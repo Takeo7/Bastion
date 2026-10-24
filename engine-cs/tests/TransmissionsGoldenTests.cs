@@ -12,7 +12,7 @@ namespace Bastion.Engine.Tests
     /// <summary>
     /// transmissions.ts's scenes on campaigns, against what TypeScript says (golden/lore/scenes.json, written by
     /// golden/make-lore-tests.ts): the states recorded in golden/campaign, UI's sample, and states made from them by a
-    /// patch to reach every scene's condition. The scenes' texts are LoreGoldenTests'.
+    /// patch to reach every scene's condition, and the recap for each seat. The scenes' texts are LoreGoldenTests'.
     /// </summary>
     public class TransmissionsGoldenTests
     {
@@ -77,6 +77,11 @@ namespace Bastion.Engine.Tests
                     var seen = n["seen"]!.Select((x) => (string)x!).ToList();
                     var moment = (bool)n["moment"]!;
                     Assert.True((string?)n["scene"] == Transmissions.NextScene(c, seen, moment)?.Id, $"{label}: next after [{string.Join(", ", seen)}], moment {moment}");
+                }
+                foreach (var r in ((JObject)k["recap"]!).Properties())
+                {
+                    var expected = ((JArray)r.Value).Select((l) => $"{(string)l[0]!}: {(string)l[1]!}");
+                    Assert.Equal(expected, Transmissions.RecapLines(c, int.Parse(r.Name)).Select((l) => $"{l.Who}: {l.Text}"));
                 }
                 foreach (var p in ((JObject)k["lines"]!).Properties())
                 {

@@ -112,5 +112,49 @@ namespace Bastion.UI.App
             var own = quality >= 0 && quality < names.Length ? names[quality] : "?";
             return $"gráficos {LevelNames[Level]} ({own})" + (cap > 0 ? $", límite {cap} fps" : "");
         }
-    }
+    
+        public const string GraphicsId = "graphics";
+        public const string CapId = "fpsCap";
+        public const string CounterId = "showFps";
+
+        /// <summary>Ajustes' graphics rows (settingsPanel.ts graphicsSettings), for the battle's menu and the base's.</summary>
+        public static System.Collections.Generic.List<Hud.SettingView> Views() => new System.Collections.Generic.List<Hud.SettingView>
+        {
+            // The level, high to low as the 0.10.1's «Efectos» (the project's quality levels, Arte's).
+            new Hud.SettingView
+            {
+                Id = GraphicsId,
+                Label = "Gráficos",
+                About = "Sombras, oclusión ambiental, posprocesado y resolución de la escena. «Altos» se ve mejor y es lo que más cuesta dibujar. Cambia al momento.",
+                Choices = new System.Collections.Generic.List<string> { "Altos", "Medios", "Bajos" },
+                On = 2 - Level,
+            },
+            new Hud.SettingView
+            {
+                Id = CapId,
+                Label = "Límite de FPS",
+                About = "Menos imágenes por segundo: menos trabajo para la tarjeta gráfica y la batería.",
+                Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(Caps, c => c == 0 ? "Sin límite" : c.ToString())),
+                On = Math.Max(0, Array.IndexOf(Caps, FpsCap)),
+            },
+            new Hud.SettingView
+            {
+                Id = CounterId,
+                Label = "Mostrar FPS",
+                About = "Un contador de imágenes por segundo en una esquina.",
+                Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
+                On = ShowFps ? 0 : 1,
+            },
+        };
+
+        /// <summary>One of those rows changed (its id, the choice's place): kept and applied; false if it isn't one of them.</summary>
+        public static bool Change(string id, float value)
+        {
+            if (id == GraphicsId) Level = 2 - (int)value;
+            else if (id == CapId) FpsCap = Caps[Mathf.Clamp((int)value, 0, Caps.Length - 1)];
+            else if (id == CounterId) ShowFps = value == 0;
+            else return false;
+            return true;
+        }
+}
 }

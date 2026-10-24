@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Bastion.Client.Net;
 using Bastion.Net;
+using Bastion.UI.Hud;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -49,6 +50,9 @@ namespace Bastion.UI.Start
             doc.rootVisualElement.Clear();
             tree.CloneTree(doc.rootVisualElement);
             root = doc.rootVisualElement.Q("start");
+            // mixta.css .menu-column: a big plate in the steel frame with rivets, the main key slanted (as the 0.10.1).
+            PlateFrame.Dress(root.Q(className: "start__column"));
+            root.Query<Button>(className: "btn-primary").ForEach(Slant.Dress);
             link = NetLink.Instance;
             Fill();
             link.Joined += OnJoined;

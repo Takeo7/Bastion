@@ -242,7 +242,19 @@ namespace Bastion.Client.Map
             Beyond();
             Furnish();
             Night();
+            // A winter's map: the snow on what faces up (snow.ts).
+            if (Mood.Snowy(s))
+            {
+                snow = SnowCover.Make(root, s, plan, prefabOf);
+                SnowCover.Mark(root, plan, s, GroundPlane());
+            }
         }
+
+        /// <summary>The snow on a winter's map (SnowCover), or none.</summary>
+        SnowCover snow;
+
+        /// <summary>The ground's own plane (UI's GroundView «Suelo»): it has its own snow.</summary>
+        Transform GroundPlane() => Storeys.Length > 0 ? Storeys[0].GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "Suelo") : null;
 
         /// <summary>
         /// The base's pines (mapView.ts dressed, 'basePines') on the tiles of `only` (Key; all of them if null), each on its
@@ -309,7 +321,7 @@ namespace Bastion.Client.Map
                 o.transform.SetParent(beyond.transform, false);
                 o.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var r = o.AddComponent<MeshRenderer>();
-                r.sharedMaterial = kv.Key.material;
+                r.sharedMaterial = Windy(kv.Key.material) ? InWind(kv.Key.material, 0) : kv.Key.material;
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
             Debug.Log($"[map] the pinar past the edge: {near} pines near, {far} far in {lots.Count} meshes");
@@ -486,6 +498,7 @@ namespace Bastion.Client.Map
                 Decor(k, i, done[k]);
             }
             Woods(redo);
+            if (snow != null) SnowCover.Mark(root, plan, s, GroundPlane());
             return redo.Count;
         }
 
@@ -953,32 +966,51 @@ namespace Bastion.Client.Map
         /// A prop on the floor at `at`, turned `yaw` degrees (Unity's), fitted as 0.10.1 (syntyProps.ts prepare); over
         /// several tiles, to its footprint (mapView.ts fitted).
         /// </summary>
-        /// <summary>Each windy material (Nature's trees and vines sway with the game's clock), and its copy that stands still.</summary>
+        /// <summary>
+        /// How much the trees sway, of what Nature's materials have (Arturo, 24/10: a soft wind, at the base and in combat;
+        /// 0.10.1's stood still): their sway's amounts times this, its speeds times Calmer. Set before a map is made.
+        /// </summary>
+        public static float Wind = 0.5f;
+        const float Calmer = 0.7f;
+        static readonly string[] WindAmounts = { "_Big_Wind_Amount", "_Small_Wind_Amount" };
+        static readonly string[] WindSpeeds = { "_Big_Wind_Speed", "_Small_Wind_Speed" };
+        /// <summary>Each windy material (Nature's trees and vines sway by the game's clock): its copy in this wind, and its copy still.</summary>
+        static readonly Dictionary<(Material, float), Material> breezes = new Dictionary<(Material, float), Material>();
         static readonly Dictionary<Material, Material> stills = new Dictionary<Material, Material>();
-        static readonly string[] Winds = { "_Big_Wind_Amount", "_Small_Wind_Amount", "_Big_WindAmount", "_Small_WindAmount", "_Leaves_WindAmount", "_Leaves_Wind_Amount" };
+        /// <summary>A copy's own material (its windy original), for Still.</summary>
+        static readonly Dictionary<Material, Material> sources = new Dictionary<Material, Material>();
+
+        static bool Windy(Material m) => m != null && WindAmounts.Any(m.HasProperty);
+
+        /// <summary>A windy material in a wind `k` times its own (0: still), made once.</summary>
+        static Material InWind(Material m, float k)
+        {
+            if (sources.TryGetValue(m, out var own)) m = own;
+            if (k == 0 ? stills.TryGetValue(m, out var made) && made != null : breezes.TryGetValue((m, k), out made) && made != null) return made;
+            made = new Material(m) { name = m.name + (k == 0 ? " (quieto)" : " (brisa)") };
+            foreach (string a in WindAmounts) if (made.HasProperty(a)) made.SetFloat(a, m.GetFloat(a) * k);
+            foreach (string s in WindSpeeds) if (k > 0 && made.HasProperty(s)) made.SetFloat(s, m.GetFloat(s) * Calmer);
+            if (k == 0) stills[m] = made;
+            else breezes[(m, k)] = made;
+            sources[made] = m;
+            return made;
+        }
 
         /// <summary>
-        /// A model's windy materials swapped for still ones: 0.10.1's trees don't sway, and in play mode the sway of
-        /// SyntyStudios_Trees came out as no number (24/10: the pines black there, in the clearing and in a town's square;
-        /// SSAO took it round them, and the props near them came out red). Each material's copy is made once.
+        /// A model's windy materials in the map's wind (Wind). Nature's tree shader sways each vertex by its place in its
+        /// own model: the far wood, merged into patches (Beyond), would sway another way, so it stands still (InWind 0);
+        /// out there, in the haze, it doesn't show.
         /// </summary>
-        static void Still(GameObject model)
+        static void Breeze(GameObject model, float k)
         {
             foreach (var r in model.GetComponentsInChildren<Renderer>(true))
             {
                 var materials = r.sharedMaterials;
                 bool swapped = false;
-                for (int k = 0; k < materials.Length; k++)
+                for (int i = 0; i < materials.Length; i++)
                 {
-                    var m = materials[k];
-                    if (m == null || !Winds.Any(m.HasProperty)) continue;
-                    if (!stills.TryGetValue(m, out var still) || still == null)
-                    {
-                        still = new Material(m) { name = m.name + " (quieto)" };
-                        foreach (string w in Winds) if (still.HasProperty(w)) still.SetFloat(w, 0);
-                        stills[m] = still;
-                    }
-                    materials[k] = still;
+                    if (!Windy(materials[i])) continue;
+                    materials[i] = InWind(materials[i], k);
                     swapped = true;
                 }
                 if (swapped) r.sharedMaterials = materials;
@@ -1002,7 +1034,7 @@ namespace Bastion.Client.Map
             var holder = new GameObject(id).transform;
             holder.SetParent(parent, false);
             var model = UnityEngine.Object.Instantiate(prefab, holder, false);
-            Still(model);
+            Breeze(model, Wind);
             model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = Quaternion.identity;
             // Its box as it stands, then the longest side to `fit` tiles; centred (or on its origin) and on the floor.

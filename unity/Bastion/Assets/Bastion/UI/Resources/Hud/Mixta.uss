@@ -160,6 +160,81 @@ Button:disabled {
     background-color: var(--t-primary-hover);
 }
 
+/* =============================================================== the big plates' steel frame */
+
+/*
+   mixta.css's big plates: the packs' steel frame (mh/frame-a, made grey) cut in nine, its 34 px edge drawn 15 px wide
+   and 8 px outside the plate, and four rivets (PlateFrame, a child out of the flow; StrategyRoot.Dress and the HUD's
+   pieces say which plates). The partner's proposal has the rivets only.
+*/
+.plate-frame {
+    position: absolute;
+    left: -8px;
+    top: -8px;
+    right: -8px;
+    bottom: -8px;
+    background-image: url("../../Textures/frame-a.png");
+    -unity-slice-left: 34;
+    -unity-slice-top: 34;
+    -unity-slice-right: 34;
+    -unity-slice-bottom: 34;
+    -unity-slice-scale: 0.441px;
+}
+
+.plate-frame--rivets {
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-image: none;
+}
+
+/* =============================================================== what to press next, slanted */
+
+/*
+   mixta.css .x-btn.primary: a hazard-yellow plate cut 9 px in at its ends, its top lit, its foot shaded (Slant paints
+   it from these; the button's own background goes clear). Its colours as the 0.10.1's, worked out over the plate
+   in sRGB: USS would blend the 0.10.1's alphas in linear and come out stronger.
+*/
+.btn-slant.btn-primary,
+.btn-slant.btn-primary:hover,
+.btn-slant.btn-primary:disabled {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0;
+}
+
+.btn-slant.btn-primary {
+    padding-left: 18px;
+    padding-right: 18px;
+    --slant-hi: #ffdb62;
+    --slant-fill: #f2c230;
+    --slant-lo: #d6a01c;
+    --slant-top: rgb(255, 241, 192);
+    --slant-foot: rgb(173, 125, 15);
+    --slant-edge: rgba(0, 0, 0, 0);
+}
+
+.btn-slant.btn-primary:hover {
+    --slant-hi: #ffe68e;
+    --slant-fill: #f9cf48;
+    --slant-lo: #e2ad25;
+    --slant-top: rgb(255, 248, 221);
+    --slant-foot: rgb(179, 132, 20);
+}
+
+/* Off: the yellow at 45 % over the plate, as measured on the 0.10.1's captures, with dark ink (opaque: USS would
+   blend an opacity in linear and come out pale). */
+.btn-slant.btn-primary:disabled {
+    opacity: 1;
+    color: rgb(33, 31, 23);
+    --slant-hi: rgb(127, 112, 58);
+    --slant-fill: rgb(121, 105, 50);
+    --slant-lo: rgb(115, 98, 42);
+    --slant-top: rgb(132, 117, 62);
+    --slant-foot: rgb(115, 98, 42);
+}
+
 /* ================================================================ pips */
 
 /* A row of pips: health, actions, rounds (Ui.Pips). */

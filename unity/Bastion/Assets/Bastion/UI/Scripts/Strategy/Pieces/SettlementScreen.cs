@@ -133,7 +133,16 @@ namespace Bastion.UI.Strategy
             Ui.Text(t.Name, "settle-tile__name", b);
             if (t.Built) Ui.Text("✓", "settle-cost settle-cost--built font-title", b);
             else Cost(t.Supplies, t.Parts, b);
-            if (t.New) Ui.Text(StrategyText.Tabs.NewTag, "strat-tab__new settle-tile__new font-title", b);
+            if (t.New)
+            {
+                var tag = Ui.Text(StrategyText.Tabs.NewTag, "strat-tab__new settle-tile__new font-title", b);
+                var seen = t.NewKey;
+                b.RegisterCallback<PointerEnterEvent>(e =>
+                {
+                    tag.RemoveFromHierarchy();
+                    if (!string.IsNullOrEmpty(seen)) handlers.OnSeen(seen);
+                });
+            }
             // A built one doesn't take the pointer: its help goes on a box round it (a disabled button gets no hover).
             if (t.Built)
             {
@@ -244,7 +253,16 @@ namespace Bastion.UI.Strategy
             Ui.AddClasses(b, "settle-action__button");
             b.SetEnabled(string.IsNullOrEmpty(a.Why));
             box.Add(b);
-            if (a.New) Ui.Text(StrategyText.Tabs.NewTag, "strat-tab__new settle-action__new font-title", b);
+            if (a.New)
+            {
+                var tag = Ui.Text(StrategyText.Tabs.NewTag, "strat-tab__new settle-action__new font-title", b);
+                var seen = a.NewKey;
+                box.RegisterCallback<PointerEnterEvent>(e =>
+                {
+                    tag.RemoveFromHierarchy();
+                    if (!string.IsNullOrEmpty(seen)) handlers.OnSeen(seen);
+                });
+            }
             var hover = a.Hover ?? a.Tip;
             if (!string.IsNullOrEmpty(hover)) tips.Attach(box, hover);
             if (!string.IsNullOrEmpty(a.Why)) Ui.Text(a.Why, "strat-why strat-why--small", box);

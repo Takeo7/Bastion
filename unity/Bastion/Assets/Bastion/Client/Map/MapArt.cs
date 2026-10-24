@@ -69,6 +69,14 @@ namespace Bastion.Client.Map
             return known >= 0 ? known : art.pack == "apocalypse" ? 1 : 2;
         }
 
+        /// <summary>The same for a model by its key (`pack:fbx`: one that is no prop's, as La Lata's).</summary>
+        public static int UnityTurnOf(string key)
+        {
+            if (key == null) return 0;
+            int known = MapCatalog.Load()?.TurnOf(key) ?? -1;
+            return known >= 0 ? known : key.StartsWith("apocalypse:") ? 1 : 2;
+        }
+
         /// <summary>The same by the model's name alone (the first prop's that is drawn with it).</summary>
         public static int UnityTurn(string fbx)
         {

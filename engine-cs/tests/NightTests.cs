@@ -10,8 +10,7 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// packages/engine/test/night.test.ts: building height and night missions (docs/ALTURA-Y-NOCHE.md), test by test.
-    /// `client toEqual s` is Step2Json.StateDiff. «night › more suministros at night…» leaves out its second half, what
-    /// the operation pays by night: it needs campaign.ts (nightFor, byNight, createCampaign's offers).
+    /// `client toEqual s` is Step2Json.StateDiff; an operation's `toEqual`, its JSON (CampaignJsonTests.Write).
     /// </summary>
     public class NightTests
     {
@@ -403,7 +402,44 @@ namespace Bastion.Engine.Tests
                 if (by?.Supplies is int supplies && supplies != 0) Assert.Equal(Step2Json.Element(new Loot { Supplies = (int)Js.Round(supplies * Content.Night.Supplies) }).GetRawText(), Step2Json.Element(dusk).GetRawText());
                 else Assert.Equal(Step2Json.Element(by).GetRawText(), Step2Json.Element(dusk).GetRawText());
             }
-            // Left out: what the operation pays by night, which needs campaign.ts (nightFor, byNight, createCampaign's offers).
+            var seeds = Enumerable.Range(0, 300).Select((i) => i * 7919 + 13).ToList();
+            var nights = seeds.Where(Campaign.NightFor).ToList();
+            Assert.True((double)nights.Count / seeds.Count > 0.25, $"{nights.Count} nights");
+            Assert.True((double)nights.Count / seeds.Count < 0.42, $"{nights.Count} nights");
+            MissionOffer Offer(int seed, Action<MissionOffer>? extra = null)
+            {
+                var o = new MissionOffer
+                {
+                    Id = "m1",
+                    Name = "Operación",
+                    Kind = MissionKinds.Elimination,
+                    Difficulty = 2,
+                    ExpiresDay = 9,
+                    Reward = new MissionReward { Credits = 100, Recruit = true },
+                    Map = MapSource.Generated(Biomes.City, seed),
+                    Pods = new List<List<string>>(),
+                    Final = false,
+                    Region = RegionIds.Na,
+                    Facility = null,
+                    Story = null,
+                    Quest = null,
+                };
+                extra?.Invoke(o);
+                return o;
+            }
+            var dark = Campaign.ByNight(Offer(nights[0]));
+            Assert.Equal((true, 150, (object?)true), (dark.Night, dark.Reward.Credits, dark.Reward.Recruit));
+            var day = seeds.First((x) => !Campaign.NightFor(x));
+            Assert.Equal(CampaignJsonTests.Write(Offer(day)), CampaignJsonTests.Write(Campaign.ByNight(Offer(day))));
+            // Story chapters and the final mission are flown by day.
+            Assert.Null(Campaign.ByNight(Offer(nights[0], (o) => o.Story = 2)).Night);
+            Assert.Null(Campaign.ByNight(Offer(nights[0], (o) => o.Final = true)).Night);
+            // In a campaign, every operation's night is its seed's.
+            for (var seed = 1; seed < 12; seed++)
+            {
+                // `(o.map as { seed: number }).seed`: a map without one is `nightFor(undefined)`, which is nightFor(0).
+                foreach (var o in Campaign.CreateCampaign(new[] { 0 }, new Rng(seed)).Offers) Assert.Equal(o.Story == null && !o.Final && Campaign.NightFor(o.Map.Seed ?? 0), o.Night == true);
+            }
         }
 
         [Fact(DisplayName = "night › the Saqueo’s horde comes a turn sooner at night")]

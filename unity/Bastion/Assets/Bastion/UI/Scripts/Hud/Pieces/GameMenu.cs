@@ -91,6 +91,8 @@ namespace Bastion.UI.Hud
         {
             layer.Clear();
             var card = Ui.El("panel game-menu__card", layer);
+            // mixta.css .game-menu-card: a big plate in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
+            PlateFrame.Dress(card);
             if (page == "main")
             {
                 // The same list as the base's (playtest 19/10 #7), one entry a line, all alike; the controls are in Ajustes.
@@ -234,6 +236,8 @@ namespace Bastion.UI.Hud
             if (v.Danger) refuse.AddToClassList("btn-primary");
             actions.Add(accept);
             actions.Add(refuse);
+            PlateFrame.Dress(card);
+            Slant.Dress(v.Danger ? refuse : accept);
         }
 
         public void CloseConfirm()

@@ -149,6 +149,20 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 824bf4e389cadee4a99e1a390dfc9e41, type: 3}
   - Id: base:will
     Sprite: {fileID: 21300000, guid: 2a9c1235489e1e14d841e7507a84ed94, type: 3}
+  - Id: rank:1
+    Sprite: {fileID: 21300000, guid: 5054205ef6bbcaf4abae28c7526cac1d, type: 3}
+  - Id: rank:2
+    Sprite: {fileID: 21300000, guid: 325c3587ad2a8dc4e982770163bb676c, type: 3}
+  - Id: rank:3
+    Sprite: {fileID: 21300000, guid: 7acac67cca531eb4db9402804f10be25, type: 3}
+  - Id: rank:4
+    Sprite: {fileID: 21300000, guid: 84147fe2e8b4f814199774be091d17c8, type: 3}
+  - Id: rank:5
+    Sprite: {fileID: 21300000, guid: db06eaed655a8a44688cf4761848bc82, type: 3}
+  - Id: rank:6
+    Sprite: {fileID: 21300000, guid: 6d777a4ac2e53c148ba1b14b591fac18, type: 3}
+  - Id: rank:7
+    Sprite: {fileID: 21300000, guid: 63c307c1f06e2554c8859f01a2faacc5, type: 3}
   - Id: tab:geoscape
     Sprite: {fileID: 21300000, guid: ab441200c73329d4d9925ec803e6f048, type: 3}
   - Id: tab:engineering

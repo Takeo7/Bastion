@@ -3,20 +3,25 @@ using System.Collections.Generic;
 using System.Linq;
 using Bastion.Engine;
 using Xunit;
+using static Bastion.Engine.Tests.CampaignHelpers;
 using static Bastion.Engine.Tests.Step1Helpers;
 using static Bastion.Engine.Tests.Step2Helpers;
 
 namespace Bastion.Engine.Tests
 {
     /// <summary>
-    /// packages/engine/test/arms.test.ts, test by test. Not ported, they play a campaign and need campaign.ts
-    /// (createCampaign, executeCampaignCommand, applyMissionResult; the helpers raise and levelTo): «the weapons from zero
-    /// › a new campaign…», «… › anyone takes any weapon…», «… › the Taller makes weapons again and again…» and «a weapon
-    /// found in the mission › back home, the find is the soldier's…».
+    /// packages/engine/test/arms.test.ts, test by test: the five of «the weapons from zero», the one of «the Armería shows
+    /// what each weapon does» and the six of «a weapon found in the mission». Its helpers `run`, `ctx` and `field`, here
+    /// as private ones (`of` is Step2Helpers.Of).
     /// </summary>
     public class ArmsTests
     {
         // The weapons from zero (docs/FASE8.md §A): the class no longer brings a weapon.
+
+        private static CampaignResult Run(CampaignState c, CampaignCommand cmd, int slot = 0)
+        {
+            return CampaignHelpers.Run(c, cmd, slot, new[] { 0 });
+        }
 
         private static CommandContext Ctx()
         {
@@ -72,6 +77,26 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ the weapons from zero
 
+        [Fact(DisplayName = "the weapons from zero › a new campaign: knife and pistol, nothing else, and no spare magazines")]
+        public void ANewCampaignKnifeAndPistolNothingElse()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            c.Squad = c.Soldiers.Take(4).Select((x) => x.Id).ToList();
+            Assert.Empty(c.FoundWeapons ?? new List<FoundWeapon>());
+            var m = Campaign.BuildSquad(c)[0];
+            Assert.NotNull(m.Arms);
+            Assert.Equal(((string?)null, (string?)null, (int?)0, "Pistola"), (m.Arms!.Primary, m.Arms.Melee, m.Mags, m.WeaponName));
+            var s = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, 3), Slots = new List<int> { 0 }, Rng = new Rng(1), Squad = Campaign.BuildSquad(c) });
+            var u = s.Units.First((x) => x.Team == Teams.Xcom);
+            Assert.Equal("pistol", Content.AttackWeapon(u, AbilityIds.Shoot).Id);
+            Assert.Equal("knife", Content.AttackWeapon(u, AbilityIds.Slash).Id);
+            Assert.Equal((Content.PistolClip, 0), (u.Ammo, u.Mags));
+            Assert.Null(u.PistolAmmo);
+            Assert.Contains(AbilityIds.Shoot, Abilities.AbilitiesOf(u));
+            Assert.Contains(AbilityIds.Slash, Abilities.AbilitiesOf(u));
+            Assert.DoesNotContain(AbilityIds.Pistol, Abilities.AbilitiesOf(u));
+        }
+
         [Fact(DisplayName = "the weapons from zero › the pistol counts its rounds; beside a primary it has its own")]
         public void ThePistolCountsItsRounds()
         {
@@ -107,6 +132,52 @@ namespace Bastion.Engine.Tests
             Assert.False(Content.HasSquadsight(AddUnit(s, "s3", TemplateIds.Rookie, 3, 3, extra: (u) => u.Arms = Armed(FoundWeaponIds.ScopedRifle))));
             // Without arms of its own (a skirmish), its class's.
             Assert.True(Content.HasSquadsight(AddUnit(s, "s4", TemplateIds.Sharpshooter, 4, 4)));
+        }
+
+        [Fact(DisplayName = "the weapons from zero › anyone takes any weapon: one in the hand and one at the belt; Mano de machete wants the machete")]
+        public void AnyoneTakesAnyWeapon()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            var s = c.Soldiers[0];
+            s.Board = new List<string> { "bladeMaster" };
+            c.FoundWeapons = new List<FoundWeapon>
+            {
+                new FoundWeapon { Id = "w1", Kind = FoundWeaponIds.PumpShotgun, Holder = null },
+                new FoundWeapon { Id = "w2", Kind = FoundWeaponIds.Machete, Holder = null },
+                new FoundWeapon { Id = "w3", Kind = FoundWeaponIds.AssaultRifle, Holder = null },
+            };
+            var knife = Campaign.SquadMember(c, s).Mods;
+            foreach (var w in new[] { "w1", "w2" }) Assert.True(Run(c, new AssignWeaponCommand { Weapon = w, Soldier = s.Id }).Ok);
+            var member = Campaign.SquadMember(c, s);
+            Assert.NotNull(member.Arms);
+            Assert.Equal((FoundWeaponIds.PumpShotgun, "w1", FoundWeaponIds.Machete, "w2"), (member.Arms!.Primary, member.Arms.PrimaryId, member.Arms.Melee, member.Arms.MeleeId));
+            Assert.Equal("Escopeta", member.WeaponName);
+            Assert.Equal(2, Campaign.SquadMember(c, s).Mods.MeleeDamage - knife.MeleeDamage);
+            Assert.Equal(15, Campaign.SquadMember(c, s).Mods.MeleeAim - knife.MeleeAim);
+            // A second primary takes the first one's place; the machete stays.
+            Assert.True(Run(c, new AssignWeaponCommand { Weapon = "w3", Soldier = s.Id }).Ok);
+            Assert.Equal(new[] { null, s.Id, s.Id }, c.FoundWeapons.Select((w) => w.Holder));
+        }
+
+        [Fact(DisplayName = "the weapons from zero › the Taller makes weapons again and again, and munition three times; the Bastion's level brings some")]
+        public void TheTallerMakesWeaponsAgainAndAgain()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            Raise(c, PieceIds.Workshop);
+            c.Credits = 999;
+            c.Parts = 99;
+            Assert.Null(Campaign.CraftBlocker(c, CraftIds.MakeRifle));
+            Assert.Equal("Se desbloquea con la casa móvil.", Campaign.CraftBlocker(c, CraftIds.MakeSniper));
+            Assert.Equal("Se desbloquea con la casa móvil.", Campaign.CraftBlocker(c, CraftIds.Ammo2));
+            c.Crafted = new List<string> { CraftIds.Ammo1 };
+            Assert.Equal(1, Progression.SpareMags(c));
+            Assert.Equal(FoundWeaponIds.AssaultRifle, Progression.Crafts[CraftIds.MakeRifle].Makes);
+            // Made once, it can be made again.
+            c.Crafted.Add(CraftIds.MakeRifle);
+            Assert.Null(Campaign.CraftBlocker(c, CraftIds.MakeRifle));
+            Assert.Equal("Ya está hecho.", Campaign.CraftBlocker(c, CraftIds.Ammo1));
+            LevelTo(c, 3, new Rng(1));
+            Assert.Equal(new[] { FoundWeaponIds.AssaultRifle, FoundWeaponIds.Machete, FoundWeaponIds.PrecisionRifle, FoundWeaponIds.PumpShotgun }, (c.FoundWeapons ?? new List<FoundWeapon>()).Select((w) => w.Kind).OrderBy((k) => k, StringComparer.Ordinal));
         }
 
         // ------------------------------------------------------------ the Armería shows what each weapon does (Arturo, 17/10)
@@ -234,6 +305,48 @@ namespace Bastion.Engine.Tests
             Assert.NotNull(u.Backpack);
             Assert.Empty(u.Backpack!);
             Assert.Contains(AbilityIds.Pistol, Abilities.AbilitiesOf(u));
+        }
+
+        [Fact(DisplayName = "a weapon found in the mission (docs/FASE8.md §C) › back home, the find is the soldier's; its own comes back to the rack in a backpack, or is lost on the floor")]
+        public void BackHomeTheFindIsTheSoldiers()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            var a = c.Soldiers[0];
+            var b = c.Soldiers[1];
+            c.FoundWeapons = new List<FoundWeapon>
+            {
+                new FoundWeapon { Id = "w1", Kind = FoundWeaponIds.AssaultRifle, Holder = a.Id },
+                new FoundWeapon { Id = "w2", Kind = FoundWeaponIds.PumpShotgun, Holder = b.Id },
+            };
+            c.Squad = new List<string> { a.Id, b.Id };
+            var offer = c.Offers.FirstOrDefault((o) => (o.Story ?? 0) == 0) ?? c.Offers[0];
+            c.ActiveMission = offer.Id;
+            var mission = Setup.CreateMission(new MissionOptions { Map = offer.Map, Slots = new List<int> { 0 }, Rng = new Rng(3), Kind = offer.Kind, Squad = Campaign.BuildSquad(c), Pods = offer.Pods, Difficulty = offer.Difficulty });
+            var ua = mission.Units.First((u) => u.CampaignId == a.Id);
+            var ub = mission.Units.First((u) => u.CampaignId == b.Id);
+            // A swapped its rifle for a hunting rifle and kept it in the backpack; B left its shotgun on the floor for a machine gun.
+            ua.Arms = Armed(FoundWeaponIds.HuntingRifle);
+            ua.Backpack = new List<Loot> { new Loot { Weapon = FoundWeaponIds.AssaultRifle, WeaponId = "w1" } };
+            ub.Arms = Armed(FoundWeaponIds.MachineGun);
+            ub.Backpack = new List<Loot>();
+            foreach (var u in mission.Units.Where((x) => x.Team == Teams.Xcom))
+            {
+                u.Alive = false;
+                u.Evacuated = true;
+            }
+            mission.Outcome = Outcomes.Victory;
+            mission.OutcomeReason = EndReasons.Objective;
+            var report = Campaign.ApplyMissionResult(c, mission, new Rng(4));
+            List<string> Held(string id) => c.FoundWeapons!.Where((w) => w.Holder == id).Select((w) => w.Kind).ToList();
+            Assert.Equal(new[] { FoundWeaponIds.HuntingRifle }, Held(a.Id));
+            Assert.Equal(new[] { FoundWeaponIds.MachineGun }, Held(b.Id));
+            var w1 = c.FoundWeapons!.FirstOrDefault((w) => w.Id == "w1");
+            Assert.NotNull(w1);
+            Assert.Null(w1!.Holder);
+            Assert.DoesNotContain(c.FoundWeapons!, (w) => w.Id == "w2");
+            // The rifle coming back is not a find.
+            Assert.Empty(report.Loot?.Weapons ?? new List<string>());
+            Assert.Contains(c.Log, (l) => l.Text.Contains("vuelve sin su escopeta"));
         }
     }
 }

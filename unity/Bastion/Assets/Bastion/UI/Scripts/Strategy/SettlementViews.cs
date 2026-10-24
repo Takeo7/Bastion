@@ -62,6 +62,8 @@ namespace Bastion.UI.Strategy
         public bool On;
         /// <summary>A level brought it and this player hasn't looked at it («Nuevo»).</summary>
         public bool New;
+        /// <summary>«piece:wall»: told back when the pointer goes over it.</summary>
+        public string NewKey;
         /// <summary>What it is for, and why not (PIECE_TEXT.line, pieceBlocker).</summary>
         public string Tip;
     }
@@ -130,6 +132,8 @@ namespace Bastion.UI.Strategy
         /// <summary>On hover; null, `Tip`.</summary>
         public string Hover;
         public bool New;
+        /// <summary>«raise:quarters:2»: told back when the pointer goes over it.</summary>
+        public string NewKey;
     }
 
     [Serializable]

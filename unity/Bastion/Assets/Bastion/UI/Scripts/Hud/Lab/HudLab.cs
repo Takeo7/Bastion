@@ -46,7 +46,8 @@ namespace Bastion.UI.Hud
                 Title = "El colegio de Brena",
                 Objective = "Eliminad a todos los hostiles",
                 Turns = "Sin límite de turnos",
-                Briefing = "Aviso del Refugio de Bielsa. Allí queda un equipo de radio entero.",
+                // With Lore's marks, as the campaign's briefings come (the key words, the objective).
+                Briefing = "Aviso del Refugio de Bielsa. Allí queda un **equipo de radio** entero. ==Traedlo a La Lata.==",
             });
             hud.Log("La escuadra llega a la zona.", "#8fd05a");
             foreach (var step in Steps) Step(step);

@@ -216,7 +216,7 @@ namespace Bastion.UI.Combat
             {
                 if (!u.Alive || !Visible(u)) continue;
                 var f = new FlagView { Id = u.Id, Enemy = u.Team != Teams.Xcom, Hp = u.Hp, MaxHp = u.MaxHp, Armor = u.Armor, Cover = -1 };
-                if (u.Id == picked || u.Id == hovered?.Id) f.Name = u.Team == Teams.Xcom && u.Template != TemplateIds.Vip && u.Nickname != null ? $"«{u.Nickname}»" : u.Name;
+                if (u.Id == picked || u.Id == hovered?.Id) f.Name = u.Team == Teams.Xcom && u.Template != TemplateIds.Vip && !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name;
                 if (u.Team == Teams.Xcom)
                 {
                     // With no shooter in sight nobody flanks anyone: the shield only shows cover, never the red «flanked».
@@ -406,7 +406,7 @@ namespace Bastion.UI.Combat
                 var card = new SquadCardView
                 {
                     Id = u.Id,
-                    Name = (u.Template == TemplateIds.Rookie ? "" : Content.Templates[u.Template].Short + " ") + (u.Nickname != null ? $"«{u.Nickname}»" : u.Name),
+                    Name = (u.Template == TemplateIds.Rookie ? "" : Content.Templates[u.Template].Short + " ") + (!string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name),
                     Accent = u.Owner == null ? "#e8edf2" : PlayerColor(u.Owner.Value),
                     Mine = mine,
                     Selected = u.Id == picked,
@@ -494,7 +494,7 @@ namespace Bastion.UI.Combat
                 Rank = soldier ? u.Rank : 0,
                 RankName = soldier ? rank : t.Short,
                 Skills = SkillValues(u),
-                Name = u.Nickname != null ? $"{u.Name} «{u.Nickname}»" : u.Name,
+                Name = !string.IsNullOrEmpty(u.Nickname) ? $"{u.Name} «{u.Nickname}»" : u.Name,
                 Weapon = weapon,
                 WeaponTip = string.Join(" · ", new[] { weapon }.Concat(extras).Where(x => !string.IsNullOrEmpty(x))),
             };

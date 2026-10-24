@@ -88,6 +88,21 @@ namespace Bastion.UI.EditorTools
         }
 
         /// <summary>
+        /// The base's orders through a real room in this app (Strategy.BaseRun): BASTION_ANFITRION hosts it (on
+        /// BASTION_DATOS, BASTION_PUERTO), a new campaign opens, and BASTION_PASOS are clicked one at a time.
+        /// </summary>
+        public static void BaseRed()
+        {
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.62f, 0.68f, 0.75f);
+            var run = new GameObject("BaseRun");
+            run.AddComponent<UIDocument>().panelSettings = Panel();
+            run.AddComponent<Bastion.UI.Strategy.BaseRun>();
+        }
+
+        /// <summary>
         /// The base's lab over Arte's clearing (Bastion.EditorTools.SettlementLab.Clearing: the lab's base, seed 3, with
         /// its pieces; BASTION_LOOK frames it, as there) instead of a plain sky: for the Asentamiento's panels. Called by
         /// name, so that this assembly needn't reference Arte's editor tools; without them, the plain sky.

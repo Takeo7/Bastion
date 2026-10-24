@@ -14,17 +14,23 @@
                 <ui:VisualElement name="invite" class="room__invite" />
             </ui:VisualElement>
             <ui:VisualElement class="room__main panel">
-                <ui:Label name="mission-head" class="room__head font-title" />
-                <ui:VisualElement name="missions" class="room__options" />
-                <ui:Label name="map-head" class="room__head font-title" />
-                <ui:VisualElement name="maps" class="room__options" />
-                <ui:Label name="hour-head" class="room__head font-title" />
-                <ui:VisualElement name="hours" class="room__options" />
+                <!-- The main page (lobby.ts renderMain): the campaign to go on with, a new one, a skirmish; or a new one's question. -->
+                <ui:VisualElement name="menu" class="room__menu" />
+                <!-- The skirmish's sheet (lobby.ts renderSkirmish). -->
+                <ui:VisualElement name="skirmish" class="room__skirmish">
+                    <ui:Label name="mission-head" class="room__head font-title" />
+                    <ui:VisualElement name="missions" class="room__options" />
+                    <ui:Label name="map-head" class="room__head font-title" />
+                    <ui:VisualElement name="maps" class="room__options" />
+                    <ui:Label name="hour-head" class="room__head font-title" />
+                    <ui:VisualElement name="hours" class="room__options" />
+                </ui:VisualElement>
                 <ui:VisualElement class="room__foot">
                     <ui:Button name="start" class="start__choice btn-primary room__start">
                         <ui:Label name="start-title" class="start__choice-title font-title" picking-mode="Ignore" />
                         <ui:Label name="start-about" class="start__choice-about" picking-mode="Ignore" />
                     </ui:Button>
+                    <ui:Button name="back" class="room__leave" />
                     <ui:Button name="leave" class="room__leave" />
                 </ui:VisualElement>
                 <ui:Label name="status" class="start__status" />

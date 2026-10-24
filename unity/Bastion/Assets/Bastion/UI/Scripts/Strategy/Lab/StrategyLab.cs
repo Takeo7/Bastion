@@ -13,7 +13,10 @@ namespace Bastion.UI.Strategy
     /// `BASTION_ESTRATEGIA` picks what is open: propuesta, propuesta-mia, espera, acontecimiento, acontecimiento-voto,
     /// diario, fin, menu, soldados, personalizar, tablero, armeria, armeria-arma, escuadra, parte, mapa, mapa-mision,
     /// mapa-zona, asentamiento, asentamiento-mano, asentamiento-talar, asentamiento-bastion, asentamiento-barracon,
-    /// asentamiento-muro, asentamiento-foso, volver (none: the plain base).
+    /// asentamiento-muro, asentamiento-foso, volver (none: the plain base); any with «-radio» after it, the radio's recap
+    /// over it (asentamiento-radio, tablero-radio). «muestra-…»: the same from the sample campaign through the presenter
+    /// (muestra-soldados, -armeria, -armeria-arma, -escuadra, -parte, -mapa, -mapa-mision, -mapa-zona, -asentamiento,
+    /// -asentamiento-bastion, -propuesta, -propuesta-mia, -diario).
     /// </summary>
     public sealed class StrategyLab : MonoBehaviour, IStrategyHandlers
     {
@@ -21,10 +24,15 @@ namespace Bastion.UI.Strategy
         StrategyRoot root;
         bool shown;
 
+        /// <summary>«…-radio»: the case with the radio playing over it, its first line typed (as the 0.10.1's shots had it).</summary>
+        bool withRadio;
+
         void Start()
         {
             root = GetComponent<StrategyRoot>();
             if (string.IsNullOrEmpty(Case)) Case = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA") ?? "";
+            withRadio = Case.EndsWith("-radio");
+            if (withRadio) Case = Case.Substring(0, Case.Length - "-radio".Length);
         }
 
         void Update()
@@ -32,6 +40,11 @@ namespace Bastion.UI.Strategy
             if (shown || root == null || !root.Ready) return;
             shown = true;
             root.Bind(this);
+            if (Case.StartsWith("muestra-"))
+            {
+                Sample(Case.Substring("muestra-".Length));
+                return;
+            }
             var mineAsked = Case == "propuesta-mia";
             root.ClockOf = () => (EngineLore.ProposalClock("0:24", mineAsked), 0.62f, false);
             root.SetTop(Top(Case == "propuesta" ? "theirs" : mineAsked ? "mine" : null));
@@ -58,6 +71,11 @@ namespace Bastion.UI.Strategy
             if (Case == "diario") root.SetModal(Diary());
             if (Case == "fin") root.SetModal(new StrategyModalView { Kind = "end", Kicker = "Fin de la campaña", Title = "Campaña perdida", Text = "No queda nadie que conteste por radio. El Bastión se queda a oscuras.", Buttons = { "Volver al menú" } });
             if (Case == "menu") root.ToggleMenu(new GameMenuView { Abandon = false, QuitLabel = "Salir de Bastión" });
+            if (withRadio)
+            {
+                root.RadioCard.Play(Recap());
+                root.RadioCard.Finish();
+            }
             if (Case == "volver") root.SetModal(new StrategyModalView { Kind = "leave", Kicker = StrategyText.Leave.Kicker, Title = StrategyText.Leave.Title, Text = StrategyText.Leave.Text("Ana"), Buttons = { StrategyText.Leave.Yes, StrategyText.Leave.No } });
         }
 
@@ -414,6 +432,98 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
+        /// <summary>
+        /// «muestra-…»: the presenter's views from the sample campaign itself (SampleCampaign), not made-up ones: as Arturo
+        /// (slot 1) with Ana away, as the 0.10.1's references. For now the strip, the tabs and the Asentamiento
+        /// (muestra-asentamiento; -bastion with the caravan picked); with «-radio», the recap over it.
+        /// </summary>
+        void Sample(string which)
+        {
+            // Ana here only for the proposals (70- and 71-propuesta), as the 0.10.1's steps set her connected.
+            var p = new StrategyPresenter { State = SampleCampaign.Load(), Slot = 1, Seats = SampleCampaign.Seats(which.StartsWith("propuesta")) };
+            var screen = which.StartsWith("asentamiento") || which.StartsWith("radio") ? "facilities" : which == "escuadra" ? "squad" : which == "parte" ? "debrief"
+                : which.StartsWith("armeria") ? "engineering" : which.StartsWith("mapa") ? "geoscape" : "barracks";
+            // 70- and 71-propuesta: a recruit proposed by Ana or by Arturo, with the engine's sentence (Lore).
+            if (which.StartsWith("propuesta"))
+                p.State.Proposal = new Bastion.Engine.Proposal { By = which == "propuesta-mia" ? 1 : 0, Action = new Bastion.Engine.RecruitAction { For = which == "propuesta-mia" ? 1 : 0 }, Text = "reclutar un soldado (30 §)" };
+            // 50-escuadra: the first offer chosen, as its steps sent chooseMission (the command, with Red's room: the
+            // squad the engine fills for whoever is connected).
+            if (screen == "squad")
+            {
+                p.State.ActiveMission = p.State.Offers[0].Id;
+                p.State.Squad = Bastion.Engine.Campaign.DefaultSquad(p.State, new List<int> { 1 });
+            }
+            root.SetTop(p.Top());
+            root.SetNav(p.Nav(screen));
+            root.SetScreen(screen);
+            if (screen == "facilities") root.SetSettlement(p.Settlement(new SettlementPick { Piece = which == "asentamiento-bastion" ? "b1" : null }));
+            // The 0.10.1's 10-soldados: the first of Ana's soldiers picked, as its steps did.
+            // 72-acontecimiento was shot after 50-escuadra (its mission chosen), on Arturo's first soldier.
+            if (which.StartsWith("acontecimiento"))
+            {
+                p.State.ActiveMission = p.State.Offers[0].Id;
+                root.SetNav(p.Nav(screen));
+            }
+            if (screen == "barracks") root.SetSoldiers(p.Soldiers(new SoldiersPick { Soldier = which.StartsWith("acontecimiento") ? null : p.State.Soldiers.Find(s => s.Owner == 0 && s.Alive)?.Id }));
+            if (screen == "squad") root.SetSquad(p.Squad());
+            if (screen == "debrief") root.SetDebrief(p.Debrief());
+            // 20- to 22-armeria: the belt with its first item, and the gear with the Armería's first weapon.
+            if (screen == "engineering") root.SetArmory(p.Armory(which == "armeria-arma" ? new ArmoryPick { Tab = "gear", Pick = "f:" + p.State.FoundWeapons[0].Id } : new ArmoryPick()));
+            // 30- to 32-mapa: nothing picked, the first offer, the first zone without contact.
+            if (screen == "geoscape")
+            {
+                root.ValleyCamera = Camera.main;
+                var offer = which == "mapa-mision" ? p.State.Offers[0] : null;
+                var zone = which == "mapa-zona" ? (p.State.Regions.Find(r => !r.Contacted) ?? p.State.Regions[0]).Id : offer?.Region;
+                root.SetMap(p.Map(new MapPick { Offer = offer?.Id, Region = zone }));
+            }
+            root.SetProposal(p.Proposal(), p.Waiting(screen));
+            if (p.State.Proposal != null) root.ClockOf = () => (EngineLore.ProposalClock("0:24", p.State.Proposal.By == 1), 0.62f, false);
+            // 72-acontecimiento: the smugglers' event from the state (Campaign.EventDef), over Soldados; «-voto», Ana's
+            // answer on the table for Arturo to vote.
+            if (which.StartsWith("acontecimiento"))
+            {
+                p.State.Event = Bastion.Engine.CampaignEventIds.Smugglers;
+                if (which == "acontecimiento-voto")
+                {
+                    p.Seats = SampleCampaign.Seats(true);
+                    p.State.Proposal = new Bastion.Engine.Proposal { By = 0, Action = new Bastion.Engine.EventAction { Option = 0 }, Text = $"responder «{Bastion.Engine.Campaign.Events["smugglers"].Options[0].Label}»" };
+                }
+                root.SetProposal(p.Proposal(), p.Waiting(screen));
+                root.SetModal(p.Event(screen));
+            }
+            // 12-tablero: Rafael's board, as Arturo sees a soldier of Ana's.
+            if (which == "tablero") root.SetSkillBoard(p.SkillBoard(p.State.Soldiers.Find(s => s.Owner == 0 && s.Alive)?.Id));
+            // «radio-N»: the story's scene N (Transmissions.Scenes, Lore's own lines) through the radio's controller, its
+            // placeholders filled as for Arturo with Ana; its first line typed.
+            if (which.StartsWith("radio"))
+            {
+                var n = which.Length > "radio-".Length && int.TryParse(which.Substring("radio-".Length), out var k) ? k : 0;
+                var scene = Bastion.Engine.Transmissions.Scenes[n];
+                var radio = new Radio(root.RadioCard, 1, () => new Dictionary<string, string> { ["yo"] = StrategyText.Radio.Greeting(new[] { "Arturo" }), ["saludo"] = StrategyText.Radio.Greeting(new[] { "Ana", "Arturo" }) });
+                root.RadioCard.Play(radio.View(scene, Bastion.Engine.Transmissions.SceneLines(scene, p.State)));
+                root.RadioCard.Finish();
+            }
+            // 73-diario: the diary as the level before had bought this one (collectAlerts with level 2).
+            if (which == "diario")
+            {
+                var before = SampleCampaign.Load();
+                before.Level = 2;
+                var alerts = p.Alerts(before);
+                if (alerts.Count > 0) root.SetModal(alerts[0]);
+            }
+            // The line-up's pads where the 0.10.1's shots have them, right to left as its hangar numbers them (Arte's
+            // Settlement.PadWorld, projected, in the game).
+            var squadPads = new[] { 454f, 606f, 835f, 986f };
+            var debriefPads = new[] { 223f, 355f, 487f, 619f, 820f, 952f, 1085f, 1217f };
+            root.PadAt = (i, n) => screen == "squad" ? new Vector2(squadPads[(squadPads.Length - 1 - i + squadPads.Length) % squadPads.Length], 497) : new Vector2(debriefPads[(n - 1 - i + debriefPads.Length) % debriefPads.Length], 403);
+            if (withRadio)
+            {
+                root.RadioCard.Play(Recap());
+                root.RadioCard.Finish();
+            }
+        }
+
         /// <summary>The sample's stores and level: the palette's costs against them (pieceBlocker).</summary>
         const int Credits = 540;
         const int Parts = 9;
@@ -508,6 +618,13 @@ namespace Bastion.UI.Strategy
             return c;
         }
 
+        /// <summary>The recap of the sample campaign for Arturo, as the engine says it (Transmissions.RecapLines).</summary>
+        static RadioView Recap()
+        {
+            var radio = new Radio(null, 1, () => new Dictionary<string, string> { ["yo"] = StrategyText.Radio.Greeting(new[] { "Arturo" }), ["saludo"] = StrategyText.Radio.Greeting(new[] { "Ana", "Arturo" }) });
+            return radio.View(Bastion.Engine.Transmissions.Recap, Bastion.Engine.Transmissions.RecapLines(SampleCampaign.Load(), 1));
+        }
+
         static string Capital(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
 
         static ProposalView Proposal(bool mine)
@@ -584,7 +701,7 @@ namespace Bastion.UI.Strategy
         public void OnGoMap() => Debug.Log("[estrategia] go map");
         public void OnDebriefContinue() => Debug.Log("[estrategia] debrief continue");
         public void OnDebriefLine(int index) => Debug.Log("[estrategia] debrief line " + index);
-        public void OnZone(string id) => Debug.Log("[estrategia] zone " + id);
+        public void OnZone(string id, bool mark) => Debug.Log($"[estrategia] zone {id}{(mark ? " (marca)" : "")}");
         public void OnOffer(string id) => Debug.Log("[estrategia] offer " + id);
         public void OnWait() => Debug.Log("[estrategia] wait");
         public void OnListen(string rumor) => Debug.Log("[estrategia] listen " + rumor);
@@ -595,5 +712,6 @@ namespace Bastion.UI.Strategy
         public void OnPieceAction(string action) => Debug.Log("[estrategia] piece " + action);
         public void OnPieceClose() => Debug.Log("[estrategia] piece close");
         public void OnWalk() => Debug.Log("[estrategia] walk");
+        public void OnSeen(string key) => Debug.Log("[estrategia] seen " + key);
     }
 }

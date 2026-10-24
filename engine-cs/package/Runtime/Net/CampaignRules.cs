@@ -4,25 +4,10 @@ using Bastion.Engine;
 namespace Bastion.Net
 {
     // What the room asks of campaign.ts, which comes to C# in parts (Campaign/, docs/UNITY.md hito 2): until all of it is
-    // there, the room is tested with rules of its own (tests/NetCampaignRoomTests.cs). The campaign's types are the
-    // engine's (Types/Campaign.cs, CampaignCommand.cs); what the room reads that is already ported it takes from the engine
-    // itself: Campaign.CampaignVersion and FreshCampaignVersion (the save's checks), Progression.BastionLevel and
-    // Bars.PointsLeft.
-
-    /// <summary>
-    /// campaign.ts executeCampaignCommand's answer (CampaignResult): done, and whether the mission goes now; or why not.
-    /// Here until executeCampaignCommand is ported, which brings its own.
-    /// </summary>
-    public sealed class CampaignResult
-    {
-        public bool Ok { get; set; }
-        public string? Error { get; set; }
-        public bool Launch { get; set; }
-
-        public static CampaignResult Success(bool launch = false) => new CampaignResult { Ok = true, Launch = launch };
-
-        public static CampaignResult Failure(string error) => new CampaignResult { Ok = false, Error = error };
-    }
+    // there, the room is tested with rules of its own (tests/NetCampaignRoomTests.cs), and the app's room has none (it
+    // plays skirmishes only). The campaign's types are the engine's (Types/Campaign.cs, CampaignCommand.cs,
+    // Campaign/CampaignResult.cs); what the room reads that is already ported it takes from the engine itself:
+    // Campaign.CampaignVersion and FreshCampaignVersion (the save's checks), Progression.BastionLevel and Bars.PointsLeft.
 
     /// <summary>
     /// What the room asks of the campaign (room.ts imports them from campaign.ts), with TypeScript's signatures: apart from

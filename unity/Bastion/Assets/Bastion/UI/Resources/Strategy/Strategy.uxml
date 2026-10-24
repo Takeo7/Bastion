@@ -12,6 +12,7 @@
     <Style src="Squad.uss" />
     <Style src="Map.uss" />
     <Style src="Settlement.uss" />
+    <Style src="Radio.uss" />
     <ui:VisualElement name="strat" class="strat font-text" picking-mode="Ignore">
         <ui:VisualElement name="view" class="strat-view" picking-mode="Ignore" />
         <ui:VisualElement name="top" class="strat-top" />

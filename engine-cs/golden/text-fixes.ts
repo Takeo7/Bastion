@@ -9,7 +9,12 @@
  *
  * Each fix: what to look for (a string, or a RegExp for a family of texts), what goes instead, and why.
  */
-export const TEXT_FIXES: [string | RegExp, string, string][] = [
+import { inMissions } from '../../packages/engine/src/lore';
+
+/** What goes instead: a text, or (for a RegExp) a function of what it matched, as String.prototype.replace takes it. */
+type Fix = string | ((match: string, ...groups: string[]) => string);
+
+export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   // quests.ts
   ['Se une como sargento, con el rasgo «Pesadillas»', 'Se une con tres barras llenas y el rasgo «Pesadillas»', 'Lindqvist: there are no ranks since Fase 10; `rank: 3` is three bars more (seasoned)'],
   ['un refuerzo (Granadero) y dos granadas', 'un recluta y dos granadas', 'the mine: there are no classes since Fase 10; `recruit: {}` is a plain recruit'],
@@ -32,11 +37,45 @@ export const TEXT_FIXES: [string | RegExp, string, string][] = [
   ['ya quiere despegar: ', 'ya quiere salir: ', 'nextSteps: La Lata doesn\'t take off (XCOM\'s Skyranger)'],
   ['Revisa la escuadra y despega: ', 'Revisa la escuadra y sal: ', 'nextSteps: La Lata doesn\'t take off'],
   ['y sin camas: construye un barracón', 'y sin camas: construye un Barracón', 'nextSteps: a piece\'s name'],
+  // campaign.ts: its events, its log, its reasons why not and nextSteps (Lore, 24/10), for the campaign's port
+  ['una emboscada de los Cazadores cerca del Bastión', 'una emboscada de los Cuervos cerca del Bastión', 'EVENTS.convoy: a Cazador is one of the Cuervos, not a band'],
+  ['−40 suministros, dos misiones nuevas', '−40 suministros; dos misiones nuevas', 'EVENTS.market: an effect\'s parts, as the other events write them'],
+  ['−20 suministros, una misión nueva', '−20 suministros; una misión nueva', 'EVENTS.scientist: the same'],
+  ['El Taller ya está con otro encargo.', 'El Taller ya está con otro trabajo.', 'craftBlocker: «encargo» is the side quests\' name'],
+  ['Llega el segundo comandante', 'Se une el otro jugador', 'addPlayer\'s log and alert: no gender for the partner, who may be Ana'],
+  ['Si lo escuchamos unos días, sabremos qué hay de cierto.', 'Si lo escuchamos un tiempo, sabremos qué hay de cierto.', 'a rumour\'s log: time is counted in missions, never days'],
+  [/^Escuchamos el rumor (.+): faltan (\d+) días de escucha\.$/, (_, zone, n) => `Escuchamos el rumor ${zone}: se sabrá ${inMissions(Number(n))}.`, 'investigate\'s log: in missions, as the Mapa says it («Se sabrá tras la próxima misión»); it said «faltan 1 días»'],
+  [/^El Taller se pone con (.+): (\d+) días\.$/, (_, what, n) => `El Taller se pone con ${what}: sale ${inMissions(Number(n))}.`, 'craft\'s log: in missions, as the Armería says it («Sale tras la próxima misión»)'],
+  [/ recibe medicinas: (\d+) días menos de recuperación\.$/, (_, n) => (n === '1' ? ' recibe medicinas: vuelve una misión antes.' : ` recibe medicinas: vuelve ${n} misiones antes.`), 'medicate\'s log: it said «1 días menos de recuperación»; in missions, as the Curar button'],
+  [/ caduca en (\d+) días?$/, (_, n) => ` caduca ${inMissions(Number(n))}`, 'nextSteps: in missions, as the Mapa says «Caduca tras la próxima misión»'],
+  [/ se convierte mañana$/, ' se convierte tras la próxima misión', 'nextSteps: in missions, as the soldier\'s sheet says it'],
+  [/ se convierte en (\d+) días$/, (_, n) => ` se convierte ${inMissions(Number(n))}`, 'nextSteps: the same'],
+  [' tiene fiebre: hay que tratarle antes.', ' tiene fiebre: necesita el tratamiento antes de salir.', 'squad\'s reason: «tratarle» is leísmo, and the Escuadra\'s tooltip says it so'],
+  [/^No está contagiado\.$/, 'No tiene ningún mordisco.', 'treat\'s reason: «contagiado» doesn\'t agree with a soldier who is a woman'],
+  [/^No está herido\.$/, 'No tiene heridas.', 'medicate\'s reason: «herido» doesn\'t agree with a soldier who is a woman'],
+  [/^Está lista\.$/, 'No hay nada que reponer.', 'rearm\'s reason: said of «el cepo» or «el foso» too'],
+  ['La Marea ha llegado al Bastión.', 'Los muertos han llegado al Bastión.', 'the defeat\'s log: before level 4 nobody knows of the Marea'],
+  ['El Bastión entra en servicio. Elegid la primera misión.', 'Lo que se levante en este claro será el Bastión. Elegid la primera misión.', 'WELCOME: the Bastion starts as a caravan in a clearing, not a station going into service; as the diary\'s first page (Gameplay, 24/10)'],
+  [/^Llega el convoy de Bielsa: Ruth Halvorsen manda (\d+) suministros\.$/, 'Llega el convoy de Ruth Halvorsen: $1 suministros de lo pactado con los enclaves.', 'the convoy\'s log: it brings what every contacted zone pays, not Bielsa\'s alone (Gameplay, 24/10)'],
 ];
+
+/**
+ * transmissions.ts recapLines' last line, fixed in C# only (Gameplay, 24/10), which no fix above can say, for it
+ * depends on the campaign: `step` is nextSteps' first label, as C# has it (fixText), `names` the soldiers'. The 0.10.1
+ * lowered the step's first letter, a soldier's name too («hiro Sato se convierte…»), and a step with its own «:» came
+ * out with two («Lo más urgente: revisa la escuadra y sal: El colegio…»), and one ending in a full stop got a second
+ * («…levantad un Huerto..»). C#: Transmissions.UrgentLine.
+ */
+export function recapUrgent(step: string, names: readonly string[]): string {
+  const end = step.endsWith('.') ? '' : '.';
+  if (step.includes(': ')) return `Lo más urgente. ${step}${end}`;
+  if (names.some((n) => n && step.startsWith(n))) return `Lo más urgente: ${step}${end}`;
+  return `Lo más urgente: ${step[0]!.toLowerCase()}${step.slice(1)}${end}`;
+}
 
 export function fixText(text: string): string {
   let out = text;
-  for (const [from, to] of TEXT_FIXES) out = typeof from === 'string' ? out.split(from).join(to) : out.replace(from, to);
+  for (const [from, to] of TEXT_FIXES) out = typeof from === 'string' ? out.split(from).join(to as string) : out.replace(from, to as never);
   return out;
 }
 

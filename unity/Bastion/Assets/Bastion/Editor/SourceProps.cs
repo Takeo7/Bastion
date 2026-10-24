@@ -29,6 +29,8 @@ namespace Bastion.EditorTools
             // The base's bench and wood pile (basePieces.ts), from Alpine Mountain.
             ("SM_Prop_Bench_01", $"{Alpine}/FBX/Props/SM_Prop_Bench_01.fbx", "PolygonNatureBiomes_Alpine_Mat_01", AlpineAtlas, null),
             ("SM_Prop_Wood_Pile_01", $"{Alpine}/FBX/Props/SM_Prop_Wood_Pile_01.fbx", "PolygonNatureBiomes_Alpine_Mat_01", AlpineAtlas, null),
+            // The snowbanks of a winter's map (snow.ts drifts; their material is the snow's: SnowFeatureMake).
+            ("SM_Env_Snow_Mound_01", $"{Alpine}/FBX/Environment/SM_Env_Snow_Mound_01.fbx", "PolygonNatureBiomes_Alpine_Mat_01", AlpineAtlas, null),
             // The watchtower of the siege and the base (basePieces.ts tower): a deck on legs with its rail, its hut and its
             // stairs taken off (the map's ladder climbs to it), as the manifest's guardTower.
             ("SM_Bld_GuardTower_02", "assets-src/synty/POLYGON_Military_SourceFiles/Fbx/SM_Bld_GuardTower_02.fbx", "PolygonMilitary_01_A", null,

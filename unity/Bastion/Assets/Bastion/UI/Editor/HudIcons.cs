@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Bastion.UI.Hud;
 using UnityEditor;
 using UnityEngine;
@@ -93,6 +94,11 @@ namespace Bastion.UI.EditorTools
             // the strip's, the tabs' and the markers' own).
             ("base:beds", "ICON_MilitaryCombat_Map_Home_02_Clean"), ("base:garden", "ICON_MilitaryCombat_Map_Plants_01_Clean"),
             ("base:will", "ICON_MilitaryCombat_Stat_Mind_01_Clean"),
+            // A soldier's rank (mixta.css .rank: synty-sprites.py's mh/rank-1 to 7, the Military Combat HUD's chevrons).
+            ("rank:1", "SPR_MilitaryCombat_Badge_Chevron_05_Bronze"), ("rank:2", "SPR_MilitaryCombat_Badge_Chevron_06_Bronze"),
+            ("rank:3", "SPR_MilitaryCombat_Badge_Chevron_07_Bronze"), ("rank:4", "SPR_MilitaryCombat_Badge_Chevron_01_Silver"),
+            ("rank:5", "SPR_MilitaryCombat_Badge_Chevron_02_Silver"), ("rank:6", "SPR_MilitaryCombat_Badge_Chevron_03_Gold"),
+            ("rank:7", "SPR_MilitaryCombat_Badge_Chevron_04_Gold"),
             // The base's tabs (mixta-base.css --ni: mh-pin, mh-shop, helmet, crafting; the squad's La Lata by a vehicle).
             ("tab:geoscape", "ICON_MilitaryCombat_Map_Pin_01_Clean"), ("tab:engineering", "ICON_MilitaryCombat_Map_ShopWeapons_01_Clean"),
             ("tab:barracks", Helmet), ("tab:facilities", "ICON_Apocalpyse_Inventory_Crafting_01"), ("tab:squad", Vehicle),
@@ -109,7 +115,7 @@ namespace Bastion.UI.EditorTools
         public static void Make()
         {
             var files = new Dictionary<string, Sprite>();
-            foreach (var guid in AssetDatabase.FindAssets("t:Sprite ICON_", new[] { "Assets/Synty" }))
+            foreach (var guid in AssetDatabase.FindAssets("t:Sprite ICON_", new[] { "Assets/Synty" }).Concat(AssetDatabase.FindAssets("t:Sprite SPR_MilitaryCombat_Badge", new[] { "Assets/Synty" })))
             {
                 var path = AssetDatabase.GUIDToAssetPath(guid);
                 var name = Path.GetFileNameWithoutExtension(path);

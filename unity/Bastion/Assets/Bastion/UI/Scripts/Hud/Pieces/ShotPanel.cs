@@ -26,6 +26,9 @@ namespace Bastion.UI.Hud
             this.handlers = handlers;
             this.tips = tips;
             Ui.CloneInto("ShotPanel", host);
+            // mixta.css: a big plate in its frame, and Disparar slanted (.hud button.fire).
+            PlateFrame.Dress(host);
+            Slant.Dress(host.Q<Button>("fire"));
             host.Q("dial-holder").Add(dial);
             host.Q<Button>("prev").clicked += () => handlers.OnCycleTarget(-1);
             host.Q<Button>("next").clicked += () => handlers.OnCycleTarget(1);

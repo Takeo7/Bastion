@@ -11,7 +11,7 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// The campaigns saved while playing the 0.7.0 to the 0.10.x (golden/campaign/saves/, versions 20 to 25) and UI's
-    /// sample (muestra.json), in the room's save (wip/Net/SaveStore.cs) as the TypeScript host wrote it: read, written and
+    /// sample (muestra.json), in the room's save (Net/SaveStore.cs) as the TypeScript host wrote it: read, written and
     /// read again, they say the same, nulls apart (engine-cs README); and the room goes on with them.
     /// </summary>
     public sealed class NetCampaignSaveTests : IDisposable
@@ -130,6 +130,20 @@ namespace Bastion.Engine.Tests
             // From the 0.7 on, none is put aside; only those before the 25 go through migrateCampaign.
             Assert.Equal(version < Campaign.CampaignVersion ? 1 : 0, rules.Migrated);
             Assert.Equal(Campaign.CampaignVersion, save.Campaign!.Version);
+        }
+
+        [Fact]
+        public void ACampaignThatCantBeBroughtUpToDateIsKeptAsideAndTheHostGoesOn()
+        {
+            // persistence.ts migrates within its try: whatever fails, the save is one that can't be read, never written over.
+            Put(SaveOf(CampaignOf("saves/v24.json")));
+            var log = new List<string>();
+            var rules = new FakeCampaignRules { MigrationFails = true };
+            var room = new Room(new SaveStore(SavePath, log.Add, rules), new FakeRules(), "1.0.0", null, new FakeClock(), new Rng(5), null, rules);
+            Assert.Equal("lobby", room.Summary().phase);
+            Assert.True(File.Exists(Path.Combine(temp, "save.ilegible.json")));
+            Assert.Equal(24, (int)JObject.Parse(File.ReadAllText(Path.Combine(temp, "save.ilegible.json")))["campaign"]!["version"]!);
+            Assert.Contains(log, (l) => l.Contains("no se pudo poner al día su campaña (KeyNotFoundException: una pieza que ya no existe)"));
         }
 
         [Theory]

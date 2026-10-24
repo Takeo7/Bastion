@@ -69,8 +69,8 @@ namespace Bastion.UI.Strategy
         void OnDebriefLine(int index);
 
         // The Mapa.
-        /// <summary>A zone (its marker, a Nido's or an errand's row).</summary>
-        void OnZone(string id);
+        /// <summary>A zone: its marker on the valley (`mark`, its first mission picked too) or a Nido's or an errand's row.</summary>
+        void OnZone(string id, bool mark);
         /// <summary>A mission of the list.</summary>
         void OnOffer(string id);
         /// <summary>«Esperar un día»: this player's key.</summary>
@@ -93,6 +93,9 @@ namespace Bastion.UI.Strategy
         void OnPieceClose();
         /// <summary>«Andar por la base».</summary>
         void OnWalk();
+
+        /// <summary>The pointer went over something marked «Nuevo» (its key, fresh.ts): its mark goes.</summary>
+        void OnSeen(string key);
     }
 
     /// <summary>Nobody answers: everything is ignored (before Bind).</summary>
@@ -129,7 +132,7 @@ namespace Bastion.UI.Strategy
         public void OnGoMap() { }
         public void OnDebriefContinue() { }
         public void OnDebriefLine(int index) { }
-        public void OnZone(string id) { }
+        public void OnZone(string id, bool mark) { }
         public void OnOffer(string id) { }
         public void OnWait() { }
         public void OnListen(string rumor) { }
@@ -140,6 +143,7 @@ namespace Bastion.UI.Strategy
         public void OnPieceAction(string action) { }
         public void OnPieceClose() { }
         public void OnWalk() { }
+        public void OnSeen(string key) { }
     }
 
     /// <summary>The handlers the pieces hold, so Bind can change who answers without making them again.</summary>
@@ -176,7 +180,7 @@ namespace Bastion.UI.Strategy
         public void OnGoMap() => Target.OnGoMap();
         public void OnDebriefContinue() => Target.OnDebriefContinue();
         public void OnDebriefLine(int index) => Target.OnDebriefLine(index);
-        public void OnZone(string id) => Target.OnZone(id);
+        public void OnZone(string id, bool mark) => Target.OnZone(id, mark);
         public void OnOffer(string id) => Target.OnOffer(id);
         public void OnWait() => Target.OnWait();
         public void OnListen(string rumor) => Target.OnListen(rumor);
@@ -187,5 +191,6 @@ namespace Bastion.UI.Strategy
         public void OnPieceAction(string action) => Target.OnPieceAction(action);
         public void OnPieceClose() => Target.OnPieceClose();
         public void OnWalk() => Target.OnWalk();
+        public void OnSeen(string key) => Target.OnSeen(key);
     }
 }

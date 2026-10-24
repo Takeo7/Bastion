@@ -41,6 +41,8 @@ namespace Bastion.UI.Strategy
             {
                 Ui.Text("TE ESPERAN", "strat-proposal__kicker font-title", host);
                 Ui.Text(waiting.Text, "strat-proposal__text", host);
+                // On the Escuadra itself (a siege), no way there.
+                if (string.IsNullOrEmpty(waiting.Button)) return;
                 var go = new Button(handlers.OnWaitingGo) { text = waiting.Button.ToUpperInvariant() };
                 go.AddToClassList("btn-primary");
                 go.AddToClassList("font-title");

@@ -5,10 +5,11 @@
     align-items: flex-start;
 }
 
+/* 24 px apart: the two steel frames (8 px out of each plate) keep a gap between them. */
 .room__side {
     width: 300px;
     padding: 16px 18px;
-    margin-right: 12px;
+    margin-right: 24px;
 }
 
 .room__main {
@@ -110,6 +111,40 @@
     white-space: normal;
     -unity-text-align: upper-left;
     color: var(--t-muted);
+}
+
+/* The main page's choices, one under another as the 0.10.1's menu (lobby.ts .menu-item), and a new campaign's question. */
+.room__menu > .start__choice {
+    margin-bottom: 8px;
+}
+
+.room__ask-kicker {
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+    margin-top: 4px;
+}
+
+.room__ask-title {
+    font-size: 24px;
+    margin: -4px 0 4px;
+}
+
+.room__ask-text {
+    font-size: 13px;
+    white-space: normal;
+    margin-bottom: 6px;
+}
+
+.room__ask-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 6px;
+}
+
+.room__ask-actions > Button {
+    padding: 6px 16px;
+    margin-left: 8px;
 }
 
 .room__foot {

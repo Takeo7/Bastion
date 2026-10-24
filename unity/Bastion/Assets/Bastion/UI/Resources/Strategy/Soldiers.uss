@@ -98,11 +98,12 @@
     top: 4px;
 }
 
-.rank__chevron {
-    width: 12px;
-    height: 3px;
-    margin-bottom: 2px;
-    background-color: var(--t-accent);
+/* A rank: the Military Combat HUD's chevron (mixta.css .rank: 24 × 18, contained). */
+.rank-badge {
+    width: 24px;
+    height: 18px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
 }
 
 .soldier-tile__points {
@@ -210,6 +211,13 @@
     margin-top: 6px;
     font-size: 15px;
     color: #ff6a55;
+    white-space: normal;
+}
+
+/* What a bite's care is about, over its buttons. */
+.sheet__care-line {
+    margin: 0 0 6px;
+    font-size: 12px;
     white-space: normal;
 }
 

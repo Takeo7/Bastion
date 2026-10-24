@@ -57,6 +57,8 @@ namespace Bastion.UI.Strategy
         /// <summary>Not made yet (armour, the Taller's): dim.</summary>
         public bool Dim;
         public bool New;
+        /// <summary>What its «Nuevo» marks (fresh.ts: «item:grenade», «craft:stock»): told back when the pointer goes over it.</summary>
+        public string NewKey;
         public string Tip;
     }
 

@@ -163,6 +163,8 @@ namespace Bastion.UI.Strategy
         public string Blocked;
         /// <summary>The option on the table (proposed).</summary>
         public bool Proposed;
+        /// <summary>Off with nothing said: a proposal is on the table.</summary>
+        public bool Locked;
     }
 
     [Serializable]

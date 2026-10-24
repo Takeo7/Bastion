@@ -87,7 +87,8 @@
     bottom: var(--edge);
     width: var(--unit-w);
     padding: 6px 10px 7px;
-    rotate: -0.6deg;
+    /* Straight in its steel frame, as Mixta had it (synty-base.css: «Straight, not crooked»). */
+    rotate: 0deg;
 }
 
 .abilities {
@@ -105,7 +106,7 @@
     right: var(--edge);
     top: 50%;
     translate: 0 -50%;
-    rotate: 1deg;
+    rotate: 0deg;
     width: 236px;
     padding: 8px 10px;
 }

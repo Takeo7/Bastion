@@ -39,6 +39,9 @@ namespace Bastion.UI.Combat
         List<TurnClock> clocks;
         float heard;
 
+        /// <summary>The campaign as it was when the squad took off (the first `campaign` of the mission), for the base after it.</summary>
+        CampaignState tookOff;
+
         /// <summary>The presence last sent (the picked one and the pointer's tile), and when, so it goes at most a few times a second.</summary>
         string presence;
         float presenceAt;
@@ -99,6 +102,16 @@ namespace Bastion.UI.Combat
                 case RoomMessage room:
                     control.Players = room.Players;
                     if (control.State != null) control.Refresh();
+                    // Out of the mission (back to the base, or to the menu): what comes next is for the next scene, which
+                    // gets it from NetLink in order (the base, its campaign), with the base as it took off.
+                    if (room.Phase != RoomPhases.Mission && room == net.LastRoom)
+                    {
+                        net.Message -= OnMessage;
+                        Bastion.UI.Strategy.BaseSession.TookOff = tookOff;
+                    }
+                    break;
+                case CampaignMessage campaign when tookOff == null:
+                    tookOff = campaign.State;
                     break;
                 case SnapshotMessage snap when snap.State != null:
                     Load(snap.State);

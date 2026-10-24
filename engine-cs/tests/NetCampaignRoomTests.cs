@@ -22,9 +22,12 @@ namespace Bastion.Engine.Tests
         public int Applied;
         public int Pads;
         public GameState? LastMission;
+        /// <summary>Bringing a campaign up to date throws, as a bug in migrateCampaign would.</summary>
+        public bool MigrationFails;
 
         public CampaignState MigrateCampaign(CampaignState c)
         {
+            if (MigrationFails) throw new KeyNotFoundException("una pieza que ya no existe");
             Migrated++;
             c.Version = Campaign.CampaignVersion;
             return c;
@@ -109,7 +112,7 @@ namespace Bastion.Engine.Tests
         }
     }
 
-    /// <summary>The room with the campaign (wip/Net/Room.cs): the base, its orders and proposals, its missions, and its save.</summary>
+    /// <summary>The room with the campaign (Net/Room.cs): the base, its orders and proposals, its missions, and its save.</summary>
     public class NetCampaignRoomTests
     {
         private sealed class Rig : IDisposable

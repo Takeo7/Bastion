@@ -34,7 +34,8 @@ namespace Bastion.Net
     /// <summary>
     /// A connection over TCP (Frame on the wire). It reads and writes on its own tasks, so a slow or stuck peer never holds
     /// up whoever sends; it beats every HeartbeatMs, and one that hears nothing for DeadAfterMs takes the other for gone
-    /// (a laptop shut, the Wi-Fi lost), as the WebSocket's ping did.
+    /// (a laptop shut, the Wi-Fi lost), as the WebSocket's ping did: DeadAfterMs of its own time awake, not the time it
+    /// was held up itself (BeatLoop).
     /// </summary>
     public sealed class TcpConnection : IConnection
     {
@@ -234,12 +235,29 @@ namespace Bastion.Net
 
         private async Task BeatLoop()
         {
+            var beat = Math.Min(heartbeatMs, deadAfterMs / 2);
+            // How long this end was held up itself since it last heard the other, which isn't the other's silence.
+            long held = 0;
+            long heardSeen = Volatile.Read(ref heardAt);
             try
             {
                 while (!cancel.IsCancellationRequested)
                 {
-                    await Task.Delay(Math.Min(heartbeatMs, deadAfterMs / 2), cancel.Token).ConfigureAwait(false);
-                    if (clock.ElapsedMilliseconds - Volatile.Read(ref heardAt) > deadAfterMs)
+                    var slept = clock.ElapsedMilliseconds;
+                    await Task.Delay(beat, cancel.Token).ConfigureAwait(false);
+                    var now = clock.ElapsedMilliseconds;
+                    var heard = Volatile.Read(ref heardAt);
+                    if (heard != heardSeen)
+                    {
+                        heardSeen = heard;
+                        held = 0;
+                    }
+                    // Woken more than a beat late, this end was held up itself (a loaded machine, a pause of the
+                    // collector): its reading as much as this, so what the other sent may be waiting unread, and its
+                    // pings went late. A beat adds two beats' time to the silence at most, so a peer gone quiet is still
+                    // found, only later. (A test with both ends in one process once lost them for 1.3 s.)
+                    held += Math.Max(0, now - slept - 2 * beat);
+                    if (now - heard - held > deadAfterMs && !Unread())
                     {
                         Shut("no responde", false);
                         return;
@@ -250,6 +268,19 @@ namespace Bastion.Net
             catch (OperationCanceledException)
             {
                 /* closed */
+            }
+        }
+
+        /// <summary>Bytes from the other end waiting to be read (the reading was held up while they came): it is there.</summary>
+        private bool Unread()
+        {
+            try
+            {
+                return client.Available > 0;
+            }
+            catch (Exception e) when (e is ObjectDisposedException || e is SocketException)
+            {
+                return false;
             }
         }
     }

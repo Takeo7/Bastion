@@ -668,7 +668,8 @@ namespace Bastion.UI.Combat
             Send(new NewMissionMessage());
         }
 
-        public void OnReturnToBase() { }
+        /// <summary>A campaign mission over: both back to the base (the room ignores backToMenu then).</summary>
+        public void OnReturnToBase() => Send(new ReturnToBaseMessage());
         public void OnBackToMenu() => Send(new BackToMenuMessage());
         public void OnSheet(string unit) => SheetAsked?.Invoke(unit);
         public void OnFloor(int dir) => SetLevel(Level + dir);

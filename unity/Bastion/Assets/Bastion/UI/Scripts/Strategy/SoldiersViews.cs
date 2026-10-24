@@ -33,6 +33,8 @@ namespace Bastion.UI.Strategy
         /// <summary>The six lines' experience (SkillIds.All order), for the hexagon.</summary>
         public float[] Skills = new float[6];
         public int Rank;
+        /// <summary>«Fogueada · 6 puntos gastados en el tablero».</summary>
+        public string RankTip;
         public bool Points;
         public string PointsTip;
         /// <summary>Under the name: «Fiebre · ahora», «2 misiones», «Caído»; null, none.</summary>
@@ -110,10 +112,17 @@ namespace Bastion.UI.Strategy
     [Serializable]
     public sealed class CareView
     {
+        /// <summary>«Mordisco»; null, no head (a wound's cure).</summary>
         public string Title;
+        /// <summary>What it is about: «El tratamiento le quita la fiebre. Tenéis 4 ✚.»; null, none.</summary>
+        public string Line;
         public List<string> Buttons = new List<string>();
         public List<bool> Enabled = new List<bool>();
         public string Waiting;
+        /// <summary>Why the main one is off, in red; null, it isn't.</summary>
+        public string Why;
+        /// <summary>The main one's help on hover.</summary>
+        public string Tip;
     }
 
     /// <summary>

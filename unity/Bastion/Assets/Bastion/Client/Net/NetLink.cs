@@ -21,7 +21,8 @@ namespace Bastion.Client.Net
     ///
     /// For tests with two apps, without clicking: BASTION_ANFITRION=&lt;name&gt; hosts as it starts, BASTION_UNIRSE=&lt;address&gt;
     /// with BASTION_NOMBRE=&lt;name&gt; joins, and BASTION_EMPEZAR=1 starts the skirmish once both are in (hosting).
-    /// BASTION_PUERTO: the first port to host on, instead of RoomHost.FirstPort.
+    /// BASTION_PUERTO: the first port to host on, instead of RoomHost.FirstPort. BASTION_CAMPANA=1: a campaign from a new
+    /// one to its missions, played by MissionBot, and back instead (CampaignRun).
     ///
     /// Of its own: the seat's token at each host (back after a drop, the same seat), `away` when the window loses or gets
     /// the focus, and what Net's ServerFeed does: a gap in the events (a `seq` missed) answered with a `sync`, and what
@@ -60,6 +61,9 @@ namespace Bastion.Client.Net
         /// <summary>The rules the room plays by: the engine's (Setup and Rules), or a recorded mission's (BASTION_MISION). Set before Host.</summary>
         public IRules Rules { get; set; } = new EngineRules();
 
+        /// <summary>The campaign's (Campaign/, campaign.ts in C#): its save brought up to date, its base and its missions. Set before Host.</summary>
+        public ICampaignRules CampaignRules { get; set; } = new EngineCampaignRules();
+
         /// <summary>Where the save, red.log and conexion.json are.</summary>
         public string DataDir { get; private set; } = "";
 
@@ -82,6 +86,8 @@ namespace Bastion.Client.Net
         private DateTime lastFrame;
         /// <summary>BASTION_EMPEZAR: hosting, the skirmish starts once both are in.</summary>
         private bool startWhenBoth;
+        /// <summary>BASTION_CAMPANA: a campaign to its missions and back, by itself.</summary>
+        private CampaignRun? campaignRun;
         private readonly ConcurrentQueue<IReadOnlyList<LanGame>> lanHeard = new ConcurrentQueue<IReadOnlyList<LanGame>>();
         private readonly ConcurrentQueue<string> errors = new ConcurrentQueue<string>();
         private int errorsThisMinute;
@@ -198,6 +204,7 @@ namespace Bastion.Client.Net
             else if (!string.IsNullOrEmpty(joinAt)) problem = Join(joinAt!, Environment.GetEnvironmentVariable("BASTION_NOMBRE") ?? "Prueba");
             if (problem != null) log.Write($"[prueba] {problem}");
             startWhenBoth = Environment.GetEnvironmentVariable("BASTION_EMPEZAR") == "1";
+            campaignRun = CampaignRun.FromEnvironment(log.Write);
         }
 
         // ---------------------------------------------------------- start screen
@@ -214,8 +221,8 @@ namespace Bastion.Client.Net
             {
                 try
                 {
-                    var store = new SaveStore(Path.Combine(DataDir, "save.json"), log.Write);
-                    var made = new Room(store, Rules, Version, HostAddresses.List(), say: (line) => Debug.Log(line));
+                    var store = new SaveStore(Path.Combine(DataDir, "save.json"), log.Write, CampaignRules);
+                    var made = new Room(store, Rules, Version, HostAddresses.List(), say: (line) => Debug.Log(line), campaignRules: CampaignRules);
                     host = int.TryParse(Environment.GetEnvironmentVariable("BASTION_PUERTO"), out var first) ? RoomHost.StartFree(made, first) : RoomHost.StartFree(made);
                     room = made;
                 }
@@ -318,6 +325,8 @@ namespace Bastion.Client.Net
                 startWhenBoth = false;
                 Send(new StartMessage());
             }
+            // BASTION_CAMPANA's player reads it too, before it goes on as it is.
+            campaignRun?.Observe(msg);
             feed.Take(msg);
         }
 
@@ -412,6 +421,7 @@ namespace Bastion.Client.Net
             while (errors.TryDequeue(out var line))
                 if (errorsThisMinute++ < ErrorsPerMinute) Report(line);
             session?.Pump();
+            campaignRun?.Tick(this, Time.realtimeSinceStartup);
         }
 
         /// <summary>The window lost or got the focus: the game out of sight, or back (the `away` message).</summary>

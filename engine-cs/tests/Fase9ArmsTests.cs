@@ -9,9 +9,9 @@ using static Bastion.Engine.Tests.Step2Helpers;
 namespace Bastion.Engine.Tests
 {
     /// <summary>
-    /// packages/engine/test/fase9-arms.test.ts, test by test. Not ported, they play a campaign and need campaign.ts
-    /// (createCampaign, buildSquad, applyMissionResult, executeCampaignCommand, repairBlocker): the two of «the Armería»
-    /// (what the shots took comes home…; improvements found wait in the Armería…).
+    /// packages/engine/test/fase9-arms.test.ts, test by test: the three of «weapons wear», the two of «improvements» and
+    /// the two of «the Armería», which play a campaign. Its helpers `field`, `armed`, `shot` and the Armería's `run`, here
+    /// as private ones.
     /// </summary>
     public class Fase9ArmsTests
     {
@@ -147,6 +147,58 @@ namespace Bastion.Engine.Tests
                 var def = Content.FoundWeapons[loot.Weapon!];
                 Assert.Equal(!string.IsNullOrEmpty(def.Mod) ? new[] { def.Mod! } : new string[0], loot.Mods ?? new List<string>());
             }
+        }
+
+        // ------------------------------------------------------------ the Armería
+
+        /// <summary>A command alone at the base, with Rng(1); it must go through, or it throws with its reason.</summary>
+        private static void Run(CampaignState c, CampaignCommand cmd, int slot = 0)
+        {
+            var r = Campaign.ExecuteCampaignCommand(c, cmd, new CampaignContext { Slot = slot, Connected = new[] { 0 }, Rng = new Rng(1) });
+            if (!r.Ok) throw new InvalidOperationException(r.Error);
+        }
+
+        [Fact(DisplayName = "the Armería › what the shots took comes home with the weapon; parts mend it, 25 each, as far as they go")]
+        public void WhatTheShotsTookComesHomeWithTheWeapon()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            var s = c.Soldiers[0];
+            c.FoundWeapons = new List<FoundWeapon> { new FoundWeapon { Id = "w1", Kind = FoundWeaponIds.AssaultRifle, Holder = s.Id } };
+            c.ActiveMission = c.Offers[0].Id;
+            c.Squad = new List<string> { s.Id };
+            var mission = Setup.CreateMission(new MissionOptions { Map = c.Offers[0].Map, Slots = new List<int> { 0 }, Rng = new Rng(2), Kind = c.Offers[0].Kind, Squad = Campaign.BuildSquad(c) });
+            var unit = mission.Units.First((u) => u.CampaignId == s.Id);
+            Assert.NotNull(unit.Arms);
+            Assert.Equal((FoundWeaponIds.AssaultRifle, "w1"), (unit.Arms!.Primary, unit.Arms.PrimaryId));
+            unit.Arms.Condition = 40;
+            mission.Outcome = Outcomes.Victory;
+            Campaign.ApplyMissionResult(c, mission, new Rng(3));
+            var w = c.FoundWeapons.First((x) => x.Id == "w1");
+            Assert.Equal(40, w.Condition);
+            Assert.Equal(40, Campaign.SquadMember(c, s).Arms?.Condition);
+            c.Parts = 1;
+            Run(c, new RepairCommand { Weapon = "w1" });
+            Assert.Equal(((double?)65, (int?)0), (w.Condition, c.Parts));
+            Assert.Equal("No hay piezas.", Campaign.RepairBlocker(c, 0, "w1"));
+            c.Parts = 5;
+            Run(c, new RepairCommand { Weapon = "w1" });
+            Assert.Equal(((double?)null, (int?)3), (w.Condition, c.Parts));
+            Assert.Equal("Está como nueva.", Campaign.RepairBlocker(c, 0, "w1"));
+        }
+
+        [Fact(DisplayName = "the Armería › improvements found wait in the Armería, two at most on a weapon, and come off again")]
+        public void ImprovementsFoundWaitInTheArmeria()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            c.FoundWeapons = new List<FoundWeapon> { new FoundWeapon { Id = "w1", Kind = FoundWeaponIds.AssaultRifle, Holder = null } };
+            c.WeaponMods = new Dictionary<string, int> { [WeaponModIds.Scope] = 1, [WeaponModIds.Stock] = 1, [WeaponModIds.Silencer] = 1 };
+            Run(c, new ModCommand { Weapon = "w1", Mod = WeaponModIds.Scope, On = true });
+            Run(c, new ModCommand { Weapon = "w1", Mod = WeaponModIds.Stock, On = true });
+            Assert.Matches("quita una antes", Assert.Throws<InvalidOperationException>(() => Run(c, new ModCommand { Weapon = "w1", Mod = WeaponModIds.Silencer, On = true })).Message);
+            Run(c, new ModCommand { Weapon = "w1", Mod = WeaponModIds.Scope, On = false });
+            Assert.Matches("No queda ningún cargador ampliado", Assert.Throws<InvalidOperationException>(() => Run(c, new ModCommand { Weapon = "w1", Mod = WeaponModIds.ExtMag, On = true })).Message);
+            Assert.Equal(new[] { WeaponModIds.Stock }, c.FoundWeapons[0].Mods!);
+            Assert.Equal(new[] { "scope=1", "silencer=1", "stock=0" }, c.WeaponMods.OrderBy((e) => e.Key, StringComparer.Ordinal).Select((e) => $"{e.Key}={e.Value}"));
         }
     }
 }

@@ -684,7 +684,7 @@ namespace Bastion.UI.Combat
         {
             var v = Shown;
             if (a == null || !a.Alive || a.Team != Teams.Alien || !Content.Templates[a.Template].Undead || !Visible(a) || v.Concealed || v.Outcome != null) return null;
-            var seen = Grid.Combatants(v, Teams.Xcom).Where(u => Los.CanSee(v, a, u)).Select(u => u.Nickname != null ? $"«{u.Nickname}»" : u.Name).ToList();
+            var seen = Grid.Combatants(v, Teams.Xcom).Where(u => Los.CanSee(v, a, u)).Select(u => !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name).ToList();
             var who = seen.Count > 1 ? $"{string.Join(", ", seen.Take(seen.Count - 1))} y {seen[seen.Count - 1]}" : seen.FirstOrDefault();
             if (Abilities.AbilitiesOf(a).Contains(AbilityIds.Mindspin)) return who != null ? $"Ve a {who}" : null;
             if (who != null) return $"Ve a {who}: va a por {(seen.Count == 1 ? "ese soldado" : "el más cercano")}";

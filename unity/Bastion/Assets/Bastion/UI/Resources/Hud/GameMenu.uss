@@ -23,7 +23,7 @@
 .game-menu__card {
     width: 360px;
     padding: 16px 22px 14px;
-    rotate: -0.6deg;
+    rotate: 0deg;
 }
 
 .game-menu__title {

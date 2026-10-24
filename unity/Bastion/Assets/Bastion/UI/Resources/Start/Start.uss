@@ -20,6 +20,11 @@
     margin-bottom: 12px;
 }
 
+/* The steel frame (Mixta.uss .plate-frame) is a child of the column too, out of the flow: no gap under it. */
+.start__column > .plate-frame {
+    margin-bottom: 0;
+}
+
 .start__title {
     font-size: 54px;
     letter-spacing: 8px;

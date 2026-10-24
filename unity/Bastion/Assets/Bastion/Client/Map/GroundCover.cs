@@ -214,7 +214,7 @@ namespace Bastion.Client.Map
                         return look == DecorKinds.Tree || look == DecorKinds.StreetTree;
                     }
                     if (Near(Tree)) list.Add(("leaves", 0.5));
-                    if (s.Biome == Biomes.City && kind == GroundMap.Open && Near((_, nx, ny) => ground.Kinds[ny * w + nx] == GroundMap.Street)) list.Add(("grassBlob", 0.16));
+                    if (s.Biome == Biomes.City && kind == GroundMap.Open && Near((k, nx, ny) => k != null && ground.Kinds[ny * w + nx] == GroundMap.Street)) list.Add(("grassBlob", 0.16));
                     // The middle of a square or a car park (open paving all round), so it never reads as an empty slab: weeds
                     // through the cracks, leaves blown in, more litter. All of it flat.
                     bool Paved(int nx, int ny) => nx >= 0 && ny >= 0 && nx < w && ny < h && s.Tiles[ny * w + nx] == TileKinds.Floor && ground.Kinds[ny * w + nx] == GroundMap.Open && data[(ny * w + nx) * 4 + 2] != GroundMap.Lawn && Elev(nx, ny) == e;

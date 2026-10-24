@@ -5,7 +5,6 @@
 // `{saludo}` becomes "Comandantes Ana y Luis" (or "Comandante Ana" alone); `{yo}`, "Comandante Ana" for the player
 // reading it.
 //
-// recapLines waits for campaign.ts nextSteps in C#, in engine-cs/wip/Transmissions.Campaign.cs.
 using System.Collections.Generic;
 using System.Linq;
 
@@ -411,6 +410,39 @@ namespace Bastion.Engine
         {
             if (n <= 0) return "aún no hemos salido";
             return n == 1 ? "llevamos una salida" : $"llevamos {n} salidas";
+        }
+
+        /// <summary>Where the campaign stands, for `slot`: the day, the Bastion, the Marea, their soldiers and the first thing to do.</summary>
+        public static List<SceneLine> RecapLines(CampaignState c, int slot)
+        {
+            var level = Level(c);
+            var story = c.Story.Done != 0 ? $"Llevamos {c.Story.Done} de {Lore.Story.Count} hojas del diario." : "El diario está en la primera hoja.";
+            var mine = c.Soldiers.Where(s => s.Owner == slot && s.Alive).Select(s => s.Name).ToList();
+            var names = mine.Count > 1 ? $"{string.Join(", ", mine.Take(mine.Count - 1))} y {mine[mine.Count - 1]}" : mine.Count == 1 ? mine[0] : "nadie todavía";
+            var first = Campaign.NextSteps(c, slot).FirstOrDefault();
+            var lines = new List<SceneLine>
+            {
+                new SceneLine { Who = SpeakerIds.Morse, Text = $"{{yo}}: {Outings(c.MissionsFlown ?? 0)}. El Bastión es {Lore.BastionLevelA(level)}." },
+                new SceneLine { Who = SpeakerIds.Morse, Text = $"{Lore.DoomStatus(level, c.Doom)}. {story}" },
+                new SceneLine { Who = SpeakerIds.Teo, Text = $"A tu mando: {names}." },
+            };
+            if (first != null) lines.Add(new SceneLine { Who = SpeakerIds.Morse, Text = UrgentLine(c, first.Label) });
+            return lines;
+        }
+
+        /// <summary>
+        /// The recap's last line, the first thing to do. Fixed in C# only (Gameplay, 24/10; text-fixes.ts says so too): the
+        /// 0.10.1 lowered the step's first letter, a soldier's name too («hiro Sato se convierte…»), and a step with its own
+        /// «:» came out with two, and one that ended in a full stop got a second. Now a step that starts with a soldier's name keeps
+        /// it, one with its «:» goes apart, and none ends in «..».
+        /// </summary>
+        private static string UrgentLine(CampaignState c, string step)
+        {
+            // A step that ends its own sentence gets no second full stop («…levantad un Huerto..» in the 0.10.1).
+            var end = step.EndsWith(".") ? "" : ".";
+            if (step.Contains(": ")) return $"Lo más urgente. {step}{end}";
+            if (c.Soldiers.Any(s => s.Name.Length > 0 && step.StartsWith(s.Name, System.StringComparison.Ordinal))) return $"Lo más urgente: {step}{end}";
+            return $"Lo más urgente: {step.Substring(0, 1).ToLowerInvariant()}{step.Substring(1)}{end}";
         }
     }
 }

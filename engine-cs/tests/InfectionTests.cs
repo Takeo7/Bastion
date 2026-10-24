@@ -1,19 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Bastion.Engine;
 using Xunit;
+using static Bastion.Engine.Tests.CampaignHelpers;
 using static Bastion.Engine.Tests.Step1Helpers;
 using static Bastion.Engine.Tests.Step2Helpers;
 
 namespace Bastion.Engine.Tests
 {
     /// <summary>
-    /// packages/engine/test/infection.test.ts: phase 3 of the zombies, infection and medicines (docs/FASE3.md). The
-    /// tests of «infection in combat». `client toEqual s` is Step2Json.StateDiff. Not ported, the seven of «infection at
-    /// the base» (a fever…, untreated it turns…, treating takes both keys…, no medicines…, a bitten soldier cannot join…,
-    /// medicines heal wounds…, La Vega and Tarbes send medicines…): they play a campaign and need campaign.ts
-    /// (createCampaign, executeCampaignCommand, applyMissionResult, buildSquad; the helper raise).
+    /// packages/engine/test/infection.test.ts: phase 3 of the zombies, infection and medicines (docs/FASE3.md), test by
+    /// test: the five of «infection in combat» and the seven of «infection at the base», which play a campaign. `client
+    /// toEqual s` is Step2Json.StateDiff. Its helpers `field`, `pod`, `biteRate`, and the base's `run` and `bitten`, here
+    /// as private ones (`pod` is Step2Helpers.Pod).
     /// </summary>
     public class InfectionTests
     {
@@ -171,6 +172,199 @@ namespace Bastion.Engine.Tests
             foreach (var e in turn.Events) Events.ApplyEvent(client, e);
             foreach (var e in next.Events) Events.ApplyEvent(client, e);
             Assert.Null(Step2Json.StateDiff(s, client));
+        }
+
+        // ------------------------------------------------------------ infection at the base
+
+        private static CampaignResult Run(CampaignState c, CampaignCommand cmd, int slot = 0, IReadOnlyList<int>? connected = null)
+        {
+            return CampaignHelpers.Run(c, cmd, slot, connected ?? Both);
+        }
+
+        /// <summary>A campaign whose last mission brought `bitten` soldiers home infected.</summary>
+        private static (CampaignState c, MissionReport report, List<CampaignSoldier> sick, CampaignSoldier fallen) Bitten(int count = 1, IReadOnlyList<int>? players = null)
+        {
+            players ??= Both;
+            var c = Campaign.CreateCampaign(players, new Rng(2));
+            // Nothing else interrupts the days.
+            c.NextEventDay = 999;
+            c.NextMissionDay = 999;
+            c.NextRumorDay = 999;
+            c.NextFacilityDay = 999;
+            c.NextSupplyDay = 999;
+            c.NextDoomDay = 999;
+            // Nor the siege (it comes straight after the first mission: Ana, 22/10).
+            c.Siege.In = 99;
+            var offer = c.Offers[0];
+            if (!Run(c, new ChooseMissionCommand { Id = offer.Id }, 0, new[] { players[0] }).Ok) throw new InvalidOperationException("mission");
+            var mission = Setup.CreateMission(new MissionOptions { Map = offer.Map, Slots = players.ToList(), Rng = new Rng(3), Kind = offer.Kind, Squad = Campaign.BuildSquad(c), Pods = offer.Pods, Difficulty = offer.Difficulty });
+            var squad = mission.Units.Where((u) => u.Team == Teams.Xcom).ToList();
+            foreach (var u in squad.Take(count)) u.Infected = true;
+            // A bitten soldier who fell stays fallen (in the field, the corpse rose).
+            squad[count].Infected = true;
+            squad[count].Alive = false;
+            squad[count].Hp = 0;
+            mission.Outcome = Outcomes.Victory;
+            mission.OutcomeReason = EndReasons.Objective;
+            var report = Campaign.ApplyMissionResult(c, mission, new Rng(4));
+            var sick = squad.Take(count).Select((u) => c.Soldiers.First((s) => s.Id == u.CampaignId)).ToList();
+            return (c, report, sick, c.Soldiers.First((s) => s.Id == squad[count].CampaignId));
+        }
+
+        /// <summary>`r toEqual { ok: false, error }`.</summary>
+        private static void Refused(string error, CampaignResult r)
+        {
+            Assert.Equal((false, error, false), (r.Ok, r.Error, r.Launch));
+        }
+
+        [Fact(DisplayName = "infection at the base › a soldier back with a bite has a fever: a day (a mission), two with an Enfermería, and no deploying")]
+        public void ASoldierBackWithABiteHasAFever()
+        {
+            var (c, report, sick, fallen) = Bitten();
+            var s = sick[0];
+            Assert.Equal(new[] { s.Id }, report.Infected!);
+            Assert.NotNull(s.Infection);
+            Assert.Equal(c.Day, s.Infection!.Since);
+            Assert.False(fallen.Alive);
+            Assert.Null(fallen.Infection);
+            Assert.Equal(c.Day + Campaign.TurnDays, Campaign.TurnDay(c, s));
+            Raise(c, PieceIds.Infirmary);
+            Assert.Equal(c.Day + Campaign.TurnDays + Campaign.InfirmaryTurnDays, Campaign.TurnDay(c, s));
+            Assert.False(Campaign.SoldierReady(s));
+            Assert.DoesNotContain(s.Id, Campaign.DefaultSquad(c, Both));
+        }
+
+        [Fact(DisplayName = "infection at the base › untreated, it turns on its day: one more of the Caídos")]
+        public void UntreatedItTurnsOnItsDay()
+        {
+            var (c, _, sick, _) = Bitten();
+            var s = sick[0];
+            var day = Campaign.TurnDay(c, s)!.Value;
+            for (var i = 0; i < 10 && s.Alive; i++) Campaign.AdvanceTime(c, new Rng(7 + i));
+            Assert.False(s.Alive);
+            Assert.Equal(day, c.Day);
+            Assert.Equal(((int?)day, FellCauses.Turned), (s.FellDay, s.FellCause));
+            Assert.Null(s.Infection);
+            Assert.Contains(c.Log, (l) => l.Alert != null && Regex.IsMatch(l.Alert.Title, "se ha convertido"));
+        }
+
+        [Fact(DisplayName = "infection at the base › treating takes both keys (alone, one) and 2 ✚, 1 with the Enfermería at level 2")]
+        public void TreatingTakesBothKeys()
+        {
+            var (c, _, sick, _) = Bitten(2);
+            var a = sick[0];
+            var b = sick[1];
+            c.Medicines = 5;
+            Assert.True(Run(c, new TreatCommand { Soldier = a.Id, Ready = true }, 0).Ok);
+            Assert.Equal(a.Id, c.Treatment?.Soldier);
+            Assert.Equal(new[] { true, false }, c.Treatment!.Ready);
+            Assert.NotNull(a.Infection);
+            // Another proposal waits for this one.
+            Assert.False(Run(c, new TreatCommand { Soldier = b.Id, Ready = true }, 1).Ok);
+            Assert.True(Run(c, new TreatCommand { Soldier = a.Id, Ready = true }, 1).Ok);
+            Assert.Null(a.Infection);
+            Assert.Equal(3, c.Medicines);
+            Assert.Null(c.Treatment);
+            // The partner can turn it down.
+            Run(c, new TreatCommand { Soldier = b.Id, Ready = true }, 0);
+            Run(c, new TreatCommand { Soldier = b.Id, Ready = false }, 1);
+            Assert.Null(c.Treatment);
+            Assert.NotNull(b.Infection);
+            // With the Enfermería at level 2, one ✚; and a player alone needs no second key.
+            Raise(c, PieceIds.Infirmary, 2);
+            Assert.Equal(1, Campaign.TreatCost(c));
+            Assert.True(Run(c, new TreatCommand { Soldier = b.Id, Ready = true }, 0, new[] { 0 }).Ok);
+            Assert.Null(b.Infection);
+            Assert.Equal(2, c.Medicines);
+            Assert.Equal(b.WoundedDays == 0, Campaign.SoldierReady(b));
+        }
+
+        [Fact(DisplayName = "infection at the base › no medicines, no treatment")]
+        public void NoMedicinesNoTreatment()
+        {
+            var (c, _, sick, _) = Bitten(1, new[] { 0 });
+            c.Medicines = 1;
+            var r = Run(c, new TreatCommand { Soldier = sick[0].Id, Ready = true }, 0, new[] { 0 });
+            Refused("No hay medicinas suficientes.", r);
+            Assert.NotNull(sick[0].Infection);
+        }
+
+        [Fact(DisplayName = "infection at the base › a bitten soldier cannot join the squad")]
+        public void ABittenSoldierCannotJoinTheSquad()
+        {
+            var (c, _, sick, _) = Bitten();
+            var s = sick[0];
+            var offer = c.Offers.FirstOrDefault((o) => (o.Story ?? 0) == 0) ?? c.Offers[0];
+            Run(c, new ChooseMissionCommand { Id = offer.Id }, 0, new[] { 0 });
+            c.Squad = new List<string>();
+            var r = Run(c, new SquadCommand { Soldier = s.Id, On = true }, s.Owner, new[] { s.Owner });
+            Assert.False(r.Ok);
+            // «tiene fiebre: hay que tratarle antes» is «tiene fiebre: necesita el tratamiento antes de salir» (text-fixes.ts): «fiebre» either way.
+            Assert.Matches("fiebre", r.Ok ? "" : r.Error);
+        }
+
+        [Fact(DisplayName = "infection at the base › medicines heal wounds: 1 ✚ for a day (a mission) fewer")]
+        public void MedicinesHealWounds()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            Assert.Equal(Campaign.StartMedicines, c.Medicines);
+            var s = c.Soldiers[0];
+            Assert.False(Run(c, new MedicateCommand { Soldier = s.Id }, 0, new[] { 0 }).Ok);
+            s.WoundedDays = 3;
+            Assert.True(Run(c, new MedicateCommand { Soldier = s.Id }, 0, new[] { 0 }).Ok);
+            Assert.Equal(3 - Campaign.MedicateDays, s.WoundedDays);
+            Assert.Equal(Campaign.StartMedicines - 1, c.Medicines);
+            c.Medicines = 0;
+            Refused("No hay medicinas.", Run(c, new MedicateCommand { Soldier = s.Id }, 0, new[] { 0 }));
+        }
+
+        [Fact(DisplayName = "infection at the base › La Vega and Tarbes send medicines every few days while they are allies and stand; some operations pay them too")]
+        public void LaVegaAndTarbesSendMedicines()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            // No Marea to get in the way (docs/FASE5.md): the activity stays put.
+            c.NextEventDay = 999;
+            c.NextMissionDay = 999;
+            c.NextRumorDay = 999;
+            c.NextFacilityDay = 999;
+            c.NextSupplyDay = 999;
+            c.NextDoomDay = 999;
+            // Advances to day `until` at least; what the enclaves sent meanwhile, convoy by convoy.
+            List<int> Wait(int until)
+            {
+                // The log is newest first (and short): what's new is what comes before the entry on top now.
+                var mark = c.Log.Count > 0 ? c.Log[0] : null;
+                var start = c.Medicines!.Value;
+                // A day at a time: an event set for the next day stops the clock there (and is dropped).
+                for (var i = 0; i < 60 && c.Day < until; i++)
+                {
+                    c.NextEventDay = c.Day + 1;
+                    Campaign.AdvanceTime(c, new Rng(7 + i));
+                    c.Event = null;
+                    c.NextEventDay = 999;
+                }
+                var fresh = mark != null && c.Log.Contains(mark) ? c.Log.Take(c.Log.IndexOf(mark)).ToList() : c.Log;
+                var convoys = fresh.Where((l) => Regex.IsMatch(l.Text, "medicinas: \\+")).Select((l) => int.Parse(Regex.Match(l.Text, "\\+(\\d+) ✚").Groups[1].Value)).ToList();
+                Assert.Equal(convoys.Sum(), c.Medicines!.Value - start);
+                return convoys;
+            }
+            // Not contacted yet: no allies, no medicines.
+            foreach (var r in c.Regions) if (r.Id == RegionIds.Oce || r.Id == RegionIds.Afr) r.Contacted = false;
+            Assert.Empty(Wait(1 + 2 * Campaign.EnclaveDays));
+            // Contacted: each sends 1 ✚ every few days.
+            foreach (var r in c.Regions) if (r.Id == RegionIds.Oce || r.Id == RegionIds.Afr) r.Contacted = true;
+            var both = Wait(c.Day + 2 * Campaign.EnclaveDays);
+            Assert.True(both.Count >= 1);
+            Assert.All(both, (n) => Assert.Equal(2, n));
+            // A Nido in La Vega: only Tarbes still sends.
+            c.Regions.First((r) => r.Id == RegionIds.Oce).Facility = new RegionFacility { NextDoomDay = 999 };
+            var one = Wait(c.Day + 2 * Campaign.EnclaveDays);
+            Assert.True(one.Count >= 1);
+            Assert.All(one, (n) => Assert.Equal(1, n));
+            // Recoveries always pay a ✚; some others do too.
+            var offers = Enumerable.Range(0, 12).SelectMany((i) => Campaign.CreateCampaign(new[] { 0 }, new Rng(i + 1)).Offers).Where((o) => (o.Story ?? 0) == 0).ToList();
+            foreach (var o in offers) if (o.Kind == MissionKinds.Recovery) Assert.Equal(1, o.Reward.Medicines);
+            Assert.Contains(offers, (o) => o.Kind != MissionKinds.Recovery && (o.Reward.Medicines ?? 0) != 0);
         }
     }
 }

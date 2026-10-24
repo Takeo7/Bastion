@@ -110,7 +110,8 @@ namespace Bastion.Engine
             if (!string.IsNullOrEmpty(def.Tech) && !Progression.HasTech(c.Level, c.Techs, def.Tech!)) return Lore.NeedsLevelLine(Progression.Techs[def.Tech!].Level);
             if ((def.Level ?? 0) != 0 && Progression.BastionLevel(c.Level) < def.Level!.Value) return Lore.NeedsLevelLine(def.Level.Value);
             if (!string.IsNullOrEmpty(def.After) && !Progression.HasCrafted(c.Crafted, def.After!)) return $"Antes hay que hacer {Progression.Crafts[def.After!].The}.";
-            if (c.Base.Works.Any((w) => w.Kind == ConstructionKinds.Craft)) return "El Taller ya está con otro encargo.";
+            // «encargo» is the side quests' name (text-fixes.ts, Lore 24/10): TypeScript says «otro encargo».
+            if (c.Base.Works.Any((w) => w.Kind == ConstructionKinds.Craft)) return "El Taller ya está con otro trabajo.";
             if (!CanAfford(c, def.Cost)) return "No hay suministros suficientes.";
             if ((c.Parts ?? 0) < def.Parts) return "No hay piezas suficientes.";
             return null;

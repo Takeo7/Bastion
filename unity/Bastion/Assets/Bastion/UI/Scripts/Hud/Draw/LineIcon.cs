@@ -8,7 +8,8 @@ namespace Bastion.UI.Hud
     /// <summary>
     /// The icons that were our own drawings on the web, not Synty's (icons.ts: 24 × 24, a line of 2, round ends): drawn
     /// with Painter2D in the element's tint (USS `-unity-background-image-tint-color`, as the sprites are tinted), so
-    /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, and the base's axe.
+    /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, the base's axe, and the
+    /// Coro's wave.
     /// </summary>
     public sealed class LineIcon : VisualElement
     {
@@ -44,6 +45,15 @@ namespace Bastion.UI.Hud
                 pen.To(12.4f, 6.9f);
                 pen.To(10.8f, 5.3f);
                 pen.Fill();
+            },
+            // The Coro's mark on the radio when it has no bust (transmissions.ts portrait: «∿», which none of our fonts
+            // has): one period of a sine wave, up then down.
+            ["wave"] = pen =>
+            {
+                pen.Begin(3, 12);
+                pen.Curve(6.5f, 6, 8.5f, 6, 12, 12);
+                pen.Curve(15.5f, 18, 17.5f, 18, 21, 12);
+                pen.Stroke();
             },
         };
 
@@ -147,6 +157,9 @@ namespace Bastion.UI.Hud
                 p.ClosePath();
                 p.Fill();
             }
+
+            /// <summary>The same path, open and drawn as a line.</summary>
+            public void Stroke() => p.Stroke();
 
             /// <summary>A filled dot (the SVG's small circle, filled and stroked: its radius plus half the line).</summary>
             public void Dot(float x, float y, float radius)

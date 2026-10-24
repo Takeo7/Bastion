@@ -18,15 +18,17 @@ namespace Bastion.UI.Strategy
         readonly VisualElement bottom;
         readonly VisualElement empty;
         readonly TooltipLayer tips;
+        readonly Func<string, Sprite> icon;
         readonly IStrategyHandlers handlers;
         readonly LineupCards cards;
         bool shown;
         SquadView last;
         string key;
 
-        public SquadScreen(VisualElement view, TooltipLayer tips, IStrategyHandlers handlers)
+        public SquadScreen(VisualElement view, TooltipLayer tips, IStrategyHandlers handlers, Func<string, Sprite> icon = null)
         {
             this.tips = tips;
+            this.icon = icon;
             this.handlers = handlers;
             cards = new LineupCards(view, tips, handlers) { Floor = () => bottom.worldBound.yMin };
             left = Ui.El("strat-side strat-side--left strat-side--fit squad-list panel", view);
@@ -65,7 +67,7 @@ namespace Bastion.UI.Strategy
                 return;
             }
             List(v.MineHead, v.MineTip, v.Mine, left);
-            if (v.Partner.Count > 0) List(v.PartnerHead, null, v.Partner, right);
+            if (v.Partner.Count > 0) List(v.PartnerHead, v.PartnerTip, v.Partner, right);
             if (v.Ready.Count > 0)
             {
                 var board = Ui.El("ready-board", bottom);
@@ -124,8 +126,8 @@ namespace Bastion.UI.Strategy
                 Ui.Text(r.Name, "squad-row__name font-title", row);
                 if (r.Rank > 0)
                 {
-                    var rank = Ui.El("squad-row__rank", row);
-                    for (var i = 0; i < r.Rank; i++) Ui.El("rank__chevron", rank);
+                    var rank = Ui.Icon(icon, "rank:" + Mathf.Clamp(r.Rank, 1, 7), "squad-row__rank rank-badge", row);
+                    if (!string.IsNullOrEmpty(r.RankTip)) tips.Attach(rank, r.RankTip);
                 }
                 if (!string.IsNullOrEmpty(r.Chip))
                 {

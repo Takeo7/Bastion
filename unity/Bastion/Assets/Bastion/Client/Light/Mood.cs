@@ -57,6 +57,21 @@ namespace Bastion.Client
         };
 
         /// <summary>
+        /// Winter daylight in Brena (renderer.ts SNOW_DAY): the day's, bluer and paler, its sun whiter and a little weaker;
+        /// for a snowy mission and the settlement's clearing in winter.
+        /// </summary>
+        public static readonly Values SnowDay = new Values
+        {
+            haze = 0xc3d4e2, hazeDensity = 0.0032f, sun = 0xeaf3ff, sunIntensity = 2.9f, sunFrom = new Vector3(5, 26, -31),
+            skyLight = 0xc1d5ed, groundLight = 0x899bad, skyIntensity = 1.75f, fill = 0xeaf3ff, fillIntensity = 0.3f, exposure = 1.18f,
+            bloomStrength = 0.35f, bloomThreshold = 0.92f, saturation = 0.9f, contrast = 1.04f, vignette = 0.2f,
+            shadowTint = new Vector3(0.92f, 0.98f, 1.06f), highlightTint = new Vector3(1.0f, 1.0f, 1.02f), lift = new Vector3(0.04f, 0.05f, 0.065f),
+        };
+
+        /// <summary>Whether a mission is in winter (snow.ts snowyMission): the engine says so; before it did, the opening chapter.</summary>
+        public static bool Snowy(GameState state) => state?.Snow ?? state?.CampaignMission?.Story == 1;
+
+        /// <summary>
         /// How vivid the colours are over each mood's grade (post.ts VIVID_LEVELS; VIVID_DEFAULT 1, Arturo's choice of
         /// 22/10, «bastante más vivo»): saturation, vibrance, contrast, lift, gain.
         /// </summary>
@@ -97,8 +112,8 @@ namespace Bastion.Client
             asset.shadowDistance = metres.Value;
         }
 
-        /// <summary>The light for `state` (by night if its mission is), on «Luz».</summary>
-        public static Mood For(GameState state) => Show(state?.Mission?.Night == true ? Night : Day);
+        /// <summary>The light for `state` (by night if its mission is; by day in winter, the snow's), on «Luz».</summary>
+        public static Mood For(GameState state) => Show(state?.Mission?.Night == true ? Night : Snowy(state) ? SnowDay : Day);
 
         public static Mood Show(Values values)
         {

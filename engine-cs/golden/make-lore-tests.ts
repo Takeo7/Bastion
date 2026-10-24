@@ -15,7 +15,8 @@ import { FOUND_WEAPONS } from '../../packages/engine/src/content';
 import { SKILL_IDS } from '../../packages/engine/src/skills';
 import * as Q from '../../packages/engine/src/quests';
 import type { MissionOffer, MissionReward } from '../../packages/engine/src/campaign';
-import { fixText } from './text-fixes';
+import { fixText, recapUrgent } from './text-fixes';
+import { nextSteps } from '../../packages/engine/src/campaign';
 import * as T from '../../packages/engine/src/transmissions';
 import type { CampaignState } from '../../packages/engine/src/campaign';
 
@@ -756,7 +757,16 @@ const sceneCases = cases.map((k) => {
   const linesOf = Object.fromEntries(
     T.SCENES.filter((s) => s.lines.some((l) => l.if)).map((s) => [s.id, T.sceneLines(s, c).map((l) => [l.who, fixText(l.text)])]),
   );
-  return { name: k.name, base: k.base, patch: k.patch, unlocked, next, lines: linesOf };
+  // The recap for each seat: lore.ts's lines through the fixes, the last one as C# says it (recapUrgent).
+  const recap = Object.fromEntries(
+    ([0, 1] as const).map((slot) => {
+      const lines = T.recapLines(c, slot).map((l) => [l.who, fixText(l.text)]);
+      const first = nextSteps(c, slot)[0];
+      if (first) lines[lines.length - 1] = ['morse', recapUrgent(fixText(first.label), c.soldiers.map((s) => s.name))];
+      return [String(slot), lines];
+    }),
+  );
+  return { name: k.name, base: k.base, patch: k.patch, unlocked, next, lines: linesOf, recap };
 });
 const unreached = T.SCENES.map((s) => s.id).filter((id) => !reached.has(id) && !WAITING.has(id));
 if (unreached.length) throw new Error(`scenes no case reaches: ${unreached.join(', ')}`);

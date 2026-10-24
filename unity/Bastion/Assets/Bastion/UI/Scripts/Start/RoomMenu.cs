@@ -3,14 +3,17 @@ using System.Linq;
 using Bastion.Client.Net;
 using Bastion.Engine;
 using Bastion.Net;
+using Bastion.UI.Hud;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Bastion.UI.Start
 {
     /// <summary>
-    /// The room menu, between joining and the mission (lobby.ts's skirmish sheet; docs/UNITY-UI.md): the commanders and
-    /// their state, where the partner joins (the host's addresses, with «Copiar»), the mission, the map (the city alone in
+    /// The room menu, between joining and the mission or the base (lobby.ts; docs/UNITY-UI.md): the commanders and their
+    /// state, where the partner joins (the host's addresses, with «Copiar»); its main page, «Continuar campaña» (the
+    /// saved one's outings, level and Marea, or the mission left half played), «Nueva campaña» (asked first over a saved
+    /// one or without the partner) and «Escaramuza»; and the skirmish's sheet: the mission, the map (the city alone in
     /// the first milestone), day or night, and start (the `start` message). It reads NetLink.LastRoom and never listens to
     /// NetLink.Message: what the host sends waits there for the game, its snapshot first (AppFlow loads the battle when
     /// the room's phase is mission). «Ir al inicio» leaves; a host with the partner in is warned first.
@@ -27,6 +30,8 @@ namespace Bastion.UI.Start
         string mission;
         bool night;
         bool warned;
+        /// <summary>main, ask (a new campaign's question) or skirmish.</summary>
+        string page = "main";
         /// <summary>Made-up room and addresses for a capture (Preview); null, NetLink's.</summary>
         RoomMessage previewRoom;
         IReadOnlyList<HostAddress> previewAddresses;
@@ -44,26 +49,35 @@ namespace Bastion.UI.Start
             doc.rootVisualElement.Clear();
             tree.CloneTree(doc.rootVisualElement);
             root = doc.rootVisualElement.Q("room");
+            // mixta.css .menu-column, .menu-squad: the room's two plates framed, «Empezar» slanted (as the 0.10.1).
+            PlateFrame.Dress(root.Q(className: "room__side"));
+            PlateFrame.Dress(root.Q(className: "room__main"));
+            root.Query<Button>(className: "btn-primary").ForEach(Slant.Dress);
             link = NetLink.Instance;
             mission = PlayerPrefs.GetString(MissionKey, "elimination");
             if (!RoomText.Missions.Any(m => m.Id == mission)) mission = "elimination";
             night = PlayerPrefs.GetInt(NightKey, 0) == 1;
             warned = false;
+            page = "main";
             key = null;
             root.Q<Label>("mission-head").text = RoomText.Mission.ToUpperInvariant();
             root.Q<Label>("map-head").text = RoomText.Map.ToUpperInvariant();
             root.Q<Label>("hour-head").text = RoomText.Hour.ToUpperInvariant();
             root.Q<Button>("start").clicked += StartMission;
             root.Q<Button>("leave").clicked += Leave;
+            var back = root.Q<Button>("back");
+            back.text = RoomText.Back;
+            back.clicked += () => Go("main");
             Draw();
         }
 
-        /// <summary>A room to show without a connection (HudShots.Room): its players, the host's addresses, hosting or not.</summary>
-        public void Preview(RoomMessage room, IReadOnlyList<HostAddress> addresses, bool hosting)
+        /// <summary>A room to show without a connection (HudShots.Room): its players, the host's addresses, hosting or not, the page.</summary>
+        public void Preview(RoomMessage room, IReadOnlyList<HostAddress> addresses, bool hosting, string page = "main")
         {
             previewRoom = room;
             previewAddresses = addresses;
             previewHosting = hosting;
+            this.page = page;
             key = null;
         }
 
@@ -78,7 +92,8 @@ namespace Bastion.UI.Start
             var room = Room;
             // Drawn again only when who is in, their state, or the choices change.
             var k = room == null ? "" : string.Join("|", room.Players.Select(p => $"{p.Slot}:{p.Name}:{p.Connected}:{p.Away}"));
-            k += $"#{Hosting}#{mission}#{night}#{warned}";
+            var saved = room?.SavedCampaign;
+            k += $"#{Hosting}#{mission}#{night}#{warned}#{page}#{(saved != null ? RoomText.Saved(saved) : "")}#{room?.SetAside}";
             if (k == key) return;
             key = k;
             Draw();
@@ -102,6 +117,11 @@ namespace Bastion.UI.Start
                 if (p != null) Ui.Text(!p.Connected ? RoomText.Offline : p.Away == true ? RoomText.Away : RoomText.Connected, "room__seat-state", seat);
             }
             DrawInvite(players);
+            var sheet = page == "skirmish";
+            Ui.Show(root.Q("skirmish"), sheet);
+            Ui.Show(root.Q<Button>("start"), sheet);
+            Ui.Show(root.Q<Button>("back"), sheet);
+            DrawMenu(room, players, sheet);
 
             Options(root.Q("missions"), RoomText.Missions.Select(m => (m.Id, m.Name, m.About)), mission, id =>
             {
@@ -123,6 +143,72 @@ namespace Bastion.UI.Start
             var leave = root.Q<Button>("leave");
             leave.text = warned ? Lore.QuitText.Accept : Lore.HostClosed.Home;
             Say(warned ? Lore.QuitHostWarning(Partner(players)) : "");
+        }
+
+        /// <summary>
+        /// The main page (lobby.ts renderMain): «Continuar campaña» with how far it went, «Nueva campaña», «Escaramuza»
+        /// (not with a campaign mission half played), and the note of a campaign kept aside; or, on «Nueva campaña» over a
+        /// saved one or without the partner, its question (renderConfirm).
+        /// </summary>
+        void DrawMenu(RoomMessage room, List<PlayerInfo> players, bool sheet)
+        {
+            var menu = root.Q("menu");
+            menu.Clear();
+            Ui.Show(menu, !sheet);
+            if (sheet) return;
+            var saved = room?.SavedCampaign;
+            var alone = players.Count(p => p.Connected) < 2;
+            var ok = room != null && players.Any(p => p.Connected);
+            if (page == "ask")
+            {
+                Ui.Text(RoomText.NewCampaign.ToUpperInvariant(), "room__ask-kicker font-title", menu);
+                Ui.Text((saved != null ? RoomText.AskAgain : RoomText.AskAlone).ToUpperInvariant(), "room__ask-title font-title", menu);
+                if (saved != null) Ui.Text(RoomText.Replaces(saved), "room__ask-text", menu);
+                if (alone) Ui.Text(RoomText.AloneText, "room__ask-text", menu);
+                var actions = Ui.El("room__ask-actions", menu);
+                actions.Add(new Button(() => Go("main")) { text = alone && saved == null ? RoomText.Wait : RoomText.Cancel });
+                var yes = new Button(() =>
+                {
+                    Go("main");
+                    Send(new NewCampaignMessage());
+                }) { text = saved != null ? RoomText.StartAgain : RoomText.StartNew };
+                yes.AddToClassList("btn-primary");
+                actions.Add(yes);
+                Slant.Dress(yes);
+                return;
+            }
+            if (saved != null) Choice(menu, RoomText.Continue, RoomText.Saved(saved), true, ok, () => Send(new ContinueCampaignMessage()));
+            Choice(menu, RoomText.NewCampaign, RoomText.NewCampaignAbout, saved == null, ok, () =>
+            {
+                if (saved == null && !alone) Send(new NewCampaignMessage());
+                else Go("ask");
+            });
+            Choice(menu, RoomText.Skirmish, saved?.InMission != null ? RoomText.SkirmishBlocked : RoomText.SkirmishAbout, false, ok && saved?.InMission == null, () => Go("skirmish"));
+            if (!string.IsNullOrEmpty(room?.SetAside)) Ui.Text(RoomText.SetAside(room.SetAside), "start__hint", menu);
+        }
+
+        /// <summary>A choice of the main page (lobby.ts .menu-item): its name big, what it is small under it.</summary>
+        static void Choice(VisualElement menu, string title, string about, bool primary, bool enabled, System.Action click)
+        {
+            var b = new Button(click);
+            b.AddToClassList("start__choice");
+            if (primary) b.AddToClassList("btn-primary");
+            Ui.Text(title.ToUpperInvariant(), "start__choice-title font-title", b).pickingMode = PickingMode.Ignore;
+            Ui.Text(about, "start__choice-about", b).pickingMode = PickingMode.Ignore;
+            b.SetEnabled(enabled);
+            menu.Add(b);
+            if (primary) Slant.Dress(b);
+        }
+
+        void Go(string to)
+        {
+            page = to;
+            key = null;
+        }
+
+        void Send(ClientMessage msg)
+        {
+            if (previewRoom == null) link.Send(msg);
         }
 
         /// <summary>How the partner joins (lobby.ts invite): the host's addresses, the default route's first, the rest folded.</summary>

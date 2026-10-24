@@ -16,6 +16,8 @@ namespace Bastion.UI.Strategy
         public string MineTip;
         public List<PickRowView> Mine = new List<PickRowView>();
         public string PartnerHead;
+        /// <summary>«Los elige su jugador».</summary>
+        public string PartnerTip;
         public List<PickRowView> Partner = new List<PickRowView>();
         /// <summary>Each player and whether they are ready (only with both connected); empty, none.</summary>
         public List<ReadyView> Ready = new List<ReadyView>();
@@ -48,6 +50,8 @@ namespace Bastion.UI.Strategy
         public string Accent;
         public float[] Skills = new float[6];
         public int Rank;
+        /// <summary>«Fogueado · 6 puntos gastados en el tablero».</summary>
+        public string RankTip;
         public string Chip;
         /// <summary>good, bad, warn or null.</summary>
         public string ChipTone;

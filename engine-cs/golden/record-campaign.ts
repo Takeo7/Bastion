@@ -77,6 +77,7 @@ import {
   campaignHackBonus,
   contactBlocker,
   craftBlocker,
+  fellBlocker,
   CRAFTS,
   createCampaign,
   createMission,
@@ -116,6 +117,11 @@ import { fixDeep } from './text-fixes';
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'campaign');
 mkdirSync(out, { recursive: true });
+/**
+ * EXTRA_GAMES=<folder> EXTRA_SEEDS=<n>: only whole campaigns, n of them by seed, into that folder (outside git): a wider
+ * check than the recorded ones, for CampaignGamesTests with CAMPAIGN_GAMES=<folder>.
+ */
+const extra = process.env.EXTRA_GAMES;
 
 const both: Slot[] = [0, 1];
 const json = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
@@ -339,7 +345,7 @@ keep('duo-new', duo);
   keep('ending', end);
 }
 
-writeFileSync(join(out, 'states.json'), JSON.stringify({ states }) + '\n');
+if (!extra) writeFileSync(join(out, 'states.json'), JSON.stringify({ states }) + '\n');
 console.log(`campaign/states.json: ${states.length} estados (${states.map((s) => s.name).join(', ')})`);
 
 // ------------------------------------------------------------------- tables and commands
@@ -359,7 +365,7 @@ const ids = {
   traits: Object.keys(TRAITS),
   baseViews: baseViewSchema.options,
 };
-writeFileSync(join(out, 'tables.json'), JSON.stringify({ regions: REGIONS, roads: ROADS, facilities: FACILITIES, constants, ids }) + '\n');
+if (!extra) writeFileSync(join(out, 'tables.json'), JSON.stringify({ regions: REGIONS, roads: ROADS, facilities: FACILITIES, constants, ids }) + '\n');
 
 const painted: Appearance = { primary: '#826cbd', secondary: '#a678ff', visor: '#9fe3ff', head: 'cap', build: 'normal', sex: 'f', helmet: '#334455', character: 'hunter' };
 const commands: CampaignCommand[] = [
@@ -400,7 +406,7 @@ const commands: CampaignCommand[] = [
 ];
 // As the server takes them off the wire: one the schema refuses would stop here.
 for (const cmd of commands) campaignCommandSchema.parse(cmd);
-writeFileSync(join(out, 'commands.json'), JSON.stringify({ commands }) + '\n');
+if (!extra) writeFileSync(join(out, 'commands.json'), JSON.stringify({ commands }) + '\n');
 console.log(`campaign/tables.json, campaign/commands.json: ${commands.length} órdenes`);
 
 // ------------------------------------------------------------------- what only reads
@@ -516,5 +522,519 @@ const fixed = {
   nightFor: [...Array.from({ length: 100 }, (_, i) => i), 123456789, 2 ** 31 - 1, 16683818, 2029091731].map((seed) => [seed, nightFor(seed)]),
   sexOfPerson: people.map((n) => [n, sexOfPerson(n) ?? null]),
 };
-writeFileSync(join(out, 'reads.json'), JSON.stringify(fixDeep({ fixed, states: sources.map((s) => ({ source: s.source, reads: reads(s.campaign) })) })) + '\n');
+if (!extra) writeFileSync(join(out, 'reads.json'), JSON.stringify(fixDeep({ fixed, states: sources.map((s) => ({ source: s.source, reads: reads(s.campaign) })) })) + '\n');
 console.log(`campaign/reads.json: ${sources.length} estados`);
+
+// ------------------------------------------------------------------- whole campaigns
+
+/*
+ * games/*.json (the rules, third part): whole campaigns played by a bot, operation by operation, as the room plays them:
+ * a command with its seat and who is connected (the result, ok or why not), a mission over (createMission with an Rng
+ * of its own, ended without playing it, then applyMissionResult with the campaign's), a partner who comes late, the
+ * time going on, a save migrated; and now and then a look at what the screens read (nextSteps of both seats, the
+ * squad going out, what the operation names). One Rng for the campaign the whole game, as the room has; the bot's
+ * choices and the missions draw on others. Each operation keeps the campaign's Rng after it and how the campaign
+ * changed (`delta`: the keys that changed; a list of the same length by its items, `$items`; the log by what came in
+ * front, `$unshift`), through fixDeep. CampaignGamesTests plays the same in C# and compares the campaign after each.
+ */
+
+import { applyMissionResult as foldMission, advanceTime, migrateCampaign, nextSteps, FOUND_WEAPONS, TEMPLATES, WEAPON_MODS as MODS, ITEMS as ITEM_DEFS, BOARD as BOARD_CELLS_LIST, ENDING_TITLES, epilogue, bastionLevel, raiseCost as raiseCostOf, rearmCost, repairCost } from '../../packages/engine/src/index';
+import type { GameState as Mission, Loot } from '../../packages/engine/src/index';
+
+/** How `now` differs from `prev` (plain JSON campaigns, key by key). */
+function campaignDelta(prev: Record<string, any>, now: Record<string, any>): Record<string, unknown> {
+  const d: Record<string, unknown> = {};
+  for (const k of new Set([...Object.keys(prev), ...Object.keys(now)])) {
+    const a = prev[k];
+    const b = now[k];
+    if (canonOf(a) === canonOf(b)) continue;
+    if (k === 'log' && Array.isArray(a) && Array.isArray(b)) {
+      // What came in front, the old ones pushed back (and the last ones gone past 40).
+      let n = 0;
+      while (n <= b.length && canonOf(b.slice(n)) !== canonOf(a.slice(0, b.length - n))) n++;
+      if (n <= b.length) {
+        d.log = { $unshift: b.slice(0, n), length: b.length };
+        continue;
+      }
+    }
+    if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) {
+      const items: Record<string, unknown> = {};
+      b.forEach((v, i) => {
+        if (canonOf(a[i]) !== canonOf(v)) items[i] = v ?? null;
+      });
+      d[k] = { $items: items };
+      continue;
+    }
+    d[k] = b ?? null;
+  }
+  return d;
+}
+
+/** JSON with its keys sorted and nulls left out, to tell whether two values are the same. */
+function canonOf(v: unknown): string {
+  if (v === null || v === undefined) return 'null';
+  if (Array.isArray(v)) return `[${v.map(canonOf).join(',')}]`;
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o).filter((k) => o[k] !== undefined && o[k] !== null).sort().map((k) => `${JSON.stringify(k)}:${canonOf(o[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v);
+}
+
+/** What applyMissionResult reads of a mission over: the squad whole; of the rest, what it is and how it ended. */
+function stripMission(s: Mission): Record<string, unknown> {
+  const units = s.units.map((u) =>
+    TEMPLATES[u.template].team === 'xcom' || u.campaignId
+      ? u
+      : { id: u.id, template: u.template, team: u.team, owner: u.owner, pos: u.pos, hp: u.hp, maxHp: u.maxHp, alive: u.alive, evacuated: u.evacuated, objective: u.objective, kills: u.kills, ...(u.automaton ? { automaton: u.automaton, ammo: u.ammo } : {}) },
+  );
+  return json({
+    mapId: s.mapId, mapName: s.mapName, biome: s.biome, width: s.width, height: s.height, tiles: [], elev: [], units, pods: [], mission: s.mission,
+    turn: s.turn, activeTeam: s.activeTeam, concealed: s.concealed, ready: s.ready, smoke: [], outcome: s.outcome, outcomeReason: s.outcomeReason,
+    ...(s.base ? { base: s.base } : {}), ...(s.breakables ? { breakables: s.breakables } : {}), ...(s.traps ? { traps: s.traps } : {}),
+  });
+}
+
+const UTILITY = (Object.keys(ITEM_DEFS) as engine.ItemId[]).filter((id) => ITEM_DEFS[id].slot === 'utility');
+const FOUND = Object.keys(FOUND_WEAPONS) as engine.FoundWeaponId[];
+const PRIMARY = FOUND.filter((k) => FOUND_WEAPONS[k].slot === 'primary');
+const MOD_IDS = Object.keys(MODS) as engine.WeaponModId[];
+
+/** Ends a mission without playing it, as the bot decides: won or not, and how each soldier came out of it. */
+function endMissionBy(s: Mission, bot: Rng): void {
+  const siege = !!s.mission.siege;
+  const won = bot.int(30) >= (siege ? 3 : 1);
+  const squad = s.units.filter((u) => u.campaignId);
+  if (won) {
+    for (const u of s.units) if (u.team === 'alien' && !u.automaton) ((u.alive = false), (u.hp = 0));
+    s.outcome = 'victory';
+    s.outcomeReason = 'objective';
+  } else {
+    s.outcome = 'defeat';
+    s.outcomeReason = bot.pick(['wiped', 'abandoned', 'timer'] as const);
+  }
+  for (const u of squad) {
+    const deeds: Record<string, number> = {};
+    for (const k of ['shot', 'hit', 'gunKill', 'swing', 'blow', 'throw', 'search', 'healOther', 'run'] as const) {
+      const n = bot.int(5) - 1;
+      if (n > 0) deeds[k] = n;
+    }
+    u.deeds = deeds as engine.Deeds;
+    u.kills = bot.int(3);
+    if (bot.int(4) === 0) u.hp = Math.max(1, u.maxHp - 1 - bot.int(3));
+    if (bot.int(8) === 0) u.infected = true;
+    const fate = bot.int(40);
+    if ((!won && s.outcomeReason === 'wiped') || fate === 0) ((u.alive = false), (u.hp = 0));
+    else if (fate === 1) u.lost = true;
+    else if (fate === 2) ((u.evacuated = true), (u.alive = false));
+    if (bot.int(3) === 0) {
+      const pack: Loot[] = [];
+      for (let i = bot.int(4); i > 0; i--) {
+        const k = bot.int(7);
+        if (k === 0) pack.push({ supplies: 5 + bot.int(20) });
+        else if (k === 1) pack.push({ item: bot.pick(UTILITY) });
+        else if (k === 2) pack.push({ medicines: 1 });
+        else if (k === 3) pack.push({ food: 1 + bot.int(3) });
+        else if (k === 4) pack.push({ parts: 1 + bot.int(2) });
+        else if (k === 5) pack.push({ weapon: bot.pick(FOUND), ...(bot.int(2) ? { condition: 40 + bot.int(60) } : {}), ...(bot.int(3) === 0 ? { mods: [bot.pick(MOD_IDS)] } : {}) });
+        else pack.push({ mod: bot.pick(MOD_IDS) });
+      }
+      u.backpack = pack;
+    }
+    // A find taken up instead of its own, which comes back in the backpack (docs/FASE8.md §C).
+    if (u.arms?.primaryId && bot.int(8) === 0) {
+      // Carried home in the backpack, or left out there (and lost).
+      if (bot.int(2) === 0) (u.backpack ??= []).push({ weapon: u.arms.primary!, weaponId: u.arms.primaryId });
+      u.arms = { ...u.arms, primary: bot.pick(PRIMARY) };
+      delete u.arms.primaryId;
+      delete u.arms.condition;
+      delete u.arms.mods;
+    } else if (u.arms?.primaryId) u.arms.condition = Math.max(0, (u.arms.condition ?? 100) - bot.int(40));
+  }
+  if (siege) {
+    // What the dead broke down: a few doors and barricades, the traps gone off, the turrets as they ended.
+    s.breakables ??= {};
+    for (const node of Object.keys(s.breakables).slice(0, 6)) if (bot.int(2) === 0) s.breakables[Number(node)] = bot.int(3) === 0 ? 0 : Math.max(0, s.breakables[Number(node)]! - 1 - bot.int(4));
+    for (const t of s.traps ?? []) if (bot.int(2) === 0) t.charges = Math.max(0, t.charges - 1);
+    for (const u of s.units) {
+      if (!u.automaton) continue;
+      if (bot.int(3) === 0) u.hp = Math.max(0, u.hp - 2);
+      if (bot.int(2) === 0) u.ammo = Math.max(0, u.ammo - 2);
+    }
+  }
+}
+
+/** Ends a mission as the story bot's help has it: won (or `won` false: abandoned, everyone home), nobody hurt or bitten. */
+function endMissionHelped(s: Mission, bot: Rng, won: boolean): void {
+  if (won) {
+    for (const u of s.units) if (u.team === 'alien' && !u.automaton) ((u.alive = false), (u.hp = 0));
+    s.outcome = 'victory';
+    s.outcomeReason = 'objective';
+  } else {
+    s.outcome = 'defeat';
+    s.outcomeReason = 'abandoned';
+  }
+  for (const u of s.units.filter((x) => x.campaignId)) {
+    u.deeds = { shot: 1 + bot.int(4), hit: bot.int(3), search: bot.int(2) } as engine.Deeds;
+    u.kills = bot.int(3);
+    if (bot.int(4) === 0) u.backpack = [{ supplies: 10 + bot.int(20) }, { parts: 1 + bot.int(2) }];
+  }
+  // A siege spends the traps and the turrets' rounds, and beats a few doors.
+  for (const t of s.traps ?? []) t.charges = Math.max(0, t.charges - 1 - bot.int(2));
+  for (const u of s.units) if (u.automaton) u.ammo = Math.max(0, u.ammo - 1 - bot.int(3));
+  if (s.breakables) for (const node of Object.keys(s.breakables).slice(0, 3)) s.breakables[Number(node)] = Math.max(1, s.breakables[Number(node)]! - 1);
+}
+
+interface GamePlan {
+  name: string;
+  seed: number;
+  /** A new campaign of these seats, or a saved one (golden/campaign/…), migrated if it is older. */
+  start: { create: Slot[] } | { save: string };
+  missions: number;
+  /** After this many missions the second player comes (a solo campaign). */
+  lateJoin?: number;
+  /** One in this many rounds the partner is away. */
+  away?: number;
+  /** Plays for the end: no waiting by choice, and the answers that hold the Marea back. */
+  careful?: boolean;
+  /**
+   * Plays the story to its end, helped in the field (every mission won, nobody hurt): the Bastion up as soon as it can
+   * be, the Nidos burnt, the Sala de radio up to its Estación de escucha, traps set and set again after each siege, and
+   * the vaccine answered with `ending` (0 for everyone, 1 for those who kept their deals). `loseFinal`: the final mission
+   * lost once before it is won.
+   */
+  story?: { ending: 0 | 1; loseFinal?: boolean };
+}
+
+const GAMES: GamePlan[] = [
+  { name: 'duo-a', seed: 101, start: { create: [0, 1] }, missions: 60 },
+  { name: 'duo-b', seed: 202, start: { create: [0, 1] }, missions: 30, away: 4 },
+  { name: 'duo-c', seed: 303, start: { create: [0, 1] }, missions: 30 },
+  { name: 'duo-d', seed: 606, start: { create: [0, 1] }, missions: 30, away: 2 },
+  { name: 'solo-a', seed: 404, start: { create: [0] }, missions: 25 },
+  { name: 'solo-late', seed: 505, start: { create: [0] }, missions: 25, lateJoin: 3 },
+  { name: 'solo-early', seed: 515, start: { create: [0] }, missions: 20, lateJoin: 0 },
+  { name: 'sample', seed: 707, start: { save: 'muestra.json' }, missions: 15 },
+  { name: 'from-v20', seed: 808, start: { save: 'saves/v20.json' }, missions: 15 },
+  { name: 'from-v23', seed: 909, start: { save: 'saves/v23-migrada.json' }, missions: 15 },
+  { name: 'duo-long', seed: 111, start: { create: [0, 1] }, missions: 80, careful: true },
+  { name: 'solo-long', seed: 222, start: { create: [0] }, missions: 80, careful: true },
+  { name: 'final-break', seed: 333, start: { create: [0, 1] }, missions: 80, story: { ending: 0, loseFinal: true } },
+  { name: 'final-record', seed: 445, start: { create: [0, 1] }, missions: 80, story: { ending: 1 } },
+];
+
+function playGame(plan: GamePlan): void {
+  const rng = new Rng(plan.seed);
+  const bot = new Rng(plan.seed * 31 + 7);
+  let c: CampaignState;
+  if ('create' in plan.start) c = createCampaign(plan.start.create, rng);
+  else {
+    c = fixDeep(JSON.parse(readFileSync(join(out, plan.start.save), 'utf8')).campaign as CampaignState);
+    // UI's sample was written by hand: its Taller's work lacks what the type has, given as C# reads it missing.
+    for (const w of c.base.works) Object.assign(w, { plot: w.plot ?? '', kind: w.kind ?? 'craft', total: w.total ?? 0 });
+  }
+  const campaign0 = fixDeep(json(c));
+  const rng0 = rng.state;
+  let prev = campaign0 as Record<string, any>;
+  const ops: Record<string, unknown>[] = [];
+  const record = (op: Record<string, unknown>) => {
+    const now = fixDeep(json(c)) as Record<string, any>;
+    ops.push({ ...op, rng: rng.state, delta: campaignDelta(prev, now) });
+    prev = now;
+  };
+  const cmd = (slot: Slot, connected: Slot[], command: CampaignCommand) => {
+    const r = executeCampaignCommand(c, command, { slot, connected, rng });
+    record({ op: 'cmd', slot, connected, cmd: command, result: fixDeep(r) });
+    return r;
+  };
+  const look = () => {
+    const offer = activeOffer(c);
+    record({
+      op: 'look',
+      reads: fixDeep(json({
+        next: [nextSteps(c, 0, 'Ana'), nextSteps(c, 1)],
+        ...(offer ? { squad: buildSquad(c), info: missionInfo(c, offer), briefing: offerBriefing(c, offer), signature: offerSignature(c, offer) } : {}),
+      })),
+    });
+  };
+
+  if ('save' in plan.start && (c.version as number) < 25) {
+    c = migrateCampaign(c);
+    record({ op: 'migrate' });
+  }
+  if ('create' in plan.start) {
+    openingMission(c);
+    record({ op: 'opening' });
+  }
+
+  let flown = 0;
+  let lostFinal = false;
+  /** A round of the story bot (GamePlan.story): one thing done, the most pressing first. */
+  const storyRound = (story: NonNullable<GamePlan['story']>) => {
+    const connected: Slot[] = c.players.length > 1 ? [0, 1] : [0];
+    const me: Slot = bot.pick(connected);
+    const siege = !!activeOffer(c)?.siege;
+    if (c.proposal) {
+      cmd(c.proposal.by === 0 ? 1 : 0, connected, { type: 'vote', accept: true });
+      return;
+    }
+    if (c.event) {
+      const holds = c.event === 'finale' ? story.ending : c.event === 'convoy' && eventOptionAvailable(c, 0) ? 0 : c.event === 'defector' ? 1 : null;
+      cmd(me, connected, { type: 'answerEvent', option: holds ?? (eventOptionAvailable(c, 0) ? 0 : 1) });
+      return;
+    }
+    // Something refused just now: on to the missions, not the same thing again.
+    const last = ops[ops.length - 1];
+    const refused = !!last && last.op === 'cmd' && !(last.result as { ok: boolean }).ok;
+    if (!siege && !refused) {
+      if (!levelUpBlocker(c)) {
+        cmd(me, connected, { type: 'levelUp' });
+        return;
+      }
+      const nest = c.regions.find((r) => r.facility && !contactBlocker(c, r.id));
+      if (nest) {
+        cmd(me, connected, { type: 'contact', region: nest.id });
+        return;
+      }
+      const radio = c.bastion.pieces.find((p) => p.piece === 'radio');
+      const spot = radio ? null : spotFor(c, 'radio');
+      if (spot && bastionLevel(c) >= PIECES.radio.level && c.credits >= PIECES.radio.cost.supplies + 60) {
+        cmd(me, connected, { type: 'place', piece: 'radio', x: spot.x, y: spot.y, rot: 0 });
+        return;
+      }
+      const up = radio && raiseCostOf(radio);
+      if (radio && up && typeof up !== 'string' && bastionLevel(c) >= up.level && c.credits >= up.cost + 80) {
+        cmd(me, connected, { type: 'raise', piece: radio.id });
+        return;
+      }
+      // Traps by the Bastion, and set again once a siege has spent them.
+      const traps = c.bastion.pieces.filter((p) => PIECES[p.piece].kind === 'trap');
+      const trap: PieceId = bastionLevel(c) >= 3 && (c.parts ?? 0) >= 1 ? 'mine' : 'spikes';
+      const at = traps.length < 4 && bastionLevel(c) >= PIECES[trap].level && c.credits >= 60 ? spotFor(c, trap) : null;
+      if (at) {
+        cmd(me, connected, { type: 'place', piece: trap, x: at.x, y: at.y, rot: 0 });
+        return;
+      }
+      const spent = c.bastion.pieces.find((p) => rearmCost(p) > 0 && (c.parts ?? 0) >= rearmCost(p));
+      if (spent) {
+        cmd(me, connected, { type: 'rearm', piece: spent.id });
+        return;
+      }
+      const broken = c.bastion.pieces.find((p) => p.hp < PIECES[p.piece].hp && c.credits >= repairCost(p).supplies + 60 && (c.parts ?? 0) >= (repairCost(p).parts ?? 0));
+      if (broken) {
+        cmd(me, connected, { type: 'mend', piece: broken.id });
+        return;
+      }
+    }
+    const offer = activeOffer(c);
+    if (!offer) {
+      if (mustWait(c)) {
+        for (const slot of connected) cmd(slot, connected, { type: 'advance', ready: true });
+        return;
+      }
+      // The end first; then a Nido, the story, what sets the Marea back; then any.
+      const best = (o: engine.MissionOffer) => (o.final ? 100 : 0) + (o.facility ? 30 : 0) + (o.story ? 20 : 0) + (o.reward.doom ?? 0) * 5;
+      cmd(me, connected, { type: 'chooseMission', id: [...c.offers].sort((a, b) => best(b) - best(a))[0]!.id });
+      return;
+    }
+    let launch = false;
+    for (const slot of connected) if (cmd(slot, connected, { type: 'launch', ready: true }).ok) launch ||= !!(ops[ops.length - 1]!.result as { launch?: boolean }).launch;
+    if (!launch) {
+      if (!c.squad.length) {
+        c.squad = defaultSquad(c, connected);
+        syncPads(c);
+        record({ op: 'defaultSquad', connected });
+      }
+      return;
+    }
+    look();
+    const mission = launchMission(c, new Rng(plan.seed * 1000 + flown));
+    const lose = !!story.loseFinal && offer.final && !lostFinal;
+    if (lose) lostFinal = true;
+    endMissionHelped(mission, bot, !lose);
+    const stripped = stripMission(mission);
+    foldMission(c, mission, rng);
+    record({ op: 'mission', mission: stripped });
+    flown++;
+  };
+  for (let round = 0; round < 3000 && flown < plan.missions && !c.outcome; round++) {
+    if (plan.story) {
+      storyRound(plan.story);
+      continue;
+    }
+    if (plan.lateJoin !== undefined && flown >= plan.lateJoin && !c.players.includes(1)) {
+      const got = addPlayer(c, 1, rng);
+      // The room's bringPlayersIn: a squad being picked is redone for both.
+      if (c.activeMission && !activeOffer(c)?.siege) {
+        c.squad = defaultSquad(c, both);
+        syncPads(c);
+      }
+      record({ op: 'addPlayer', slot: 1, got });
+    }
+    const two = c.players.length > 1;
+    const connected: Slot[] = two && !(plan.away && bot.int(plan.away) === 0) ? [0, 1] : [0];
+    const me: Slot = connected.length > 1 ? bot.pick(connected) : 0;
+    const partner: Slot = me === 0 ? 1 : 0;
+    const mine = c.soldiers.filter((s) => s.owner === me && s.alive);
+
+    // A proposal waits: the other one answers it (and now and then says no).
+    if (c.proposal) {
+      const by = c.proposal.by;
+      const voter: Slot = by === 0 ? 1 : 0;
+      if (connected.includes(voter)) cmd(voter, connected, { type: 'vote', accept: bot.int(6) !== 0 });
+      else cmd(by, connected, { type: 'withdraw' });
+      continue;
+    }
+    // A treatment one proposed: the other key.
+    if (c.treatment && connected.length > 1) {
+      const other = connected.find((slot) => !c.treatment!.ready[slot]);
+      if (other !== undefined) {
+        cmd(other, connected, { type: 'treat', soldier: c.treatment.soldier, ready: true });
+        continue;
+      }
+    }
+    if (c.event) {
+      // Careful, the answers that hold the Marea back: someone to the convoy, the deserter to lead a horde away.
+      const holds = plan.careful ? (c.event === 'convoy' && eventOptionAvailable(c, 0) ? 0 : c.event === 'defector' ? 1 : null) : null;
+      const option = holds ?? (eventOptionAvailable(c, 0) && (bot.int(3) !== 0 || !eventOptionAvailable(c, 1)) ? 0 : 1);
+      cmd(me, connected, { type: 'answerEvent', option });
+      continue;
+    }
+
+    // What a commander does at the base, a few things a round.
+    for (let k = bot.int(3); k > 0; k--) {
+      const what = bot.int(22);
+      const s = mine.length ? bot.pick(mine) : undefined;
+      const weapons = c.foundWeapons ?? [];
+      const pieces = c.bastion.pieces;
+      if (what === 0) cmd(me, connected, { type: 'buy', item: bot.pick(UTILITY) });
+      else if (what === 1 && s) cmd(me, connected, { type: 'equip', soldier: s.id, slot: bot.pick(['utility', 'ammo'] as const), item: bot.int(4) ? bot.pick(UTILITY) : null });
+      else if (what === 2 && s) cmd(me, connected, { type: 'customize', soldier: s.id, name: bot.int(5) ? s.name : `  ${s.name}  `, nickname: bot.pick(['', 'Rayo', 'Tejón', 'La Sombra']), appearance: { ...s.appearance, ...(bot.int(2) ? { helmet: '#445566' } : {}), ...(bot.int(3) === 0 ? { head: 'cap' as const } : {}) } });
+      else if (what === 3 && s) {
+        const cell = BOARD_CELLS_LIST.filter((x) => !unlockBlocker(s.skills, s.board, x.id))[0]?.id ?? bot.pick(BOARD_CELLS_LIST).id;
+        cmd(me, connected, { type: 'unlock', soldier: s.id, cell });
+      } else if (what === 4 && weapons.length) cmd(me, connected, { type: 'assignWeapon', weapon: bot.pick(weapons).id, soldier: s && bot.int(4) ? s.id : null });
+      else if (what === 5 && weapons.length) cmd(me, connected, { type: 'repair', weapon: bot.pick(weapons).id });
+      else if (what === 6 && weapons.length) cmd(me, connected, { type: 'mod', weapon: bot.pick(weapons).id, mod: bot.pick(MOD_IDS), on: bot.int(3) !== 0 });
+      else if (what === 7) {
+        const hurt = mine.filter((x) => x.woundedDays > 0);
+        if (hurt.length) cmd(me, connected, { type: 'medicate', soldier: bot.pick(hurt).id });
+      } else if (what === 8) {
+        const bitten = c.soldiers.filter((x) => x.alive && x.infection);
+        if (bitten.length) cmd(me, connected, { type: 'treat', soldier: bot.pick(bitten).id, ready: bot.int(5) !== 0 });
+      } else if (what === 9) cmd(me, connected, { type: 'recruit', ...(bot.int(2) ? { squad: true } : {}) });
+      else if (what === 10) cmd(me, connected, { type: 'levelUp' });
+      else if (what === 11) {
+        const zone = (Object.keys(REGIONS) as RegionId[]).filter((id) => !contactBlocker(c, id));
+        cmd(me, connected, { type: 'contact', region: zone.length ? bot.pick(zone) : bot.pick(Object.keys(REGIONS) as RegionId[]) });
+      } else if (what === 12 && c.rumors.length) cmd(me, connected, { type: 'investigate', id: bot.pick(c.rumors).id });
+      else if (what === 13) {
+        const project = (Object.keys(CRAFTS) as CraftId[]).find((id) => !craftBlocker(c, id)) ?? bot.pick(Object.keys(CRAFTS) as CraftId[]);
+        cmd(me, connected, { type: 'craft', project });
+      } else if (what === 14) {
+        const id = bot.pick(['palisade', 'sandbags', 'quarters', 'workshop', 'radio', 'garden', 'infirmary', 'mine', 'spikes', 'quarantine', 'tower', 'floodlight', 'turret', 'memorial'] as PieceId[]);
+        const spot = spotFor(c, id);
+        if (spot) cmd(me, connected, { type: 'place', piece: id, x: spot.x, y: spot.y, rot: 0 });
+      } else if (what === 15 && pieces.length) cmd(me, connected, { type: 'raise', piece: bot.pick(pieces).id });
+      else if (what === 16 && pieces.length) {
+        // What a siege left: beaten pieces to mend, traps and turrets to set again; or any.
+        const worn = pieces.filter((p) => p.hp < PIECES[p.piece].hp || (p.charges ?? 0) < (PIECES[p.piece].charges ?? 0));
+        const p = worn.length && bot.int(4) ? bot.pick(worn) : bot.pick(pieces);
+        cmd(me, connected, { type: p.hp < PIECES[p.piece].hp ? 'mend' : 'rearm', piece: p.id });
+      }
+      else if (what === 17 && pieces.length > 1 && bot.int(4) === 0) cmd(me, connected, { type: 'dismantle', piece: bot.pick(pieces.filter((p) => p.piece !== 'caravan')).id });
+      else if (what === 18) {
+        const trees = c.bastion.trees.filter((t) => !fellBlocker(c.bastion, t % c.bastion.width, Math.floor(t / c.bastion.width)));
+        if (trees.length) {
+          const t = bot.pick(trees);
+          const tiles = [{ x: t % c.bastion.width, y: Math.floor(t / c.bastion.width) }];
+          if (bot.int(2)) tiles.push({ ...tiles[0]! });
+          cmd(me, connected, { type: 'fell', tiles });
+        }
+      } else if (what === 19) {
+        const spot = spotFor(c, 'palisade');
+        if (spot) cmd(me, connected, { type: 'placeLine', piece: 'palisade', cells: [{ x: spot.x, y: spot.y }, { x: spot.x + 1, y: spot.y }, { x: spot.x + 2, y: spot.y }], rot: 0 });
+      } else if (what === 20 && c.activeMission && s) cmd(me, connected, { type: 'squad', soldier: s.id, on: bot.int(2) === 0 });
+      else if (what === 21) {
+        // Orders refused: a vote with nothing to vote, another's soldier, a launch with nothing chosen.
+        const wrong: CampaignCommand[] = [{ type: 'vote', accept: true }, { type: 'withdraw' }, { type: 'unlock', soldier: c.soldiers.find((x) => x.owner === partner)?.id ?? 'c1', cell: BOARD_CELLS_LIST[1]!.id }, { type: 'post', soldier: 'c1', at: { x: 0, y: 0 } }, { type: 'cancelMission' }];
+        cmd(me, connected, bot.pick(wrong));
+      }
+      if (c.proposal || c.outcome) break;
+    }
+    if (c.proposal || c.event || c.outcome) continue;
+    // The Bastion up a level as soon as it can be bought; a Nido's zone contacted, so it can be burnt.
+    if (!levelUpBlocker(c) && !activeOffer(c)?.siege) {
+      cmd(me, connected, { type: 'levelUp' });
+      continue;
+    }
+    const nest = c.regions.find((r) => r.facility && !contactBlocker(c, r.id));
+    if (nest && !activeOffer(c)?.siege) {
+      cmd(me, connected, { type: 'contact', region: nest.id });
+      continue;
+    }
+    if (bot.int(10) === 0) look();
+
+    // The siege's posts, before it begins.
+    const offer = activeOffer(c);
+    if (offer?.siege && bot.int(2) === 0) {
+      const defender = c.squad.map((id) => c.soldiers.find((s) => s.id === id)!).find((s) => connected.includes(s.owner));
+      if (defender) {
+        const at = bot.int(5) === 0 ? null : postFor(c, defender.id);
+        cmd(defender.owner, connected, { type: 'post', soldier: defender.id, at });
+      }
+    }
+    if (!offer) {
+      if (mustWait(c) || (!plan.careful && bot.int(8) === 0)) {
+        for (const slot of connected) cmd(slot, connected, { type: 'advance', ready: true });
+        continue;
+      }
+      // The Marea high, what sets it back first (a Nido, a sabotage); then the side quests and the story; now and then any.
+      const best = (o: engine.MissionOffer) => (c.doom >= 3 ? (o.reward.doom ?? 0) * 10 : 0) + (o.final ? 50 : 0) + (o.story ? 5 : 0) + (o.quest ? 4 : 0);
+      const pick = bot.int(5) === 0 ? bot.pick(c.offers) : [...c.offers].sort((a, b) => best(b) - best(a))[0]!;
+      cmd(me, connected, { type: 'chooseMission', id: pick.id });
+      continue;
+    }
+    if (bot.int(15) === 0 && !offer.siege) {
+      cmd(me, connected, { type: 'cancelMission' });
+      continue;
+    }
+    // Both keys, and the mission goes.
+    let launch = false;
+    for (const slot of connected) if (cmd(slot, connected, { type: 'launch', ready: true }).ok) launch ||= !!(ops[ops.length - 1]!.result as { launch?: boolean }).launch;
+    if (!launch) {
+      // An empty squad (all of it hurt or gone since it was picked): the room picks it again, as bringPlayersIn does.
+      if (!c.squad.length) {
+        c.squad = defaultSquad(c, connected);
+        syncPads(c);
+        record({ op: 'defaultSquad', connected });
+      }
+      continue;
+    }
+    look();
+    const mission = launchMission(c, new Rng(plan.seed * 1000 + flown));
+    endMissionBy(mission, bot);
+    const stripped = stripMission(mission);
+    foldMission(c, mission, rng);
+    record({ op: 'mission', mission: stripped });
+    flown++;
+    if (!plan.careful && bot.int(6) === 0 && !c.outcome && !c.event) {
+      advanceTime(c, rng);
+      record({ op: 'advanceTime' });
+    }
+  }
+  // How it ended: the title and the last page (lore.ts ENDING_TITLES, epilogue).
+  if (c.outcome) record({ op: 'end', reads: fixDeep({ title: c.ending ? ENDING_TITLES[c.ending] : null, epilogue: epilogue(c.outcome, c.ending, c.doom >= DOOM_MAX) }) });
+  const folder = extra ?? join(out, 'games');
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, `${plan.name}.json`), JSON.stringify({ name: plan.name, seed: plan.seed, start: plan.start, campaign: campaign0, rng: rng0, ops }) + '\n');
+  console.log(`campaign/games/${plan.name}.json: ${ops.length} operaciones, ${flown} misiones, ${c.outcome ?? 'sin terminar'} (día ${c.day}, nivel ${c.level})`);
+}
+
+if (extra) {
+  const starts: GamePlan['start'][] = [{ create: [0, 1] }, { create: [0] }, { save: 'muestra.json' }, { save: 'saves/v20.json' }, { save: 'saves/v22.json' }, { save: 'saves/v24.json' }, { save: 'saves/v25.json' }];
+  for (let i = 0; i < Number(process.env.EXTRA_SEEDS ?? 20); i++) {
+    const seed = 10000 + i * 37;
+    playGame({ name: `extra-${seed}`, seed, start: starts[i % starts.length]!, missions: 40, ...(i % 4 === 1 ? { lateJoin: i % 3 } : {}), ...(i % 5 === 2 ? { away: 3 } : {}), ...(i % 3 === 0 ? { careful: true } : {}) });
+  }
+} else for (const plan of GAMES) playGame(plan);

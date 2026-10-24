@@ -11,7 +11,8 @@ namespace Bastion.UI.App
 {
     /// <summary>
     /// What the app shows, from Red's NetLink (docs/UNITY-UI.md; UI's, Gameplay 23/10). Out of a room, the start screen;
-    /// in one, its menu while it is in the lobby, and the battle's scene while it is in a mission. It reads the room
+    /// in one, its menu while it is in the lobby, the base's screens while it is on the campaign's base (BaseSession),
+    /// and the battle's scene while it is in a mission. It reads the room
     /// (NetLink.LastRoom) and never listens to NetLink.Message, which waits for the battle with its snapshot.
     ///
     /// Over any scene, its own card and line: the host closed the game («Ana ha cerrado la partida»: back in, to the
@@ -48,6 +49,8 @@ namespace Bastion.UI.App
         /// <summary>The start scene's two screens, found once (Unity's null again once the scene is gone).</summary>
         StartScreen start;
         RoomMenu room;
+        /// <summary>The base's screens (StrategyRoot and BaseSession) while the room is on the base; null otherwise.</summary>
+        GameObject baseScreens;
 
         void Awake()
         {
@@ -177,7 +180,38 @@ namespace Bastion.UI.App
                 Load(startScene);
                 return;
             }
-            Screens(phase == null);
+            var onBase = phase == RoomPhases.Base;
+            Base(onBase);
+            if (!onBase) Screens(phase == null);
+        }
+
+        /// <summary>
+        /// The base (the room's phase `base`): its screens over the start scene, on a document of their own (Arte's
+        /// clearing goes under them when it is in the app), the start screen and the room's menu off and cleared meanwhile.
+        /// Gone with the scene when a mission loads, or when the room is back in the lobby.
+        /// </summary>
+        void Base(bool on)
+        {
+            if (on == (baseScreens != null)) return;
+            if (!on)
+            {
+                Destroy(baseScreens);
+                baseScreens = null;
+                return;
+            }
+            if (start == null) start = FindFirstObjectByType<StartScreen>(FindObjectsInactive.Include);
+            if (room == null) room = FindFirstObjectByType<RoomMenu>(FindObjectsInactive.Include);
+            foreach (var screen in new MonoBehaviour[] { start, room })
+            {
+                if (screen == null) continue;
+                screen.enabled = false;
+                screen.GetComponent<UIDocument>()?.rootVisualElement?.Clear();
+            }
+            baseScreens = new GameObject("Base");
+            SceneManager.MoveGameObjectToScene(baseScreens, SceneManager.GetActiveScene());
+            baseScreens.AddComponent<UIDocument>().panelSettings = PanelOf(GetComponent<UIDocument>());
+            baseScreens.AddComponent<Bastion.UI.Strategy.StrategyRoot>();
+            baseScreens.AddComponent<Bastion.UI.Strategy.BaseSession>();
         }
 
         /// <summary>

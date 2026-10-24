@@ -3,13 +3,14 @@ using Bastion.Engine;
 
 namespace Bastion.Net
 {
-    // The messages between a player's app and the host (protocol.ts ClientMessage and ServerMessage), as far as the
-    // first milestone goes: a mission between two apps (docs/UNITY.md). Each one a class told by its `t`, as in TypeScript.
+    // The messages between a player's app and the host (protocol.ts ClientMessage, campaignMessageSchema and
+    // ServerMessage). Each one a class told by its `t`, as in TypeScript.
     // New since TypeScript: `version` in hello and welcome (two apps of different builds must not play together),
     // `report` (the client's telemetry and errors, which went by POST to /__report) and `replaced` (the WebSocket's close
-    // code 4000: TCP has none). Left for later: the campaign and the base, and real time.
+    // code 4000: TCP has none). The campaign and the base: with the engine's types (Types/Campaign.cs, CampaignCommand.cs;
+    // the base's screens, BaseViews, are there too). Left for later: real time.
 
-    /// <summary>The screen the room is on (protocol.ts RoomPhase). The first milestone has no base.</summary>
+    /// <summary>The screen the room is on (protocol.ts RoomPhase): the lobby, the campaign's base, or a mission.</summary>
     public static class RoomPhases
     {
         public const string Lobby = "lobby";
@@ -73,10 +74,64 @@ namespace Bastion.Net
         public bool? Night { get; set; }
     }
 
-    /// <summary>From a skirmish, over or not, back to the menu: it ends there (campaignMessageSchema, which also leaves the base).</summary>
+    /// <summary>
+    /// Back to the main menu, for both (campaignMessageSchema): from the base; from a skirmish, over or not (it ends there);
+    /// from a campaign mission under way, which waits as it is for «Continuar campaña» (playtest 19/10, #7).
+    /// </summary>
     public sealed class BackToMenuMessage : ClientMessage
     {
         public override string T => "backToMenu";
+    }
+
+    /// <summary>The same as backToMenu (the base's own button).</summary>
+    public sealed class LeaveCampaignMessage : ClientMessage
+    {
+        public override string T => "leaveCampaign";
+    }
+
+    /// <summary>A campaign afresh, from the lobby: the one there was is kept as it was, next to the save.</summary>
+    public sealed class NewCampaignMessage : ClientMessage
+    {
+        public override string T => "newCampaign";
+    }
+
+    /// <summary>Back to the campaign: to its mission left half played, as it was, or else to the base.</summary>
+    public sealed class ContinueCampaignMessage : ClientMessage
+    {
+        public override string T => "continueCampaign";
+    }
+
+    /// <summary>A campaign mission over: back to the base.</summary>
+    public sealed class ReturnToBaseMessage : ClientMessage
+    {
+        public override string T => "returnToBase";
+    }
+
+    /// <summary>An order on the base (campaign.ts executeCampaignCommand).</summary>
+    public sealed class CampaignCmdMessage : ClientMessage
+    {
+        public override string T => "ccmd";
+        public CampaignCommand? Cmd { get; set; }
+    }
+
+    /// <summary>Which base screen the player is looking at (BaseViews), shown to the partner.</summary>
+    public sealed class BaseViewMessage : ClientMessage
+    {
+        public override string T => "baseView";
+        public string View { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Building on the base (docs/FASE12.md §11.7): the piece in hand and where it points, for the partner to see; no piece
+    /// once it is put down or the build mode closed. Passed on as it comes, never kept.
+    /// </summary>
+    public sealed class BaseCursorMessage : ClientMessage
+    {
+        public override string T => "baseCursor";
+        public string? Piece { get; set; } // PieceIds
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int Rot { get; set; }
     }
 
     /// <summary>Ends the current mission for both players: asked of the partner first, if here (playtest 16/10).</summary>
@@ -178,12 +233,51 @@ namespace Bastion.Net
         public bool? Away { get; set; }
     }
 
-    /// <summary>Who is in the room and which screen it is on (lobby or mission, for now).</summary>
+    /// <summary>The campaign there is, for the lobby's «Continuar campaña»: how far it went, and the mission left half played.</summary>
+    public sealed class SavedCampaign
+    {
+        public int Day { get; set; }
+        public int Missions { get; set; }
+        public int Doom { get; set; }
+        public int Level { get; set; }
+        public string? InMission { get; set; }
+    }
+
+    /// <summary>Who is in the room and which screen it is on.</summary>
     public sealed class RoomMessage : ServerMessage
     {
         public override string T => "room";
         public List<PlayerInfo> Players { get; set; } = new List<PlayerInfo>();
         public string Phase { get; set; } = RoomPhases.Lobby;
+        public SavedCampaign? SavedCampaign { get; set; }
+        /// <summary>A campaign from before the 0.7 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.</summary>
+        public string? SetAside { get; set; }
+    }
+
+    /// <summary>The whole campaign: sent whole after every change (it is small beside a mission).</summary>
+    public sealed class CampaignMessage : ServerMessage
+    {
+        public override string T => "campaign";
+        public CampaignState? State { get; set; }
+    }
+
+    /// <summary>The base screen the partner is on.</summary>
+    public sealed class PartnerBaseViewMessage : ServerMessage
+    {
+        public override string T => "baseView";
+        public int Slot { get; set; }
+        public string View { get; set; } = "";
+    }
+
+    /// <summary>The piece the partner has in hand on the base, and where it points.</summary>
+    public sealed class PartnerBaseCursorMessage : ServerMessage
+    {
+        public override string T => "baseCursor";
+        public int Slot { get; set; }
+        public string? Piece { get; set; }
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int Rot { get; set; }
     }
 
     public sealed class SnapshotMessage : ServerMessage

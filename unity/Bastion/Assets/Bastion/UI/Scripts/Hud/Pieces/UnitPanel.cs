@@ -38,6 +38,8 @@ namespace Bastion.UI.Hud
             if (view == null) return;
             shownId = view.Id;
             Ui.CloneInto("UnitPanel", host);
+            // mixta.css: one of the big plates, in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
+            PlateFrame.Dress(host);
             var tree = host;
 
             var head = tree.Q("head");

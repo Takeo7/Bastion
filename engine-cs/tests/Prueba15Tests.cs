@@ -10,10 +10,7 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// packages/engine/test/prueba15.test.ts: the playtest of 2026-10-15 (docs/PRUEBA-2026-10-15.md), test by test.
-    /// `client toEqual s` is Step2Json.StateDiff. Not ported, they need campaign.ts: «the bitten and the Cuarentena › the
-    /// Cuarentena is built like any facility, and its levels hold the fever off a day each» (createCampaign, FACILITIES,
-    /// turnDay, raise) and «operations say who and what › a rescue names who is held and a sabotage what makes the noise;
-    /// the map is called as the operation» (createCampaign's offers, missionInfo).
+    /// `client toEqual s` is Step2Json.StateDiff.
     /// </summary>
     public class Prueba15Tests
     {
@@ -148,6 +145,54 @@ namespace Bastion.Engine.Tests
             sim.RunAlienTurn();
             Assert.Equal(hp - 1, bitten.Hp);
             Assert.Equal(fine.MaxHp, fine.Hp);
+        }
+
+        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › the Cuarentena is built like any facility, and its levels hold the fever off a day each")]
+        public void TheCuarentenaIsBuiltLikeAnyFacility()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            var quarantine = Campaign.Facilities[FacilityIds.Quarantine];
+            Assert.Equal(("Cuarentena", true, 1), (quarantine.Name, quarantine.Unique, quarantine.Level));
+            var soldier = c.Soldiers[0];
+            soldier.Infection = new SoldierInfection { Since = c.Day };
+            var before = Campaign.TurnDay(c, soldier)!.Value;
+            CampaignHelpers.Raise(c, PieceIds.Quarantine, 3);
+            Assert.Equal(before + 2, Campaign.TurnDay(c, soldier));
+        }
+
+        // ------------------------------------------------------------ operations say who and what (#14, #20)
+
+        [Fact(DisplayName = "operations say who and what (#14, #20) › a rescue names who is held and a sabotage what makes the noise; the map is called as the operation")]
+        public void ARescueNamesWhoIsHeldAndASabotageWhatMakesTheNoise()
+        {
+            var rescue = false;
+            var sabotage = false;
+            for (var seed = 1; seed <= 40 && !(rescue && sabotage); seed++)
+            {
+                var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(seed));
+                foreach (var o in c.Offers.Where((x) => x.Story == null && !x.Final))
+                {
+                    var info = Campaign.MissionInfo(c, o);
+                    if (o.Kind == MissionKinds.Rescue)
+                    {
+                        rescue = true;
+                        Assert.False(string.IsNullOrEmpty(o.Vip));
+                        Assert.Equal(o.Vip, info.VipName);
+                        var s = Setup.CreateMission(new MissionOptions { Map = o.Map, Slots = new List<int> { 0 }, Rng = new Rng(1), Kind = o.Kind, VipName = info.VipName, CampaignMission = new CampaignMission { Id = o.Id, Name = o.Name } });
+                        Assert.Equal(o.Vip, s.Units.First((u) => u.Captive).Name);
+                        Assert.Equal(o.Name, s.MapName);
+                    }
+                    if (o.Kind == MissionKinds.Sabotage)
+                    {
+                        sabotage = true;
+                        Assert.Contains(o.Alarm, new[] { "police", "ambulance", "factory" });
+                        var s = Setup.CreateMission(new MissionOptions { Map = o.Map, Slots = new List<int> { 0 }, Rng = new Rng(1), Kind = o.Kind, Alarm = info.Alarm, ObjectiveName = Lore.AlarmNames[info.Alarm!] });
+                        Assert.Equal(o.Alarm, s.Mission.Alarm);
+                        Assert.Equal(Lore.AlarmNames[o.Alarm!], s.Units.First((u) => u.Objective).Name);
+                    }
+                }
+            }
+            Assert.True(rescue && sabotage);
         }
 
         // ------------------------------------------------------------ the siren a sabotage silences (#14)

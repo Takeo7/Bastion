@@ -31,9 +31,6 @@ namespace Bastion.UI.Combat
 
         const string EnemySpeedId = "enemySpeed";
         const string PlansId = "autoPlan";
-        const string GraphicsId = "graphics";
-        const string CapId = "fpsCap";
-        const string CounterId = "showFps";
 
         /// <summary>«Menú» or Esc: the game's menu with what it can do now, or closed.</summary>
         void ToggleMenu()
@@ -56,33 +53,9 @@ namespace Bastion.UI.Combat
                 AbandonTip = HudText.Menu.AbandonTip(partner?.Name, Players.Count > 1),
                 // One's own call waiting for the partner: off, saying so.
                 AbandonWaiting = State.AbandonCall != null && State.AbandonCall.By == MySlot ? Lore.EvacWaiting(partner?.Name ?? "el otro jugador") : null,
-                Settings = new List<SettingView>
+                // The graphics' rows (GameSettings), then the battle's own.
+                Settings = App.GameSettings.Views().Concat(new List<SettingView>
                 {
-                    // The level, high to low as the 0.10.1's «Efectos» (GameSettings: the project's quality levels, Arte's).
-                    new SettingView
-                    {
-                        Id = GraphicsId,
-                        Label = "Gráficos",
-                        About = "Sombras, oclusión ambiental, posprocesado y resolución de la escena. «Altos» se ve mejor y es lo que más cuesta dibujar. Cambia al momento.",
-                        Choices = new List<string> { "Altos", "Medios", "Bajos" },
-                        On = 2 - App.GameSettings.Level,
-                    },
-                    new SettingView
-                    {
-                        Id = CapId,
-                        Label = "Límite de FPS",
-                        About = "Menos imágenes por segundo: menos trabajo para la tarjeta gráfica y la batería.",
-                        Choices = App.GameSettings.Caps.Select(c => c == 0 ? "Sin límite" : c.ToString()).ToList(),
-                        On = System.Math.Max(0, System.Array.IndexOf(App.GameSettings.Caps, App.GameSettings.FpsCap)),
-                    },
-                    new SettingView
-                    {
-                        Id = CounterId,
-                        Label = "Mostrar FPS",
-                        About = "Un contador de imágenes por segundo en una esquina.",
-                        Choices = new List<string> { "Sí", "No" },
-                        On = App.GameSettings.ShowFps ? 0 : 1,
-                    },
                     // The enemy turn's speed, a slider (playtest 18/10 #6); the squad's own actions play at their own pace.
                     new SettingView
                     {
@@ -105,7 +78,7 @@ namespace Bastion.UI.Combat
                         Choices = new List<string> { "Sí", "No" },
                         On = AutoPlan ? 0 : 1,
                     },
-                },
+                }).ToList(),
                 Controls = Controls.Select(c => new ControlView { Keys = c.keys, What = c.what }).ToList(),
                 NightLabel = Lore.NightText.Label,
                 NightRules = Lore.NightText.Rules.ToList(),
@@ -122,9 +95,7 @@ namespace Bastion.UI.Combat
                 Hurry?.Invoke(false);
             }
             else if (id == PlansId) AutoPlan = value == 0;
-            else if (id == GraphicsId) App.GameSettings.Level = 2 - (int)value;
-            else if (id == CapId) App.GameSettings.FpsCap = App.GameSettings.Caps[UnityEngine.Mathf.Clamp((int)value, 0, App.GameSettings.Caps.Length - 1)];
-            else if (id == CounterId) App.GameSettings.ShowFps = value == 0;
+            else App.GameSettings.Change(id, value);
         }
 
         /// <summary>An entry of the menu: each asks first when it costs something (hud.ts confirmLeave, confirmAbandon, confirmQuit).</summary>

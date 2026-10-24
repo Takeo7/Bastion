@@ -98,7 +98,17 @@ namespace Bastion.UI.Strategy
                 if (!string.IsNullOrEmpty(t.Tone)) tag.AddToClassList("armory-row__tag--" + t.Tone);
                 if (!string.IsNullOrEmpty(t.Tip)) tips.Attach(tag, t.Tip);
             }
-            if (r.New) Ui.Text(StrategyText.Tabs.NewTag, "strat-tab__new font-title", top);
+            if (r.New)
+            {
+                // fresh.ts markNew: the pointer over it, and its «Nuevo» goes.
+                var tag = Ui.Text(StrategyText.Tabs.NewTag, "strat-tab__new font-title", top);
+                var seen = r.NewKey;
+                row.RegisterCallback<PointerEnterEvent>(e =>
+                {
+                    tag.RemoveFromHierarchy();
+                    if (!string.IsNullOrEmpty(seen)) handlers.OnSeen(seen);
+                });
+            }
             if (!string.IsNullOrEmpty(r.Price)) Ui.Text(r.Price, "strat-chip armory-row__price", words);
             var end = Ui.El("armory-row__end", row);
             if (!string.IsNullOrEmpty(r.Place)) Ui.Text(r.Place.ToUpperInvariant(), "armory-row__place font-title", end);

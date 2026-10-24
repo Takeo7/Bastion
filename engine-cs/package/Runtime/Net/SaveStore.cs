@@ -15,10 +15,7 @@ namespace Bastion.Net
         public string Token { get; set; } = "";
     }
 
-    /// <summary>
-    /// The room as saved (persistence.ts SaveFile), in the same JSON as TypeScript's. The campaign comes with the base
-    /// (after the first milestone): until then, saves are of skirmishes.
-    /// </summary>
+    /// <summary>The room as saved (persistence.ts SaveFile), in the same JSON as TypeScript's: a 0.10.1 save is read as it is.</summary>
     public sealed class SaveFile
     {
         public int Version { get; set; } = SaveStore.SaveVersion;
@@ -26,6 +23,8 @@ namespace Bastion.Net
         public string Phase { get; set; } = RoomPhases.Lobby;
         public string Mode { get; set; } = "skirmish"; // skirmish | campaign
         public GameState? State { get; set; }
+        public CampaignState? Campaign { get; set; }
+        /// <summary>Whether the finished campaign mission has already been folded into the campaign.</summary>
         public bool ResultApplied { get; set; }
         public long[] Rng { get; set; } = new long[4];
         public string MissionKind { get; set; } = MissionKinds.Elimination;
@@ -44,14 +43,26 @@ namespace Bastion.Net
         /// <summary>persistence.ts SAVE_VERSION: the shape of the save.</summary>
         public const int SaveVersion = 6;
 
+        /// <summary>
+        /// The release whose progression a campaign must be from (campaign.ts campaignOutdated, Campaign.FreshCampaignVersion):
+        /// older ones are kept aside under its name, save.antes-&lt;release&gt;.json, and the messages say it.
+        /// </summary>
+        public const string FreshRelease = "0.7";
+
         private readonly string path;
+        private readonly ICampaignRules? campaignRules;
 
         /// <summary>A line for the host's red.log; the room writes there too.</summary>
         public Action<string> Log { get; }
 
-        public SaveStore(string path, Action<string>? log = null)
+        /// <summary>Where a campaign from before FreshRelease was put aside on loading, if one was (docs/FASE9.md §7, FASE10.md).</summary>
+        public string? SetAside { get; private set; }
+
+        /// <summary>`campaignRules`: to bring a campaign of an older version up to date (without them, it is read as it is).</summary>
+        public SaveStore(string path, Action<string>? log = null, ICampaignRules? campaignRules = null)
         {
             this.path = path;
+            this.campaignRules = campaignRules;
             Log = log ?? ((_) => { });
         }
 
@@ -101,6 +112,22 @@ namespace Bastion.Net
                     error = "es de una versión más nueva de Bastión";
                     return false;
                 }
+                // A campaign from before FreshRelease can't take the new progression (docs/FASE9.md §7, FASE10.md): the file
+                // is kept aside as it is and the room starts in the lobby. If it can't be kept aside, the host stops
+                // (KeepAside throws, past the catch below), rather than write over it.
+                // `campaign: null` in TypeScript's skirmishes: no campaign, as when it is missing.
+                var campaignVersion = (data["campaign"] as JObject)?["version"];
+                if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion < Campaign.FreshCampaignVersion)
+                {
+                    SetAside = KeepAside($"antes-{FreshRelease}", file, false);
+                    Log($"[save] Partida de antes de la {FreshRelease}: guardada aparte en {SetAside}; se empieza en el vestíbulo.");
+                    return true;
+                }
+                if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion > Campaign.CampaignVersion)
+                {
+                    error = "es de una versión más nueva de Bastión";
+                    return false;
+                }
                 if (!(data["seats"] is JArray))
                 {
                     error = "no tiene puestos";
@@ -113,13 +140,34 @@ namespace Bastion.Net
                     return true;
                 }
                 save = data.ToObject<SaveFile>(Json.Serializer);
+                if (save?.Campaign != null && campaignRules != null && save.Campaign.Version != Campaign.CampaignVersion)
+                {
+                    // Whatever goes wrong bringing it up to date, the save is one that can't be read (persistence.ts migrate
+                    // within its try): kept aside, never written over, and the host goes on.
+                    try
+                    {
+                        save.Campaign = campaignRules.MigrateCampaign(save.Campaign);
+                    }
+                    catch (Exception e)
+                    {
+                        save = null;
+                        error = $"no se pudo poner al día su campaña ({e.GetType().Name}: {e.Message})";
+                        return false;
+                    }
+                }
                 return true;
             }
-            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is JsonException || e is FormatException || e is InvalidCastException)
+            catch (Exception e) when (!(e is KeepAsideFailed) && (e is IOException || e is UnauthorizedAccessException || e is JsonException || e is FormatException || e is InvalidCastException))
             {
                 error = e.Message;
                 return false;
             }
+        }
+
+        /// <summary>A copy of the save as it is now, before something replaces it (a new campaign); null without a save. Throws if it can't.</summary>
+        public string? KeepCopy(string label)
+        {
+            return File.Exists(path) ? KeepAside(label, path, false) : null;
         }
 
         /// <summary>
@@ -144,8 +192,16 @@ namespace Bastion.Net
                 }
                 catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
                 {
-                    throw new IOException($"No se pudo guardar aparte {from} ({e.Message}); no se toca.", e);
+                    throw new KeepAsideFailed($"No se pudo guardar aparte {from} ({e.Message}); no se toca.", e);
                 }
+            }
+        }
+
+        /// <summary>A save that couldn't be kept aside: never read past (the host stops rather than write over it).</summary>
+        private sealed class KeepAsideFailed : IOException
+        {
+            public KeepAsideFailed(string message, Exception inner) : base(message, inner)
+            {
             }
         }
 

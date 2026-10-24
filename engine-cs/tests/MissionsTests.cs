@@ -11,9 +11,7 @@ using static Bastion.Engine.Tests.Step2Helpers;
 namespace Bastion.Engine.Tests
 {
     /// <summary>
-    /// packages/engine/test/missions.test.ts, test by test. Not ported: «skirmish soldiers › the campaign is untouched: its
-    /// soldiers bring exactly what they learnt», needs campaign.ts (createCampaign, buildSquad); «the dead first › the
-    /// living hold the story chapters and quest steps that are theirs, and nothing else», needs quests.ts (QUESTS).
+    /// packages/engine/test/missions.test.ts, test by test.
     /// </summary>
     public class MissionsTests
     {
@@ -419,6 +417,20 @@ namespace Bastion.Engine.Tests
             Assert.True(rookies.All((u) => u.Perks.Count == 0 && u.Rank == 0));
         }
 
+        [Fact(DisplayName = "skirmish soldiers (docs/FASE10.md §7) › the campaign is untouched: its soldiers bring exactly what they learnt")]
+        public void TheCampaignIsUntouchedItsSoldiersBringExactlyWhatTheyLearnt()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(3));
+            c.Squad = c.Soldiers.Take(6).Select((s) => s.Id).ToList();
+            var squad = Campaign.BuildSquad(c);
+            Assert.Equal(6, squad.Count);
+            for (var seed = 1; seed <= 10; seed++)
+            {
+                var mission = Setup.CreateMission(new MissionOptions { Map = MapSource.Handmade("plaza"), Slots = new List<int> { 0 }, Rng = new Rng(seed), Squad = squad, Veterans = true });
+                Same(squad.Select((m) => m.Perks), mission.Units.Where((u) => u.Team == Teams.Xcom).Select((u) => u.Perks));
+            }
+        }
+
         // ------------------------------------------------------------ the dead first (docs/ZOMBIS-PRIMERO.md)
 
         private static int Living(List<List<string>> pods)
@@ -439,6 +451,17 @@ namespace Bastion.Engine.Tests
                 Assert.Equal(2, held.Count((p) => p.All((t) => !Content.Templates[t].Undead)));
                 Assert.Equal(2, held.Count((p) => p.All((t) => Content.Templates[t].Undead)));
             }
+        }
+
+        [Fact(DisplayName = "the dead first (docs/ZOMBIS-PRIMERO.md) › the living hold the story chapters and quest steps that are theirs, and nothing else")]
+        public void TheLivingHoldTheStoryChaptersAndQuestStepsThatAreTheirs()
+        {
+            Assert.Equal(new[] { "La sirena", "Los inmunes", "La Voz" }, Lore.Story.Where((c) => c.Living == true).Select((c) => c.Title));
+            var steps = Quests.QuestDefs.Values.SelectMany((q) => q.Steps.OfType<QuestMission>()).ToList();
+            var held = steps.Where((s) => s.Living == true || (s.Leader != null && !Content.Templates[s.Leader.Template].Undead)).Select((s) => s.Name).ToList();
+            // `expect.arrayContaining`: every one of these, in any order.
+            foreach (var name in new[] { "La lista de prisioneros", "Sacar a {relative}", "Vera Lindqvist", "Otto Brandt", "Ruta 50", "Cacería en la Ruta 50", "Manos", "Las notas de Mei" }) Assert.Contains(name, held);
+            Assert.Equal(8, held.Count);
         }
 
         // ------------------------------------------------------------ ranks (docs/PRUEBA-2026-10-14.md P5)

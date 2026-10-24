@@ -224,8 +224,9 @@ namespace Bastion.UI.Strategy
                 else Ui.Icon(icon, "tab:barracks", "soldier-tile__silhouette", face);
                 if (t.Rank > 0)
                 {
-                    var rank = Ui.El("soldier-tile__rank", tile);
-                    for (var i = 0; i < t.Rank; i++) Ui.El("rank__chevron", rank);
+                    // The rank as the Military Combat HUD's chevron (mixta.css .rank), bronze, silver, gold.
+                    var rank = Ui.Icon(icon, "rank:" + Mathf.Clamp(t.Rank, 1, 7), "soldier-tile__rank rank-badge", tile);
+                    if (!string.IsNullOrEmpty(t.RankTip)) tips.Attach(rank, t.RankTip);
                 }
                 if (t.Points)
                 {
@@ -304,7 +305,8 @@ namespace Bastion.UI.Strategy
             tips.Attach(health, s.HealthTip);
             if (s.Care != null)
             {
-                SubHead(s.Care.Title, parent);
+                if (!string.IsNullOrEmpty(s.Care.Title)) SubHead(s.Care.Title, parent);
+                if (!string.IsNullOrEmpty(s.Care.Line)) Ui.Text(s.Care.Line, "sheet__care-line muted", parent);
                 var actions = Ui.El("sheet__care", parent);
                 for (var i = 0; i < s.Care.Buttons.Count; i++)
                 {
@@ -314,7 +316,9 @@ namespace Bastion.UI.Strategy
                     if (i == 0) b.AddToClassList("btn-primary");
                     b.SetEnabled(i >= s.Care.Enabled.Count || s.Care.Enabled[i]);
                     actions.Add(b);
+                    if (i == 0 && !string.IsNullOrEmpty(s.Care.Tip)) tips.Attach(b, s.Care.Tip);
                 }
+                if (!string.IsNullOrEmpty(s.Care.Why)) Ui.Text(s.Care.Why, "strat-why strat-why--small", parent);
                 if (!string.IsNullOrEmpty(s.Care.Waiting)) Ui.Text(s.Care.Waiting, "strat-why strat-why--wait", parent);
             }
             if (s.Traits.Count > 0)

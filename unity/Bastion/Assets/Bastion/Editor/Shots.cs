@@ -156,6 +156,12 @@ namespace Bastion.EditorTools
                     frame++;
                     if (frame > PlayLimit) throw new TimeoutException($"{PlayLimit} frames in play mode and no shot");
                     if (frame == 1) panels = PanelsInto(width, height);
+                    // The cameras drawn into a texture of their own while the game runs, not into the batch's screen, which
+                    // has none: drawn there each frame, Synty materials came out red, pink or black at random in the shots,
+                    // more of them the longer it ran (24/10: the pines, the pieces, a town's tree).
+                    if (frame == 1)
+                        foreach (var c in UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
+                            if (c.targetTexture == null) c.targetTexture = new RenderTexture(width, height, 24) { name = "Pantalla de la pasada" };
                     if (frame < first) return;
                     string path = frames <= 1 ? outPath : Path.Combine(outPath, $"f{shot:000}.png");
                     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
@@ -259,9 +265,10 @@ namespace Bastion.EditorTools
             if (RenderPipeline.SupportsRenderRequest(camera, request)) RenderPipeline.SubmitRenderRequest(camera, request);
             else
             {
+                var had = camera.targetTexture;
                 camera.targetTexture = target;
                 camera.Render();
-                camera.targetTexture = null;
+                camera.targetTexture = had;
             }
             var was = RenderTexture.active;
             RenderTexture.active = target;

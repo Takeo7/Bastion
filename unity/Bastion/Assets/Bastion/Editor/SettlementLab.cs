@@ -17,7 +17,8 @@ namespace Bastion.EditorTools
     /// a case of engine-cs/golden/step3/base.json, as base-70-siege), drawn as the map its siege would be fought on, with
     /// nobody on it (clearingArt.ts clearingState). Its camera as the lab's look(x, z, distance, yaw).
     ///   BASTION_BARE=1 none of the lab's pieces · BASTION_NIVEL=n the base's level · BASTION_DESGASTE=w the Bastion worn 0 to 3
-    ///   BASTION_SEED=s the fresh base's seed · BASTION_BASE_FILE=base.json a base of one's own (as 0.10.1's __claro.base takes it)
+    ///   BASTION_LATA=v La Lata as vehicle v (0 4×4, 1 van, 2 lorry, 3 the bus) · BASTION_IR=1 it goes, BASTION_VOLVER=1 it
+    ///   comes back (a strip: -shotFrames) · BASTION_NIEVE=1 in winter · BASTION_VIENTO=k the trees' wind (MapBuilder.Wind) · BASTION_SEED=s the fresh base's seed · BASTION_BASE_FILE=base.json a base of one's own (as 0.10.1's __claro.base takes it)
     ///   BASTION_LOOK=x,z,distance[,yaw] the camera (the lab's look; yaw in radians, 0 from the south-east) · BASTION_CERCO=1
     ///   BASTION_SOMBRAS=m how far the shadows reach (90). To weigh the light against 0.10.1's: BASTION_GRADE=0 without the
     ///   grade · BASTION_SOL=0 without sun nor fill · with it BASTION_CIELO=0 without the sky's light, and BASTION_NIEBLA=1
@@ -29,29 +30,28 @@ namespace Bastion.EditorTools
         public static void Clearing()
         {
             var @base = Base();
-            var state = ClearingState(@base);
-            MapLab.Lighting(true);
-            // For shots in play mode (Shots -shotPlay: UI's panels over it), the map is made once the game runs, as the game
-            // makes it. Made before, in edit mode, and taken into play mode without the scene reloaded, its Synty models came
-            // out there with another's material (flat red, or the pines black; with a property block on the pines, the
-            // tufts and the caravan red instead): the SRP Batcher's, 24/10.
-            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-shotPlay") >= 0)
+            bool snow = Environment.GetEnvironmentVariable("BASTION_NIEVE") == "1";
+            // BASTION_VIENTO=k: the trees' wind, k times Nature's own (MapBuilder.Wind; 0 still).
+            if (float.TryParse(Environment.GetEnvironmentVariable("BASTION_VIENTO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float wind)) MapBuilder.Wind = wind;
+            // The settlement's own (Settlement: the clearing, its light, La Lata as BASTION_LATA says: 0 4×4, 1 van, 2 lorry, 3 the bus).
+            var settlement = new GameObject("Asentamiento").AddComponent<Settlement>();
+            if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_LATA"), out int vehicle)) settlement.SetVehicle(vehicle);
+            // The sun's shadows over the whole clearing (0.10.1's shadow camera over all of it), as far as the view reaches.
+            settlement.ShadowMetres = float.TryParse(Environment.GetEnvironmentVariable("BASTION_SOMBRAS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float reach) ? reach : 90;
+            settlement.Show(@base, snow, MapLab.Prefabs(), MapLab.Materials());
+            // BASTION_IR=1: La Lata going, BASTION_VOLVER=1 coming back, from the first frame of a strip.
+            if (Environment.GetEnvironmentVariable("BASTION_IR") == "1") settlement.Depart();
+            if (Environment.GetEnvironmentVariable("BASTION_VOLVER") == "1")
             {
-                void Entered(UnityEditor.PlayModeStateChange change)
-                {
-                    if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
-                    UnityEditor.EditorApplication.playModeStateChanged -= Entered;
-                    MapLab.Map(state, "claro");
-                }
-                UnityEditor.EditorApplication.playModeStateChanged += Entered;
+                settlement.Depart();
+                settlement.Lata.ShotStep(10);
+                settlement.Arrive();
             }
-            else MapLab.Map(state, "claro");
             int c = @base.Width / 2;
             var look = Environment.GetEnvironmentVariable("BASTION_LOOK")?.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
             Look(look != null && look.Length >= 3 ? look[0] : c, look != null && look.Length >= 3 ? look[1] : c, look != null && look.Length >= 3 ? look[2] : 34, look != null && look.Length >= 4 ? look[3] : 0);
-            MapLab.Lighting(true);
-            // The sun's shadows over the whole clearing (0.10.1's shadow camera over all of it), as far as the view reaches.
-            Mood.ShadowReach(float.TryParse(Environment.GetEnvironmentVariable("BASTION_SOMBRAS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float reach) ? reach : 90);
+            // The fill turned with the camera.
+            Mood.Show(snow ? Mood.SnowDay : Mood.Day);
             // BASTION_SOMBRAS_RES=texels,cascades,split: to weigh the shadows' sharpness (a test).
             var res = Environment.GetEnvironmentVariable("BASTION_SOMBRAS_RES")?.Split(',');
             if (res != null && (UnityEngine.QualitySettings.renderPipeline ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline) is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urp)
@@ -273,11 +273,7 @@ namespace Bastion.EditorTools
         /// <summary>The clearing as a battlefield with nobody on it: the map its siege would be fought on (clearingArt.ts clearingState).</summary>
         public static GameState ClearingState(BaseState @base)
         {
-            var s = Setup.CreateMission(new MissionOptions { Map = MapSource.OfBase(@base), Slots = new System.Collections.Generic.List<int> { 0 }, Rng = new Rng(1), Difficulty = 1 });
-            s.Units.Clear();
-            s.Traps = null;
-            if (s.Base != null) s.Base.Felled = @base.Felled ?? new System.Collections.Generic.List<int>();
-            return s;
+            return Settlement.ClearingState(@base, false);
         }
 
         /// <summary>The lab's camera (clearingLab.ts look): on (x, z) tiles from `distance` tiles, its bearing `yaw` from the south-east, 50° down, 40° of view.</summary>

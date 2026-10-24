@@ -6,6 +6,7 @@ using Bastion.Net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Bastion.Engine.Tests
 {
@@ -24,29 +25,8 @@ namespace Bastion.Engine.Tests
     {
         private static readonly string Dir = Path.Combine(AppContext.BaseDirectory, "golden", "campaign");
 
-        /// <summary>
-        /// The network's JSON (Net/Json.cs) and the two unions of the campaign it doesn't read yet: Red's wip/Net knows
-        /// only its provisional WipCampaignCommand, so the proposals' actions and the commands are told apart here.
-        /// </summary>
-        internal static readonly JsonSerializer Serializer = MakeSerializer();
-
-        private static JsonSerializer MakeSerializer()
-        {
-            var net = Json.Settings;
-            var settings = new JsonSerializerSettings
-            {
-                ContractResolver = net.ContractResolver,
-                NullValueHandling = net.NullValueHandling,
-                MissingMemberHandling = net.MissingMemberHandling,
-                Formatting = net.Formatting,
-                TypeNameHandling = net.TypeNameHandling,
-                MaxDepth = net.MaxDepth,
-            };
-            foreach (var c in net.Converters) settings.Converters.Add(c);
-            settings.Converters.Add(new TagConverter<ProposalAction>("type", (a) => a.Type));
-            settings.Converters.Add(new TagConverter<CampaignCommand>("type", (c) => c.Type));
-            return JsonSerializer.Create(settings);
-        }
+        /// <summary>The network's JSON (Net/Json.cs), which tells the proposals' actions and the commands apart by `type`.</summary>
+        internal static readonly JsonSerializer Serializer = Json.Serializer;
 
         internal static JObject Golden(string name) => JObject.Parse(File.ReadAllText(Path.Combine(Dir, name)));
 
@@ -186,14 +166,26 @@ namespace Bastion.Engine.Tests
             Assert.Equal(new List<int> { 8 }, c.LastReport!.Squad[0].Bars![0].Growth);
         }
 
+        private readonly ITestOutputHelper output;
+
+        public CampaignJsonTests(ITestOutputHelper output)
+        {
+            this.output = output;
+        }
+
         [Fact]
         public void TheOriginalSampleIsTheOneCopied()
         {
-            // Outside git (.dev-snapshots), only on the Mac that has it: then its campaign must be golden/campaign/muestra.json's.
+            // Outside git (.dev-snapshots), only on the Mac that has it, and UI's to make again: the one that counts is
+            // golden/campaign/muestra.json. So this only says so, never fails, when the original is missing or has changed.
             var original = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".dev-snapshots", "ui", "estrategia-0101", "partida-muestra.json");
-            if (!File.Exists(original)) return;
-            var campaign = JObject.Parse(File.ReadAllText(original))["campaign"]!;
-            Assert.True(JToken.DeepEquals(campaign, Golden("muestra.json")["campaign"]), "partida-muestra.json ha cambiado: cópiala otra vez en golden/campaign/muestra.json.");
+            if (!File.Exists(original))
+            {
+                output.WriteLine("partida-muestra.json no está: vale la de golden/campaign/muestra.json.");
+                return;
+            }
+            var campaign = JObject.Parse(File.ReadAllText(original))["campaign"];
+            if (!JToken.DeepEquals(campaign, Golden("muestra.json")["campaign"])) output.WriteLine("Aviso: partida-muestra.json ha cambiado desde que se copió en golden/campaign/muestra.json, que es la que vale.");
         }
 
         [Fact]

@@ -1,0 +1,211 @@
+/*
+   The radio's card (transmissions.css with mixta's: a big riveted plate in the bottom right corner, above the tabs,
+   which is the free corner of the base screens; elsewhere where each screen leaves room). RadioPanel fills it.
+*/
+
+.radio {
+    position: absolute;
+    right: 12px;
+    bottom: 40px;
+    width: 400px;
+    flex-direction: row;
+    padding: 10px 12px;
+}
+
+/* The Mapa: the briefing's Desplegar has the corner; top centre, over the valley, between the two panels. */
+.radio--geoscape {
+    top: 40px;
+    bottom: auto;
+    right: auto;
+    left: 50%;
+    translate: -50% 0;
+}
+
+/* Escuadra and the debrief: the centred panel's buttons have the corner. Escuadra: top centre, between the lists;
+   the debrief: top right. */
+.radio--squad,
+.radio--debrief {
+    top: 56px;
+    bottom: auto;
+}
+
+.radio--squad {
+    right: auto;
+    left: 50%;
+    translate: -50% 0;
+}
+
+/* Soldados: the sheet runs down the right side; bottom centre, over the tabs, at the soldier's feet. */
+.radio--barracks {
+    right: auto;
+    left: 50%;
+    translate: -50% 0;
+    bottom: 62px;
+}
+
+/* Her bust in a sunken frame, faint scan lines over it (mixta-hud.css .radio-portrait). */
+.radio__portrait {
+    width: 56px;
+    height: 56px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgb(58, 67, 75);
+    -unity-background-scale-mode: scale-and-crop;
+    border-width: 2px;
+    border-color: #3a4043;
+    border-radius: 2px;
+}
+
+.radio__portrait--coro {
+    background-color: rgb(8, 16, 12);
+}
+
+.radio__initials {
+    font-size: 22px;
+    color: var(--t-accent);
+    rotate: -6deg;
+}
+
+/* The Coro's «∿», drawn (LineIcon "wave"): the 0.10.1's glyph is in none of our fonts. */
+.radio__wave {
+    width: 24px;
+    height: 24px;
+    -unity-background-image-tint-color: #7dffb0;
+}
+
+.radio__scan {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.12);
+}
+
+.radio__body {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.radio__head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.radio__channel {
+    flex-shrink: 1;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+.radio__close {
+    width: 20px;
+    height: 18px;
+    padding: 0;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    font-size: 15px;
+    color: var(--t-muted);
+}
+
+.radio__close:hover {
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--t-danger);
+}
+
+.radio__who {
+    flex-direction: row;
+    align-items: flex-end;
+    margin-top: 2px;
+}
+
+.radio__name {
+    font-size: 16px;
+    letter-spacing: 0.3px;
+    color: #ffffff;
+}
+
+.radio__role {
+    margin: 0 0 2px 8px;
+    font-size: 12px;
+    color: var(--t-muted);
+}
+
+.radio__text {
+    min-height: 36px;
+    margin: 4px 0 2px;
+    font-size: 14px;
+    white-space: normal;
+}
+
+/* The Coro is not typed by anyone. */
+.radio__text--coro {
+    -unity-font-style: italic;
+    color: #6a2c8a;
+}
+
+/* The rule under one of Morse's warnings, in small print. */
+.radio__rule {
+    margin: 0 0 4px;
+    font-size: 12px;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+.radio__foot {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.radio__count {
+    font-size: 12px;
+    color: var(--t-muted);
+}
+
+/* «Seguir ▸»: faint while the line is typed; then lit, nudging, with how to go on beside it. */
+.radio__next {
+    flex-direction: row;
+    align-items: center;
+    padding: 0;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0;
+    opacity: 0.35;
+}
+
+.radio__next:hover {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.radio--ready .radio__next {
+    opacity: 1;
+}
+
+.radio__next-label {
+    font-size: 18px;
+    letter-spacing: 1px;
+    color: var(--t-accent);
+}
+
+.radio__next .triangle {
+    width: 7px;
+    height: 9px;
+    margin: 0 0 0 6px;
+    color: var(--t-accent);
+}
+
+.radio__hint {
+    display: none;
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.radio--ready .radio__hint {
+    display: flex;
+}

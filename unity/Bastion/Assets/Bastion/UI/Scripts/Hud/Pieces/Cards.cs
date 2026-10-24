@@ -59,6 +59,8 @@ namespace Bastion.UI.Hud
             accept.AddToClassList("btn-primary");
             actions.Add(refuse);
             actions.Add(accept);
+            PlateFrame.Dress(call);
+            Slant.Dress(accept);
             // The time left, counted down on this computer's clock from when it came (the server's deadline).
             Ui.Show(clock, v.Ms >= 0);
             if (v.Ms < 0) return;
@@ -85,11 +87,14 @@ namespace Bastion.UI.Hud
             Ui.Text((v.Title ?? "").ToUpperInvariant(), "card__title font-title", intro);
             if (!string.IsNullOrEmpty(v.Objective)) Ui.Text(HudText.Mission.IntroObjective + v.Objective, "card__objective", intro);
             if (!string.IsNullOrEmpty(v.Turns)) Ui.Text(v.Turns.ToUpperInvariant(), "card__turns", intro);
-            if (!string.IsNullOrEmpty(v.Briefing)) Ui.Text(v.Briefing, "card__text", intro);
+            // Lore's marks, as hud.ts marked(briefing): the key words in white bold, the objective in the accent.
+            if (!string.IsNullOrEmpty(v.Briefing)) Ui.Text(Strategy.StrategyText.Marked(v.Briefing), "card__text", intro);
             var actions = Ui.El("card__actions", intro);
             var ok = new Button(() => CloseIntro(false)) { text = HudText.Mission.IntroClose };
             ok.AddToClassList("btn-primary");
             actions.Add(ok);
+            PlateFrame.Dress(intro);
+            Slant.Dress(ok);
             sound?.Invoke("paper");
         }
 
@@ -126,16 +131,19 @@ namespace Bastion.UI.Hud
             Ui.Text(v.Victory ? HudText.Mission.Victory : HudText.Mission.Defeat, "outcome__title font-title", outcome);
             if (!string.IsNullOrEmpty(v.Line)) Ui.Text(v.Line, "card__text outcome__line", outcome);
             var actions = Ui.El("card__actions", outcome);
+            PlateFrame.Dress(outcome);
             if (v.Campaign)
             {
                 var back = new Button(() => handlers.OnReturnToBase()) { text = HudText.Mission.ToBase };
                 back.AddToClassList("btn-primary");
                 actions.Add(back);
+                Slant.Dress(back);
                 return;
             }
             var again = new Button(() => handlers.OnNewMission(false)) { text = v.Siege ? HudText.Mission.AgainSiege : HudText.Mission.Again };
             again.AddToClassList("btn-primary");
             actions.Add(again);
+            Slant.Dress(again);
             actions.Add(new Button(() => handlers.OnNewMission(true)) { text = HudText.Mission.Random });
             actions.Add(new Button(() => handlers.OnBackToMenu()) { text = HudText.Mission.ToMenu });
         }

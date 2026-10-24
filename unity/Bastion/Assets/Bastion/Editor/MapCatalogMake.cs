@@ -25,7 +25,8 @@ namespace Bastion.EditorTools
             var missing = new List<string>();
             Readable(prefabOf);
 
-            var modelNames = MapArt.Models().Distinct().OrderBy(n => n).ToList();
+            // The props' models, and La Lata's (its vehicles and La Mula's plates).
+            var modelNames = MapArt.Models().Concat(LaLata.Models).Append(SnowCover.Mound).Distinct().OrderBy(n => n).ToList();
             var models = modelNames.Select(n => prefabOf(n)).ToList();
             var materialNames = MapBuilder.MaterialsUsed.Distinct().OrderBy(n => n).ToList();
             var materials = materialNames.Select(n => materialOf(n)).ToList();

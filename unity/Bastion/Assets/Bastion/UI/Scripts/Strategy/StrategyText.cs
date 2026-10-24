@@ -72,6 +72,28 @@ namespace Bastion.UI.Strategy
             public const string ZoneMeterTip = "Zonas contactadas / máximo";
         }
 
+        /// <summary>The radio's card (transmissions.ts): its fixed words.</summary>
+        public static class Radio
+        {
+            public const string Kicker = "Transmisión";
+            public const string CloseTip = "Cerrar (Esc)";
+            public const string Next = "Seguir";
+            public const string End = "Fin";
+            public const string Ok = "Entendido";
+            /// <summary>After «Seguir ▸» once the line is typed (the battle's card takes clicks only: Hint without «o Intro»).</summary>
+            public const string Hint = "· clic o Intro";
+
+            /// <summary>{saludo} and {yo}: «Comandantes Ana y Luis», «Comandante Ana» (transmissions.ts greeting).</summary>
+            public static string Greeting(IList<string> names)
+            {
+                var list = new List<string>();
+                foreach (var n in names) if (!string.IsNullOrEmpty(n)) list.Add(n);
+                if (list.Count == 0) return "Comandantes";
+                if (list.Count == 1) return $"Comandante {list[0]}";
+                return $"Comandantes {string.Join(", ", list.GetRange(0, list.Count - 1))} y {list[list.Count - 1]}";
+            }
+        }
+
         /// <summary>«Volver al menú principal» from the base (Lore, 24/10: as in the HUD; «menú principal», not «de inicio»).</summary>
         public static class Leave
         {
@@ -94,12 +116,13 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>
-        /// marked.ts in rich text: **bold** and ==the goal== (in the accent), for briefings and the diary's paragraphs.
+        /// marked.ts in rich text: **the key words** in white bold and ==the goal== in the accent (mixta-base.css strong,
+        /// mark.goal), for briefings, the arrival card and the diary's paragraphs.
         /// </summary>
         public static string Marked(string text)
         {
             if (string.IsNullOrEmpty(text)) return text;
-            text = Regex.Replace(text, @"\*\*(.+?)\*\*", "<b>$1</b>");
+            text = Regex.Replace(text, @"\*\*(.+?)\*\*", "<color=#ffffff><b>$1</b></color>");
             return Regex.Replace(text, @"==(.+?)==", "<color=#f2c230><b>$1</b></color>");
         }
 

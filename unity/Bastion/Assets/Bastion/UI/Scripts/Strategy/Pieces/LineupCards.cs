@@ -65,7 +65,8 @@ namespace Bastion.UI.Strategy
                 if (!string.IsNullOrEmpty(v.Recruit))
                 {
                     var b = new Button(handlers.OnSquadRecruit) { text = v.Recruit.ToUpperInvariant() };
-                    Ui.AddClasses(b, "lineup-card__recruit btn-primary font-title");
+                    // A plain steel key, as the 0.10.1's (recruitCard: .x-btn, not .primary).
+                    Ui.AddClasses(b, "lineup-card__recruit font-title");
                     b.SetEnabled(v.RecruitEnabled);
                     card.Add(b);
                 }

@@ -138,18 +138,33 @@ namespace Bastion.Engine.Tests
             var port = ((IPEndPoint)listener.LocalEndpoint).Port;
             var raw = new TcpClient();
             await raw.ConnectAsync("127.0.0.1", port);
-            // Beating every 50 ms, a second of nothing for dead: twenty beats in a row would have to be lost or held up. A
-            // dead time of 300 ms (six) is within what a loaded machine can hold the network's threads up.
+            // Beating every 50 ms, a second of nothing for dead. Both ends share this process: held up together (the pool
+            // once 1.3 s late, with the whole suite twice at once), neither may take the other for gone on waking, before
+            // reading what waits (TcpConnection.BeatLoop); the second covers one end held up while the other isn't.
             var server = new TcpConnection(await listener.AcceptTcpClientAsync(), 1024, 1024, heartbeatMs: 50, deadAfterMs: 1000);
             var client = new TcpConnection(raw, 1024, 1024, heartbeatMs: 50, deadAfterMs: 1000);
             var serverClosed = ClosedOf(server);
             var clientClosed = ClosedOf(client);
             server.Start();
             client.Start();
+            // How late the thread pool, which the connections' loops run on, was at its worst meanwhile: if they are
+            // taken for gone, whether the machine held them up or the heartbeat failed.
+            var watch = Stopwatch.StartNew();
+            long worst = 0;
+            var probe = Task.Run(async () =>
+            {
+                while (watch.ElapsedMilliseconds < 3000)
+                {
+                    var before = watch.ElapsedMilliseconds;
+                    await Task.Delay(10).ConfigureAwait(false);
+                    worst = Math.Max(worst, watch.ElapsedMilliseconds - before - 10);
+                }
+            });
             // Three times the dead time with nothing to say but the heartbeat: both still open.
             await Task.Delay(3000);
-            Assert.False(serverClosed.IsCompleted);
-            Assert.False(clientClosed.IsCompleted);
+            await probe;
+            string Why(Task<string> closed) => closed.IsCompleted ? $"closed «{closed.Result}»; the pool was up to {worst} ms late" : "";
+            Assert.False(serverClosed.IsCompleted || clientClosed.IsCompleted, $"server: {Why(serverClosed)} · client: {Why(clientClosed)}");
             client.Close("fin");
             listener.Stop();
         }

@@ -95,7 +95,7 @@ Arturo, 24/10: «quiero que terminemos con el port a Unity completo». Orden pro
   - `unity/tools/captura.sh` saca capturas en el editor;
   - las apps compiladas se comprueban con su propia captura (`-shotOut`), no solo con el registro. La pantalla negra del 24/10 salió así.
 - **Escenas:** un solo dueño por archivo .unity. Partida es de Arte; Inicio, de UI.
-- **En otra máquina, tras clonar:** importar Synty (`unity/tools/importar-synty.sh`), los clips de Mixamo y la herramienta Sidekicks (assets-src/sidekicks-tool), y ejecutar SourceProps.Run, MapCatalogMake.Run, PieceMake.Run, GradeMake.Run y ProjectSetup.Run (UNITY-ARTE.md §6).
+- **En otra máquina, tras clonar:** importar Synty (`unity/tools/importar-synty.sh`), los clips de Mixamo y la herramienta Sidekicks (assets-src/sidekicks-tool), y ejecutar SourceProps.Run, SnowFeatureMake.Run, MapCatalogMake.Run, PieceMake.Run, GradeMake.Run y ProjectSetup.Run (UNITY-ARTE.md §6).
 - **Revisión:** cada animación, con tira a 10 fps de cerca y desde la cámara del juego; cada pantalla, junto a la 0.10.1 con el mismo encuadre. Gameplay aprueba.
 
 ## 7. Para un Gameplay nuevo

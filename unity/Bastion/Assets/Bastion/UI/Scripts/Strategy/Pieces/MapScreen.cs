@@ -155,7 +155,7 @@ namespace Bastion.UI.Strategy
         void Row(MapRowView r, string kind, VisualElement parent)
         {
             var id = r.Id;
-            var row = new Button(() => handlers.OnZone(id));
+            var row = new Button(() => handlers.OnZone(id, false));
             Ui.AddClasses(row, "map-row map-row--" + kind);
             row.EnableInClassList("map-row--on", r.Selected);
             var words = Ui.El("map-row__words", row);
@@ -286,7 +286,7 @@ namespace Bastion.UI.Strategy
                 }
                 // The zone's pin and name take the pointer: a click picks it.
                 mark.pickingMode = PickingMode.Position;
-                mark.RegisterCallback<ClickEvent>(_ => handlers.OnZone(id));
+                mark.RegisterCallback<ClickEvent>(_ => handlers.OnZone(id, true));
                 zones[id] = mark;
             }
             if (lata != null) lata.BringToFront();

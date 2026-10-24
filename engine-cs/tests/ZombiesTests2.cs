@@ -11,11 +11,9 @@ using static Bastion.Engine.Tests.ZombiesTests;
 namespace Bastion.Engine.Tests
 {
     /// <summary>
-    /// packages/engine/test/zombies.test.ts, second half (searching, the Saqueo, the backpack, replication, the dead and
-    /// the living); ZombiesTests has the first and the helpers. Not ported, they need campaign.ts (createCampaign,
-    /// applyMissionResult, executeCampaignCommand, migrateCampaign, buildSquad, medicineCures; the helper raise): the three
-    /// of «loot in the campaign» (suministros go to the credits…, a lost mission brings home only what was evacuated,
-    /// Saqueos turn up among the offers…) and «the backpack › the Chapistería gives one more slot…».
+    /// packages/engine/test/zombies.test.ts, second half (searching, the Saqueo, loot in the campaign, the backpack,
+    /// replication, the dead and the living); ZombiesTests has the first and the helpers. `report.loot toEqual` is compared
+    /// through its JSON, nulls apart (CampaignJsonTests.FirstDifference).
     /// </summary>
     public class ZombiesTests2
     {
@@ -348,6 +346,105 @@ namespace Bastion.Engine.Tests
             Assert.Empty(Trickles(MissionKinds.Elimination, 3));
         }
 
+        // ------------------------------------------------------------ loot in the campaign
+
+        /// <summary>A campaign of two whose first offer, made a mission of `kind`, has been chosen; and that mission.</summary>
+        private static (CampaignState c, MissionOffer offer, GameState mission) Flown(string kind)
+        {
+            var c = Campaign.CreateCampaign(new[] { 0, 1 }, new Rng(2));
+            var offer = c.Offers[0];
+            offer.Kind = kind;
+            CampaignHelpers.Ok(c, new ChooseMissionCommand { Id = offer.Id });
+            var mission = Setup.CreateMission(new MissionOptions { Map = offer.Map, Slots = new List<int> { 0, 1 }, Rng = new Rng(3), Kind = kind, Squad = Campaign.BuildSquad(c), Pods = offer.Pods, Difficulty = offer.Difficulty });
+            return (c, offer, mission);
+        }
+
+        [Fact(DisplayName = "loot in the campaign › suministros go to the credits, accessories to the inventory, medicines to their counter; the report says it")]
+        public void SuministrosGoToTheCreditsAccessoriesToTheInventory()
+        {
+            var (c, offer, mission) = Flown(MissionKinds.Scavenge);
+            var squad = mission.Units.Where((u) => u.Team == Teams.Xcom).ToList();
+            var (a, b, d) = (squad[0], squad[1], squad[2]);
+            var carried = Pack(Supplies(12), ItemLoot(ItemIds.SmokeGrenade), Medicines(1));
+            a.Alive = false;
+            a.Evacuated = true;
+            a.Backpack = carried;
+            b.Alive = false;
+            b.Hp = 0;
+            b.Backpack = Pack(Supplies(20));
+            d.Alive = false;
+            d.Evacuated = true;
+            d.Backpack = Pack(Medicines(1));
+            foreach (var u in mission.Units)
+            {
+                if (u.Team == Teams.Xcom && u.Alive)
+                {
+                    u.Alive = false;
+                    u.Evacuated = true;
+                }
+            }
+            mission.Outcome = Outcomes.Victory;
+            mission.OutcomeReason = EndReasons.Objective;
+            var credits = c.Credits;
+            var smoke = c.Inventory.TryGetValue(ItemIds.SmokeGrenade, out var copies) ? copies : 0;
+            // No enclave convoy while the squad flies back, to count only the loot (and the reward's).
+            c.NextMedicineDay = 999;
+            var medicines = c.Medicines ?? 0;
+            var report = Campaign.ApplyMissionResult(c, mission, new Rng(4));
+            var expected = new MissionLoot { Supplies = 12, Items = new List<string> { ItemIds.SmokeGrenade }, Medicines = 2, Food = 0, Parts = 0, Weapons = new List<string>(), Line = Lore.LootSummary(12, new[] { ItemIds.SmokeGrenade }, 2) };
+            Newtonsoft.Json.Linq.JToken Json(object x) => CampaignJsonTests.Clean(Newtonsoft.Json.Linq.JToken.Parse(CampaignJsonTests.Write(x)));
+            Assert.NotNull(report.Loot);
+            var difference = CampaignJsonTests.FirstDifference(Json(expected), Json(report.Loot!));
+            Assert.True(difference == null, difference);
+            Assert.Matches("12", report.Loot!.Line);
+            Assert.Equal(medicines + 2 + (offer.Reward.Medicines ?? 0), c.Medicines);
+            Assert.Equal(smoke + 1, c.Inventory[ItemIds.SmokeGrenade]);
+            // The reward and the loot; no bodies from a Saqueo: the squad left by the evac.
+            Assert.Equal(0, report.Bodies);
+            Assert.True(c.Credits >= credits + 12 + (offer.Reward.Credits ?? 0), $"{c.Credits} credits");
+        }
+
+        [Fact(DisplayName = "loot in the campaign › a lost mission brings home only what was evacuated")]
+        public void ALostMissionBringsHomeOnlyWhatWasEvacuated()
+        {
+            var (c, _, mission) = Flown(MissionKinds.Elimination);
+            var squad = mission.Units.Where((u) => u.Team == Teams.Xcom).ToList();
+            var (a, b) = (squad[0], squad[1]);
+            a.Alive = false;
+            a.Evacuated = true;
+            a.Backpack = Pack(Supplies(8));
+            b.Backpack = Pack(Supplies(30));
+            mission.Outcome = Outcomes.Defeat;
+            mission.OutcomeReason = EndReasons.Abandoned;
+            var report = Campaign.ApplyMissionResult(c, mission, new Rng(4));
+            Assert.NotNull(report.Loot);
+            Assert.Equal((8, 0), (report.Loot!.Supplies, report.Loot.Medicines));
+            Assert.Empty(report.Loot.Items);
+        }
+
+        [Fact(DisplayName = "loot in the campaign › Saqueos turn up among the offers, in towns and full of the dead; older campaigns keep working")]
+        public void SaqueosTurnUpAmongTheOffers()
+        {
+            var offers = new List<MissionOffer>();
+            for (var seed = 1; seed < 30; seed++)
+            {
+                var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(seed));
+                for (var i = 0; i < 6; i++) Campaign.ExecuteCampaignCommand(c, new AdvanceCommand { Ready = true }, new CampaignContext { Slot = 0, Connected = new[] { 0 }, Rng = new Rng(seed * 10 + i) });
+                offers.AddRange(c.Offers.Where((o) => o.Kind == MissionKinds.Scavenge));
+            }
+            Assert.NotEmpty(offers);
+            foreach (var o in offers)
+            {
+                Assert.Equal((MapSourceKinds.Generated, Biomes.City), (o.Map.Kind, o.Map.Biome));
+                Assert.True(o.Pods.SelectMany((p) => p).All((t) => Content.Templates[t].Undead));
+            }
+            var old = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            old.Medicines = null;
+            var migrated = Campaign.MigrateCampaign(old);
+            Assert.Equal(Campaign.CampaignVersion, migrated.Version);
+            Assert.Equal(0, migrated.Medicines ?? 0);
+        }
+
         // ------------------------------------------------------------ the backpack (docs/FASE8.md §C)
 
         private static CommandResult Item(GameState s, string unit, string action, int? index = null, string? id = null, string? to = null)
@@ -443,6 +540,21 @@ namespace Bastion.Engine.Tests
             var b = AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => { u.Hp = 2; u.Infected = true; });
             Assert.True(Item(s, "s1", ItemActions.Use, index: 0, to: "s2").Ok);
             Assert.Equal(false, b.Infected);
+        }
+
+        [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › the Chapistería gives one more slot, and the Enfermería at level 2 makes medicines stop the bite")]
+        public void TheChapisteriaGivesOneMoreSlot()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            Assert.True(Campaign.BuildSquad(c).All((m) => m.PackSlots == null));
+            Assert.False(Campaign.MedicineCures(c));
+            CampaignHelpers.Raise(c, PieceIds.Garage);
+            CampaignHelpers.Raise(c, PieceIds.Infirmary, 2);
+            Assert.True(Campaign.BuildSquad(c).All((m) => m.PackSlots == 4));
+            Assert.True(Campaign.MedicineCures(c));
+            var s = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, 3), Slots = new List<int> { 0 }, Rng = new Rng(1), Squad = Campaign.BuildSquad(c), MedicineCures = Campaign.MedicineCures(c) });
+            Assert.Equal(true, s.Mission.MedicineCures);
+            Assert.True(s.Units.Where((u) => u.Team == Teams.Xcom).All((u) => u.PackSlots == 4));
         }
 
         [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › a client replaying the backpack ends with the host state")]

@@ -33,6 +33,8 @@ namespace Bastion.UI.Strategy
         DebriefScreen debrief;
         MapScreen map;
         SettlementScreen settlement;
+        RadioPanel radio;
+        VisualElement radioCard;
         ValleyMap valley;
         Label toast;
         float toastUntil;
@@ -52,6 +54,12 @@ namespace Bastion.UI.Strategy
 
         /// <summary>A base piece's picture by id, for the Asentamiento's palette (Arte's renders); null, the 0.10.1's.</summary>
         public Func<string, Texture> PieceArtOf;
+
+        /// <summary>A radio voice's bust by speaker (Arte's Portraits.Voice); null, their initials.</summary>
+        public Func<string, Texture> VoiceOf;
+
+        /// <summary>The radio's card: Radio (the controller) plays the scenes on it.</summary>
+        public RadioPanel RadioCard => radio;
 
         /// <summary>
         /// Where the card of pad `i` of `n` of the line-up goes, in panel pixels (its top centre): Arte's
@@ -98,7 +106,7 @@ namespace Bastion.UI.Strategy
             soldiers.Show(false);
             armory = new ArmoryScreen(root.Q("view"), tips, Icon, relay);
             armory.Show(false);
-            squad = new SquadScreen(root.Q("view"), tips, relay);
+            squad = new SquadScreen(root.Q("view"), tips, relay, Icon);
             debrief = new DebriefScreen(root.Q("view"), tips, Icon, relay);
             foreach (var cards in new[] { squad.Cards, debrief.Cards })
             {
@@ -111,6 +119,10 @@ namespace Bastion.UI.Strategy
             map.Show(false);
             settlement = new SettlementScreen(root.Q("view"), tips, Icon, relay) { ArtOf = id => PieceArtOf?.Invoke(id) };
             settlement.Show(false);
+            // The radio over everything but the short note, as the 0.10.1 appended it (transmissions.ts; z-index 13).
+            radioCard = Ui.El("radio panel");
+            root.Insert(root.IndexOf(root.Q("toast")), radioCard);
+            radio = new RadioPanel(radioCard, tips, s => Sound?.Invoke(s)) { VoiceOf = id => VoiceOf?.Invoke(id) };
             skillBoard = new SkillBoardModal(root.Q("board"), relay, s => Sound?.Invoke(s), tips) { PortraitOf = id => PortraitOf?.Invoke(id) };
             toast = root.Q<Label>("toast");
             Ui.Show(toast, false);
@@ -140,6 +152,7 @@ namespace Bastion.UI.Strategy
                 toastUntil = 0;
                 Ui.Show(toast, false);
             }
+            radio.Tick(Time.unscaledDeltaTime);
             var clock = ClockOf?.Invoke();
             proposal.Tick(clock?.text, clock?.left ?? 0, clock?.hurry ?? false);
             modal.Tick(clock?.text, clock?.left ?? 0, clock?.hurry ?? false);
@@ -174,6 +187,8 @@ namespace Bastion.UI.Strategy
             debrief.Show(view == "debrief");
             map.Show(view == "geoscape");
             settlement.Show(view == "facilities");
+            // Where the radio sits goes with the screen (transmissions.css): the free corner of each.
+            foreach (var v in new[] { "geoscape", "squad", "debrief", "barracks" }) radioCard.EnableInClassList("radio--" + v, view == v);
             Dress();
         }
 
@@ -219,9 +234,13 @@ namespace Bastion.UI.Strategy
         /// (mixta.css: border-image, --m-rivets, clip-path; strategy.css .recruit-card). Once each, after every change,
         /// since the screens make some of them again.
         /// </summary>
+        /// <summary>A key for the radio (escape, enter, space): true if it took it (the base's Esc then does nothing else).</summary>
+        public bool RadioKey(string key) => radio != null && radio.Key(key);
+
         void Dress()
         {
             if (root == null) return;
+            PlateFrame.Dress(radioCard, false);
             foreach (var cls in FramedPlates) root.Query(className: cls).ForEach(e => PlateFrame.Dress(e));
             root.Query(className: "strat-proposal").ForEach(e => PlateFrame.Dress(e, false));
             root.Query<Button>(className: "btn-primary").ForEach(Slant.Dress);

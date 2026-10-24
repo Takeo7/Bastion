@@ -1,17 +1,19 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using Bastion.Engine;
+using Newtonsoft.Json.Linq;
 
 namespace Bastion.Net
 {
     /// <summary>
-    /// A single co-op session for two seats (room.ts Room), as far as the first milestone goes: a skirmish between two
-    /// apps (docs/UNITY.md). The room owns the authoritative state; clients only send intents, and what they make happen
-    /// streams to both as events.
+    /// A single co-op session for two seats (room.ts Room): skirmishes and, with ICampaignRules, the campaign and its
+    /// base. The room owns the authoritative state: the campaign and the tactical mission in progress. Clients only send
+    /// intents; tactical results stream as events, the campaign is sent whole.
     ///
     /// It runs on one thread, its own: what comes from the connections (on theirs) waits in a queue, and Pump plays it,
     /// in order, with the timers that are due by its clock (RoomHost does that; the tests, by hand with a fake clock).
@@ -26,10 +28,10 @@ namespace Bastion.Net
 
         /// <summary>
         /// How long a joint decision waits for the partner's answer before it goes ahead (playtest 2026-10-14, #28: in
-        /// case they left). Leaving the mission, two minutes (Arturo, 22/10: Ana was taken home unasked). A base
-        /// proposal (30 s) comes with the base.
+        /// case they left; 16/10: 90 s was too long). Leaving the mission, two minutes (Arturo, 22/10: Ana was taken home
+        /// unasked).
         /// </summary>
-        private static readonly IReadOnlyDictionary<string, long> AnswerWaitMs = new Dictionary<string, long> { [DeadlineKinds.Evac] = 120_000, [DeadlineKinds.Abandon] = 120_000 };
+        private static readonly IReadOnlyDictionary<string, long> AnswerWaitMs = new Dictionary<string, long> { [DeadlineKinds.Proposal] = 30_000, [DeadlineKinds.Evac] = 120_000, [DeadlineKinds.Abandon] = 120_000 };
 
         /// <summary>The squad's turn clock (Arturo, 22/10): each player gets this long for each soldier they command.</summary>
         public const long TurnMsPerSoldier = 45_000;
@@ -53,6 +55,8 @@ namespace Bastion.Net
             public long? DroppedAt;
             /// <summary>Their game is out of sight (the `away` message): a drop then waits AwayGraceMs.</summary>
             public bool Away;
+            /// <summary>The base screen this player is on (BaseViews), so a reconnecting partner sees it.</summary>
+            public string? View;
         }
 
         /// <summary>A connection and the seat it took with its hello, if any.</summary>
@@ -100,6 +104,8 @@ namespace Bastion.Net
 
         private readonly SaveStore store;
         private readonly IRules rules;
+        /// <summary>The campaign's rules; without them, skirmishes only.</summary>
+        private readonly ICampaignRules? campaignRules;
         private readonly string version;
         private readonly List<HostAddress> hosts;
         private readonly IClock clock;
@@ -115,7 +121,11 @@ namespace Bastion.Net
         /// <summary>The waits on joint decisions now running (AnswerWaitMs), by kind.</summary>
         private readonly Dictionary<string, Waiting> waits = new Dictionary<string, Waiting>();
         private string phase = RoomPhases.Lobby;
+        private string mode = "skirmish"; // skirmish | campaign
         private GameState? state;
+        private CampaignState? campaign;
+        /// <summary>Whether the finished campaign mission has already been folded into the campaign.</summary>
+        private bool resultApplied;
         private Rng rng;
         private string missionKind = MissionKinds.Elimination;
         private string skirmishMap = SkirmishMaps.City;
@@ -136,12 +146,13 @@ namespace Bastion.Net
         /// <summary>
         /// The room, from its save if there is one. `version`: this build's, which every player's must match. `hosts`:
         /// where the partner can connect, for the welcome. `say`: the host's console (room.ts console.log); red.log is the
-        /// store's Log.
+        /// store's Log. `campaignRules`: the campaign's; without them, skirmishes only.
         /// </summary>
-        public Room(SaveStore store, IRules rules, string version, IReadOnlyList<HostAddress>? hosts = null, IClock? clock = null, Rng? rng = null, Action<string>? say = null)
+        public Room(SaveStore store, IRules rules, string version, IReadOnlyList<HostAddress>? hosts = null, IClock? clock = null, Rng? rng = null, Action<string>? say = null, ICampaignRules? campaignRules = null)
         {
             this.store = store;
             this.rules = rules;
+            this.campaignRules = campaignRules;
             this.version = version;
             this.hosts = hosts?.ToList() ?? new List<HostAddress>();
             this.clock = clock ?? new SystemClock();
@@ -154,8 +165,16 @@ namespace Bastion.Net
                 var s = i < saved.Seats.Count ? saved.Seats[i] : null;
                 seats[i] = s == null ? null : new Seat { Slot = s.Slot, Name = s.Name, Token = s.Token };
             }
-            // Only a skirmish's mission goes on: a campaign's, and the base, come later.
-            if (saved.Mode == "skirmish" && saved.Phase == RoomPhases.Mission && saved.State != null)
+            // Without the campaign's rules, only a skirmish's mission goes on; the campaign stays in the save as it was.
+            campaign = saved.Campaign;
+            if (campaignRules != null)
+            {
+                phase = saved.Phase;
+                mode = saved.Mode;
+                state = saved.State;
+                resultApplied = saved.ResultApplied;
+            }
+            else if (saved.Mode == "skirmish" && saved.Phase == RoomPhases.Mission && saved.State != null)
             {
                 phase = RoomPhases.Mission;
                 state = saved.State;
@@ -166,7 +185,7 @@ namespace Bastion.Net
             skirmishVeterans = saved.SkirmishVeterans;
             skirmishNight = saved.SkirmishNight ?? false;
             Summarize();
-            this.say($"[room] Partida restaurada ({phase}).");
+            this.say($"[room] Partida restaurada ({phase}{(campaign != null ? $", campaña día {campaign.Day}" : "")}).");
         }
 
         // ------------------------------------------------------------- the thread
@@ -261,7 +280,7 @@ namespace Bastion.Net
             ClientMessage msg;
             try
             {
-                msg = Json.Read<ClientMessage>(text);
+                msg = Json.ReadFromPlayer<ClientMessage>(text);
             }
             catch (Exception)
             {
@@ -330,6 +349,12 @@ namespace Bastion.Net
                     return UnitId(m.Unit) && (m.Tile == null || Spot(m.Tile));
                 case ReportMessage m:
                     return m.Line != null;
+                case CampaignCmdMessage m:
+                    return m.Cmd != null && ValidCampaignCommand(m.Cmd);
+                case BaseViewMessage m:
+                    return BaseViews.All.Contains(m.View);
+                case BaseCursorMessage m:
+                    return (m.Piece == null || Base.Pieces.ContainsKey(m.Piece)) && BaseTile(m.X, m.Y) && Turn(m.Rot);
                 default:
                     return true;
             }
@@ -354,7 +379,100 @@ namespace Bastion.Net
             }
         }
 
-        private static bool UnitId(string? id) => id != null && id.Length >= 1 && id.Length <= 16;
+        /// <summary>
+        /// protocol.ts campaignCommandSchema, past what the types already say (Types/CampaignCommand.cs lists it): ids,
+        /// tiles of the base and turns in bounds, and the names of things among the engine's.
+        /// </summary>
+        private static bool ValidCampaignCommand(CampaignCommand cmd)
+        {
+            switch (cmd)
+            {
+                case PlaceCommand c:
+                    return Has(Base.Pieces, c.Piece) && BaseTile(c.X, c.Y) && Turn(c.Rot);
+                case FellCommand c:
+                    return BaseTiles(c.Tiles, 400);
+                case MendCommand c:
+                    return Id(c.Piece);
+                case RaiseCommand c:
+                    return Id(c.Piece);
+                case PlaceLineCommand c:
+                    return Has(Base.Pieces, c.Piece) && BaseTiles(c.Cells, 60) && Turn(c.Rot);
+                case PostCommand c:
+                    return Id(c.Soldier) && (c.At == null || BaseTile(c.At.X, c.At.Y));
+                case RearmCommand c:
+                    return Id(c.Piece);
+                case DismantleCommand c:
+                    return Id(c.Piece);
+                case ChooseMissionCommand c:
+                    return Id(c.Id);
+                case ContactCommand c:
+                    return Has(Campaign.Regions, c.Region);
+                case AnswerEventCommand c:
+                    return c.Option == 0 || c.Option == 1;
+                case InvestigateCommand c:
+                    return Id(c.Id);
+                case SquadCommand c:
+                    return Id(c.Soldier);
+                case UnlockCommand c:
+                    return Id(c.Soldier) && Has(Board.BoardCells, c.Cell);
+                case RepairCommand c:
+                    return Id(c.Weapon);
+                case ModCommand c:
+                    return Id(c.Weapon) && Has(Content.WeaponMods, c.Mod);
+                case BuyCommand c:
+                    return Has(Content.Items, c.Item);
+                case EquipCommand c:
+                    return Id(c.Soldier) && ItemSlots.All.Contains(c.Slot) && (c.Item == null || Has(Content.Items, c.Item));
+                case CustomizeCommand c:
+                    return Id(c.Soldier) && c.Name.Length <= Appearances.NameMax * 2 && c.Nickname.Length <= Appearances.NicknameMax * 2 && ValidAppearance(c.Appearance);
+                case TreatCommand c:
+                    return Id(c.Soldier);
+                case MedicateCommand c:
+                    return Id(c.Soldier);
+                case CraftCommand c:
+                    return Has(Progression.Crafts, c.Project);
+                case AssignWeaponCommand c:
+                    return Id(c.Weapon) && (c.Soldier == null || Id(c.Soldier));
+                default:
+                    // levelUp, cancelMission, recruit, advance, launch, vote, withdraw: nothing past their types.
+                    return true;
+            }
+        }
+
+        /// <summary>protocol.ts appearanceSchema: its colours `#rrggbb`, its head and build the engine's; the pieces may be missing.</summary>
+        private static bool ValidAppearance(Appearance? a)
+        {
+            return a != null && Colour(a.Primary) && Colour(a.Secondary) && Colour(a.Visor) && Has(Appearances.Heads, a.Head) && Has(Appearances.Builds, a.Build)
+                && (a.Sex == null || Sexes.All.Contains(a.Sex)) && (a.Helmet == null || Colour(a.Helmet)) && (a.Torso == null || Colour(a.Torso))
+                && (a.Arms == null || Colour(a.Arms)) && (a.Legs == null || Colour(a.Legs)) && (a.Character == null || Character(a.Character));
+        }
+
+        /// <summary>/^#[0-9a-f]{6}$/i.</summary>
+        private static bool Colour(string? s)
+        {
+            return s != null && s.Length == 7 && s[0] == '#' && s.Skip(1).All(Uri.IsHexDigit);
+        }
+
+        /// <summary>/^[a-z][a-zA-Z0-9]{0,23}$/: which survivor model a soldier is.</summary>
+        private static bool Character(string s)
+        {
+            return s.Length >= 1 && s.Length <= 24 && s[0] >= 'a' && s[0] <= 'z' && s.All((ch) => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'));
+        }
+
+        /// <summary>A key of one of the engine's tables (z.enum(keys(…))).</summary>
+        private static bool Has<T>(IReadOnlyDictionary<string, T> table, string? key) => key != null && table.ContainsKey(key);
+
+        /// <summary>A tile of the base's map (docs/FASE12.md §11): 0–255 each way.</summary>
+        private static bool BaseTile(int x, int y) => x >= 0 && x <= 255 && y >= 0 && y <= 255;
+
+        private static bool BaseTiles(List<Vec2>? tiles, int max) => tiles != null && tiles.Count >= 1 && tiles.Count <= max && tiles.All((t) => t != null && BaseTile(t.X, t.Y));
+
+        private static bool Turn(int rot) => rot >= 0 && rot <= 3;
+
+        /// <summary>protocol.ts `id`: 1–16 characters.</summary>
+        private static bool Id(string? id) => id != null && id.Length >= 1 && id.Length <= 16;
+
+        private static bool UnitId(string? id) => Id(id);
 
         private static bool Spot(Pos p) => p.Z >= 0 && p.Z <= 3;
 
@@ -421,14 +539,19 @@ namespace Bastion.Net
             say($"[room] {name} ocupa el puesto {seat.Slot + 1}.");
 
             Send(socket, new WelcomeMessage { Token = seat.Token, Slot = seat.Slot, Hosts = hosts, Version = version });
+            // A partner joining a campaign started without them gets soldiers of their own.
+            if (phase == RoomPhases.Base) BringPlayersIn();
             BroadcastRoom();
+            if (campaign != null && phase != RoomPhases.Lobby) Send(socket, new CampaignMessage { State = campaign });
+            foreach (var other in seats)
+                if (other != null && other != seat && other.View != null) Send(socket, new PartnerBaseViewMessage { Slot = other.Slot, View = other.View });
             if (phase == RoomPhases.Mission && state != null) Send(socket, new SnapshotMessage { State = state });
             Persist();
             ResyncTurn();
-            // A call saved before the host restarted had no clock: it gets one when someone is back.
+            // A proposal saved before the host restarted had no clock: it gets one when someone is back.
             CheckWaits();
             // Back in: how long the open decisions have left, and the turn clock.
-            foreach (var kind in new[] { DeadlineKinds.Evac, DeadlineKinds.Abandon })
+            foreach (var kind in new[] { DeadlineKinds.Proposal, DeadlineKinds.Evac, DeadlineKinds.Abandon })
                 if (waits.TryGetValue(kind, out var wait)) Send(socket, new DeadlineMessage { Kind = kind, Ms = Math.Max(0, wait.At - clock.Now) });
             idle[seat.Slot] = false;
             Send(socket, TurnClockNow());
@@ -448,24 +571,105 @@ namespace Bastion.Net
                 case StartMessage m:
                     if (phase == RoomPhases.Lobby)
                     {
+                        // Not over a campaign mission left half played: it would be lost, and played again.
+                        if (PausedMission() != null)
+                        {
+                            Send(seat.Socket!, new ErrorMessage { Message = "Antes, acabad la misión de la campaña que está a medias: «Continuar campaña»." });
+                            return;
+                        }
                         if (m.Veterans != null) skirmishVeterans = m.Veterans.Value;
                         if (m.Night != null) skirmishNight = m.Night.Value;
                         StartSkirmish(m.Mission, m.Map);
                     }
                     break;
                 case NewMissionMessage m:
-                    if (phase != RoomPhases.Mission || state?.Outcome == null) return;
+                    if (phase != RoomPhases.Mission || mode != "skirmish" || state?.Outcome == null) return;
                     if (m.Night != null) skirmishNight = m.Night.Value;
                     StartSkirmish(m.Mission, m.Map);
                     break;
                 case BackToMenuMessage _:
-                    // From a skirmish, over or not: it ends there.
-                    if (phase != RoomPhases.Mission) return;
-                    state = null;
+                case LeaveCampaignMessage _:
+                    // From the base; from a skirmish, over or not (it ends there); from a campaign mission under way, which
+                    // waits as it is for «Continuar campaña» (playtest 19/10, #7). A campaign mission over goes back to the base first.
+                    if (phase != RoomPhases.Base && phase != RoomPhases.Mission) return;
+                    if (phase == RoomPhases.Mission && mode == "skirmish") state = null;
+                    else if (phase == RoomPhases.Mission && (state == null || state.Outcome != null)) return;
                     phase = RoomPhases.Lobby;
                     BroadcastRoom();
                     Persist();
                     CheckWaits();
+                    break;
+
+                // ---- campaign
+                case NewCampaignMessage _:
+                {
+                    if (phase != RoomPhases.Lobby || campaignRules == null) return;
+                    // The campaign it replaces is kept as it was, next to the save: the client asks first, but a click is easy.
+                    if (campaign != null)
+                    {
+                        try
+                        {
+                            var kept = store.KeepCopy("antes-de-campana-nueva");
+                            if (kept != null) store.Log($"[save] La campaña anterior queda en {kept}.");
+                        }
+                        catch (IOException e)
+                        {
+                            store.Log($"[save] {e.Message}");
+                            Send(seat.Socket!, new ErrorMessage { Message = "No se pudo guardar aparte la campaña de ahora: no se empieza otra." });
+                            return;
+                        }
+                    }
+                    // A mission of the old one left half played goes with it (in the copy).
+                    if (PausedMission() != null) state = null;
+                    campaign = campaignRules.CreateCampaign(ConnectedSlots(), rng);
+                    // It opens with the first operation chosen and its squad in the hangar (playtest 2026-10-13).
+                    campaignRules.OpeningMission(campaign);
+                    say($"[room] Nueva campaña con {campaign.Players.Count} jugador(es).");
+                    EnterBase();
+                    break;
+                }
+                case ContinueCampaignMessage _:
+                    if (phase != RoomPhases.Lobby || campaign == null || campaignRules == null) return;
+                    // Back to a mission left half played, as it was; else to the base.
+                    if (PausedMission() != null) ResumeMission();
+                    else EnterBase();
+                    break;
+                case CampaignCmdMessage m:
+                {
+                    var cmd = m.Cmd!;
+                    // Orders that don't go through are written to red.log, to find out why when a player says nothing
+                    // happened (Arturo, 18/10: a skill that would not unlock, with no message).
+                    if (phase != RoomPhases.Base || campaign == null || campaignRules == null)
+                    {
+                        store.Log($"[campaña] {seat.Name}: «{cmd.Type}» ignorada (fase {phase}{(campaign != null ? "" : ", sin campaña")})");
+                        return;
+                    }
+                    var result = campaignRules.ExecuteCampaignCommand(campaign, cmd, seat.Slot, ConnectedSlots(), rng);
+                    if (!result.Ok)
+                    {
+                        store.Log($"[campaña] {seat.Name} (puesto {seat.Slot + 1}): «{cmd.Type}» rechazada: {result.Error}{CommandDetail(cmd)}");
+                        Send(seat.Socket!, new RejectedMessage { Message = result.Error ?? "" });
+                        return;
+                    }
+                    if (cmd.Type == "unlock") store.Log($"[campaña] {seat.Name}: {Field(cmd, "cell")} para {Field(cmd, "soldier")}{CommandDetail(cmd)}");
+                    if (result.Launch) LaunchCampaignMission();
+                    else Broadcast(new CampaignMessage { State = campaign });
+                    Persist();
+                    CheckWaits();
+                    break;
+                }
+                case ReturnToBaseMessage _:
+                    if (phase != RoomPhases.Mission || mode != "campaign" || state?.Outcome == null) return;
+                    state = null;
+                    EnterBase();
+                    break;
+                case BaseViewMessage m:
+                    seat.View = m.View;
+                    ToPartner(seat, new PartnerBaseViewMessage { Slot = seat.Slot, View = m.View });
+                    break;
+                case BaseCursorMessage m:
+                    // What the partner has in hand on the base, passed on as it comes (docs/FASE12.md §11.7).
+                    if (phase == RoomPhases.Base) ToPartner(seat, new PartnerBaseCursorMessage { Slot = seat.Slot, Piece = m.Piece, X = m.X, Y = m.Y, Rot = m.Rot });
                     break;
                 case IdleMessage m:
                     idle[seat.Slot] = m.Idle;
@@ -548,6 +752,7 @@ namespace Bastion.Net
             if (kind == MissionKinds.Scavenge && map != SkirmishMaps.Industrial) map = SkirmishMaps.City;
             missionKind = kind;
             skirmishMap = map;
+            mode = "skirmish";
             // rng.int(2 ** 31): past an int, so as rng.ts does it.
             var seed = (int)Math.Floor(rng.Next() * 2147483648.0);
             var options = new SkirmishOptions { Seed = seed, Slots = slots, Kind = kind, Veterans = skirmishVeterans, Night = skirmishNight };
@@ -575,9 +780,76 @@ namespace Bastion.Net
             Persist();
         }
 
-        /// <summary>After any tactical change. A campaign's mission over is folded into the campaign here, when the campaign comes.</summary>
+        /// <summary>Every connected player takes part in the campaign (one who arrives late gets soldiers).</summary>
+        private void BringPlayersIn()
+        {
+            var c = campaign;
+            if (c == null || campaignRules == null) return;
+            var changed = false;
+            foreach (var slot in ConnectedSlots())
+                if (campaignRules.AddPlayer(c, slot, rng)) changed = true;
+            if (!changed) return;
+            // A squad being picked is redone with both commanders' soldiers.
+            if (c.ActiveMission != null)
+            {
+                c.Squad = campaignRules.DefaultSquad(c, ConnectedSlots());
+                campaignRules.SyncPads(c);
+                c.LaunchReady = new bool[2];
+            }
+            Broadcast(new CampaignMessage { State = c });
+            Persist();
+        }
+
+        private void EnterBase()
+        {
+            BringPlayersIn();
+            phase = RoomPhases.Base;
+            mode = "campaign";
+            BroadcastRoom();
+            if (campaign != null) Broadcast(new CampaignMessage { State = campaign });
+            Persist();
+        }
+
+        /// <summary>A campaign mission left for the menu half played (phase lobby), if there is one.</summary>
+        private GameState? PausedMission()
+        {
+            return phase == RoomPhases.Lobby && mode == "campaign" && state != null && state.Outcome == null ? state : null;
+        }
+
+        /// <summary>Back to the campaign mission left half played, as it was.</summary>
+        private void ResumeMission()
+        {
+            phase = RoomPhases.Mission;
+            say($"[room] Vuelta a la misión de campaña{(state?.CampaignMission != null ? $": {state.CampaignMission.Name}" : "")}.");
+            BroadcastRoom();
+            if (campaign != null) Broadcast(new CampaignMessage { State = campaign });
+            Broadcast(new SnapshotMessage { State = state });
+            Persist();
+        }
+
+        private void LaunchCampaignMission()
+        {
+            var c = campaign!;
+            var made = campaignRules!.LaunchMission(c, rng);
+            if (made == null) return;
+            state = made.Value.state;
+            resultApplied = false;
+            phase = RoomPhases.Mission;
+            say($"[room] Misión de campaña: {made.Value.name}.");
+            BroadcastRoom();
+            Broadcast(new CampaignMessage { State = c });
+            Broadcast(new SnapshotMessage { State = state });
+        }
+
+        /// <summary>After any tactical change: fold a finished campaign mission into the campaign once.</summary>
         private void AfterTactical()
         {
+            if (mode == "campaign" && campaign != null && campaignRules != null && state?.Outcome != null && !resultApplied)
+            {
+                campaignRules.ApplyMissionResult(campaign, state, rng);
+                resultApplied = true;
+                Broadcast(new CampaignMessage { State = campaign });
+            }
             Persist();
         }
 
@@ -601,6 +873,8 @@ namespace Bastion.Net
         /// </summary>
         private void CheckWaits()
         {
+            var proposal = phase == RoomPhases.Base ? campaign?.Proposal : null;
+            Watch(DeadlineKinds.Proposal, proposal != null ? Json.Write(proposal) : null);
             var on = phase == RoomPhases.Mission && state != null && state.Outcome == null;
             var call = on ? state!.EvacCall : null;
             Watch(DeadlineKinds.Evac, call != null ? $"{state!.Turn}:{call.By}:{call.Unit}" : null);
@@ -730,7 +1004,7 @@ namespace Bastion.Net
         /// <summary>Who is to answer a question of `kind`: the one who didn't ask.</summary>
         private int? Answerer(string kind)
         {
-            var by = kind == DeadlineKinds.Evac ? state?.EvacCall?.By : state?.AbandonCall?.By;
+            var by = kind == DeadlineKinds.Proposal ? campaign?.Proposal?.By : kind == DeadlineKinds.Evac ? state?.EvacCall?.By : state?.AbandonCall?.By;
             return by == null ? (int?)null : by == 0 ? 1 : 0;
         }
 
@@ -751,6 +1025,18 @@ namespace Bastion.Net
                 return;
             }
             waits.Remove(kind);
+            // Nobody here: it waits for whoever comes back (Join starts the clock again).
+            if (kind == DeadlineKinds.Proposal && ConnectedSlots().Count == 0) return;
+            if (kind == DeadlineKinds.Proposal && campaign?.Proposal != null && campaignRules != null && phase == RoomPhases.Base)
+            {
+                var partner = campaign.Proposal.By == 0 ? 1 : 0;
+                // Who is really here: a mission chosen this way fills La Lata as without the partner, not with their soldiers.
+                var result = campaignRules.ExecuteCampaignCommand(campaign, new VoteCommand { Accept = true }, partner, ConnectedSlots(), rng);
+                say($"[room] Propuesta sin respuesta: sigue adelante{(result.Ok ? "" : $" ({result.Error})")}.");
+                if (result.Ok && result.Launch) LaunchCampaignMission();
+                else Broadcast(new CampaignMessage { State = campaign });
+                Persist();
+            }
             if (kind == DeadlineKinds.Evac && state?.EvacCall != null && phase == RoomPhases.Mission)
             {
                 var partner = state.EvacCall.By == 0 ? 1 : 0;
@@ -778,6 +1064,22 @@ namespace Bastion.Net
         }
 
         // -------------------------------------------------------------- helpers
+
+        /// <summary>For red.log: the soldier an order is about, as the campaign has it (whose, alive, points, board).</summary>
+        private string CommandDetail(CampaignCommand cmd)
+        {
+            var id = Field(cmd, "soldier");
+            var s = id != null ? campaign?.Soldiers.Find((x) => x.Id == id) : null;
+            if (s == null) return id != null ? $" · {id} no está en la campaña" : "";
+            return $" · {s.Name} ({s.Id}), de {s.Owner + 1}, {(s.Alive ? "vivo" : "caído")}, {Bars.PointsLeft(s.Skills, s.Board)} puntos, tablero [{string.Join(" ", s.Board)}] · conectados {string.Join(",", ConnectedSlots().Select((x) => x + 1))}";
+        }
+
+        /// <summary>A field of an order, by its name in the JSON (room.ts reads `'soldier' in cmd`), or null.</summary>
+        private static string? Field(CampaignCommand cmd, string name)
+        {
+            var value = JObject.FromObject(cmd, Json.Serializer)[name];
+            return value?.Type == JTokenType.String ? (string?)value : null;
+        }
 
         private List<int> ConnectedSlots()
         {
@@ -836,7 +1138,12 @@ namespace Bastion.Net
 
         private RoomMessage RoomNow()
         {
-            return new RoomMessage { Players = Players(), Phase = phase };
+            var paused = PausedMission();
+            var saved = campaign != null && campaign.Outcome == null && campaignRules != null
+                ? new SavedCampaign { Day = campaign.Day, Missions = campaign.MissionsFlown ?? 0, Doom = campaign.Doom, Level = Progression.BastionLevel(campaign.Level), InMission = paused != null ? paused.CampaignMission?.Name ?? paused.MapName : null }
+                : null;
+            // A campaign from before the 0.7 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
+            return new RoomMessage { Players = Players(), Phase = phase, SavedCampaign = saved, SetAside = store.SetAside != null ? Path.GetFileName(store.SetAside) : null };
         }
 
         private void Broadcast(ServerMessage msg)
@@ -870,9 +1177,10 @@ namespace Bastion.Net
                 {
                     Seats = seats.Select((s) => s == null ? null : new SavedSeat { Slot = s.Slot, Name = s.Name, Token = s.Token }).ToList(),
                     Phase = phase,
-                    Mode = "skirmish",
+                    Mode = mode,
                     State = state,
-                    ResultApplied = false,
+                    Campaign = campaign,
+                    ResultApplied = resultApplied,
                     Rng = rng.State,
                     MissionKind = missionKind,
                     SkirmishMap = skirmishMap,

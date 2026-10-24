@@ -69,7 +69,7 @@ namespace Bastion.UI.Strategy
                 var option = new Button(() => handlers.OnOption(index));
                 option.AddToClassList("strat-option");
                 option.EnableInClassList("strat-option--proposed", o.Proposed);
-                option.SetEnabled(string.IsNullOrEmpty(o.Blocked));
+                option.SetEnabled(!o.Locked && string.IsNullOrEmpty(o.Blocked));
                 Ui.Text(o.Label, "strat-option__label font-title", option);
                 Ui.Text(o.Effect, "strat-option__effect", option);
                 if (!string.IsNullOrEmpty(o.Blocked)) Ui.Text(o.Blocked, "strat-option__blocked", option);
