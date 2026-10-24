@@ -91,11 +91,13 @@ namespace Bastion.Client.Map
             cmd.SetRenderTarget(heights);
             cmd.ClearRenderTarget(true, true, Color.clear);
             cmd.SetViewProjectionMatrices(view, projection);
+            // Each one's mesh where it stands, not the renderer: drawn with another material by DrawRenderer, a renderer
+            // came out in play mode with that material's red (the heights) instead of its own (SRP Batcher, Unity 6.3).
             foreach (var r in Occluders())
             {
-                var filter = r.GetComponent<MeshFilter>();
-                int subs = filter != null && filter.sharedMesh != null ? filter.sharedMesh.subMeshCount : 1;
-                for (int k = 0; k < subs; k++) cmd.DrawRenderer(r, bake, k, 0);
+                var mesh = r.GetComponent<MeshFilter>()?.sharedMesh;
+                if (mesh == null) continue;
+                for (int k = 0; k < mesh.subMeshCount; k++) cmd.DrawMesh(mesh, r.localToWorldMatrix, bake, k, 0);
             }
             bake.SetVector(BakeSizeId, new Vector4(width, depth, 0, 0));
             cmd.Blit(heights, occlusion, bake, 1);

@@ -63,7 +63,7 @@ namespace Bastion.Engine
                 {
                     "La radio vuelve a funcionar, y lo primero que hemos oído son los demás enclaves contando lo mismo: algo sube desde los Llanos de Ceniza.",
                     "No es una horda: son todas a la vez. Miles de zombis caminando juntos hacia la sierra con el deshielo. La llaman la Marea.",
-                    "Los Nidos la alimentan. Cada Nido que quememos la frena. Desde hoy, el reloj de la sala de mando cuenta kilómetros.",
+                    "Los Nidos la alimentan. Cada Nido que quememos la frena. Desde hoy, el reloj cuenta kilómetros.",
                 },
                 "Doce kilómetros. Contadlos. — N. A."),
             new ExpedientePage(

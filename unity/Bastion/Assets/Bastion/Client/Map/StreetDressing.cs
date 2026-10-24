@@ -34,7 +34,8 @@ namespace Bastion.Client.Map
         {
             var output = new List<FrameArt.Dressing>();
             int w = s.Width, h = s.Height;
-            var lamps = s.Lights?.Where(l => l.Turns == null).Select(l => l.Tile).ToList();
+            // On a map with a base, none: its lights are its floodlights (BasePieces; mapView.ts `fixed`).
+            var lamps = s.Base != null ? new List<Pos>() : s.Lights?.Where(l => l.Turns == null).Select(l => l.Tile).ToList();
             // The engine's lights: a street light on each, near the kerb, its arm over the road.
             foreach (var p in lamps ?? new List<Pos>())
             {

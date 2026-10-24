@@ -168,7 +168,11 @@ namespace Bastion.UI.Strategy
         public int RankFilled;
         public int RankTotal;
         public string Will;
+        /// <summary>What the next rank gives in full; at the top, «No hay rango más alto.».</summary>
+        public string WillTip;
         public string RankLine;
+        /// <summary>What the rank gives now: «Voluntad 40 · 2 acciones por turno».</summary>
+        public string Gives;
         public string Board;
         /// <summary>One's own soldier with points to spend: the button pulses.</summary>
         public bool BoardPulse;
@@ -186,6 +190,9 @@ namespace Bastion.UI.Strategy
         public int Total;
         public string Reward;
         public string RewardTip;
+        /// <summary>How the bar fills (SKILL_DEFS line), on its name; what it raises (its stat), on the growth.</summary>
+        public string Tip;
+        public string GrowthTip;
     }
 }
 

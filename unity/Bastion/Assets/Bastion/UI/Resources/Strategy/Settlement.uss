@@ -1,0 +1,454 @@
+/*
+   The Asentamiento (screen.ts renderFacilities, buildMode.ts, with strategy.css's panel-stack, piece-*, bstat): a
+   column of plates on each side over the clearing, Talar and the palette on the left (it scrolls as one), the Bastion
+   in figures, «Andar por la base» and the piece's card on the right.
+*/
+
+.settle-col {
+    position: absolute;
+    top: 8px;
+    width: 336px;
+}
+
+/* The scroll clips what it holds: 8 px of room round the plates for their frames (PlateFrame stands out that far). */
+.settle-col--left {
+    left: 2px;
+    width: 352px;
+    top: 0;
+    bottom: 0;
+}
+
+.settle-scroll .unity-scroll-view__content-container {
+    padding: 8px 8px 0;
+}
+
+.settle-col--right {
+    right: 14px;
+    top: 12px;
+    width: 334px;
+}
+
+.settle-scroll {
+    flex-grow: 1;
+}
+
+/* Each its own steel plate, 18 px apart (Ana, 21/10 #40). */
+.settle-plate {
+    margin-bottom: 18px;
+    padding: 10px 10px 10px;
+}
+
+/* A head with its rule on to the edge (mixta-base.css .x-head::after). */
+.settle-head {
+    margin: 2px 0 10px;
+}
+
+.settle-head__rule {
+    flex-grow: 1;
+    height: 1px;
+    margin-left: 10px;
+    background-color: rgba(242, 194, 48, 0.35);
+}
+
+/* ============================================================== Talar */
+
+.settle-fell {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding: 0 12px;
+    background-color: var(--t-panel-hi);
+    background-image: none;
+    border-width: 0;
+    border-radius: 2px;
+}
+
+.settle-fell:hover {
+    background-color: var(--t-panel-hover);
+}
+
+.settle-fell--on {
+    border-width: 2px;
+    border-color: var(--t-accent);
+}
+
+.settle-fell__icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 16px;
+    -unity-background-image-tint-color: var(--t-accent);
+}
+
+.settle-fell__label {
+    flex-grow: 1;
+    -unity-text-align: middle-left;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: #ffffff;
+}
+
+.settle-fell__cost {
+    align-self: center;
+}
+
+.settle-cost__per {
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+/* What to do with what is in hand, under its grid. */
+.settle-keys {
+    margin: 8px 2px 0;
+    font-size: 12px;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+/* A proposal waiting with the other one here: nothing else goes down meanwhile, in red over the grid. */
+.settle-pending {
+    margin: 0 0 6px;
+    font-size: 12.5px;
+    -unity-font-style: bold;
+    color: var(--t-danger);
+    white-space: normal;
+}
+
+/* ============================================================== the palette */
+
+/* Four to a row, 5 px apart; each row as tall as its tallest, the cost at the foot. */
+.settle-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    margin-right: -5px;
+}
+
+.settle-tile__holder {
+    width: 74px;
+    margin: 0 5px 5px 0;
+}
+
+.settle-tile {
+    width: 74px;
+    margin: 0 5px 5px 0;
+    padding: 4px 1px 6px;
+    align-items: center;
+    background-color: var(--t-panel-hi);
+    background-image: none;
+    border-width: 0;
+    border-radius: 2px;
+}
+
+.settle-tile__holder .settle-tile {
+    margin: 0;
+    flex-grow: 1;
+}
+
+.settle-tile:hover {
+    background-color: var(--t-panel-hover);
+}
+
+.settle-tile--on {
+    border-width: 2px;
+    border-color: var(--t-accent);
+    padding: 2px 0 4px;
+}
+
+.settle-tile--built {
+    opacity: 0.5;
+}
+
+.settle-tile__pic {
+    width: 64px;
+    height: 64px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.settle-tile--short .settle-tile__pic {
+    -unity-background-image-tint-color: rgb(170, 170, 170);
+}
+
+.settle-tile__name {
+    flex-grow: 1;
+    margin-top: 2px;
+    font-size: 11px;
+    /* Barlow's own semibold (the 0.10.1's 600): the button's made-up bold (Mixta.uss) is wider and broke «entrenamiento». */
+    -unity-font-definition: url("../../Fonts/Barlow-SemiBold SDF.asset");
+    -unity-font-style: normal;
+    -unity-text-align: upper-center;
+    white-space: normal;
+    color: var(--t-text);
+}
+
+.settle-tile__new {
+    position: absolute;
+    left: 3px;
+    top: 3px;
+}
+
+/* A cost as the stores show it: the supplies in their gold with the crate, the parts in steel with the wrench. */
+.settle-cost {
+    flex-direction: row;
+    align-items: center;
+}
+
+.settle-cost__supplies {
+    font-size: 13px;
+    color: #ffd25a;
+}
+
+.settle-cost__parts {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 6px;
+}
+
+.settle-cost__parts-n {
+    font-size: 13px;
+    color: #b2c3d0;
+}
+
+.settle-cost__parts-icon {
+    width: 13px;
+    height: 13px;
+    margin-left: 2px;
+    -unity-background-image-tint-color: #b2c3d0;
+}
+
+.settle-tile--short .settle-cost__supplies,
+.settle-tile--short .settle-cost__parts-n {
+    color: var(--t-danger);
+}
+
+.settle-cost--built {
+    font-size: 14px;
+    color: var(--t-good);
+}
+
+/* ============================================================== the Bastion in figures */
+
+/* Tiles of an icon, a number and what it is, two to a row (Ana, 21/10 #38). */
+.settle-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-right: -6px;
+}
+
+.settle-stat {
+    flex-direction: row;
+    align-items: center;
+    width: 151px;
+    min-height: 46px;
+    margin: 0 6px 6px 0;
+    padding: 6px 8px;
+    background-color: rgb(18, 20, 22);
+    border-color: rgb(10, 11, 12);
+}
+
+/* Synty's sprites carry a clear margin: drawn larger than their room, so they read at the 0.10.1's 22 px. */
+.settle-stat__icon {
+    width: 34px;
+    height: 34px;
+    margin: -6px 2px -6px -6px;
+    flex-shrink: 0;
+    -unity-background-image-tint-color: var(--t-muted);
+}
+
+.settle-stat__words {
+    flex-shrink: 1;
+}
+
+/* Oswald's line is half as tall again as its size: pulled in, as the 0.10.1's line-height 1. */
+.settle-stat__value {
+    margin: -4px 0 -3px;
+    font-size: 20px;
+    -unity-font-style: normal;
+    color: #ffffff;
+}
+
+.settle-stat__value--good {
+    color: var(--t-good);
+}
+
+.settle-stat__value--warn {
+    color: var(--t-accent);
+}
+
+.settle-stat__value--bad {
+    color: var(--t-danger);
+}
+
+.settle-stat__label {
+    margin-top: -1px;
+    font-size: 11px;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+/* «Andar por la base»: a plain steel key, as wide as its words. */
+/* The card's and the walk's keys are the steel x-btn of the 0.10.1: Barlow in capitals, not Oswald. */
+.settle-walk {
+    align-self: flex-start;
+    height: 28px;
+    padding: 0 14px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    -unity-font-style: bold;
+}
+
+/* ============================================================== the piece's card */
+
+.settle-card__top {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.settle-card__title {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-bottom: -4px;
+    font-size: 30px;
+    letter-spacing: 1px;
+    color: #ffffff;
+    white-space: normal;
+}
+
+.settle-card__close {
+    width: 26px;
+    height: 22px;
+    margin-top: 4px;
+    padding: 0;
+    font-size: 12px;
+}
+
+/* What it gives at its level, first and big (Ana, 21/10 #42). */
+.settle-card__figure {
+    margin: -2px 0 2px;
+    font-size: 22px;
+    color: var(--t-accent);
+}
+
+.settle-card__line {
+    margin: 4px 0 6px;
+    font-size: 12px;
+    white-space: normal;
+}
+
+/* Its levels in a row, this one lit. */
+.settle-ladder {
+    flex-direction: row;
+    margin: 2px -4px 8px 0;
+}
+
+.settle-step {
+    flex-grow: 1;
+    flex-basis: 0;
+    align-items: center;
+    margin-right: 4px;
+    padding: 4px 2px 2px;
+    background-color: rgb(25, 27, 29);
+    border-radius: 2px;
+}
+
+.settle-step__label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    -unity-font-style: bold;
+    color: var(--t-muted);
+}
+
+.settle-step__figure {
+    margin: -3px 0 -3px;
+    font-size: 16px;
+    color: var(--t-muted);
+}
+
+.settle-step--past .settle-step__figure,
+.settle-step--past .settle-step__label {
+    color: var(--t-text);
+}
+
+.settle-step--now {
+    background-color: rgb(56, 52, 35);
+    border-width: 1px;
+    border-color: rgba(242, 194, 48, 0.6);
+}
+
+.settle-step--now .settle-step__label,
+.settle-step--now .settle-step__figure {
+    color: var(--t-accent);
+}
+
+.settle-card__level {
+    margin: 4px 0;
+    font-size: 15px;
+    -unity-font-style: italic;
+    color: var(--t-text);
+    white-space: normal;
+}
+
+.settle-card__holds {
+    margin: 6px 0 4px 8px;
+    font-size: 13px;
+    -unity-font-style: bold;
+}
+
+.settle-card__uses {
+    margin: 2px 0;
+    font-size: 13px;
+}
+
+/* What can be done to it: each button as wide as the card, its reason or its line under it. */
+.settle-actions {
+    margin: 10px 0 -8px;
+}
+
+.settle-action {
+    margin-bottom: 8px;
+}
+
+.settle-action__button {
+    height: 26px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    -unity-font-style: bold;
+}
+
+.settle-action__new {
+    position: absolute;
+    right: 6px;
+    top: 5px;
+}
+
+.settle-action__tip {
+    margin-top: 2px;
+    font-size: 12px;
+    white-space: normal;
+}
+
+/* Desmontar asked: the question and its two buttons in its place. */
+.settle-confirm {
+    margin-top: 2px;
+}
+
+.settle-confirm__text {
+    font-size: 15px;
+    -unity-font-style: bold;
+    white-space: normal;
+}
+
+.settle-confirm__buttons {
+    flex-direction: row;
+    margin-top: 6px;
+}
+
+.settle-confirm__button {
+    height: 24px;
+    margin-right: 6px;
+    padding: 0 12px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    -unity-font-style: bold;
+}
+

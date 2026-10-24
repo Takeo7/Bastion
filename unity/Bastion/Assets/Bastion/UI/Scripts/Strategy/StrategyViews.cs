@@ -11,30 +11,38 @@ namespace Bastion.UI.Strategy
     [Serializable]
     public sealed class TopView
     {
-        /// <summary>Missions flown («8 SALIDAS»); 0 shows none.</summary>
+        /// <summary>Missions flown («8 SALIDAS», Lore.OutingsMark); 0 shows none (playtest 19/10 #4).</summary>
         public int Outings;
-        public string OutingsTip;
-        /// <summary>The siege's badge («ASEDIO EN 3 MISIONES», «ASEDIO · NOCHE»); null, none.</summary>
+        public TipView OutingsTip;
+        /// <summary>The siege's badge («ASEDIO EN 3 MISIONES», «ASEDIO · DE NOCHE»); null, none.</summary>
         public string Siege;
         /// <summary>The siege is on (it pulses); near, a mission or less away.</summary>
         public bool SiegeNow;
         public bool SiegeNear;
-        public string SiegeTip;
+        public TipView SiegeTip;
         public int Day;
-        public string DayTip;
+        public TipView DayTip;
         /// <summary>Suministros, medicinas, raciones, piezas: each in its well.</summary>
         public List<StoreView> Stores = new List<StoreView>();
         /// <summary>The Bastion's level («CASA MÓVIL») and the missions towards the next.</summary>
         public string Level;
         public int LevelFilled;
         public int LevelTotal;
-        public string LevelTip;
+        public TipView LevelTip;
         /// <summary>The Marea («INFESTACIÓN»): its marks filled up to `DoomFilled` of `DoomMax`, the figure («5/12», «7 km»).</summary>
         public string Doom;
         public int DoomFilled;
         public int DoomMax;
         public string DoomFigure;
-        public string DoomTip;
+        public TipView DoomTip;
+    }
+
+    /// <summary>A tooltip of the strip: its name in bold, then a sentence a line (data-tip-name, sentences).</summary>
+    [Serializable]
+    public sealed class TipView
+    {
+        public string Name;
+        public List<string> Lines = new List<string>();
     }
 
     /// <summary>A store in the top strip: its icon, its figure, what a pending proposal would spend, hungry or not.</summary>
@@ -105,6 +113,8 @@ namespace Bastion.UI.Strategy
     {
         public string Key;
         public string Value;
+        /// <summary>What the figure means, on hover; null, none.</summary>
+        public string Tip;
     }
 
     /// <summary>«Te esperan»: the partner is ready to go and this player isn't (renderWaiting); null text, none.</summary>

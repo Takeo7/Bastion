@@ -77,6 +77,7 @@ namespace Bastion.UI.Strategy
                     var name = Ui.Text(r.Name, "ready-mark__name font-title", mark);
                     name.style.color = Ui.Hex(r.Color, Color.white);
                     Ui.Text(r.Ready ? "A PUNTO" : "ELIGIENDO", "ready-mark__state font-title", mark);
+                    if (!string.IsNullOrEmpty(r.Tip)) tips.Attach(mark, r.Tip);
                 }
             }
             var plate = Ui.El("squad-mission panel", bottom);
@@ -130,6 +131,7 @@ namespace Bastion.UI.Strategy
                 {
                     var chip = Ui.Text(r.Chip, "squad-row__chip font-title", row);
                     if (!string.IsNullOrEmpty(r.ChipTone)) chip.AddToClassList("squad-row__chip--" + r.ChipTone);
+                    if (!string.IsNullOrEmpty(r.ChipTip)) tips.Attach(chip, r.ChipTip);
                 }
                 if (!string.IsNullOrEmpty(r.Tip)) tips.Attach(row, r.Tip);
                 parent.Add(row);

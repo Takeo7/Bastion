@@ -15,7 +15,7 @@ namespace Bastion.Engine.Tests
     /// default one» (createCampaign, executeCampaignCommand: campaign.ts); «armour pieces › the protocol takes looks with
     /// or without pieces, and checks their colours» (protocol.ts's campaignCommandSchema); of «the soldier's sex
     /// (playtest 2026-10-13)», «every name has one, and soldiers and recruits get the sex of their name» (createCampaign),
-    /// «people who join by name take theirs…» (campaign.ts sexOfPerson), «is part of a valid look, and the protocol takes
+    /// «is part of a valid look, and the protocol takes
     /// it» (protocol.ts), «customizing keeps it unless the look sends another…» (createCampaign, addPlayer) and «every
     /// soldier starts with a head and a build of its own, and a campaign of before gets them…» (createCampaign,
     /// migrateCampaign), all of them needing campaign.ts or protocol.ts.
@@ -161,6 +161,18 @@ namespace Bastion.Engine.Tests
                 Assert.Equal(SexOf(u.Name), u.Appearance?.Sex);
                 Same(Appearances.DefaultAppearance(u.Owner!.Value, null, SexOf(u.Name), u.Name), u.Appearance);
             }
+        }
+
+        [Fact(DisplayName = "the soldier's sex (playtest 2026-10-13) › people who join by name take theirs: the story's, a relative's, a soldier's")]
+        public void PeopleWhoJoinByNameTakeTheirs()
+        {
+            Assert.Equal("f", Campaign.SexOfPerson("Vera Lindqvist"));
+            Assert.Equal("m", Campaign.SexOfPerson("Dr. Femi Adebayo"));
+            Assert.Equal("f", Campaign.SexOfPerson("Agente Claire Dubois"));
+            Assert.Equal("m", Campaign.SexOfPerson("Kenji Okafor"));
+            Assert.Equal("f", Campaign.SexOfPerson("Mariam Rey"));
+            Assert.Equal("m", Campaign.SexOfPerson("Hiro Sato"));
+            Assert.Null(Campaign.SexOfPerson("Nadie Conocido"));
         }
     }
 }

@@ -123,7 +123,7 @@ namespace Bastion.Net
         private string phase = RoomPhases.Lobby;
         private string mode = "skirmish"; // skirmish | campaign
         private GameState? state;
-        private WipCampaign? campaign;
+        private CampaignState? campaign;
         /// <summary>Whether the finished campaign mission has already been folded into the campaign.</summary>
         private bool resultApplied;
         private Rng rng;
@@ -165,15 +165,15 @@ namespace Bastion.Net
                 var s = i < saved.Seats.Count ? saved.Seats[i] : null;
                 seats[i] = s == null ? null : new Seat { Slot = s.Slot, Name = s.Name, Token = s.Token };
             }
+            // Without the campaign's rules, only a skirmish's mission goes on; the campaign stays in the save as it was.
+            campaign = saved.Campaign;
             if (campaignRules != null)
             {
                 phase = saved.Phase;
                 mode = saved.Mode;
                 state = saved.State;
-                campaign = saved.Campaign;
                 resultApplied = saved.ResultApplied;
             }
-            // Without the campaign's rules, only a skirmish's mission goes on.
             else if (saved.Mode == "skirmish" && saved.Phase == RoomPhases.Mission && saved.State != null)
             {
                 phase = RoomPhases.Mission;
@@ -280,7 +280,7 @@ namespace Bastion.Net
             ClientMessage msg;
             try
             {
-                msg = Json.Read<ClientMessage>(text);
+                msg = Json.ReadFromPlayer<ClientMessage>(text);
             }
             catch (Exception)
             {
@@ -350,11 +350,11 @@ namespace Bastion.Net
                 case ReportMessage m:
                     return m.Line != null;
                 case CampaignCmdMessage m:
-                    return m.Cmd != null;
+                    return m.Cmd != null && ValidCampaignCommand(m.Cmd);
                 case BaseViewMessage m:
                     return BaseViews.All.Contains(m.View);
                 case BaseCursorMessage m:
-                    return (m.Piece == null || (m.Piece.Length >= 1 && m.Piece.Length <= 32)) && m.X >= 0 && m.X <= 255 && m.Y >= 0 && m.Y <= 255 && m.Rot >= 0 && m.Rot <= 3;
+                    return (m.Piece == null || Base.Pieces.ContainsKey(m.Piece)) && BaseTile(m.X, m.Y) && Turn(m.Rot);
                 default:
                     return true;
             }
@@ -379,7 +379,100 @@ namespace Bastion.Net
             }
         }
 
-        private static bool UnitId(string? id) => id != null && id.Length >= 1 && id.Length <= 16;
+        /// <summary>
+        /// protocol.ts campaignCommandSchema, past what the types already say (Types/CampaignCommand.cs lists it): ids,
+        /// tiles of the base and turns in bounds, and the names of things among the engine's.
+        /// </summary>
+        private static bool ValidCampaignCommand(CampaignCommand cmd)
+        {
+            switch (cmd)
+            {
+                case PlaceCommand c:
+                    return Has(Base.Pieces, c.Piece) && BaseTile(c.X, c.Y) && Turn(c.Rot);
+                case FellCommand c:
+                    return BaseTiles(c.Tiles, 400);
+                case MendCommand c:
+                    return Id(c.Piece);
+                case RaiseCommand c:
+                    return Id(c.Piece);
+                case PlaceLineCommand c:
+                    return Has(Base.Pieces, c.Piece) && BaseTiles(c.Cells, 60) && Turn(c.Rot);
+                case PostCommand c:
+                    return Id(c.Soldier) && (c.At == null || BaseTile(c.At.X, c.At.Y));
+                case RearmCommand c:
+                    return Id(c.Piece);
+                case DismantleCommand c:
+                    return Id(c.Piece);
+                case ChooseMissionCommand c:
+                    return Id(c.Id);
+                case ContactCommand c:
+                    return Has(Campaign.Regions, c.Region);
+                case AnswerEventCommand c:
+                    return c.Option == 0 || c.Option == 1;
+                case InvestigateCommand c:
+                    return Id(c.Id);
+                case SquadCommand c:
+                    return Id(c.Soldier);
+                case UnlockCommand c:
+                    return Id(c.Soldier) && Has(Board.BoardCells, c.Cell);
+                case RepairCommand c:
+                    return Id(c.Weapon);
+                case ModCommand c:
+                    return Id(c.Weapon) && Has(Content.WeaponMods, c.Mod);
+                case BuyCommand c:
+                    return Has(Content.Items, c.Item);
+                case EquipCommand c:
+                    return Id(c.Soldier) && ItemSlots.All.Contains(c.Slot) && (c.Item == null || Has(Content.Items, c.Item));
+                case CustomizeCommand c:
+                    return Id(c.Soldier) && c.Name.Length <= Appearances.NameMax * 2 && c.Nickname.Length <= Appearances.NicknameMax * 2 && ValidAppearance(c.Appearance);
+                case TreatCommand c:
+                    return Id(c.Soldier);
+                case MedicateCommand c:
+                    return Id(c.Soldier);
+                case CraftCommand c:
+                    return Has(Progression.Crafts, c.Project);
+                case AssignWeaponCommand c:
+                    return Id(c.Weapon) && (c.Soldier == null || Id(c.Soldier));
+                default:
+                    // levelUp, cancelMission, recruit, advance, launch, vote, withdraw: nothing past their types.
+                    return true;
+            }
+        }
+
+        /// <summary>protocol.ts appearanceSchema: its colours `#rrggbb`, its head and build the engine's; the pieces may be missing.</summary>
+        private static bool ValidAppearance(Appearance? a)
+        {
+            return a != null && Colour(a.Primary) && Colour(a.Secondary) && Colour(a.Visor) && Has(Appearances.Heads, a.Head) && Has(Appearances.Builds, a.Build)
+                && (a.Sex == null || Sexes.All.Contains(a.Sex)) && (a.Helmet == null || Colour(a.Helmet)) && (a.Torso == null || Colour(a.Torso))
+                && (a.Arms == null || Colour(a.Arms)) && (a.Legs == null || Colour(a.Legs)) && (a.Character == null || Character(a.Character));
+        }
+
+        /// <summary>/^#[0-9a-f]{6}$/i.</summary>
+        private static bool Colour(string? s)
+        {
+            return s != null && s.Length == 7 && s[0] == '#' && s.Skip(1).All(Uri.IsHexDigit);
+        }
+
+        /// <summary>/^[a-z][a-zA-Z0-9]{0,23}$/: which survivor model a soldier is.</summary>
+        private static bool Character(string s)
+        {
+            return s.Length >= 1 && s.Length <= 24 && s[0] >= 'a' && s[0] <= 'z' && s.All((ch) => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'));
+        }
+
+        /// <summary>A key of one of the engine's tables (z.enum(keys(…))).</summary>
+        private static bool Has<T>(IReadOnlyDictionary<string, T> table, string? key) => key != null && table.ContainsKey(key);
+
+        /// <summary>A tile of the base's map (docs/FASE12.md §11): 0–255 each way.</summary>
+        private static bool BaseTile(int x, int y) => x >= 0 && x <= 255 && y >= 0 && y <= 255;
+
+        private static bool BaseTiles(List<Vec2>? tiles, int max) => tiles != null && tiles.Count >= 1 && tiles.Count <= max && tiles.All((t) => t != null && BaseTile(t.X, t.Y));
+
+        private static bool Turn(int rot) => rot >= 0 && rot <= 3;
+
+        /// <summary>protocol.ts `id`: 1–16 characters.</summary>
+        private static bool Id(string? id) => id != null && id.Length >= 1 && id.Length <= 16;
+
+        private static bool UnitId(string? id) => Id(id);
 
         private static bool Spot(Pos p) => p.Z >= 0 && p.Z <= 3;
 
@@ -938,7 +1031,7 @@ namespace Bastion.Net
             {
                 var partner = campaign.Proposal.By == 0 ? 1 : 0;
                 // Who is really here: a mission chosen this way fills La Lata as without the partner, not with their soldiers.
-                var result = campaignRules.ExecuteCampaignCommand(campaign, new WipVoteCommand { Accept = true }, partner, ConnectedSlots(), rng);
+                var result = campaignRules.ExecuteCampaignCommand(campaign, new VoteCommand { Accept = true }, partner, ConnectedSlots(), rng);
                 say($"[room] Propuesta sin respuesta: sigue adelante{(result.Ok ? "" : $" ({result.Error})")}.");
                 if (result.Ok && result.Launch) LaunchCampaignMission();
                 else Broadcast(new CampaignMessage { State = campaign });
@@ -973,16 +1066,16 @@ namespace Bastion.Net
         // -------------------------------------------------------------- helpers
 
         /// <summary>For red.log: the soldier an order is about, as the campaign has it (whose, alive, points, board).</summary>
-        private string CommandDetail(WipCampaignCommand cmd)
+        private string CommandDetail(CampaignCommand cmd)
         {
             var id = Field(cmd, "soldier");
             var s = id != null ? campaign?.Soldiers.Find((x) => x.Id == id) : null;
             if (s == null) return id != null ? $" · {id} no está en la campaña" : "";
-            return $" · {s.Name} ({s.Id}), de {s.Owner + 1}, {(s.Alive ? "vivo" : "caído")}, {campaignRules!.PointsLeft(s)} puntos, tablero [{string.Join(" ", s.Board)}] · conectados {string.Join(",", ConnectedSlots().Select((x) => x + 1))}";
+            return $" · {s.Name} ({s.Id}), de {s.Owner + 1}, {(s.Alive ? "vivo" : "caído")}, {Bars.PointsLeft(s.Skills, s.Board)} puntos, tablero [{string.Join(" ", s.Board)}] · conectados {string.Join(",", ConnectedSlots().Select((x) => x + 1))}";
         }
 
         /// <summary>A field of an order, by its name in the JSON (room.ts reads `'soldier' in cmd`), or null.</summary>
-        private static string? Field(WipCampaignCommand cmd, string name)
+        private static string? Field(CampaignCommand cmd, string name)
         {
             var value = JObject.FromObject(cmd, Json.Serializer)[name];
             return value?.Type == JTokenType.String ? (string?)value : null;
@@ -1047,7 +1140,7 @@ namespace Bastion.Net
         {
             var paused = PausedMission();
             var saved = campaign != null && campaign.Outcome == null && campaignRules != null
-                ? new SavedCampaign { Day = campaign.Day, Missions = campaign.MissionsFlown ?? 0, Doom = campaign.Doom, Level = campaignRules.BastionLevel(campaign), InMission = paused != null ? paused.CampaignMission?.Name ?? paused.MapName : null }
+                ? new SavedCampaign { Day = campaign.Day, Missions = campaign.MissionsFlown ?? 0, Doom = campaign.Doom, Level = Progression.BastionLevel(campaign.Level), InMission = paused != null ? paused.CampaignMission?.Name ?? paused.MapName : null }
                 : null;
             // A campaign from before the 0.7 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
             return new RoomMessage { Players = Players(), Phase = phase, SavedCampaign = saved, SetAside = store.SetAside != null ? Path.GetFileName(store.SetAside) : null };

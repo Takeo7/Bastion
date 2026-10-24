@@ -252,7 +252,7 @@ namespace Bastion.EditorTools
             }
         }
 
-        static void Render(Camera camera, int width, int height, string path, RenderTexture over = null)
+        internal static void Render(Camera camera, int width, int height, string path, RenderTexture over = null)
         {
             var target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
             var request = new RenderPipeline.StandardRequest { destination = target };

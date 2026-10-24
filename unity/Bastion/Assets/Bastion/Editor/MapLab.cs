@@ -217,36 +217,59 @@ namespace Bastion.EditorTools
             ["SK_Veh_Caravan_01"] = "SM_Veh_Caravan_01",
         };
 
-        /// <summary>Every Synty prefab by its name (a model where there is no prefab), loaded the first time it is asked for.</summary>
+        /// <summary>
+        /// The quarter turns a model stands from its source FBX, by where it comes from (MapArt.UnityTurn): Apocalypse's
+        /// Unity package, one; any other package's, or a source FBX in Extra (as it is, or cut by Blender), two.
+        /// </summary>
+        internal static int UnityTurnOf(string path) => path.StartsWith("Assets/Synty/PolygonApocalypse/") ? 1 : 2;
+
+        /// <summary>The packs' folders in Assets/Synty, by MapArt.json's pack names.</summary>
+        static readonly Dictionary<string, string> PackFolders = new Dictionary<string, string>
+        {
+            ["apocalypse"] = "PolygonApocalypse", ["city"] = "PolygonCity", ["town"] = "PolygonTown", ["office"] = "PolygonOffice",
+            ["military"] = "PolygonMilitary", ["construction"] = "PolygonConstruction", ["farm"] = "PolygonFarm", ["nature"] = "PolygonNature",
+            ["alpine"] = "PolygonNatureBiomes", ["industrial"] = "PolygonMapsMilitaryWarehouse", ["woodland"] = "PolygonWoodland",
+        };
+
+        /// <summary>
+        /// Every Synty prefab by its name (a model where there is no prefab), loaded the first time it is asked for; or by a
+        /// prop's key (MapArt.ModelKey, `pack:fbx`), from that pack's folder, since several packs have models of the same
+        /// name (Farm's and Apocalypse's wooden gate). The source's own models (SourceProps, in Extra) come before the
+        /// packages' of the same name: Unity's can hold other parts that 0.10.1 draws apart (the house's glass, the trap's jaws).
+        /// </summary>
         internal static Func<string, GameObject> Prefabs()
         {
-            var paths = new Dictionary<string, string>();
-            foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Synty" }))
+            var models = AssetDatabase.FindAssets("t:Model", new[] { "Assets/Synty" }).Select(AssetDatabase.GUIDToAssetPath).ToList();
+            var prefabs = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Synty" }).Select(AssetDatabase.GUIDToAssetPath).ToList();
+            // A name's models, the one asked by name alone first (as it always was: Extra's, else the last prefab, else the last model).
+            var candidates = new Dictionary<string, List<string>>();
+            foreach (string p in Enumerable.Reverse(models).Where(p => p.StartsWith("Assets/Synty/Extra/")).Concat(Enumerable.Reverse(prefabs)).Concat(Enumerable.Reverse(models)))
             {
-                string p = AssetDatabase.GUIDToAssetPath(guid);
-                paths[Path.GetFileNameWithoutExtension(p)] = p;
+                string name = Path.GetFileNameWithoutExtension(p);
+                if (!candidates.TryGetValue(name, out var list)) candidates[name] = list = new List<string>();
+                if (!list.Contains(p)) list.Add(p);
             }
-            foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Synty" }))
+            string PathOf(string asked)
             {
-                string p = AssetDatabase.GUIDToAssetPath(guid);
-                paths[Path.GetFileNameWithoutExtension(p)] = p;
-            }
-            // The source's own models (SourceProps, in Extra) before the package's of the same name: Unity's can hold other
-            // parts that 0.10.1 draws apart (the house's glass, the trap's jaws).
-            foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Synty/Extra" }))
-            {
-                string p = AssetDatabase.GUIDToAssetPath(guid);
-                paths[Path.GetFileNameWithoutExtension(p)] = p;
+                int colon = asked.IndexOf(':');
+                string pack = colon >= 0 ? asked.Substring(0, colon) : null;
+                // Some of MapArt's names carry the pack's folder (Props/…): the file's name is what is looked up.
+                string file = Path.GetFileName(colon >= 0 ? asked.Substring(colon + 1) : asked);
+                if (UnityNames.TryGetValue(file, out var other)) file = other;
+                if (!candidates.TryGetValue(file, out var list)) return null;
+                if (pack == null) return list[0];
+                return list.FirstOrDefault(p => p.StartsWith("Assets/Synty/Extra/"))
+                    ?? (PackFolders.TryGetValue(pack, out var folder) ? list.FirstOrDefault(p => p.StartsWith($"Assets/Synty/{folder}/")) : null)
+                    ?? list[0];
             }
             var loaded = new Dictionary<string, GameObject>();
             return name =>
             {
-                // Some of MapArt's names carry the pack's folder (Props/…): the file's name is what is looked up.
+                if (name == null) return null;
                 if (!loaded.TryGetValue(name, out var prefab))
                 {
-                    string file = Path.GetFileName(name);
-                    if (UnityNames.TryGetValue(file, out var other)) file = other;
-                    loaded[name] = prefab = paths.TryGetValue(file, out var p) ? AssetDatabase.LoadAssetAtPath<GameObject>(p) : null;
+                    string p = PathOf(name);
+                    loaded[name] = prefab = p != null ? AssetDatabase.LoadAssetAtPath<GameObject>(p) : null;
                 }
                 return prefab;
             };

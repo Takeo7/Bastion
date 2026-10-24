@@ -52,16 +52,18 @@ namespace Bastion.UI.Strategy
             foreach (var l in map.Data.landmarks)
             {
                 var e = Ui.El("valley-landmark", marks);
-                Ui.Text(l.name.ToUpperInvariant(), "valley-landmark__name font-title", e);
+                // Lore's name, not valley.json's copy of it (that goes stale when Lore changes one).
+                var name = Bastion.Engine.Lore.Landmarks.TryGetValue(l.key ?? "", out var named) ? named : l.name;
+                Ui.Text(name.ToUpperInvariant(), "valley-landmark__name font-title", e);
                 places.Add((e, l.x, l.z));
             }
             var home = Ui.El("valley-place", marks);
             Ui.Icon(icon, "map:home", "valley-home", home);
-            Ui.Text("EL BASTIÓN", "valley-name valley-name--home font-title", home);
+            Ui.Text(Bastion.Engine.Lore.Landmarks["atalaya"].ToUpperInvariant(), "valley-name valley-name--home font-title", home);
             places.Add((home, map.Data.bastion.x, map.Data.bastion.z));
             lata = Ui.El("valley-lata", marks);
             Ui.Icon(icon, "map:lata", "valley-lata__icon", lata);
-            Ui.Text("LA LATA", "valley-lata__name font-title", lata);
+            Ui.Text(Bastion.Engine.Lore.Bus.Name.ToUpperInvariant(), "valley-lata__name font-title", lata);
             Show(shown);
         }
 
@@ -108,8 +110,8 @@ namespace Bastion.UI.Strategy
                 Head("Rumores", v.RumorsTip, leftBody);
                 foreach (var r in v.Rumors) Rumor(r, leftBody);
             }
-            Head("Red de enclaves", v.ContactsTip, leftBody);
-            Meter(v.Contacts, v.ContactsMax, leftBody);
+            Head("Red de enclaves", StrategyText.Map.NetworkTip, leftBody);
+            Meter(v.Contacts, v.ContactsMax, v.ContactsTip, leftBody);
             if (v.Detail != null) Detail(v.Detail, rightBody);
         }
 
@@ -204,9 +206,10 @@ namespace Bastion.UI.Strategy
             if (!string.IsNullOrEmpty(w.Note)) Ui.Text(w.Note, "map-wait__note", parent);
         }
 
-        static void Meter(int filled, int total, VisualElement parent)
+        void Meter(int filled, int total, string tip, VisualElement parent)
         {
             var row = Ui.El("map-meter", parent);
+            if (!string.IsNullOrEmpty(tip)) tips.Attach(row, tip);
             var marks = Ui.El("map-meter__marks", row);
             for (var i = 0; i < total; i++) Ui.El(i < filled ? "map-meter__mark map-meter__mark--on" : "map-meter__mark", marks);
             Ui.Text($"{filled}/{total}", "map-meter__text font-title", row);
@@ -224,6 +227,11 @@ namespace Bastion.UI.Strategy
             foreach (var t in d.Text) Ui.Text(StrategyText.Marked(t), "map-detail__text", parent);
             if (!string.IsNullOrEmpty(d.Warning)) Ui.Text(d.Warning, "squad-mission__warning", parent);
             if (!string.IsNullOrEmpty(d.Note)) Ui.Text(d.Note, "map-detail__note", parent);
+            foreach (var l in d.Lines)
+            {
+                var line = Ui.Text(l.Text, l.Tone == "bad" ? "map-detail__line strat-chip--bad" : "map-detail__line muted", parent);
+                if (!string.IsNullOrEmpty(l.Tip)) tips.Attach(line, l.Tip);
+            }
             if (d.Rows.Count > 0)
             {
                 var box = Ui.El("map-briefing", parent);
@@ -234,7 +242,6 @@ namespace Bastion.UI.Strategy
                     Ui.Text(r.Value, "map-briefing__value", row);
                 }
             }
-            if (d.MeterMax > 0) Meter(d.Meter, d.MeterMax, parent);
             if (d.Buttons.Count > 0)
             {
                 var actions = Ui.El("map-detail__actions", parent);
@@ -248,7 +255,9 @@ namespace Bastion.UI.Strategy
                     actions.Add(button);
                 }
             }
-            if (!string.IsNullOrEmpty(d.Why)) Ui.Text(d.Why, "strat-why strat-why--small", parent);
+            if (!string.IsNullOrEmpty(d.Why)) Ui.Text(d.Why, "strat-why", parent);
+            // The network's meter, under the contact's reason (screen.ts regionInfo).
+            if (d.MeterMax > 0) Meter(d.Meter, d.MeterMax, StrategyText.Map.ZoneMeterTip, parent);
         }
 
         /// <summary>The zones' markers, made again when the view changes (they are few).</summary>

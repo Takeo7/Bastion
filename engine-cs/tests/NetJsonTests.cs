@@ -183,5 +183,24 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain("\"by\"", Json.Write(sent[3]));
             Assert.Contains("\"hosts\":[{\"address\":\"192.168.1.20\",\"kind\":\"lan\"}]", Json.Write(sent[0]));
         }
+
+        [Fact]
+        public void APlayersNumbersAreWholeWhereWholeOnesGo()
+        {
+            // protocol.ts takes every number with .int(): 2 and 2.0 are 2; 1.5, "2", true or past an int are not read. (A
+            // null is a missing field, as everywhere in the engine's JSON: its default, which the room's checks look at.)
+            var move = Assert.IsType<MoveCommand>(Assert.IsType<CmdMessage>(Json.ReadFromPlayer<ClientMessage>("{\"t\":\"cmd\",\"cmd\":{\"type\":\"move\",\"unit\":\"s1\",\"to\":{\"x\":2.0,\"y\":3,\"z\":1}}}")).Cmd);
+            Assert.Equal((2, 3, 1), (move.To.X, move.To.Y, move.To.Z));
+            var place = Assert.IsType<PlaceCommand>(Assert.IsType<CampaignCmdMessage>(Json.ReadFromPlayer<ClientMessage>("{\"t\":\"ccmd\",\"cmd\":{\"type\":\"place\",\"piece\":\"wall\",\"x\":4,\"y\":5,\"rot\":1}}")).Cmd);
+            Assert.Equal((4, 5, 1), (place.X, place.Y, place.Rot));
+            foreach (var x in new[] { "1.5", "\"2\"", "true", "2147483648", "1e400", "[]" })
+                Assert.ThrowsAny<Exception>(() => Json.ReadFromPlayer<ClientMessage>("{\"t\":\"cmd\",\"cmd\":{\"type\":\"move\",\"unit\":\"s1\",\"to\":{\"x\":" + x + ",\"y\":3}}}"));
+            // A nullable one may be null, or missing.
+            var item = Assert.IsType<ItemCommand>(Assert.IsType<CmdMessage>(Json.ReadFromPlayer<ClientMessage>("{\"t\":\"cmd\",\"cmd\":{\"type\":\"item\",\"unit\":\"s1\",\"action\":\"use\",\"index\":null}}")).Cmd);
+            Assert.Null(item.Index);
+            Assert.Equal(3, Assert.IsType<ItemCommand>(Assert.IsType<CmdMessage>(Json.ReadFromPlayer<ClientMessage>("{\"t\":\"cmd\",\"cmd\":{\"type\":\"item\",\"unit\":\"s1\",\"action\":\"use\",\"index\":3}}")).Cmd).Index);
+            // Read as the engine's own JSON instead, a union (its tag first read into a JObject) would take 1.5 for 2.
+            Assert.Equal(2, Assert.IsType<MoveCommand>(Json.Read<Command>("{\"type\":\"move\",\"unit\":\"s1\",\"to\":{\"x\":1.5,\"y\":3}}")).To.X);
+        }
     }
 }

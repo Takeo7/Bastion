@@ -6,12 +6,18 @@
  *   npx tsx engine-cs/golden/make-lore-tests.ts
  *
  * Each case is the C# expression and the same call in TypeScript; tables are
- * walked whole, so a text changed on one side and not the other fails.
+ * walked whole, so a text changed on one side and not the other fails. Every
+ * expected text goes through text-fixes.ts first: what was fixed in C# only.
  */
-import { writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import * as L from '../../packages/engine/src/lore';
 import { FOUND_WEAPONS } from '../../packages/engine/src/content';
 import { SKILL_IDS } from '../../packages/engine/src/skills';
+import * as Q from '../../packages/engine/src/quests';
+import type { MissionOffer, MissionReward } from '../../packages/engine/src/campaign';
+import { fixText } from './text-fixes';
+import * as T from '../../packages/engine/src/transmissions';
+import type { CampaignState } from '../../packages/engine/src/campaign';
 
 const lit = (v: unknown): string => (v === null || v === undefined ? 'null' : typeof v === 'string' ? JSON.stringify(v) : String(v));
 const lines: string[] = [];
@@ -21,10 +27,12 @@ const eq = (expected: unknown, cs: string) =>
       ? `            Assert.${expected ? 'True' : 'False'}(${cs});`
       : expected === null || expected === undefined
         ? `            Assert.Null(${cs});`
-        : `            Assert.Equal(${lit(expected)}, ${cs});`,
+        : `            Assert.Equal(${lit(typeof expected === 'string' ? fixText(expected) : expected)}, ${cs});`,
   );
 const cap = (k: string) => `${k[0]!.toUpperCase()}${k.slice(1)}`;
 const list = (xs: readonly string[]) => `new string[] { ${xs.map(lit).join(', ')} }`;
+/** An expected list of texts, through text-fixes.ts as every expected text. */
+const fixedList = (xs: readonly string[]) => list(xs.map(fixText));
 const section = (name: string) => lines.push('', `            // ${name}`);
 
 // ---------------------------------------------------------------- the head
@@ -60,7 +68,7 @@ eq(Object.keys(L.REGION_LORE).length, 'Lore.RegionLores.Count');
 section('searching');
 for (const [id, s] of Object.entries(L.SEARCH_SPOTS)) eq(s!.name, `Lore.SearchSpots[${lit(id)}].Name`);
 for (const [name, xs] of [['EmptyFinds', L.EMPTY_FINDS], ['MedicineFinds', L.MEDICINE_FINDS], ['FoodFinds', L.FOOD_FINDS], ['PartsFinds', L.PARTS_FINDS], ['MagFinds', L.MAG_FINDS]] as const) {
-  lines.push(`            Assert.Equal(${list(xs)}, Lore.${name});`);
+  lines.push(`            Assert.Equal(${fixedList(xs)}, Lore.${name});`);
 }
 for (const [id, v] of Object.entries(L.ITEM_FINDS)) eq(v, `Lore.ItemFinds[${lit(id)}]`);
 eq(Object.keys(L.ITEM_FINDS).length, 'Lore.ItemFinds.Count');
@@ -114,6 +122,10 @@ for (const id of Object.keys(L.REGION_LORE) as (keyof typeof L.REGION_LORE)[]) {
   eq(L.nestNoContactTip(id, 50), `Lore.NestNoContactTip(${lit(id)}, 50)`);
   eq(L.contactAim(id, 25), `Lore.ContactAim(${lit(id)}, 25)`);
 }
+// Not in lore.ts (Lore, 24/10, approved by Gameplay): the Mapa's «Nidos» head showed GLOSSARY.Nido, which names the
+// Marea before level 4, when nobody knows of it. From level 4 it is the glossary's line; before, «la infestación».
+for (const level of [1, 3, 4, 8])
+  eq(level >= L.PARTITURA_LEVEL ? L.GLOSSARY.Nido : 'Sitio donde se juntan los zombis. Hace crecer la infestación; quemarlo la hace retroceder.', `Lore.NestTip(${level})`);
 for (const zone of ['Bielsa', 'El Pantano Gris', 'Los Llanos de Ceniza']) eq(L.rumorAim(zone), `Lore.RumorAim(${lit(zone)})`);
 for (const kind of ['arms', 'ammo', 'armor']) eq(L.craftAim(kind, 'un fusil de asalto'), `Lore.CraftAim(${lit(kind)}, "un fusil de asalto")`);
 
@@ -205,7 +217,7 @@ for (const who of ['Chiara Rossi', 'Ana']) {
 }
 eq(L.LIVING_TIP, 'Lore.LivingTip');
 for (const [k, v] of Object.entries(L.BASE_SIEGE_TEXT)) eq(v, `Lore.BaseSiegeText.${k[0]!.toUpperCase()}${k.slice(1)}`);
-lines.push(`            Assert.Equal(${list(L.SIDES)}, Lore.Sides);`);
+lines.push(`            Assert.Equal(${fixedList(L.SIDES)}, Lore.Sides);`);
 for (const [k, v] of Object.entries(L.SIEGE_TEXT)) eq(v, `Lore.SiegeText.${k[0]!.toUpperCase()}${k.slice(1)}`);
 eq(L.siegeObjective(), 'Lore.SiegeObjective()');
 eq(L.siegeObjectiveTip(11), 'Lore.SiegeObjectiveTip(11)');
@@ -230,7 +242,7 @@ for (const [id, t] of Object.entries(L.PIECE_TEXT) as [Parameters<typeof L.holdi
   eq(t.the, `${at}.The`);
   eq(t.a, `${at}.A`);
   eq(t.line, `${at}.Line`);
-  lines.push(t.levels ? `            Assert.Equal(${list(t.levels)}, ${at}.Levels);` : `            Assert.Null(${at}.Levels);`);
+  lines.push(t.levels ? `            Assert.Equal(${fixedList(t.levels)}, ${at}.Levels);` : `            Assert.Null(${at}.Levels);`);
   for (const level of [1, 2, 3, 4]) {
     eq(L.pieceFigure(id, level), `Lore.PieceFigure(${lit(id)}, ${level})`);
     eq(L.pieceFigureShort(id, level), `Lore.PieceFigureShort(${lit(id)}, ${level})`);
@@ -245,6 +257,9 @@ for (const [id, t] of Object.entries(L.PIECE_TEXT) as [Parameters<typeof L.holdi
   eq(L.pieceHint(id, { hp: [5, 15], level: 2 }), `Lore.PieceHint(${lit(id)}, (5, 15), level: 2)`);
   for (const state of ['spent', 'silent', 'broken'] as const) eq(L.pieceHint(id, { hp: [5, 15], state, level: 2 }), `Lore.PieceHint(${lit(id)}, (5, 15), ${lit(state)}, 2)`);
 }
+// Fixed in C# only (Gameplay, 24/10): lore.ts's «Talar un árbol · 3 §» doesn't say whether it is paid or earned;
+// «Cuesta», as placeHint. The rest of the line is lore.ts's.
+for (const trees of [1, 2, 12]) eq(L.fellHint(trees).replace(/ · (\d+) §$/, ' · Cuesta $1 §'), `Lore.FellHint(${trees})`);
 for (const [k, v] of Object.entries(L.NEW_BRIEF)) eq(v, `Lore.NewBrief[${lit(k)}]`);
 for (const [k, v] of Object.entries(L.PIECE_STATE)) {
   eq(v, `Lore.PieceState.${cap(k)}`);
@@ -308,7 +323,7 @@ eq(L.weaponFigure('clip', 4), 'Lore.WeaponFigure("clip", 4)');
 L.EXPEDIENTE.forEach((p, i) => {
   eq(p.title, `Lore.Expediente[${i}].Title`);
   eq(p.summary, `Lore.Expediente[${i}].Summary`);
-  lines.push(`            Assert.Equal(${list(p.paragraphs)}, Lore.Expediente[${i}].Paragraphs);`);
+  lines.push(`            Assert.Equal(${fixedList(p.paragraphs)}, Lore.Expediente[${i}].Paragraphs);`);
   eq(p.note ?? null, `Lore.Expediente[${i}].Note`);
 });
 eq(L.EXPEDIENTE.length, 'Lore.Expediente.Count');
@@ -327,7 +342,7 @@ for (const who of ['Ana', 'Chiara Rossi'])
 eq(L.CURED_FLOAT, 'Lore.CuredFloat');
 for (const [k, v] of Object.entries(L.BELT_TEXT)) eq(v, `Lore.BeltText.${cap(k)}`);
 for (const item of Object.keys(L.ITEM_FINDS) as Parameters<typeof L.beltLine>[1][]) eq(L.beltLine('Ana', item), `Lore.BeltLine("Ana", ${lit(item)})`);
-lines.push(`            Assert.Equal(${list(L.SCAVENGE_BRIEFINGS)}, Lore.ScavengeBriefings.All);`);
+lines.push(`            Assert.Equal(${fixedList(L.SCAVENGE_BRIEFINGS)}, Lore.ScavengeBriefings.All);`);
 for (const [k, v] of Object.entries(L.SCAVENGE)) {
   // Fixed in C# only: since #49 a fallen soldier's backpack stays on the ground, while lore.ts (frozen) still says it is lost.
   if (k === 'carryingTip') {
@@ -397,7 +412,7 @@ eq(L.lootSummary(34, [], 2), 'Lore.LootSummary(34, new string[] { }, 2)');
 for (const [k, v] of Object.entries(L.GLOSSARY)) eq(v, `Lore.Glossary[${lit(k)}]`);
 eq(Object.keys(L.GLOSSARY).length, 'Lore.Glossary.Count');
 for (const k of ['label', 'briefing', 'report'] as const) eq(L.NIGHT_TEXT[k], `Lore.NightText.${cap(k)}`);
-lines.push(`            Assert.Equal(${list(L.NIGHT_TEXT.rules)}, Lore.NightText.Rules);`);
+lines.push(`            Assert.Equal(${fixedList(L.NIGHT_TEXT.rules)}, Lore.NightText.Rules);`);
 eq(L.litNote(), 'Lore.LitNote()');
 for (const turns of [0, 1, 3]) eq(L.litNote(turns), `Lore.LitNote(${turns})`);
 
@@ -443,7 +458,7 @@ for (const rank of [-2, -1, 0, 1, 2, 3, 4, 5]) {
 // ---------------------------------------------------------------- premise and valley
 section('premise and valley');
 eq(L.PREMISE.title, 'Lore.Premise.Title');
-lines.push(`            Assert.Equal(${list(L.PREMISE.lines)}, Lore.Premise.Lines);`);
+lines.push(`            Assert.Equal(${fixedList(L.PREMISE.lines)}, Lore.Premise.Lines);`);
 for (const [k, v] of Object.entries(L.ALARM_NAMES)) eq(v, `Lore.AlarmNames[${lit(k)}]`);
 for (const biome of ['city', 'wilds', 'facility'] as const) for (const seed of [0, 3, 17, -5, 2147483647]) eq(L.missionName(biome, 'El Pantano Gris', seed), `Lore.MissionName(${lit(biome)}, "El Pantano Gris", ${seed})`);
 for (const site of ['roadside', 'industrial'] as const) for (const seed of [1, 6]) eq(L.missionName('city', 'Tarbes', seed, site), `Lore.MissionName("city", "Tarbes", ${seed}, ${lit(site)})`);
@@ -465,6 +480,289 @@ for (const level of [2, 5]) {
   eq(L.floodedZoneNote(level), `Lore.FloodedZoneNote(${level})`);
 }
 for (const via of [[], ['Bielsa'], ['Bielsa', 'La Vega']]) eq(L.noRoadReason(via), `Lore.NoRoadReason(${list(via)})`);
+
+// ---------------------------------------------------------------- story
+section('story');
+/** A reward's fields, each against the C# one (`recruit` is an object there: true, or a class's id in old saves). */
+const rewardEq = (r: MissionReward | undefined, at: string) => {
+  if (!r) return lines.push(`            Assert.Null(${at});`);
+  eq(r.credits, `${at}.Credits`);
+  lines.push(r.recruit ? `            Assert.True(${at}.Recruit is true);` : `            Assert.Null(${at}.Recruit);`);
+  for (const k of ['doom', 'medicines', 'food', 'parts', 'vehicle'] as const) eq(r[k], `${at}.${cap(k)}`);
+};
+L.STORY.forEach((c, i) => {
+  const at = `Lore.Story[${i}]`;
+  eq(c.title, `${at}.Title`);
+  eq(c.kind, `${at}.Kind`);
+  eq(c.biome, `${at}.Biome`);
+  eq(c.region, `${at}.Region`);
+  eq(c.difficulty, `${at}.Difficulty`);
+  rewardEq(c.reward, `${at}.Reward`);
+  eq(c.prize, `${at}.Prize`);
+  eq(c.briefing, `${at}.Briefing`);
+  eq(c.signature, `${at}.Signature`);
+  eq(c.living, `${at}.Living`);
+  eq(c.item, `${at}.Item`);
+  eq(c.vip, `${at}.Vip`);
+  eq(c.after, `${at}.After`);
+});
+eq(L.STORY.length, 'Lore.Story.Count');
+eq(L.SIMON_CHAPTER, 'Lore.SimonChapter');
+eq(L.NWOSU_CHAPTER, 'Lore.NwosuChapter');
+const SIMONS: L.SimonChoice[] = [null, 'trusted', 'refused'];
+for (let chapter = 1; chapter <= L.STORY.length; chapter++)
+  for (const simon of SIMONS) {
+    eq(L.storyBriefing(chapter, simon), `Lore.StoryBriefing(${chapter}, ${lit(simon)})`);
+    eq(L.storyVip(chapter, simon), `Lore.StoryVip(${chapter}, ${lit(simon)})`);
+  }
+
+// ---------------------------------------------------------------- briefings
+section('briefings');
+type Offer = Pick<MissionOffer, 'id' | 'kind' | 'region' | 'map' | 'final' | 'facility' | 'story' | 'quest'> & Partial<Pick<MissionOffer, 'night' | 'vip' | 'alarm'>>;
+/** An offer as C# builds it, with what the briefings read. */
+const offerCs = (o: Offer) => {
+  const map = o.map.kind === 'generated' ? `MapSource.Generated(${lit(o.map.biome)}, ${o.map.seed})` : o.map.kind === 'handmade' ? `MapSource.Handmade(${lit(o.map.id)})` : 'new MapSource { Kind = "base" }';
+  const parts = [`Id = ${lit(o.id)}`, `Kind = ${lit(o.kind)}`, `Region = ${lit(o.region)}`, `Map = ${map}`];
+  if (o.final) parts.push('Final = true');
+  if (o.facility) parts.push(`Facility = ${lit(o.facility)}`);
+  if (o.story) parts.push(`Story = ${o.story}`);
+  if (o.quest) parts.push(`Quest = ${lit(o.quest)}`);
+  if (o.night) parts.push('Night = true');
+  if (o.vip) parts.push(`Vip = ${lit(o.vip)}`);
+  if (o.alarm) parts.push(`Alarm = ${lit(o.alarm)}`);
+  return `new MissionOffer { ${parts.join(', ')} }`;
+};
+const offers: Offer[] = [];
+const plain = (id: string, kind: MissionOffer['kind'], region: MissionOffer['region'], map: MissionOffer['map'], more: Partial<Offer> = {}): Offer => ({ id, kind, region, map, final: false, facility: null, story: null, quest: null, ...more });
+const KINDS = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge'] as const;
+// Every kind in every zone, with ids and seeds enough for each of its reports (seed % n), by day and by night.
+for (const region of Object.keys(L.REGION_LORE) as MissionOffer['region'][])
+  for (const kind of KINDS)
+    for (let i = 1; i <= 4; i++) offers.push(plain(`m${i}`, kind, region, { kind: 'generated', biome: 'city', seed: i * 7919 }, { night: i % 2 === 0 }));
+// Hand-made maps (no seed) and seeds at the edge of 32 bits: the sum is past them in TypeScript.
+for (const kind of KINDS)
+  for (const map of [{ kind: 'handmade', id: 'clinic' }, { kind: 'generated', biome: 'wilds', seed: 0 }, { kind: 'generated', biome: 'facility', seed: 2147483647 }] as MissionOffer['map'][])
+    for (const id of ['m9', 'm10', 'offer-37']) offers.push(plain(id, kind, 'eas', map));
+// Who is held, with and without a title, and an ally with «el» (Bielsa's).
+for (const vip of [undefined, 'Otto Brandt', 'Dr. Femi Adebayo', 'Dra. Irina Sokolova', 'Alcaldesa Mara Velasco', 'Agente Claire Dubois', 'Ing. Kenji Mori'])
+  for (const region of ['weu', 'oce'] as const) for (let i = 1; i <= 3; i++) offers.push(plain(`m${i}`, 'rescue', region, { kind: 'generated', biome: 'city', seed: i }, { vip }));
+// What sounds in a sabotage.
+for (const alarm of [undefined, 'police', 'ambulance', 'factory'] as const) for (const region of ['weu', 'na'] as const) offers.push(plain('m3', 'sabotage', region, { kind: 'generated', biome: 'wilds', seed: 5 }, { alarm }));
+// The story, the final mission, the Nidos and a quest's step.
+for (let story = 1; story <= L.STORY.length; story++) for (const night of [false, true]) offers.push(plain(`s${story}`, L.STORY[story - 1]!.kind, L.STORY[story - 1]!.region, { kind: 'generated', biome: 'city', seed: 11 }, { story, night }));
+for (const night of [false, true]) offers.push(plain('final', 'elimination', 'na', { kind: 'generated', biome: 'facility', seed: 3 }, { final: true, night }));
+offers.push(plain('nest', 'sabotage', 'me', { kind: 'generated', biome: 'facility', seed: 4 }, { facility: 'me', alarm: 'factory' }));
+for (const quest of ['sunken', 'faces'] as const) offers.push(plain('q1', 'recovery', 'oce', { kind: 'generated', biome: 'wilds', seed: 8 }, { quest }));
+for (const o of offers) {
+  const cs = offerCs(o);
+  const offer = o as MissionOffer;
+  for (const level of o.facility ? [3, 4] : [3]) {
+    eq(L.missionBriefing(offer, level), `Lore.MissionBriefing(${cs}, ${level})`);
+    if (o.story === L.SIMON_CHAPTER) for (const simon of SIMONS) eq(L.missionBriefing(offer, level, simon), `Lore.MissionBriefing(${cs}, ${level}, ${lit(simon)})`);
+  }
+  eq(L.briefingSignature(offer), `Lore.BriefingSignature(${cs})`);
+  eq(L.recoveryItem(offer), `Lore.RecoveryItem(${cs})`);
+  eq(L.recoveryOutdoors(offer), `Lore.RecoveryOutdoors(${cs})`);
+}
+// How many of each kind's reports came out (lore.ts BRIEFINGS: 3, 3, 2, 3, 3 and 3): said when it runs.
+const reports = (kind: string) =>
+  new Set(offers.filter((o) => o.kind === kind && !o.story && !o.final && !o.facility && !o.vip && !o.alarm).map((o) => L.missionBriefing({ ...o, night: false } as MissionOffer, 3).replace(/^Aviso [^.]*\. /, ''))).size;
+console.log(KINDS.map((k) => `${k} ${reports(k)}`).join(', '));
+
+// ---------------------------------------------------------------- quests
+section('quests');
+lines.push(`            Assert.Equal(${fixedList(Object.keys(Q.QUESTS))}, Quests.QuestDefs.Keys);`);
+lines.push(`            Assert.Equal(${fixedList(Object.keys(Q.QUESTS))}, QuestIds.All);`);
+for (const q of Object.values(Q.QUESTS)) {
+  const at = `Quests.QuestDefs[${lit(q.id)}]`;
+  eq(q.id, `${at}.Id`);
+  eq(q.title, `${at}.Title`);
+  eq(q.signature, `${at}.Signature`);
+  eq(q.hook, `${at}.Hook`);
+  eq(q.prize, `${at}.Prize`);
+  eq(q.region, `${at}.Region`);
+  eq(q.rumor, `${at}.Rumor`);
+  eq(q.steps.length, `${at}.Steps.Count`);
+  q.steps.forEach((st, i) => {
+    eq(st.type, `${at}.Steps[${i}].Type`);
+    if (st.type === 'event') {
+      const s = `((QuestDecision)${at}.Steps[${i}])`;
+      eq(st.title, `${s}.Title`);
+      eq(st.text, `${s}.Text`);
+      eq(st.options.length, `${s}.Options.Count`);
+      st.options.forEach((o, j) => {
+        eq(o.label, `${s}.Options[${j}].Label`);
+        eq(o.effect, `${s}.Options[${j}].Effect`);
+        eq(o.then, `${s}.Options[${j}].Then`);
+        eq(o.clue, `${s}.Options[${j}].Clue`);
+      });
+    } else {
+      const s = `((QuestMission)${at}.Steps[${i}])`;
+      eq(st.name, `${s}.Name`);
+      eq(st.kind, `${s}.Kind`);
+      eq(st.biome, `${s}.Biome`);
+      eq(st.difficulty, `${s}.Difficulty`);
+      eq(st.days, `${s}.Days`);
+      eq(st.briefing, `${s}.Briefing`);
+      eq(st.item, `${s}.Item`);
+      eq(st.outdoors, `${s}.Outdoors`);
+      eq(st.vip, `${s}.Vip`);
+      if (st.leader) {
+        eq(st.leader.template, `${s}.Leader!.Template`);
+        eq(st.leader.name, `${s}.Leader!.Name`);
+      } else lines.push(`            Assert.Null(${s}.Leader);`);
+      eq(st.living, `${s}.Living`);
+      rewardEq(st.reward, `${s}.Reward`);
+    }
+  });
+  lines.push(`            Assert.Equal(${fixedList(Object.keys(q.outcomes))}, ${at}.Outcomes.Keys);`);
+  for (const [key, o] of Object.entries(q.outcomes)) {
+    const s = `${at}.Outcomes[${lit(key)}]`;
+    eq(o.text, `${s}.Text`);
+    eq(o.tone, `${s}.Tone`);
+    for (const k of ['credits', 'doom', 'income', 'contacts', 'tech', 'trait', 'enemy', 'delay', 'retry'] as const) eq(o[k], `${s}.${cap(k)}`);
+    if (o.items) {
+      eq(Object.keys(o.items).length, `${s}.Items!.Count`);
+      for (const [item, n] of Object.entries(o.items)) eq(n, `${s}.Items![${lit(item)}]`);
+    } else lines.push(`            Assert.Null(${s}.Items);`);
+    if (o.recruit) {
+      eq(o.recruit.name, `${s}.Recruit!.Name`);
+      eq(o.recruit.rank, `${s}.Recruit!.Rank`);
+      eq(o.recruit.trait, `${s}.Recruit!.Trait`);
+    } else lines.push(`            Assert.Null(${s}.Recruit);`);
+  }
+  if (q.clues) {
+    eq(q.clues.guilty, `${at}.Clues!.Guilty`);
+    eq(q.clues.innocent, `${at}.Clues!.Innocent`);
+  } else lines.push(`            Assert.Null(${at}.Clues);`);
+}
+lines.push(`            Assert.Equal(${fixedList(Object.keys(Q.TRAITS))}, Quests.Traits.Keys);`);
+lines.push(`            Assert.Equal(${fixedList(Object.keys(Q.TRAITS))}, TraitIds.All);`);
+for (const [id, t] of Object.entries(Q.TRAITS)) {
+  eq(t.name, `Quests.Traits[${lit(id)}].Name`);
+  eq(t.description, `Quests.Traits[${lit(id)}].Description`);
+  eq(t.aim, `Quests.Traits[${lit(id)}].Aim`);
+  eq(t.will, `Quests.Traits[${lit(id)}].Will`);
+}
+eq(Q.RELATIVES.length, 'Quests.Relatives.Count');
+Q.RELATIVES.forEach((r, i) => {
+  eq(r.name, `Quests.Relatives[${i}].Name`);
+  eq(r.relation, `Quests.Relatives[${i}].Relation`);
+  eq(r.sex, `Quests.Relatives[${i}].Sex`);
+});
+lines.push(`            Assert.Equal(${fixedList(Q.SUSPECTS)}, Quests.Suspects);`);
+lines.push(`            Assert.Equal(${fixedList(Q.RUMOR_LINES)}, Quests.RumorLines);`);
+/** `names` as C# writes it. */
+const namesCs = (names: Record<string, string>) => `new System.Collections.Generic.Dictionary<string, string> { ${Object.entries(names).map(([k, v]) => `[${lit(k)}] = ${lit(v)}`).join(', ')} }`;
+const NAMES: Record<string, string>[] = [{}, { soldier: 'Ana Ruiz', relation: 'su hermana', relative: 'Mariam' }, { a: 'Pavel Lanz, el electricista', b: 'Rosa Alves, la cocinera', clue: 'Vigilamos a Rosa.', name: 'Rosa', culprit: 'Rosa Alves' }];
+const texts = [
+  ...Object.values(Q.QUESTS).flatMap((q) => [q.hook, q.prize, ...q.steps.flatMap((st) => (st.type === 'event' ? [st.title, st.text, ...st.options.flatMap((o) => [o.label, o.effect])] : [st.name, st.briefing, st.vip ?? ''])), ...Object.values(q.outcomes).map((o) => o.text)]),
+  '{a}{a} y {b}', '{}', '{niño} y {a_1}', 'sin nada',
+];
+// The C# tables' texts, fixed (text-fixes.ts), into Fill.
+for (const names of NAMES) for (const text of new Set(texts.map(fixText))) eq(Q.fill(text, names), `Quests.Fill(${lit(text)}, ${namesCs(names)})`);
+
+
+// ---------------------------------------------------------------- transmissions
+section('transmissions');
+lines.push(`            Assert.Equal(${fixedList(Object.keys(T.SPEAKERS))}, SpeakerIds.All);`);
+lines.push(`            Assert.Equal(${fixedList(Object.keys(T.SPEAKERS))}, Transmissions.Speakers.Keys);`);
+for (const [id, sp] of Object.entries(T.SPEAKERS)) {
+  eq(sp.name, `Transmissions.Speakers[${lit(id)}].Name`);
+  eq(sp.role, `Transmissions.Speakers[${lit(id)}].Role`);
+}
+lines.push(`            Assert.Equal(${fixedList([...T.SCENES.map((s) => s.id), T.RECAP.id])}, SceneIds.All);`);
+eq(T.SCENES.length, 'Transmissions.Scenes.Count');
+T.SCENES.forEach((s, i) => {
+  const at = `Transmissions.Scenes[${i}]`;
+  eq(s.id, `${at}.Id`);
+  eq(s.title, `${at}.Title`);
+  eq(s.channel, `${at}.Channel`);
+  eq(s.lines.length, `${at}.Lines.Count`);
+  s.lines.forEach((l, j) => {
+    eq(l.who, `${at}.Lines[${j}].Who`);
+    eq(l.text, `${at}.Lines[${j}].Text`);
+    eq(l.rule, `${at}.Lines[${j}].Rule`);
+    eq(!!l.if, `${at}.Lines[${j}].If != null`);
+  });
+});
+eq(T.RECAP.id, 'Transmissions.Recap.Id');
+eq(T.RECAP.title, 'Transmissions.Recap.Title');
+eq(T.RECAP.channel, 'Transmissions.Recap.Channel');
+eq(T.RECAP.lines.length, 'Transmissions.Recap.Lines.Count');
+
+/**
+ * The scenes on campaigns (golden/lore/scenes.json, read by TransmissionsGoldenTests): the states recorded from
+ * TypeScript (golden/campaign), UI's sample and states made from them to reach every scene's condition (a patch: a
+ * path and its new value, or one more item for a list). For each, what unlockedScenes, nextScene and sceneLines say.
+ */
+type Patch = [path: string, value: unknown, push?: true];
+const campaignDir = new URL('./campaign/', import.meta.url);
+const recorded = (JSON.parse(readFileSync(new URL('states.json', campaignDir), 'utf8')) as { states: { name: string; campaign: CampaignState }[] }).states;
+const sample = (JSON.parse(readFileSync(new URL('muestra.json', campaignDir), 'utf8')) as { campaign: CampaignState }).campaign;
+const baseOf = (base: string) => JSON.parse(JSON.stringify(base === 'muestra' ? sample : recorded.find((s) => s.name === base)!.campaign)) as CampaignState;
+const patched = (base: string, patch: Patch[]) => {
+  const c = baseOf(base) as unknown as Record<string, unknown>;
+  for (const [path, value, push] of patch) {
+    const keys = path.split('.');
+    let at: Record<string, unknown> = c;
+    for (const k of keys.slice(0, -1)) at = at[k] as Record<string, unknown>;
+    const last = keys[keys.length - 1]!;
+    if (push) (at[last] as unknown[]).push(value);
+    else at[last] = value;
+  }
+  return c as unknown as CampaignState;
+};
+// Scenes C# can't tell yet, left out of what TypeScript says here (none since Campaign.TreatCost came, 24/10).
+const WAITING = new Set<string>([]);
+const cases: { name: string; base: string; patch: Patch[] }[] = [
+  ...recorded.map((s) => ({ name: s.name, base: s.name, patch: [] as Patch[] })),
+  { name: 'muestra', base: 'muestra', patch: [] },
+  { name: 'day 32', base: 'duo-new', patch: [['day', 32]] },
+  { name: 'chapter 1 at level 2', base: 'duo-new', patch: [['story.done', 1], ['level', 2]] },
+  { name: 'chapter 2 offered', base: 'duo-new', patch: [['offers.0.story', 2]] },
+  { name: 'chapter 3 offered', base: 'duo-new', patch: [['offers.0.story', 3]] },
+  ...[2, 3, 5, 6, 7].map((done) => ({ name: `chapter ${done} won`, base: 'duo-new', patch: [['story.done', done]] as Patch[] })),
+  ...[4, 6, 7].map((level) => ({ name: `level ${level}`, base: 'duo-new', patch: [['level', level]] as Patch[] })),
+  { name: 'flooded', base: 'duo-new', patch: [['flooded', ['na']]] },
+  { name: 'Simão at the door', base: 'duo-new', patch: [['event', 'simon']] },
+  { name: 'Simão trusted', base: 'duo-new', patch: [['story.simon', 'trusted'], ['story.done', 5]] },
+  { name: 'Simão refused', base: 'duo-new', patch: [['story.simon', 'refused'], ['story.done', 5]] },
+  { name: 'echoes', base: 'duo-new', patch: [['bastion.pieces', { id: 'echoes-1', piece: 'echoes', x: 0, y: 0, rot: 0 }, true]] },
+  { name: 'bitten', base: 'duo-new', patch: [['soldiers.0.infection', { since: 1 }]] },
+  { name: 'bitten, no medicines', base: 'duo-new', patch: [['soldiers.0.infection', { since: 1 }], ['medicines', 0]] },
+  { name: 'turned', base: 'duo-new', patch: [['soldiers.0.alive', false], ['soldiers.0.fellCause', 'turned']] },
+  { name: 'fallen', base: 'duo-new', patch: [['soldiers.0.alive', false], ['soldiers.0.fellCause', 'killed']] },
+  { name: 'hungry', base: 'duo-new', patch: [['hungry', true]] },
+  { name: 'a good weapon', base: 'duo-new', patch: [['foundWeapons', [{ id: 'fw1', kind: 'huntingRifle', holder: null }]]] },
+  { name: 'a plain weapon', base: 'duo-new', patch: [['foundWeapons', [{ id: 'fw1', kind: 'assaultRifle', holder: null }]]] },
+  { name: 'the final mission', base: 'duo-new', patch: [['offers.0.final', true]] },
+  { name: 'the finale', base: 'duo-new', patch: [['event', 'finale']] },
+  { name: 'ending break, trusted', base: 'duo-new', patch: [['ending', 'break'], ['story.simon', 'trusted'], ['story.done', 7], ['level', 8]] },
+  { name: 'ending record', base: 'duo-new', patch: [['ending', 'record'], ['story.done', 7], ['level', 8]] },
+  { name: 'kilometre zero', base: 'duo-new', patch: [['outcome', 'defeat'], ['doom', 12]] },
+  { name: 'lost, not to the Marea', base: 'duo-new', patch: [['outcome', 'defeat'], ['doom', 5]] },
+];
+const reached = new Set<string>();
+const sceneCases = cases.map((k) => {
+  const c = patched(k.base, k.patch);
+  const unlocked = T.unlockedScenes(c).map((s) => s.id).filter((id) => !WAITING.has(id));
+  for (const id of unlocked) reached.add(id);
+  const seens: string[][] = [[], unlocked.slice(0, 1), unlocked];
+  const next = seens.flatMap((seen) =>
+    [false, true].map((moment) => ({ seen, moment, scene: T.nextScene(c, new Set([...seen, ...WAITING]) as ReadonlySet<T.SceneId>, moment)?.id ?? null })),
+  );
+  // Only two scenes have a line that depends on the campaign (Simão's, if he was let in).
+  const linesOf = Object.fromEntries(
+    T.SCENES.filter((s) => s.lines.some((l) => l.if)).map((s) => [s.id, T.sceneLines(s, c).map((l) => [l.who, fixText(l.text)])]),
+  );
+  return { name: k.name, base: k.base, patch: k.patch, unlocked, next, lines: linesOf };
+});
+const unreached = T.SCENES.map((s) => s.id).filter((id) => !reached.has(id) && !WAITING.has(id));
+if (unreached.length) throw new Error(`scenes no case reaches: ${unreached.join(', ')}`);
+mkdirSync(new URL('./lore/', import.meta.url), { recursive: true });
+writeFileSync(new URL('./lore/scenes.json', import.meta.url), JSON.stringify({ cases: sceneCases }, null, 1) + '\n');
+console.log(`${sceneCases.length} campaigns for the scenes`);
 
 const out = `// Written by engine-cs/golden/make-lore-tests.ts from packages/engine/src/lore.ts: do not edit by hand.
 using Bastion.Engine;

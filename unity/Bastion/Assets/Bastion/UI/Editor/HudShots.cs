@@ -88,6 +88,28 @@ namespace Bastion.UI.EditorTools
         }
 
         /// <summary>
+        /// The base's lab over Arte's clearing (Bastion.EditorTools.SettlementLab.Clearing: the lab's base, seed 3, with
+        /// its pieces; BASTION_LOOK frames it, as there) instead of a plain sky: for the Asentamiento's panels. Called by
+        /// name, so that this assembly needn't reference Arte's editor tools; without them, the plain sky.
+        /// </summary>
+        public static void EstrategiaClaro()
+        {
+            var lab = System.Type.GetType("Bastion.EditorTools.SettlementLab, Bastion.Editor");
+            var clearing = lab?.GetMethod("Clearing", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (clearing == null)
+            {
+                Debug.LogWarning("[estrategia] no SettlementLab.Clearing: the plain sky");
+                Estrategia();
+                return;
+            }
+            clearing.Invoke(null, null);
+            var screen = new GameObject("Base");
+            screen.AddComponent<UIDocument>().panelSettings = Panel();
+            screen.AddComponent<Bastion.UI.Strategy.StrategyRoot>();
+            screen.AddComponent<Bastion.UI.Strategy.StrategyLab>();
+        }
+
+        /// <summary>
         /// The combat on a recorded state (CombatLab, engine-cs/golden/step2/city-3-elimination.json) with its HUD: the reach
         /// of a soldier's move, the way to a tile and the cover there, over a rough floor with capsules for the units.
         /// </summary>

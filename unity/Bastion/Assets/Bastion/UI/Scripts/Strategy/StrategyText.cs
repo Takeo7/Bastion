@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 namespace Bastion.UI.Strategy
@@ -34,6 +35,62 @@ namespace Bastion.UI.Strategy
             public const string NewTag = "Nuevo";
             public const string NewTip = "Hay cosas nuevas";
             public static string PartnerHere(string name) => $"{name} está aquí";
+        }
+
+        /// <summary>The soldier's sheet: the heads' and the veterancy's help (screen.ts renderSheet's titles).</summary>
+        public static class Sheet
+        {
+            public const string ArmsTip = "Las armas salen de la Armería: allí se arreglan y se les ponen mejoras";
+            public const string BeltTip = "Dos huecos para cualquier accesorio. Se compran en la Armería; si el soldado cae, se pierden";
+            public const string RankTip = "La veteranía sube con los puntos gastados en el tablero: un rango cada 5.";
+        }
+
+        /// <summary>The skill board: its points' help.</summary>
+        public static class Board
+        {
+            public const string PointsTip = "Un punto de habilidad cada vez que se llena una barra";
+        }
+
+        /// <summary>Escuadra's and the line-up's fixed words.</summary>
+        public static class Squad
+        {
+            public const string RemoveTip = "Quitar de la escuadra";
+            public const string InTip = "En la escuadra";
+        }
+
+        /// <summary>A card's «→ +2 Habilidades» under the line-up (skillSheet.ts:182): the points for the board a mission gave.</summary>
+        public static class Learned
+        {
+            public static string Points(int n) => n == 1 ? "Habilidad" : "Habilidades";
+            public const string PointsTip = "Puntos para el tablero de habilidades";
+        }
+
+        /// <summary>The Mapa's fixed help.</summary>
+        public static class Map
+        {
+            public const string NetworkTip = "Pulsa una zona del mapa para ver sus datos";
+            public const string ZoneMeterTip = "Zonas contactadas / máximo";
+        }
+
+        /// <summary>«Volver al menú principal» from the base (Lore, 24/10: as in the HUD; «menú principal», not «de inicio»).</summary>
+        public static class Leave
+        {
+            public const string Kicker = "Menú principal";
+            public const string Title = "¿Volver al menú principal?";
+            public const string Yes = "Volver al menú";
+            public const string No = "Seguir aquí";
+
+            public static string Text(string partner) => string.IsNullOrEmpty(partner) ? "La campaña queda guardada." : $"La campaña queda guardada. {partner} vuelve también al menú.";
+        }
+
+        /// <summary>A text a sentence a line, as the 0.10.1's tooltips (screen.ts sentences: «no un bloque», Ana 21/10 #33).</summary>
+        public static List<string> Sentences(string text)
+        {
+            var out_ = new List<string>();
+            if (string.IsNullOrEmpty(text)) return out_;
+            foreach (var part in Regex.Split(text.Trim(), @"(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¡¿−+0-9«])"))
+                if (part.Length > 0) out_.Add(part);
+            return out_;
         }
 
         /// <summary>

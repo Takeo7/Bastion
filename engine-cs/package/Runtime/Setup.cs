@@ -63,7 +63,8 @@ namespace Bastion.Engine
         /// <summary>A hand-made map's (maps.ts MAPS).</summary>
         public string? Id { get; set; }
         public string? Biome { get; set; } // Biomes
-        public int Seed { get; set; }
+        /// <summary>A generated map's; missing on the others (a campaign's siege offer is `{ kind: 'handmade', id: 'bastion' }`).</summary>
+        public int? Seed { get; set; }
         public string? Site { get; set; } // Sites
         public string? Medical { get; set; } // MedicalSiteKinds
         public BaseState? Base { get; set; }
@@ -652,7 +653,7 @@ namespace Bastion.Engine
                 Biome = map.Biome!,
                 Kind = LayoutKind.TryGetValue(kind, out var layoutKind) ? layoutKind : kind,
                 PodSizes = podSizes,
-                Seed = map.Seed,
+                Seed = map.Seed ?? 0,
                 Site = !string.IsNullOrEmpty(map.Site) ? map.Site : null,
                 Medical = !string.IsNullOrEmpty(map.Medical) ? map.Medical : null,
                 ItemOutdoors = itemOutdoors ? true : (bool?)null,
@@ -899,7 +900,7 @@ namespace Bastion.Engine
             if (layout.Siege != true && opts.Map.Kind == MapSourceKinds.Generated && plan.Any((members) => members.Any((t) => Content.Templates[t].Undead)))
             {
                 // Drawn from the map's own seed, so the rest of the mission is as it was.
-                var spots = LurkerSpots(layout, units, Lurkers[Math.Min(difficulty, Lurkers.Count - 1)], new Rng(unchecked((uint)(opts.Map.Seed ^ 0x2f6b))));
+                var spots = LurkerSpots(layout, units, Lurkers[Math.Min(difficulty, Lurkers.Count - 1)], new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x2f6b))));
                 for (var k = 0; k < spots.Count; k++)
                 {
                     var id = $"a{++alienIndex}";

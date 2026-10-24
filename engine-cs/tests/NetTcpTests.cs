@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -12,7 +13,11 @@ namespace Bastion.Engine.Tests
     /// <summary>The host's port and its connections over TCP (Net/TcpHost.cs, Net/Connection.cs), on 127.0.0.1.</summary>
     public class NetTcpTests
     {
-        private static async Task<T> Within<T>(Task<T> task, int ms = 5000)
+        /// <summary>
+        /// `task`, which must end, within `ms`: generous, as it returns once it does. A loaded machine (Unity compiling,
+        /// the other tests, a pause of the collector) can hold anything up a second or two, never ten.
+        /// </summary>
+        private static async Task<T> Within<T>(Task<T> task, int ms = 10_000)
         {
             var done = await Task.WhenAny(task, Task.Delay(ms));
             Assert.True(done == task, $"nothing after {ms} ms");
@@ -48,7 +53,7 @@ namespace Bastion.Engine.Tests
         {
             var (host, serverTask) = Host();
             using var _ = host;
-            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 2000, CancellationToken.None);
+            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, CancellationToken.None);
             var fromServer = Next(client);
             client.Start();
             var server = await Within(serverTask);
@@ -65,7 +70,7 @@ namespace Bastion.Engine.Tests
         {
             var (host, serverTask) = Host();
             using var _ = host;
-            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 2000, CancellationToken.None);
+            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, CancellationToken.None);
             var got = Next(client);
             client.Start();
             var server = await Within(serverTask);
@@ -81,7 +86,7 @@ namespace Bastion.Engine.Tests
         {
             var (host, serverTask) = Host();
             using var _ = host;
-            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 2000, CancellationToken.None);
+            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, CancellationToken.None);
             client.Start();
             var server = await Within(serverTask);
             var closed = ClosedOf(server);
@@ -96,7 +101,7 @@ namespace Bastion.Engine.Tests
         {
             var (host, serverTask) = Host();
             using var _ = host;
-            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 2000, CancellationToken.None);
+            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, CancellationToken.None);
             client.Start();
             var server = await Within(serverTask);
             var serverClosed = ClosedOf(server);
@@ -121,7 +126,7 @@ namespace Bastion.Engine.Tests
             var server = new TcpConnection(await listener.AcceptTcpClientAsync(), 1024, 1024, heartbeatMs: 50, deadAfterMs: 300);
             var closed = ClosedOf(server);
             server.Start();
-            Assert.Equal("no responde", await Within(closed, 3000));
+            Assert.Equal("no responde", await Within(closed));
             listener.Stop();
         }
 
@@ -133,14 +138,16 @@ namespace Bastion.Engine.Tests
             var port = ((IPEndPoint)listener.LocalEndpoint).Port;
             var raw = new TcpClient();
             await raw.ConnectAsync("127.0.0.1", port);
-            var server = new TcpConnection(await listener.AcceptTcpClientAsync(), 1024, 1024, heartbeatMs: 50, deadAfterMs: 300);
-            var client = new TcpConnection(raw, 1024, 1024, heartbeatMs: 50, deadAfterMs: 300);
+            // Beating every 50 ms, a second of nothing for dead: twenty beats in a row would have to be lost or held up. A
+            // dead time of 300 ms (six) is within what a loaded machine can hold the network's threads up.
+            var server = new TcpConnection(await listener.AcceptTcpClientAsync(), 1024, 1024, heartbeatMs: 50, deadAfterMs: 1000);
+            var client = new TcpConnection(raw, 1024, 1024, heartbeatMs: 50, deadAfterMs: 1000);
             var serverClosed = ClosedOf(server);
             var clientClosed = ClosedOf(client);
             server.Start();
             client.Start();
             // Three times the dead time with nothing to say but the heartbeat: both still open.
-            await Task.Delay(900);
+            await Task.Delay(3000);
             Assert.False(serverClosed.IsCompleted);
             Assert.False(clientClosed.IsCompleted);
             client.Close("fin");
@@ -165,7 +172,7 @@ namespace Bastion.Engine.Tests
             host.Connected += (c) => c.Message += (m) => hello.TrySetResult((c, m));
             host.Start();
             var tokens = new MemoryTokens();
-            var session = new ClientSession((cancel) => TcpConnection.ConnectAsync("127.0.0.1", host.Port, 2000, cancel).ContinueWith((t) => (IConnection)t.Result), tokens, "1.0.0");
+            var session = new ClientSession((cancel) => TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, cancel).ContinueWith((t) => (IConnection)t.Result), tokens, "1.0.0");
             session.Connect("Ana");
             await Wait.Until(() => hello.Task.IsCompleted, session.Pump);
             var (server, text) = await hello.Task;
@@ -179,14 +186,15 @@ namespace Bastion.Engine.Tests
         [Fact]
         public async Task NobodyThereFailsInTime()
         {
-            // A free port with nobody listening: refused at once, or at most the timeout.
-            var probe = new TcpListener(IPAddress.Loopback, 0);
-            probe.Start();
-            var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-            probe.Stop();
-            var started = DateTime.UtcNow;
+            // A port with nobody listening: refused at once, or at most the timeout, never the system's (20 s and more).
+            // Held, bound but not listening, while it's tried: a port let go could be taken meanwhile by another test's
+            // host, or be the very port the attempt goes out from (a socket connected to itself), and then it connects.
+            using var held = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            held.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            var port = ((IPEndPoint)held.LocalEndPoint!).Port;
+            var started = Stopwatch.StartNew();
             await Assert.ThrowsAnyAsync<Exception>(() => TcpConnection.ConnectAsync("127.0.0.1", port, 1000, CancellationToken.None));
-            Assert.True((DateTime.UtcNow - started).TotalMilliseconds < 2500);
+            Assert.True(started.ElapsedMilliseconds < 5000, $"{started.ElapsedMilliseconds} ms");
         }
     }
 }

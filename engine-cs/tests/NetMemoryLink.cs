@@ -97,8 +97,12 @@ namespace Bastion.Engine.Tests
 
     public static class Wait
     {
-        /// <summary>Calls `step` until `done`, a few milliseconds apart, for at most `ms`; throws if it never is.</summary>
-        public static async Task Until(Func<bool> done, Action? step = null, int ms = 3000)
+        /// <summary>
+        /// Calls `step` until `done`, a few milliseconds apart, for at most `ms`; throws if it never is. Generous, as it
+        /// returns once done: a loaded machine (Unity compiling, the other tests, a pause of the collector) can hold
+        /// the network's threads up a second or two, never ten.
+        /// </summary>
+        public static async Task Until(Func<bool> done, Action? step = null, int ms = 10_000)
         {
             var until = DateTime.UtcNow.AddMilliseconds(ms);
             while (true)

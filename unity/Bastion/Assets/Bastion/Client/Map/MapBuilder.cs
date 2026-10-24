@@ -953,6 +953,38 @@ namespace Bastion.Client.Map
         /// A prop on the floor at `at`, turned `yaw` degrees (Unity's), fitted as 0.10.1 (syntyProps.ts prepare); over
         /// several tiles, to its footprint (mapView.ts fitted).
         /// </summary>
+        /// <summary>Each windy material (Nature's trees and vines sway with the game's clock), and its copy that stands still.</summary>
+        static readonly Dictionary<Material, Material> stills = new Dictionary<Material, Material>();
+        static readonly string[] Winds = { "_Big_Wind_Amount", "_Small_Wind_Amount", "_Big_WindAmount", "_Small_WindAmount", "_Leaves_WindAmount", "_Leaves_Wind_Amount" };
+
+        /// <summary>
+        /// A model's windy materials swapped for still ones: 0.10.1's trees don't sway, and in play mode the sway of
+        /// SyntyStudios_Trees came out as no number (24/10: the pines black there, in the clearing and in a town's square;
+        /// SSAO took it round them, and the props near them came out red). Each material's copy is made once.
+        /// </summary>
+        static void Still(GameObject model)
+        {
+            foreach (var r in model.GetComponentsInChildren<Renderer>(true))
+            {
+                var materials = r.sharedMaterials;
+                bool swapped = false;
+                for (int k = 0; k < materials.Length; k++)
+                {
+                    var m = materials[k];
+                    if (m == null || !Winds.Any(m.HasProperty)) continue;
+                    if (!stills.TryGetValue(m, out var still) || still == null)
+                    {
+                        still = new Material(m) { name = m.name + " (quieto)" };
+                        foreach (string w in Winds) if (still.HasProperty(w)) still.SetFloat(w, 0);
+                        stills[m] = still;
+                    }
+                    materials[k] = still;
+                    swapped = true;
+                }
+                if (swapped) r.sharedMaterials = materials;
+            }
+        }
+
         GameObject Place(Transform parent, string id, Vector3 at, float yaw, MapArt.Footprint footprint = null)
         {
             var art = MapArt.Prop(id);
@@ -961,7 +993,7 @@ namespace Bastion.Client.Map
                 Missing.Add(id);
                 return null;
             }
-            var prefab = prefabOf(art.fbx);
+            var prefab = prefabOf(MapArt.ModelKey(art));
             if (prefab == null)
             {
                 Missing.Add($"{id} ({art.pack}/{art.fbx})");
@@ -970,6 +1002,7 @@ namespace Bastion.Client.Map
             var holder = new GameObject(id).transform;
             holder.SetParent(parent, false);
             var model = UnityEngine.Object.Instantiate(prefab, holder, false);
+            Still(model);
             model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = Quaternion.identity;
             // Its box as it stands, then the longest side to `fit` tiles; centred (or on its origin) and on the floor.
@@ -979,6 +1012,8 @@ namespace Bastion.Client.Map
             float along = fit > 0 ? fit * MapSpace.Tile / Mathf.Max(size.x, size.z, 1e-4f) : 1;
             float across = (art.stretch ? 1 : along) * (art.thick > 0 ? art.thick : 1) * (footprint?.thin ?? 1);
             var scale = size.x >= size.z ? new Vector3(along, across, across) : new Vector3(across, across, along);
+            // A deck one stands on, one storey up whatever its width took (a guard tower's on its legs).
+            if (art.deck > 0) scale.y = MapSpace.Storey / art.deck;
             if (art.tall > 0) scale.y = art.tall * MapSpace.Tile / Mathf.Max(size.y, 1e-4f);
             var centre = art.origin ? Vector3.zero : bounds.center;
             model.transform.localScale = Vector3.Scale(model.transform.localScale, scale);
@@ -986,7 +1021,7 @@ namespace Bastion.Client.Map
             // Its own turn to face north (0.10.1's quarter turns, the other way round here), then where it goes.
             var turned = new GameObject("turn").transform;
             turned.SetParent(holder, false);
-            turned.localRotation = Quaternion.Euler(0, -(art.yaw - MapArt.UnityTurn(art.fbx)) * 90, 0);
+            turned.localRotation = Quaternion.Euler(0, -(art.yaw - MapArt.UnityTurn(art)) * 90, 0);
             if (art.shift != null && art.shift.Length >= 2) turned.localPosition = new Vector3(art.shift[0] * MapSpace.Tile, 0, -art.shift[1] * MapSpace.Tile);
             model.transform.SetParent(turned, false);
             holder.SetPositionAndRotation(at, Quaternion.Euler(0, yaw, 0));

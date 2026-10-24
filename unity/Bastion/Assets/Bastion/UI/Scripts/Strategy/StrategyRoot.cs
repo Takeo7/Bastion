@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Bastion.UI.Hud;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -31,6 +32,7 @@ namespace Bastion.UI.Strategy
         SquadScreen squad;
         DebriefScreen debrief;
         MapScreen map;
+        SettlementScreen settlement;
         ValleyMap valley;
         Label toast;
         float toastUntil;
@@ -47,6 +49,9 @@ namespace Bastion.UI.Strategy
 
         /// <summary>A soldier's bust by id (Arte's Portraits.Soldier); null, a silhouette.</summary>
         public Func<string, Texture> PortraitOf;
+
+        /// <summary>A base piece's picture by id, for the Asentamiento's palette (Arte's renders); null, the 0.10.1's.</summary>
+        public Func<string, Texture> PieceArtOf;
 
         /// <summary>
         /// Where the card of pad `i` of `n` of the line-up goes, in panel pixels (its top centre): Arte's
@@ -104,7 +109,9 @@ namespace Bastion.UI.Strategy
             debrief.Show(false);
             map = new MapScreen(root.Q("view"), tips, Icon, relay);
             map.Show(false);
-            skillBoard = new SkillBoardModal(root.Q("board"), relay, s => Sound?.Invoke(s)) { PortraitOf = id => PortraitOf?.Invoke(id) };
+            settlement = new SettlementScreen(root.Q("view"), tips, Icon, relay) { ArtOf = id => PieceArtOf?.Invoke(id) };
+            settlement.Show(false);
+            skillBoard = new SkillBoardModal(root.Q("board"), relay, s => Sound?.Invoke(s), tips) { PortraitOf = id => PortraitOf?.Invoke(id) };
             toast = root.Q<Label>("toast");
             Ui.Show(toast, false);
             Ui.Show(root.Q("proposal"), false);
@@ -142,8 +149,18 @@ namespace Bastion.UI.Strategy
 
         public void SetTop(TopView v) => top.Set(v);
         public void SetNav(NavView v) => nav.Set(v);
-        public void SetProposal(ProposalView p, WaitingView waiting) => proposal.Set(p, waiting);
-        public void SetModal(StrategyModalView v) => modal.Set(v);
+
+        public void SetProposal(ProposalView p, WaitingView waiting)
+        {
+            proposal.Set(p, waiting);
+            Dress();
+        }
+
+        public void SetModal(StrategyModalView v)
+        {
+            modal.Set(v);
+            Dress();
+        }
 
         /// <summary>
         /// Which screen is up (geoscape, engineering, barracks, facilities, squad, debrief): its panels shown, the others'
@@ -156,13 +173,76 @@ namespace Bastion.UI.Strategy
             squad.Show(view == "squad");
             debrief.Show(view == "debrief");
             map.Show(view == "geoscape");
+            settlement.Show(view == "facilities");
+            Dress();
         }
 
-        public void SetSoldiers(SoldiersView v) => soldiers.Set(v);
-        public void SetSkillBoard(SkillBoardView v) => skillBoard.Set(v);
-        public void SetArmory(ArmoryView v) => armory.Set(v);
-        public void SetSquad(SquadView v) => squad.Set(v);
-        public void SetDebrief(DebriefView v) => debrief.Set(v);
+        public void SetSoldiers(SoldiersView v)
+        {
+            soldiers.Set(v);
+            Dress();
+        }
+
+        public void SetSkillBoard(SkillBoardView v)
+        {
+            skillBoard.Set(v);
+            Dress();
+        }
+
+        public void SetArmory(ArmoryView v)
+        {
+            armory.Set(v);
+            Dress();
+        }
+
+        public void SetSquad(SquadView v)
+        {
+            squad.Set(v);
+            Dress();
+        }
+
+        public void SetDebrief(DebriefView v)
+        {
+            debrief.Set(v);
+            Dress();
+        }
+
+        public void SetSettlement(SettlementView v)
+        {
+            settlement.Set(v);
+            Dress();
+        }
+
+        /// <summary>
+        /// The big plates (the side columns, the Asentamiento's, «no hay misión», the windows, the board)
+        /// in their steel frame with rivets; the proposal riveted; what to press next slanted; the recruit's card dashed
+        /// (mixta.css: border-image, --m-rivets, clip-path; strategy.css .recruit-card). Once each, after every change,
+        /// since the screens make some of them again.
+        /// </summary>
+        void Dress()
+        {
+            if (root == null) return;
+            foreach (var cls in FramedPlates) root.Query(className: cls).ForEach(e => PlateFrame.Dress(e));
+            root.Query(className: "strat-proposal").ForEach(e => PlateFrame.Dress(e, false));
+            root.Query<Button>(className: "btn-primary").ForEach(Slant.Dress);
+            root.Query(className: "recruit-card").ForEach(DashedEdge.Dress);
+        }
+
+        /// <summary>The plates the 0.10.1 framed (.strat-left, .strat-right, .strat-center-top, the windows); not the mission's nor the debrief's, which sit in .squad-bottom.</summary>
+        static readonly string[] FramedPlates = { "strat-side", "settle-plate", "squad-empty", "strat-modal__card", "board-modal" };
+
+        /// <summary>
+        /// The Asentamiento's plates on screen, as fractions of it (0 to 1, from the top left): what Arte's camera
+        /// leaves the clearing clear of (Settlement.SetInsets). Fractions, so they hold at any size, the captures' too.
+        /// </summary>
+        public List<Rect> SettlementPanels()
+        {
+            var out_ = new List<Rect>();
+            var size = root?.panel?.visualTree.layout.size ?? Vector2.zero;
+            if (settlement == null || size.x <= 0 || size.y <= 0) return out_;
+            foreach (var r in settlement.Plates()) out_.Add(new Rect(r.x / size.x, r.y / size.y, r.width / size.x, r.height / size.y));
+            return out_;
+        }
 
         /// <summary>The Mapa: the valley is made the first time (its painting, the Marea's field, its camera).</summary>
         public void SetMap(MapView v)
@@ -175,6 +255,7 @@ namespace Bastion.UI.Strategy
                 map.Bind(valley);
             }
             map.Set(v);
+            Dress();
         }
         public void ToggleMenu(GameMenuView v) => menu.Toggle(v);
         public void CloseMenu() => menu.Close();

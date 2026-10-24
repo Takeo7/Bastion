@@ -117,7 +117,8 @@ namespace Bastion.UI.Strategy
         void Detail(ArmoryDetailView d, VisualElement parent)
         {
             if (!string.IsNullOrEmpty(d.Art)) Ui.Icon(icon, d.Art, "armory-art", parent);
-            Ui.Text(d.Kicker.ToUpperInvariant(), "sheet__kicker font-title", parent);
+            var kicker = Ui.Text(d.Kicker.ToUpperInvariant(), "sheet__kicker font-title", parent);
+            if (!string.IsNullOrEmpty(d.KickerTip)) tips.Attach(kicker, d.KickerTip);
             Ui.Text(d.Name.ToUpperInvariant(), "armory-detail__name font-title", parent);
             foreach (var t in d.Text) Ui.Text(StrategyText.Marked(t), "armory-detail__text", parent);
             if (d.Chips.Count > 0)
@@ -139,6 +140,7 @@ namespace Bastion.UI.Strategy
                     var row = Ui.El("armory-figure", box);
                     Ui.Text(f.Key, "armory-figure__key", row);
                     Ui.Text(f.Value, "armory-figure__value font-title", row);
+                    if (!string.IsNullOrEmpty(f.Tip)) tips.Attach(row, f.Tip);
                 }
                 if (d.Range != null) Range(d.Range, box);
             }
@@ -227,12 +229,13 @@ namespace Bastion.UI.Strategy
         static void SubHead(string text, VisualElement parent) => Ui.Text(text.ToUpperInvariant(), "sheet__head font-title", parent);
 
         /// <summary>The reach (arms.ts rangeChart): its name, a bar above or below the line at each distance, «casillas», its line.</summary>
-        static void Range(RangeView r, VisualElement parent)
+        void Range(RangeView r, VisualElement parent)
         {
             var head = Ui.El("armory-range__head", parent);
-            Ui.Text("ALCANCE", "armory-range__label font-title", head);
+            Ui.Text(Bastion.Engine.Lore.WeaponLabels.Reach.ToUpperInvariant(), "armory-range__label font-title", head);
             Ui.Text(r.Name, "armory-range__name font-title", head);
             var chart = Ui.El("armory-range", parent);
+            tips.Attach(chart, Bastion.Engine.Lore.WeaponLabels.Range);
             foreach (var s in r.Steps)
             {
                 var col = Ui.El("armory-range__col", chart);

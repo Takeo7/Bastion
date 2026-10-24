@@ -146,7 +146,8 @@
   "guardTower": {
    "pack": "military",
    "fbx": "SM_Bld_GuardTower_02",
-   "fit": 3
+   "fit": 3,
+   "deck": 3.58
   },
   "radioMast": {
    "pack": "apocalypse",

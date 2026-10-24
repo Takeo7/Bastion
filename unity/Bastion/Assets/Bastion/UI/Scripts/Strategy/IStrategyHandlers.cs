@@ -79,6 +79,20 @@ namespace Bastion.UI.Strategy
         void OnListen(string rumor);
         /// <summary>The sheet's buttons: deploy, squad, cancel, contact.</summary>
         void OnMapAction(string action);
+
+        // The Asentamiento.
+        /// <summary>A piece of the palette taken up, to put on the clearing.</summary>
+        void OnPieceTake(string piece);
+        /// <summary>Talar taken up.</summary>
+        void OnFell();
+        /// <summary>The piece in hand (or the axe) let go.</summary>
+        void OnBuildDrop();
+        /// <summary>The card's buttons: mend, raise, levelUp, rearm, dismantle (asks), dismantleYes, dismantleNo.</summary>
+        void OnPieceAction(string action);
+        /// <summary>The card's ✕: the piece let go.</summary>
+        void OnPieceClose();
+        /// <summary>«Andar por la base».</summary>
+        void OnWalk();
     }
 
     /// <summary>Nobody answers: everything is ignored (before Bind).</summary>
@@ -120,6 +134,12 @@ namespace Bastion.UI.Strategy
         public void OnWait() { }
         public void OnListen(string rumor) { }
         public void OnMapAction(string action) { }
+        public void OnPieceTake(string piece) { }
+        public void OnFell() { }
+        public void OnBuildDrop() { }
+        public void OnPieceAction(string action) { }
+        public void OnPieceClose() { }
+        public void OnWalk() { }
     }
 
     /// <summary>The handlers the pieces hold, so Bind can change who answers without making them again.</summary>
@@ -161,5 +181,11 @@ namespace Bastion.UI.Strategy
         public void OnWait() => Target.OnWait();
         public void OnListen(string rumor) => Target.OnListen(rumor);
         public void OnMapAction(string action) => Target.OnMapAction(action);
+        public void OnPieceTake(string piece) => Target.OnPieceTake(piece);
+        public void OnFell() => Target.OnFell();
+        public void OnBuildDrop() => Target.OnBuildDrop();
+        public void OnPieceAction(string action) => Target.OnPieceAction(action);
+        public void OnPieceClose() => Target.OnPieceClose();
+        public void OnWalk() => Target.OnWalk();
     }
 }

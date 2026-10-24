@@ -322,15 +322,15 @@ namespace Bastion.UI.Strategy
                 SubHead("Rasgos", parent);
                 Chips(s.Traits, parent);
             }
-            SubHead(s.ArmsHead, parent);
+            tips.Attach(SubHead(s.ArmsHead, parent), StrategyText.Sheet.ArmsTip);
             foreach (var p in s.Arms) Pick(p, parent);
             if (s.Armor != null) Armor(s.Armor, parent);
-            SubHead(s.BeltHead, parent);
+            tips.Attach(SubHead(s.BeltHead, parent), StrategyText.Sheet.BeltTip);
             foreach (var p in s.Belt) Pick(p, parent);
             if (s.Experience != null) Experience(s.Experience, parent);
         }
 
-        static void SubHead(string text, VisualElement parent) => Ui.Text(text.ToUpperInvariant(), "sheet__head font-title", parent);
+        static Label SubHead(string text, VisualElement parent) => Ui.Text(text.ToUpperInvariant(), "sheet__head font-title", parent);
 
         /// <summary>A choice: «LABEL Value ▾» and its lines; open, its options under it.</summary>
         void Pick(PickView p, VisualElement parent)
@@ -408,8 +408,13 @@ namespace Bastion.UI.Strategy
                 var top = Ui.El("skill-row__top", row);
                 var color = SkillHex.Colors[Mathf.Clamp(r.Line, 0, SkillHex.Colors.Length - 1)];
                 Ui.El("skill-row__dot", top).style.backgroundColor = color;
-                Ui.Text(r.Name, "skill-row__name font-title", top);
-                if (!string.IsNullOrEmpty(r.Growth)) Ui.Text(r.Growth, "skill-row__growth font-title", top);
+                var name = Ui.Text(r.Name, "skill-row__name font-title", top);
+                if (!string.IsNullOrEmpty(r.Tip)) tips.Attach(name, r.Tip);
+                if (!string.IsNullOrEmpty(r.Growth))
+                {
+                    var growth = Ui.Text(r.Growth, "skill-row__growth font-title", top);
+                    if (!string.IsNullOrEmpty(r.GrowthTip)) tips.Attach(growth, r.GrowthTip);
+                }
                 var bottom = Ui.El("skill-row__bottom", row);
                 var bar = Ui.El("skill-row__bar", bottom);
                 for (var i = 0; i < r.Total; i++)
@@ -425,8 +430,11 @@ namespace Bastion.UI.Strategy
             Ui.Text(x.Rank.ToUpperInvariant(), "skill-rank__name font-title", rankTop);
             var marks = Ui.El("skill-rank__bar", rankTop);
             for (var i = 0; i < x.RankTotal; i++) Ui.El(i < x.RankFilled ? "skill-rank__seg skill-rank__seg--on" : "skill-rank__seg", marks);
-            Ui.Text(x.Will, "skill-rank__will", rankTop);
+            tips.Attach(marks, StrategyText.Sheet.RankTip);
+            var will = Ui.Text(x.Will, "skill-rank__will", rankTop);
+            if (!string.IsNullOrEmpty(x.WillTip)) tips.Attach(will, x.WillTip);
             Ui.Text(x.RankLine, "skill-rank__line", rank);
+            if (!string.IsNullOrEmpty(x.Gives)) Ui.Text(x.Gives, "skill-rank__line skill-rank__gives", rank);
             var board = new Button(handlers.OnBoard) { text = x.Board.ToUpperInvariant() };
             Ui.AddClasses(board, "skill-board font-title");
             board.EnableInClassList("skill-board--pulse", x.BoardPulse);

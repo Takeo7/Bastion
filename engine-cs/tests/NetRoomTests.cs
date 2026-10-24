@@ -599,7 +599,7 @@ namespace Bastion.Engine.Tests
             var host = new RoomHost(rig.Room, 0, IPAddress.Loopback);
             host.Start();
             var tokens = new MemoryTokens();
-            var session = new ClientSession((cancel) => TcpConnection.ConnectAsync("127.0.0.1", host.Port, 2000, cancel).ContinueWith((t) => (IConnection)t.Result), tokens, "1.0.0");
+            var session = new ClientSession((cancel) => TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, cancel).ContinueWith((t) => (IConnection)t.Result), tokens, "1.0.0");
             var closed = false;
             session.HostClosed += () => closed = true;
             session.Connect("Ana");

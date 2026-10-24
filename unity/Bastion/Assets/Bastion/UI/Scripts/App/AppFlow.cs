@@ -185,7 +185,7 @@ namespace Bastion.UI.App
         /// panel (AppFlow's own), HudRoot, and the mission over the network (CombatSession: the controller, the camera's
         /// rig and the marks).
         /// </summary>
-        void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, LoadSceneMode mode)
         {
             loading = false;
             GameSettings.InMenu = scene.name != battleScene;

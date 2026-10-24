@@ -4,8 +4,9 @@
 // accessories and the base's pieces. Weapons and armour are never bought: the
 // level opens what the Taller can make (CRAFTS, docs/FASE4.md), the armour is
 // for everyone, and some levels bring weapons to the Armería (LEVEL_ARMS).
-// campaign.ts is not ported yet: these functions take what they read of a campaign (`level`, `techs`, `crafted`,
-// `foundWeapons`, a soldier's `id`) as arguments, not a CampaignState; FoundWeapon is here until campaign.ts is.
+// These functions take what they read of a campaign (`level`, `techs`, `crafted`, `foundWeapons`, a soldier's `id`) as
+// arguments; each one that takes a campaign in TypeScript has also its overload with TypeScript's signature, which takes
+// the CampaignState (and the CampaignSoldier) and gives the same.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -120,20 +121,6 @@ namespace Bastion.Engine
         public int Level { get; set; }
         /// <summary>It rises levels (2 and 3); missing, as if it did.</summary>
         public bool? Building { get; set; }
-    }
-
-    // TODO(port): campaign.FoundWeapon: campaign.ts's type, here until campaign.ts is ported (then it moves there).
-    /// <summary>A weapon of the Armería (docs/FASE8.md §A).</summary>
-    public sealed class FoundWeapon
-    {
-        public string Id { get; set; } = "";
-        public string Kind { get; set; } = ""; // FoundWeaponIds
-        /// <summary>The soldier who carries it; null, on the rack. Lost with them if they fall.</summary>
-        public string? Holder { get; set; }
-        /// <summary>0 to 100 (docs/FASE9.md §5); absent, 100. Below 30 it is «Gastada»; at 0, «Rota».</summary>
-        public double? Condition { get; set; }
-        /// <summary>What is mounted on it, MOD_SLOTS at most.</summary>
-        public List<string>? Mods { get; set; } // WeaponModIds
     }
 
     public static class Progression
@@ -347,5 +334,32 @@ namespace Bastion.Engine
                 .SelectMany((f) => new[] { 2, 3 }.Where((to) => UpgradeLevel(f.Level, to) == level).Select((to) => $"{f.Name}, nivel {to}")));
             return @out;
         }
+
+        // ------------------------------------------------------------- with a campaign
+
+        // progression.ts's own signatures, `c` the campaign and `s` a soldier: the same as the ones above, given what they
+        // read of them.
+
+        public static int BastionLevel(CampaignState c) => BastionLevel(c.Level);
+
+        public static bool HasTech(CampaignState c, string id) => HasTech(c.Level, c.Techs, id);
+
+        public static bool ItemUnlocked(CampaignState c, string id) => ItemUnlocked(c.Level, id);
+
+        public static int SpareMags(CampaignState c) => SpareMags(c.Crafted);
+
+        public static bool HasCrafted(CampaignState c, string id) => HasCrafted(c.Crafted, id);
+
+        public static int BaseArmorTier(CampaignState c) => BaseArmorTier(c.Crafted);
+
+        public static FoundWeapon? FoundWeaponOf(CampaignState c, CampaignSoldier s) => FoundWeaponOf(c.FoundWeapons, s.Id);
+
+        public static FoundWeapon? MeleeWeaponOf(CampaignState c, CampaignSoldier s) => MeleeWeaponOf(c.FoundWeapons, s.Id);
+
+        /// <remarks>`armorTier(c, _s?)`: the soldier changes nothing.</remarks>
+        public static int ArmorTier(CampaignState c, CampaignSoldier? s = null) => ArmorTier(c.Crafted);
+
+        /// <remarks>`nextTierBlocker(c, _s, kind)`: the soldier changes nothing.</remarks>
+        public static string? NextTierBlocker(CampaignState c, CampaignSoldier? s, string kind) => NextTierBlocker(c.Level, c.Techs, c.Crafted, kind);
     }
 }

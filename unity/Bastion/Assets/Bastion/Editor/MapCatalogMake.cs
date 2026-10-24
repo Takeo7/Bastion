@@ -42,6 +42,7 @@ namespace Bastion.EditorTools
             var found = Enumerable.Range(0, modelNames.Count).Where(k => models[k] != null).ToList();
             catalog.modelNames = found.Select(k => modelNames[k]).ToArray();
             catalog.models = found.Select(k => models[k]).ToArray();
+            catalog.modelTurns = found.Select(k => MapLab.UnityTurnOf(AssetDatabase.GetAssetPath(models[k]))).ToArray();
             var foundMaterials = Enumerable.Range(0, materialNames.Count).Where(k => materials[k] != null).ToList();
             catalog.materialNames = foundMaterials.Select(k => materialNames[k]).ToArray();
             catalog.materials = foundMaterials.Select(k => materials[k]).ToArray();
@@ -63,7 +64,7 @@ namespace Bastion.EditorTools
             foreach (string id in Merged)
             {
                 var art = MapArt.Prop(id);
-                var model = art?.fbx != null ? prefabOf(art.fbx) : null;
+                var model = art?.fbx != null ? prefabOf(MapArt.ModelKey(art)) : null;
                 if (model == null) continue;
                 foreach (var f in model.GetComponentsInChildren<MeshFilter>(true))
                     if (f.sharedMesh != null && !f.sharedMesh.isReadable) sources.Add(AssetDatabase.GetAssetPath(f.sharedMesh));

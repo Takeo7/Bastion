@@ -572,6 +572,11 @@
     white-space: normal;
 }
 
+/* What the rank gives now (skillSheet.ts sk-vet-gives): «Voluntad 40 · 2 acciones por turno». */
+.skill-rank__gives {
+    -unity-font-style: normal;
+}
+
 .skill-board {
     margin-top: 8px;
     height: 30px;

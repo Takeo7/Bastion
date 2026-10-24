@@ -132,8 +132,16 @@ namespace Bastion.Client.Map
         void Make(GameState s, GroundMap ground, HashSet<int> only)
         {
             var placed = new Dictionary<int, List<(string id, Matrix4x4 m, bool cast)>>();
+            // Nothing grows through the base's buildings, nor through what is left of them (mapView.ts, by where it lands).
+            var pieces = BasePieces.MapOf(s);
             foreach (var (id, x, y, m, cast) in Scatter(s, ground, only))
             {
+                if (pieces != null)
+                {
+                    int tx = Mathf.FloorToInt(m.m03 / MapSpace.Tile), ty = Mathf.FloorToInt(-m.m23 / MapSpace.Tile);
+                    int k = tx >= 0 && ty >= 0 && tx < s.Width && ty < s.Height ? pieces.at[ty * s.Width + tx] : -1;
+                    if (k >= 0 && pieces.spots[k].def.Kind == PieceKinds.Building) continue;
+                }
                 int c = ChunkOf(Mathf.Clamp(x, 0, width - 1), Mathf.Clamp(y, 0, height - 1));
                 if (!placed.TryGetValue(c, out var list)) placed[c] = list = new List<(string, Matrix4x4, bool)>();
                 list.Add((id, m, cast));

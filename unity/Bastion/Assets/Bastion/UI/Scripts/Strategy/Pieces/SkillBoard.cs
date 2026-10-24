@@ -301,9 +301,10 @@ namespace Bastion.UI.Strategy
                 var line = Line;
                 // The core shows its picture in the accent on a dark face (hexBoard.css .hx.core); the others bought, in their colour.
                 var isCore = Cell.Id == Board.Core;
-                var face = isCore ? new Color(0.23f, 0.19f, 0.1f) : State == "unlocked" ? line : State == "open" ? Color.Lerp(new Color(0.11f, 0.12f, 0.13f), line, 0.16f) : Color.Lerp(new Color(0.1f, 0.105f, 0.11f), line, 0.05f);
-                // Out of reach: nearly gone, its sector's tint in the face and hardly an edge (hexBoard.css .hx.locked).
-                var edge = State == "unlocked" ? Color.Lerp(line, Color.white, 0.3f) : State == "open" ? new Color(line.r, line.g, line.b, 0.55f) : new Color(line.r, line.g, line.b, 0.012f);
+                // Out of reach: nearly gone, as hexBoard.css .hx.locked mixes it: 4 % of its sector's colour in the face and
+                // 12 % in an edge hardly lighter than it, both opaque.
+                var face = isCore ? new Color(0.23f, 0.19f, 0.1f) : State == "unlocked" ? line : State == "open" ? Color.Lerp(new Color(0.11f, 0.12f, 0.13f), line, 0.16f) : Color.Lerp(new Color32(0x12, 0x15, 0x17, 0xff), line, 0.04f);
+                var edge = State == "unlocked" ? Color.Lerp(line, Color.white, 0.3f) : State == "open" ? new Color(line.r, line.g, line.b, 0.55f) : Color.Lerp(new Color32(0x1e, 0x22, 0x25, 0xff), line, 0.12f);
                 var rim = Selected || focusController?.focusedElement == this;
                 if (rim) edge = new Color32(0xf2, 0xc2, 0x30, 0xff);
                 p.fillColor = face;

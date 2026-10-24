@@ -96,7 +96,7 @@ namespace Bastion.Engine
             {
                 case "garden": return new Figure($"+{5 * l}", $"+{5 * l} raciones por misión");
                 case "quarters": return new Figure($"+{1 + l}", $"+{1 + l} camas");
-                case "infirmary": return new Figure($"×{1 + l}", $"Heridas: curan ×{1 + l} de rápido");
+                case "infirmary": return new Figure($"×{1 + l}", $"Heridas: curan {1 + l} veces más rápido"); // Fixed in C# only (text-fixes.ts): lore.ts says «curan ×3 de rápido»
                 case "workshop": return new Figure($"−{25 + 10 * (l - 1)} %", $"Accesorios −{25 + 10 * (l - 1)} %");
                 case "range":
                 {
@@ -339,6 +339,15 @@ namespace Bastion.Engine
             var name = PieceTexts.All[piece].Name;
             if (!string.IsNullOrEmpty(blocked)) return $"{name} · {blocked}";
             return $"{name} · {BuildCostLine(supplies, parts)}{(vote ? $" · {BuildText.Vote}" : "")}";
+        }
+
+        /// <summary>
+        /// By the pointer, felling: «Talar un árbol · Cuesta 3 §», «Talar 12 árboles · Cuesta 36 §». lore.ts said only
+        /// «· 3 §», which doesn't say whether it is paid or earned; «Cuesta», as PlaceHint (Gameplay, 24/10).
+        /// </summary>
+        public static string FellHint(int trees)
+        {
+            return $"Talar {(trees == 1 ? "un árbol" : $"{trees} árboles")} · {BuildCostLine(trees * Base.FellCost)}";
         }
 
         /// <summary>A piece under the pointer: «Barricada de sacos · 5/15», «Foso con pinchos · por reponer», «Taller · nivel 2». `state`: a PieceState key.</summary>

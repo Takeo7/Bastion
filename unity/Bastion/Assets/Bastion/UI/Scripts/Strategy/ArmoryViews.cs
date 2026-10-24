@@ -64,6 +64,8 @@ namespace Bastion.UI.Strategy
     [Serializable]
     public sealed class ArmoryDetailView
     {
+        /// <summary>The kicker's help («Se equipa en la ficha del soldado; si cae, se pierde»); null, none.</summary>
+        public string KickerTip;
         /// <summary>«ACCESORIO · CINTURÓN», «ARMA · MANO», «TALLER · MEJORA»…</summary>
         public string Kicker;
         public string Name;

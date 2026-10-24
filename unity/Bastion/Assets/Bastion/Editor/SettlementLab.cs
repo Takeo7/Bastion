@@ -16,7 +16,8 @@ namespace Bastion.EditorTools
     /// (seed 3) with a clearing felled round its middle and the same pieces put in it, or a golden base (BASTION_BASE =
     /// a case of engine-cs/golden/step3/base.json, as base-70-siege), drawn as the map its siege would be fought on, with
     /// nobody on it (clearingArt.ts clearingState). Its camera as the lab's look(x, z, distance, yaw).
-    ///   BASTION_BARE=1 none of the lab's pieces · BASTION_NIVEL=n the base's level · BASTION_SEED=s the fresh base's seed
+    ///   BASTION_BARE=1 none of the lab's pieces · BASTION_NIVEL=n the base's level · BASTION_DESGASTE=w the Bastion worn 0 to 3
+    ///   BASTION_SEED=s the fresh base's seed · BASTION_BASE_FILE=base.json a base of one's own (as 0.10.1's __claro.base takes it)
     ///   BASTION_LOOK=x,z,distance[,yaw] the camera (the lab's look; yaw in radians, 0 from the south-east) · BASTION_CERCO=1
     ///   BASTION_SOMBRAS=m how far the shadows reach (90). To weigh the light against 0.10.1's: BASTION_GRADE=0 without the
     ///   grade · BASTION_SOL=0 without sun nor fill · with it BASTION_CIELO=0 without the sky's light, and BASTION_NIEBLA=1
@@ -30,7 +31,21 @@ namespace Bastion.EditorTools
             var @base = Base();
             var state = ClearingState(@base);
             MapLab.Lighting(true);
-            MapLab.Map(state, "claro");
+            // For shots in play mode (Shots -shotPlay: UI's panels over it), the map is made once the game runs, as the game
+            // makes it. Made before, in edit mode, and taken into play mode without the scene reloaded, its Synty models came
+            // out there with another's material (flat red, or the pines black; with a property block on the pines, the
+            // tufts and the caravan red instead): the SRP Batcher's, 24/10.
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-shotPlay") >= 0)
+            {
+                void Entered(UnityEditor.PlayModeStateChange change)
+                {
+                    if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
+                    UnityEditor.EditorApplication.playModeStateChanged -= Entered;
+                    MapLab.Map(state, "claro");
+                }
+                UnityEditor.EditorApplication.playModeStateChanged += Entered;
+            }
+            else MapLab.Map(state, "claro");
             int c = @base.Width / 2;
             var look = Environment.GetEnvironmentVariable("BASTION_LOOK")?.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
             Look(look != null && look.Length >= 3 ? look[0] : c, look != null && look.Length >= 3 ? look[1] : c, look != null && look.Length >= 3 ? look[2] : 34, look != null && look.Length >= 4 ? look[3] : 0);
@@ -131,9 +146,73 @@ namespace Bastion.EditorTools
             UnityEngine.Object.DestroyImmediate(target);
         }
 
-        /// <summary>The lab's base (clearingLab.ts), or a golden one.</summary>
+        /// <summary>
+        /// Each prop's model box as it comes (BASTION_IDS, MapArt ids, comma-separated, or `all`), in its own frame, in metres: to
+        /// tell how Unity's model stands from 0.10.1's GLB of it (a quarter or half turn, Unity's mirror against three's).
+        ///   BASTION_IDS=plywoodShed,bastionHouse unity/tools/unity.sh -executeMethod Bastion.EditorTools.SettlementLab.Boxes -quit
+        /// </summary>
+        public static void Boxes()
+        {
+            var prefabs = MapLab.Prefabs();
+            string asked = Environment.GetEnvironmentVariable("BASTION_IDS") ?? "";
+            foreach (string id in asked == "all" ? MapArt.Ids().ToArray() : asked.Split(','))
+            {
+                var art = MapArt.Prop(id);
+                var prefab = art != null && !string.IsNullOrEmpty(art.fbx) ? prefabs(MapArt.ModelKey(art)) : null;
+                if (prefab == null)
+                {
+                    Debug.Log($"[box] {id}: no model");
+                    continue;
+                }
+                var o = (GameObject)UnityEngine.Object.Instantiate(prefab);
+                o.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                var renderers = o.GetComponentsInChildren<Renderer>();
+                if (renderers.Length == 0)
+                {
+                    Debug.Log($"[box] {id}: no renderer");
+                    UnityEngine.Object.DestroyImmediate(o);
+                    continue;
+                }
+                var b = renderers[0].bounds;
+                foreach (var r in renderers) b.Encapsulate(r.bounds);
+                string F(Vector3 v) => FormattableString.Invariant($"[{v.x:0.000}, {v.y:0.000}, {v.z:0.000}]");
+                Debug.Log($"[box] {id} {UnityEditor.AssetDatabase.GetAssetPath(prefab)} min {F(b.min)} max {F(b.max)} centre {F(b.center)}");
+                UnityEngine.Object.DestroyImmediate(o);
+            }
+        }
+
+        /// <summary>
+        /// Many views of one clearing in one run, each as Clearing's camera (the lab's look): BASTION_VIEWS a JSON file of
+        /// [{name, x, z, d, yaw}], BASTION_OUT the folder their PNGs go to (name.png), 1600×900 unless BASTION_SIZE=w×h;
+        /// the clearing as Clearing's env says (BASTION_BASE_FILE a base of one's own, as 0.10.1's __claro.base takes it).
+        ///   BASTION_BASE_FILE=n1.json BASTION_VIEWS=views.json BASTION_OUT=out unity/tools/unity.sh -executeMethod Bastion.EditorTools.SettlementLab.Views -quit
+        /// </summary>
+        public static void Views()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            Clearing();
+            var camera = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).First(k => k.name == "Shot camera");
+            var size = (Environment.GetEnvironmentVariable("BASTION_SIZE") ?? "1600x900").Split('x').Select(int.Parse).ToArray();
+            camera.aspect = (float)size[0] / size[1];
+            string folder = Environment.GetEnvironmentVariable("BASTION_OUT") ?? throw new ArgumentException("BASTION_OUT is missing");
+            Directory.CreateDirectory(folder);
+            var views = Newtonsoft.Json.Linq.JArray.Parse(File.ReadAllText(Environment.GetEnvironmentVariable("BASTION_VIEWS") ?? throw new ArgumentException("BASTION_VIEWS is missing")));
+            // A frame thrown away first, as Shots does (the first one a run draws has no ambient light nor reflections yet).
+            Shots.Render(camera, size[0], size[1], null);
+            foreach (var v in views)
+            {
+                Look((float)v["x"], (float)v["z"], (float)v["d"], (float)v["yaw"]);
+                Shots.Render(camera, size[0], size[1], Path.Combine(folder, (string)v["name"] + ".png"));
+            }
+            Debug.Log($"[claro] {views.Count} views in {Path.GetFullPath(folder)}");
+        }
+
+        /// <summary>The lab's base (clearingLab.ts), a golden one, or one from a file.</summary>
         static BaseState Base()
         {
+            string file = Environment.GetEnvironmentVariable("BASTION_BASE_FILE");
+            if (file != null)
+                return Newtonsoft.Json.JsonConvert.DeserializeObject<BaseState>(File.ReadAllText(file), new Newtonsoft.Json.JsonSerializerSettings { ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver() });
             string golden = Environment.GetEnvironmentVariable("BASTION_BASE");
             if (golden != null)
             {
@@ -142,9 +221,18 @@ namespace Bastion.EditorTools
                 return found["options"]["map"]["base"].ToObject<BaseState>(Newtonsoft.Json.JsonSerializer.Create(new Newtonsoft.Json.JsonSerializerSettings { ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver() }));
             }
             var @base = Bastion.Engine.Base.FreshBase(new Rng(int.TryParse(Environment.GetEnvironmentVariable("BASTION_SEED"), out int seed) ? seed : 3));
-            if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_NIVEL"), out int level)) @base.Level = level;
             int c = @base.Width / 2;
-            if (Environment.GetEnvironmentVariable("BASTION_BARE") == "1") return @base;
+            if (Environment.GetEnvironmentVariable("BASTION_BARE") != "1") Pieces(@base, c);
+            // The Bastion at another level, worn 0 to 3 (the lab's nivel(n, desgaste), once its pieces are in: the caravan's health).
+            if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_NIVEL"), out int level)) @base.Level = level;
+            if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_DESGASTE"), out int wear) && @base.Pieces.Find(p => p.Piece == PieceIds.Caravan) is BasePiece caravan)
+                caravan.Hp = new[] { 40, 26, 12, 0 }[Mathf.Clamp(wear, 0, 3)];
+            return @base;
+        }
+
+        /// <summary>The lab's pieces round the caravan (clearingLab.ts), on a clearing felled round the middle `c`.</summary>
+        static void Pieces(BaseState @base, int c)
+        {
             for (int y = c - 9; y <= c + 9; y++)
                 for (int x = c - 11; x <= c + 11; x++)
                     Bastion.Engine.Base.FellTree(@base, x, y);
@@ -172,7 +260,6 @@ namespace Bastion.EditorTools
                 for (int x = c - 7; x <= c; x++) Put("palisade", x, c - 2);
                 Put("tower", c + 4, c + 1);
             }
-            return @base;
         }
 
         /// <summary>What the ambient probe gives a surface facing up (URP's SampleSH, linear).</summary>

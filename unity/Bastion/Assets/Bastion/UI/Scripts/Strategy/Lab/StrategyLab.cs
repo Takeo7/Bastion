@@ -1,6 +1,9 @@
 using System.Collections.Generic;
+using System.Linq;
 using Bastion.UI.Hud;
 using UnityEngine;
+using EngineBase = Bastion.Engine.Base;
+using EngineLore = Bastion.Engine.Lore;
 
 namespace Bastion.UI.Strategy
 {
@@ -8,7 +11,9 @@ namespace Bastion.UI.Strategy
     /// The base's screens with made-up views, as the 0.10.1 showed its sample campaign (day 20, the Bastion a «casa
     /// móvil», two players; .dev-snapshots/ui/estrategia-0101/): for captures next to it with the same framing.
     /// `BASTION_ESTRATEGIA` picks what is open: propuesta, propuesta-mia, espera, acontecimiento, acontecimiento-voto,
-    /// diario, fin, menu (none: the plain base).
+    /// diario, fin, menu, soldados, personalizar, tablero, armeria, armeria-arma, escuadra, parte, mapa, mapa-mision,
+    /// mapa-zona, asentamiento, asentamiento-mano, asentamiento-talar, asentamiento-bastion, asentamiento-barracon,
+    /// asentamiento-muro, asentamiento-foso, volver (none: the plain base).
     /// </summary>
     public sealed class StrategyLab : MonoBehaviour, IStrategyHandlers
     {
@@ -27,9 +32,10 @@ namespace Bastion.UI.Strategy
             if (shown || root == null || !root.Ready) return;
             shown = true;
             root.Bind(this);
-            root.ClockOf = () => ("Quedan 24 s: si no contestas, cuenta como un sí.", 0.62f, false);
-            root.SetTop(Top(Case.StartsWith("propuesta")));
-            var screen = Case.StartsWith("armeria") ? "engineering" : Case == "escuadra" ? "squad" : Case == "parte" ? "debrief" : Case.StartsWith("mapa") ? "geoscape" : "barracks";
+            var mineAsked = Case == "propuesta-mia";
+            root.ClockOf = () => (EngineLore.ProposalClock("0:24", mineAsked), 0.62f, false);
+            root.SetTop(Top(Case == "propuesta" ? "theirs" : mineAsked ? "mine" : null));
+            var screen = Case.StartsWith("armeria") ? "engineering" : Case == "escuadra" ? "squad" : Case == "parte" ? "debrief" : Case.StartsWith("mapa") ? "geoscape" : Case.StartsWith("asentamiento") ? "facilities" : "barracks";
             root.ValleyCamera = Camera.main;
             root.SetNav(Nav(screen));
             // Soldados under everything else, as the 0.10.1's shots (Rafael, Ana's, picked while she is away).
@@ -42,6 +48,7 @@ namespace Bastion.UI.Strategy
             if (screen == "squad") root.SetSquad(Squad());
             if (screen == "debrief") root.SetDebrief(Debrief());
             if (screen == "geoscape") root.SetMap(Map(Case));
+            if (screen == "facilities") root.SetSettlement(Settlement(Case));
             var soldiers = Soldiers();
             if (Case == "personalizar") soldiers.Customizer = Customizer();
             root.SetSoldiers(soldiers);
@@ -51,22 +58,40 @@ namespace Bastion.UI.Strategy
             if (Case == "diario") root.SetModal(Diary());
             if (Case == "fin") root.SetModal(new StrategyModalView { Kind = "end", Kicker = "Fin de la campaña", Title = "Campaña perdida", Text = "No queda nadie que conteste por radio. El Bastión se queda a oscuras.", Buttons = { "Volver al menú" } });
             if (Case == "menu") root.ToggleMenu(new GameMenuView { Abandon = false, QuitLabel = "Salir de Bastión" });
+            if (Case == "volver") root.SetModal(new StrategyModalView { Kind = "leave", Kicker = StrategyText.Leave.Kicker, Title = StrategyText.Leave.Title, Text = StrategyText.Leave.Text("Ana"), Buttons = { StrategyText.Leave.Yes, StrategyText.Leave.No } });
         }
 
-        static TopView Top(bool owed)
+        static TipView Tip(string name, string text) => new TipView { Name = name, Lines = StrategyText.Sentences(text) };
+
+        /// <summary>The strip as the sample's (renderTop), its tooltips from Lore; `proposal`: «theirs», «mine» or null.</summary>
+        static TopView Top(string proposal)
         {
             var v = new TopView
             {
-                Outings = 8, OutingsTip = "Salidas: misiones hechas. Cada una cuenta para el nivel del Bastión.",
-                Siege = "ASEDIO EN 3 MISIONES", SiegeTip = "Los muertos vienen a por el Bastión dentro de 3 misiones.",
-                Day = 20, DayTip = "Día 20. Cada misión son 2 días.",
-                Level = "CASA MÓVIL", LevelFilled = 6, LevelTotal = 10, LevelTip = "Para la Casa grande: 150 § y 10 misiones hechas (llevas 8).",
-                Doom = "INFESTACIÓN", DoomFilled = 5, DoomMax = 12, DoomFigure = "5/12", DoomTip = "La Marea avanza. Si se llena, la campaña está perdida. Quemar Nidos la hace retroceder.",
+                Outings = 8, OutingsTip = Tip("Salidas", EngineLore.TimeHelp(Level)),
+                Siege = "ASEDIO EN 3 MISIONES", SiegeTip = Tip(EngineLore.SiegeText.Name, EngineLore.SiegeWarning(3)),
+                Day = 20, DayTip = Tip("Día 20", EngineLore.TimeHelp(Level)),
+                Level = EngineLore.BastionLevelName(Level).ToUpperInvariant(), LevelFilled = 6, LevelTotal = 10,
+                // The sample's nextLevel: the casa móvil con porche, 240 §, 6 missions (levelBadge).
+                LevelTip = new TipView { Name = EngineLore.BastionLevelName(Level), Lines = { $"Para {EngineLore.BastionLevelThe(Level + 1)}: 240 § y 6 misiones hechas (llevas 8).", EngineLore.LevelText.About } },
+                Doom = EngineLore.DoomName(Level).ToUpperInvariant(), DoomFilled = 5, DoomMax = 12, DoomFigure = "5/12",
+                // Before level 4 nobody knows of the Marea: its name and the glossary's line only from then (renderTop).
+                DoomTip = Tip(EngineLore.DoomName(Level), $"{EngineLore.DoomStatus(Level, 5)}. Si se llena, la campaña está perdida. Quemar Nidos la hace retroceder."),
             };
-            v.Stores.Add(new StoreView { Id = "credits", Value = "540", Owed = owed ? "−30" : null, OwedTip = "Pendiente: se paga cuando Arturo diga que sí", TipName = "Suministros", Tip = { "+40 con el convoy, en 2 misiones.", "La moneda del Bastión: construir, comprar, reclutar y contactar." } });
-            v.Stores.Add(new StoreView { Id = "medicines", Value = "4", TipName = "Medicinas", Tip = { "Curan heridas y tratan a los mordidos." } });
-            v.Stores.Add(new StoreView { Id = "food", Value = "12", TipName = "Raciones", Tip = { "−6 por misión.", "+4 de los Huertos.", "Hay para 6 misiones." } });
-            v.Stores.Add(new StoreView { Id = "parts", Value = "9", TipName = "Piezas", Tip = { "Para el Taller: arreglar armas y hacer lo suyo." } });
+            var credits = new StoreView { Id = "credits", Value = "540", TipName = "Suministros", Tip = { $"+140 con el convoy, {EngineLore.InMissions(1)}" } };
+            credits.Tip.AddRange(StrategyText.Sentences(EngineLore.Glossary["Suministros"]));
+            if (proposal != null)
+            {
+                credits.Owed = "−30";
+                credits.OwedTip = proposal == "mine" ? "Pendiente: se paga cuando Ana diga que sí" : "Pendiente: se paga si aceptas la propuesta de Ana";
+            }
+            v.Stores.Add(credits);
+            v.Stores.Add(new StoreView { Id = "medicines", Value = "4", TipName = "Medicinas", Tip = StrategyText.Sentences(EngineLore.Glossary["Medicinas"]) });
+            // The sample's rations: 12, 8 a mission, no Huerto (rationsTip).
+            var food = new StoreView { Id = "food", Value = "12", TipName = "Raciones", Tip = { "−8 por misión", "Hay para 1 misión." } };
+            food.Tip.AddRange(StrategyText.Sentences(EngineLore.RationsHelp()));
+            v.Stores.Add(food);
+            v.Stores.Add(new StoreView { Id = "parts", Value = "9", TipName = "Piezas", Tip = StrategyText.Sentences(EngineLore.Glossary["Piezas"]) });
             return v;
         }
 
@@ -74,7 +99,7 @@ namespace Bastion.UI.Strategy
         const string Ana = "#a678ff";
 
         static SoldierTileView Tile(string id, string name, string accent, float[] skills, int rank = 0, bool points = false, string tag = null, string tone = null, bool selected = false) =>
-            new SoldierTileView { Id = id, Name = name, Accent = accent, Skills = skills, Rank = rank, Points = points, PointsTip = "Talento por elegir", Tag = tag, TagTone = tone, Selected = selected };
+            new SoldierTileView { Id = id, Name = name, Accent = accent, Skills = skills, Rank = rank, Points = points, PointsTip = "Puntos por gastar en el tablero", Tag = tag, TagTone = tone, Selected = selected };
 
         static SoldiersView Soldiers()
         {
@@ -91,36 +116,47 @@ namespace Bastion.UI.Strategy
             {
                 Title = "Reclutar un soldado",
                 Blurb = "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.",
-                Chips = { new ChipView { Text = "30 §" }, new ChipView { Text = "Tus soldados 4/6" }, new ChipView { Text = "Camas libres 0", Tone = "warn" } },
+                Chips = { new ChipView { Text = "30 §" }, new ChipView { Text = "Tus soldados 4/6", Tip = "Como mucho 6 soldados por jugador" }, new ChipView { Text = "Camas libres 0", Tone = "warn", Tip = "Cada soldado necesita una cama: la caravana tiene 8, y cada Barracón suma más." } },
                 Button = "Reclutar · 30 §",
                 Enabled = false,
                 Why = "No quedan camas: para reclutar más, construid un Barracón.",
             };
             var sheet = new SoldierSheetView
             {
-                Kicker = "Novato · de Ana", Name = "Rafael Costa", Skills = new float[] { 10, 10, 10, 60, 5, 10 }, NameTip = "2 misiones · 6 bajas",
+                Kicker = "Novato · de Ana", Name = "Rafael Costa", Skills = new float[] { 10, 10, 10, 60, 5, 10 }, NameTip = "Misiones: 3 · Bajas: 2",
                 Subtitle = "Fusil de asalto", Note = "Ana no está: lo preparas tú hasta que vuelva.", Customize = "Personalizar",
                 Health = "Listo", HealthTone = "good",
                 ArmsHead = "Arma y armadura · se eligen aquí", BeltHead = "Cinturón · se elige aquí",
             };
             sheet.Stats.Add(new SheetStatView { Icon = "stat:hp", Value = "10", Color = "#8fd05a", Tip = "Salud" });
-            sheet.Stats.Add(new SheetStatView { Icon = "stat:aim", Value = "68", Color = "#ffffff", Tip = "Puntería con armas de fuego" });
-            sheet.Stats.Add(new SheetStatView { Icon = "stat:melee", Value = "63", Color = "#ffffff", Tip = "Puntería cuerpo a cuerpo" });
+            sheet.Stats.Add(new SheetStatView { Icon = "stat:aim", Value = "68", Color = "#ffffff", Tip = "Puntería con armas de fuego: 60 de base, más lo que suman las barras de Disparo y el tablero" });
+            sheet.Stats.Add(new SheetStatView { Icon = "stat:melee", Value = "63", Color = "#ffffff", Tip = "Puntería cuerpo a cuerpo: 60 de base, más lo que suman las barras de Cuerpo a cuerpo y el tablero" });
             sheet.Stats.Add(new SheetStatView { Icon = "stat:ap", Value = "40", Color = "#a678ff", Tip = "Voluntad" });
-            var hand = new PickView { Id = "hand", Label = "Mano", Value = "Fusil de asalto", Lines = { "Daño 3-5 · Alcance medio", "y la pistola al cinto" }, Condition = 100, ConditionText = "Estado 100", Tags = { "Mira" }, Editable = true };
-            hand.Options.Add(new PickOptionView { Id = "w100", Name = "Fusil de asalto", Note = "La lleva Rafael", Current = true });
+            var hand = new PickView { Id = "hand", Label = "Mano", Value = "Fusil de asalto", Lines = { "Daño 3–5 · Alcance medio", "y la pistola al cinto" }, Condition = 100, ConditionText = "Estado 100", Tags = { "Mira" }, Editable = true };
+            hand.Options.Add(new PickOptionView { Id = "none", Name = "Sin arma: la pistola", Note = "Fusil de asalto vuelve a la Armería" });
             hand.Options.Add(new PickOptionView { Id = "w103", Name = "Fusil de precisión", Note = "En la Armería" });
-            hand.Options.Add(new PickOptionView { Id = "w104", Name = "Escopeta", Note = "La lleva Hiro, de Arturo", Enabled = false });
+            hand.Options.Add(new PickOptionView { Id = "w104", Name = "Escopeta", Note = "La lleva Hiro Sato, de Arturo", Enabled = false });
             sheet.Arms.Add(hand);
-            sheet.Arms.Add(new PickView { Id = "belt", Label = "Cinto", Value = "Cuchillo", Lines = { "Daño 2-4" }, Editable = true });
+            sheet.Arms.Add(new PickView { Id = "belt", Label = "Cinto", Value = "Cuchillo", Lines = { "Daño 2–4" }, Editable = true });
             sheet.Armor = new ArmorView { Tier = 3, Name = "Equipo antidisturbios", Figures = "· 10 de salud · 1 de blindaje" };
             sheet.Belt.Add(new PickView { Id = "slot0", Label = "Hueco 1", Value = "Nada", Editable = true });
             sheet.Belt.Add(new PickView { Id = "slot1", Label = "Hueco 2", Value = "Nada", Editable = true });
-            var xp = new SkillsView { Head = "Experiencia", Rank = "Novato", RankFilled = 4, RankTotal = 8, Will = "+10 de voluntad", RankLine = "Sin rango: menos de 5 puntos gastados en el tablero.", Board = "Tablero de habilidades · 3 puntos por gastar" };
-            var names = new[] { "Disparo", "Cuerpo a cuerpo", "Lanzar", "Curar", "Investigar", "Forma física" };
+            var next = EngineLore.RankReward(0, "m");
+            var xp = new SkillsView
+            {
+                Head = "Experiencia", Rank = "Novato", RankFilled = 4, RankTotal = 8, Will = next?.Short ?? "Rango máximo", WillTip = next?.Long ?? "No hay rango más alto.",
+                RankLine = "Sin rango: menos de 5 puntos gastados en el tablero.", Gives = $"Voluntad {Bastion.Engine.Bars.VeteranWill(0)} · 2 acciones por turno",
+                Board = "Tablero de habilidades · 3 puntos por gastar",
+            };
             var filled = new[] { 0, 18, 10, 3, 2, 0 };
             var growth = new[] { "+8 %", null, null, null, null, "+10 %" };
-            for (var i = 0; i < 6; i++) xp.Rows.Add(new SkillRowView { Line = i, Name = names[i], Growth = growth[i], Filled = filled[i], Total = 20, Reward = "+5–10 % · +1 punto", RewardTip = "Al llenar la barra: +5–10 % y un punto para el tablero." });
+            for (var i = 0; i < 6; i++)
+            {
+                var skill = Bastion.Engine.SkillIds.All[i];
+                var reward = EngineLore.BarReward(skill);
+                var def = Bastion.Engine.Bars.SkillDefs[skill];
+                xp.Rows.Add(new SkillRowView { Line = i, Name = def.Name, Tip = def.Line, Growth = growth[i], GrowthTip = def.Stat, Filled = filled[i], Total = 20, Reward = reward.Short, RewardTip = reward.Long });
+            }
             sheet.Experience = xp;
             v.Sheet = sheet;
             return v;
@@ -145,7 +181,7 @@ namespace Bastion.UI.Strategy
             Row("torso", "Torso", "como la armadura");
             Row("arms", "Brazos", "como la armadura");
             Row("legs", "Piernas", "como la armadura");
-            Row("trim", "Detalles", "como la armadura");
+            Row("trim", "Detalles", "capucha, boina y gorra");
             return c;
         }
 
@@ -154,7 +190,7 @@ namespace Bastion.UI.Strategy
             var v = new NavView { Hidden = on == "squad" || on == "debrief" };
             v.Tabs.Add(new TabView { Id = "geoscape", Label = "Mapa", On = on == "geoscape" });
             v.Tabs.Add(new TabView { Id = "engineering", Label = "Armería", New = on != "engineering", On = on == "engineering" });
-            v.Tabs.Add(new TabView { Id = "barracks", Label = "Soldados", On = on == "barracks", Count = "▲4", Tip = "Yuki Tanaka: talento por elegir" });
+            v.Tabs.Add(new TabView { Id = "barracks", Label = "Soldados", On = on == "barracks", Count = "▲4", Tip = string.Join(" · ", new[] { "Yuki Tanaka", "Dmitri Volkov", "Hiro Sato", "Lucía Ortega" }.Select(n => $"{n}: puntos por gastar en el tablero")) });
             v.Tabs.Add(new TabView { Id = "facilities", Label = "Asentamiento", Partner = "Ana", PartnerColor = "#a678ff" });
             v.Tabs.Add(new TabView { Id = "squad", Label = "Escuadra", Urgent = true });
             return v;
@@ -164,14 +200,15 @@ namespace Bastion.UI.Strategy
         {
             var v = new ArmoryView { Head = "Armería", Tab = "items", GearNew = true };
             var list = new ArmorySectionView();
-            list.Rows.Add(new ArmoryRowView { Id = "i:grenade", Name = "Granadas", Price = "20 §", Right = "Tienes 2", Selected = true });
-            list.Rows.Add(new ArmoryRowView { Id = "i:smoke", Name = "Granada de humo", Price = "25 §" });
-            list.Rows.Add(new ArmoryRowView { Id = "i:firstAid", Name = "Botiquín", Price = "25 §", Right = "Tienes 1" });
-            list.Rows.Add(new ArmoryRowView { Id = "i:flashbang", Name = "Granada aturdidora", Price = "30 §" });
+            const string equip = "Se equipan en la ficha de cada soldado";
+            list.Rows.Add(new ArmoryRowView { Id = "i:grenade", Name = "Granadas", Price = "20 §", Right = "Tienes 2", Selected = true, Tip = equip });
+            list.Rows.Add(new ArmoryRowView { Id = "i:smoke", Name = "Granada de humo", Price = "25 §", Tip = equip });
+            list.Rows.Add(new ArmoryRowView { Id = "i:firstAid", Name = "Botiquín", Price = "25 §", Right = "Tienes 1", Tip = equip });
+            list.Rows.Add(new ArmoryRowView { Id = "i:flashbang", Name = "Granada aturdidora", Price = "30 §", Tip = equip });
             v.Sections.Add(list);
             v.Detail = new ArmoryDetailView
             {
-                Kicker = "Accesorio · Cinturón", Name = "Granadas", Art = "grenade",
+                Kicker = "Accesorio · Cinturón", KickerTip = "Se equipa en la ficha del soldado; si cae, se pierde", Name = "Granadas", Art = "grenade",
                 Text = { "Dos granadas de fragmentación, en el cinturón. Quien no las lleva, no puede lanzar." },
                 Chips = { new ChipView { Text = "Tienes 2" }, new ChipView { Text = "20 §" } },
                 Button = "Comprar", Action = "buy",
@@ -223,7 +260,7 @@ namespace Bastion.UI.Strategy
                 Figures =
                 {
                     new RowView { Key = "Daño", Value = "3–5" }, new RowView { Key = "Daño crítico", Value = "5–7" },
-                    new RowView { Key = "Crítico", Value = "±0 %" }, new RowView { Key = "Puntería", Value = "+10" },
+                    new RowView { Key = "Crítico", Value = "±0 %" }, new RowView { Key = "Puntería", Value = "+10", Tip = "Lo que el arma suma o resta a la puntería: la mira, el desgaste" },
                     new RowView { Key = "Cargador", Value = "4 balas" }, new RowView { Key = "Acciones por disparo", Value = "1 acción" },
                     new RowView { Key = "Ruido", Value = "18 casillas" },
                 },
@@ -248,21 +285,25 @@ namespace Bastion.UI.Strategy
                 Holder = new HolderView { Head = "La lleva", Name = "Rafael Costa", Button = "Quitársela" },
                 SoldiersHead = "Tus soldados y los de Ana",
             };
-            d.Soldiers.Add(new CarrierView { Id = "s1", Name = "Yuki Tanaka", Note = "· en la mano: Pistola", Diff = { new ChipView { Text = "Daño +1", Tone = "good" }, new ChipView { Text = "De lejos +6", Tone = "good" }, new ChipView { Text = "Ruido +6", Tone = "bad" } }, Button = "Dársela" });
-            d.Soldiers.Add(new CarrierView { Id = "s3", Name = "Dmitri Volkov", Note = "· en la mano: Pistola", Diff = { new ChipView { Text = "Daño +1", Tone = "good" }, new ChipView { Text = "De lejos +6", Tone = "good" } }, Button = "Dársela" });
+            d.Soldiers.Add(new CarrierView { Id = "s1", Name = "Yuki Tanaka", Note = "· en la mano: Pistola", Diff = { new ChipView { Text = "Daño 3–5", Tone = "good" }, new ChipView { Text = "De lejos +6", Tone = "good" }, new ChipView { Text = "Ruido +6", Tone = "bad" } }, Button = "Dársela" });
+            d.Soldiers.Add(new CarrierView { Id = "s3", Name = "Dmitri Volkov", Note = "· en la mano: Pistola", Diff = { new ChipView { Text = "Daño 3–5", Tone = "good" }, new ChipView { Text = "De lejos +6", Tone = "good" } }, Button = "Dársela" });
             d.Soldiers.Add(new CarrierView { Id = "s6", Name = "Rafael Costa", Note = "· en la mano: Fusil de asalto", Chip = "La lleva" });
             v.Detail = d;
             return v;
         }
 
         static PickRowView Pick(string id, string name, string accent, int rank, string chip = null, string tone = null, bool inSquad = false, bool enabled = true) =>
-            new PickRowView { Id = id, Name = name, Accent = accent, Skills = new float[] { 30, 20, 10, 10, 5, 10 }, Rank = rank, Chip = chip, ChipTone = tone, In = inSquad, Enabled = enabled };
+            new PickRowView
+            {
+                Id = id, Name = name, Accent = accent, Skills = new float[] { 30, 20, 10, 10, 5, 10 }, Rank = rank, Chip = chip, ChipTone = tone, In = inSquad, Enabled = enabled,
+                ChipTip = chip == "✓" ? StrategyText.Squad.InTip : chip == "Fiebre" ? "Mordisco: necesita el tratamiento antes de salir." : chip != null ? "Heridas" : null,
+            };
 
         static SquadView Squad()
         {
             var v = new SquadView
             {
-                MineHead = "Tus soldados · 3/4", MineTip = "Elige quién sale: clic para meterlo o sacarlo.", PartnerHead = "De Ana · 0",
+                MineHead = "Tus soldados · 3/4", MineTip = "Pulsa un soldado para meterlo o sacarlo. Los de Ana los elige Ana; los huecos que no llene se quedan vacíos. El equipo se cambia en Soldados.", PartnerHead = "De Ana · 0",
                 Title = "El colegio de La Vega", Night = "De noche",
                 Briefing = "Aviso de las Bodegas. Los Cuervos se han llevado al Dr. Femi Adebayo. Si llegan a su campamento, **no habrá otra ocasión**. ==Que salga con vida.== De noche: a oscuras, tus soldados ven 10 casillas en vez de 18. Hay más zombis, y el botín vale la mitad más.",
                 Warning = "Los muertos van a por cualquier vivo, también a por ellos, y el tiroteo los atrae.",
@@ -286,10 +327,12 @@ namespace Bastion.UI.Strategy
         static DebriefView Debrief()
         {
             var v = new DebriefView { Victory = true, Result = "Misión cumplida", Mission = "Asedio", Continue = "Continuar" };
-            v.Haul.Add(new HaulView { Icon = "store:credits", Figure = "+7", Tip = "Suministros: 7 de botín" });
+            v.Haul.Add(new HaulView { Icon = "store:credits", Figure = "+7", Tip = "Suministros · Botín: 7" });
+            // The sample's soldiers who are women: «ILESA» (Lore, C2; the 0.10.1 said «ILESO» to everyone).
+            var women = new HashSet<string> { "s0", "s1", "s4", "s7" };
             LineupCardView Card(string id, string name, string accent, string kills, params LearnedView[] learned)
             {
-                var c = new LineupCardView { Id = id, Name = name, Accent = accent, Lines = { "ILESO", kills } };
+                var c = new LineupCardView { Id = id, Name = name, Accent = accent, Lines = { women.Contains(id) ? "ILESA" : "ILESO", kills } };
                 c.Learned.AddRange(learned);
                 return c;
             }
@@ -301,7 +344,7 @@ namespace Bastion.UI.Strategy
             v.Cards.Add(Card("s1", "Yuki Tanaka", Ana, "0 bajas"));
             v.Cards.Add(Card("s2", "Arjun Mehta", Ana, "2 bajas", Skill("+7 Disparo")));
             v.Cards.Add(Card("s7", "Lucía Ortega", Ana, "0 bajas", Skill("+7 Disparo")));
-            v.Cards.Add(Card("s6", "Rafael Costa", Ana, "2 bajas", Skill("+10 Disparo"), new LearnedView { Kind = "bar", Line = 0, Text = "▲ DISPARO +8 %" }, new LearnedView { Kind = "point", Text = "Habilidad" }));
+            v.Cards.Add(Card("s6", "Rafael Costa", Ana, "2 bajas", Skill("+10 Disparo"), new LearnedView { Kind = "bar", Line = 0, Text = "▲ DISPARO +8 %" }, new LearnedView { Kind = "point", Count = 1 }));
             return v;
         }
 
@@ -313,7 +356,15 @@ namespace Bastion.UI.Strategy
         {
             var mission = which == "mapa-mision";
             var zone = which == "mapa-zona";
-            var v = new MapView { Level = 5, Lata = "weu", Selected = mission ? "oce" : zone ? "afr" : null, Contacts = 4, ContactsMax = 2, NestsTip = "Nido: un foco de la Marea.", QuestsTip = "Encargo: lo que os piden en una zona.", RumorsTip = "Rumor: se escucha uno a la vez, o se enfría." };
+            var v = new MapView
+            {
+                Level = 5, Lata = "weu", Selected = mission ? "oce" : zone ? "afr" : null, Contacts = 4, ContactsMax = 2,
+                ContactsTip = "Zonas contactadas / máximo (la Sala de radio da más)",
+                // Not the glossary's Nido, which names the Marea before level 4 (Lore.NestTip).
+                NestsTip = EngineLore.NestTip(Level), QuestsTip = EngineLore.Glossary["Encargo"],
+                // One is being listened to in the sample (screen.ts rumorHead).
+                RumorsTip = EngineLore.Glossary["Rumor"] + " Solo se escucha uno a la vez.",
+            };
             ZoneMarkView Zone(string id, string name, bool contacted, bool flooded = false) => new ZoneMarkView { Id = id, Name = name, Contacted = contacted, Flooded = flooded, Selected = v.Selected == id };
             var weu = Zone("weu", "Bielsa", true);
             weu.Missions.AddRange(new[] { Story, Op, Story, Op });
@@ -328,13 +379,15 @@ namespace Bastion.UI.Strategy
             var eas = Zone("eas", "El Pantano Gris", false);
             eas.Rumor = true;
             v.Zones.AddRange(new[] { Zone("na", "Los Llanos de Ceniza", false, true), Zone("sa", "Rudnik", true), weu, Zone("eeu", "Sappada", false), Zone("afr", "Tarbes", false), me, eas, oce });
-            MissionRowView Row(string id, string tone, string kind, string name, string where, bool on = false) => new MissionRowView { Id = id, Tone = tone, Kind = kind, Name = name, Where = where, Selected = on };
-            v.Missions.Add(Row("o1", Story, "rescue", "El consultorio de Bielsa", "Bielsa"));
-            v.Missions.Add(Row("o2", Op, "rescue", "El colegio de La Vega", "La Vega · De noche", mission));
-            v.Missions.Add(Row("o3", Op, "recovery", "El hospital de Bielsa", "Bielsa · De noche"));
-            v.Missions.Add(Row("o4", Op, "scavenge", "El centro comercial de Bielsa", "Bielsa"));
-            v.Wait = new WaitDayView { Label = "Esperar un día", Tip = "Un día sin salir: avanzan el Taller y la Marea." };
-            v.Nests.Add(new MapRowView { Id = "me", Name = "Koper", Chip = "Sin contacto", ChipTip = "Para asaltar un Nido, antes hay que contactar con su zona." });
+            // The row's help as screen.ts renderMissions: «Historia · Rescate · Bielsa», the kind by its name (MISSION_NAMES).
+            MissionRowView Row(string id, string tone, string kind, string name, string zoneName, string where, bool on = false) =>
+                new MissionRowView { Id = id, Tone = tone, Kind = kind, Name = name, Where = where, Selected = on, Tip = $"{(tone == Story ? "Historia · " : "")}{Bastion.Engine.Setup.MissionNames[kind]} · {zoneName}" };
+            v.Missions.Add(Row("o1", Story, "rescue", "El consultorio de Bielsa", "Bielsa", "Bielsa"));
+            v.Missions.Add(Row("o2", Op, "rescue", "El colegio de La Vega", "La Vega", "La Vega · De noche", mission));
+            v.Missions.Add(Row("o3", Op, "recovery", "El hospital de Bielsa", "Bielsa", "Bielsa · De noche"));
+            v.Missions.Add(Row("o4", Op, "scavenge", "El centro comercial de Bielsa", "Bielsa", "Bielsa"));
+            v.Wait = new WaitDayView { Label = "Esperar un día", Tip = $"Un día sin salir: se come, se curan las heridas y avanzan el Taller y {EngineLore.DoomSubject(Level)}." };
+            v.Nests.Add(new MapRowView { Id = "me", Name = "Koper", Chip = "Sin contacto", ChipTip = EngineLore.NestNoContactTip("me", 110) });
             v.Quests.Add(new MapRowView { Id = "q1", Name = "La estación de números", Line = "Paso 1 de 2 · Esperando vuestra decisión" });
             v.Rumors.Add(new RumorRowView { Id = "r1", Region = "Koper", Text = "Se habla de una camioneta de la cruz roja volcada en la cuneta.", Listening = "Escuchando · 3 misiones" });
             v.Rumors.Add(new RumorRowView { Id = "r2", Region = "El Pantano Gris", Text = "Se habla de luces en la vieja fábrica de conservas.", Button = "Escuchar · 2 misiones", Chip = "en 2", ChipTone = "warn" });
@@ -351,7 +404,9 @@ namespace Bastion.UI.Strategy
                 v.Detail = new MapDetailView
                 {
                     Kicker = "Zona sin contacto", Title = "Tarbes",
-                    Text = { "La primera ciudad caída. Calles llenas de zombis y farmacias que nadie ha terminado de saquear.", "Sin enclave · +25 § al mes" },
+                    // Who is there and what they send, from Lore (screen.ts regionInfo: REGION_LORE[id].ally, regionIncome).
+                    Text = { EngineLore.RegionLores["afr"].Situation },
+                    Lines = { new MapLineView { Text = $"{Capital(EngineLore.RegionLores["afr"].Ally)} · +25 § en cada convoy", Tip = "Lo que deja en cada convoy, una vez contactada. El convoy llega cada 6 misiones." } },
                     Meter = 4, MeterMax = 2,
                     Buttons = { new MapButtonView { Action = "contact", Label = "Contactar · 110 §", Primary = true, Enabled = false } },
                     Why = "No caben más contactos: construid o mejorad la Sala de radio.",
@@ -359,9 +414,105 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
+        /// <summary>The sample's stores and level: the palette's costs against them (pieceBlocker).</summary>
+        const int Credits = 540;
+        const int Parts = 9;
+        const int Level = 3;
+
+        /// <summary>
+        /// The Asentamiento as the 0.10.1 showed the sample (40-asentamiento and after): the palette from the engine's
+        /// pieces and Lore's words, the Bastion's figures as the sample's (campaign.ts isn't in C# yet), and the card of
+        /// the caravan, of a Barracón, of a Muro being taken down or of a spent Foso.
+        /// </summary>
+        static SettlementView Settlement(string which)
+        {
+            var inHand = which == "asentamiento-mano" ? "quarters" : null;
+            var felling = which == "asentamiento-talar";
+            var v = new SettlementView { StatsHead = "Bastión", Walk = "Andar por la base" };
+            v.Fell = new FellView { Label = EngineLore.BuildText.Fell, Supplies = EngineBase.FellCost, Per = "por árbol", On = felling, Keys = EngineLore.BuildText.Felling, Tip = EngineLore.BuildText.Felling };
+            var groups = new[] { (EngineLore.BuildText.Tabs.Building, new[] { "building" }), (EngineLore.BuildText.Tabs.Defence, new[] { "defence", "trap" }) };
+            foreach (var (title, kinds) in groups)
+            {
+                var g = new PaletteGroupView { Title = title };
+                foreach (var id in EngineBase.PieceOrder)
+                {
+                    var def = EngineBase.Pieces[id];
+                    if (id == "caravan" || def.Level > Level || System.Array.IndexOf(kinds, def.Kind) < 0) continue;
+                    var shortOf = (System.Math.Max(0, def.Cost.Supplies - Credits), System.Math.Max(0, (def.Cost.Parts ?? 0) - Parts));
+                    var why = shortOf.Item1 > 0 || shortOf.Item2 > 0 ? EngineLore.BuildShortLine(shortOf.Item1, shortOf.Item2) + "." : null;
+                    var line = EngineLore.PieceTexts.All[id].Line;
+                    g.Tiles.Add(new PieceTileView { Id = id, Name = EngineLore.PieceTexts.All[id].Name, Supplies = def.Cost.Supplies, Parts = def.Cost.Parts ?? 0, Short = why != null, On = id == inHand, Tip = why != null ? line + "\n" + why : line });
+                    if (id == inHand) g.Keys = EngineLore.HoldingLine(id) + (id == "palisade" || id == "wall" || id == "sandbags" || id == "logs" || id == "wire" ? " Arrastra para poner una fila." : "");
+                }
+                v.Groups.Add(g);
+            }
+            var barracks = which == "asentamiento-barracon" || which == "asentamiento-muro" || which == "asentamiento-foso";
+            v.Stats.Add(new BastionStatView { Icon = "base:beds", IconColor = "#b2c3d0", Value = barracks ? "8/10" : "8/8", Label = "Camas", Tone = barracks ? null : "warn" });
+            v.Stats.Add(new BastionStatView { Icon = "store:food", IconColor = "#eab96c", Value = "−8", Label = "Raciones por misión" });
+            v.Stats.Add(new BastionStatView { Icon = "store:credits", Value = "+140", Label = "Convoy tras la próxima misión" });
+            if (which == "asentamiento-bastion") v.Card = Card(new Bastion.Engine.BasePiece { Id = "b1", Piece = "caravan", Hp = 40, Level = 1 });
+            if (which == "asentamiento-barracon") v.Card = Card(new Bastion.Engine.BasePiece { Id = "b90", Piece = "quarters", Hp = 22, Level = 1 });
+            if (which == "asentamiento-muro") v.Card = Card(new Bastion.Engine.BasePiece { Id = "b91", Piece = "wall", Hp = 20 }, true);
+            if (which == "asentamiento-foso") v.Card = Card(new Bastion.Engine.BasePiece { Id = "b92", Piece = "spikes", Hp = 9, Charges = 0 });
+            return v;
+        }
+
+        /// <summary>
+        /// buildMode.ts pieceCard over a piece of the sample, with the engine's costs and Lore's words; what campaign.ts
+        /// says (raiseCost, nextLevel, levelUpBlocker) as the 0.10.1 showed it.
+        /// </summary>
+        static PieceCardView Card(Bastion.Engine.BasePiece p, bool dismantling = false)
+        {
+            var def = EngineBase.Pieces[p.Piece];
+            var text = EngineLore.PieceTexts.All[p.Piece];
+            var level = p.Level ?? 1;
+            var building = def.Kind == "building" && p.Piece != "caravan";
+            var c = new PieceCardView { Title = p.Piece == "caravan" ? EngineLore.BastionLevelName(Level) : text.Name, CloseTip = "Soltarla (Esc)" };
+            c.Figure = building ? EngineLore.PieceFigure(p.Piece, level) : null;
+            if (c.Figure == null) c.Line = text.Line;
+            if (building)
+            {
+                var top = text.Levels?.Count ?? 3;
+                for (var n = 1; n <= top; n++)
+                    c.Ladder.Add(new LadderStepView { Label = $"Nivel {n}", Figure = EngineLore.PieceFigureShort(p.Piece, n) ?? "—", Now = n == level, Past = n < level });
+                if (text.Levels != null && level <= text.Levels.Count) c.LevelLine = text.Levels[level - 1];
+            }
+            c.Holds = EngineLore.HoldsLine(p.Hp, def.Hp);
+            c.HoldsTip = "Lo que aguanta los golpes de los muertos";
+            if (def.Charges != null)
+            {
+                c.Uses = EngineLore.UsesLine(p.Charges ?? 0, def.Charges.Value);
+                if ((p.Charges ?? 0) == 0) c.State = p.Piece == "turret" ? EngineLore.PieceState.SilentLine : EngineLore.PieceState.SpentLine;
+            }
+            if (p.Hp < def.Hp)
+            {
+                var cost = EngineBase.RepairCost(p);
+                c.Actions.Add(new PieceActionView { Action = "mend", Label = EngineLore.ActionPrice("repair", cost.Supplies, cost.Parts ?? 0) });
+            }
+            // The sample's raiseCost: a Barracón to level 2 for 40 §.
+            if (building) c.Actions.Add(new PieceActionView { Action = "raise", Label = EngineLore.ActionPrice("upgrade", 40), Tip = EngineLore.UpgradeLine(p.Piece, level + 1) });
+            // The sample's nextLevel: the casa móvil con porche, 240 §, 6 missions, and it has both (8 flown, 540 §), so
+            // nothing under the button (Lore, 24/10: not the 0.10.1's «8 de 6 misiones…»). When it can't, its Why is
+            // what is missing, levelUpBlocker's: «Para la casa móvil con porche hacen falta 6 misiones hechas: lleváis
+            // 3.» or «Faltan N §.».
+            if (p.Piece == "caravan")
+                c.Actions.Add(new PieceActionView { Action = "levelUp", Label = $"Subir a {EngineLore.BastionLevelThe(Level + 1)} · 240 §", Hover = EngineLore.LevelUpLine(Level + 1, 240) });
+            if (def.Charges != null && (p.Charges ?? 0) < def.Charges)
+                c.Actions.Add(new PieceActionView { Action = "rearm", Label = EngineLore.ActionPrice("rearm", 0, EngineBase.RearmCost(p)) });
+            if (EngineBase.DismantleBlocker(p) == null)
+            {
+                var back = EngineBase.DismantleRefund(p);
+                c.Actions.Add(new PieceActionView { Action = "dismantle", Label = EngineLore.ActionPrice("dismantle", back) });
+                if (dismantling) c.Confirm = new PieceConfirmView { Text = $"{EngineLore.BuildText.DismantleAsk} {EngineLore.DismantleBack(back)}", Yes = EngineLore.BuildText.DismantleYes, No = EngineLore.BuildText.DismantleNo };
+            }
+            return c;
+        }
+
+        static string Capital(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
+
         static ProposalView Proposal(bool mine)
         {
-            var p = new ProposalView { Mine = mine, Partner = "Ana", PartnerColor = "#a678ff", Text = "reclutar un soldado", Cost = "30 §", CanSee = true };
+            var p = new ProposalView { Mine = mine, Partner = "Ana", PartnerColor = "#a678ff", Text = "reclutar un soldado (30 §)", Cost = "30 §", CanSee = true };
             p.Rows.Add(new RowView { Key = "Suministros", Value = "30 §" });
             p.Rows.Add(new RowView { Key = "Qué hace", Value = "Un recluta para Arturo." });
             return p;
@@ -370,9 +521,9 @@ namespace Bastion.UI.Strategy
         static StrategyModalView Event(bool proposed)
         {
             var v = new StrategyModalView { Kind = "event", Kicker = "Acontecimiento", Title = "Contrabandistas", Text = "Unos contrabandistas han vaciado un cuartel abandonado y ofrecen lo que sacaron." };
-            v.Options.Add(new OptionView { Label = "Comprárselo", Effect = "−40 suministros: dos granadas extra para la armería", Proposed = proposed });
+            v.Options.Add(new OptionView { Label = "Comprárselo", Effect = "−40 suministros; dos granadas extra para la Armería", Proposed = proposed });
             v.Options.Add(new OptionView { Label = "Rechazar la oferta", Effect = "Sin efecto" });
-            if (proposed) v.Vote = new ProposalView { Partner = "Ana", PartnerColor = "#a678ff", Text = "comprárselo", Cost = "40 §" };
+            if (proposed) v.Vote = new ProposalView { Partner = "Ana", PartnerColor = "#a678ff", Text = "responder «Comprárselo»", Cost = "40 §" };
             else v.Foot = "El tiempo no avanza hasta que decidáis.";
             return v;
         }
@@ -388,15 +539,16 @@ namespace Bastion.UI.Strategy
                 Buttons = { "Entendido" },
             };
             var build = new BroughtGroupView { Title = "Para construir" };
-            build.Items.Add(new BroughtView { Icon = "tab:geoscape", Name = "Sala de mapas", Brief = "Más suministros por misión" });
-            build.Items.Add(new BroughtView { Icon = "grenade", Name = "Mina", Brief = "Estalla al pisarla: un uso" });
+            build.Items.Add(new BroughtView { Icon = "tab:geoscape", Name = "Sala de mapas", Brief = EngineLore.NewBrief["piece:simulation"] });
+            build.Items.Add(new BroughtView { Icon = "map:lata", Name = "Chapistería", Brief = EngineLore.NewBrief["piece:garage"] });
+            build.Items.Add(new BroughtView { Icon = "grenade", Name = "Mina", Brief = EngineLore.NewBrief["piece:mine"] });
             var up = new BroughtGroupView { Title = "Suben de nivel" };
-            up.Items.Add(new BroughtView { Icon = "tab:barracks", Name = "Barracón, nivel 2", Brief = "+3 camas" });
-            up.Items.Add(new BroughtView { Icon = "store:parts", Name = "Taller, nivel 2", Brief = "Accesorios −35 %" });
-            up.Items.Add(new BroughtView { Icon = "store:medicines", Name = "Enfermería, nivel 2", Brief = "Heridas: curan +3 de rápido" });
-            up.Items.Add(new BroughtView { Icon = "store:food", Name = "Huerto, nivel 2", Brief = "+10 raciones por misión" });
+            up.Items.Add(new BroughtView { Icon = "tab:barracks", Name = "Barracón, nivel 2", Brief = EngineLore.PieceFigure("quarters", 2) });
+            up.Items.Add(new BroughtView { Icon = "store:parts", Name = "Taller, nivel 2", Brief = EngineLore.PieceFigure("workshop", 2) });
+            up.Items.Add(new BroughtView { Icon = "store:medicines", Name = "Enfermería, nivel 2", Brief = EngineLore.PieceFigure("infirmary", 2) });
+            up.Items.Add(new BroughtView { Icon = "store:food", Name = "Huerto, nivel 2", Brief = EngineLore.PieceFigure("garden", 2) });
             var tech = new BroughtGroupView { Title = "Avances" };
-            tech.Items.Add(new BroughtView { Icon = "weapon:rifle", Name = "Culatas y silenciadores", Brief = "El Taller hace culatas y silenciadores" });
+            tech.Items.Add(new BroughtView { Icon = "weapon:rifle", Name = "Culatas y silenciadores", Brief = EngineLore.NewBrief["tech:magWeapons"] });
             v.Brought.AddRange(new List<BroughtGroupView> { build, up, tech });
             return v;
         }
@@ -437,5 +589,11 @@ namespace Bastion.UI.Strategy
         public void OnWait() => Debug.Log("[estrategia] wait");
         public void OnListen(string rumor) => Debug.Log("[estrategia] listen " + rumor);
         public void OnMapAction(string action) => Debug.Log("[estrategia] map " + action);
+        public void OnPieceTake(string piece) => Debug.Log("[estrategia] take " + piece);
+        public void OnFell() => Debug.Log("[estrategia] fell");
+        public void OnBuildDrop() => Debug.Log("[estrategia] drop");
+        public void OnPieceAction(string action) => Debug.Log("[estrategia] piece " + action);
+        public void OnPieceClose() => Debug.Log("[estrategia] piece close");
+        public void OnWalk() => Debug.Log("[estrategia] walk");
     }
 }

@@ -3,20 +3,14 @@ using Bastion.Engine;
 
 namespace Bastion.Net
 {
-    // The messages between a player's app and the host (protocol.ts ClientMessage and ServerMessage), as far as the
-    // first milestone goes: a mission between two apps (docs/UNITY.md). Each one a class told by its `t`, as in TypeScript.
+    // The messages between a player's app and the host (protocol.ts ClientMessage, campaignMessageSchema and
+    // ServerMessage). Each one a class told by its `t`, as in TypeScript.
     // New since TypeScript: `version` in hello and welcome (two apps of different builds must not play together),
     // `report` (the client's telemetry and errors, which went by POST to /__report) and `replaced` (the WebSocket's close
-    // code 4000: TCP has none). The campaign and the base: in wip/Net, with provisional types (Campaign.cs), until
-    // campaign.ts is in C#. Left for later: real time.
+    // code 4000: TCP has none). The campaign and the base: with the engine's types (Types/Campaign.cs, CampaignCommand.cs;
+    // the base's screens, BaseViews, are there too). Left for later: real time.
 
-    /// <summary>The base's screens (protocol.ts baseViewSchema): which one each player is on, shown to the partner.</summary>
-    public static class BaseViews
-    {
-        public static readonly IReadOnlyList<string> All = new[] { "hub", "geoscape", "research", "engineering", "barracks", "facilities", "squad", "debrief" };
-    }
-
-    /// <summary>The screen the room is on (protocol.ts RoomPhase). The first milestone has no base.</summary>
+    /// <summary>The screen the room is on (protocol.ts RoomPhase): the lobby, the campaign's base, or a mission.</summary>
     public static class RoomPhases
     {
         public const string Lobby = "lobby";
@@ -117,7 +111,7 @@ namespace Bastion.Net
     public sealed class CampaignCmdMessage : ClientMessage
     {
         public override string T => "ccmd";
-        public WipCampaignCommand? Cmd { get; set; }
+        public CampaignCommand? Cmd { get; set; }
     }
 
     /// <summary>Which base screen the player is looking at (BaseViews), shown to the partner.</summary>
@@ -264,7 +258,7 @@ namespace Bastion.Net
     public sealed class CampaignMessage : ServerMessage
     {
         public override string T => "campaign";
-        public WipCampaign? State { get; set; }
+        public CampaignState? State { get; set; }
     }
 
     /// <summary>The base screen the partner is on.</summary>

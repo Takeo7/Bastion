@@ -51,6 +51,7 @@ namespace Bastion.UI.Strategy
         public string Chip;
         /// <summary>good, bad, warn or null.</summary>
         public string ChipTone;
+        public string ChipTip;
         public bool In;
         public bool Enabled = true;
         public string Tip;
@@ -62,6 +63,8 @@ namespace Bastion.UI.Strategy
         public string Name;
         public string Color;
         public bool Ready;
+        /// <summary>«A punto para salir», «A punto para defender», «Aún elige la escuadra».</summary>
+        public string Tip;
     }
 
     /// <summary>
@@ -94,8 +97,10 @@ namespace Bastion.UI.Strategy
     [Serializable]
     public sealed class LearnedView
     {
-        /// <summary>skill (a line's tag in its colour), bar (a bar filled: «▲»), point («→ +1 Habilidad»).</summary>
+        /// <summary>skill (a line's tag in its colour), bar (a bar filled: «▲»), point («→ +2 Habilidades»).</summary>
         public string Kind;
+        /// <summary>A point's: how many the mission gave.</summary>
+        public int Count = 1;
         /// <summary>The line's place in SkillIds.All (its colour); −1, none.</summary>
         public int Line = -1;
         public string Text;

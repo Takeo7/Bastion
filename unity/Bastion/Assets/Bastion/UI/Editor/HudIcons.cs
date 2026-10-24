@@ -89,6 +89,10 @@ namespace Bastion.UI.EditorTools
             ("store:food", "ICON_Apocalpyse_Status_Hunger_01"), ("store:parts", Repair), ("base:day", Time),
             ("base:level", "ICON_MilitaryCombat_Status_Up_01_Clean"), ("base:doom", "ICON_Apocalpyse_Map_Biohazard_01"),
             ("base:menu", "ICON_ModernMenus_MainMenu_01_Clean"),
+            // The Bastion's figures in the Asentamiento (strategy.css .bstat: mh-tent, mh-plants, mh-mind; the rest are
+            // the strip's, the tabs' and the markers' own).
+            ("base:beds", "ICON_MilitaryCombat_Map_Home_02_Clean"), ("base:garden", "ICON_MilitaryCombat_Map_Plants_01_Clean"),
+            ("base:will", "ICON_MilitaryCombat_Stat_Mind_01_Clean"),
             // The base's tabs (mixta-base.css --ni: mh-pin, mh-shop, helmet, crafting; the squad's La Lata by a vehicle).
             ("tab:geoscape", "ICON_MilitaryCombat_Map_Pin_01_Clean"), ("tab:engineering", "ICON_MilitaryCombat_Map_ShopWeapons_01_Clean"),
             ("tab:barracks", Helmet), ("tab:facilities", "ICON_Apocalpyse_Inventory_Crafting_01"), ("tab:squad", Vehicle),

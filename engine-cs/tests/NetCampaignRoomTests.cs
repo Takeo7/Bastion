@@ -9,42 +9,48 @@ using Xunit;
 namespace Bastion.Engine.Tests
 {
     /// <summary>
-    /// A campaign of its own for the room's tests, until campaign.ts is in C# (wip/Net/Campaign.cs): two soldiers each,
-    /// an operation chosen from the start, a proposal by «chooseMission» that the partner votes, and «unlock» refused on
-    /// the cell «x».
+    /// A campaign of its own for the room's tests, on the engine's types, until campaign.ts is in C#: two soldiers each,
+    /// with three skill points; an operation chosen from the start; a proposal by «chooseMission» that the partner votes;
+    /// «launch» once ready; «unlock» refused on the cell RefusedCell; any other order refused with «No.».
     /// </summary>
     public sealed class FakeCampaignRules : ICampaignRules
     {
+        /// <summary>A cell of the board (board.ts BOARD) the fake won't unlock.</summary>
+        public const string RefusedCell = "lightTrigger";
+
         public int Migrated;
         public int Applied;
         public int Pads;
         public GameState? LastMission;
 
-        public int CampaignVersion => 25;
-
-        public bool CampaignOutdated(int version) => version < 20;
-
-        public WipCampaign MigrateCampaign(WipCampaign c)
+        public CampaignState MigrateCampaign(CampaignState c)
         {
             Migrated++;
-            c.Version = CampaignVersion;
+            c.Version = Campaign.CampaignVersion;
             return c;
         }
 
-        private static IEnumerable<WipSoldier> SoldiersOf(int slot) => new[] { "a", "b" }.Select((x) => new WipSoldier { Id = $"s{slot}{x}", Name = $"Soldado {slot}{x}", Owner = slot, Alive = true });
-
-        public WipCampaign CreateCampaign(IReadOnlyList<int> slots, Rng rng)
+        private static IEnumerable<CampaignSoldier> SoldiersOf(int slot) => new[] { "a", "b" }.Select((x) => new CampaignSoldier
         {
-            return new WipCampaign { Version = CampaignVersion, Day = 1, Players = slots.ToList(), Soldiers = slots.SelectMany(SoldiersOf).ToList() };
+            Id = $"s{slot}{x}",
+            Name = $"Soldado {slot}{x}",
+            Owner = slot,
+            Alive = true,
+            Skills = new Skills { [SkillIds.Shooting] = Bars.BarsCost(3) },
+        });
+
+        public CampaignState CreateCampaign(IReadOnlyList<int> slots, Rng rng)
+        {
+            return new CampaignState { Version = Campaign.CampaignVersion, Day = 1, Level = 2, Players = slots.ToList(), Soldiers = slots.SelectMany(SoldiersOf).ToList() };
         }
 
-        public void OpeningMission(WipCampaign c)
+        public void OpeningMission(CampaignState c)
         {
             c.ActiveMission = "op1";
             c.Squad = c.Soldiers.Select((s) => s.Id).ToList();
         }
 
-        public bool AddPlayer(WipCampaign c, int slot, Rng rng)
+        public bool AddPlayer(CampaignState c, int slot, Rng rng)
         {
             if (c.Players.Contains(slot)) return false;
             c.Players.Add(slot);
@@ -52,34 +58,34 @@ namespace Bastion.Engine.Tests
             return true;
         }
 
-        public List<string> DefaultSquad(WipCampaign c, IReadOnlyList<int> connected) => c.Soldiers.Where((s) => s.Alive && connected.Contains(s.Owner)).Select((s) => s.Id).ToList();
+        public List<string> DefaultSquad(CampaignState c, IReadOnlyList<int> connected) => c.Soldiers.Where((s) => s.Alive && connected.Contains(s.Owner)).Select((s) => s.Id).ToList();
 
-        public void SyncPads(WipCampaign c)
+        public void SyncPads(CampaignState c)
         {
             Pads++;
         }
 
-        public CampaignResult ExecuteCampaignCommand(WipCampaign c, WipCampaignCommand cmd, int slot, IReadOnlyList<int> connected, Rng rng)
+        public CampaignResult ExecuteCampaignCommand(CampaignState c, CampaignCommand cmd, int slot, IReadOnlyList<int> connected, Rng rng)
         {
             switch (cmd)
             {
-                case WipChooseMissionCommand m:
-                    c.Proposal = new WipProposal { By = slot, Action = "mission", Text = $"Ir a {m.Mission}" };
+                case ChooseMissionCommand m:
+                    c.Proposal = new Proposal { By = slot, Action = new ChooseMissionAction { Id = m.Id }, Text = $"Ir a {m.Id}" };
                     return CampaignResult.Success();
-                case WipVoteCommand v:
+                case VoteCommand v:
                     if (c.Proposal == null || c.Proposal.By == slot) return CampaignResult.Failure("No hay nada que votar.");
                     c.Proposal = null;
                     return CampaignResult.Success(v.Accept);
-                case WipLaunchCommand _:
-                    return c.ActiveMission == null ? CampaignResult.Failure("Elegid antes una operación.") : CampaignResult.Success(true);
-                case WipUnlockCommand u:
-                    return u.Cell == "x" ? CampaignResult.Failure("Faltan puntos.") : CampaignResult.Success();
+                case LaunchCommand l:
+                    return c.ActiveMission == null ? CampaignResult.Failure("Elegid antes una operación.") : CampaignResult.Success(l.Ready);
+                case UnlockCommand u:
+                    return u.Cell == RefusedCell ? CampaignResult.Failure("Faltan puntos.") : CampaignResult.Success();
                 default:
                     return CampaignResult.Failure("No.");
             }
         }
 
-        public (GameState state, string name)? LaunchMission(WipCampaign c, Rng rng)
+        public (GameState state, string name)? LaunchMission(CampaignState c, Rng rng)
         {
             if (c.ActiveMission == null) return null;
             c.MissionsFlown = (c.MissionsFlown ?? 0) + 1;
@@ -95,16 +101,12 @@ namespace Bastion.Engine.Tests
             return (LastMission, "Operación 1");
         }
 
-        public void ApplyMissionResult(WipCampaign c, GameState state, Rng rng)
+        public void ApplyMissionResult(CampaignState c, GameState state, Rng rng)
         {
             Applied++;
             c.Day++;
             c.ActiveMission = null;
         }
-
-        public int BastionLevel(WipCampaign c) => 2;
-
-        public int PointsLeft(WipSoldier s) => 3;
     }
 
     /// <summary>The room with the campaign (wip/Net/Room.cs): the base, its orders and proposals, its missions, and its save.</summary>
@@ -220,16 +222,16 @@ namespace Bastion.Engine.Tests
         {
             using var rig = new Rig();
             var (ana, pepe) = rig.Base();
-            rig.Say(ana, Ccmd(new { type = "unlock", soldier = "s0a", cell = "x" }));
+            rig.Say(ana, Ccmd(new { type = "unlock", soldier = "s0a", cell = FakeCampaignRules.RefusedCell }));
             Assert.Equal("Faltan puntos.", (string?)ana.Take("rejected").Single()["message"]);
             Assert.Empty(pepe.Take("campaign"));
             Assert.Contains(rig.Log, (l) => l.StartsWith("[campaña] Ana (puesto 1): «unlock» rechazada: Faltan puntos. · Soldado 0a (s0a), de 1, vivo, 3 puntos"));
-            rig.Say(ana, Ccmd(new { type = "unlock", soldier = "s0a", cell = "c4" }));
+            rig.Say(ana, Ccmd(new { type = "unlock", soldier = "s0a", cell = "steadyHand" }));
             Assert.Single(pepe.Take("campaign"));
-            Assert.Contains(rig.Log, (l) => l.StartsWith("[campaña] Ana: c4 para s0a · Soldado 0a"));
+            Assert.Contains(rig.Log, (l) => l.StartsWith("[campaña] Ana: steadyHand para s0a · Soldado 0a"));
             // Back in the lobby, an order is let be, and said.
             rig.Say(pepe, new { t = "leaveCampaign" });
-            rig.Say(ana, Ccmd(new { type = "launch" }));
+            rig.Say(ana, Ccmd(new { type = "launch", ready = true }));
             Assert.Contains("[campaña] Ana: «launch» ignorada (fase lobby)", rig.Log);
             // Not a campaign's order: refused before the room.
             rig.Say(ana, Ccmd(new { type = "teleport" }));
@@ -237,11 +239,69 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void OrdersAreCheckedAsCampaignCommandSchemaChecksThem()
+        {
+            using var rig = new Rig();
+            var (ana, _) = rig.Base();
+            // One of each kind, as campaignCommandSchema takes them (golden/campaign/commands.json): past the check, each
+            // reaches the campaign's rules, which do it or say why not.
+            var commands = (JArray)JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "golden", "campaign", "commands.json")))["commands"]!;
+            Assert.Equal(34, commands.Count);
+            foreach (var cmd in commands)
+            {
+                rig.Say(ana, Ccmd(cmd));
+                Assert.True(ana.Take("error").Count == 0, $"{cmd}: refused by the room");
+                Assert.True(ana.Take("rejected").Count + ana.Take("campaign").Count == 1, $"{cmd}: no answer from the campaign");
+            }
+            // What the schema doesn't let through never reaches them.
+            var look = new { primary = "#826cbd", secondary = "#a678ff", visor = "#9fe3ff", head = "cap", build = "normal" };
+            var bad = new object[]
+            {
+                new { type = "place", piece = "teleporter", x = 1, y = 1, rot = 0 },
+                new { type = "place", piece = "palisade", x = 1, y = 256, rot = 0 },
+                new { type = "place", piece = "palisade", x = 1, y = 1, rot = 4 },
+                new { type = "place", piece = "palisade", x = 1.5, y = 1, rot = 0 },
+                new { type = "fell", tiles = new object[0] },
+                new { type = "fell", tiles = new object?[] { null } },
+                new { type = "placeLine", piece = "wall", cells = Enumerable.Range(0, 61).Select((i) => new { x = i, y = 0 }), rot = 0 },
+                new { type = "mend", piece = "" },
+                new { type = "post", soldier = "s0a", at = new { x = -1, y = 0 } },
+                new { type = "chooseMission", id = new string('m', 17) },
+                new { type = "contact", region = "atlantis" },
+                new { type = "answerEvent", option = 2 },
+                new { type = "unlock", soldier = "s0a", cell = "x" },
+                new { type = "mod", weapon = "w1", mod = "laser", on = true },
+                new { type = "buy", item = "railgun" },
+                new { type = "equip", soldier = "s0a", slot = "head", item = "firstAid" },
+                new { type = "equip", soldier = "s0a", slot = "utility", item = "railgun" },
+                new { type = "customize", soldier = "s0a", name = new string('a', Appearances.NameMax * 2 + 1), nickname = "", appearance = look },
+                new { type = "customize", soldier = "s0a", name = "Ana", nickname = "", appearance = new { primary = "#12345g", look.secondary, look.visor, look.head, look.build } },
+                new { type = "customize", soldier = "s0a", name = "Ana", nickname = "", appearance = new { look.primary, look.secondary, look.visor, look.head, look.build, character = "Hunter" } },
+                new { type = "customize", soldier = "s0a", name = "Ana", nickname = "", appearance = new { look.primary, look.secondary, look.visor, look.head, build = "giant" } },
+                new { type = "customize", soldier = "s0a", name = "Ana", nickname = "" },
+                new { type = "craft", project = "warpDrive" },
+                new { type = "assignWeapon", weapon = "w1", soldier = "" },
+            };
+            foreach (var cmd in bad)
+            {
+                rig.Say(ana, Ccmd(cmd));
+                Assert.True(ana.Take("error").Count == 1, $"{JObject.FromObject(cmd)}: let through");
+                Assert.Empty(ana.Take("rejected"));
+            }
+            // A colour of the look with a line break after it: /$/ in JavaScript ends there, and so here.
+            rig.Say(ana, Ccmd(new { type = "customize", soldier = "s0a", name = "Ana", nickname = "", appearance = new { primary = "#826cbd\n", look.secondary, look.visor, look.head, look.build } }));
+            Assert.Single(ana.Take("error"));
+        }
+
+        [Fact]
         public void ALaunchedMissionIsFoldedIntoTheCampaignOnce()
         {
             using var rig = new Rig();
             var (ana, pepe) = rig.Base();
-            rig.Say(ana, Ccmd(new { type = "launch" }));
+            // Not ready yet: the campaign goes on as it was, the mission doesn't.
+            rig.Say(ana, Ccmd(new { type = "launch", ready = false }));
+            Assert.Equal("base", rig.Room.Summary().phase);
+            rig.Say(ana, Ccmd(new { type = "launch", ready = true }));
             foreach (var p in new[] { ana, pepe })
             {
                 Assert.Equal("mission", (string?)Last(p, "room")["phase"]);
@@ -264,8 +324,11 @@ namespace Bastion.Engine.Tests
         {
             using var rig = new Rig();
             var (ana, pepe) = rig.Base();
-            rig.Say(ana, Ccmd(new { type = "chooseMission", mission = "granja" }));
+            rig.Say(ana, Ccmd(new { type = "chooseMission", id = "granja" }));
             Assert.Equal(30_000, (long)Last(pepe, "deadline")["ms"]!);
+            // The proposal goes to both with its action, told by its `type`.
+            var proposal = Last(pepe, "campaign")["state"]!["proposal"]!;
+            Assert.Equal(("chooseMission", "granja"), ((string?)proposal["action"]!["type"], (string?)proposal["action"]!["id"]));
             Assert.Equal("proposal", (string?)Last(ana, "deadline")["kind"]);
             rig.Advance(29_999);
             Assert.Equal("base", rig.Room.Summary().phase);
@@ -281,7 +344,7 @@ namespace Bastion.Engine.Tests
             using var rig = new Rig();
             var (ana, pepe) = rig.Base();
             rig.Say(pepe, new { t = "away", away = true });
-            rig.Say(ana, Ccmd(new { type = "chooseMission", mission = "granja" }));
+            rig.Say(ana, Ccmd(new { type = "chooseMission", id = "granja" }));
             rig.Advance(30_000);
             Assert.Equal(Room.AwayGraceMs - 30_000, (long)Last(ana, "deadline")["ms"]!);
             // Voted no meanwhile: the proposal goes, and so does the wait.
@@ -296,7 +359,7 @@ namespace Bastion.Engine.Tests
         {
             using var rig = new Rig();
             var (ana, pepe) = rig.Base();
-            rig.Say(ana, Ccmd(new { type = "launch" }));
+            rig.Say(ana, Ccmd(new { type = "launch", ready = true }));
             rig.Say(ana, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
             var seq = rig.Campaign.LastMission!.Seq;
             rig.Say(pepe, new { t = "backToMenu" });
@@ -318,7 +381,7 @@ namespace Bastion.Engine.Tests
         {
             using var rig = new Rig();
             var (ana, _) = rig.Base();
-            rig.Say(ana, Ccmd(new { type = "unlock", soldier = "s0a", cell = "c1" }));
+            rig.Say(ana, Ccmd(new { type = "unlock", soldier = "s0a", cell = "steadyHand" }));
             rig.Say(ana, new { t = "leaveCampaign" });
             rig.Say(ana, new { t = "newCampaign" });
             var kept = Path.Combine(rig.Dir, "save.antes-de-campana-nueva.json");
@@ -374,10 +437,16 @@ namespace Bastion.Engine.Tests
             var view = pepe.Take("baseView").Single();
             Assert.Equal((0, "barracks"), ((int)view["slot"]!, (string?)view["view"]));
             Assert.Empty(ana.Take("baseView"));
-            rig.Say(ana, new { t = "baseCursor", piece = "muro", x = 4, y = 7, rot = 1 });
+            rig.Say(ana, new { t = "baseCursor", piece = "wall", x = 4, y = 7, rot = 1 });
             Assert.Equal(7, (int)pepe.Take("baseCursor").Single()["y"]!);
+            // Put down: null, passed on as well.
+            rig.Say(ana, new { t = "baseCursor", piece = (string?)null, x = 4, y = 7, rot = 1 });
+            Assert.Null(pepe.Take("baseCursor").Single()["piece"]);
             rig.Say(ana, new { t = "baseView", view = "teleporter" });
             Assert.Equal("Mensaje no válido.", (string?)ana.Take("error").Single()["message"]);
+            rig.Say(ana, new { t = "baseCursor", piece = "muro", x = 4, y = 7, rot = 1 });
+            Assert.Equal("Mensaje no válido.", (string?)ana.Take("error").Single()["message"]);
+            Assert.Empty(pepe.Take("baseCursor"));
             // Back in, the partner's screen is told again.
             pepe.Close("wifi");
             rig.Room.Pump();

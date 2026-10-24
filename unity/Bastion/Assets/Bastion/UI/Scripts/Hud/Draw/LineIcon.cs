@@ -8,7 +8,7 @@ namespace Bastion.UI.Hud
     /// <summary>
     /// The icons that were our own drawings on the web, not Synty's (icons.ts: 24 × 24, a line of 2, round ends): drawn
     /// with Painter2D in the element's tint (USS `-unity-background-image-tint-color`, as the sprites are tinted), so
-    /// the bar's rules for its icons (muted when off, green when free) reach them too. For now the doors.
+    /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, and the base's axe.
     /// </summary>
     public sealed class LineIcon : VisualElement
     {
@@ -31,6 +31,19 @@ namespace Bastion.UI.Hud
                 pen.Rect(8.5f, 5.5f, 5, 6);
                 pen.Rect(8.5f, 14, 5, 5);
                 pen.Dot(16, 12.8f, 1.9f);
+            },
+            // Talar's axe (strategy.css .fell-ico, a filled shape): the blade at the top right, the haft down to the left.
+            ["axe"] = pen =>
+            {
+                pen.Begin(13.2f, 3.1f);
+                pen.Curve(16.1f, 2.5f, 19.2f, 3.7f, 20.9f, 6.2f);
+                pen.To(16.3f, 10.8f);
+                pen.To(14.7f, 9.2f);
+                pen.To(5.8f, 18.1f);
+                pen.Round(4.63f, 16.97f, 1.6f, 45, 225);
+                pen.To(12.4f, 6.9f);
+                pen.To(10.8f, 5.3f);
+                pen.Fill();
             },
         };
 
@@ -113,6 +126,26 @@ namespace Bastion.UI.Hud
                     var b = from + dir * Mathf.Min(length, d + on);
                     Line(a.x, a.y, b.x, b.y);
                 }
+            }
+
+            /// <summary>A filled shape, a point at a time: Begin, To, Curve, Round, then Fill.</summary>
+            public void Begin(float x, float y)
+            {
+                p.BeginPath();
+                p.MoveTo(At(x, y));
+            }
+
+            public void To(float x, float y) => p.LineTo(At(x, y));
+
+            public void Curve(float x1, float y1, float x2, float y2, float x, float y) => p.BezierCurveTo(At(x1, y1), At(x2, y2), At(x, y));
+
+            /// <summary>An arc round (cx, cy), clockwise on screen from one angle to the other (degrees, 0 to the right).</summary>
+            public void Round(float cx, float cy, float radius, float from, float to) => p.Arc(At(cx, cy), radius * k, from, to);
+
+            public void Fill()
+            {
+                p.ClosePath();
+                p.Fill();
             }
 
             /// <summary>A filled dot (the SVG's small circle, filled and stroked: its radius plus half the line).</summary>

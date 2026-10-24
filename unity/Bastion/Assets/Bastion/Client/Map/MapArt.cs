@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 using UnityEngine;
 
@@ -21,6 +22,8 @@ namespace Bastion.Client.Map
         public float[] shift;
         /// <summary>On its own origin, not its middle (a pole with an arm).</summary>
         public bool origin;
+        /// <summary>A deck one stands on at this height in its FBX (metres): set one storey up, however that stretches it (the guard tower's).</summary>
+        public float deck;
         /// <summary>Sunk this far into the ground (tiles).</summary>
         public float sink;
         /// <summary>Stood this tall (tiles), its height alone stretched to it.</summary>
@@ -51,18 +54,36 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>
-        /// Models that Synty's Unity package has turned against its source FBX (which 0.10.1's art was set against): the
-        /// quarter turns to take off 0.10.1's yaw. Apocalypse's wrecked cars lie along z here, along x there (24/10: every
-        /// car of city-7 stood across its tiles); so does the caravan (its mesh, SM_Veh_Caravan_01, for the source's rigged one).
+        /// The quarter turns (0.10.1's yaw, counter-clockwise from above) a prop's Unity model stands from the source FBX
+        /// 0.10.1's art was set against, to take off its yaw. Measured on every prop, its Unity model's box against 0.10.1's
+        /// GLB of it (SettlementLab.Boxes, 24/10), it goes by where the model comes from, with no exception among the 160 that
+        /// tell: Apocalypse's Unity package, a quarter turn (its wrecked cars lay across their tiles in city-7, the base's
+        /// palisade and sandbags across their line); every other package's, and a source FBX imported as it is (Extra), a
+        /// half turn (the barracks and the house of the Bastion back to front). MapCatalogMake keeps each model's in the
+        /// catalog; without it, by the pack.
         /// </summary>
-        static readonly Dictionary<string, int> UnityTurns = new Dictionary<string, int>
+        public static int UnityTurn(PropArt art)
         {
-            ["SM_Prop_Car_Wrecked_01"] = 1, ["SM_Prop_Car_Wrecked_Rusted_01"] = 1, ["SM_Prop_Car_Wrecked_SUV_01"] = 1, ["SM_Prop_Car_Wrecked_OpenBoot_01"] = 1,
-            ["SK_Veh_Caravan_01"] = 1,
-        };
+            if (art == null || string.IsNullOrEmpty(art.fbx)) return 0;
+            int known = MapCatalog.Load()?.TurnOf(ModelKey(art)) ?? -1;
+            return known >= 0 ? known : art.pack == "apocalypse" ? 1 : 2;
+        }
 
-        /// <summary>The quarter turns a model's Unity prefab stands from its source FBX (0 for most).</summary>
-        public static int UnityTurn(string fbx) => fbx != null && UnityTurns.TryGetValue(System.IO.Path.GetFileName(fbx), out int k) ? k : 0;
+        /// <summary>The same by the model's name alone (the first prop's that is drawn with it).</summary>
+        public static int UnityTurn(string fbx)
+        {
+            if (fbx == null) return 0;
+            Load();
+            string file = System.IO.Path.GetFileName(fbx);
+            return UnityTurn(props.Values.FirstOrDefault(p => p.fbx != null && System.IO.Path.GetFileName(p.fbx) == file));
+        }
+
+        /// <summary>
+        /// The model a prop is drawn with, as the catalog and the labs look it up: `pack:fbx` (MapArt.json's pack and name).
+        /// Several packs have a model of the same name (Farm's SM_Prop_Fence_Wood_Gate_01 is a lattice gate, Apocalypse's a
+        /// planked door; Town's SM_Prop_Couch_01 and Apocalypse's), so the name alone is not enough.
+        /// </summary>
+        public static string ModelKey(PropArt art) => art == null || string.IsNullOrEmpty(art.fbx) ? null : $"{art.pack}:{art.fbx}";
 
         public static PropArt Prop(string id)
         {
@@ -70,11 +91,18 @@ namespace Bastion.Client.Map
             return props.TryGetValue(id, out var p) ? p : null;
         }
 
-        /// <summary>Every prop's Synty model by name, for the game's catalog (MapCatalog).</summary>
+        /// <summary>Every prop's id (MapArt.json's props).</summary>
+        public static IEnumerable<string> Ids()
+        {
+            Load();
+            return props.Keys;
+        }
+
+        /// <summary>Every prop's Synty model by its key (ModelKey), for the game's catalog (MapCatalog).</summary>
         public static IEnumerable<string> Models()
         {
             Load();
-            foreach (var p in props.Values) if (!string.IsNullOrEmpty(p.fbx)) yield return p.fbx;
+            foreach (var p in props.Values) if (!string.IsNullOrEmpty(p.fbx)) yield return ModelKey(p);
         }
 
         /// <summary>A set's props (PROP_SETS), or the prop of that id alone.</summary>

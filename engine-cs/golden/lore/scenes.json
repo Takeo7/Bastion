@@ -1,0 +1,5126 @@
+{
+ "cases": [
+  {
+   "name": "solo-new",
+   "base": "solo-new",
+   "patch": [],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "duo-new",
+   "base": "duo-new",
+   "patch": [],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "late-partner",
+   "base": "late-partner",
+   "patch": [],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "proposal-contact",
+   "base": "proposal-contact",
+   "patch": [],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "proposal-choose",
+   "base": "proposal-choose",
+   "patch": [],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "proposal-recruit",
+   "base": "proposal-recruit",
+   "patch": [],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "proposal-buy",
+   "base": "proposal-buy",
+   "patch": [],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "proposal-place",
+   "base": "proposal-place",
+   "patch": [],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-1",
+   "base": "mission-1",
+   "patch": [],
+   "unlocked": [
+    "firstBite"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstBite"
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "event",
+   "base": "event",
+   "patch": [],
+   "unlocked": [
+    "firstBite"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstBite"
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "treatment",
+   "base": "treatment",
+   "patch": [],
+   "unlocked": [
+    "firstBite"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstBite"
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "siege-posts",
+   "base": "siege-posts",
+   "patch": [],
+   "unlocked": [
+    "firstBite"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstBite"
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-2",
+   "base": "mission-2",
+   "patch": [],
+   "unlocked": [
+    "firstTurned"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstTurned"
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "taller-at-work",
+   "base": "taller-at-work",
+   "patch": [],
+   "unlocked": [
+    "firstTurned"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstTurned"
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "levelled",
+   "base": "levelled",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "firstTurned"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "firstTurned"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "firstTurned"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "firstTurned"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-3",
+   "base": "mission-3",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstTurned"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstTurned"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstTurned"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-4",
+   "base": "mission-4",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstBite",
+    "firstTurned",
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstBite",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstBite",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "quest-decision",
+   "base": "quest-decision",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstBite",
+    "firstTurned",
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstBite",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstBite",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "waited",
+   "base": "waited",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstFlood",
+    "firstTurned",
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-5",
+   "base": "mission-5",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstFlood",
+    "firstTurned",
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-6",
+   "base": "mission-6",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstFlood",
+    "firstTurned",
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-7",
+   "base": "mission-7",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstFlood",
+    "firstTurned",
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-8",
+   "base": "mission-8",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstFlood",
+    "firstTurned",
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-9",
+   "base": "mission-9",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstFlood",
+    "firstTurned",
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "mission-10",
+   "base": "mission-10",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstFlood",
+    "firstTurned",
+    "hunger",
+    "granCoral"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": "granCoral"
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "granCoral"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": "granCoral"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "granCoral"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger",
+      "granCoral"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger",
+      "granCoral"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "ending",
+   "base": "ending",
+   "patch": [],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "firstFlood",
+    "firstTurned",
+    "hunger",
+    "eve",
+    "endingBreak"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": "endingBreak"
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "endingBreak"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": "endingBreak"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "endingBreak"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger",
+      "eve",
+      "endingBreak"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "firstFlood",
+      "firstTurned",
+      "hunger",
+      "eve",
+      "endingBreak"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "muestra",
+   "base": "muestra",
+   "patch": [],
+   "unlocked": [
+    "firstBite",
+    "foundWeapon"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstBite"
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": "foundWeapon"
+    },
+    {
+     "seen": [
+      "firstBite",
+      "foundWeapon"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite",
+      "foundWeapon"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "day 32",
+   "base": "duo-new",
+   "patch": [
+    [
+     "day",
+     32
+    ]
+   ],
+   "unlocked": [
+    "council"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "council"
+    },
+    {
+     "seen": [
+      "council"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "council"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "council"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "council"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "chapter 1 at level 2",
+   "base": "duo-new",
+   "patch": [
+    [
+     "story.done",
+     1
+    ],
+    [
+     "level",
+     2
+    ]
+   ],
+   "unlocked": [
+    "ch1After"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch1After"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "chapter 2 offered",
+   "base": "duo-new",
+   "patch": [
+    [
+     "offers.0.story",
+     2
+    ]
+   ],
+   "unlocked": [
+    "ch2Before"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "chapter 3 offered",
+   "base": "duo-new",
+   "patch": [
+    [
+     "offers.0.story",
+     3
+    ]
+   ],
+   "unlocked": [
+    "ch3Before"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch3Before"
+    },
+    {
+     "seen": [
+      "ch3Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch3Before"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch3Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch3Before"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "chapter 2 won",
+   "base": "duo-new",
+   "patch": [
+    [
+     "story.done",
+     2
+    ]
+   ],
+   "unlocked": [
+    "ch2Before",
+    "ch2After"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": "ch2After"
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "chapter 3 won",
+   "base": "duo-new",
+   "patch": [
+    [
+     "story.done",
+     3
+    ]
+   ],
+   "unlocked": [
+    "ch2Before",
+    "ch2After",
+    "ch3Before",
+    "ch3After"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": "ch2After"
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "chapter 5 won",
+   "base": "duo-new",
+   "patch": [
+    [
+     "story.done",
+     5
+    ]
+   ],
+   "unlocked": [
+    "ch2Before",
+    "ch2After",
+    "ch3Before",
+    "ch3After",
+    "ch5After"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": "ch2After"
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "ch5After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "ch5After"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "chapter 6 won",
+   "base": "duo-new",
+   "patch": [
+    [
+     "story.done",
+     6
+    ]
+   ],
+   "unlocked": [
+    "ch2Before",
+    "ch2After",
+    "ch3Before",
+    "ch3After",
+    "ch5After",
+    "ch6After"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": "ch2After"
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "ch5After",
+      "ch6After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "ch5After",
+      "ch6After"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "chapter 7 won",
+   "base": "duo-new",
+   "patch": [
+    [
+     "story.done",
+     7
+    ]
+   ],
+   "unlocked": [
+    "ch2Before",
+    "ch2After",
+    "ch3Before",
+    "ch3After",
+    "ch5After",
+    "ch6After",
+    "voz"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "ch2Before"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": "ch2After"
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "ch5After",
+      "ch6After",
+      "voz"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "ch5After",
+      "ch6After",
+      "voz"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "level 4",
+   "base": "duo-new",
+   "patch": [
+    [
+     "level",
+     4
+    ]
+   ],
+   "unlocked": [
+    "partitura"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "partitura"
+    },
+    {
+     "seen": [
+      "partitura"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "partitura"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "partitura"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "partitura"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "level 6",
+   "base": "duo-new",
+   "patch": [
+    [
+     "level",
+     6
+    ]
+   ],
+   "unlocked": [
+    "partitura",
+    "confession"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "partitura"
+    },
+    {
+     "seen": [
+      "partitura"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "partitura"
+     ],
+     "moment": true,
+     "scene": "confession"
+    },
+    {
+     "seen": [
+      "partitura",
+      "confession"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "partitura",
+      "confession"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "level 7",
+   "base": "duo-new",
+   "patch": [
+    [
+     "level",
+     7
+    ]
+   ],
+   "unlocked": [
+    "partitura",
+    "confession",
+    "contranota"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "partitura"
+    },
+    {
+     "seen": [
+      "partitura"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "partitura"
+     ],
+     "moment": true,
+     "scene": "confession"
+    },
+    {
+     "seen": [
+      "partitura",
+      "confession",
+      "contranota"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "partitura",
+      "confession",
+      "contranota"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "flooded",
+   "base": "duo-new",
+   "patch": [
+    [
+     "flooded",
+     [
+      "na"
+     ]
+    ]
+   ],
+   "unlocked": [
+    "firstFlood"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstFlood"
+    },
+    {
+     "seen": [
+      "firstFlood"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstFlood"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstFlood"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstFlood"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "Simão at the door",
+   "base": "duo-new",
+   "patch": [
+    [
+     "event",
+     "simon"
+    ]
+   ],
+   "unlocked": [
+    "simon"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": "simon"
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "simon"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "simon"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "simon"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "simon"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "Simão trusted",
+   "base": "duo-new",
+   "patch": [
+    [
+     "story.simon",
+     "trusted"
+    ],
+    [
+     "story.done",
+     5
+    ]
+   ],
+   "unlocked": [
+    "ch2Before",
+    "ch2After",
+    "ch3Before",
+    "ch3After",
+    "simon",
+    "ch5After"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": "simon"
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "simon",
+      "ch5After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "simon",
+      "ch5After"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "simon",
+      "Os dije dónde estaba."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "simon",
+      "Los Cuervos no se la merecen. Aunque mi hermano siga con ellos."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "Simão refused",
+   "base": "duo-new",
+   "patch": [
+    [
+     "story.simon",
+     "refused"
+    ],
+    [
+     "story.done",
+     5
+    ]
+   ],
+   "unlocked": [
+    "ch2Before",
+    "ch2After",
+    "ch3Before",
+    "ch3After",
+    "simon",
+    "ch5After"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": "simon"
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": false,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch2Before"
+     ],
+     "moment": true,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "simon",
+      "ch5After"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "simon",
+      "ch5After"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "echoes",
+   "base": "duo-new",
+   "patch": [
+    [
+     "bastion.pieces",
+     {
+      "id": "echoes-1",
+      "piece": "echoes",
+      "x": 0,
+      "y": 0,
+      "rot": 0
+     },
+     true
+    ]
+   ],
+   "unlocked": [
+    "velmar"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "velmar"
+    },
+    {
+     "seen": [
+      "velmar"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "velmar"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "velmar"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "velmar"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "bitten",
+   "base": "duo-new",
+   "patch": [
+    [
+     "soldiers.0.infection",
+     {
+      "since": 1
+     }
+    ]
+   ],
+   "unlocked": [
+    "firstBite"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstBite"
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "bitten, no medicines",
+   "base": "duo-new",
+   "patch": [
+    [
+     "soldiers.0.infection",
+     {
+      "since": 1
+     }
+    ],
+    [
+     "medicines",
+     0
+    ]
+   ],
+   "unlocked": [
+    "firstBite",
+    "shortMedicines"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstBite"
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite"
+     ],
+     "moment": true,
+     "scene": "shortMedicines"
+    },
+    {
+     "seen": [
+      "firstBite",
+      "shortMedicines"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstBite",
+      "shortMedicines"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "turned",
+   "base": "duo-new",
+   "patch": [
+    [
+     "soldiers.0.alive",
+     false
+    ],
+    [
+     "soldiers.0.fellCause",
+     "turned"
+    ]
+   ],
+   "unlocked": [
+    "firstTurned"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "firstTurned"
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "firstTurned"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "fallen",
+   "base": "duo-new",
+   "patch": [
+    [
+     "soldiers.0.alive",
+     false
+    ],
+    [
+     "soldiers.0.fellCause",
+     "killed"
+    ]
+   ],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "hungry",
+   "base": "duo-new",
+   "patch": [
+    [
+     "hungry",
+     true
+    ]
+   ],
+   "unlocked": [
+    "hunger"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "hunger"
+    },
+    {
+     "seen": [
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "hunger"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "hunger"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "a good weapon",
+   "base": "duo-new",
+   "patch": [
+    [
+     "foundWeapons",
+     [
+      {
+       "id": "fw1",
+       "kind": "huntingRifle",
+       "holder": null
+      }
+     ]
+    ]
+   ],
+   "unlocked": [
+    "foundWeapon"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "foundWeapon"
+    },
+    {
+     "seen": [
+      "foundWeapon"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "foundWeapon"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "foundWeapon"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "foundWeapon"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "a plain weapon",
+   "base": "duo-new",
+   "patch": [
+    [
+     "foundWeapons",
+     [
+      {
+       "id": "fw1",
+       "kind": "assaultRifle",
+       "holder": null
+      }
+     ]
+    ]
+   ],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "the final mission",
+   "base": "duo-new",
+   "patch": [
+    [
+     "offers.0.final",
+     true
+    ]
+   ],
+   "unlocked": [
+    "eve"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "eve"
+    },
+    {
+     "seen": [
+      "eve"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "eve"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "eve"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "eve"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "the finale",
+   "base": "duo-new",
+   "patch": [
+    [
+     "event",
+     "finale"
+    ]
+   ],
+   "unlocked": [
+    "eve"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "eve"
+    },
+    {
+     "seen": [
+      "eve"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "eve"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "eve"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "eve"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "ending break, trusted",
+   "base": "duo-new",
+   "patch": [
+    [
+     "ending",
+     "break"
+    ],
+    [
+     "story.simon",
+     "trusted"
+    ],
+    [
+     "story.done",
+     7
+    ],
+    [
+     "level",
+     8
+    ]
+   ],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "ch2After",
+    "ch3Before",
+    "ch3After",
+    "partitura",
+    "simon",
+    "ch5After",
+    "confession",
+    "ch6After",
+    "contranota",
+    "voz",
+    "eve",
+    "endingBreak"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": "simon"
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "simon"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "partitura",
+      "simon",
+      "ch5After",
+      "confession",
+      "ch6After",
+      "contranota",
+      "voz",
+      "eve",
+      "endingBreak"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "partitura",
+      "simon",
+      "ch5After",
+      "confession",
+      "ch6After",
+      "contranota",
+      "voz",
+      "eve",
+      "endingBreak"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "simon",
+      "Os dije dónde estaba."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "simon",
+      "Los Cuervos no se la merecen. Aunque mi hermano siga con ellos."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "ending record",
+   "base": "duo-new",
+   "patch": [
+    [
+     "ending",
+     "record"
+    ],
+    [
+     "story.done",
+     7
+    ],
+    [
+     "level",
+     8
+    ]
+   ],
+   "unlocked": [
+    "ch1After",
+    "ch2Before",
+    "ch2After",
+    "ch3Before",
+    "ch3After",
+    "partitura",
+    "ch5After",
+    "confession",
+    "ch6After",
+    "contranota",
+    "voz",
+    "eve",
+    "endingRecord"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": "endingRecord"
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "endingRecord"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": false,
+     "scene": "endingRecord"
+    },
+    {
+     "seen": [
+      "ch1After"
+     ],
+     "moment": true,
+     "scene": "endingRecord"
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "partitura",
+      "ch5After",
+      "confession",
+      "ch6After",
+      "contranota",
+      "voz",
+      "eve",
+      "endingRecord"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "ch1After",
+      "ch2Before",
+      "ch2After",
+      "ch3Before",
+      "ch3After",
+      "partitura",
+      "ch5After",
+      "confession",
+      "ch6After",
+      "contranota",
+      "voz",
+      "eve",
+      "endingRecord"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "kilometre zero",
+   "base": "duo-new",
+   "patch": [
+    [
+     "outcome",
+     "defeat"
+    ],
+    [
+     "doom",
+     12
+    ]
+   ],
+   "unlocked": [
+    "granCoral"
+   ],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": "granCoral"
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": "granCoral"
+    },
+    {
+     "seen": [
+      "granCoral"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "granCoral"
+     ],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [
+      "granCoral"
+     ],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [
+      "granCoral"
+     ],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  },
+  {
+   "name": "lost, not to the Marea",
+   "base": "duo-new",
+   "patch": [
+    [
+     "outcome",
+     "defeat"
+    ],
+    [
+     "doom",
+     5
+    ]
+   ],
+   "unlocked": [],
+   "next": [
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": false,
+     "scene": null
+    },
+    {
+     "seen": [],
+     "moment": true,
+     "scene": null
+    }
+   ],
+   "lines": {
+    "ch5After": [
+     [
+      "nwosu",
+      "Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre."
+     ],
+     [
+      "nwosu",
+      "El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna."
+     ],
+     [
+      "teo",
+      "Pregunta cuándo puede subir a La Lata."
+     ]
+    ],
+    "eve": [
+     [
+      "morse",
+      "La Marea se ve desde lo alto de la cuesta. Llena el valle."
+     ],
+     [
+      "teo",
+      "La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo."
+     ],
+     [
+      "nwosu",
+      "La vacuna está lista. Pocas dosis. Habrá que decidir para quién."
+     ],
+     [
+      "morse",
+      "Lo decidiréis los dos."
+     ]
+    ]
+   }
+  }
+ ]
+}

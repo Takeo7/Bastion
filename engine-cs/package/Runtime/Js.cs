@@ -466,7 +466,11 @@ namespace Bastion.Engine
     /// A JavaScript Map: walked in the order its keys went in (a key set again keeps its place; one deleted and set again
     /// goes last). Dictionary's order is not promised, and the engine's results depend on it (path.ts destinations).
     /// </summary>
-    public sealed class JsMap<TKey, TValue> : IEnumerable<KeyValuePair<TKey, TValue>> where TKey : notnull
+    /// <remarks>
+    /// Also a JavaScript object whose keys are deleted and set again, as the campaign's state has (`questLog`): it is an
+    /// IDictionary, so the JSON writes it as an object, in this order, and reads it back in the order it comes.
+    /// </remarks>
+    public sealed class JsMap<TKey, TValue> : IDictionary<TKey, TValue> where TKey : notnull
     {
         private readonly Dictionary<TKey, int> index = new Dictionary<TKey, int>();
         private readonly List<TKey> keys = new List<TKey>();
@@ -546,6 +550,58 @@ namespace Bastion.Engine
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
+        }
+
+        // As an IDictionary (a JavaScript object's `o[key]`, `delete o[key]`), the same Map underneath.
+
+        /// <summary>`o[key]`; a key it doesn't have throws, as a Dictionary's; set, Map.set.</summary>
+        public TValue this[TKey key]
+        {
+            get => index.TryGetValue(key, out var i) ? values[i] : throw new KeyNotFoundException();
+            set => Set(key, value);
+        }
+
+        /// <summary>Map.set of a key it doesn't have; one it has throws, as a Dictionary's.</summary>
+        public void Add(TKey key, TValue value)
+        {
+            if (index.ContainsKey(key)) throw new ArgumentException("JsMap: the key is there already.");
+            Set(key, value);
+        }
+
+        public bool ContainsKey(TKey key) => Has(key);
+
+        /// <summary>Map.delete.</summary>
+        public bool Remove(TKey key) => Delete(key);
+
+        /// <summary>Map.clear.</summary>
+        public void Clear()
+        {
+            index.Clear();
+            keys.Clear();
+            values.Clear();
+        }
+
+        ICollection<TKey> IDictionary<TKey, TValue>.Keys => keys.AsReadOnly();
+
+        ICollection<TValue> IDictionary<TKey, TValue>.Values => values.AsReadOnly();
+
+        bool ICollection<KeyValuePair<TKey, TValue>>.IsReadOnly => false;
+
+        void ICollection<KeyValuePair<TKey, TValue>>.Add(KeyValuePair<TKey, TValue> item) => Add(item.Key, item.Value);
+
+        bool ICollection<KeyValuePair<TKey, TValue>>.Contains(KeyValuePair<TKey, TValue> item)
+        {
+            return TryGetValue(item.Key, out var value) && EqualityComparer<TValue>.Default.Equals(value, item.Value);
+        }
+
+        void ICollection<KeyValuePair<TKey, TValue>>.CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
+        {
+            foreach (var e in this) array[arrayIndex++] = e;
+        }
+
+        bool ICollection<KeyValuePair<TKey, TValue>>.Remove(KeyValuePair<TKey, TValue> item)
+        {
+            return ((ICollection<KeyValuePair<TKey, TValue>>)this).Contains(item) && Delete(item.Key);
         }
     }
 

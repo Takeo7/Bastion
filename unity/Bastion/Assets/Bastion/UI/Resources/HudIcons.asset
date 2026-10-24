@@ -143,6 +143,12 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 62b25a71ccf0bc147a37fcec0f480e4d, type: 3}
   - Id: base:menu
     Sprite: {fileID: 21300000, guid: ec17e8766917dc9489a6f7f8afbed8d7, type: 3}
+  - Id: base:beds
+    Sprite: {fileID: 21300000, guid: 5f97f454f0cb0f449b593a448d885a6b, type: 3}
+  - Id: base:garden
+    Sprite: {fileID: 21300000, guid: 824bf4e389cadee4a99e1a390dfc9e41, type: 3}
+  - Id: base:will
+    Sprite: {fileID: 21300000, guid: 2a9c1235489e1e14d841e7507a84ed94, type: 3}
   - Id: tab:geoscape
     Sprite: {fileID: 21300000, guid: ab441200c73329d4d9925ec803e6f048, type: 3}
   - Id: tab:engineering

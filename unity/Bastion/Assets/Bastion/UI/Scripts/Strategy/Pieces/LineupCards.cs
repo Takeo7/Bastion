@@ -85,6 +85,7 @@ namespace Bastion.UI.Strategy
                 var id = v.Id;
                 var x = new Button(() => handlers.OnSquadToggle(id, false)) { text = "×" };
                 x.AddToClassList("lineup-card__remove");
+                tips.Attach(x, StrategyText.Squad.RemoveTip);
                 card.Add(x);
             }
             Ui.Text(v.Name, "lineup-card__name font-title", card);
@@ -95,9 +96,10 @@ namespace Bastion.UI.Strategy
                 if (l.Kind == "point")
                 {
                     Ui.Text("→", "lineup-learned__arrow", tag);
-                    Ui.Text("+1", "lineup-learned__hex font-title", tag);
+                    Ui.Text($"+{l.Count}", "lineup-learned__hex font-title", tag);
+                    tips.Attach(tag, l.Tip ?? StrategyText.Learned.PointsTip);
                 }
-                var text = Ui.Text(l.Text, "lineup-learned__text font-title", tag);
+                var text = Ui.Text(l.Kind == "point" ? StrategyText.Learned.Points(l.Count) : l.Text, "lineup-learned__text font-title", tag);
                 if (l.Line >= 0)
                 {
                     var color = SkillHex.Colors[Mathf.Clamp(l.Line, 0, SkillHex.Colors.Length - 1)];

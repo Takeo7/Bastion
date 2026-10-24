@@ -39,19 +39,19 @@ namespace Bastion.UI.Strategy
             {
                 var outings = Ui.El("strat-brand__outings", brand);
                 Ui.Icon(icon, "base:day", "strat-brand__icon", outings);
-                Ui.Text($"{v.Outings} SALIDAS", "font-title", outings);
-                tips.Attach(brand, v.OutingsTip);
+                Ui.Text(Bastion.Engine.Lore.OutingsMark(v.Outings), "font-title", outings);
+                Named(brand, v.OutingsTip);
             }
             if (!string.IsNullOrEmpty(v.Siege))
             {
                 var siege = Ui.Text(v.Siege, "strat-siege font-title", host);
                 siege.EnableInClassList("strat-siege--now", v.SiegeNow);
                 siege.EnableInClassList("strat-siege--near", v.SiegeNear);
-                tips.Attach(siege, v.SiegeTip);
+                Named(siege, v.SiegeTip);
             }
             var stores = Ui.El("strat-res", host);
             var day = Well(stores, "base:day", "strat-well--day", $"DÍA {v.Day}");
-            tips.Attach(day, v.DayTip);
+            Named(day, v.DayTip);
             foreach (var s in v.Stores)
             {
                 var well = Well(stores, "store:" + s.Id, "strat-well--" + s.Id, s.Value);
@@ -69,14 +69,14 @@ namespace Bastion.UI.Strategy
                 var level = Well(stores, "base:level", "strat-well--level", v.Level);
                 var bar = Ui.El("strat-level-bar", level);
                 for (var i = 0; i < v.LevelTotal; i++) Ui.El(i < v.LevelFilled ? "strat-level-bar__mark strat-level-bar__mark--on" : "strat-level-bar__mark", bar);
-                tips.Attach(level, v.LevelTip);
+                Named(level, v.LevelTip);
             }
             var doom = Ui.El("strat-doom", host);
             Ui.Icon(icon, "base:doom", "strat-doom__icon", doom);
             var marks = Ui.El("strat-doom__marks", doom);
             for (var i = 0; i < v.DoomMax; i++) Ui.El(i < v.DoomFilled ? "strat-doom__mark strat-doom__mark--on" : "strat-doom__mark", marks);
             Ui.Text(v.DoomFigure, "strat-doom__figure font-title", doom);
-            tips.Attach(doom, v.DoomTip);
+            Named(doom, v.DoomTip);
             var menu = new Button(handlers.OnMenu);
             menu.AddToClassList("strat-menu");
             Ui.Icon(icon, "base:menu", "strat-menu__icon", menu);
@@ -92,6 +92,13 @@ namespace Bastion.UI.Strategy
             Ui.Icon(icon, iconId, "strat-well__icon", well);
             Ui.Text(value, "strat-well__value font-title", well);
             return well;
+        }
+
+        /// <summary>`el`'s tooltip with its name, as the stores': none if the view gives none.</summary>
+        void Named(VisualElement el, TipView t)
+        {
+            if (t == null) return;
+            tips.Attach(el, () => Tip(t.Name, t.Lines));
         }
 
         /// <summary>A rich tooltip: the name, then each sentence with its figures picked out (withTip, sentences, figures).</summary>

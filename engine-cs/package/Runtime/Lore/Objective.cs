@@ -191,6 +191,15 @@ namespace Bastion.Engine
             return $"Contacta por radio con {RegionLores[id].Ally} desde el Mapa ({cost} §) para poder asaltarlo.";
         }
 
+        /// <summary>
+        /// The tooltip of the Mapa's «Nidos» head: the glossary's Nido, with the doom track by the name it has at `level`.
+        /// Not in lore.ts, which shows GLOSSARY.Nido, and that names the Marea before level 4, when nobody knows of it yet.
+        /// </summary>
+        public static string NestTip(int level)
+        {
+            return $"Sitio donde se juntan los zombis. Hace crecer {DoomSubject(level)}; quemarlo la hace retroceder.";
+        }
+
         /// <summary>«Qué hace» for a contact: who answers, what they send and what it opens.</summary>
         public static string ContactAim(string id, int income)
         {

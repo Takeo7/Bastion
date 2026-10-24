@@ -16,6 +16,7 @@ namespace Bastion.UI.Strategy
     {
         readonly VisualElement host;
         readonly IStrategyHandlers handlers;
+        readonly TooltipLayer tips;
         readonly SkillBoard board;
         readonly VisualElement head;
         readonly VisualElement card;
@@ -25,10 +26,11 @@ namespace Bastion.UI.Strategy
         /// <summary>A soldier's bust by id; null, the silhouette.</summary>
         public Func<string, Texture> PortraitOf;
 
-        public SkillBoardModal(VisualElement host, IStrategyHandlers handlers, Action<string> sound)
+        public SkillBoardModal(VisualElement host, IStrategyHandlers handlers, Action<string> sound, TooltipLayer tips = null)
         {
             this.host = host;
             this.handlers = handlers;
+            this.tips = tips;
             var panel = Ui.El("board-modal panel", host);
             head = Ui.El("board-modal__head", panel);
             var body = Ui.El("board-modal__body", panel);
@@ -71,6 +73,7 @@ namespace Bastion.UI.Strategy
             pill.EnableInClassList("board-modal__points--some", v.Points > 0);
             Ui.Text(v.Points.ToString(), "board-modal__points-n font-title", pill);
             Ui.Text(v.Points == 1 ? "punto por gastar" : "puntos por gastar", "board-modal__points-text font-title", pill);
+            tips?.Attach(pill, StrategyText.Board.PointsTip);
             board.Set(v.Board, v.Points, v.Editable);
             board.Select(Board.Core);
             Card(Board.Core);

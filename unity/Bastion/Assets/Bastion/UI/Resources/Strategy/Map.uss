@@ -350,6 +350,13 @@
     white-space: normal;
 }
 
+/* A zone's small lines: who is there and what they send (muted), a Nido (red). */
+.map-detail__line {
+    margin-top: 8px;
+    font-size: 12px;
+    white-space: normal;
+}
+
 .map-detail__note {
     margin-top: 6px;
     font-size: 17px;

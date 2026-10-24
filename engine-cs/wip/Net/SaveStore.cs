@@ -23,7 +23,7 @@ namespace Bastion.Net
         public string Phase { get; set; } = RoomPhases.Lobby;
         public string Mode { get; set; } = "skirmish"; // skirmish | campaign
         public GameState? State { get; set; }
-        public WipCampaign? Campaign { get; set; }
+        public CampaignState? Campaign { get; set; }
         /// <summary>Whether the finished campaign mission has already been folded into the campaign.</summary>
         public bool ResultApplied { get; set; }
         public long[] Rng { get; set; } = new long[4];
@@ -44,13 +44,13 @@ namespace Bastion.Net
         public const int SaveVersion = 6;
 
         /// <summary>
-        /// The release whose progression a campaign must be from (campaign.ts campaignOutdated, FRESH_CAMPAIGN_VERSION):
+        /// The release whose progression a campaign must be from (campaign.ts campaignOutdated, Campaign.FreshCampaignVersion):
         /// older ones are kept aside under its name, save.antes-&lt;release&gt;.json, and the messages say it.
         /// </summary>
         public const string FreshRelease = "0.7";
 
         private readonly string path;
-        private readonly ICampaignRules? campaign;
+        private readonly ICampaignRules? campaignRules;
 
         /// <summary>A line for the host's red.log; the room writes there too.</summary>
         public Action<string> Log { get; }
@@ -58,11 +58,11 @@ namespace Bastion.Net
         /// <summary>Where a campaign from before FreshRelease was put aside on loading, if one was (docs/FASE9.md §7, FASE10.md).</summary>
         public string? SetAside { get; private set; }
 
-        /// <summary>`campaign`: to bring a saved campaign up to date (without it, a save with one is read as it is).</summary>
-        public SaveStore(string path, Action<string>? log = null, ICampaignRules? campaign = null)
+        /// <summary>`campaignRules`: to bring a campaign of an older version up to date (without them, it is read as it is).</summary>
+        public SaveStore(string path, Action<string>? log = null, ICampaignRules? campaignRules = null)
         {
             this.path = path;
-            this.campaign = campaign;
+            this.campaignRules = campaignRules;
             Log = log ?? ((_) => { });
         }
 
@@ -115,14 +115,15 @@ namespace Bastion.Net
                 // A campaign from before FreshRelease can't take the new progression (docs/FASE9.md §7, FASE10.md): the file
                 // is kept aside as it is and the room starts in the lobby. If it can't be kept aside, the host stops
                 // (KeepAside throws, past the catch below), rather than write over it.
-                var campaignVersion = data["campaign"]?["version"];
-                if (campaign != null && campaignVersion?.Type == JTokenType.Integer && campaign.CampaignOutdated((int)campaignVersion))
+                // `campaign: null` in TypeScript's skirmishes: no campaign, as when it is missing.
+                var campaignVersion = (data["campaign"] as JObject)?["version"];
+                if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion < Campaign.FreshCampaignVersion)
                 {
                     SetAside = KeepAside($"antes-{FreshRelease}", file, false);
                     Log($"[save] Partida de antes de la {FreshRelease}: guardada aparte en {SetAside}; se empieza en el vestíbulo.");
                     return true;
                 }
-                if (campaign != null && campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion > campaign.CampaignVersion)
+                if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion > Campaign.CampaignVersion)
                 {
                     error = "es de una versión más nueva de Bastión";
                     return false;
@@ -139,7 +140,7 @@ namespace Bastion.Net
                     return true;
                 }
                 save = data.ToObject<SaveFile>(Json.Serializer);
-                if (save?.Campaign != null && campaign != null && save.Campaign.Version != campaign.CampaignVersion) save.Campaign = campaign.MigrateCampaign(save.Campaign);
+                if (save?.Campaign != null && campaignRules != null && save.Campaign.Version != Campaign.CampaignVersion) save.Campaign = campaignRules.MigrateCampaign(save.Campaign);
                 return true;
             }
             catch (Exception e) when (!(e is KeepAsideFailed) && (e is IOException || e is UnauthorizedAccessException || e is JsonException || e is FormatException || e is InvalidCastException))

@@ -124,12 +124,23 @@ namespace Bastion.UI.Strategy
         public List<string> Text = new List<string>();
         /// <summary>The offer's signature, handwritten.</summary>
         public string Note;
+        /// <summary>A zone's small lines under its text: who is there and what they send, its errand, its Nido.</summary>
+        public List<MapLineView> Lines = new List<MapLineView>();
         public List<RowView> Rows = new List<RowView>();
         /// <summary>The network's meter under a contact (filled, of).</summary>
         public int Meter;
         public int MeterMax;
         public List<MapButtonView> Buttons = new List<MapButtonView>();
         public string Why;
+    }
+
+    [Serializable]
+    public sealed class MapLineView
+    {
+        public string Text;
+        /// <summary>bad (a Nido, a zone under the Marea) or null, muted.</summary>
+        public string Tone;
+        public string Tip;
     }
 
     [Serializable]
