@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The network (docs/UNITY.md, Red): the host's room, the client and the transport, with JSON; apart from the engine, which depends on no JSON library. Unity compiles the same files with Bastion.Net.asmdef. In its own folder: two projects in one share obj/ and undo each other's restore. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Bastion.Net</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../package/Runtime/Net/**/*.cs" />
+    <!-- What is half done, which Unity doesn't see (engine-cs README). -->
+    <Compile Include="../wip/Net/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Unity brings 13.0.2 (com.unity.nuget.newtonsoft-json); any 13 reads and writes the same. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Bastion.Engine.csproj" />
+  </ItemGroup>
+</Project>

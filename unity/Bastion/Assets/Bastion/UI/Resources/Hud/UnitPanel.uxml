@@ -1,0 +1,17 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!-- The picked soldier's panel (hud.ts setSelected; UnitPanel.cs fills it). The backpack comes after the first milestone. -->
+    <ui:VisualElement name="head" class="unit-head">
+        <ui:VisualElement name="rank" class="rank" picking-mode="Ignore" />
+        <ui:VisualElement name="name-row" class="unit-head__name-row" picking-mode="Ignore">
+            <ui:Label name="name" class="unit-name font-title" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:Label name="class" class="unit-class muted" />
+        <ui:Label name="whose" class="whose tag" />
+        <ui:Label name="bite" class="tag tag--bite" />
+    </ui:VisualElement>
+    <ui:VisualElement name="stats" class="unit-stats" />
+    <ui:VisualElement name="weapon" class="unit-weapon">
+        <ui:VisualElement class="stat-icon stat-icon--weapon" picking-mode="Ignore" />
+        <ui:Label name="weapon-name" class="unit-weapon__name" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

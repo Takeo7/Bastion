@@ -1,0 +1,129 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48b7fbd162474407ea117ed38629b1fe, type: 3}
+  m_Name: HudIcons
+  m_EditorClassIdentifier: Bastion.UI::Bastion.UI.Hud.HudIconTable
+  Entries:
+  - Id: shoot
+    Sprite: {fileID: 21300000, guid: 89ecffc93d8631b40b9dfa5c75d16116, type: 3}
+  - Id: weapon:rifle
+    Sprite: {fileID: 21300000, guid: 89ecffc93d8631b40b9dfa5c75d16116, type: 3}
+  - Id: weapon:pistol
+    Sprite: {fileID: 21300000, guid: 76a01d15da329774faff16bf89d49346, type: 3}
+  - Id: weapon:shotgun
+    Sprite: {fileID: 21300000, guid: 762131e06799cab4cb382908005c1ce4, type: 3}
+  - Id: weapon:sniper
+    Sprite: {fileID: 21300000, guid: 0e48012f5dfa16345963314be590a3c0, type: 3}
+  - Id: weapon:cannon
+    Sprite: {fileID: 21300000, guid: 6f9436295675b0a4cbbfa6176cc476e0, type: 3}
+  - Id: pistol
+    Sprite: {fileID: 21300000, guid: 76a01d15da329774faff16bf89d49346, type: 3}
+  - Id: slash
+    Sprite: {fileID: 21300000, guid: c54c4970ee93e2545a8cbffd087741f0, type: 3}
+  - Id: overwatchMelee
+    Sprite: {fileID: 21300000, guid: 7f43c38336b908e428cac2195ddc57d7, type: 3}
+  - Id: stone
+    Sprite: {fileID: 21300000, guid: 1458be508d6262d43a4afa7d87f4a658, type: 3}
+  - Id: overwatch
+    Sprite: {fileID: 21300000, guid: a8d702d679318b44ca69b4f867c1b332, type: 3}
+  - Id: hunker
+    Sprite: {fileID: 21300000, guid: 28a19294736fdde4ba1551844e2941da, type: 3}
+  - Id: reload
+    Sprite: {fileID: 21300000, guid: 29b8fbca4442f9f40911e8aba1bf1801, type: 3}
+  - Id: grenade
+    Sprite: {fileID: 21300000, guid: 1458be508d6262d43a4afa7d87f4a658, type: 3}
+  - Id: missiles
+    Sprite: {fileID: 21300000, guid: 1458be508d6262d43a4afa7d87f4a658, type: 3}
+  - Id: launch
+    Sprite: {fileID: 21300000, guid: 06c7f1c205efba0418760e874c019102, type: 3}
+  - Id: smoke
+    Sprite: {fileID: 21300000, guid: d1677304366feea43845de5e0969f2d5, type: 3}
+  - Id: flashbang
+    Sprite: {fileID: 21300000, guid: cadf66080a1d5e34b985b2b4eeef6b35, type: 3}
+  - Id: firstAid
+    Sprite: {fileID: 21300000, guid: 12d1706fbf846a247ba82be6c3c41974, type: 3}
+  - Id: evac
+    Sprite: {fileID: 21300000, guid: c1181452fffbd7a4790b572c0e62d545, type: 3}
+  - Id: evacAccept
+    Sprite: {fileID: 21300000, guid: c1181452fffbd7a4790b572c0e62d545, type: 3}
+  - Id: evacRefuse
+    Sprite: {fileID: 21300000, guid: df047dd03ff0541499be1e075668f0f0, type: 3}
+  - Id: abandonRefuse
+    Sprite: {fileID: 21300000, guid: df047dd03ff0541499be1e075668f0f0, type: 3}
+  - Id: abandon
+    Sprite: {fileID: 21300000, guid: 5f647b59495ba5d49a34aaab53c2479c, type: 3}
+  - Id: abandonAccept
+    Sprite: {fileID: 21300000, guid: 5f647b59495ba5d49a34aaab53c2479c, type: 3}
+  - Id: hack
+    Sprite: {fileID: 21300000, guid: 2a9bf586126857e49a399faff1512758, type: 3}
+  - Id: search
+    Sprite: {fileID: 21300000, guid: 8a65f66b8fbcf4248a5b819cb71edfeb, type: 3}
+  - Id: searchRoom
+    Sprite: {fileID: 21300000, guid: 8a65f66b8fbcf4248a5b819cb71edfeb, type: 3}
+  - Id: runAndGun
+    Sprite: {fileID: 21300000, guid: ee63e40df78e38149a4fbe2ee6d77080, type: 3}
+  - Id: rapidFire
+    Sprite: {fileID: 21300000, guid: 130f1f8e9664ea64cbf414e4b970d3e6, type: 3}
+  - Id: aimedShot
+    Sprite: {fileID: 21300000, guid: 0e48012f5dfa16345963314be590a3c0, type: 3}
+  - Id: suppression
+    Sprite: {fileID: 21300000, guid: 6f9436295675b0a4cbbfa6176cc476e0, type: 3}
+  - Id: chainShot
+    Sprite: {fileID: 21300000, guid: 1b5debe2e542c7d468796221fe421e1c, type: 3}
+  - Id: rupture
+    Sprite: {fileID: 21300000, guid: 27359be4ef2da06498a2bfc485c0b593, type: 3}
+  - Id: elbowRoom
+    Sprite: {fileID: 21300000, guid: 47df44e4508aae6428f81cde563a519f, type: 3}
+  - Id: patchUp
+    Sprite: {fileID: 21300000, guid: d68781deb0bc2854e9f3ef6a8a0f2d59, type: 3}
+  - Id: lightningHands
+    Sprite: {fileID: 21300000, guid: 5fbe81ff8c0aeae4288d2d56370e3186, type: 3}
+  - Id: faceoff
+    Sprite: {fileID: 21300000, guid: 0acde0a574933734dac7b46f0f8b3ff4, type: 3}
+  - Id: killZone
+    Sprite: {fileID: 21300000, guid: 9e11ac4a1ed949142a9d8e059ff25f56, type: 3}
+  - Id: revival
+    Sprite: {fileID: 21300000, guid: 7de8e9e43a20d4f438fcab92ef3c4795, type: 3}
+  - Id: restoration
+    Sprite: {fileID: 21300000, guid: a2a2d4f75f093f9448023644345123a9, type: 3}
+  - Id: claw
+    Sprite: {fileID: 21300000, guid: ca292955d9929dd48b658eb22b7e89b4, type: 3}
+  - Id: mindspin
+    Sprite: {fileID: 21300000, guid: 52460614464439a4bbf9b0018b776a96, type: 3}
+  - Id: reanimate
+    Sprite: {fileID: 21300000, guid: a46c9dd4245e79a47b1f5083ce1e91c1, type: 3}
+  - Id: burst
+    Sprite: {fileID: 21300000, guid: 0ab0f1e374cb9c94fb86717589066fdf, type: 3}
+  - Id: stunLance
+    Sprite: {fileID: 21300000, guid: 40ba9a55860952f49bea9a9054d931b5, type: 3}
+  - Id: stat:hp
+    Sprite: {fileID: 21300000, guid: a2a2d4f75f093f9448023644345123a9, type: 3}
+  - Id: stat:ap
+    Sprite: {fileID: 21300000, guid: 3ede763e132d151499e339ef66c46c85, type: 3}
+  - Id: stat:ammo
+    Sprite: {fileID: 21300000, guid: 1b5debe2e542c7d468796221fe421e1c, type: 3}
+  - Id: stat:sidearm
+    Sprite: {fileID: 21300000, guid: 1b5debe2e542c7d468796221fe421e1c, type: 3}
+  - Id: stat:aim
+    Sprite: {fileID: 21300000, guid: 0cbef7be15e09b945868d53432235eac, type: 3}
+  - Id: stat:melee
+    Sprite: {fileID: 21300000, guid: c54c4970ee93e2545a8cbffd087741f0, type: 3}
+  - Id: stat:grenade
+    Sprite: {fileID: 21300000, guid: 1458be508d6262d43a4afa7d87f4a658, type: 3}
+  - Id: stat:armor
+    Sprite: {fileID: 21300000, guid: 1acaa59fd8634f74b9664cdaa3b45a46, type: 3}
+  - Id: stat:worn
+    Sprite: {fileID: 21300000, guid: 1acaa59fd8634f74b9664cdaa3b45a46, type: 3}
+  - Id: stat:weapon
+    Sprite: {fileID: 21300000, guid: 89ecffc93d8631b40b9dfa5c75d16116, type: 3}
+  - Id: ui:check
+    Sprite: {fileID: 21300000, guid: 51bc8b49758370744ad5f923d0408e44, type: 3}

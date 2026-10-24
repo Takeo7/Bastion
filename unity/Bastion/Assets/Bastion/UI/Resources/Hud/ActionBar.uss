@@ -1,0 +1,176 @@
+/* The action bar (hud.ts setAbilities): 56 px keys with the ability's icon; its card on hover; a menu's choices above it. */
+
+.ability {
+    width: 56px;
+    height: 56px;
+    margin: 0 3px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--m-steel);
+}
+
+.ability:hover {
+    background-color: var(--m-steel-hi);
+    border-top-color: var(--t-accent);
+}
+
+/* Armed (its first press) or its menu open: the accent round it. */
+.ability--active {
+    border-width: 2px;
+    border-color: var(--t-accent);
+}
+
+.ability--free .ability__icon {
+    -unity-background-image-tint-color: var(--t-good);
+}
+
+/* The icon: the Synty INTERFACE sprite for the ability (set from C# by id), tinted with the text colour. */
+.ability__icon {
+    width: 34px;
+    height: 34px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+.ability:disabled .ability__icon {
+    -unity-background-image-tint-color: var(--t-muted);
+}
+
+/* What to do first, on a slip over the key (#24: «Sin balas: recarga»). */
+.ability__note {
+    position: absolute;
+    left: -6px;
+    right: -6px;
+    top: -14px;
+    font-size: 9px;
+    -unity-text-align: middle-center;
+    background-color: var(--t-tag);
+    color: var(--t-warn);
+    white-space: nowrap;
+}
+
+.ability__count {
+    position: absolute;
+    right: 3px;
+    bottom: 1px;
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+.ability__cd {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: var(--t-text);
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* Nothing left to use: stamped, not explained (a red bar across it until the stamp's sprite is in). */
+.ability__stamp {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 24px;
+    height: 6px;
+    rotate: -20deg;
+    background-color: var(--t-stamp);
+}
+
+/* A menu's choices, above its key, numbered from 1. */
+.ability-slot {
+    align-items: center;
+}
+
+.ability-menu {
+    position: absolute;
+    bottom: 64px;
+    flex-direction: row;
+    padding: 4px;
+}
+
+/* Why the keys rest: over the bar. */
+.abilities__lock {
+    position: absolute;
+    bottom: 64px;
+    left: 0;
+    right: 0;
+    -unity-text-align: middle-center;
+    font-size: 12px;
+    color: var(--t-muted);
+}
+
+.abilities--locked .ability {
+    opacity: 0.55;
+}
+
+/* ============================================================== the card */
+
+.ability-card {
+    width: 250px;
+}
+
+.ac-head {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ac-head__name {
+    font-size: 14px;
+}
+
+.ac-head__key {
+    font-size: 11px;
+    padding: 0 4px;
+    border-width: 1px;
+    border-color: var(--t-line);
+    color: var(--t-muted);
+}
+
+.ac-stats {
+    margin-top: 4px;
+}
+
+.ac-stat {
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.ac-stat__k {
+    color: var(--t-muted);
+    font-size: 12px;
+}
+
+.ac-stat__v {
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.ac-cost {
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--t-accent);
+}
+
+.ac-dmg {
+    font-size: 12px;
+}
+
+.ac-desc {
+    margin-top: 4px;
+    font-size: 12px;
+    white-space: normal;
+}
+
+.ac-why {
+    margin-top: 4px;
+    font-size: 12px;
+    white-space: normal;
+    color: var(--t-warn);
+}

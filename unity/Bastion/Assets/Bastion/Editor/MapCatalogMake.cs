@@ -1,0 +1,90 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Bastion.Client.Map;
+using Bastion.Engine;
+using UnityEditor;
+using UnityEngine;
+
+namespace Bastion.EditorTools
+{
+    /// <summary>
+    /// Makes Resources/MapCatalog.asset (Bastion.Client.Map.MapCatalog): every model MapArt.json's props name and the
+    /// materials the map repaints with, looked up in Assets/Synty as the labs do. Run it again when the props change:
+    /// unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapCatalogMake.Run -quit.
+    /// </summary>
+    public static class MapCatalogMake
+    {
+        const string Asset = "Assets/Bastion/Client/Resources/MapCatalog.asset";
+
+        public static void Run()
+        {
+            var prefabOf = MapLab.Prefabs();
+            var materialOf = MapLab.Materials();
+            var missing = new List<string>();
+
+            var modelNames = MapArt.Models().Distinct().OrderBy(n => n).ToList();
+            var models = modelNames.Select(n => prefabOf(n)).ToList();
+            var materialNames = MapBuilder.MaterialsUsed.Distinct().OrderBy(n => n).ToList();
+            var materials = materialNames.Select(n => materialOf(n)).ToList();
+            for (int k = 0; k < modelNames.Count; k++) if (models[k] == null) missing.Add(modelNames[k]);
+            for (int k = 0; k < materialNames.Count; k++) if (materials[k] == null) missing.Add(materialNames[k]);
+
+            var catalog = AssetDatabase.LoadAssetAtPath<MapCatalog>(Asset);
+            if (catalog == null)
+            {
+                catalog = ScriptableObject.CreateInstance<MapCatalog>();
+                AssetDatabase.CreateAsset(catalog, Asset);
+            }
+            // Only what was found: a name without its model would only be a gap the builder reports anyway.
+            var found = Enumerable.Range(0, modelNames.Count).Where(k => models[k] != null).ToList();
+            catalog.modelNames = found.Select(k => modelNames[k]).ToArray();
+            catalog.models = found.Select(k => models[k]).ToArray();
+            var foundMaterials = Enumerable.Range(0, materialNames.Count).Where(k => materials[k] != null).ToList();
+            catalog.materialNames = foundMaterials.Select(k => materialNames[k]).ToArray();
+            catalog.materials = foundMaterials.Select(k => materials[k]).ToArray();
+            EditorUtility.SetDirty(catalog);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[catalog] {Asset}: {catalog.models.Length} models, {catalog.materials.Length} materials" + (missing.Count > 0 ? "; missing: " + string.Join(", ", missing) : ""));
+        }
+
+        /// <summary>
+        /// Every recorded state of a biome (BASTION_BIOME, city unless said) in engine-cs/golden/step*/ (one a file, or a file's
+        /// cases) built with the
+        /// game's catalog, and what each asks for that the catalog lacks: the maps the game would draw with gaps.
+        /// unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapCatalogMake.Check -quit
+        /// </summary>
+        public static void Check()
+        {
+            string biome = System.Environment.GetEnvironmentVariable("BASTION_BIOME") ?? "city";
+            var catalog = MapCatalog.Load() ?? throw new FileNotFoundException(Asset);
+            string golden = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../../../engine-cs/golden"));
+            var gaps = new SortedSet<string>();
+            int maps = 0;
+            // A state of its own (step1, step2), or many, each a case's (step3: {cases: [{name, state}]}).
+            var states = new List<(string name, Newtonsoft.Json.Linq.JToken state)>();
+            foreach (string file in Directory.GetDirectories(golden, "step*").OrderBy(d => d).SelectMany(d => Directory.GetFiles(d, "*.json").OrderBy(f => f)))
+            {
+                var json = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(file));
+                string where = System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(file)) + "/" + System.IO.Path.GetFileNameWithoutExtension(file);
+                if (json["state"] != null) states.Add((where, json["state"]));
+                if (json["cases"] is Newtonsoft.Json.Linq.JArray cases)
+                    foreach (var c in cases)
+                        if (c["state"] != null) states.Add(($"{where}/{(string)c["name"]}", c["state"]));
+            }
+            foreach (var (name, json) in states)
+            {
+                var state = Bastion.Net.Json.Read<GameState>(json.ToString(Newtonsoft.Json.Formatting.None));
+                if (state.Biome != biome) continue;
+                var root = new GameObject("Comprobación").transform;
+                var builder = new MapBuilder(state, root, catalog.PrefabOf(), catalog.MaterialOf());
+                builder.Build();
+                Object.DestroyImmediate(root.gameObject);
+                maps++;
+                Debug.Log($"[catalog] {name} ({state.MapId}, {state.Site ?? "-"}): {builder.Placed} props" + (builder.Missing.Count > 0 ? "; missing: " + string.Join(", ", builder.Missing.OrderBy(m => m)) : ""));
+                gaps.UnionWith(builder.Missing);
+            }
+            Debug.Log($"[catalog] {maps} {biome} maps; missing in all: " + (gaps.Count > 0 ? string.Join(", ", gaps) : "nothing"));
+        }
+    }
+}

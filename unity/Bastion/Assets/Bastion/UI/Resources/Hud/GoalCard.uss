@@ -1,0 +1,141 @@
+/* The objective's card under «Menú» (hud.ts setMission), and a siege's compass under it (#34). */
+
+.goal-dock {
+    width: 100%;
+    padding: 7px 10px 8px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    transition-property: opacity;
+    transition-duration: 0.3s;
+}
+
+.goal-dock:hover {
+    border-top-color: var(--t-accent);
+}
+
+/* Hidden while the arrival card is up: it shrinks into here. */
+.goal-dock--waiting {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.goal-dock > * {
+    margin: 0 6px 4px 0;
+}
+
+.mission-kind {
+    width: 100%;
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+.mission-goal {
+    width: 100%;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.timer {
+    padding: 1px 6px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    background-color: var(--t-tag);
+    border-width: 1px;
+    border-color: var(--t-line);
+}
+
+.timer--urgent {
+    color: var(--t-danger);
+    border-color: rgba(240, 80, 60, 0.6);
+}
+
+.horde {
+    flex-direction: row;
+    align-items: center;
+}
+
+.horde__label {
+    font-size: 10px;
+    -unity-font-style: bold;
+    margin-right: 4px;
+}
+
+.horde__bar {
+    width: 60px;
+    height: 6px;
+}
+
+.horde__fill {
+    height: 100%;
+    background-color: var(--t-warn);
+}
+
+.horde--full .horde__fill {
+    background-color: var(--t-danger);
+}
+
+/* ============================================================== compass */
+
+.compass {
+    width: 66px;
+    height: 66px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.compass-rose {
+    width: 56px;
+    height: 56px;
+    border-radius: 28px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+.compass-needle {
+    position: absolute;
+    left: 26px;
+    top: 16px;
+    width: 4px;
+    height: 12px;
+}
+
+.compass-dir {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    margin-top: -8px;
+    -unity-text-align: middle-center;
+    font-size: 13px;
+    -unity-font-style: bold;
+}
+
+.compass-dir--n {
+    left: 28px;
+    top: 8px;
+    color: var(--t-accent);
+}
+
+.compass-dir--e {
+    left: 48px;
+    top: 28px;
+}
+
+.compass-dir--s {
+    left: 28px;
+    top: 48px;
+}
+
+.compass-dir--o {
+    left: 8px;
+    top: 28px;
+}
+
+/* The next wave's sides (with the Sala de radio): red, beating (CompassRose's schedule). */
+.compass-dir--hot {
+    color: var(--t-danger);
+}

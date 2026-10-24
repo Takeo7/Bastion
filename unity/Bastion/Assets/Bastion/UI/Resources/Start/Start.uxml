@@ -1,0 +1,47 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        The start screen (the Electron app's launcher.html of the 0.10.1): be the host, a game on the network, join by
+        address, quit. In Unity the name is asked here, before opening or joining (NetLink.Host/Join take it).
+        Filled by StartScreen.cs against Red's NetLink.
+    -->
+    <Style src="../Hud/Mixta.uss" />
+    <Style src="Start.uss" />
+    <ui:VisualElement name="start" class="start font-text">
+        <ui:VisualElement class="start__column panel">
+            <ui:Label name="title" class="start__title font-title" />
+            <ui:Label name="kicker" class="start__kicker" />
+
+            <ui:VisualElement class="start__field">
+                <ui:Label name="name-label" class="start__label" />
+                <ui:TextField name="name" class="start__input" max-length="20" />
+            </ui:VisualElement>
+
+            <ui:Button name="host" class="start__choice btn-primary">
+                <ui:Label name="host-title" class="start__choice-title font-title" picking-mode="Ignore" />
+                <ui:Label name="host-about" class="start__choice-about" picking-mode="Ignore" />
+            </ui:Button>
+
+            <ui:VisualElement name="lan" class="start__section">
+                <ui:Label name="lan-label" class="start__label" />
+                <ui:Label name="lan-hint" class="start__hint" />
+                <ui:VisualElement name="games" class="start__games" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="start__section">
+                <ui:Label name="join-label" class="start__label" />
+                <ui:Label name="join-hint" class="start__hint" />
+                <ui:VisualElement class="start__row">
+                    <ui:TextField name="address" class="start__input start__input--address" />
+                    <ui:Button name="join" class="start__join font-title" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:Label name="status" class="start__status" />
+
+            <ui:Button name="quit" class="start__choice start__choice--quit">
+                <ui:Label name="quit-title" class="start__choice-title font-title" picking-mode="Ignore" />
+            </ui:Button>
+            <ui:Label name="version" class="start__version" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

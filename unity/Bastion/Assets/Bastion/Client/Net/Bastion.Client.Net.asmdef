@@ -1,0 +1,17 @@
+{
+    "name": "Bastion.Client.Net",
+    "rootNamespace": "Bastion.Client.Net",
+    "references": [
+        "Bastion.Engine",
+        "Bastion.Net"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

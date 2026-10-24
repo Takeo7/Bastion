@@ -8,3 +8,17 @@ data/
 
 # Synty source packs: the licence forbids redistributing the originals; only converted models are committed.
 assets-src/
+
+# The C# engine's builds, and Unity's own folders; the Synty packs imported into Unity stay off GitHub (docs/UNITY.md §2).
+engine-cs/**/bin/
+engine-cs/**/obj/
+unity/Bastion/Library/
+unity/Bastion/Temp/
+unity/Bastion/Logs/
+unity/Bastion/UserSettings/
+unity/Bastion/Builds/
+unity/Bastion/Assets/Synty/
+unity/Bastion/Assets/Synty.meta
+# The Mixamo clips imported into Unity (their licence doesn't allow sharing the files): copied from assets-src/ by an editor method.
+unity/Bastion/Assets/Mixamo/
+unity/Bastion/Assets/Mixamo.meta

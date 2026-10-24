@@ -1,0 +1,168 @@
+/* Over the units (unitViews.ts renderFlag, the CSS was UI's): name, health, armour, cover, states; floating numbers. */
+
+/* Its bottom middle stands over the unit's head (UnitFlags places it each frame with translate, from its size). */
+.uflag {
+    position: absolute;
+    left: 0;
+    top: 0;
+    align-items: center;
+}
+
+.uflag__name {
+    font-size: 11px;
+    -unity-font-style: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.uflag--enemy .uflag__name {
+    color: #ff8a7a;
+}
+
+.uflag__row {
+    flex-direction: row;
+    align-items: center;
+    padding: 1px 3px;
+    background-color: rgba(10, 12, 13, 0.75);
+    border-radius: 1px;
+}
+
+.uflag--enemy .pip--on {
+    background-color: var(--t-danger);
+}
+
+.uflag__armor {
+    flex-direction: row;
+    margin-left: 3px;
+}
+
+.uflag__armor-pip {
+    width: 6px;
+    height: 7px;
+    margin-right: 1px;
+    background-color: #9fb8c8;
+}
+
+/* Cover: high, low, flanked (a shield's sprite later; a coloured block until then). */
+.uflag__cover {
+    width: 10px;
+    height: 10px;
+    margin-right: 3px;
+}
+
+.uflag__cover--2 {
+    background-color: #7fd3ff;
+}
+
+.uflag__cover--1 {
+    background-color: #ffcf5a;
+}
+
+.uflag__cover--0 {
+    background-color: var(--t-danger);
+}
+
+.uflag .tag {
+    font-size: 9px;
+}
+
+/* The hover line over an enemy, from the tile under the pointer: its odds, sight or flank. */
+.uflag__hover {
+    margin-bottom: 2px;
+    padding: 0 5px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    background-color: var(--t-tag);
+}
+
+.uflag__hover--aim {
+    color: var(--t-accent);
+}
+
+.uflag__hover--sight {
+    color: #7fd3ff;
+}
+
+.uflag__hover--flank {
+    color: var(--t-danger);
+}
+
+/* Over the shoulder only the target's flag stays (styles.css .labels-layer.close-shot). */
+.flags-layer--close .uflag {
+    display: none;
+}
+
+.flags-layer--close .uflag--target {
+    display: flex;
+}
+
+/* Floating numbers and words (fx.ts floatText: now UI's), risen and faded from C#. */
+.float {
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 16px;
+    -unity-font-style: bold;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+}
+
+.float--damage {
+    color: #ff6b5a;
+}
+
+.float--crit {
+    font-size: 20px;
+    color: var(--t-accent);
+}
+
+.float--info {
+    font-size: 12px;
+    color: #c9d4dc;
+}
+
+.float--warn {
+    font-size: 13px;
+    color: var(--t-warn);
+}
+
+.float--callout {
+    font-size: 14px;
+    padding: 1px 8px;
+    color: var(--t-text);
+    background-color: rgba(120, 20, 14, 0.9);
+}
+
+/* An enemy that sees one of the squad (styles.css .uflag.watching): an eye in the stamp's red at the row's start. */
+.uflag__eye {
+    width: 16px;
+    height: 10px;
+    margin-right: 3px;
+    color: var(--t-stamp);
+}
+
+/* Whose ping it is (styles.css .ping-tag): white on the player's colour, darkened, a ring of it round. */
+.pin {
+    position: absolute;
+    left: 0;
+    top: 0;
+    padding: 2px 7px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: #ffffff;
+    border-width: 2px;
+    border-radius: 2px;
+    white-space: nowrap;
+}
+
+/* The line on the tile under the pointer (styles.css .tile-note): a small plate, a warning-coloured edge at its left. */
+.tile-note {
+    position: absolute;
+    left: 0;
+    top: 0;
+    padding: 0 6px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    white-space: nowrap;
+    background-color: var(--t-tag);
+    border-left-width: 3px;
+    border-left-color: var(--t-warn);
+}

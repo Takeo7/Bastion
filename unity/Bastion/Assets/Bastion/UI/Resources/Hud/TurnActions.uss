@@ -1,0 +1,148 @@
+/* «Terminar turno» and what goes over it (hud.ts setEndTurn, setCommand, setGoTo, tickClocks). */
+
+.turn-actions > * {
+    margin-top: 5px;
+}
+
+.turn-btn {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 8px;
+}
+
+.turn-btn__label {
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+.turn-btn__key {
+    font-size: 10px;
+    padding: 0 4px;
+    color: var(--t-muted);
+    border-width: 1px;
+    border-color: var(--t-line);
+}
+
+/* The camera switch: a track and its knob, on or off (#15). */
+.switch {
+    width: 26px;
+    height: 13px;
+    border-radius: 7px;
+    background-color: var(--m-well);
+    justify-content: center;
+    padding: 0 2px;
+}
+
+.switch__knob {
+    width: 9px;
+    height: 9px;
+    border-radius: 5px;
+    background-color: var(--t-muted);
+    transition-property: translate, background-color;
+    transition-duration: 0.15s;
+}
+
+.follow-turn--on .switch__knob {
+    translate: 13px 0;
+    background-color: var(--t-good);
+}
+
+/* The clocks: this player's a thick bar in their colour, the partner's a thin one under it. */
+.end-clock {
+    margin-top: 6px;
+}
+
+.turn-clock {
+    height: 7px;
+    margin-bottom: 2px;
+    overflow: hidden;
+}
+
+.turn-clock--theirs {
+    height: 3px;
+}
+
+.turn-clock__fill {
+    height: 100%;
+    width: 100%;
+    background-color: var(--t-accent);
+}
+
+/* Still while the screen shows what happened; it moves while it runs (C# shifts its stripes). */
+.turn-clock--low .turn-clock__fill {
+    background-color: var(--t-warn);
+}
+
+.turn-clock--out .turn-clock__fill {
+    background-color: var(--t-danger);
+}
+
+.end-turn {
+    height: 52px;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--t-primary);
+    border-top-color: #ffe27a;
+}
+
+.end-turn:hover {
+    background-color: var(--t-primary-hover);
+}
+
+.end-turn__top {
+    flex-direction: row;
+    align-items: center;
+}
+
+.end-turn__check {
+    width: 16px;
+    height: 16px;
+    margin-left: 6px;
+    -unity-background-image-tint-color: var(--t-ready-ink);
+}
+
+.end-turn__label {
+    font-size: 17px;
+    letter-spacing: 1px;
+    color: var(--t-primary-ink);
+}
+
+.end-turn__detail {
+    font-size: 11px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+    color: var(--t-primary-ink);
+}
+
+.end-turn--ready {
+    background-color: var(--t-ready);
+}
+
+.end-turn--ready .end-turn__label,
+.end-turn--ready .end-turn__detail {
+    color: var(--t-ready-ink);
+}
+
+.end-turn--confirm {
+    background-color: var(--t-danger);
+}
+
+.end-turn--confirm .end-turn__label,
+.end-turn--confirm .end-turn__detail {
+    color: #ffffff;
+}
+
+.end-turn--waiting,
+.end-turn--enemy {
+    background-color: var(--m-steel);
+}
+
+.end-turn--waiting .end-turn__label,
+.end-turn--waiting .end-turn__detail,
+.end-turn--enemy .end-turn__label,
+.end-turn--enemy .end-turn__detail {
+    color: var(--t-muted);
+}

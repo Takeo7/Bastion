@@ -1,0 +1,128 @@
+/* The room menu (lobby.ts): the commanders on the left, the mission's sheet on the right, start at its foot. */
+
+.room__sheet {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.room__side {
+    width: 300px;
+    padding: 16px 18px;
+    margin-right: 12px;
+}
+
+.room__main {
+    width: 560px;
+    padding: 16px 20px 14px;
+}
+
+.room__head {
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+    margin: 6px 0 6px;
+}
+
+/* A seat: its player's colour, name and state; empty, waiting. */
+.room__seat {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    background-color: var(--t-panel-hi);
+    border-left-width: 3px;
+}
+
+.room__seat--empty {
+    opacity: 0.55;
+}
+
+.room__seat--offline {
+    opacity: 0.7;
+}
+
+.room__seat-name {
+    font-size: 15px;
+    -unity-font-style: bold;
+    flex-grow: 1;
+}
+
+.room__seat-state {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.room__invite > * {
+    margin-top: 6px;
+}
+
+.room__address {
+    flex-direction: row;
+    align-items: center;
+}
+
+.room__address-text {
+    flex-grow: 1;
+    padding: 3px 8px;
+    font-size: 14px;
+    background-color: var(--m-well);
+}
+
+.room__address-kind {
+    font-size: 10px;
+    color: var(--t-muted);
+    margin-bottom: 1px;
+}
+
+.room__copy {
+    margin-left: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+/* The options, two a row: a name and a line of what it is; the chosen one in the accent. */
+.room__options {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.room__option {
+    width: 49%;
+    margin-bottom: 6px;
+    padding: 6px 10px;
+    align-items: flex-start;
+}
+
+.room__option--on {
+    border-width: 2px;
+    border-color: var(--t-accent);
+    background-color: var(--t-accent-soft);
+}
+
+.room__option-name {
+    font-size: 14px;
+    -unity-font-style: bold;
+}
+
+.room__option-about {
+    font-size: 11px;
+    white-space: normal;
+    -unity-text-align: upper-left;
+    color: var(--t-muted);
+}
+
+.room__foot {
+    flex-direction: row;
+    align-items: stretch;
+    margin-top: 10px;
+}
+
+.room__start {
+    flex-grow: 1;
+    margin-right: 8px;
+}
+
+.room__leave {
+    padding: 0 14px;
+}

@@ -1,0 +1,7 @@
+{
+  "name": "com.bastion.engine",
+  "version": "0.1.0",
+  "displayName": "Bastión: el motor",
+  "description": "Las reglas de Bastión en C#, deterministas, sin nada de UnityEngine (docs/UNITY.md).",
+  "unity": "6000.0"
+}

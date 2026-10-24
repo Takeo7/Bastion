@@ -1,0 +1,54 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        The combat HUD (hud.ts of the 0.10.1): one holder per piece, each filled by its class (Scripts/Hud/Pieces).
+        The style sheets go here, on the root, and reach the templates cloned under it (SquadCard, AbilityButton…).
+        Holders that only place things let the clicks through to the map (picking-mode Ignore).
+    -->
+    <Style src="Mixta.uss" />
+    <Style src="Hud.uss" />
+    <Style src="SquadList.uss" />
+    <Style src="UnitPanel.uss" />
+    <Style src="ActionBar.uss" />
+    <Style src="ShotPanel.uss" />
+    <Style src="TurnStrip.uss" />
+    <Style src="TurnActions.uss" />
+    <Style src="GoalCard.uss" />
+    <Style src="Log.uss" />
+    <Style src="Flags.uss" />
+    <Style src="Cards.uss" />
+    <Style src="EdgeMarks.uss" />
+    <Style src="GameMenu.uss" />
+    <ui:VisualElement name="hud" class="hud font-text" picking-mode="Ignore">
+        <!-- Round the screen, in the colour of whoever plays now. -->
+        <ui:VisualElement name="turn-frame" class="turn-frame" picking-mode="Ignore">
+            <ui:VisualElement class="turn-frame__edge turn-frame__edge--top" picking-mode="Ignore" />
+            <ui:VisualElement class="turn-frame__edge turn-frame__edge--right" picking-mode="Ignore" />
+            <ui:VisualElement class="turn-frame__edge turn-frame__edge--bottom" picking-mode="Ignore" />
+            <ui:VisualElement class="turn-frame__edge turn-frame__edge--left" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <!-- Over the units: their flags, the hover lines, the floating numbers (under every panel). -->
+        <ui:VisualElement name="flags" class="flags-layer" picking-mode="Ignore" />
+        <!-- Arrows at the screen's edge towards the marks off it (the objective, the evacuation, the partner's moment). -->
+        <ui:VisualElement name="edge-marks" class="edge-marks" picking-mode="Ignore" />
+        <ui:VisualElement name="top" class="top" picking-mode="Ignore">
+            <ui:VisualElement name="turn" class="turn" />
+            <ui:VisualElement name="floor" class="floor-ind panel" />
+            <ui:VisualElement name="players" class="players" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="squad" class="squad panel" />
+        <ui:VisualElement name="unit-panel" class="unit-panel panel" />
+        <ui:VisualElement name="abilities" class="abilities" picking-mode="Ignore" />
+        <ui:VisualElement name="shot-panel" class="shot-panel panel" />
+        <ui:VisualElement name="turn-actions" class="turn-actions" picking-mode="Ignore" />
+        <ui:VisualElement name="side" class="side" picking-mode="Ignore">
+            <ui:Button name="menu-button" class="menu-button" text="Menú" />
+            <ui:VisualElement name="goal" class="goal-dock panel" />
+            <ui:VisualElement name="compass" class="compass panel" />
+            <ui:VisualElement name="log" class="log panel" />
+        </ui:VisualElement>
+        <ui:VisualElement name="banner" class="banner" />
+        <ui:VisualElement name="notes" class="notes" picking-mode="Ignore" />
+        <!-- The cards in the middle: the partner's call, the arrival, the outcome. -->
+        <ui:VisualElement name="cards" class="cards" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

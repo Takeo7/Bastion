@@ -1,0 +1,2228 @@
+{
+ "props": {
+  "carWreck": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Car_Wrecked_01",
+   "fit": 1.95,
+   "yaw": 1
+  },
+  "carRusted": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Car_Wrecked_Rusted_01",
+   "fit": 1.95,
+   "yaw": 1
+  },
+  "carSuv": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Car_Wrecked_SUV_01",
+   "fit": 1.95,
+   "yaw": 1
+  },
+  "carOpen": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Car_Wrecked_OpenBoot_01",
+   "fit": 1.95,
+   "yaw": 1
+  },
+  "planter": {
+   "pack": "city",
+   "fbx": "SM_Prop_Planter_01",
+   "fit": 0.9
+  },
+  "dumpster": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Dumpster_01",
+   "fit": 0.95
+  },
+  "rubbishBin": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_RubbishBin_01"
+  },
+  "streetPot": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Pot_Street_Plant_01",
+   "fit": 0.9
+  },
+  "vending": {
+   "pack": "town",
+   "fbx": "SM_Prop_VendingMachine_01",
+   "yaw": 2
+  },
+  "statue": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Statue_01",
+   "fit": 0.95
+  },
+  "fountainWhole": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Fountain_01",
+   "fit": 3
+  },
+  "parkBench": {
+   "pack": "city",
+   "fbx": "SM_Prop_ParkBench_01",
+   "fit": 1.6,
+   "yaw": 2
+  },
+  "parkBenchBroken": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_ParkBench_Broken_01",
+   "fit": 1.6,
+   "yaw": 1
+  },
+  "concreteBarrier": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barrier_Concrete_01",
+   "fit": 1
+  },
+  "barricade1": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barricade_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "barricade2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barricade_03",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "barricadeTall": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barricade_05",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "barricadePallet": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barricade_Pallet_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "boardsCross": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barricade_06",
+   "fit": 1,
+   "yaw": 1
+  },
+  "boardsMany": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barricade_08",
+   "fit": 1,
+   "yaw": 1
+  },
+  "boardsRails": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barricade_12",
+   "fit": 1,
+   "yaw": 1
+  },
+  "mattress": {
+   "pack": "military",
+   "fbx": "SM_Prop_Bed_Mattress_01",
+   "fit": 1.27
+  },
+  "sandbags": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sandbag_Wall_02",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "sandbag": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sandbag_01",
+   "fit": 0.45
+  },
+  "gateLeafDown": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Wall_Quarantine_GateDoor_01",
+   "fit": 1.25
+  },
+  "guardTower": {
+   "pack": "military",
+   "fbx": "SM_Bld_GuardTower_02",
+   "fit": 3
+  },
+  "radioMast": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_RadioTower_01",
+   "origin": true
+  },
+  "radioMastTop": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_RadioTower_Top_01",
+   "origin": true
+  },
+  "caravan": {
+   "pack": "apocalypse",
+   "fbx": "SK_Veh_Caravan_01",
+   "fit": 3.9
+  },
+  "mobileHome": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Trailer_01",
+   "origin": true
+  },
+  "mobileHomeGlass": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Trailer_Glass_01",
+   "origin": true
+  },
+  "mobileHomeWreck": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Trailer_Damaged_01",
+   "origin": true
+  },
+  "mobileHomeWreckGlass": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Trailer_Damaged_Glass_01",
+   "origin": true
+  },
+  "mobileHomeSkirt": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Trailer_Skirt_01",
+   "origin": true
+  },
+  "trailerDeck": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Trailer_Deck_01",
+   "origin": true
+  },
+  "trailerSteps": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Trailer_Steps_01",
+   "origin": true
+  },
+  "plywoodShed": {
+   "pack": "military",
+   "fbx": "SM_Bld_Plywood_Shed_01",
+   "origin": true
+  },
+  "plywoodShedRuin": {
+   "pack": "military",
+   "fbx": "SM_Bld_Plywood_Shed_Destroyed_01",
+   "origin": true
+  },
+  "bastionHouse": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_House_03",
+   "origin": true
+  },
+  "bastionHouseGlass": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_House_03_Glass_01",
+   "origin": true
+  },
+  "bAwning": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Junk_Shelter_06",
+   "origin": true
+  },
+  "bAwningTarp": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Junk_Shelter_06_Tarp",
+   "origin": true
+  },
+  "bWaterTower": {
+   "pack": "military",
+   "fbx": "SM_Bld_WaterTank_01",
+   "origin": true
+  },
+  "bIronSheet": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Iron_Sheet_01",
+   "origin": true
+  },
+  "bPlank": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Plank_01",
+   "origin": true
+  },
+  "bTankTrap": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_TankTrap_01",
+   "origin": true
+  },
+  "palisade": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_SpikeWall_01",
+   "fit": 0.5,
+   "stretch": true,
+   "shift": [
+    0,
+    -0.25
+   ]
+  },
+  "gateWood": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Fence_Wood_Gate_01",
+   "fit": 1,
+   "stretch": true
+  },
+  "gateMetal": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Wall_Quarantine_GateDoor_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "woodStack": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Wood_Stack_01",
+   "fit": 0.95,
+   "stretch": true,
+   "thick": 1.2
+  },
+  "floodlight": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Spotlight_01"
+  },
+  "wireCoil": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Wire_03",
+   "fit": 0.95
+  },
+  "towerLadder": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Ladder_01"
+  },
+  "turretTripod": {
+   "pack": "apocalypse",
+   "fbx": "SM_Wep_AAGun_01",
+   "origin": true
+  },
+  "turretSwivel": {
+   "pack": "apocalypse",
+   "fbx": "SM_Wep_AAGun_Swivel_01",
+   "origin": true
+  },
+  "turretGun": {
+   "pack": "apocalypse",
+   "fbx": "SM_Wep_AAGun_Body_01",
+   "origin": true
+  },
+  "turretDrum": {
+   "pack": "apocalypse",
+   "fbx": "SM_Wep_AAGun_Mag_01",
+   "origin": true
+  },
+  "mine": {
+   "pack": "military",
+   "fbx": "SM_Prop_Mine_01"
+  },
+  "crater": {
+   "pack": "military",
+   "fbx": "SM_Env_Crater_01"
+  },
+  "spikeStake": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Spike_01",
+   "origin": true
+  },
+  "bearTrap": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Bear_Trap_01"
+  },
+  "bearJaw": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Bear_Trap_Jaw_01",
+   "origin": true
+  },
+  "bearJaw2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Bear_Trap_Jaw_02",
+   "origin": true
+  },
+  "cagePanel": {
+   "pack": "military",
+   "fbx": "SM_Bld_Door_Cage_01"
+  },
+  "bArmyTent": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Military_Tent_01"
+  },
+  "bFieldTent": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Tent_Long_01"
+  },
+  "bOpenTent": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Military_Tent_02"
+  },
+  "bQuarantineTent": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Quarantine_Tent_01"
+  },
+  "bShipContainer": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Shipping_Container_02"
+  },
+  "bGarageShed": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Preset_Garage_01"
+  },
+  "bGardenShed": {
+   "pack": "town",
+   "fbx": "SM_Bld_GardenShed_01"
+  },
+  "bLeanTo": {
+   "pack": "farm",
+   "fbx": "SM_Bld_Shelter_01"
+  },
+  "bShackFrame": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Junk_Shelter_01"
+  },
+  "bShackTarp": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Junk_Shelter_01_Tarp"
+  },
+  "bAerial": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Trailer_Aerial_01"
+  },
+  "bMast": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Trailer_Aerial_03"
+  },
+  "bDish": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Trailer_Dish_01"
+  },
+  "bSolarPanel": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Solar_Panel_01"
+  },
+  "bPowerGenerator": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Generator_01"
+  },
+  "bPowerBoxes": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_PowerBoxes_01"
+  },
+  "bFirePit": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_FirePit_01"
+  },
+  "bWashingLine": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_WashingLine_01"
+  },
+  "bCampChair": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Camp_Chair_01"
+  },
+  "campCup": {
+   "pack": "military",
+   "fbx": "SM_Item_Canteen_Cup_01"
+  },
+  "campBar": {
+   "pack": "military",
+   "fbx": "SM_Item_Meal_Bar_01"
+  },
+  "bLongTable": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Table_02"
+  },
+  "bBlackboard": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Blackboard_01"
+  },
+  "bRadioSet": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Radio_01"
+  },
+  "bWorkbench": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Workbench_01"
+  },
+  "bVice": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Vice_01"
+  },
+  "bToolbox": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_ToolBox_01"
+  },
+  "bTyres": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Tire_Pile_01"
+  },
+  "bOilDrum": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barrel_01"
+  },
+  "bJerrycan": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_GasCan_01"
+  },
+  "bBatteryTable": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CarBattery_Table_01"
+  },
+  "bFuelPump": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Gaspump_01"
+  },
+  "bRustyCar": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Car_Wrecked_Rusted_01"
+  },
+  "bDeconShower": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Decontamination_Shower_01"
+  },
+  "bMedKit": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_MedicalBox_02"
+  },
+  "bTarget": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Target_01"
+  },
+  "bTargetBoard": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Target_02"
+  },
+  "bBottleRange": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_ShootingRange_01"
+  },
+  "bTyreWall": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_TireWall_01"
+  },
+  "bBalanceBeam": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Plank_Bench_01"
+  },
+  "bSandbagWall": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sandbag_Wall_02"
+  },
+  "bClimbFrame": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Junk_Shelter_02"
+  },
+  "bLookout": {
+   "pack": "alpine",
+   "fbx": "Props/SM_Prop_Lookout_01"
+  },
+  "bCross": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Cross_01"
+  },
+  "bStoneCross": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Cross_02"
+  },
+  "bGraveStick": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_GraveStick_01"
+  },
+  "bPicketFence": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Fence_Wood_Straight_01"
+  },
+  "bBench": {
+   "pack": "alpine",
+   "fbx": "Props/SM_Prop_Bench_01"
+  },
+  "bLampPost": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_LightPole_01"
+  },
+  "bGardenBed": {
+   "pack": "farm",
+   "fbx": "SM_Prop_PlantBox_Large_01"
+  },
+  "bGardenBarrel": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barrel_Water_Open_01"
+  },
+  "bGardenPlant": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Plant_Ground_01_L"
+  },
+  "bGardenPlant2": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Plant_Ground_02_L"
+  },
+  "bScarecrow": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Scarecrow_01"
+  },
+  "bJersey": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Barrier_Long_01"
+  },
+  "bBurntHeap": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_BurnPile_01"
+  },
+  "bJunkHeap": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_TrashPile_01"
+  },
+  "bRubbleHeap": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Rubble_Concrete_01"
+  },
+  "bFloodlights": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Floodlights_01"
+  },
+  "bWoodPile": {
+   "pack": "alpine",
+   "fbx": "Props/SM_Prop_Wood_Pile_01"
+  },
+  "bAnvil": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Anvil_01"
+  },
+  "bSawhorse": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Saw_Horse_01"
+  },
+  "bPlankRack": {
+   "pack": "construction",
+   "fbx": "SM_Prop_StorageShelf_Plank_01"
+  },
+  "bTrestle": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Trestle_Table_01"
+  },
+  "bStump": {
+   "pack": "nature",
+   "fbx": "SM_Tree_Stump_01"
+  },
+  "bSupplyCrate": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Crate_01"
+  },
+  "pineDead": {
+   "pack": "nature",
+   "fbx": "SM_Tree_Pine_Dead_01",
+   "sink": 0.1
+  },
+  "crate": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Crate_01"
+  },
+  "crates": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Crate_Large_02"
+  },
+  "barrels": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_BarrelStack_02",
+   "fit": 0.95
+  },
+  "generator": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Generator_01",
+   "fit": 0.9
+  },
+  "gasTank": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Gastank_01",
+   "fit": 0.95
+  },
+  "pipes": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Pipe_Large_01",
+   "fit": 1,
+   "stretch": true,
+   "thick": 0.5
+  },
+  "loudSpeaker": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Loud_Speaker_01",
+   "fit": 0.7
+  },
+  "drums": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_BarrelStack_01",
+   "fit": 0.95
+  },
+  "drumsTarp": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_BarrelStack_01_Tarp",
+   "fit": 0.95
+  },
+  "machine": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Generator_Large_01",
+   "fit": 0.95
+  },
+  "silo2": {
+   "pack": "construction",
+   "fbx": "SM_Bld_WaterTank_02",
+   "fit": 1.9
+  },
+  "silo3": {
+   "pack": "construction",
+   "fbx": "SM_Bld_WaterTank_03",
+   "fit": 1.9
+  },
+  "sirenPolice": {
+   "pack": "city",
+   "fbx": "SM_Veh_Car_Police_01",
+   "fit": 1.95
+  },
+  "sirenAmbulance": {
+   "pack": "apocalypse",
+   "fbx": "SK_Veh_Ambulance_01",
+   "fit": 1.95
+  },
+  "rubble1": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Rubble_Concrete_01",
+   "fit": 0.95
+  },
+  "rubble2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Rubble_Concrete_02",
+   "fit": 0.95
+  },
+  "rubbleWall": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Rubble_Concrete_Frame_01",
+   "fit": 0.95
+  },
+  "fencePost": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Fence_Wood_Pole_01"
+  },
+  "fencePanel": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Fence_Wood_01",
+   "fit": 0.5,
+   "stretch": true,
+   "yaw": 1,
+   "shift": [
+    0,
+    -0.25
+   ]
+  },
+  "fenceWire": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Fence_Wire_01",
+   "fit": 0.5,
+   "stretch": true,
+   "yaw": 1,
+   "shift": [
+    0,
+    -0.25
+   ]
+  },
+  "gatePost": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Fence_Fancy_Pole_01"
+  },
+  "gatePillar": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Fence_Concrete_Pillar_01"
+  },
+  "hayBale": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Hay_Bale_Square_01",
+   "fit": 0.9
+  },
+  "hayRound": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Hay_Bale_Round_01",
+   "fit": 0.95
+  },
+  "shelfLow": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_ShopShelf_Wall_01",
+   "fit": 1,
+   "yaw": 1
+  },
+  "gondola": {
+   "pack": "town",
+   "fbx": "SM_Prop_ShopShelf_02",
+   "fit": 1,
+   "yaw": 2
+  },
+  "wallShelf": {
+   "pack": "town",
+   "fbx": "SM_Prop_ShopShelf_01",
+   "fit": 1,
+   "yaw": 2
+  },
+  "gondolaGaps": {
+   "pack": "town",
+   "fbx": "SM_Prop_ShopShelf_02",
+   "fit": 1,
+   "yaw": 2
+  },
+  "gondolaBare": {
+   "pack": "town",
+   "fbx": "SM_Prop_ShopShelf_02",
+   "fit": 1,
+   "yaw": 2
+  },
+  "gondolaEmpty": {
+   "pack": "town",
+   "fbx": "SM_Prop_ShopShelf_02",
+   "fit": 1,
+   "yaw": 2
+  },
+  "wallShelfGaps": {
+   "pack": "town",
+   "fbx": "SM_Prop_ShopShelf_01",
+   "fit": 1,
+   "yaw": 2
+  },
+  "wallShelfBare": {
+   "pack": "town",
+   "fbx": "SM_Prop_ShopShelf_01",
+   "fit": 1,
+   "yaw": 2
+  },
+  "wallShelfEmpty": {
+   "pack": "town",
+   "fbx": "SM_Prop_ShopShelf_01",
+   "fit": 1,
+   "yaw": 2
+  },
+  "canFallen1": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Can_01",
+   "fit": 0.06
+  },
+  "canFallen2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Can_04",
+   "fit": 0.06
+  },
+  "canFallen3": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Can_07",
+   "fit": 0.06
+  },
+  "endDisplay": {
+   "pack": "city",
+   "fbx": "SM_Prop_ShopInterior_Shelf_04",
+   "fit": 1,
+   "yaw": 2
+  },
+  "shelfHigh": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Shop_Shelf_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1,
+   "tall": 1.35
+  },
+  "bookshelf": {
+   "pack": "town",
+   "fbx": "SM_Prop_Bookshelf_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "rug": {
+   "pack": "town",
+   "fbx": "SM_Prop_Rug_01",
+   "fit": 1.3,
+   "yaw": 2
+  },
+  "rug2": {
+   "pack": "town",
+   "fbx": "SM_Prop_Rug_02",
+   "fit": 1.4,
+   "yaw": 2
+  },
+  "rug3": {
+   "pack": "town",
+   "fbx": "SM_Prop_Rug_03",
+   "fit": 1.2,
+   "yaw": 2
+  },
+  "bathRug": {
+   "pack": "town",
+   "fbx": "SM_Prop_BathroomRug_01",
+   "fit": 0.75,
+   "yaw": 2
+  },
+  "coffeeTable": {
+   "pack": "town",
+   "fbx": "SM_Prop_CoffeeTable_01",
+   "fit": 0.75,
+   "yaw": 2
+  },
+  "armchair": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Chair_Soft_01",
+   "fit": 0.68,
+   "yaw": 1
+  },
+  "armchairWorn": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Chair_Soft_Damaged_01",
+   "fit": 0.68,
+   "yaw": 1
+  },
+  "diningChair": {
+   "pack": "town",
+   "fbx": "SM_Prop_DiningChair_01",
+   "fit": 0.45,
+   "yaw": 2
+  },
+  "diningChair2": {
+   "pack": "town",
+   "fbx": "SM_Prop_DiningChair_02",
+   "fit": 0.45,
+   "yaw": 2
+  },
+  "floorLamp": {
+   "pack": "town",
+   "fbx": "SM_Prop_LampStanding_01",
+   "fit": 0.3,
+   "yaw": 2
+  },
+  "floorLamp2": {
+   "pack": "town",
+   "fbx": "SM_Prop_LampStanding_02",
+   "fit": 0.36,
+   "yaw": 2
+  },
+  "tableLamp": {
+   "pack": "town",
+   "fbx": "SM_Prop_Lamp_01",
+   "fit": 0.22,
+   "yaw": 2
+  },
+  "tableLamp2": {
+   "pack": "town",
+   "fbx": "SM_Prop_Lamp_02",
+   "fit": 0.22,
+   "yaw": 2
+  },
+  "pottedPlant": {
+   "pack": "town",
+   "fbx": "SM_Prop_PotPlant_01",
+   "fit": 0.32,
+   "yaw": 2
+  },
+  "pottedPlant2": {
+   "pack": "town",
+   "fbx": "SM_Prop_PotPlant_02",
+   "fit": 0.34,
+   "yaw": 2
+  },
+  "pottedPlant3": {
+   "pack": "town",
+   "fbx": "SM_Prop_PotPlant_04",
+   "fit": 0.24,
+   "yaw": 2
+  },
+  "bedsideTable": {
+   "pack": "town",
+   "fbx": "SM_Prop_BedsideTable_01",
+   "fit": 0.3,
+   "yaw": 2
+  },
+  "deskChair": {
+   "pack": "town",
+   "fbx": "SM_Prop_DeskChair_01",
+   "fit": 0.5,
+   "yaw": 2
+  },
+  "towelRack": {
+   "pack": "town",
+   "fbx": "SM_Prop_TowelRack_01",
+   "fit": 0.5,
+   "yaw": 2
+  },
+  "bookPile": {
+   "pack": "town",
+   "fbx": "SM_Prop_Book_Group_01",
+   "fit": 0.25,
+   "yaw": 2
+  },
+  "bookPile2": {
+   "pack": "town",
+   "fbx": "SM_Prop_Book_Group_04",
+   "fit": 0.2,
+   "yaw": 2
+  },
+  "breadBin": {
+   "pack": "town",
+   "fbx": "SM_Prop_BreadBin_01",
+   "fit": 0.25,
+   "yaw": 2
+  },
+  "coffeeMachine": {
+   "pack": "town",
+   "fbx": "SM_Prop_CoffeeMachine_01",
+   "fit": 0.2,
+   "yaw": 2
+  },
+  "coatRack": {
+   "pack": "office",
+   "fbx": "SM_Prop_CoatRack_01",
+   "fit": 0.45
+  },
+  "cafeTable": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Cafe_Table_01",
+   "fit": 0.75,
+   "yaw": 1
+  },
+  "cafeChair": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Cafe_Chair_01",
+   "fit": 0.38,
+   "yaw": 1
+  },
+  "barStool": {
+   "pack": "town",
+   "fbx": "SM_Prop_Stool_01",
+   "fit": 0.27,
+   "yaw": 2
+  },
+  "drinksCooler": {
+   "pack": "town",
+   "fbx": "SM_Prop_Cooler_01",
+   "fit": 0.4,
+   "yaw": 2
+  },
+  "drinksFridge": {
+   "pack": "town",
+   "fbx": "SM_Prop_FridgeDrinks_01",
+   "fit": 0.52,
+   "yaw": 2
+  },
+  "bookPile3": {
+   "pack": "town",
+   "fbx": "SM_Prop_Book_Group_06",
+   "fit": 0.2,
+   "yaw": 2
+  },
+  "tractor": {
+   "pack": "farm",
+   "fbx": "SM_Veh_TractorOld_01",
+   "fit": 2.6,
+   "yaw": 2
+  },
+  "pitchfork": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Tool_Pitchfork_01",
+   "fit": 0.2
+  },
+  "rake": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Tool_Rake_01",
+   "fit": 0.35
+  },
+  "spade": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Tool_Spade_01",
+   "fit": 0.17
+  },
+  "wheelbarrow": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Wheelbarrow_01",
+   "fit": 1
+  },
+  "bucket": {
+   "pack": "farm",
+   "fbx": "SM_Prop_Tool_Bucket_01",
+   "fit": 0.24
+  },
+  "counter": {
+   "pack": "town",
+   "fbx": "SM_Prop_Kitchen_Counter_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "shopCounter": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_ShopCounter_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "table": {
+   "pack": "town",
+   "fbx": "SM_Prop_DiningTable_01",
+   "fit": 1,
+   "stretch": true
+  },
+  "sofa": {
+   "pack": "town",
+   "fbx": "SM_Prop_Couch_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "sofaDirty": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Couch_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "bed": {
+   "pack": "town",
+   "fbx": "SM_Prop_Bed_Single_01",
+   "fit": 1,
+   "yaw": 2
+  },
+  "bedDouble": {
+   "pack": "town",
+   "fbx": "SM_Prop_Bed_Double_01",
+   "fit": 1.95,
+   "yaw": 2
+  },
+  "fridge": {
+   "pack": "town",
+   "fbx": "SM_Prop_Kitchen_Fridge_01",
+   "fit": 0.65,
+   "yaw": 2
+  },
+  "stove": {
+   "pack": "town",
+   "fbx": "SM_Prop_Oven_01",
+   "fit": 0.75,
+   "yaw": 2
+  },
+  "bathtub": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Bathtub_01",
+   "fit": 1,
+   "stretch": true
+  },
+  "washbasin": {
+   "pack": "town",
+   "fbx": "SM_Prop_BathroomSink_02",
+   "fit": 0.6,
+   "yaw": 2
+  },
+  "wc": {
+   "pack": "town",
+   "fbx": "SM_Prop_Toilet_01",
+   "fit": 0.55,
+   "yaw": 2
+  },
+  "tvStand": {
+   "pack": "town",
+   "fbx": "SM_Prop_TVCabinet_01",
+   "fit": 0.95,
+   "stretch": true,
+   "yaw": 2
+  },
+  "television": {
+   "pack": "town",
+   "fbx": "SM_Prop_Television_Flat_01",
+   "fit": 0.75,
+   "yaw": 2
+  },
+  "gunRack": {
+   "pack": "military",
+   "fbx": "SM_Prop_Gunrack_01"
+  },
+  "corpseCivilian": {
+   "pack": "apocalypse",
+   "fbx": "SK_Chr_Business_Male_01",
+   "fit": 0.92
+  },
+  "corpseStaff": {
+   "pack": "apocalypse",
+   "fbx": "SK_Chr_Waitress_Female_01",
+   "fit": 0.92
+  },
+  "hospitalBed": {
+   "pack": "apocalypse",
+   "fbx": "Rigged/SK_Prop_Bed_Hospital_01",
+   "fit": 1.15,
+   "yaw": 1
+  },
+  "medicalShelf": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Medical_Shelf_01",
+   "fit": 0.9,
+   "yaw": 1
+  },
+  "gurney": {
+   "pack": "apocalypse",
+   "fbx": "Rigged/SK_Prop_Bed_Gurney_01",
+   "fit": 0.95,
+   "yaw": 1
+  },
+  "ivStand": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Medical_IVStand_01"
+  },
+  "clinicalKit": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_MedicalBox_02",
+   "fit": 0.22
+  },
+  "wardrobe": {
+   "pack": "town",
+   "fbx": "SM_Prop_Wardrobe_01_Combined",
+   "fit": 0.95,
+   "yaw": 2
+  },
+  "desk": {
+   "pack": "town",
+   "fbx": "SM_Prop_Desk_01",
+   "fit": 1,
+   "stretch": true
+  },
+  "cabinet": {
+   "pack": "town",
+   "fbx": "SM_Prop_Cabinet_01",
+   "yaw": 2
+  },
+  "workShelf": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_WorkShelf_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "tree": {
+   "pack": "nature",
+   "fbx": "SM_Tree_01",
+   "fit": 2.73
+  },
+  "treePine": {
+   "pack": "nature",
+   "fbx": "SM_Tree_PolyPine_01",
+   "fit": 2.13,
+   "sink": 0.15
+  },
+  "treeDead": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_Tree_Dead_01",
+   "fit": 3.17
+  },
+  "streetTree": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_Tree_01",
+   "fit": 3.47
+  },
+  "bush": {
+   "pack": "nature",
+   "fbx": "SM_Plant_Bush_01",
+   "fit": 0.9,
+   "thick": 0.6
+  },
+  "rock": {
+   "pack": "nature",
+   "fbx": "SM_Rock_01",
+   "fit": 0.95
+  },
+  "boulder": {
+   "pack": "nature",
+   "fbx": "SM_Rock_Boulder_01",
+   "fit": 0.95,
+   "thick": 1.4
+  },
+  "log": {
+   "pack": "nature",
+   "fbx": "SM_Tree_Log_01",
+   "fit": 1,
+   "stretch": true,
+   "thick": 2.5
+  },
+  "roofAircon": {
+   "pack": "city",
+   "fbx": "SM_Prop_Roof_Aircon_01",
+   "fit": 0.9
+  },
+  "roofAirconLong": {
+   "pack": "city",
+   "fbx": "SM_Prop_Roof_Aircon_02",
+   "fit": 1.6
+  },
+  "roofVent": {
+   "pack": "town",
+   "fbx": "SM_Prop_Airvent_01",
+   "fit": 0.65
+  },
+  "roofSkylight": {
+   "pack": "town",
+   "fbx": "SM_Bld_Skylight_01",
+   "fit": 1.3
+  },
+  "roofAccess": {
+   "pack": "city",
+   "fbx": "SM_Bld_Roof_Access_01",
+   "fit": 2.3
+  },
+  "roofDish": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Roof_Satellite_Dish_01",
+   "fit": 0.75
+  },
+  "chimney": {
+   "pack": "town",
+   "fbx": "SM_Bld_Chimney_01",
+   "fit": 0.8
+  },
+  "tuft": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_Grass_Tuft_01",
+   "fit": 0.3
+  },
+  "tuftLow": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_Grass_Tuft_02",
+   "fit": 0.3
+  },
+  "tuftWide": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_Grass_Tuft_03",
+   "fit": 0.45
+  },
+  "flowers": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_Flowers_02",
+   "fit": 0.6
+  },
+  "pebbles": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_Rubble_Pebbles_02",
+   "fit": 0.6
+  },
+  "leaves": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_GroundLeaves_02",
+   "fit": 1.5
+  },
+  "grassBlob": {
+   "pack": "apocalypse",
+   "fbx": "SM_Env_GrassBlob_01",
+   "fit": 0.9
+  },
+  "papers": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Papers_01",
+   "fit": 0.7
+  },
+  "trash": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Trash_02",
+   "fit": 1
+  },
+  "manhole": {
+   "pack": "town",
+   "fbx": "SM_Prop_Manhole_01",
+   "fit": 0.75
+  },
+  "drain": {
+   "pack": "town",
+   "fbx": "SM_Prop_Drain_01",
+   "fit": 0.5
+  },
+  "crateOpen": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Crate_Open_01"
+  },
+  "crateLid": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Crate_Open_Lid_01"
+  },
+  "drawer": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Dresser_03_Drawer_01",
+   "fit": 0.45
+  },
+  "laundry": {
+   "pack": "town",
+   "fbx": "SM_Prop_Laundry_Pile_01",
+   "fit": 0.4
+  },
+  "cardboard": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CardboardBox_01",
+   "fit": 0.45
+  },
+  "lootWeapons": {
+   "pack": "military",
+   "fbx": "SM_Prop_Crate_Wood_01",
+   "fit": 0.92
+  },
+  "lootWeaponsLid": {
+   "pack": "military",
+   "fbx": "SM_Prop_Crate_Wood_Lid_01",
+   "fit": 0.92
+  },
+  "lootMedical": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Medical_Container_01",
+   "fit": 0.66
+  },
+  "lootMedicalKit": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_MedicalBox_02",
+   "fit": 0.36
+  },
+  "lootPills": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Pills_01",
+   "fit": 0.1
+  },
+  "lootAmmo": {
+   "pack": "military",
+   "fbx": "SM_Prop_Crate_Ammo_01",
+   "fit": 0.72
+  },
+  "lootAmmoLid": {
+   "pack": "military",
+   "fbx": "SM_Prop_Crate_Ammo_Lid_01",
+   "fit": 0.72
+  },
+  "lootAmmoCan": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Ammo_Box_01",
+   "fit": 0.3
+  },
+  "lootAmmoCanOpen": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Ammo_Box_Open_01",
+   "fit": 0.3
+  },
+  "lootFood": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CardboardBox_03",
+   "fit": 0.62
+  },
+  "lootFoodTop": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CardboardBox_02",
+   "fit": 0.42
+  },
+  "lootCan": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Can_01",
+   "fit": 0.08
+  },
+  "lootCan2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Can_04",
+   "fit": 0.08
+  },
+  "lootRice": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Rice_01",
+   "fit": 0.14
+  },
+  "dropBag": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Duffle_Bag_01",
+   "fit": 0.44
+  },
+  "fallenPack": {
+   "pack": "military",
+   "fbx": "SM_Chr_Attach_Backpack_01",
+   "fit": 0.5
+  },
+  "pineLarge": {
+   "pack": "nature",
+   "fbx": "SM_Tree_PolyPine_02",
+   "fit": 1.7,
+   "sink": 0.1
+  },
+  "pineLarge2": {
+   "pack": "nature",
+   "fbx": "SM_Tree_PolyPine_03",
+   "fit": 1.6,
+   "sink": 0.15
+  },
+  "logPile": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Log_Pile_02",
+   "fit": 1.9
+  },
+  "truckWreck": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Truck_Wrecked_01",
+   "fit": 3.9,
+   "yaw": 2
+  },
+  "truckWreck2": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Truck_Wrecked_02",
+   "fit": 3.9,
+   "yaw": 2
+  },
+  "lumberjack": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Statue_Lumberjack_01",
+   "fit": 0.9
+  },
+  "lumberjackBase": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Statue_Base_01",
+   "fit": 0.95
+  },
+  "baitSign": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Bait_Sign_01",
+   "fit": 0.9
+  },
+  "baitSign2": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Bait_Sign_Alt_01",
+   "fit": 0.9
+  },
+  "gasSign": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Gas_Sign_01",
+   "fit": 1.1,
+   "yaw": 2
+  },
+  "natureSign": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Nature_Sign_01",
+   "fit": 0.9
+  },
+  "brochures": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Brochure_Stand_01",
+   "fit": 0.5
+  },
+  "woodFence": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Fence_Wood_Damaged_01",
+   "fit": 1
+  },
+  "woodFence2": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Fence_Wood_Damaged_02",
+   "fit": 1
+  },
+  "chainFence": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Chain_Fence_Broken_01",
+   "fit": 1
+  },
+  "container": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "fit": 4.85,
+   "yaw": 2
+  },
+  "containerBlue": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "fit": 4.85,
+   "yaw": 2
+  },
+  "containerOrange": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "fit": 4.85,
+   "yaw": 2
+  },
+  "waterTower": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_WaterTower_01",
+   "fit": 2.3
+  },
+  "razorWire": {
+   "pack": "military",
+   "fbx": "SM_Prop_RazorWire_01",
+   "fit": 1,
+   "stretch": true
+  },
+  "cliff": {
+   "pack": "nature",
+   "fbx": "SM_Rock_Wall_01",
+   "fit": 1.4
+  },
+  "cliff2": {
+   "pack": "nature",
+   "fbx": "SM_Rock_Wall_02",
+   "fit": 1.4
+  },
+  "trashPile": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_TrashPile_02",
+   "fit": 1.05
+  },
+  "trashPile2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_TrashPile_03",
+   "fit": 1.05
+  },
+  "junkPile": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_JunkPile_01",
+   "fit": 1
+  },
+  "tirePile": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Tire_Pile_01",
+   "fit": 1
+  },
+  "streetLight": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_LightPole_Base_01",
+   "origin": true
+  },
+  "powerPole": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Powerpole_Single_01",
+   "origin": true
+  },
+  "powerLine": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Powerpole_Single_Line_01",
+   "origin": true
+  },
+  "hydrant": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Hydrant_01"
+  },
+  "mailbox": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mailbox_01"
+  },
+  "stopSign": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sign_Stop_01",
+   "origin": true
+  },
+  "cone": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Cone_01"
+  },
+  "trashBag": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_TrashBag_01"
+  },
+  "trashBag2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_TrashBag_02"
+  },
+  "trashBag3": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_TrashBag_04"
+  },
+  "tire": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Tire_01"
+  },
+  "pallet": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Pallet_01"
+  },
+  "bike": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Bike_Broken_01"
+  },
+  "luggage": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Luggage_01"
+  },
+  "luggageRetro": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Luggage_Retro_01"
+  },
+  "luggageOpen": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Luggage_Open_01"
+  },
+  "holdall": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Duffle_Bag_01"
+  },
+  "trolley": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_ShoppingCart_01"
+  },
+  "trolleyBroken": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_ShoppingCart_Broken_01"
+  },
+  "cardboard2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CardboardBox_02",
+   "fit": 0.45
+  },
+  "cardboard4": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CardboardBox_04",
+   "fit": 0.45
+  },
+  "armGrenade": {
+   "pack": "military",
+   "fbx": "SM_Chr_Attach_Grenade_01"
+  },
+  "armFlashbang": {
+   "pack": "military",
+   "fbx": "SM_Chr_Attach_Grenade_Flash_01"
+  },
+  "armSmoke": {
+   "pack": "military",
+   "fbx": "SM_Chr_Attach_Grenade_Smoke_01"
+  },
+  "armAmmo556": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Ammo_556_01"
+  },
+  "armAmmo762": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Ammo_762_Open_01"
+  },
+  "armAmmo12g": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Ammo_12G_01"
+  },
+  "armAmmoCrate": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Ammo_Crate_01"
+  },
+  "armAmmoCrateLid": {
+   "pack": "apocalypse",
+   "fbx": "SM_Item_Ammo_Crate_Lid_01"
+  },
+  "signShop": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sign_Shop_01"
+  },
+  "signFood": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sign_Food_01"
+  },
+  "signMarket": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sign_Market_01"
+  },
+  "signDiner": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sign_Diner_01"
+  },
+  "signPets": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Sign_Pets_01"
+  },
+  "officeDesk": {
+   "pack": "office",
+   "fbx": "SM_Prop_Desk_01",
+   "fit": 0.95,
+   "thick": 1.4
+  },
+  "officeDesk2": {
+   "pack": "office",
+   "fbx": "SM_Prop_Desk_03",
+   "fit": 0.95,
+   "thick": 1.4
+  },
+  "officeChair": {
+   "pack": "office",
+   "fbx": "SM_Prop_Chair_01"
+  },
+  "officeCabinet": {
+   "pack": "office",
+   "fbx": "SM_Prop_Cabinets_01"
+  },
+  "siteBarrier": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Barrier_Plastic_01",
+   "fit": 1,
+   "stretch": true
+  },
+  "brickStack": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Brick_Stack_01",
+   "fit": 0.95
+  },
+  "palletStack": {
+   "pack": "construction",
+   "fbx": "SM_Prop_PalletStack_01",
+   "fit": 0.95
+  },
+  "cementBags": {
+   "pack": "construction",
+   "fbx": "SM_Prop_ConcreteBag_Stack_01",
+   "fit": 0.9
+  },
+  "portaloo": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Portaloo_01",
+   "fit": 0.95
+  },
+  "milBarrier": {
+   "pack": "military",
+   "fbx": "SM_Prop_Barrier_01",
+   "fit": 1,
+   "stretch": true
+  },
+  "milBarrierTall": {
+   "pack": "military",
+   "fbx": "SM_Prop_Barrier_Tall_01",
+   "fit": 1
+  },
+  "milCrate": {
+   "pack": "military",
+   "fbx": "SM_Prop_Crate_Cube_01",
+   "fit": 0.8
+  },
+  "debrisPile": {
+   "pack": "military",
+   "fbx": "SM_Prop_DebrisPile_01"
+  },
+  "debrisPile2": {
+   "pack": "military",
+   "fbx": "SM_Prop_DebrisPile_03"
+  },
+  "ruinPile": {
+   "pack": "military",
+   "fbx": "SM_Bld_Destroyed_02"
+  },
+  "sheetFence": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Fence_MetalSheet_01"
+  },
+  "sheetFence2": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Fence_MetalSheet_02"
+  },
+  "concreteFence": {
+   "pack": "construction",
+   "fbx": "SM_Prop_Fence_Concrete_01"
+  },
+  "pump": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Gaspump_01"
+  },
+  "pump2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Gaspump_02"
+  },
+  "pumpCanopy": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Gaspump_Cover_01",
+   "origin": true
+  },
+  "pumpCanopyBurnt": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Gaspump_Cover_Burnt_01",
+   "origin": true
+  },
+  "pumpIsland": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Gaspump_Base_01"
+  },
+  "skylight": {
+   "pack": "industrial",
+   "fbx": "SM_Bld_Skylight_Flat_01",
+   "origin": true
+  },
+  "rollerShutter": {
+   "pack": "industrial",
+   "fbx": "SM_Bld_Door_Roller_Large_01",
+   "origin": true
+  },
+  "motelSign": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Motel_Sign_01",
+   "origin": true
+  },
+  "billboard": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Billboard_Roof_01"
+  },
+  "billboardSign": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Billboard_Sign_01"
+  },
+  "billboardSign2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Billboard_Sign_03"
+  },
+  "bus": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Car_Wrecked_Bus_01"
+  },
+  "van": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Car_Wrecked_Van_01"
+  }
+ },
+ "sets": {
+  "cityLow": [
+   "crates",
+   "barricade1",
+   "concreteBarrier",
+   "dumpster",
+   "barrels",
+   "trashPile",
+   "junkPile",
+   "trashPile2",
+   "tirePile",
+   "brickStack",
+   "siteBarrier"
+  ],
+  "cityHigh": [
+   "vending",
+   "barricadeTall",
+   "gasTank",
+   "cabinet",
+   "portaloo",
+   "milBarrierTall"
+  ],
+  "wildsLow": [
+   "rock",
+   "log",
+   "bush",
+   "rock"
+  ],
+  "wildsHigh": [
+   "tree",
+   "treePine",
+   "treeDead",
+   "boulder"
+  ],
+  "facilityLow": [
+   "crate",
+   "barricadePallet",
+   "generator",
+   "milBarrier",
+   "milCrate"
+  ],
+  "facilityHigh": [
+   "workShelf",
+   "cabinet",
+   "gasTank",
+   "workShelf"
+  ],
+  "console": [
+   "desk"
+  ],
+  "carFront": [
+   "carWreck",
+   "carRusted",
+   "carSuv",
+   "carOpen"
+  ],
+  "planter": [
+   "planter"
+  ],
+  "bin": [
+   "dumpster",
+   "rubbishBin"
+  ],
+  "streetTree": [
+   "streetPot"
+  ],
+  "kiosk": [
+   "vending"
+  ],
+  "statue": [
+   "statue"
+  ],
+  "bench": [
+   "parkBenchBroken"
+  ],
+  "logPile": [
+   "logPile"
+  ],
+  "truck": [
+   "truckWreck",
+   "truckWreck2"
+  ],
+  "container": [
+   "container",
+   "containerBlue",
+   "containerOrange"
+  ],
+  "roadSign": [
+   "gasSign"
+  ],
+  "chainFence": [
+   "chainFence"
+  ],
+  "razorWire": [
+   "razorWire"
+  ],
+  "pines": [
+   "pineLarge",
+   "pineLarge2",
+   "treePine",
+   "pineLarge"
+  ],
+  "basePines": [
+   "pineLarge",
+   "treePine",
+   "pineLarge2",
+   "pineLarge",
+   "treePine",
+   "pineLarge2",
+   "pineLarge",
+   "treePine",
+   "pineLarge2",
+   "pineLarge",
+   "treePine",
+   "pineLarge2",
+   "pineLarge",
+   "treePine",
+   "pineLarge2",
+   "pineLarge",
+   "treePine",
+   "pineLarge2",
+   "pineLarge",
+   "pineDead"
+  ],
+  "woodFence": [
+   "woodFence"
+  ],
+  "fencePost": [
+   "fencePost"
+  ],
+  "fenceRails": [
+   "fenceWire"
+  ],
+  "fenceBoards": [
+   "fencePanel"
+  ],
+  "gatePost": [
+   "gatePost"
+  ],
+  "gatePillar": [
+   "gatePillar"
+  ],
+  "hayBale": [
+   "hayBale"
+  ],
+  "hayStack": [
+   "hayRound"
+  ],
+  "shelfLow": [
+   "shelfLow"
+  ],
+  "shelfHigh": [
+   "shelfHigh",
+   "bookshelf"
+  ],
+  "counter": [
+   "counter",
+   "shopCounter"
+  ],
+  "table": [
+   "table"
+  ],
+  "fridge": [
+   "fridge"
+  ],
+  "stove": [
+   "stove"
+  ],
+  "bathtub": [
+   "bathtub"
+  ],
+  "washbasin": [
+   "washbasin"
+  ],
+  "wc": [
+   "wc"
+  ],
+  "tvStand": [
+   "tvStand"
+  ],
+  "sofa": [
+   "sofa",
+   "sofaDirty"
+  ],
+  "bed": [
+   "bed"
+  ],
+  "hospitalBed": [
+   "hospitalBed"
+  ],
+  "medicalShelf": [
+   "medicalShelf"
+  ],
+  "gurney": [
+   "gurney"
+  ],
+  "desk": [
+   "desk",
+   "officeDesk",
+   "officeDesk2"
+  ],
+  "labBench": [
+   "officeDesk2"
+  ],
+  "wardrobe": [
+   "wardrobe"
+  ],
+  "cabinet": [
+   "cabinet",
+   "bookshelf"
+  ],
+  "officeCabinet": [
+   "officeCabinet"
+  ],
+  "rack": [
+   "workShelf"
+  ],
+  "crates": [
+   "crates",
+   "crate",
+   "palletStack",
+   "cementBags"
+  ],
+  "lootWeapons": [
+   "lootWeapons"
+  ],
+  "lootMedical": [
+   "lootMedical"
+  ],
+  "lootAmmo": [
+   "lootAmmo"
+  ],
+  "lootFood": [
+   "lootFood"
+  ],
+  "techCrate": [
+   "crate"
+  ],
+  "pallets": [
+   "pallet"
+  ],
+  "drums": [
+   "drums",
+   "barrels",
+   "drumsTarp"
+  ],
+  "machine": [
+   "machine"
+  ],
+  "silo": [
+   "silo3",
+   "silo2"
+  ],
+  "barricade": [
+   "barricade1",
+   "barricade2",
+   "barricadePallet",
+   "sandbags",
+   "milBarrier",
+   "siteBarrier"
+  ],
+  "sandbags": [
+   "sandbags"
+  ],
+  "techBarrier": [
+   "concreteBarrier",
+   "milBarrier"
+  ],
+  "pipe": [
+   "pipes"
+  ],
+  "tank": [
+   "gasTank"
+  ],
+  "pump": [
+   "pump",
+   "pump2"
+  ],
+  "portaloo": [
+   "portaloo"
+  ],
+  "pylon": [
+   "cabinet"
+  ],
+  "tree": [
+   "streetTree",
+   "tree"
+  ],
+  "forest": [
+   "tree",
+   "treePine",
+   "tree"
+  ],
+  "bush": [
+   "bush"
+  ],
+  "rock": [
+   "rock"
+  ],
+  "spire": [
+   "boulder"
+  ],
+  "logs": [
+   "log"
+  ],
+  "rubble": [
+   "rubble1",
+   "rubble2"
+  ],
+  "wallStub": [
+   "rubbleWall"
+  ]
+ },
+ "footprints": {
+  "carWreck": {
+   "fit": 2.95
+  },
+  "carRusted": {
+   "fit": 2.95
+  },
+  "carSuv": {
+   "fit": 2.95
+  },
+  "carOpen": {
+   "fit": 2.95
+  },
+  "sirenPolice": {
+   "fit": 2.95
+  },
+  "sirenAmbulance": {
+   "fit": 3.9
+  },
+  "tractor": {
+   "fit": 2.48
+  },
+  "truckWreck": {
+   "fit": 5.9
+  },
+  "truckWreck2": {
+   "fit": 4.7
+  },
+  "bed": {
+   "fit": 1.95,
+   "thin": 0.78
+  },
+  "bedDouble": {
+   "fit": 1.95
+  },
+  "sofa": {
+   "fit": 1.37
+  },
+  "sofaDirty": {
+   "fit": 1.95
+  },
+  "table": {
+   "fit": 1.58
+  },
+  "bathtub": {
+   "fit": 1.55
+  },
+  "hospitalBed": {
+   "fit": 1.88,
+   "thin": 0.74
+  },
+  "gurney": {
+   "fit": 1.75
+  }
+ }
+}

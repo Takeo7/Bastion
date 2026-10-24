@@ -1,0 +1,41 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!-- The aim's panel (hud.ts fillTarget; ShotPanel.cs fills it and hides what a kind doesn't show). -->
+    <ui:Label name="title" class="shot-title font-title" />
+    <ui:VisualElement name="head" class="shot-head">
+        <ui:Button name="prev" class="cycle" text="‹" />
+        <ui:VisualElement class="shot-target" picking-mode="Ignore">
+            <ui:Label name="target" class="shot-target__name font-title" picking-mode="Ignore" />
+            <ui:Label name="index" class="shot-target__index muted" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:Button name="next" class="cycle" text="›" />
+    </ui:VisualElement>
+    <ui:VisualElement name="numbers" class="shot-numbers">
+        <ui:VisualElement name="hit" class="shot-big">
+            <ui:VisualElement name="dial-holder" class="shot-big__dial" picking-mode="Ignore" />
+            <ui:Label name="hit-value" class="shot-big__value font-title" picking-mode="Ignore" />
+            <ui:Label name="hit-label" class="shot-big__label muted" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="crit" class="shot-big shot-big--crit">
+            <ui:Label name="crit-value" class="shot-big__value font-title" picking-mode="Ignore" />
+            <ui:Label name="crit-label" class="shot-big__label muted" picking-mode="Ignore" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:VisualElement name="damage" class="damage">
+        <ui:Label name="damage-line" class="damage__line" />
+        <ui:VisualElement name="damage-notes" class="damage__notes" />
+        <ui:Label name="kill" class="damage__kill" />
+    </ui:VisualElement>
+    <ui:Label name="cost" class="self-cost" />
+    <ui:Label name="effect" class="shot-effect" />
+    <ui:Label name="detail" class="shot-effect shot-effect--detail" />
+    <ui:VisualElement name="mods" class="mods" />
+    <ui:VisualElement name="crit-mods" class="mods mods--crit" />
+    <ui:Label name="graze" class="graze" />
+    <ui:Label name="note" class="shot-effect" />
+    <ui:Label name="noise" class="shot-noise" />
+    <ui:Label name="hint" class="self-hint muted" />
+    <ui:VisualElement class="shot-actions">
+        <ui:Button name="fire" class="fire btn-primary font-title" />
+        <ui:Button name="cancel" class="cancel" />
+    </ui:VisualElement>
+</ui:UXML>

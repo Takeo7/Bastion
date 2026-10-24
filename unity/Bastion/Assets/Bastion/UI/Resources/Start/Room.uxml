@@ -1,0 +1,34 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        The room menu (lobby.ts's skirmish sheet, 0.10.1), for the first milestone: the commanders, where the partner joins
+        (the host's addresses), the mission, the map (the city), day or night, start. Filled by RoomMenu.cs.
+    -->
+    <Style src="../Hud/Mixta.uss" />
+    <Style src="Start.uss" />
+    <Style src="Room.uss" />
+    <ui:VisualElement name="room" class="start font-text">
+        <ui:VisualElement class="room__sheet">
+            <ui:VisualElement class="room__side panel">
+                <ui:Label name="seats-head" class="room__head font-title" />
+                <ui:VisualElement name="seats" class="room__seats" />
+                <ui:VisualElement name="invite" class="room__invite" />
+            </ui:VisualElement>
+            <ui:VisualElement class="room__main panel">
+                <ui:Label name="mission-head" class="room__head font-title" />
+                <ui:VisualElement name="missions" class="room__options" />
+                <ui:Label name="map-head" class="room__head font-title" />
+                <ui:VisualElement name="maps" class="room__options" />
+                <ui:Label name="hour-head" class="room__head font-title" />
+                <ui:VisualElement name="hours" class="room__options" />
+                <ui:VisualElement class="room__foot">
+                    <ui:Button name="start" class="start__choice btn-primary room__start">
+                        <ui:Label name="start-title" class="start__choice-title font-title" picking-mode="Ignore" />
+                        <ui:Label name="start-about" class="start__choice-about" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Button name="leave" class="room__leave" />
+                </ui:VisualElement>
+                <ui:Label name="status" class="start__status" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,36 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!-- Bottom right (hud.ts .turn-actions; TurnActions.cs): the camera switch, «Ir a», the command, the clocks, «Terminar turno». -->
+    <ui:Button name="follow" class="turn-btn follow-turn">
+        <ui:Label name="follow-label" class="turn-btn__label" picking-mode="Ignore" />
+        <ui:VisualElement class="switch" picking-mode="Ignore">
+            <ui:VisualElement class="switch__knob" picking-mode="Ignore" />
+        </ui:VisualElement>
+    </ui:Button>
+    <ui:Button name="go" class="turn-btn">
+        <ui:Label name="go-label" class="turn-btn__label" picking-mode="Ignore" />
+        <ui:Label class="turn-btn__key" text="F" picking-mode="Ignore" />
+    </ui:Button>
+    <ui:Button name="pass" class="turn-btn">
+        <ui:Label name="pass-label" class="turn-btn__label" picking-mode="Ignore" />
+        <ui:Label class="turn-btn__key" text="C" picking-mode="Ignore" />
+    </ui:Button>
+    <ui:Button name="watch" class="turn-btn">
+        <ui:Label name="watch-label" class="turn-btn__label" picking-mode="Ignore" />
+        <ui:Label class="turn-btn__key" text="F" picking-mode="Ignore" />
+    </ui:Button>
+    <ui:VisualElement name="clocks" class="end-clock" picking-mode="Ignore">
+        <ui:VisualElement name="clock-mine" class="turn-clock turn-clock--mine well" picking-mode="Ignore">
+            <ui:VisualElement name="clock-mine-fill" class="turn-clock__fill" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="clock-theirs" class="turn-clock turn-clock--theirs well" picking-mode="Ignore">
+            <ui:VisualElement name="clock-theirs-fill" class="turn-clock__fill" picking-mode="Ignore" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:Button name="end" class="end-turn">
+        <ui:VisualElement class="end-turn__top" picking-mode="Ignore">
+            <ui:Label name="end-label" class="end-turn__label font-title" picking-mode="Ignore" />
+            <ui:VisualElement name="end-check" class="ui-icon end-turn__check" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:Label name="end-detail" class="end-turn__detail" picking-mode="Ignore" />
+    </ui:Button>
+</ui:UXML>

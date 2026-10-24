@@ -33,6 +33,7 @@ Sesiones abiertas (2026-10-14), todas con Remote Control para seguirlas desde cl
   | Red | 3390 (https en 3391), arrancado a mano; 3392, el receptor de la captura del tráiler | 5205 (`trailer.html`, config local en `.claude/`) |
 
   Nunca se usan ni se paran el 3000/3001 (la partida de los jugadores) ni el 5173.
+  La app de Unity aloja en el TCP 41391–41400 (el primero libre) y anuncia sus partidas por UDP 41390, como la de Electron.
 - El panel admite 5 servidores de prueba a la vez: como mucho, dos o tres agentes probando en el navegador al mismo tiempo.
 - Los packs de Synty originales viven en `assets-src/synty/`, que no se sube: la licencia no deja redistribuirlos. Al repositorio solo van los modelos convertidos que use el juego.
 - El repositorio `Takeo7/Bastion` es **siempre privado**: lleva los modelos de Synty convertidos y la licencia no deja publicarlos. Nadie cambia su visibilidad. Si algún día hace falta una descarga pública, será un repositorio o sitio aparte solo con los binarios, y siempre preguntando antes a Arturo. Las releases (`v0.1.0`) solo las ve quien tiene acceso al repositorio; para pasar el juego a alguien, Arturo le manda el zip.

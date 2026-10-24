@@ -1,0 +1,16 @@
+{
+    "name": "Bastion.Editor",
+    "rootNamespace": "Bastion.EditorTools",
+    "references": [
+        "Bastion.Client",
+        "Bastion.Engine",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "SidekickCharacters",
+        "Bastion.Net"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": false
+}

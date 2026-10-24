@@ -1,0 +1,161 @@
+/* The stamp (hud.ts banner), the cards in the middle (call, arrival, outcome) and the notes (toast, notice). */
+
+/* ================================================================ banner */
+
+/* A rubber stamp coming down: big and faint, then its size, in one quick step (the transition). */
+.banner {
+    position: absolute;
+    top: 24%;
+    left: 0;
+    right: 0;
+    align-items: center;
+    opacity: 0;
+    scale: 1.6 1.6;
+    rotate: -6deg;
+    transition-property: opacity, scale;
+    transition-duration: 0.14s, 0.14s;
+    transition-timing-function: ease-in, ease-in;
+}
+
+.banner--show {
+    opacity: 1;
+    scale: 1 1;
+}
+
+.banner__text {
+    padding: 4px 20px;
+    font-size: 40px;
+    letter-spacing: 3px;
+    color: var(--t-accent);
+    border-width: 4px;
+    border-color: var(--t-accent);
+}
+
+.banner--alien .banner__text {
+    color: var(--t-danger);
+    border-color: var(--t-danger);
+}
+
+.banner--warn .banner__text {
+    color: var(--t-warn);
+    border-color: var(--t-warn);
+}
+
+.banner__detail {
+    margin-top: 6px;
+    padding: 2px 10px;
+    font-size: 15px;
+    background-color: var(--t-tag);
+}
+
+.banner__go {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--t-muted);
+}
+
+/* ================================================================= cards */
+
+.card {
+    width: 520px;
+    padding: 16px 28px 18px;
+}
+
+.card > * {
+    margin-bottom: 8px;
+}
+
+.card__kicker {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+.card__title {
+    font-size: 30px;
+    letter-spacing: 1px;
+    white-space: normal;
+}
+
+.card__text {
+    font-size: 14px;
+    white-space: normal;
+}
+
+.card__objective {
+    font-size: 15px;
+    white-space: normal;
+}
+
+.card__turns {
+    font-size: 13px;
+    color: var(--t-accent);
+}
+
+.card__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.card__actions Button {
+    margin-left: 6px;
+    height: 34px;
+}
+
+.card__clock {
+    font-size: 13px;
+    color: var(--t-warn);
+}
+
+/* The arrival card shrinking into the objective's card (Intro.Close: towards the top right). */
+.card--intro {
+    transition-property: opacity, scale, translate;
+    transition-duration: 0.35s, 0.35s, 0.35s;
+}
+
+.card--leaving {
+    opacity: 0;
+    scale: 0.3 0.3;
+    translate: 40% -45%;
+}
+
+.outcome__title {
+    font-size: 44px;
+    letter-spacing: 3px;
+    -unity-text-align: middle-center;
+}
+
+.outcome--victory .outcome__title {
+    color: var(--t-good);
+}
+
+.outcome--defeat .outcome__title {
+    color: var(--t-danger);
+}
+
+.outcome__line {
+    -unity-text-align: middle-center;
+}
+
+/* ================================================================= notes */
+
+.note {
+    margin-top: 4px;
+    padding: 3px 12px;
+    font-size: 18px;
+    background-color: var(--t-tag);
+    rotate: -1deg;
+}
+
+/* A key moment of the partner's, with «Ver (F)», in their colour (border set from C#). */
+.note--partner {
+    flex-direction: row;
+    align-items: center;
+    font-size: 15px;
+    border-left-width: 3px;
+}
+
+.note--partner Button {
+    margin-left: 8px;
+}

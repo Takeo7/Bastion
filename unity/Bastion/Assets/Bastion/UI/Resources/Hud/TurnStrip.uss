@@ -1,0 +1,122 @@
+/* The strip at the top (hud.ts setTurn, setPlayers, setFloor): whose turn on a tab of their colour, the stamps beside it. */
+
+.turn {
+    flex-direction: row;
+    align-items: center;
+}
+
+.turn-label {
+    padding: 3px 14px;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: #ffffff;
+    background-color: var(--t-accent);
+}
+
+.turn-label--enemy {
+    background-color: var(--t-stamp);
+}
+
+.turn-label--over {
+    background-color: var(--m-steel);
+}
+
+.turn__in-play {
+    margin-left: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--t-accent);
+    background-color: var(--t-tag);
+}
+
+/* OCULTOS / DETECTADOS, and the night: stamps beside the tab. */
+.conceal {
+    margin-left: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    background-color: var(--t-tag);
+    border-width: 1px;
+}
+
+.conceal--on {
+    color: var(--t-good);
+    border-color: rgba(143, 208, 90, 0.5);
+}
+
+.conceal--off {
+    color: var(--t-danger);
+    border-color: rgba(240, 80, 60, 0.5);
+}
+
+.conceal--night {
+    color: #9fb8ff;
+    border-color: rgba(159, 184, 255, 0.5);
+}
+
+.floor-ind {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 8px;
+    padding: 1px 4px;
+}
+
+.floor-ind Button {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-size: 10px;
+}
+
+.floor-ind__label {
+    margin: 0 6px;
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+.players {
+    flex-direction: row;
+    margin-left: 10px;
+}
+
+.player {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 8px;
+    padding: 2px 6px;
+    background-color: var(--t-tag);
+    border-bottom-width: 2px;
+    border-bottom-color: transparent;
+}
+
+/* Who holds the command: underlined in their colour (set from C#). */
+.player--command {
+    border-bottom-color: var(--t-accent);
+}
+
+.player--offline {
+    opacity: 0.5;
+}
+
+.player__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-right: 5px;
+}
+
+.player__name {
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.player__status {
+    margin-left: 5px;
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.player--ready .player__status {
+    color: var(--t-good);
+}

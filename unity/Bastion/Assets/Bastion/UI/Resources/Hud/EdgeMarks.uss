@@ -1,0 +1,57 @@
+/* The arrows at the screen's edge (EdgeMarks.cs; styles.css .edge-mark): a small steel plate, the arrow and the words in
+   the mark's colour: the objective in the accent, the evacuation in green, the partner's moment in the stamp's red. */
+.edge-marks {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+.edge-mark {
+    position: absolute;
+    left: 0;
+    top: 0;
+    flex-direction: row;
+    align-items: center;
+    padding: 3px 9px 3px 5px;
+}
+
+.edge-mark:hover {
+    background-color: var(--t-panel-hover);
+}
+
+/* On the arrow and the words themselves: Mixta's Label and .triangle set their own colour. */
+.edge-mark .edge-mark__arrow,
+.edge-mark .edge-mark__label {
+    color: var(--t-accent);
+}
+
+.edge-mark--evac .edge-mark__arrow,
+.edge-mark--evac .edge-mark__label {
+    color: var(--t-good);
+}
+
+.edge-mark--alert {
+    border-width: 2px;
+    border-color: var(--t-danger);
+}
+
+.edge-mark--alert .edge-mark__arrow,
+.edge-mark--alert .edge-mark__label {
+    color: var(--t-danger);
+}
+
+/* Narrow and tall, so its point reads whichever way it is turned (an even one looks the same three ways). */
+.edge-mark__arrow {
+    width: 9px;
+    height: 14px;
+    margin-right: 6px;
+}
+
+.edge-mark__label {
+    font-size: 12px;
+    -unity-font-style: bold;
+    white-space: nowrap;
+}

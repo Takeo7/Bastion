@@ -1,0 +1,1245 @@
+{
+ "clips": {
+  "tpose": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Neutral/Additive/TPose/A_TPose_Neut"
+  },
+  "idleMasc": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Masculine/Idle/A_Idle_Standing_Masc"
+  },
+  "idleFemn": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Feminine/Idle/A_Idle_Standing_Femn"
+  },
+  "crouchIdleMasc": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Masculine/Idle/A_Idle_Crouching_Masc"
+  },
+  "crouchIdleFemn": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Feminine/Idle/A_Idle_Crouching_Femn"
+  },
+  "walkMasc": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Masculine/Locomotion/Walk/A_Walk_F_Masc"
+  },
+  "walkFemn": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Feminine/Locomotion/Walk/A_Walk_F_Femn"
+  },
+  "runMasc": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Masculine/Locomotion/Run/A_Run_F_Masc"
+  },
+  "runFemn": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Feminine/Locomotion/Run/A_Run_F_Femn"
+  },
+  "sprintMasc": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Masculine/Locomotion/Sprint/A_Sprint_F_Masc"
+  },
+  "sprintFemn": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Feminine/Locomotion/Sprint/A_Sprint_F_Femn"
+  },
+  "crouchWalkMasc": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Masculine/Locomotion/Crouch/A_Crouch_FwdStrafeF_Masc"
+  },
+  "crouchWalkFemn": {
+   "pack": "baseLocomotion",
+   "fbx": "Animations/Polygon/Feminine/Locomotion/Crouch/A_Crouch_FwdStrafeF_Femn"
+  },
+  "goblinWalk": {
+   "pack": "goblinLocomotion",
+   "fbx": "Animations/Polygon/Neutral/Locomotion/Walk/A_POLY_GBL_Walk_F_Neut"
+  },
+  "goblinRun": {
+   "pack": "goblinLocomotion",
+   "fbx": "Animations/Polygon/Neutral/Locomotion/Run/A_POLY_GBL_Run_F_Neut"
+  },
+  "goblinSprint": {
+   "pack": "goblinLocomotion",
+   "fbx": "Animations/Polygon/Neutral/Locomotion/Sprint/A_POLY_GBL_Sprint_F_Neut"
+  },
+  "lookLMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Look/Actions/A_POLY_IDL_Look_L_Masc"
+  },
+  "lookRMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Look/Actions/A_POLY_IDL_Look_R_Masc"
+  },
+  "lookBehindMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Look/Actions/A_POLY_IDL_Look_L_Behind_Masc"
+  },
+  "shiftLMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/WeightShift/Actions/A_POLY_IDL_WeightShift_L_Masc"
+  },
+  "shiftRMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/WeightShift/Actions/A_POLY_IDL_WeightShift_R_Masc"
+  },
+  "lookLFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Look/Actions/A_POLY_IDL_Look_L_Femn"
+  },
+  "lookRFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Look/Actions/A_POLY_IDL_Look_R_Femn"
+  },
+  "lookBehindFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Look/Actions/A_POLY_IDL_Look_R_Behind_Femn"
+  },
+  "shiftLFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/WeightShift/Actions/A_POLY_IDL_WeightShift_L_Femn"
+  },
+  "shiftRFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/WeightShift/Actions/A_POLY_IDL_WeightShift_R_Femn"
+  },
+  "drunkMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Sway/Stances/A_POLY_IDL_Sway_Drunk_Loop_Masc"
+  },
+  "drunkFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Sway/Stances/A_POLY_IDL_Sway_Drunk_Loop_Femn"
+  },
+  "aggressiveMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Posture/Stances/A_POLY_IDL_Posture_Aggressive_Loop_Masc"
+  },
+  "aggressiveFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Posture/Stances/A_POLY_IDL_Posture_Aggressive_Loop_Femn"
+  },
+  "slumpedMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Posture/Stances/A_POLY_IDL_Posture_Slumped_Loop_Masc"
+  },
+  "slumpedFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Posture/Stances/A_POLY_IDL_Posture_Slumped_Loop_Femn"
+  },
+  "armsFoldedMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/ArmsFolded/Stances/A_POLY_IDL_ArmsFolded_Casual_Loop_Masc"
+  },
+  "armsFoldedFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/ArmsFolded/Stances/A_POLY_IDL_ArmsFolded_Casual_Loop_Femn"
+  },
+  "handsOnHipsMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/HandsOnHips/Stances/A_POLY_IDL_HandsOnHips_Base_Loop_Masc"
+  },
+  "handsOnHipsFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/HandsOnHips/Stances/A_POLY_IDL_HandsOnHips_Base_Loop_Femn"
+  },
+  "thoughtfulMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_R_Loop_Masc"
+  },
+  "thoughtfulFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_R_Loop_Femn"
+  },
+  "restBaseMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Base/Stances/A_POLY_IDL_Base_Masc"
+  },
+  "restBaseFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Base/Stances/A_POLY_IDL_Base_Femn"
+  },
+  "thoughtfulLMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_L_Loop_Masc"
+  },
+  "thoughtfulLFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_L_Loop_Femn"
+  },
+  "pointMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/PointHand/Actions/A_POLY_IDL_PointHand_Index_F_Small_Masc"
+  },
+  "pointFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/PointHand/Actions/A_POLY_IDL_PointHand_Index_F_Small_Femn"
+  },
+  "nodMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/HeadNod/Actions/A_POLY_IDL_HeadNod_Small_Masc"
+  },
+  "nodFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/HeadNod/Actions/A_POLY_IDL_HeadNod_Small_Femn"
+  },
+  "chinMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Thoughtful/Actions/A_POLY_IDL_Thoughtful_R_ChinScratch_Masc"
+  },
+  "chinFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Thoughtful/Actions/A_POLY_IDL_Thoughtful_R_ChinScratch_Femn"
+  },
+  "shrugMasc": {
+   "pack": "emotes",
+   "fbx": "Animations/Polygon/Masculine/Sad/A_POLY_EMOT_Sad_Shrug_Masc"
+  },
+  "shrugFemn": {
+   "pack": "emotes",
+   "fbx": "Animations/Polygon/Feminine/Sad/A_POLY_EMOT_Sad_Shrug_Femn"
+  },
+  "calmMasc": {
+   "pack": "emotes",
+   "fbx": "Animations/Polygon/Masculine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Masc"
+  },
+  "calmFemn": {
+   "pack": "emotes",
+   "fbx": "Animations/Polygon/Feminine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Femn"
+  },
+  "leanBackMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFolded_Loop_Masc"
+  },
+  "leanBackFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFolded_Loop_Femn"
+  },
+  "leanBackLegMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFoldedLegUp_Loop_Masc"
+  },
+  "leanBackLegFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFoldedLegUp_Loop_Femn"
+  },
+  "leanBackBaseMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/Base/A_POLY_IDL_Lean_B_Base_Loop_Masc"
+  },
+  "leanBackBaseFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/Base/A_POLY_IDL_Lean_B_Base_Loop_Femn"
+  },
+  "leanLeftMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Loop_Masc"
+  },
+  "leanLeftFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Loop_Femn"
+  },
+  "leanRightMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Loop_Masc"
+  },
+  "leanRightFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Loop_Femn"
+  },
+  "leanLeftInMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Enter_Masc"
+  },
+  "leanLeftInFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Enter_Femn"
+  },
+  "leanLeftOutMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Exit_Masc"
+  },
+  "leanLeftOutFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Exit_Femn"
+  },
+  "leanRightInMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Enter_Masc"
+  },
+  "leanRightInFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Enter_Femn"
+  },
+  "leanRightOutMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Exit_Masc"
+  },
+  "leanRightOutFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Exit_Femn"
+  },
+  "stretchArmsMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Stretch/Actions/A_POLY_IDL_Stretch_Arms_Masc"
+  },
+  "stretchArmsFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Stretch/Actions/A_POLY_IDL_Stretch_Arms_Femn"
+  },
+  "stretchShouldersMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Stretch/Actions/A_POLY_IDL_Stretch_Shoulders_Masc"
+  },
+  "stretchShouldersFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Stretch/Actions/A_POLY_IDL_Stretch_Shoulders_Femn"
+  },
+  "yawnMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Yawn/Actions/A_POLY_IDL_Yawn_Masc"
+  },
+  "yawnFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Yawn/Actions/A_POLY_IDL_Yawn_Femn"
+  },
+  "footTapMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Bored/Actions/A_POLY_IDL_Bored_FootTap_Masc"
+  },
+  "footTapFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Bored/Actions/A_POLY_IDL_Bored_FootTap_Femn"
+  },
+  "kickGroundMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Bored/Actions/A_POLY_IDL_Bored_KickGround_Masc"
+  },
+  "kickGroundFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Bored/Actions/A_POLY_IDL_Bored_KickGround_Femn"
+  },
+  "swingArmsMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Bored/Actions/A_POLY_IDL_Bored_SwingArms_Masc"
+  },
+  "swingArmsFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Bored/Actions/A_POLY_IDL_Bored_SwingArms_Femn"
+  },
+  "checkWatchMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/CheckWatch/Actions/A_POLY_IDL_CheckWatch_Masc"
+  },
+  "checkWatchFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/CheckWatch/Actions/A_POLY_IDL_CheckWatch_Femn"
+  },
+  "inspectHandsMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Inspect/Actions/A_POLY_IDL_Inspect_Hands_Masc"
+  },
+  "inspectHandsFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Inspect/Actions/A_POLY_IDL_Inspect_Hands_Femn"
+  },
+  "inspectFeetMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Inspect/Actions/A_POLY_IDL_Inspect_Feet_Masc"
+  },
+  "inspectFeetFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Inspect/Actions/A_POLY_IDL_Inspect_Feet_Femn"
+  },
+  "headShakeMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/HeadShake/Actions/A_POLY_IDL_HeadShake_Small_Masc"
+  },
+  "headShakeFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/HeadShake/Actions/A_POLY_IDL_HeadShake_Small_Femn"
+  },
+  "lookUpMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Look/Actions/A_POLY_IDL_Look_Up_Masc"
+  },
+  "lookUpFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Look/Actions/A_POLY_IDL_Look_Up_Femn"
+  },
+  "drinkInMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Drink/Stances/A_POLY_IDL_Drink_Hold_Enter_Masc"
+  },
+  "drinkInFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Drink/Stances/A_POLY_IDL_Drink_Hold_Enter_Femn"
+  },
+  "drinkMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Drink/Stances/A_POLY_IDL_Drink_Hold_Loop_Masc"
+  },
+  "drinkFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Drink/Stances/A_POLY_IDL_Drink_Hold_Loop_Femn"
+  },
+  "drinkOutMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Drink/Stances/A_POLY_IDL_Drink_Hold_Exit_Masc"
+  },
+  "drinkOutFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Drink/Stances/A_POLY_IDL_Drink_Hold_Exit_Femn"
+  },
+  "sipMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Drink/Actions/A_POLY_IDL_Drink_Sip_Masc"
+  },
+  "sipFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Drink/Actions/A_POLY_IDL_Drink_Sip_Femn"
+  },
+  "eatInMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Eat/Stances/A_POLY_IDL_Eat_Hold_Enter_Masc"
+  },
+  "eatInFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Eat/Stances/A_POLY_IDL_Eat_Hold_Enter_Femn"
+  },
+  "eatMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Eat/Stances/A_POLY_IDL_Eat_Hold_Loop_Masc"
+  },
+  "eatFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Eat/Stances/A_POLY_IDL_Eat_Hold_Loop_Femn"
+  },
+  "eatOutMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Eat/Stances/A_POLY_IDL_Eat_Hold_Exit_Masc"
+  },
+  "eatOutFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Eat/Stances/A_POLY_IDL_Eat_Hold_Exit_Femn"
+  },
+  "biteMasc": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Masculine/Eat/Actions/A_POLY_IDL_Eat_Small_Masc"
+  },
+  "biteFemn": {
+   "pack": "idles",
+   "fbx": "Animations/Polygon/Feminine/Eat/Actions/A_POLY_IDL_Eat_Small_Femn"
+  },
+  "sitChair": {
+   "pack": "mixamo",
+   "fbx": "Sitting Idle 3"
+  },
+  "sitChairStill": {
+   "pack": "mixamo",
+   "fbx": "Sitting Idle 5"
+  },
+  "sitBreathe": {
+   "pack": "mixamo",
+   "fbx": "Sitting Idle"
+  },
+  "sitFloor": {
+   "pack": "mixamo",
+   "fbx": "Sitting Idle 2"
+  },
+  "sitReclined": {
+   "pack": "mixamo",
+   "fbx": "Sitting Idle 4"
+  },
+  "sitCrossed": {
+   "pack": "mixamo",
+   "fbx": "Sitting"
+  },
+  "sitTalk": {
+   "pack": "mixamo",
+   "fbx": "Sitting Talking"
+  },
+  "sitTalk2": {
+   "pack": "mixamo",
+   "fbx": "Sitting Talking 2"
+  },
+  "standToSit": {
+   "pack": "mixamo",
+   "fbx": "Stand To Sit"
+  },
+  "sitToStand": {
+   "pack": "mixamo",
+   "fbx": "Sit To Stand"
+  },
+  "warmHands": {
+   "pack": "mixamo",
+   "fbx": "Kneel"
+  },
+  "zombieFeed": {
+   "pack": "mixamo",
+   "fbx": "../mixamo-30fps/Zombie Biting"
+  },
+  "zombieFeedFromStanding": {
+   "pack": "mixamo",
+   "fbx": "../mixamo-30fps/Zombie Biting 2"
+  },
+  "kneelDown": {
+   "pack": "mixamo",
+   "fbx": "../mixamo-30fps/Kneeling Down"
+  },
+  "kneelUp": {
+   "pack": "mixamo",
+   "fbx": "../mixamo-30fps/Standing"
+  },
+  "zombieNeckBite": {
+   "pack": "mixamo",
+   "fbx": "../mixamo-30fps/Zombie Neck Bite"
+  },
+  "zombieHeadbutt": {
+   "pack": "mixamo",
+   "fbx": "../mixamo-30fps/Zombie Headbutt"
+  },
+  "squat": {
+   "pack": "mixamo",
+   "fbx": "Crouch Idle"
+  },
+  "enterCar": {
+   "pack": "mixamo",
+   "fbx": "Entering Car"
+  },
+  "enterCarR": {
+   "pack": "mixamo",
+   "fbx": "Entering Car",
+   "mirror": true
+  },
+  "stepUp": {
+   "pack": "mixamo",
+   "fbx": "Ascending Stairs"
+  },
+  "deathHeadFMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Death/A_POLY_BOW_Death_Head_F_Masc"
+  },
+  "deathHeadLMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Death/A_POLY_BOW_Death_Head_L_Masc"
+  },
+  "deathHeadRMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Death/A_POLY_BOW_Death_Head_R_Masc"
+  },
+  "deathSpineMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Death/A_POLY_BOW_Death_Spine_B_Masc"
+  },
+  "deathStomachMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Death/A_POLY_BOW_Death_Stomach_F_Masc"
+  },
+  "deathHeadFFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Death/A_POLY_BOW_Death_Head_F_Femn"
+  },
+  "deathHeadLFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Death/A_POLY_BOW_Death_Head_L_Femn"
+  },
+  "deathHeadRFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Death/A_POLY_BOW_Death_Head_R_Femn"
+  },
+  "deathSpineFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Death/A_POLY_BOW_Death_Spine_B_Femn"
+  },
+  "deathStomachFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Death/A_POLY_BOW_Death_Stomach_F_Femn"
+  },
+  "deathForward": {
+   "pack": "swordCombat",
+   "fbx": "Animations/Polygon/Death/A_Death_F_01_Sword"
+  },
+  "hitHeadFMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Hit/A_POLY_BOW_Hit_Head_F_React_Masc"
+  },
+  "hitHeadLMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Hit/A_POLY_BOW_Hit_Head_L_React_Masc"
+  },
+  "hitHeadRMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Hit/A_POLY_BOW_Hit_Head_R_React_Masc"
+  },
+  "hitHeadBMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Hit/A_POLY_BOW_Hit_Head_B_React_Masc"
+  },
+  "hitBackMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Hit/A_POLY_BOW_Hit_Back_B_React_Masc"
+  },
+  "hitShoulderLMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Hit/A_POLY_BOW_Hit_Shoulder_L_React_Masc"
+  },
+  "hitShoulderRMasc": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Masculine/Hit/A_POLY_BOW_Hit_Shoulder_R_React_Masc"
+  },
+  "hitHeadFFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Hit/A_POLY_BOW_Hit_Head_F_React_Femn"
+  },
+  "hitHeadLFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Hit/A_POLY_BOW_Hit_Head_L_React_Femn"
+  },
+  "hitHeadRFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Hit/A_POLY_BOW_Hit_Head_R_React_Femn"
+  },
+  "hitHeadBFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Hit/A_POLY_BOW_Hit_Head_B_React_Femn"
+  },
+  "hitBackFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Hit/A_POLY_BOW_Hit_Back_B_React_Femn"
+  },
+  "hitShoulderLFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Hit/A_POLY_BOW_Hit_Shoulder_L_React_Femn"
+  },
+  "hitShoulderRFemn": {
+   "pack": "bowCombat",
+   "fbx": "Animations/Polygon/Feminine/Hit/A_POLY_BOW_Hit_Shoulder_R_React_Femn"
+  },
+  "hardBack": {
+   "pack": "swordCombat",
+   "fbx": "Animations/Polygon/Hit/HitReact/A_Hit_B_React_Sword"
+  },
+  "hardDouble": {
+   "pack": "swordCombat",
+   "fbx": "Animations/Polygon/Hit/HitReact/A_Hit_F_React_Sword"
+  },
+  "hardLeft": {
+   "pack": "swordCombat",
+   "fbx": "Animations/Polygon/Hit/HitReact/A_Hit_L_React_Sword"
+  },
+  "hardRight": {
+   "pack": "swordCombat",
+   "fbx": "Animations/Polygon/Hit/HitReact/A_Hit_R_React_Sword"
+  },
+  "rifleIdle": {
+   "pack": "mixamo",
+   "fbx": "Rifle Idle"
+  },
+  "rifleLowered": {
+   "pack": "mixamo",
+   "fbx": "Rifle Idle 4"
+  },
+  "rifleIdleLook": {
+   "pack": "mixamo",
+   "fbx": "Rifle Idle 3"
+  },
+  "rifleAim": {
+   "pack": "mixamo",
+   "fbx": "Rifle Aiming Idle"
+  },
+  "rifleFire": {
+   "pack": "mixamo",
+   "fbx": "Firing Rifle"
+  },
+  "rifleReload": {
+   "pack": "mixamo",
+   "fbx": "Reloading"
+  },
+  "rifleTurnL45": {
+   "pack": "mixamo",
+   "fbx": "Rifle Turn"
+  },
+  "rifleTurnR45": {
+   "pack": "mixamo",
+   "fbx": "Rifle Turn 2"
+  },
+  "rifleTurnL90": {
+   "pack": "mixamo",
+   "fbx": "Rifle Turn 6"
+  },
+  "rifleTurnR90": {
+   "pack": "mixamo",
+   "fbx": "Rifle Turn 8"
+  },
+  "rifleTurnL180": {
+   "pack": "mixamo",
+   "fbx": "Rifle Turn 5"
+  },
+  "rifleTurnR180": {
+   "pack": "mixamo",
+   "fbx": "Rifle Turn 3"
+  },
+  "rifleKneel": {
+   "pack": "mixamo",
+   "fbx": "Rifle Kneel Idle"
+  },
+  "rifleKneelAim": {
+   "pack": "mixamo",
+   "fbx": "Idle Crouching Aiming"
+  },
+  "pistolRest": {
+   "pack": "mixamo",
+   "fbx": "Pistol Aim"
+  },
+  "pistolAim": {
+   "pack": "mixamo",
+   "fbx": "Pistol Idle 2"
+  },
+  "pistolFire": {
+   "pack": "mixamo",
+   "fbx": "Shooting"
+  },
+  "tossGrenade": {
+   "pack": "mixamo",
+   "fbx": "Toss Grenade",
+   "mirror": true
+  },
+  "throwStone": {
+   "pack": "mixamo",
+   "fbx": "Throw Object",
+   "mirror": true
+  },
+  "knifeStab": {
+   "pack": "mixamo",
+   "fbx": "Stabbing 3"
+  },
+  "macheteSwing": {
+   "pack": "mixamo",
+   "fbx": "Standing Melee Attack Horizontal"
+  },
+  "rifleWalk": {
+   "pack": "mixamo",
+   "fbx": "Rifle Walk"
+  },
+  "rifleRun": {
+   "pack": "mixamo",
+   "fbx": "Rifle Run"
+  },
+  "rifleSprint": {
+   "pack": "mixamo",
+   "fbx": "Sprint Forward"
+  }
+ },
+ "motionOrder": [
+  "idle",
+  "crouchIdle",
+  "walk",
+  "run",
+  "crouchWalk",
+  "sprint"
+ ],
+ "motions": {
+  "masc": {
+   "idle": "idleMasc",
+   "crouchIdle": "crouchIdleMasc",
+   "walk": "walkMasc",
+   "run": "runMasc",
+   "crouchWalk": "crouchWalkMasc",
+   "sprint": "sprintMasc"
+  },
+  "femn": {
+   "idle": "idleFemn",
+   "crouchIdle": "crouchIdleFemn",
+   "walk": "walkFemn",
+   "run": "runFemn",
+   "crouchWalk": "crouchWalkFemn",
+   "sprint": "sprintFemn"
+  }
+ },
+ "deadMotions": {
+  "walk": "goblinWalk",
+  "run": "goblinRun",
+  "sprint": "goblinSprint"
+ },
+ "idleVariations": {
+  "masc": [
+   "lookLMasc",
+   "lookRMasc",
+   "lookBehindMasc",
+   "shiftLMasc",
+   "shiftRMasc"
+  ],
+  "femn": [
+   "lookLFemn",
+   "lookRFemn",
+   "lookBehindFemn",
+   "shiftLFemn",
+   "shiftRFemn"
+  ]
+ },
+ "stanceOrder": [
+  "drunk",
+  "aggressive",
+  "slumped",
+  "armsFolded",
+  "handsOnHips",
+  "thoughtful",
+  "thoughtfulL",
+  "restBase"
+ ],
+ "stances": {
+  "masc": {
+   "drunk": "drunkMasc",
+   "aggressive": "aggressiveMasc",
+   "slumped": "slumpedMasc",
+   "armsFolded": "armsFoldedMasc",
+   "handsOnHips": "handsOnHipsMasc",
+   "thoughtful": "thoughtfulMasc",
+   "thoughtfulL": "thoughtfulLMasc",
+   "restBase": "restBaseMasc"
+  },
+  "femn": {
+   "drunk": "drunkFemn",
+   "aggressive": "aggressiveFemn",
+   "slumped": "slumpedFemn",
+   "armsFolded": "armsFoldedFemn",
+   "handsOnHips": "handsOnHipsFemn",
+   "thoughtful": "thoughtfulFemn",
+   "thoughtfulL": "thoughtfulLFemn",
+   "restBase": "restBaseFemn"
+  }
+ },
+ "gestureOrder": [
+  "point",
+  "nod",
+  "chin",
+  "shrug",
+  "calm"
+ ],
+ "gestures": {
+  "masc": {
+   "point": "pointMasc",
+   "nod": "nodMasc",
+   "chin": "chinMasc",
+   "shrug": "shrugMasc",
+   "calm": "calmMasc"
+  },
+  "femn": {
+   "point": "pointFemn",
+   "nod": "nodFemn",
+   "chin": "chinFemn",
+   "shrug": "shrugFemn",
+   "calm": "calmFemn"
+  }
+ },
+ "deaths": {
+  "masc": [
+   {
+    "id": "deathHeadFMasc",
+    "falls": -2.65,
+    "reach": 0.85,
+    "head": true
+   },
+   {
+    "id": "deathHeadLMasc",
+    "falls": -2.46,
+    "reach": 1.25,
+    "head": true
+   },
+   {
+    "id": "deathHeadRMasc",
+    "falls": 2.34,
+    "reach": 1.41,
+    "head": true
+   },
+   {
+    "id": "deathSpineMasc",
+    "falls": 3,
+    "reach": 0.73
+   },
+   {
+    "id": "deathStomachMasc",
+    "falls": 0.21,
+    "reach": 0.95,
+    "close": true
+   },
+   {
+    "id": "deathForward",
+    "falls": -0.14,
+    "reach": 1.58
+   }
+  ],
+  "femn": [
+   {
+    "id": "deathHeadFFemn",
+    "falls": -2.65,
+    "reach": 0.85,
+    "head": true
+   },
+   {
+    "id": "deathHeadLFemn",
+    "falls": -2.46,
+    "reach": 1.25,
+    "head": true
+   },
+   {
+    "id": "deathHeadRFemn",
+    "falls": 2.34,
+    "reach": 1.41,
+    "head": true
+   },
+   {
+    "id": "deathSpineFemn",
+    "falls": 3,
+    "reach": 0.73
+   },
+   {
+    "id": "deathStomachFemn",
+    "falls": 0.21,
+    "reach": 0.95,
+    "close": true
+   },
+   {
+    "id": "deathForward",
+    "falls": -0.14,
+    "reach": 1.58
+   }
+  ]
+ },
+ "hits": {
+  "masc": [
+   {
+    "id": "hitHeadFMasc",
+    "from": 0,
+    "head": true
+   },
+   {
+    "id": "hitHeadLMasc",
+    "from": 0.86,
+    "head": true
+   },
+   {
+    "id": "hitHeadRMasc",
+    "from": -1.17,
+    "head": true
+   },
+   {
+    "id": "hitHeadBMasc",
+    "from": 3.141592653589793,
+    "head": true
+   },
+   {
+    "id": "hitBackMasc",
+    "from": 3.141592653589793
+   },
+   {
+    "id": "hitShoulderLMasc",
+    "from": 1.25
+   },
+   {
+    "id": "hitShoulderRMasc",
+    "from": -1.57
+   },
+   {
+    "id": "hardBack",
+    "from": -0.22,
+    "hard": true
+   },
+   {
+    "id": "hardDouble",
+    "from": 3.141592653589793,
+    "hard": true,
+    "close": true
+   },
+   {
+    "id": "hardLeft",
+    "from": -1.2,
+    "hard": true
+   },
+   {
+    "id": "hardRight",
+    "from": 0.82,
+    "hard": true
+   }
+  ],
+  "femn": [
+   {
+    "id": "hitHeadFFemn",
+    "from": 0,
+    "head": true
+   },
+   {
+    "id": "hitHeadLFemn",
+    "from": 0.86,
+    "head": true
+   },
+   {
+    "id": "hitHeadRFemn",
+    "from": -1.17,
+    "head": true
+   },
+   {
+    "id": "hitHeadBFemn",
+    "from": 3.141592653589793,
+    "head": true
+   },
+   {
+    "id": "hitBackFemn",
+    "from": 3.141592653589793
+   },
+   {
+    "id": "hitShoulderLFemn",
+    "from": 1.25
+   },
+   {
+    "id": "hitShoulderRFemn",
+    "from": -1.57
+   },
+   {
+    "id": "hardBack",
+    "from": -0.22,
+    "hard": true
+   },
+   {
+    "id": "hardDouble",
+    "from": 3.141592653589793,
+    "hard": true,
+    "close": true
+   },
+   {
+    "id": "hardLeft",
+    "from": -1.2,
+    "hard": true
+   },
+   {
+    "id": "hardRight",
+    "from": 0.82,
+    "hard": true
+   }
+  ]
+ },
+ "actions": [
+  "rifleIdle",
+  "rifleLowered",
+  "rifleIdleLook",
+  "rifleAim",
+  "rifleFire",
+  "rifleReload",
+  "rifleTurnL45",
+  "rifleTurnR45",
+  "rifleTurnL90",
+  "rifleTurnR90",
+  "rifleTurnL180",
+  "rifleTurnR180",
+  "rifleKneel",
+  "rifleKneelAim",
+  "pistolRest",
+  "pistolAim",
+  "pistolFire",
+  "tossGrenade",
+  "throwStone",
+  "knifeStab",
+  "macheteSwing"
+ ],
+ "armedMotions": {
+  "rifle": {
+   "walk": "rifleWalk",
+   "run": "rifleRun",
+   "sprint": "rifleSprint"
+  },
+  "pistol": {
+   "walk": "own",
+   "run": "own",
+   "sprint": "own",
+   "crouchWalk": "own"
+  }
+ },
+ "rifleRests": [
+  "rifleIdle",
+  "rifleLowered",
+  "rifleIdleLook"
+ ],
+ "feedClips": {
+  "bite": [
+   "zombieNeckBite",
+   0,
+   1.3
+  ],
+  "down": [
+   "kneelDown",
+   0.8,
+   2.77
+  ],
+  "loop": [
+   "zombieFeed",
+   0,
+   2.33
+  ],
+  "up": [
+   "kneelUp",
+   0,
+   2.6
+  ]
+ },
+ "weapons": {
+  "rifle": {
+   "fbx": "SM_Wep_AssaultRifle_01",
+   "fore": [
+    0.002,
+    0.2
+   ],
+   "sight": 0.098
+  },
+  "rifle2": {
+   "fbx": "SM_Wep_AssaultRifle_02",
+   "fore": [
+    0.012,
+    0.21
+   ],
+   "sight": 0.096
+  },
+  "rifle3": {
+   "fbx": "SM_Wep_AssaultRifle_03",
+   "fore": [
+    0.03,
+    0.27
+   ],
+   "sight": 0.1
+  },
+  "shotgun": {
+   "fbx": "SM_Wep_Shotgun_01",
+   "fore": [
+    -0.014,
+    0.2
+   ],
+   "sight": 0.057,
+   "reflex": true
+  },
+  "sniper": {
+   "fbx": "SM_Wep_SniperRifle_01",
+   "fore": [
+    -0.02,
+    0.14
+   ],
+   "sight": 0.053
+  },
+  "sniper2": {
+   "fbx": "SM_Wep_SniperRifle_02",
+   "fore": [
+    -0.022,
+    0.18
+   ],
+   "sight": 0.04,
+   "muzzle": [
+    0,
+    0.026,
+    0.49
+   ]
+  },
+  "machineGun": {
+   "fbx": "SM_Wep_MachineGun_01",
+   "fore": [
+    0.018,
+    0.3
+   ],
+   "sight": 0.11,
+   "reflex": true
+  },
+  "huntingRifle": {
+   "fbx": "SM_Wep_HuntingRifle_01",
+   "fore": [
+    -0.04,
+    0.22
+   ],
+   "sight": 0.043
+  },
+  "smg": {
+   "fbx": "SM_Wep_SubMGun_01",
+   "fore": [
+    -0.008,
+    0.12
+   ],
+   "sight": 0.071,
+   "reflex": true
+  },
+  "baton": {
+   "fbx": "SM_Wep_Baton_01",
+   "melee": true
+  },
+  "pistol": {
+   "fbx": "SM_Wep_Pistol_01",
+   "pistol": true
+  },
+  "knife": {
+   "fbx": "SM_Wep_Melee_HuntingKnife_01",
+   "melee": true,
+   "size": 0.8
+  },
+  "machete": {
+   "fbx": "SM_Wep_Melee_Machete_01",
+   "melee": true,
+   "size": 0.72
+  },
+  "boltRifle": {
+   "fbx": "SM_Wep_HuntingRifle_Clean_01",
+   "fore": [
+    -0.04,
+    0.22
+   ],
+   "sight": 0.043
+  },
+  "machineGun2": {
+   "fbx": "SM_Wep_MachineGun_02",
+   "fore": [
+    0.018,
+    0.3
+   ],
+   "sight": 0.122,
+   "reflex": true
+  }
+ },
+ "unitWeapons": {
+  "rookie": [
+   "rifle",
+   "rifle2",
+   "rifle3"
+  ],
+  "specialist": [
+   "rifle",
+   "rifle2",
+   "rifle3"
+  ],
+  "assault": [
+   "shotgun",
+   "shotgun",
+   "shotgun"
+  ],
+  "sharpshooter": [
+   "sniper",
+   "sniper2",
+   "sniper2"
+  ],
+  "grenadier": [
+   "machineGun",
+   "machineGun",
+   "machineGun"
+  ],
+  "trooper": [
+   "huntingRifle",
+   "huntingRifle",
+   "huntingRifle"
+  ],
+  "officer": [
+   "smg",
+   "smg",
+   "smg"
+  ],
+  "lancer": [
+   "baton",
+   "baton",
+   "baton"
+  ]
+ }
+}

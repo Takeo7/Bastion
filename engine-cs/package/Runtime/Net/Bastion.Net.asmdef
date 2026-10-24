@@ -1,0 +1,14 @@
+{
+  "name": "Bastion.Net",
+  "rootNamespace": "Bastion.Net",
+  "references": ["Bastion.Engine"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": ["Newtonsoft.Json.dll"],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

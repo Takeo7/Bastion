@@ -1,0 +1,295 @@
+/*
+ * «Mixta», the interface (ui/themes/mixta.css of the 0.10.1), for UI Toolkit: plates of dark steel with a bevel lit
+ * from above, hazard yellow for what to press next and what is chosen, green good, red danger.
+ *
+ * USS has no gradients, box-shadow, gap nor @keyframes (docs/UNITY-UI.md §4): the plates are flat colours with their
+ * bevel in the borders until the steel and grime textures go in as 9-sliced sprites; spacing is margins; what moves
+ * is a transition or C#.
+ *
+ * Fonts: Oswald for titles and big numbers, Barlow for everything read (UI/Fonts: TTFs from @fontsource's WOFF by
+ * tools/ui/woff-to-ttf.py, their Font Assets by HudFonts.Make). Inherited: the HUD's root takes Barlow, titles Oswald.
+ * The «§» as their fallback is still to come.
+ */
+
+:root {
+    --t-text: #eef0ea;
+    --t-muted: #a1a79d;
+    --t-accent: #f2c230;
+    --t-accent-soft: rgba(242, 194, 48, 0.14);
+    --t-line: rgba(255, 255, 255, 0.1);
+    --t-good: #8fd05a;
+    --t-warn: #f5a524;
+    --t-danger: #f0503c;
+    --t-stamp: #b3261e;
+
+    --t-panel: rgba(27, 30, 32, 0.96);
+    --t-panel-hi: rgba(46, 50, 52, 0.97);
+    --t-panel-lo: rgba(12, 14, 15, 0.92);
+    --t-panel-hover: rgba(60, 64, 64, 0.98);
+    --t-tag: rgba(17, 19, 20, 0.94);
+    --t-primary: #f2c230;
+    --t-primary-hover: #f9cf48;
+    --t-primary-ink: #1e1706;
+    --t-ready: #8fd05a;
+    --t-ready-ink: #0d1806;
+
+    --m-steel-hi: #3d4346;
+    --m-steel: #2b2f31;
+    --m-steel-lo: #1c1f21;
+    --m-well: #0c0e0f;
+    --m-edge: #060708;
+
+    --edge: 8px;
+    --unit-w: 236px;
+    --end-w: 172px;
+    --side-w: 224px;
+}
+
+/* ================================================================ type */
+
+.font-text {
+    -unity-font-definition: url("../../Fonts/Barlow-Medium SDF.asset");
+    color: var(--t-text);
+}
+
+/* Oswald SemiBold is already its weight: no bold made on top of it. */
+.font-title {
+    -unity-font-definition: url("../../Fonts/Oswald-SemiBold SDF.asset");
+    -unity-font-style: normal;
+    letter-spacing: 1px;
+    color: var(--t-text);
+}
+
+Label {
+    color: var(--t-text);
+    font-size: 13px;
+    margin: 0;
+    padding: 0;
+}
+
+.muted {
+    color: var(--t-muted);
+}
+
+.good {
+    color: var(--t-good);
+}
+
+.bad {
+    color: var(--t-danger);
+}
+
+.warn {
+    color: var(--t-warn);
+}
+
+.accent {
+    color: var(--t-accent);
+}
+
+/* ============================================================== plates */
+
+/* A plate of steel: flat for now, its bevel in the borders (light on top, dark below), a dark outline. */
+.panel {
+    background-color: var(--t-panel);
+    /* Our steel (tools/ui/mixta-textures.py: grime and brushed steel over the plate's colour, baked into one tile). */
+    background-image: url("../../Textures/steel-plate.png");
+    background-repeat: repeat repeat;
+    background-size: 256px 256px;
+    border-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.12);
+    border-left-color: rgba(255, 255, 255, 0.05);
+    border-right-color: rgba(0, 0, 0, 0.6);
+    border-bottom-color: rgba(0, 0, 0, 0.75);
+    border-radius: 2px;
+}
+
+/* A well sunk into a plate (the dial, the clock's track). */
+.well {
+    background-color: var(--m-well);
+    border-width: 1px;
+    border-top-color: rgba(0, 0, 0, 0.75);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+    border-left-color: rgba(0, 0, 0, 0.5);
+    border-right-color: rgba(0, 0, 0, 0.5);
+}
+
+.hidden {
+    display: none;
+}
+
+/* ============================================================= buttons */
+
+Button {
+    margin: 0;
+    padding: 4px 10px;
+    border-width: 1px;
+    border-radius: 2px;
+    background-color: var(--m-steel);
+    border-top-color: rgba(255, 255, 255, 0.14);
+    border-left-color: rgba(255, 255, 255, 0.06);
+    border-right-color: var(--m-edge);
+    border-bottom-color: var(--m-edge);
+    color: var(--t-text);
+    font-size: 12px;
+    -unity-font-style: bold;
+    transition-property: background-color, scale;
+    transition-duration: 0.12s, 0.08s;
+}
+
+Button:hover {
+    background-color: var(--m-steel-hi);
+}
+
+Button:active {
+    scale: 0.97 0.97;
+}
+
+Button:disabled {
+    opacity: 0.45;
+}
+
+/* What to press next: hazard yellow, dark ink. */
+.btn-primary {
+    background-color: var(--t-primary);
+    border-top-color: #ffe27a;
+    color: var(--t-primary-ink);
+}
+
+.btn-primary:hover {
+    background-color: var(--t-primary-hover);
+}
+
+/* ================================================================ pips */
+
+/* A row of pips: health, actions, rounds (Ui.Pips). */
+.pips {
+    flex-direction: row;
+    align-items: center;
+}
+
+.pip {
+    width: 7px;
+    height: 7px;
+    margin-right: 2px;
+    background-color: rgba(255, 255, 255, 0.12);
+    border-radius: 1px;
+}
+
+.pip--on {
+    background-color: var(--t-good);
+}
+
+.pips--ap .pip--on {
+    background-color: var(--t-accent);
+}
+
+.pips--ammo .pip {
+    width: 3px;
+    height: 9px;
+    margin-right: 1px;
+}
+
+.pips--ammo .pip--on {
+    background-color: #d39a4a;
+}
+
+/* ================================================================ tags */
+
+/* A state on a card or a flag: small capitals on a dark slip, coloured by kind. */
+.tag {
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    letter-spacing: 0.5px;
+    background-color: var(--t-tag);
+    color: var(--t-text);
+    border-radius: 1px;
+}
+
+.tag--ow {
+    color: #7fd3ff;
+}
+
+.tag--hk {
+    color: #9fe08a;
+}
+
+.tag--stun {
+    color: #ffcf5a;
+}
+
+.tag--psi {
+    color: #d29bff;
+}
+
+.tag--bite {
+    color: var(--t-danger);
+}
+
+.tag--data {
+    color: #8fe6ff;
+}
+
+.tag--evac {
+    color: var(--t-good);
+}
+
+.tag--aid {
+    color: #9fe08a;
+}
+
+.tag--in-play {
+    color: var(--t-accent);
+}
+
+/* ================================================================ icons */
+
+/* A sprite of the HUD's table (Ui.Icon), tinted with the text's colour. */
+.ui-icon {
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+/* A filled triangle (Triangle.cs), in the text's colour. */
+.triangle {
+    width: 9px;
+    height: 7px;
+    color: var(--t-text);
+}
+
+/* ========================================================== skill hexagon */
+
+.skill-hex {
+    width: 11px;
+    height: 11px;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+/* ============================================================= tooltips */
+
+.tooltip-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.tooltip {
+    position: absolute;
+    max-width: 280px;
+    padding: 6px 9px;
+    background-color: rgba(14, 16, 17, 0.97);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.14);
+    border-radius: 2px;
+}
+
+.tooltip__text {
+    white-space: normal;
+    font-size: 12px;
+}

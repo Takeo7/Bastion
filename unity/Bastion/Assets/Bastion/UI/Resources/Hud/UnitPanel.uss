@@ -1,0 +1,89 @@
+/* The picked soldier's panel (hud.ts setSelected): who, its figures with their icons, its weapon. */
+
+.unit-head {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.unit-head--opens:hover .unit-name {
+    color: var(--t-accent);
+}
+
+.unit-head__name-row {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 1;
+}
+
+.unit-name {
+    font-size: 17px;
+    margin-right: 6px;
+}
+
+.unit-class {
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+/* «DE ANA»: in the partner's colour (set from C#). */
+.whose {
+    margin-left: 0;
+}
+
+/* Veterancy chevrons: a small stack of marks before the name. */
+.rank {
+    flex-direction: column;
+    margin-right: 5px;
+}
+
+.rank__chevron {
+    width: 10px;
+    height: 3px;
+    margin-bottom: 1px;
+    background-color: var(--t-accent);
+}
+
+.unit-stats {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 5px;
+}
+
+.stat {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 8px 4px 0;
+}
+
+/* The figure's icon (Synty INTERFACE sprites, tinted): set per kind once the sprites are in. */
+.stat-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 3px;
+    -unity-background-image-tint-color: var(--t-muted);
+}
+
+.stat__value {
+    font-size: 13px;
+    -unity-font-style: bold;
+    margin-left: 2px;
+}
+
+.stat__value--bad {
+    color: var(--t-danger);
+}
+
+.unit-weapon {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 2px;
+    padding-top: 4px;
+    border-top-width: 1px;
+    border-top-color: var(--t-line);
+}
+
+.unit-weapon__name {
+    font-size: 12px;
+    color: var(--t-muted);
+}

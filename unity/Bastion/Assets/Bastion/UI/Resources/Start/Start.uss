@@ -1,0 +1,153 @@
+/* The start screen (launcher.html): one column of steel in the middle, the choices one under another. */
+
+.start {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgb(12, 14, 15);
+}
+
+.start__column {
+    width: 520px;
+    padding: 24px 28px 18px;
+}
+
+.start__column > * {
+    margin-bottom: 12px;
+}
+
+.start__title {
+    font-size: 54px;
+    letter-spacing: 8px;
+    -unity-text-align: middle-center;
+    color: var(--t-accent);
+}
+
+.start__kicker {
+    margin-top: -10px;
+    font-size: 12px;
+    letter-spacing: 3px;
+    -unity-text-align: middle-center;
+    color: var(--t-muted);
+}
+
+.start__label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    -unity-font-style: bold;
+    color: var(--t-muted);
+    margin-bottom: 3px;
+}
+
+.start__hint {
+    font-size: 12px;
+    white-space: normal;
+    color: var(--t-muted);
+    margin-bottom: 4px;
+}
+
+.start__input {
+    margin: 0;
+}
+
+.start__input > .unity-base-field__input {
+    padding: 4px 8px;
+    font-size: 15px;
+    color: var(--t-text);
+    background-color: var(--m-well);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* The address's example, a hint and not a value: grey. */
+.start__input .unity-base-text-field__input--placeholder,
+.start__input .unity-text-element--placeholder {
+    color: var(--t-muted);
+}
+
+.start__row {
+    flex-direction: row;
+}
+
+.start__input--address {
+    flex-grow: 1;
+    margin-right: 6px;
+}
+
+.start__join {
+    font-size: 15px;
+    padding: 4px 16px;
+}
+
+/* A choice: its name big, what it does small under it. */
+.start__choice {
+    padding: 10px 14px;
+    align-items: flex-start;
+}
+
+.start__choice-title {
+    font-size: 20px;
+    letter-spacing: 2px;
+}
+
+.btn-primary .start__choice-title,
+.btn-primary .start__choice-about {
+    color: var(--t-primary-ink);
+}
+
+.start__choice-about {
+    font-size: 12px;
+    white-space: normal;
+    -unity-text-align: upper-left;
+    margin-top: 2px;
+}
+
+.start__choice--quit {
+    align-items: center;
+}
+
+.start__choice--quit .start__choice-title {
+    font-size: 14px;
+    color: var(--t-muted);
+}
+
+/* A game found on the network: whose, how many, where it is (in the menu, on the base, in a mission), its address. */
+.start__game {
+    margin-bottom: 4px;
+    padding: 6px 10px;
+    align-items: flex-start;
+}
+
+.start__game-name {
+    font-size: 15px;
+    -unity-font-style: bold;
+}
+
+.start__game-about {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+/* Another version: shown, not joinable. */
+.start__game--other {
+    opacity: 0.5;
+}
+
+.start__status {
+    font-size: 13px;
+    white-space: normal;
+    min-height: 18px;
+}
+
+.start__status--bad {
+    color: var(--t-danger);
+}
+
+.start__version {
+    font-size: 10px;
+    -unity-text-align: middle-center;
+    color: var(--t-muted);
+}

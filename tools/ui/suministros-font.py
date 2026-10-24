@@ -5,6 +5,10 @@
 #
 #   pip install fonttools brotli
 #   python tools/ui/suministros-font.py packages/client/src/ui/themes/suministros.woff2
+#
+# For Unity (docs/UNITY-UI.md §6: its Font Asset is made from a TTF), the same glyph as a .ttf:
+#
+#   python tools/ui/suministros-font.py unity/Bastion/Assets/Bastion/UI/Fonts/BastionSuministros.ttf
 import sys
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
@@ -53,6 +57,7 @@ fb.setupHorizontalHeader(ascent=800, descent=-200)
 fb.setupNameTable({'familyName': 'Bastion Suministros', 'styleName': 'Regular'})
 fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200)
 fb.setupPost()
-fb.font.flavor = 'woff2'
+if out.endswith('.woff2'):
+    fb.font.flavor = 'woff2'
 fb.save(out)
 print('ok', out)

@@ -1,0 +1,12 @@
+{
+    "name": "Bastion.Client.Net.Editor",
+    "rootNamespace": "Bastion.Client.Net.EditorTools",
+    "references": [
+        "Bastion.Engine",
+        "Bastion.Net"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": false
+}

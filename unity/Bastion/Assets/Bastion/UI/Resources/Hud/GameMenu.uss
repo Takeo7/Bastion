@@ -1,0 +1,259 @@
+/*
+   The game's menu (Esc) and the questions before going (styles.css .game-menu, .modal; mixta-hud.css «Esc menu»).
+   UI Toolkit blends in linear space here: a tint over the dark plate shows much stronger than the web's same alpha,
+   so the tints are fainter (0.045 shows as the web's 0.16).
+*/
+
+/* Over the whole screen, dimmed; the card in the middle. */
+.game-menu {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(10, 8, 5, 0.55);
+}
+
+.game-menu--modal {
+    background-color: rgba(10, 8, 5, 0.6);
+}
+
+.game-menu__card {
+    width: 360px;
+    padding: 16px 22px 14px;
+    rotate: -0.6deg;
+}
+
+.game-menu__title {
+    margin-bottom: 8px;
+    font-size: 26px;
+    letter-spacing: 2px;
+    color: #ffffff;
+}
+
+/* One entry a line, Oswald in capitals, that steps aside when pointed at, like the main menu's. */
+.game-menu__entry {
+    padding: 7px 4px;
+    font-size: 20px;
+    letter-spacing: 1.6px;
+    -unity-text-align: middle-left;
+    -unity-font-style: normal;
+    color: #e6e8e2;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0 0 1px 0;
+    border-bottom-color: rgba(0, 0, 0, 0.5);
+    border-radius: 0;
+    transition-property: translate, background-color, color;
+    transition-duration: 0.14s, 0.14s, 0.14s;
+}
+
+.game-menu__entry:hover {
+    background-color: rgba(242, 194, 48, 0.05);
+    color: #ffffff;
+    translate: 4px 0;
+}
+
+.game-menu__entry:active {
+    scale: 1 1;
+}
+
+/* «Abandonar la misión»: red, an entry like the others. */
+.game-menu__entry--danger {
+    background-color: rgba(240, 80, 60, 0.045);
+    color: #ff8a78;
+}
+
+.game-menu__entry--danger:hover {
+    background-color: rgba(240, 80, 60, 0.11);
+    color: #ffc2b6;
+}
+
+.game-menu__back {
+    align-self: flex-start;
+    margin-top: 10px;
+    padding: 2px 0;
+    font-size: 14px;
+    color: var(--t-accent);
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+}
+
+.game-menu__back:hover {
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--t-primary-hover);
+}
+
+/* ============================================================== Ajustes */
+
+.settings {
+    margin: 4px 0 6px;
+}
+
+/* Its name over its switch, so no switch wraps (mixta-hud.css). */
+.setting {
+    padding: 5px 0;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.setting__name {
+    margin-bottom: 4px;
+    font-size: 12px;
+    letter-spacing: 1.4px;
+    color: var(--t-muted);
+}
+
+.setting__choices {
+    flex-direction: row;
+    align-items: center;
+}
+
+.setting__choice {
+    margin-right: 4px;
+    padding: 1px 8px;
+    font-size: 14px;
+    -unity-font-style: normal;
+    color: var(--t-muted);
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: 2px;
+}
+
+.setting__choice:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--t-text);
+}
+
+.setting__choice--on {
+    color: var(--t-text);
+    border-color: var(--t-accent);
+}
+
+/* «Velocidad del turno enemigo»: a slider between «Lenta» and «Rápida», its rate beside it. */
+.setting__end {
+    font-size: 12px;
+    color: var(--t-muted);
+}
+
+.setting__slider {
+    flex-grow: 1;
+    margin: 0 8px;
+    min-width: 120px;
+}
+
+.setting__slider .unity-base-slider__tracker {
+    height: 4px;
+    margin-top: -2px;
+    background-color: var(--m-well);
+    border-width: 0;
+}
+
+.setting__slider .unity-base-slider__dragger {
+    width: 10px;
+    height: 16px;
+    margin-top: -8px;
+    background-color: var(--t-accent);
+    border-width: 0;
+    border-radius: 1px;
+}
+
+.setting__slider .unity-base-slider__dragger-border {
+    display: none;
+}
+
+.setting__value {
+    min-width: 40px;
+    margin-left: 6px;
+    font-size: 14px;
+    -unity-text-align: middle-right;
+}
+
+/* ============================================================ Controles */
+
+.game-menu__card--wide {
+    width: 500px;
+}
+
+.controls__row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+/* Keys are little key caps. */
+.controls__keys {
+    flex-shrink: 0;
+    max-width: 150px;
+    margin-right: 12px;
+    padding: 1px 6px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    white-space: normal;
+    background-color: var(--m-steel-hi);
+    border-width: 1px 1px 2.5px 1px;
+    border-color: var(--m-edge);
+    border-radius: 3px;
+}
+
+.controls__what {
+    flex-shrink: 1;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.controls__night {
+    margin: 14px 0 4px;
+    font-size: 15px;
+}
+
+.controls__rule {
+    margin-bottom: 4px;
+    font-size: 13px;
+    white-space: normal;
+}
+
+/* ======================================================== the question */
+
+.game-menu__card--ask {
+    width: 440px;
+    padding: 20px 26px;
+    rotate: 0deg;
+}
+
+.game-menu__ask-title {
+    margin-bottom: 8px;
+    font-size: 22px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.game-menu__line {
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: var(--t-muted);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+/* Leaving the game while hosting it, with the partner in: said plainly, in the warning colour. */
+.game-menu__warning {
+    -unity-font-style: bold;
+    color: var(--t-warn);
+}
+
+.game-menu__actions {
+    justify-content: center;
+}
+
+.btn-danger {
+    background-color: var(--t-danger);
+    border-top-color: #ff8a78;
+    color: #ffffff;
+}
+
+.btn-danger:hover {
+    background-color: #ff6a55;
+}

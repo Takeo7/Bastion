@@ -1,0 +1,170 @@
+/* The aim's panel (hud.ts fillTarget): the odds on a dial, the damage, the modifiers, fire and cancel. */
+
+.shot-panel > * {
+    margin-bottom: 5px;
+}
+
+/* A self ability armed by its first press: over the key that was pressed (ShotPanel.Anchor). */
+.shot-panel--anchored {
+    top: auto;
+    bottom: 72px;
+    right: auto;
+    translate: 0 0;
+    rotate: 0deg;
+}
+
+.shot-title {
+    white-space: normal;
+    font-size: 13px;
+    color: var(--t-muted);
+    letter-spacing: 1px;
+}
+
+.shot-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cycle {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 16px;
+}
+
+.shot-target {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.shot-target__name {
+    font-size: 17px;
+    color: var(--t-danger);
+}
+
+.shot-panel--support .shot-target__name {
+    color: var(--t-good);
+}
+
+.shot-target__index {
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+.shot-numbers {
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.shot-big {
+    width: 84px;
+    height: 84px;
+    align-items: center;
+    justify-content: center;
+}
+
+.shot-big__dial {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.hit-dial {
+    width: 100%;
+    height: 100%;
+}
+
+.shot-big__value {
+    font-size: 30px;
+}
+
+.shot-big--crit .shot-big__value {
+    font-size: 22px;
+    color: var(--t-warn);
+}
+
+.shot-big__label {
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+
+.damage__line {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--t-danger);
+}
+
+.damage__notes Label {
+    font-size: 11px;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+.damage__kill {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--t-accent);
+}
+
+.mods {
+    border-top-width: 1px;
+    border-top-color: var(--t-line);
+    padding-top: 3px;
+}
+
+.mod {
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.mod Label {
+    font-size: 12px;
+}
+
+.mod__pos {
+    color: var(--t-good);
+}
+
+.mod__neg {
+    color: var(--t-danger);
+}
+
+.graze,
+.shot-effect,
+.self-cost,
+.self-hint,
+.shot-noise {
+    font-size: 12px;
+    white-space: normal;
+}
+
+.self-cost {
+    color: var(--t-accent);
+}
+
+.shot-noise {
+    color: var(--t-warn);
+}
+
+.shot-actions {
+    flex-direction: row;
+    margin-top: 2px;
+}
+
+.fire {
+    flex-grow: 1;
+    height: 34px;
+    font-size: 16px;
+    letter-spacing: 1px;
+    margin-right: 5px;
+}
+
+.cancel {
+    height: 34px;
+}

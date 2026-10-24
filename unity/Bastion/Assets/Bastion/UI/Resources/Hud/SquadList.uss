@@ -1,0 +1,85 @@
+/* The squad list (hud.ts setSquad): a card per soldier, its owner's colour on its edge. */
+
+.squad-card {
+    flex-direction: row;
+    margin-bottom: 1px;
+    padding: 2px 5px 2px 0;
+    background-color: var(--t-panel-hi);
+    border-radius: 1px;
+    transition-property: background-color;
+    transition-duration: 0.12s;
+}
+
+.squad-card--mine:hover {
+    background-color: var(--t-panel-hover);
+}
+
+.squad-card__accent {
+    width: 3px;
+    margin-right: 5px;
+    background-color: var(--t-accent);
+}
+
+.squad-card__body {
+    flex-grow: 1;
+}
+
+.squad-card__name-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.squad-card__name {
+    font-size: 12px;
+    -unity-text-overflow-position: end;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    flex-shrink: 1;
+}
+
+.squad-card__row {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 1px;
+}
+
+.squad-card__row .pips--ap {
+    margin-left: 6px;
+}
+
+.squad-card__tags {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.squad-card--selected {
+    background-color: var(--t-accent-soft);
+    border-left-width: 0;
+}
+
+.squad-card--selected .squad-card__name {
+    color: var(--t-accent);
+}
+
+/* The partner's, not this player's to command: still, a little dimmer. */
+.squad-card--theirs {
+    opacity: 0.8;
+}
+
+.squad-card--dead {
+    opacity: 0.4;
+}
+
+.squad-card--dead .squad-card__name {
+    color: var(--t-muted);
+}
+
+.squad-card--evacuated {
+    opacity: 0.6;
+}
+
+.squad-card--in-play {
+    border-left-width: 2px;
+    border-left-color: var(--t-accent);
+}

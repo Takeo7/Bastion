@@ -1,0 +1,164 @@
+/* Where each piece of the combat HUD stands (styles.css of the 0.10.1: --edge 8px, --unit-w 236px, --end-w 172px). */
+
+.hud {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* ================================================================ frame */
+
+.turn-frame {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.turn-frame__edge {
+    position: absolute;
+    background-color: var(--t-accent);
+    opacity: 0.85;
+}
+
+.turn-frame__edge--top {
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+}
+
+.turn-frame__edge--bottom {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+}
+
+.turn-frame__edge--left {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+}
+
+.turn-frame__edge--right {
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+}
+
+/* The partner's turn: thinner and fainter (dashed on the web; USS has no dashed borders: a repeated texture later). */
+.turn-frame--partner .turn-frame__edge {
+    opacity: 0.5;
+}
+
+.turn-frame--over .turn-frame__edge {
+    display: none;
+}
+
+/* =============================================================== places */
+
+.top {
+    position: absolute;
+    top: var(--edge);
+    left: 232px;
+    right: 232px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.squad {
+    position: absolute;
+    top: var(--edge);
+    left: var(--edge);
+    width: 206px;
+    padding: 4px 5px;
+}
+
+.unit-panel {
+    position: absolute;
+    left: var(--edge);
+    bottom: var(--edge);
+    width: var(--unit-w);
+    padding: 6px 10px 7px;
+    rotate: -0.6deg;
+}
+
+.abilities {
+    position: absolute;
+    bottom: var(--edge);
+    left: 256px;
+    right: 192px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.shot-panel {
+    position: absolute;
+    right: var(--edge);
+    top: 50%;
+    translate: 0 -50%;
+    rotate: 1deg;
+    width: 236px;
+    padding: 8px 10px;
+}
+
+.turn-actions {
+    position: absolute;
+    right: var(--edge);
+    bottom: var(--edge);
+    width: var(--end-w);
+    align-items: stretch;
+}
+
+.side {
+    position: absolute;
+    right: var(--edge);
+    top: var(--edge);
+    width: var(--side-w);
+    align-items: flex-end;
+}
+
+.side > * {
+    margin-bottom: 5px;
+}
+
+.menu-button {
+    padding: 3px 10px;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.flags-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+.notes {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 96px;
+    align-items: center;
+}
+
+.cards {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}

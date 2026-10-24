@@ -1,0 +1,41 @@
+/* The log under the objective (hud.ts log): the last two lines folded, thirty open. */
+
+.log {
+    width: 100%;
+    padding: 4px 8px;
+}
+
+.log__toggle {
+    flex-direction: row;
+    align-items: center;
+    align-self: flex-start;
+    margin-top: 3px;
+    padding: 0 6px;
+    font-size: 10px;
+    background-color: transparent;
+    border-width: 0;
+    color: var(--t-muted);
+}
+
+/* Folded, only the last two are shown (Log.cs), whole: no height to cut them; open, thirty, scrolling. */
+.log--open .log__lines {
+    max-height: 300px;
+}
+
+.log__line {
+    font-size: 12px;
+    white-space: normal;
+    margin-top: 2px;
+}
+
+.log__arrow {
+    width: 8px;
+    height: 6px;
+    margin-right: 4px;
+    color: var(--t-muted);
+}
+
+.log__toggle-text {
+    font-size: 10px;
+    color: var(--t-muted);
+}

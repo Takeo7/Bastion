@@ -1,0 +1,20 @@
+{
+  "name": "Bastion.UI",
+  "rootNamespace": "Bastion.UI",
+  "references": [
+    "Bastion.Engine",
+    "Bastion.Client",
+    "Bastion.Net",
+    "Bastion.Client.Net",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
