@@ -127,3 +127,53 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 89ecffc93d8631b40b9dfa5c75d16116, type: 3}
   - Id: ui:check
     Sprite: {fileID: 21300000, guid: 51bc8b49758370744ad5f923d0408e44, type: 3}
+  - Id: store:credits
+    Sprite: {fileID: 21300000, guid: 4c4705680be35e14b912f4b5307d624a, type: 3}
+  - Id: store:medicines
+    Sprite: {fileID: 21300000, guid: cd75d44bfa846624fb71849134411067, type: 3}
+  - Id: store:food
+    Sprite: {fileID: 21300000, guid: ddb736ccfd595d24caba17c29dae37eb, type: 3}
+  - Id: store:parts
+    Sprite: {fileID: 21300000, guid: d68781deb0bc2854e9f3ef6a8a0f2d59, type: 3}
+  - Id: base:day
+    Sprite: {fileID: 21300000, guid: df047dd03ff0541499be1e075668f0f0, type: 3}
+  - Id: base:level
+    Sprite: {fileID: 21300000, guid: ef8bc0849d9557f4cbdb371139cbc27e, type: 3}
+  - Id: base:doom
+    Sprite: {fileID: 21300000, guid: 62b25a71ccf0bc147a37fcec0f480e4d, type: 3}
+  - Id: base:menu
+    Sprite: {fileID: 21300000, guid: ec17e8766917dc9489a6f7f8afbed8d7, type: 3}
+  - Id: tab:geoscape
+    Sprite: {fileID: 21300000, guid: ab441200c73329d4d9925ec803e6f048, type: 3}
+  - Id: tab:engineering
+    Sprite: {fileID: 21300000, guid: f13320be5d458414a8c21f9ada325d50, type: 3}
+  - Id: tab:barracks
+    Sprite: {fileID: 21300000, guid: 28a19294736fdde4ba1551844e2941da, type: 3}
+  - Id: tab:facilities
+    Sprite: {fileID: 21300000, guid: 7b3113d60f1f0e94590c6c914257370e, type: 3}
+  - Id: tab:squad
+    Sprite: {fileID: 21300000, guid: c1181452fffbd7a4790b572c0e62d545, type: 3}
+  - Id: map:zone
+    Sprite: {fileID: 21300000, guid: 1a072f4f2fb90f54080c7407362bda3c, type: 3}
+  - Id: map:nest
+    Sprite: {fileID: 21300000, guid: e753f1f60ce8f4c4d8bd9caec802c1bc, type: 3}
+  - Id: map:rumor
+    Sprite: {fileID: 21300000, guid: acec5ae80b9f6ab49a84d3dabfb6be8a, type: 3}
+  - Id: map:home
+    Sprite: {fileID: 21300000, guid: 0dd470ad2f2e93846a06886f67401e18, type: 3}
+  - Id: map:lata
+    Sprite: {fileID: 21300000, guid: c1181452fffbd7a4790b572c0e62d545, type: 3}
+  - Id: map:pin
+    Sprite: {fileID: 21300000, guid: ab441200c73329d4d9925ec803e6f048, type: 3}
+  - Id: kind:elimination
+    Sprite: {fileID: 21300000, guid: ca292955d9929dd48b658eb22b7e89b4, type: 3}
+  - Id: kind:recovery
+    Sprite: {fileID: 21300000, guid: 4c4705680be35e14b912f4b5307d624a, type: 3}
+  - Id: kind:sabotage
+    Sprite: {fileID: 21300000, guid: a4627b7710d2e42438baeb80805cbb51, type: 3}
+  - Id: kind:hack
+    Sprite: {fileID: 21300000, guid: dcc59d592c2c7aa4ba2cf0b76f6d569b, type: 3}
+  - Id: kind:rescue
+    Sprite: {fileID: 21300000, guid: 05924ad1f8dfdf348a7788e38390e57d, type: 3}
+  - Id: kind:scavenge
+    Sprite: {fileID: 21300000, guid: 8a65f66b8fbcf4248a5b819cb71edfeb, type: 3}

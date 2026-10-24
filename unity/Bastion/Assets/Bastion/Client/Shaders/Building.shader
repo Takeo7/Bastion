@@ -46,7 +46,7 @@ Shader "Bastion/Building"
         float4 inner : TEXCOORD3;
         // Pieces: the building (+1), the way out (x, z in 0.10.1's frame; ON_ROOF), the floor (m).
         float4 cut : TEXCOORD4;
-        // Pieces: the storey, a cap (1).
+        // Pieces: the storey, a cap (1); a pane lit by night (1).
         float4 more : TEXCOORD5;
         UNITY_VERTEX_INPUT_INSTANCE_ID
     };
@@ -60,8 +60,8 @@ Shader "Bastion/Building"
         float4 inner : TEXCOORD3;
         float3 positionWS : TEXCOORD4;
         float3 normalWS : TEXCOORD5;
-        // How high it is drawn up to (m), how far it has faded, whether it is a cap.
-        float3 cut : TEXCOORD6;
+        // How high it is drawn up to (m), how far it has faded, whether it is a cap, a pane lit by night.
+        float4 cut : TEXCOORD6;
         half fogFactor : TEXCOORD7;
         UNITY_VERTEX_INPUT_INSTANCE_ID
     };
@@ -87,7 +87,7 @@ Shader "Bastion/Building"
         output.swatch = input.swatch;
         output.outer = input.outer.rgb;
         output.inner = input.inner;
-        output.cut = float3(top, fade, input.more.y);
+        output.cut = float4(top, fade, input.more.y, input.more.z);
         output.fogFactor = ComputeFogFactor(output.positionCS.z);
         return output;
     }
@@ -157,6 +157,8 @@ Shader "Bastion/Building"
             #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            // 1 by night (Mood): the lit windows glow.
+            float _Night;
 
             half4 Fragment(BuildingVaryings input, bool front : SV_IsFrontFace) : SV_Target
             {
@@ -208,6 +210,10 @@ Shader "Bastion/Building"
                     surface.metallic = 0.3;
                     surface.alpha = _BaseColor.a;
                     surface.emission = _EmissionColor.rgb;
+                    // By night some windows are lit, warm and nearly opaque (buildings.ts glassMaterial's aGlow).
+                    float lit = input.cut.w * _Night;
+                    surface.emission += half3(1.0, 0.6, 0.26) * 2.4 * lit;
+                    surface.alpha = lerp(surface.alpha, 0.92, lit);
                 #endif
 
                 half4 colour = UniversalFragmentPBR(inputData, surface);

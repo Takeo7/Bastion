@@ -1,0 +1,23 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <!--
+        The base's screens (strategy/screen.ts of the 0.10.1; StrategyRoot fills each holder). The style sheets go here,
+        on the root: the HUD's Mixta (the plates, the buttons, the tooltips), the combat's menu, and the base's own.
+        Holders that only place things let the clicks through to the clearing or the valley (picking-mode Ignore).
+    -->
+    <Style src="../Hud/Mixta.uss" />
+    <Style src="../Hud/GameMenu.uss" />
+    <Style src="Strategy.uss" />
+    <Style src="Soldiers.uss" />
+    <Style src="Armory.uss" />
+    <Style src="Squad.uss" />
+    <Style src="Map.uss" />
+    <ui:VisualElement name="strat" class="strat font-text" picking-mode="Ignore">
+        <ui:VisualElement name="view" class="strat-view" picking-mode="Ignore" />
+        <ui:VisualElement name="top" class="strat-top" />
+        <ui:VisualElement name="proposal" class="strat-proposal panel" />
+        <ui:VisualElement name="nav" class="strat-nav" picking-mode="Ignore" />
+        <ui:VisualElement name="board" class="strat-modal board-host" />
+        <ui:VisualElement name="modal" class="strat-modal" />
+        <ui:Label name="toast" class="strat-toast panel" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

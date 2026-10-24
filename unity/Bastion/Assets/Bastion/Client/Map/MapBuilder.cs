@@ -177,8 +177,23 @@ namespace Bastion.Client.Map
         GameObject parapets;
         /// <summary>What the rooms have besides their cover (HomeFurnishing: rugs, lamps, chairs round a table…).</summary>
         readonly List<GameObject> furnished = new List<GameObject>();
+        /// <summary>The wrecks whose headlights are left on by night (mapView.ts: one in four), in Unity's metres.</summary>
+        readonly Dictionary<int, NightLights.Glow> headlights = new Dictionary<int, NightLights.Glow>();
         /// <summary>The ground, its textures and marks (UI's GroundView: ground.ts).</summary>
         GroundView ground;
+        /// <summary>
+        /// The base's pieces, on its siege's map and on its own screen (BasePieces; null on any other map), and the map as
+        /// the ground and the buildings see it: without what BasePieces draws (TerrainOf; the state itself with no base).
+        /// </summary>
+        PieceMap pieces;
+        GameState terrain;
+        /// <summary>The pieces as drawn, and each one's look (BasePieces.PieceKey) when they were: drawn again when one changes.</summary>
+        readonly List<GameObject> pieceArt = new List<GameObject>();
+        string piecesDrawn;
+        /// <summary>The base's pinar past the map's edge (BaseWoods.Wood), made once a map.</summary>
+        GameObject beyond;
+        /// <summary>How tall and big each prop's model stands as placed (mapView.ts topOf and sizeOf), in tiles, once measured.</summary>
+        readonly Dictionary<string, PropMeasure> measured = new Dictionary<string, PropMeasure>();
         int holesMade;
         readonly Dictionary<int, (Vector3 outer, Vector3 inner)> looks = new Dictionary<int, (Vector3, Vector3)>();
         /// <summary>What stands on each tile of each storey (Key), and the tiles each thing stands on: what goes when they change.</summary>
@@ -209,19 +224,182 @@ namespace Bastion.Client.Map
             }
             Roofs = new GameObject("Tejados").transform;
             Roofs.SetParent(root, false);
-            plan = new BuildingPlan(s);
+            Terrain();
+            plan = new BuildingPlan(terrain);
             ground = new GroundView();
-            ground.Build(s, plan, Storeys[0]);
+            ground.Build(terrain, plan, Storeys[0]);
             BuildingParts();
             wallsView = new WallsView(walls, s.Width, (parent, id) => Place(parent, id, Vector3.zero, 0), LooksOf, plan);
-            wallsView.Lay(WallLayout.Of(s, plan));
+            wallsView.Lay(WallLayout.Of(terrain, plan));
             for (int k = 0; k < levels; k++)
             {
                 int n = TilesOf(k).Count;
                 var done = new HashSet<int>();
                 for (int i = 0; i < n; i++) Decor(k, i, done);
             }
+            DrawPieces();
+            Woods(null);
+            Beyond();
             Furnish();
+            Night();
+        }
+
+        /// <summary>
+        /// The base's pines (mapView.ts dressed, 'basePines') on the tiles of `only` (Key; all of them if null), each on its
+        /// storey and gone when its tile changes, and where one was felled its stump. None but on the base's map.
+        /// </summary>
+        void Woods(HashSet<long> only)
+        {
+            if (pieces == null) return;
+            bool PieceAt(int i) => pieces.at[i] >= 0;
+            foreach (var p in BaseWoods.Pines(s, PieceAt, i => pieces.yard.Has(i)).Concat(BaseWoods.Stumps(s, PieceAt)))
+            {
+                if (only != null && !only.Contains(Key(p.z, p.tile))) continue;
+                var o = PlaceGame(props[p.z], p.id, p.matrix);
+                if (o == null) continue;
+                if (!p.shadows) foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                Own(o, p.z, new[] { p.tile });
+            }
+        }
+
+        /// <summary>
+        /// The base's pinar past the edge (mapView.ts baseWood, farWood): as thick as along it, out to where the haze has it
+        /// all, its tracks' ways left open; none of it casts a shadow. Out to BaseWoods.Near its pines are models of their
+        /// own, as the map's; further, as 0.10.1 instanced them, they are merged into a mesh for each patch of the wood
+        /// (WoodPatch tiles a side) and material, so what is out of view is still left out: a few hundred renderers for
+        /// thousands of models (Gameplay, 24/10). Made once a map (nobody fells nor builds out there).
+        /// </summary>
+        void Beyond()
+        {
+            DestroyNow(beyond);
+            beyond = null;
+            if (pieces == null || ground?.Map == null) return;
+            beyond = new GameObject("Bosque");
+            beyond.transform.SetParent(root, false);
+            var flip = Matrix4x4.Scale(new Vector3(1, 1, -1));
+            var parts = new Dictionary<string, List<(Mesh mesh, int sub, Material material, Matrix4x4 local)>>();
+            var lots = new Dictionary<(int x, int z, Material material), List<CombineInstance>>();
+            int near = 0, far = 0;
+            foreach (var p in BaseWoods.Wood(terrain, ground.Map, id => Measure(id).top))
+            {
+                if (!p.far)
+                {
+                    var o = PlaceGame(beyond.transform, p.id, p.matrix);
+                    if (o == null) continue;
+                    foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    near++;
+                    continue;
+                }
+                if (!parts.TryGetValue(p.id, out var of)) parts[p.id] = of = PartsOf(p.id);
+                var at = flip * WallsView.InMetres(p.matrix) * flip;
+                var patch = (Mathf.FloorToInt(p.x / (float)WoodPatch), Mathf.FloorToInt(p.y / (float)WoodPatch));
+                foreach (var (mesh, sub, material, local) in of)
+                {
+                    var key = (patch.Item1, patch.Item2, material);
+                    if (!lots.TryGetValue(key, out var lot)) lots[key] = lot = new List<CombineInstance>();
+                    lot.Add(new CombineInstance { mesh = mesh, subMeshIndex = sub, transform = at * local });
+                }
+                far++;
+            }
+            foreach (var kv in lots)
+            {
+                var mesh = new Mesh { name = $"Pinar {kv.Key.x},{kv.Key.z} {kv.Key.material.name}", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+                mesh.CombineMeshes(kv.Value.ToArray(), true, true);
+                var o = new GameObject(mesh.name);
+                o.transform.SetParent(beyond.transform, false);
+                o.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var r = o.AddComponent<MeshRenderer>();
+                r.sharedMaterial = kv.Key.material;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            Debug.Log($"[map] the pinar past the edge: {near} pines near, {far} far in {lots.Count} meshes");
+        }
+
+        /// <summary>The side of a patch of the far wood merged into one mesh, in tiles.</summary>
+        const int WoodPatch = 8;
+
+        /// <summary>Prop `id`'s meshes as it is placed (Place), each part's submesh with its material and where it stands in the prop.</summary>
+        List<(Mesh mesh, int sub, Material material, Matrix4x4 local)> PartsOf(string id)
+        {
+            var list = new List<(Mesh, int, Material, Matrix4x4)>();
+            var o = Place(root, id, Vector3.zero, 0);
+            if (o == null) return list;
+            o.transform.SetParent(null, false);
+            o.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            Placed--;
+            foreach (var r in o.GetComponentsInChildren<MeshRenderer>())
+            {
+                var mesh = r.GetComponent<MeshFilter>()?.sharedMesh;
+                if (mesh == null) continue;
+                var materials = r.sharedMaterials;
+                var local = o.transform.worldToLocalMatrix * r.transform.localToWorldMatrix;
+                for (int k = 0; k < mesh.subMeshCount && materials.Length > 0; k++) list.Add((mesh, k, materials[Mathf.Min(k, materials.Length - 1)], local));
+            }
+            DestroyNow(o);
+            return list;
+        }
+
+        /// <summary>The base's pieces on the map as it is now, and the map without them (mapView.ts build: pieceMap, terrainOf).</summary>
+        void Terrain()
+        {
+            pieces = BasePieces.MapOf(s);
+            terrain = pieces != null ? BasePieces.TerrainOf(s, pieces) : s;
+        }
+
+        /// <summary>
+        /// The base's pieces (mapView.ts rebuild; basePieces.ts drawPiece), each at its wear, its sandbags as a siege's
+        /// barricade's; all of them drawn again when one changed (some hundred models).
+        /// </summary>
+        void DrawPieces()
+        {
+            string key = pieces == null ? "" : string.Join(";", pieces.spots.Select(spot => BasePieces.PieceKey(s, spot)));
+            if (key == piecesDrawn) return;
+            piecesDrawn = key;
+            foreach (var o in pieceArt) DestroyNow(o);
+            pieceArt.Clear();
+            if (pieces == null) return;
+            var placements = new List<PiecePlacement>();
+            foreach (var spot in pieces.spots)
+            {
+                if (!BasePieces.Drawn.Contains(spot.piece.Piece)) continue;
+                int wear = BasePieces.PieceWear(s, spot);
+                if (spot.piece.Piece == PieceIds.Sandbags) BasePieces.DrawSandbags(s, pieces, spot, wear, placements);
+                else BasePieces.DrawPiece(s, pieces, spot, wear, Measure, placements);
+            }
+            foreach (var p in placements)
+            {
+                var o = PlaceGame(props[0], p.id, p.matrix);
+                if (o == null) continue;
+                if (!p.shadows) foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                pieceArt.Add(o);
+            }
+            Debug.Log($"[map] the base's pieces: {string.Join(", ", placements.GroupBy(p => p.id).Select(g => $"{g.Key} ×{g.Count()}"))}");
+        }
+
+        /// <summary>Prop `id` measured as it is placed (mapView.ts topOf, sizeOf): its parts' highest point and their box, in tiles.</summary>
+        PropMeasure Measure(string id)
+        {
+            if (measured.TryGetValue(id, out var m)) return m;
+            var o = Place(root, id, Vector3.zero, 0);
+            if (o == null) return measured[id] = PropMeasure.Unloaded;
+            o.transform.SetParent(null, false);
+            o.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            Placed--;
+            bool any = o.GetComponentInChildren<Renderer>() != null;
+            var b = BoundsIn(o, o.transform);
+            DestroyNow(o);
+            float top = b.max.y / MapSpace.Tile;
+            m = any ? new PropMeasure(top > 0 ? top : 0.3, b.size.x / MapSpace.Tile, b.size.y / MapSpace.Tile, b.size.z / MapSpace.Tile) : PropMeasure.Unloaded;
+            return measured[id] = m;
+        }
+
+        /// <summary>The night's lamps (UI's street lights) and the headlights left on, for NightLights.</summary>
+        void Night()
+        {
+            // Those whose car has gone (its tile changed) go with it.
+            foreach (int anchor in headlights.Keys.ToList())
+                if (s.Decor == null || anchor >= s.Decor.Count || Bastion.Engine.Decor.DecorOf(s.Decor[anchor])?.Kind != "carFront") headlights.Remove(anchor);
+            (root.GetComponent<NightLights>() ?? root.gameObject.AddComponent<NightLights>()).Show(ground?.Lamps, headlights.Values.ToList());
         }
 
         /// <summary>
@@ -271,11 +449,12 @@ namespace Bastion.Client.Map
                 }
             }
             s = next;
-            plan?.Follow(next);
+            Terrain();
+            plan?.Follow(terrain);
             if (changed.Count == 0) return 0;
-            ground?.Rebuild(next, changed.Where(key => key >> 32 == 0).Select(key => (int)(uint)key).ToList());
+            ground?.Rebuild(terrain, changed.Where(key => key >> 32 == 0).Select(key => (int)(uint)key).ToList());
             // The walls laid again whole; only the chunks whose pieces changed are made again.
-            wallsView?.Lay(WallLayout.Of(s, plan));
+            wallsView?.Lay(WallLayout.Of(terrain, plan));
             // What stood on a changed tile goes, and every tile it stood on is made again.
             var redo = new HashSet<long>(changed);
             foreach (long key in changed)
@@ -292,11 +471,13 @@ namespace Bastion.Client.Map
             if (holes != holesMade)
             {
                 holesMade = holes;
-                var (storeys, decks) = BuildingSurfaces.Upper(s, plan);
+                var (storeys, decks) = BuildingSurfaces.Upper(terrain, plan);
                 Upper(storeys, decks);
             }
             Parapets();
+            DrawPieces();
             Furnish();
+            Night();
             var done = new Dictionary<int, HashSet<int>>();
             foreach (int k in redo.Select(key => (int)(key >> 32)).Distinct()) done[k] = new HashSet<int>();
             foreach (long key in redo)
@@ -304,6 +485,7 @@ namespace Bastion.Client.Map
                 int k = (int)(key >> 32), i = (int)(uint)key;
                 Decor(k, i, done[k]);
             }
+            Woods(redo);
             return redo.Count;
         }
 
@@ -366,7 +548,7 @@ namespace Bastion.Client.Map
         /// </summary>
         void BuildingParts()
         {
-            var set = BuildingSurfaces.Of(s, plan);
+            var set = BuildingSurfaces.Of(terrain, plan);
             // The cutaway of these buildings, measured to their roofs (Building.top, just set).
             (root.GetComponent<Cutaway>() ?? root.gameObject.AddComponent<Cutaway>()).Reset(plan);
             var catalog = PieceCatalog.Load();
@@ -523,6 +705,8 @@ namespace Bastion.Client.Map
             float floor = k * MapSpace.Storey;
             string tile = tiles[i];
             if (tile != "low" && tile != "high") return;
+            // The base's pieces are drawn whole (DrawPieces), and the Bastion's yard with it.
+            if (k == 0 && pieces != null && ((pieces.at[i] >= 0 && BasePieces.Drawn.Contains(pieces.spots[pieces.at[i]].piece.Piece)) || pieces.yard.Has(i))) return;
             var look = Bastion.Engine.Decor.DecorOf(decor[i]);
             if (look == null) return;
             // An object over several tiles: one model over all of them, from its anchor (mapView.ts drawThing).
@@ -538,6 +722,8 @@ namespace Bastion.Client.Map
                 return;
             }
             if (Fountain(k, i, look, tiles, decor, done)) return;
+            // The base's pines are its own (Woods).
+            if (pieces != null && tile == "high" && look.Kind == DecorKinds.Tree) return;
             if (look.Kind == "part") return;
             bool low = tile == "low";
             string set = MapArt.DecorSet(look.Kind, low, s.Biome, s.Site);
@@ -721,7 +907,21 @@ namespace Bastion.Client.Map
             }
             float cx = (x0 + x1 + 1) / 2f, cz = (y0 + y1 + 1) / 2f;
             var placed = Place(parent, id, new Vector3(cx * MapSpace.Tile, floor, -cz * MapSpace.Tile), -((4 - thing.Facing) % 4) * 90, MapArt.FootprintOf(id));
-            if (placed != null && thing.Kind == "carFront") Repaint(placed, Mathf.FloorToInt(MapArt.Hash(ax, ay, 13) * CarPaints.Length) % CarPaints.Length);
+            if (placed != null && thing.Kind == "carFront")
+            {
+                Repaint(placed, Mathf.FloorToInt(MapArt.Hash(ax, ay, 13) * CarPaints.Length) % CarPaints.Length);
+                // Some wrecks still have a battery: their headlights on, by night, at the nose.
+                if (MapArt.Hash(ax, ay, 9) < 0.25f)
+                {
+                    var d = Bastion.Engine.Grid.Dirs4[thing.Facing];
+                    float nose = (MapArt.FootprintOf(id)?.fit ?? 2.95f) / 2 - 0.055f;
+                    headlights[thing.Anchor] = new NightLights.Glow
+                    {
+                        at = new Vector3((cx + d.X * nose) * MapSpace.Tile, floor + 0.32f * MapSpace.Tile, -(cz + d.Y * nose) * MapSpace.Tile),
+                        facing = new Vector3(d.X, 0, -d.Y), power = 1,
+                    };
+                }
+            }
             return placed;
         }
 

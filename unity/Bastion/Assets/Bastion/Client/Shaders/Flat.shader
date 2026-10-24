@@ -54,7 +54,6 @@ Shader "Bastion/Flat"
                 float3 positionWS : TEXCOORD0;
                 float3 normalWS : TEXCOORD1;
                 half3 color : TEXCOORD2;
-                half fogFactor : TEXCOORD3;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -68,7 +67,6 @@ Shader "Bastion/Flat"
                 output.positionWS = position.positionWS;
                 output.normalWS = GetVertexNormalInputs(input.normalOS).normalWS;
                 output.color = input.color.rgb;
-                output.fogFactor = ComputeFogFactor(position.positionCS.z);
                 return output;
             }
 
@@ -81,7 +79,9 @@ Shader "Bastion/Flat"
                 inputData.normalWS = normalize(input.normalWS);
                 inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 inputData.shadowCoord = TransformWorldToShadowCoord(input.positionWS);
-                inputData.fogCoord = input.fogFactor;
+                // The fog per pixel, from its own depth: per vertex, the plane's few far corners (some behind the camera,
+                // clipped to 0 by URP) gave the near ground 3–4 times the fog it should have (Arte, 24/10).
+                inputData.fogCoord = ComputeFogFactor(TransformWorldToHClip(input.positionWS).z);
                 inputData.bakedGI = SampleSH(inputData.normalWS);
                 inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
                 inputData.shadowMask = half4(1, 1, 1, 1);

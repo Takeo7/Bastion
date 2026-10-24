@@ -72,6 +72,22 @@ namespace Bastion.UI.EditorTools
         }
 
         /// <summary>
+        /// The base's screens with made-up views (StrategyLab): `BASTION_ESTRATEGIA` picks what is open (propuesta,
+        /// acontecimiento, diario, fin, menu…), over a flat snowy grey where the 0.10.1 had the clearing.
+        /// </summary>
+        public static void Estrategia()
+        {
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.62f, 0.68f, 0.75f);
+            var screen = new GameObject("Base");
+            screen.AddComponent<UIDocument>().panelSettings = Panel();
+            screen.AddComponent<Bastion.UI.Strategy.StrategyRoot>();
+            screen.AddComponent<Bastion.UI.Strategy.StrategyLab>();
+        }
+
+        /// <summary>
         /// The combat on a recorded state (CombatLab, engine-cs/golden/step2/city-3-elimination.json) with its HUD: the reach
         /// of a soldier's move, the way to a tile and the cover there, over a rough floor with capsules for the units.
         /// </summary>

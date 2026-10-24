@@ -1,0 +1,945 @@
+/*
+   Soldados (screen.ts renderBarracks with strategy.css and mixta-base.css): the left column with the busts and the
+   recruit's card, the right one with the sheet. The side panels are every screen's (strat-side).
+*/
+
+.strat-side {
+    position: absolute;
+    top: 12px;
+    width: 334px;
+    padding: 10px 12px 12px;
+}
+
+.strat-side--left {
+    left: 12px;
+    max-height: 98%;
+}
+
+.strat-side--right {
+    right: 18px;
+    top: 16px;
+    bottom: 0;
+    width: 330px;
+}
+
+.strat-side ScrollView {
+    flex-shrink: 1;
+}
+
+.strat-head {
+    flex-direction: row;
+    align-items: center;
+    margin: 4px 0 8px;
+    padding-left: 7px;
+    border-left-width: 3px;
+    border-left-color: var(--t-accent);
+}
+
+.strat-head__text {
+    font-size: 14px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+.strat-head__note {
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+/* =============================================================== busts */
+
+.soldier-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.soldier-tile {
+    width: 98px;
+    height: 104px;
+    margin: 0 4px 6px 0;
+    padding: 6px 0 4px;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.03);
+    background-image: none;
+    border-width: 0 0 3px 0;
+    border-radius: 2px;
+}
+
+.soldier-tile--on {
+    border-width: 2px 2px 3px 2px;
+    border-top-color: var(--t-accent);
+    border-left-color: var(--t-accent);
+    border-right-color: var(--t-accent);
+    background-color: rgba(242, 194, 48, 0.08);
+}
+
+.soldier-tile--dead {
+    opacity: 0.45;
+}
+
+.soldier-tile__face {
+    width: 64px;
+    height: 64px;
+    align-items: center;
+    justify-content: center;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.soldier-tile__silhouette {
+    width: 40px;
+    height: 40px;
+    -unity-background-image-tint-color: rgba(201, 205, 198, 0.35);
+}
+
+.soldier-tile__rank {
+    position: absolute;
+    left: 8px;
+    top: 4px;
+}
+
+.rank__chevron {
+    width: 12px;
+    height: 3px;
+    margin-bottom: 2px;
+    background-color: var(--t-accent);
+}
+
+.soldier-tile__points {
+    position: absolute;
+    right: 6px;
+    top: 4px;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    -unity-text-align: middle-center;
+    color: #10180a;
+    background-color: #7ec24f;
+    border-radius: 2px;
+}
+
+.soldier-tile__name-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.soldier-tile__name-row .skill-hex {
+    width: 9px;
+    height: 10px;
+    margin-right: 4px;
+}
+
+.soldier-tile__name {
+    font-size: 13px;
+    color: #ffffff;
+}
+
+.soldier-tile__tag {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.soldier-tile__tag--bad {
+    color: #ff6a55;
+}
+
+.soldier-tile__tag--warn {
+    color: #c9a4ff;
+}
+
+/* =============================================================== recruit */
+
+.recruit-card {
+    margin: 6px 0 10px;
+    padding: 10px 10px 8px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(0, 0, 0, 0.18);
+}
+
+.recruit-card__title {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    color: var(--t-muted);
+}
+
+.recruit-card__blurb {
+    margin-top: 4px;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.recruit-card__button {
+    margin-top: 8px;
+    height: 30px;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+}
+
+.strat-chips {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.strat-chip {
+    margin: 0 4px 4px 0;
+    padding: 1px 6px;
+    font-size: 11px;
+    background-color: rgba(0, 0, 0, 0.35);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+}
+
+.strat-chip--warn {
+    color: var(--t-accent);
+}
+
+.strat-chip--bad {
+    color: #ff6a55;
+}
+
+.strat-chip--good {
+    color: #8fd05a;
+}
+
+/* Why not: the first reason that applies, in red. */
+.strat-why {
+    margin-top: 6px;
+    font-size: 15px;
+    color: #ff6a55;
+    white-space: normal;
+}
+
+.strat-why--wait {
+    font-size: 12px;
+    color: var(--t-accent);
+}
+
+/* =============================================================== sheet */
+
+.sheet__kicker {
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+.sheet__name-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.sheet__name-row .skill-hex {
+    width: 16px;
+    height: 18px;
+    margin-right: 8px;
+}
+
+.sheet__name {
+    font-size: 30px;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+.sheet__subtitle {
+    font-size: 13px;
+}
+
+.sheet__note {
+    margin-top: 6px;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.sheet__customize {
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.sheet__stats {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 8px;
+    padding: 5px 10px;
+}
+
+.sheet__stat {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 12px;
+}
+
+.sheet__stat-icon {
+    width: 15px;
+    height: 15px;
+    margin-right: 3px;
+}
+
+.sheet__stat-value {
+    font-size: 20px;
+}
+
+.sheet__health {
+    flex-grow: 1;
+    -unity-text-align: middle-right;
+    font-size: 19px;
+    color: var(--t-muted);
+}
+
+.sheet__health--good {
+    color: #8fd05a;
+}
+
+.sheet__health--bad {
+    color: #ff6a55;
+}
+
+.sheet__health--warn {
+    color: var(--t-accent);
+}
+
+.sheet__head {
+    margin-top: 9px;
+    padding-bottom: 2px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--t-muted);
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.sheet__care {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.sheet__care Button {
+    margin: 0 6px 4px 0;
+    font-size: 13px;
+}
+
+/* =============================================================== choices */
+
+.pick {
+    margin-top: 4px;
+}
+
+.pick__head {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 2px 2px 3px;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0 0 1px 0;
+    border-bottom-color: rgba(255, 255, 255, 0.16);
+    border-radius: 0;
+}
+
+.pick__head:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.pick__head--fixed:hover {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.pick__label,
+.pick__value,
+.pick__option-name,
+.pick__option-note {
+    -unity-text-align: middle-left;
+}
+
+.pick__label {
+    width: 48px;
+    margin-bottom: 3px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--t-muted);
+}
+
+.pick__value {
+    flex-grow: 1;
+    font-size: 19px;
+    color: var(--t-accent);
+}
+
+.pick__arrow {
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: var(--t-text);
+}
+
+.pick__lines {
+    padding: 2px 2px 0;
+}
+
+.pick__line-row {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.pick__line {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.pick__gauge {
+    width: 54px;
+    height: 4px;
+    margin: 0 6px 0 8px;
+}
+
+.pick__gauge-fill {
+    height: 100%;
+    background-color: #8fd05a;
+}
+
+.pick__gauge-fill--worn {
+    background-color: #ff6a55;
+}
+
+.pick__tag {
+    margin-left: 6px;
+    padding: 0 3px;
+    font-size: 10px;
+    color: #ffffff;
+    border-width: 1px;
+    border-color: var(--t-accent);
+}
+
+.pick__options {
+    margin-top: 2px;
+    padding: 2px;
+}
+
+.pick__option {
+    align-items: flex-start;
+    padding: 3px 8px;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0;
+}
+
+.pick__option:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.pick__option--current .pick__option-name {
+    color: var(--t-accent);
+}
+
+.pick__option-name {
+    font-size: 14px;
+}
+
+.pick__option-note {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.sheet__armor {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.tier-marks {
+    flex-direction: row;
+    margin-right: 4px;
+}
+
+.tier-marks__mark {
+    font-size: 11px;
+    color: #a678ff;
+}
+
+.sheet__armor-name {
+    font-size: 13px;
+    color: #ffffff;
+}
+
+.sheet__armor-figures {
+    margin-left: 4px;
+    font-size: 11px;
+}
+
+/* =============================================================== experience */
+
+.skill-row {
+    margin-top: 3px;
+}
+
+.skill-row__top {
+    flex-direction: row;
+    align-items: center;
+}
+
+.skill-row__dot {
+    width: 8px;
+    height: 8px;
+    margin-right: 6px;
+    border-radius: 4px;
+}
+
+.skill-row__name {
+    font-size: 13px;
+    color: #ffffff;
+}
+
+.skill-row__growth {
+    margin-left: 6px;
+    font-size: 11px;
+    color: #8fd05a;
+}
+
+.skill-row__bottom {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.skill-row__bar {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.skill-row__seg {
+    flex-grow: 1;
+    height: 7px;
+    margin-right: 1px;
+}
+
+.skill-row__reward {
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.skill-rank {
+    margin-top: 10px;
+    padding: 6px 10px 8px;
+    border-left-width: 2px;
+    border-left-color: var(--t-accent);
+}
+
+.skill-rank__top {
+    flex-direction: row;
+    align-items: center;
+}
+
+.skill-rank__name {
+    font-size: 16px;
+    color: var(--t-accent);
+}
+
+.skill-rank__bar {
+    flex-direction: row;
+    flex-grow: 1;
+    margin: 0 8px;
+}
+
+.skill-rank__seg {
+    flex-grow: 1;
+    height: 7px;
+    margin-right: 2px;
+    background-color: rgba(242, 194, 48, 0.18);
+}
+
+.skill-rank__seg--on {
+    background-color: var(--t-accent);
+}
+
+.skill-rank__will {
+    font-size: 11px;
+    color: var(--t-text);
+}
+
+.skill-rank__line {
+    margin-top: 2px;
+    font-size: 12px;
+    -unity-font-style: italic;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+.skill-board {
+    margin-top: 8px;
+    height: 30px;
+    font-size: 13px;
+    letter-spacing: 1px;
+}
+
+.skill-board--pulse {
+    border-width: 1px;
+    border-color: var(--t-accent);
+    color: var(--t-accent);
+}
+
+/* =============================================================== personalizar */
+
+.custom__head {
+    margin-top: 6px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--t-muted);
+}
+
+.custom__field {
+    margin: 2px 0 0;
+}
+
+/* «Sin apodo»: the placeholder, dim. */
+.custom__field .unity-base-text-field__input--placeholder,
+.custom__field .unity-text-field__input--placeholder,
+.custom__field .unity-text-element--placeholder {
+    color: rgba(201, 205, 198, 0.4);
+}
+
+.custom__field > .unity-text-field__input {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 18px;
+    color: #ffffff;
+    background-color: var(--m-well);
+    border-width: 0 0 2px 0;
+    border-bottom-color: rgba(242, 194, 48, 0.55);
+    border-radius: 0;
+}
+
+.custom__choices {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 3px;
+}
+
+.custom__choice {
+    margin: 0 4px 4px 0;
+    padding: 2px 7px;
+    font-size: 11px;
+}
+
+.custom__choice--on {
+    border-width: 1px;
+    border-color: var(--t-accent);
+    color: #ffffff;
+    background-color: rgba(242, 194, 48, 0.14);
+}
+
+.custom__colors-head {
+    margin-top: 12px;
+}
+
+.custom__off {
+    font-size: 12px;
+    white-space: normal;
+    margin-bottom: 4px;
+}
+
+.custom__rows:disabled {
+    opacity: 0.85;
+}
+
+.custom-color {
+    margin-top: 6px;
+}
+
+.custom-color:disabled {
+    opacity: 0.55;
+}
+
+.custom-color__top {
+    flex-direction: row;
+    align-items: center;
+}
+
+.custom-color__dot {
+    width: 12px;
+    height: 12px;
+    margin-right: 6px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.custom-color__label {
+    flex-grow: 1;
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.custom-color__note {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.custom-color__reset {
+    padding: 0 6px;
+    font-size: 11px;
+}
+
+.custom-color__swatches {
+    flex-direction: row;
+    margin-top: 3px;
+}
+
+.custom-color__swatch {
+    width: 21px;
+    height: 18px;
+    margin: 0 3px 0 0;
+    padding: 0;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.55);
+    border-radius: 2px;
+    background-image: none;
+}
+
+.custom-color__swatch--on {
+    border-width: 2px;
+    border-color: #ffffff;
+}
+
+.custom-color__any {
+    background-image: url("../../Textures/steel-plate.png");
+    -unity-background-image-tint-color: #ff7ad9;
+}
+
+.custom__actions,
+.custom__foot {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.custom__actions Button,
+.custom__foot Button {
+    margin: 0 6px 4px 0;
+    font-size: 12px;
+}
+
+.custom__copy--armed {
+    color: var(--t-accent);
+    border-color: var(--t-accent);
+}
+
+/* «Otro color»: the square of saturation and value, the hue strip beside it. */
+.color-picker {
+    flex-direction: row;
+    margin-top: 6px;
+}
+
+.color-picker__field {
+    width: 150px;
+    height: 110px;
+}
+
+.color-picker__strip {
+    width: 16px;
+    height: 110px;
+    margin-left: 8px;
+}
+
+.color-picker__knob {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-width: 2px;
+    border-color: #ffffff;
+    border-radius: 5px;
+}
+
+.color-picker__bar {
+    position: absolute;
+    left: -2px;
+    right: -2px;
+    height: 3px;
+    background-color: #ffffff;
+}
+
+/* =============================================================== the skill board */
+
+.board-modal {
+    width: 1180px;
+    height: 760px;
+    padding: 14px 18px 12px;
+    border-width: 2px;
+    border-color: rgba(200, 205, 198, 0.4);
+}
+
+.board-modal__kicker {
+    font-size: 13px;
+    letter-spacing: 3px;
+    color: var(--t-accent);
+}
+
+.board-modal__row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.board-modal__bust {
+    width: 50px;
+    height: 50px;
+    margin-right: 14px;
+    border-radius: 25px;
+    border-width: 2px;
+    border-color: #c9cdc6;
+    background-color: var(--m-well);
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.board-modal__name {
+    font-size: 30px;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+.board-modal__rank {
+    margin-left: 16px;
+    font-size: 16px;
+    color: var(--t-accent);
+}
+
+.board-modal__rank-bar {
+    flex-direction: row;
+    margin: 0 10px;
+}
+
+.board-modal__rank-seg {
+    width: 56px;
+    height: 8px;
+    margin-right: 3px;
+    background-color: rgba(242, 194, 48, 0.18);
+}
+
+.board-modal__rank-seg--on {
+    background-color: var(--t-accent);
+}
+
+.board-modal__will {
+    font-size: 11px;
+}
+
+.board-modal__points {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 16px;
+    padding: 3px 10px;
+    border-width: 1px;
+    border-color: rgba(242, 194, 48, 0.4);
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.board-modal__points--some {
+    border-color: var(--t-accent);
+}
+
+.board-modal__points-n {
+    font-size: 22px;
+    color: var(--t-accent);
+    margin-right: 4px;
+}
+
+.board-modal__points-text {
+    font-size: 13px;
+    color: var(--t-accent);
+}
+
+.board-modal__body {
+    flex-direction: row;
+    flex-grow: 1;
+    margin-top: 10px;
+}
+
+.board-modal__board {
+    flex-grow: 1;
+}
+
+.skill-board-area {
+    flex-grow: 1;
+}
+
+.hex-cell__icon {
+    position: absolute;
+    left: 20%;
+    top: 24%;
+    width: 60%;
+    height: 52%;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.board-modal__card {
+    width: 290px;
+    margin-left: 12px;
+    padding: 12px 14px;
+    border-top-width: 2px;
+    border-top-color: var(--t-accent);
+}
+
+.board-card__top {
+    flex-direction: row;
+    align-items: center;
+}
+
+.board-card__icon {
+    width: 52px;
+    height: 52px;
+    margin-right: 12px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.board-card__name {
+    font-size: 22px;
+    color: #ffffff;
+}
+
+.board-card__kind {
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--t-accent);
+}
+
+.board-card__about {
+    margin-top: 12px;
+    font-size: 13px;
+    -unity-font-style: italic;
+    white-space: normal;
+}
+
+.board-card__effect {
+    margin-top: 8px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: #ffffff;
+    white-space: normal;
+}
+
+.board-card__none {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #ff8a7a;
+}
+
+.board-modal__foot {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.board-modal__foot Button {
+    padding: 5px 16px;
+    font-size: 14px;
+    letter-spacing: 1px;
+}

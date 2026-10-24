@@ -1,0 +1,396 @@
+/*
+   The Mapa (screen.ts renderGeoscape, valley.css, mixta-base.css .mission-icon): the markers over the valley, each a
+   point its parts hang from; the panels at the sides.
+*/
+
+/* Over the whole panel (its coordinates are the panel's), under the panels. */
+.valley-marks {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -46px;
+    bottom: -48px;
+}
+
+.valley-zone,
+.valley-place,
+.valley-landmark,
+.valley-lata {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: visible;
+}
+
+/* The name over the pin, white with a dark edge as the painting's own lettering. */
+.valley-name {
+    position: absolute;
+    left: -100px;
+    width: 200px;
+    bottom: 11px;
+    -unity-text-align: lower-center;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+    -unity-text-outline-width: 0.22px;
+    -unity-text-outline-color: #10202a;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.55);
+}
+
+.valley-zone--marea .valley-name {
+    color: #f1dcff;
+}
+
+.valley-zone--selected .valley-name {
+    color: var(--t-accent);
+}
+
+/* A zone: the pack's objective, its middle on the place, on a dark disc that lifts it off the painting. */
+.valley-zone__disc {
+    position: absolute;
+    left: -10px;
+    top: -10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    background-color: rgba(16, 32, 42, 0.7);
+}
+
+/* The objective spans x 31–225 and y 19–236 of 256: 24 px of it give the 0.10.1's 18 × 20. */
+.valley-zone__pin {
+    position: absolute;
+    left: -2px;
+    top: -2px;
+    width: 24px;
+    height: 24px;
+    -unity-background-image-tint-color: #f4f1e8;
+}
+
+.valley-zone--contacted .valley-zone__pin {
+    -unity-background-image-tint-color: #47aaff;
+}
+
+.valley-zone--marea .valley-zone__pin {
+    -unity-background-image-tint-color: #c58cf0;
+}
+
+.valley-zone--selected .valley-zone__pin {
+    -unity-background-image-tint-color: var(--t-accent);
+}
+
+.valley-zone__ring {
+    position: absolute;
+    left: -16px;
+    top: -15px;
+    width: 32px;
+    height: 30px;
+    border-radius: 16px;
+    border-width: 2px;
+    border-color: var(--t-accent);
+}
+
+/* What there is in the zone, to its right: a Nido, the operations, a rumour. */
+.valley-badges {
+    position: absolute;
+    left: 12px;
+    top: -14px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.valley-badge {
+    width: 24px;
+    height: 24px;
+    margin-right: -2px;
+}
+
+.valley-badge--nest {
+    -unity-background-image-tint-color: #ff4a5a;
+}
+
+.valley-badge--rumor {
+    -unity-background-image-tint-color: #f4f1e8;
+}
+
+.valley-badge--listening {
+    -unity-background-image-tint-color: #54d1ff;
+}
+
+.valley-badge--mission {
+    width: 20px;
+    height: 28px;
+}
+
+/* An operation's pin: the map pin in its tone, a dark window at 34 % down, its kind's icon in the tone. */
+.mission-pin {
+    width: 26px;
+    height: 36px;
+    flex-shrink: 0;
+}
+
+/* The pack's picture: its pin spans x 58–197 and y 31–224 of 256, so 48 px of it put the pin on the 26 × 36 box. */
+.mission-pin__shape {
+    position: absolute;
+    left: -11px;
+    top: -6px;
+    width: 48px;
+    height: 48px;
+}
+
+.mission-pin__window {
+    position: absolute;
+    left: 24%;
+    top: 14%;
+    width: 52%;
+    height: 38%;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: #15181a;
+}
+
+.mission-pin__kind {
+    width: 74%;
+    height: 74%;
+}
+
+.valley-place .valley-home {
+    position: absolute;
+    left: -9px;
+    top: -9px;
+    width: 18px;
+    height: 18px;
+    -unity-background-image-tint-color: #f2c230;
+}
+
+.valley-name--home {
+    font-size: 13px;
+    color: #f2c230;
+}
+
+/* The places one knows the valley by: small capitals, centred on their place. */
+.valley-landmark__name {
+    position: absolute;
+    left: -100px;
+    width: 200px;
+    top: -8px;
+    -unity-text-align: middle-center;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #ffffff;
+    -unity-text-outline-width: 0.25px;
+    -unity-text-outline-color: #10202a;
+}
+
+.valley-lata__icon {
+    position: absolute;
+    left: -22px;
+    top: -16px;
+    width: 44px;
+    height: 32px;
+    -unity-background-image-tint-color: #f2c230;
+}
+
+.valley-lata__name {
+    position: absolute;
+    left: 18px;
+    top: -8px;
+    width: 100px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #f2c230;
+    -unity-text-outline-width: 0.25px;
+    -unity-text-outline-color: #10202a;
+}
+
+/* =============================================================== panels */
+
+.map-left {
+    width: 334px;
+}
+
+.map-head {
+    margin-top: 10px;
+}
+
+.map-row {
+    flex-direction: row;
+    align-items: center;
+    min-height: 40px;
+    margin: 0;
+    padding: 3px 8px;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0 0 1px 0;
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+    border-radius: 0;
+}
+
+.map-row:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.map-row--on {
+    background-color: rgba(242, 194, 48, 0.07);
+    border-left-width: 3px;
+    border-left-color: var(--t-accent);
+}
+
+.map-row--nest {
+    border-left-width: 3px;
+    border-left-color: #f0503c;
+}
+
+.map-row--quest {
+    border-left-width: 3px;
+    border-left-color: #2f9e6a;
+}
+
+.map-row .mission-pin {
+    margin-right: 10px;
+}
+
+.map-row__words {
+    flex-grow: 1;
+    flex-shrink: 1;
+    align-items: flex-start;
+}
+
+.map-row__name {
+    font-size: 13px;
+    color: #ffffff;
+    -unity-text-align: middle-left;
+}
+
+.map-row__line {
+    font-size: 11px;
+    color: var(--t-muted);
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.map-row__listening {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.map-row__listen {
+    margin-left: 0;
+}
+
+.map-row__chip {
+    margin-left: 6px;
+}
+
+.map-empty {
+    font-size: 12px;
+}
+
+.map-wait {
+    margin-top: 6px;
+    height: 30px;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+.map-wait--ready {
+    color: var(--t-accent);
+    border-width: 1px;
+    border-color: var(--t-accent);
+}
+
+.map-wait__note {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--t-accent);
+}
+
+.map-meter {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.map-meter__marks {
+    flex-direction: row;
+    margin-right: 6px;
+}
+
+.map-meter__mark {
+    width: 10px;
+    height: 10px;
+    margin-right: 2px;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.map-meter__mark--on {
+    background-color: var(--t-accent);
+}
+
+.map-meter__text {
+    font-size: 12px;
+}
+
+.map-kicker--final,
+.map-kicker--nest {
+    color: #ff6a55;
+}
+
+.map-kicker--story {
+    color: #6f9bff;
+}
+
+.map-kicker--quest {
+    color: #4fc08a;
+}
+
+.map-detail__text {
+    margin-top: 6px;
+    font-size: 14px;
+    white-space: normal;
+}
+
+.map-detail__note {
+    margin-top: 6px;
+    font-size: 17px;
+    -unity-font-style: bold;
+    color: var(--t-accent);
+}
+
+.map-briefing {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background-color: var(--m-well);
+}
+
+.map-briefing__row {
+    flex-direction: row;
+    margin: 1px 0;
+}
+
+.map-briefing__key {
+    width: 100px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--t-muted);
+}
+
+.map-briefing__value {
+    flex-shrink: 1;
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: #ffffff;
+    white-space: normal;
+}
+
+.map-detail__actions {
+    flex-direction: row;
+    margin-top: 10px;
+}
+
+.map-detail__button {
+    margin-right: 6px;
+    padding: 4px 14px;
+    font-size: 14px;
+    letter-spacing: 1px;
+}

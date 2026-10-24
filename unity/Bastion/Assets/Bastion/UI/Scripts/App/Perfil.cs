@@ -20,6 +20,7 @@ namespace Bastion.UI.App
         readonly Dictionary<string, double> sums = new Dictionary<string, double>();
         int skip = 30;
         int frames;
+        double work;
 
         void Start()
         {
@@ -39,6 +40,7 @@ namespace Bastion.UI.App
         {
             if (skip-- > 0) return;
             frames++;
+            work += Perf.Work;
             foreach (var (name, rec) in recorders)
             {
                 if (!rec.Valid || rec.LastValue <= 0) continue;
@@ -46,7 +48,7 @@ namespace Bastion.UI.App
             }
             if (frames < Frames) return;
             var top = sums.OrderByDescending(p => p.Value).Take(30).Select(p => $"{p.Key} {p.Value / frames / 1e6:0.000}");
-            Debug.Log($"[perfil] {frames} frames, ms per frame: " + string.Join(" · ", top));
+            Debug.Log($"[perfil] {frames} frames, work timed by Perf {work / frames:0.000} ms; ms per frame: " + string.Join(" · ", top));
             foreach (var (_, rec) in recorders) rec.Dispose();
             recorders.Clear();
             Destroy(this);

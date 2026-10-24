@@ -53,11 +53,12 @@ namespace Bastion.Client.Map
         /// <summary>
         /// Models that Synty's Unity package has turned against its source FBX (which 0.10.1's art was set against): the
         /// quarter turns to take off 0.10.1's yaw. Apocalypse's wrecked cars lie along z here, along x there (24/10: every
-        /// car of city-7 stood across its tiles).
+        /// car of city-7 stood across its tiles); so does the caravan (its mesh, SM_Veh_Caravan_01, for the source's rigged one).
         /// </summary>
         static readonly Dictionary<string, int> UnityTurns = new Dictionary<string, int>
         {
             ["SM_Prop_Car_Wrecked_01"] = 1, ["SM_Prop_Car_Wrecked_Rusted_01"] = 1, ["SM_Prop_Car_Wrecked_SUV_01"] = 1, ["SM_Prop_Car_Wrecked_OpenBoot_01"] = 1,
+            ["SK_Veh_Caravan_01"] = 1,
         };
 
         /// <summary>The quarter turns a model's Unity prefab stands from its source FBX (0 for most).</summary>

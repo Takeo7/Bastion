@@ -1,0 +1,99 @@
+# Las pantallas de estrategia en Unity (UI, hito 2)
+
+Plan de UI para pasar a Unity las pantallas de la base de la 0.10.1: `packages/client/src/strategy/screen.ts` (3551 líneas) y sus módulos. Lo que hay que conectar al motor espera a `campaign.ts` en C# (Gameplay). Hasta entonces se construye con vistas inventadas, como se hizo con el HUD.
+
+## 1. Qué hay en la 0.10.1
+
+Una sola clase, `StrategyScreen`, que **rehace todo el DOM en cada cambio** y por eso guarda a mano la posición del scroll de cada panel y el cursor del texto. Encima de un escenario 3D (`Stage`, con dos «decorados»: el valle y el claro) van:
+
+| Pieza | Qué es | Líneas |
+|---|---|---|
+| Franja de arriba | BASTIÓN y salidas, asedio, día, § suministros, ✚ medicinas, raciones, piezas, nivel del Bastión con su barra, la Marea con sus marcas, «Menú». Cada cosa con su ayuda al pasar el ratón (cuerpos ricos: cifras resaltadas, frases) | 1305–1413 |
+| Propuesta | La placa del centro: «Tu propuesta» o «X propone…», lo que cuesta, el detalle por tipo (14 tipos), el reloj que se agota, «Ver», «Aceptar», «Rechazar», «Retirar». «Te esperan» cuando el compañero está a punto | 1420–1617 |
+| Pestañas | Mapa, Armería, Soldados, Asentamiento y, con misión elegida, Escuadra. Números de novedades, «▲n» de talentos, «Nuevo», el punto del compañero en la pestaña donde está | 1619–1732 |
+| Avisos | Una cola de ventanas: la premisa del día 1, el diario al subir de nivel (con lo que trae), los avisos del asedio | 1135–1247 |
+| Ventanas | Una a la vez, por prioridad: Ajustes, Salir, Volver al menú, Menú, Fin de la campaña, Acontecimiento (dos opciones, con propuesta y voto), Avisos, Tablero de habilidades | 3368–3535 |
+| Mapa | El valle pintado con la Marea (shader), zonas con sus marcas, La Lata por las carreteras; a la izquierda Misiones, Esperar un día, Nidos, Encargos, Rumores, Red de enclaves; a la derecha la misión (briefing, recompensa, Desplegar) o la zona (contactar) | 1736–2027, geoscape.ts, valley* |
+| Armería | Pestañas Accesorios y Armamento: armas buenas, mejoras sueltas, armadura, lo que hace el Taller; a la derecha el detalle (estadísticas, gráfica de alcance, estado, mejoras, quién la lleva, dársela) | 2029–2310, arms.ts |
+| Soldados | Rejilla de retratos, tarjeta de reclutar, la hoja del soldado (estadísticas, curar y tratar, rasgos, arma y armadura, cinturón, experiencia); Personalizar (nombre, apodo, ropa, cabeza, complexión, colores) | 2382–2788, skillSheet.ts |
+| Tablero de habilidades | 169 hexágonos en SVG, la ola bajo el ratón, mantener pulsado 1 s para comprar, flechas de teclado | hexBoard.ts |
+| Asentamiento | Las cifras del Bastión, la paleta de piezas y la ficha de la pieza elegida sobre el claro en 3D | 2818–3002, buildMode.ts |
+| Escuadra | Tus soldados, los del compañero, «A punto» de cada uno, la misión y LANZAR; una tarjeta bajo cada figura de la fila junto a La Lata; en el asedio, los puestos | 3006–3242 |
+| Parte | MISIÓN CUMPLIDA o FRACASADA, el botín en baldosas, los cambios (nivel, Marea), caídos, daños en la base, la hoja de la historia, una tarjeta de estado bajo cada figura | 3245–3364 |
+| Radio | La hoja de la transmisión abajo a la derecha: retrato, quién habla, texto que se escribe solo, Seguir | transmissions.ts |
+
+## 2. Cómo lo haría en Unity
+
+- **Igual que el HUD:** cada pieza es una clase que pinta una *vista* (clases con campos públicos), con su UXML y su USS; un presentador construye las vistas desde el estado de la campaña; las órdenes salen por una interfaz de manejadores (`IStrategyHandlers`, que manda los `CampaignCommand` por la red de Red).
+- **Nada de rehacer todo:** cada pieza se repinta sola cuando cambia su vista (`Ui.Key`), como en el HUD. Así el scroll, el cursor del texto, el «Nuevo» y los relojes se quedan como están sin trucos.
+- **El aspecto, el de la Mixta** del HUD (la 0.10.1 jugaba con `mixta-base.css`, que tapa el aspecto de papel de `strategy.css`): sus placas de acero, chips, medidores y botones. El HUD ya tiene casi todo eso.
+- **Reutilizar del HUD:** `TooltipLayer` (las ayudas al pasar el ratón, que aquí están en casi todo, también en botones desactivados), el menú de Esc y Ajustes (`GameMenu`), las tarjetas, `Ui.Pips`, los iconos de Synty (`HudIcons`), Painter2D para el hexágono de habilidad y el dial.
+- **Lo que guardaba el navegador** (novedades vistas, premisa, parte leído, «Nuevo», escenas de radio oídas) pasa a PlayerPrefs, por campaña.
+- **Un laboratorio** (`StrategyLab`, como `HudLab`) con estados inventados para cada pantalla, y capturas junto a la 0.10.1 con el mismo encuadre.
+
+## 3. Repartos (Gameplay, 24/10)
+
+| Quién | Qué |
+|---|---|
+| **UI** | Todo lo de §1 salvo lo de abajo. **El Mapa, entero:** el cuadro, el shader de la Marea pasado a URP, La Lata por las carreteras, las marcas de las zonas y los paneles. Arte revisa el cuadro y la Marea junto a la 0.10.1. **Asentamiento:** los paneles (paleta y ficha de pieza de `buildMode.ts`). |
+| **Arte** | El escenario y el claro: los planos de cámara de cada pestaña, los fundidos, el escaparate del soldado (y su tumba), la fila de la Escuadra junto a La Lata, los puestos del asedio, colocar piezas sobre el claro, andar por la base, la salida de La Lata, la escena. **Los retratos** (bustos de soldados y de las voces de la radio): los renderiza Arte y UI los muestra. **UI necesita** de Arte: dónde cae en pantalla cada hueco de la fila (para pegar las tarjetas debajo, `anchorCards`), que el encuadre deje libre el sitio de los paneles (en la 0.10.1 la cámara medía los paneles del DOM) y la forma de los retratos (una textura por soldado y voz, y cuándo se rehace). |
+| | **Acordado con Arte (24/10; los nombres los confirma al crear la escena):** `Vector3 Settlement.PadWorld(int i, int n)` y `Vector2 Settlement.PadScreen(int i, int n, Camera c)` (dos filas por encima de 8; llamar en LateUpdate); `Settlement.SetInsets(...)` con los rectángulos de los paneles en píxeles de pantalla, y su cámara encuadra el claro en el hueco libre (sin insets, a pantalla completa); `Texture Portraits.Soldier(string soldierId)`, `Texture Portraits.Voice(string speakerId)` (RenderTextures de 160 px en caché) y `event Action<string> Portraits.Changed`; mientras no estén, una silueta. |
+| **Gameplay** (motor) | Lo que el presentador necesita del C# de la campaña (§4); lo pasa al Gameplay nuevo con campaign.ts. |
+| **Red** | Las órdenes de campaña por la red, la propuesta con su plazo (el servidor lo lleva; mensaje `deadline`), en qué pestaña está el compañero (`baseView`) y su cursor en el claro (`baseCursor`), los rechazos (`rejected` → aviso). |
+| **Lore** | Los textos de campaña de lore.ts que faltan (§4). |
+
+## 4. Lo que necesito del motor y de Lore
+
+**Estado** (`CampaignState` y lo que cuelga): día, jugadores, suministros, medicinas, raciones y hambre, piezas, nivel, vehículo, soldados (con apariencia, habilidades, tablero, rasgos, carga, heridas, infección), inventario, armas encontradas y mejoras, lo hecho por el Taller y lo que está haciendo, el Bastión (piezas), el asedio, regiones, ofertas, misión activa, escuadra y huecos, Marea, propuesta, `advanceReady`, `launchReady`, tratamiento, acontecimiento, rumores y escucha, encargos y su diario, registro, último parte (`MissionReport`), final.
+
+**Funciones** (por pantalla; nombres de TypeScript):
+- Franja: `nextLevel`, `convoyIncome`, `convoyIn`, `rationsPerMission`, `gardenPerMission`, `siegeHeard`, `proposalCost`, `vehicleOf`, `wintry`.
+- Propuesta: `missionInfo`, `raiseCost`, `recruitCost`, `contactCost`, `repairCost`, `rearmCost`, `dismantleRefund`, `FELL_COST`, `eventDef`, `eventOptionAvailable`, `commandsFor`.
+- Mapa: `shownOffers`, `contactCapacity`, `contactBlocker`, `regionIncome`, `underMarea`, `offerBriefing`, `offerSignature`, `activeOffer`, `REGIONS`, `ROADS`, `roadRoute`, `QUESTS`, `fill`.
+- Armería: `shopPrice`, `craftBlocker`, `itemsFree`, `itemUnlocked`, `spareMags`, `baseArmorTier`, `repairParts`, `repairBlocker`, `modBlocker`, `foundWeaponOf`, `meleeWeaponOf`, `weaponProfile`, `baseWeaponProfile`, `CRAFTS`, `ARMOR_TIERS`.
+- Soldados: `soldierCap`, `beds`, `bedsFree`, `canAfford`, `canSpendPoints`, `mustWait`, `treatCost`, `soldierArms`, `armorTier`, `nextTierBlocker`, `weaponTier`, `totalBars`, `displayName`, `randomAppearance`, `defaultAppearance`, `partColor`, `barsOf`, `pointsLeft`, `veterancyRank`, `veteranWill`, `cellState`, `unlockBlocker`, `BOARD`, `boardNeighbors`.
+- Escuadra y parte: `squadMax`, `squadLimit`, `squadPads`, `squadPlace`, `soldierReady`, `postBlocker`.
+- Asentamiento: `beds`, `healRate`, `garageCut`, `rangeAim`, `rewardMultiplier`, `memorialWill`, `listeningDelay`, `levelUnlocks`.
+- Radio: `nextScene`, `sceneLines`, `RECAP`, `recapLines`, `SPEAKERS`, `unlockedScenes` (transmissions.ts).
+
+**Textos de lore.ts** que usan estas pantallas (los de campaña aún sin pasar): `GLOSSARY`, `timeHelp`, `rationsHelp`, `doomName`/`doomStatus`/`doomSubject`, `LEVEL_TEXT`, `EXPEDIENTE`, `PREMISE`, `NEW_BRIEF`, `PIECE_TEXT`, `SIEGE_TEXT`, `BASE_SIEGE_TEXT`, `NIGHT_TEXT`, `siegeWarning*`, `proposalClock`, `operationAim`, `contactAim`, `rumorAim`, `craftAim`, `STORY`, `VEHICLES`, `LIVING_TIP`, `REGION_LORE`, `floodedZoneNote`, `nestNoContactTip`, `ENDING_TITLES`, `epilogue`, `OUTFIT_NAMES`, `barReward`, `rankReward`, `learnedLine`, `barLine`, `BOARD_ABOUT`, `WEAPON_LABELS`, `weaponFigure`, `REACH`, `itemTag`, `BITE_TAG`, `TURNED_CAUSE`, `doomChangeText`. Y el texto de cada propuesta (`proposal.text`), que escribe el motor.
+
+## 5. Lo difícil en UI Toolkit
+
+1. **El tablero de habilidades:** un elemento propio con Painter2D (169 hexágonos, iconos de un atlas, la ola, el anillo de mantener pulsado, rebote al comprar), con clic en hexágono y no en rectángulo y teclado por vecinos.
+2. **Ayudas en todas partes:** `TooltipLayer` del HUD, ampliado para cuerpos ricos y para botones desactivados (que no reciben el ratón: la ayuda va en su contenedor).
+3. **Texto rico:** negritas y la meta resaltada (`marked`), nombres en su color, cifras resaltadas. Etiquetas de texto rico de UI Toolkit; una línea con botón dentro va en una fila que salta de línea.
+4. **El selector de color** de Personalizar: UI Toolkit no tiene uno en ejecución; uno propio (tono, saturación, valor) con vista previa limitada a 90 ms.
+5. **Tarjetas pegadas a figuras 3D** (Escuadra, Parte) y marcas pegadas al mapa: proyección cada fotograma, como las banderas del HUD.
+6. **Lo que USS no tiene:** rejilla (`grid`), mayúsculas (`ToUpperInvariant` en C#), `::before`/`::after`, `clip-path`, degradados cónicos (el hexágono partido ya está en Painter2D), máscaras de iconos (sprites teñidos), animaciones con fotogramas clave (transiciones de USS o C#).
+7. **El cuadro del valle con la Marea:** no es UI: una cámara, un quad y el shader pasado a URP (como Marks.shader), con las marcas de las zonas en UI Toolkit encima.
+
+## 6. Orden de trabajo
+
+Cada paso con su laboratorio y capturas junto a la 0.10.1 con el mismo encuadre, y Gameplay revisa.
+
+1. **Referencias (hecho, 24/10):** 21 capturas de la 0.10.1 a 1440×900 en `.dev-snapshots/ui/estrategia-0101/` (hoja en `hoja.png`): las cinco pestañas con sus estados, Personalizar, el tablero, la propuesta (del compañero y mía), el acontecimiento, el diario, el fin de la campaña, el menú, Ajustes y el parte. La partida de muestra (`partida-muestra.json`, campaña versión 25 en el día 20 con dos jugadores) se sirve en el 3360 con `--save`; la hace `muestra.mts` del scratchpad.
+2. **Marco (primera parte hecha, 24/10):** `Scripts/Strategy/` (StrategyRoot, StrategyViews, IStrategyHandlers, StrategyText; piezas TopStrip, NavTabs, ProposalPlate, StrategyModal; StrategyLab) con `Resources/Strategy/Strategy.uxml` y `.uss`; capturas con `HudShots.Estrategia` y `BASTION_ESTRATEGIA` (propuesta, propuesta-mia, espera, acontecimiento, acontecimiento-voto, diario, fin, menu) en `.dev-snapshots/ui/unity/estrategia/`, junto a la 0.10.1 en `marco-junto-0101.png`. Falta conectar el aviso corto y las ayudas ricas de la franja con datos de verdad. Lo que había: documento de la base, vistas, manejadores, laboratorio; franja de arriba con ayudas; pestañas; placa de propuesta con su reloj; «Te esperan»; aviso corto; ventanas (Menú y Ajustes del combate, Volver al menú, Salir, Fin de la campaña, Acontecimiento, Avisos con «lo que trae»).
+3. **Soldados (hecho en el laboratorio, 24/10):** `SoldiersScreen` con `SoldiersViews`: rejilla con busto (silueta hasta los retratos de Arte), hexágono de la mejor habilidad (`SkillHex` del HUD), galones, ▲ y su etiqueta; reclutar con chips y por qué no; la hoja (cifras, curar y tratar, rasgos, mano y cinto con estado y mejoras, armadura, cinturón, experiencia con rango y el botón del tablero); las elecciones se abren en el sitio. Personalizar (sin rehacer los campos al escribir) con `ColorPicker` propio. Casos `soldados` y `personalizar`; junto a la 0.10.1 en `soldados-junto-0101.png`.
+4. **Tablero de habilidades (hecho en el laboratorio, 24/10):** `SkillBoard` (las 169 casillas del motor, `Board.Cells`, como hexágonos con Painter2D; clic dentro del hexágono; la ola; mantener 1 s para comprar con su anillo; flechas por vecinos; iconos de los atlas de la 0.10.1 pasados a PNG en `Resources/Board/`, índice en `BoardIconIndex.cs`) y `SkillBoardModal` (cabecera, ficha de la casilla con `Lore.BoardAbout`, Cerrar). Caso `tablero`; junto a la 0.10.1 en `tablero-junto-0101.png`. Falta probar a mano la ola y el mantener pulsado.
+5. **Armería (hecha en el laboratorio, 24/10):** `ArmoryScreen` con `ArmoryViews`: pestañas Accesorios y Armamento con su «Nuevo»; filas con icono (o los rombos de la armadura), etiquetas, precio, sitio y quién la lleva, recuento, chip del Taller, apagadas si no están hechas; el detalle con la silueta en la esquina, cifras, gráfica de alcance, estado, mejoras (quitar, poner en el hueco libre), quién la lleva y a quién dársela con la diferencia en verde y rojo, y el botón principal con su porqué. Casos `armeria` y `armeria-arma`; junto a la 0.10.1 en `armeria-junto-0101.png`.
+6. **Escuadra y Parte (hechos en el laboratorio, 24/10, salvo los puestos del asedio):** `SquadScreen` (tus soldados y los del compañero, «A punto» de cada uno, la misión con LANZAR y Volver al Bastión, sin misión «Ir al mapa») y `DebriefScreen` (resultado, misión, baldosas del botín, cambios, líneas con su botón, «Leer el parte», CONTINUAR); las dos con `LineupCards`, una tarjeta bajo cada figura (busto, nombre, líneas, «×», lo aprendido; vacía «Libre» o Reclutar), colocadas cada fotograma por `StrategyRoot.PadAt` (Arte: Settlement.PadWorld proyectado; en el laboratorio, los sitios de la 0.10.1). Casos `escuadra` y `parte`; junto a la 0.10.1 en `escuadra-junto-0101.png`. Falta la lista de puestos del asedio (postsPanel).
+7. **Mapa (hecho en el laboratorio, 24/10):**
+   - **Datos:** `tools/ui/valle-unity.mts` escribe, desde el código de la 0.10.1, `Resources/Valley/`: `marea.bytes` (el campo de la Marea de `mareaReach`, 240×160 medios flotantes, idéntico), `valley.json` (zonas con sus carreteras y umbrales, carreteras trazadas sobre el cuadro, lugares, Atalaya, el Bastión) y `mapa.jpg`. Hay que volver a generarlo si cambian los umbrales o las carreteras; los nombres y las carreteras de las zonas se cambian por los del motor cuando campaign.ts esté en C#.
+   - **`Valley.shader`** (en Resources): GROUND_FRAGMENT de geoscape.ts pasado a URP constante por constante (Atalaya quemada con brasas y humo, el claro del Bastión, la Marea con su velo, el resplandor y la línea del borde).
+   - **`ValleyMap`:** el cuadro en un plano bajo una cámara cenital ortográfica (a y −500), encajado entero en el hueco que dejan los paneles (sin zoom), apartado si la zona elegida queda bajo la hoja; la Marea se acerca a su nivel; La Lata por la ruta más corta de carreteras (`roadRoute`) hasta su zona.
+   - **`MapScreen`:** marcas de las zonas (alfiler según su estado, nombre, Nido, alfileres de las operaciones con su tipo, rumor, anillo de la elegida), nombres de los lugares desde 30 px por unidad, el Bastión y La Lata, colocadas cada fotograma; paneles Misiones, Esperar un día, Nidos, Encargos, Rumores (el rumor elegido sí se marca), Red de enclaves, y la hoja de la misión o de la zona.
+   - Casos `mapa`, `mapa-mision` y `mapa-zona`; junto a la 0.10.1 en `mapa-junto-0101.png`.
+8. **Asentamiento:** cifras del Bastión, paleta y ficha de pieza (el claro y colocar, Arte).
+9. **Radio.**
+10. **Presentador** desde el `CampaignState` de C#, cuando esté, y probarlo entero entre dos apps.
+
+Los pasos 2 a 9 no esperan al motor.
+
+## 7. Rarezas de la 0.10.1 (Gameplay, 24/10)
+
+- **Se corrige al pasarlo:** `rumorRows` marca la fila elegida comparando una región con un rumor, y nunca coincide (1866).
+- **No se pasa** (código que nunca se ejecuta): `openSoldier`; la acción de rumor de `logAlert` y las prioridades de ENCARGO (solo saltan los avisos de «Asedio»); la rama «weapon» de `craftChip`/`craftRow`; la rama de bloqueado de la pestaña Accesorios.
+- **Se pasa como está, y para preguntar a Arturo:**
+  - pulsar una zona del mapa elige solo la primera misión de la zona;
+  - `cancelMission` va sin voto (y «Esperar un día» es un «a punto»), mientras desplegar y contactar van a votación.

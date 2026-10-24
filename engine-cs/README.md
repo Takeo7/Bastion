@@ -18,6 +18,10 @@ Cada csproj va en su carpeta: dos en la misma comparten `obj/` y se pisan la res
 
 **Lo que está a medias va en `engine-cs/wip/`** (la red, en `wip/Net/`). Unity compila `package/` cada vez que se abre, y un solo error en el motor tumba el proyecto entero: nadie puede compilar, importar ni capturar. Los csproj de .NET compilan `wip/` junto con `package/Runtime/`. Un archivo pasa a `package/Runtime/` cuando `dotnet build` no da errores y `dotnet test` pasa.
 
+**En `wip/Net/`, un archivo sustituye al de `package/Runtime/Net/` que se llama igual**, solo para .NET (regla de `net/Bastion.Net.csproj`). Sirve para rehacer una clase que ya funciona, como la sala con la campaña, sin tocar la que usa Unity.
+- **Cómo se nota:** si un nombre está en las dos carpetas, `dotnet build` y `dotnet test` usan la copia de `wip/Net/`, y Unity la de `package/Runtime/Net/`. Hoy son Room.cs, Protocol.cs, Json.cs y SaveStore.cs, con la campaña. Un arreglo en la de `package` no lo ven las pruebas, y uno en la de `wip` no lo ve Unity: mientras duren las dos, se arregla en las dos.
+- **Al terminar:** se mueve la de `wip/Net/` encima de la de `package/Runtime/Net/` (sin dejarla en `wip`), se compila con `dotnet build`, se pasa `dotnet test` y se compila Unity.
+
 ## Normas
 
 - **C# 9, netstandard2.1, sin UnityEngine** (asmdef con `noEngineReferences`). Nada de namespaces de archivo, `global using`, `record struct` ni otras cosas más nuevas.

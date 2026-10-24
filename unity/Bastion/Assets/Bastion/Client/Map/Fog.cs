@@ -23,6 +23,9 @@ namespace Bastion.Client.Map
         const float SightFade = 0.35f;
         /// <summary>fogOfWar.ts UNKNOWN, HAZE, MIST: the dark mist, the haze over what is seen, the low mist's tint.</summary>
         static readonly Color Unknown = Hex(0x161e28), Haze = Hex(0xa9b8c8), MistTint = Hex(0x2e3640);
+        /// <summary>By night (fogOfWar.ts setNight): the mist darker, the haze teal; lit tiles glow warm (LAMP, linear).</summary>
+        static readonly Color UnknownNight = Hex(0x070d11), HazeNight = Hex(0x10202a), MistNight = Hex(0x070d12);
+        static readonly Color Lamp = new Color(1.0f, 0.55f, 0.22f) * 0.6f;
         /// <summary>How thick the low mist is at most (MIST_LEVELS: 0, 0.35, 0.6; Arturo chose it dense).</summary>
         public float mist = 0.6f;
         /// <summary>What parts a building's rooms (BETWEEN_ROOMS).</summary>
@@ -41,9 +44,9 @@ namespace Bastion.Client.Map
 
         Texture2D map, shellMap;
         Color32[] pixels, shellPixels;
-        float[] sight, known, sightTo, knownTo, roofSight, roofKnown, roofSightTo, roofKnownTo;
+        float[] sight, known, sightTo, knownTo, roofSight, roofKnown, roofSightTo, roofKnownTo, lit, litTo;
         bool[] explored, shut;
-        bool[] visible, view;
+        bool[] visible, view, lights;
         readonly List<Shell> shells = new List<Shell>();
         GameState last;
         int width, height;
@@ -71,6 +74,8 @@ namespace Bastion.Client.Map
             known = new float[n];
             sightTo = new float[n];
             knownTo = new float[n];
+            lit = new float[n];
+            litTo = new float[n];
             roofSight = new float[n];
             roofKnown = new float[n];
             roofSightTo = new float[n];
@@ -91,10 +96,21 @@ namespace Bastion.Client.Map
             Shader.SetGlobalTexture(FogShell, shellMap);
             Shader.SetGlobalVector(FogSize, new Vector4(width, height, MapSpace.Tile, 1));
             // In the pass's linear colour: a global colour is passed as it is (a material's would be turned to linear).
-            Shader.SetGlobalColor(FogUnknown, Unknown.linear);
-            Shader.SetGlobalColor(FogHaze, Haze.linear);
-            Shader.SetGlobalColor(FogMistTint, MistTint.linear);
+            Tints();
             Shader.SetGlobalFloat(FogMist, mist);
+        }
+
+        static bool Night => Mood.Current != null && Mood.Current.Now == Mood.Night;
+
+        /// <summary>The fog's colours by day or by night (in the pass's linear colour: a global colour is passed as it is).</summary>
+        static void Tints()
+        {
+            bool night = Night;
+            Shader.SetGlobalColor(FogUnknown, (night ? UnknownNight : Unknown).linear);
+            Shader.SetGlobalColor(FogHaze, (night ? HazeNight : Haze).linear);
+            Shader.SetGlobalColor(FogMistTint, (night ? MistNight : MistTint).linear);
+            Shader.SetGlobalFloat("_FogNight", night ? 1 : 0);
+            Shader.SetGlobalColor("_FogLamp", Lamp);
         }
 
         void Remake(ref Texture2D texture, string name)
@@ -158,15 +174,26 @@ namespace Bastion.Client.Map
             if (map == null || seen.Width != width || seen.Height != height) Reset(seen);
             last = seen;
             visible = Los.TeamVisibility(seen, "xcom");
+            // Lit at night (the engine's lit mask: street lights, a Bengala, a fire, as far as their light reaches).
+            lights = Night ? Los.LitMask(seen) : null;
             view = Los.TeamView(seen, "xcom");
             if (explored == null || explored.Length != view.Length) explored = new bool[view.Length];
             for (int k = 0; k < view.Length; k++) explored[k] |= view[k] || (k < visible.Length && visible[k]);
             Refog(instant);
         }
 
+        /// <summary>Everything in sight (a lab's look at the whole map, as 0.10.1's reference block), at once.</summary>
+        public void SeeAll()
+        {
+            if (visible == null) return;
+            for (int k = 0; k < visible.Length; k++) visible[k] = true;
+            Refog(true);
+        }
+
         /// <summary>The storey in view changed (MapView.ShowLevel) or the map did: the fog worked out for it again.</summary>
         public void Refog(bool instant = false)
         {
+            Tints();
             if (last == null || visible == null) return;
             var s = last;
             int n = width * height;
@@ -180,6 +207,7 @@ namespace Bastion.Client.Map
                 bool inSight = node < visible.Length && visible[node];
                 bool seen = inSight || (node < view.Length && view[node]) || (node < explored.Length && explored[node]);
                 sightTo[i] = inSight && !shut[i] ? 1 : 0;
+                litTo[i] = lights != null && node < lights.Length && lights[node] ? 1 : 0;
                 knownTo[i] = seen && !shut[i] ? 1 : 0;
                 // The floor of each tile there, for the low mist (setFloors).
                 float storey = levels[i] > 0 ? levels[i] : (i < s.Elev.Count ? s.Elev[i] : 0);
@@ -200,6 +228,7 @@ namespace Bastion.Client.Map
             if (instant)
             {
                 System.Array.Copy(sightTo, sight, n);
+                System.Array.Copy(litTo, lit, n);
                 System.Array.Copy(knownTo, known, n);
                 System.Array.Copy(roofSightTo, roofSight, n);
                 System.Array.Copy(roofKnownTo, roofKnown, n);
@@ -276,7 +305,8 @@ namespace Bastion.Client.Map
             float step = dt / SightFade;
             for (int i = 0; i < sight.Length; i++)
             {
-                if (sight[i] == sightTo[i] && known[i] == knownTo[i] && roofSight[i] == roofSightTo[i] && roofKnown[i] == roofKnownTo[i]) continue;
+                if (sight[i] == sightTo[i] && known[i] == knownTo[i] && roofSight[i] == roofSightTo[i] && roofKnown[i] == roofKnownTo[i] && lit[i] == litTo[i]) continue;
+                lit[i] = Mathf.MoveTowards(lit[i], litTo[i], step);
                 sight[i] = Mathf.MoveTowards(sight[i], sightTo[i], step);
                 known[i] = Mathf.MoveTowards(known[i], knownTo[i], step);
                 roofSight[i] = Mathf.MoveTowards(roofSight[i], roofSightTo[i], step);
@@ -289,6 +319,7 @@ namespace Bastion.Client.Map
             {
                 pixels[i].r = (byte)(sight[i] * 255);
                 pixels[i].g = (byte)(known[i] * 255);
+                pixels[i].b = (byte)(lit[i] * 255);
                 shellPixels[i].g = (byte)(roofSight[i] * 255);
                 shellPixels[i].b = (byte)(roofKnown[i] * 255);
             }

@@ -14,8 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Bastion.Client::Bastion.Client.Map.MapCatalog
   modelNames:
   - Props/SM_Prop_Bench_01
+  - Props/SM_Prop_Wood_Pile_01
   - Rigged/SK_Prop_Bed_Gurney_01
   - Rigged/SK_Prop_Bed_Hospital_01
+  - SK_Veh_Caravan_01
   - SM_Bld_Chimney_01
   - SM_Bld_Destroyed_02
   - SM_Bld_Door_Cage_01
@@ -23,6 +25,7 @@ MonoBehaviour:
   - SM_Bld_GardenShed_01
   - SM_Bld_GuardTower_02
   - SM_Bld_House_03
+  - SM_Bld_House_03_Glass_01
   - SM_Bld_House_Preset_Garage_01
   - SM_Bld_Junk_Shelter_01
   - SM_Bld_Junk_Shelter_01_Tarp
@@ -36,12 +39,16 @@ MonoBehaviour:
   - SM_Bld_Plywood_Shed_Destroyed_01
   - SM_Bld_Quarantine_Tent_01
   - SM_Bld_RadioTower_01
+  - SM_Bld_RadioTower_Top_01
   - SM_Bld_Roof_Access_01
   - SM_Bld_Shelter_01
   - SM_Bld_Skylight_01
   - SM_Bld_Skylight_Flat_01
   - SM_Bld_Trailer_01
   - SM_Bld_Trailer_Damaged_01
+  - SM_Bld_Trailer_Damaged_Glass_01
+  - SM_Bld_Trailer_Glass_01
+  - SM_Bld_Trailer_Skirt_01
   - SM_Bld_WaterTank_01
   - SM_Bld_WaterTank_02
   - SM_Bld_WaterTank_03
@@ -97,6 +104,8 @@ MonoBehaviour:
   - SM_Prop_BathroomSink_02
   - SM_Prop_Bathtub_01
   - SM_Prop_Bear_Trap_01
+  - SM_Prop_Bear_Trap_Jaw_01
+  - SM_Prop_Bear_Trap_Jaw_02
   - SM_Prop_Bed_Double_01
   - SM_Prop_Bed_Mattress_01
   - SM_Prop_Bed_Single_01
@@ -124,6 +133,7 @@ MonoBehaviour:
   - SM_Prop_Car_Wrecked_Rusted_01
   - SM_Prop_Car_Wrecked_SUV_01
   - SM_Prop_Car_Wrecked_Van_01
+  - SM_Prop_CarBattery_Table_01
   - SM_Prop_CardboardBox_01
   - SM_Prop_CardboardBox_02
   - SM_Prop_CardboardBox_03
@@ -302,6 +312,7 @@ MonoBehaviour:
   - SM_Prop_TVCabinet_01
   - SM_Prop_VendingMachine_01
   - SM_Prop_Vice_01
+  - SM_Prop_Wall_Quarantine_GateDoor_01
   - SM_Prop_Wardrobe_01_Combined
   - SM_Prop_WashingLine_01
   - SM_Prop_Wheelbarrow_01
@@ -323,17 +334,23 @@ MonoBehaviour:
   - SM_Veh_Car_Police_01
   - SM_Veh_TractorOld_01
   - SM_Wep_AAGun_01
+  - SM_Wep_AAGun_Body_01
+  - SM_Wep_AAGun_Mag_01
+  - SM_Wep_AAGun_Swivel_01
   models:
-  - {fileID: 1385524857775532, guid: 74dd79ffd92ff194d85f9c443415d31e, type: 3}
+  - {fileID: 919132149155446097, guid: c65f5789925ed4a8290a7472255b86ba, type: 3}
+  - {fileID: 919132149155446097, guid: b58cebb6224cc4b5f9e111e62cf2ec30, type: 3}
   - {fileID: 1724283039470302, guid: 6aaa8c326a405744997e8344d9133942, type: 3}
   - {fileID: 1266594610114530, guid: b6e1a4ce864593c46b880ce4aafbadac, type: 3}
+  - {fileID: 1289125152715534, guid: d3e137c6224f93445a3c8efa136c1800, type: 3}
   - {fileID: 1537075459107986, guid: f4a74bdf5f51f7b4782e991d0b4ffdd6, type: 3}
   - {fileID: 1850374535654858, guid: 5abc52526538b3342b6beceb54c8bd58, type: 3}
   - {fileID: 1504752541149036, guid: 48b4d2b2f226d904ea7c8f3594bf25e2, type: 3}
   - {fileID: 4252833268999605069, guid: 381444432ed2ebb42a3ca4567013039e, type: 3}
   - {fileID: 1429945603137650, guid: 0a8f55cd7b76a0445a9d1482e6cfed9f, type: 3}
   - {fileID: 1300358768083420, guid: e80bc785a6eb0ae42b4812ad0cf387c5, type: 3}
-  - {fileID: 1839124528823706, guid: 8e578596767278f40861a66c5c586eb3, type: 3}
+  - {fileID: 919132149155446097, guid: c02f6fce62e3e44edbe00cba38db32d8, type: 3}
+  - {fileID: 919132149155446097, guid: f1ef10eebcfbe4ac49ac616361c0145f, type: 3}
   - {fileID: 1453203562746868, guid: c967b3d3b3d988144acf28f592fdb2fe, type: 3}
   - {fileID: 1623103741959910, guid: c808dd7672f316d4b95e2d0f05d6da22, type: 3}
   - {fileID: 1985198351629916, guid: fa62a919626d9f042a32c11f89889ea7, type: 3}
@@ -346,13 +363,17 @@ MonoBehaviour:
   - {fileID: 1708332331587280, guid: 77430e9a204ca6b458f3a96c8946c6a6, type: 3}
   - {fileID: 1717343103555224, guid: bf4fddb2b705d744a88431d9ab79e866, type: 3}
   - {fileID: 1223674719005576, guid: d0521494728afa040a7ee397dac54d07, type: 3}
-  - {fileID: 1986437825360374, guid: 8baa48d3960ea2e478eab614acc048bf, type: 3}
+  - {fileID: 919132149155446097, guid: d8acd683ce0c34b0a81fc4d3dd602006, type: 3}
+  - {fileID: 919132149155446097, guid: cbab2e176a2c5473dbdb3d5b26df291b, type: 3}
   - {fileID: 159368, guid: e97c4383dd13fb54fb98ecc4e4be2ec3, type: 3}
   - {fileID: 1269772399169626, guid: d1b6a91b86ff96c458c8800a7f00cce5, type: 3}
   - {fileID: 1598864691248770, guid: 2a9854b6e1666d04089c2205bfc9bf74, type: 3}
   - {fileID: 6654093495130995862, guid: e4df18bf07833174ca30233a29571b20, type: 3}
-  - {fileID: 1718806199345174, guid: 15302bd74a0fa344c8fee77ad7a46e50, type: 3}
-  - {fileID: 1436402022423282, guid: 2ac4d473e2bd3a543a449f931aa54484, type: 3}
+  - {fileID: 919132149155446097, guid: 7bb7d9352d0bc4b93a80fc2b443ce893, type: 3}
+  - {fileID: 919132149155446097, guid: 24c6a526317da4e528f6c5926af60a00, type: 3}
+  - {fileID: 919132149155446097, guid: cd230e7a901064692bdcf36dca1342fc, type: 3}
+  - {fileID: 919132149155446097, guid: 7395490f6ad864eefb4dbcbbbe031cff, type: 3}
+  - {fileID: 919132149155446097, guid: ca3415739c8fa4e0db3024be664445ed, type: 3}
   - {fileID: 1107366689767066, guid: c62f091844026a14b90943fb7b3454fe, type: 3}
   - {fileID: 1759109634790138, guid: 8b08441c01a65c14ea47526d67df7cc5, type: 3}
   - {fileID: 1963166537298288, guid: f60d00d817b98db419e1b09cd3f5a823, type: 3}
@@ -407,7 +428,9 @@ MonoBehaviour:
   - {fileID: 1514872856459784, guid: 069265700d81b0a468d77fa1f88f5cb7, type: 3}
   - {fileID: 1024412646188886, guid: 970ca55d54ebea74497a921026514966, type: 3}
   - {fileID: 1425984937311468, guid: b0ae4571707d67f4b9145c552be2bb51, type: 3}
-  - {fileID: 1754962658015278, guid: abf0b0a3477fdaa4ba5031599fbe68ae, type: 3}
+  - {fileID: 919132149155446097, guid: 4d8116518a776468b878f2b7247cc626, type: 3}
+  - {fileID: 919132149155446097, guid: fe9663b3fb56b4d77a8f9a6d856cefa9, type: 3}
+  - {fileID: 919132149155446097, guid: 1574e107bf5ae4ca8936de41e8941b6a, type: 3}
   - {fileID: 1639530465133374, guid: 2a19a84f8e814564d96853291c221b31, type: 3}
   - {fileID: 1417574437197612, guid: 90349757797a5af4192e379423c4dedf, type: 3}
   - {fileID: 1296588007907970, guid: f0bf7294cedd0f34e8a32a4292903641, type: 3}
@@ -435,6 +458,7 @@ MonoBehaviour:
   - {fileID: 1243194821767460, guid: 1f51b8de285f2b04887f1bda933b3af3, type: 3}
   - {fileID: 1356109316017642, guid: e5997f29051e1c24fa02c8fcc2698d5f, type: 3}
   - {fileID: 1461443525670046, guid: 72c55d02f43923547a5a694f08963584, type: 3}
+  - {fileID: 919132149155446097, guid: 834c91261c256488cb41f95cb897203c, type: 3}
   - {fileID: 1299846362916210, guid: 183e952709142f144bc3668ec857b2df, type: 3}
   - {fileID: 1277163129526764, guid: 6c943777f29ba7c4994e93de7ad5ef7f, type: 3}
   - {fileID: 1553826968180558, guid: 3ad8a79aa34ec764885be45c25593d3d, type: 3}
@@ -613,6 +637,7 @@ MonoBehaviour:
   - {fileID: 1551739599243302, guid: 620abb905dd09314e9235dc6888ed94c, type: 3}
   - {fileID: 1686052375672638, guid: 32214b401c4ef004699df74486cccfde, type: 3}
   - {fileID: 1550799875703364, guid: 78ec54d18beeda441bc9b6e1bc05fc1a, type: 3}
+  - {fileID: 919132149155446097, guid: 9f6959df568ff4c53b5bf56745dd55b8, type: 3}
   - {fileID: 1839219942348264, guid: 0545a43039c905245818e0c123c3c30a, type: 3}
   - {fileID: 1557191070921276, guid: 7b52a09302180794db4d2bf3fb0278b9, type: 3}
   - {fileID: 1359723901517416, guid: 68eeb5e60d5733d44af1f5c84ee8d8b4, type: 3}
@@ -633,7 +658,10 @@ MonoBehaviour:
   - {fileID: 1552408322253738, guid: c104bd949dbb87644ab3fe86ab934293, type: 3}
   - {fileID: 189930, guid: f539f0390d17a9f4a922b722e47998fe, type: 3}
   - {fileID: 1848324045129022, guid: c458e890f1755a341893df58d24ed4da, type: 3}
-  - {fileID: 1638244575166490, guid: e10c556d4d4596f40b7d9dbc793c966d, type: 3}
+  - {fileID: 919132149155446097, guid: a6e5ae14b120c4fefb7872f4767e6a42, type: 3}
+  - {fileID: 919132149155446097, guid: 7d053dad4a62e410c89d2231b6370634, type: 3}
+  - {fileID: 919132149155446097, guid: eca868ddcba62469da46d337d81ced9b, type: 3}
+  - {fileID: 919132149155446097, guid: 6d40790ba3f1c4a59aabfe90e79786b4, type: 3}
   materialNames:
   - PolygonApocalypse_01_B
   - PolygonApocalypse_01_C

@@ -2,6 +2,7 @@ using System;
 using Bastion.Client.Net;
 using Unity.Profiling;
 using UnityEngine;
+using UnityEngine.LowLevel;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
@@ -10,8 +11,8 @@ namespace Bastion.UI.App
     /// <summary>
     /// How the game runs on each player's computer, told to the host (perf.ts of the 0.10.1): every ten seconds of play,
     /// one line with the frame rate and the refresh that caps it, the slowest frames, the time a frame takes on the main
-    /// thread (its work, and apart the wait for the screen) and on the graphics card (mean / 95th percentile, Unity's
-    /// FrameTimingManager), the draw calls and
+    /// thread (its work, timed here, and apart what the frame waited) and on the graphics card (mean / 95th percentile,
+    /// Unity's FrameTimingManager), the draw calls and
     /// triangles, the graphics card, the settings and the size; and one line when the player goes somewhere else
     /// (combate, menú). They go to the host's red.log by Red's report («[rend Ana] …»), so a partner's machine is measured
     /// without them doing anything. And the frames-per-second counter of Ajustes, in a corner.
@@ -64,8 +65,50 @@ namespace Bastion.UI.App
         int counterFrames;
         float counterFrom;
 
+        /// <summary>
+        /// The main thread's work in the last frame, in ms: from the start of the player loop's Initialization to the end
+        /// of its PostLateUpdate (rendering included). The waits between frames (for the screen, for the frame cap) fall
+        /// outside: Unity's own `cpuMainThreadFrameTime` counts them (24/10: a still menu at 60 fps read 14 ms).
+        /// </summary>
+        static double work;
+        static long workFrom;
+
+        /// <summary>The main thread's work in the last frame, in ms (Perfil shows it next to the markers).</summary>
+        public static double Work => work;
+
+        struct WorkStart { }
+        struct WorkEnd { }
+
+        /// <summary>The two stamps in the player loop, once (a capture's play mode keeps the loop from the last one).</summary>
+        static void Hook()
+        {
+            var loop = PlayerLoop.GetCurrentPlayerLoop();
+            for (var i = 0; i < loop.subSystemList.Length; i++)
+            {
+                var phase = loop.subSystemList[i];
+                var subs = phase.subSystemList ?? new PlayerLoopSystem[0];
+                if (Array.Exists(subs, x => x.type == typeof(WorkStart) || x.type == typeof(WorkEnd))) return;
+                if (phase.type == typeof(UnityEngine.PlayerLoop.Initialization))
+                {
+                    var with = new PlayerLoopSystem[subs.Length + 1];
+                    with[0] = new PlayerLoopSystem { type = typeof(WorkStart), updateDelegate = () => workFrom = System.Diagnostics.Stopwatch.GetTimestamp() };
+                    Array.Copy(subs, 0, with, 1, subs.Length);
+                    loop.subSystemList[i].subSystemList = with;
+                }
+                else if (phase.type == typeof(UnityEngine.PlayerLoop.PostLateUpdate))
+                {
+                    var with = new PlayerLoopSystem[subs.Length + 1];
+                    Array.Copy(subs, with, subs.Length);
+                    with[subs.Length] = new PlayerLoopSystem { type = typeof(WorkEnd), updateDelegate = () => { if (workFrom != 0) work = (System.Diagnostics.Stopwatch.GetTimestamp() - workFrom) * 1000.0 / System.Diagnostics.Stopwatch.Frequency; } };
+                    loop.subSystemList[i].subSystemList = with;
+                }
+            }
+            PlayerLoop.SetPlayerLoop(loop);
+        }
+
         void OnEnable()
         {
+            Hook();
             drawCalls = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Draw Calls Count");
             triangles = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Triangles Count");
             GameSettings.Changed += OnSettings;
@@ -118,24 +161,21 @@ namespace Bastion.UI.App
             frames++;
             spent += dt;
             if (dt >= Hitch) hitches++;
-            if (FrameTimingManager.GetLatestTimings(1, timing) > 0)
+            // The main thread's work, timed in the loop (with or without the frame timings); the rest of Unity's
+            // main-thread frame was waiting (for the screen, Metal's next drawable on a Mac; for the frame cap), no work.
+            var known = FrameTimingManager.GetLatestTimings(1, timing) > 0;
+            var cpu = (float)work;
+            if (cpu > 0 && cpu < Pause * 1000)
             {
-                // The main thread's work: its frame less the wait for the screen (on a Mac, Metal's next drawable at the
-                // refresh), which is no work (24/10: the still menu read 4–5 ms, 0.1 ms of it work).
-                var wait = Mathf.Max(0, (float)timing[0].cpuMainThreadPresentWaitTime);
-                var cpu = (float)timing[0].cpuMainThreadFrameTime - wait;
-                var gpu = (float)timing[0].gpuFrameTime;
-                if (cpu > 0 && cpu < Pause * 1000)
-                {
-                    cpuTimes[cpuCount++ % Ring] = cpu;
-                    cpuSum += cpu;
-                    waitSum += wait;
-                }
-                if (gpu > 0 && gpu < Pause * 1000)
-                {
-                    gpuTimes[gpuCount++ % Ring] = gpu;
-                    gpuSum += gpu;
-                }
+                cpuTimes[cpuCount++ % Ring] = cpu;
+                cpuSum += cpu;
+                if (known) waitSum += Mathf.Max(0, (float)timing[0].cpuMainThreadFrameTime - cpu);
+            }
+            var gpu = known ? (float)timing[0].gpuFrameTime : 0;
+            if (gpu > 0 && gpu < Pause * 1000)
+            {
+                gpuTimes[gpuCount++ % Ring] = gpu;
+                gpuSum += gpu;
             }
             if (drawCalls.Valid) calls += drawCalls.LastValue;
             if (triangles.Valid) tris += triangles.LastValue;

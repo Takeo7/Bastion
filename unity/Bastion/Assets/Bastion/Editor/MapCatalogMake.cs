@@ -10,7 +10,8 @@ namespace Bastion.EditorTools
 {
     /// <summary>
     /// Makes Resources/MapCatalog.asset (Bastion.Client.Map.MapCatalog): every model MapArt.json's props name and the
-    /// materials the map repaints with, looked up in Assets/Synty as the labs do. Run it again when the props change:
+    /// materials the map repaints with, looked up in Assets/Synty as the labs do; and the models whose meshes the map
+    /// merges, imported readable. Run it again when the props change:
     /// unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapCatalogMake.Run -quit.
     /// </summary>
     public static class MapCatalogMake
@@ -22,6 +23,7 @@ namespace Bastion.EditorTools
             var prefabOf = MapLab.Prefabs();
             var materialOf = MapLab.Materials();
             var missing = new List<string>();
+            Readable(prefabOf);
 
             var modelNames = MapArt.Models().Distinct().OrderBy(n => n).ToList();
             var models = modelNames.Select(n => prefabOf(n)).ToList();
@@ -46,6 +48,33 @@ namespace Bastion.EditorTools
             EditorUtility.SetDirty(catalog);
             AssetDatabase.SaveAssets();
             Debug.Log($"[catalog] {Asset}: {catalog.models.Length} models, {catalog.materials.Length} materials" + (missing.Count > 0 ? "; missing: " + string.Join(", ", missing) : ""));
+        }
+
+        /// <summary>
+        /// The props whose meshes the map merges as it is made (Mesh.CombineMeshes, which a build only does with meshes it
+        /// can read): the pines of the base's wood past the edge (MapBuilder.Beyond).
+        /// </summary>
+        static IEnumerable<string> Merged => BaseWoods.BasePines.Append(BaseWoods.FarPine).Distinct();
+
+        /// <summary>The models of Merged imported readable (their FBX's importer), those that weren't.</summary>
+        static void Readable(System.Func<string, GameObject> prefabOf)
+        {
+            var sources = new HashSet<string>();
+            foreach (string id in Merged)
+            {
+                var art = MapArt.Prop(id);
+                var model = art?.fbx != null ? prefabOf(art.fbx) : null;
+                if (model == null) continue;
+                foreach (var f in model.GetComponentsInChildren<MeshFilter>(true))
+                    if (f.sharedMesh != null && !f.sharedMesh.isReadable) sources.Add(AssetDatabase.GetAssetPath(f.sharedMesh));
+            }
+            foreach (string path in sources)
+            {
+                if (!(AssetImporter.GetAtPath(path) is ModelImporter importer) || importer.isReadable) continue;
+                importer.isReadable = true;
+                importer.SaveAndReimport();
+            }
+            Debug.Log($"[catalog] readable for merging: {(sources.Count > 0 ? string.Join(", ", sources.Select(Path.GetFileName)) : "all were already")}");
         }
 
         /// <summary>

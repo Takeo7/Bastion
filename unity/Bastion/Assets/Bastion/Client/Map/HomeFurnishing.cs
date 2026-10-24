@@ -133,8 +133,9 @@ namespace Bastion.Client.Map
         // Mac, and that shows in the matrix's elements that should come out 0 (a chair knocked over at a right angle). As
         // Js.cs's atan: clang on arm64 fuses each `a + b * c` of an expression into a multiply-add, here Js.FusedMultiplyAdd;
         // with them, the same bits as node on Apple silicon (1.3 million arguments, up to ±1000 and near every π/4). The
-        // reduction of arguments past 2^19 π/2 (__kernel_rem_pio2) is not here: no angle of these comes near it.
-        static class Trig
+        // reduction of arguments past 2^19 π/2 (__kernel_rem_pio2) is not here: no angle of these comes near it. Shared
+        // with BasePieces.
+        internal static class Trig
         {
             const double S1 = -1.66666666666666324348e-01; // 0xBFC55555, 0x55555549
             const double S2 = 8.33333333332248946124e-03; // 0x3F811111, 0x1110F8A6

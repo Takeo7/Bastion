@@ -37,6 +37,8 @@ namespace Bastion.UI.App
         VisualElement card;
         /// <summary>The veil under the card: over the whole screen, so the HUD's own cards don't show through (24/10).</summary>
         VisualElement veil;
+        /// <summary>The HUD hidden while the card is up (its arrival card still read through the veil, 24/10).</summary>
+        VisualElement hiddenHud;
         Label cardNote;
         Label line;
         bool loading;
@@ -242,6 +244,8 @@ namespace Bastion.UI.App
             actions.Add(new Button(Home) { text = Lore.HostClosed.Home });
             actions.Add(new Button(Quit) { text = Lore.QuitText.Button });
             root.Add(veil);
+            hiddenHud = FindFirstObjectByType<HudRoot>()?.GetComponent<UIDocument>()?.rootVisualElement;
+            if (hiddenHud != null) hiddenHud.style.display = DisplayStyle.None;
         }
 
         /// <summary>Back in, the same seat (NetLink keeps it by host): «Aún no está abierta» while it isn't.</summary>
@@ -279,6 +283,8 @@ namespace Bastion.UI.App
         {
             veil?.RemoveFromHierarchy();
             veil = null;
+            if (hiddenHud != null) hiddenHud.style.display = StyleKeyword.Null;
+            hiddenHud = null;
             card = null;
             cardNote = null;
         }

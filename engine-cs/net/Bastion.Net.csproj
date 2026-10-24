@@ -8,9 +8,12 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../package/Runtime/Net/**/*.cs" />
-    <!-- What is half done, which Unity doesn't see (engine-cs README). -->
-    <Compile Include="../wip/Net/**/*.cs" />
+    <!-- What is half done, which Unity doesn't see (engine-cs README). A file of wip/Net stands in for the one of the same
+         name in package/Runtime/Net: a class being reworked (the room with the campaign) is built and tested here while
+         Unity keeps the one that works. -->
+    <WipNet Include="../wip/Net/**/*.cs" />
+    <Compile Include="../package/Runtime/Net/**/*.cs" Exclude="@(WipNet->'../package/Runtime/Net/%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Compile Include="@(WipNet)" />
   </ItemGroup>
   <ItemGroup>
     <!-- Unity brings 13.0.2 (com.unity.nuget.newtonsoft-json); any 13 reads and writes the same. -->

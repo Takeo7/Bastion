@@ -1,0 +1,646 @@
+/*
+   The base's screens (strategy/screen.ts with mixta-base.css of the 0.10.1): the steel band on top, the proposal's
+   plate, the tabs at the bottom, the window on its veil. The plates, buttons and tooltips are the HUD's (Mixta.uss).
+*/
+
+.strat {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.strat-view {
+    position: absolute;
+    left: 0;
+    top: 46px;
+    right: 0;
+    bottom: 48px;
+}
+
+/* =============================================================== top strip */
+
+.strat-top {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    height: 46px;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 14px;
+    background-color: rgb(30, 33, 35);
+    background-image: url("../../Textures/steel-plate.png");
+    background-repeat: repeat repeat;
+    background-size: 256px 256px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(242, 194, 48, 0.35);
+}
+
+.strat-brand {
+    flex-direction: row;
+    align-items: center;
+    height: 100%;
+    padding-right: 14px;
+    margin-right: 12px;
+    border-right-width: 1px;
+    border-right-color: rgba(0, 0, 0, 0.55);
+}
+
+.strat-brand__name {
+    font-size: 22px;
+    letter-spacing: 3px;
+    color: #ffffff;
+}
+
+.strat-brand__outings {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.strat-brand__outings Label {
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    color: var(--t-accent);
+}
+
+.strat-brand__icon {
+    width: 13px;
+    height: 13px;
+    margin-right: 5px;
+    -unity-background-image-tint-color: var(--t-accent);
+}
+
+.strat-siege {
+    margin-right: 12px;
+    padding: 2px 8px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--t-accent);
+    border-width: 1px;
+    border-color: rgba(242, 194, 48, 0.75);
+    border-radius: 2px;
+    background-color: rgba(242, 194, 48, 0.06);
+}
+
+.strat-siege--near {
+    color: #ff8a7a;
+    border-color: rgba(240, 80, 60, 0.85);
+}
+
+.strat-siege--now {
+    color: #ffffff;
+    background-color: #b3261e;
+    border-color: #f0503c;
+}
+
+.strat-res {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Each store in its own well: the pack's icon in the store's colour, the figure in Oswald. */
+.strat-well {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    margin-right: 6px;
+    padding: 0 10px 0 7px;
+    background-color: var(--m-well);
+    border-width: 1px;
+    border-top-color: rgba(0, 0, 0, 0.75);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+    border-left-color: rgba(0, 0, 0, 0.5);
+    border-right-color: rgba(0, 0, 0, 0.5);
+    border-radius: 2px;
+}
+
+.strat-well__icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    -unity-background-image-tint-color: #d6dbd2;
+}
+
+.strat-well__value {
+    font-size: 19px;
+    color: #ffffff;
+}
+
+.strat-well--credits .strat-well__icon {
+    -unity-background-image-tint-color: #ffd25a;
+}
+
+.strat-well--medicines .strat-well__icon {
+    -unity-background-image-tint-color: #8fd05a;
+}
+
+.strat-well--food .strat-well__icon {
+    -unity-background-image-tint-color: #eab96c;
+}
+
+.strat-well--parts .strat-well__icon {
+    -unity-background-image-tint-color: #b2c3d0;
+}
+
+.strat-well--level .strat-well__icon {
+    -unity-background-image-tint-color: var(--t-accent);
+}
+
+.strat-well--bad {
+    border-color: rgba(240, 80, 60, 0.8);
+}
+
+.strat-well--bad .strat-well__icon {
+    -unity-background-image-tint-color: #ff6a55;
+}
+
+/* What a pending proposal would spend: after the figure, in amber, paid on the yes. */
+.strat-owed {
+    margin-left: 4px;
+    font-size: 14px;
+    color: var(--t-accent);
+}
+
+.strat-level-bar {
+    flex-direction: row;
+    margin-left: 8px;
+}
+
+.strat-level-bar__mark {
+    width: 6px;
+    height: 10px;
+    margin-left: 1px;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.strat-level-bar__mark--on {
+    background-color: var(--t-accent);
+}
+
+/* The Marea: its marks across the rest of the band, red where it has come. */
+.strat-doom {
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.strat-doom__icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    -unity-background-image-tint-color: #ff6a55;
+}
+
+.strat-doom__marks {
+    flex-direction: row;
+    padding: 2px;
+    background-color: var(--m-well);
+    border-radius: 2px;
+}
+
+.strat-doom__mark {
+    width: 14px;
+    height: 10px;
+    margin: 0 1px;
+    background-color: rgba(255, 255, 255, 0.07);
+    border-radius: 1px;
+}
+
+.strat-doom__mark--on {
+    background-color: #e0453a;
+}
+
+.strat-doom__figure {
+    margin-left: 8px;
+    font-size: 18px;
+    color: #ff6a55;
+}
+
+.strat-menu {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    padding: 0 12px;
+}
+
+.strat-menu__icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+.strat-menu Label {
+    font-size: 13px;
+    letter-spacing: 1px;
+}
+
+/* A store's tooltip: its name, then its sentences. */
+.strat-tip__name {
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--t-accent);
+    margin-bottom: 2px;
+}
+
+.strat-tip__line {
+    font-size: 12px;
+    white-space: normal;
+    max-width: 280px;
+}
+
+/* =============================================================== tabs */
+
+.strat-nav {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.strat-tab {
+    flex-direction: row;
+    align-items: center;
+    min-width: 112px;
+    height: 40px;
+    margin: 0 3px;
+    padding: 0 16px 0 12px;
+    background-color: rgb(42, 46, 48);
+    background-image: url("../../Textures/steel-plate.png");
+    background-repeat: repeat repeat;
+    background-size: 256px 256px;
+    border-bottom-width: 0;
+    border-radius: 2px 2px 0 0;
+}
+
+.strat-tab__icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    -unity-background-image-tint-color: #c9cdc6;
+}
+
+.strat-tab__label {
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    color: #c9cdc6;
+}
+
+.strat-tab:hover .strat-tab__label,
+.strat-tab:hover .strat-tab__icon {
+    color: #ffffff;
+    -unity-background-image-tint-color: #ffffff;
+}
+
+.strat-tab--on {
+    background-color: var(--t-primary);
+    background-image: none;
+}
+
+.strat-tab--on .strat-tab__label {
+    color: var(--t-primary-ink);
+}
+
+.strat-tab--on .strat-tab__icon {
+    -unity-background-image-tint-color: var(--t-primary-ink);
+}
+
+.strat-tab--urgent .strat-tab__label {
+    color: #ffb3a6;
+}
+
+.strat-tab--urgent .strat-tab__icon {
+    -unity-background-image-tint-color: #ffb3a6;
+}
+
+.strat-tab__count,
+.strat-tab__new {
+    margin-left: 8px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    color: var(--t-primary-ink);
+    background-color: var(--t-accent);
+}
+
+.strat-tab--on .strat-tab__count {
+    background-color: rgba(0, 0, 0, 0.35);
+    color: #ffffff;
+}
+
+.strat-tab__count--urgent {
+    background-color: #f0503c;
+    color: #ffffff;
+}
+
+.strat-tab__new {
+    background-color: rgba(0, 0, 0, 0.35);
+    color: var(--t-accent);
+    font-size: 10px;
+}
+
+.strat-tab__partner {
+    margin-left: 8px;
+    width: 17px;
+    height: 17px;
+    border-radius: 9px;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    color: #ffffff;
+}
+
+/* =============================================================== proposal */
+
+.strat-proposal {
+    position: absolute;
+    top: 54px;
+    left: 50%;
+    translate: -50% 0;
+    width: 492px;
+    padding: 12px 16px 12px;
+}
+
+.strat-proposal__kicker {
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+.strat-proposal--mine .strat-proposal__kicker {
+    color: #8fd05a;
+}
+
+.strat-proposal__text {
+    margin-top: 2px;
+    font-size: 16px;
+    white-space: normal;
+}
+
+.strat-proposal__cost {
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--t-accent);
+}
+
+.strat-proposal__detail {
+    margin-top: 10px;
+    padding: 8px 10px;
+}
+
+.strat-detail-row {
+    flex-direction: row;
+    margin: 1px 0;
+}
+
+.strat-detail-row__key {
+    width: 112px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--t-muted);
+}
+
+.strat-detail-row__value {
+    flex-shrink: 1;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.strat-proposal__clock {
+    margin-top: 8px;
+}
+
+.strat-proposal__clock-text {
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.strat-proposal__track {
+    height: 4px;
+    margin-top: 3px;
+}
+
+.strat-proposal__fill {
+    height: 100%;
+    background-color: var(--t-accent);
+}
+
+.strat-proposal__clock--hurry .strat-proposal__fill {
+    background-color: #f0503c;
+}
+
+.strat-proposal__clock--hurry .strat-proposal__clock-text {
+    color: #ff8a7a;
+}
+
+.strat-proposal__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.strat-proposal__actions Button {
+    margin-left: 6px;
+    padding: 5px 14px;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+.strat-btn-bad {
+    background-color: #7d2620;
+    border-top-color: #b4453a;
+    color: #ffd8d2;
+}
+
+.strat-btn-bad:hover {
+    background-color: #96302a;
+}
+
+/* =============================================================== window */
+
+.strat-modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    /* The web's 0.5, blended in linear space here: about 0.75 darkens as much. */
+    background-color: rgba(0, 0, 0, 0.75);
+}
+
+.strat-modal__card {
+    width: 540px;
+    padding: 18px 22px 16px;
+    /* The sheet's pale rim (mixta-base.css .strat-modal .x-panel). */
+    border-width: 2px;
+    border-color: rgba(200, 205, 198, 0.4);
+}
+
+.strat-modal__card--event,
+.strat-modal__card--end {
+    width: 500px;
+}
+
+.strat-modal__kicker {
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+.strat-modal__kicker--good {
+    color: var(--t-accent);
+}
+
+.strat-modal__kicker--bad {
+    color: #f0503c;
+}
+
+.strat-modal__title {
+    margin-top: 2px;
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+.strat-modal__body,
+.strat-modal__text {
+    margin-top: 6px;
+    font-size: 14px;
+    white-space: normal;
+}
+
+.strat-modal__text {
+    color: var(--t-muted);
+}
+
+.strat-brought__head {
+    margin-top: 12px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--t-muted);
+}
+
+.strat-brought {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.strat-brought__item {
+    width: 50%;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+    padding-right: 8px;
+}
+
+.strat-brought__icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+    flex-shrink: 0;
+    -unity-background-image-tint-color: var(--t-accent);
+}
+
+.strat-brought__words {
+    flex-shrink: 1;
+}
+
+.strat-brought__name {
+    font-size: 13px;
+    color: #ffffff;
+}
+
+.strat-brought__brief {
+    font-size: 11px;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+.strat-option {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-top: 8px;
+    padding: 8px 12px;
+}
+
+.strat-option__label {
+    font-size: 16px;
+    color: #ffffff;
+}
+
+.strat-option__effect {
+    font-size: 12px;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+.strat-option__blocked {
+    font-size: 11px;
+    color: #ff8a7a;
+}
+
+.strat-option--proposed {
+    border-width: 2px;
+    border-color: var(--t-accent);
+}
+
+.strat-modal__foot {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--t-muted);
+}
+
+.strat-modal__vote {
+    margin-top: 12px;
+}
+
+.strat-modal__note {
+    margin-top: 12px;
+    font-size: 16px;
+    -unity-font-style: italic;
+    color: var(--t-accent);
+    white-space: normal;
+}
+
+.strat-modal__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
+.strat-modal__actions Button {
+    margin-left: 6px;
+    padding: 5px 16px;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+/* =============================================================== short note */
+
+.strat-toast {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    translate: -50% 0;
+    padding: 6px 14px;
+    font-size: 13px;
+}
+
+/* What can't be pressed now reads off: dark ochre, dim ink (strategy.css .x-btn.primary:disabled), not a pale yellow. */
+.strat .btn-primary:disabled {
+    opacity: 1;
+    background-color: #6b5420;
+    border-top-color: #8a6e2a;
+    color: rgba(30, 23, 6, 0.75);
+}

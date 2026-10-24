@@ -83,6 +83,23 @@ namespace Bastion.UI.EditorTools
             ("stat:worn", Armor), ("stat:weapon", Rifle),
             // ✓, which Oswald lacks (the arrows are drawn: Triangle).
             ("ui:check", Confirm),
+            // The base's top strip (mixta.css --mi-*: synty-sprites.py's mh-crate, mh-medkit, mh-repair, mh-hourglass,
+            // mh-up, biohazard, mainmenu; the rations by Apocalypse's hunger).
+            ("store:credits", "ICON_MilitaryCombat_Map_Treasure_01_Clean"), ("store:medicines", "ICON_MilitaryCombat_Inventory_Healing_02_Clean"),
+            ("store:food", "ICON_Apocalpyse_Status_Hunger_01"), ("store:parts", Repair), ("base:day", Time),
+            ("base:level", "ICON_MilitaryCombat_Status_Up_01_Clean"), ("base:doom", "ICON_Apocalpyse_Map_Biohazard_01"),
+            ("base:menu", "ICON_ModernMenus_MainMenu_01_Clean"),
+            // The base's tabs (mixta-base.css --ni: mh-pin, mh-shop, helmet, crafting; the squad's La Lata by a vehicle).
+            ("tab:geoscape", "ICON_MilitaryCombat_Map_Pin_01_Clean"), ("tab:engineering", "ICON_MilitaryCombat_Map_ShopWeapons_01_Clean"),
+            ("tab:barracks", Helmet), ("tab:facilities", "ICON_Apocalpyse_Inventory_Crafting_01"), ("tab:squad", Vehicle),
+            // The valley's markers (valley.css: map-objective, map-skull, map-unknown, map-home, map-vehicle) and the
+            // operations' pins with their kind inside (mixta-base.css .mission-icon: map-pin; skull, mh-crate, fire,
+            // mh-comms, heal, backpack).
+            ("map:zone", "ICON_MilitaryCombat_Map_Objective_01_Clean"), ("map:nest", "ICON_MilitaryCombat_Map_Skull_01_Clean"),
+            ("map:rumor", "ICON_MilitaryCombat_Map_Unknown_01_Clean"), ("map:home", "ICON_MilitaryCombat_Map_Home_01_Clean"),
+            ("map:lata", Vehicle), ("map:pin", "ICON_MilitaryCombat_Map_Pin_01_Clean"),
+            ("kind:elimination", Skull), ("kind:recovery", "ICON_MilitaryCombat_Map_Treasure_01_Clean"), ("kind:sabotage", "ICON_Apocalpyse_Map_Fire_01"),
+            ("kind:hack", "ICON_MilitaryCombat_Inventory_Comms_01_Clean"), ("kind:rescue", "ICON_Apocalpyse_Map_Healing_01"), ("kind:scavenge", Backpack),
         };
 
         public static void Make()

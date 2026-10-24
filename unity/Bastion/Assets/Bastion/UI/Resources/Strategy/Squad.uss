@@ -1,0 +1,476 @@
+/*
+   Escuadra and the debrief (screen.ts renderSquad and renderDebrief, strategy.css, mixta-base.css): the squad's lists
+   at the sides, the mission's plate at the bottom, the cards under the line-up's figures.
+*/
+
+/* =============================================================== lists */
+
+.squad-list {
+    width: 214px;
+    padding: 8px 10px 10px;
+}
+
+.squad-row {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    margin: 0 0 2px;
+    padding: 0 8px 0 10px;
+    background-color: rgba(255, 255, 255, 0.03);
+    background-image: none;
+    border-width: 0 0 0 3px;
+    border-radius: 0;
+}
+
+.squad-row:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.squad-row--in {
+    background-color: rgba(242, 194, 48, 0.07);
+}
+
+.squad-row:disabled {
+    opacity: 0.6;
+}
+
+.squad-row .skill-hex {
+    width: 10px;
+    height: 11px;
+    margin-right: 8px;
+}
+
+.squad-row__name {
+    flex-grow: 1;
+    font-size: 13px;
+    color: #ffffff;
+    -unity-text-align: middle-left;
+}
+
+.squad-row__rank {
+    margin-right: 6px;
+}
+
+.squad-row__chip {
+    padding: 1px 4px;
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.squad-row__chip--good {
+    color: #10180a;
+    background-color: #7ec24f;
+    border-radius: 2px;
+}
+
+.squad-row__chip--bad {
+    color: #ff6a55;
+}
+
+.squad-row__chip--warn {
+    color: #1e1706;
+    background-color: rgba(166, 120, 255, 0.85);
+    border-radius: 2px;
+}
+
+/* =============================================================== bottom */
+
+.squad-bottom {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    translate: -50% 0;
+    width: 942px;
+    align-items: center;
+}
+
+.ready-board {
+    flex-direction: row;
+    margin-bottom: 8px;
+}
+
+.ready-mark {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 8px;
+    padding: 3px 10px;
+    background-color: rgba(12, 14, 15, 0.85);
+    border-radius: 2px;
+}
+
+.ready-mark__lamp {
+    width: 9px;
+    height: 9px;
+    margin-right: 6px;
+    border-radius: 5px;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.ready-mark--on .ready-mark__lamp {
+    background-color: #8fd05a;
+}
+
+.ready-mark__name {
+    font-size: 13px;
+    margin-right: 6px;
+}
+
+.ready-mark__state {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--t-muted);
+}
+
+.ready-mark--on .ready-mark__state {
+    color: #8fd05a;
+}
+
+.squad-mission {
+    width: 100%;
+    flex-direction: row;
+    padding: 18px 20px 16px;
+}
+
+.squad-mission__words {
+    flex-grow: 1;
+    flex-shrink: 1;
+    padding-right: 24px;
+}
+
+.squad-mission__title-row {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.squad-mission__title {
+    font-size: 26px;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+.squad-mission__night {
+    margin: 0 0 4px 8px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: var(--t-accent);
+}
+
+.squad-mission__briefing {
+    margin-top: 6px;
+    font-size: 14px;
+    white-space: normal;
+}
+
+.squad-mission__warning {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--t-accent);
+    white-space: normal;
+}
+
+.squad-mission__actions {
+    width: 200px;
+    justify-content: center;
+}
+
+.squad-launch {
+    height: 50px;
+    font-size: 22px;
+    letter-spacing: 2px;
+}
+
+.squad-launch--ready {
+    background-color: #7ec24f;
+    border-top-color: #a8e07a;
+    color: #10180a;
+}
+
+.squad-launch--waiting {
+    border-width: 2px;
+    border-color: #ffffff;
+}
+
+.squad-back {
+    margin-top: 6px;
+    height: 28px;
+    font-size: 13px;
+    letter-spacing: 1px;
+}
+
+.squad-empty {
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    translate: -50% 0;
+    align-items: center;
+    padding: 18px 24px;
+}
+
+.squad-empty__text {
+    font-size: 16px;
+    margin-bottom: 10px;
+}
+
+/* =============================================================== cards */
+
+/* Over the whole panel (its coordinates are the panel's), under the plates. */
+.lineup-cards {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -46px;
+    bottom: -48px;
+}
+
+.lineup-card {
+    position: absolute;
+    align-items: center;
+    padding: 18px 6px 8px;
+    background-color: rgba(24, 27, 29, 0.94);
+    background-image: url("../../Textures/steel-plate.png");
+    background-repeat: repeat repeat;
+    background-size: 256px 256px;
+    border-top-width: 3px;
+    border-radius: 2px;
+}
+
+.lineup-card--ready {
+    border-top-color: #8fd05a;
+}
+
+.lineup-card--fallen {
+    background-color: rgba(70, 20, 18, 0.94);
+}
+
+.lineup-card--empty {
+    padding: 14px 6px;
+    background-color: rgba(200, 205, 210, 0.18);
+    background-image: none;
+    border-width: 2px;
+    border-color: rgba(220, 225, 230, 0.35);
+}
+
+.lineup-card__free {
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: rgba(230, 234, 238, 0.7);
+}
+
+.lineup-card__hint {
+    font-size: 11px;
+    color: rgba(230, 234, 238, 0.7);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.lineup-card__recruit {
+    margin-top: 4px;
+    font-size: 12px;
+}
+
+.lineup-card__bust {
+    position: absolute;
+    left: -10px;
+    top: -14px;
+    width: 46px;
+    height: 46px;
+    border-radius: 23px;
+    border-width: 2px;
+    background-color: var(--m-well);
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.lineup-card__remove {
+    position: absolute;
+    right: 2px;
+    top: 0;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    font-size: 12px;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0;
+    color: var(--t-muted);
+}
+
+.lineup-card__name {
+    font-size: 16px;
+    color: #ffffff;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.lineup-card__line {
+    font-size: 12px;
+    color: var(--t-muted);
+}
+
+.lineup-card__line--first {
+    letter-spacing: 0.5px;
+}
+
+.lineup-learned {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 3px;
+    padding: 0 4px;
+    border-left-width: 2px;
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.lineup-learned__text {
+    font-size: 11px;
+}
+
+.lineup-learned--bar .lineup-learned__text {
+    color: #0d1a26;
+}
+
+.lineup-learned--point {
+    background-color: rgba(0, 0, 0, 0);
+    border-left-width: 0;
+}
+
+.lineup-learned--point .lineup-learned__text {
+    color: var(--t-accent);
+}
+
+.lineup-learned__arrow {
+    margin-right: 4px;
+    font-size: 12px;
+    color: var(--t-accent);
+}
+
+.lineup-learned__hex {
+    width: 22px;
+    height: 22px;
+    margin-right: 4px;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    color: #1e1706;
+    background-color: var(--t-accent);
+    border-radius: 4px;
+}
+
+/* =============================================================== debrief */
+
+.debrief-card {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    translate: -50% 0;
+    width: 942px;
+    padding: 16px 22px 14px;
+}
+
+.debrief-result {
+    align-self: flex-start;
+    padding: 3px 12px;
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: #10180a;
+    background-color: #7ec24f;
+}
+
+.debrief-card--defeat .debrief-result {
+    color: #ffffff;
+    background-color: #b3261e;
+}
+
+.debrief-mission {
+    margin-top: 8px;
+    font-size: 28px;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+.debrief-rule {
+    height: 1px;
+    margin: 8px 0 12px;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.debrief-haul {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.haul {
+    width: 72px;
+    height: 74px;
+    margin: 0 8px 8px 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.haul--big {
+    width: 96px;
+    height: 96px;
+}
+
+.haul__icon {
+    width: 60px;
+    height: 40px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: #ffd25a;
+}
+
+.haul--better .haul__icon {
+    -unity-background-image-tint-color: #a678ff;
+}
+
+.haul__figure {
+    margin-top: 2px;
+    font-size: 16px;
+    color: #ffffff;
+}
+
+.debrief-line {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.debrief-line__text {
+    font-size: 13px;
+    white-space: normal;
+}
+
+.debrief-line__text--bad {
+    color: #ff8a7a;
+}
+
+.debrief-foot {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+}
+
+.debrief-foot__space {
+    flex-grow: 1;
+}
+
+.debrief-story-toggle {
+    font-size: 13px;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0;
+    color: var(--t-accent);
+}
+
+.debrief-continue {
+    height: 44px;
+    padding: 0 18px;
+    font-size: 20px;
+    letter-spacing: 2px;
+}
+
+.debrief-story {
+    margin-top: 8px;
+    font-size: 13px;
+    -unity-font-style: italic;
+    white-space: normal;
+}

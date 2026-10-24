@@ -67,11 +67,11 @@ Arturo, 24/10: «quiero que terminemos con el port a Unity completo». Orden pro
 
 | Quién | Qué |
 |---|---|
-| Gameplay | `campaign.ts` (3983), `quests.ts` (559) y `transmissions.ts` (423) a C#, con partidas de campaña grabadas en TypeScript (`engine-cs/golden/`), como los pasos 1–3. Las pruebas de campaña que quedaron fuera en los pasos 2 y 3 (base, comida, infección en la base, apariencia, misiones). |
+| Gameplay | `campaign.ts` (3983), `quests.ts` (559) y `transmissions.ts` (423) a C#, con partidas de campaña grabadas en TypeScript (`engine-cs/golden/`), como los pasos 1–3. Las pruebas de campaña que quedaron fuera en los pasos 2 y 3 (base, comida, infección en la base, apariencia, misiones). Lo que leen las pantallas de estrategia (unas 70 funciones) está en UNITY-ESTRATEGIA.md §4; los tipos que espera la sala de Red, en la cabecera de engine-cs/wip/Net/Campaign.cs. Una campaña de muestra avanzada (versión 25, día 20, nivel 3, dos jugadores) para grabar partidas: `.dev-snapshots/ui/estrategia-0101/partida-muestra.json` (fuera de git, en este Mac). |
 | Red | La sala con campaña: CampaignCommand, propuestas y votos, partidas guardadas de la campaña (y leer las de la 0.10.1), el asedio desde la campaña. room.ts tiene todo eso. |
 | Lore | Lo que queda de lore.ts (STORY, missionBriefing, storyVip, recoveryItem, fellHint…). |
-| UI | Las pantallas de estrategia: strategy/screen.ts (3551) y lo suyo: Mapa (geoscape, valley*), Soldados con la hoja (skillSheet, hexBoard), Armería (arms), Escuadra y fila de Lanzar misión (stage), diario y transmisiones, propuestas y votos, acontecimientos. |
-| Arte | El Asentamiento en 3D: clearing.ts, clearingArt.ts, clearingLife.ts, baseKit/buildMode (construir piezas), la caravana y La Lata, el campamento con sus clips (MIXAMO campamento), andar por la base en primera persona (walkAbout). |
+| UI | El plan está en UNITY-ESTRATEGIA.md. Las pantallas de estrategia: strategy/screen.ts (3551) y lo suyo: Mapa (geoscape, valley*), Soldados con la hoja (skillSheet, hexBoard), Armería (arms), Escuadra y fila de Lanzar misión (stage), diario y transmisiones, propuestas y votos, acontecimientos. |
+| Arte | Los retratos (render a textura) y el Asentamiento en 3D: clearing.ts, clearingArt.ts, clearingLife.ts, baseKit/buildMode (construir piezas), la caravana y La Lata, el campamento con sus clips (MIXAMO campamento), andar por la base en primera persona (walkAbout). |
 
 ### Hito 3: lo que queda
 

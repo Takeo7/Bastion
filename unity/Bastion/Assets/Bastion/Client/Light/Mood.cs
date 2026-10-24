@@ -1,6 +1,8 @@
 using Bastion.Engine;
 using UnityEngine;
+using System.Collections.Generic;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using Light = UnityEngine.Light;
 
 namespace Bastion.Client
@@ -70,6 +72,29 @@ namespace Bastion.Client
         {
             if (Current == this) Current = null;
             Shader.SetGlobalFloat("_GradeOn", 0);
+            ShadowReach(null);
+        }
+
+        /// <summary>The pipelines' own shadow distances, while a view has its own (ShadowReach).</summary>
+        static readonly Dictionary<UniversalRenderPipelineAsset, float> projectShadows = new Dictionary<UniversalRenderPipelineAsset, float>();
+
+        /// <summary>
+        /// How far from the camera the sun's shadows reach (the pipeline's shadow distance, metres), for a view that takes in
+        /// more than the battle's: the settlement's clearing whole, as 0.10.1's shadow camera over all of it (clearingArt.ts
+        /// aim). Null puts the project's back, as the mood going does.
+        /// </summary>
+        public static void ShadowReach(float? metres)
+        {
+            var asset = (QualitySettings.renderPipeline ?? GraphicsSettings.defaultRenderPipeline) as UniversalRenderPipelineAsset;
+            if (metres == null)
+            {
+                foreach (var kv in projectShadows) if (kv.Key != null) kv.Key.shadowDistance = kv.Value;
+                projectShadows.Clear();
+                return;
+            }
+            if (asset == null) return;
+            if (!projectShadows.ContainsKey(asset)) projectShadows[asset] = asset.shadowDistance;
+            asset.shadowDistance = metres.Value;
         }
 
         /// <summary>The light for `state` (by night if its mission is), on «Luz».</summary>
@@ -147,6 +172,14 @@ namespace Bastion.Client
             // The grade (Grade.shader), as globals: display values, after the tone mapping.
             var v = VividLevels[VividDefault];
             Shader.SetGlobalFloat("_GradeOn", 1);
+            // What glows only at night (the lit windows: Bastion/Building).
+            Shader.SetGlobalFloat("_Night", m == Night ? 1 : 0);
+            // The light that reaches a surface, as the fog's lamp pools reckon its own colour by (Fog.shader): the sky's
+            // hemisphere and the sun (or moon), linear, as URP's.
+            Shader.SetGlobalVector("_LightSky", Hex(m.skyLight).linear * k);
+            Shader.SetGlobalVector("_LightGround", Hex(m.groundLight).linear * k);
+            Shader.SetGlobalVector("_LightSun", Hex(m.sun).linear * (m.sunIntensity / Mathf.PI));
+            Shader.SetGlobalVector("_LightSunFrom", new Vector3(m.sunFrom.x, m.sunFrom.y, -m.sunFrom.z).normalized);
             Shader.SetGlobalFloat("_GradeExposure", m.exposure);
             Shader.SetGlobalVector("_GradeLook", new Vector4(m.saturation, m.contrast, m.vignette, 0));
             Shader.SetGlobalVector("_GradeShadowTint", m.shadowTint);

@@ -19,6 +19,8 @@ namespace Bastion.EditorTools
     {
         public static void Day() => Build(true);
 
+        public static void Night() => Build(false);
+
         /// <summary>A recorded state by its name (engine-cs/golden/step1/&lt;name&gt;.json).</summary>
         internal static GameState Golden(string name)
         {
@@ -120,6 +122,8 @@ namespace Bastion.EditorTools
                 var fog = new GameObject("Niebla").AddComponent<Fog>();
                 fog.Reset(state);
                 fog.Show(state, true);
+                // BASTION_FOG=all: everything in sight (0.10.1's reference block); the lit tiles and the night as they are.
+                if (Environment.GetEnvironmentVariable("BASTION_FOG_ALL") == "1") fog.SeeAll();
                 var squad = state.Units.Where(u => u.Alive && u.Team == "xcom").Select(u => $"{u.Id} ({u.Pos.X},{u.Pos.Y},{u.Pos.Z})");
                 Debug.Log($"[map] fog: {fog.Counts().sight} tiles in sight, {fog.Counts().known} seen of {state.Width * state.Height}; squad {string.Join(", ", squad)}");
             }
@@ -209,6 +213,8 @@ namespace Bastion.EditorTools
             ["SM_Prop_Pot_Street_Plant_01"] = "SM_Prop_Pot_Street_01",
             ["SK_Prop_Bed_Gurney_01"] = "SM_Prop_Bed_Gurney_01",
             ["SK_Prop_Bed_Hospital_01"] = "SM_Prop_Bed_Hospital_01",
+            // The caravan (the Bastion's first stage: basePieces.ts), rigged in the source for its door.
+            ["SK_Veh_Caravan_01"] = "SM_Veh_Caravan_01",
         };
 
         /// <summary>Every Synty prefab by its name (a model where there is no prefab), loaded the first time it is asked for.</summary>
@@ -221,6 +227,13 @@ namespace Bastion.EditorTools
                 paths[Path.GetFileNameWithoutExtension(p)] = p;
             }
             foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Synty" }))
+            {
+                string p = AssetDatabase.GUIDToAssetPath(guid);
+                paths[Path.GetFileNameWithoutExtension(p)] = p;
+            }
+            // The source's own models (SourceProps, in Extra) before the package's of the same name: Unity's can hold other
+            // parts that 0.10.1 draws apart (the house's glass, the trap's jaws).
+            foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { "Assets/Synty/Extra" }))
             {
                 string p = AssetDatabase.GUIDToAssetPath(guid);
                 paths[Path.GetFileNameWithoutExtension(p)] = p;

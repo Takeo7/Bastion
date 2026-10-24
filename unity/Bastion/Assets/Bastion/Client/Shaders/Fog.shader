@@ -36,6 +36,13 @@ Shader "Bastion/Fog"
             float4 _FogMistTint;
             float _FogMist;
             float _FogTime;
+            // By night: lit tiles (the map's blue) glow warm (Fog: _FogLamp); the light a surface gets, to reckon its colour by (Mood).
+            float _FogNight;
+            float4 _FogLamp;
+            float4 _LightSky;
+            float4 _LightGround;
+            float4 _LightSun;
+            float4 _LightSunFrom;
 
             float Hash(float2 p)
             {
@@ -105,6 +112,19 @@ Shader "Bastion/Fog"
                 {
                     seen = 0;
                     known = 0;
+                }
+                // Night: a lit tile glows warm, so players read where they'd be seen (fogOfWar.ts: the lamp's light over the
+                // surface's own colour, less where it is bright already, on what stands at its floor). How light a
+                // material is: the picture over the light it gets (the sky's hemisphere and the moon).
+                if (_FogNight > 0.5 && !none)
+                {
+                    float floorAt = tile.a * 8.0 * 2.3;
+                    float near = 1.0 - smoothstep(2.3 * 0.6, 2.3 * 1.2, high - floorAt);
+                    float3 light = lerp(_LightGround.rgb, _LightSky.rgb, 0.5 * normal.y + 0.5) + _LightSun.rgb * saturate(dot(normal, _LightSunFrom.xyz));
+                    // As a grey: the night's teal haze is in the picture, and would tint the pool green.
+                    float hot = dot(colour.rgb, float3(0.2126, 0.7152, 0.0722));
+                    float own = saturate(hot / max(dot(light, float3(0.2126, 0.7152, 0.0722)), 0.02));
+                    colour.rgb += own * _FogLamp.rgb * tile.b * inside * near / (1.0 + 2.5 * hot);
                 }
                 // Seen, out of sight: greyer, darker, under a haze that drifts with the mist (FOG_GREY, FOG_DARK, FOG_HAZE, FOG_DRIFT).
                 half3 grey = dot(colour.rgb, half3(0.2126, 0.7152, 0.0722));
