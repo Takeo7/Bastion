@@ -210,11 +210,11 @@ namespace Bastion.Engine
                 if (Content.HasMod(shooter, WeaponModIds.Scope)) mods.Add(new Modifier { Label = "Mira", Value = Content.ModAim });
                 if (opts.Reaction && Content.HasMod(shooter, WeaponModIds.Stock)) mods.Add(new Modifier { Label = "Culata", Value = Content.ModAim });
             }
-            if (shooter.Disoriented != 0) mods.Add(new Modifier { Label = "Desorientado", Value = -Content.DisorientedAim });
+            if (shooter.Disoriented != 0) mods.Add(new Modifier { Label = "Desorientación", Value = -Content.DisorientedAim });
             if (!string.IsNullOrEmpty(shooter.SuppressedBy))
             {
                 var by = s.Units.Find((u) => u.Id == shooter.SuppressedBy);
-                mods.Add(new Modifier { Label = "Suprimido", Value = -(Content.SuppressedAim + (by?.Mods.SuppressAim ?? 0)) });
+                mods.Add(new Modifier { Label = "Supresión", Value = -(Content.SuppressedAim + (by?.Mods.SuppressAim ?? 0)) });
             }
             if (target.Marked != 0 && shooter.Team != target.Team) mods.Add(new Modifier { Label = "Marcado", Value = target.Marked });
             var luck = BadLuckAimOf(s, shooter);

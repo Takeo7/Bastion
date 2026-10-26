@@ -44,7 +44,7 @@ namespace Bastion.UI.Hud
             {
                 Kicker = "OPERACIÓN · BRENA",
                 Title = "El colegio de Brena",
-                Objective = "Eliminad a todos los hostiles",
+                Objective = "Abatid a todo lo que haya",
                 Turns = "Sin límite de turnos",
                 // With Lore's marks, as the campaign's briefings come (the key words, the objective).
                 Briefing = "Aviso del Refugio de Bielsa. Allí queda un **equipo de radio** entero. ==Traedlo a La Lata.==",
@@ -163,7 +163,7 @@ namespace Bastion.UI.Hud
             {
                 Label = siege ? "Asedio" : "Limpieza",
                 Area = "Brena",
-                Objective = siege ? "Acabad con todos" : "Eliminad a todos los hostiles",
+                Objective = siege ? "Acabad con todos" : "Abatid a todo lo que haya",
                 ObjectiveTip = siege ? "Acabad con todas las oleadas. Si caen todos, el Bastión cae." : null,
                 WaveText = siege ? "OLEADA · ESTE TURNO" : null,
                 WaveTip = siege ? "La próxima oleada llega al final de este turno." : null,
@@ -173,19 +173,26 @@ namespace Bastion.UI.Hud
             hud.SetFlags(Flags());
             hud.SetCloseShot(close);
             hud.SetCall(call
-                ? new CallView
-                {
-                    Kind = "evac",
-                    Kicker = "EVACUACIÓN",
-                    Title = "Ana quiere irse en La Lata",
-                    Text = "Los que estén dentro se van. Los que se queden fuera, se quedan.",
-                    ClockNote = "Si no contestas, se van al acabarse el tiempo.",
-                    Ms = 45000,
-                    Accept = "Irnos",
-                    Refuse = "Seguir",
-                }
+                ? EvacCall()
                 : null);
             hud.SetOutcome(outcomeState == 0 ? null : new OutcomeView { Victory = outcomeState == 1, Line = outcomeState == 1 ? "Volvéis con el equipo de radio." : "No queda nadie en pie." });
+        }
+
+        /// <summary>The partner's call to leave, in Lore's words as the game makes it (CombatController.CallView): one left outside.</summary>
+        static CallView EvacCall()
+        {
+            var ask = Bastion.Engine.Lore.EvacAsk("Ana", new Bastion.Engine.Lore.EvacSituation(false, false, new[] { "Freya Lund" }));
+            return new CallView
+            {
+                Kind = "evac",
+                Kicker = "Evacuación",
+                Title = ask.Title,
+                Text = ask.Text,
+                ClockNote = $"Sin respuesta, {Bastion.Engine.Lore.Bus.Name} sale",
+                Ms = 45000,
+                Accept = Bastion.Engine.Lore.EvacBar.Accept,
+                Refuse = Bastion.Engine.Lore.EvacBar.Wait,
+            };
         }
 
         void ShowBanner()
@@ -228,7 +235,7 @@ namespace Bastion.UI.Hud
             }
             Card("s1", "Mateo Rojas", Arturo, true, 6, 7, 2, new float[] { 20, 0, 0, 0, 0, 10 });
             Card("s2", "«Chispa»", Arturo, true, 5, 5, 1, new float[] { 10, 10, 0, 0, 0, 0 }, new TagView { Text = "VIGILANCIA", Kind = "ow" });
-            Card("s3", "Freya Lund", Arturo, true, 3, 6, 0, new float[] { 0, 0, 10, 10, 10, 0 }, new TagView { Text = "MORDIDO", Kind = "bite", Tip = "Si cae, se levanta." });
+            Card("s3", "Freya Lund", Arturo, true, 3, 6, 0, new float[] { 0, 0, 10, 10, 10, 0 }, new TagView { Text = Bastion.Engine.Lore.BiteTag, Kind = "bite", Tip = Bastion.Engine.Lore.BiteNote(true) });
             Card("s4", "Zainab Bello", Arturo, true, 0, 6, 0, new float[] { 0, 0, 0, 0, 0, 0 });
             Card("s5", "Chiara Rossi", Ana, false, 6, 6, 2, new float[] { 0, 10, 0, 0, 0, 10 });
             // Ana's turn, one soldier at a time: hers in play.
@@ -404,5 +411,8 @@ namespace Bastion.UI.Hud
         public void OnSheet(string unit) => hud.Toast($"Hoja de {unit}");
         public void OnFloor(int dir) => hud.Toast(dir > 0 ? "Subir de planta" : "Bajar de planta");
         public void OnMenu() => hud.Toast("Menú");
+        public void OnItem(PackOrder order) => hud.Toast($"Mochila: {order.Action} {order.Index} {order.Id} {order.To}");
+        public void OnTakeAll(System.Collections.Generic.List<string> ids) => hud.Toast($"Coger {ids.Count}");
+        public void OnSwap(string take, int drop) => hud.Toast($"Cambiar {take} por el hueco {drop}");
     }
 }

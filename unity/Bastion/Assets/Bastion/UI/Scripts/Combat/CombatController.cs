@@ -201,8 +201,11 @@ namespace Bastion.UI.Combat
                 looking = null;
                 if (current?.Id == mineInPlay.Id) return;
                 picked = mineInPlay.Id;
+                TurnCamera(mineInPlay);
                 return;
             }
+            // The partner's soldier comes into play: the camera to it too, if wanted (#47).
+            if (turned && playing != null && playing.Alive && !Commands(playing) && playing.Team == Teams.Xcom) TurnCamera(playing);
             if (current != null && current.Id == looking)
             {
                 if (current.Ap <= 0) return;
@@ -211,7 +214,26 @@ namespace Bastion.UI.Combat
             if (current != null && Commands(current) && (current.Ap > 0 || !CanAct())) return;
             var next = mineInPlay ?? MyUnits().FirstOrDefault(x => x.Ap > 0) ?? (current != null && Commands(current) ? current : MyUnits().FirstOrDefault());
             picked = next?.Id;
+            if (next != null && current != null && next.Id != current.Id && CanAct()) TurnCamera(next);
         }
+
+        /// <summary>The camera keeps off a turn's soldier this long after the player moved it (game.ts TURN_CAMERA_QUIET_MS).</summary>
+        const float TurnCameraQuiet = 4f;
+
+        /// <summary>
+        /// The camera to the soldier whose turn it is (playtest 17/10 #47; game.ts turnCamera): as the turn begins, the
+        /// command passes or a soldier comes into play, if the HUD's switch («Cámara al soldado») says so; never fighting
+        /// the player (not if they moved the camera in the last few seconds).
+        /// </summary>
+        void TurnCamera(Unit u)
+        {
+            if (u == null || !u.Alive || Hud == null || !Hud.FollowsTurn || Rig == null || Time.unscaledTime - Rig.TakenAt < TurnCameraQuiet) return;
+            SetLevel(u.Pos.Z);
+            Rig.Focus(FeetOf(u.Id) ?? Board.TileToWorld(State, u.Pos));
+        }
+
+        /// <summary>The camera to `slot`'s soldier whose turn it is in `v` (the event player: a turn opens, the command passes).</summary>
+        public void TurnCamera(GameState v, int slot, bool opening = false) => TurnCamera(TurnSoldier(v, slot, opening));
 
         string lastInPlay;
         int? lastCommand;
@@ -346,6 +368,14 @@ namespace Bastion.UI.Combat
             RefreshHud();
         }
 
+        /// <summary>A click on `place`, as the pointer's there (tests: PackSteps «click=x,y»).</summary>
+        public void ClickAt(Pos place)
+        {
+            Hover(place);
+            var at = Rig != null ? (Vector2)Rig.Camera.WorldToScreenPoint(Board.TileToWorld(State, place)) : Vector2.zero;
+            Click(at);
+        }
+
         // ------------------------------------------------------- input
 
         void Update()
@@ -368,6 +398,13 @@ namespace Bastion.UI.Combat
             var at = mouse.position.ReadValue();
             if (mouse.delta.ReadValue() != Vector2.zero) hoverHeld = false;
             var overHud = Hud != null && Hud.Over(at);
+            // Any click or the wheel in the game lets «TU TURNO» go and does what it does (Arturo, 23/10 #8: aiming, it
+            // stayed in the middle); one on the stamp itself only lets it go (Banner, with its sound).
+            if (Hud != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame || mouse.middleButton.wasPressedThisFrame || mouse.scroll.ReadValue().y != 0) && !Hud.OverBanner(at))
+                Hud.ReleaseBanner(true);
+            // A press on the map closes the backpack's menu (one on the HUD, its root: Backpack.PressedAt).
+            if (Hud != null && !overHud && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame)) Hud.ClosePackMenu();
+            RightClick(mouse, at, overHud);
             if (!hoverHeld)
             {
                 var place = !overHud && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), Level, out var p) ? p : null;
@@ -379,8 +416,9 @@ namespace Bastion.UI.Combat
                     else RefreshFlags();
                 }
             }
-            if (Hud != null && Hud.MenuOpen) return;
             var shift = Keyboard.current != null && Keyboard.current.shiftKey.isPressed;
+            if (!overHud && (Hud == null || !Hud.MenuOpen)) App.GameCursor.Ask(CursorOn(hover, shift));
+            if (Hud != null && Hud.MenuOpen) return;
             // Shift and the click, or the wheel's click, mark the tile for both (playtest 19/10 #14); Shift and the wheel, the floor.
             if (!overHud && mouse.leftButton.wasPressedThisFrame)
             {
@@ -397,6 +435,46 @@ namespace Bastion.UI.Combat
         }
 
         float lastFloorWheel = -10;
+
+        /// <summary>Where the right button went down off the HUD (a drag of it moves the camera: CameraRig); null, it isn't down.</summary>
+        Vector2? rightFrom;
+        bool rightMoved;
+
+        /// <summary>
+        /// A right click, not a drag (game.ts onUp): planning without the command, it takes the picked soldier's plan away
+        /// (playtest 18/10 #25); elsewhere it backs out of aiming, throwing or a door. (On a known enemy the 0.10.1 opened
+        /// its file: that comes with the file.)
+        /// </summary>
+        void RightClick(Mouse mouse, Vector2 at, bool overHud)
+        {
+            if (mouse.rightButton.wasPressedThisFrame && !overHud)
+            {
+                rightFrom = at;
+                rightMoved = false;
+            }
+            if (rightFrom is Vector2 from && Mathf.Abs(at.x - from.x) + Mathf.Abs(at.y - from.y) > 4 * Mathf.Max(1, Screen.height / 900f)) rightMoved = true;
+            if (!mouse.rightButton.wasReleasedThisFrame || rightFrom == null) return;
+            rightFrom = null;
+            if (rightMoved || (Hud != null && Hud.MenuOpen)) return;
+            var planned = Unit();
+            if (mode == Mode.Move && !HasCommand() && planned != null && plans.Any(p => p.unit == planned.Id && p.slot == MySlot)) WithdrawPlan(planned);
+            else if (mode != Mode.Move || modeAbility != null) CancelMode();
+        }
+
+        /// <summary>
+        /// The map's cursor (game.ts updateCursor, #5): the brackets with Mayús held (a click signals, #14), the crosshair
+        /// on an enemy in sight while there is a soldier to give orders to, the yellow arrow on another of this player's
+        /// soldiers (a click picks it), else the arrow.
+        /// </summary>
+        App.GameCursor.Kind CursorOn(Pos place, bool shift)
+        {
+            if (shift) return App.GameCursor.Kind.Signal;
+            var hovered = place != null ? Grid.UnitAt(State, place) : null;
+            var u = Unit();
+            if (hovered != null && hovered.Alive && hovered.Team == Teams.Alien && Visible(hovered) && u != null && CanAct()) return App.GameCursor.Kind.Aim;
+            if (hovered != null && hovered.Alive && hovered.Id != u?.Id && Commands(hovered)) return App.GameCursor.Kind.Hot;
+            return App.GameCursor.Kind.Arrow;
+        }
 
         /// <summary>The shot over a shoulder on now, and who is in it (the event player's).</summary>
         public System.Func<(string attacker, string target)?> CloseFocus;
@@ -429,6 +507,13 @@ namespace Bastion.UI.Combat
             {
                 if (k.escapeKey.wasPressedThisFrame) Hud.MenuBack();
                 if (k.spaceKey.wasReleasedThisFrame) Hurry?.Invoke(false);
+                return;
+            }
+            // The mission's briefing stays until «Entendido» (playtest 14/10 #3; Ana, 20/10 #32): Intro and Space are that
+            // button; Esc does nothing over it.
+            if (Hud != null && Hud.IntroOpen && (enter || k.spaceKey.wasPressedThisFrame || k.escapeKey.wasPressedThisFrame))
+            {
+                if (!k.escapeKey.wasPressedThisFrame) Hud.CloseIntro();
                 return;
             }
             // «TU TURNO» held till it is seen (#50): Intro or Esc let it go and do nothing else; any other key goes on (Arturo, 23/10 #8).
@@ -606,6 +691,7 @@ namespace Bastion.UI.Combat
             // it sees and where it goes next (21/10 #11). A move, a door or a box beside say theirs instead (below).
             var hovered = hover != null ? Grid.UnitAt(Shown, hover) : null;
             Note(hover, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, IntentNote(hovered));
+            if (mode == Mode.Tile) ThrowNote();
             if (mode != Mode.Move) return;
             var u = Unit();
             if (u != null && hover != null && CanAct() && Commands(u))

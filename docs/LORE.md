@@ -252,3 +252,7 @@ Es la propuesta de Gameplay, con el coste de cada paso. **Las cinco fases están
 | 5 · El mapa del valle | Ossau en lugar del globo | Arte | Alto |
 
 **Arte:** todo es Synty POLYGON (lo vóxel está borrado); ver [ARTE.md](ARTE.md).
+
+## Pendiente en Unity
+
+- **Los acontecimientos y la Marea (26/10).** Hay dos efectos que dicen «Los muertos avanzan (+1)» y «Los muertos retroceden (−1)» (CampaignEvents.cs, del convoy y del desertor). Desde el nivel 4, el resto del juego lo cuenta en km de la Marea (`Lore.DoomChangeText`). Se quedan como en la 0.10.1, porque cambiarlos rompe la comparación con las grabaciones de una forma que fixDeep no arregla: el texto depende del nivel. Si Arturo lo nota en la prueba, se hace entonces.

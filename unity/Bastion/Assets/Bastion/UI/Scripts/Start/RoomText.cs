@@ -12,8 +12,8 @@ namespace Bastion.UI.Start
         public const string Commanders = "Comandantes";
         public const string Connecting = "Conectando…";
         public const string WaitingPlayer = "Esperando jugador…";
-        public const string Connected = "Conectado";
-        public const string Offline = "Desconectado";
+        public const string Connected = "En línea";
+        public const string Offline = "Sin conexión";
         public const string Away = "Ausente";
         public const string Invite = "Quien juegue contigo te verá en «Partidas en tu red» de su app. Si no te ve, que use «Unirse por dirección» con:";
         /// <summary>Each of the host's addresses, by what it is (net.ts inviteLinks of the 0.10.1).</summary>
@@ -80,7 +80,7 @@ namespace Bastion.UI.Start
         /// </summary>
         public static readonly (string Id, string Name, string About)[] Missions =
         {
-            ("elimination", "Limpieza", "Abatid a todos los hostiles del mapa."),
+            ("elimination", "Limpieza", "Abatid a todo lo que haya en el mapa."),
             ("recovery", "Botín", "Recuperad la carga y salid " + Lore.Bus.In + " antes de que se acabe el tiempo."),
             ("sabotage", "Sabotaje", "Apagad la alarma antes de que llegue la horda."),
             ("hack", "Arreglar la radio", "Arreglad la radio. Si falla, salta la alarma."),

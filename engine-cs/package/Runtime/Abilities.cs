@@ -174,7 +174,7 @@ namespace Bastion.Engine
                 if (u.Mags == 0) return "Sin munición y sin cargadores.";
                 return ammo > 1 ? $"Necesita {ammo} balas en el cargador: recarga." : "Sin munición: recarga.";
             }
-            if (u.Disoriented != 0 && def.Target == Engine.AbilityTargets.Tile && !ByHand.Contains(ability) && ability != AbilityIds.Stone) return "Desorientado: no puede usar explosivos.";
+            if (u.Disoriented != 0 && def.Target == Engine.AbilityTargets.Tile && !ByHand.Contains(ability) && ability != AbilityIds.Stone) return "Con desorientación no se pueden usar explosivos.";
             if (Content.FiresPrimary(u, ability) && Content.ConditionOf(u) <= 0) return "Rota: no dispara. Se arregla en la Armería.";
             switch (ability)
             {

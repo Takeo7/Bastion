@@ -606,7 +606,7 @@ En `unity/Bastion/Assets/Bastion/UI/` (asmdef `Bastion.UI`). Compila en el proye
 | sí | Vistas (`HudViews`), textos fijos (`HudText`), manejadores (`IHudHandlers` y su relevo), ayudas al pasar el ratón (`TooltipLayer`) |
 | sí | Lista de la escuadra, panel del soldado (sin mochila), barra de acciones con menús y tarjeta, panel de disparo (ataque, apoyo, propia sobre su botón) |
 | sí | Franja de turno con marco, jugadores y planta; aviso (sello, retenido); botones del turno con los relojes |
-| sí | Tarjeta del objetivo, rosa del asedio, registro |
+| sí | Tarjeta del objetivo y registro; la rosa del asedio, dibujada pero sin datos todavía (nadie llama a `HudRoot.SetCompass`: repaso del 26/10) |
 | sí | Marcas sobre las unidades y textos flotantes (del mundo al panel en cada fotograma) |
 | sí | Tarjetas de llamada, llegada y resultado; notas |
 | sí | Dibujos con Painter2D: hexágono de habilidad partido, dial de impacto, aguja, triángulo |
@@ -631,6 +631,7 @@ En `unity/Bastion/Assets/Bastion/UI/` (asmdef `Bastion.UI`). Compila en el proye
 | sí | El suelo del mapa (en `Client/Map`, sobre MapSpace y el catálogo de Arte): `GroundMap` y `Bastion/Ground` (ground.ts: losas, bordillos, césped, asfalto con línea central, pasos de cebra, grietas, musgo; el campo y las instalaciones; el agua del canal), lo menudo (`GroundCover`: scatterCover con los mismos hashes, alcantarillas, sumideros, islas de surtidores) y la sombra de contacto horneada (`GroundOcclusion`, de groundAO.ts) |
 | sí | El marco fuera de juego (`FrameArt`, `FrameView`: frameArt.ts con lo que usa de dressing.ts; el canal, la vía, la autovía, el agua y el barranco), las calles vestidas (`StreetDressing`, de dressStreets: farolas, postes y cables, señales, bocas de riego y buzones, bolsas; `GroundView.Lamps` para las luces de noche de Arte), y el foco del corte de edificios de Arte desde el controlador |
 | no | En Ajustes: el sonido (cuando exista en Unity) y el tamaño de la interfaz; la hoja del soldado, la mochila y la ficha del enemigo |
+| sí | Tanda del repaso del 26/10 (UNITY-UI §5.5 y lo que faltaba de hud.ts y game.ts): clic derecho (retirar el plan, cancelar lo armado), «Cámara al soldado» (`turnCamera`), el sello que suelta cualquier clic o la rueda, «Turno enemigo» sobre la barra, la tarjeta de llegada que tapa y se cierra con Intro o Espacio, la pantalla de carga (`AppFlow.RaiseVeil`, `VeilWords`, `LiftVeil`), «Volviendo al Bastión…» y «Misión al azar». Tiras en `.dev-snapshots/ui/unity/combate-tanda1/` (laboratorio: `BASTION_TOQUES`) |
 
 ### 7.1 El estilo del HUD, aparcado (Arturo, 24/10)
 

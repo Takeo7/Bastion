@@ -19,8 +19,12 @@ namespace Bastion.UI.Hud
         string callKey;
         IVisualElementScheduledItem callClock;
         VisualElement intro;
+        /// <summary>Behind the arrival card, over the whole screen: nothing under it is played meanwhile (hud.ts .intro-catcher).</summary>
+        VisualElement catcher;
         IntroView introView;
         VisualElement outcome;
+        Button back;
+        bool returning;
 
         public Cards(VisualElement host, IHudHandlers handlers, Action<string> sound)
         {
@@ -31,6 +35,9 @@ namespace Bastion.UI.Hud
 
         /// <summary>Something the game put up covers the field to be read: the clock doesn't run meanwhile.</summary>
         public bool Covering => call != null || intro != null;
+
+        /// <summary>The arrival card is up: only «Entendido», Intro or Space close it (Ana, 20/10 #32), and Esc does nothing.</summary>
+        public bool IntroOpen => intro != null;
 
         /// <summary>Fired when the arrival card closes, to show the objective's card again.</summary>
         public event Action IntroClosed;
@@ -82,6 +89,8 @@ namespace Bastion.UI.Hud
             CloseIntro(true);
             introView = v;
             if (v == null) return;
+            // Only «Entendido» (or Intro, Space) closes it: a click by the way lost it (Ana, 20/10 #32).
+            catcher = Ui.El("card-catcher", host);
             intro = Ui.El("card panel card--intro", host);
             if (!string.IsNullOrEmpty(v.Kicker)) Ui.Text(v.Kicker, "card__kicker", intro);
             Ui.Text((v.Title ?? "").ToUpperInvariant(), "card__title font-title", intro);
@@ -108,6 +117,8 @@ namespace Bastion.UI.Hud
         public bool CloseIntro(bool quiet)
         {
             if (intro == null) return false;
+            catcher?.RemoveFromHierarchy();
+            catcher = null;
             var leaving = intro;
             intro = null;
             leaving.AddToClassList("card--leaving");
@@ -125,6 +136,7 @@ namespace Bastion.UI.Hud
         {
             outcome?.RemoveFromHierarchy();
             outcome = null;
+            back = null;
             if (v == null) return;
             sound?.Invoke("stamp");
             outcome = Ui.El("card panel outcome " + (v.Victory ? "outcome--victory" : "outcome--defeat"), host);
@@ -134,10 +146,12 @@ namespace Bastion.UI.Hud
             PlateFrame.Dress(outcome);
             if (v.Campaign)
             {
-                var back = new Button(() => handlers.OnReturnToBase()) { text = HudText.Mission.ToBase };
+                back = new Button(ReturnToBase) { text = HudText.Mission.ToBase };
                 back.AddToClassList("btn-primary");
                 actions.Add(back);
                 Slant.Dress(back);
+                // Drawn again on the way back (a reconnection): it still says so.
+                if (returning) Returning();
                 return;
             }
             var again = new Button(() => handlers.OnNewMission(false)) { text = v.Siege ? HudText.Mission.AgainSiege : HudText.Mission.Again };
@@ -146,6 +160,26 @@ namespace Bastion.UI.Hud
             Slant.Dress(again);
             actions.Add(new Button(() => handlers.OnNewMission(true)) { text = HudText.Mission.Random });
             actions.Add(new Button(() => handlers.OnBackToMenu()) { text = HudText.Mission.ToMenu });
+        }
+
+        /// <summary>
+        /// «Volver a la base» (playtest, Ana: «tarda mucho, no sé si se espera a Arturo»): the report says so at once, and
+        /// the order goes once that is on screen; sent at once, building the base could hold the screen before it is drawn.
+        /// </summary>
+        void ReturnToBase()
+        {
+            if (returning) return;
+            Returning();
+            host.schedule.Execute(() => handlers.OnReturnToBase()).StartingIn(30);
+        }
+
+        /// <summary>The report on its way to the Bastión (either player sent it): the button off and saying so.</summary>
+        public void Returning()
+        {
+            returning = true;
+            if (back == null) return;
+            back.SetEnabled(false);
+            back.text = HudText.Mission.Returning;
         }
     }
 }

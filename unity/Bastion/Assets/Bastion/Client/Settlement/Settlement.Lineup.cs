@@ -181,6 +181,13 @@ namespace Bastion.Client
         /// <summary>A soldier on their place, their weapon in hand, waiting the `index`th way (restAs), slumped if wounded.</summary>
         void Stand(CampaignSoldier s, CampaignState campaign, int index, Vector2 at, float yaw, bool wounded, string band)
         {
+            var stander = Standing(s, campaign, index, World(new Vector3(at.x, 0, at.y)), yaw, wounded, band, lineupRoot);
+            if (stander != null) standers.Add(stander);
+        }
+
+        /// <summary>That soldier standing at `world` (metres) under `parent`, the lineup's or the posts' (Settlement.Posts); null without a figure.</summary>
+        Stander Standing(CampaignSoldier s, CampaignState campaign, int index, Vector3 world, float yaw, bool wounded, string band, Transform parent)
+        {
             var look = s.Appearance;
             string named = look == null || string.IsNullOrEmpty(look.Sex) ? Content.SexOfName(s.Name) : null;
             var dress = Dress.Of(look, s.Id, named);
@@ -193,12 +200,12 @@ namespace Bastion.Client
             catch (System.Exception e)
             {
                 Debug.LogWarning($"[settlement] {s.Id}: no figure ({e.Message})");
-                return;
+                return null;
             }
-            if (figure == null) return;
+            if (figure == null) return null;
             var holder = new GameObject(s.Name).transform;
-            holder.SetParent(lineupRoot, false);
-            holder.position = World(new Vector3(at.x, 0, at.y));
+            holder.SetParent(parent, false);
+            holder.position = world;
             figure.transform.SetParent(holder, false);
             figure.transform.localScale = Vector3.one * Figures.CharacterScale;
             string build = dress.sex == "f" ? "femn" : "masc";
@@ -217,22 +224,25 @@ namespace Bastion.Client
                 stander.anim = new FigureAnimator(stander.animator, m => catalog.Clip(ArmedId(m) ?? (m == "idle" && slumped != null ? slumped : Anims.Motion(build, m, false))), null, m => ArmedId(m) != null);
                 if (armed && slumped == null) stander.anim.Rest(catalog.Clip(rest), 0);
             }
-            standers.Add(stander);
+            return stander;
         }
 
         /// <summary>The row's breath: each in its pose, facing its camera, its gun in its hands.</summary>
         void StepLineup(float dt)
         {
-            foreach (var s in standers)
-            {
-                if (s.root == null) continue;
-                s.root.rotation = Quaternion.Euler(0, Mathf.Atan2(Mathf.Sin(s.yaw), -Mathf.Cos(s.yaw)) * Mathf.Rad2Deg, 0);
-                if (s.anim == null) continue;
-                if (dt <= 0) s.anim.Step(0);
-                for (float left = dt; left > 1e-5f; left -= 0.1f) s.anim.Step(Mathf.Min(0.1f, left));
-                if (s.slung) KeepSlung(s);
-                else UnitViews.Hold(s.animator, s.gun, s.root, false, ref s.grip);
-            }
+            foreach (var s in standers) StepStander(s, dt);
+        }
+
+        /// <summary>One standing: its turn (three's yaw), its clips on by `dt`, its gun in its hands or on its back.</summary>
+        static void StepStander(Stander s, float dt)
+        {
+            if (s.root == null) return;
+            s.root.rotation = Quaternion.Euler(0, Mathf.Atan2(Mathf.Sin(s.yaw), -Mathf.Cos(s.yaw)) * Mathf.Rad2Deg, 0);
+            if (s.anim == null) return;
+            if (dt <= 0) s.anim.Step(0);
+            for (float left = dt; left > 1e-5f; left -= 0.1f) s.anim.Step(Mathf.Min(0.1f, left));
+            if (s.slung) KeepSlung(s);
+            else UnitViews.Hold(s.animator, s.gun, s.root, false, ref s.grip);
         }
 
         /// <summary>Where place `i` of a lineup of `n` stands (Unity's world, on the ground: for the cards under them).</summary>

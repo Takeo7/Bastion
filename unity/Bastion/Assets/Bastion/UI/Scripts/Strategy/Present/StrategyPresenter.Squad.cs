@@ -10,9 +10,10 @@ namespace Bastion.UI.Strategy
 
         /// <summary>
         /// Escuadra (renderSquad): one's own soldiers to pick on the left, the partner's to see on the right, who is ready,
-        /// the mission and LANZAR under the row, a card under each figure of it. The siege's posts are the clearing's (Arte).
+        /// the mission and LANZAR under the row, a card under each figure of it. In a siege the left is one's defenders to
+        /// post on the clearing (postsPanel, #58): `postPick`, the one in hand.
         /// </summary>
-        public SquadView Squad()
+        public SquadView Squad(string postPick = null)
         {
             var c = State;
             var offer = c.ActiveMission != null ? c.Offers.FirstOrDefault(o => o.Id == c.ActiveMission) : null;
@@ -35,14 +36,18 @@ namespace Bastion.UI.Strategy
                 Briefing = Campaign.OfferBriefing(c, offer),
                 Warning = offer.Living == true ? Lore.LivingTip : null,
             };
-            foreach (var s in c.Soldiers.Where(s => s.Owner == Slot && s.Alive)) v.Mine.Add(PickRow(c, s, siege));
-            // The other player's, to see but not to pick: each puts in and takes out only their own (playtest 18/10 #43).
-            var lent = c.Soldiers.Where(s => s.Owner != Slot && s.Alive).ToList();
-            if (lent.Count > 0)
+            if (siege) Posts(c, squad, postPick, v);
+            else
             {
-                v.PartnerHead = $"De {PlayerName(lent[0].Owner)} · {squad.Count - myCount}";
-                v.PartnerTip = "Los elige su jugador";
-                foreach (var s in lent) v.Partner.Add(PickRow(c, s, siege));
+                foreach (var s in c.Soldiers.Where(s => s.Owner == Slot && s.Alive)) v.Mine.Add(PickRow(c, s, siege));
+                // The other player's, to see but not to pick: each puts in and takes out only their own (playtest 18/10 #43).
+                var lent = c.Soldiers.Where(s => s.Owner != Slot && s.Alive).ToList();
+                if (lent.Count > 0)
+                {
+                    v.PartnerHead = $"De {PlayerName(lent[0].Owner)} · {squad.Count - myCount}";
+                    v.PartnerTip = "Los elige su jugador";
+                    foreach (var s in lent) v.Partner.Add(PickRow(c, s, siege));
+                }
             }
             var ready = c.LaunchReady[Slot];
             var together = c.Players.Count > 1 && partner != null && partner.Connected;
@@ -60,7 +65,8 @@ namespace Bastion.UI.Strategy
             // The first mission is the only way in: no going back to the base before it (Ana, 22/10).
             v.Back = c.Story.Done == 0 && offer.Story == 1 ? null : "Volver al Bastión";
             // One card under each pad of the row; a free one this player could take but has nobody for: recruit into it (#39).
-            var pads = siege ? squad : Campaign.SquadPads(c).Select(id => squad.FirstOrDefault(s => s.Id == id)).ToList();
+            // In a siege there is no row: each defender stands on the clearing where they will start (#58).
+            var pads = siege ? new List<CampaignSoldier>() : Campaign.SquadPads(c).Select(id => squad.FirstOrDefault(s => s.Id == id)).ToList();
             var roster = c.Soldiers.Where(s => s.Owner == Slot && s.Alive).ToList();
             var spare = roster.Any(s => Campaign.SoldierReady(s) && !c.Squad.Contains(s.Id));
             var room = !siege && !spare && roster.Count < Campaign.SoldierCap(c) && Campaign.SquadPlace(c, Slot, Connected).Error == null;
@@ -93,6 +99,41 @@ namespace Bastion.UI.Strategy
                 });
             }
             return v;
+        }
+
+        /// <summary>
+        /// The siege's defenders (Arturo, 18/10 #58; screen.ts postsPanel): this player's to post on the clearing, one at a
+        /// time (picked here or on the clearing, then a click on a tile); the other's as they stand. Whoever has no post
+        /// starts by the Bastión.
+        /// </summary>
+        void Posts(CampaignState c, List<CampaignSoldier> squad, string postPick, SquadView v)
+        {
+            var posts = c.SiegePosts ?? new Dictionary<string, Vec2>();
+            var mine = squad.Where(s => s.Owner == Slot).ToList();
+            var theirs = squad.Where(s => s.Owner != Slot).ToList();
+            var picked = mine.FirstOrDefault(s => s.Id == postPick);
+            v.MineHead = $"Tus defensores · {mine.Count}";
+            v.PostHelp = picked != null
+                ? $"{Appearances.DisplayName(picked.Name, picked.Nickname)}: clic para elegir su puesto, Esc para soltar."
+                : "Elige un soldado y haz clic en el claro donde empezará el asedio. Si no tiene puesto, empieza junto al Bastión.";
+            if (picked != null && posts.ContainsKey(picked.Id)) v.PostHome = "Que empiece junto al Bastión";
+            PickRowView Row(CampaignSoldier s)
+            {
+                var row = new PickRowView
+                {
+                    Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname), Accent = PlayerColor(s.Owner), Skills = SkillsOf(s),
+                    Rank = Bars.VeterancyRank(s.Board.Count), RankTip = RankTip(s), Enabled = s.Owner == Slot, Picked = s.Id == postPick,
+                };
+                if (posts.ContainsKey(s.Id)) (row.Chip, row.ChipTone, row.ChipTip) = ("Puesto", "good", "Empieza el asedio donde está en el claro");
+                else (row.Chip, row.ChipTone, row.ChipTip) = ("Junto al Bastión", null, "Sin puesto: empieza junto al Bastión");
+                return row;
+            }
+            foreach (var s in mine) v.Mine.Add(Row(s));
+            if (theirs.Count > 0)
+            {
+                v.PartnerHead = $"De {PlayerName(theirs[0].Owner)} · {theirs.Count}";
+                foreach (var s in theirs) v.Partner.Add(Row(s));
+            }
         }
 
         /// <summary>A soldier's row in a squad list (pickRow): in it ✓, out with what keeps it in, the partner's off.</summary>

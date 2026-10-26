@@ -296,7 +296,7 @@ namespace Bastion.UI.Combat
         /// <summary>Esc: a menu of the bar, then what is armed, then a pending «Terminar turno»; otherwise the game's menu.</summary>
         void Escape()
         {
-            if (Hud != null && Hud.CloseAbilityMenu()) return;
+            if (Hud != null && (Hud.CloseAbilityMenu() || Hud.ClosePackMenu())) return;
             if (mode != Mode.Move) CancelMode();
             else if (EndArmed) DisarmEndTurn();
             else ToggleMenu();
@@ -457,6 +457,26 @@ namespace Bastion.UI.Combat
             AimMarks.ShowAim(State, shot?.Origin ?? u.Pos, option.Unit.Pos, friendly, attack);
         }
 
+        /// <summary>
+        /// Where a throw lands, its line (game.ts updateHover; docs/FASE7.md §4–5): «Ruido 4 · Rompe una pared · Hunde el
+        /// suelo», what of it there is; none, the tile's own line stays.
+        /// </summary>
+        void ThrowNote()
+        {
+            var u = Unit();
+            if (u == null || hover == null) return;
+            var centre = AbilityTexts.ThrowTile(u, modeAbility, hover);
+            var loud = Abilities.NoiseOf(State, u, modeAbility);
+            var walls = Abilities.BreachedWalls(State, modeAbility, centre, u).Count;
+            var parts = new[]
+            {
+                loud > 0 ? $"Ruido {loud}" : null,
+                walls == 0 ? null : walls == 1 ? "Rompe una pared" : $"Rompe {walls} paredes",
+                Abilities.BreaksFloor(State, modeAbility, centre) ? "Hunde el suelo" : null,
+            };
+            if (parts.Any(p => p != null)) Note(centre, parts);
+        }
+
         string highlighted;
         string aiming;
 
@@ -501,13 +521,20 @@ namespace Bastion.UI.Combat
                 endArmedUntil = Time.time + 4;
                 var partner = PartnerHere();
                 var next = partner != null && !State.Ready[partner.Slot] ? $"el mando pasa a {partner.Name}" : "juega el enemigo";
-                Toast($"{(idle == 1 ? "Un soldado tiene" : $"{idle} soldados tienen")} acciones. Pulsa otra vez para terminar: {next}.");
+                endQuestion = $"{(idle == 1 ? "Un soldado tiene" : $"{idle} soldados tienen")} acciones. Pulsa otra vez para terminar: {next}.";
+                Toast(endQuestion);
                 RefreshHud();
                 return;
             }
             DisarmEndTurn();
+            // The question answered goes with it (Gameplay, 26/10: it stayed through the enemy's turn).
+            if (endQuestion != null) Hud?.ClearToast(endQuestion);
+            endQuestion = null;
             Send(new EndTurnCommand { Ready = !ready });
         }
+
+        /// <summary>The end-of-turn question last asked, to take it away once answered.</summary>
+        string endQuestion;
 
         /// <summary>My soldiers that still have actions this turn.</summary>
         int IdleSoldiers() => MyUnits().Count(x => x.Ap > 0);
@@ -663,9 +690,19 @@ namespace Bastion.UI.Combat
         public void OnIntroClosed() => IntroClosed?.Invoke();
         public void OnBannerReleased() => BannerReleased?.Invoke();
 
+        /// <summary>The skirmish's kinds and maps «Misión al azar» picks from (hud.ts KINDS, MAPS).</summary>
+        static readonly string[] SkirmishKinds = { MissionKinds.Elimination, MissionKinds.Recovery, MissionKinds.Sabotage, MissionKinds.Hack, MissionKinds.Rescue, MissionKinds.Scavenge };
+
+        /// <summary>«Otra igual» (the same kind, a new map), or «Misión al azar»: any kind on any map.</summary>
         public void OnNewMission(bool random)
         {
-            Send(new NewMissionMessage());
+            if (!random)
+            {
+                Send(new NewMissionMessage());
+                return;
+            }
+            var maps = SkirmishMaps.All.ToList();
+            Send(new NewMissionMessage { Mission = SkirmishKinds[UnityEngine.Random.Range(0, SkirmishKinds.Length)], Map = maps[UnityEngine.Random.Range(0, maps.Count)] });
         }
 
         /// <summary>A campaign mission over: both back to the base (the room ignores backToMenu then).</summary>

@@ -197,7 +197,7 @@ namespace Bastion.Engine
                 Lines = new[]
                 {
                     new SceneLine { Who = "nwosu", Text = "Treinta y nueve y subiendo. Es el mordisco. Está en la Cuarentena, con el cerrojo echado." },
-                    new SceneLine { Who = "nwosu", Text = "Un día, alguno más con la Enfermería o con la Cuarentena mejor montada. Con el tratamiento, la fiebre baja." },
+                    new SceneLine { Who = "nwosu", Text = "Hasta la próxima misión. Alguna más con la Enfermería o con la Cuarentena mejor montada. Con el tratamiento, la fiebre baja." }, // Fixed in C# only (text-fixes.ts): time in missions
                     new SceneLine { Who = "nwosu", Text = "Cada tratamiento se lleva medicinas, y no nos sobran." },
                     new SceneLine { Who = "morse", Text = "Con fiebre no sale de misión. El tratamiento lo aprobáis los dos." },
                 },

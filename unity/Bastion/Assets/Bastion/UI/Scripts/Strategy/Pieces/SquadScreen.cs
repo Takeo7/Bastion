@@ -66,7 +66,13 @@ namespace Bastion.UI.Strategy
                 Draw();
                 return;
             }
-            List(v.MineHead, v.MineTip, v.Mine, left);
+            List(v.MineHead, v.MineTip, v.Mine, left, v.PostHelp);
+            if (!string.IsNullOrEmpty(v.PostHome))
+            {
+                var home = new Button(handlers.OnPostHome) { text = v.PostHome.ToUpperInvariant() };
+                Ui.AddClasses(home, "squad-back squad-post-home font-title");
+                left.Add(home);
+            }
             if (v.Partner.Count > 0) List(v.PartnerHead, v.PartnerTip, v.Partner, right);
             if (v.Ready.Count > 0)
             {
@@ -106,18 +112,20 @@ namespace Bastion.UI.Strategy
             Draw();
         }
 
-        /// <summary>A squad list: its head and its rows (hexagon, name, rank, a chip).</summary>
-        void List(string head, string tip, List<PickRowView> rows, VisualElement parent)
+        /// <summary>A squad list: its head (and a help under it), and its rows (hexagon, name, rank, a chip).</summary>
+        void List(string head, string tip, List<PickRowView> rows, VisualElement parent, string help = null)
         {
             var h = Ui.El("strat-head", parent);
             Ui.Text(head.ToUpperInvariant(), "strat-head__text font-title", h);
             if (!string.IsNullOrEmpty(tip)) tips.Attach(h, tip);
+            if (!string.IsNullOrEmpty(help)) Ui.Text(help, "squad-help muted", parent);
             foreach (var r in rows)
             {
                 var id = r.Id;
                 var row = new Button(() => handlers.OnSquadToggle(id, !r.In));
                 row.AddToClassList("squad-row");
                 row.EnableInClassList("squad-row--in", r.In);
+                row.EnableInClassList("squad-row--picked", r.Picked);
                 row.SetEnabled(r.Enabled);
                 row.style.borderLeftColor = Ui.Hex(r.Accent, new Color(0.95f, 0.65f, 0.2f));
                 var hex = new SkillHex();

@@ -27,6 +27,15 @@ namespace Bastion.UI.Combat
         /// <summary>Raised by every move of the player's: a move sent while it was another number lets go.</summary>
         public int Epoch { get; private set; }
 
+        /// <summary>
+        /// For measuring only (Arte's ShadowFit, BASTION_MEDIR): BASTION_CAMARA=&lt;tiles&gt; holds the camera at that distance
+        /// (42, the farthest), with no zoom of the player's or of an action's nor the shot over the shoulder; where it
+        /// looks goes on moving as always. Unset, nothing changes.
+        /// </summary>
+        static readonly float? HeldAt = float.TryParse(System.Environment.GetEnvironmentVariable("BASTION_CAMARA"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var tiles)
+            ? Mathf.Clamp(tiles * 1.5f, MinDistance, MaxDistance)
+            : (float?)null;
+
         /// <summary>The map's floor plan (metres, x and z), which the point looked at stays in.</summary>
         public Rect Bounds = new Rect(0, -96, 96, 96);
 
@@ -67,6 +76,7 @@ namespace Bastion.UI.Combat
         {
             cam = GetComponent<Camera>();
             cam.fieldOfView = 40f;
+            if (HeldAt != null) distance = desiredDistance = HeldAt.Value;
         }
 
         /// <summary>To `p` on the spring (or at once); it lets go if the player moves the camera meanwhile.</summary>
@@ -77,6 +87,31 @@ namespace Bastion.UI.Combat
             if (!instant) return;
             target = desiredTarget;
             targetVel = Vector3.zero;
+            Place();
+        }
+
+        /// <summary>
+        /// The camera as it stands taken over (the clearing's free look, once Arte's shot has eased in: screen.ts «only
+        /// once the stage has eased it home»): the point of the ground at `groundY` it looks at, its turn and its distance
+        /// kept; the pitch is the rig's own.
+        /// </summary>
+        public void TakeOver(float groundY = 0)
+        {
+            var f = transform.forward;
+            var from = transform.position;
+            var reach = f.y < -0.05f ? (groundY - from.y) / f.y : 24f * 1.5f;
+            var at = from + f * reach;
+            target = desiredTarget = Clamp(new Vector3(at.x, Mathf.Max(0, groundY), at.z));
+            targetVel = Vector3.zero;
+            springing = false;
+            var back = from - target;
+            yaw = desiredYaw = Mathf.Atan2(back.x, -back.z) * Mathf.Rad2Deg;
+            distance = desiredDistance = Mathf.Clamp(back.magnitude, MinDistance, MaxDistance);
+            savedDistance = null;
+            closeOn = false;
+            close = null;
+            closeFrom = null;
+            closeness = 0;
             Place();
         }
 
@@ -217,6 +252,12 @@ namespace Bastion.UI.Combat
 
         void Step(float dt)
         {
+            if (HeldAt != null)
+            {
+                distance = desiredDistance = HeldAt.Value;
+                savedDistance = null;
+                closeOn = false;
+            }
             var k = 1 - Mathf.Exp(-dt * 7);
             if (springing)
             {

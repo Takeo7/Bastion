@@ -36,6 +36,12 @@ namespace Bastion.UI.Hud
         void OnFloor(int dir);
         /// <summary>«Menú» (Esc): the game's menu, open or closed.</summary>
         void OnMenu();
+        /// <summary>An order on the shown soldier's backpack or tile (hud.ts onItem): the engine's `item` command.</summary>
+        void OnItem(PackOrder order);
+        /// <summary>A fallen soldier's rucksack taken (onTakeAll): one thing after another while they fit.</summary>
+        void OnTakeAll(System.Collections.Generic.List<string> ids);
+        /// <summary>The backpack full: slot `drop` left on the floor, then `take` picked up (onSwap).</summary>
+        void OnSwap(string take, int drop);
     }
 
     /// <summary>Handlers that do nothing: the HUD lab's, and the HUD's before the game binds its own.</summary>
@@ -62,6 +68,9 @@ namespace Bastion.UI.Hud
         public void OnSheet(string unit) { }
         public void OnFloor(int dir) { }
         public void OnMenu() { }
+        public void OnItem(PackOrder order) { }
+        public void OnTakeAll(System.Collections.Generic.List<string> ids) { }
+        public void OnSwap(string take, int drop) { }
     }
 }
 
@@ -91,5 +100,8 @@ namespace Bastion.UI.Hud
         public void OnSheet(string unit) => Target.OnSheet(unit);
         public void OnFloor(int dir) => Target.OnFloor(dir);
         public void OnMenu() => Target.OnMenu();
+        public void OnItem(PackOrder order) => Target.OnItem(order);
+        public void OnTakeAll(System.Collections.Generic.List<string> ids) => Target.OnTakeAll(ids);
+        public void OnSwap(string take, int drop) => Target.OnSwap(take, drop);
     }
 }

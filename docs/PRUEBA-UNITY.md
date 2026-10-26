@@ -45,7 +45,7 @@ Si la primera sale a pantalla completa, se puede abrir en ventana igual, desde o
 ## 2. Entrar en la partida
 
 1. En las dos, escribir un nombre distinto en «TU NOMBRE».
-2. Quien aloja pulsa «SER ANFITRIÓN».
+2. Quien aloja pulsa «ALOJAR LA PARTIDA» («SER ANFITRIÓN» en las compilaciones de antes del 26/10).
 3. El otro ve la partida en «PARTIDAS EN TU RED» y la elige. Si no sale, usa «UNIRSE POR DIRECCIÓN» con la dirección que aparece en la sala de quien aloja.
 4. En la sala:
    - mirar que los dos salen en «Comandantes» como «Conectado»;

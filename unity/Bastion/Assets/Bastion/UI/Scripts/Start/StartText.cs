@@ -10,11 +10,11 @@ namespace Bastion.UI.Start
         public const string Kicker = "TÁCTICA POR TURNOS COOPERATIVA";
         public const string NameLabel = "TU NOMBRE";
         public const string NameMissing = "Escribe tu nombre.";
-        public const string Host = "SER ANFITRIÓN";
+        public const string Host = "ALOJAR LA PARTIDA";
         public const string HostAbout = "La partida se abre en este ordenador. Quien juegue contigo entra desde su app.";
         public const string LanLabel = "PARTIDAS EN TU RED";
         public const string LanSearching = "Buscando partidas en tu red…";
-        public const string LanNone = "Ninguna por ahora. Cuando el otro jugador pulse «Ser anfitrión», saldrá aquí.";
+        public const string LanNone = "Ninguna por ahora. Cuando el otro jugador pulse «Alojar la partida», saldrá aquí.";
         public const string JoinLabel = "UNIRSE POR DIRECCIÓN";
         /// <summary>The host's address is on its main menu once the game is open (lobby.ts invite, and so in Unity).</summary>
         public const string JoinHint = "Por Tailscale, o si la partida no sale arriba: escribe la dirección que aparece en el menú principal de quien la aloja.";

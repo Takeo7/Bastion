@@ -76,6 +76,7 @@ namespace Bastion.UI.Strategy
             card.style.borderTopColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
             card.EnableInClassList("lineup-card--ready", v.Ready);
             card.EnableInClassList("lineup-card--fallen", v.Fallen);
+            card.AddToClassList("lineup-card--bust");
             var bust = Ui.El("lineup-card__bust", card);
             bust.style.borderTopColor = bust.style.borderBottomColor = bust.style.borderLeftColor = bust.style.borderRightColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
             var portrait = PortraitOf?.Invoke(v.Id);

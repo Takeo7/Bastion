@@ -14,6 +14,8 @@ namespace Bastion.UI.Strategy
         public const string Launch = "En marcha";
         public const string Menu = "Menú";
         public const string MenuTip = "Menú (Esc)";
+        /// <summary>At the bottom while walking about the clearing (walkAbout.ts).</summary>
+        public const string WalkHint = "WASD: andar · Ratón: mirar · Mayús: correr · Esc: salir";
 
         public static class Proposal
         {

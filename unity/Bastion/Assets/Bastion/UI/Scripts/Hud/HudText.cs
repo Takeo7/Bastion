@@ -29,7 +29,7 @@ namespace Bastion.UI.Hud
             public const string Confirm = "¿TERMINAR?";
             public const string ConfirmAgain = "Pulsa otra vez";
             /// <summary>With the check sign after it (an icon: ✓ isn't in Oswald).</summary>
-            public const string Ready = "LISTO";
+            public const string Ready = "A PUNTO";
             public const string ReadyCancel = "Pulsa para cancelar";
             public const string EnemyTurn = "TURNO ENEMIGO";
             public const string EnemyFaster = "Espacio: más rápido";
@@ -56,10 +56,11 @@ namespace Bastion.UI.Hud
 
         public static class Players
         {
-            public const string Ready = "Listo";
+            // Without gender (Lore, 26/10): «A punto», «Sin conexión».
+            public const string Ready = "A punto";
             public const string WithActions = "Con acciones";
             public const string NoActions = "Sin acciones";
-            public const string Offline = "Desconectado";
+            public const string Offline = "Sin conexión";
             public const string Away = "Ausente";
         }
 
@@ -89,6 +90,7 @@ namespace Bastion.UI.Hud
             public const string Victory = "MISIÓN CUMPLIDA";
             public const string Defeat = "MISIÓN FRACASADA";
             public const string ToBase = "VOLVER A LA BASE";
+            public const string Returning = "VOLVIENDO AL BASTIÓN…";
             public const string Again = "OTRA IGUAL (MAPA NUEVO)";
             public const string AgainSiege = "OTRO ASEDIO";
             public const string Random = "MISIÓN AL AZAR";
@@ -186,7 +188,48 @@ namespace Bastion.UI.Hud
             public const string InPlay = "EN JUEGO";
             public const string InPlayTip = "En juego: termina sus acciones antes que otro";
 
-            public static string Whose(string name) => $"DE {name.ToUpperInvariant()}";
+            /// <summary>«DE ANA»; a partner not in the room, «DEL OTRO JUGADOR».</summary>
+            public static string Whose(string name) => string.IsNullOrEmpty(name) ? "DEL OTRO JUGADOR" : $"DE {name.ToUpperInvariant()}";
+        }
+
+        /// <summary>The backpack on the soldier's panel (hud.ts backpack, packMenuEl, packOffer; docs/FASE8.md §C).</summary>
+        public static class Pack
+        {
+            public const string Floor = "EN EL SUELO";
+            public const string Squad = "ESCUADRA";
+            public const string Nothing = "—";
+            public const string NothingTip = "La escuadra aún no lleva nada.";
+            public const string Free = "Hueco libre";
+            public const string Close = "Cerrar";
+            public const string Take = "Coger";
+            public const string Swap = "Cambiar";
+            public const string OneAction = "1 acción";
+            public const string Gratis = "gratis";
+            public const string Equip = "Equipar";
+            public const string PutOn = "Ponerse";
+            public const string Use = "Usar";
+            public const string Drop = "Soltar";
+            public const string VestOn = "Ya lleva un chaleco puesto.";
+            public const string GearOn = "Ya lleva eso puesto.";
+            public const string FullFallen = "La mochila está llena: deja algo antes";
+            // Why not, in the engine's words (Rules.BackpackRefusal).
+            public const string NoWoundsSelf = "No tienes heridas.";
+            public const string NoWounds = "No tiene heridas.";
+            public const string NoRoom = "No le cabe: lleva la mochila llena.";
+
+            public static string Locked(string holder) => $"Tiene el mando {holder}";
+            public static string Tip(int carried, int size) => $"Mochila {carried}/{size}. Cuenta si vuelve: lo que lleva un caído se pierde.";
+            public static string Heal(string name) => $"Curar a {name}";
+            public static string Give(string name) => $"Dar a {name}";
+            public static string Leave(string name) => $"Dejar {name}";
+            public static string SwapTitle(string name) => $"Coger {name}: ¿qué dejas?";
+            public static string FloorTip(string label, bool full) => full ? $"{label}: la mochila está llena; elige qué dejar" : $"{label}: recogerlo (gratis)";
+            public static string FallenTip(int fits, int all) => $"Coge lo que quepa: {fits} de {all}";
+            public static string Supplies(int n) => $"Suministros: +{n} §";
+            public static string Medicines(int n) => n == 1 ? "Medicinas" : $"Medicinas ×{n}";
+            public static string Food(int n) => $"Raciones: +{n}";
+            public static string Parts(int n) => $"Piezas: +{n}";
+            public static string Weapon(string name) => $"{name}: a la Armería, para un soldado";
         }
     }
 }

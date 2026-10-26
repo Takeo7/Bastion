@@ -28,6 +28,8 @@ namespace Bastion.Client.Map
         public float sink;
         /// <summary>Stood this tall (tiles), its height alone stretched to it.</summary>
         public float tall;
+        /// <summary>Painted from another texture than its model's (syntyManifest.ts ATLASES: a container's colour), as MapArt.Atlases says; null, its own.</summary>
+        public string atlas;
     }
 
     /// <summary>
@@ -85,6 +87,18 @@ namespace Bastion.Client.Map
             string file = System.IO.Path.GetFileName(fbx);
             return UnityTurn(props.Values.FirstOrDefault(p => p.fbx != null && System.IO.Path.GetFileName(p.fbx) == file));
         }
+
+        /// <summary>
+        /// 0.10.1's other textures (syntyManifest.ts ATLASES) a prop is painted from, as Unity's packs have them: which of
+        /// its materials (by the start of its name) is swapped for which. Woodland's container comes red, as 0.10.1's
+        /// containerRed; its other colours are materials of its own (Containers_03 blue, 05 orange). The caravan's and the
+        /// roller shutter's are their prefabs' own already.
+        /// </summary>
+        public static readonly Dictionary<string, (string from, string to)> Atlases = new Dictionary<string, (string, string)>
+        {
+            ["containerBlue"] = ("Shipping_Container_", "Shipping_Container_03"),
+            ["containerOrange"] = ("Shipping_Container_", "Shipping_Container_05"),
+        };
 
         /// <summary>
         /// The model a prop is drawn with, as the catalog and the labs look it up: `pack:fbx` (MapArt.json's pack and name).

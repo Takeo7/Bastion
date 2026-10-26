@@ -38,6 +38,7 @@ namespace Bastion.UI.Strategy
         RadioPanel radio;
         VisualElement radioCard;
         ValleyMap valley;
+        ClearingLabels labels;
         Label toast;
         float toastUntil;
         HudIconTable icons;
@@ -129,6 +130,8 @@ namespace Bastion.UI.Strategy
             }
             squad.Show(false);
             debrief.Show(false);
+            // Under everything: the words by the pointer on the clearing and the names over it (the 0.10.1's, in the stage).
+            labels = new ClearingLabels(root);
             map = new MapScreen(root.Q("view"), tips, Icon, relay);
             map.Show(false);
             settlement = new SettlementScreen(root.Q("view"), tips, Icon, relay) { ArtOf = id => PieceArtOf?.Invoke(id) };
@@ -355,13 +358,45 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>
+        /// Walking about the clearing (Arte's Settlement.WalkAbout; walkAbout.ts): every panel over the view hidden (stage.ts
+        /// PANELS) and, at the bottom in the middle, how to walk; all back as it ends.
+        /// </summary>
+        public void Walking(bool on)
+        {
+            if (root == null) return;
+            if (walkHint == null)
+            {
+                walkHint = Ui.Text(StrategyText.WalkHint, "walk-hint", root);
+                walkHint.pickingMode = PickingMode.Ignore;
+            }
+            root.EnableInClassList("strat--walking", on);
+        }
+
+        Label walkHint;
+
+        /// <summary>What the pointer would do on the clearing, by it (a screen point, y up): its cost, or why not (`bad`); null, none.</summary>
+        public void ClearingHint(string text, bool bad, Vector2 screen) => labels?.Hint(text, bad, screen, Settlement.Instance?.Camera);
+
+        /// <summary>The pointer moved and nothing else: the words go with it.</summary>
+        public void ClearingHintAt(Vector2 screen) => labels?.HintAt(screen, Settlement.Instance?.Camera);
+
+        /// <summary>The names over the clearing (the partner's, the siege's defenders), placed through its camera.</summary>
+        public void ClearingTags(IReadOnlyList<ClearingTag> tags) => labels?.Tags(tags, Settlement.Instance?.Camera);
+
+        /// <summary>
         /// Whether the pointer is over the base's panels at a screen point (Input System coordinates, y up): then a click
         /// or the wheel isn't the clearing's (Arte's camera rig, the building's pointer).
         /// </summary>
         public bool Over(Vector2 screen)
         {
             if (root?.panel == null) return false;
-            var p = RuntimePanelUtils.ScreenToPanel(root.panel, new Vector2(screen.x, Screen.height - screen.y));
+            // By the size of the clearing's picture, which is the screen's in the game and the shot's texture in the
+            // captures (Shots draws the cameras into one of its own): the same point the pointer's words take.
+            var camera = Settlement.Instance?.Camera;
+            var w = camera != null ? camera.pixelWidth : Screen.width;
+            var h = camera != null ? camera.pixelHeight : Screen.height;
+            var size = root.panel.visualTree.layout.size;
+            var p = new Vector2(screen.x / Mathf.Max(1, w) * size.x, (1 - screen.y / Mathf.Max(1, h)) * size.y);
             var picked = root.panel.Pick(p);
             return picked != null && picked.pickingMode == PickingMode.Position && picked != root && picked != root.parent;
         }

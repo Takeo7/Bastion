@@ -38,8 +38,8 @@ namespace Bastion.UI.Strategy
             marks.pickingMode = PickingMode.Ignore;
             left = Ui.El("strat-side strat-side--left strat-side--fit map-left panel", view);
             right = Ui.El("strat-side strat-side--right strat-side--fit panel", view);
-            left.Add(new ScrollView(ScrollViewMode.Vertical) { name = "left-scroll", verticalScrollerVisibility = ScrollerVisibility.Hidden, horizontalScrollerVisibility = ScrollerVisibility.Hidden });
-            right.Add(new ScrollView(ScrollViewMode.Vertical) { name = "right-scroll", verticalScrollerVisibility = ScrollerVisibility.Hidden, horizontalScrollerVisibility = ScrollerVisibility.Hidden });
+            left.Add(new ScrollView(ScrollViewMode.Vertical) { name = "left-scroll", verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden });
+            right.Add(new ScrollView(ScrollViewMode.Vertical) { name = "right-scroll", verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden });
             marks.schedule.Execute(Place).Every(16);
         }
 
@@ -275,11 +275,12 @@ namespace Bastion.UI.Strategy
                 var kicker = Ui.Text(d.Kicker.ToUpperInvariant(), "sheet__kicker font-title", parent);
                 if (!string.IsNullOrEmpty(d.KickerTone)) kicker.AddToClassList("map-kicker--" + d.KickerTone);
             }
-            Ui.Text(d.Title.ToUpperInvariant(), "armory-detail__name font-title", parent);
+            Ui.Text(d.Title.ToUpperInvariant(), "armory-detail__name map-detail__title font-title", parent);
             if (!string.IsNullOrEmpty(d.Subtitle)) Ui.Text(d.Subtitle, "sheet__subtitle muted", parent);
             foreach (var t in d.Text) Ui.Text(StrategyText.Marked(t), "map-detail__text", parent);
-            if (!string.IsNullOrEmpty(d.Warning)) Ui.Text(d.Warning, "squad-mission__warning", parent);
+            // The signature right under the report it signs, then the amber line (Lore, 26/10; as the 0.10.1).
             if (!string.IsNullOrEmpty(d.Note)) Ui.Text(d.Note, "map-detail__note", parent);
+            if (!string.IsNullOrEmpty(d.Warning)) Ui.Text(d.Warning, "squad-mission__warning", parent);
             foreach (var l in d.Lines)
             {
                 var line = Ui.Text(l.Text, l.Tone == "bad" ? "map-detail__line strat-chip--bad" : "map-detail__line muted", parent);

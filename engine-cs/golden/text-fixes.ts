@@ -34,6 +34,7 @@ export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   ['Una doctora, encerrada en la tercera planta desde hace tres semanas.', 'Una doctora, encerrada en la tercera planta desde hace una semana.', 'the scene «Una llamada de Tarbes»: chapter 2\'s briefing says a week (Gameplay, 24/10)'],
   ['Puerta norte · interfono', 'Entrada del claro', 'the scene «Alguien en la puerta»: a north gate with an intercom was Atalaya; the Bastion is a clearing (Gameplay, 24/10)'],
   ['A su mando: ', 'A tu mando: ', 'the recap: it is for one commander, and the radio says tú and vosotros, never usted'],
+  ['Un día, alguno más con la Enfermería o con la Cuarentena mejor montada.', 'Hasta la próxima misión. Alguna más con la Enfermería o con la Cuarentena mejor montada.', 'the scene «Fiebre»: time in missions, as the Cuarentena says «Fiebre: +1 misión» and nextSteps «se convierte tras la próxima misión» (Gameplay, 26/10)'],
   // campaign.ts (its port is Gameplay's: EVENTS.smugglers, nextSteps)
   ['dos granadas extra para la armería', 'dos granadas extra para la Armería', 'the Armería is a place with a name'],
   ['ya quiere despegar: ', 'ya quiere salir: ', 'nextSteps: La Lata doesn\'t take off (XCOM\'s Skyranger)'],
@@ -58,6 +59,10 @@ export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   // rules.ts (its port is Gameplay's: Rules.cs, changed on 26/10)
   [/^No estás herido\.$/, 'No tienes heridas.', 'a medicine on oneself: the same'],
   ['No está aturdido, desorientado ni en pánico.', 'No sufre aturdimiento, desorientación ni pánico.', 'Reanimar\'s reason: the same'],
+  // aim.ts and abilities.ts (Gameplay's: Aim.cs, Abilities.cs; Lore, 26/10)
+  ['Desorientado: no puede usar explosivos.', 'Con desorientación no se pueden usar explosivos.', 'a grenade\'s reason: the same'],
+  [/^Desorientado$/, 'Desorientación', 'the shot\'s modifier: a noun, as Puntería, Mira or Alcance, so it agrees with a soldier who is a woman'],
+  [/^Suprimido$/, 'Supresión', 'the shot\'s modifier: the same'],
   [/^Está lista\.$/, 'No hay nada que reponer.', 'rearm\'s reason: said of «el cepo» or «el foso» too'],
   ['La Marea ha llegado al Bastión.', 'Los muertos han llegado al Bastión.', 'the defeat\'s log: before level 4 nobody knows of the Marea'],
   ['El Bastión entra en servicio. Elegid la primera misión.', 'Lo que se levante en este claro será el Bastión. Elegid la primera misión.', 'WELCOME: the Bastion starts as a caravan in a clearing, not a station going into service; as the diary\'s first page (Gameplay, 24/10)'],

@@ -67,6 +67,9 @@ namespace Bastion.UI.App
             link.Status += OnStatus;
             link.Rejoining += OnRejoining;
             SceneManager.sceneLoaded += OnSceneLoaded;
+            // Tests with the app (TestSteps): steps from the app's start, for the start screen and the room («Continuar campaña»).
+            var steps = System.Environment.GetEnvironmentVariable("BASTION_RECORRIDO_SALA");
+            if (!string.IsNullOrEmpty(steps)) _ = TestSteps.Run(steps, null, destroyCancellationToken);
             // The graphics settings kept on this computer, and how the game runs told to the host (Perf).
             GameSettings.Apply();
             perf = gameObject.AddComponent<Perf>();
@@ -177,6 +180,7 @@ namespace Bastion.UI.App
             {
                 // From the base to a mission: La Lata leaves first (screen.ts launch, awaited before the battle).
                 if (want == battleScene && active == baseScene) Depart();
+                else if (want == battleScene) _ = LoadBattle();
                 else Load(want);
                 return;
             }
@@ -192,6 +196,8 @@ namespace Bastion.UI.App
         void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, LoadSceneMode mode)
         {
             loading = false;
+            // Not the battle (back to the base, to the menu): nothing to wait for under the veil.
+            if (scene.name != battleScene) LiftVeil();
             GameSettings.InMenu = scene.name != battleScene;
             if (scene.name == baseScene)
             {
@@ -222,8 +228,136 @@ namespace Bastion.UI.App
             {
                 departing = false;
             }
-            if (link.LastRoom?.Phase == RoomPhases.Mission) Load(battleScene);
+            if (link.LastRoom?.Phase == RoomPhases.Mission) await LoadBattle();
         }
+
+        /// <summary>The battle loaded under the veil: up first, drawn a frame, then the scene.</summary>
+        async Awaitable LoadBattle()
+        {
+            loading = true;
+            RaiseVeil();
+            await Awaitable.NextFrameAsync();
+            Load(battleScene);
+        }
+
+        // ---------------------------------------------------------- loading
+
+        /// <summary>The veil comes off by itself this long after it went up, whatever happened to the battle (s).</summary>
+        const float VeilMost = 20;
+        /// <summary>How long its words take to go, and then its black (mixta-hud.css .load-veil.out: 0.12 s, 0.4 s).</summary>
+        const float WordsOut = 0.12f, VeilOut = 0.4f;
+
+        VisualElement loadVeil, loadWords, loadRun;
+        Label loadKicker, loadTitle, loadPlace;
+        float loadSince, liftSince = -1;
+
+        /// <summary>
+        /// While the battle loads (hud.ts veil, game.ts raiseVeil; UX-REVISION-3 #1): the operation's name over a running
+        /// bar instead of a frozen screen, over everything; its words once the battle has its state (VeilWords), lifted once
+        /// the map is drawn (LiftVeil); the arrival card waits for it (Veiled).
+        /// </summary>
+        void RaiseVeil()
+        {
+            if (loadVeil != null)
+            {
+                liftSince = -1;
+                return;
+            }
+            loadVeil = Ui.El();
+            var v = loadVeil.style;
+            v.position = Position.Absolute;
+            v.left = 0;
+            v.top = 0;
+            v.right = 0;
+            v.bottom = 0;
+            v.backgroundColor = Color.black;
+            // The words from 30 % of the height less 48 px (.load-veil: padding-top calc(30vh − 48px)): a spacer's height,
+            // as a margin's percent goes by the width.
+            var spacer = Ui.El(null, loadVeil);
+            spacer.style.height = Length.Percent(30);
+            spacer.style.flexShrink = 0;
+            loadWords = Ui.El(null, loadVeil);
+            loadWords.style.alignItems = Align.Center;
+            loadWords.style.marginTop = -48;
+            loadKicker = Ui.Text("", "font-title", loadWords);
+            loadKicker.style.fontSize = 13;
+            loadKicker.style.letterSpacing = 3.4f;
+            loadKicker.style.color = (Color)new Color32(0xf2, 0xc2, 0x30, 0xff);
+            loadTitle = Ui.Text("", "font-title", loadWords);
+            loadTitle.style.fontSize = 44;
+            loadTitle.style.letterSpacing = 2.2f;
+            loadTitle.style.color = Color.white;
+            loadTitle.style.marginTop = 4;
+            loadTitle.style.marginBottom = 10;
+            var rail = Ui.El(null, loadWords);
+            rail.style.width = 220;
+            rail.style.height = 4;
+            rail.style.overflow = Overflow.Hidden;
+            rail.style.backgroundColor = new Color(1, 1, 1, 0.08f);
+            loadRun = Ui.El(null, rail);
+            loadRun.style.position = Position.Absolute;
+            loadRun.style.top = 0;
+            loadRun.style.bottom = 0;
+            loadRun.style.width = Length.Percent(40);
+            loadRun.style.backgroundColor = (Color)new Color32(0xf2, 0xc2, 0x30, 0xff);
+            loadPlace = Ui.Text("", null, loadWords);
+            loadPlace.style.marginTop = 8;
+            loadPlace.style.color = (Color)new Color32(0x8d, 0x91, 0x8a, 0xff);
+            loadSince = Time.realtimeSinceStartup;
+            liftSince = -1;
+            root.Add(loadVeil);
+            loadVeil.schedule.Execute(StepVeil).Every(16);
+        }
+
+        void StepVeil()
+        {
+            if (loadVeil == null) return;
+            var now = Time.realtimeSinceStartup;
+            // The stripe sliding along its rail (veil-run: 1.1 s, eased, from −100 % to 250 % of itself).
+            var t = (now - loadSince) % 1.1f / 1.1f;
+            loadRun.style.left = Length.Percent(Mathf.Lerp(-40, 100, t * t * (3 - 2 * t)));
+            if (liftSince < 0)
+            {
+                if (now - loadSince > VeilMost) LiftVeil();
+                return;
+            }
+            // Lifting, the words go first: the briefing comes up under them with the same name.
+            var gone = now - liftSince;
+            loadWords.style.opacity = Mathf.Clamp01(1 - gone / WordsOut);
+            loadVeil.style.opacity = Mathf.Clamp01(1 - gone / VeilOut);
+            if (gone < VeilOut) return;
+            loadVeil.RemoveFromHierarchy();
+            loadVeil = null;
+        }
+
+        /// <summary>The battle's words on the veil (game.ts raiseVeil): what kind of operation, its name, the place.</summary>
+        public static void VeilWords(string kicker, string title, string place)
+        {
+            var app = instance;
+            if (app == null || app.loadVeil == null) return;
+            app.loadKicker.text = kicker ?? "";
+            Ui.Show(app.loadKicker, !string.IsNullOrEmpty(kicker));
+            app.loadTitle.text = (title ?? "").ToUpperInvariant();
+            app.loadPlace.text = place ?? "";
+            Ui.Show(app.loadPlace, !string.IsNullOrEmpty(place));
+            // For tests with the app (BASTION_FOTOS, Red's CampaignRun's): the veil with its words, as this frame ends.
+            var shots = System.Environment.GetEnvironmentVariable("BASTION_FOTOS");
+            if (!string.IsNullOrEmpty(shots)) ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(shots, $"velo-{++app.veilShots}.png"));
+        }
+
+        int veilShots;
+
+        /// <summary>The map is drawn: the veil goes, its words first.</summary>
+        public static void LiftVeil()
+        {
+            var app = instance;
+            if (app == null || app.loadVeil == null || app.liftSince >= 0) return;
+            app.liftSince = Time.realtimeSinceStartup;
+            app.loadVeil.pickingMode = PickingMode.Ignore;
+        }
+
+        /// <summary>The veil is up and not going: what comes after it (the arrival card) waits.</summary>
+        public static bool Veiled => instance != null && instance.loadVeil != null && instance.liftSince < 0;
 
         void Load(string scene)
         {

@@ -238,6 +238,72 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// A soldier's weapons as 0.10.1's ARMS_CASES (weaponLab.ts; BASTION_ARMAS: «pistola» the pistol alone, «fusil» a
+        /// rifle and the pistol drawn to fire, «cuchillo» a rifle and the knife at the belt, «machete» a shotgun and the
+        /// machete): at rest 2 s, aims at one of the dead four tiles off and fires twice, lowers it, reloads, and strikes the
+        /// dead one brought up beside it. On a plain floor, the camera low from the side (BASTION_VIEW=game, the game's).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Armas -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 120 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Armas()
+        {
+            var first = MapLab.Golden("city-7");
+            string soldierId = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
+            string deadId = first.Units.First(u => u.Alive && u.Template == "zombie").Id;
+            Plain(u => u.Id == soldierId || u.Id == deadId, 10, 13);
+            soldier = Put(state.Units.First(u => u.Id == soldierId), 10, 10, 0);
+            target = Put(state.Units.First(u => u.Id == deadId), 14, 10, Math.PI);
+            string which = Environment.GetEnvironmentVariable("BASTION_ARMAS") ?? "pistola";
+            soldier.Template = "rookie";
+            soldier.Arms = which switch
+            {
+                "fusil" => new Arms { Primary = "assaultRifle" },
+                "cuchillo" => new Arms { Primary = "assaultRifle" },
+                "machete" => new Arms { Primary = "pumpShotgun", Melee = "machete" },
+                _ => new Arms { Primary = null },
+            };
+            bool sidearm = which == "fusil";
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    Debug.Log($"[combat] {Time.time:0.00} s: {which}, at rest");
+                    await Awaitable.WaitForSecondsAsync(2f);
+                    var at = units.Chest(target.Id);
+                    Debug.Log($"[combat] {Time.time:0.00} s: aims");
+                    int aim = await units.RaiseWeapon(soldier.Id, at, sidearm);
+                    await Awaitable.WaitForSecondsAsync(0.4f);
+                    for (int shot = 0; shot < 2; shot++)
+                    {
+                        var from = units.Muzzle(soldier.Id);
+                        fx.MuzzleFlash(from, Fx.Hex(0xffd27a));
+                        units.Recoil(soldier.Id);
+                        await fx.Bullet(from, at, Fx.Hex(0xffd27a));
+                        await Awaitable.WaitForSecondsAsync(0.4f);
+                    }
+                    await units.LowerWeapon(soldier.Id, aim);
+                    await Awaitable.WaitForSecondsAsync(0.8f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: reloads");
+                    await units.Reload(soldier.Id);
+                    await Awaitable.WaitForSecondsAsync(0.8f);
+                    // The dead one brought up beside it, to strike.
+                    await units.MoveAlong(target.Id, new[] { new Pos { X = 13, Y = 10 }, new Pos { X = 12, Y = 10 }, new Pos { X = 11, Y = 10 } }, 1);
+                    await Awaitable.WaitForSecondsAsync(0.3f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: strikes");
+                    await units.Lunge(soldier.Id, target.Id, false, () => Debug.Log($"[combat] {Time.time:0.00} s: the blow lands"));
+                    await Awaitable.WaitForSecondsAsync(1f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[combat] " + e);
+                }
+            };
+        }
+
+        /// <summary>
         /// Each figure of a state (BASTION_MAP, step2/city-3-elimination unless said) checked in play mode: how far its head
         /// bone is, across, from the middle of what is drawn (UI's marks hang over the head bone).
         /// </summary>

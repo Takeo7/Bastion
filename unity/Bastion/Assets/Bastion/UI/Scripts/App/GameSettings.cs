@@ -46,13 +46,19 @@ namespace Bastion.UI.App
         /// <summary>Something changed: the counter shows or goes, the telemetry says the new settings.</summary>
         public static event Action Changed;
 
+        /// <summary>
+        /// For measuring (Measure, medir.bat: BASTION_GRAFICOS=bajos|medios|altos): the level as if it were so, never kept
+        /// on this computer, whose player's own settings stay as they are (as TintForLab). Unset, none.
+        /// </summary>
+        static readonly int? LevelForTest = Array.IndexOf(LevelNames, Environment.GetEnvironmentVariable("BASTION_GRAFICOS")) is var i && i >= 0 ? i : (int?)null;
+
         /// <summary>0 bajos, 1 medios, 2 altos. Medios on a Mac (its target, ≥30 fps), altos elsewhere (the 0.10.1's).</summary>
         public static int Level
         {
-            get => Mathf.Clamp(PlayerPrefs.GetInt(LevelKey, Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor ? 1 : 2), 0, 2);
+            get => LevelForTest ?? Mathf.Clamp(PlayerPrefs.GetInt(LevelKey, Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor ? 1 : 2), 0, 2);
             set
             {
-                PlayerPrefs.SetInt(LevelKey, Mathf.Clamp(value, 0, 2));
+                if (LevelForTest == null) PlayerPrefs.SetInt(LevelKey, Mathf.Clamp(value, 0, 2));
                 Apply();
             }
         }

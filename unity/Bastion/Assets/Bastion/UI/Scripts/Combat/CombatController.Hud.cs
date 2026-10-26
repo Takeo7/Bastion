@@ -32,6 +32,8 @@ namespace Bastion.UI.Combat
             var bar = new ActionBarView { Abilities = BarKeys() };
             var u = Unit();
             if (u != null && Commands(u) && CanAct() && !mine) bar.Lock = $"Turno de {PlayerName(s.Command)}: puedes apuntar y planear";
+            // Why the cards rest in the enemy's turn: the bar says it over itself (hud.ts setTurn).
+            else if (s.Outcome == null && (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien)) bar.Lock = HudText.Turn.EnemyLock;
             Hud.SetAbilities(bar);
             Hud.SetCall(CallView());
             Hud.SetTarget(TargetPanel());
@@ -168,7 +170,7 @@ namespace Bastion.UI.Combat
             var marks = MissionGoals();
             if (marks.Count == 0)
             {
-                Toast("Esta misión no tiene un punto al que ir: eliminad a los hostiles.");
+                Toast("Esta misión no tiene un punto al que ir: abatid a todo lo que haya.");
                 return;
             }
             LookAt(Board.TileToWorld(Shown, marks[markCycle++ % marks.Count].pos));
@@ -385,7 +387,7 @@ namespace Bastion.UI.Combat
             foreach (var p in Players)
             {
                 var holds = commander == p.Slot;
-                var status = !p.Connected ? "Desconectado" : p.Away == true ? "Ausente" : alone || holds ? "" : v.Ready[p.Slot] ? "Listo" : busy.Contains(p.Slot) ? "Con acciones" : "Sin acciones";
+                var status = !p.Connected ? HudText.Players.Offline : p.Away == true ? HudText.Players.Away : alone || holds ? "" : v.Ready[p.Slot] ? HudText.Players.Ready : busy.Contains(p.Slot) ? HudText.Players.WithActions : HudText.Players.NoActions;
                 view.Players.Add(new PlayerView { Slot = p.Slot, Name = p.Name, Color = p.Color, Me = p.Slot == MySlot, Connected = p.Connected, Ready = v.Ready[p.Slot], Command = holds, Status = status });
             }
             return view;
@@ -438,7 +440,7 @@ namespace Bastion.UI.Combat
                 {
                     if (on) card.Tags.Add(new TagView { Text = text, Kind = kind, Tip = tip });
                 }
-                Tag(u.Id == inPlay, "EN JUEGO", "in-play", "En juego: termina sus acciones antes que otro");
+                // «EN JUEGO» is the card's own (SquadList, from InPlay), first.
                 Tag(u.ControlledBy != null, UnitWords.Agree(u, "CONTROLADO"), "psi");
                 Tag(u.Captive, UnitWords.Agree(u, "CAUTIVO"), "data");
                 Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi");
@@ -505,7 +507,7 @@ namespace Bastion.UI.Combat
             // A partner's soldier says whose, in the partner's colour (Arturo, 17/10).
             if (u.Team == Teams.Xcom && u.Owner != null && u.Owner != MySlot)
             {
-                view.Whose = $"DE {PlayerName(u.Owner).ToUpperInvariant()}";
+                view.Whose = Players.FirstOrDefault(p => p.Slot == u.Owner)?.Name ?? "";
                 view.WhoseColor = PlayerColor(u.Owner.Value);
             }
             if (u.Infected == true && u.Alive)
@@ -534,6 +536,9 @@ namespace Bastion.UI.Combat
                 var def = Content.Items[item];
                 view.Stats.Add(new StatView { Kind = "worn", Tip = $"Lleva puesto: {def.Name} ({def.Description.TrimEnd('.')})", Value = $"+{def.Hp ?? 0}" });
             }
+            // Its state and improvements (docs/FASE9.md §5), where it carries a weapon of the Armería.
+            if (!string.IsNullOrEmpty(arms?.Primary)) view.WeaponMarks = WeaponMarks(Content.ConditionOf(u), arms.Mods);
+            view.Pack = PackOf(u);
             return view;
         }
 
@@ -545,7 +550,7 @@ namespace Bastion.UI.Combat
             var s = Shown;
             var m = s.Mission;
             if (m.Siege != null) return SiegeView();
-            var objective = "Eliminad a todos los hostiles";
+            var objective = "Abatid a todo lo que haya";
             string tip = null;
             switch (m.Kind)
             {
@@ -568,7 +573,7 @@ namespace Bastion.UI.Combat
                 case MissionKinds.Rescue:
                 {
                     var vip = UnitById(s, m.ObjectiveUnit);
-                    var who = vip?.Name ?? "el VIP";
+                    var who = vip?.Name ?? "la persona retenida";
                     objective = m.ObjectiveDone ? Lore.VipObjective(who, "out")
                         : vip != null && vip.Alive && !vip.Captive && Abilities.InEvacZone(s, vip.Pos) ? Lore.VipObjective(who, "aboard")
                         : vip != null && vip.Captive ? Lore.VipObjective(who, "captive")
@@ -776,6 +781,14 @@ namespace Bastion.UI.Combat
             });
             if (s.Units.Any(u => u.Alive && u.Team == Teams.Alien && !u.Objective && !Content.Templates[u.Template].Undead)) Hud.Log(Lore.LivingTip, FeudColor);
             if (s.Mission.Night == true) Hud.Log(string.Join(" ", Lore.NightText.Rules), "#2a4a7a");
+        }
+
+        /// <summary>The loading veil's words (game.ts raiseVeil: kicker, missionName): the kicker and the operation's name.</summary>
+        public (string kicker, string title) VeilWords()
+        {
+            var s = State;
+            var cm = s.CampaignMission;
+            return (Kicker(), cm?.Name ?? (s.Mission.Siege != null ? Lore.SiegeText.Name : MissionName(s.Mission.Kind)));
         }
 
         /// <summary>The briefing's kicker: the operation's, the story chapter's, or what kind of fight it is.</summary>

@@ -6,7 +6,8 @@
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime",
         "SidekickCharacters",
-        "Gilzoide.SqliteNet"
+        "Gilzoide.SqliteNet",
+        "Unity.InputSystem"
     ],
     "autoReferenced": true
 }

@@ -15,7 +15,7 @@
 
 .armory-tabs {
     flex-direction: row;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     padding: 2px;
 }
 
@@ -23,7 +23,7 @@
     flex-grow: 1;
     flex-direction: row;
     justify-content: center;
-    height: 30px;
+    height: 27px;
     background-color: rgba(0, 0, 0, 0);
     background-image: none;
     border-width: 0;
@@ -46,7 +46,7 @@
 }
 
 .armory-section {
-    margin: 8px 0 2px;
+    margin: 6px 0 2px;
     font-size: 11px;
     letter-spacing: 1.5px;
     color: var(--t-muted);
@@ -55,9 +55,9 @@
 .armory-row {
     flex-direction: row;
     align-items: center;
-    min-height: 25px;
+    min-height: 24px;
     margin: 0;
-    padding: 2px 8px;
+    padding: 1px 8px;
     background-color: rgba(0, 0, 0, 0);
     background-image: none;
     border-width: 0 0 1px 0;

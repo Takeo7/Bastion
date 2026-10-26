@@ -59,6 +59,8 @@ namespace Bastion.Client.Map
             props = new PropParts();
             cover = new GroundCover(props);
             cover.Build(state, map, plane.transform);
+            // Over the pumps, a canopy a station that fades when the fight is under it (mapView.ts placeCanopies).
+            PumpCanopies.Build(state, props, parent);
             // What closes the map round what is played (the outline), beside the ground: it hides the sky too.
             FrameView.Build(state, props, parent);
             // The contact occlusion, baked once the map is whole (before its next frame) from what stands on it.

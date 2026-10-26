@@ -79,6 +79,8 @@ namespace Bastion.UI.Combat
             control.Hurry = player.SetHurry;
             if (Hud != null) Hud.ClockOf = ClockOf;
             if (net.LastRoom != null) control.Players = net.LastRoom.Players;
+            // Tests with two apps (BASTION_PASOS_COMBATE): the HUD pressed as a player would.
+            CombatRun.FromEnvironment(control);
             net.Message += OnMessage;
         }
 
@@ -102,6 +104,14 @@ namespace Bastion.UI.Combat
                 case RoomMessage room:
                     control.Players = room.Players;
                     if (control.State != null) control.Refresh();
+                    // On the way back to the base (this player's «Volver a la base» or the partner's): the report says so.
+                    if (room.Phase == RoomPhases.Base && room == net.LastRoom)
+                    {
+                        Hud?.Returning();
+                        // For tests with the app (BASTION_FOTOS): the report saying so, as this frame ends.
+                        var shots = Environment.GetEnvironmentVariable("BASTION_FOTOS");
+                        if (!string.IsNullOrEmpty(shots)) ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(shots, "volviendo.png"));
+                    }
                     // Out of the mission (back to the base, or to the menu): what comes next is for the next scene, which
                     // gets it from NetLink in order (the base, its campaign), with the base as it took off.
                     if (room.Phase != RoomPhases.Mission && room == net.LastRoom)
@@ -164,8 +174,42 @@ namespace Bastion.UI.Combat
             Snapshot?.Invoke(state);
             control.Refresh();
             if (first) control.OpeningShot();
-            // A fresh mission opens with its briefing (main.ts: seq 0).
-            if (state.Seq == 0) control.Intro();
+            if (first)
+            {
+                var (kicker, title) = control.VeilWords();
+                App.AppFlow.VeilWords(kicker, title, state.MapName);
+                _ = LiftVeil();
+            }
+            // A fresh mission opens with its briefing (main.ts: seq 0), once the veil is off (it waits for it: game.ts).
+            if (state.Seq == 0) _ = IntroAfterVeil();
+        }
+
+        /// <summary>The map built: the loading veil goes once two frames of it are drawn (game.ts raiseVeil).</summary>
+        async Awaitable LiftVeil()
+        {
+            try
+            {
+                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                await Awaitable.NextFrameAsync(destroyCancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // The scene went first.
+            }
+            App.AppFlow.LiftVeil();
+        }
+
+        async Awaitable IntroAfterVeil()
+        {
+            try
+            {
+                while (App.AppFlow.Veiled) await Awaitable.NextFrameAsync(destroyCancellationToken);
+                control.Intro();
+            }
+            catch (OperationCanceledException)
+            {
+                // The scene went first.
+            }
         }
 
         /// <summary>

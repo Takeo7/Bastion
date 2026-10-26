@@ -300,21 +300,23 @@ namespace Bastion.Client
             {
                 postRings = new GameObject("Puestos");
                 postRings.transform.SetParent(BuildRoot, false);
-                foreach (var p in posts) Drawn(p.id, postRings.transform, Ring(p.x + 0.5f, p.y + 0.5f, 0.3f, 0.4f, 0.045f, 28), See(p.colour, RingAlpha, false, "Puesto"));
+                // On its tile's floor (0.10.1 left them on the ground, under a watchtower's deck).
+                foreach (var p in posts) Drawn(p.id, postRings.transform, Ring(p.x + 0.5f, p.y + 0.5f, 0.3f, 0.4f, PostFloor(p.x, p.y) + 0.045f, 28), See(p.colour, RingAlpha, false, "Puesto"));
             }
+            PostFigures(posts);
             RefreshPicked();
         }
 
-        /// <summary>Where post `id`'s name goes (world, metres): over its tile (over the head of a figure standing there); null if there is no such post.</summary>
+        /// <summary>Where post `id`'s name goes (world, metres): over its tile, over the head of the figure standing there (on its floor: 0.10.1 left it at a head's height off the ground, inside one on a watchtower); null if there is no such post.</summary>
         public Vector3? PostWorld(string id)
         {
             foreach (var p in posts)
-                if (p.id == id) return BuildRoot.TransformPoint(World(p.x + 0.5f, PostTagHeight, p.y + 0.5f));
+                if (p.id == id) return BuildRoot.TransformPoint(World(p.x + 0.5f, PostFloor(p.x, p.y) + PostTagHeight, p.y + 0.5f));
             return null;
         }
 
-        /// <summary>The name over a post: on the ground's ring (0.10.1 without figures there: 0.45 tiles); over a head, 2.05.</summary>
-        const float PostTagHeight = 0.45f;
+        /// <summary>The name over a post: over a head (clearing.ts lift, with figures there: 2.05 tiles; 0.45, on the ring, without).</summary>
+        const float PostTagHeight = 2.05f;
 
         /// <summary>A point of the clearing in the world (metres): tile (x, y)'s middle, in fractions too (TileAt's way back; clearing.ts focusTile).</summary>
         public Vector3 TileWorld(float x, float y) => BuildRoot.TransformPoint(World(x + 0.5f, 0, y + 0.5f));
@@ -413,7 +415,11 @@ namespace Bastion.Client
         /// <summary>The tiles those about the clearing keep off (what is being placed: clearing.ts keepClear); null, none.</summary>
         public IReadOnlyList<Vector2Int> KeptClear { get; private set; }
 
-        void KeepClear(IReadOnlyList<Vector2Int> cells) => KeptClear = cells;
+        void KeepClear(IReadOnlyList<Vector2Int> cells)
+        {
+            KeptClear = cells;
+            life?.KeepClear(cells?.Select(c => new Vec2 { X = c.x, Y = c.y }));
+        }
 
         static void DestroyNowObject(UnityEngine.Object o)
         {

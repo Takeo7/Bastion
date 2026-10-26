@@ -15,6 +15,10 @@ namespace Bastion.UI.Strategy
         public string MineHead;
         public string MineTip;
         public List<PickRowView> Mine = new List<PickRowView>();
+        /// <summary>In a siege, under the head (#58): how to post one's defenders, or the one in hand's; null, none.</summary>
+        public string PostHelp;
+        /// <summary>«Que empiece junto al Bastión», for the one in hand with a post; null, none.</summary>
+        public string PostHome;
         public string PartnerHead;
         /// <summary>«Los elige su jugador».</summary>
         public string PartnerTip;
@@ -59,6 +63,8 @@ namespace Bastion.UI.Strategy
         public bool In;
         public bool Enabled = true;
         public string Tip;
+        /// <summary>The siege's defender in hand, to post on the clearing.</summary>
+        public bool Picked;
     }
 
     [Serializable]

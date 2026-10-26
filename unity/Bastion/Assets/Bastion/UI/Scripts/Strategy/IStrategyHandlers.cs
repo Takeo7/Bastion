@@ -63,6 +63,8 @@ namespace Bastion.UI.Strategy
         void OnLaunch();
         void OnSquadBack();
         void OnSquadRecruit();
+        /// <summary>The siege's defender in hand starts by the Bastión again (#58: its post taken back).</summary>
+        void OnPostHome();
         void OnGoMap();
         void OnDebriefContinue();
         /// <summary>A debrief line's button (Construir), by the line's place.</summary>
@@ -129,6 +131,7 @@ namespace Bastion.UI.Strategy
         public void OnLaunch() { }
         public void OnSquadBack() { }
         public void OnSquadRecruit() { }
+        public void OnPostHome() { }
         public void OnGoMap() { }
         public void OnDebriefContinue() { }
         public void OnDebriefLine(int index) { }
@@ -177,6 +180,7 @@ namespace Bastion.UI.Strategy
         public void OnLaunch() => Target.OnLaunch();
         public void OnSquadBack() => Target.OnSquadBack();
         public void OnSquadRecruit() => Target.OnSquadRecruit();
+        public void OnPostHome() => Target.OnPostHome();
         public void OnGoMap() => Target.OnGoMap();
         public void OnDebriefContinue() => Target.OnDebriefContinue();
         public void OnDebriefLine(int index) => Target.OnDebriefLine(index);

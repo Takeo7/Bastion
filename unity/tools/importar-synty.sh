@@ -66,6 +66,13 @@ if wanted "$@"; then
     $e/Masculine/Sad/A_POLY_EMOT_Sad_Shrug_Masc.fbx $e/Feminine/Sad/A_POLY_EMOT_Sad_Shrug_Femn.fbx \
     $e/Masculine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Masc.fbx $e/Feminine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Femn.fbx || failed=1
 fi
+# Woodland Apocalypse Map: its own folder alone (MapArt's fences, log piles, signs, lorries and containers), not the
+# copy of PolygonGeneric it brings (the other packs' is already in, and its shaders are shared) nor its demo scenes.
+name=POLYGON_Woodland_Apocalypse_Map_Unity_2022_3_v1_0_1
+if wanted "$@"; then
+  echo "== $name (su carpeta)"
+  python3 -I "$tools/upkg-extract.py" --under Assets/Synty/PolygonMapsWoodlandApocalypse "$synty/POLYGON - Woodland Apocalypse Map/Unity/$name.unitypackage" "$project" || failed=1
+fi
 # The HUD's icons (UI): three INTERFACE packs, only their sprites and textures (no prefabs, scripts or samples: the HUD
 # is UI Toolkit, not their uGUI).
 for p in "INTERFACE - Apocalypse HUD/Unity/INTERFACE_Apocalypse_HUD_Unity_2022_3_v1_1_1.unitypackage" \

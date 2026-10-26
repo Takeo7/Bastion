@@ -47,7 +47,7 @@ Una línea cada 10 segundos de juego, por ejemplo:
 
 La app de Unity no se instala: se abre `Bastion.exe` con doble clic.
 
-- **Quien aloja** pulsa «Ser anfitrión». Windows pregunta la primera vez por el cortafuegos: «Permitir» en redes privadas. La partida va por el TCP 41391 (o el siguiente libre, hasta el 41400) y se anuncia en la red por el UDP 41390.
+- **Quien aloja** pulsa «Alojar la partida» («Ser anfitrión» en las compilaciones de antes del 26/10). Windows pregunta la primera vez por el cortafuegos: «Permitir» en redes privadas. La partida va por el TCP 41391 (o el siguiente libre, hasta el 41400) y se anuncia en la red por el UDP 41390.
 - **La red de casa tiene que estar como «Privada»** (Configuración → Red e Internet → la red → Tipo de perfil). Si está como «Pública», Ana no podrá entrar.
 - **Quien se une** ve la partida en «Partidas en tu red» o entra con «Unirse por dirección», con la dirección que sale en la sala de quien aloja.
 - Lo que mide cada uno llega al `red.log` de quien aloja: `%USERPROFILE%\AppData\LocalLow\Bastion-Unity\Bastion\red.log` (en el Explorador, pegar la ruta en la barra de direcciones).

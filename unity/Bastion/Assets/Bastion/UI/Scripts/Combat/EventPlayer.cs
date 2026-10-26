@@ -270,7 +270,7 @@ namespace Bastion.UI.Combat
                     await PlaySafe(item);
                     current = null;
                     NoteResult(item.e);
-                    await Settle(item.e, item.by);
+                    await Settle(item.e, item.by, false, epoch);
                     // The one it killed has fallen: a moment more over the shoulder (on one of ours, longer), then back.
                     if (killCam != null && item.e is DiedEvent fell && fell.Unit == killCam)
                     {
@@ -475,7 +475,7 @@ namespace Bastion.UI.Combat
                 await ShowEnemy(points);
             }
             else if (hold > 0) await Wait(hold);
-            foreach (var q in doors) await Settle(q.e, q.by);
+            foreach (var q in doors) await Settle(q.e, q.by, false, q.epoch);
             // Each one's walks as one: its two actions a single stretch, no stop between.
             var walks = new Dictionary<string, MovedEvent>();
             var order = new List<string>();
@@ -506,7 +506,7 @@ namespace Bastion.UI.Combat
             // All of them where they stopped before the view syncs (playtest 21/10 #21: they walked in, vanished, and came
             // back all at once).
             foreach (var q in items) Events.ApplyEvent(V, q.e);
-            foreach (var q in items) await Settle(q.e, q.by, true);
+            foreach (var q in items) await Settle(q.e, q.by, true, q.epoch);
         }
 
         /// <summary>
@@ -593,7 +593,7 @@ namespace Bastion.UI.Combat
             foreach (var q in all)
             {
                 NoteResult(q.e);
-                await Settle(q.e, q.by);
+                await Settle(q.e, q.by, false, q.epoch);
             }
         }
 
@@ -642,14 +642,17 @@ namespace Bastion.UI.Combat
             foreach (var q in items)
             {
                 NoteResult(q.e);
-                await Settle(q.e, q.by);
+                await Settle(q.e, q.by, false, q.epoch);
             }
         }
 
         /// <summary>What a played event leaves behind (game.ts settle): View has it, the figures, the sight and the HUD follow.</summary>
-        async Awaitable Settle(GameEvent e, int? by, bool applied = false)
+        /// <remarks>`epoch`: the camera's as the event began to play (none: now); the player who moved it since keeps it.</remarks>
+        async Awaitable Settle(GameEvent e, int? by, bool applied = false, int? epoch = null)
         {
             var call = V.EvacCall;
+            // Who was in sight until this event, for the newcomers' callouts (AnnounceSighted).
+            var before = new HashSet<string>(V.Units.Where(a => a.Alive && a.Team == Teams.Alien && control.Visible(a)).Select(a => a.Id));
             var floorBefore = new HashSet<string>((V.Dropped ?? new List<DroppedLoot>()).Select(d => d.Id));
             if (!applied) Events.ApplyEvent(V, e);
             // A soldier falls and their rucksack stays on the floor (#49), said once.
@@ -659,8 +662,10 @@ namespace Bastion.UI.Combat
             {
                 var who = Unit(e is SearchedEvent se ? se.Unit : ((RoomSearchedEvent)e).Unit);
                 var left = (V.Dropped ?? new List<DroppedLoot>()).FirstOrDefault(d => !floorBefore.Contains(d.Id) && who != null && d.Pos.X == who.Pos.X && d.Pos.Y == who.Pos.Y && d.Pos.Z == who.Pos.Z);
-                if (left != null) Hud?.Toast(Lore.PackFullLine(left.Loot));
+                if (left != null) control.PackFull(who.Id, left.Id, Lore.PackFullLine(left.Loot));
             }
+            // The next thing of a rucksack being taken, a swap's find (CombatController.Pack).
+            control.LootSettled(e, by, V);
             // A call nobody answered lapses with the squad's turn.
             if (e is TurnBeganEvent && call != null && V.EvacCall == null) Log(Lore.EvacText.Lapsed, "#ffc93a");
             // Plans (playtest 18/10 #3): the partner's go as a turn begins; one's own last until the command comes to this
@@ -678,6 +683,7 @@ namespace Bastion.UI.Combat
             See();
             ShowSeen();
             control.Refresh();
+            await AnnounceSighted(e, by, before, epoch ?? (control.Rig != null ? control.Rig.Epoch : 0));
             // Let the player see the outcome of their own action before the pick moves on.
             if (by == control.MySlot && !(e is NoiseEvent)) holdAfter = HoldAfter(e);
             if (by == control.MySlot && myPending > 0 && --myPending == 0)
@@ -693,6 +699,38 @@ namespace Bastion.UI.Combat
                 // The space bar hurries the enemy's turn only.
                 if (began.Team == Teams.Xcom) hurry = false;
             }
+        }
+
+        /// <summary>
+        /// Enemies that have just come into the squad's sight (`before`: who was in sight until this event) get a callout
+        /// over them and a line in the log, so nobody «appears out of nowhere» (game.ts announceSighted; playtest): «A LA
+        /// VISTA» a group that hasn't noticed the squad (the chance of an ambush), «¡APARECE UN …!» one that has. In the
+        /// enemy's turn the camera holds on the first a moment, unless the player took it during the event (`epoch`);
+        /// after one's own action a short pause; the partner's get the callout alone. Contacts, arrivals and the risen
+        /// have their own show.
+        /// </summary>
+        async Awaitable AnnounceSighted(GameEvent e, int? by, HashSet<string> before, int epoch)
+        {
+            if (e is PodActivatedEvent || e is SpawnedEvent || e is ReanimatedEvent || e is MissionEndedEvent) return;
+            var v = V;
+            var fresh = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && !a.Objective && control.Visible(a) && !before.Contains(a.Id)).ToList();
+            if (fresh.Count == 0) return;
+            bool Alert(Unit a) => v.Pods.FirstOrDefault(p => p.Id == a.PodId)?.Active == true;
+            foreach (var a in fresh)
+            {
+                var name = Content.Templates[a.Template].Name.ToUpperInvariant();
+                Float(Chest(a.Id), Alert(a) ? $"¡APARECE UN {name}!" : $"A LA VISTA: {name}", "callout");
+            }
+            var names = string.Join(", ", fresh.Select(a => a.Name));
+            // A group that hasn't noticed the squad yet: the chance to set up an ambush.
+            var unaware = !fresh.Any(Alert);
+            Log(unaware ? $"A la vista: {names}{(v.Concealed ? " (aún no os han visto)" : "")}" : fresh.Count == 1 ? $"¡Aparece {AnEnemy(fresh[0])}!" : $"¡Aparecen: {names}!", "#ff6b5a");
+            if (v.ActiveTeam == Teams.Alien)
+            {
+                if (control.Rig != null && control.Rig.Epoch == epoch) control.Rig.Focus(Feet(fresh[0].Id));
+                await Wait(0.9f);
+            }
+            else if (by == control.MySlot) await Wait(0.5f);
         }
 
         /// <summary>The squad's sight of the ground, again (game.ts refreshView).</summary>
@@ -1075,7 +1113,7 @@ namespace Bastion.UI.Combat
                         Loose(Later(0.8f, () => Loose(units.LowerWeapon(u.Id, aim, stop))));
                     }
                     else await Wait(0.6f);
-                    Float(chest, "SUPRIMIDO", "warn");
+                    Float(chest, UnitWords.Agree(target, "SUPRIMIDO"), "warn");
                     Log($"{u.Name} suprime a {target.Name}", "#ffc93a");
                     return;
                 }
@@ -1196,7 +1234,8 @@ namespace Bastion.UI.Combat
                     {
                         fx?.Heal(Chest(target.Id));
                         Float(Chest(target.Id), $"+{amount}", "heal");
-                        Log($"{u.Name} cura {amount} a {target.Name}", "#6dff9a");
+                        // One who treats themself «se cura» (Lore, 26/10).
+                        Log(target.Id == u.Id ? $"{u.Name} se cura {amount}" : $"{u.Name} cura {amount} a {target.Name}", "#6dff9a");
                     }
                     else
                     {
@@ -1480,7 +1519,7 @@ namespace Bastion.UI.Combat
                 {
                     var vip = Unit(vr.Unit);
                     Look(Feet(vip.Id));
-                    Float(Chest(vip.Id), "VIP RESCATADO", "heal");
+                    Float(Chest(vip.Id), UnitWords.Agree(vip, "RESCATADO"), "heal");
                     Log($"{vip.Name} se une a la escuadra", "#6dff9a");
                     await Wait(0.6f);
                     return;
@@ -1590,6 +1629,8 @@ namespace Bastion.UI.Combat
                     if (turn.Team == Teams.Alien && !EnemyTurnShows()) return;
                     var partner = turn.Team == Teams.Xcom && control.Players.Any(p => p.Slot != control.MySlot && p.Connected) && turn.Command != null && turn.Command != control.MySlot;
                     Hud?.Banner(turn.Team == Teams.Alien ? "TURNO ENEMIGO" : partner ? $"TURNO DE {PlayerName(turn.Command).ToUpperInvariant()}" : "TU TURNO", turn.Team == Teams.Xcom ? "xcom" : "alien", null, turn.Team == Teams.Xcom && !partner);
+                    // The squad's turn: the camera to the soldier who plays first (#47).
+                    if (turn.Team == Teams.Xcom) control.TurnCamera(v, turn.Command ?? control.MySlot, true);
                     var left = v.Mission.TurnsLeft != null && turn.Turn > 1 ? v.Mission.TurnsLeft - 1 : v.Mission.TurnsLeft;
                     if (turn.Team == Teams.Xcom && v.Mission.Siege == null && !v.Mission.ObjectiveDone && (left == 5 || left == 1))
                     {
@@ -1607,6 +1648,8 @@ namespace Bastion.UI.Combat
                         if (cp.To == control.MySlot) Hud?.Banner("TU TURNO", "xcom", "Tienes el mando: das tú las órdenes", true);
                         else Hud?.Banner($"TURNO DE {PlayerName(cp.To).ToUpperInvariant()}", "xcom", control.State.Ready[control.MySlot] ? $"Has terminado: juega {PlayerName(cp.To)}" : "Mientras, puedes apuntar y planear");
                     }
+                    // To the soldier who plays now: the one in play of whoever takes the command, or their first with actions (#47).
+                    control.TurnCamera(v, cp.To);
                     Log(cp.To == control.MySlot ? "Tienes el mando" : $"{PlayerName(cp.To)} tiene el mando", PlayerColor(cp.To));
                     return;
                 }
@@ -2110,9 +2153,9 @@ namespace Bastion.UI.Combat
                 case MissionKinds.Recovery: success = $"{Capitalize(RecoveryItem())} a salvo"; break;
                 case MissionKinds.Sabotage: success = "Ya no suena"; break;
                 case MissionKinds.Hack: success = "Equipo en marcha"; break;
-                case MissionKinds.Rescue: success = vip != null ? $"{vip}, a salvo" : "VIP extraído"; break;
+                case MissionKinds.Rescue: success = vip != null ? $"{vip}, a salvo" : "La persona retenida, a salvo"; break;
                 case MissionKinds.Scavenge: success = loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
-                default: success = "Todos los hostiles abatidos"; break;
+                default: success = "No queda ninguno en pie"; break;
             }
             string why;
             var siege = s.Mission.Siege != null;
@@ -2131,7 +2174,7 @@ namespace Bastion.UI.Combat
                     why = s.Mission.EvacDone == true ? (s.Mission.Kind == MissionKinds.Elimination ? Lore.EvacText.Retreat : Lore.EvacText.WithoutObjective) : "Misión abandonada";
                     break;
                 case "objectiveLost":
-                    why = vip != null ? $"{vip} ha muerto" : "El VIP ha muerto";
+                    why = vip != null ? $"{vip} ha muerto" : "La persona retenida ha muerto";
                     break;
                 default:
                     why = "";

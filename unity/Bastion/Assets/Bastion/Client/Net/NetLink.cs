@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Bastion.Engine;
@@ -224,6 +225,7 @@ namespace Bastion.Client.Net
             if (name.Length < 1 || name.Length > 20) return NameProblem;
             if (host == null)
             {
+                var first = int.TryParse(Environment.GetEnvironmentVariable("BASTION_PUERTO"), out var port) ? port : RoomHost.FirstPort;
                 try
                 {
                     // Measuring (BASTION_MEDIR) plays each case from nothing, on a save of its own emptied first: with the
@@ -238,7 +240,6 @@ namespace Bastion.Client.Net
                     var seed = CampaignRun.Seed();
                     var made = new Room(store, Rules, Version, HostAddresses.List(), rng: seed != null ? new Rng(seed.Value) : null, say: (line) => Debug.Log(line), campaignRules: CampaignRules);
                     if (seed != null) log.Write($"[prueba] sala con la semilla {seed}");
-                    var first = int.TryParse(Environment.GetEnvironmentVariable("BASTION_PUERTO"), out var port) ? port : RoomHost.FirstPort;
                     // Measuring alone (BASTION_MEDIR), on 127.0.0.1 only: nobody else to join, and no firewall asking (its
                     // window would take the focus, and the telemetry counts only with the game in front).
                     host = RoomHost.StartFree(made, first, 10, measure != null ? System.Net.IPAddress.Loopback : null);
@@ -246,8 +247,11 @@ namespace Bastion.Client.Net
                 }
                 catch (Exception e)
                 {
-                    log.Write($"no arranca: {e.Message}");
-                    return $"No se pudo abrir la partida: {e.Message}";
+                    // .NET's reason, in English, to red.log; on the screen, one in Spanish.
+                    log.Write($"no arranca: {e.GetType().Name}: {e.Message}");
+                    if (e is SocketException s && s.SocketErrorCode == SocketError.AddressAlreadyInUse) return $"Los puertos del {first} al {first + 9} están ocupados por otras apps. Cierra alguna y vuelve a intentarlo.";
+                    if (e is IOException || e is UnauthorizedAccessException) return "No se pudo abrir la partida: no se puede escribir en la carpeta de datos del juego.";
+                    return "No se pudo abrir la partida. El motivo queda en red.log.";
                 }
                 log.Write($"anfitrión arrancado: tcp {host.Port} · {string.Join(", ", HostAddresses.List().Select((a) => a.Address))} · versión {Version}");
                 if (measure == null) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
@@ -326,7 +330,7 @@ namespace Bastion.Client.Net
             Drop();
             if (!nobody) return;
             log.Write($"[red] {where}: no responde nadie");
-            Failed?.Invoke($"No responde nadie en {where}. ¿Tiene abierta la partida (Ser anfitrión) y estáis en la misma red o en Tailscale?");
+            Failed?.Invoke($"No responde nadie en {where}. ¿Tiene abierta la partida («Alojar la partida») y estáis en la misma red o en Tailscale?");
         }
 
         /// <summary>A message from the host, already read on the network thread (ClientSession): a whole mission never costs a frame.</summary>

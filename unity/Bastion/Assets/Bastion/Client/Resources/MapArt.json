@@ -162,7 +162,8 @@
   "caravan": {
    "pack": "apocalypse",
    "fbx": "SK_Veh_Caravan_01",
-   "fit": 3.9
+   "fit": 3.9,
+   "atlas": "apocalypseVehicle"
   },
   "mobileHome": {
    "pack": "apocalypse",
@@ -1517,19 +1518,22 @@
    "pack": "woodland",
    "fbx": "SM_Prop_Shipping_Container_01",
    "fit": 4.85,
-   "yaw": 2
+   "yaw": 2,
+   "atlas": "containerRed"
   },
   "containerBlue": {
    "pack": "woodland",
    "fbx": "SM_Prop_Shipping_Container_01",
    "fit": 4.85,
-   "yaw": 2
+   "yaw": 2,
+   "atlas": "containerBlue"
   },
   "containerOrange": {
    "pack": "woodland",
    "fbx": "SM_Prop_Shipping_Container_01",
    "fit": 4.85,
-   "yaw": 2
+   "yaw": 2,
+   "atlas": "containerOrange"
   },
   "waterTower": {
    "pack": "apocalypse",
@@ -1830,7 +1834,8 @@
   "rollerShutter": {
    "pack": "industrial",
    "fbx": "SM_Bld_Door_Roller_Large_01",
-   "origin": true
+   "origin": true,
+   "atlas": "generic"
   },
   "motelSign": {
    "pack": "apocalypse",

@@ -159,3 +159,18 @@
 .note--partner Button {
     margin-left: 8px;
 }
+
+/* A find left on the floor with the backpack full (hud.ts packOffer), with «Cambiar»: higher, over the partner's. */
+.note--offer {
+    flex-direction: row;
+    align-items: center;
+    font-size: 15px;
+    margin-bottom: 44px;
+    border-left-width: 3px;
+    border-left-color: var(--t-accent);
+    rotate: 0deg;
+}
+
+.note--offer Button {
+    margin-left: 8px;
+}

@@ -30,6 +30,24 @@
     background-color: rgba(242, 194, 48, 0.07);
 }
 
+/* The siege's defender in hand (#58): ringed in the picked yellow, as on the clearing. */
+.squad-row--picked {
+    background-color: rgba(255, 224, 138, 0.1);
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-top-color: #ffe08a;
+    border-right-color: #ffe08a;
+    border-bottom-color: #ffe08a;
+}
+
+/* How to post one's defenders for the siege, under the head. */
+.squad-help {
+    margin: 0 0 6px;
+    font-size: 12px;
+    white-space: normal;
+}
+
 .squad-row:disabled {
     opacity: 0.6;
 }
@@ -169,14 +187,17 @@
     white-space: normal;
 }
 
+/* As wide as its longest button (mixta-base.css .x-btn.big: inline, 18 px each side), and never narrower than 200. */
 .squad-mission__actions {
-    width: 200px;
+    min-width: 200px;
+    flex-shrink: 0;
     justify-content: center;
 }
 
 .squad-launch {
     height: 50px;
-    font-size: 22px;
+    padding: 0 18px;
+    font-size: 20px;
     letter-spacing: 2px;
 }
 
@@ -301,6 +322,17 @@
     color: #ffffff;
     white-space: normal;
     -unity-text-align: middle-center;
+}
+
+/* The portrait reaches past the padding (mixta-base.css .lineup-card[data-bust]): the name, the only line beside it,
+   starts after it, on two lines if it must («mitri Volkov» had lost its initial, Lore 26/10, as UX-REVISION-3 #2). */
+.lineup-card--bust {
+    padding-left: 18px;
+    padding-right: 6px;
+}
+
+.lineup-card--bust .lineup-card__name {
+    margin-left: 14px;
 }
 
 .lineup-card__line {

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const m = await import(join(root, 'packages/client/src/game/syntyManifest.ts'));
-const keep = ['pack', 'fbx', 'fit', 'stretch', 'thick', 'yaw', 'shift', 'origin', 'deck', 'sink', 'tall'];
+const keep = ['pack', 'fbx', 'fit', 'stretch', 'thick', 'yaw', 'shift', 'origin', 'deck', 'sink', 'tall', 'atlas'];
 const props: Record<string, Record<string, unknown>> = {};
 for (const [id, a] of Object.entries(m.PROPS as Record<string, Record<string, unknown>>)) {
   props[id] = Object.fromEntries(keep.filter((k) => a[k] !== undefined).map((k) => [k, a[k]]));

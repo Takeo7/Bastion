@@ -6583,7 +6583,7 @@ namespace Bastion.Engine.Tests
             Assert.Null(Transmissions.Scenes[11].Lines[0].Rule);
             Assert.False(Transmissions.Scenes[11].Lines[0].If != null);
             Assert.Equal("nwosu", Transmissions.Scenes[11].Lines[1].Who);
-            Assert.Equal("Un día, alguno más con la Enfermería o con la Cuarentena mejor montada. Con el tratamiento, la fiebre baja.", Transmissions.Scenes[11].Lines[1].Text);
+            Assert.Equal("Hasta la próxima misión. Alguna más con la Enfermería o con la Cuarentena mejor montada. Con el tratamiento, la fiebre baja.", Transmissions.Scenes[11].Lines[1].Text);
             Assert.Null(Transmissions.Scenes[11].Lines[1].Rule);
             Assert.False(Transmissions.Scenes[11].Lines[1].If != null);
             Assert.Equal("nwosu", Transmissions.Scenes[11].Lines[2].Who);

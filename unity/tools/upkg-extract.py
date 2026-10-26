@@ -2,19 +2,27 @@
 # Unity, so it works whatever state the project's scripts are in; Unity imports them the next time it opens:
 #   python3 -I upkg-extract.py <package> <project folder> [asset path…]   (paths as in the package: Assets/Synty/…)
 #   python3 -I upkg-extract.py --only Sprites,Textures <package> <project folder>
+#   python3 -I upkg-extract.py --under Assets/Synty/<pack folder> <package> <project folder>
 # With no paths, the whole package but its demo scenes and samples (Assets/<…>/<pack>/Scenes, Samples); with --only,
-# only what lies in folders of those names (and the folders above them, for their .meta).
+# only what lies in folders of those names (and the folders above them, for their .meta); with --under, only what lies
+# under that folder (and the folder itself), but its demo scenes and samples.
 import os, sys, tarfile
 args = sys.argv[1:]
 only = None
+under = None
 if args[:1] == ['--only']:
     only = set(args[1].split(','))
+    args = args[2:]
+if args[:1] == ['--under']:
+    under = args[1].rstrip('/')
     args = args[2:]
 package, project, wanted = args[0], args[1], set(args[2:])
 
 def keep(path):
     if wanted:
         return path in wanted
+    if under is not None and path != under and not path.startswith(under + '/'):
+        return False
     parts = path.split('/')
     if only is not None:
         # In one of those folders, or a folder on the way to one (kept for its .meta; empty ones go below).

@@ -22,3 +22,6 @@ unity/Bastion/Assets/Synty.meta
 # The Mixamo clips imported into Unity (their licence doesn't allow sharing the files): copied from assets-src/ by an editor method.
 unity/Bastion/Assets/Mixamo/
 unity/Bastion/Assets/Mixamo.meta
+# The sound, some 600 MB of WAV generated from the 0.10.1's by unity/tools/sonido.sh (docs/UNITY-SONIDO.md).
+unity/Bastion/Assets/Bastion/Client/Audio/Generado/
+unity/Bastion/Assets/Bastion/Client/Audio/Generado.meta

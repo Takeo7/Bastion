@@ -311,6 +311,25 @@ namespace Bastion.UI.EditorTools
             };
         }
 
+        /// <summary>
+        /// In «Partida», the backpack (docs/FASE8.md §C): a recorded mission with things in the backpacks, on the floor and a
+        /// fallen soldier's rucksack (BASTION_LAB_ARCHIVO: a golden's file, its path without «.json»), played by BASTION_TOQUES
+        /// (PackSteps).
+        /// </summary>
+        public static void PartidaMochila()
+        {
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                var hud = new GameObject("HUD");
+                hud.AddComponent<UIDocument>().panelSettings = Panel();
+                var lab = new GameObject("CombatLab").AddComponent<Bastion.UI.Combat.CombatLab>();
+                lab.Hud = hud.AddComponent<HudRoot>();
+                lab.Golden = System.Environment.GetEnvironmentVariable("BASTION_LAB_ARCHIVO") ?? "city-3-elimination";
+                lab.InScene = true;
+            };
+        }
+
         static void CombatScene(string arm, bool toShot = false)
         {
             var camera = new GameObject("Shot camera").AddComponent<Camera>();

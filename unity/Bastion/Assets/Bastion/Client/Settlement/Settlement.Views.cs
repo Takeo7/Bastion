@@ -85,6 +85,9 @@ namespace Bastion.Client
         }
         bool cameraFree;
 
+        /// <summary>The campaign's mission now is a siege of the base (screen.ts siegeNow): the Escuadra's shot the clearing's, for its posts.</summary>
+        public bool SiegeNow { get; set; }
+
         /// <summary>The camera is being eased to a shot (0.9 s), not yet still on it.</summary>
         public bool CameraMoving => moved < MoveSeconds;
 
@@ -126,6 +129,8 @@ namespace Bastion.Client
         public void SetView(string tab, bool instant = false)
         {
             view = tab ?? Views.Facilities;
+            // Those out about the clearing on the Asentamiento's tab only.
+            LifeView();
             // Soldados' soldier only on Soldados (screen.ts: the showcase cleared on leaving it).
             if (showcase != null && showcase.gameObject.activeSelf != (view == Views.Barracks))
             {
@@ -178,6 +183,8 @@ namespace Bastion.Client
                 case Views.Engineering:
                     return ArmoryShot();
                 case Views.Squad:
+                    // The siege's squad is the clearing from above, round the caravan (screen.ts shotFor, #58).
+                    return SiegeNow ? ClearingShot() : LineupShot();
                 case Views.Debrief:
                     return LineupShot();
                 default:
@@ -552,9 +559,9 @@ namespace Bastion.Client
 
         void LateUpdate()
         {
-            // A fitted shot fits the new size (stage.ts resize).
+            // A fitted shot fits the new size (stage.ts resize); walking about, the camera is the walk's.
             var camera = Camera;
-            if (camera != null)
+            if (camera != null && !Walking)
             {
                 var size = new Vector2Int(camera.pixelWidth, camera.pixelHeight);
                 if (size != screenWas)
@@ -563,8 +570,9 @@ namespace Bastion.Client
                     Refit();
                 }
             }
-            MoveCamera(Time.deltaTime);
+            if (!Walking) MoveCamera(Time.deltaTime);
             StepFade(Time.deltaTime);
+            EndWalk();
         }
     }
 }

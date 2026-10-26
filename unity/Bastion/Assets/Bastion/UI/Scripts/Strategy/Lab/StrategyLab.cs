@@ -739,6 +739,7 @@ namespace Bastion.UI.Strategy
         public void OnLaunch() => Debug.Log("[estrategia] launch");
         public void OnSquadBack() => Debug.Log("[estrategia] squad back");
         public void OnSquadRecruit() => Debug.Log("[estrategia] squad recruit");
+        public void OnPostHome() => Debug.Log("[estrategia] post home");
         public void OnGoMap() => Debug.Log("[estrategia] go map");
         public void OnDebriefContinue() => Debug.Log("[estrategia] debrief continue");
         public void OnDebriefLine(int index) => Debug.Log("[estrategia] debrief line " + index);

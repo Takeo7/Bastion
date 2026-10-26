@@ -5,8 +5,8 @@ namespace Bastion.UI.Hud
 {
     /// <summary>
     /// The picked soldier's panel, bottom left (hud.ts setSelected; docs/UNITY-UI.md §2.2): veterancy, its best line's
-    /// hexagon, name, whose; its figures as icons with pips or numbers (words in the tooltips); its weapon. A soldier's
-    /// head opens its sheet (H). Null hides it.
+    /// hexagon, name, whose; its figures as icons with pips or numbers (words in the tooltips); its weapon with its wear
+    /// and improvements; its backpack (Backpack). A soldier's head opens its sheet (H). Null hides it.
     /// </summary>
     public sealed class UnitPanel
     {
@@ -17,6 +17,7 @@ namespace Bastion.UI.Hud
         readonly IHudHandlers handlers;
         readonly TooltipLayer tips;
         readonly System.Func<string, Sprite> icon;
+        readonly Backpack backpack;
         string key;
         string shownId;
 
@@ -26,7 +27,14 @@ namespace Bastion.UI.Hud
             this.handlers = handlers;
             this.tips = tips;
             this.icon = icon;
+            backpack = new Backpack(handlers, tips, icon);
         }
+
+        /// <summary>The backpack's menu: open, and the swap opened for a thing on the floor (the notice's «Cambiar»).</summary>
+        public bool PackMenuOpen => backpack.MenuOpen;
+        public void OpenSwap(string unit, string id) => backpack.OpenSwap(unit, id);
+        public bool ClosePackMenu() => backpack.Close();
+        public void PressedAt(VisualElement target) => backpack.PressedAt(target);
 
         public void Set(UnitPanelView view)
         {
@@ -35,7 +43,11 @@ namespace Bastion.UI.Hud
             key = k;
             host.Clear();
             Ui.Show(host, view != null);
-            if (view == null) return;
+            if (view == null)
+            {
+                backpack.Set(null, null, null);
+                return;
+            }
             shownId = view.Id;
             Ui.CloneInto("UnitPanel", host);
             // mixta.css: one of the big plates, in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
@@ -83,6 +95,12 @@ namespace Bastion.UI.Hud
             if (weaponSprite != null) weaponIcon.style.backgroundImage = new StyleBackground(weaponSprite);
             tree.Q<Label>("weapon-name").text = view.Weapon;
             tips.Attach(tree.Q("weapon"), view.WeaponTip);
+            // Its state and improvements (docs/FASE9.md §5): «GASTADA», «ROTA», «+2», each with its line.
+            var marks = tree.Q("weapon-marks");
+            foreach (var m in view.WeaponMarks)
+                tips.Attach(Ui.Text(m.Text, "weapon-mark weapon-mark--" + m.Kind, marks), m.Tip);
+            Ui.Show(marks, view.WeaponMarks.Count > 0);
+            backpack.Set(tree.Q("pack"), view.Id, view.Pack);
         }
 
         VisualElement Stat(StatView s)

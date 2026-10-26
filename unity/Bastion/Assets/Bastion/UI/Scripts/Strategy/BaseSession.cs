@@ -25,6 +25,8 @@ namespace Bastion.UI.Strategy
         BaseController control;
         /// <summary>The tabs' tour (BASTION_PESTANAS) goes once a run: the first time on the base.</summary>
         static bool toured;
+        /// <summary>Times on the base this run: BASTION_RECORRIDO_BASE plays on the first, BASTION_RECORRIDO_BASE2 on the second.</summary>
+        static int visits;
 
         public BaseController Control => control;
 
@@ -46,9 +48,25 @@ namespace Bastion.UI.Strategy
                 toured = true;
                 _ = TabTour(shots);
             }
+            // Tests with the app (TestSteps): this visit's steps, BaseRun's on the base («tab:geoscape», «take:sandbags»…)
+            // and «unwalk» to stop walking.
+            var tour = Environment.GetEnvironmentVariable(visits == 0 ? "BASTION_RECORRIDO_BASE" : "BASTION_RECORRIDO_BASE2");
+            visits++;
+            if (!string.IsNullOrEmpty(tour)) _ = TestSteps.Run(tour, step =>
+            {
+                if (step == "unwalk") Bastion.Client.Settlement.Instance?.WalkAbout(false);
+                else BaseRun.Do(control, step);
+                return true;
+            }, destroyCancellationToken);
+            // Walking about the clearing (Arte's): the panels off, how to walk at the bottom.
+            walkingOf = Bastion.Client.Settlement.Instance;
+            if (walkingOf != null) walkingOf.WalkingChanged += root.Walking;
             // Last: what NetLink held for the base comes in as it is listened to, and what it throws ends Start there.
             net.Message += OnMessage;
         }
+
+        /// <summary>The clearing whose walk the screens follow.</summary>
+        Bastion.Client.Settlement walkingOf;
 
         /// <summary>
         /// For tests with the app (BASTION_PESTANAS=1 with Red's BASTION_FOTOS): the first time on the base, once the
@@ -161,6 +179,7 @@ namespace Bastion.UI.Strategy
         void OnDestroy()
         {
             if (net != null) net.Message -= OnMessage;
+            if (walkingOf != null) walkingOf.WalkingChanged -= GetComponent<StrategyRoot>().Walking;
         }
 
         void OnMessage(ServerMessage m)
@@ -188,6 +207,9 @@ namespace Bastion.UI.Strategy
                 case ErrorMessage error:
                     control.Note(error.Message);
                     break;
+                case PartnerBaseCursorMessage cursor:
+                    control.PartnerCursor(cursor.Slot, cursor.Piece, cursor.X, cursor.Y, cursor.Rot);
+                    break;
             }
         }
 
@@ -196,8 +218,12 @@ namespace Bastion.UI.Strategy
         {
             var keys = Keyboard.current;
             var root = GetComponent<StrategyRoot>();
-            if (keys == null || control == null || !root.Ready) return;
-            if (keys.escapeKey.wasPressedThisFrame) control.Escape();
+            if (control == null || !root.Ready) return;
+            control.Tick();
+            if (keys == null) return;
+            // Walking about the clearing, Esc is the walk's (Arte's: it ends it in its LateUpdate, so Walking is still on here).
+            var walking = Bastion.Client.Settlement.Instance != null && Bastion.Client.Settlement.Instance.Walking;
+            if (keys.escapeKey.wasPressedThisFrame && !walking) control.Escape();
             else if (keys.enterKey.wasPressedThisFrame) root.RadioKey("enter");
             else if (keys.spaceKey.wasPressedThisFrame) root.RadioKey("space");
         }

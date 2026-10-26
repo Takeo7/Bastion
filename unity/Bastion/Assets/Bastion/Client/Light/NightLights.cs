@@ -75,6 +75,8 @@ namespace Bastion.Client
             glows.Add(Boxes("Farolas", heads, LampHead));
             glows.Add(Boxes("Faros", fronts, Headlight));
             glows.RemoveAll(o => o == null);
+            // The map made again under the same root takes its children with it (MapView.Build): the pool too.
+            if (pool != null && pool.Any(l => l == null)) pool = null;
             if (pool == null)
             {
                 pool = new Light[RealLights];
@@ -133,7 +135,8 @@ namespace Bastion.Client
         {
             bool night = Mood.Current != null && Mood.Current.Now == Mood.Night;
             foreach (var o in glows) if (o != null && o.activeSelf != night) o.SetActive(night);
-            if (pool == null) return;
+            // (Gone with the map made again, till Show makes them anew.)
+            if (pool == null || pool.Any(l => l == null)) return;
             if (!night)
             {
                 foreach (var l in pool) l.enabled = false;

@@ -163,3 +163,13 @@
     align-items: center;
     justify-content: center;
 }
+
+/* Behind the arrival card, over the whole screen and clear: a click by the way doesn't play the map under it
+   (hud.ts .intro-catcher; Ana, 20/10 #32). */
+.card-catcher {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}

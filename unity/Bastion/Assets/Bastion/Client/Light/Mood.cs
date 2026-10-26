@@ -90,27 +90,60 @@ namespace Bastion.Client
             ShadowReach(null);
         }
 
-        /// <summary>The pipelines' own shadow distances, while a view has its own (ShadowReach).</summary>
-        static readonly Dictionary<UniversalRenderPipelineAsset, float> projectShadows = new Dictionary<UniversalRenderPipelineAsset, float>();
+        /// <summary>The pipelines' own shadow distances and cascades' splits, while a view has its own (ShadowReach, FitShadows).</summary>
+        static readonly Dictionary<UniversalRenderPipelineAsset, (float distance, float split2, Vector2 split3, Vector3 split4)> projectShadows =
+            new Dictionary<UniversalRenderPipelineAsset, (float, float, Vector2, Vector3)>();
+
+        static UniversalRenderPipelineAsset KeptAsset()
+        {
+            var asset = (QualitySettings.renderPipeline ?? GraphicsSettings.defaultRenderPipeline) as UniversalRenderPipelineAsset;
+            if (asset != null && !projectShadows.ContainsKey(asset)) projectShadows[asset] = (asset.shadowDistance, asset.cascade2Split, asset.cascade3Split, asset.cascade4Split);
+            return asset;
+        }
 
         /// <summary>
         /// How far from the camera the sun's shadows reach (the pipeline's shadow distance, metres), for a view that takes in
         /// more than the battle's: the settlement's clearing whole, as 0.10.1's shadow camera over all of it (clearingArt.ts
-        /// aim). Null puts the project's back, as the mood going does.
+        /// aim). Null puts the project's back (and its cascades), as the mood going does.
         /// </summary>
         public static void ShadowReach(float? metres)
         {
-            var asset = (QualitySettings.renderPipeline ?? GraphicsSettings.defaultRenderPipeline) as UniversalRenderPipelineAsset;
             if (metres == null)
             {
-                foreach (var kv in projectShadows) if (kv.Key != null) kv.Key.shadowDistance = kv.Value;
+                foreach (var kv in projectShadows)
+                {
+                    if (kv.Key == null) continue;
+                    kv.Key.shadowDistance = kv.Value.distance;
+                    kv.Key.cascade2Split = kv.Value.split2;
+                    kv.Key.cascade3Split = kv.Value.split3;
+                    kv.Key.cascade4Split = kv.Value.split4;
+                }
                 projectShadows.Clear();
+                fittedNear = -1;
                 return;
             }
-            if (asset == null) return;
-            if (!projectShadows.ContainsKey(asset)) projectShadows[asset] = asset.shadowDistance;
-            asset.shadowDistance = metres.Value;
+            var asset = KeptAsset();
+            if (asset != null) asset.shadowDistance = metres.Value;
         }
+
+        /// <summary>
+        /// The shadows to `far` metres (in depth from the camera), their cascades ending at those fractions (`splits2` with
+        /// two, `splits4` with four) of the way from `near` (the nearest ground seen) to `far`: what the battle's camera
+        /// sees (ShadowFit). Only when it moved enough to tell (a hundredth of the distance).
+        /// </summary>
+        public static void FitShadows(float far, float near, float[] splits2, float[] splits4)
+        {
+            var asset = KeptAsset();
+            if (asset == null || far <= 0) return;
+            if (Mathf.Abs(asset.shadowDistance - far) < far * 0.01f && Mathf.Abs(fittedNear - near) < far * 0.01f) return;
+            fittedNear = near;
+            asset.shadowDistance = far;
+            float At(float k) => Mathf.Clamp((near + k * (far - near)) / far, 0.02f, 0.95f);
+            asset.cascade2Split = At(splits2[0]);
+            asset.cascade4Split = new Vector3(At(splits4[0]), Mathf.Max(At(splits4[1]), At(splits4[0]) + 0.01f), Mathf.Max(At(splits4[2]), At(splits4[1]) + 0.02f));
+        }
+
+        static float fittedNear = -1;
 
         /// <summary>The light for `state` (by night if its mission is; by day in winter, the snow's), on «Luz».</summary>
         public static Mood For(GameState state) => Show(state?.Mission?.Night == true ? Night : Snowy(state) ? SnowDay : Day);

@@ -16,7 +16,11 @@ namespace Bastion.UI.Strategy
     /// offer:&lt;n&gt;, zone:&lt;n&gt;, map:&lt;action&gt;, recruit, launch, wait, squad:&lt;n&gt;:on|off, armory-tab:&lt;tab&gt;,
     /// armory-pick:&lt;id&gt;, armory:&lt;action&gt;[:&lt;arg&gt;], board, unlock:&lt;cell&gt;, vote:yes|no, withdraw, option:&lt;n&gt;,
     /// modal:&lt;n&gt;, continue, customize, custom-choice:&lt;group&gt;:&lt;id&gt;, custom-color:&lt;part&gt;:&lt;#hex&gt;,
-    /// custom:&lt;action&gt;; and in the mission, abandon and tobase. In the mission the base's screens go, as with AppFlow's
+    /// custom:&lt;action&gt;; on the clearing take:&lt;piece&gt;, fell, walk, turn, point:free[:&lt;n&gt;]|tree|post|&lt;x&gt;:&lt;y&gt;|+&lt;dx&gt;:+&lt;dy&gt;
+    /// (the pointer there: free, the nearest tile where the piece in hand fits, or a line of n of it to the east; post,
+    /// where the siege's defender in hand can start; tree, the nearest that can be felled; signed,
+    /// from where it is), press, release;
+    /// and in the mission, abandon and tobase. In the mission the base's screens go, as with AppFlow's
     /// change of scene, and a stand-in for the battle listens to NetLink as CombatSession does (the snapshot first, and
     /// off once the room leaves the mission), so the way back to the base goes as in the app. What happens goes to the
     /// log («[base-run]», and the controller's «[base]»).
@@ -142,8 +146,54 @@ namespace Bastion.UI.Strategy
             }
         }
 
+        /// <summary>The tile the test's pointer was last put on.</summary>
+        static Vector2Int pointed;
+
+        /// <summary>The test's pointer onto a tile of the clearing (kept pressed if it was): one named, or the nearest fit for the tool.</summary>
+        static bool Point(BaseController control, string[] part)
+        {
+            var clearing = Bastion.Client.Settlement.Instance;
+            var b = clearing?.Base;
+            if (b == null) return false;
+            Vector2Int? tile = null;
+            var relative = part.Length > 2 && (part[1].StartsWith("+") || part[1].StartsWith("-")) && ClearingInput.Fake != null;
+            if (part.Length > 2 && int.TryParse(part[1], out var x) && int.TryParse(part[2], out var y)) tile = relative ? pointed + new Vector2Int(x, y) : new Vector2Int(x, y);
+            else
+            {
+                // From the middle outwards: the first that fits.
+                var mid = new Vector2Int(b.Width / 2, b.Height / 2);
+                var input = control.Clearing;
+                foreach (var t in Enumerable.Range(0, b.Width * b.Height).Select(i => new Vector2Int(i % b.Width, i / b.Width)).OrderBy(t => (t - mid).sqrMagnitude))
+                {
+                    // free:<n>: room for a line of n to the east from there.
+                    var n = part.Length > 2 && int.TryParse(part[2], out var k) ? k : 1;
+                    var fits = part.Length > 1 && part[1] == "tree"
+                        ? Base.TreeAt(b, t.x, t.y) && Base.FellBlocker(b, t.x, t.y) == null
+                        : part.Length > 1 && part[1] == "post"
+                        ? input.Soldier != null && control.PostBlocker(input.Soldier, t.x, t.y) == null
+                        : input.Piece != null && (n > 1
+                            ? control.LineBlocker(input.Piece, Enumerable.Range(0, n).Select(i => new Vec2 { X = t.x + i, Y = t.y }).ToList(), input.Rot) == null
+                            : ClearingInput.PlaceAt(input.Piece, input.Rot, t) is var at && control.Blocker(input.Piece, at.x, at.y, input.Rot) == null);
+                    if (!fits) continue;
+                    tile = t;
+                    break;
+                }
+            }
+            if (tile == null)
+            {
+                Debug.LogWarning($"[base-run] ninguna casilla para {string.Join(":", part)}");
+                return false;
+            }
+            var down = ClearingInput.Fake?.down ?? false;
+            pointed = tile.Value;
+            var s = clearing.Camera.WorldToScreenPoint(clearing.TileWorld(tile.Value.x, tile.Value.y));
+            ClearingInput.Fake = (new Vector2(s.x, s.y), down);
+            Debug.Log($"[base-run] puntero en {tile.Value.x},{tile.Value.y}");
+            return false;
+        }
+
         /// <summary>The click; true when it is an order, whose answer the next step waits for.</summary>
-        static bool Do(BaseController control, string step)
+        internal static bool Do(BaseController control, string step)
         {
             var c = control.State;
             var part = step.Split(':');
@@ -175,6 +225,19 @@ namespace Bastion.UI.Strategy
                 case "custom-choice": control.OnCustomChoice(S(1), S(2), false); return false;
                 case "custom-color": control.OnCustomColor(S(1), S(2), false); return false;
                 case "custom": control.OnCustomAction(S(1)); return S(1) == "save" || S(1) == "copy";
+                case "take": control.OnPieceTake(S(1)); return false;
+                case "fell": control.OnFell(); return false;
+                case "walk": control.OnWalk(); return false;
+                case "turn": control.Clearing.Turn(1); return false;
+                case "point": return Point(control, part);
+                case "press":
+                case "release":
+                    if (ClearingInput.Fake is var f && f != null) ClearingInput.Fake = (f.Value.at, part[0] == "press");
+                    var hand = control.Clearing;
+                    var seen = ClearingInput.Fake is var g && g != null ? Bastion.Client.Settlement.Instance?.TileAt(g.Value.at) : null;
+                    var over = ClearingInput.Fake is var o && o != null && FindFirstObjectByType<StrategyRoot>().Over(o.Value.at);
+                    Debug.Log($"[base-run] {part[0]} en {pointed.x},{pointed.y} (TileAt: {seen}, sobre un panel: {over}): {hand.Tool} {hand.Piece ?? hand.Soldier}{(hand.Soldier != null ? $", puesto: {control.PostBlocker(hand.Soldier, pointed.x, pointed.y) ?? "sí"}" : "")}");
+                    return part[0] == "release";
                 default:
                     Debug.LogWarning($"[base-run] paso desconocido: {step}");
                     return false;

@@ -87,3 +87,379 @@
     font-size: 12px;
     color: var(--t-muted);
 }
+
+/* A weapon of the Armería's state and improvements (strategy.css .wmarks): «GASTADA», «ROTA», «+2». */
+.weapon-marks {
+    flex-direction: row;
+    margin-left: 6px;
+}
+
+.weapon-mark {
+    margin-right: 4px;
+    padding: 0 4px;
+    border-radius: 2px;
+    font-size: 10.5px;
+    -unity-font-style: bold;
+    letter-spacing: 0.4px;
+}
+
+.weapon-mark--worn {
+    background-color: rgba(245, 165, 36, 0.22);
+    color: var(--t-warn);
+}
+
+.weapon-mark--broken {
+    background-color: rgba(240, 80, 60, 0.26);
+    color: var(--t-danger);
+}
+
+.weapon-mark--mods {
+    background-color: var(--t-accent-soft);
+    color: var(--t-accent);
+}
+
+/* ============================================================== backpack */
+
+/* The backpack (styles.css .unit-pack, mixta-hud.css): what is on the floor, then the slots and the squad's haul on one line. */
+.unit-pack {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top-width: 1px;
+    border-top-color: var(--t-line);
+}
+
+/* The squad's haul beside the slots, or under them, to the right, when it doesn't fit (styles.css: margin-left auto). */
+.pack-line {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.pack-slots {
+    flex-direction: row;
+    flex-shrink: 0;
+}
+
+/* A slot: a dark well, its kind's colour as a line along its foot (--c), its number and icon in that colour. */
+.pack-slot {
+    width: 28px;
+    height: 20px;
+    margin-right: 3px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    background-color: rgba(0, 0, 0, 0.42);
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+.pack-slot--empty {
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.1);
+    opacity: 0.7;
+}
+
+.pack-slot__n {
+    font-size: 12px;
+    letter-spacing: 0;
+}
+
+.pack-slot__icon {
+    width: 14px;
+    height: 14px;
+}
+
+.pack-slot__icon--small {
+    width: 11px;
+    height: 11px;
+    margin-left: 1px;
+}
+
+.pack-slot__icon--weapon {
+    width: 20px;
+}
+
+.pack-slot--supplies { border-bottom-color: rgba(255, 210, 90, 0.7); }
+.pack-slot--medicines { border-bottom-color: rgba(143, 208, 90, 0.7); }
+.pack-slot--item { border-bottom-color: rgba(242, 194, 48, 0.7); }
+.pack-slot--food { border-bottom-color: rgba(234, 185, 108, 0.7); }
+.pack-slot--parts { border-bottom-color: rgba(178, 195, 208, 0.7); }
+
+/* A weapon found glows faintly purple: for the Armería. */
+.pack-slot--weapon {
+    background-color: rgba(197, 140, 255, 0.13);
+    border-width: 1px;
+    border-color: rgba(197, 140, 255, 0.65);
+}
+
+.pack-slot--supplies .pack-slot__n, .pack-total--supplies .pack-total__n { color: #ffd25a; }
+.pack-slot--medicines .pack-slot__n, .pack-total--medicines .pack-total__n { color: var(--t-good); }
+.pack-slot--item .pack-slot__n, .pack-total--item .pack-total__n { color: var(--t-accent); }
+.pack-slot--food .pack-slot__n, .pack-total--food .pack-total__n { color: #eab96c; }
+.pack-slot--parts .pack-slot__n, .pack-total--parts .pack-total__n { color: #b2c3d0; }
+.pack-slot--weapon .pack-slot__n, .pack-total--weapon .pack-total__n { color: #c58cff; }
+
+.pack-slot--medicines .pack-slot__icon, .pack-total--medicines .pack-total__icon { -unity-background-image-tint-color: var(--t-good); }
+.pack-slot--item .pack-slot__icon, .pack-total--item .pack-total__icon { -unity-background-image-tint-color: var(--t-accent); }
+.pack-slot--food .pack-slot__icon, .pack-total--food .pack-total__icon { -unity-background-image-tint-color: #eab96c; }
+.pack-slot--parts .pack-slot__icon, .pack-total--parts .pack-total__icon { -unity-background-image-tint-color: #b2c3d0; }
+.pack-slot--weapon .pack-slot__icon, .pack-total--weapon .pack-total__icon { -unity-background-image-tint-color: #c58cff; }
+
+/* One's own soldier's slot is a button: lit on hover and while its menu is open. */
+.pack-slot-btn {
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+/* Over Mixta's Button:hover, which would fill it with steel. */
+.pack-slot-btn:hover {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.pack-slot-btn:hover .pack-slot,
+.pack-slot-btn--open .pack-slot {
+    border-top-width: 1px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-color: var(--t-accent);
+    border-left-color: var(--t-accent);
+    border-right-color: var(--t-accent);
+}
+
+/* What the whole squad carries, at the line's end: «ESCUADRA 12§ 3▣ ×2». */
+.pack-squad {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 1;
+    max-width: 100%;
+    margin-left: auto;
+    padding-left: 6px;
+}
+
+.pack-squad__title {
+    flex-shrink: 0;
+    font-size: 10px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    color: var(--t-muted);
+    margin-right: 5px;
+}
+
+.pack-squad__none {
+    color: var(--t-muted);
+}
+
+/* Many kinds carried: they go on in a second line, to the right. */
+.pack-totals {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    flex-shrink: 1;
+}
+
+.pack-total {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 5px;
+}
+
+.pack-total__n {
+    font-size: 12px;
+    letter-spacing: 0;
+}
+
+.pack-total__icon {
+    width: 11px;
+    height: 11px;
+    margin-right: 1px;
+}
+
+.pack-total__icon--after {
+    margin-right: 0;
+    margin-left: 1px;
+}
+
+.pack-total--weapon .pack-total__icon {
+    width: 16px;
+}
+
+/* What lies on its tile: «EN EL SUELO», a fallen soldier's rucksack with its order, each thing a button. */
+.pack-floor {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.pack-floor__title {
+    font-size: 10px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    color: var(--t-muted);
+    margin-right: 6px;
+}
+
+/* Its mark, and its order beside it, or under it when the name is long. */
+.pack-fallen {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 2px 0 3px;
+}
+
+.pack-fallen__mark {
+    font-size: 12px;
+    color: var(--t-text);
+    margin-right: 8px;
+}
+
+.pack-fallen__take {
+    margin: 2px 0 0;
+    padding: 1px 8px;
+    font-size: 12px;
+    flex-shrink: 1;
+    white-space: normal;
+}
+
+.pack-floor-item {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 6px 3px 0;
+    padding: 1px 7px;
+    border-width: 1px;
+    border-radius: 2px;
+    border-color: rgba(242, 194, 48, 0.7);
+    background-color: rgba(242, 194, 48, 0.08);
+}
+
+.pack-floor-item:disabled {
+    opacity: 0.6;
+}
+
+.pack-floor-item:hover,
+.pack-floor-item--open {
+    background-color: rgba(242, 194, 48, 0.18);
+}
+
+.pack-floor-item__label {
+    font-size: 12px;
+    margin-right: 5px;
+}
+
+.pack-floor-item__act {
+    font-size: 10.5px;
+    -unity-font-style: bold;
+    color: var(--t-accent);
+}
+
+/* The menu over the backpack (mixta-hud.css .pack-menu): riveted steel, a line per order, its cost or why not. */
+.pack-menu {
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    margin-bottom: 6px;
+    /* A fixed width, not min/max: so a reason on two lines is measured as two (with the width open, Unity measured one
+       and the menu came out a line short). The longest name and reason fit. */
+    width: 290px;
+    padding: 8px;
+    border-radius: 2px;
+    background-color: var(--m-steel);
+    border-width: 1px;
+    border-color: var(--m-edge);
+    border-top-color: var(--m-steel-hi);
+}
+
+/* No line of the menu gives up height: a reason on two lines made the column squeeze its title. */
+.pack-menu__head {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2px 3px;
+}
+
+.pack-menu__title {
+    font-size: 14px;
+    color: #ffffff;
+    flex-shrink: 1;
+    white-space: normal;
+}
+
+.pack-menu__x {
+    margin: 0 0 0 8px;
+    padding: 0 4px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--t-muted);
+}
+
+.pack-menu__x:hover {
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--t-text);
+}
+
+.pack-act {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin: 3px 0 0;
+    padding: 4px 8px;
+    border-radius: 2px;
+    border-width: 1px;
+    border-color: var(--m-edge);
+    border-top-color: var(--m-steel-hi);
+    background-color: #2f3436;
+}
+
+.pack-act:hover {
+    background-color: #3a4043;
+    border-color: rgba(242, 194, 48, 0.55);
+}
+
+.pack-act--main {
+    background-color: #3f3920;
+    border-color: rgba(242, 194, 48, 0.7);
+}
+
+.pack-act--main:hover {
+    background-color: #4a4325;
+}
+
+.pack-act__label {
+    flex-shrink: 0;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--t-text);
+}
+
+.pack-act--main .pack-act__label {
+    color: #ffe9a6;
+}
+
+/* Its cost, or why not: on two lines, to the right, when a long reason doesn't fit beside a long name. */
+.pack-act__cost {
+    flex-shrink: 1;
+    margin-left: 10px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    white-space: normal;
+    color: var(--t-muted);
+}
+
+.pack-act:disabled {
+    opacity: 1;
+}
+
+.pack-act:disabled .pack-act__label {
+    color: var(--t-muted);
+}
+
+.pack-act:disabled .pack-act__cost {
+    color: var(--t-warn);
+}

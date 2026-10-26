@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Bastion.UI.Hud
 {
-    /// <summary>A tag on a card or a flag («VIGILANCIA», «MORDIDO»): its words, its kind (the colour) and its tooltip.</summary>
+    /// <summary>A tag on a card or a flag («VIGILANCIA», «MORDISCO»): its words, its kind (the colour) and its tooltip.</summary>
     [Serializable]
     public sealed class TagView
     {
@@ -154,15 +154,123 @@ namespace Bastion.UI.Hud
         public string RankName;
         public float[] Skills = Array.Empty<float>();
         public string Name;
-        /// <summary>A partner's soldier: whose («DE ANA») and their colour; empty, one's own.</summary>
+        /// <summary>A partner's soldier: whose (their name: the panel says «DE ANA», HudText.Squad.Whose) and their colour; empty, one's own.</summary>
         public string Whose;
         public string WhoseColor;
-        /// <summary>Bitten: its tag (Lore's BITE_TAG, «MORDIDO») and what a bite does in this mission; empty if not.</summary>
+        /// <summary>Bitten: its tag (Lore.BiteTag, «MORDISCO») and what a bite does in this mission; empty if not.</summary>
         public string Bite;
         public string BiteTip;
         public List<StatView> Stats = new List<StatView>();
         public string Weapon;
         public string WeaponTip;
+        /// <summary>A weapon of the Armería's state and improvements (arms.ts wearMarks): «GASTADA» (worn), «ROTA» (broken), «+2» (mods).</summary>
+        public List<TagView> WeaponMarks = new List<TagView>();
+        /// <summary>Its backpack, where there is anything to search or it carries something (game.ts packView); null, none.</summary>
+        public PackView Pack;
+    }
+
+    // ------------------------------------------------------------- backpack
+
+    /// <summary>An order on a thing carried or on the floor (hud.ts ItemOrder): the engine's `item` command for the soldier shown.</summary>
+    [Serializable]
+    public sealed class PackOrder
+    {
+        /// <summary>drop, take, give, use, equip (ItemActions).</summary>
+        public string Action;
+        /// <summary>The slot ordered on; -1, none (take).</summary>
+        public int Index = -1;
+        /// <summary>The thing on the floor taken.</summary>
+        public string Id;
+        /// <summary>The partner it is handed to, or treated.</summary>
+        public string To;
+    }
+
+    /// <summary>A line of a slot's menu (hud.ts packMenuEl): «Curar a Kofi», what it costs, or why not instead.</summary>
+    [Serializable]
+    public sealed class PackActView
+    {
+        public string Label;
+        /// <summary>«1 acción», «gratis».</summary>
+        public string Cost;
+        /// <summary>Why it can't be given now (in place of the cost); empty, it can.</summary>
+        public string Off;
+        /// <summary>What the slot is for (Usar, Equipar, Ponerse, Al cinturón): lit.</summary>
+        public bool Main;
+        public PackOrder Order;
+    }
+
+    /// <summary>A slot of the backpack (hud.ts PackSlot): one thing carried.</summary>
+    [Serializable]
+    public sealed class PackSlotView
+    {
+        /// <summary>supplies, medicines, food, parts, weapon, item: its colour.</summary>
+        public string Kind;
+        /// <summary>Its number («12§», «3»); empty, only its icon.</summary>
+        public string Text;
+        /// <summary>Its icon (HudIcons: «store:food», «stat:grenade»…); empty, none.</summary>
+        public string Icon;
+        public string Tip;
+        /// <summary>What it is (lore.ts findLabel: «Medicinas»), its menu's title.</summary>
+        public string Label;
+        /// <summary>The same as a phrase (lootName: «una medicina»), for «Dejar …».</summary>
+        public string Name;
+        /// <summary>Its menu: what can be done with it.</summary>
+        public List<PackActView> Acts = new List<PackActView>();
+    }
+
+    /// <summary>A thing on the soldier's tile (GameState.dropped), to pick up.</summary>
+    [Serializable]
+    public sealed class PackFloorView
+    {
+        public string Id;
+        public string Kind;
+        /// <summary>findLabel: «Medicinas», «+2 piezas».</summary>
+        public string Label;
+        /// <summary>lootName: «2 medicinas», for «Coger …: ¿qué dejas?».</summary>
+        public string Name;
+    }
+
+    /// <summary>A fallen soldier's rucksack on the tile (playtest 18/10 #49): whose, and one order that takes what fits.</summary>
+    [Serializable]
+    public sealed class PackFallenView
+    {
+        /// <summary>lore.ts fallenPackMark: «MOCHILA DE CHIARA».</summary>
+        public string Mark;
+        /// <summary>fallenPackAction: its button.</summary>
+        public string Action;
+        public string Tip;
+        /// <summary>The backpack is full.</summary>
+        public bool Off;
+        public List<string> Ids = new List<string>();
+    }
+
+    /// <summary>One of the squad's totals: «12§», «×2» with the medicines' icon.</summary>
+    [Serializable]
+    public sealed class PackTotalView
+    {
+        public string Kind;
+        public string Text;
+        public string Icon;
+        /// <summary>Its icon after the number (rations and parts), not before.</summary>
+        public bool IconAfter;
+    }
+
+    /// <summary>The soldier's backpack and the squad's haul (hud.ts PackView): it only counts if it gets home.</summary>
+    [Serializable]
+    public sealed class PackView
+    {
+        public List<PackSlotView> Slots = new List<PackSlotView>();
+        public int Size;
+        /// <summary>One of the player's own, with orders to give (docs/FASE8.md §C): the slots and the floor take a click.</summary>
+        public bool Live;
+        /// <summary>The partner holds the command: why no order goes yet («Tiene el mando Luis»); empty, they go.</summary>
+        public string Locked;
+        public string Tip;
+        public List<PackFloorView> Floor = new List<PackFloorView>();
+        public List<PackFallenView> Fallen = new List<PackFallenView>();
+        public List<PackTotalView> Totals = new List<PackTotalView>();
+        /// <summary>What the squad carries, in words (lootSummary), on its totals.</summary>
+        public string SquadTip;
     }
 
     // -------------------------------------------------------------- actions

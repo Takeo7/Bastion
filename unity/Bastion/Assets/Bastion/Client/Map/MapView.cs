@@ -42,6 +42,8 @@ namespace Bastion.Client.Map
             Level = storeys.Length;
             Current = this;
             PlaceLata(state);
+            // (BASTION_SOMBRAS_FIJAS=1: the pipeline's own, to weigh what fitting them costs: a test.)
+            if (FitShadows && GetComponent<ShadowFit>() == null && Environment.GetEnvironmentVariable("BASTION_SOMBRAS_FIJAS") != "1") gameObject.AddComponent<ShadowFit>();
             return builder;
         }
 
@@ -49,6 +51,9 @@ namespace Bastion.Client.Map
 
         /// <summary>Whether La Lata waits by the evacuation on this map (the settlement's clearing has its own: off there).</summary>
         public bool WithLata = true;
+
+        /// <summary>Whether the sun's shadows follow the camera's view (ShadowFit: the battle's; the clearing has its own reach, Settlement.ShadowMetres).</summary>
+        public bool FitShadows = true;
 
         /// <summary>La Lata by the evacuation (mapView.ts placeBus, evacBus.ts), on a map whose mission has a zone; null without.</summary>
         public LaLata Lata { get; private set; }

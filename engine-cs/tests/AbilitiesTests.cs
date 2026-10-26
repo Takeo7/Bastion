@@ -310,8 +310,8 @@ namespace Bastion.Engine.Tests
             Events.ApplyEvent(s, new PsiEvent { Unit = "a1", Target = "s2", Success = true, Effect = PsiEffects.Disoriented, Chance = 70 });
             var spec = s.Units.Find((u) => u.Id == "s2")!;
             spec.Ap = 2;
-            Assert.Matches("Desorientado", Abilities.AbilityBlocker(s, spec, AbilityIds.Grenade));
-            Has(Aim.PreviewShot(s, spec, s.Units.Find((u) => u.Id == "a1")!)!.Mods, "Desorientado", -20);
+            Assert.Matches("desorientación", Abilities.AbilityBlocker(s, spec, AbilityIds.Grenade));
+            Has(Aim.PreviewShot(s, spec, s.Units.Find((u) => u.Id == "a1")!)!.Mods, "Desorientación", -20);
         }
 
         [Fact(DisplayName = "psionics › sectoids raise corpses as zombies that join their pod and claw at soldiers")]

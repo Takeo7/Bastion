@@ -36,6 +36,8 @@ namespace Bastion.Client.Map
         /// <summary>Its length and width, in tiles (once built; the bus's until then).</summary>
         public float Length => built ? size.z / Tile : 7;
         public float Width => built ? size.x / Tile : 1.7f;
+        /// <summary>Its width over the bus's plates (the others have none), in tiles: what one leaning on it has its shoulder to.</summary>
+        public float PlatedWidth => built ? plated.x / Tile : 1.7f;
         /// <summary>Whether one gets in on its one side only (the bus): it is mirrored to have its doors towards the squad.</summary>
         public bool OneSided => Vehicle >= 3;
         /// <summary>Whether it is going or coming.</summary>
@@ -49,7 +51,7 @@ namespace Bastion.Client.Map
 
         bool built;
         GameObject body;
-        Vector3 size;
+        Vector3 size, plated;
         Bounds box;
         readonly List<Transform> wheels = new List<Transform>();
         readonly List<Quaternion> wheelsAt = new List<Quaternion>();
@@ -131,9 +133,12 @@ namespace Bastion.Client.Map
                 }
             }
             if (wheels.Count > 0) wheelRadius = BoundsOf(wheels[0], wheels[0], r => true).size.y / 2;
-            if (Vehicle == 3) Plates(model.transform, prefabOf);
+            // Its size without the bus's plates (mula.ts: the bus's model.size): one leaning on it stands LeanOff past its
+            // side, that already its shoulder to the plates (with them, a third of a tile off: Gameplay 26/10).
             box = BoundsOf(body.transform, body.transform, r => true);
             size = box.size;
+            if (Vehicle == 3) Plates(model.transform, prefabOf);
+            plated = BoundsOf(body.transform, body.transform, r => true).size;
             if (Vehicle == 0) CutDoors(model.transform);
             Doors(model.transform);
             Lamps();

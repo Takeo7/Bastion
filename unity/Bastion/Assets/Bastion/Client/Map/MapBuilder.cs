@@ -120,7 +120,7 @@ namespace Bastion.Client.Map
     /// (WallLayout, WallsView) with their floors, roofs and stairs (BuildingSurfaces), and the decor as Synty's props as
     /// 0.10.1 picked, turned and fitted them. `prefabOf` gives a prop's model by its Synty name.
     /// </summary>
-    public sealed class MapBuilder
+    public sealed partial class MapBuilder
     {
         GameState s;
         readonly Func<string, GameObject> prefabOf;
@@ -146,8 +146,8 @@ namespace Bastion.Client.Map
         /// </summary>
         static readonly string[] CarPaints = { null, "PolygonApocalypse_01_B", "PolygonApocalypse_01_C", "PolygonApocalypse_02_A", "PolygonApocalypse_03_A", "PolygonApocalypse_04_A" };
 
-        /// <summary>The Synty materials the map asks `materialOf` for (the cars' paints), for the game's catalog (MapCatalog).</summary>
-        public static IEnumerable<string> MaterialsUsed => CarPaints.Where(m => m != null);
+        /// <summary>The Synty materials the map asks `materialOf` for (the cars' paints, the containers' colours: MapArt.Atlases), for the game's catalog (MapCatalog).</summary>
+        public static IEnumerable<string> MaterialsUsed => CarPaints.Where(m => m != null).Concat(MapArt.Atlases.Values.Select(a => a.to));
         const string CarRed = "PolygonApocalypse_01_A";
 
         void Repaint(GameObject car, int paint)
@@ -436,6 +436,40 @@ namespace Bastion.Client.Map
             }
             return root;
         }
+
+        /// <summary>Prop `id`'s model alone under `parent`, set up as the map places it (fitted, turned to face north, on its floor); null if it has none.</summary>
+        public GameObject PropAlone(string id, Transform parent)
+        {
+            var o = Place(parent, id, Vector3.zero, 0);
+            if (o == null) return null;
+            Placed--;
+            o.transform.localPosition = Vector3.zero;
+            o.transform.localRotation = Quaternion.identity;
+            return o;
+        }
+
+        /// <summary>
+        /// Prop `id`'s parts' box in its own frame as placed (0.10.1's tiles: x east, y up, z south), as clearingArt.ts propBox
+        /// read it; empty if it has no model.
+        /// </summary>
+        public ClearingLife.PropBox BoxOf(string id)
+        {
+            if (boxes.TryGetValue(id, out var b)) return b;
+            var o = Place(root, id, Vector3.zero, 0);
+            if (o == null) return boxes[id] = ClearingLife.PropBox.Empty;
+            o.transform.SetParent(null, false);
+            o.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            Placed--;
+            bool any = o.GetComponentInChildren<Renderer>() != null;
+            var u = BoundsIn(o, o.transform);
+            DestroyNow(o);
+            if (!any) return boxes[id] = ClearingLife.PropBox.Empty;
+            float k = MapSpace.Tile;
+            // (Unity's z is 0.10.1's the other way.)
+            return boxes[id] = new ClearingLife.PropBox(u.min.x / k, u.min.y / k, -u.max.z / k, u.max.x / k, u.max.y / k, -u.min.z / k);
+        }
+
+        readonly Dictionary<string, ClearingLife.PropBox> boxes = new Dictionary<string, ClearingLife.PropBox>();
 
         /// <summary>Prop `id` measured as it is placed (mapView.ts topOf, sizeOf): its parts' highest point and their box, in tiles.</summary>
         PropMeasure Measure(string id)
@@ -773,7 +807,7 @@ namespace Bastion.Client.Map
             if (look == null) return;
             // An object over several tiles: one model over all of them, from its anchor (mapView.ts drawThing).
             var thing = Bastion.Engine.Decor.ObjectAt(decor, s.Width, i);
-            if (thing != null && thing.Tiles.Count > 1)
+            if (thing != null && thing.Tiles.Count > 1 && !OldBlock(thing, decor))
             {
                 if (!done.Add(thing.Anchor)) return;
                 // Whatever still stands on its tiles goes (made again with it).
@@ -783,6 +817,7 @@ namespace Bastion.Client.Map
                 Own(Thing(props[k], thing, floor), k, thing.Tiles);
                 return;
             }
+            if (Block(k, i, look, tiles, decor, done)) return;
             if (Fountain(k, i, look, tiles, decor, done)) return;
             // The base's pines are its own (Woods).
             if (pieces != null && tile == "high" && look.Kind == DecorKinds.Tree) return;
@@ -803,6 +838,27 @@ namespace Bastion.Client.Map
             var ids = MapArt.Set(set);
             string id = ids[Mathf.Min(ids.Length - 1, Mathf.FloorToInt(MapArt.Hash(x, y, 1) * ids.Length))];
             Own(Place(props[k], id, new Vector3(cx * MapSpace.Tile, floor, -cz * MapSpace.Tile), -yaw), k, new[] { i });
+            // A fence's rails, from its middle to each fence or gate post beside it still standing (boards in town, wire elsewhere).
+            if (look.Kind == "fence" || look.Kind == "gatePost")
+            {
+                var rails = MapArt.Set(s.Biome == "city" ? "fenceBoards" : "fenceRails");
+                for (int f = 0; f < 4; f++)
+                {
+                    var d = Bastion.Engine.Grid.Dirs4[f];
+                    if (!FenceAt(x + d.X, y + d.Y) || rails.Length == 0) continue;
+                    Own(Place(props[k], rails[0], new Vector3((x + 0.5f) * MapSpace.Tile, floor, -(y + 0.5f) * MapSpace.Tile), -((4 - f) % 4) * 90), k, new[] { i });
+                }
+            }
+        }
+
+        /// <summary>A fence or gate post still standing on tile (x, y) (mapView.ts fenceAt: the ground's): the fences beside it run their rails to it.</summary>
+        bool FenceAt(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= s.Width || y >= s.Height) return false;
+            int i = y * s.Width + x;
+            if (i >= s.Tiles.Count || s.Tiles[i] != "low" || s.Decor == null || i >= s.Decor.Count) return false;
+            string kind = Bastion.Engine.Decor.DecorOf(s.Decor[i])?.Kind;
+            return kind == "fence" || kind == "gatePost";
         }
 
         /// <summary>A square's fountain (mapView.ts FOUNTAIN): its rim's pieces low, the statue in the middle of a big one high.</summary>
@@ -1082,8 +1138,33 @@ namespace Bastion.Client.Map
             }
             var holder = Prop(parent, id, art, prefab, footprint).transform;
             holder.SetPositionAndRotation(at, Quaternion.Euler(0, yaw, 0));
+            Repaint(holder.gameObject, art);
             Placed++;
             return holder.gameObject;
+        }
+
+        /// <summary>A prop painted from another texture than its model's (MapArt.Atlases: a container's colour), its materials of that name swapped.</summary>
+        void Repaint(GameObject prop, PropArt art)
+        {
+            if (art.atlas == null || !MapArt.Atlases.TryGetValue(art.atlas, out var swap) || materialOf == null) return;
+            var to = materialOf(swap.to);
+            if (to == null)
+            {
+                Missing.Add($"{art.atlas} ({swap.to})");
+                return;
+            }
+            foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
+            {
+                var materials = r.sharedMaterials;
+                bool swapped = false;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    if (materials[i] == null || !materials[i].name.StartsWith(swap.from)) continue;
+                    materials[i] = to;
+                    swapped = true;
+                }
+                if (swapped) r.sharedMaterials = materials;
+            }
         }
 
         /// <summary>

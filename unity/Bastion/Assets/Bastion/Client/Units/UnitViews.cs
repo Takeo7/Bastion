@@ -77,7 +77,7 @@ namespace Bastion.Client.Units
     /// Sidekick figure and clips, the figures are stand-ins (a body of the team's colour) that walk, turn, flinch and
     /// fall at the right pace, so the player's rhythm can be built on them.
     /// </summary>
-    public sealed class UnitViews : MonoBehaviour, IShotStep
+    public sealed partial class UnitViews : MonoBehaviour, IShotStep
     {
         public static UnitViews Current { get; private set; }
 
@@ -102,10 +102,22 @@ namespace Bastion.Client.Units
             public string build = "masc";
             public bool deadKind;
             public string seed;
-            /// <summary>The weapon in its hands (a two-handed gun), its muzzle in the gun's frame, how it is held at rest.</summary>
+            /// <summary>The weapon in its hands (UnitViews.Arms: a gun, the pistol, a blade), its muzzle in its frame, how it is held at rest.</summary>
             public Transform weapon;
             public Vector3 muzzle;
             public string rest;
+            /// <summary>What it carries by where it rides (weapon, sidearm, belt: syntyFigures.ts CARRIES), each's look, muzzle and middle, and the places on the body they ride in.</summary>
+            public readonly Dictionary<string, Transform> carried = new Dictionary<string, Transform>();
+            public readonly Dictionary<string, WeaponArt> arts = new Dictionary<string, WeaponArt>();
+            public readonly Dictionary<string, Vector3> muzzles = new Dictionary<string, Vector3>();
+            public readonly Dictionary<string, float> middles = new Dictionary<string, float>();
+            public readonly Dictionary<string, Transform> stows = new Dictionary<string, Transform>();
+            /// <summary>Which of them is in its hands, and what that is.</summary>
+            public string drawn = "weapon";
+            public Held inHand;
+            /// <summary>The pistol's turn in the right hand's frame (syntyFigures.ts clipGrip for a pistol); how far into a reload it is (0 none).</summary>
+            public Quaternion? pistolGrip;
+            public float reload;
             /// <summary>The gun's turn in the right hand's frame, learnt while both hands are on it (syntyFigures.ts clipGrip).</summary>
             public Quaternion? grip;
             /// <summary>How far it is aimed (0 at rest, 1 aimed), going there over AimBlend.</summary>
@@ -116,6 +128,8 @@ namespace Bastion.Client.Units
             public bool feeding;
             public bool walking;
             public bool slumped;
+            /// <summary>The stance it stands in at ease (the living enemy's, the pistol's way of waiting); null the plain idle.</summary>
+            public string stance;
             /// <summary>Where it stood before it went down to eat (it goes back there as it gets up).</summary>
             public Vector3 home;
         }
@@ -168,8 +182,8 @@ namespace Bastion.Client.Units
                 }
                 v.aim = Mathf.MoveTowards(v.aim, v.aiming && !v.dead && !v.crouched ? 1 : 0, dt / AimBlend);
                 v.anim?.Step(dt);
-                if (v.aim > 0) Straighten(v, AimStraighten * v.aim);
-                Hold(v);
+                if (v.aim > 0 && v.inHand == Held.Rifle) Straighten(v, AimStraighten * v.aim);
+                HoldNow(v);
             }
         }
 
@@ -269,16 +283,19 @@ namespace Bastion.Client.Units
                 view.animator = model.GetComponentInChildren<Animator>();
                 var catalog = FigureCatalog.Load();
                 bool armed = !view.deadKind && Arm(view, u, catalog);
+                bool rifled = armed && Rifled(view);
                 // With a gun in the hands it moves in Mixamo's armed clips where there is one (ARMED_MOTIONS), crouches
-                // kneeling with it; the rest Synty's. It stands in its stance (syntyFigures.ts: the dead drunk, the living
-                // enemy aggressive).
-                string stance = view.deadKind ? "drunk" : LivingEnemies.Contains(u.Template) ? "aggressive" : null;
-                string ArmedId(string m) => !armed ? null : m == "crouchIdle" ? "rifleKneel" : Anims.Armed("rifle", m) is string a && a != "own" ? a : null;
+                // kneeling with it; the rest Synty's (with the pistol, its own: 'own'). It stands in its stance
+                // (syntyFigures.ts: the dead drunk, the living enemy aggressive; with the pistol, one of PISTOL_RESTS).
+                string stance = view.deadKind ? "drunk" : LivingEnemies.Contains(u.Template) ? "aggressive"
+                    : armed && PistolMain(view) && PistolRests.TryGetValue(view.rest ?? "", out var waits) ? waits : null;
+                view.stance = stance;
+                string ArmedId(string m) => !rifled ? null : m == "crouchIdle" ? "rifleKneel" : Anims.Armed("rifle", m) is string a && a != "own" ? a : null;
                 string IdOf(string m) => ArmedId(m) ?? (m == "idle" ? Anims.Stance(view.build, stance) : null) ?? Anims.Motion(view.build, m, view.deadKind);
                 if (view.animator != null && catalog != null)
                 {
                     view.anim = new FigureAnimator(view.animator, m => catalog.Clip(IdOf(m)), m => Gaits.ArmedPace(m, ArmedId(m)), m => m != "crouchIdle" && ArmedId(m) != null);
-                    if (armed) view.anim.Rest(catalog.Clip(view.rest), 0);
+                    if (armed) AtRest(view, 0);
                 }
                 view.body = model.transform;
             }
@@ -310,12 +327,12 @@ namespace Bastion.Client.Units
             {
                 v.slumped = slumped;
                 var catalog = FigureCatalog.Load();
-                v.anim.SetMotion("idle", catalog?.Clip(Anims.Stance(v.build, slumped ? "slumped" : null) ?? Anims.Motion(v.build, "idle", v.deadKind)));
+                v.anim.SetMotion("idle", catalog?.Clip(Anims.Stance(v.build, slumped ? "slumped" : v.stance) ?? Anims.Motion(v.build, "idle", v.deadKind)));
             }
             if (crouched == v.crouched) return;
             v.crouched = crouched;
             if (!v.walking && !v.feeding) v.anim.Motion(IdleOf(v));
-            if (v.weapon != null && !v.aiming) v.anim.Rest(FigureCatalog.Load()?.Clip(RestOf(v)), 0.3f);
+            if (v.weapon != null && !v.aiming) AtRest(v, 0.3f);
         }
 
         /// <summary>The Sidekick presets each kind of the enemy is drawn as (syntyManifest.ts UNIT_BODIES, of what Unity has so far).</summary>
@@ -363,20 +380,6 @@ namespace Bastion.Client.Units
                 Debug.LogWarning($"[units] {u.Id}: no soldier figure ({e.Message})");
                 return null;
             }
-        }
-
-        /// <summary>
-        /// The gun its template carries at its weapon tier (UNIT_WEAPONS), in its hands, at rest one of RIFLE_RESTS by its
-        /// seed; false if it carries none it can hold yet (pistols and blades come next).
-        /// </summary>
-        bool Arm(View v, Unit u, FigureCatalog catalog)
-        {
-            if (v.animator == null || !v.animator.isHuman) return false;
-            var gun = Gun(Anims.Weapon(Anims.UnitWeapon(u.Template, u.WeaponTier)), v.root, catalog, out v.muzzle);
-            if (gun == null) return false;
-            v.weapon = gun;
-            v.rest = RestFor(v.seed);
-            return true;
         }
 
         /// <summary>
@@ -538,7 +541,8 @@ namespace Bastion.Client.Units
         /// <summary>The shot's kick: Mixamo's fire clip once over the aim.</summary>
         public void Recoil(string id)
         {
-            if (views.TryGetValue(id, out var v) && v.weapon != null) v.anim?.PlayUpper(FigureCatalog.Load()?.Clip("rifleFire"), 0.03f);
+            // (The pistol's own clip goes unplayed, as in 0.10.1: its aim held.)
+            if (views.TryGetValue(id, out var v) && v.weapon != null && v.inHand == Held.Rifle) v.anim?.PlayUpper(FigureCatalog.Load()?.Clip("rifleFire"), 0.03f);
         }
 
         /// <summary>Into La Lata: out of sight at once.</summary>
@@ -669,13 +673,14 @@ namespace Bastion.Client.Units
             v.anim?.Motion(IdleOf(v));
         }
 
-        /// <summary>The weapon raised at `at` (the pistol, `sidearm`); its number, for LowerWeapon.</summary>
+        /// <summary>The weapon raised at `at` (the pistol drawn from its holster, `sidearm`: unitViews.ts raiseWeapon); its number, for LowerWeapon.</summary>
         public async Awaitable<int> RaiseWeapon(string id, Vector3 at, bool sidearm = false, CancellationToken ct = default)
         {
             Face(id, at);
             if (views.TryGetValue(id, out var v) && v.weapon != null)
             {
-                v.anim?.Rest(FigureCatalog.Load()?.Clip(v.crouched ? "rifleKneelAim" : "rifleAim"), AimBlend);
+                if (sidearm) Draw(v, SidearmCarry);
+                Aimed(v, AimBlend);
                 v.aiming = true;
             }
             await Awaitable.WaitForSecondsAsync(0.35f, ct);
@@ -684,14 +689,20 @@ namespace Bastion.Client.Units
 
         int aims;
 
+        /// <summary>Lowered at rest; the pistol back in its holster after (unitViews.ts lowerWeapon: the main weapon drawn, if nothing raised it again meanwhile).</summary>
         public async Awaitable LowerWeapon(string id, int aim, CancellationToken ct = default)
         {
             if (views.TryGetValue(id, out var v) && v.weapon != null)
             {
-                v.anim?.Rest(FigureCatalog.Load()?.Clip(RestOf(v)), 0.3f);
+                AtRest(v, 0.3f);
                 v.aiming = false;
             }
             await Awaitable.WaitForSecondsAsync(0.3f, ct);
+            if (aim == aims && v != null && v.weapon != null && v.drawn != MainCarry && !v.aiming)
+            {
+                Draw(v, MainCarry);
+                AtRest(v, 0.2f);
+            }
         }
 
         /// <summary>Out to `to` and back again (a lean out from cover): over `seconds`.</summary>
@@ -729,6 +740,13 @@ namespace Bastion.Client.Units
                 await Awaitable.WaitForSecondsAsync(0.45f, ct);
                 onHit?.Invoke();
                 await Awaitable.WaitForSecondsAsync(0.35f, ct);
+                return;
+            }
+            // A living one strikes with its blade (unitViews.ts lunge: the belt's, its own if it is all it has).
+            if (views.TryGetValue(id, out var s) && !s.deadKind && s.anim != null && s.carried.Count > 0)
+            {
+                views.TryGetValue(target, out var aimed);
+                await Strike(s, aimed, onHit, ct);
                 return;
             }
             await Awaitable.WaitForSecondsAsync(0.35f, ct);
@@ -874,7 +892,12 @@ namespace Bastion.Client.Units
             v.anim?.StopWhole(0.2f);
         }
 
-        public async Awaitable Reload(string id, CancellationToken ct = default) => await Awaitable.WaitForSecondsAsync(1.4f, ct);
+        /// <summary>A reload (unitViews.ts reload: 0.6 s, «Reloading» scrubbed through, the gun held fast in the right hand); none with a pistol.</summary>
+        public async Awaitable Reload(string id, CancellationToken ct = default)
+        {
+            if (views.TryGetValue(id, out var v)) await ReloadNow(v, ct);
+            else await Awaitable.WaitForSecondsAsync(ReloadSeconds, ct);
+        }
 
         /// <summary>
         /// Where in Mixamo's throws the hand lets go, and how long before that the game starts them (docs/MIXAMO.md;

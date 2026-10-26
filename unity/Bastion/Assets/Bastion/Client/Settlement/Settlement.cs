@@ -42,6 +42,13 @@ namespace Bastion.Client
             Mood.ShadowReach(null);
             // No fade left over the next scene's 3D.
             Shader.SetGlobalFloat("_StageFade", 0);
+            life?.ClearAll();
+            // (The pointer back, if it was walking about.)
+            if (Walking)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
         }
 
         /// <summary>The clearing as a battlefield with nobody on it: the map its siege would be fought on (clearingArt.ts clearingState).</summary>
@@ -71,12 +78,14 @@ namespace Bastion.Client
             pieceGrid = null;
             Snow = snow;
             var state = ClearingState(@base, snow);
+            ground = state;
             Mood.Show(snow ? Mood.SnowDay : Mood.Day);
             if (Map == null)
             {
                 Map = new GameObject("Mapa").AddComponent<MapView>();
                 // La Lata is the settlement's own here (Park), not the evacuation's.
                 Map.WithLata = false;
+                Map.FitShadows = false;
                 Map.transform.SetParent(transform, false);
             }
             built = Map.Build(state, this.prefabOf, this.materialOf);
@@ -88,6 +97,7 @@ namespace Bastion.Client
             if (Lata == null || Lata.Vehicle != vehicle) MakeLata();
             Park();
             CampPlaces();
+            LifeBase();
             Reframe();
         }
 
@@ -100,7 +110,13 @@ namespace Bastion.Client
             // Their clothes, by the order they joined, unless they chose (wardrobe.ts setRoster).
             Dress.Roster(campaign.Soldiers);
             vehicle = Campaign.VehicleOf(campaign);
+            // A siege to fight: the Escuadra is the clearing from above, its posts (screen.ts siegeNow, shotFor).
+            SiegeNow = Campaign.ActiveOffer(campaign)?.Siege == true;
+            LifeOf(campaign);
             Show(campaign.Bastion, Campaign.Wintry(campaign));
+            LifeView();
+            // The posts' soldiers as this campaign has them (given before it, or dressed otherwise now).
+            if (posts.Count > 0) PostFigures(posts);
         }
 
         void MakeLata()
@@ -123,6 +139,7 @@ namespace Bastion.Client
             MakeLata();
             Park();
             CampPlaces();
+            LifeBase();
             Reframe();
         }
 
@@ -132,6 +149,9 @@ namespace Bastion.Client
             StepLineup(Time.deltaTime);
             StepFlames(Time.deltaTime);
             StepBuild(Time.time);
+            StepLife(Time.deltaTime);
+            StepWalkAbout(Time.deltaTime);
+            StepPosts(Time.deltaTime);
             if (nextVehicle != null && Lata != null && !Lata.Moving)
             {
                 int v = nextVehicle.Value;

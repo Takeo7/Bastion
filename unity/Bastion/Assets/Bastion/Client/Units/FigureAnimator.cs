@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
@@ -31,6 +32,8 @@ namespace Bastion.Client.Units
             public bool loop;
             public float from;
             public bool stopping;
+            /// <summary>Its time and weight set from outside every frame (Scrub: a reload, a blade's stroke), not by fades.</summary>
+            public bool manual;
         }
 
         PlayableGraph graph;
@@ -52,6 +55,8 @@ namespace Bastion.Client.Units
         readonly float[] restTimes = new float[2];
         readonly float[] restLengths = new float[2];
         readonly float[] restWeights = new float[2];
+        /// <summary>Each rest's time held fast (≥ 0: syntyFigures.ts PISTOL_HOLD), else round and round.</summary>
+        readonly float[] restFrozen = { -1, -1 };
         int restNow = -1;
         float restFade = 0.25f;
 
@@ -75,11 +80,13 @@ namespace Bastion.Client.Units
         bool variationStopping;
         int CampInput(int k) => Anims.MotionOrder.Length + k;
 
-        const int Held = 1;
-        const int Upper = 2;
+        /// <summary>The gun arm alone (ArmRest: a pistol at rest), under the weapon held at rest and all that plays over it.</summary>
+        const int ArmLayer = 1;
+        const int Held = 2;
+        const int Upper = 3;
         /// <summary>The upper body but the gun arm (syntyAnims.ts 'free': a throw by the free hand, the gun kept as it was held).</summary>
-        const int Free = 3;
-        const int Whole = 4;
+        const int Free = 4;
+        const int Whole = 5;
 
         /// <summary>
         /// `clipOf` gives each of MOTION_ORDER's clips (idle, crouchIdle, walk, run, crouchWalk, sprint), or null; `paceOf`
@@ -92,7 +99,7 @@ namespace Bastion.Client.Units
             graph = PlayableGraph.Create(animator.gameObject.name);
             graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
             var output = AnimationPlayableOutput.Create(graph, "figura", animator);
-            layers = AnimationLayerMixerPlayable.Create(graph, 5);
+            layers = AnimationLayerMixerPlayable.Create(graph, 6);
             // (And after the motions, the camp's: two loops, the one going and the one coming, and a variation: CampLoop, Vary.)
             motions = AnimationMixerPlayable.Create(graph, Anims.MotionOrder.Length + 3);
             graph.Connect(motions, 0, layers, 0);
@@ -103,6 +110,7 @@ namespace Bastion.Client.Units
             layers.SetLayerMaskFromAvatarMask(Held, upper);
             layers.SetLayerMaskFromAvatarMask(Upper, upper);
             layers.SetLayerMaskFromAvatarMask(Free, UpperBody(false));
+            layers.SetLayerMaskFromAvatarMask(ArmLayer, GunArm());
             for (int k = 0; k < Anims.MotionOrder.Length; k++)
             {
                 var clip = clipOf(Anims.MotionOrder[k]);
@@ -144,12 +152,15 @@ namespace Bastion.Client.Units
         /// How it holds its weapon standing (a rifle at rest, aimed), looped over the upper body as long as it stands (the
         /// moving clips hold it their own way); null, nothing (unarmed). Crossfaded over `fade` seconds.
         /// </summary>
-        public void Rest(AnimationClip clip, float fade = 0.25f)
+        public void Rest(AnimationClip clip, float fade = 0.25f) => Rest(clip, fade, -1);
+
+        /// <summary>The same, held at `at` seconds into it (a pistol at rest by the thigh: the tail of «Pistol Aim», PISTOL_HOLD) when it is ≥ 0.</summary>
+        public void Rest(AnimationClip clip, float fade, float at)
         {
             int next = restNow < 0 ? 0 : 1 - restNow;
             if (rests[next].IsValid())
             {
-                graph.Disconnect(rest, next);
+                Unplug(rest, next);
                 rests[next].Destroy();
             }
             restFade = Mathf.Max(fade, 1e-3f);
@@ -163,8 +174,79 @@ namespace Bastion.Client.Units
             graph.Connect(rests[next], 0, rest, next);
             restTimes[next] = 0;
             restLengths[next] = Mathf.Max(clip.length, 1e-3f);
+            restFrozen[next] = at >= 0 ? Mathf.Min(at, clip.length) : -1;
             if (restNow < 0) restWeights[next] = fade <= 0 ? 1 : 0;
             restNow = next;
+        }
+
+        /// <summary>
+        /// A clip over the gun arm alone, held at `at` seconds into it (a pistol at rest by the thigh: the tail of «Pistol
+        /// Aim», syntyFigures.ts PISTOL_HOLD, over GUN_ARM, the rest of the body its stance), fading in or out over `fade`;
+        /// null lets it go. Under the rests: a pistol aimed with both hands (Rest) takes over from it as it fades.
+        /// </summary>
+        public void ArmRest(AnimationClip clip, float at, float fade = 0.25f)
+        {
+            armFade = Mathf.Max(fade, 1e-3f);
+            if (clip == null)
+            {
+                armOn = false;
+                return;
+            }
+            if (!armClip.IsValid() || armClip.GetAnimationClip() != clip)
+            {
+                if (armClip.IsValid())
+                {
+                    Unplug(layers, ArmLayer);
+                    armClip.Destroy();
+                }
+                armClip = AnimationClipPlayable.Create(graph, clip);
+                armClip.SetApplyFootIK(false);
+                graph.Connect(armClip, 0, layers, ArmLayer);
+                if (fade <= 0) armWeight = 1;
+            }
+            armClip.SetTime(Mathf.Clamp(at, 0, clip.length));
+            armOn = true;
+        }
+
+        AnimationClipPlayable armClip;
+        bool armOn;
+        float armWeight, armFade = 0.25f;
+
+        /// <summary>The right arm alone (syntyAnims.ts GUN_ARM: clavicle, shoulder, elbow, hand).</summary>
+        static AvatarMask GunArm()
+        {
+            var mask = new AvatarMask();
+            for (var part = AvatarMaskBodyPart.Root; part < AvatarMaskBodyPart.LastBodyPart; part++)
+                mask.SetHumanoidBodyPartActive(part, part == AvatarMaskBodyPart.RightArm || part == AvatarMaskBodyPart.RightFingers || part == AvatarMaskBodyPart.RightHandIK);
+            return mask;
+        }
+
+        /// <summary>
+        /// A clip over the upper body at `time` seconds into it, weighing `weight`, both set every frame from outside (a
+        /// reload scrubbed, a blade's stroke on its own clock: syntyFigures.ts direct's spin, strike); `clip` null lets go.
+        /// </summary>
+        public void Scrub(AnimationClip clip, float time, float weight)
+        {
+            var slot = slots[Upper];
+            if (clip == null)
+            {
+                if (slot.manual && slot.clip.IsValid())
+                {
+                    Unplug(layers, Upper);
+                    slot.clip.Destroy();
+                }
+                slot.manual = false;
+                return;
+            }
+            if (!slot.manual || !slot.clip.IsValid() || slot.clip.GetAnimationClip() != clip)
+            {
+                Play(Upper, clip, 0, 0, true, 0, 0);
+                slot.manual = true;
+            }
+            slot.time = Mathf.Clamp(time, 0, slot.length);
+            slot.weight = Mathf.Clamp01(weight);
+            slot.clip.SetTime(slot.time);
+            layers.SetInputWeight(Upper, slot.weight);
         }
 
         /// <summary>A clip over the upper body, once (from `at` seconds into it), fading in and out; its seconds from there.</summary>
@@ -301,9 +383,19 @@ namespace Bastion.Client.Units
             slot.stopping = false;
             slot.loop = false;
             slot.from = 0;
+            slot.manual = false;
             if (fadeIn <= 0) slot.weight = 1;
             Step(0);
             return (slot.length - slot.time) / Mathf.Max(speed, 1e-3f);
+        }
+
+        /// <summary>The layers' weights and the motions mixer's inputs' (MOTION_ORDER, the camp's two loops, the variation), for the labs.</summary>
+        public string Weights()
+        {
+            if (!graph.IsValid()) return "-";
+            var layer = string.Join(" ", Enumerable.Range(0, layers.GetInputCount()).Select(k => layers.GetInputWeight(k).ToString("0.00")));
+            var mix = string.Join(" ", Enumerable.Range(0, motions.GetInputCount()).Select(k => motions.GetInputWeight(k).ToString("0.00")));
+            return $"layers {layer} | motions {mix}";
         }
 
         public void Step(float dt)
@@ -333,7 +425,7 @@ namespace Bastion.Client.Units
                 stood += c.weight;
                 if (c.weight <= 0 && k != campNow)
                 {
-                    graph.Disconnect(motions, CampInput(k));
+                    Unplug(motions, CampInput(k));
                     c.clip.Destroy();
                 }
             }
@@ -345,7 +437,7 @@ namespace Bastion.Client.Units
                 variationKeep = Mathf.Clamp01(variationKeep + (variationStopping ? -dt : dt) / VariationCut);
                 if (variation.time >= variation.length - 1e-3f || variationKeep <= 0)
                 {
-                    graph.Disconnect(motions, CampInput(2));
+                    Unplug(motions, CampInput(2));
                     variation.clip.Destroy();
                 }
                 else
@@ -374,15 +466,32 @@ namespace Bastion.Client.Units
                 if (!rests[k].IsValid()) continue;
                 restWeights[k] = k == restNow ? Mathf.Min(1, restWeights[k] + dt / restFade) : Mathf.Max(0, restWeights[k] - dt / restFade);
                 restTimes[k] += dt;
-                rests[k].SetTime(restTimes[k] % restLengths[k]);
+                rests[k].SetTime(restFrozen[k] >= 0 ? restFrozen[k] : restTimes[k] % restLengths[k]);
                 held += restWeights[k];
             }
             for (int k = 0; k < 2; k++) rest.SetInputWeight(k, held > 0 ? restWeights[k] / held : 0);
             layers.SetInputWeight(Held, Mathf.Min(1, held) * standing);
+            // The pistol at rest: as long as it stands (moving, Synty's own arms swing: syntyAnims.ts 'own').
+            armWeight = armOn ? Mathf.Min(1, armWeight + dt / armFade) : Mathf.Max(0, armWeight - dt / armFade);
+            if (armClip.IsValid())
+            {
+                layers.SetInputWeight(ArmLayer, armWeight * standing);
+                if (!armOn && armWeight <= 0)
+                {
+                    Unplug(layers, ArmLayer);
+                    armClip.Destroy();
+                }
+            }
             for (int layer = Upper; layer <= Whole; layer++)
             {
                 var slot = slots[layer];
                 if (!slot.clip.IsValid()) continue;
+                if (slot.manual)
+                {
+                    slot.clip.SetTime(slot.time);
+                    layers.SetInputWeight(layer, slot.weight);
+                    continue;
+                }
                 slot.time += dt * slot.speed;
                 if (slot.loop && slot.time >= slot.length) slot.time = slot.from + (slot.time - slot.from) % Mathf.Max(slot.length - slot.from, 1e-3f);
                 slot.time = Mathf.Min(slot.length, slot.time);
@@ -394,11 +503,21 @@ namespace Bastion.Client.Units
                 layers.SetInputWeight(layer, slot.weight);
                 if (ending && slot.weight <= 0)
                 {
-                    graph.Disconnect(layers, layer);
+                    Unplug(layers, layer);
                     slot.clip.Destroy();
                 }
             }
             graph.Evaluate(0);
+        }
+
+        /// <summary>
+        /// An input let go of with its weight to 0: Unity sets a disconnected input's weight back to 1, and a mixer blends an
+        /// empty input as the default pose (the arms out level, as in a T-pose: the camp's drink, Gameplay 26/10).
+        /// </summary>
+        void Unplug(Playable mixer, int input)
+        {
+            graph.Disconnect(mixer, input);
+            mixer.SetInputWeight(input, 0);
         }
 
         public void Dispose()

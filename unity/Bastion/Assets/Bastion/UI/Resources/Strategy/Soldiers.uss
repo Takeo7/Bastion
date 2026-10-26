@@ -246,7 +246,7 @@
 }
 
 .sheet__name {
-    font-size: 30px;
+    font-size: 27px;
     letter-spacing: 1px;
     color: #ffffff;
 }
@@ -263,7 +263,7 @@
 
 .sheet__customize {
     align-self: flex-start;
-    margin-top: 6px;
+    margin-top: 4px;
     padding: 3px 10px;
     font-size: 12px;
     letter-spacing: 1px;
@@ -272,8 +272,8 @@
 .sheet__stats {
     flex-direction: row;
     align-items: center;
-    margin-top: 8px;
-    padding: 5px 10px;
+    margin-top: 6px;
+    padding: 3px 10px;
 }
 
 .sheet__stat {
@@ -289,13 +289,13 @@
 }
 
 .sheet__stat-value {
-    font-size: 20px;
+    font-size: 18px;
 }
 
 .sheet__health {
     flex-grow: 1;
     -unity-text-align: middle-right;
-    font-size: 19px;
+    font-size: 17px;
     color: var(--t-muted);
 }
 
@@ -312,7 +312,7 @@
 }
 
 .sheet__head {
-    margin-top: 9px;
+    margin-top: 7px;
     padding-bottom: 2px;
     font-size: 11px;
     letter-spacing: 1.5px;
@@ -335,14 +335,14 @@
 /* =============================================================== choices */
 
 .pick {
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .pick__head {
     flex-direction: row;
     align-items: flex-end;
     justify-content: flex-start;
-    padding: 2px 2px 3px;
+    padding: 1px 2px 2px;
     background-color: rgba(0, 0, 0, 0);
     background-image: none;
     border-width: 0 0 1px 0;
@@ -375,7 +375,7 @@
 
 .pick__value {
     flex-grow: 1;
-    font-size: 19px;
+    font-size: 17px;
     color: var(--t-accent);
 }
 

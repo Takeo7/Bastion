@@ -93,6 +93,8 @@ namespace Bastion.UI.Hud
             menuButton.text = HudText.Menu.Label;
             menuButton.clicked += () => relay.OnMenu();
             tips.Attach(menuButton, HudText.Menu.Tip);
+            // A press anywhere on the HUD outside the backpack closes its menu.
+            root.RegisterCallback<PointerDownEvent>(e => unit.PressedAt(e.target as VisualElement), TrickleDown.TrickleDown);
         }
 
         void OnDisable()
@@ -171,10 +173,23 @@ namespace Bastion.UI.Hud
         public bool CloseAbilityMenu() => bar.CloseMenu();
         public void ToggleAbilityMenu(string id) => bar.ToggleMenu(id);
 
+        /// <summary>The backpack's menu (Backpack): open; the swap for a thing on the floor opened; closed (Esc, a press on the map).</summary>
+        public bool PackMenuOpen => unit != null && unit.PackMenuOpen;
+        public void OpenSwap(string unitId, string id) => unit.OpenSwap(unitId, id);
+        public bool ClosePackMenu() => unit != null && unit.ClosePackMenu();
+
         // ------------------------------------------------------ the moments
 
         public void Banner(string text, string kind = "xcom", string detail = null, bool held = false) => banner.Show(text, kind, detail, held);
         public bool ReleaseBanner(bool quiet = false) => banner.Release(quiet);
+
+        /// <summary>Whether a screen point (y up) is on the turn's stamp: a click there only lets it go, with its sound (Banner).</summary>
+        public bool OverBanner(Vector2 screen)
+        {
+            var picked = PickAt(screen);
+            var stamp = root?.Q("banner");
+            return picked != null && stamp != null && (picked == stamp || stamp.Contains(picked));
+        }
 
         /// <summary>The arrival card; the objective's card waits under it until it closes.</summary>
         public void Intro(IntroView v)
@@ -185,6 +200,12 @@ namespace Bastion.UI.Hud
 
         public bool CloseIntro() => cards.CloseIntro(false);
 
+        /// <summary>The arrival card is up (its keys are its own: Intro and Space close it, Esc does nothing).</summary>
+        public bool IntroOpen => cards.IntroOpen;
+
+        /// <summary>The squad is on its way back to the base (this player's «Volver a la base», or the partner's).</summary>
+        public void Returning() => cards.Returning();
+
         void ReopenIntro()
         {
             goal.SetWaiting(true);
@@ -194,7 +215,11 @@ namespace Bastion.UI.Hud
         public void Log(string text, string color = null) => log.Add(text, color);
         public void ClearLog() => log.Clear();
         public void Toast(string text) => notes.Toast(text);
+        /// <summary>The short note gone, if it still says `text`.</summary>
+        public void ClearToast(string text) => notes.ClearToast(text);
         public void Notice(string text, string color = null, Action onSee = null) => notes.Notice(text, color, onSee);
+        /// <summary>A find left on the floor with the backpack full (hud.ts packOffer): its line, with «Cambiar» for 7 s.</summary>
+        public void PackOffer(string text, Action swap) => notes.Offer(text, HudText.Pack.Swap, swap);
 
         /// <summary>A word or number rising over a point of the world (damage, «ATURDIDO»…).</summary>
         public void Float(Vector3 world, string text, string kind) => flags.Float(world, text, kind);
@@ -238,10 +263,22 @@ namespace Bastion.UI.Hud
         /// <summary>Whether the pointer is over the HUD at a screen point (Input System coordinates, y up): then a click isn't the map's.</summary>
         public bool Over(Vector2 screen)
         {
-            if (root?.panel == null) return false;
-            var p = RuntimePanelUtils.ScreenToPanel(root.panel, new Vector2(screen.x, Screen.height - screen.y));
-            var picked = root.panel.Pick(p);
+            var picked = PickAt(screen);
             return picked != null && picked.pickingMode == PickingMode.Position && picked != root;
+        }
+
+        /// <summary>
+        /// What is on the panel at a screen point (y up), by the size of the game camera's picture: the screen's in the game,
+        /// the shot's texture in the captures (Shots draws the cameras into one of its own).
+        /// </summary>
+        VisualElement PickAt(Vector2 screen)
+        {
+            if (root?.panel == null) return null;
+            var camera = Camera.main;
+            var w = camera != null ? camera.pixelWidth : Screen.width;
+            var h = camera != null ? camera.pixelHeight : Screen.height;
+            var size = root.panel.visualTree.layout.size;
+            return root.panel.Pick(new Vector2(screen.x / Mathf.Max(1, w) * size.x, (1 - screen.y / Mathf.Max(1, h)) * size.y));
         }
     }
 }

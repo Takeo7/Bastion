@@ -6,6 +6,8 @@ using Bastion.Engine;
 using Bastion.Net;
 using Bastion.UI.Hud;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using Grid = Bastion.Engine.Grid;
 
 namespace Bastion.UI.Combat
@@ -103,8 +105,17 @@ namespace Bastion.UI.Combat
         Material squad;
         Material enemy;
 
+        /// <summary>
+        /// BASTION_TOQUES: keys and clicks at moments of the game (seconds), for strips of what they do: «0:intro» the
+        /// arrival card, «lejos» the camera off to a corner, «tuturno» the squad's turn opening, «space», «enter», «esc»,
+        /// «click» and «rclick» (on the middle of the map), «hold=d/1.5» a key held that long (the camera's WASD, as a player
+        /// taking it), and PackSteps' (the backpack, the bar, the pointer, «end»): «1.5:space,4:click,6:slot=0».
+        /// </summary>
+        public string Touches;
+
         void Start()
         {
+            if (string.IsNullOrEmpty(Touches)) Touches = System.Environment.GetEnvironmentVariable("BASTION_TOQUES") ?? "";
             // BASTION_TINTE=1: «Ropa con el color del jugador» on for this capture (Arte's figures), not kept.
             if (System.Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             var path = Path.GetFullPath(Path.Combine(Application.dataPath, "../../../engine-cs/golden", Step, Golden + ".json"));
@@ -188,6 +199,7 @@ namespace Bastion.UI.Combat
                 control.CloseFocus = () => player.CloseFocus;
             }
 
+            if (Touches != "") TouchesSoon();
             if (turn != null && player != null)
             {
                 PlaySoon(turn.Events);
@@ -298,6 +310,101 @@ namespace Bastion.UI.Combat
             else if (Menu == "salir") control.MenuChose(Bastion.UI.Hud.GameMenu.Quit);
         }
 
+        /// <summary>BASTION_TOQUES played: the keyboard's and the mouse's states queued as a player's would come (Input System).</summary>
+        async void TouchesSoon()
+        {
+#if UNITY_EDITOR
+            // In the editor the keyboard and the pointer go to the game only with its view in focus, and a batch run has no
+            // view: a copy of the settings that sends them all (the project's own asset untouched).
+            var settings = ScriptableObject.Instantiate(InputSystem.settings);
+            settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            InputSystem.settings = settings;
+#endif
+            // Nor is a batch run ever in focus: its devices go on all the same.
+            InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            var keys = Keyboard.current ?? InputSystem.AddDevice<Keyboard>();
+            var mouse = Mouse.current ?? InputSystem.AddDevice<Mouse>();
+            // (Off from the start: the app had no focus.)
+            if (!keys.enabled) InputSystem.EnableDevice(keys);
+            if (!mouse.enabled) InputSystem.EnableDevice(mouse);
+            var start = Time.time;
+            var steps = Touches.Split(',').Select(t => t.Split(':')).Where(t => t.Length == 2).Select(t => (at: float.Parse(t[0], System.Globalization.CultureInfo.InvariantCulture), what: t[1].Trim())).OrderBy(t => t.at).ToList();
+            try
+            {
+                foreach (var (at, what) in steps)
+                {
+                    while (Time.time - start < at) await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    var cam = control.Rig != null ? control.Rig.Camera : Camera.main;
+                    var middle = new Vector2(cam.pixelWidth * 0.5f, cam.pixelHeight * 0.45f);
+                    switch (what)
+                    {
+                        case "intro":
+                            control.Intro();
+                            break;
+                        case "lejos":
+                            // The camera off to a corner of the map, as a player who looked elsewhere (no TakeControl: not the player's).
+                            control.Rig.Focus(Board.TileToWorld(control.State, new Pos { X = 4, Y = 4 }), true);
+                            break;
+                        case "tuturno":
+                            // The squad's turn opening, as the host's event would come (the stamp held, the camera to its soldier).
+                            player?.Push(new List<GameEvent> { new TurnBeganEvent { Team = Teams.Xcom, Turn = control.State.Turn, Command = 0 } }, null);
+                            break;
+                        case "space":
+                        case "enter":
+                        case "esc":
+                            var key = what == "space" ? Key.Space : what == "enter" ? Key.Enter : Key.Escape;
+                            InputSystem.QueueStateEvent(keys, new KeyboardState(key));
+                            await Awaitable.NextFrameAsync(destroyCancellationToken);
+                            await Awaitable.NextFrameAsync(destroyCancellationToken);
+                            InputSystem.QueueStateEvent(keys, new KeyboardState());
+                            break;
+                        case "click":
+                        case "rclick":
+                            InputSystem.QueueStateEvent(mouse, new MouseState { position = middle, buttons = (ushort)(what == "click" ? 1 : 2) });
+                            await Awaitable.NextFrameAsync(destroyCancellationToken);
+                            await Awaitable.NextFrameAsync(destroyCancellationToken);
+                            InputSystem.QueueStateEvent(mouse, new MouseState { position = middle });
+                            break;
+                        default:
+                            if (what.StartsWith("hold="))
+                            {
+                                var hold = what.Substring(5).Split('/');
+                                if (hold.Length == 2 && System.Enum.TryParse<Key>(hold[0], true, out var held) && float.TryParse(hold[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+                                    HoldKey(keys, held, seconds);
+                                break;
+                            }
+                            // The backpack's: «pick=s1», «slot=0», «act=Curar», «floor=0», «fallen», «offer», «x»; the map's.
+                            PackSteps.Do(control, what);
+                            break;
+                    }
+                    Debug.Log($"[lab] toque {what} a {Time.time - start:0.0} s");
+                }
+            }
+            catch (System.OperationCanceledException)
+            {
+                // The lab went first.
+            }
+        }
+
+        /// <summary>`key` held for `seconds` (BASTION_TOQUES «hold=d/1.5»), while the other touches go on.</summary>
+        async void HoldKey(Keyboard keys, Key key, float seconds)
+        {
+            try
+            {
+                var until = Time.time + seconds;
+                while (Time.time < until)
+                {
+                    InputSystem.QueueStateEvent(keys, new KeyboardState(key));
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                }
+                InputSystem.QueueStateEvent(keys, new KeyboardState());
+            }
+            catch (System.OperationCanceledException)
+            {
+                // The lab went first.
+            }
+        }
+
         /// <summary>Recorded events, a moment after the start: on the host's and this player's states, and to the event player.</summary>
         async void PlaySoon(List<GameEvent> events)
         {
@@ -355,6 +462,7 @@ namespace Bastion.UI.Combat
             var result = Rules.ExecuteCommand(host, cmd, 0, new[] { 0 }, rng);
             if (!result.Ok)
             {
+                Debug.Log($"[lab] orden rechazada ({cmd.Type}): {result.Error}");
                 Hud?.Toast(result.Error);
                 return;
             }

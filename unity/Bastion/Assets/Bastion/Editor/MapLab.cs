@@ -21,6 +21,84 @@ namespace Bastion.EditorTools
 
         public static void Night() => Build(false);
 
+        /// <summary>
+        /// What the sun's shadows cost on a battle's map (Gameplay 26/10: ShadowFit, the shadows over what the camera sees):
+        /// BASTION_MAP (city-7) by day, the camera over its middle at each of BASTION_DISTANCIAS (tiles: 24, the game's, and
+        /// 42, its farthest), at each quality level (BASTION_CALIDAD=Medio,Alto; all if not said), drawn n times (BASTION_FRAMES,
+        /// 120) at 1920×1080, each frame waited for (a pixel read back), with the pipeline's own shadows (50 m) and fitted, in
+        /// turns three times, in ms a frame (the least of each). In the editor, on this machine's GPU.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.Cost -quit
+        /// </summary>
+        public static void Cost()
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+            string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
+            var state = Golden(name);
+            Lighting(true);
+            var view = Map(state, name);
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.farClipPlane = 800;
+            var target = new RenderTexture(1920, 1080, 24);
+            camera.targetTexture = target;
+            camera.aspect = 1920f / 1080;
+            camera.fieldOfView = 40;
+            var probe = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            int frames = int.TryParse(Environment.GetEnvironmentVariable("BASTION_FRAMES"), out int f) ? f : 120;
+            double Frames()
+            {
+                void One()
+                {
+                    camera.Render();
+                    RenderTexture.active = target;
+                    probe.ReadPixels(new Rect(0, 0, 1, 1), 0, 0);
+                    probe.Apply(false);
+                    RenderTexture.active = null;
+                }
+                for (int k = 0; k < 10; k++) One();
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                for (int k = 0; k < frames; k++) One();
+                return watch.Elapsed.TotalMilliseconds / frames;
+            }
+            var fit = camera.gameObject.AddComponent<Bastion.Client.ShadowFit>();
+            fit.Camera = camera;
+            var middle = MapSpace.World(state.Width / 2, state.Height / 2);
+            var distances = (Environment.GetEnvironmentVariable("BASTION_DISTANCIAS") ?? "24,42").Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+            string asked = Environment.GetEnvironmentVariable("BASTION_CALIDAD");
+            int was = QualitySettings.GetQualityLevel();
+            foreach (string level in asked != null ? asked.Split(',') : QualitySettings.names)
+            {
+                int index = Array.IndexOf(QualitySettings.names, level);
+                if (index < 0)
+                {
+                    Debug.LogWarning($"[cost] no quality level {level}");
+                    continue;
+                }
+                QualitySettings.SetQualityLevel(index, true);
+                foreach (float tiles in distances)
+                {
+                    // The game's camera (CameraRig: 52° down, turned 45°).
+                    float pitch = 52 * Mathf.Deg2Rad, yaw = 45 * Mathf.Deg2Rad, back = Mathf.Cos(pitch) * tiles * MapSpace.Tile;
+                    camera.transform.position = middle + new Vector3(Mathf.Sin(yaw) * back, Mathf.Sin(pitch) * tiles * MapSpace.Tile, -Mathf.Cos(yaw) * back);
+                    camera.transform.LookAt(middle);
+                    // In turns, three times each, the least of each (other apps on the GPU only ever add to it).
+                    double own = double.MaxValue, fitted = double.MaxValue;
+                    for (int turn = 0; turn < 3; turn++)
+                    {
+                        Bastion.Client.Mood.ShadowReach(null);
+                        own = Math.Min(own, Frames());
+                        fit.Fit();
+                        fitted = Math.Min(fitted, Frames());
+                    }
+                    var urp = (QualitySettings.renderPipeline ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline) as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+                    Debug.Log(FormattableString.Invariant($"[cost] {level}, {tiles} tiles: {own:0.00} ms a frame with the shadows to 50 m, {fitted:0.00} fitted (ground {fit.Near:0}–{fit.Far / 1.08f:0} m deep, shadows to {urp?.shadowDistance:0} m, {urp?.shadowCascadeCount} cascades; {frames} frames, 1920×1080)"));
+                }
+            }
+            Bastion.Client.Mood.ShadowReach(null);
+            QualitySettings.SetQualityLevel(was, true);
+            camera.targetTexture = null;
+            UnityEngine.Object.DestroyImmediate(target);
+        }
+
         /// <summary>A recorded state by its name (engine-cs/golden/step1/&lt;name&gt;.json).</summary>
         internal static GameState Golden(string name)
         {
@@ -39,6 +117,15 @@ namespace Bastion.EditorTools
             var clock = System.Diagnostics.Stopwatch.StartNew();
             var builder = view.Build(state, Prefabs(), Materials());
             Debug.Log($"[map] {name}: {state.Width}×{state.Height}, {builder.Placed} props and {builder.Walls?.Laid} wall pieces in {clock.ElapsedMilliseconds} ms; missing: {string.Join(", ", builder.Missing.Concat(builder.Walls?.Missing ?? Enumerable.Empty<string>()).OrderBy(m => m))}");
+            // BASTION_PROBAR=id[,id…]: each of those props' first one drawn: its parts, their materials and shaders, their boxes (a test).
+            foreach (string probe in (Environment.GetEnvironmentVariable("BASTION_PROBAR") ?? "").Split(',').Where(k => k.Length > 0))
+            {
+                var found = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(o => o.name == probe).ToList();
+                Debug.Log($"[probar] {probe}: {found.Count} drawn");
+                if (found.Count == 0) continue;
+                foreach (var r in found[0].GetComponentsInChildren<Renderer>(true))
+                    Debug.Log($"[probar]   {r.name} ({r.GetType().Name}, on {r.enabled && r.gameObject.activeInHierarchy}): {string.Join(", ", r.sharedMaterials.Select(m => m == null ? "null" : $"{m.name} [{m.shader.name}, queue {m.renderQueue}, cutoff {(m.HasProperty("_Cutoff") ? m.GetFloat("_Cutoff") : -1):0.##}]"))}; box {r.bounds.size:F2}; mesh {(r.GetComponent<MeshFilter>()?.sharedMesh?.vertexCount ?? 0)} vertices");
+            }
             return view;
         }
 
@@ -132,6 +219,16 @@ namespace Bastion.EditorTools
             var at = Environment.GetEnvironmentVariable("BASTION_AT")?.Split(',');
             if (at != null && at.Length >= 3)
                 MapSpace.Aim(camera, MapSpace.World(int.Parse(at[0]), int.Parse(at[1]), at.Length > 3 ? int.Parse(at[3]) : 0), float.Parse(at[2], System.Globalization.CultureInfo.InvariantCulture));
+            // The sun's shadows over what the camera sees, as the battle's map has them (ShadowFit); BASTION_SOMBRAS_FIJAS=1, the
+            // pipeline's own (50 m), to weigh them.
+            if (Environment.GetEnvironmentVariable("BASTION_SOMBRAS_FIJAS") != "1")
+            {
+                var fit = camera.gameObject.AddComponent<Bastion.Client.ShadowFit>();
+                fit.Camera = camera;
+                fit.Fit();
+                var urp = (UnityEngine.QualitySettings.renderPipeline ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline) as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+                Debug.Log(FormattableString.Invariant($"[map] shadows fitted: ground seen {fit.Near:0.#}–{fit.Far / 1.08f:0.#} m deep, to {urp?.shadowDistance:0.#} m, {urp?.shadowCascadeCount} cascades at {urp?.cascade4Split}"));
+            }
             // BASTION_SHADOWTEST=x,y: a cube 2 m over tile (x, y), to see whose shadow falls where.
             var shadowTest = Environment.GetEnvironmentVariable("BASTION_SHADOWTEST")?.Split(',');
             if (shadowTest != null && shadowTest.Length >= 2)
@@ -228,7 +325,7 @@ namespace Bastion.EditorTools
         {
             ["apocalypse"] = "PolygonApocalypse", ["city"] = "PolygonCity", ["town"] = "PolygonTown", ["office"] = "PolygonOffice",
             ["military"] = "PolygonMilitary", ["construction"] = "PolygonConstruction", ["farm"] = "PolygonFarm", ["nature"] = "PolygonNature",
-            ["alpine"] = "PolygonNatureBiomes", ["industrial"] = "PolygonMapsMilitaryWarehouse", ["woodland"] = "PolygonWoodland",
+            ["alpine"] = "PolygonNatureBiomes", ["industrial"] = "PolygonMapsMilitaryWarehouse", ["woodland"] = "PolygonMapsWoodlandApocalypse",
         };
 
         /// <summary>
