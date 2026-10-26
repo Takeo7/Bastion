@@ -190,6 +190,9 @@ namespace Bastion.Client.Map
         /// <summary>The pieces as drawn, and each one's look (BasePieces.PieceKey) when they were: drawn again when one changes.</summary>
         readonly List<GameObject> pieceArt = new List<GameObject>();
         string piecesDrawn;
+        /// <summary>What the base's pieces put where, as last drawn (0.10.1's tiles: the clearing's fires and seats, Settlement).</summary>
+        public IReadOnlyList<PiecePlacement> PiecesPlaced => piecesPlaced;
+        List<PiecePlacement> piecesPlaced = new List<PiecePlacement>();
         /// <summary>The base's pinar past the map's edge (BaseWoods.Wood), made once a map.</summary>
         GameObject beyond;
         /// <summary>How tall and big each prop's model stands as placed (mapView.ts topOf and sizeOf), in tiles, once measured.</summary>
@@ -369,6 +372,7 @@ namespace Bastion.Client.Map
             piecesDrawn = key;
             foreach (var o in pieceArt) DestroyNow(o);
             pieceArt.Clear();
+            piecesPlaced = new List<PiecePlacement>();
             if (pieces == null) return;
             var placements = new List<PiecePlacement>();
             foreach (var spot in pieces.spots)
@@ -378,6 +382,7 @@ namespace Bastion.Client.Map
                 if (spot.piece.Piece == PieceIds.Sandbags) BasePieces.DrawSandbags(s, pieces, spot, wear, placements);
                 else BasePieces.DrawPiece(s, pieces, spot, wear, Measure, placements);
             }
+            piecesPlaced = placements;
             foreach (var p in placements)
             {
                 var o = PlaceGame(props[0], p.id, p.matrix);
@@ -386,6 +391,50 @@ namespace Bastion.Client.Map
                 pieceArt.Add(o);
             }
             Debug.Log($"[map] the base's pieces: {string.Join(", ", placements.GroupBy(p => p.id).Select(g => $"{g.Key} ×{g.Count()}"))}");
+        }
+
+        /// <summary>
+        /// A piece alone (clearingArt.ts pieceModel, pieceGroup): its models as BasePieces draws them, whole, turned `rot`
+        /// (at `level` if a building), round its footprint's middle at `parent`'s origin (metres); sandbags as their
+        /// barricade's. None casts a shadow. For the one about to go down, a line of them, the partner's in hand and a
+        /// proposal (Settlement.Ghost). Null if it has no model.
+        /// </summary>
+        public GameObject PieceAlone(string id, int rot, int level, Transform parent)
+        {
+            if (!Bastion.Engine.Base.Pieces.TryGetValue(id, out var def)) return null;
+            int across = def.Size.Count > 0 ? def.Size[0] : 1, deep = def.Size.Count > 1 ? def.Size[1] : 1;
+            int w = rot % 2 != 0 ? deep : across, h = rot % 2 != 0 ? across : deep;
+            int width = w + 2, height = h + 2;
+            var piece = new BasePiece { Id = "ghost", Piece = id, X = 1, Y = 1, Rot = rot, Hp = def.Hp };
+            if (def.Kind == PieceKinds.Building) piece.Level = level;
+            if (def.Charges != null) piece.Charges = def.Charges;
+            var alone = new GameState
+            {
+                Width = width,
+                Height = height,
+                Tiles = Enumerable.Repeat(TileKinds.Floor, width * height).ToList(),
+                Elev = Enumerable.Repeat(0, width * height).ToList(),
+                Base = new SiegeBase { Pieces = new List<BasePiece> { piece } },
+            };
+            var map = BasePieces.MapOf(alone);
+            if (map == null || map.spots.Count == 0) return null;
+            var spot = map.spots[0];
+            var placements = new List<PiecePlacement>();
+            if (id == PieceIds.Sandbags) BasePieces.DrawSandbags(alone, map, spot, 0, placements);
+            else BasePieces.DrawPiece(alone, map, spot, 0, Measure, placements);
+            var root = new GameObject("Pieza sola " + id);
+            root.transform.SetParent(parent, false);
+            // Its footprint's middle (0.10.1's tiles, z south) at the origin.
+            var inner = new GameObject("modelos").transform;
+            inner.SetParent(root.transform, false);
+            inner.localPosition = new Vector3(-(float)spot.x * MapSpace.Tile, 0, (float)spot.z * MapSpace.Tile);
+            foreach (var p in placements)
+            {
+                var o = PlaceGame(inner, p.id, p.matrix);
+                if (o == null) continue;
+                foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            return root;
         }
 
         /// <summary>Prop `id` measured as it is placed (mapView.ts topOf, sizeOf): its parts' highest point and their box, in tiles.</summary>
@@ -1031,6 +1080,25 @@ namespace Bastion.Client.Map
                 Missing.Add($"{id} ({art.pack}/{art.fbx})");
                 return null;
             }
+            var holder = Prop(parent, id, art, prefab, footprint).transform;
+            holder.SetPositionAndRotation(at, Quaternion.Euler(0, yaw, 0));
+            Placed++;
+            return holder.gameObject;
+        }
+
+        /// <summary>
+        /// One of MapArt's props as the map places it (its fit, stretch, deck, height, sink, its own turn and shift), under
+        /// `parent` at its origin: what stands on a tile's middle facing north (0.10.1's −z); null without its model.
+        /// </summary>
+        public static GameObject Prop(Transform parent, string id, Func<string, GameObject> prefabOf)
+        {
+            var art = MapArt.Prop(id);
+            var prefab = art != null && !string.IsNullOrEmpty(art.fbx) ? prefabOf?.Invoke(MapArt.ModelKey(art)) : null;
+            return prefab != null ? Prop(parent, id, art, prefab, null) : null;
+        }
+
+        static GameObject Prop(Transform parent, string id, PropArt art, GameObject prefab, MapArt.Footprint footprint)
+        {
             var holder = new GameObject(id).transform;
             holder.SetParent(parent, false);
             var model = UnityEngine.Object.Instantiate(prefab, holder, false);
@@ -1056,8 +1124,6 @@ namespace Bastion.Client.Map
             turned.localRotation = Quaternion.Euler(0, -(art.yaw - MapArt.UnityTurn(art)) * 90, 0);
             if (art.shift != null && art.shift.Length >= 2) turned.localPosition = new Vector3(art.shift[0] * MapSpace.Tile, 0, -art.shift[1] * MapSpace.Tile);
             model.transform.SetParent(turned, false);
-            holder.SetPositionAndRotation(at, Quaternion.Euler(0, yaw, 0));
-            Placed++;
             return holder.gameObject;
         }
 

@@ -1,7 +1,8 @@
 #nullable enable
 // campaign.ts: the commands (executeCampaignCommand): the shared decisions, proposed to the partner or applied at once
 // (proposalText, validateAction, applyAction, propose), and what each commander does alone. Texts fixed as
-// text-fixes.ts has them (Lore, 24/10): the time in missions, the reasons that agree with a soldier who is a woman.
+// text-fixes.ts has them (Lore, 24/10): the time in missions, the reasons that agree with a soldier who is a woman. Not in
+// TypeScript: calling off the mission chosen is proposed too (CancelMissionAction; Arturo, 26/10).
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -40,6 +41,11 @@ namespace Bastion.Engine
                     return $"subir el Bastión a {Lore.BastionLevelThe(Progression.BastionLevel(c) + 1)}";
                 case ChooseMissionAction a:
                     return $"ir a la misión {c.Offers.FirstOrDefault((o) => o.Id == a.Id)?.Name ?? ""}";
+                case CancelMissionAction a:
+                {
+                    var name = c.Offers.FirstOrDefault((o) => o.Id == a.Id)?.Name;
+                    return name != null ? $"cancelar la misión «{name}»" : "cancelar la misión";
+                }
                 case ContactAction a:
                     return $"contactar con {Regions[a.Region].Name}";
                 case EventAction a:
@@ -150,6 +156,12 @@ namespace Bastion.Engine
                     // Another operation may take the place of the one chosen, until it takes off.
                     if (c.ActiveMission == a.Id) return "Esa misión ya está elegida.";
                     if (!c.Offers.Any((o) => o.Id == a.Id)) return "Esa misión ya no está disponible.";
+                    return null;
+                case CancelMissionAction a:
+                    if (c.ActiveMission == null) return "No hay misión elegida.";
+                    if (ActiveOffer(c)?.Siege == true) return SiegeNow;
+                    // Another one chosen while the vote waited (alone, the partner away): the vote was about the one before.
+                    if (c.ActiveMission != a.Id) return "Esa misión ya no está elegida.";
                     return null;
                 case ContactAction a:
                     return ContactBlocker(c, a.Region);
@@ -269,6 +281,12 @@ namespace Bastion.Engine
                     Log(c, $"Misión elegida: {c.Offers.First((o) => o.Id == a.Id).Name}. Revisad la escuadra.");
                     break;
                 }
+                case CancelMissionAction _:
+                    c.ActiveMission = null;
+                    c.Squad = new List<string>();
+                    c.LaunchReady = new bool[2];
+                    Log(c, "Misión cancelada.");
+                    break;
                 case ContactAction a:
                 {
                     Pay(c, ContactCost(c));
@@ -495,14 +513,10 @@ namespace Bastion.Engine
                     c.Proposal = null;
                     return CampaignResult.Success();
 
+                // Calling it off goes to a vote with the other one here, as choosing it (Arturo, 26/10); TypeScript called it
+                // off at once. Alone, at once, as before.
                 case CancelMissionCommand _:
-                    if (c.ActiveMission == null) return CampaignResult.Failure("No hay misión elegida.");
-                    if (ActiveOffer(c)?.Siege == true) return CampaignResult.Failure(SiegeNow);
-                    c.ActiveMission = null;
-                    c.Squad = new List<string>();
-                    c.LaunchReady = new bool[2];
-                    Log(c, "Misión cancelada.");
-                    return CampaignResult.Success();
+                    return Propose(c, new CancelMissionAction { Id = c.ActiveMission ?? "" }, ctx);
 
                 case PostCommand m:
                 {

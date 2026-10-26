@@ -29,6 +29,7 @@ namespace Bastion.EditorTools
 
         public static void Shoot()
         {
+            if (Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
             state = MapLab.Golden(name);
@@ -73,6 +74,7 @@ namespace Bastion.EditorTools
         /// </summary>
         public static void Close()
         {
+            if (Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
             state = MapLab.Golden("city-7");
             MapLab.Lighting(true);
@@ -310,6 +312,50 @@ namespace Bastion.EditorTools
                     Debug.LogError("[combat] " + e);
                 }
             };
+        }
+
+        /// <summary>
+        /// La Lata at a mission's evacuation (mapView.ts placeBus, evacBus.ts): a recorded mission with its bay (BASTION_MAP,
+        /// step2/city-11-scavenge unless said), as the campaign's vehicle BASTION_VEHICULO (0 the 4×4, 1 the van, 2 the lorry,
+        /// 3 the bus, as unless said), the camera on its bay as the game puts it when it goes (16 tiles off; BASTION_DIST
+        /// another). BASTION_IR=1, in play mode: it goes (MapView.LataDeparts) from the first frame of a strip.
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Evac -shotOut lata.png
+        ///   BASTION_IR=1 unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Evac -shotPlay -shotFrames 30 -shotFps 10 -shotOut tira
+        /// </summary>
+        public static void Evac()
+        {
+            string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "../step2/city-11-scavenge";
+            state = MapLab.Golden(name);
+            if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_VEHICULO"), out int vehicle)) state.Vehicle = vehicle;
+            MapLab.Lighting(state.Mission?.Night != true);
+            var view = MapLab.Map(state, name);
+            var bay = state.Mission?.EvacBus?.Tiles;
+            var zone = state.Mission?.EvacZone;
+            var tiles = bay != null && bay.Count > 0 ? bay : zone;
+            // game.ts busTile: the bay's tile nearest its middle (else the zone's).
+            float mx = (float)tiles.Average(t => t.X), my = (float)tiles.Average(t => t.Y);
+            var at = tiles.OrderBy(t => (t.X - mx) * (t.X - mx) + (t.Y - my) * (t.Y - my)).First();
+            var camera = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).FirstOrDefault(c => c.name == "Shot camera") ?? new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.farClipPlane = 800;
+            float distance = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : 16;
+            MapSpace.Aim(camera, MapSpace.TileToWorld(state, new Pos { X = at.X, Y = at.Y }), distance);
+            MapLab.Lighting(state.Mission?.Night != true);
+            Debug.Log($"[combat] {name}: La Lata ({view.Lata?.Vehicle}) at the bay's ({at.X},{at.Y}), {(view.Lata != null && view.Lata.Shown ? "waiting" : "gone")}");
+            if (Environment.GetEnvironmentVariable("BASTION_IR") != "1") return;
+            void Go(PlayModeStateChange change)
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                EditorApplication.playModeStateChanged -= Go;
+                float started = Time.time;
+                Wait();
+                async void Wait()
+                {
+                    await MapView.Current.LataDeparts();
+                    Debug.Log($"[combat] La Lata gone after {Time.time - started:0.00} s of game time");
+                }
+            }
+            EditorApplication.playModeStateChanged += Go;
         }
 
         /// <summary>The effects side by side on a plain floor, close up, a moment after they start (-shotWarm 0.05).</summary>

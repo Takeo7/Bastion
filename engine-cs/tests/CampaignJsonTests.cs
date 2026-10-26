@@ -226,7 +226,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("fragGrenade", Assert.IsType<BuyAction>(states["proposal-buy"].Proposal!.Action).Item);
             Assert.Equal("palisade", Assert.IsType<PlaceAction>(states["proposal-place"].Proposal!.Action).Piece);
             Assert.All(states.Values.Where((c) => c.Proposal != null), (c) => Assert.Equal(1, c.Proposal!.By));
-            // The ones no new campaign makes, and those of the base of before.
+            // The ones no new campaign makes, those of the base of before, and calling off a mission (C# only: Arturo, 26/10).
             var others = new ProposalAction[]
             {
                 new RaiseAction { Piece = "b2" },
@@ -243,6 +243,7 @@ namespace Bastion.Engine.Tests
                 new ClearAction { Plot = "p1" },
                 new BuildAction { Plot = "p1", Facility = "workshop" },
                 new UpgradeAction { Plot = "p2" },
+                new CancelMissionAction { Id = "m4" },
             };
             foreach (var action in others)
             {
@@ -251,7 +252,7 @@ namespace Bastion.Engine.Tests
                 Assert.Equal(action.GetType(), back.Action.GetType());
                 Assert.Equal(json, Write(back));
             }
-            Assert.Equal(18, new TagConverter<ProposalAction>("type", (a) => a.Type).Tags.Count);
+            Assert.Equal(19, new TagConverter<ProposalAction>("type", (a) => a.Type).Tags.Count);
         }
 
         // ------------------------------------------------------------------- the commands

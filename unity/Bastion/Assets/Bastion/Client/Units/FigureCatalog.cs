@@ -6,8 +6,8 @@ namespace Bastion.Client.Units
 {
     /// <summary>
     /// What the figures are made of, by name, for the game (where there is no AssetDatabase): Sidekick's presets whole
-    /// (their prefabs) and their colour maps (what a soldier's palette is composed from), and the clips by 0.10.1's
-    /// animation ids (Anims.json). Resources/FigureCatalog.asset, made by Bastion.EditorTools.FigureCatalogMake.Run.
+    /// (their prefabs) and their colour maps (what a soldier's palette is composed from), the clips by 0.10.1's
+    /// animation ids (Anims.json), the weapons, and the POLYGON characters the radio's voices are drawn as. Resources/FigureCatalog.asset, made by Bastion.EditorTools.FigureCatalogMake.Run.
     /// </summary>
     public sealed class FigureCatalog : ScriptableObject
     {
@@ -19,14 +19,27 @@ namespace Bastion.Client.Units
         public AnimationClip[] clips = Array.Empty<AnimationClip>();
         public string[] weaponNames = Array.Empty<string>();
         public GameObject[] weapons = Array.Empty<GameObject>();
+        /// <summary>POLYGON's characters and attachments by their prefab's name (the radio's voices: Voices).</summary>
+        public string[] characterNames = Array.Empty<string>();
+        public GameObject[] characters = Array.Empty<GameObject>();
         /// <summary>Seconds into each clip after which the body no longer moves (a death: it lies still; syntyAnims.ts settleOf).</summary>
         public float[] settles = Array.Empty<float>();
+        /// <summary>
+        /// Each of a Sidekick palette's 256 cells by its kind (FigureCatalogMake.CellKinds: what Sidekick's material maps
+        /// make of it, metal, gloss, reflection, opacity, its folds' shade, skin): cells of one kind look alike but for
+        /// their colour (SoldierFigure.Split moves corners from one to another).
+        /// </summary>
+        public int[] cellKinds = Array.Empty<int>();
 
         static FigureCatalog loaded;
         Dictionary<string, GameObject> presetBy;
         Dictionary<string, Texture2D> colourMapBy;
         Dictionary<string, AnimationClip> clipBy;
         Dictionary<string, GameObject> weaponBy;
+        Dictionary<string, GameObject> characterBy;
+
+        /// <summary>A POLYGON character's (or attachment's) prefab by its name (SM_Chr_Boss_Female_01…), or null.</summary>
+        public GameObject Character(string name) => Find(ref characterBy, characterNames, characters, name);
 
         /// <summary>A weapon's model by its Synty name (WeaponArt.fbx), or null.</summary>
         public GameObject Weapon(string fbx) => Find(ref weaponBy, weaponNames, weapons, fbx);

@@ -1,11 +1,13 @@
-// A portrait's tone (0.10.1's portraits.ts renderer: three's ACESFilmicToneMapping at an exposure of 1.1), from the
-// lit picture (linear, HDR) to the one shown, its alpha kept (the bust on nothing). Graphics.Blit's: _MainTex.
+// A studio picture's tone (Studio.Shoot: 0.10.1's offscreen renderers, three's ACESFilmicToneMapping, _Mode 0, or its
+// NeutralToneMapping, _Mode 1, at _Exposure), from the lit picture (linear, HDR) to the one shown, its alpha kept (the
+// subject on nothing). Graphics.Blit's: _MainTex.
 Shader "Hidden/Bastion/PortraitTone"
 {
     Properties
     {
         _MainTex ("Picture", 2D) = "black" {}
         _Exposure ("Exposure", Float) = 1.1
+        _Mode ("ACES 0, Neutral 1", Float) = 0
     }
     SubShader
     {
@@ -19,6 +21,7 @@ Shader "Hidden/Bastion/PortraitTone"
 
             sampler2D _MainTex;
             float _Exposure;
+            float _Mode;
 
             struct Attributes { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
             struct Varyings { float4 position : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -50,13 +53,31 @@ Shader "Hidden/Bastion/PortraitTone"
                 return saturate(color);
             }
 
+            // three's NeutralToneMapping (Khronos PBR Neutral).
+            float3 Neutral(float3 color)
+            {
+                const float start = 0.8 - 0.04;
+                const float desaturation = 0.15;
+                color *= _Exposure;
+                float x = min(color.r, min(color.g, color.b));
+                float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+                color -= offset;
+                float peak = max(color.r, max(color.g, color.b));
+                if (peak < start) return saturate(color);
+                float d = 1.0 - start;
+                float newPeak = 1.0 - d * d / (peak + d - start);
+                color *= newPeak / peak;
+                float g = 1.0 - 1.0 / (desaturation * (peak - newPeak) + 1.0);
+                return saturate(lerp(color, newPeak, g));
+            }
+
             float4 Frag(Varyings input) : SV_Target
             {
                 float4 c = tex2D(_MainTex, input.uv);
                 // What has no figure stays clear; at its edges (drawn over a clear black, so their colour is premultiplied),
                 // the figure's own colour, its alpha straight (as UI shows a texture).
                 float3 rgb = c.a > 0 ? c.rgb / max(c.a, 1e-4) : 0;
-                return float4(ACESFilmic(rgb), c.a);
+                return float4(_Mode > 0.5 ? Neutral(rgb) : ACESFilmic(rgb), c.a);
             }
             ENDHLSL
         }

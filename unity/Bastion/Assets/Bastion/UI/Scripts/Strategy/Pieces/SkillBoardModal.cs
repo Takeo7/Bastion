@@ -51,7 +51,7 @@ namespace Bastion.UI.Strategy
 
         public void Set(SkillBoardView v)
         {
-            var k = Ui.Key(v);
+            var k = Ui.Key(v) + "|" + StrategyRoot.PictureStamp;
             if (k == key) return;
             key = k;
             last = v;

@@ -23,6 +23,8 @@ export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   ['Los Cuervos se llevan la carga del embarcadero.', 'Los Cuervos se llevan la carga.', 'the river truck: its briefing leaves the load by the road, not on a jetty'],
   // lore.ts
   [/Heridas: curan ×(\d+) de rápido/g, 'Heridas: curan $1 veces más rápido', 'the Enfermería\'s figure, said plainly (textos directos)'],
+  [/^Heridas: −(\d+) días?$/, (_, n) => `Heridas: −${n} ${n === '1' ? 'misión' : 'misiones'}`, 'the Garaje\'s figure: time is counted in missions, as the wounded soldier\'s card says it (26/10)'],
+  [/^Fiebre: \+(\d+) días?$/, (_, n) => `Fiebre: +${n} ${n === '1' ? 'misión' : 'misiones'}`, 'the Cuarentena\'s figure: the same, as nextSteps says «se convierte dentro de N misiones» (26/10)'],
   // transmissions.ts (and lore.ts EXPEDIENTE, page 4, which says the same about the clock)
   ['el reloj de la sala de mando cuenta kilómetros.', 'el reloj cuenta kilómetros.', 'the Bastion has no «sala de mando»: Morse speaks from the Sala de radio (the scene «La Marea» and the diary\'s page 4)'],
   ['A quien la lleve, su arma le sube un nivel. Decidme a quién. Si cae, se pierde.', 'Está en la Armería. Decidme quién la lleva. Si cae, se pierde.', 'the scene «En una mochila»: weapons have no levels since Fase 9; a found one is a weapon of its own'],
@@ -52,7 +54,10 @@ export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   [/ se convierte en (\d+) días$/, (_, n) => ` se convierte ${inMissions(Number(n))}`, 'nextSteps: the same'],
   [' tiene fiebre: hay que tratarle antes.', ' tiene fiebre: necesita el tratamiento antes de salir.', 'squad\'s reason: «tratarle» is leísmo, and the Escuadra\'s tooltip says it so'],
   [/^No está contagiado\.$/, 'No tiene ningún mordisco.', 'treat\'s reason: «contagiado» doesn\'t agree with a soldier who is a woman'],
-  [/^No está herido\.$/, 'No tiene heridas.', 'medicate\'s reason: «herido» doesn\'t agree with a soldier who is a woman'],
+  [/^No está herido\.$/, 'No tiene heridas.', 'medicate\'s reason, and rules.ts First aid and a medicine on a partner: «herido» doesn\'t agree with a soldier who is a woman'],
+  // rules.ts (its port is Gameplay's: Rules.cs, changed on 26/10)
+  [/^No estás herido\.$/, 'No tienes heridas.', 'a medicine on oneself: the same'],
+  ['No está aturdido, desorientado ni en pánico.', 'No sufre aturdimiento, desorientación ni pánico.', 'Reanimar\'s reason: the same'],
   [/^Está lista\.$/, 'No hay nada que reponer.', 'rearm\'s reason: said of «el cepo» or «el foso» too'],
   ['La Marea ha llegado al Bastión.', 'Los muertos han llegado al Bastión.', 'the defeat\'s log: before level 4 nobody knows of the Marea'],
   ['El Bastión entra en servicio. Elegid la primera misión.', 'Lo que se levante en este claro será el Bastión. Elegid la primera misión.', 'WELCOME: the Bastion starts as a caravan in a clearing, not a station going into service; as the diary\'s first page (Gameplay, 24/10)'],

@@ -10,6 +10,8 @@ namespace Bastion.UI.Strategy
     public static class StrategyText
     {
         public const string Brand = "BASTIÓN";
+        /// <summary>The stamp as La Lata leaves (screen.ts launch).</summary>
+        public const string Launch = "En marcha";
         public const string Menu = "Menú";
         public const string MenuTip = "Menú (Esc)";
 
@@ -70,6 +72,8 @@ namespace Bastion.UI.Strategy
         {
             public const string NetworkTip = "Pulsa una zona del mapa para ver sus datos";
             public const string ZoneMeterTip = "Zonas contactadas / máximo";
+            /// <summary>The zone's sheet: the head over its missions.</summary>
+            public const string ZoneMissions = "Misiones en la zona";
         }
 
         /// <summary>The radio's card (transmissions.ts): its fixed words.</summary>

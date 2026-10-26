@@ -216,6 +216,7 @@ namespace Bastion.UI.Combat
         public void Load(GameState state)
         {
             queue.Clear();
+            control.Aboard.Clear();
             control.View = Events.CloneState(state);
             See();
             ShowSeen(true);
@@ -596,6 +597,16 @@ namespace Bastion.UI.Combat
             }
         }
 
+        /// <summary>Whether the next event is another soldier boarding La Lata (then it waits for them).</summary>
+        bool NextBoards() => queue.Count > 0 && queue.Peek().e is EvacuatedEvent;
+
+        /// <summary>La Lata pulling away off the map (game.ts busLeaves: Arte's MapView.LataDeparts, ≈2.6 s; at once without it).</summary>
+        async Awaitable LataLeaves()
+        {
+            var map = Bastion.Client.Map.MapView.Current;
+            if (map != null) await map.LataDeparts(stop);
+        }
+
         /// <summary>What a blast leaves on everyone it caught, right after its `explosive`, taken off the queue; none unless at least two.</summary>
         List<(GameEvent e, int? by, int epoch)> BlastResults()
         {
@@ -955,10 +966,10 @@ namespace Bastion.UI.Combat
                 case StunnedEvent st:
                 {
                     var u = Unit(st.Unit);
-                    Log($"{u.Name} queda aturdido", "#6ad8ff");
+                    Log($"{u.Name} queda {UnitWords.Agree(u, "aturdido")}", "#6ad8ff");
                     if (!ShownToSquad(u)) return;
                     fx?.Sparks(Chest(u.Id), Fx.Hex(0x6ad8ff), 14);
-                    Float(Chest(u.Id), "ATURDIDO", "warn");
+                    Float(Chest(u.Id), UnitWords.Agree(u, "ATURDIDO"), "warn");
                     await Wait(0.5f);
                     return;
                 }
@@ -1071,8 +1082,8 @@ namespace Bastion.UI.Combat
                 case DisorientedEvent dis:
                 {
                     var u = Unit(dis.Unit);
-                    if (ShownToSquad(u)) Float(Chest(u.Id), "DESORIENTADO", "crit");
-                    Log($"{u.Name} queda desorientado", "#e8d8c0");
+                    if (ShownToSquad(u)) Float(Chest(u.Id), UnitWords.Agree(u, "DESORIENTADO"), "crit");
+                    Log($"{u.Name} queda {UnitWords.Agree(u, "desorientado")}", "#e8d8c0");
                     await Wait(0.15f);
                     return;
                 }
@@ -1095,7 +1106,7 @@ namespace Bastion.UI.Combat
                     // No second shriek: the scream ('mindspin') was just heard; this is what it does to the soldier.
                     if (fx != null) await fx.PsiBeam(Chest(u.Id) + Vector3.up * 0.35f, Chest(target.Id), null, stop);
                     else await Wait(0.4f);
-                    var text = psi.Effect == "disoriented" ? "DESORIENTADO" : psi.Effect == "panicked" ? "PÁNICO" : psi.Effect == "controlled" ? "FUERA DE SÍ" : "RESISTE";
+                    var text = psi.Effect == "disoriented" ? UnitWords.Agree(target, "DESORIENTADO") : psi.Effect == "panicked" ? "PÁNICO" : psi.Effect == "controlled" ? "FUERA DE SÍ" : "RESISTE";
                     Float(Chest(target.Id), text, psi.Success ? "crit" : "info");
                     Log(psi.Success ? $"{target.Name}: {text.ToLowerInvariant()} ({AbilityTexts.Number(psi.Chance)}%)" : $"{target.Name} resiste el grito ({AbilityTexts.Number(psi.Chance)}%)", psi.Success ? "#e8d8c0" : null);
                     if (psi.Effect == "controlled") Hud?.Banner("¡FUERA DE SÍ!", "alien");
@@ -1344,14 +1355,17 @@ namespace Bastion.UI.Combat
                         Log(Lore.TimeText.Departs, "#ff6b5a");
                     }
                     Log(Lore.EvacDepartLine(aboard.Select(u => u.Name).ToList()), "#6dff9a");
-                    // The bus pulling away (mapView.busDeparts) is the map's, once Arte has it.
+                    // The camera to La Lata (else the zone), everyone in it boards (the `evacuated` that follow), and then it
+                    // pulls away (Arte's MapView.LataDeparts).
                     var zone = v.Mission.EvacZone;
-                    if (zone.Count > 0 && rig != null)
+                    var lata = Bastion.Client.Map.MapView.Current?.LataAt;
+                    if (rig != null && (lata != null || zone.Count > 0))
                     {
-                        rig.Focus(Board.TileToWorld(v, new Pos { X = zone[zone.Count / 2].X, Y = zone[zone.Count / 2].Y }));
+                        rig.Focus(lata ?? Board.TileToWorld(v, new Pos { X = zone[zone.Count / 2].X, Y = zone[zone.Count / 2].Y }));
                         rig.CinematicZoom(16 * Board.Tile);
                     }
                     await Wait(0.5f);
+                    if (!NextBoards()) await LataLeaves();
                     return;
                 }
                 case EvacuatedEvent evac:
@@ -1360,6 +1374,11 @@ namespace Bastion.UI.Combat
                     fx?.Dust(Feet(evac.Unit), 4);
                     await Wait(0.18f);
                     units?.Board(evac.Unit);
+                    // Their flag goes with them (the HUD's, not the figure's); after the last one aboard, La Lata goes
+                    // (game.ts busLeaves), before the boarding is on the view, as the 0.10.1: their sight holds the fog off.
+                    control.Aboard.Add(evac.Unit);
+                    control.Refresh();
+                    if (!NextBoards()) await LataLeaves();
                     return;
                 }
                 case LeftBehindEvent lb:

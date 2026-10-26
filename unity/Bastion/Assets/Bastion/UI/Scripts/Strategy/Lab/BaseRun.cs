@@ -15,7 +15,8 @@ namespace Bastion.UI.Strategy
     /// after the host's answer to the one before. The steps: tab:&lt;view&gt;, soldier:&lt;n&gt; (one's own, in order),
     /// offer:&lt;n&gt;, zone:&lt;n&gt;, map:&lt;action&gt;, recruit, launch, wait, squad:&lt;n&gt;:on|off, armory-tab:&lt;tab&gt;,
     /// armory-pick:&lt;id&gt;, armory:&lt;action&gt;[:&lt;arg&gt;], board, unlock:&lt;cell&gt;, vote:yes|no, withdraw, option:&lt;n&gt;,
-    /// modal:&lt;n&gt;; and in the mission, abandon and tobase. In the mission the base's screens go, as with AppFlow's
+    /// modal:&lt;n&gt;, continue, customize, custom-choice:&lt;group&gt;:&lt;id&gt;, custom-color:&lt;part&gt;:&lt;#hex&gt;,
+    /// custom:&lt;action&gt;; and in the mission, abandon and tobase. In the mission the base's screens go, as with AppFlow's
     /// change of scene, and a stand-in for the battle listens to NetLink as CombatSession does (the snapshot first, and
     /// off once the room leaves the mission), so the way back to the base goes as in the app. What happens goes to the
     /// log («[base-run]», and the controller's «[base]»).
@@ -170,6 +171,10 @@ namespace Bastion.UI.Strategy
                 case "option": control.OnOption(N(1)); return true;
                 case "modal": control.OnModalButton(N(1)); return false;
                 case "continue": control.OnDebriefContinue(); return false;
+                case "customize": control.OnCustomize(); return false;
+                case "custom-choice": control.OnCustomChoice(S(1), S(2), false); return false;
+                case "custom-color": control.OnCustomColor(S(1), S(2), false); return false;
+                case "custom": control.OnCustomAction(S(1)); return S(1) == "save" || S(1) == "copy";
                 default:
                     Debug.LogWarning($"[base-run] paso desconocido: {step}");
                     return false;

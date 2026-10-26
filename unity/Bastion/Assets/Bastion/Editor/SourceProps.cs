@@ -48,7 +48,24 @@ namespace Bastion.EditorTools
         // memorial's crosses on graves), the toolbox is another one, and the planked gate of the palisade is only Farm's
         // lattice gate, of the same name.
         .Concat(FromApocalypse("SM_Prop_GraveStick_01", "SM_Prop_ToolBox_01", "SM_Prop_Fence_Wood_Gate_01"))
+        // The Armería's crates open, their lids beside them (clearingArt.ts fillArmory): Unity's prefabs have them shut,
+        // and no lid of their own.
+        .Concat(FromApocalypse("SM_Item_Ammo_Crate_01", "SM_Item_Ammo_Crate_Lid_01"))
+        // Its green first-aid kit, as 0.10.1 drew it from the source (Unity's is grey); and its bench, its pegboard solid
+        // as there (Plain).
+        .Concat(FromApocalypse("SM_Prop_MedicalBox_02", "SM_Prop_Workbench_01"))
+        // (And the camp's metal cup, a canteen's, which Unity's Military has only on the canteen: clearingLife.ts CAMP_ITEMS.)
+        .Concat(new[] { "SM_Prop_Crate_Wood_01", "SM_Prop_Crate_Wood_Lid_01", "SM_Item_Canteen_Cup_01" }.Select(m => (m, $"assets-src/synty/POLYGON_Military_SourceFiles/Fbx/{m}.fbx", "PolygonMilitary_01_A", (string)null, (string)null)))
         .ToArray();
+        /// <summary>
+        /// The slots painted from a texture of their own (a wire's alpha) that 0.10.1 drew in one plain colour, the atlas's
+        /// at a spot of it (syntyManifest.ts `plain`, Blender's UV; convert.py plain_slots): the workbench's pegboard.
+        /// </summary>
+        static readonly Dictionary<string, (string slot, float u, float v)> Plain = new Dictionary<string, (string, float, float)>
+        {
+            ["SM_Prop_Workbench_01"] = ("Polygon_Apocalypse_Wire_01", 0.93f, 0.06f),
+        };
+
         const string Apocalypse = "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX";
 
         /// <summary>Apocalypse's source models with the pack's own material, or its glass (`name:glass`; MaterialList_PolygonApocalypse).</summary>
@@ -81,9 +98,13 @@ namespace Bastion.EditorTools
                 importer.animationType = ModelImporterAnimationType.None;
                 importer.materialImportMode = ModelImporterMaterialImportMode.ImportViaMaterialDescription;
                 var own = atlas != null ? Made(material, Path.Combine(root, atlas), materialOf) : materialOf(material);
-                // Every material the FBX names, the pack's one.
-                foreach (var m in AssetDatabase.LoadAllAssetsAtPath(to).OfType<Material>())
-                    importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), m.name), own);
+                // Every material the FBX names, the pack's one (a plain slot its plain colour).
+                Plain.TryGetValue(model, out var plain);
+                // (What it names: its own materials, or those remapped already on an import before.)
+                var names = AssetDatabase.LoadAllAssetsAtPath(to).OfType<Material>().Select(m => m.name)
+                    .Concat(importer.GetExternalObjectMap().Keys.Where(k => k.type == typeof(Material)).Select(k => k.name)).Distinct().ToList();
+                foreach (string name in names)
+                    importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), name), plain.slot != null && name == plain.slot ? PlainOf(model, own, plain.u, plain.v) ?? own : own);
                 importer.SaveAndReimport();
                 Debug.Log($"[source props] {to} with {(own != null ? own.name : "no material")}");
             }
@@ -122,6 +143,42 @@ namespace Bastion.EditorTools
                 Debug.LogWarning($"[source props] {from}: no Blender ({blender}): {e.Message}");
                 return false;
             }
+        }
+
+        /// <summary>`like` in one colour: its atlas's at (u, v), on a texture of 4 × 4 of it, made in Extra (once).</summary>
+        static Material PlainOf(string model, Material like, float u, float v)
+        {
+            if (like == null) return null;
+            string path = $"{Folder}/{model}_Plain.mat";
+            var made = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (made != null) return made;
+            var atlas = like.GetTexture("_Albedo_Map") as Texture2D;
+            if (atlas == null) return null;
+            // Read through a render texture (Synty's atlases aren't readable).
+            var rt = RenderTexture.GetTemporary(atlas.width, atlas.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            Graphics.Blit(atlas, rt);
+            var was = RenderTexture.active;
+            RenderTexture.active = rt;
+            var copy = new Texture2D(atlas.width, atlas.height, TextureFormat.RGBA32, false);
+            copy.ReadPixels(new Rect(0, 0, atlas.width, atlas.height), 0, 0);
+            copy.Apply();
+            RenderTexture.active = was;
+            RenderTexture.ReleaseTemporary(rt);
+            var colour = copy.GetPixel(Mathf.Clamp(Mathf.FloorToInt(u * atlas.width), 0, atlas.width - 1), Mathf.Clamp(Mathf.FloorToInt(v * atlas.height), 0, atlas.height - 1));
+            Object.DestroyImmediate(copy);
+            var swatch = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+            swatch.SetPixels(Enumerable.Repeat(colour, 16).ToArray());
+            swatch.Apply();
+            string texture = $"{Folder}/{model}_Plain.png";
+            File.WriteAllBytes(texture, swatch.EncodeToPNG());
+            Object.DestroyImmediate(swatch);
+            AssetDatabase.ImportAsset(texture, ImportAssetOptions.ForceUpdate);
+            made = new Material(like) { name = $"{model}_Plain" };
+            made.SetTexture("_Albedo_Map", AssetDatabase.LoadAssetAtPath<Texture2D>(texture));
+            made.SetTexture("_Emission_Map", null);
+            AssetDatabase.CreateAsset(made, path);
+            Debug.Log($"[source props] {model}'s {path}: #{ColorUtility.ToHtmlStringRGB(colour)}");
+            return made;
         }
 
         /// <summary>A pack's material made in Extra (once): Apocalypse's, on the pack's atlas, with no normals and no glow of its.</summary>

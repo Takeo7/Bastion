@@ -66,6 +66,12 @@ namespace Bastion.UI.Combat
         /// <summary>Ana in too, with a plan for one of the soldiers, and a ping of hers on a tile ahead.</summary>
         public bool Plans;
 
+        /// <summary>
+        /// The squad put on the evacuation's tiles as the mission starts, and a moment later the call to leave (alone: La
+        /// Lata goes at once): the event player's evacDeparted and evacuated, the camera on La Lata and it pulling away.
+        /// </summary>
+        public bool Evacuate;
+
         /// <summary>The HUD, if the lab has one (HudShots.Combat makes it).</summary>
         public HudRoot Hud;
 
@@ -99,6 +105,8 @@ namespace Bastion.UI.Combat
 
         void Start()
         {
+            // BASTION_TINTE=1: «Ropa con el color del jugador» on for this capture (Arte's figures), not kept.
+            if (System.Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             var path = Path.GetFullPath(Path.Combine(Application.dataPath, "../../../engine-cs/golden", Step, Golden + ".json"));
             if (!File.Exists(path))
             {
@@ -134,6 +142,7 @@ namespace Bastion.UI.Combat
                     foreach (var e in op.Events) Events.ApplyEvent(host, e);
                 }
             }
+            if (Evacuate) IntoZone(host);
             var mine = Events.CloneState(host);
             InScene &= Bastion.Client.Battlefield.Current != null;
             if (InScene) Bastion.Client.Battlefield.Current.Show(mine);
@@ -182,6 +191,11 @@ namespace Bastion.UI.Combat
             if (turn != null && player != null)
             {
                 PlaySoon(turn.Events);
+                return;
+            }
+            if (Evacuate)
+            {
+                EvacSoon(mine);
                 return;
             }
             if (Stairs && UpStairs(mine, rig)) return;
@@ -297,6 +311,33 @@ namespace Bastion.UI.Combat
             }
             player.Push(events, null);
             control.Refresh();
+        }
+
+        /// <summary>The squad's living on the evacuation's free tiles (the ground's), one each, as far as there are tiles.</summary>
+        static void IntoZone(GameState s)
+        {
+            var free = s.Mission.EvacZone.Where(z => Grid.SurfaceAt(s, z.X, z.Y, Grid.ElevAt(s, z.X, z.Y)) is Pos p && p.Z == 0 && !s.Units.Any(u => u.Alive && u.Team != Teams.Xcom && Grid.SameTile(u.Pos, z))).ToList();
+            var i = 0;
+            foreach (var u in s.Units.Where(x => x.Team == Teams.Xcom && x.Alive))
+            {
+                if (i >= free.Count) break;
+                u.Pos = new Pos { X = free[i].X, Y = free[i].Y, Z = 0 };
+                i++;
+            }
+            Debug.Log($"[lab] evac: {i} soldiers on the zone's {free.Count} free tiles");
+        }
+
+        /// <summary>The call to leave, from the first in the zone, a second in (the map and the camera settled).</summary>
+        async void EvacSoon(GameState s)
+        {
+            await Awaitable.WaitForSecondsAsync(1f, destroyCancellationToken);
+            var u = s.Units.FirstOrDefault(x => x.Team == Teams.Xcom && x.Alive && Abilities.InEvacZone(s, x.Pos));
+            if (u == null)
+            {
+                Debug.Log("[lab] evac: nobody in the zone");
+                return;
+            }
+            Play(new EvacCommand { Unit = u.Id });
         }
 
         async void FireSoon()

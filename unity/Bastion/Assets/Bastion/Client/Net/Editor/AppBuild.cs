@@ -51,12 +51,49 @@ namespace Bastion.Client.Net.EditorTools
 
         /// <summary>
         /// Builds/Windows/Bastion.exe, with its Bastion_Data and the rest beside it: the folder goes whole. From a Mac only
-        /// with Mono (IL2CPP for Windows needs a Windows computer); it needs Unity's «Windows Build Support (Mono)».
+        /// with Mono (IL2CPP for Windows needs a Windows computer); it needs Unity's «Windows Build Support (Mono)». Beside
+        /// it, medir.bat (the PC's test, docs/PRUEBA-PC-3090.md), and Builds/Bastion-Windows.zip to hand it on, without
+        /// Burst's folder that isn't to be shipped (*DoNotShip*).
         /// </summary>
         public static void Windows()
         {
-            Build(BuildTarget.StandaloneWindows64, "Builds/Windows/Bastion.exe");
+            var exe = Build(BuildTarget.StandaloneWindows64, "Builds/Windows/Bastion.exe");
+            if (exe == null) return;
+            var folder = Path.GetDirectoryName(Path.GetFullPath(exe))!;
+            File.WriteAllText(Path.Combine(folder, "medir.bat"), MeasureBat.Replace("\r\n", "\n").Replace("\n", "\r\n"));
+            var parent = Path.GetDirectoryName(folder)!;
+            var zip = Path.Combine(parent, "Bastion-Windows.zip");
+            if (File.Exists(zip)) File.Delete(zip);
+            if (!Ran("zip", $"-r -X -q \"{zip}\" \"{Path.GetFileName(folder)}\" -x \"*DoNotShip*\"", parent)) return;
+            Debug.Log($"[red] app de Windows con medir.bat · {new FileInfo(zip).Length / (1024 * 1024)} MB → {zip}");
         }
+
+        /// <summary>
+        /// The PC's test, double-clicked (docs/PRUEBA-PC-3090.md): the app once per case of NetLink's BASTION_MEDIR, with
+        /// the graphics altos and then medios, its data in «medidas» beside it (not the player's own: their save stays as
+        /// it was). Plain ASCII: cmd reads it in the console's code page.
+        /// </summary>
+        private const string MeasureBat = @"@echo off
+rem Bastion: mide el rendimiento por si solo (docs/PRUEBA-PC-3090.md). Abre el juego una vez por caso:
+rem la ciudad de dia, la ciudad de noche, el asedio de la base y la base, con graficos altos y luego medios.
+rem Son unos 15 minutos sin tocar nada. Los datos quedan en la carpeta medidas, junto a este archivo.
+setlocal
+cd /d ""%~dp0""
+set ""BASTION_DATOS=%~dp0medidas""
+set BASTION_ANFITRION=Medida
+set BASTION_SEMILLA=7
+for %%G in (altos medios) do (
+  for %%C in (ciudad ciudad-noche asedio base) do (
+    echo Midiendo %%C con graficos %%G...
+    set BASTION_GRAFICOS=%%G
+    set BASTION_MEDIR=%%C
+    start """" /wait ""%~dp0Bastion.exe""
+  )
+)
+echo.
+echo Hecho. Manda el archivo medidas\red.log
+pause
+";
 
         /// <summary>
         /// Builds/Linux/Bastion.x86_64, with its Bastion_Data and the rest beside it: the folder goes whole (a .tar.gz keeps
@@ -123,10 +160,10 @@ namespace Bastion.Client.Net.EditorTools
             return t.parent == null ? t.name : $"{PathOf(t.parent)}/{t.name}";
         }
 
-        /// <summary>A command of the Mac's, waited for; if it fails, what it said goes to the log and the build fails.</summary>
-        private static bool Ran(string tool, string arguments)
+        /// <summary>A command of the Mac's, waited for (in `directory`, if said); if it fails, what it said goes to the log and the build fails.</summary>
+        private static bool Ran(string tool, string arguments, string? directory = null)
         {
-            var start = new ProcessStartInfo(tool, arguments) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+            var start = new ProcessStartInfo(tool, arguments) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = directory ?? "" };
             using var process = Process.Start(start)!;
             var output = process.StandardOutput.ReadToEndAsync();
             var error = process.StandardError.ReadToEnd();

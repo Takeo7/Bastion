@@ -11,8 +11,8 @@ namespace Bastion.UI.App
 {
     /// <summary>
     /// What the app shows, from Red's NetLink (docs/UNITY-UI.md; UI's, Gameplay 23/10). Out of a room, the start screen;
-    /// in one, its menu while it is in the lobby, the base's screens while it is on the campaign's base (BaseSession),
-    /// and the battle's scene while it is in a mission. It reads the room
+    /// in one, its menu while it is in the lobby, Arte's scene «Base» with the base's screens while it is on the
+    /// campaign's base (BaseSession), and the battle's scene while it is in a mission. It reads the room
     /// (NetLink.LastRoom) and never listens to NetLink.Message, which waits for the battle with its snapshot.
     ///
     /// Over any scene, its own card and line: the host closed the game («Ana ha cerrado la partida»: back in, to the
@@ -31,6 +31,7 @@ namespace Bastion.UI.App
     {
         [SerializeField] string startScene = "Inicio";
         [SerializeField] string battleScene = "Partida";
+        [SerializeField] string baseScene = "Base";
 
         static AppFlow instance;
         NetLink link;
@@ -49,8 +50,6 @@ namespace Bastion.UI.App
         /// <summary>The start scene's two screens, found once (Unity's null again once the scene is gone).</summary>
         StartScreen start;
         RoomMenu room;
-        /// <summary>The base's screens (StrategyRoot and BaseSession) while the room is on the base; null otherwise.</summary>
-        GameObject baseScreens;
 
         void Awake()
         {
@@ -164,71 +163,66 @@ namespace Bastion.UI.App
             instance = null;
         }
 
+        /// <summary>The squad getting into La Lata (BaseSession.Depart): the mission loads once it has gone.</summary>
+        bool departing;
+
         void Update()
         {
-            if (loading || card != null) return;
+            if (loading || departing || card != null) return;
             var phase = link.LastRoom?.Phase;
-            var inBattle = SceneManager.GetActiveScene().name == battleScene;
-            if (phase == RoomPhases.Mission)
+            // The scene for the room's phase: the battle's in a mission, Arte's base on the campaign's base, else the start.
+            var want = phase == RoomPhases.Mission ? battleScene : phase == RoomPhases.Base ? baseScene : startScene;
+            var active = SceneManager.GetActiveScene().name;
+            if (active != want)
             {
-                if (!inBattle) Load(battleScene);
+                // From the base to a mission: La Lata leaves first (screen.ts launch, awaited before the battle).
+                if (want == battleScene && active == baseScene) Depart();
+                else Load(want);
                 return;
             }
-            if (inBattle)
-            {
-                // The mission over and back to the menu, or out of the room: the start scene.
-                Load(startScene);
-                return;
-            }
-            var onBase = phase == RoomPhases.Base;
-            Base(onBase);
-            if (!onBase) Screens(phase == null);
-        }
-
-        /// <summary>
-        /// The base (the room's phase `base`): its screens over the start scene, on a document of their own (Arte's
-        /// clearing goes under them when it is in the app), the start screen and the room's menu off and cleared meanwhile.
-        /// Gone with the scene when a mission loads, or when the room is back in the lobby.
-        /// </summary>
-        void Base(bool on)
-        {
-            if (on == (baseScreens != null)) return;
-            if (!on)
-            {
-                Destroy(baseScreens);
-                baseScreens = null;
-                return;
-            }
-            if (start == null) start = FindFirstObjectByType<StartScreen>(FindObjectsInactive.Include);
-            if (room == null) room = FindFirstObjectByType<RoomMenu>(FindObjectsInactive.Include);
-            foreach (var screen in new MonoBehaviour[] { start, room })
-            {
-                if (screen == null) continue;
-                screen.enabled = false;
-                screen.GetComponent<UIDocument>()?.rootVisualElement?.Clear();
-            }
-            baseScreens = new GameObject("Base");
-            SceneManager.MoveGameObjectToScene(baseScreens, SceneManager.GetActiveScene());
-            baseScreens.AddComponent<UIDocument>().panelSettings = PanelOf(GetComponent<UIDocument>());
-            baseScreens.AddComponent<Bastion.UI.Strategy.StrategyRoot>();
-            baseScreens.AddComponent<Bastion.UI.Strategy.BaseSession>();
+            if (want == startScene) Screens(phase == null);
         }
 
         /// <summary>
         /// A scene in: the battle's gets the HUD (Arte's scene stays his alone, Gameplay 23/10): a document with the HUD's
         /// panel (AppFlow's own), HudRoot, and the mission over the network (CombatSession: the controller, the camera's
-        /// rig and the marks).
+        /// rig and the marks). The base's (Arte's «Base»: the clearing, Settlement) gets the base's screens: StrategyRoot
+        /// and the campaign over the network (BaseSession).
         /// </summary>
         void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, LoadSceneMode mode)
         {
             loading = false;
             GameSettings.InMenu = scene.name != battleScene;
+            if (scene.name == baseScene)
+            {
+                var screens = new GameObject("Base");
+                SceneManager.MoveGameObjectToScene(screens, scene);
+                screens.AddComponent<UIDocument>().panelSettings = PanelOf(GetComponent<UIDocument>());
+                screens.AddComponent<Bastion.UI.Strategy.StrategyRoot>();
+                screens.AddComponent<Bastion.UI.Strategy.BaseSession>();
+                return;
+            }
             if (scene.name != battleScene) return;
             var hud = new GameObject("HUD");
             SceneManager.MoveGameObjectToScene(hud, scene);
             hud.AddComponent<UIDocument>().panelSettings = PanelOf(GetComponent<UIDocument>());
             var root = hud.AddComponent<HudRoot>();
             hud.AddComponent<Bastion.UI.Combat.CombatSession>().Hud = root;
+        }
+
+        async void Depart()
+        {
+            departing = true;
+            try
+            {
+                var session = FindFirstObjectByType<Bastion.UI.Strategy.BaseSession>();
+                if (session != null) await session.Depart();
+            }
+            finally
+            {
+                departing = false;
+            }
+            if (link.LastRoom?.Phase == RoomPhases.Mission) Load(battleScene);
         }
 
         void Load(string scene)

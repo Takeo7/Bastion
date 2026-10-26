@@ -1664,7 +1664,7 @@ namespace Bastion.Engine
                     var to = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(s, cmd.To!) : u;
                     if (to == null || !to.Alive || to.Team != Teams.Xcom || to.Objective) return "Solo en ti o en un compañero.";
                     if (to != u && !Aim.InMeleeReach(s, u.Pos, to.Pos)) return "Tiene que estar a tu lado.";
-                    if (to.Hp >= to.MaxHp && !(to.Infected == true && MedicineStopsBite(s, u))) return to == u ? "No estás herido." : "No está herido.";
+                    if (to.Hp >= to.MaxHp && !(to.Infected == true && MedicineStopsBite(s, u))) return to == u ? "No tienes heridas." : "No tiene heridas.";
                     return null;
                 }
                 case ItemActions.Equip:
@@ -1709,9 +1709,9 @@ namespace Bastion.Engine
             switch (ability)
             {
                 case AbilityIds.FirstAid:
-                    return "No está herido.";
+                    return "No tiene heridas.";
                 case AbilityIds.Revival:
-                    return "No está aturdido, desorientado ni en pánico.";
+                    return "No sufre aturdimiento, desorientación ni pánico.";
                 case AbilityIds.PatchUp:
                     return !string.IsNullOrEmpty(target.Arms?.Primary) ? "Su arma está como nueva." : "No lleva arma que arreglar.";
             }

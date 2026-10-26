@@ -103,6 +103,9 @@ namespace Bastion.UI.Combat
         /// <summary>Whether a screen point is over the HUD: the wheel scrolls the log or a list there, not the camera.</summary>
         public System.Func<Vector2, bool> OverHud;
 
+        /// <summary>The right button held drags the ground; off on the clearing (playtest 20/10 #6: «solo WASD»), where a right click lets go of what is in hand.</summary>
+        public bool RightDrag = true;
+
         void Update()
         {
             var dt = Time.unscaledDeltaTime;
@@ -137,7 +140,7 @@ namespace Bastion.UI.Combat
                 }
                 // The right button held drags the ground under it.
                 var at = mouse.position.ReadValue();
-                if (mouse.rightButton.wasPressedThisFrame)
+                if (RightDrag && mouse.rightButton.wasPressedThisFrame)
                 {
                     dragging = true;
                     dragFrom = at;

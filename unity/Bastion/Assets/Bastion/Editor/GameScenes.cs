@@ -12,22 +12,27 @@ namespace Bastion.EditorTools
 {
     /// <summary>
     /// The combat's scene, «Partida» (Arte's; UI's AppFlow loads it by name when the room goes into a mission and mounts
-    /// the HUD itself), and the build's scene list: UI's «Inicio» first, «Partida» after.
+    /// the HUD itself), the base's, «Base» (Arte's too: AppFlow loads it in the room's phase `base` and puts the base's
+    /// screens over it, which find the clearing by Settlement.Instance), and the build's scene list: UI's «Inicio» first,
+    /// «Partida» and «Base» after.
     ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.GameScenes.Make
     /// </summary>
     public static class GameScenes
     {
         public const string Partida = "Assets/Bastion/Scenes/Partida.unity";
+        public const string Base = "Assets/Bastion/Scenes/Base.unity";
         const string Inicio = "Assets/Bastion/UI/Scenes/Inicio.unity";
 
         public static void Make()
         {
             if (!File.Exists(Partida)) MakePartida();
             Furnish();
+            if (!File.Exists(Base)) MakeBase();
             var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>();
             if (File.Exists(Inicio)) scenes.Add(new EditorBuildSettingsScene(Inicio, true));
             else Debug.LogWarning($"[scenes] {Inicio} is not there yet (UI's AppScenes.MakeStart makes it)");
             scenes.Add(new EditorBuildSettingsScene(Partida, true));
+            scenes.Add(new EditorBuildSettingsScene(Base, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             Debug.Log($"[scenes] build: {string.Join(", ", scenes.ConvertAll(s => s.path))}");
             EditorApplication.Exit(0);
@@ -52,6 +57,28 @@ namespace Bastion.EditorTools
             sun.transform.rotation = Quaternion.Euler(48, -35, 0);
             EditorSceneManager.SaveScene(scene, Partida);
             Debug.Log($"[scenes] {Partida} made");
+        }
+
+        /// <summary>
+        /// The base's scene: its camera (tagged MainCamera; Settlement moves it by the tab, SetView) and the settlement
+        /// (Settlement: the clearing, La Lata, Soldados' soldier), which draws nothing until it is shown a campaign
+        /// (Settlement.Instance.Show). Its light is the clearing's own (Mood, made with it).
+        /// </summary>
+        static void MakeBase()
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Base));
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var camera = new GameObject("Cámara del claro").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.fieldOfView = 40;
+            camera.nearClipPlane = 0.3f;
+            camera.farClipPlane = 800;
+            camera.gameObject.AddComponent<AudioListener>();
+            camera.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+            camera.transform.SetPositionAndRotation(new Vector3(0, 28.4f, -22.2f), Quaternion.Euler(52, 0, 0));
+            new GameObject("Asentamiento").AddComponent<Settlement>();
+            EditorSceneManager.SaveScene(scene, Base);
+            Debug.Log($"[scenes] {Base} made");
         }
 
         /// <summary>

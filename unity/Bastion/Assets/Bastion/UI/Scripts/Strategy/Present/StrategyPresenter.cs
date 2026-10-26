@@ -34,7 +34,7 @@ namespace Bastion.UI.Strategy
         SeatInfo Seat(int slot) => Seats.FirstOrDefault(s => s.Slot == slot);
         SeatInfo Partner => Seats.FirstOrDefault(s => s.Slot != Slot);
         string PlayerName(int slot) => Seat(slot)?.Name ?? $"Jugador {slot + 1}";
-        string PlayerColor(int slot) => Seat(slot)?.Color ?? "#888888";
+        string PlayerColor(int slot) => Seat(slot)?.Color ?? (slot >= 0 && slot < Content.PlayerColors.Count ? Content.PlayerColors[slot] : "#888888");
 
         /// <summary>The other one is here: everything on the base goes to a vote, one at a time (Arturo, 18/10 #55).</summary>
         bool Voting => State.Players.Count > 1 && Partner != null && Partner.Connected;

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biblioteca de assets Synty · Bastión</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<svg class="icons" aria-hidden="true" focusable="false">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95"/><path d="M19 4v4h-4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-first" viewBox="0 0 24 24"><path d="M17 5l-7 7 7 7M7 5v14"/></symbol>
+  <symbol id="i-last" viewBox="0 0 24 24"><path d="M7 5l7 7-7 7M17 5v14"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><path d="M3 15h18M3 9h18M9 3v18M15 3v18"/></symbol>
+  <symbol id="i-frame" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.3"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
+</svg>
+
+<header class="topbar">
+  <button type="button" class="icon-btn only-narrow" id="toggleSidebar" aria-controls="sidebar" aria-expanded="false" title="Mostrar filtros">
+    <svg class="icon"><use href="#i-filter"/></svg><span class="sr-only">Mostrar filtros</span>
+  </button>
+  <div class="brand">
+    <h1>Biblioteca de assets Synty</h1>
+    <p class="brand-sub">Herramienta local de Bastión</p>
+  </div>
+  <div class="top-actions">
+    <button type="button" class="btn" id="reindexBtn" title="Volver a leer los paquetes de Synty sin tocar los originales">
+      <svg class="icon"><use href="#i-refresh"/></svg><span>Indexar biblioteca</span>
+    </button>
+    <a class="btn" id="exportLink" href="/api/export" download title="Descargar la lista de seleccionados en Markdown">
+      <svg class="icon"><use href="#i-download"/></svg><span>Exportar</span>
+    </a>
+  </div>
+</header>
+
+<section class="statusbar" id="statusbar" aria-label="Estado del índice">
+  <dl class="counters" id="counters">
+    <div><dt>Assets</dt><dd id="cAssets">-</dd></div>
+    <div><dt>Packs</dt><dd id="cPacks">-</dd></div>
+    <div><dt>En uso</dt><dd id="cUsed">-</dd></div>
+    <div><dt>Seleccionados</dt><dd id="cSelected">-</dd></div>
+    <div><dt>Indexado</dt><dd id="cIndexed">-</dd></div>
+  </dl>
+  <div id="notices" class="notices" role="status" aria-live="polite"></div>
+</section>
+
+<div class="layout">
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="sidebar" id="sidebar" aria-label="Bibliotecas y filtros">
+    <div class="sidebar-head only-narrow">
+      <h2>Filtros</h2>
+      <button type="button" class="icon-btn" id="closeSidebar" title="Cerrar filtros">
+        <svg class="icon"><use href="#i-close"/></svg><span class="sr-only">Cerrar filtros</span>
+      </button>
+    </div>
+
+    <fieldset class="filter-group">
+      <legend>Estado</legend>
+      <div class="state-filter" id="stateFilter">
+        <label><input type="radio" name="state" value="" checked><span>Todos</span></label>
+        <label><input type="radio" name="state" value="used"><span>En uso en el juego</span></label>
+        <label><input type="radio" name="state" value="selected"><span>Seleccionados</span></label>
+        <label><input type="radio" name="state" value="pending"><span>Solicitados, sin integrar</span></label>
+      </div>
+    </fieldset>
+
+    <div class="filter-group">
+      <label class="field-label" for="kindSelect">Tipo de asset</label>
+      <select id="kindSelect">
+        <option value="">Todos los tipos</option>
+      </select>
+    </div>
+
+    <div class="filter-group libraries">
+      <div class="libraries-head">
+        <h2>Bibliotecas</h2>
+        <button type="button" class="link-btn" id="clearLibrary" hidden>Quitar filtro</button>
+      </div>
+      <label class="sr-only" for="packSearch">Buscar pack</label>
+      <input type="search" id="packSearch" placeholder="Filtrar packs por nombre" autocomplete="off">
+      <div id="libraryTree" class="library-tree">
+        <p class="muted">Cargando packs</p>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content" id="content">
+    <form class="searchbar" id="searchForm" role="search">
+      <label class="sr-only" for="searchInput">Buscar assets</label>
+      <svg class="icon search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="search" id="searchInput" placeholder="Buscar assets por nombre, ruta o pack" autocomplete="off">
+      <button type="submit" class="btn">Buscar</button>
+    </form>
+
+    <div class="result-head">
+      <p id="resultCount" class="result-count" aria-live="polite"></p>
+      <div id="activeFilters" class="chips"></div>
+    </div>
+
+    <div id="results" class="results" aria-busy="false"></div>
+
+    <nav class="pager" id="pager" aria-label="Paginación" hidden>
+      <button type="button" class="icon-btn" id="pFirst" title="Primera página"><svg class="icon"><use href="#i-first"/></svg><span class="sr-only">Primera página</span></button>
+      <button type="button" class="icon-btn" id="pPrev" title="Página anterior"><svg class="icon"><use href="#i-prev"/></svg><span class="sr-only">Página anterior</span></button>
+      <span id="pLabel" class="pager-label"></span>
+      <button type="button" class="icon-btn" id="pNext" title="Página siguiente"><svg class="icon"><use href="#i-next"/></svg><span class="sr-only">Página siguiente</span></button>
+      <button type="button" class="icon-btn" id="pLast" title="Última página"><svg class="icon"><use href="#i-last"/></svg><span class="sr-only">Última página</span></button>
+    </nav>
+  </main>
+</div>
+
+<dialog id="detail" class="detail" aria-labelledby="dTitle">
+  <div class="detail-inner">
+    <header class="detail-head">
+      <div class="detail-title">
+        <p class="detail-kicker" id="dKicker"></p>
+        <h2 id="dTitle">Asset</h2>
+      </div>
+      <button type="button" class="icon-btn" id="dClose" title="Cerrar">
+        <svg class="icon"><use href="#i-close"/></svg><span class="sr-only">Cerrar detalle</span>
+      </button>
+    </header>
+    <div class="detail-body" id="dBody"></div>
+  </div>
+</dialog>
+
+<dialog id="confirm" class="confirm" aria-labelledby="cTitle" aria-describedby="cText">
+  <h2 id="cTitle">Cambios sin guardar</h2>
+  <p id="cText"></p>
+  <div class="confirm-actions">
+    <button type="button" class="btn primary" value="save">Guardar ahora</button>
+    <button type="button" class="btn" value="keep">Conservar borrador</button>
+    <button type="button" class="btn danger" value="discard">Descartar cambios</button>
+    <button type="button" class="btn ghost" value="stay">Seguir editando</button>
+  </div>
+</dialog>
+</body>
+</html>

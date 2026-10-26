@@ -104,9 +104,9 @@ namespace Bastion.Engine
                     return new Figure($"+{aim}", $"Puntería +{aim}");
                 }
                 case "simulation": return new Figure($"+{25 + 15 * (l - 1)} %", $"Suministros +{25 + 15 * (l - 1)} %");
-                case "garage": return new Figure($"−{l}", $"Heridas: −{l} {(l == 1 ? "día" : "días")}");
+                case "garage": return new Figure($"−{l}", $"Heridas: −{l} {(l == 1 ? "misión" : "misiones")}"); // Fixed in C# only (text-fixes.ts): lore.ts counts it in days
                 case "memorial": return l >= 2 ? new Figure($"+{(l == 2 ? 5 : 10)}", $"Voluntad +{(l == 2 ? 5 : 10)}") : null;
-                case "quarantine": return l >= 2 ? new Figure($"+{l - 1}", $"Fiebre: +{l - 1} {(l == 2 ? "día" : "días")}") : null;
+                case "quarantine": return l >= 2 ? new Figure($"+{l - 1}", $"Fiebre: +{l - 1} {(l == 2 ? "misión" : "misiones")}") : null; // The same
                 case "training": return new Figure($"+{l}", $"Reclutas: +{l} {(l == 1 ? "nivel" : "niveles")}");
                 case "echoes": return new Figure($"+{20 * l} %", $"Barras +{20 * l} %");
                 case "radio": return new Figure($"+{1 + l}", $"+{1 + l} contactos");

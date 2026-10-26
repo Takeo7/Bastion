@@ -9,6 +9,26 @@ namespace Bastion.UI.Strategy
     {
         /// <summary>The soldier whose sheet is open; null, the first of one's own (set to the one shown).</summary>
         public string Soldier;
+        /// <summary>Personalizar open on that soldier: its draft, in place of the sheet; null, the sheet.</summary>
+        public CustomDraft Draft;
+    }
+
+    /// <summary>Personalizar's draft (screen.ts custom): saved only when the player says so.</summary>
+    public sealed class CustomDraft
+    {
+        public string Soldier;
+        public string Name;
+        public string Nickname;
+        public Appearance Look;
+        /// <summary>«Copiar a todos mis soldados» pressed once: the next press paints them.</summary>
+        public bool CopyArmed;
+
+        /// <summary>A look's copy, to change without touching the campaign's.</summary>
+        public static Appearance Copy(Appearance a) => a == null ? null : new Appearance
+        {
+            Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex,
+            Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character,
+        };
     }
 
     public sealed partial class StrategyPresenter
@@ -91,8 +111,85 @@ namespace Bastion.UI.Strategy
             }
             v.Recruit = Recruit(c, mine.Count(s => s.Alive));
             var soldier = c.Soldiers.FirstOrDefault(s => s.Id == picked);
-            if (soldier != null) v.Sheet = Sheet(c, soldier);
+            if (soldier != null && pick.Draft != null && pick.Draft.Soldier == soldier.Id) v.Customizer = Customizer(soldier, pick.Draft);
+            else if (soldier != null) v.Sheet = Sheet(c, soldier);
             return v;
+        }
+
+        /// <summary>
+        /// Personalizar (screen.ts customizer): name and nickname; Ropa (Arte's wardrobe: «Al azar» and the outfits of the
+        /// soldier's sex), Cabeza and Complexión; a colour for the whole armour, each piece (which follows the armour, or
+        /// the trim for a beret, cap or hood, until it has its own: «↺ como…»), the trim, and the player's mark, always in
+        /// their colour; Aleatorio, Restablecer, «Copiar a todos mis soldados» (asked twice), Guardar with its why.
+        /// </summary>
+        CustomizerView Customizer(CampaignSoldier s, CustomDraft d)
+        {
+            var c = State;
+            var look = d.Look;
+            var v = new CustomizerView
+            {
+                Kicker = $"Personalizar · {Campaign.VeterancyName(s)}",
+                Title = Appearances.DisplayName(string.IsNullOrWhiteSpace(d.Name) ? s.Name : d.Name.Trim(), (d.Nickname ?? "").Trim()),
+                Name = d.Name, NameMax = Appearances.NameMax, Nickname = d.Nickname, NicknameMax = Appearances.NicknameMax,
+                ColorsHead = "Colores", ColorsOff = Tinted ? null : TintOff,
+                CanSave = !string.IsNullOrWhiteSpace(d.Name), SaveWhy = "Ponle un nombre",
+                CopyArmed = d.CopyArmed,
+            };
+            var others = c.Soldiers.Count(x => x.Owner == s.Owner && x.Alive && x.Id != s.Id);
+            v.CopyCount = others + 1;
+            v.CanCopy = v.CanSave && others > 0 && Tinted;
+            // The clothes: among those of the soldier's sex; unset, the ones their id picks, the same in every screen.
+            var worn = Client.Units.Dress.OutfitOf(look.Character);
+            var outfit = new ChoiceGroupView { Id = "outfit", Title = "Ropa" };
+            outfit.Choices.Add(new ChoiceView { Id = "", Label = "Al azar", On = worn == null });
+            foreach (var id in Client.Units.Dress.OutfitsFor(Client.Units.Dress.SexOf(look, s.Id)))
+                outfit.Choices.Add(new ChoiceView { Id = id, Label = Lore.OutfitNames.TryGetValue(id, out var n) ? n : id, On = worn == id });
+            v.Groups.Add(outfit);
+            var heads = new ChoiceGroupView { Id = "head", Title = "Cabeza" };
+            foreach (var id in HeadIds.All) heads.Choices.Add(new ChoiceView { Id = id, Label = Appearances.Heads[id].Name, On = look.Head == id });
+            v.Groups.Add(heads);
+            var builds = new ChoiceGroupView { Id = "build", Title = "Complexión" };
+            foreach (var id in BuildIds.All) builds.Choices.Add(new ChoiceView { Id = id, Label = Appearances.Builds[id].Name, On = look.Build == id });
+            v.Groups.Add(builds);
+            var swatches = Appearances.ArmorColors.ToList();
+            var hat = Appearances.Heads.TryGetValue(look.Head ?? "", out var head) ? head.Paint : null;
+            string Follows(string piece)
+            {
+                var bare = CustomDraft.Copy(look);
+                SetPart(bare, piece, null);
+                return Appearances.PartColor(bare, piece);
+            }
+            ColorRowView Piece(string piece, string label)
+            {
+                var leader = piece == ArmorParts.Helmet && hat == "trim" ? "los detalles" : "la armadura";
+                var mine = Appearances.PartOf(look, piece);
+                var own = mine != null && !string.Equals(mine, Follows(piece), System.StringComparison.OrdinalIgnoreCase);
+                return new ColorRowView { Id = piece, Label = label, Color = mine ?? Follows(piece), Swatches = swatches, Reset = own ? $"↺ como {leader}" : null, Note = own ? null : $"como {leader}" };
+            }
+            v.Colors.Add(new ColorRowView { Id = "all", Label = "Toda la armadura", Color = look.Primary, Swatches = swatches, Note = "todas las piezas" });
+            v.Colors.Add(hat != null ? Piece(ArmorParts.Helmet, hat == "armour" ? "Casco" : head.Name)
+                : new ColorRowView { Id = ArmorParts.Helmet, Label = "Casco", Note = $"{head?.Name}: nada que pintar", Locked = true });
+            v.Colors.Add(Piece(ArmorParts.Torso, "Torso"));
+            v.Colors.Add(Piece(ArmorParts.Arms, "Brazos"));
+            v.Colors.Add(Piece(ArmorParts.Legs, "Piernas"));
+            v.Colors.Add(new ColorRowView { Id = "trim", Label = "Detalles", Color = look.Secondary, Swatches = swatches, Note = "capucha, boina y gorra" });
+            v.Colors.Add(new ColorRowView { Id = "mark", Label = "Marca de jugador", Color = PlayerColor(s.Owner), Note = "siempre en tu color", Locked = true });
+            return v;
+        }
+
+        /// <summary>The clothes take the colours (Ajustes' «Ropa con el color del jugador», off by default): else the rows wait, dimmed.</summary>
+        static bool Tinted => App.GameSettings.SquadTint;
+
+        /// <summary>Over the dimmed colours while the clothes don't take them (screen.ts TINT_OFF).</summary>
+        const string TintOff = "Para teñir la ropa, activa «Ropa con el color del jugador» en Ajustes.";
+
+        /// <summary>A piece's own colour set (null: it follows again).</summary>
+        public static void SetPart(Appearance a, string piece, string color)
+        {
+            if (piece == ArmorParts.Helmet) a.Helmet = color;
+            else if (piece == ArmorParts.Torso) a.Torso = color;
+            else if (piece == ArmorParts.Arms) a.Arms = color;
+            else if (piece == ArmorParts.Legs) a.Legs = color;
         }
 
         /// <summary>A soldier by the face (Ana, 22/10 #49): the name they go by, the rank, ▲ for points, what keeps them in.</summary>
@@ -175,7 +272,8 @@ namespace Bastion.UI.Strategy
             var aim = Content.Templates[TemplateIds.Rookie].Aim;
             var v = new SoldierSheetView
             {
-                Kicker = $"{Campaign.VeterancyName(s)} · {(own ? "tuyo" : $"de {PlayerName(s.Owner)}")}",
+                // Lore, 26/10: «tuya» for a woman, as the rank already agrees («Fogueada · tuya»).
+                Kicker = $"{Campaign.VeterancyName(s)} · {(own ? (Female(s) ? "tuya" : "tuyo") : $"de {PlayerName(s.Owner)}")}",
                 Name = Appearances.DisplayName(s.Name, s.Nickname),
                 Skills = SkillsOf(s),
                 NameTip = $"Misiones: {s.Missions} · Bajas: {s.Kills}",

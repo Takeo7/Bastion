@@ -243,18 +243,19 @@
     background-color: rgba(70, 20, 18, 0.94);
 }
 
+/* mixta-base.css .lineup-card.empty: dark glass over the clearing (snow shows through it grey), a faint edge. */
 .lineup-card--empty {
     padding: 14px 6px;
-    background-color: rgba(200, 205, 210, 0.18);
+    background-color: rgba(14, 16, 17, 0.55);
     background-image: none;
-    border-width: 2px;
-    border-color: rgba(220, 225, 230, 0.35);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.18);
 }
 
 .lineup-card__free {
     font-size: 15px;
     letter-spacing: 2px;
-    color: rgba(230, 234, 238, 0.7);
+    color: var(--t-muted);
 }
 
 .lineup-card__hint {

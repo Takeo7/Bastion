@@ -53,7 +53,7 @@ namespace Bastion.UI.Strategy
 
         public void Set(SoldiersView v)
         {
-            var k = KeyOf(v) + "|" + open + "|" + picking;
+            var k = KeyOf(v) + "|" + open + "|" + picking + "|" + StrategyRoot.PictureStamp;
             if (k == key) return;
             key = k;
             last = v;
@@ -129,7 +129,9 @@ namespace Bastion.UI.Strategy
             var actions = Ui.El("custom__actions", parent);
             Action(actions, "Aleatorio", "random");
             Action(actions, "Restablecer", "reset");
-            Action(actions, c.CopyArmed ? $"¿Pintar a tus {c.CopyCount} soldados? Pulsa otra vez" : "Copiar a todos mis soldados", "copy").EnableInClassList("custom__copy--armed", c.CopyArmed);
+            var copy = Action(actions, c.CopyArmed ? $"¿Pintar a tus {c.CopyCount} soldados? Pulsa otra vez" : "Copiar a todos mis soldados", "copy");
+            copy.EnableInClassList("custom__copy--armed", c.CopyArmed);
+            copy.SetEnabled(c.CanCopy);
             var foot = Ui.El("custom__foot", parent);
             var save = Action(foot, "Guardar", "save");
             save.AddToClassList("btn-primary");

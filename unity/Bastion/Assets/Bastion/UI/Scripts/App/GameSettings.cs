@@ -14,6 +14,7 @@ namespace Bastion.UI.App
         const string LevelKey = "bastion.graphics";
         const string CapKey = "bastion.fpsCap";
         const string CounterKey = "bastion.showFps";
+        const string TintKey = "bastion.squadTint";
 
         /// <summary>The levels, low to high, and the quality levels they look for by name (Arte's: Bajo, Medio, Alto).</summary>
         public static readonly string[] LevelNames = { "bajos", "medios", "altos" };
@@ -77,6 +78,31 @@ namespace Bastion.UI.App
         }
 
         /// <summary>
+        /// «Ropa con el color del jugador» (settings.ts squadTint; off by default, Arturo 21/10): the soldiers' clothes in
+        /// Personalizar's colours and the band of their player's colour on the arm. Arte's figures read it, in the battle
+        /// and on the base, and hear `SquadTintChanged`.
+        /// </summary>
+        public static bool SquadTint
+        {
+            get => TintForLab ?? PlayerPrefs.GetInt(TintKey, 0) == 1;
+            set
+            {
+                if (SquadTint == value) return;
+                PlayerPrefs.SetInt(TintKey, value ? 1 : 0);
+                // Arte's figures (Client can't see Ajustes): painted again at once.
+                Bastion.Client.Units.SquadTint.On = value;
+                SquadTintChanged?.Invoke(value);
+                Changed?.Invoke();
+            }
+        }
+
+        /// <summary>For the labs' captures (BASTION_TINTE): the setting as if it were so, without keeping it on this computer.</summary>
+        public static bool? TintForLab;
+
+        /// <summary>«Ropa con el color del jugador» turned on or off (its new value).</summary>
+        public static event Action<bool> SquadTintChanged;
+
+        /// <summary>
         /// The level's quality level (by its name; while Arte's aren't there, the lowest, middle or highest there is), then
         /// the cap: none, the screen's refresh (vsync); a cap, that many frames and no vsync; out of the battle, `MenuFps`
         /// at most. In the app only: in the editor
@@ -86,6 +112,8 @@ namespace Bastion.UI.App
         {
             // How much lies about on the ground (0.10.1's COVER_DENSITY by its effects): fewer on slower machines, from the next map.
             Bastion.Client.Map.GroundCover.Density = Level == 0 ? 0.3f : Level == 1 ? 0.6f : 1f;
+            // «Ropa con el color del jugador» for Arte's figures, in the battle and on the base.
+            Bastion.Client.Units.SquadTint.On = SquadTint;
             if (Application.isEditor)
             {
                 Changed?.Invoke();
@@ -116,6 +144,7 @@ namespace Bastion.UI.App
         public const string GraphicsId = "graphics";
         public const string CapId = "fpsCap";
         public const string CounterId = "showFps";
+        public const string TintId = "squadTint";
 
         /// <summary>Ajustes' graphics rows (settingsPanel.ts graphicsSettings), for the battle's menu and the base's.</summary>
         public static System.Collections.Generic.List<Hud.SettingView> Views() => new System.Collections.Generic.List<Hud.SettingView>
@@ -145,6 +174,15 @@ namespace Bastion.UI.App
                 Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
                 On = ShowFps ? 0 : 1,
             },
+            // settingsPanel.ts: No first, as the 0.10.1.
+            new Hud.SettingView
+            {
+                Id = TintId,
+                Label = "Ropa con el color del jugador",
+                About = "Tiñe la ropa de los soldados con los colores de Personalizar y les pone el brazalete del color de su jugador.",
+                Choices = new System.Collections.Generic.List<string> { "No", "Sí" },
+                On = SquadTint ? 1 : 0,
+            },
         };
 
         /// <summary>One of those rows changed (its id, the choice's place): kept and applied; false if it isn't one of them.</summary>
@@ -153,8 +191,9 @@ namespace Bastion.UI.App
             if (id == GraphicsId) Level = 2 - (int)value;
             else if (id == CapId) FpsCap = Caps[Mathf.Clamp((int)value, 0, Caps.Length - 1)];
             else if (id == CounterId) ShowFps = value == 0;
+            else if (id == TintId) SquadTint = value == 1;
             else return false;
             return true;
         }
-}
+    }
 }

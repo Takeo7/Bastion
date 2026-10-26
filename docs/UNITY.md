@@ -52,12 +52,18 @@ packages/                  la versión de Three.js, congelada en la 0.10.1
 
 | Parte | Estado |
 |---|---|
-| Motor en C# (`engine-cs`) | Pasos 1–3 hechos: tipos, azar, contenido, mapa, visión, caminos, reglas, IA, montaje de misiones, generador de mapas, base y asedio. Idéntico al bit con TypeScript: 119 mapas, 17 partidas grabadas, 623 pruebas. Campaña (24/10, tarde): los tipos (`Types/Campaign*.cs`, `QuestTypes.cs`) y todas las lecturas (`Runtime/Campaign/`), comparados con 29 estados grabados (`golden/campaign/`) y con las partidas guardadas reales; 727 pruebas. Falta lo que cambia el estado (tanda 3) y realtime. |
-| Red (`engine-cs/package/Runtime/Net`, Red) | Sala, TCP, reconexión, «Partidas en tu red», reloj de turno, guardado. EngineRules con Setup.CreateMission. 98 pruebas. Falta la campaña en la sala. |
+| Motor en C# (`engine-cs`) | Pasos 1–3 hechos: tipos, azar, contenido, mapa, visión, caminos, reglas, IA, montaje de misiones, generador de mapas, base y asedio. Idéntico al bit con TypeScript: 119 mapas, 17 partidas grabadas, 623 pruebas. Campaña (24/10, tarde): los tipos (`Types/Campaign*.cs`, `QuestTypes.cs`) y todas las lecturas (`Runtime/Campaign/`), comparados con 29 estados grabados (`golden/campaign/`) y con las partidas guardadas reales. campaign.ts entero (21d61ab): 161 funciones, idéntico a TypeScript en 14 campañas grabadas hasta los dos finales; 886 pruebas (26/10). Falta realtime (solo si Arturo lo quiere). |
+| Red (`engine-cs/package/Runtime/Net`, Red) | Sala, TCP, reconexión, «Partidas en tu red», reloj de turno, guardado. EngineRules con Setup.CreateMission. La sala con campaña (EngineCampaignRules): órdenes de la base, propuestas y votos, la misión a medias, el asedio desde la campaña; el guardado lee las partidas de la 0.10.1 (v20–v25, con su migración y las de antes de la 0.7 apartadas). 162 pruebas. Apps de Mac (firmada ad hoc), Windows y Linux con `AppBuild`. La medida sola en la app (`BASTION_MEDIR`: ciudad, ciudad de noche, asedio y base) y `medir.bat` para el PC de la 3090 ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md)); falta que Arturo la pase. |
 | Textos (`Runtime/Lore`, Lore) | lore.ts entero (24/10), quests.ts (`Runtime/Quests.cs`) y transmissions.ts (`Runtime/Transmissions.cs`; lo que pide `NextSteps` espera en `wip/Transmissions.Campaign.cs`). Los arreglos de texto sobre la 0.10.1, en una tabla viejo→nuevo (`golden/text-fixes.ts`) que usan también las grabaciones. |
 | Mapa y unidades (Arte) | Mapa desde el estado, edificios con piezas de Synty (muros, suelos, tejados, escaleras, corte), niebla con edificios y plantas, luz y posproceso de la 0.10.1, figuras Sidekick con sus animaciones (fusil, granada, morir, comer, agacharse, esperas), efectos. Faltan las luces de noche, la pistola y las armas blancas, y los muertos de City Zombies y Boss Zombies. |
 | HUD y control (UI) | HUD del combate entero, controlador, cámara, marcas, reproductor de eventos con su ritmo, plano al hombro, menú de Esc con Ajustes, pantalla de entrar y sala, suelo, lo menudo, marco fuera de juego, calles vestidas. El estilo del HUD queda en «Mixta» (Arturo aparcó elegir otro, §7.1 de UNITY-UI.md). |
 | Apps | Mac (universal, firma ad hoc comprobada), Windows y Linux; `AppBuild.*` en Assets/Bastion/Client/Net/Editor. Windows sin probar en un PC. |
+
+**Decisiones de Arturo del 26/10** que se apartan de la 0.10.1:
+- Pulsar una zona del Mapa abre su hoja con todas sus misiones (UI).
+- «Cancelar misión» se vota, como desplegar y contactar (motor). Las partidas grabadas de dos jugadores con una cancelación lo tienen en cuenta en la repetición.
+- Los avisos del combate sin género: «No tienes heridas», «No sufre aturdimiento…».
+- Los rótulos de estado de las soldados concuerdan: ATURDIDA, DESORIENTADA, EVACUADA (UI).
 
 ## 5. Lo que falta para terminar el port
 
@@ -67,7 +73,7 @@ Arturo, 24/10: «quiero que terminemos con el port a Unity completo». Orden pro
 
 | Quién | Qué |
 |---|---|
-| Gameplay | `campaign.ts` (3983) a C# (`quests.ts` y `transmissions.ts` pasaron a Lore el 24/10), con partidas de campaña grabadas en TypeScript (`engine-cs/golden/`), como los pasos 1–3. Las pruebas de campaña que quedaron fuera en los pasos 2 y 3 (base, comida, infección en la base, apariencia, misiones). Lo que leen las pantallas de estrategia (unas 70 funciones) está en UNITY-ESTRATEGIA.md §4; lo que espera la sala de Red, en `ICampaignRules` (engine-cs/wip/Net/Campaign.cs). Una campaña de muestra avanzada (versión 25, día 20, nivel 3, dos jugadores) para grabar partidas: `.dev-snapshots/ui/estrategia-0101/partida-muestra.json` (fuera de git, en este Mac). |
+| Gameplay | **Hecho** (21d61ab). `campaign.ts` (3983) a C# (`quests.ts` y `transmissions.ts` pasaron a Lore el 24/10), con partidas de campaña grabadas en TypeScript (`engine-cs/golden/`), como los pasos 1–3. Las pruebas de campaña que quedaron fuera en los pasos 2 y 3 (base, comida, infección en la base, apariencia, misiones). Lo que leen las pantallas de estrategia (unas 70 funciones) está en UNITY-ESTRATEGIA.md §4; lo que espera la sala de Red, en `ICampaignRules` (engine-cs/wip/Net/Campaign.cs). Una campaña de muestra avanzada (versión 25, día 20, nivel 3, dos jugadores) para grabar partidas: `.dev-snapshots/ui/estrategia-0101/partida-muestra.json` (fuera de git, en este Mac). |
 | Red | La sala con campaña: CampaignCommand, propuestas y votos, partidas guardadas de la campaña (y leer las de la 0.10.1), el asedio desde la campaña. room.ts tiene todo eso. La campaña de la app de Electron no se trae (Arturo, 24/10): en Unity se empieza una nueva. |
 | Lore | Lo que queda de lore.ts (STORY, missionBriefing, storyVip, recoveryItem, fellHint…). |
 | UI | El plan está en UNITY-ESTRATEGIA.md. Las pantallas de estrategia: strategy/screen.ts (3551) y lo suyo: Mapa (geoscape, valley*), Soldados con la hoja (skillSheet, hexBoard), Armería (arms), Escuadra y fila de Lanzar misión (stage), diario y transmisiones, propuestas y votos, acontecimientos. |
@@ -94,6 +100,10 @@ Arturo, 24/10: «quiero que terminemos con el port a Unity completo». Orden pro
   - `unity/tools/unity.sh` compila, y no puede haber dos Unity a la vez: avisar antes de lanzar;
   - `unity/tools/captura.sh` saca capturas en el editor;
   - las apps compiladas se comprueban con su propia captura (`-shotOut`), no solo con el registro. La pantalla negra del 24/10 salió así.
+- **Lo que el editor no enseña:**
+  - en la app compilada, `Shader.Find` devuelve null si el shader no va incluido: hay que referenciarlo desde un material o un asset, o meterlo en «Always Included Shaders» (26/10);
+  - los UIDocument sin PanelSettings no pintan nada (24/10).
+  Por eso las apps se prueban de verdad, con dos apps y `-shotOut`.
 - **Escenas:** un solo dueño por archivo .unity. Partida es de Arte; Inicio, de UI.
 - **En otra máquina, tras clonar:** importar Synty (`unity/tools/importar-synty.sh`), los clips de Mixamo y la herramienta Sidekicks (assets-src/sidekicks-tool), y ejecutar SourceProps.Run, SnowFeatureMake.Run, MapCatalogMake.Run, PieceMake.Run, GradeMake.Run y ProjectSetup.Run (UNITY-ARTE.md §6).
 - **Revisión:** cada animación, con tira a 10 fps de cerca y desde la cámara del juego; cada pantalla, junto a la 0.10.1 con el mismo encuadre. Gameplay aprueba.

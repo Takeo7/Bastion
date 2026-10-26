@@ -56,6 +56,16 @@ if wanted "$@"; then
     Assets/Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/Grass_Texture_01.png \
     Assets/Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/Dirt_Texture_01.png || failed=1
 fi
+# Emotes and Taunts: only the two gestures the camp's talkers make (clearingLife.ts SAYS: a shrug, calming down), a
+# woman's and a man's; the rest of the pack brings older copies of Sidekick's and Generic's shaders.
+name=ANIMATION_Emotes_And_Taunts_Unity_2022_3_v1_0_0
+if wanted "$@"; then
+  echo "== $name (dos gestos)"
+  e=Assets/Synty/AnimationEmotesAndTaunts/Animations/Polygon
+  python3 -I "$tools/upkg-extract.py" "$synty/ANIMATION - Emotes and Taunts/Unity/$name.unitypackage" "$project" \
+    $e/Masculine/Sad/A_POLY_EMOT_Sad_Shrug_Masc.fbx $e/Feminine/Sad/A_POLY_EMOT_Sad_Shrug_Femn.fbx \
+    $e/Masculine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Masc.fbx $e/Feminine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Femn.fbx || failed=1
+fi
 # The HUD's icons (UI): three INTERFACE packs, only their sprites and textures (no prefabs, scripts or samples: the HUD
 # is UI Toolkit, not their uGUI).
 for p in "INTERFACE - Apocalypse HUD/Unity/INTERFACE_Apocalypse_HUD_Unity_2022_3_v1_1_1.unitypackage" \

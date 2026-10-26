@@ -200,6 +200,9 @@ namespace Bastion.UI.Combat
         /// The flags over the units in sight (unitViews.ts renderFlag): health, armour, cover, what is on them; the name on
         /// the picked one's and the hovered one's; over the enemies, what the pointer's tile means (game.ts enemyTags).
         /// </summary>
+        /// <summary>Who has boarded La Lata as the event player plays it (EvacuatedEvent), before the view has it: no flag.</summary>
+        public readonly HashSet<string> Aboard = new HashSet<string>();
+
         void RefreshFlags()
         {
             if (Hud == null) return;
@@ -214,7 +217,8 @@ namespace Bastion.UI.Combat
             var carrier = v.Mission.Item?.Carrier;
             foreach (var u in v.Units)
             {
-                if (!u.Alive || !Visible(u)) continue;
+                // Aboard La Lata (evacuated, or boarding as it is played): out of sight, and so its flag (unitViews.ts board).
+                if (!u.Alive || u.Evacuated || Aboard.Contains(u.Id) || !Visible(u)) continue;
                 var f = new FlagView { Id = u.Id, Enemy = u.Team != Teams.Xcom, Hp = u.Hp, MaxHp = u.MaxHp, Armor = u.Armor, Cover = -1 };
                 if (u.Id == picked || u.Id == hovered?.Id) f.Name = u.Team == Teams.Xcom && u.Template != TemplateIds.Vip && !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name;
                 if (u.Team == Teams.Xcom)
@@ -229,19 +233,19 @@ namespace Bastion.UI.Combat
                 {
                     if (on) f.Tags.Add(new TagView { Text = text, Kind = kind });
                 }
-                Tag(u.ControlledBy != null, "CONTROLADO", "psi");
+                Tag(u.ControlledBy != null, UnitWords.Agree(u, "CONTROLADO"), "psi");
                 Tag(u.Overwatch, u.KillZone ? "ZONA LETAL" : u.WatchMelee == true ? "HOJA EN ALTO" : "VIGILANCIA", "ow");
                 Tag(u.Hunkered, "CUBRIÉNDOSE", "hk");
-                Tag(u.Aided > 0, "PROTEGIDO", "aid");
-                Tag(u.Stunned, "ATURDIDO", "stun");
-                Tag(u.Disoriented > 0, "DESORIENTADO", "psi");
+                Tag(u.Aided > 0, UnitWords.Agree(u, "PROTEGIDO"), "aid");
+                Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun");
+                Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi");
                 Tag(u.Panicked, "PÁNICO", "psi");
                 Tag(u.Infected == true, Lore.BiteTag, "bite");
-                Tag(u.SuppressedBy != null, "SUPRIMIDO", "stun");
+                Tag(u.SuppressedBy != null, UnitWords.Agree(u, "SUPRIMIDO"), "stun");
                 Tag(u.Marked > 0, "MARCADO", "aid");
                 Tag(u.Ruptured > 0, "VULNERABLE", "stun");
                 Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data");
-                Tag(u.Captive, "CAUTIVO", "data");
+                Tag(u.Captive, UnitWords.Agree(u, "CAUTIVO"), "data");
                 Tag(u.Objective, "OBJETIVO", "stun");
                 if (tags.TryGetValue(u.Id, out var t))
                 {
@@ -435,17 +439,17 @@ namespace Bastion.UI.Combat
                     if (on) card.Tags.Add(new TagView { Text = text, Kind = kind, Tip = tip });
                 }
                 Tag(u.Id == inPlay, "EN JUEGO", "in-play", "En juego: termina sus acciones antes que otro");
-                Tag(u.ControlledBy != null, "CONTROLADO", "psi");
-                Tag(u.Captive, "CAUTIVO", "data");
-                Tag(u.Disoriented > 0, "DESORIENTADO", "psi");
+                Tag(u.ControlledBy != null, UnitWords.Agree(u, "CONTROLADO"), "psi");
+                Tag(u.Captive, UnitWords.Agree(u, "CAUTIVO"), "data");
+                Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi");
                 Tag(u.Panicked, "PÁNICO", "psi");
                 // Bitten (docs/FASE3.md): if it falls it rises, and back at the base it turns unless treated.
                 Tag(u.Infected == true && u.Alive, Lore.BiteTag, "bite", BiteNote());
-                Tag(u.Evacuated, "EVACUADO", "evac");
+                Tag(u.Evacuated, UnitWords.Agree(u, "EVACUADO"), "evac");
                 Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data");
                 Tag(u.Overwatch, u.KillZone ? "ZONA LETAL" : u.WatchMelee == true ? "HOJA EN ALTO" : "VIGILANCIA", "ow");
                 Tag(u.Hunkered, "CUBRIÉNDOSE", "hk");
-                Tag(u.Stunned, "ATURDIDO", "stun");
+                Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun");
                 view.Cards.Add(card);
             }
             return view;

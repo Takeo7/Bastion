@@ -98,7 +98,8 @@ namespace Bastion.UI.Strategy
             stats.Add(new BastionStatView { Icon = "store:credits", Value = $"+{Campaign.ConvoyIncome(c)}", Label = $"Convoy {ConvoyWhen(c)}" });
             if (Campaign.FacilityCount(c, "infirmary") > 0) stats.Add(new BastionStatView { Icon = "store:medicines", Value = $"×{Campaign.HealRate(c)}", Label = "Curación" });
             var garage = Campaign.GarageCut(c).Wounds;
-            if (garage != 0) stats.Add(new BastionStatView { Icon = "map:lata", Value = $"−{garage}", Label = "Días de baja" });
+            // Lore, 26/10: wounds are counted in missions.
+            if (garage != 0) stats.Add(new BastionStatView { Icon = "map:lata", Value = $"−{garage}", Label = "Misiones de baja" });
             var aim = Campaign.RangeAim(c);
             if (aim != 0) stats.Add(new BastionStatView { Icon = "stat:aim", Value = $"+{aim}", Label = "Puntería" });
             if (Campaign.FacilityCount(c, "workshop") > 0)

@@ -43,6 +43,10 @@ namespace Bastion.Client.Map
         /// <summary>Whether it is out of sight (gone, or parked hidden).</summary>
         public bool Shown => body != null && body.activeSelf;
 
+        /// <summary>Where it is parked (0.10.1's world, tiles: its middle, past the bay's shift) and the way its nose points (radians from +z).</summary>
+        public Vector3 At => at;
+        public float Heading => heading;
+
         bool built;
         GameObject body;
         Vector3 size;
@@ -58,6 +62,8 @@ namespace Bastion.Client.Map
             public Quaternion at;
             public float swing;
             public float k;
+            /// <summary>Its middle shut, in 0.10.1's body (tiles), to tell which doorway it closes.</summary>
+            public Vector3 centre;
         }
         readonly List<Door> doors = new List<Door>();
         /// <summary>Each doorway's middle, in 0.10.1's body (tiles: its doors on −x).</summary>
@@ -128,6 +134,7 @@ namespace Bastion.Client.Map
             if (Vehicle == 3) Plates(model.transform, prefabOf);
             box = BoundsOf(body.transform, body.transform, r => true);
             size = box.size;
+            if (Vehicle == 0) CutDoors(model.transform);
             Doors(model.transform);
             Lamps();
             built = true;
@@ -146,7 +153,7 @@ namespace Bastion.Client.Map
                 {
                     // Its hinge is its pivot: the outer edge. The left one (−x here) swings its free end back and out.
                     float swing = (t.localPosition.x < 0 ? 1 : -1) * 1.97f * Mathf.Rad2Deg;
-                    doors.Add(new Door { leaf = t, shut = t.localPosition, open = t.localPosition, at = t.localRotation, swing = swing, k = 1 });
+                    doors.Add(new Door { leaf = t, shut = t.localPosition, open = t.localPosition, at = t.localRotation, swing = swing, k = 1, centre = Body(BoundsOf(t, body.transform, r => true).center) });
                 }
                 else if (Vehicle == 3 && System.Text.RegularExpressions.Regex.IsMatch(t.name, @"Door_0\d$"))
                 {
@@ -154,16 +161,160 @@ namespace Bastion.Client.Map
                     int digit = t.name[t.name.Length - 1] - '0';
                     // In, off its side (0.10.1's +x is in, here −x), and along the bus away from its doorway's middle.
                     var open = t.localPosition + t.parent.InverseTransformVector(body.transform.TransformVector(new Vector3(-0.14f * Tile, 0, (digit % 2 == 1 ? 1 : -1) * b.size.z * 0.85f)));
-                    doors.Add(new Door { leaf = t, shut = t.localPosition, open = open, at = t.localRotation, swing = 0, k = 1 });
+                    doors.Add(new Door { leaf = t, shut = t.localPosition, open = open, at = t.localRotation, swing = 0, k = 1, centre = Body(b.center) });
                     doorCentres.Add(Body(b.center));
                 }
             }
             if (Vehicle == 0)
-                // By its doors on either side, each door's middle (mula.ts CAR_DOORS: along it, from its back).
-                foreach (float x in new[] { box.min.x, box.max.x })
-                    foreach (var (from, to) in new[] { (0.435f, 0.587f), (0.253f, 0.435f) })
+                // By its doors on either side, each door's middle (mula.ts CAR_DOORS: along it, from its back), in 0.10.1's
+                // order: its −x side's first (here +x), the driver's.
+                foreach (float x in new[] { box.max.x, box.min.x })
+                    foreach (var (from, to, _) in CarDoors)
                         doorCentres.Add(Body(new Vector3(x, 0.5f * Tile, box.min.z + size.z * (from + to) / 2)));
             else if (Vehicle < 3) doorCentres.Add(Body(new Vector3(box.center.x, 0.6f * Tile, box.min.z)));
+        }
+
+        /// <summary>
+        /// The 4×4's doors (mula.ts CAR_DOORS; playtest 20/10 #7: get in, not vanish in the gap): Synty's body has them in its
+        /// one shell, so they are cut out of it and its glass: along the body (fractions of its length from the back), front
+        /// and rear, as its handles and mirrors place them; from the sill to the roof's edge (fractions of its height); the
+        /// outer share of its width either side. Each hangs on its front edge, `hinge` tiles in from the widest, and swings
+        /// out (radians).
+        /// </summary>
+        static readonly (float from, float to, float hinge)[] CarDoors = { (0.435f, 0.587f, 0.13f), (0.253f, 0.435f, 0.13f) };
+        const float CarDoorLow = 0.09f, CarDoorHigh = 0.845f, CarDoorSide = 0.55f, CarDoorSwing = 1.15f;
+
+        /// <summary>Each shell's mesh cut (CutDoors): what stays, and each door's (none: nothing of it there), by the mesh's id.</summary>
+        static readonly Dictionary<int, (Mesh rest, Mesh[] doors)> cuts = new Dictionary<int, (Mesh, Mesh[])>();
+
+        /// <summary>
+        /// The 4×4's four doors cut out of its shell and glass (mula.ts carDoors; not its armour or its window bars, which
+        /// 0.10.1 left on the body): a triangle whose three corners are in one door's box goes with that door; each door a
+        /// leaf on its hinge, in 0.10.1's order (its −x side's, here +x, front and rear; then the other side's).
+        /// </summary>
+        void CutDoors(Transform model)
+        {
+            float midX = box.center.x, half = size.x / 2;
+            float low = box.min.y + size.y * CarDoorLow, high = box.min.y + size.y * CarDoorHigh;
+            var cut = new List<(int side, float z0, float z1)>();
+            var leaves = new List<Transform>();
+            foreach (int side in new[] { 1, -1 })
+                foreach (var (from, to, hinge) in CarDoors)
+                {
+                    cut.Add((side, box.min.z + size.z * from, box.min.z + size.z * to));
+                    var leaf = new GameObject("Puerta").transform;
+                    leaf.SetParent(body.transform, false);
+                    leaf.localPosition = new Vector3(midX + side * (half - hinge * Tile), 0, box.min.z + size.z * to);
+                    leaves.Add(leaf);
+                }
+            float slack = 0.01f * Tile;
+            foreach (var r in model.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (Extra(r.name) || r.name.Contains("Wheel")) continue;
+                var f = r.GetComponent<MeshFilter>();
+                var mesh = f != null ? f.sharedMesh : null;
+                if (mesh == null) continue;
+                if (!mesh.isReadable)
+                {
+                    Debug.LogWarning($"[lata] {mesh.name} isn't readable: the 4×4's doors stay shut in it (MapCatalogMake.Run)");
+                    continue;
+                }
+                if (!cuts.TryGetValue(mesh.GetInstanceID(), out var made))
+                {
+                    var toBody = body.transform.worldToLocalMatrix * r.transform.localToWorldMatrix;
+                    int Which(Vector3 v)
+                    {
+                        var p = toBody.MultiplyPoint3x4(v);
+                        if (p.y < low || p.y > high || Mathf.Abs(p.x - midX) < half * CarDoorSide) return -1;
+                        for (int k = 0; k < cut.Count; k++)
+                            if (Mathf.Sign(p.x - midX) == cut[k].side && p.z >= cut[k].z0 - slack && p.z <= cut[k].z1 + slack) return k;
+                        return -1;
+                    }
+                    made = cuts[mesh.GetInstanceID()] = Split(mesh, mesh.vertices.Select(Which).ToArray(), cut.Count);
+                }
+                f.sharedMesh = made.rest;
+                for (int k = 0; k < cut.Count; k++)
+                {
+                    if (made.doors[k] == null) continue;
+                    // As the shell was, then onto the leaf (which, shut, is only moved off it).
+                    var piece = new GameObject(r.name);
+                    piece.layer = r.gameObject.layer;
+                    piece.transform.SetParent(r.transform.parent, false);
+                    piece.transform.localPosition = r.transform.localPosition;
+                    piece.transform.localRotation = r.transform.localRotation;
+                    piece.transform.localScale = r.transform.localScale;
+                    piece.transform.SetParent(leaves[k], true);
+                    piece.AddComponent<MeshFilter>().sharedMesh = made.doors[k];
+                    var pr = piece.AddComponent<MeshRenderer>();
+                    pr.sharedMaterials = r.sharedMaterials;
+                    pr.shadowCastingMode = r.shadowCastingMode;
+                    pr.receiveShadows = r.receiveShadows;
+                }
+            }
+            for (int k = 0; k < leaves.Count; k++)
+            {
+                var leaf = leaves[k];
+                // A point behind the hinge swings out to its side (0.10.1's turn about y, here the other way: x mirrored).
+                float swing = (cut[k].side > 0 ? -1 : 1) * CarDoorSwing * Mathf.Rad2Deg;
+                doors.Add(new Door { leaf = leaf, shut = leaf.localPosition, open = leaf.localPosition, at = Quaternion.identity, swing = swing, k = 0, centre = Body(BoundsOf(leaf, body.transform, r => true).center) });
+            }
+        }
+
+        /// <summary>`mesh` cut by `which` (each vertex's door, or −1): what stays, and each of `count` doors' triangles (null if none).</summary>
+        static (Mesh rest, Mesh[] doors) Split(Mesh mesh, int[] which, int count)
+        {
+            var rest = UnityEngine.Object.Instantiate(mesh);
+            rest.name = mesh.name + " (sin puertas)";
+            var parts = new List<int>[count, mesh.subMeshCount];
+            for (int s = 0; s < mesh.subMeshCount; s++)
+            {
+                var tris = mesh.GetTriangles(s);
+                var kept = new List<int>(tris.Length);
+                for (int t = 0; t + 2 < tris.Length; t += 3)
+                {
+                    int k = which[tris[t]];
+                    if (k >= 0 && which[tris[t + 1]] == k && which[tris[t + 2]] == k)
+                    {
+                        (parts[k, s] ??= new List<int>()).AddRange(new[] { tris[t], tris[t + 1], tris[t + 2] });
+                        continue;
+                    }
+                    kept.Add(tris[t]);
+                    kept.Add(tris[t + 1]);
+                    kept.Add(tris[t + 2]);
+                }
+                rest.SetTriangles(kept, s, false);
+            }
+            rest.RecalculateBounds();
+            var doors = new Mesh[count];
+            var vertices = mesh.vertices;
+            var normals = mesh.normals;
+            var tangents = mesh.tangents;
+            var colours = mesh.colors32;
+            var uvs = Enumerable.Range(0, 4).Select(c => { var l = new List<Vector2>(); mesh.GetUVs(c, l); return l; }).ToArray();
+            for (int k = 0; k < count; k++)
+            {
+                var used = new Dictionary<int, int>();
+                for (int s = 0; s < mesh.subMeshCount; s++)
+                    if (parts[k, s] != null)
+                        foreach (int i in parts[k, s])
+                            if (!used.ContainsKey(i)) used[i] = used.Count;
+                if (used.Count == 0) continue;
+                var order = used.OrderBy(p => p.Value).Select(p => p.Key).ToArray();
+                var door = new Mesh { name = $"{mesh.name} (puerta {k})" };
+                if (order.Length > 65535) door.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                door.vertices = order.Select(i => vertices[i]).ToArray();
+                if (normals.Length == vertices.Length) door.normals = order.Select(i => normals[i]).ToArray();
+                if (tangents.Length == vertices.Length) door.tangents = order.Select(i => tangents[i]).ToArray();
+                if (colours.Length == vertices.Length) door.colors32 = order.Select(i => colours[i]).ToArray();
+                for (int c = 0; c < 4; c++)
+                    if (uvs[c].Count == vertices.Length) door.SetUVs(c, order.Select(i => uvs[c][i]).ToList());
+                door.subMeshCount = mesh.subMeshCount;
+                for (int s = 0; s < mesh.subMeshCount; s++)
+                    door.SetTriangles(parts[k, s] != null ? parts[k, s].Select(i => used[i]).ToArray() : new int[0], s, false);
+                door.RecalculateBounds();
+                doors[k] = door;
+            }
+            return (rest, doors);
         }
 
         /// <summary>A point of the body (here, metres) in 0.10.1's body (tiles, mirrored across x).</summary>
@@ -328,6 +479,24 @@ namespace Bastion.Client.Map
             foreach (var d in doors) DoorAt(d, k);
         }
 
+        /// <summary>How many ways in it has (Doorways), and the leaves of way `way` at `k` of the way open (a double doorway's both).</summary>
+        public int Ways => doorCentres.Count;
+
+        /// <summary>`twins` false, only that doorway's own leaves (the 4×4's: its front and rear doors are nearer than 0.7).</summary>
+        public void SetWay(int way, float k, bool twins = true)
+        {
+            if (way < 0 || way >= doorCentres.Count) return;
+            var centre = doorCentres[way];
+            foreach (var d in doors)
+            {
+                // Each leaf with the doorway nearest it (evacBus.ts leavesByDoorway), and a doorway's twin within 0.7.
+                int nearest = 0;
+                for (int i = 1; i < doorCentres.Count; i++)
+                    if (Vector3.Distance(doorCentres[i], d.centre) < Vector3.Distance(doorCentres[nearest], d.centre)) nearest = i;
+                if (twins ? Vector3.Distance(doorCentres[nearest], centre) < 0.7f : nearest == way) DoorAt(d, k);
+            }
+        }
+
         static void DoorAt(Door d, float k)
         {
             d.k = k;
@@ -356,9 +525,24 @@ namespace Bastion.Client.Map
         /// Its doors shut, its lights on, then away along its nose `distance` tiles, faster and faster, and gone (back where
         /// it parks, out of sight: the way it comes back to). With `fade` (its way out is built over) it goes where it stands.
         /// </summary>
-        public void Depart(float distance = 12, bool fade = false)
+        public void Depart(float distance = 12, bool fade = false) => Depart(distance, fade, null);
+
+        /// <summary>Depart, waited for: done once it is gone (at once if it isn't there), or when `ct` is cancelled.</summary>
+        public async Awaitable DepartAsync(float distance = 12, bool fade = false, System.Threading.CancellationToken ct = default)
         {
             if (!Shown) return;
+            bool gone = false;
+            Depart(distance, fade, () => gone = true);
+            while (!gone && !ct.IsCancellationRequested && this != null) await Awaitable.NextFrameAsync(ct);
+        }
+
+        void Depart(float distance, bool fade, Action gone)
+        {
+            if (!Shown)
+            {
+                gone?.Invoke();
+                return;
+            }
             var from = doors.Select(d => d.k).ToList();
             float lit = night ? LightsNight : LightsDay;
             Then(ShutSeconds, t =>
@@ -372,6 +556,7 @@ namespace Bastion.Client.Map
                 {
                     body.SetActive(false);
                     Unfade();
+                    gone?.Invoke();
                 });
                 return;
             }
@@ -386,6 +571,7 @@ namespace Bastion.Client.Map
             {
                 body.SetActive(false);
                 Place(at);
+                gone?.Invoke();
             });
         }
 

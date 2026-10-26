@@ -168,6 +168,36 @@ namespace Bastion.Client.Map
         /// where it stands. With `only`, the tiles of those chunks alone.
         /// </summary>
         IEnumerable<(string id, int x, int y, Matrix4x4 m, bool cast)> Scatter(GameState s, GroundMap ground, HashSet<int> only)
+            => ScatterOn(s, ground, only);
+
+        /// <summary>
+        /// The base's tiles that aren't floor in the engine's clearing (base.ts clearingState), which `s` (TerrainOf's: the
+        /// ground and the buildings' map) has as floor: what its standing pieces stand on, by their cells' tiles, and the
+        /// Bastion's yard while it stands, low (the fire, the chairs, the wood, the porch). 0.10.1's scatterCover reads the
+        /// state itself: nothing grows there. Null without a base.
+        /// </summary>
+        static bool[] Taken(GameState s)
+        {
+            if (s.Base == null) return null;
+            var taken = new bool[s.Tiles.Count];
+            var @base = new BaseState { Width = s.Width, Height = s.Height, Pieces = s.Base.Pieces, Felled = s.Base.Felled, Level = s.Base.Level };
+            void Take(int x, int y)
+            {
+                int i = y * s.Width + x;
+                if (x >= 0 && y >= 0 && x < s.Width && i < taken.Length) taken[i] = true;
+            }
+            foreach (var p in s.Base.Pieces)
+            {
+                if (p.Hp <= 0) continue;
+                if (p.Piece == PieceIds.Caravan) foreach (var c in Base.BastionFootprint(@base)) Take(c.X, c.Y);
+                else foreach (var c in Base.CellsOf(p)) if (c.Tile != TileKinds.Floor) Take(c.X, c.Y);
+            }
+            if (s.Base.Pieces.Any(p => p.Piece == PieceIds.Caravan && p.Hp > 0))
+                foreach (var c in Base.BastionYard(@base)) Take(c.X, c.Y);
+            return taken;
+        }
+
+        IEnumerable<(string id, int x, int y, Matrix4x4 m, bool cast)> ScatterOn(GameState s, GroundMap ground, HashSet<int> only)
         {
             int w = s.Width, h = s.Height;
             var wildsRoad = s.Biome == Biomes.Wilds && s.Site == Sites.Roadside;
@@ -178,6 +208,7 @@ namespace Bastion.Client.Map
                 plan[GroundMap.Street] = Cover[Biomes.City][GroundMap.Street];
             }
             var decor = s.Decor ?? new List<int>();
+            var taken = Taken(s);
             var snowy = s.Snow ?? s.CampaignMission?.Story == 1;
             var siege = s.Mission?.Siege != null;
             string At(int x, int y) => x < 0 || y < 0 || x >= w || y >= h ? null : s.Tiles[y * w + x];
@@ -196,7 +227,7 @@ namespace Bastion.Client.Map
                 for (int x = 0; x < w; x++)
                 {
                     int i = y * w + x;
-                    if (s.Tiles[i] != TileKinds.Floor || (only != null && !only.Contains(ChunkOf(x, y)))) continue;
+                    if (s.Tiles[i] != TileKinds.Floor || (taken != null && taken[i]) || (only != null && !only.Contains(ChunkOf(x, y)))) continue;
                     int e = Elev(x, y);
                     // A siege's watchtower deck is planks: nothing grows on it.
                     if (e != 0 && siege) continue;

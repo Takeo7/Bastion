@@ -58,14 +58,16 @@ namespace Bastion.EditorTools
         /// </summary>
         static IEnumerable<string> Merged => BaseWoods.BasePines.Append(BaseWoods.FarPine).Distinct();
 
-        /// <summary>The models of Merged imported readable (their FBX's importer), those that weren't.</summary>
+        /// <summary>
+        /// The models of Merged imported readable (their FBX's importer), those that weren't; and the 4×4's, whose doors
+        /// La Lata cuts out of its shell (LaLata.CutDoors).
+        /// </summary>
         static void Readable(System.Func<string, GameObject> prefabOf)
         {
             var sources = new HashSet<string>();
-            foreach (string id in Merged)
+            var models = Merged.Select(id => MapArt.Prop(id)).Select(art => art?.fbx != null ? prefabOf(MapArt.ModelKey(art)) : null).Append(prefabOf(LaLata.Bodies[0]));
+            foreach (var model in models)
             {
-                var art = MapArt.Prop(id);
-                var model = art?.fbx != null ? prefabOf(MapArt.ModelKey(art)) : null;
                 if (model == null) continue;
                 foreach (var f in model.GetComponentsInChildren<MeshFilter>(true))
                     if (f.sharedMesh != null && !f.sharedMesh.isReadable) sources.Add(AssetDatabase.GetAssetPath(f.sharedMesh));

@@ -168,39 +168,57 @@
     color: #f2c230;
 }
 
-/* The places one knows the valley by: small capitals, centred on their place. */
+/* The places one knows the valley by: small capitals in Barlow bold, centred on their place, the dark edge thick
+   enough to read on the painting (valley.css .valley-landmark span). */
 .valley-landmark__name {
     position: absolute;
     left: -100px;
     width: 200px;
     top: -8px;
     -unity-text-align: middle-center;
-    font-size: 11px;
-    letter-spacing: 1px;
-    color: #ffffff;
-    -unity-text-outline-width: 0.25px;
+    -unity-font-definition: url("../../Fonts/Barlow-Bold SDF.asset");
+    font-size: 10.5px;
+    letter-spacing: 0.85px;
+    color: rgba(255, 255, 255, 0.94);
+    -unity-text-outline-width: 0.4px;
     -unity-text-outline-color: #10202a;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
 }
 
-.valley-lata__icon {
+/* La Lata: the vehicle's profile in yellow with a dark edge and a soft shadow (valley.css .valley-bus; its box is
+   MapScreen's, as each vehicle has its own proportions), the name just past it. */
+.valley-lata__shadow,
+.valley-lata__edge,
+.valley-lata__body {
     position: absolute;
-    left: -22px;
-    top: -16px;
-    width: 44px;
-    height: 32px;
-    -unity-background-image-tint-color: #f2c230;
+}
+
+.valley-lata__shadow {
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.4);
+}
+
+.valley-lata__edge {
+    -unity-background-image-tint-color: #10202a;
+}
+
+.valley-lata__body {
+    -unity-background-image-tint-color: #ffc43a;
 }
 
 .valley-lata__name {
     position: absolute;
-    left: 18px;
+    left: 25px;
     top: -8px;
-    width: 100px;
-    font-size: 11px;
-    letter-spacing: 1px;
-    color: #f2c230;
-    -unity-text-outline-width: 0.25px;
+    height: 16px;
+    width: 120px;
+    -unity-text-align: middle-left;
+    -unity-font-definition: url("../../Fonts/Barlow-Bold SDF.asset");
+    font-size: 12px;
+    letter-spacing: 0.7px;
+    color: #ffd060;
+    -unity-text-outline-width: 0.4px;
     -unity-text-outline-color: #10202a;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
 }
 
 /* =============================================================== panels */

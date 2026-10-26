@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Bastion.Client;
 using Bastion.Engine;
 using Bastion.Net;
 using Bastion.UI.Hud;
@@ -13,7 +14,9 @@ namespace Bastion.UI.Strategy
     /// sends is drawn through the presenter; what is open stays here (the tab, the soldier, the Armería's row, the Mapa's
     /// pick, the piece on the clearing, the board, the windows waiting); every button that changes the campaign goes to
     /// the host as its CampaignCommand, and the host answers with the whole campaign (or `rejected` and why, a note).
-    /// Arte's clearing is not here yet: placing, felling, the siege's posts and walking only pick, and nothing is sent.
+    /// Arte's clearing (the scene «Base», Settlement) follows: the campaign, the tab, the plates on screen, Soldados'
+    /// soldier and Personalizar's draft; and the busts (Portraits) know every look. Placing, felling, the siege's posts
+    /// and walking on the clearing are still to come: their buttons only pick.
     /// </summary>
     public sealed class BaseController : IStrategyHandlers
     {
@@ -56,11 +59,19 @@ namespace Bastion.UI.Strategy
             root.Bind(this);
             root.ClockOf = Clock;
             root.MenuChose += MenuChose;
-            root.SettingChanged += (id, value) => App.GameSettings.Change(id, value);
+            // Ajustes: kept and applied; drawn again (Personalizar's colours wait on «Ropa con el color del jugador»).
+            root.SettingChanged += (id, value) =>
+            {
+                App.GameSettings.Change(id, value);
+                Render();
+            };
         }
 
         /// <summary>The campaign as the squad took off, when the base is made anew after a mission (main.ts's `before`).</summary>
         public CampaignState Before;
+
+        /// <summary>Back from a mission, La Lata still to come in (screen.ts arriving).</summary>
+        bool arriving;
 
         public CampaignState State => p.State;
         public string View => view;
@@ -74,10 +85,16 @@ namespace Bastion.UI.Strategy
         public void Campaign(CampaignState c)
         {
             if (c == null) return;
-            // A base made anew after a mission compares with it as it took off: the mission's news still pop up.
+            // A base made anew after a mission compares with it as it took off: the mission's news still pop up; and La
+            // Lata comes back the first time the clearing is in view.
+            if (p.State == null && Before != null) arriving = true;
             var prev = p.State ?? Before;
             Before = null;
             p.State = c;
+            Settlement.Instance?.Show(c);
+            Portraits.Know(c);
+            // The draft's own bust, drawn again over what Know just put back.
+            if (soldiers.Draft != null) Portraits.Know(soldiers.Draft.Soldier, soldiers.Draft.Look, NameOf(soldiers.Draft.Soldier));
             p.SeeNews(view);
             radio = radio ?? new Radio(root.RadioCard, p.Slot, Vars);
             // One's own proposal that costs: said at once that nothing is paid until the yes (playtest 16/10 #5).
@@ -180,7 +197,8 @@ namespace Bastion.UI.Strategy
                     root.SetDebrief(p.Debrief());
                     break;
                 case "geoscape":
-                    if (root.ValleyCamera == null) root.ValleyCamera = Camera.main;
+                    // The valley with its own camera: the clearing's goes off on the Mapa, at the bottom of its fade (Settlement.SetView,
+                    // its MapShown: StrategyRoot).
                     root.SetMap(p.Map(map));
                     break;
                 case "facilities":
@@ -191,6 +209,22 @@ namespace Bastion.UI.Strategy
             root.SetProposal(p.Proposal(), p.Waiting(view));
             shown = Modal();
             root.SetModal(shown);
+            var clearing = Settlement.Instance;
+            if (clearing == null) return;
+            // Soldados' soldier on the clearing, as Personalizar's draft has them while it is open.
+            if (view == "barracks") clearing.Showcase(p.State, soldiers.Soldier, soldiers.Draft?.Look);
+            // The Armería's corner, and the squad by La Lata (the debrief's while it is to be read): each only if it changed.
+            clearing.SetArmory(p.State);
+            var (mirror, halves) = p.LineupSides();
+            clearing.SetLineup(p.State, p.Lineup(ReportPending(p.State)), mirror, halves);
+            // Back from a mission: La Lata up its track (screen.ts arrive), the first time the clearing is shown after the
+            // debrief (screen.ts go: fixed shots too, as Soldados; in the debrief it stands parked behind the row; the Mapa
+            // is the valley's).
+            if (arriving && view != "debrief" && view != "geoscape")
+            {
+                arriving = false;
+                clearing.Arrive();
+            }
         }
 
         /// <summary>One window at a time (renderModal): leaving the game, back to the menu, the campaign's end, the event, then the alerts.</summary>
@@ -231,6 +265,8 @@ namespace Bastion.UI.Strategy
             view = to;
             p.SeeNews(view);
             board = null;
+            CloseDraft();
+            Settlement.Instance?.SetView(view);
             if (view != "facilities")
             {
                 settlement.InHand = null;
@@ -337,6 +373,11 @@ namespace Bastion.UI.Strategy
                     map.Region = c.Offers.FirstOrDefault(o => o.Id == a.Id)?.Region;
                     Go("geoscape");
                     break;
+                case CancelMissionAction a:
+                    map.Offer = a.Id;
+                    map.Region = c.Offers.FirstOrDefault(o => o.Id == a.Id)?.Region;
+                    Go("geoscape");
+                    break;
                 case ContactAction a:
                     map.Offer = null;
                     map.Region = a.Region;
@@ -367,14 +408,69 @@ namespace Bastion.UI.Strategy
         // Soldados.
         public void OnSoldier(string id)
         {
+            if (soldiers.Draft != null && soldiers.Draft.Soldier != id) CloseDraft();
             soldiers.Soldier = id;
             Render();
         }
 
         public void OnRecruit() => Order(new RecruitCommand());
 
-        /// <summary>Personalizar waits for Arte's wardrobe (the figure that changes as one chooses).</summary>
-        public void OnCustomize() => Debug.Log("[base] Personalizar: espera al armario de Arte");
+        /// <summary>Personalizar on the soldier shown: a draft of their name, nickname and looks (theirs, or as their id has them).</summary>
+        public void OnCustomize()
+        {
+            var s = p.State?.Soldiers.FirstOrDefault(x => x.Id == soldiers.Soldier);
+            if (s == null) return;
+            soldiers.Draft = new CustomDraft
+            {
+                Soldier = s.Id, Name = s.Name, Nickname = s.Nickname ?? "",
+                Look = CustomDraft.Copy(s.Appearance) ?? Appearances.DefaultAppearance(s.Owner, null, null, s.Id),
+            };
+            Prepare();
+            Render();
+        }
+
+        /// <summary>The soldier, head and build the clearing last made the other outfits for (Settlement.Prepare).</summary>
+        string prepared;
+
+        /// <summary>
+        /// The other outfits of the draft's sex made on the clearing in the background, in its head and build, so that the
+        /// pointer over one shows it at once (Arte's Settlement.Prepare): on opening, and again when the head or build changes.
+        /// </summary>
+        void Prepare()
+        {
+            var d = soldiers.Draft;
+            var k = d == null ? null : $"{d.Soldier}|{d.Look.Head}|{d.Look.Build}|{d.Look.Sex}";
+            if (k == null || k == prepared) return;
+            prepared = k;
+            Settlement.Instance?.Prepare(p.State, d.Soldier, d.Look);
+        }
+
+        /// <summary>Personalizar closed without saving: the bust as the soldier is.</summary>
+        void CloseDraft()
+        {
+            var d = soldiers.Draft;
+            if (d == null) return;
+            soldiers.Draft = null;
+            prepared = null;
+            var s = p.State?.Soldiers.FirstOrDefault(x => x.Id == d.Soldier);
+            if (s != null) Portraits.Know(s.Id, s.Appearance, s.Name);
+        }
+
+        /// <summary>The draft changed for good (a click, a colour let go): drawn, on the clearing and in its bust.</summary>
+        void DraftChanged()
+        {
+            var d = soldiers.Draft;
+            d.CopyArmed = false;
+            Portraits.Know(d.Soldier, d.Look, NameOf(d.Soldier));
+            Prepare();
+            Render();
+        }
+
+        /// <summary>A soldier's name as the campaign has it (who has no sex in their look gets a body by it).</summary>
+        string NameOf(string soldier) => p.State?.Soldiers.FirstOrDefault(x => x.Id == soldier)?.Name;
+
+        /// <summary>The draft on the clearing only (an outfit under the pointer, a colour being dragged).</summary>
+        void Preview(Appearance look) => Settlement.Instance?.Showcase(p.State, soldiers.Draft?.Soldier, look);
 
         public void OnCare(int index) => Order(p.CareOrder(soldiers.Soldier, index));
 
@@ -404,11 +500,118 @@ namespace Bastion.UI.Strategy
             Render();
         }
 
-        // Personalizar (Arte's wardrobe first).
-        public void OnCustomName(string name, string nickname) { }
-        public void OnCustomChoice(string group, string id, bool preview) { }
-        public void OnCustomColor(string part, string color, bool preview) { }
-        public void OnCustomAction(string action) { }
+        // Personalizar (screen.ts customizer).
+        public void OnCustomName(string name, string nickname)
+        {
+            if (soldiers.Draft == null) return;
+            soldiers.Draft.Name = name;
+            soldiers.Draft.Nickname = nickname;
+            soldiers.Draft.CopyArmed = false;
+            Render();
+        }
+
+        /// <summary>Ropa, Cabeza or Complexión; over an outfit (`preview`) the soldier wears it on the clearing, and back to the draft away.</summary>
+        public void OnCustomChoice(string group, string id, bool preview)
+        {
+            var d = soldiers.Draft;
+            if (d == null) return;
+            if (preview)
+            {
+                if (group != "outfit") return;
+                if (string.IsNullOrEmpty(id)) Preview(d.Look);
+                else
+                {
+                    var look = CustomDraft.Copy(d.Look);
+                    look.Character = id;
+                    Preview(look);
+                }
+                return;
+            }
+            if (group == "outfit") d.Look.Character = string.IsNullOrEmpty(id) ? null : id;
+            else if (group == "head") d.Look.Head = id;
+            else if (group == "build") d.Look.Build = id;
+            DraftChanged();
+        }
+
+        /// <summary>
+        /// A colour: the whole armour (every piece that follows it, a beret, cap or hood keeping its own), the trim, or a
+        /// piece (null: it follows again). While the picker is dragged (`preview`) only the clearing follows; the sheet
+        /// draws again, and the bust, when it is let go.
+        /// </summary>
+        public void OnCustomColor(string part, string color, bool preview)
+        {
+            var d = soldiers.Draft;
+            if (d == null) return;
+            var look = d.Look;
+            if (part == "all")
+            {
+                look.Primary = color ?? look.Primary;
+                look.Torso = look.Arms = look.Legs = null;
+                if (!(Appearances.Heads.TryGetValue(look.Head ?? "", out var head) && head.Paint == "trim")) look.Helmet = null;
+            }
+            else if (part == "trim") look.Secondary = color ?? look.Secondary;
+            else StrategyPresenter.SetPart(look, part, color);
+            if (preview) Preview(look);
+            else DraftChanged();
+        }
+
+        /// <summary>Aleatorio, Restablecer, «Copiar a todos mis soldados» (asked twice), Guardar, Cancelar.</summary>
+        public void OnCustomAction(string action)
+        {
+            var d = soldiers.Draft;
+            var c = p.State;
+            var s = c?.Soldiers.FirstOrDefault(x => x.Id == d?.Soldier);
+            if (d == null || s == null) return;
+            switch (action)
+            {
+                case "random":
+                    d.Look = Appearances.RandomAppearance(new Rng(Environment.TickCount));
+                    DraftChanged();
+                    break;
+                case "reset":
+                    // Its own look by its id (the engine's): not everyone back in a helmet.
+                    d.Look = Appearances.DefaultAppearance(s.Owner, null, s.Appearance?.Sex, s.Id);
+                    DraftChanged();
+                    break;
+                case "copy":
+                    if (!d.CopyArmed)
+                    {
+                        d.CopyArmed = true;
+                        Render();
+                        break;
+                    }
+                    Save(d);
+                    // The same colours on every soldier of this player, each keeping their name, head and build.
+                    var hat = Appearances.Heads.TryGetValue(d.Look.Head ?? "", out var head) ? head.Paint : null;
+                    foreach (var x in c.Soldiers.Where(x => x.Owner == s.Owner && x.Alive && x.Id != s.Id))
+                    {
+                        var a = new Appearance { Primary = d.Look.Primary, Secondary = d.Look.Secondary, Visor = d.Look.Visor, Head = x.Appearance?.Head ?? d.Look.Head, Build = x.Appearance?.Build ?? d.Look.Build };
+                        foreach (var piece in ArmorParts.All)
+                        {
+                            var color = piece == ArmorParts.Helmet && hat != null ? Appearances.PartColor(d.Look, piece) : Appearances.PartOf(d.Look, piece);
+                            if (color != null) StrategyPresenter.SetPart(a, piece, color);
+                        }
+                        Order(new CustomizeCommand { Soldier = x.Id, Name = x.Name, Nickname = x.Nickname ?? "", Appearance = a });
+                    }
+                    soldiers.Draft = null;
+                    prepared = null;
+                    Render();
+                    break;
+                case "save":
+                    if (string.IsNullOrWhiteSpace(d.Name)) break;
+                    Save(d);
+                    soldiers.Draft = null;
+                    prepared = null;
+                    Render();
+                    break;
+                case "cancel":
+                    CloseDraft();
+                    Render();
+                    break;
+            }
+        }
+
+        void Save(CustomDraft d) => Order(new CustomizeCommand { Soldier = d.Soldier, Name = d.Name.Trim(), Nickname = (d.Nickname ?? "").Trim(), Appearance = d.Look });
 
         // The skill board.
         public void OnUnlock(string cell) => Order(board != null ? new UnlockCommand { Soldier = board, Cell = cell } : null);
@@ -494,10 +697,14 @@ namespace Bastion.UI.Strategy
         /// A zone: its marker picks its first mission on the list too (GeoscapeSet's click, docs/UNITY-ESTRATEGIA.md §7:
         /// as the 0.10.1), a Nido's or an errand's row only the zone (focusRegion).
         /// </summary>
+        /// <summary>
+        /// A zone, from its marker or a row: its sheet, with all its missions to pick from (Arturo, 26/10; the 0.10.1 picked
+        /// the zone's first mission from the marker).
+        /// </summary>
         public void OnZone(string id, bool mark)
         {
             map.Region = id;
-            map.Offer = mark && p.State != null ? StrategyPresenter.ShownOffers(p.State).FirstOrDefault(o => o.Region == id)?.Id : null;
+            map.Offer = null;
             Render();
         }
 

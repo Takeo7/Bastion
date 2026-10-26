@@ -516,7 +516,7 @@ namespace Bastion.Engine.Tests
             var a = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => u.Backpack = Pack(Medicines(2), Food(1)));
             var b = AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => { u.Hp = 1; u.Infected = true; });
             Refused("Solo se usan las medicinas.", Item(s, "s1", ItemActions.Use, index: 1));
-            Refused("No estás herido.", Item(s, "s1", ItemActions.Use, index: 0));
+            Refused("No tienes heridas.", Item(s, "s1", ItemActions.Use, index: 0));
             var r = Item(s, "s1", ItemActions.Use, index: 0, to: "s2");
             Assert.True(r.Ok);
             Assert.Equal(4, b.Hp);
@@ -525,7 +525,7 @@ namespace Bastion.Engine.Tests
             SameJson(Pack(Medicines(1), Food(1)), a.Backpack);
             // Healthy but bitten: with the Enfermería at level 2, the medicine is worth it again, and it stops the bite.
             b.Hp = b.MaxHp;
-            Refused("No está herido.", Item(s, "s1", ItemActions.Use, index: 0, to: "s2"));
+            Refused("No tiene heridas.", Item(s, "s1", ItemActions.Use, index: 0, to: "s2"));
             s.Mission.MedicineCures = true;
             Assert.True(Item(s, "s1", ItemActions.Use, index: 0, to: "s2").Ok);
             Assert.Equal(false, b.Infected);

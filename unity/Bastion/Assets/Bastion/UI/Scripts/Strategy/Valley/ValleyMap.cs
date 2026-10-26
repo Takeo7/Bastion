@@ -114,12 +114,36 @@ namespace Bastion.UI.Strategy
             cam.transform.rotation = Quaternion.Euler(90, 0, 0);
             cam.nearClipPlane = 1;
             cam.farClipPlane = 20;
+            UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering += BeginCamera;
+            UnityEngine.Rendering.RenderPipelineManager.endCameraRendering += EndCamera;
             var home = data.ZoneOf("weu");
             lataZone = home?.id;
             lata = home != null ? new Vector2(home.x, home.z) + Park : Vector2.zero;
         }
 
         public Camera Camera => cam;
+
+        /// <summary>
+        /// The map as it was painted (geoscape.ts MAP_MOOD: no tone mapping, bloom or grade). Its camera has no URP post (a
+        /// new camera's default), but Arte's grade (Grade.shader) is a pass of the renderer and runs on every camera:
+        /// _GradePlain 1 while this one draws tells it to leave the picture as it is (its fade to black still goes).
+        /// </summary>
+        void BeginCamera(UnityEngine.Rendering.ScriptableRenderContext context, Camera camera)
+        {
+            if (camera == cam && plane != null && plane.activeSelf) Shader.SetGlobalFloat("_GradePlain", 1);
+        }
+
+        void EndCamera(UnityEngine.Rendering.ScriptableRenderContext context, Camera camera)
+        {
+            if (camera == cam) Shader.SetGlobalFloat("_GradePlain", 0);
+        }
+
+        void OnDestroy()
+        {
+            UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering -= BeginCamera;
+            UnityEngine.Rendering.RenderPipelineManager.endCameraRendering -= EndCamera;
+            Shader.SetGlobalFloat("_GradePlain", 0);
+        }
 
         public void Show(bool on)
         {
@@ -165,7 +189,8 @@ namespace Bastion.UI.Strategy
         {
             if (cam == null || panel.y <= 0) return;
             scale = Mathf.Min((free.width - 2 * Margin) / data.size.w, (free.height - 2 * Margin) / data.size.d);
-            if (scale <= 0) return;
+            // (Not laid out yet, the first frame: NaN.)
+            if (!(scale > 0)) return;
             centre = free.center;
             var goal = Vector2.zero;
             if (keep.HasValue && sheet.HasValue)
@@ -175,6 +200,8 @@ namespace Bastion.UI.Strategy
             }
             aside = Vector2.Lerp(aside, goal, 1 - Mathf.Exp(-Time.unscaledDeltaTime * 6));
             cam.orthographicSize = panel.y / (2 * scale);
+            // Mood paints every camera's background with the haze as it changes the light: round the map, the steel.
+            cam.backgroundColor = Table;
             var mid = centre + aside;
             cam.transform.position = new Vector3(-(mid.x - panel.x / 2) / scale, Depth + 10, (mid.y - panel.y / 2) / scale);
             material.SetFloat("_Pixel", Application.isBatchMode ? 1 : Mathf.Max(1, Screen.height / panel.y));

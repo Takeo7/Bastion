@@ -187,8 +187,19 @@ namespace Bastion.UI.Strategy
             }
         }
 
+        /// <summary>A voice's bust that came while its line was up: the line's portrait again, in its place.</summary>
+        public void RepaintPortrait()
+        {
+            if (view == null || index >= view.Lines.Count) return;
+            var old = card.Q(className: "radio__portrait");
+            if (old == null) return;
+            var at = card.IndexOf(old);
+            old.RemoveFromHierarchy();
+            card.Insert(at, Portrait(view.Lines[index], card));
+        }
+
         /// <summary>The voice's bust in its sunken frame (Arte's), or their initials on a card; the Coro, a signal.</summary>
-        void Portrait(RadioLineView line, VisualElement parent)
+        VisualElement Portrait(RadioLineView line, VisualElement parent)
         {
             var frame = Ui.El("radio__portrait", parent);
             frame.EnableInClassList("radio__portrait--coro", line.Who == "coro");
@@ -198,6 +209,7 @@ namespace Bastion.UI.Strategy
             else if (line.Who == "coro") Ui.El("radio__wave", frame).Add(new LineIcon("wave"));
             else Ui.Text(Initials(line), "radio__initials font-title", frame);
             Ui.El("radio__scan", frame).pickingMode = PickingMode.Ignore;
+            return frame;
         }
 
         /// <summary>transmissions.ts portrait's stand-in: the first two capitalised words' initials, no «nickname», no «Dra.».</summary>

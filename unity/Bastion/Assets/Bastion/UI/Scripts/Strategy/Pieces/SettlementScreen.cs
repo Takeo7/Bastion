@@ -20,7 +20,6 @@ namespace Bastion.UI.Strategy
         readonly TooltipLayer tips;
         readonly Func<string, Sprite> icon;
         readonly IStrategyHandlers handlers;
-        readonly Dictionary<string, Texture> art = new Dictionary<string, Texture>();
         string key;
         bool shown;
 
@@ -156,17 +155,8 @@ namespace Bastion.UI.Strategy
             grid.Add(b);
         }
 
-        Texture Art(string id)
-        {
-            var mine = ArtOf?.Invoke(id);
-            if (mine != null) return mine;
-            if (!art.TryGetValue(id, out var t))
-            {
-                t = Resources.Load<Texture2D>("Pieces/piece-" + id);
-                art[id] = t;
-            }
-            return t;
-        }
+        /// <summary>A piece's picture: Arte's (PiecePictures, by StrategyRoot.PieceArtOf).</summary>
+        Texture Art(string id) => ArtOf?.Invoke(id);
 
         /// <summary>A cost as the stores show it: the supplies in their gold with the crate, the parts after with their wrench.</summary>
         VisualElement Cost(int supplies, int parts, VisualElement parent)

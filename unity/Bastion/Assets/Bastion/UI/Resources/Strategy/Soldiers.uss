@@ -611,13 +611,6 @@
     margin: 2px 0 0;
 }
 
-/* «Sin apodo»: the placeholder, dim. */
-.custom__field .unity-base-text-field__input--placeholder,
-.custom__field .unity-text-field__input--placeholder,
-.custom__field .unity-text-element--placeholder {
-    color: rgba(201, 205, 198, 0.4);
-}
-
 .custom__field > .unity-text-field__input {
     height: 28px;
     padding: 0 8px;
@@ -627,6 +620,13 @@
     border-width: 0 0 2px 0;
     border-bottom-color: rgba(242, 194, 48, 0.55);
     border-radius: 0;
+}
+
+/* «Sin apodo»: the placeholder, dim (after the field's white, which it overrules). */
+.custom__field > .unity-base-text-field__input--placeholder,
+.custom__field > .unity-text-field__input--placeholder,
+.custom__field .unity-text-element--placeholder {
+    color: rgba(201, 205, 198, 0.4);
 }
 
 .custom__choices {

@@ -26,8 +26,10 @@ namespace Bastion.UI.Strategy
             var v = new SquadView
             {
                 MineHead = siege ? $"Tus soldados · {myCount}" : $"Tus soldados · {myCount}/{limit}",
-                // Lore, C3: the partner by name, not «él».
-                MineTip = siege ? Lore.BaseSiegeText.Defenders : $"Pulsa un soldado para meterlo o sacarlo. Los de {partner?.Name ?? "el otro jugador"} los elige {partner?.Name ?? "él"}; los huecos que no llene se quedan vacíos. El equipo se cambia en Soldados.",
+                // Lore, C3: the partner by name, not «él»; alone, nothing about a partner (Lore, 26/10).
+                MineTip = siege ? Lore.BaseSiegeText.Defenders
+                    : partner != null ? $"Pulsa un soldado para meterlo o sacarlo. Los de {partner.Name} los elige {partner.Name}; los huecos que no llene se quedan vacíos. El equipo se cambia en Soldados."
+                    : "Pulsa un soldado para meterlo o sacarlo. El equipo se cambia en Soldados.",
                 Title = offer.Name,
                 Night = offer.Night == true ? Lore.NightText.Label : null,
                 Briefing = Campaign.OfferBriefing(c, offer),
@@ -124,6 +126,38 @@ namespace Bastion.UI.Strategy
         /// lines pictures can't say, the story's page and CONTINUAR; a card under each figure with how they came back and
         /// what they learnt. Null without a report.
         /// </summary>
+        /// <summary>
+        /// Who stands by La Lata (screen.ts lineup; Arte's Settlement.SetLineup), in the order of the cards: the debrief's
+        /// squad as it came back (one left behind, fallen), or the Escuadra's pads (null, a free one); none in a siege,
+        /// nor without a mission or a debrief.
+        /// </summary>
+        public List<Bastion.Client.Settlement.LineupEntry> Lineup(bool report)
+        {
+            var c = State;
+            var out_ = new List<Bastion.Client.Settlement.LineupEntry>();
+            if (report && c.LastReport != null)
+            {
+                foreach (var e in c.LastReport.Squad)
+                    out_.Add(new Bastion.Client.Settlement.LineupEntry { SoldierId = e.Id, Colour = PlayerColor(e.Owner), Status = e.Status == ReportStatuses.Lost ? ReportStatuses.Dead : e.Status });
+                return out_;
+            }
+            var offer = Campaign.ActiveOffer(c);
+            if (offer == null || offer.Siege == true) return out_;
+            foreach (var id in Campaign.SquadPads(c))
+            {
+                var s = id == null ? null : c.Soldiers.FirstOrDefault(x => x.Id == id);
+                out_.Add(s == null ? null : new Bastion.Client.Settlement.LineupEntry { SoldierId = s.Id, Colour = PlayerColor(s.Owner) });
+            }
+            return out_;
+        }
+
+        /// <summary>The row mirrored (two commanders, this one the second: each sees their own on their left) and in halves (two of them).</summary>
+        public (bool mirror, bool halves) LineupSides()
+        {
+            var two = State.Players.Count > 1;
+            return (two && State.Players.IndexOf(Slot) == 1, two);
+        }
+
         public DebriefView Debrief()
         {
             var c = State;

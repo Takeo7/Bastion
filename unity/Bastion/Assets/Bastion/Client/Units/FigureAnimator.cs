@@ -55,6 +55,26 @@ namespace Bastion.Client.Units
         int restNow = -1;
         float restFade = 0.25f;
 
+        /// <summary>
+        /// At the camp (syntyAnims.ts campLoop, campVariations): a clip stayed in instead of the idle (sat, knelt, leant,
+        /// drinking), eased in and out over StanceBlend (two, the one going and the one coming); a part of one, played back
+        /// and forth if its ends don't meet; and a clip once now and then in the idle's place (a stretch, a yawn), eased in
+        /// and out over Blend, let go of in VariationCut once it is to stop.
+        /// </summary>
+        const float StanceBlend = 0.6f, VariationCut = 0.2f;
+        sealed class CampClip
+        {
+            public AnimationClipPlayable clip;
+            public float time, from, length, weight;
+            public bool pingPong;
+        }
+        readonly CampClip[] campLoops = { new CampClip(), new CampClip() };
+        int campNow = -1;
+        readonly CampClip variation = new CampClip();
+        float variationKeep;
+        bool variationStopping;
+        int CampInput(int k) => Anims.MotionOrder.Length + k;
+
         const int Held = 1;
         const int Upper = 2;
         /// <summary>The upper body but the gun arm (syntyAnims.ts 'free': a throw by the free hand, the gun kept as it was held).</summary>
@@ -73,7 +93,8 @@ namespace Bastion.Client.Units
             graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
             var output = AnimationPlayableOutput.Create(graph, "figura", animator);
             layers = AnimationLayerMixerPlayable.Create(graph, 5);
-            motions = AnimationMixerPlayable.Create(graph, Anims.MotionOrder.Length);
+            // (And after the motions, the camp's: two loops, the one going and the one coming, and a variation: CampLoop, Vary.)
+            motions = AnimationMixerPlayable.Create(graph, Anims.MotionOrder.Length + 3);
             graph.Connect(motions, 0, layers, 0);
             layers.SetInputWeight(0, 1);
             rest = AnimationMixerPlayable.Create(graph, 2);
@@ -156,18 +177,18 @@ namespace Bastion.Client.Units
         public float PlayWhole(AnimationClip clip, float fade, bool hold, float at = 0, float speed = 1) => Play(Whole, clip, fade, 0.2f, hold, at, speed);
 
         /// <summary>
-        /// A part of a clip over the whole body, `from` to `to` seconds of it (syntyManifest.ts FEED_CLIPS); `loop`, round
-        /// and round, else it holds its last pose. Its seconds.
+        /// A part of a clip over the whole body, `from` to `to` seconds of it (syntyManifest.ts FEED_CLIPS, CAMP_SPANS) at
+        /// `speed` times its own; `loop`, round and round, else it holds its last pose. Its seconds.
         /// </summary>
-        public float PlayWholePart(AnimationClip clip, float from, float to, float fade, bool loop)
+        public float PlayWholePart(AnimationClip clip, float from, float to, float fade, bool loop, float speed = 1)
         {
             if (clip == null) return 0;
-            float seconds = Play(Whole, clip, fade, 0.2f, true, from, 1);
+            Play(Whole, clip, fade, 0.2f, true, from, speed);
             var slot = slots[Whole];
             slot.length = Mathf.Clamp(to, from + 1e-3f, clip.length);
             slot.from = from;
             slot.loop = loop;
-            return slot.length - from;
+            return (slot.length - from) / Mathf.Max(speed, 1e-3f);
         }
 
         /// <summary>Stands or moves in `name` (one of MOTION_ORDER) in another clip from now on (a stance: the wounded's slump).</summary>
@@ -185,6 +206,70 @@ namespace Bastion.Client.Units
             lengths[k] = Mathf.Max(clip.length, 1e-3f);
             graph.Connect(motionClips[k], 0, motions, k);
         }
+
+        /// <summary>
+        /// Stays in `clip` instead of the idle (from `from` to `to` seconds of it, round and round; `pingPong`, back and
+        /// forth), or in none (null): eased over StanceBlend, or at once (`now`: where a move into it left the body).
+        /// </summary>
+        public void CampLoop(AnimationClip clip, bool now = false, float from = 0, float to = -1, bool pingPong = false)
+        {
+            var current = campNow >= 0 ? campLoops[campNow] : null;
+            if (clip == null)
+            {
+                campNow = -1;
+                if (now) foreach (var c in campLoops) c.weight = 0;
+                return;
+            }
+            if (current == null || !current.clip.IsValid() || current.clip.GetAnimationClip() != clip || current.from != from)
+            {
+                int next = campNow < 0 ? (campLoops[0].weight <= campLoops[1].weight ? 0 : 1) : 1 - campNow;
+                var c = campLoops[next];
+                if (c.clip.IsValid())
+                {
+                    graph.Disconnect(motions, CampInput(next));
+                    c.clip.Destroy();
+                }
+                c.clip = AnimationClipPlayable.Create(graph, clip);
+                c.clip.SetApplyFootIK(false);
+                graph.Connect(c.clip, 0, motions, CampInput(next));
+                c.from = Mathf.Clamp(from, 0, clip.length);
+                c.length = Mathf.Max((to > c.from ? Mathf.Min(to, clip.length) : clip.length) - c.from, 1e-3f);
+                c.time = 0;
+                c.weight = 0;
+                c.pingPong = pingPong;
+                campNow = next;
+            }
+            if (now)
+                for (int k = 0; k < 2; k++) campLoops[k].weight = k == campNow ? 1 : 0;
+        }
+
+        /// <summary>Whether a camp clip is stayed in now (or easing out).</summary>
+        public bool InCamp => campLoops[0].weight > 0 || campLoops[1].weight > 0;
+
+        /// <summary>Plays `clip` once in the idle's place (a variation), eased in and out; its seconds.</summary>
+        public float Vary(AnimationClip clip)
+        {
+            if (clip == null) return 0;
+            if (variation.clip.IsValid())
+            {
+                graph.Disconnect(motions, CampInput(2));
+                variation.clip.Destroy();
+            }
+            variation.clip = AnimationClipPlayable.Create(graph, clip);
+            variation.clip.SetApplyFootIK(false);
+            graph.Connect(variation.clip, 0, motions, CampInput(2));
+            variation.time = 0;
+            variation.from = 0;
+            variation.length = Mathf.Max(clip.length, 1e-3f);
+            variationKeep = 1;
+            variationStopping = false;
+            return variation.length;
+        }
+
+        /// <summary>Whether a variation plays now; and stopping it (it goes over VariationCut).</summary>
+        public bool Varying => variation.clip.IsValid();
+
+        public void StopVariation() => variationStopping = true;
 
         /// <summary>The whole body's clip let go (a body getting up), over `fade` seconds.</summary>
         public void StopWhole(float fade)
@@ -233,10 +318,49 @@ namespace Bastion.Client.Units
                 total += weights[k];
                 times[k] += dt * (k == motion ? speed * paces[k] : paces[k]);
             }
+            // The camp's loop and variation take the idle's place (syntyAnims.ts update: idle × held, the idle what is left).
+            float idleShare = total > 0 && motionClips[0].IsValid() ? weights[0] / total : 0;
+            float stood = 0;
+            for (int k = 0; k < 2; k++)
+            {
+                var c = campLoops[k];
+                c.weight = Mathf.Clamp01(c.weight + (k == campNow ? dt : -dt) / StanceBlend);
+                if (!c.clip.IsValid()) continue;
+                c.time += dt;
+                float t = c.pingPong ? Mathf.PingPong(c.time, c.length) : c.time % c.length;
+                c.clip.SetTime(c.from + t);
+                motions.SetInputWeight(CampInput(k), idleShare * c.weight);
+                stood += c.weight;
+                if (c.weight <= 0 && k != campNow)
+                {
+                    graph.Disconnect(motions, CampInput(k));
+                    c.clip.Destroy();
+                }
+            }
+            stood = Mathf.Min(1, stood);
+            float varied = 0;
+            if (variation.clip.IsValid())
+            {
+                variation.time += dt;
+                variationKeep = Mathf.Clamp01(variationKeep + (variationStopping ? -dt : dt) / VariationCut);
+                if (variation.time >= variation.length - 1e-3f || variationKeep <= 0)
+                {
+                    graph.Disconnect(motions, CampInput(2));
+                    variation.clip.Destroy();
+                }
+                else
+                {
+                    variation.clip.SetTime(variation.time);
+                    varied = Mathf.Min(1, Mathf.Min(variation.time / Blend, (variation.length - variation.time) / Blend)) * idleShare * (1 - stood) * variationKeep;
+                    motions.SetInputWeight(CampInput(2), varied);
+                }
+            }
             for (int k = 0; k < weights.Length; k++)
             {
                 if (!motionClips[k].IsValid()) continue;
-                motions.SetInputWeight(k, total > 0 ? weights[k] / total : 0);
+                float w = total > 0 ? weights[k] / total : 0;
+                if (k == 0) w = w * (1 - stood) - varied;
+                motions.SetInputWeight(k, Mathf.Max(0, w));
                 motionClips[k].SetTime(times[k] % lengths[k]);
             }
             // The weapon held as long as it stands, or moves in a clip that doesn't hold it (crouched: Synty's legs, the gun

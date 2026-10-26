@@ -16,6 +16,8 @@ namespace Bastion.UI.Strategy
         public List<ZoneMarkView> Zones = new List<ZoneMarkView>();
         /// <summary>La Lata's zone (the active mission's, else the Bastion's).</summary>
         public string Lata;
+        /// <summary>What La Lata is now (Campaign.VehicleOf: todoterreno, furgoneta, camión, autobús).</summary>
+        public int Vehicle = 1;
         /// <summary>The zone picked: kept clear of the sheet on the right.</summary>
         public string Selected;
         public List<MissionRowView> Missions = new List<MissionRowView>();
@@ -126,6 +128,8 @@ namespace Bastion.UI.Strategy
         public string Note;
         /// <summary>A zone's small lines under its text: who is there and what they send, its errand, its Nido.</summary>
         public List<MapLineView> Lines = new List<MapLineView>();
+        /// <summary>A zone's missions, each to its briefing (Arturo, 26/10: a zone opens its sheet with all of them).</summary>
+        public List<MissionRowView> Missions = new List<MissionRowView>();
         public List<RowView> Rows = new List<RowView>();
         /// <summary>The network's meter under a contact (filled, of).</summary>
         public int Meter;

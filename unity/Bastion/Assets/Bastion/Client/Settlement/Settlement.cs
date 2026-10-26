@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using Bastion.Client.Map;
+using Bastion.Client.Units;
 using Bastion.Engine;
 using UnityEngine;
 
@@ -11,7 +13,7 @@ namespace Bastion.Client
     /// the snow on it; the sun's shadows over the whole clearing; and La Lata parked by the caravan (Park), going down its
     /// track and coming back (Depart, Arrive), as the campaign's vehicle (SetVehicle).
     /// </summary>
-    public sealed class Settlement : MonoBehaviour
+    public sealed partial class Settlement : MonoBehaviour
     {
         public static Settlement Current { get; private set; }
 
@@ -38,6 +40,8 @@ namespace Bastion.Client
         {
             if (Current == this) Current = null;
             Mood.ShadowReach(null);
+            // No fade left over the next scene's 3D.
+            Shader.SetGlobalFloat("_StageFade", 0);
         }
 
         /// <summary>The clearing as a battlefield with nobody on it: the map its siege would be fought on (clearingArt.ts clearingState).</summary>
@@ -57,21 +61,46 @@ namespace Bastion.Client
         public void Show(BaseState @base, bool snow = false, Func<string, GameObject> prefabOf = null, Func<string, Material> materialOf = null)
         {
             Current = this;
+            // The same clearing as shown: nothing to make again (UI shows it on every campaign state).
+            string key = @base == null ? null : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { @base, snow });
+            if (key != null && key == shownKey && Map != null && prefabOf == null && materialOf == null) return;
+            shownKey = key;
             this.prefabOf = prefabOf ?? this.prefabOf ?? MapCatalog.Load()?.PrefabOf() ?? (_ => null);
             this.materialOf = materialOf ?? this.materialOf ?? MapCatalog.Load()?.MaterialOf();
             Base = @base;
+            pieceGrid = null;
             Snow = snow;
             var state = ClearingState(@base, snow);
             Mood.Show(snow ? Mood.SnowDay : Mood.Day);
             if (Map == null)
             {
                 Map = new GameObject("Mapa").AddComponent<MapView>();
+                // La Lata is the settlement's own here (Park), not the evacuation's.
+                Map.WithLata = false;
                 Map.transform.SetParent(transform, false);
             }
-            Map.Build(state, this.prefabOf, this.materialOf);
+            built = Map.Build(state, this.prefabOf, this.materialOf);
+            // The fire pits lit (clearingArt.ts camp: its fires).
+            SetFlames(built.PiecesPlaced.Where(p => p.id == "bFirePit").Select(p => (Vector3)p.matrix.GetColumn(3)).ToList());
+            pines = null;
+            cleared.Clear();
             Mood.ShadowReach(ShadowMetres);
             if (Lata == null || Lata.Vehicle != vehicle) MakeLata();
             Park();
+            CampPlaces();
+            Reframe();
+        }
+
+        string shownKey;
+
+        /// <summary>The campaign's clearing (screen.ts on each state): its base, under snow while it is still winter (Campaign.Wintry), its vehicle.</summary>
+        public void Show(CampaignState campaign)
+        {
+            if (campaign?.Bastion == null) return;
+            // Their clothes, by the order they joined, unless they chose (wardrobe.ts setRoster).
+            Dress.Roster(campaign.Soldiers);
+            vehicle = Campaign.VehicleOf(campaign);
+            Show(campaign.Bastion, Campaign.Wintry(campaign));
         }
 
         void MakeLata()
@@ -93,10 +122,16 @@ namespace Bastion.Client
             if (Base == null) return;
             MakeLata();
             Park();
+            CampPlaces();
+            Reframe();
         }
 
         void Update()
         {
+            StepShowcase(Time.deltaTime);
+            StepLineup(Time.deltaTime);
+            StepFlames(Time.deltaTime);
+            StepBuild(Time.time);
             if (nextVehicle != null && Lata != null && !Lata.Moving)
             {
                 int v = nextVehicle.Value;
@@ -135,8 +170,11 @@ namespace Bastion.Client
             var lot = Bastion.Engine.Base.BastionLot(b);
             float cw = lot != null ? lot.W : 0, ch = lot != null ? lot.H : 0;
             var mid = lot != null ? new Vector2(lot.X + lot.W / 2f, lot.Y + lot.H / 2f) : new Vector2(b.Width / 2f, b.Height / 2f);
-            float length = Lata.Length, halfWidth = Lata.Width / 2;
-            bool Blocked(int x, int y) => Bastion.Engine.Base.PieceAt(b, x, y) != null || Bastion.Engine.Base.TreeAt(b, x, y) || Bastion.Engine.Base.OnBastionLot(b, x, y);
+            // As 0.10.1 parked it: the bus it starts with by the size it has until its model is built (evacBus.ts: 7 by
+            // 1.7), the spot then kept; the others (setVehicle) parked again once built, by their own. With its own, the
+            // bus stood further up the track (its 2.27 across caught the memorial beside it), the squad on its other side.
+            float length = Lata.Vehicle == 3 ? 7 : Lata.Length, halfWidth = (Lata.Vehicle == 3 ? 1.7f : Lata.Width) / 2;
+            bool Blocked(int x, int y) => PieceOn(x, y) != null || Bastion.Engine.Base.TreeAt(b, x, y) || Bastion.Engine.Base.OnBastionLot(b, x, y);
             // Nothing under it from `from` to `to` tiles along `dir` from `at`, its width across; `out`: past the clearing's
             // edge the way goes on (its way out), else it is no place to stand.
             bool Clear(Vector3 at, Vector2 dir, float from, float to, bool @out = false)
@@ -179,6 +217,7 @@ namespace Bastion.Client
                         bestCost = cost;
                     }
             }
+            busParked = found;
             if (!found)
             {
                 Lata.Park(new Vector3(b.Width / 2f, 0, b.Height / 2f), 0, new Vector3(mid.x, 0, mid.y), false);
@@ -186,6 +225,10 @@ namespace Bastion.Client
             }
             busWay = bestWay;
             busRoute = bestRoute;
+            busAt = new Vector2(bestAt.x, bestAt.z);
+            busDir = bestDir;
+            busHalf = length / 2;
+            busHalfWidth = halfWidth;
             // Its doors shut, as it stands waiting (who gets in opens them).
             Lata.Park(bestAt, Mathf.Atan2(bestDir.x, bestDir.y), new Vector3(mid.x, 0, mid.y), !away, 0, false);
             Debug.Log(FormattableString.Invariant($"[settlement] La Lata ({Lata.Vehicle}) parked at {bestAt.x:0.##},{bestAt.z:0.##} heading {Mathf.Atan2(bestDir.x, bestDir.y):0.###}, its way out {busWay:0.#} tiles{(busRoute ? "" : ", built over")}"));

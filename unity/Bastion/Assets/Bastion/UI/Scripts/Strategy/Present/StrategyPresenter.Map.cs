@@ -66,6 +66,7 @@ namespace Bastion.UI.Strategy
             {
                 Level = c.Doom,
                 Lata = (c.ActiveMission != null ? c.Offers.FirstOrDefault(o => o.Id == c.ActiveMission)?.Region : null) ?? Campaign.HomeRegion,
+                Vehicle = Campaign.VehicleOf(c),
                 Selected = region,
                 Contacts = c.Regions.Count(r => r.Contacted), ContactsMax = Campaign.ContactCapacity(c),
                 // Lore, C5: the Sala de radio, not XCOM's centres; the head's help is the screen's own.
@@ -76,18 +77,7 @@ namespace Bastion.UI.Strategy
                 MissionsEmpty = offers.Count == 0 ? "Ninguna a la vista." : null,
             };
             foreach (var r in c.Regions) v.Zones.Add(Zone(c, r, offers, region));
-            foreach (var o in offers)
-            {
-                var days = o.ExpiresDay != null ? MissionsFor(o.ExpiresDay.Value - c.Day) : (int?)null;
-                v.Missions.Add(new MissionRowView
-                {
-                    Id = o.Id, Tone = o.Final || o.Siege == true ? "#ff5a8a" : OfferTone(o), Kind = o.Kind, Name = o.Name, Selected = pick.Offer == o.Id,
-                    Where = $"{(o.Siege == true ? "El Bastión" : Campaign.Regions[o.Region].Name)}{(o.Night == true ? $" · {Lore.NightText.Label}" : "")}",
-                    Tip = o.Siege == true ? $"{Lore.SiegeText.Name} · El Bastión" : $"{(o.Facility != null ? "Nido" : o.Story != null ? $"Historia · {Setup.MissionNames[o.Kind]}" : o.Quest != null ? $"Encargo · {Setup.MissionNames[o.Kind]}" : Setup.MissionNames[o.Kind])} · {Campaign.Regions[o.Region].Name}",
-                    Chip = o.ExpiresDay != null ? AheadChip(c, o.ExpiresDay.Value) : null, ChipTone = days != null && days <= 1 ? "bad" : null,
-                    ChipTip = o.ExpiresDay == null ? "No caduca" : $"Caduca {AheadText(c, o.ExpiresDay.Value)}",
-                });
-            }
+            foreach (var o in offers) v.Missions.Add(MissionRow(c, o, pick.Offer == o.Id));
             v.Wait = WaitDay(c);
             foreach (var r in c.Regions.Where(r => r.Facility != null))
                 v.Nests.Add(new MapRowView
@@ -213,7 +203,24 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
-        /// <summary>A zone's sheet (regionInfo): what it is, who is there and what they send, its errand, its Nido, Contactar.</summary>
+        /// <summary>A mission's row (screen.ts renderGeoscape's list): its pin, name, where, how long it is there.</summary>
+        MissionRowView MissionRow(CampaignState c, MissionOffer o, bool selected)
+        {
+            var days = o.ExpiresDay != null ? MissionsFor(o.ExpiresDay.Value - c.Day) : (int?)null;
+            return new MissionRowView
+            {
+                Id = o.Id, Tone = o.Final || o.Siege == true ? "#ff5a8a" : OfferTone(o), Kind = o.Kind, Name = o.Name, Selected = selected,
+                Where = $"{(o.Siege == true ? "El Bastión" : Campaign.Regions[o.Region].Name)}{(o.Night == true ? $" · {Lore.NightText.Label}" : "")}",
+                Tip = o.Siege == true ? $"{Lore.SiegeText.Name} · El Bastión" : $"{(o.Facility != null ? "Nido" : o.Story != null ? $"Historia · {Setup.MissionNames[o.Kind]}" : o.Quest != null ? $"Encargo · {Setup.MissionNames[o.Kind]}" : Setup.MissionNames[o.Kind])} · {Campaign.Regions[o.Region].Name}",
+                Chip = o.ExpiresDay != null ? AheadChip(c, o.ExpiresDay.Value) : null, ChipTone = days != null && days <= 1 ? "bad" : null,
+                ChipTip = o.ExpiresDay == null ? "No caduca" : $"Caduca {AheadText(c, o.ExpiresDay.Value)}",
+            };
+        }
+
+        /// <summary>
+        /// A zone's sheet (regionInfo): what it is, who is there and what they send, its errand, its Nido, its missions
+        /// (Arturo, 26/10: a zone opens its sheet, and a mission is picked from there), Contactar.
+        /// </summary>
         MapDetailView RegionInfo(CampaignState c, string id)
         {
             var def = Campaign.Regions[id];
@@ -240,6 +247,7 @@ namespace Bastion.UI.Strategy
             if (errand != null) v.Lines.Add(new MapLineView { Text = errand });
             // Lore, C7: a Nido every 3 missions (FACILITY_DOOM_INTERVAL), not the 0.10.1's 14.
             if (r.Facility != null) v.Lines.Add(new MapLineView { Text = $"Nido: hace avanzar {Lore.DoomSubject(level)} cada {MissionsText(3)}.{(r.Contacted ? "" : $" {Lore.NestNoContactTip(r.Id, cost)}")}", Tone = "bad" });
+            foreach (var o in ShownOffers(c).Where(o => o.Region == id && o.Siege != true)) v.Missions.Add(MissionRow(c, o, false));
             if (r.Contacted) return v;
             v.Buttons.Add(new MapButtonView { Action = "contact", Label = $"{Decide("Contactar")} · {Campaign.CostText(cost)}", Primary = true, Enabled = blocked == null });
             v.Why = blocked;

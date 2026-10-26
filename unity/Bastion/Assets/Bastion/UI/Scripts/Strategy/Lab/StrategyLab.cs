@@ -31,6 +31,12 @@ namespace Bastion.UI.Strategy
         {
             root = GetComponent<StrategyRoot>();
             if (string.IsNullOrEmpty(Case)) Case = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA") ?? "";
+            // BASTION_TINTE=1: «Ropa con el color del jugador» on, for this capture only.
+            if (System.Environment.GetEnvironmentVariable("BASTION_TINTE") == "1")
+            {
+                App.GameSettings.TintForLab = true;
+                Bastion.Client.Units.SquadTint.On = true;
+            }
             withRadio = Case.EndsWith("-radio");
             if (withRadio) Case = Case.Substring(0, Case.Length - "-radio".Length);
         }
@@ -49,7 +55,7 @@ namespace Bastion.UI.Strategy
             root.ClockOf = () => (EngineLore.ProposalClock("0:24", mineAsked), 0.62f, false);
             root.SetTop(Top(Case == "propuesta" ? "theirs" : mineAsked ? "mine" : null));
             var screen = Case.StartsWith("armeria") ? "engineering" : Case == "escuadra" ? "squad" : Case == "parte" ? "debrief" : Case.StartsWith("mapa") ? "geoscape" : Case.StartsWith("asentamiento") ? "facilities" : "barracks";
-            root.ValleyCamera = Camera.main;
+            root.ValleyCamera = GameObject.Find("Cámara del valle")?.GetComponent<Camera>() ?? Camera.main;
             root.SetNav(Nav(screen));
             // Soldados under everything else, as the 0.10.1's shots (Rafael, Ana's, picked while she is away).
             root.SetScreen(screen);
@@ -441,8 +447,11 @@ namespace Bastion.UI.Strategy
         {
             // Ana here only for the proposals (70- and 71-propuesta), as the 0.10.1's steps set her connected.
             var p = new StrategyPresenter { State = SampleCampaign.Load(), Slot = 1, Seats = SampleCampaign.Seats(which.StartsWith("propuesta")) };
-            var screen = which.StartsWith("asentamiento") || which.StartsWith("radio") ? "facilities" : which == "escuadra" ? "squad" : which == "parte" ? "debrief"
+            var screen = which.StartsWith("asentamiento") || which.StartsWith("radio") ? "facilities" : which == "escuadra" || which == "lanzar" ? "squad" : which.StartsWith("parte") ? "debrief"
                 : which.StartsWith("armeria") ? "engineering" : which.StartsWith("mapa") ? "geoscape" : "barracks";
+            // «parte-6», «parte-4»: the debrief with the first so many of its squad (the 0.10.1's shot the same way).
+            if (which.StartsWith("parte-") && int.TryParse(which.Substring("parte-".Length), out var kept) && p.State.LastReport != null)
+                p.State.LastReport.Squad = p.State.LastReport.Squad.Take(kept).ToList();
             // 70- and 71-propuesta: a recruit proposed by Ana or by Arturo, with the engine's sentence (Lore).
             if (which.StartsWith("propuesta"))
                 p.State.Proposal = new Bastion.Engine.Proposal { By = which == "propuesta-mia" ? 1 : 0, Action = new Bastion.Engine.RecruitAction { For = which == "propuesta-mia" ? 1 : 0 }, Text = "reclutar un soldado (30 §)" };
@@ -464,7 +473,28 @@ namespace Bastion.UI.Strategy
                 p.State.ActiveMission = p.State.Offers[0].Id;
                 root.SetNav(p.Nav(screen));
             }
-            if (screen == "barracks") root.SetSoldiers(p.Soldiers(new SoldiersPick { Soldier = which.StartsWith("acontecimiento") ? null : p.State.Soldiers.Find(s => s.Owner == 0 && s.Alive)?.Id }));
+            var soldiersPick = new SoldiersPick { Soldier = which.StartsWith("acontecimiento") ? null : p.State.Soldiers.Find(s => s.Owner == 0 && s.Alive)?.Id };
+            // 11-personalizar: Personalizar open on that soldier, the draft as they are.
+            if (which == "personalizar" && p.State.Soldiers.Find(s => s.Id == soldiersPick.Soldier) is Bastion.Engine.CampaignSoldier own)
+                soldiersPick.Draft = new CustomDraft { Soldier = own.Id, Name = own.Name, Nickname = own.Nickname ?? "", Look = CustomDraft.Copy(own.Appearance) ?? Bastion.Engine.Appearances.DefaultAppearance(own.Owner, null, null, own.Id) };
+            if (screen == "barracks") root.SetSoldiers(p.Soldiers(soldiersPick));
+            // In Arte's scene «Base» (HudShots.EstrategiaBase): the clearing as the sample has it, the tab's shot, Soldados'
+            // soldier (as the draft has them), and the busts.
+            Bastion.Client.Portraits.Know(p.State);
+            var clearing = Bastion.Client.Settlement.Instance;
+            if (clearing != null)
+            {
+                clearing.Show(p.State);
+                clearing.SetArmory(p.State);
+                var (mirror, halves) = p.LineupSides();
+                clearing.SetLineup(p.State, p.Lineup(screen == "debrief"), mirror, halves);
+                clearing.SetView(screen, true);
+                if (screen == "barracks") clearing.Showcase(p.State, soldiersPick.Soldier, soldiersPick.Draft?.Look);
+                // «llegada»: back from the mission onto Soldados (the debrief read), La Lata up its track to the caravan;
+                // «lanzar»: the Escuadra's take-off three seconds in (BaseSession.Depart: the stamp, the squad getting in, La Lata away).
+                if (which == "llegada") clearing.Arrive();
+                if (which == "lanzar") LaunchSoon(clearing);
+            }
             if (screen == "squad") root.SetSquad(p.Squad());
             if (screen == "debrief") root.SetDebrief(p.Debrief());
             // 20- to 22-armeria: the belt with its first item, and the gear with the Armería's first weapon.
@@ -472,7 +502,8 @@ namespace Bastion.UI.Strategy
             // 30- to 32-mapa: nothing picked, the first offer, the first zone without contact.
             if (screen == "geoscape")
             {
-                root.ValleyCamera = Camera.main;
+                // HudShots.EstrategiaBase's own camera for the valley when there is one (the clearing's goes off on the Mapa).
+                root.ValleyCamera = GameObject.Find("Cámara del valle")?.GetComponent<Camera>() ?? Camera.main;
                 var offer = which == "mapa-mision" ? p.State.Offers[0] : null;
                 var zone = which == "mapa-zona" ? (p.State.Regions.Find(r => !r.Contacted) ?? p.State.Regions[0]).Id : offer?.Region;
                 root.SetMap(p.Map(new MapPick { Offer = offer?.Id, Region = zone }));
@@ -516,7 +547,8 @@ namespace Bastion.UI.Strategy
             // Settlement.PadWorld, projected, in the game).
             var squadPads = new[] { 454f, 606f, 835f, 986f };
             var debriefPads = new[] { 223f, 355f, 487f, 619f, 820f, 952f, 1085f, 1217f };
-            root.PadAt = (i, n) => screen == "squad" ? new Vector2(squadPads[(squadPads.Length - 1 - i + squadPads.Length) % squadPads.Length], 497) : new Vector2(debriefPads[(n - 1 - i + debriefPads.Length) % debriefPads.Length], 403);
+            // Without the clearing (the plain sky) the 0.10.1's places; with it, its own (StrategyRoot.ClearingPad).
+            if (clearing == null) root.PadAt = (i, n) => screen == "squad" ? new Vector2(squadPads[(squadPads.Length - 1 - i + squadPads.Length) % squadPads.Length], 497) : new Vector2(debriefPads[(n - 1 - i + debriefPads.Length) % debriefPads.Length], 403);
             if (withRadio)
             {
                 root.RadioCard.Play(Recap());
@@ -623,6 +655,15 @@ namespace Bastion.UI.Strategy
         {
             var radio = new Radio(null, 1, () => new Dictionary<string, string> { ["yo"] = StrategyText.Radio.Greeting(new[] { "Arturo" }), ["saludo"] = StrategyText.Radio.Greeting(new[] { "Ana", "Arturo" }) });
             return radio.View(Bastion.Engine.Transmissions.Recap, Bastion.Engine.Transmissions.RecapLines(SampleCampaign.Load(), 1));
+        }
+
+        async void LaunchSoon(Bastion.Client.Settlement clearing)
+        {
+            // Three seconds in: the busts drawn and the row standing, for a strip that starts just before.
+            await Awaitable.WaitForSecondsAsync(3f, destroyCancellationToken);
+            root.Launching(StrategyText.Launch);
+            await clearing.Leave(destroyCancellationToken);
+            Debug.Log("[estrategia] La Lata se ha ido");
         }
 
         static string Capital(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);

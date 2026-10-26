@@ -88,15 +88,34 @@ namespace Bastion.UI.EditorTools
         }
 
         /// <summary>
+        /// The base's lab in Arte's scene «Base» (run with -shotScene Assets/Bastion/Scenes/Base.unity): the screens over
+        /// the clearing, which the sample's cases fill (StrategyLab: Settlement.Show, SetView, Showcase; the busts). The
+        /// Mapa's cases from the valley's own camera, as in the game, the clearing's off (run with -shotCamera "Cámara del
+        /// valle").
+        /// </summary>
+        public static void EstrategiaBase()
+        {
+            if ((System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA") ?? "").Contains("mapa")) new GameObject("Cámara del valle").AddComponent<Camera>();
+            var screen = new GameObject("Base");
+            screen.AddComponent<UIDocument>().panelSettings = Panel();
+            screen.AddComponent<Bastion.UI.Strategy.StrategyRoot>();
+            screen.AddComponent<Bastion.UI.Strategy.StrategyLab>();
+        }
+
+        /// <summary>
         /// The base's orders through a real room in this app (Strategy.BaseRun): BASTION_ANFITRION hosts it (on
         /// BASTION_DATOS, BASTION_PUERTO), a new campaign opens, and BASTION_PASOS are clicked one at a time.
         /// </summary>
         public static void BaseRed()
         {
-            var camera = new GameObject("Shot camera").AddComponent<Camera>();
-            camera.tag = "MainCamera";
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.62f, 0.68f, 0.75f);
+            // In Arte's scene «Base» (-shotScene), its own camera, which the clearing moves; else a plain sky.
+            if (Camera.main == null)
+            {
+                var camera = new GameObject("Shot camera").AddComponent<Camera>();
+                camera.tag = "MainCamera";
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0.62f, 0.68f, 0.75f);
+            }
             var run = new GameObject("BaseRun");
             run.AddComponent<UIDocument>().panelSettings = Panel();
             run.AddComponent<Bastion.UI.Strategy.BaseRun>();
@@ -145,6 +164,26 @@ namespace Bastion.UI.EditorTools
 
         /// <summary>As PartidaShot, up to the first shot that kills (city-6-hard-veterans, or BASTION_LAB_GOLDEN's): the shot over the shoulder.</summary>
         public static void PartidaKill() => InPartida(System.Environment.GetEnvironmentVariable("BASTION_LAB_GOLDEN") ?? "city-6-hard-veterans", true);
+
+        /// <summary>
+        /// In «Partida», a mission with La Lata at its bay (BASTION_LAB_GOLDEN's, city-11-scavenge by default): the squad on
+        /// the evacuation, the call to leave a second in, and the event player's way out: the camera on La Lata, each one
+        /// boarding, and it pulling away (a strip: -shotFrames 50 -shotFps 10).
+        /// </summary>
+        public static void PartidaEvac()
+        {
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                var hud = new GameObject("HUD");
+                hud.AddComponent<UIDocument>().panelSettings = Panel();
+                var lab = new GameObject("CombatLab").AddComponent<Bastion.UI.Combat.CombatLab>();
+                lab.Hud = hud.AddComponent<HudRoot>();
+                lab.Golden = System.Environment.GetEnvironmentVariable("BASTION_LAB_GOLDEN") ?? "city-11-scavenge";
+                lab.Evacuate = true;
+                lab.InScene = true;
+            };
+        }
 
         /// <summary>In «Partida», a recorded state as it starts (BASTION_LAB_GOLDEN's, city-11-scavenge by default): the mission's marks.</summary>
         public static void PartidaMarks()

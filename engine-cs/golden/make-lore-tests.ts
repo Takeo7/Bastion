@@ -31,6 +31,9 @@ const eq = (expected: unknown, cs: string) =>
         : `            Assert.Equal(${lit(typeof expected === 'string' ? fixText(expected) : expected)}, ${cs});`,
   );
 const cap = (k: string) => `${k[0]!.toUpperCase()}${k.slice(1)}`;
+/** A collection's size, as xUnit wants it: Empty, Single, or Equal on its Count. */
+const count = (n: number, cs: string) =>
+  lines.push(n === 0 ? `            Assert.Empty(${cs});` : n === 1 ? `            Assert.Single(${cs});` : `            Assert.Equal(${n}, ${cs}.Count);`);
 const list = (xs: readonly string[]) => `new string[] { ${xs.map(lit).join(', ')} }`;
 /** An expected list of texts, through text-fixes.ts as every expected text. */
 const fixedList = (xs: readonly string[]) => list(xs.map(fixText));
@@ -57,14 +60,14 @@ for (const [id, f] of Object.entries(L.ENEMY_FILES)) {
   eq(f!.does, `Lore.EnemyFiles[${lit(id)}].Does`);
   eq(f!.tip, `Lore.EnemyFiles[${lit(id)}].Tip`);
 }
-eq(Object.keys(L.ENEMY_FILES).length, 'Lore.EnemyFiles.Count');
+count(Object.keys(L.ENEMY_FILES).length, 'Lore.EnemyFiles');
 
 section('regions');
 for (const [id, r] of Object.entries(L.REGION_LORE)) {
   eq(r.ally, `Lore.RegionLores[${lit(id)}].Ally`);
   eq(r.situation, `Lore.RegionLores[${lit(id)}].Situation`);
 }
-eq(Object.keys(L.REGION_LORE).length, 'Lore.RegionLores.Count');
+count(Object.keys(L.REGION_LORE).length, 'Lore.RegionLores');
 
 section('searching');
 for (const [id, s] of Object.entries(L.SEARCH_SPOTS)) eq(s!.name, `Lore.SearchSpots[${lit(id)}].Name`);
@@ -72,7 +75,7 @@ for (const [name, xs] of [['EmptyFinds', L.EMPTY_FINDS], ['MedicineFinds', L.MED
   lines.push(`            Assert.Equal(${fixedList(xs)}, Lore.${name});`);
 }
 for (const [id, v] of Object.entries(L.ITEM_FINDS)) eq(v, `Lore.ItemFinds[${lit(id)}]`);
-eq(Object.keys(L.ITEM_FINDS).length, 'Lore.ItemFinds.Count');
+count(Object.keys(L.ITEM_FINDS).length, 'Lore.ItemFinds');
 for (const n of [1, 2, 7]) {
   eq(L.rations(n), `Lore.Rations(${n})`);
   eq(L.partsCount(n), `Lore.PartsCount(${n})`);
@@ -83,7 +86,7 @@ for (const d of ['lootWeapons', 'lootFood', 'wardrobe']) eq(L.boxTitle(d as neve
 section('people and outfits');
 for (const [k, v] of Object.entries(L.NAMED_SEX)) eq(v, `Lore.NamedSex[${lit(k)}]`);
 for (const [k, v] of Object.entries(L.OUTFIT_NAMES)) eq(v, `Lore.OutfitNames[${lit(k)}]`);
-eq(Object.keys(L.OUTFIT_NAMES).length, 'Lore.OutfitNames.Count');
+count(Object.keys(L.OUTFIT_NAMES).length, 'Lore.OutfitNames');
 
 // ---------------------------------------------------------------- objective
 section('objective');
@@ -327,7 +330,7 @@ L.EXPEDIENTE.forEach((p, i) => {
   lines.push(`            Assert.Equal(${fixedList(p.paragraphs)}, Lore.Expediente[${i}].Paragraphs);`);
   eq(p.note ?? null, `Lore.Expediente[${i}].Note`);
 });
-eq(L.EXPEDIENTE.length, 'Lore.Expediente.Count');
+count(L.EXPEDIENTE.length, 'Lore.Expediente');
 eq(L.SIMON_CHAPTER, 'Lore.SimonChapter');
 eq(L.NWOSU_CHAPTER, 'Lore.NwosuChapter');
 for (const [k, v] of Object.entries(L.ENDING_TITLES)) eq(v, `Lore.EndingTitles[${lit(k)}]`);
@@ -411,7 +414,7 @@ for (const [supplies, items, medicines, food, parts, weapons] of summaries)
   eq(L.lootSummary(supplies, items as never, medicines, food, parts, weapons as never), `Lore.LootSummary(${supplies}, ${list(items)}, ${medicines}, ${food}, ${parts}, ${list(weapons)})`);
 eq(L.lootSummary(34, [], 2), 'Lore.LootSummary(34, new string[] { }, 2)');
 for (const [k, v] of Object.entries(L.GLOSSARY)) eq(v, `Lore.Glossary[${lit(k)}]`);
-eq(Object.keys(L.GLOSSARY).length, 'Lore.Glossary.Count');
+count(Object.keys(L.GLOSSARY).length, 'Lore.Glossary');
 for (const k of ['label', 'briefing', 'report'] as const) eq(L.NIGHT_TEXT[k], `Lore.NightText.${cap(k)}`);
 lines.push(`            Assert.Equal(${fixedList(L.NIGHT_TEXT.rules)}, Lore.NightText.Rules);`);
 eq(L.litNote(), 'Lore.LitNote()');
@@ -487,6 +490,8 @@ section('story');
 /** A reward's fields, each against the C# one (`recruit` is an object there: true, or a class's id in old saves). */
 const rewardEq = (r: MissionReward | undefined, at: string) => {
   if (!r) return lines.push(`            Assert.Null(${at});`);
+  // A quest step's reward may be null in C#: past the Null above, it isn't.
+  at = `${at}!`;
   eq(r.credits, `${at}.Credits`);
   lines.push(r.recruit ? `            Assert.True(${at}.Recruit is true);` : `            Assert.Null(${at}.Recruit);`);
   for (const k of ['doom', 'medicines', 'food', 'parts', 'vehicle'] as const) eq(r[k], `${at}.${cap(k)}`);
@@ -507,7 +512,7 @@ L.STORY.forEach((c, i) => {
   eq(c.vip, `${at}.Vip`);
   eq(c.after, `${at}.After`);
 });
-eq(L.STORY.length, 'Lore.Story.Count');
+count(L.STORY.length, 'Lore.Story');
 eq(L.SIMON_CHAPTER, 'Lore.SimonChapter');
 eq(L.NWOSU_CHAPTER, 'Lore.NwosuChapter');
 const SIMONS: L.SimonChoice[] = [null, 'trusted', 'refused'];
@@ -583,14 +588,14 @@ for (const q of Object.values(Q.QUESTS)) {
   eq(q.prize, `${at}.Prize`);
   eq(q.region, `${at}.Region`);
   eq(q.rumor, `${at}.Rumor`);
-  eq(q.steps.length, `${at}.Steps.Count`);
+  count(q.steps.length, `${at}.Steps`);
   q.steps.forEach((st, i) => {
     eq(st.type, `${at}.Steps[${i}].Type`);
     if (st.type === 'event') {
       const s = `((QuestDecision)${at}.Steps[${i}])`;
       eq(st.title, `${s}.Title`);
       eq(st.text, `${s}.Text`);
-      eq(st.options.length, `${s}.Options.Count`);
+      count(st.options.length, `${s}.Options`);
       st.options.forEach((o, j) => {
         eq(o.label, `${s}.Options[${j}].Label`);
         eq(o.effect, `${s}.Options[${j}].Effect`);
@@ -623,7 +628,7 @@ for (const q of Object.values(Q.QUESTS)) {
     eq(o.tone, `${s}.Tone`);
     for (const k of ['credits', 'doom', 'income', 'contacts', 'tech', 'trait', 'enemy', 'delay', 'retry'] as const) eq(o[k], `${s}.${cap(k)}`);
     if (o.items) {
-      eq(Object.keys(o.items).length, `${s}.Items!.Count`);
+      count(Object.keys(o.items).length, `${s}.Items!`);
       for (const [item, n] of Object.entries(o.items)) eq(n, `${s}.Items![${lit(item)}]`);
     } else lines.push(`            Assert.Null(${s}.Items);`);
     if (o.recruit) {
@@ -645,7 +650,7 @@ for (const [id, t] of Object.entries(Q.TRAITS)) {
   eq(t.aim, `Quests.Traits[${lit(id)}].Aim`);
   eq(t.will, `Quests.Traits[${lit(id)}].Will`);
 }
-eq(Q.RELATIVES.length, 'Quests.Relatives.Count');
+count(Q.RELATIVES.length, 'Quests.Relatives');
 Q.RELATIVES.forEach((r, i) => {
   eq(r.name, `Quests.Relatives[${i}].Name`);
   eq(r.relation, `Quests.Relatives[${i}].Relation`);
@@ -673,13 +678,13 @@ for (const [id, sp] of Object.entries(T.SPEAKERS)) {
   eq(sp.role, `Transmissions.Speakers[${lit(id)}].Role`);
 }
 lines.push(`            Assert.Equal(${fixedList([...T.SCENES.map((s) => s.id), T.RECAP.id])}, SceneIds.All);`);
-eq(T.SCENES.length, 'Transmissions.Scenes.Count');
+count(T.SCENES.length, 'Transmissions.Scenes');
 T.SCENES.forEach((s, i) => {
   const at = `Transmissions.Scenes[${i}]`;
   eq(s.id, `${at}.Id`);
   eq(s.title, `${at}.Title`);
   eq(s.channel, `${at}.Channel`);
-  eq(s.lines.length, `${at}.Lines.Count`);
+  count(s.lines.length, `${at}.Lines`);
   s.lines.forEach((l, j) => {
     eq(l.who, `${at}.Lines[${j}].Who`);
     eq(l.text, `${at}.Lines[${j}].Text`);
@@ -690,7 +695,7 @@ T.SCENES.forEach((s, i) => {
 eq(T.RECAP.id, 'Transmissions.Recap.Id');
 eq(T.RECAP.title, 'Transmissions.Recap.Title');
 eq(T.RECAP.channel, 'Transmissions.Recap.Channel');
-eq(T.RECAP.lines.length, 'Transmissions.Recap.Lines.Count');
+count(T.RECAP.lines.length, 'Transmissions.Recap.Lines');
 
 /**
  * The scenes on campaigns (golden/lore/scenes.json, read by TransmissionsGoldenTests): the states recorded from

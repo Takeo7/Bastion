@@ -641,6 +641,37 @@
    What can't be pressed now reads off: the 0.10.1's yellow at 45 % over the plate (strategy.css .x-btn:disabled), a dark
    ochre with dark ink, measured on its captures; opaque, since USS would blend an opacity in linear and come out pale.
 */
+/* Take-off (strategy.css .strat.launching, .launch-banner): everything but the stamp fades away while the squad gets in. */
+.strat--launching > * {
+    opacity: 0;
+    transition-property: opacity;
+    transition-duration: 0.4s;
+}
+
+.strat--launching > .strat-launch {
+    opacity: 1;
+}
+
+.strat-launch {
+    position: absolute;
+    top: 22%;
+    left: 0;
+    right: 0;
+    align-items: center;
+    rotate: -6deg;
+}
+
+.strat-launch__text {
+    padding: 6px 28px;
+    font-size: 46px;
+    letter-spacing: 8px;
+    color: var(--t-accent);
+    background-color: rgba(20, 22, 23, 0.85);
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-color: var(--t-accent);
+}
+
 .strat .btn-primary:disabled {
     opacity: 1;
     color: rgb(33, 31, 23);

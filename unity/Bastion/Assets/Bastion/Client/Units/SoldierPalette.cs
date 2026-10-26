@@ -53,7 +53,11 @@ namespace Bastion.Client.Units
         /// a skin tone (SkinTones, -1 the risen's) and a hair colour (HairColors). `map` gives a preset's colour map.
         /// </summary>
         public static Texture2D Compose(WardrobePiece outfit, IReadOnlyList<Mesh> outfitMeshes, WardrobePiece hat, IReadOnlyList<Mesh> hatMeshes,
-            int skin, int hairColor, Func<string, Texture2D> map)
+            int skin, int hairColor, Func<string, Texture2D> map) => Compose(outfit, outfitMeshes, hat, hatMeshes, skin, hairColor, map, out _);
+
+        /// <summary>Compose, and the palette's colours a cell each (y · 16 + x), for its paint (SquadTint).</summary>
+        public static Texture2D Compose(WardrobePiece outfit, IReadOnlyList<Mesh> outfitMeshes, WardrobePiece hat, IReadOnlyList<Mesh> hatMeshes,
+            int skin, int hairColor, Func<string, Texture2D> map, out Color32[] cells)
         {
             var cache = new Dictionary<string, Color32[]>();
             Color32[] Of(string preset) => cache.TryGetValue(preset, out var c) ? c : cache[preset] = Cells(map(preset));
@@ -69,6 +73,7 @@ namespace Bastion.Client.Units
             for (int i = 0; i < SkinCells.Length; i++) colors[SkinCells[i].y * 16 + SkinCells[i].x] = Hex(tone[i]);
             var hair = Hex(HairColors[hairColor]);
             foreach (var (x, y) in HairCells) colors[y * 16 + x] = y == 10 ? Darker(hair, 0.8f) : hair;
+            cells = (Color32[])colors.Clone();
             return Texture(colors);
         }
 
@@ -90,6 +95,9 @@ namespace Bastion.Client.Units
             }
             return colors;
         }
+
+        /// <summary>The cell a UV is in (v from the bottom, cells from the top).</summary>
+        public static int CellOf(Vector2 uv) => Mathf.Clamp(Mathf.FloorToInt((1 - uv.y) * 16), 0, 15) * 16 + Mathf.Clamp(Mathf.FloorToInt(uv.x * 16), 0, 15);
 
         /// <summary>The cells a mesh is painted from, by its first UVs (v from the bottom, cells from the top).</summary>
         static IEnumerable<int> CellsOf(Mesh mesh)
@@ -128,7 +136,11 @@ namespace Bastion.Client.Units
             return cells;
         }
 
-        static Texture2D Texture(Color32[] colors)
+        /// <summary>Whether a cell (y · 16 + x) is the body's, not the clothes': the skin, the eyes, the teeth, the hair.</summary>
+        public static bool IsBody(int cell) => BodyCells.Contains(cell);
+
+        /// <summary>A palette of these colours (a cell each), as Sidekick's shader reads it.</summary>
+        public static Texture2D Texture(Color32[] colors)
         {
             var texels = new Color32[32 * 32];
             for (int y = 0; y < 16; y++)

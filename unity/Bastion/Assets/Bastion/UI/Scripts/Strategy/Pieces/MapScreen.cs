@@ -54,7 +54,7 @@ namespace Bastion.UI.Strategy
                 var e = Ui.El("valley-landmark", marks);
                 // Lore's name, not valley.json's copy of it (that goes stale when Lore changes one).
                 var name = Bastion.Engine.Lore.Landmarks.TryGetValue(l.key ?? "", out var named) ? named : l.name;
-                Ui.Text(name.ToUpperInvariant(), "valley-landmark__name font-title", e);
+                Ui.Text(name.ToUpperInvariant(), "valley-landmark__name", e);
                 places.Add((e, l.x, l.z));
             }
             var home = Ui.El("valley-place", marks);
@@ -62,18 +62,70 @@ namespace Bastion.UI.Strategy
             Ui.Text(Bastion.Engine.Lore.Landmarks["atalaya"].ToUpperInvariant(), "valley-name valley-name--home font-title", home);
             places.Add((home, map.Data.bastion.x, map.Data.bastion.z));
             lata = Ui.El("valley-lata", marks);
-            Ui.Icon(icon, "map:lata", "valley-lata__icon", lata);
-            Ui.Text(Bastion.Engine.Lore.Bus.Name.ToUpperInvariant(), "valley-lata__name font-title", lata);
+            Ui.El("valley-lata__shadow", lata);
+            Ui.El("valley-lata__edge", lata);
+            Ui.El("valley-lata__body", lata);
+            Ui.Text(Bastion.Engine.Lore.Bus.Name.ToUpperInvariant(), "valley-lata__name", lata);
+            vehicle = -1;
+            Vehicle(last?.Vehicle ?? 1);
             Show(shown);
         }
 
+        /// <summary>
+        /// La Lata as the campaign has it (valley.css .valley-bus, #45): the vehicle's own profile (the 0.10.1's
+        /// silhouettes: Resources/Valley/lata-0 to 3, todoterreno, furgoneta, camión, autobús) at its proportions, and the
+        /// name just past it: left, top, width and height from La Lata's place, and the name's left (UI pixels).
+        /// </summary>
+        static readonly (float x, float y, float w, float h, float name)[] Vehicles =
+        {
+            (-19, -7, 38, 14, 22), (-16, -10, 32, 20, 19), (-18, -7, 37, 15, 22), (-22, -7, 44, 13, 25),
+        };
+
+        int vehicle = -1;
+
+        /// <summary>The profile three times: a soft shadow under it, a dark edge a pixel round it, the yellow over.</summary>
+        void Vehicle(int n)
+        {
+            n = Mathf.Clamp(n, 0, Vehicles.Length - 1);
+            if (lata == null || n == vehicle) return;
+            vehicle = n;
+            var picture = Resources.Load<Texture2D>($"Valley/lata-{n}");
+            var (x, y, w, h, name) = Vehicles[n];
+            Box(lata.Q(className: "valley-lata__shadow"), picture, x, y + 1.5f, w, h);
+            Box(lata.Q(className: "valley-lata__edge"), picture, x - 1, y - 1, w + 2, h + 2);
+            Box(lata.Q(className: "valley-lata__body"), picture, x, y, w, h);
+            lata.Q(className: "valley-lata__name").style.left = name;
+        }
+
+        static void Box(VisualElement e, Texture2D picture, float x, float y, float w, float h)
+        {
+            e.style.backgroundImage = picture;
+            e.style.left = x;
+            e.style.top = y;
+            e.style.width = w;
+            e.style.height = h;
+        }
+
+        public bool Bound => valley != null;
+
+        /// <summary>The clearing's word on the valley (StrategyRoot: Settlement.MapShown); none, no clearing: it goes with the tab.</summary>
+        bool? valleyUp;
+
+        public void ValleyUp(bool? on)
+        {
+            valleyUp = on;
+            Show(shown);
+        }
+
+        /// <summary>The panels with the tab; the valley when the clearing gives it the screen, the marks over it with both.</summary>
         public void Show(bool on)
         {
             shown = on;
-            Ui.Show(marks, on);
+            var up = valleyUp ?? on;
+            Ui.Show(marks, on && up);
             Ui.Show(left, on && last != null);
             Ui.Show(right, on && last?.Detail != null);
-            valley?.Show(on);
+            valley?.Show(up);
         }
 
         public void Set(MapView v)
@@ -90,6 +142,7 @@ namespace Bastion.UI.Strategy
             if (v == null) return;
             valley?.SetLevel(v.Level);
             valley?.DriveTo(v.Lata);
+            Vehicle(v.Vehicle);
             Zones(v);
             Head("Misiones", null, leftBody);
             if (v.Missions.Count == 0 && !string.IsNullOrEmpty(v.MissionsEmpty)) Ui.Text(v.MissionsEmpty, "map-empty muted", leftBody);
@@ -231,6 +284,11 @@ namespace Bastion.UI.Strategy
             {
                 var line = Ui.Text(l.Text, l.Tone == "bad" ? "map-detail__line strat-chip--bad" : "map-detail__line muted", parent);
                 if (!string.IsNullOrEmpty(l.Tip)) tips.Attach(line, l.Tip);
+            }
+            if (d.Missions.Count > 0)
+            {
+                Ui.Text(StrategyText.Map.ZoneMissions.ToUpperInvariant(), "sheet__head font-title", parent);
+                foreach (var m in d.Missions) Mission(m, parent);
             }
             if (d.Rows.Count > 0)
             {

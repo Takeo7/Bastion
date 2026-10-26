@@ -43,7 +43,7 @@ namespace Bastion.UI.Strategy
 
         public void Set(DebriefView v)
         {
-            var k = Ui.Key(v) + "|" + storyOpen;
+            var k = Ui.Key(v) + "|" + storyOpen + "|" + StrategyRoot.PictureStamp;
             if (k == key) return;
             key = k;
             last = v;

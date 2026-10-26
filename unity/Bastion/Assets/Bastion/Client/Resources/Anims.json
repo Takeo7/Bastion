@@ -1083,6 +1083,153 @@
    2.6
   ]
  },
+ "campLoops": {
+  "masc": {
+   "leanBack": "leanBackMasc",
+   "leanBackLeg": "leanBackLegMasc",
+   "leanBackBase": "leanBackBaseMasc",
+   "leanLeft": "leanLeftMasc",
+   "leanRight": "leanRightMasc",
+   "sitChair": "sitChair",
+   "sitChairStill": "sitChairStill",
+   "sitBreathe": "sitBreathe",
+   "sitFloor": "sitFloor",
+   "sitReclined": "sitReclined",
+   "sitCrossed": "sitCrossed",
+   "sitTalk": "sitTalk",
+   "sitTalk2": "sitTalk2",
+   "warmHands": "warmHands",
+   "squat": "squat",
+   "drink": "drinkMasc",
+   "eat": "eatMasc"
+  },
+  "femn": {
+   "leanBack": "leanBackFemn",
+   "leanBackLeg": "leanBackLegFemn",
+   "leanBackBase": "leanBackBaseFemn",
+   "leanLeft": "leanLeftFemn",
+   "leanRight": "leanRightFemn",
+   "sitChair": "sitChair",
+   "sitChairStill": "sitChairStill",
+   "sitBreathe": "sitBreathe",
+   "sitFloor": "sitFloor",
+   "sitReclined": "sitReclined",
+   "sitCrossed": "sitCrossed",
+   "sitTalk": "sitTalk",
+   "sitTalk2": "sitTalk2",
+   "warmHands": "warmHands",
+   "squat": "squat",
+   "drink": "drinkFemn",
+   "eat": "eatFemn"
+  }
+ },
+ "campVariations": {
+  "masc": [
+   "stretchArmsMasc",
+   "stretchShouldersMasc",
+   "yawnMasc",
+   "footTapMasc",
+   "kickGroundMasc",
+   "swingArmsMasc",
+   "checkWatchMasc",
+   "inspectHandsMasc",
+   "inspectFeetMasc",
+   "headShakeMasc",
+   "lookUpMasc"
+  ],
+  "femn": [
+   "stretchArmsFemn",
+   "stretchShouldersFemn",
+   "yawnFemn",
+   "footTapFemn",
+   "kickGroundFemn",
+   "swingArmsFemn",
+   "checkWatchFemn",
+   "inspectHandsFemn",
+   "inspectFeetFemn",
+   "headShakeFemn",
+   "lookUpFemn"
+  ]
+ },
+ "campMoves": {
+  "masc": {
+   "sitDown": "standToSit",
+   "standUp": "sitToStand",
+   "leanLeftIn": "leanLeftInMasc",
+   "leanLeftOut": "leanLeftOutMasc",
+   "leanRightIn": "leanRightInMasc",
+   "leanRightOut": "leanRightOutMasc",
+   "kneelDown": "warmHandsIn",
+   "kneelUp": "warmHandsOut",
+   "drinkIn": "drinkInMasc",
+   "drinkOut": "drinkOutMasc",
+   "sip": "sipMasc",
+   "eatIn": "eatInMasc",
+   "eatOut": "eatOutMasc",
+   "bite": "biteMasc",
+   "enterCar": "enterCar",
+   "enterCarR": "enterCarR",
+   "stepUp": "stepUp"
+  },
+  "femn": {
+   "sitDown": "standToSit",
+   "standUp": "sitToStand",
+   "leanLeftIn": "leanLeftInFemn",
+   "leanLeftOut": "leanLeftOutFemn",
+   "leanRightIn": "leanRightInFemn",
+   "leanRightOut": "leanRightOutFemn",
+   "kneelDown": "warmHandsIn",
+   "kneelUp": "warmHandsOut",
+   "drinkIn": "drinkInFemn",
+   "drinkOut": "drinkOutFemn",
+   "sip": "sipFemn",
+   "eatIn": "eatInFemn",
+   "eatOut": "eatOutFemn",
+   "bite": "biteFemn",
+   "enterCar": "enterCar",
+   "enterCarR": "enterCarR",
+   "stepUp": "stepUp"
+  }
+ },
+ "campParts": {
+  "warmHands": {
+   "loop": [
+    2.9,
+    6.3
+   ],
+   "into": [
+    1.5,
+    2.9
+   ],
+   "out": [
+    6.3,
+    7.5
+   ]
+  }
+ },
+ "campSpans": {
+  "enterCar": [
+   2.2,
+   8.4
+  ],
+  "enterCarR": [
+   2.2,
+   8.4
+  ],
+  "stepUp": [
+   0.3,
+   1.9
+  ]
+ },
+ "campFree": [
+  "enterCar",
+  "enterCarR",
+  "stepUp"
+ ],
+ "campItems": {
+  "drink": "campCup",
+  "eat": "campBar"
+ },
  "weapons": {
   "rifle": {
    "fbx": "SM_Wep_AssaultRifle_01",

@@ -22,15 +22,12 @@ namespace Bastion.Client
     public static class Portraits
     {
         public const int Size = 160;
+        /// <summary>How long the last bust took to make and draw (ms; one a frame while the game runs).</summary>
+        public static float LastDrawMs { get; private set; }
+
         /// <summary>A soldier's or a voice's bust was drawn again (its id).</summary>
         public static event Action<string> Changed;
 
-        /// <summary>The layer the studio's figure is drawn on (unused by the map and the figures).</summary>
-        const int StudioLayer = 30;
-        public static float SoldierTurn = -0.3f;
-
-        /// <summary>Where the studio stands: far under the map, out of every other camera's way.</summary>
-        static readonly Vector3 StudioAt = new Vector3(0, -5000, 0);
         const float Tile = Map.MapSpace.Tile;
 
         sealed class Bust
@@ -43,7 +40,12 @@ namespace Bastion.Client
             public string build = "masc";
             public RenderTexture texture;
             public bool drawn;
+            /// <summary>What a soldier's was known as (to paint it again when the tint changes).</summary>
+            public Appearance look;
+            public string name, band;
         }
+
+        static bool listening;
 
         static readonly Dictionary<string, Bust> soldiers = new Dictionary<string, Bust>();
         static readonly Dictionary<string, Bust> voices = new Dictionary<string, Bust>();
@@ -54,23 +56,44 @@ namespace Bastion.Client
         public static void Know(CampaignState campaign)
         {
             if (campaign?.Soldiers == null) return;
-            foreach (var s in campaign.Soldiers) Know(s.Id, s.Appearance, s.Name);
+            // Their clothes, by the order they joined, unless they chose (wardrobe.ts setRoster).
+            Dress.Roster(campaign.Soldiers);
+            foreach (var s in campaign.Soldiers) Know(s.Id, s.Appearance, s.Name, SquadTint.ColourOf(s.Owner));
         }
 
         /// <summary>
         /// A soldier as they look (`look`; who has none, a body of their sex by their name): dressed as in battle
         /// (Dress.Of, by their id), drawn again if that changed (Personalizar: the draft as it is edited).
         /// </summary>
-        public static void Know(string id, Appearance look, string name = null)
+        public static void Know(string id, Appearance look, string name = null, string band = null)
         {
             if (string.IsNullOrEmpty(id)) return;
+            if (!listening)
+            {
+                listening = true;
+                // Tinted or not, every bust again (SquadTint: their clothes in their colours, their band).
+                SquadTint.Changed += _ =>
+                {
+                    foreach (var kv in soldiers.ToList()) Know(kv.Key, kv.Value.look, kv.Value.name, kv.Value.band);
+                };
+            }
             string sex = look == null || string.IsNullOrEmpty(look.Sex) ? (name != null ? Content.SexOfName(name) : null) : null;
-            string key = Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { look, sex });
-            if (soldiers.TryGetValue(id, out var bust) && bust.key == key) return;
-            if (bust == null) soldiers[id] = bust = new Bust { turn = SoldierTurn };
-            bust.key = key;
+            // The same bust while the same figure (Dress.Key: the roster's outfit too) in the same paint.
             var dress = Dress.Of(look, id, sex);
-            bust.make = () => SoldierFigure.Make(dress, "Retrato");
+            string key = dress.Key + "|" + (SquadTint.On ? Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { look, band }) : "plain");
+            if (soldiers.TryGetValue(id, out var bust) && bust.key == key) return;
+            if (bust == null) soldiers[id] = bust = new Bust { turn = -0.3f };
+            bust.key = key;
+            bust.look = look;
+            bust.name = name;
+            bust.band = band;
+            // Its parts apart, as Soldados' soldier and Personalizar's previews: a quarter of the time, and the same figure.
+            bust.make = () =>
+            {
+                var figure = SoldierFigure.Make(dress, "Retrato", true);
+                SquadTint.Paint(figure, look, band);
+                return figure;
+            };
             bust.build = dress.sex == "f" ? "femn" : "masc";
             Enqueue(id, bust);
         }
@@ -120,7 +143,10 @@ namespace Bastion.Client
                     bust.texture = new RenderTexture(Size, Size, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { name = $"Retrato {id}" };
                     bust.texture.Create();
                 }
-                if (Draw(bust.make, bust.turn, bust.backlit, bust.build, bust.texture))
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                bool drawn = Draw(bust.make, bust.turn, bust.backlit, bust.build, bust.texture);
+                LastDrawMs = (float)clock.Elapsed.TotalMilliseconds;
+                if (drawn)
                 {
                     bust.drawn = true;
                     Changed?.Invoke(id);
@@ -143,7 +169,8 @@ namespace Bastion.Client
 
         // -------------------------------------------------------------------------------------------------------- studio
 
-        public static float HeadTurn = 25, HeadBow = 6;
+        /// <summary>How much further round than the body its head looks, and how far it bows (degrees; by eye, beside 0.10.1).</summary>
+        const float HeadTurn = 20, HeadBow = 8;
 
         /// <summary>
         /// The head a little further round than the body, and bowed (0.10.1's idle turns it on its neck; Unity's humanoid
@@ -168,7 +195,7 @@ namespace Bastion.Client
         static bool Draw(Func<GameObject> make, float turn, bool backlit, string build, RenderTexture target)
         {
             var studio = new GameObject("Estudio");
-            studio.transform.position = StudioAt;
+            studio.transform.position = Studio.At;
             var figure = make();
             if (figure == null)
             {
@@ -180,11 +207,13 @@ namespace Bastion.Client
             figure.transform.localScale = Vector3.one * Units.Figures.CharacterScale;
             // three's turn the other way round here (Unity's y turns clockwise from above): its face to the camera's left.
             figure.transform.localRotation = Quaternion.Euler(0, -turn * Mathf.Rad2Deg, 0);
-            foreach (var t in figure.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = StudioLayer;
+            foreach (var t in figure.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = Studio.Layer;
             var animator = figure.GetComponentInChildren<Animator>();
             FigureAnimator anim = null;
             if (animator != null && animator.isHuman)
             {
+                // Posed though no camera sees it yet (POLYGON's prefabs cull their bones' updates when unseen).
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 var catalog = FigureCatalog.Load();
                 var idle = catalog?.Clip(Anims.Motion(build, "idle", false));
                 // The clips blend in over a few frames (portraits.ts: applyPose to 1.2 s).
@@ -206,164 +235,19 @@ namespace Bastion.Client
             camera.fieldOfView = 20;
             camera.nearClipPlane = 0.05f;
             camera.farClipPlane = 15;
-            camera.cullingMask = 1 << StudioLayer;
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = Color.clear;
-            camera.allowHDR = true;
-            var data = camera.GetUniversalAdditionalCameraData();
-            data.renderPostProcessing = false;
-            data.renderShadows = false;
-            data.requiresDepthOption = CameraOverrideOption.Off;
-            data.requiresColorOption = CameraOverrideOption.Off;
             // Lights: the studio's, from the camera's left, above and in front, and from behind on its right.
             var right = camera.transform.right;
             var up = Vector3.up;
             var toward = (camera.transform.position - at).normalized;
-            var lights = new List<Light>();
-            Light Directional(int hex, float intensity, Vector3 from)
-            {
-                var l = new GameObject("Luz").AddComponent<Light>();
-                l.transform.SetParent(studio.transform, false);
-                l.type = LightType.Directional;
-                l.color = Hex(hex);
-                l.intensity = intensity / Mathf.PI;
-                l.shadows = LightShadows.None;
-                l.transform.rotation = Quaternion.LookRotation(-from.normalized);
-                lights.Add(l);
-                return l;
-            }
-            Color sky, ground;
-            float skyIntensity;
             if (backlit)
-            {
-                sky = Hex(0x203028);
-                ground = Hex(0x050807);
-                skyIntensity = 0.35f;
-                foreach (float x in new[] { 1.3f, -1.3f }) Directional(0x7dffb0, 3.2f, x * right + 0.8f * up - toward);
-            }
+                Studio.Shoot(camera, target, new[] { new Studio.Lamp(0x7dffb0, 3.2f, 1.3f * right + 0.8f * up - toward), new Studio.Lamp(0x7dffb0, 3.2f, -1.3f * right + 0.8f * up - toward) },
+                    Studio.Hex(0x203028), Studio.Hex(0x050807), 0.35f);
             else
-            {
-                sky = Hex(0xd8e4ff);
-                ground = Hex(0x4a3a30);
-                skyIntensity = 1.3f;
-                Directional(0xffe6c8, 2.4f, -1 * right + 1.2f * up + 1.5f * toward);
-                Directional(0xa8c8ff, 1.4f, 1.2f * right + 0.6f * up - 1 * toward);
-            }
-            var hdr = RenderTexture.GetTemporary(new RenderTextureDescriptor(Size, Size, RenderTextureFormat.ARGBHalf, 24) { msaaSamples = 4 });
-            using (new Isolation(lights[0], sky, ground, skyIntensity))
-            {
-                var request = new RenderPipeline.StandardRequest { destination = hdr };
-                if (RenderPipeline.SupportsRenderRequest(camera, request)) RenderPipeline.SubmitRenderRequest(camera, request);
-                else
-                {
-                    camera.targetTexture = hdr;
-                    camera.Render();
-                    camera.targetTexture = null;
-                }
-            }
-            var tone = Resources.Load<Material>("PortraitTone");
-            if (tone != null) Graphics.Blit(hdr, target, tone);
-            else Graphics.Blit(hdr, target);
-            RenderTexture.ReleaseTemporary(hdr);
+                Studio.Shoot(camera, target, new[] { new Studio.Lamp(0xffe6c8, 2.4f, -1 * right + 1.2f * up + 1.5f * toward), new Studio.Lamp(0xa8c8ff, 1.4f, 1.2f * right + 0.6f * up - 1 * toward) },
+                    Studio.Hex(0xd8e4ff), Studio.Hex(0x4a3a30), 1.3f);
             anim?.Dispose();
             Destroy(studio);
             return true;
-        }
-
-        static Color Hex(int hex) => new Color(((hex >> 16) & 255) / 255f, ((hex >> 8) & 255) / 255f, (hex & 255) / 255f);
-
-        /// <summary>
-        /// While a bust is shot: every other light off, the studio's sky as the ambient (three's hemisphere light: sky above,
-        /// ground below), no haze, and the renderers' passes off (the fog of war, the grade, the snow, the occlusion);
-        /// all of it as it was after.
-        /// </summary>
-        sealed class Isolation : IDisposable
-        {
-            readonly List<Light> off = new List<Light>();
-            readonly List<ScriptableRendererFeature> features = new List<ScriptableRendererFeature>();
-            readonly SphericalHarmonicsL2 probe;
-            readonly bool fog;
-            readonly Light sun;
-            readonly DefaultReflectionMode reflection;
-            readonly Texture cube;
-            readonly float shine;
-            static Cubemap dark;
-
-            /// <summary>How much a directional light of 1 added to Unity's harmonics gives along its own axis, over its linear band.</summary>
-            static float Lobe()
-            {
-                var one = new SphericalHarmonicsL2();
-                one.AddDirectionalLight(Vector3.up, Color.white, 1);
-                var at = new Color[2];
-                one.Evaluate(new[] { Vector3.up, Vector3.down }, at);
-                return Mathf.Max(1e-3f, (at[0].r - at[1].r) * 0.5f);
-            }
-
-            static Cubemap Dark()
-            {
-                if (dark != null) return dark;
-                dark = new Cubemap(4, TextureFormat.RGBA32, false) { name = "Estudio sin cielo", hideFlags = HideFlags.HideAndDontSave };
-                var black = Enumerable.Repeat(Color.clear, 16).ToArray();
-                foreach (CubemapFace face in new[] { CubemapFace.PositiveX, CubemapFace.NegativeX, CubemapFace.PositiveY, CubemapFace.NegativeY, CubemapFace.PositiveZ, CubemapFace.NegativeZ })
-                    dark.SetPixels(black, face);
-                dark.Apply();
-                return dark;
-            }
-
-            public Isolation(Light key, Color sky, Color ground, float intensity)
-            {
-                foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
-                    if (l.enabled && l.gameObject.layer != StudioLayer && l.transform.parent?.name != "Estudio")
-                    {
-                        l.enabled = false;
-                        off.Add(l);
-                    }
-                sun = RenderSettings.sun;
-                RenderSettings.sun = key;
-                probe = RenderSettings.ambientProbe;
-                // three's hemisphere: lerp(ground, sky, (n.y + 1) / 2): its middle all round, and half their difference along up.
-                var s = sky.linear * (intensity / Mathf.PI);
-                var g = ground.linear * (intensity / Mathf.PI);
-                var sh = new SphericalHarmonicsL2();
-                sh.AddAmbientLight((s + g) * 0.5f);
-                float lobe = Lobe();
-                sh.AddDirectionalLight(Vector3.up, (s - g) * (0.5f / lobe), 1);
-                sh.AddDirectionalLight(Vector3.down, (s - g) * (-0.5f / lobe), 1);
-                RenderSettings.ambientProbe = sh;
-                // three's scene has no environment: nothing of the sky in the shine either.
-                reflection = RenderSettings.defaultReflectionMode;
-                cube = RenderSettings.customReflectionTexture;
-                shine = RenderSettings.reflectionIntensity;
-                RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
-                RenderSettings.customReflectionTexture = Dark();
-                RenderSettings.reflectionIntensity = 0;
-                fog = RenderSettings.fog;
-                RenderSettings.fog = false;
-                if (QualitySettings.renderPipeline is UniversalRenderPipelineAsset urp || GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset)
-                {
-                    var asset = (UniversalRenderPipelineAsset)(QualitySettings.renderPipeline ?? GraphicsSettings.currentRenderPipeline);
-                    foreach (var data in asset.rendererDataList)
-                        if (data != null)
-                            foreach (var f in data.rendererFeatures)
-                                if (f != null && f.isActive)
-                                {
-                                    f.SetActive(false);
-                                    features.Add(f);
-                                }
-                }
-            }
-
-            public void Dispose()
-            {
-                foreach (var l in off) if (l != null) l.enabled = true;
-                RenderSettings.sun = sun;
-                RenderSettings.ambientProbe = probe;
-                RenderSettings.defaultReflectionMode = reflection;
-                RenderSettings.customReflectionTexture = cube;
-                RenderSettings.reflectionIntensity = shine;
-                RenderSettings.fog = fog;
-                foreach (var f in features) if (f != null) f.SetActive(true);
-            }
         }
 
         static void Destroy(UnityEngine.Object o)

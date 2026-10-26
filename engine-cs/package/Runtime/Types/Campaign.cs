@@ -389,6 +389,17 @@ namespace Bastion.Engine
         public string Id { get; set; } = "";
     }
 
+    /// <summary>
+    /// Calling off the mission chosen goes to a vote too, as choosing it (Arturo, 26/10). Not in TypeScript: there
+    /// `cancelMission` called it off at once.
+    /// </summary>
+    public sealed class CancelMissionAction : ProposalAction
+    {
+        public override string Type => "cancelMission";
+        /// <summary>The operation called off (MissionOffer.id): the one chosen when it was proposed.</summary>
+        public string Id { get; set; } = "";
+    }
+
     public sealed class ContactAction : ProposalAction
     {
         public override string Type => "contact";

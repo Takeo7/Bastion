@@ -50,6 +50,26 @@ namespace Bastion.EditorTools
             // The dead's feeding (syntyManifest.ts FEED_CLIPS): down onto its knees by the fallen, and up again.
             ("kneelDown", "mixamo-30fps/Kneeling Down.fbx", false),
             ("kneelUp", "mixamo-30fps/Standing.fbx", false),
+            // Boarding La Lata (clearingArt.ts board, boardCar; syntyManifest.ts CAMP_SPANS): into the 4×4 by a left door
+            // (mirrored, a right one), and up a step into the others.
+            ("enterCar", "mixamo/Entering Car.fbx", false),
+            ("enterCarR", "mixamo/Entering Car.fbx", true),
+            ("stepUp", "mixamo/Ascending Stairs.fbx", false),
+            // The camp (clearingLife.ts; syntyManifest.ts CAMP_LOOPS, CAMP_MOVES): sat on a camp chair, on the ground,
+            // talking; sitting down and getting up; knelt warming the hands by the fire (in, stayed in and out: CAMP_PARTS);
+            // squatting.
+            ("sitChair", "mixamo/Sitting Idle 3.fbx", false),
+            ("sitChairStill", "mixamo/Sitting Idle 5.fbx", false),
+            ("sitBreathe", "mixamo/Sitting Idle.fbx", false),
+            ("sitFloor", "mixamo/Sitting Idle 2.fbx", false),
+            ("sitReclined", "mixamo/Sitting Idle 4.fbx", false),
+            ("sitCrossed", "mixamo/Sitting.fbx", false),
+            ("sitTalk", "mixamo/Sitting Talking.fbx", false),
+            ("sitTalk2", "mixamo/Sitting Talking 2.fbx", false),
+            ("standToSit", "mixamo/Stand To Sit.fbx", false),
+            ("sitToStand", "mixamo/Sit To Stand.fbx", false),
+            ("warmHands", "mixamo/Kneel.fbx", false),
+            ("squat", "mixamo/Crouch Idle.fbx", false),
         };
 
         public static void Run()

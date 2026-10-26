@@ -51,7 +51,9 @@ namespace Bastion.Client.Units
         public static Dress Of(Appearance look, string seed, string sex = null, bool risen = false)
         {
             string s = SexOf(look, seed, sex);
-            string outfit = Outfits.Any(o => o.id == look?.Character) ? look.Character : Pick(Outfits.Where(o => o.sexes.Contains(s)).Select(o => o.id).ToArray(), seed + "|outfit");
+            string outfit = Outfits.Any(o => o.id == look?.Character) ? look.Character
+                : seed != null && rostered.TryGetValue(seed, out var worn) ? worn
+                : Pick(Outfits.Where(o => o.sexes.Contains(s)).Select(o => o.id).ToArray(), seed + "|outfit");
             string head = !string.IsNullOrEmpty(look?.Head) ? look.Head : "helmet";
             string headwear = head == "bare" ? null : head;
             string own = Pick(Hairs.Where(h => h.sex == s && h.id != Under(s)).Select(h => h.id).ToArray(), seed + "|hair");
@@ -71,10 +73,57 @@ namespace Bastion.Client.Units
             };
         }
 
+        /// <summary>
+        /// The order recruits are dressed in when they haven't chosen (wardrobe.ts WEAR_ORDER), by sex: survivors the most,
+        /// then the civilians' winter clothes, a policeman now and then; neighbours unlike each other.
+        /// </summary>
+        static readonly Dictionary<string, string[]> WearOrder = new Dictionary<string, string[]>
+        {
+            ["f"] = new[] { "survivor1", "survivor3", "survivor7", "survivor4", "civilian1", "survivor6", "police2", "survivor2", "civilian4", "survivor8", "survivor5", "civilian2", "police1", "civilian3", "police3" },
+            ["m"] = new[] { "survivor2", "survivor4", "survivor8", "survivor5", "civilian3", "survivor6", "police1", "survivor3", "survivor7", "civilian2", "survivor1", "civilian4", "police3", "civilian1", "police2" },
+        };
+
+        /// <summary>The campaign's soldiers' outfits when they haven't chosen one (Roster), by campaign id.</summary>
+        static readonly Dictionary<string, string> rostered = new Dictionary<string, string>();
+
+        /// <summary>
+        /// Dresses the campaign's soldiers (every one, the fallen too: wardrobe.ts setRoster, main.ts on each campaign
+        /// state): in the order they joined, each the next outfit of their sex's WearOrder, so no two wear the same until
+        /// all have been worn, and nobody's changes when others join or fall. Whether anyone's changed.
+        /// </summary>
+        public static bool Roster(IEnumerable<CampaignSoldier> soldiers)
+        {
+            var before = new Dictionary<string, string>(rostered);
+            rostered.Clear();
+            int Joined(string id)
+            {
+                var digits = new string((id ?? "").Where(char.IsDigit).ToArray());
+                return digits.Length > 0 && long.TryParse(digits, out long n) && n <= int.MaxValue ? (int)n : 0;
+            }
+            var next = new Dictionary<string, int> { ["f"] = 0, ["m"] = 0 };
+            foreach (var s in (soldiers ?? Enumerable.Empty<CampaignSoldier>()).OrderBy(x => Joined(x.Id)))
+            {
+                string sex = SexOf(s.Appearance, s.Id);
+                var order = WearOrder[sex == "f" ? "f" : "m"];
+                string key = sex == "f" ? "f" : "m";
+                rostered[s.Id] = order[next[key]++ % order.Length];
+            }
+            return before.Count != rostered.Count || rostered.Any(kv => !before.TryGetValue(kv.Key, out var o) || o != kv.Value);
+        }
+
         static string Under(string sex) => sex == "f" ? "hairUnderF" : "hairUnderM";
 
+        /// <summary>
+        /// The outfits someone of this sex ("f", "m") can wear, in the barracks' order (wardrobe.ts outfitsFor): Personalizar's
+        /// Ropa, after «Al azar»; their names are Lore.OutfitNames.
+        /// </summary>
+        public static IReadOnlyList<string> OutfitsFor(string sex) => Outfits.Where(o => o.sexes.Contains(sex)).Select(o => o.id).ToList();
+
+        /// <summary>The outfit a look names (Appearance.Character; wardrobe.ts outfitOf), or null: one by their id («Al azar»).</summary>
+        public static string OutfitOf(string character) => Outfits.Any(o => o.id == character) ? character : null;
+
         /// <summary>wardrobe.ts soldierSex: their look's; else their outfit's if only one sex wears it; else picked by the seed.</summary>
-        static string SexOf(Appearance look, string seed, string sex)
+        public static string SexOf(Appearance look, string seed, string sex = null)
         {
             string own = !string.IsNullOrEmpty(look?.Sex) ? look.Sex : sex;
             if (!string.IsNullOrEmpty(own)) return own;

@@ -22,7 +22,8 @@ namespace Bastion.Client.Net
     /// For tests with two apps, without clicking: BASTION_ANFITRION=&lt;name&gt; hosts as it starts, BASTION_UNIRSE=&lt;address&gt;
     /// with BASTION_NOMBRE=&lt;name&gt; joins, and BASTION_EMPEZAR=1 starts the skirmish once both are in (hosting).
     /// BASTION_PUERTO: the first port to host on, instead of RoomHost.FirstPort. BASTION_CAMPANA=1: a campaign from a new
-    /// one to its missions, played by MissionBot, and back instead (CampaignRun).
+    /// one to its missions, played by MissionBot, and back instead (CampaignRun). BASTION_MEDIR=&lt;case&gt;: a case played
+    /// alone while the telemetry measures it (Measure).
     ///
     /// Of its own: the seat's token at each host (back after a drop, the same seat), `away` when the window loses or gets
     /// the focus, and what Net's ServerFeed does: a gap in the events (a `seq` missed) answered with a `sync`, and what
@@ -88,6 +89,8 @@ namespace Bastion.Client.Net
         private bool startWhenBoth;
         /// <summary>BASTION_CAMPANA: a campaign to its missions and back, by itself.</summary>
         private CampaignRun? campaignRun;
+        /// <summary>BASTION_MEDIR: a case played alone while the telemetry measures it.</summary>
+        private Measure? measure;
         private readonly ConcurrentQueue<IReadOnlyList<LanGame>> lanHeard = new ConcurrentQueue<IReadOnlyList<LanGame>>();
         private readonly ConcurrentQueue<string> errors = new ConcurrentQueue<string>();
         private int errorsThisMinute;
@@ -197,6 +200,9 @@ namespace Bastion.Client.Net
 
         private void Start()
         {
+            // The tests' drivers first: hosting asks whether one measures (Host).
+            campaignRun = CampaignRun.FromEnvironment(log.Write);
+            measure = Measure.FromEnvironment(log.Write);
             var hostAs = Environment.GetEnvironmentVariable("BASTION_ANFITRION");
             var joinAt = Environment.GetEnvironmentVariable("BASTION_UNIRSE");
             string? problem = null;
@@ -204,7 +210,6 @@ namespace Bastion.Client.Net
             else if (!string.IsNullOrEmpty(joinAt)) problem = Join(joinAt!, Environment.GetEnvironmentVariable("BASTION_NOMBRE") ?? "Prueba");
             if (problem != null) log.Write($"[prueba] {problem}");
             startWhenBoth = Environment.GetEnvironmentVariable("BASTION_EMPEZAR") == "1";
-            campaignRun = CampaignRun.FromEnvironment(log.Write);
         }
 
         // ---------------------------------------------------------- start screen
@@ -221,9 +226,22 @@ namespace Bastion.Client.Net
             {
                 try
                 {
-                    var store = new SaveStore(Path.Combine(DataDir, "save.json"), log.Write, CampaignRules);
-                    var made = new Room(store, Rules, Version, HostAddresses.List(), say: (line) => Debug.Log(line), campaignRules: CampaignRules);
-                    host = int.TryParse(Environment.GetEnvironmentVariable("BASTION_PUERTO"), out var first) ? RoomHost.StartFree(made, first) : RoomHost.StartFree(made);
+                    // Measuring (BASTION_MEDIR) plays each case from nothing, on a save of its own emptied first: with the
+                    // players' one, or the last case's, the room would go on with that game instead (26/10: every case
+                    // after the first measured the city again).
+                    var file = Path.Combine(DataDir, measure != null ? "medida.json" : "save.json");
+                    if (measure != null)
+                        foreach (var old in new[] { file, file + ".tmp", Path.Combine(DataDir, "medida.anterior.json") })
+                            if (File.Exists(old)) File.Delete(old);
+                    var store = new SaveStore(file, log.Write, CampaignRules);
+                    // BASTION_SEMILLA, only in the tests' campaign (CampaignRun): the room's dice, as CampaignAutoRun's.
+                    var seed = CampaignRun.Seed();
+                    var made = new Room(store, Rules, Version, HostAddresses.List(), rng: seed != null ? new Rng(seed.Value) : null, say: (line) => Debug.Log(line), campaignRules: CampaignRules);
+                    if (seed != null) log.Write($"[prueba] sala con la semilla {seed}");
+                    var first = int.TryParse(Environment.GetEnvironmentVariable("BASTION_PUERTO"), out var port) ? port : RoomHost.FirstPort;
+                    // Measuring alone (BASTION_MEDIR), on 127.0.0.1 only: nobody else to join, and no firewall asking (its
+                    // window would take the focus, and the telemetry counts only with the game in front).
+                    host = RoomHost.StartFree(made, first, 10, measure != null ? System.Net.IPAddress.Loopback : null);
                     room = made;
                 }
                 catch (Exception e)
@@ -232,7 +250,7 @@ namespace Bastion.Client.Net
                     return $"No se pudo abrir la partida: {e.Message}";
                 }
                 log.Write($"anfitrión arrancado: tcp {host.Port} · {string.Join(", ", HostAddresses.List().Select((a) => a.Address))} · versión {Version}");
-                announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
+                if (measure == null) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
             }
             return Open("127.0.0.1", host.Port, name, false);
         }
@@ -327,6 +345,7 @@ namespace Bastion.Client.Net
             }
             // BASTION_CAMPANA's player reads it too, before it goes on as it is.
             campaignRun?.Observe(msg);
+            measure?.Observe(msg);
             feed.Take(msg);
         }
 
@@ -384,6 +403,8 @@ namespace Bastion.Client.Net
         /// <summary>A message to the host (Net/Protocol.cs ClientMessage); dropped while not connected.</summary>
         public void Send(ClientMessage msg)
         {
+            campaignRun?.Sent(msg);
+            measure?.Sent(msg);
             session?.Send(Json.Write(msg));
         }
 
@@ -422,6 +443,7 @@ namespace Bastion.Client.Net
                 if (errorsThisMinute++ < ErrorsPerMinute) Report(line);
             session?.Pump();
             campaignRun?.Tick(this, Time.realtimeSinceStartup);
+            measure?.Tick(this, Time.realtimeSinceStartup);
         }
 
         /// <summary>The window lost or got the focus: the game out of sight, or back (the `away` message).</summary>

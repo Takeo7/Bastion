@@ -116,6 +116,15 @@ namespace Bastion.UI.Strategy
                     rows.Add(Row("Extra", $"{Setup.MissionNames[o.Kind]} en {Campaign.Regions[o.Region].Name} · dificultad {new string('★', o.Difficulty)}{(reward != "" ? $" · recompensa: {reward}" : "")}"));
                     return (rows, true);
                 }
+                // Calling it off is voted too (Arturo, 26/10): the operation stays on the Mapa.
+                case CancelMissionAction a:
+                {
+                    var o = c.Offers.FirstOrDefault(x => x.Id == a.Id);
+                    if (o == null) return (rows, false);
+                    rows.Add(Row("Misión", $"{o.Name} · {Campaign.Regions[o.Region].Name}"));
+                    rows.Add(Row("Qué hace", "La misión deja de estar elegida y la escuadra se vacía. La misión sigue en el Mapa."));
+                    return (rows, true);
+                }
                 case ContactAction a:
                     rows.Add(Row("Tiempo", "Al momento"));
                     rows.Add(Row("Suministros", Campaign.CostText(Campaign.ContactCost(c))));
@@ -125,7 +134,8 @@ namespace Bastion.UI.Strategy
                 {
                     var rumor = c.Rumors.FirstOrDefault(r => r.Id == a.Id);
                     if (rumor == null) return (rows, false);
-                    rows.Add(Row("Tiempo", $"{rumor.DaysLeft} días escuchando; no hace pasar el tiempo"));
+                    // Lore, 26/10: in missions, as the campaign's log says it («se sabrá tras la próxima misión»).
+                    rows.Add(Row("Tiempo", $"Se sabrá {Lore.InMissions(MissionsFor(rumor.DaysLeft))}; no hace pasar el tiempo"));
                     rows.Add(Row("Qué hace", Lore.RumorAim(Campaign.Regions[rumor.Region].Name)));
                     return (rows, true);
                 }

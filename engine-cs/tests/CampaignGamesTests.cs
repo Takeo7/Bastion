@@ -14,6 +14,8 @@ namespace Bastion.Engine.Tests
     /// TypeScript's, nulls apart (CampaignJsonTests.FirstDifference); and what the screens read at a look (nextSteps of both
     /// seats, the squad going out, what the operation names) and at the end (the vaccine's title, the epilogue). Two of
     /// them (final-break, final-record) reach the final mission and the vaccine, and win. Texts went through text-fixes.ts.
+    /// One rule changed since they were recorded: «Cancelar misión» with the partner here is a proposal now (Arturo, 26/10),
+    /// and the replay answers it yes at once for the partner (the `cmd` case says how).
     /// </summary>
     public class CampaignGamesTests
     {
@@ -89,10 +91,21 @@ namespace Bastion.Engine.Tests
                     case "cmd":
                     {
                         var cmd = op["cmd"]!.ToObject<CampaignCommand>(CampaignJsonTests.Serializer)!;
+                        var slot = (int)op["slot"]!;
                         var connected = op["connected"]!.Select((x) => (int)x).ToList();
-                        var r = Campaign.ExecuteCampaignCommand(c, cmd, new CampaignContext { Slot = (int)op["slot"]!, Connected = connected, Rng = rng });
+                        var pending = c.Proposal;
+                        var r = Campaign.ExecuteCampaignCommand(c, cmd, new CampaignContext { Slot = slot, Connected = connected, Rng = rng });
                         var d = Differs(op["result"]!, ResultOf(r));
                         Assert.True(d == null, $"{where}, its result: {d}");
+                        // «Cancelar misión» goes to a vote with the partner here (Arturo, 26/10), and TypeScript, which
+                        // recorded these, called it off at once. Only here the replay steps in: a recorded cancel that C#
+                        // has just proposed is answered yes by the partner at once. The step is then compared as every
+                        // other, with nothing left out: the proposal adds no log line, and `proposal` is null again.
+                        if (cmd is CancelMissionCommand && r.Ok && pending == null && c.Proposal?.Action is CancelMissionAction)
+                        {
+                            var yes = Campaign.ExecuteCampaignCommand(c, new VoteCommand { Accept = true }, new CampaignContext { Slot = connected.First((s) => s != slot), Connected = connected, Rng = rng });
+                            Assert.True(yes.Ok && !yes.Launch && c.Proposal == null, $"{where}, the partner's yes: {yes.Error}");
+                        }
                         break;
                     }
                     case "opening":

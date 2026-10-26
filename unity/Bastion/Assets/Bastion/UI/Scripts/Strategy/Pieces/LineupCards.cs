@@ -44,7 +44,7 @@ namespace Bastion.UI.Strategy
 
         public void Set(List<LineupCardView> views)
         {
-            var k = Ui.Key(views);
+            var k = Ui.Key(views) + "|" + StrategyRoot.PictureStamp;
             if (k == key) return;
             key = k;
             layer.Clear();

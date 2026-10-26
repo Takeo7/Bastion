@@ -231,6 +231,8 @@ namespace Bastion.UI.Strategy
         /// <summary>«Copiar a todos mis soldados» pressed once: it asks again.</summary>
         public bool CopyArmed;
         public int CopyCount;
+        /// <summary>It can be pressed: a name, other soldiers of one's own, and the clothes taking colours.</summary>
+        public bool CanCopy = true;
     }
 
     [System.Serializable]

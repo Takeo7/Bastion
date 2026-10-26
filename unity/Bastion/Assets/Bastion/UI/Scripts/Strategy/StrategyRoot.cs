@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Bastion.Client;
 using Bastion.UI.Hud;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -50,13 +52,25 @@ namespace Bastion.UI.Strategy
         public Func<string, Sprite> IconOf;
 
         /// <summary>A soldier's bust by id (Arte's Portraits.Soldier); null, a silhouette.</summary>
-        public Func<string, Texture> PortraitOf;
+        public Func<string, Texture> PortraitOf = Portraits.Soldier;
 
-        /// <summary>A base piece's picture by id, for the Asentamiento's palette (Arte's renders); null, the 0.10.1's.</summary>
-        public Func<string, Texture> PieceArtOf;
+        /// <summary>A base piece's picture by id, for the Asentamiento's palette (Arte's PiecePictures).</summary>
+        public Func<string, Texture> PieceArtOf = PiecePictures.Of;
 
         /// <summary>A radio voice's bust by speaker (Arte's Portraits.Voice); null, their initials.</summary>
-        public Func<string, Texture> VoiceOf;
+        public Func<string, Texture> VoiceOf = Portraits.Voice;
+
+        /// <summary>
+        /// Goes up when a bust is drawn (Portraits.Changed, once a frame at most): the screens that show busts take it into
+        /// their keys, so the same view draws again with it.
+        /// </summary>
+        public static int PictureStamp { get; private set; }
+
+        bool picturesChanged;
+        SoldiersView lastSoldiers;
+        SquadView lastSquad;
+        DebriefView lastDebrief;
+        SkillBoardView lastBoard;
 
         /// <summary>The radio's card: Radio (the controller) plays the scenes on it.</summary>
         public RadioPanel RadioCard => radio;
@@ -110,7 +124,7 @@ namespace Bastion.UI.Strategy
             debrief = new DebriefScreen(root.Q("view"), tips, Icon, relay);
             foreach (var cards in new[] { squad.Cards, debrief.Cards })
             {
-                cards.PadAt = (i, n) => PadAt?.Invoke(i, n);
+                cards.PadAt = (i, n) => PadAt != null ? PadAt(i, n) : ClearingPad(i, n);
                 cards.PortraitOf = id => PortraitOf?.Invoke(id);
             }
             squad.Show(false);
@@ -129,11 +143,60 @@ namespace Bastion.UI.Strategy
             Ui.Show(root.Q("proposal"), false);
             Ui.Show(root.Q("modal"), false);
             tips.Front();
+            Portraits.Changed += OnPicture;
         }
 
         void OnDisable()
         {
+            Portraits.Changed -= OnPicture;
+            if (watched != null) watched.MapShown -= OnMapShown;
+            watched = null;
             root = null;
+        }
+
+        void OnPicture(string id) => picturesChanged = true;
+
+        /// <summary>The plates last given to the clearing, as text, to give them again only when they move.</summary>
+        string insets = "";
+
+        /// <summary>Where the plates sit, for the clearing's shots to keep clear of them (Arte's Settlement.SetInsets), when the layout changes.</summary>
+        void Insets()
+        {
+            var clearing = Settlement.Instance;
+            // Not before the screens are laid out (their bounds NaN): nothing is sent until there is something to send.
+            if (clearing == null || root == null || float.IsNaN(root.layout.width) || root.layout.width <= 0) return;
+            var panels = SettlementPanels();
+            var now = string.Join(";", panels.Select(r => $"{r.x:0.000},{r.y:0.000},{r.width:0.000},{r.height:0.000}"));
+            if (now == insets) return;
+            insets = now;
+            clearing.SetInsets(panels);
+        }
+
+        /// <summary>Place `i` of a row of `n` by La Lata on this panel (Arte's Settlement.PadWorld through its camera); null without it, or behind.</summary>
+        Vector2? ClearingPad(int i, int n)
+        {
+            var clearing = Settlement.Instance;
+            var camera = clearing != null ? clearing.Camera : null;
+            if (camera == null || !camera.isActiveAndEnabled || root?.panel == null) return null;
+            // By the camera's viewport over the whole panel: the screen's own height can differ from the camera's (a
+            // capture drawing into a texture of its own).
+            var vp = camera.WorldToViewportPoint(clearing.PadWorld(i, n));
+            if (vp.z <= 0) return null;
+            var size = root.panel.visualTree.layout.size;
+            return new Vector2(vp.x * size.x, (1 - vp.y) * size.y);
+        }
+
+        /// <summary>A bust came: the screens that show busts drawn again with what they showed.</summary>
+        void Repaint()
+        {
+            picturesChanged = false;
+            PictureStamp++;
+            if (lastSoldiers != null) soldiers.Set(lastSoldiers);
+            if (lastSquad != null) squad.Set(lastSquad);
+            if (lastDebrief != null) debrief.Set(lastDebrief);
+            if (lastBoard != null) skillBoard.Set(lastBoard);
+            radio.RepaintPortrait();
+            Dress();
         }
 
         Sprite Icon(string id) => IconOf?.Invoke(id) ?? (icons != null ? icons.Get(id) : null);
@@ -152,6 +215,8 @@ namespace Bastion.UI.Strategy
                 toastUntil = 0;
                 Ui.Show(toast, false);
             }
+            if (picturesChanged) Repaint();
+            Insets();
             radio.Tick(Time.unscaledDeltaTime);
             var clock = ClockOf?.Invoke();
             proposal.Tick(clock?.text, clock?.left ?? 0, clock?.hurry ?? false);
@@ -194,12 +259,14 @@ namespace Bastion.UI.Strategy
 
         public void SetSoldiers(SoldiersView v)
         {
+            lastSoldiers = v;
             soldiers.Set(v);
             Dress();
         }
 
         public void SetSkillBoard(SkillBoardView v)
         {
+            lastBoard = v;
             skillBoard.Set(v);
             Dress();
         }
@@ -212,12 +279,14 @@ namespace Bastion.UI.Strategy
 
         public void SetSquad(SquadView v)
         {
+            lastSquad = v;
             squad.Set(v);
             Dress();
         }
 
         public void SetDebrief(DebriefView v)
         {
+            lastDebrief = v;
             debrief.Set(v);
             Dress();
         }
@@ -259,8 +328,42 @@ namespace Bastion.UI.Strategy
             var out_ = new List<Rect>();
             var size = root?.panel?.visualTree.layout.size ?? Vector2.zero;
             if (settlement == null || size.x <= 0 || size.y <= 0) return out_;
-            foreach (var r in settlement.Plates()) out_.Add(new Rect(r.x / size.x, r.y / size.y, r.width / size.x, r.height / size.y));
+            void Add(Rect r)
+            {
+                // Laid out only: before its first layout an element's bounds are NaN.
+                if (!float.IsNaN(r.x) && !float.IsNaN(r.y) && r.width >= 4 && r.height >= 4) out_.Add(new Rect(r.x / size.x, r.y / size.y, r.width / size.x, r.height / size.y));
+            }
+            foreach (var r in settlement.Plates()) Add(r);
+            // The other screens' (stage.ts PANELS: the strip, the tabs, the side columns, the Escuadra's and the debrief's foot).
+            foreach (var cls in ShotPanels)
+                root.Query(className: cls).ForEach(e =>
+                {
+                    if (Shown(e) && !e.ClassListContains("settle-plate")) Add(e.worldBound);
+                });
             return out_;
+        }
+
+        /// <summary>stage.ts PANELS: what a fitted shot of the clearing keeps clear of.</summary>
+        static readonly string[] ShotPanels = { "strat-top", "strat-nav", "strat-side", "squad-bottom", "debrief-card" };
+
+        /// <summary>On screen: it and all that holds it laid out (a hidden screen's panels keep their own display).</summary>
+        static bool Shown(VisualElement e)
+        {
+            for (var at = e; at != null; at = at.parent)
+                if (at.resolvedStyle.display == DisplayStyle.None || !at.visible) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Whether the pointer is over the base's panels at a screen point (Input System coordinates, y up): then a click
+        /// or the wheel isn't the clearing's (Arte's camera rig, the building's pointer).
+        /// </summary>
+        public bool Over(Vector2 screen)
+        {
+            if (root?.panel == null) return false;
+            var p = RuntimePanelUtils.ScreenToPanel(root.panel, new Vector2(screen.x, Screen.height - screen.y));
+            var picked = root.panel.Pick(p);
+            return picked != null && picked.pickingMode == PickingMode.Position && picked != root && picked != root.parent;
         }
 
         /// <summary>The Mapa: the valley is made the first time (its painting, the Marea's field, its camera).</summary>
@@ -271,15 +374,52 @@ namespace Bastion.UI.Strategy
                 valley = new GameObject("Valle").AddComponent<ValleyMap>();
                 valley.transform.SetParent(transform, false);
                 valley.Build(ValleyCamera);
-                map.Bind(valley);
             }
+            if (valley != null && !map.Bound) map.Bind(valley);
+            WatchClearing();
             map.Set(v);
             Dress();
         }
+
+        /// <summary>The clearing whose fade into the Mapa and out of it says when the valley takes the screen.</summary>
+        Settlement watched;
+
+        /// <summary>
+        /// Arte's clearing, when there is one, says when the valley takes the screen: at the bottom of its fade to black
+        /// (Settlement.MapShown), the clearing's camera off or on; till then the camera that was showing stays.
+        /// </summary>
+        void WatchClearing()
+        {
+            var clearing = Settlement.Instance;
+            if (clearing == watched) return;
+            if (watched != null) watched.MapShown -= OnMapShown;
+            watched = clearing;
+            if (clearing != null) clearing.MapShown += OnMapShown;
+            map.ValleyUp(clearing != null ? clearing.MapOn : (bool?)null);
+        }
+
+        void OnMapShown(bool on) => map?.ValleyUp(on);
         public void ToggleMenu(GameMenuView v) => menu.Toggle(v);
         public void CloseMenu() => menu.Close();
         public bool MenuBack() => menu != null && menu.Back();
         public void MenuPage(string page) => menu.Go(page);
+
+        /// <summary>
+        /// Take-off (screen.ts launch): every panel fades away but the stamp, «EN MARCHA» (a siege: «YA ESTÁN AQUÍ»), while
+        /// the clearing plays it; false, the screens back.
+        /// </summary>
+        public void Launching(string banner)
+        {
+            if (root == null) return;
+            var on = !string.IsNullOrEmpty(banner);
+            root.EnableInClassList("strat--launching", on);
+            root.Q(className: "strat-launch")?.RemoveFromHierarchy();
+            if (!on) return;
+            menu.Close();
+            var stamp = Ui.El("strat-launch", root);
+            stamp.pickingMode = PickingMode.Ignore;
+            Ui.Text(banner.ToUpperInvariant(), "strat-launch__text font-title", stamp);
+        }
 
         /// <summary>A short note at the bottom (the server's «rejected», a proposal's cost): gone after 2.6 s.</summary>
         public void Toast(string text)

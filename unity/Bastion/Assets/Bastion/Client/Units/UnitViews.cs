@@ -353,7 +353,10 @@ namespace Bastion.Client.Units
                 // relatives come with the campaign).
                 var dress = Dress.Of(u.Appearance, view.seed, u.Appearance == null ? Content.SexOfName(u.Name) : null);
                 view.build = dress.sex == "f" ? "femn" : "masc";
-                return SoldierFigure.Make(dress, "Soldado");
+                var soldier = SoldierFigure.Make(dress, "Soldado");
+                // In their colours and with their player's band if Ajustes says so (SquadTint; syntyFigures.ts paint).
+                if (u.Team == "xcom") SquadTint.Paint(soldier, u.Appearance, u.Owner is int owner ? SquadTint.ColourOf(owner) : null);
+                return soldier;
             }
             catch (Exception e)
             {
@@ -368,10 +371,24 @@ namespace Bastion.Client.Units
         /// </summary>
         bool Arm(View v, Unit u, FigureCatalog catalog)
         {
-            var art = Anims.Weapon(Anims.UnitWeapon(u.Template, u.WeaponTier));
+            if (v.animator == null || !v.animator.isHuman) return false;
+            var gun = Gun(Anims.Weapon(Anims.UnitWeapon(u.Template, u.WeaponTier)), v.root, catalog, out v.muzzle);
+            if (gun == null) return false;
+            v.weapon = gun;
+            v.rest = RestFor(v.seed);
+            return true;
+        }
+
+        /// <summary>
+        /// A two-handed gun's model (`art`) under `parent`, at the figures' scale, its muzzle in its own frame; null for a
+        /// pistol or a blade (they come next) or one without a model.
+        /// </summary>
+        public static Transform Gun(WeaponArt art, Transform parent, FigureCatalog catalog, out Vector3 muzzle)
+        {
+            muzzle = Vector3.zero;
             var prefab = art != null && !art.melee && !art.pistol && catalog != null ? catalog.Weapon(art.fbx) : null;
-            if (prefab == null || v.animator == null || !v.animator.isHuman) return false;
-            var gun = Instantiate(prefab, v.root, false);
+            if (prefab == null) return null;
+            var gun = Instantiate(prefab, parent, false);
             gun.name = "arma";
             // Apocalypse's modular parts left off (its silencers: WEAPON_PARTS puts on what a gun has).
             foreach (var part in gun.GetComponentsInChildren<Transform>(true).Where(t => t.name.Contains("Silencer")).ToList()) part.gameObject.SetActive(false);
@@ -379,13 +396,17 @@ namespace Bastion.Client.Units
             var box = new Bounds(Vector3.zero, Vector3.zero);
             foreach (var r in renderers)
                 foreach (var corner in Corners(r.bounds)) box.Encapsulate(gun.transform.InverseTransformPoint(corner));
-            v.muzzle = art.muzzle != null && art.muzzle.Length >= 3 ? new Vector3(art.muzzle[0], art.muzzle[1], art.muzzle[2]) : new Vector3(0, 0.02f, box.max.z);
+            muzzle = art.muzzle != null && art.muzzle.Length >= 3 ? new Vector3(art.muzzle[0], art.muzzle[1], art.muzzle[2]) : new Vector3(0, 0.02f, box.max.z);
             gun.transform.localScale = Vector3.one * Figures.CharacterScale * (art.size > 0 ? art.size : 1);
             foreach (var c in gun.GetComponentsInChildren<Collider>()) DestroyNow(c);
-            v.weapon = gun.transform;
+            return gun.transform;
+        }
+
+        /// <summary>How one holds a gun at rest (one of RIFLE_RESTS), by its seed.</summary>
+        public static string RestFor(string seed)
+        {
             var rests = Anims.RifleRests;
-            v.rest = rests.Count > 0 ? rests[PickIndex(rests.Count, v.seed + "|rest")] : "rifleIdle";
-            return true;
+            return rests.Count > 0 ? rests[PickIndex(rests.Count, seed + "|rest")] : "rifleIdle";
         }
 
         static IEnumerable<Vector3> Corners(Bounds b)
@@ -398,10 +419,12 @@ namespace Bastion.Client.Units
         /// on it (and that turn learnt in the right hand's frame); held so, rigid in the right hand, while the left lets go
         /// (a hit, a throw).
         /// </summary>
-        static void Hold(View v)
+        static void Hold(View v) => Hold(v.animator, v.weapon, v.root, v.dead, ref v.grip);
+
+        /// <summary>Hold(View) for any figure: `animator`'s hands on `weapon`, `root` its upright, `grip` the turn learnt in the right hand.</summary>
+        public static void Hold(Animator a, Transform weapon, Transform root, bool dead, ref Quaternion? grip)
         {
-            if (v.weapon == null || v.animator == null) return;
-            var a = v.animator;
+            if (weapon == null || a == null) return;
             Transform right = a.GetBoneTransform(HumanBodyBones.RightHand), rightBase = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
             Transform left = a.GetBoneTransform(HumanBodyBones.LeftHand), leftBase = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
             if (right == null) return;
@@ -409,16 +432,16 @@ namespace Bastion.Client.Units
             var palm = rightBase != null ? Vector3.Lerp(right.position, rightBase.position, 0.6f) : right.position;
             var support = left != null ? (leftBase != null ? Vector3.Lerp(left.position, leftBase.position, 0.6f) : left.position) : palm;
             float apart = Vector3.Distance(palm, support) / Figures.CharacterScale;
-            bool both = !v.dead && apart > 0.12f && apart < 0.8f;
+            bool both = !dead && apart > 0.12f && apart < 0.8f;
             Quaternion turn;
             if (both)
             {
                 var along = (support - palm).normalized;
-                turn = Quaternion.LookRotation(along, Vector3.ProjectOnPlane(v.root.up, along));
-                v.grip = Quaternion.Inverse(right.rotation) * turn;
+                turn = Quaternion.LookRotation(along, Vector3.ProjectOnPlane(root.up, along));
+                grip = Quaternion.Inverse(right.rotation) * turn;
             }
-            else turn = v.grip.HasValue ? right.rotation * v.grip.Value : Quaternion.LookRotation(v.root.forward, v.root.up);
-            v.weapon.SetPositionAndRotation(palm, turn);
+            else turn = grip.HasValue ? right.rotation * grip.Value : Quaternion.LookRotation(root.forward, root.up);
+            weapon.SetPositionAndRotation(palm, turn);
         }
 
         /// <summary>wardrobe.ts pick's hash (FNV-1a of the seed) over `n`.</summary>
@@ -442,7 +465,8 @@ namespace Bastion.Client.Units
             nose.localPosition = new Vector3(0, 0.55f, 0.45f);
             nose.localScale = new Vector3(0.3f, 0.15f, 0.4f);
             var colour = u.Team == "xcom" ? new Color(0.25f, 0.45f, 0.75f) : Feeders.Contains(u.Template) ? new Color(0.35f, 0.5f, 0.3f) : new Color(0.7f, 0.3f, 0.25f);
-            var m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = colour };
+            var m = KitMaterials.New(KitMaterials.Plain, "Cápsula");
+            if (m != null) m.color = colour;
             foreach (var r in body.GetComponentsInChildren<Renderer>()) r.sharedMaterial = m;
             foreach (var c in body.GetComponentsInChildren<Collider>()) DestroyNow(c);
             var head = new GameObject("cabeza").transform;
