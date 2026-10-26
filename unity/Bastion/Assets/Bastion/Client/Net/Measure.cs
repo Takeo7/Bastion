@@ -68,9 +68,14 @@ namespace Bastion.Client.Net
             return new Measure(which!, seconds, log);
         }
 
+        /// <summary>With the sound's trace (BASTION_SONIDO_TRAZA=1): each batch of events to Unity's log, beside the sounds they made.</summary>
+        private static readonly bool Tracing = Environment.GetEnvironmentVariable("BASTION_SONIDO_TRAZA") == "1";
+
         public void Observe(ServerMessage msg)
         {
             heard.Observe(msg);
+            if (Tracing && msg is EventsMessage events && events.Events.Count > 0)
+                Debug.Log($"[sonido] {Time.realtimeSinceStartup:F2} s · hechos: {string.Join(", ", events.Events.Select((e) => e.GetType().Name.Replace("Event", "")))}");
             if (msg is SnapshotMessage || msg is RejectedMessage) sentAt = -1;
         }
 

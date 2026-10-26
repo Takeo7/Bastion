@@ -203,7 +203,7 @@ namespace Bastion.UI.Hud
             cards.ShowIntro(v);
         }
 
-        public bool CloseIntro() => cards.CloseIntro(false);
+        public bool CloseIntro(bool quiet = false) => cards.CloseIntro(quiet);
 
         /// <summary>The arrival card is up (its keys are its own: Intro and Space close it, Esc does nothing).</summary>
         public bool IntroOpen => cards.IntroOpen;
@@ -228,7 +228,12 @@ namespace Bastion.UI.Hud
         public bool CloseWindow() => window != null && window.Close();
         /// <summary>The short note gone, if it still says `text`.</summary>
         public void ClearToast(string text) => notes.ClearToast(text);
-        public void Notice(string text, string color = null, Action onSee = null) => notes.Notice(text, color, onSee);
+        public void Notice(string text, string color = null, Action onSee = null)
+        {
+            notes.Notice(text, color, onSee);
+            // The partner's key moment: a crackle of the radio (hud.ts notice).
+            if (!string.IsNullOrEmpty(text)) Sound?.Invoke("notice");
+        }
         /// <summary>A find left on the floor with the backpack full (hud.ts packOffer): its line, with «Cambiar» for 7 s.</summary>
         public void PackOffer(string text, Action swap) => notes.Offer(text, HudText.Pack.Swap, swap);
 

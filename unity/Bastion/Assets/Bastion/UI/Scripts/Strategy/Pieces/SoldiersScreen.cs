@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Bastion.UI.Hud;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -15,13 +16,17 @@ namespace Bastion.UI.Strategy
     {
         readonly VisualElement left;
         readonly VisualElement right;
+        /// <summary>Under the clearing, in the middle (strategy.css .strat-center-bottom): «ESPERAR A QUE SE CUREN».</summary>
+        readonly VisualElement bottom;
         readonly TooltipLayer tips;
         readonly Func<string, Sprite> icon;
         readonly IStrategyHandlers handlers;
         SoldiersView last;
         string key;
-        /// <summary>The choice open on the sheet (its id); null, none.</summary>
+        /// <summary>The choice open on the sheet (its id); null, none. Picking another soldier closes it (screen.ts: picking = null).</summary>
         string open;
+        /// <summary>The soldier whose sheet is up, to close the choice when another is picked.</summary>
+        string sheetOf;
         /// <summary>Soldados is the screen up (its panels may show).</summary>
         bool shown;
         /// <summary>The colour row whose «Otro color» is open; null, none.</summary>
@@ -39,6 +44,8 @@ namespace Bastion.UI.Strategy
             this.handlers = handlers;
             left = Ui.El("strat-side strat-side--left panel", view);
             right = Ui.El("strat-side strat-side--right panel", view);
+            bottom = Ui.El("strat-center-bottom", view);
+            bottom.pickingMode = PickingMode.Ignore;
             // They scroll with the wheel, without a bar (as the 0.10.1's panels).
             left.Add(new ScrollView(ScrollViewMode.Vertical) { name = "left-scroll", verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden });
             right.Add(new ScrollView(ScrollViewMode.Vertical) { name = "right-scroll", verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden });
@@ -49,10 +56,35 @@ namespace Bastion.UI.Strategy
             shown = on;
             Ui.Show(left, on);
             Ui.Show(right, on && (last?.Sheet != null || last?.Customizer != null));
+            Ui.Show(bottom, on && last?.MustWait != null);
+        }
+
+        /// <summary>The choice open on the sheet (hand, belt, a slot); null, none.</summary>
+        public string OpenChoice => open;
+
+        /// <summary>For tests (BaseRun «choice:hand»): a choice opened, as a click on its head.</summary>
+        public void Open(string id)
+        {
+            open = id;
+            key = null;
+            Set(last);
+        }
+
+        /// <summary>Esc (screen.ts back): the choice open on the sheet, closed; whether there was one.</summary>
+        public bool CloseChoice()
+        {
+            if (open == null) return false;
+            open = null;
+            key = null;
+            Set(last);
+            return true;
         }
 
         public void Set(SoldiersView v)
         {
+            var now = v?.Mine.Concat(v.Partner).FirstOrDefault(t => t.Selected)?.Id;
+            if (now != sheetOf) open = null;
+            sheetOf = now;
             var k = KeyOf(v) + "|" + open + "|" + picking + "|" + StrategyRoot.PictureStamp;
             if (k == key) return;
             key = k;
@@ -61,7 +93,10 @@ namespace Bastion.UI.Strategy
             var rightBody = right.Q<ScrollView>("right-scroll").contentContainer;
             leftBody.Clear();
             rightBody.Clear();
+            bottom.Clear();
+            Ui.Show(bottom, shown && v?.MustWait != null);
             if (v == null) return;
+            if (v.MustWait != null) MustWait(v.MustWait);
             Head(v.MineHead, null, leftBody);
             Grid(v.Mine, leftBody);
             if (v.Recruit != null) Recruit(v.Recruit, leftBody);
@@ -73,6 +108,20 @@ namespace Bastion.UI.Strategy
             Ui.Show(right, shown && (v.Sheet != null || v.Customizer != null));
             if (v.Customizer != null) Customizer(v.Customizer, rightBody);
             else if (v.Sheet != null) Sheet(v.Sheet, rightBody);
+        }
+
+        /// <summary>
+        /// Nobody can go out (screen.ts waitEl): the big key, as Escuadra's «Lanzar» (green when pressed, outlined when the
+        /// partner asked), and its line on a plate of its own over the clearing.
+        /// </summary>
+        void MustWait(WaitDayView w)
+        {
+            var b = new Button(handlers.OnWait) { text = w.Label };
+            Ui.AddClasses(b, "squad-launch strat-wait font-title");
+            b.EnableInClassList("squad-launch--ready", w.Ready);
+            b.EnableInClassList("squad-launch--waiting", w.Asked);
+            bottom.Add(b);
+            if (!string.IsNullOrEmpty(w.Note)) Ui.Text(w.Note, "strat-center-bottom__line", bottom);
         }
 
         /// <summary>
@@ -114,6 +163,7 @@ namespace Bastion.UI.Strategy
                     var b = new Button(() => handlers.OnCustomChoice(group, id, false)) { text = ch.Label };
                     b.AddToClassList("custom__choice");
                     b.EnableInClassList("custom__choice--on", ch.On);
+                    if (!string.IsNullOrEmpty(ch.Tip)) tips.Attach(b, ch.Tip);
                     // Over an outfit, the figure wears it for a look; away, back to the draft.
                     b.RegisterCallback<PointerEnterEvent>(_ => handlers.OnCustomChoice(group, id, true));
                     b.RegisterCallback<PointerLeaveEvent>(_ => handlers.OnCustomChoice(group, null, true));
@@ -128,10 +178,13 @@ namespace Bastion.UI.Strategy
             foreach (var r in c.Colors) ColorRow(r, rows);
             var actions = Ui.El("custom__actions", parent);
             Action(actions, "Aleatorio", "random");
-            Action(actions, "Restablecer", "reset");
-            var copy = Action(actions, c.CopyArmed ? $"¿Pintar a tus {c.CopyCount} soldados? Pulsa otra vez" : "Copiar a todos mis soldados", "copy");
+            tips.Attach(Action(actions, "Restablecer", "reset"), "Vuelve al aspecto de serie de este soldado");
+            // On a holder: off (no colours, or no one else), the key takes no hover, and its help says why.
+            var copyHolder = Ui.El("custom__copy-holder", actions);
+            var copy = Action(copyHolder, c.CopyArmed ? $"¿Pintar a tus {c.CopyCount} soldados? Pulsa otra vez" : "Copiar a todos mis soldados", "copy");
             copy.EnableInClassList("custom__copy--armed", c.CopyArmed);
             copy.SetEnabled(c.CanCopy);
+            if (!string.IsNullOrEmpty(c.CopyTip)) tips.Attach(copyHolder, c.CopyTip);
             var foot = Ui.El("custom__foot", parent);
             var save = Action(foot, "Guardar", "save");
             save.AddToClassList("btn-primary");
@@ -161,7 +214,10 @@ namespace Bastion.UI.Strategy
         /// <summary>A part's row: its swatch and name, a note or «↺», the palette and «Otro color» (the picker under it).</summary>
         void ColorRow(ColorRowView r, VisualElement parent)
         {
-            var row = Ui.El("custom-color", parent);
+            // A locked row is off, and an off element takes no hover: its help on a holder round it.
+            var holder = string.IsNullOrEmpty(r.Tip) ? parent : Ui.El("custom-color-holder", parent);
+            if (holder != parent) tips.Attach(holder, r.Tip);
+            var row = Ui.El("custom-color", holder);
             row.SetEnabled(!r.Locked);
             var top = Ui.El("custom-color__top", row);
             var dot = Ui.El("custom-color__dot", top);
@@ -172,6 +228,7 @@ namespace Bastion.UI.Strategy
             {
                 var reset = new Button(() => handlers.OnCustomColor(part, null, false)) { text = r.Reset };
                 reset.AddToClassList("custom-color__reset");
+                if (!string.IsNullOrEmpty(r.ResetTip)) tips.Attach(reset, r.ResetTip);
                 top.Add(reset);
             }
             else if (!string.IsNullOrEmpty(r.Note)) Ui.Text(r.Note, "custom-color__note", top);
@@ -184,6 +241,8 @@ namespace Bastion.UI.Strategy
                 b.AddToClassList("custom-color__swatch");
                 b.EnableInClassList("custom-color__swatch--on", string.Equals(color, r.Color, System.StringComparison.OrdinalIgnoreCase));
                 b.style.backgroundColor = Ui.Hex(color, Color.grey);
+                // Its code (screen.ts: title), to ask for it again in «Otro color».
+                tips.Attach(b, color);
                 swatches.Add(b);
             }
             var any = new Button(() =>
@@ -219,6 +278,7 @@ namespace Bastion.UI.Strategy
                 tile.EnableInClassList("soldier-tile--on", t.Selected);
                 tile.EnableInClassList("soldier-tile--dead", t.Dead);
                 tile.style.borderBottomColor = Ui.Hex(t.Accent, new Color(0.95f, 0.65f, 0.2f));
+                if (!string.IsNullOrEmpty(t.FullName)) tips.Attach(tile, t.FullName);
                 var face = Ui.El("soldier-tile__face well", tile);
                 var portrait = PortraitOf?.Invoke(t.Id);
                 if (portrait is RenderTexture rt) face.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
@@ -316,6 +376,7 @@ namespace Bastion.UI.Strategy
                     var b = new Button(() => handlers.OnCare(index)) { text = s.Care.Buttons[i].ToUpperInvariant() };
                     b.AddToClassList("font-title");
                     if (i == 0) b.AddToClassList("btn-primary");
+                    if (i == 0 && s.Care.Pulse) StrategyRoot.Pulse(b);
                     b.SetEnabled(i >= s.Care.Enabled.Count || s.Care.Enabled[i]);
                     actions.Add(b);
                     if (i == 0 && !string.IsNullOrEmpty(s.Care.Tip)) tips.Attach(b, s.Care.Tip);
@@ -385,10 +446,31 @@ namespace Bastion.UI.Strategy
                 row.AddToClassList("pick__option");
                 row.EnableInClassList("pick__option--current", o.Current);
                 row.SetEnabled(o.Enabled);
-                Ui.Text(o.Name, "pick__option-name font-title", row);
+                // arms.ts weaponPick: the picture, the name and its marks; what it is; against what it carries now.
+                var top = Ui.El("pick__option-top", row);
+                if (!string.IsNullOrEmpty(o.Icon)) Ui.Icon(icon, o.Icon, "pick__option-icon", top);
+                Ui.Text(o.Name, "pick__option-name font-title", top);
+                foreach (var t in o.Tags)
+                {
+                    var tag = Ui.Text(t.Text, "armory-row__tag font-title", top);
+                    if (!string.IsNullOrEmpty(t.Tone)) tag.AddToClassList("armory-row__tag--" + t.Tone);
+                    if (!string.IsNullOrEmpty(t.Tip)) tips.Attach(tag, t.Tip);
+                }
                 if (!string.IsNullOrEmpty(o.Note)) Ui.Text(o.Note, "pick__option-note", row);
+                if (o.Diff.Count > 0)
+                {
+                    var diff = Ui.El("pick__option-diff", row);
+                    foreach (var x in o.Diff)
+                    {
+                        var chip = Ui.Text(x.Text, "armory-diff", diff);
+                        if (!string.IsNullOrEmpty(x.Tone)) chip.AddToClassList("armory-diff--" + x.Tone);
+                        if (!string.IsNullOrEmpty(x.Tip)) tips.Attach(chip, x.Tip);
+                    }
+                }
+                if (!string.IsNullOrEmpty(o.Tip)) tips.Attach(row, o.Tip);
                 list.Add(row);
             }
+            if (!string.IsNullOrEmpty(p.Empty)) Ui.Text(p.Empty, "pick__empty muted", list);
         }
 
         void Armor(ArmorView a, VisualElement parent)

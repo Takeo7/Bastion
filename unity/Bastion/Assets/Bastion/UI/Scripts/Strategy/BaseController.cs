@@ -89,6 +89,21 @@ namespace Bastion.UI.Strategy
         public CampaignState State => p.State;
         public string View => view;
 
+        /// <summary>For tests (BaseRun «esc», «b»): what is open, in a line for the log.</summary>
+        public string OpenNow() => $"vista {view}, desplegable {root.SoldierChoice ?? "ninguno"}, Personalizar {(soldiers.Draft != null ? "abierto" : "cerrado")}, menú {(root.MenuOpen ? "abierto" : "cerrado")}, ventana {(root.ModalOpen ? "abierta" : "no")}, tablero {(board != null ? "abierto" : "cerrado")}";
+
+        /// <summary>For tests (BaseRun «see-tile», «see-piece»): a proposal's «Ver» on a tile or a piece, without a partner to propose it.</summary>
+        public void SeeTileForTest(int x, int y)
+        {
+            Go("facilities");
+            FocusClearing(Settlement.Instance?.TileTarget(x, y));
+        }
+
+        public void SeePieceForTest(string id) => SeePiece(id);
+
+        /// <summary>For tests (BaseRun «choice:hand»): the sheet's choice opened, as its head's click.</summary>
+        public void OpenChoice(string id) => root.OpenSoldierChoice(id);
+
         // ------------------------------------------------------------ the host
 
         /// <summary>
@@ -114,8 +129,17 @@ namespace Bastion.UI.Strategy
             if (c.Proposal != null && c.Proposal.By == p.Slot && prev?.Proposal?.Text != c.Proposal.Text && p.Proposal()?.Cost != null)
                 root.Toast($"Propuesto a {PartnerName}: se paga cuando diga que sí.");
             if (c.Proposal == null) dueAt = null;
+            // The partner's proposal waits on its plate: it blinks, never taking this player away (screen.ts update); and so
+            // does the plate when the partner just said «a punto» for the mission or the siege (renderWaiting).
+            var partnerSlot = 1 - p.Slot;
+            if (c.Proposal != null && c.Proposal.By != p.Slot && prev?.Proposal?.Text != c.Proposal.Text) root.Blink("strat-proposal");
+            else if (prev != null && c.Players.Count > 1 && c.LaunchReady[partnerSlot] && !prev.LaunchReady[partnerSlot] && !c.LaunchReady[p.Slot]) root.Blink("strat-proposal");
+            // The partner's «a punto», heard even with a proposal blinking (screen.ts).
+            if (prev != null && c.Players.Count > 1 && c.LaunchReady[partnerSlot] && !prev.LaunchReady[partnerSlot] && !c.LaunchReady[p.Slot]) Bastion.Client.Audio.UiSounds.Play("bell");
             if (settlement.Piece != null && !c.Bastion.Pieces.Any(x => x.Id == settlement.Piece)) settlement.Piece = null;
             if (prev != null) alerts.AddRange(p.Alerts(prev));
+            // The clock as the days pass.
+            if (prev != null && c.Day > prev.Day) Bastion.Client.Audio.UiSounds.Play("tick");
             var premise = p.Premise();
             if (premise != null) alerts.Insert(0, premise);
             // A mission chosen by either player sends both to the hangar; a finished one to the debrief.
@@ -283,6 +307,7 @@ namespace Bastion.UI.Strategy
             board = null;
             CloseDraft();
             Settlement.Instance?.SetView(view);
+            Bastion.Client.Audio.UiSounds.View(view);
             if (view != "facilities")
             {
                 settlement.InHand = null;
@@ -311,7 +336,16 @@ namespace Bastion.UI.Strategy
         // ------------------------------------------------------------ the menu
 
         /// <summary>The base's menu (screen.ts renderModal's menu): Continuar, Ajustes (the graphics; sound is Arte's), the main menu, Salir.</summary>
-        public void OnMenu() => root.ToggleMenu(new GameMenuView { Abandon = false, QuitLabel = Lore.QuitText.Button, Settings = App.GameSettings.Views() });
+        /// <summary>The base's menu (screen.ts renderModal): «Volver al menú principal» with its help, and Ajustes saying whose they are.</summary>
+        public void OnMenu()
+        {
+            var partner = p.Seats.FirstOrDefault(s => s.Slot != p.Slot);
+            root.ToggleMenu(new GameMenuView
+            {
+                Abandon = false, QuitLabel = Lore.QuitText.Button, Settings = App.GameSettings.Views(), LeaveTip = "La campaña queda guardada",
+                SettingsNote = partner != null && partner.Connected ? $"Solo para ti: {partner.Name} sigue a lo suyo." : "Se guardan en este ordenador.",
+            });
+        }
 
         void MenuChose(string what)
         {
@@ -356,6 +390,13 @@ namespace Bastion.UI.Strategy
         // ------------------------------------------------------------ handlers
 
         public void OnTab(string tab) => Go(tab);
+
+        /// <summary>B (screen.ts onKey): from Soldados into Construir (the Asentamiento) and back; not with a window up.</summary>
+        public void ToggleBuild()
+        {
+            if (root.ModalOpen || root.MenuOpen || board != null) return;
+            if (view == "barracks" || view == "facilities") Go(view == "facilities" ? "barracks" : "facilities");
+        }
         public void OnVote(bool accept) => Order(new VoteCommand { Accept = accept });
         public void OnWithdraw() => Order(new WithdrawCommand());
         public void OnWaitingGo() => Go("squad");
@@ -365,11 +406,24 @@ namespace Bastion.UI.Strategy
         public void OnSeeProposal()
         {
             var c = p.State;
+            var clearing = Settlement.Instance;
             switch (c?.Proposal?.Action)
             {
-                case PlaceAction _:
-                case PlaceLineAction _:
-                case FellAction _:
+                // The camera to where it goes (screen.ts proposalDetail's see: clearing.focusTile, the footprint's middle;
+                // a line's or a felling's first tile).
+                case PlaceAction a:
+                    Go("facilities");
+                    var (w, h) = Footprint(a.Piece, a.Rot);
+                    FocusClearing(clearing?.TileTarget(a.X + (w - 1) / 2f, a.Y + (h - 1) / 2f));
+                    break;
+                case PlaceLineAction a:
+                    Go("facilities");
+                    if (a.Cells.Count > 0) FocusClearing(clearing?.TileTarget(a.Cells[0].X, a.Cells[0].Y));
+                    break;
+                case FellAction a:
+                    Go("facilities");
+                    if (a.Tiles.Count > 0) FocusClearing(clearing?.TileTarget(a.Tiles[0].X, a.Tiles[0].Y));
+                    break;
                 case LevelUpAction _:
                     Go("facilities");
                     break;
@@ -386,24 +440,16 @@ namespace Bastion.UI.Strategy
                     SeePiece(a.Piece);
                     break;
                 case ChooseMissionAction a:
-                    map.Offer = a.Id;
-                    map.Region = c.Offers.FirstOrDefault(o => o.Id == a.Id)?.Region;
-                    Go("geoscape");
+                    FocusOffer(a.Id);
                     break;
                 case CancelMissionAction a:
-                    map.Offer = a.Id;
-                    map.Region = c.Offers.FirstOrDefault(o => o.Id == a.Id)?.Region;
-                    Go("geoscape");
+                    FocusOffer(a.Id);
                     break;
                 case ContactAction a:
-                    map.Offer = null;
-                    map.Region = a.Region;
-                    Go("geoscape");
+                    FocusRegion(a.Region);
                     break;
                 case InvestigateAction a:
-                    map.Offer = null;
-                    map.Region = c.Rumors.FirstOrDefault(r => r.Id == a.Id)?.Region ?? map.Region;
-                    Go("geoscape");
+                    FocusRegion(c.Rumors.FirstOrDefault(r => r.Id == a.Id)?.Region ?? map.Region);
                     break;
                 case RecruitAction _:
                     Go("barracks");
@@ -420,6 +466,30 @@ namespace Bastion.UI.Strategy
             settlement.Piece = piece;
             settlement.Dismantling = false;
             Render();
+            // clearing.focusPiece: the camera to its footprint's middle as well.
+            FocusClearing(Settlement.Instance?.PieceTarget(piece));
+        }
+
+        /// <summary>A piece's tiles across and deep once turned (clearing.ts footprint).</summary>
+        static (int w, int h) Footprint(string piece, int rot)
+        {
+            if (!Bastion.Engine.Base.Pieces.TryGetValue(piece, out var def)) return (1, 1);
+            int across = def.Size.Count > 0 ? def.Size[0] : 1, deep = def.Size.Count > 1 ? def.Size[1] : 1;
+            return rot % 2 != 0 ? (deep, across) : (across, deep);
+        }
+
+        /// <summary>Where «Ver» sends the clearing's camera, while the free look waits for Arte's to reach the tab's shot.</summary>
+        Vector3? clearingFocus;
+
+        /// <summary>
+        /// The clearing's camera to `at` (Arte's TileTarget, PieceTarget), on its spring: at once if the free look has it,
+        /// else as soon as it takes it (ClearingCamera). None, nowhere.
+        /// </summary>
+        void FocusClearing(Vector3? at)
+        {
+            if (at == null) return;
+            if (rig != null && rig.enabled) rig.Focus(at.Value);
+            else clearingFocus = at;
         }
 
         // Soldados.
@@ -730,13 +800,30 @@ namespace Bastion.UI.Strategy
             map.Region = id;
             map.Offer = null;
             Render();
+            // From a row (a Nido's): its sheet's title blinks, as focusRegion; from the marker, the sheet is where one looks.
+            if (!mark) root.Blink("map-detail__title");
         }
 
-        public void OnOffer(string id)
+        public void OnOffer(string id) => FocusOffer(id);
+
+        /// <summary>A mission on the Mapa (screen.ts focusOffer): its sheet, and its row and the sheet's title blinking.</summary>
+        void FocusOffer(string id)
         {
             map.Offer = id;
             map.Region = p.State?.Offers.FirstOrDefault(o => o.Id == id)?.Region ?? map.Region;
-            Render();
+            if (view != "geoscape") Go("geoscape");
+            else Render();
+            root.Blink("map-row--on", "map-detail__title");
+        }
+
+        /// <summary>A zone on the Mapa (screen.ts focusRegion, a «Ver» or a Nido's row): its sheet, its title blinking.</summary>
+        void FocusRegion(string id)
+        {
+            map.Region = id;
+            map.Offer = null;
+            if (view != "geoscape") Go("geoscape");
+            else Render();
+            root.Blink("map-detail__title");
         }
 
         public void OnWait() => Order(new AdvanceCommand { Ready = !p.State.AdvanceReady[p.Slot] });
@@ -900,6 +987,9 @@ namespace Bastion.UI.Strategy
             rig.Bounds = clearing.ClearingBounds;
             rig.TakeOver(clearing.ClearingTarget.y);
             rig.enabled = true;
+            // A «Ver» that came while Arte's camera was on its way: there now.
+            if (clearingFocus is Vector3 focus) rig.Focus(focus);
+            clearingFocus = null;
         }
 
         /// <summary>The names over the clearing: the partner's over their piece in hand, the defenders' over their posts.</summary>
@@ -1017,16 +1107,29 @@ namespace Bastion.UI.Strategy
             if (p.Fresh.See(key)) Render();
         }
 
-        /// <summary>Esc (the base's): the radio first, then the menu's page, the board, the window asked, and the menu.</summary>
+        /// <summary>
+        /// Esc (the base's; screen.ts back): the radio first, then the menu's page, the board, the window asked, the choice
+        /// open on the sheet and Personalizar, what is in hand or picked, and the menu. A notice or an event is answered
+        /// with its own buttons: Esc leaves it be.
+        /// </summary>
         public void Escape()
         {
             if (root.RadioKey("escape") || root.MenuBack()) return;
+            // On the board, a cell held to buy is let go first (hexBoard.ts key), the board after.
+            if (board != null && root.CancelBoardHold()) return;
             if (board != null) OnBoardClose();
             else if (quitting || leaving)
             {
                 quitting = leaving = false;
                 Render();
             }
+            else if (view == "barracks" && root.CloseSoldierChoice()) return;
+            else if (soldiers.Draft != null)
+            {
+                CloseDraft();
+                Render();
+            }
+            else if (root.ModalOpen) return;
             // Construir: the piece in hand first, then the one picked; the siege's defender in hand (screen.ts onKey).
             else if (view == "facilities" && (settlement.InHand != null || settlement.Felling)) OnBuildDrop();
             else if (view == "facilities" && settlement.Piece != null) PickPiece(null);

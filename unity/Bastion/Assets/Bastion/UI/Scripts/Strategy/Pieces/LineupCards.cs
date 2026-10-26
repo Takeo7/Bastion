@@ -73,12 +73,14 @@ namespace Bastion.UI.Strategy
                 if (!string.IsNullOrEmpty(v.Tip)) tips.Attach(card, v.Tip);
                 return card;
             }
-            card.style.borderTopColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
+            // The owner's colour on the top edge, but green when ready and red when fallen (their classes: an inline colour
+            // would hide them).
+            if (!v.Ready && !v.Fallen) card.style.borderTopColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
             card.EnableInClassList("lineup-card--ready", v.Ready);
             card.EnableInClassList("lineup-card--fallen", v.Fallen);
             card.AddToClassList("lineup-card--bust");
             var bust = Ui.El("lineup-card__bust", card);
-            bust.style.borderTopColor = bust.style.borderBottomColor = bust.style.borderLeftColor = bust.style.borderRightColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
+            if (!v.Fallen) bust.style.borderTopColor = bust.style.borderBottomColor = bust.style.borderLeftColor = bust.style.borderRightColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
             var portrait = PortraitOf?.Invoke(v.Id);
             if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
             else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
@@ -91,6 +93,10 @@ namespace Bastion.UI.Strategy
                 card.Add(x);
             }
             Ui.Text(v.Name, "lineup-card__name font-title", card);
+            // strategy.css .lineup-card.ready::after, its stamp, but «A PUNTO» as the player's state says everywhere since Lore's
+            // pass (without gender: «LISTO» spoke of a soldier as a man); mixta-base.css .lineup-card.dead::after, a red «Caído» tag.
+            if (v.Ready) Ui.Text("A PUNTO", "lineup-card__stamp font-title", card);
+            if (v.Fallen) Ui.Text("CAÍDO", "lineup-card__dead font-title", card);
             for (var i = 0; i < v.Lines.Count; i++) Ui.Text(v.Lines[i], i == 0 ? "lineup-card__line lineup-card__line--first" : "lineup-card__line", card);
             foreach (var l in v.Learned)
             {

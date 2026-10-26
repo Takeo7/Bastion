@@ -19,13 +19,17 @@ namespace Bastion.UI.Strategy
         ProposalPlate vote;
         string key;
 
-        public StrategyModal(VisualElement host, IStrategyHandlers handlers, Func<string, Sprite> icon, Action<string> sound)
+        public StrategyModal(VisualElement host, IStrategyHandlers handlers, Func<string, Sprite> icon, Action<string> sound, TooltipLayer tips = null)
         {
             this.host = host;
             this.handlers = handlers;
             this.icon = icon;
             this.sound = sound;
+            this.tips = tips;
         }
+
+        /// <summary>The helps on hover (what a level brought, in full); none, none.</summary>
+        readonly TooltipLayer tips;
 
         public bool Open => host.resolvedStyle.display != DisplayStyle.None && host.childCount > 0;
 
@@ -60,6 +64,7 @@ namespace Bastion.UI.Strategy
                     var words = Ui.El("strat-brought__words", row);
                     Ui.Text(item.Name, "strat-brought__name font-title", words);
                     if (!string.IsNullOrEmpty(item.Brief)) Ui.Text(item.Brief, "strat-brought__brief", words);
+                    if (tips != null && !string.IsNullOrEmpty(item.Tip)) tips.Attach(row, item.Tip);
                 }
             }
             for (var i = 0; i < v.Options.Count; i++)

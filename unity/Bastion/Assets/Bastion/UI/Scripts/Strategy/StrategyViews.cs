@@ -182,5 +182,7 @@ namespace Bastion.UI.Strategy
         public string Icon;
         public string Name;
         public string Brief;
+        /// <summary>On hover, the whole of it (screen.ts broughtList: «name: its line»).</summary>
+        public string Tip;
     }
 }

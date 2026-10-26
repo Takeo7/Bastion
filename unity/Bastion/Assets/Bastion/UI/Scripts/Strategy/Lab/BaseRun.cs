@@ -16,7 +16,7 @@ namespace Bastion.UI.Strategy
     /// offer:&lt;n&gt;, zone:&lt;n&gt;, map:&lt;action&gt;, recruit, launch, wait, squad:&lt;n&gt;:on|off, armory-tab:&lt;tab&gt;,
     /// armory-pick:&lt;id&gt;, armory:&lt;action&gt;[:&lt;arg&gt;], board, unlock:&lt;cell&gt;, vote:yes|no, withdraw, option:&lt;n&gt;,
     /// modal:&lt;n&gt;, continue, customize, custom-choice:&lt;group&gt;:&lt;id&gt;, custom-color:&lt;part&gt;:&lt;#hex&gt;,
-    /// custom:&lt;action&gt;; on the clearing take:&lt;piece&gt;, fell, walk, turn, point:free[:&lt;n&gt;]|tree|post|&lt;x&gt;:&lt;y&gt;|+&lt;dx&gt;:+&lt;dy&gt;
+    /// custom:&lt;action&gt;, choice:&lt;hand|belt|…&gt; (a choice of the sheet opened), esc and b (the keys), menu[:settings] (the base's menu, on a page), see-tile:&lt;x&gt;:&lt;y&gt; and see-piece:&lt;n&gt; (a proposal's «Ver»); on the clearing take:&lt;piece&gt;, fell, walk, turn, point:free[:&lt;n&gt;]|tree|post|&lt;x&gt;:&lt;y&gt;|+&lt;dx&gt;:+&lt;dy&gt;
     /// (the pointer there: free, the nearest tile where the piece in hand fits, or a line of n of it to the east; post,
     /// where the siege's defender in hand can start; tree, the nearest that can be felled; signed,
     /// from where it is), press, release;
@@ -222,6 +222,30 @@ namespace Bastion.UI.Strategy
                 case "modal": control.OnModalButton(N(1)); return false;
                 case "continue": control.OnDebriefContinue(); return false;
                 case "customize": control.OnCustomize(); return false;
+                // The keys, as BaseSession takes them: Esc (BaseController.Escape) and B (into Construir and back).
+                // A proposal's «Ver» without a partner: the clearing's camera to a tile, or to the n-th piece of the base.
+                case "see-tile":
+                    control.SeeTileForTest(N(1), N(2));
+                    return false;
+                case "see-piece":
+                    control.SeePieceForTest(c.Bastion.Pieces.ElementAtOrDefault(N(1))?.Id);
+                    Debug.Log($"[base-run] see-piece: {c.Bastion.Pieces.ElementAtOrDefault(N(1))?.Piece}");
+                    return false;
+                case "choice":
+                    control.OpenChoice(S(1));
+                    Debug.Log($"[base-run] choice:{S(1)} → {control.OpenNow()}");
+                    return false;
+                // The base's menu (BaseController.OnMenu), on a page of it (settings, controls), as its key and an entry.
+                case "menu":
+                    control.OnMenu();
+                    if (!string.IsNullOrEmpty(S(1))) FindFirstObjectByType<StrategyRoot>().MenuPage(S(1));
+                    return false;
+                case "esc":
+                case "b":
+                    if (part[0] == "esc") control.Escape();
+                    else control.ToggleBuild();
+                    Debug.Log($"[base-run] {part[0]} → {control.OpenNow()}");
+                    return false;
                 case "custom-choice": control.OnCustomChoice(S(1), S(2), false); return false;
                 case "custom-color": control.OnCustomColor(S(1), S(2), false); return false;
                 case "custom": control.OnCustomAction(S(1)); return S(1) == "save" || S(1) == "copy";

@@ -226,6 +226,8 @@ namespace Bastion.UI.Strategy
             if (keys.escapeKey.wasPressedThisFrame && !walking) control.Escape();
             else if (keys.enterKey.wasPressedThisFrame) root.RadioKey("enter");
             else if (keys.spaceKey.wasPressedThisFrame) root.RadioKey("space");
+            // B: in and out of Construir (screen.ts onKey), not while a name is typed nor with Ctrl or Cmd.
+            else if (keys.bKey.wasPressedThisFrame && !walking && !root.Typing && !keys.ctrlKey.isPressed && !keys.leftMetaKey.isPressed && !keys.rightMetaKey.isPressed) control.ToggleBuild();
         }
     }
 }

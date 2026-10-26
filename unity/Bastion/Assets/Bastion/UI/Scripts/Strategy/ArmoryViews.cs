@@ -134,6 +134,10 @@ namespace Bastion.UI.Strategy
         /// <summary>«Hueco libre» and «Poner culata (2)»…; empty, no free slot.</summary>
         public string FreeHead;
         public List<ModRowView> Options = new List<ModRowView>();
+        /// <summary>How many places are free: one «Hueco libre» each when there is nothing to put in them (arms.ts weaponCare).</summary>
+        public int FreeSlots;
+        /// <summary>No loose improvement to put in: «No hay mejoras sueltas…»; null, there are.</summary>
+        public string Empty;
     }
 
     [Serializable]
@@ -144,6 +148,8 @@ namespace Bastion.UI.Strategy
         public string Line;
         public string Button;
         public bool Enabled = true;
+        /// <summary>Its key's help: why it is off, or what it does («Vuelve a la Armería, suelta»; the improvement's line).</summary>
+        public string Tip;
     }
 
     [Serializable]
@@ -168,5 +174,7 @@ namespace Bastion.UI.Strategy
         public string Button;
         public string Chip;
         public bool Enabled = true;
+        /// <summary>Why its key is off (modBlocker); null, it isn't.</summary>
+        public string Tip;
     }
 }

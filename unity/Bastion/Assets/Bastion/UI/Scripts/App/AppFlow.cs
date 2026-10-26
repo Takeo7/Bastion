@@ -72,6 +72,8 @@ namespace Bastion.UI.App
             if (!string.IsNullOrEmpty(steps)) _ = TestSteps.Run(steps, null, destroyCancellationToken);
             // The graphics settings kept on this computer, and how the game runs told to the host (Perf).
             GameSettings.Apply();
+            // The base's music from the start (main.ts).
+            Bastion.Client.Audio.UiSounds.Lobby();
             perf = gameObject.AddComponent<Perf>();
             perf.BattleScene = battleScene;
             // BASTION_PERFILAR=<frames>: where the main thread's time goes, in the log (Perfil).
@@ -127,6 +129,8 @@ namespace Bastion.UI.App
             doc.sortingOrder = 100;
             root = doc.rootVisualElement;
             root.pickingMode = PickingMode.Ignore;
+            // A click or a key on any screen (they all share this panel): its sound (ui.ts).
+            Bastion.Client.Audio.UiSounds.Install(root);
             foreach (var sheet in new[] { "Hud/Mixta", "Hud/Cards" })
             {
                 var s = Resources.Load<StyleSheet>(sheet);
@@ -201,12 +205,13 @@ namespace Bastion.UI.App
             GameSettings.InMenu = scene.name != battleScene;
             // Ajustes' «Interfaz» on whatever panel the new scene brought (all share AppFlow's today).
             GameSettings.ApplyInterface();
+            if (scene.name == startScene) Bastion.Client.Audio.UiSounds.Lobby();
             if (scene.name == baseScene)
             {
                 var screens = new GameObject("Base");
                 SceneManager.MoveGameObjectToScene(screens, scene);
                 screens.AddComponent<UIDocument>().panelSettings = PanelOf(GetComponent<UIDocument>());
-                screens.AddComponent<Bastion.UI.Strategy.StrategyRoot>();
+                screens.AddComponent<Bastion.UI.Strategy.StrategyRoot>().Sound += Bastion.Client.Audio.UiSounds.Play;
                 screens.AddComponent<Bastion.UI.Strategy.BaseSession>();
                 return;
             }
@@ -215,6 +220,7 @@ namespace Bastion.UI.App
             SceneManager.MoveGameObjectToScene(hud, scene);
             hud.AddComponent<UIDocument>().panelSettings = PanelOf(GetComponent<UIDocument>());
             var root = hud.AddComponent<HudRoot>();
+            root.Sound += Bastion.Client.Audio.UiSounds.Play;
             hud.AddComponent<Bastion.UI.Combat.CombatSession>().Hud = root;
         }
 

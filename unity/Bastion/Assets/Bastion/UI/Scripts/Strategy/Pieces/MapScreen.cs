@@ -205,10 +205,15 @@ namespace Bastion.UI.Strategy
             parent.Add(row);
         }
 
+        /// <summary>A Nido's row opens its zone; an errand's, the mission of its step (screen.ts focusOffer), if it has one yet.</summary>
         void Row(MapRowView r, string kind, VisualElement parent)
         {
             var id = r.Id;
-            var row = new Button(() => handlers.OnZone(id, false));
+            var row = new Button(() =>
+            {
+                if (kind != "quest") handlers.OnZone(id, false);
+                else if (id != null) handlers.OnOffer(id);
+            });
             Ui.AddClasses(row, "map-row map-row--" + kind);
             row.EnableInClassList("map-row--on", r.Selected);
             var words = Ui.El("map-row__words", row);
@@ -274,6 +279,7 @@ namespace Bastion.UI.Strategy
             {
                 var kicker = Ui.Text(d.Kicker.ToUpperInvariant(), "sheet__kicker font-title", parent);
                 if (!string.IsNullOrEmpty(d.KickerTone)) kicker.AddToClassList("map-kicker--" + d.KickerTone);
+                if (!string.IsNullOrEmpty(d.KickerTip)) tips.Attach(kicker, d.KickerTip);
             }
             Ui.Text(d.Title.ToUpperInvariant(), "armory-detail__name map-detail__title font-title", parent);
             if (!string.IsNullOrEmpty(d.Subtitle)) Ui.Text(d.Subtitle, "sheet__subtitle muted", parent);

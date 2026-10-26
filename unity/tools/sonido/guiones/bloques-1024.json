@@ -1,0 +1,154 @@
+{
+ "rate": 48000,
+ "seconds": 12,
+ "seed": 1,
+ "events": [
+  {
+   "at": 0.0,
+   "do": "music",
+   "id": "m",
+   "file": "vivos/musica.base.wav",
+   "fade": 2.5
+  },
+  {
+   "at": 0.490666667,
+   "do": "play",
+   "id": "a",
+   "file": "sintetizados/shot.rifle.1.0.wav",
+   "bus": "sfx",
+   "gain": 0.9,
+   "rate": 1.02,
+   "pan": -0.5,
+   "reverb": 0.2
+  },
+  {
+   "at": 0.810666667,
+   "do": "play",
+   "id": "b",
+   "file": "sintetizados/explosion.0.wav",
+   "bus": "sfx",
+   "gain": 1,
+   "rate": 0.97,
+   "reverb": 0.6
+  },
+  {
+   "at": 0.810666667,
+   "do": "duck",
+   "depth": 0.45,
+   "hold": 0.5,
+   "release": 1.4
+  },
+  {
+   "at": 1.002666667,
+   "do": "play",
+   "id": "c",
+   "file": "grabados/zombie-growl/fs-204820-1.wav",
+   "bus": "sfx",
+   "gain": 0.7,
+   "rate": 1.01,
+   "pan": 0.6
+  },
+  {
+   "at": 1.493333333,
+   "do": "play",
+   "id": "d",
+   "file": "interfaz/tick_004.wav",
+   "bus": "ui",
+   "gain": 0.32,
+   "rate": 1.05
+  },
+  {
+   "at": 2.005333333,
+   "do": "loop",
+   "id": "s",
+   "file": "sintetizados/siren.police.bucle.wav",
+   "bus": "sfx",
+   "gain": 0.5,
+   "reverb": 0.1
+  },
+  {
+   "at": 3.008,
+   "do": "setLoop",
+   "id": "s",
+   "level": 0.4,
+   "place": 0.7,
+   "muffle": 0.5
+  },
+  {
+   "at": 4.010666667,
+   "do": "holdDuck",
+   "id": "h",
+   "depth": 0.35
+  },
+  {
+   "at": 4.010666667,
+   "do": "morse",
+   "word": "SOS",
+   "level": 0.05,
+   "unit": 0.055
+  },
+  {
+   "at": 5.504,
+   "do": "release",
+   "id": "h"
+  },
+  {
+   "at": 5.994666667,
+   "do": "volumes",
+   "patch": {
+    "music": 0.2,
+    "sfx": 1
+   }
+  },
+  {
+   "at": 6.506666667,
+   "do": "play",
+   "id": "e",
+   "file": "sintetizados/shot.sniper.1.0.wav",
+   "bus": "sfx",
+   "gain": 1,
+   "rate": 1,
+   "pan": 0.3,
+   "delay": 0.1,
+   "reverb": 0.5
+  },
+  {
+   "at": 6.506666667,
+   "do": "play",
+   "id": "f",
+   "file": "sintetizados/explosion.1.wav",
+   "bus": "sfx",
+   "gain": 1.5,
+   "rate": 1,
+   "reverb": 0.4
+  },
+  {
+   "at": 6.698666667,
+   "do": "stop",
+   "id": "e",
+   "fade": 0.05
+  },
+  {
+   "at": 6.997333333,
+   "do": "endLoop",
+   "id": "s",
+   "windDown": 1.5
+  },
+  {
+   "at": 8.0,
+   "do": "fade",
+   "id": "m",
+   "level": 0,
+   "seconds": 2
+  },
+  {
+   "at": 9.002666667,
+   "do": "mute"
+  },
+  {
+   "at": 10.005333333,
+   "do": "mute"
+  }
+ ],
+ "bloque": 1024
+}

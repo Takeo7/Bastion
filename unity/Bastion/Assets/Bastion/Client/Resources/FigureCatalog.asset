@@ -47,6 +47,18 @@ MonoBehaviour:
   - ModernPolice_07
   - ModernPolice_08
   - ModernPolice_09
+  - skZombieCivil1
+  - skZombieCivil2
+  - skZombieCivil3
+  - skZombieCivil4
+  - skZombieCivil5
+  - skZombieCivil6
+  - skZombieCop1
+  - skZombieCop2
+  - skZombieCop3
+  - skZombieCop4
+  - skZombieSurv1
+  - skZombieSurv2
   - Starter_01
   - Starter_02
   - Starter_03
@@ -86,6 +98,18 @@ MonoBehaviour:
   - {fileID: 1991402357687742072, guid: 0f9d94995bbd84a4a86870dd06806e5b, type: 3}
   - {fileID: 3903370426162867808, guid: 2212ea176fa91ca4bac17ad9f1af1ae9, type: 3}
   - {fileID: 4244983925856602126, guid: 9633762e845828c4ba27a48c4fb95c03, type: 3}
+  - {fileID: 4830598159892744512, guid: 9a6bfd860d4404592a013bfb68e30a71, type: 3}
+  - {fileID: 759797312646677608, guid: 04aace6625b5148e29b62b02e5e5b9be, type: 3}
+  - {fileID: 1111835468487792668, guid: 39b431401cdf24af0a366684dd7f431f, type: 3}
+  - {fileID: 9201427009808889497, guid: 68b4f42a41a8c413490ee0592c475efb, type: 3}
+  - {fileID: 3186449188690300904, guid: 1bac7186cae9f49dca62c8245554f818, type: 3}
+  - {fileID: 2333125389950667451, guid: 3bce1d4486e044c69adda4d419a1227f, type: 3}
+  - {fileID: 2737794159573273944, guid: b7bbdbba8987d43709884a11b7d084af, type: 3}
+  - {fileID: 4066088738522538111, guid: 48b2fade934524e49bfb74d49b3a1060, type: 3}
+  - {fileID: 7681002080660577565, guid: 0ab3802d6764245ecaae75c41a5e646c, type: 3}
+  - {fileID: 756400865167456358, guid: c5fa9b28d63f3496496b7172edeccc6e, type: 3}
+  - {fileID: 4549568503672818902, guid: 8e70b8e4cab4243c693158904b7f551f, type: 3}
+  - {fileID: 3609503106352992037, guid: 6217efef12d13429fa01925638df35cc, type: 3}
   - {fileID: 1664552536257148490, guid: fce66a12cf7a45043bbbe1c0087175b5, type: 3}
   - {fileID: 3802377507391346821, guid: 759b8668b55fe0d4686d41389db207d9, type: 3}
   - {fileID: 7808259262855837012, guid: 3a1ae0fe117759d48a13a9df68c7554a, type: 3}
@@ -579,6 +603,16 @@ MonoBehaviour:
   - Character_BusinessWoman
   - SM_Chr_Nun_Female_01
   - SM_Chr_Attachment_Headset_02
+  - SM_Chr_Zombie_Jock_Male_01
+  - SM_Chr_Zombie_Cheerleader_Female_01
+  - SM_Chr_Zombie_Hoodie_Male_01
+  - SM_Chr_Zombie_SchoolGirl_Female_01
+  - SM_Chr_Zombie_RiotCop_Male_01
+  - SM_Chr_Zombie_Military_Male_01
+  - SM_Chr_Zombie_Police_Male_01
+  - SM_Chr_Zombie_Firefighter_Male_01
+  - SM_Chr_ZombieBoss_Wretch_01
+  - SM_Chr_ZombieBoss_Blobber_01
   characters:
   - {fileID: 1975240265096882, guid: 886e38ce682403743b9b058cb21703f2, type: 3}
   - {fileID: 1604611627540692, guid: 0636a8b0926172c499640f89dacb0a94, type: 3}
@@ -588,6 +622,16 @@ MonoBehaviour:
   - {fileID: 1441525330016004, guid: c0f44381dd01e904c87fad2431087f45, type: 3}
   - {fileID: 1082915869594634, guid: 1099c32bb8860d34e9d77177fdc8ddf6, type: 3}
   - {fileID: 1601352576217198, guid: 4668ce04a1b17784a8c1ce39df82a47c, type: 3}
+  - {fileID: 1562126803887444, guid: e05321c6e6ad7b845942de92aafc2395, type: 3}
+  - {fileID: 1343261146546640, guid: 4003093fe4a231c4d9c155a6540ec590, type: 3}
+  - {fileID: 1115666180268534, guid: 15fa57f984877cc4f9acd0e63babc93e, type: 3}
+  - {fileID: 1877525456610922, guid: b7a521fe7dabb734a87b288a49e9b68b, type: 3}
+  - {fileID: 1069217425750644, guid: 83620e573d3f2254199cd946a8601720, type: 3}
+  - {fileID: 1160577204630336, guid: 7c521770c9e780444b9b27cb7183739f, type: 3}
+  - {fileID: 1075024190843592, guid: ea757c1578e17134b85ac65be02c4b19, type: 3}
+  - {fileID: 1616105819863738, guid: 7cb0205c5f7aeba45b91883f9425fcab, type: 3}
+  - {fileID: 1960997148460282, guid: a3029e28af10f4f458f5d25d6118a906, type: 3}
+  - {fileID: 1658146812600542, guid: 574d3bbe7d1c8684f9101c2b823c5770, type: 3}
   settles:
   - 0.12
   - 0.12

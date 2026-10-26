@@ -42,6 +42,9 @@ namespace Bastion.UI.Combat
         public CameraRig Rig;
         public MoveOverlay Overlay;
 
+        /// <summary>The combat's sound (Red's CombatSound, 0.10.1's sfx.ts): the event player calls it as game.ts called sfx.</summary>
+        public readonly Bastion.Client.Audio.CombatSound Sfx = new Bastion.Client.Audio.CombatSound();
+
         /// <summary>The HUD over the map, if any: its views, and a click on it isn't the map's.</summary>
         public HudRoot Hud;
 
@@ -111,10 +114,103 @@ namespace Bastion.UI.Combat
             if (Hud != null) Hud.Toast(text);
         }
 
+        /// <summary>«Ajuste auto» watching this battle's frame rate (App.QualityGuard), from its start.</summary>
+        App.QualityGuard guard;
+        bool qualityNoticed;
+
+        /// <summary>The guard took the level down: said once, quietly (game.ts qualityLowered; the details are in Ajustes).</summary>
+        void QualityLowered()
+        {
+            if (qualityNoticed) return;
+            qualityNoticed = true;
+            Toast("Calidad ajustada para ir más fluido.");
+            Hud?.Log("Calidad ajustada para ir más fluido (Menú → Ajustes).");
+        }
+
         // ------------------------------------------------------- who plays
 
-        /// <summary>The players who count as here: connected (the room's grace for one who dropped is the game's to keep in Players).</summary>
-        List<int> ActiveSlots() => Players.Where(p => p.Connected).Select(p => p.Slot).ToList();
+        /// <summary>When each player who dropped did (unscaled: the enemy turn's speed doesn't shorten it): within the server's grace they still count as here (game.ts droppedAt).</summary>
+        readonly Dictionary<int, float> droppedAt = new Dictionary<int, float>();
+
+        /// <summary>The partner whose soldiers this player commands too, gone past the grace (game.ts commandingFor); null, none.</summary>
+        string commandingFor;
+
+        /// <summary>When the next dropped player's grace runs out (unscaled), to say so then; none waiting, +∞.</summary>
+        float graceEnds = float.PositiveInfinity;
+
+        /// <summary>
+        /// The room's players, as the server says (game.ts setPlayers): one who drops still counts as here for the server's
+        /// grace (Room.ReconnectGraceMs; AwayGraceMs if their game was out of sight); past it this player commands their
+        /// soldiers too, and is told so once (CommandChanged).
+        /// </summary>
+        public void SetPlayers(List<PlayerInfo> players)
+        {
+            var now = Time.unscaledTime;
+            foreach (var p in players)
+            {
+                if (p.Connected) droppedAt.Remove(p.Slot);
+                else if (Players.FirstOrDefault(q => q.Slot == p.Slot)?.Connected == true)
+                {
+                    droppedAt[p.Slot] = now;
+                    graceEnds = Mathf.Min(graceEnds, now + Grace(p) + 0.2f);
+                }
+            }
+            Players = players;
+            if (!CommandChanged()) Refresh();
+        }
+
+        static float Grace(PlayerInfo p) => (p.Away == true ? Bastion.Net.Room.AwayGraceMs : Bastion.Net.Room.ReconnectGraceMs) / 1000f;
+
+        /// <summary>The players who count as here (game.ts activeSlots): connected, or dropped within the server's grace.</summary>
+        List<int> ActiveSlots()
+        {
+            var now = Time.unscaledTime;
+            return Players.Where(p => p.Connected || droppedAt.TryGetValue(p.Slot, out var at) && now - at < Grace(p)).Select(p => p.Slot).ToList();
+        }
+
+        /// <summary>The partner who is gone and has soldiers on the field (game.ts partnerGone): this player commands them too.</summary>
+        PlayerInfo PartnerGone()
+        {
+            if (State == null) return null;
+            var active = ActiveSlots();
+            return Players.FirstOrDefault(p => p.Slot != MySlot && !active.Contains(p.Slot) && State.Units.Any(u => u.Alive && u.Team == Teams.Xcom && u.Owner == p.Slot));
+        }
+
+        /// <summary>
+        /// The partner's soldiers come under this player's orders (the partner is gone) or go back to them (game.ts
+        /// commandChanged): said once, and everything drawn again. Whether it changed.
+        /// </summary>
+        bool CommandChanged()
+        {
+            var gone = PartnerGone()?.Name;
+            if (gone == commandingFor) return false;
+            var before = commandingFor;
+            commandingFor = gone;
+            if (gone != null) Toast($"{gone} no está: mandas también sus soldados.");
+            else if (before != null) Toast($"{before} ha vuelto: cada uno manda en lo suyo.");
+            Refresh();
+            return true;
+        }
+
+        /// <summary>
+        /// For tests (PackSteps «gone»): the dropped players' grace over now. A capture's game time runs far ahead of the
+        /// unscaled one, so it never sees 30 s go by.
+        /// </summary>
+        public void EndGraces()
+        {
+            foreach (var slot in droppedAt.Keys.ToList()) droppedAt[slot] = float.NegativeInfinity;
+            GraceOver();
+        }
+
+        /// <summary>A dropped player's grace ran out: the next one's to wait for, and whether the command changed.</summary>
+        void GraceOver()
+        {
+            var now = Time.unscaledTime;
+            graceEnds = float.PositiveInfinity;
+            foreach (var p in Players)
+                if (!p.Connected && droppedAt.TryGetValue(p.Slot, out var at) && at + Grace(p) + 0.2f > now) graceEnds = Mathf.Min(graceEnds, at + Grace(p) + 0.2f);
+            CommandChanged();
+        }
 
         /// <summary>The partner, when connected: only then is there a command to share.</summary>
         PlayerInfo PartnerHere() => Players.FirstOrDefault(p => p.Slot != MySlot && p.Connected);
@@ -380,7 +476,10 @@ namespace Bastion.UI.Combat
 
         void Update()
         {
+            guard ??= new App.QualityGuard(QualityLowered);
+            guard.Frame();
             if (State == null) return;
+            if (Time.unscaledTime >= graceEnds) GraceOver();
             if (moment != null && Time.time >= momentUntil)
             {
                 moment = null;
@@ -419,18 +518,21 @@ namespace Bastion.UI.Combat
             var shift = Keyboard.current != null && Keyboard.current.shiftKey.isPressed;
             if (!overHud && (Hud == null || !Hud.MenuOpen)) App.GameCursor.Ask(CursorOn(hover, shift));
             if (Hud != null && Hud.MenuOpen) return;
-            // Shift and the click, or the wheel's click, mark the tile for both (playtest 19/10 #14); Shift and the wheel, the floor.
+            // Shift and the click, or the wheel's click, mark the tile for both (playtest 19/10 #14); Shift or Alt and the wheel, the floor.
             if (!overHud && mouse.leftButton.wasPressedThisFrame)
             {
                 if (shift) Ping();
                 else Click(at);
             }
             if (!overHud && mouse.middleButton.wasPressedThisFrame) Ping();
-            var wheel = mouse.scroll.ReadValue().y;
-            if (shift && wheel != 0 && !overHud && Time.unscaledTime - lastFloorWheel > 0.25f)
+            // Shift turns the wheel sideways on a Mac (game.ts: deltaY || deltaX); a trackpad sends a burst of these, one floor a gesture.
+            var scroll = mouse.scroll.ReadValue();
+            var wheel = scroll.y != 0 ? scroll.y : scroll.x;
+            var alt = Keyboard.current != null && Keyboard.current.altKey.isPressed;
+            if ((shift || alt) && wheel != 0 && !overHud)
             {
+                if (Time.unscaledTime - lastFloorWheel > 0.3f) SetLevel(Level + (wheel > 0 ? 1 : -1));
                 lastFloorWheel = Time.unscaledTime;
-                SetLevel(Level + (wheel > 0 ? 1 : -1));
             }
         }
 

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
@@ -16,8 +18,10 @@ namespace Bastion.Client.Net.EditorTools
     /// <summary>
     /// The app, built: the scenes of the build settings, into Builds/&lt;system&gt;/ (or -salida &lt;path&gt;). In batchmode:
     /// unity/tools/unity.sh -executeMethod Bastion.Client.Net.EditorTools.AppBuild.Mac (or .Windows, .Linux). Two copies play
-    /// together on one computer if each has its own BASTION_DATOS (NetLink). Its data packed with LZ4HC: the Synty atlases
-    /// are mostly flat colour and the meshes repeat, 842 MB of app came to some 290 (26/10); -sinComprimir leaves it unpacked.
+    /// together on one computer if each has its own BASTION_DATOS (NetLink). Its data unpacked unless -comprimir (LZ4HC):
+    /// the Synty atlases are mostly flat colour and the meshes repeat, so the Mac's 844 MB come to 306, but each build takes
+    /// some 95 s more and each load some tenths of a second (26/10, docs/UNITY.md); the releases decide. The sound must be
+    /// there as unity/tools/sonido.sh generated it (Sound); -sinSonido builds without checking.
     /// </summary>
     public static class AppBuild
     {
@@ -126,7 +130,14 @@ pause
                 if (Application.isBatchMode) EditorApplication.Exit(1);
                 return null;
             }
-            var packed = !args.Contains("-sinComprimir");
+            if (args.Contains("-sinSonido")) Debug.Log($"[red] app ({target}): -sinSonido, sin comprobar el sonido");
+            else if (Sound() is string missing)
+            {
+                Debug.LogError($"[red] app ({target}): no se compila, {missing}. unity/tools/sonido.sh lo genera (docs/UNITY-SONIDO.md); -sinSonido compila sin comprobarlo.");
+                if (Application.isBatchMode) EditorApplication.Exit(1);
+                return null;
+            }
+            var packed = args.Contains("-comprimir");
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = output, target = target, options = packed ? BuildOptions.CompressWithLz4HC : BuildOptions.None });
             var summary = report.summary;
             // Left on another platform, everyone's next run would import the assets again for it (and capture on it).
@@ -134,6 +145,30 @@ pause
             Debug.Log($"[red] app ({target}): {summary.result} en {summary.totalTime.TotalSeconds:F0} s · {summary.totalSize / (1024 * 1024)} MB{(packed ? " (LZ4HC)" : " sin comprimir")} · {summary.totalErrors} errores · {string.Join(", ", scenes)} → {output}");
             if (summary.result == BuildResult.Succeeded) return output;
             if (Application.isBatchMode) EditorApplication.Exit(1);
+            return null;
+        }
+
+        /// <summary>Where unity/tools/sonido.sh leaves the sound, with its manifiesto.json.</summary>
+        private const string SoundFolder = "Assets/Bastion/Client/Audio/Resources/Generado";
+
+        /// <summary>
+        /// What is wrong with the sound, or null: every file of Generado/manifiesto.json there with the hash it was written
+        /// with (docs/UNITY-SONIDO.md §3). Without it the app would play silent, or a sound out of step with its manifest.
+        /// </summary>
+        private static string? Sound()
+        {
+            var manifest = Path.Combine(SoundFolder, "manifiesto.json");
+            if (!File.Exists(manifest)) return $"no hay sonido ({manifest})";
+            if (!(JObject.Parse(File.ReadAllText(manifest))["archivos"] is JObject files) || files.Count == 0) return $"{manifest} no dice qué archivos lleva";
+            using var sha = SHA256.Create();
+            foreach (var p in files)
+            {
+                var path = Path.Combine(SoundFolder, p.Key);
+                if (!File.Exists(path)) return $"falta {path}";
+                var hash = string.Concat(sha.ComputeHash(File.ReadAllBytes(path)).Select((b) => b.ToString("x2")));
+                if (hash != (string?)p.Value?["sha256"]) return $"{path} no es el que se generó (su hash no es el del manifiesto)";
+            }
+            Debug.Log($"[red] sonido: {files.Count} archivos, como se generaron");
             return null;
         }
 

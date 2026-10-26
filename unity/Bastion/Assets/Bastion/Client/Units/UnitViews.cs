@@ -100,6 +100,12 @@ namespace Bastion.Client.Units
             public FigureAnimator anim;
             public Animator animator;
             public string build = "masc";
+            /// <summary>Its figure's size over the figures' (CharacterScale): the special dead's own (UnitViews.Dead).</summary>
+            public float size = 1;
+            /// <summary>How far into the Chillón's scream it is (0 none, 1 thrown back: UnitViews.Dead.Scream).</summary>
+            public float scream;
+            /// <summary>The last blow at it (UnitViews.Blows): what its hit and its death go by.</summary>
+            public Blow blow;
             public bool deadKind;
             public string seed;
             /// <summary>The weapon in its hands (UnitViews.Arms: a gun, the pistol, a blade), its muzzle in its frame, how it is held at rest.</summary>
@@ -184,7 +190,9 @@ namespace Bastion.Client.Units
                 v.anim?.Step(dt);
                 if (v.aim > 0 && v.inHand == Held.Rifle) Straighten(v, AimStraighten * v.aim);
                 HoldNow(v);
+                if (v.deadKind) DeadPose(v);
             }
+            StepFlashes(dt);
         }
 
         /// <summary>
@@ -279,7 +287,7 @@ namespace Bastion.Client.Units
                 model.transform.SetParent(root, false);
                 model.transform.localPosition = Vector3.zero;
                 model.transform.localRotation = Quaternion.identity;
-                model.transform.localScale = Vector3.one * Figures.CharacterScale;
+                model.transform.localScale = Vector3.one * Figures.CharacterScale * view.size;
                 view.body = model.transform;
                 view.animator = model.GetComponentInChildren<Animator>();
                 var catalog = FigureCatalog.Load();
@@ -339,9 +347,10 @@ namespace Bastion.Client.Units
         /// <summary>The Sidekick presets each kind of the enemy is drawn as (syntyManifest.ts UNIT_BODIES, of what Unity has so far).</summary>
         static readonly Dictionary<string, (string preset, bool female)[]> Bodies = new Dictionary<string, (string, bool)[]>
         {
-            // The dead: Sidekick's five. 0.10.1's living made dead (civilians, police, survivors) and the City Zombies and
-            // Boss Zombies figures (the runners, the armoured, the screamer, the bloated one) come next.
-            ["dead"] = new[] { ("ApocalypseZombie_01", true), ("ApocalypseZombie_02", false), ("ApocalypseZombie_03", false), ("ApocalypseZombie_04", false), ("ApocalypseZombie_05", false) },
+            // The dead: Sidekick's five, then the living made dead (UndeadFigure: civilians, police, survivors; syntyManifest.ts
+            // UNIT_BODIES zombie, 17 in all, picked among as one). The special ones are City Zombies' and Boss Zombies' (DeadBodies).
+            ["dead"] = new[] { ("ApocalypseZombie_01", true), ("ApocalypseZombie_02", false), ("ApocalypseZombie_03", false), ("ApocalypseZombie_04", false), ("ApocalypseZombie_05", false) }
+                .Concat(UndeadFigure.Bodies.Select(b => (b.id, b.female))).ToArray(),
             ["trooper"] = new[] { ("ApocalypseOutlaw_03", false), ("ApocalypseOutlaw_05", false) },
             ["officer"] = new[] { ("ApocalypseOutlaw_02", false) },
             ["lancer"] = new[] { ("ApocalypseOutlaw_01", false), ("ApocalypseOutlaw_04", true) },
@@ -353,13 +362,17 @@ namespace Bastion.Client.Units
             var catalog = FigureCatalog.Load();
             // An objective (the relay: its siren car) is no body: a stand-in until it is drawn as its own.
             if (catalog == null || u.Objective) return null;
+            // The special dead: City Zombies' and Boss Zombies' (UnitViews.Dead); Sidekick's dead if their prefab is missing.
+            if (DeadFigureOf(u, view, catalog) is GameObject special) return special;
             string kind = view.deadKind ? "dead" : u.Template;
             if (Bodies.TryGetValue(kind, out var bodies))
             {
                 var (preset, female) = bodies[PickIndex(bodies.Length, view.seed)];
-                var prefab = catalog.Preset(preset);
-                if (prefab == null) return null;
                 view.build = female ? "femn" : "masc";
+                var prefab = catalog.Preset(preset);
+                // (One of the living made dead not baked into the catalog: put together now.)
+                if (prefab == null && UndeadFigure.Bodies.Any(b => b.id == preset)) return UndeadFigure.Make(preset, preset);
+                if (prefab == null) return null;
                 var figure = Instantiate(prefab);
                 figure.name = preset;
                 SoldierFigure.OwnColours(figure);
@@ -578,9 +591,6 @@ namespace Bastion.Client.Units
             if (at is Vector3 p) Face(id, p);
         }
 
-        /// <summary>The bodies a blast at `at` throws about.</summary>
-        public void BlastAt(Vector3 at) { }
-
         // ------------------------------------------------------------ to wait for
 
         /// <summary>The seconds each step of `id`'s walk along `path` from `from` takes (for walks played together).</summary>
@@ -609,13 +619,25 @@ namespace Bastion.Client.Units
         /// on without waiting (taken, not yet drawn as a swerve).
         /// </summary>
         public Awaitable MoveAlong(string id, IReadOnlyList<Pos> path, int ap = 1, float pace = 1, CancellationToken ct = default) =>
-            Walk(id, path, ap, pace, null, null, ct);
+            Walk(id, path, ap, pace, null, null, null, ct);
 
         /// <summary>The same with UI's walk plan: `waits` before each step, `passes` the steps it may pass another on.</summary>
         public Awaitable MoveAlong(string id, IReadOnlyList<Pos> path, int ap, float pace, IReadOnlyList<float> waits, IReadOnlyList<bool> passes = null,
-            CancellationToken ct = default) => Walk(id, path, ap, pace, waits, passes, ct);
+            CancellationToken ct = default) => Walk(id, path, ap, pace, waits, passes, null, ct);
 
-        async Awaitable Walk(string id, IReadOnlyList<Pos> path, int ap, float pace, IReadOnlyList<float> waits, IReadOnlyList<bool> passes, CancellationToken ct)
+        /// <summary>
+        /// The same, `onStep` told of each tile it gets to as it gets there, where it stands in the world (unitViews.ts
+        /// moveAlong's onStep: the footsteps' sound, docs/UNITY-SONIDO.md §9).
+        /// </summary>
+        public Awaitable MoveAlong(string id, IReadOnlyList<Pos> path, int ap, float pace, Action<Vector3> onStep, CancellationToken ct = default) =>
+            Walk(id, path, ap, pace, null, null, onStep, ct);
+
+        /// <summary>The same with UI's walk plan and `onStep`.</summary>
+        public Awaitable MoveAlong(string id, IReadOnlyList<Pos> path, int ap, float pace, IReadOnlyList<float> waits, IReadOnlyList<bool> passes, Action<Vector3> onStep,
+            CancellationToken ct = default) => Walk(id, path, ap, pace, waits, passes, onStep, ct);
+
+        async Awaitable Walk(string id, IReadOnlyList<Pos> path, int ap, float pace, IReadOnlyList<float> waits, IReadOnlyList<bool> passes, Action<Vector3> onStep,
+            CancellationToken ct)
         {
             if (!views.TryGetValue(id, out var v) || path.Count == 0 || state == null) return;
             // One eating gets up first (unitViews.ts moveAlong: unfeed).
@@ -663,6 +685,7 @@ namespace Bastion.Client.Units
                         v.place = path[spans[i].step];
                         from = to;
                         v.root.position = to;
+                        onStep?.Invoke(to);
                     }
                     if (++i < spans.Count) Begin(i);
                 }
@@ -678,6 +701,8 @@ namespace Bastion.Client.Units
         public async Awaitable<int> RaiseWeapon(string id, Vector3 at, bool sidearm = false, CancellationToken ct = default)
         {
             Face(id, at);
+            // Whoever stands where it aims takes the blow from here (unitViews.ts raiseWeapon: struck).
+            if (views.TryGetValue(id, out var shooter)) Struck(at, shooter.root.position, false);
             if (views.TryGetValue(id, out var v) && v.weapon != null)
             {
                 if (sidearm) Draw(v, SidearmCarry);
@@ -723,6 +748,8 @@ namespace Bastion.Client.Units
         public async Awaitable Lunge(string id, string target, bool eats = false, Action onHit = null, CancellationToken ct = default)
         {
             if (views.TryGetValue(target, out var t)) Face(id, t.root.position);
+            // A blow at arm's length, from where it lunges from (unitViews.ts lunge: struck).
+            if (t != null && views.TryGetValue(id, out var striker)) StruckBy(t, striker.root.position, true);
             // The dead lunge as Mixamo's zombie headbutts, over their upper body (its blow lands 0.45 s in); one that kills
             // and eats takes the body by the neck and bites (FEED_CLIPS bite), and holds on to it for Feed.
             if (eats && views.TryGetValue(id, out var e) && e.deadKind && e.anim != null && Anims.Feed("bite") is var (biteId, biteFrom, biteTo)
@@ -759,11 +786,12 @@ namespace Bastion.Client.Units
         public async Awaitable HitReact(string id, float strength, CancellationToken ct = default)
         {
             if (!views.TryGetValue(id, out var v)) return;
+            FlashHit(v);
             if (v.anim != null)
             {
-                // A critical staggers (Sword Combat's hard ones); a graze or a hit, one of Bow Combat's by the body.
-                var hits = Anims.Hits(v.build).Where(h => h.hard == strength >= 1.5f).ToList();
-                var hit = hits.Count > 0 ? FigureCatalog.Load()?.Clip(hits[PickIndex(hits.Count, v.seed + "|hit" + (++hitCount))].id) : null;
+                // The hit that goes with its last blow (UnitViews.Blows HitFor): from its way, a critical hard or to the head.
+                var chosen = HitFor(v, strength);
+                var hit = chosen != null ? FigureCatalog.Load()?.Clip(chosen.id) : null;
                 if (hit != null)
                 {
                     float length = v.anim.PlayUpper(hit, 0.08f, strength < 1 ? 1.3f : 1);
@@ -780,21 +808,24 @@ namespace Bastion.Client.Units
             v.body.localRotation = Quaternion.identity;
         }
 
-        int hitCount;
 
         public async Awaitable Die(string id, CancellationToken ct = default)
         {
             if (!views.TryGetValue(id, out var v)) return;
+            FlashDeath(v);
             if (v.anim != null)
             {
                 v.dead = true;
-                var death = DeathOf(v, false);
+                // The death that goes with its last blow (UnitViews.Blows: away from it, room for the body).
+                var chosen = DeathFor(v, out bool cramped);
+                var death = chosen != null ? FigureCatalog.Load()?.Clip(chosen.id) : null;
                 if (death != null)
                 {
                     // syntyAnims.ts DEATH_BLEND; seen whole, until it lies still (settleOf).
                     float length = v.anim.PlayWhole(death, 0.2f, true);
-                    float settle = FigureCatalog.Load()?.Settle(DeathIdOf(v, false)) ?? length;
-                    await Awaitable.WaitForSecondsAsync(Mathf.Min(length, settle), ct);
+                    float settle = Mathf.Min(length, FigureCatalog.Load()?.Settle(chosen.id) ?? length);
+                    if (cramped) await Tuck(v, chosen, settle, ct);
+                    else await Awaitable.WaitForSecondsAsync(settle, ct);
                 }
                 return;
             }
@@ -968,8 +999,6 @@ namespace Bastion.Client.Units
             if (views.TryGetValue(corpse, out var c)) c.root.gameObject.SetActive(false);
             await Awaitable.WaitForSecondsAsync(1f, ct);
         }
-
-        public async Awaitable Scream(string id, CancellationToken ct = default) => await Awaitable.WaitForSecondsAsync(0.9f, ct);
 
         public async Awaitable Alert(string id, CancellationToken ct = default) => await Awaitable.WaitForSecondsAsync(0.4f, ct);
 

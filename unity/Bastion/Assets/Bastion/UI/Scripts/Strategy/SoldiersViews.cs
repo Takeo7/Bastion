@@ -20,6 +20,8 @@ namespace Bastion.UI.Strategy
         public SoldierSheetView Sheet;
         /// <summary>Personalizar open: in place of the sheet.</summary>
         public CustomizerView Customizer;
+        /// <summary>Nobody can go out (Campaign.MustWait): «ESPERAR A QUE SE CUREN» under the clearing, and its line; null, they can.</summary>
+        public WaitDayView MustWait;
     }
 
     /// <summary>A soldier's tile: the bust, the best line's hexagon and the name, the rank's chevrons, ▲ for a talent to choose.</summary>
@@ -44,6 +46,8 @@ namespace Bastion.UI.Strategy
         public string TagTip;
         public bool Dead;
         public bool Selected;
+        /// <summary>On hover, the whole name with the nickname (screen.ts: displayName).</summary>
+        public string FullName;
     }
 
     [Serializable]
@@ -123,6 +127,8 @@ namespace Bastion.UI.Strategy
         public string Why;
         /// <summary>The main one's help on hover.</summary>
         public string Tip;
+        /// <summary>The main one waits for this player's yes (the partner's treatment: strategy.css .x-btn.waiting): it pulses.</summary>
+        public bool Pulse;
     }
 
     /// <summary>
@@ -144,6 +150,8 @@ namespace Bastion.UI.Strategy
         public List<string> Tags = new List<string>();
         public bool Editable;
         public List<PickOptionView> Options = new List<PickOptionView>();
+        /// <summary>Under the options when there is nothing else to pick (wpick-empty: «No hay armas en la Armería.»); null, none.</summary>
+        public string Empty;
     }
 
     [Serializable]
@@ -152,6 +160,14 @@ namespace Bastion.UI.Strategy
         public string Id;
         public string Name;
         public string Note;
+        /// <summary>A weapon's picture before its name (weaponIcon); null, none.</summary>
+        public string Icon;
+        /// <summary>A firearm's wear and improvements by its name (weaponMarks: «Gastada», «+2»).</summary>
+        public List<ChipView> Tags = new List<ChipView>();
+        /// <summary>Against what it carries now (weaponDiff): better in green, worse in red, «Igual».</summary>
+        public List<ChipView> Diff = new List<ChipView>();
+        /// <summary>On hover: why a partner's is off.</summary>
+        public string Tip;
         public bool Enabled = true;
         public bool Current;
     }
@@ -233,6 +249,8 @@ namespace Bastion.UI.Strategy
         public int CopyCount;
         /// <summary>It can be pressed: a name, other soldiers of one's own, and the clothes taking colours.</summary>
         public bool CanCopy = true;
+        /// <summary>«Copiar a todos»'s help: what it does, or how to turn the colours on.</summary>
+        public string CopyTip;
     }
 
     [System.Serializable]
@@ -250,6 +268,8 @@ namespace Bastion.UI.Strategy
         public string Id;
         public string Label;
         public bool On;
+        /// <summary>Its help («Una al azar, y no cambia.»); null, none.</summary>
+        public string Tip;
     }
 
     /// <summary>A part's colour row: its swatch, its name, a note («como la armadura»), the palette, «Otro color».</summary>
@@ -262,6 +282,10 @@ namespace Bastion.UI.Strategy
         public string Note;
         /// <summary>«↺ como la armadura»: back to following; null, none.</summary>
         public string Reset;
+        /// <summary>Its help («Que vuelva a ir como la armadura»).</summary>
+        public string ResetTip;
+        /// <summary>A locked row's help (the mark: why it is always the player's); null, none.</summary>
+        public string Tip;
         public string Color;
         public System.Collections.Generic.List<string> Swatches = new System.Collections.Generic.List<string>();
         /// <summary>Nothing to paint (the head without a helmet) or always the player's (the mark).</summary>

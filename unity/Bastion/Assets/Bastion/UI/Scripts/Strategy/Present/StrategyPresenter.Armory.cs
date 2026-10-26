@@ -319,12 +319,20 @@ namespace Bastion.UI.Strategy
             var loose = Content.WeaponMods.Keys.Where(m => c.WeaponMods != null && c.WeaponMods.TryGetValue(m, out var n) && n > 0 && !mounted.Contains(m)).ToList();
             v.Mods = new ModsView { Head = $"Mejoras · {mounted.Count}/{Content.ModSlots}" };
             foreach (var m in mounted)
-                v.Mods.Mounted.Add(new ModRowView { Id = m, Name = Content.WeaponMods[m].Name, Line = Content.WeaponMods[m].Line, Button = "Quitar", Enabled = Campaign.ModBlocker(c, Slot, w.Id, m, false, Connected) == null });
+            {
+                var off = Campaign.ModBlocker(c, Slot, w.Id, m, false, Connected);
+                v.Mods.Mounted.Add(new ModRowView { Id = m, Name = Content.WeaponMods[m].Name, Line = Content.WeaponMods[m].Line, Button = "Quitar", Enabled = off == null, Tip = off ?? "Vuelve a la Armería, suelta" });
+            }
             if (mounted.Count < Content.ModSlots)
             {
                 v.Mods.FreeHead = "Hueco libre";
+                v.Mods.FreeSlots = Content.ModSlots - mounted.Count;
                 foreach (var m in loose)
-                    v.Mods.Options.Add(new ModRowView { Id = m, Button = $"Poner {Content.WeaponMods[m].Name.ToLowerInvariant()} ({c.WeaponMods[m]})", Enabled = Campaign.ModBlocker(c, Slot, w.Id, m, true, Connected) == null });
+                {
+                    var off = Campaign.ModBlocker(c, Slot, w.Id, m, true, Connected);
+                    v.Mods.Options.Add(new ModRowView { Id = m, Button = $"Poner {Content.WeaponMods[m].Name.ToLowerInvariant()} ({c.WeaponMods[m]})", Enabled = off == null, Tip = off ?? Content.WeaponMods[m].Line });
+                }
+                if (loose.Count == 0) v.Mods.Empty = "No hay mejoras sueltas: salen en cajas y habitaciones, o del Taller.";
             }
         }
 
@@ -342,7 +350,7 @@ namespace Bastion.UI.Strategy
                 v.Soldiers.Add(new CarrierView
                 {
                     Id = w.Id, Name = Content.FoundWeapons[w.Kind].Name, Note = $"· {(holder != null ? Appearances.DisplayName(holder.Name, holder.Nickname) : "en la Armería")}",
-                    Button = "Ponérsela", Enabled = Campaign.ModBlocker(c, Slot, w.Id, mod, true, Connected) == null,
+                    Button = "Ponérsela", Enabled = Campaign.ModBlocker(c, Slot, w.Id, mod, true, Connected) == null, Tip = Campaign.ModBlocker(c, Slot, w.Id, mod, true, Connected),
                 });
             }
             return v;

@@ -269,8 +269,11 @@
     letter-spacing: 1px;
 }
 
+/* The figures, then the state at the right (strategy.css .x-statline: wrap, .x-state margin-left auto); a long state
+   («Heridas · 2 misiones», Lore 26/10) goes under them, at the right, rather than against the last figure. */
 .sheet__stats {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     margin-top: 6px;
     padding: 3px 10px;
@@ -278,6 +281,7 @@
 
 .sheet__stat {
     flex-direction: row;
+    flex-shrink: 0;
     align-items: center;
     margin-right: 12px;
 }
@@ -294,6 +298,7 @@
 
 .sheet__health {
     flex-grow: 1;
+    flex-shrink: 0;
     -unity-text-align: middle-right;
     font-size: 17px;
     color: var(--t-muted);
@@ -452,6 +457,36 @@
 .pick__option-note {
     font-size: 11px;
     color: var(--t-muted);
+}
+
+/* arms.ts weaponPick: the picture, the name and its marks on a line; the note under it; the diff under that. */
+.pick__option {
+    flex-direction: column;
+}
+
+.pick__option-top {
+    flex-direction: row;
+    align-items: center;
+}
+
+.pick__option-icon {
+    width: 34px;
+    height: 16px;
+    margin-right: 6px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.pick__option-diff {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 1px;
+}
+
+/* Nothing in the Armería for that place (wpick-empty). */
+.pick__empty {
+    padding: 4px 8px 6px;
+    font-size: 12px;
+    white-space: normal;
 }
 
 .sheet__armor {

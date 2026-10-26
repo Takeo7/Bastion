@@ -91,6 +91,7 @@ namespace Bastion.UI.Hud
         void Page(string page)
         {
             layer.Clear();
+            notes.Clear();
             var card = Ui.El("panel game-menu__card", layer);
             // mixta.css .game-menu-card: a big plate in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
             PlateFrame.Dress(card);
@@ -100,7 +101,11 @@ namespace Bastion.UI.Hud
                 Ui.Text(HudText.Menu.Title, "game-menu__title font-title", card);
                 Entry(card, HudText.Menu.Continue, Close);
                 Entry(card, HudText.Menu.Settings, () => Page("settings"));
-                if (view.Leave) Entry(card, HudText.Menu.Leave, () => Choose(Leave));
+                if (view.Leave)
+                {
+                    var leave = Entry(card, HudText.Menu.Leave, () => Choose(Leave));
+                    if (!string.IsNullOrEmpty(view.LeaveTip)) tips?.Attach(leave, view.LeaveTip);
+                }
                 if (view.Abandon)
                 {
                     var waiting = !string.IsNullOrEmpty(view.AbandonWaiting);
@@ -113,6 +118,7 @@ namespace Bastion.UI.Hud
             else if (page == "settings")
             {
                 Ui.Text(HudText.Menu.Settings.ToUpperInvariant(), "game-menu__title font-title", card);
+                if (!string.IsNullOrEmpty(view.SettingsNote)) Ui.Text(view.SettingsNote, "game-menu__note", card);
                 // Two columns (Lore, 26/10: one ran up over the turn strip): the sound's rows, then the rest; one without sound.
                 var rows = Scroll(card, "settings");
                 var sound = view.Settings.Where(s => s.Sound).ToList();
@@ -189,13 +195,29 @@ namespace Bastion.UI.Hud
             Chose?.Invoke(what);
         }
 
-        /// <summary>A row: its name over its choices (the one on marked here, at once) or over its slider and value.</summary>
+        /// <summary>The notes under the rows of the page open, and the rows whose change takes each away (SettingView.NoteGoesWith).</summary>
+        readonly List<(VisualElement note, List<string> ids)> notes = new List<(VisualElement, List<string>)>();
+
+        /// <summary>A row changed: the notes it makes stale go (Ajuste auto's, as it gives back or the level is chosen), and it is said.</summary>
+        void Change(string id, float value)
+        {
+            notes.RemoveAll(n =>
+            {
+                if (n.ids == null || !n.ids.Contains(id)) return false;
+                n.note.RemoveFromHierarchy();
+                return true;
+            });
+            Changed?.Invoke(id, value);
+        }
+
+        /// <summary>A row: its name over its choices (the one on marked here, at once) or over its slider and value; its note under them.</summary>
         void Setting(VisualElement rows, SettingView s)
         {
             var row = Ui.El("setting", rows);
             Ui.Text(s.Label.ToUpperInvariant(), "setting__name", row);
             tips?.Attach(row, s.About);
             var choices = Ui.El("setting__choices", row);
+            if (!string.IsNullOrEmpty(s.Note)) notes.Add((Ui.Text(s.Note, "setting__note", row), s.NoteGoesWith));
             if (s.Slider)
             {
                 // A volume's has no words at its ends (settingsPanel.ts volumeRow): only its share beside it.
@@ -211,7 +233,7 @@ namespace Bastion.UI.Hud
                     var k = s.Step > 0 ? Mathf.Round(e.newValue / s.Step) * s.Step : e.newValue;
                     value.text = Shown(k);
                     s.Value = k;
-                    Changed?.Invoke(s.Id, k);
+                    Change(s.Id, k);
                 });
                 return;
             }
@@ -227,10 +249,11 @@ namespace Bastion.UI.Hud
                     if (s.On == n) return;
                     s.On = n;
                     for (var j = 0; j < buttons.Count; j++) buttons[j].EnableInClassList("setting__choice--on", j == n);
-                    Changed?.Invoke(s.Id, n);
+                    Change(s.Id, n);
                 };
                 buttons.Add(b);
                 choices.Add(b);
+                if (s.ChoiceTips != null && i < s.ChoiceTips.Count) tips?.Attach(b, s.ChoiceTips[i]);
             }
         }
 

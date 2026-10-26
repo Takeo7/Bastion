@@ -36,6 +36,7 @@ namespace Bastion.UI.Strategy
             var body = Ui.El("board-modal__body", panel);
             var area = Ui.El("board-modal__board well", body);
             board = new SkillBoard(sound);
+            this.sound = sound;
             area.Add(board);
             card = Ui.El("board-modal__card well", body);
             var foot = Ui.El("board-modal__foot", panel);
@@ -56,14 +57,21 @@ namespace Bastion.UI.Strategy
             if (last != null) Set(last);
         }
 
+        /// <summary>Esc while a cell is held: only the purchase let go (SkillBoard.CancelHold); whether there was one.</summary>
+        public bool CancelHold() => board.CancelHold();
+
+        readonly Action<string> sound;
+
         public void Set(SkillBoardView v)
         {
             var k = Ui.Key(v) + "|" + StrategyRoot.PictureStamp;
             if (k == key) return;
             key = k;
+            var opening = last == null && v != null;
             last = v;
             Ui.Show(host, v != null);
             if (v == null) return;
+            if (opening) sound?.Invoke("paper");
             head.Clear();
             Ui.Text(v.Kicker.ToUpperInvariant(), "board-modal__kicker font-title", head);
             var row = Ui.El("board-modal__row", head);

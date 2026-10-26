@@ -256,12 +256,49 @@
     border-radius: 2px;
 }
 
+/* mixta-base.css .lineup-card.ready: the top edge green (and a glow, which USS hasn't). */
 .lineup-card--ready {
     border-top-color: #8fd05a;
 }
 
+/* strategy.css .lineup-card.ready::after: a stamp at the corner, turned, on its paper (mixta left it so); «A PUNTO». */
+.lineup-card__stamp {
+    position: absolute;
+    top: -14px;
+    right: -8px;
+    padding: 0 4px;
+    border-width: 2px;
+    border-color: #2f6b2f;
+    background-color: #fbf7ea;
+    color: #2f6b2f;
+    font-size: 11px;
+    letter-spacing: 1.1px;
+    rotate: 12deg;
+}
+
+/* mixta-base.css .lineup-card.dead: darkened red, the top edge red, the bust greyed and ringed red. */
 .lineup-card--fallen {
     background-color: rgba(70, 20, 18, 0.94);
+    border-top-color: var(--t-danger);
+}
+
+.lineup-card--fallen .lineup-card__bust {
+    -unity-background-image-tint-color: rgb(110, 110, 110);
+    border-color: var(--t-danger);
+}
+
+/* Its tag (.dead::after): white on red, over the bust's top edge, in the middle. */
+.lineup-card__dead {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    translate: -50% -50%;
+    padding: 1px 8px;
+    border-radius: 2px;
+    background-color: var(--t-danger);
+    color: #ffffff;
+    font-size: 12px;
+    letter-spacing: 1.9px;
 }
 
 /* mixta-base.css .lineup-card.empty: dark glass over the clearing (snow shows through it grey), a faint edge. */

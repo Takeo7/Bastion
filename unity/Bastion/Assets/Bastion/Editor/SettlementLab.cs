@@ -601,6 +601,28 @@ namespace Bastion.EditorTools
                 Debug.Log(System.FormattableString.Invariant($"[settlement] the row again, mirrored the other way: {second:0.0} ms; and back: {again.Elapsed.TotalMilliseconds:0.0} ms"));
             }
             settlement.ScreenSize = size;
+            // BASTION_CADERA=1: how its arms stand (the upper arm from hanging, the hand out from the hips and ahead of them, in
+            // shoulder widths), as 0.10.1's was measured (scratchpad pist/start-cadera.js).
+            if (Environment.GetEnvironmentVariable("BASTION_CADERA") == "1")
+                foreach (var a in UnityEngine.Object.FindObjectsByType<Animator>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(x => x.isHuman && x.GetBoneTransform(HumanBodyBones.Hips) != null))
+                {
+                    Vector3 P(HumanBodyBones b) => a.GetBoneTransform(b).position;
+                    var across = P(HumanBodyBones.LeftUpperArm) - P(HumanBodyBones.RightUpperArm);
+                    across.y = 0;
+                    float width = across.magnitude;
+                    across.Normalize();
+                    var ahead = a.transform.forward;
+                    ahead.y = 0;
+                    ahead.Normalize();
+                    string Arm(string side, HumanBodyBones s, HumanBodyBones e, HumanBodyBones h, float sign)
+                    {
+                        var up = (P(e) - P(s)).normalized;
+                        float open = Mathf.Acos(Mathf.Clamp(-up.y, -1, 1)) * Mathf.Rad2Deg;
+                        var rel = P(h) - P(HumanBodyBones.Hips);
+                        return System.FormattableString.Invariant($"{side}: upper arm {open:0.0}° from hanging, hand {Vector3.Dot(rel, across) * sign / width:0.00} out and {Vector3.Dot(rel, ahead) / width:0.00} ahead of the hips");
+                    }
+                    Debug.Log($"[hip] {a.name}: {Arm("L", HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, 1)}; {Arm("R", HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, -1)}");
+                }
             camera.aspect = size.x / size.y;
             settlement.SetInsets(panels);
             clock.Restart();

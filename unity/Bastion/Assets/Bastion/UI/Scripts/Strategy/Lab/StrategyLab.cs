@@ -15,7 +15,7 @@ namespace Bastion.UI.Strategy
     /// mapa-zona, asentamiento, asentamiento-mano, asentamiento-talar, asentamiento-bastion, asentamiento-barracon,
     /// asentamiento-muro, asentamiento-foso, volver (none: the plain base); any with «-radio» after it, the radio's recap
     /// over it (asentamiento-radio, tablero-radio). «muestra-…»: the same from the sample campaign through the presenter
-    /// (muestra-soldados, -armeria, -armeria-arma, -escuadra, -parte, -mapa, -mapa-mision, -mapa-zona, -asentamiento,
+    /// (muestra-soldados, -esperar, -esperar-pedido, -mapa-encargo, -escuadra-listo, -parte-caido, -armeria, -armeria-arma, -escuadra, -parte, -mapa, -mapa-mision, -mapa-zona, -asentamiento,
     /// -asentamiento-bastion, -propuesta, -propuesta-mia, -diario).
     /// </summary>
     public sealed class StrategyLab : MonoBehaviour, IStrategyHandlers
@@ -43,10 +43,53 @@ namespace Bastion.UI.Strategy
             if (withRadio) Case = Case.Substring(0, Case.Length - "-radio".Length);
         }
 
+        /// <summary>BASTION_ESTRATEGIA_PULSA: a button's text, pressed a few frames after the case is up (TestSteps.Press); the order goes to the log.</summary>
+        string press = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_PULSA");
+        int pressAt = -1;
+        bool blinked;
+
         void Update()
         {
+            // BASTION_ESTRATEGIA_PARPADEO / _LATIDO: an element by its class blinking (StrategyRoot.Blink) or pulsing (Pulse), with the press.
+            if (shown && pressAt >= 0 && Time.frameCount >= pressAt && !blinked)
+            {
+                blinked = true;
+                var blink = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_PARPADEO");
+                if (!string.IsNullOrEmpty(blink)) root.Blink(blink);
+                var pulse = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_LATIDO");
+                var beat = string.IsNullOrEmpty(pulse) ? null : UnityEngine.UIElements.UQueryExtensions.Q(root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement, className: pulse);
+                // A key: the element itself if it is one, else the first inside it (a sheet's care: its main one).
+                if (beat != null && !(beat is UnityEngine.UIElements.Button)) beat = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Button>(beat);
+                if (beat != null) StrategyRoot.Pulse(beat);
+                // BASTION_ESTRATEGIA_DESPLEGABLE=hand|belt: that choice of the sheet open, as a click on its head.
+                var choice = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_DESPLEGABLE");
+                if (!string.IsNullOrEmpty(choice)) root.OpenSoldierChoice(choice);
+                // BASTION_ESTRATEGIA_AYUDA=strat-well--credits[:n|:off]: that element's help open (the n-th with the class, or the
+                // first whose key is off), scrolled into sight.
+                var help = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_AYUDA");
+                if (!string.IsNullOrEmpty(help))
+                {
+                    var bits = help.Split(':');
+                    var all = UnityEngine.UIElements.UQueryExtensions.Query(root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement, className: bits[0]).ToList();
+                    var off = bits.Length > 1 && bits[1] == "off";
+                    var at = !off && bits.Length > 1 && int.TryParse(bits[1], out var n) ? n : 0;
+                    var over = off
+                        ? all.FirstOrDefault(e => UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Button>(e) is var b && b != null && !b.enabledSelf)
+                        : at < all.Count ? all[at] : null;
+                    over?.GetFirstAncestorOfType<UnityEngine.UIElements.ScrollView>()?.ScrollTo(over);
+                    // Pinned, not a synthetic enter: the editor's own pointer enters other elements with help as it likes.
+                    if (over != null) root.PinTip(over);
+                    Debug.Log($"[estrategia] ayuda de «{help}»: {(over != null ? "abierta" : "no está")} ({all.Count} con la clase)");
+                }
+            }
+            if (shown && !string.IsNullOrEmpty(press) && pressAt >= 0 && Time.frameCount >= pressAt)
+            {
+                Debug.Log($"[estrategia] pulsado «{press}»: {Bastion.UI.TestSteps.Press(press)}");
+                press = null;
+            }
             if (shown || root == null || !root.Ready) return;
             shown = true;
+            pressAt = Time.frameCount + 10;
             root.Bind(this);
             if (Case.StartsWith("muestra-"))
             {
@@ -448,8 +491,21 @@ namespace Bastion.UI.Strategy
         void Sample(string which)
         {
             // Ana here only for the proposals (70- and 71-propuesta), as the 0.10.1's steps set her connected.
-            var p = new StrategyPresenter { State = SampleCampaign.Load(), Slot = 1, Seats = SampleCampaign.Seats(which.StartsWith("propuesta")) };
-            var screen = which.StartsWith("asentamiento") || which.StartsWith("radio") ? "facilities" : which == "escuadra" || which == "lanzar" ? "squad" : which.StartsWith("parte") ? "debrief"
+            var p = new StrategyPresenter { State = SampleCampaign.Load(), Slot = 1, Seats = SampleCampaign.Seats(which.StartsWith("propuesta") || which == "esperar-pedido" || which == "escuadra-listo" || which == "armeria-arma-ana") };
+            // «escuadra-listo»: Ana here and Arturo ready (his cards' «LISTO»); «parte-caido»: the debrief's first soldier fallen («CAÍDO»).
+            if (which == "escuadra-listo") p.State.LaunchReady[1] = true;
+            if (which == "parte-caido" && p.State.LastReport?.Squad.Count > 0) p.State.LastReport.Squad[0].Status = "dead";
+            // «mapa-encargo»: the errand «numbers» with its step's mission (the first offer), for its row's click (BASTION_ESTRATEGIA_PULSA).
+            if (which == "mapa-encargo") p.State.Offers[0].Quest = "numbers";
+            // «esperar»: nobody can go out (Campaign.MustWait: all of them hurt, no suministros to recruit); «esperar-pedido»,
+            // with Ana here and asking.
+            if (which.StartsWith("esperar"))
+            {
+                foreach (var s in p.State.Soldiers) if (s.Alive) s.WoundedDays = System.Math.Max(s.WoundedDays, 2);
+                p.State.Credits = 0;
+                if (which == "esperar-pedido") p.State.AdvanceReady[0] = true;
+            }
+            var screen = which.StartsWith("asentamiento") || which.StartsWith("radio") ? "facilities" : which == "escuadra" || which == "escuadra-listo" || which == "lanzar" ? "squad" : which.StartsWith("parte") ? "debrief"
                 : which.StartsWith("armeria") ? "engineering" : which.StartsWith("mapa") ? "geoscape" : "barracks";
             // «parte-6», «parte-4»: the debrief with the first so many of its squad (the 0.10.1's shot the same way).
             if (which.StartsWith("parte-") && int.TryParse(which.Substring("parte-".Length), out var kept) && p.State.LastReport != null)
@@ -499,8 +555,9 @@ namespace Bastion.UI.Strategy
             }
             if (screen == "squad") root.SetSquad(p.Squad());
             if (screen == "debrief") root.SetDebrief(p.Debrief());
-            // 20- to 22-armeria: the belt with its first item, and the gear with the Armería's first weapon.
-            if (screen == "engineering") root.SetArmory(p.Armory(which == "armeria-arma" ? new ArmoryPick { Tab = "gear", Pick = "f:" + p.State.FoundWeapons[0].Id } : new ArmoryPick()));
+            // 20- to 22-armeria: the belt with its first item, and the gear with the Armería's first weapon; «armeria-arma-ana»,
+            // with Ana here: Rafael, who carries it, is hers, so its keys are off.
+            if (screen == "engineering") root.SetArmory(p.Armory(which.StartsWith("armeria-arma") ? new ArmoryPick { Tab = "gear", Pick = "f:" + p.State.FoundWeapons[0].Id } : new ArmoryPick()));
             // 30- to 32-mapa: nothing picked, the first offer, the first zone without contact.
             if (screen == "geoscape")
             {

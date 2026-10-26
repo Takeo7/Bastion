@@ -94,6 +94,23 @@ namespace Bastion.Client
         /// <summary>What the Asentamiento's shot looks at (metres): the point over the caravan the free look starts from (UI's rig, Focus).</summary>
         public Vector3 ClearingTarget => World(ClearingShot().target);
 
+        /// <summary>
+        /// What the free look goes to to show tile (x, y) of the clearing (clearing.ts focusTile: its middle; fractions
+        /// allowed, for a piece about to go down the middle of its footprint, x + (w − 1) / 2), on the ground, in metres as
+        /// ClearingTarget: for UI's rig (Focus, on its spring), from a proposal's «Ver».
+        /// </summary>
+        public Vector3 TileTarget(float x, float y) => World(new Vector3(x + 0.5f, 0, y + 0.5f));
+
+        /// <summary>The same for piece `id` of the base shown (clearing.ts focusPiece: the middle of its footprint); null, no such piece.</summary>
+        public Vector3? PieceTarget(string id)
+        {
+            var p = Base?.Pieces.FirstOrDefault(q => q.Id == id);
+            if (p == null) return null;
+            var cells = Bastion.Engine.Base.CellsOf(p);
+            float w = cells.Max(c => c.X) - cells.Min(c => c.X) + 1, h = cells.Max(c => c.Y) - cells.Min(c => c.Y) + 1;
+            return TileTarget(p.X + (w - 1) / 2, p.Y + (h - 1) / 2);
+        }
+
         /// <summary>The clearing's ground (metres, x and z: its south-west corner and its size), for the free look's bounds.</summary>
         public Rect ClearingBounds => Base == null ? new Rect() : new Rect(0, -Base.Height * MapSpace.Tile, Base.Width * MapSpace.Tile, Base.Height * MapSpace.Tile);
 

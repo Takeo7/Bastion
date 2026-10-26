@@ -23,6 +23,12 @@ namespace Bastion.UI.Combat
     /// </summary>
     public sealed class CombatLab : MonoBehaviour
     {
+        /// <summary>BASTION_LENTO=ms: each frame that much longer (Ajuste auto's test: App.QualityGuard takes the level down).</summary>
+        void Update()
+        {
+            if (App.GameSettings.SlowForTest > 0) System.Threading.Thread.Sleep(App.GameSettings.SlowForTest);
+        }
+
         /// <summary>A folder of engine-cs/golden (step1, step2).</summary>
         public string Step = "step2";
 
@@ -360,6 +366,28 @@ namespace Bastion.UI.Combat
                             // The camera off to a corner of the map, as a player who looked elsewhere (no TakeControl: not the player's).
                             control.Rig.Focus(Board.TileToWorld(control.State, new Pos { X = 4, Y = 4 }), true);
                             break;
+                        case "ajustes":
+                            // The game's menu open on Ajustes, later than BASTION_MENU (Ajuste auto's note, once the guard took a level).
+                            control.OnMenu();
+                            Hud?.MenuPage("settings");
+                            break;
+                        case "autono":
+                            // Ajustes' «Ajuste auto» turned off on its own key (what it took given back, its note gone).
+                            foreach (var doc in FindObjectsByType<UnityEngine.UIElements.UIDocument>(FindObjectsSortMode.None))
+                            {
+                                if (doc.rootVisualElement == null) continue;
+                                var row = UnityEngine.UIElements.UQueryExtensions.Query(doc.rootVisualElement, className: "setting").ToList()
+                                    .FirstOrDefault(r => UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Label>(r, className: "setting__name")?.text == "AJUSTE AUTO");
+                                var no = row == null ? null : UnityEngine.UIElements.UQueryExtensions.Query<UnityEngine.UIElements.Button>(row, className: "setting__choice").ToList().FirstOrDefault(b => b.text == "No");
+                                if (no == null) continue;
+                                using (var e = UnityEngine.UIElements.NavigationSubmitEvent.GetPooled())
+                                {
+                                    e.target = no;
+                                    no.SendEvent(e);
+                                }
+                                Debug.Log($"[lab] Ajuste auto: {App.GameSettings.AutoQuality}, {App.GameSettings.Summary()}");
+                            }
+                            break;
                         case "tuturno":
                             // The squad's turn opening, as the host's event would come (the stamp held, the camera to its soldier).
                             player?.Push(new List<GameEvent> { new TurnBeganEvent { Team = Teams.Xcom, Turn = control.State.Turn, Command = 0 } }, null);
@@ -381,6 +409,18 @@ namespace Bastion.UI.Combat
                             InputSystem.QueueStateEvent(mouse, new MouseState { position = middle });
                             break;
                         default:
+                            // «wheel=1» a notch of the wheel up (-1 down) over the screen's middle; «wheelx=1» sideways, as macOS turns it with Shift.
+                            if (what.StartsWith("wheel=") || what.StartsWith("wheelx="))
+                            {
+                                if (float.TryParse(what.Substring(what.IndexOf('=') + 1), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var notch))
+                                {
+                                    var turn = what.StartsWith("wheelx=") ? new Vector2(notch * 120, 0) : new Vector2(0, notch * 120);
+                                    InputSystem.QueueStateEvent(mouse, new MouseState { position = middle, scroll = turn });
+                                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                    InputSystem.QueueStateEvent(mouse, new MouseState { position = middle });
+                                }
+                                break;
+                            }
                             if (what.StartsWith("hold="))
                             {
                                 var hold = what.Substring(5).Split('/');

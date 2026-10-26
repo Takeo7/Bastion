@@ -175,13 +175,19 @@ namespace Bastion.UI.Strategy
                     var row = Ui.El("armory-mod", parent);
                     Ui.Text(m.Name, "armory-mod__name font-title", row);
                     if (!string.IsNullOrEmpty(m.Line)) Ui.Text("· " + m.Line, "armory-mod__line", row);
-                    if (!string.IsNullOrEmpty(m.Button)) Small(m.Button, "unmod", m.Id, m.Enabled, row);
+                    if (!string.IsNullOrEmpty(m.Button)) Small(m.Button, "unmod", m.Id, m.Enabled, row, m.Tip);
                 }
                 if (!string.IsNullOrEmpty(d.Mods.FreeHead))
                 {
-                    var slot = Ui.El("armory-slot well", parent);
-                    Ui.Text(d.Mods.FreeHead.ToUpperInvariant(), "armory-slot__head font-title", slot);
-                    foreach (var o in d.Mods.Options) Small(o.Button, "mod", o.Id, o.Enabled, slot);
+                    // One line of choices is enough, the same for every free place; with none, each place and why (weaponCare).
+                    var places = d.Mods.Options.Count > 0 ? 1 : System.Math.Max(1, d.Mods.FreeSlots);
+                    for (var i = 0; i < places; i++)
+                    {
+                        var slot = Ui.El("armory-slot well", parent);
+                        Ui.Text(d.Mods.FreeHead.ToUpperInvariant(), "armory-slot__head font-title", slot);
+                        foreach (var o in d.Mods.Options) Small(o.Button, "mod", o.Id, o.Enabled, slot, o.Tip);
+                        if (!string.IsNullOrEmpty(d.Mods.Empty)) Ui.Text(d.Mods.Empty, "armory-slot__empty muted", slot);
+                    }
                 }
             }
             if (d.Holder != null)
@@ -209,9 +215,11 @@ namespace Bastion.UI.Strategy
                         {
                             var chip = Ui.Text(x.Text, "armory-diff", diff);
                             if (!string.IsNullOrEmpty(x.Tone)) chip.AddToClassList("armory-diff--" + x.Tone);
+                            // «Daño: 3–5 → 4–6» (weaponDiff's title).
+                            if (!string.IsNullOrEmpty(x.Tip)) tips.Attach(chip, x.Tip);
                         }
                     }
-                    if (!string.IsNullOrEmpty(c.Button)) Small(c.Button, "give", c.Id, c.Enabled, row);
+                    if (!string.IsNullOrEmpty(c.Button)) Small(c.Button, "give", c.Id, c.Enabled, row, c.Tip);
                     else if (!string.IsNullOrEmpty(c.Chip)) Ui.Text(c.Chip, "strat-chip strat-chip--good", row);
                 }
             }
@@ -228,12 +236,20 @@ namespace Bastion.UI.Strategy
             if (!string.IsNullOrEmpty(d.Why)) Ui.Text(d.Why, "strat-why strat-why--small", parent);
         }
 
-        void Small(string text, string action, string arg, bool enabled, VisualElement parent)
+        /// <summary>A small key; its help (`tip`: why it is off, or what it does) on a holder round it, which a key that is off still lets hover.</summary>
+        void Small(string text, string action, string arg, bool enabled, VisualElement parent, string tip = null)
         {
             var b = new Button(() => handlers.OnArmoryAction(action, arg)) { text = text.ToUpperInvariant() };
             Ui.AddClasses(b, "armory-small font-title");
             b.SetEnabled(enabled);
-            parent.Add(b);
+            if (string.IsNullOrEmpty(tip))
+            {
+                parent.Add(b);
+                return;
+            }
+            var holder = Ui.El("armory-small-holder", parent);
+            holder.Add(b);
+            tips.Attach(holder, tip);
         }
 
         static void SubHead(string text, VisualElement parent) => Ui.Text(text.ToUpperInvariant(), "sheet__head font-title", parent);

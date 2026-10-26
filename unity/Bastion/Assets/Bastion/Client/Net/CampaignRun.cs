@@ -282,7 +282,9 @@ namespace Bastion.Client.Net
         /// <summary>The screen as `name`.png, once, `after` seconds into the step (BASTION_FOTOS).</summary>
         private void Shoot(string name, float now, float after)
         {
-            if (shots == null || now - since < after || !shot.Add(name)) return;
+            // The step is marked seen even without photos: the return to the base waits for its end (26/10: without
+            // BASTION_FOTOS the campaign never came back from its first mission).
+            if (now - since < after || !shot.Add(name) || shots == null) return;
             var file = Path.Combine(shots, name + ".png");
             ScreenCapture.CaptureScreenshot(file);
             log($"[prueba] campaña: foto {file}");

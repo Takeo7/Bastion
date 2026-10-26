@@ -693,6 +693,43 @@
     --slant-edge: #ffffff;
 }
 
+/* A «Ver»'s target, or what just changed there, blinking (StrategyRoot.Blink; strategy.css .blink: an outline 2 px out
+   and a wash in the warning's colour, three times). A frame over it, so nothing moves. */
+.blink {
+    position: absolute;
+    left: -5px;
+    top: -5px;
+    right: -5px;
+    bottom: -5px;
+    border-width: 3px;
+    border-color: var(--t-warn);
+    background-color: rgba(245, 165, 36, 0.25);
+}
+
+/* A key waiting for this player's yes (StrategyRoot.Pulse; strategy.css .x-btn.waiting): its edge in the stamp's red, beating. */
+.strat .btn-slant.btn-pulse--on {
+    --slant-edge: #f0503c;
+}
+
+/* Under the clearing, in the middle (strategy.css .strat-center-bottom): «ESPERAR A QUE SE CUREN» and its line. */
+.strat-center-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 50px;
+    align-items: center;
+}
+
+.strat-center-bottom__line {
+    margin-top: 6px;
+    padding: 2px 10px;
+    font-size: 13px;
+    color: var(--t-muted);
+    background-color: rgba(10, 12, 14, 0.85);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
 /* =============================================================== dashed edges */
 
 /* The recruit's card (strategy.css .recruit-card: 1.5 px dashed), its dashes as measured: 3 px on, 2 off. */

@@ -50,6 +50,8 @@ namespace Bastion.UI.Hud
             if (k == callKey) return;
             callKey = k;
             callClock?.Pause();
+            // The bell once per call, not as it is redrawn (hud.ts).
+            var sounded = call != null;
             call?.RemoveFromHierarchy();
             call = null;
             if (v == null) return;
@@ -68,6 +70,7 @@ namespace Bastion.UI.Hud
             actions.Add(accept);
             PlateFrame.Dress(call);
             Slant.Dress(accept);
+            if (!sounded) sound?.Invoke("bell");
             // The time left, counted down on this computer's clock from when it came (the server's deadline).
             Ui.Show(clock, v.Ms >= 0);
             if (v.Ms < 0) return;
@@ -104,13 +107,14 @@ namespace Bastion.UI.Hud
             actions.Add(ok);
             PlateFrame.Dress(intro);
             Slant.Dress(ok);
-            sound?.Invoke("paper");
         }
 
         /// <summary>The arrival card up again, from the objective's card (Ana, 20/10 #32).</summary>
         public void ReopenIntro()
         {
-            if (intro == null && introView != null) ShowIntro(introView);
+            if (intro != null || introView == null) return;
+            ShowIntro(introView);
+            sound?.Invoke("paper");
         }
 
         /// <summary>Closed by its button, Intro or Space; `quiet`, without its sound nor the handler (a new one replaces it).</summary>
@@ -134,11 +138,13 @@ namespace Bastion.UI.Hud
 
         public void SetOutcome(OutcomeView v)
         {
+            var was = outcome != null;
             outcome?.RemoveFromHierarchy();
             outcome = null;
             back = null;
             if (v == null) return;
-            sound?.Invoke("stamp");
+            // Stamped on the report as it appears, a moment after (hud.ts); not again as it is redrawn.
+            if (!was) sound?.Invoke("stamp.outcome");
             outcome = Ui.El("card panel outcome " + (v.Victory ? "outcome--victory" : "outcome--defeat"), host);
             Ui.Text(v.Victory ? HudText.Mission.Victory : HudText.Mission.Defeat, "outcome__title font-title", outcome);
             if (!string.IsNullOrEmpty(v.Line)) Ui.Text(v.Line, "card__text outcome__line", outcome);

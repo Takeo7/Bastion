@@ -56,6 +56,7 @@ namespace Bastion.UI.Combat
             var marks = new GameObject("Marcas");
             control = new GameObject("Combate").AddComponent<CombatController>();
             control.Rig = rig;
+            control.Sfx.Attach(cam, () => rig.Target, Board.Tile, (s, p) => Board.TileToWorld(s, p, Board.Tile));
             control.Overlay = marks.AddComponent<MoveOverlay>();
             control.AimMarks = marks.AddComponent<AimOverlay>();
             control.Marks = marks.AddComponent<MissionMarks>();
@@ -78,7 +79,7 @@ namespace Bastion.UI.Combat
             control.EnemyTurnPlaying = () => player.EnemyTurnPlaying;
             control.Hurry = player.SetHurry;
             if (Hud != null) Hud.ClockOf = ClockOf;
-            if (net.LastRoom != null) control.Players = net.LastRoom.Players;
+            if (net.LastRoom != null) control.SetPlayers(net.LastRoom.Players);
             // The campaign as the squad took off, for the soldiers' boards on their sheets.
             control.Campaign = () => tookOff;
             // Tests with two apps (BASTION_PASOS_COMBATE): the HUD pressed as a player would.
@@ -95,6 +96,7 @@ namespace Bastion.UI.Combat
         void OnDestroy()
         {
             Time.timeScale = 1;
+            control?.Sfx.Siren(null);
             if (net != null) net.Message -= OnMessage;
             if (Current == control?.State) Current = null;
         }
@@ -104,8 +106,7 @@ namespace Bastion.UI.Combat
             switch (m)
             {
                 case RoomMessage room:
-                    control.Players = room.Players;
-                    if (control.State != null) control.Refresh();
+                    control.SetPlayers(room.Players);
                     // On the way back to the base (this player's «Volver a la base» or the partner's): the report says so.
                     if (room.Phase == RoomPhases.Base && room == net.LastRoom)
                     {
@@ -173,6 +174,8 @@ namespace Bastion.UI.Combat
             Current = state;
             Bastion.Client.Battlefield.Current?.Show(state);
             player.Load(state);
+            if (state.Outcome == null) control.Sfx.Start(state.Biome, !state.Concealed);
+            control.Sfx.Siren(() => control.View);
             Snapshot?.Invoke(state);
             control.Refresh();
             if (first) control.OpeningShot();

@@ -364,6 +364,17 @@
     margin-left: 0;
 }
 
+/* Round a small key with a help (ArmoryScreen.Small): it hovers even when the key is off, and takes no room of its own. */
+.armory-small-holder {
+    align-self: flex-start;
+}
+
+/* A free place with nothing to put in it (arms.ts weaponCare: «No hay mejoras sueltas…»). */
+.armory-slot__empty {
+    font-size: 12px;
+    white-space: normal;
+}
+
 .armory-carrier {
     flex-direction: row;
     align-items: center;

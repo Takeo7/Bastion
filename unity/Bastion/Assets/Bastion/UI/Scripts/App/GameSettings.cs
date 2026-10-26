@@ -8,8 +8,9 @@ namespace Bastion.UI.App
     /// <summary>
     /// The graphics settings of Ajustes (settingsPanel.ts graphicsSettings of the 0.10.1), kept on this computer: the
     /// level (bajos, medios, altos: the project's quality levels, whose shadows, ambient occlusion, post-processing and
-    /// render scale are Arte's), a cap on frames per second, the counter in a corner, and the interface's size. Applied
-    /// as the app starts and whenever one changes.
+    /// render scale are Arte's), a cap on frames per second, the counter in a corner, the interface's size, and «Ajuste
+    /// auto», the guard that takes the level down while a battle isn't fluid (QualityGuard). Applied as the app starts
+    /// and whenever one changes.
     /// </summary>
     public static class GameSettings
     {
@@ -18,6 +19,8 @@ namespace Bastion.UI.App
         const string CounterKey = "bastion.showFps";
         const string TintKey = "bastion.squadTint";
         const string InterfaceKey = "bastion.uiScale";
+        const string AutoKey = "bastion.autoQuality";
+        const string AutoTakenKey = "bastion.autoTaken";
 
         /// <summary>The levels, low to high, and the quality levels they look for by name (Arte's: Bajo, Medio, Alto).</summary>
         public static readonly string[] LevelNames = { "bajos", "medios", "altos" };
@@ -65,9 +68,65 @@ namespace Bastion.UI.App
             set
             {
                 if (LevelForTest == null) PlayerPrefs.SetInt(LevelKey, Mathf.Clamp(value, 0, 2));
+                // What the player picks is theirs: the guard steps back from it (settings.ts setGraphics).
+                AutoTaken = 0;
                 Apply();
             }
         }
+
+        /// <summary>
+        /// The lab's slow frames (BASTION_LENTO=ms, CombatLab): the guard watches them with the editor out of focus, and
+        /// «Ajuste auto» keeps nothing on this computer (its player's own stays as it is).
+        /// </summary>
+        public static readonly int SlowForTest = int.TryParse(Environment.GetEnvironmentVariable("BASTION_LENTO"), out var ms) && ms > 0 ? ms : 0;
+
+        static bool? autoOn;
+        static int? autoTaken;
+
+        /// <summary>
+        /// «Ajuste auto» (settings.ts autoQuality): the guard may take the level down, on by default. Off, it gives back
+        /// what it took.
+        /// </summary>
+        public static bool AutoQuality
+        {
+            get => autoOn ??= SlowForTest > 0 || PlayerPrefs.GetInt(AutoKey, 1) == 1;
+            set
+            {
+                autoOn = value;
+                if (SlowForTest == 0) PlayerPrefs.SetInt(AutoKey, value ? 1 : 0);
+                if (!value) AutoTaken = 0;
+                Apply();
+            }
+        }
+
+        /// <summary>Levels the guard has taken off on this computer, kept between battles: a slow one starts the next already lighter.</summary>
+        static int AutoTaken
+        {
+            get => autoTaken ??= SlowForTest > 0 ? 0 : Mathf.Clamp(PlayerPrefs.GetInt(AutoTakenKey, 0), 0, 2);
+            set
+            {
+                autoTaken = value;
+                if (SlowForTest == 0) PlayerPrefs.SetInt(AutoTakenKey, value);
+            }
+        }
+
+        /// <summary>The player picked the level in Ajustes (or a test did): the guard leaves it alone.</summary>
+        static bool LevelChosen => SlowForTest == 0 && (LevelForTest != null || PlayerPrefs.HasKey(LevelKey));
+
+        /// <summary>The level drawn: the chosen one, less what the guard took.</summary>
+        public static int ShownLevel => AutoQuality && !LevelChosen ? Math.Max(0, Level - AutoTaken) : Level;
+
+        /// <summary>Takes the level down one (QualityGuard); false when there is nothing left to take, or it isn't the guard's to.</summary>
+        public static bool LowerQuality()
+        {
+            if (!AutoQuality || LevelChosen || ShownLevel == 0) return false;
+            AutoTaken++;
+            Apply();
+            return true;
+        }
+
+        /// <summary>What the guard has lowered, in Ajustes' words (settings.ts autoQualityNote), or null if nothing.</summary>
+        public static string AutoNote() => ShownLevel < Level ? $"Bajado para ir fluido: gráficos {LevelNames[ShownLevel]}." : null;
 
         public static int FpsCap
         {
@@ -165,7 +224,7 @@ namespace Bastion.UI.App
         public static void Apply()
         {
             // How much lies about on the ground (0.10.1's COVER_DENSITY by its effects): fewer on slower machines, from the next map.
-            Bastion.Client.Map.GroundCover.Density = Level == 0 ? 0.3f : Level == 1 ? 0.6f : 1f;
+            Bastion.Client.Map.GroundCover.Density = ShownLevel == 0 ? 0.3f : ShownLevel == 1 ? 0.6f : 1f;
             // «Ropa con el color del jugador» for Arte's figures, in the battle and on the base.
             Bastion.Client.Units.SquadTint.On = SquadTint;
             ApplyInterface();
@@ -175,7 +234,7 @@ namespace Bastion.UI.App
                 return;
             }
             var names = QualitySettings.names;
-            var level = Level;
+            var level = ShownLevel;
             var quality = Array.FindIndex(names, n => string.Equals(n, QualityNames[level], StringComparison.OrdinalIgnoreCase));
             if (quality < 0 && names.Length > 0) quality = level == 0 ? 0 : level == 2 ? names.Length - 1 : (names.Length - 1) / 2;
             if (quality >= 0 && quality != QualitySettings.GetQualityLevel()) QualitySettings.SetQualityLevel(quality, true);
@@ -186,14 +245,18 @@ namespace Bastion.UI.App
             Changed?.Invoke();
         }
 
-        /// <summary>The settings in short, for the telemetry: «gráficos medios», and a cap if there is one.</summary>
+        /// <summary>
+        /// The settings in short, for the telemetry: «gráficos medios», what the guard took («auto: bajos») or that it is
+        /// off, and a cap if there is one.
+        /// </summary>
         public static string Summary()
         {
             var cap = FpsCap;
             var quality = QualitySettings.GetQualityLevel();
             var names = QualitySettings.names;
             var own = quality >= 0 && quality < names.Length ? names[quality] : "?";
-            return $"gráficos {LevelNames[Level]} ({own})" + (cap > 0 ? $", límite {cap} fps" : "");
+            var auto = !AutoQuality ? ", sin ajuste auto" : ShownLevel < Level ? $", auto: {LevelNames[ShownLevel]}" : "";
+            return $"gráficos {LevelNames[Level]}{auto} ({own})" + (cap > 0 ? $", límite {cap} fps" : "");
         }
     
         public const string GraphicsId = "graphics";
@@ -201,6 +264,7 @@ namespace Bastion.UI.App
         public const string CounterId = "showFps";
         public const string TintId = "squadTint";
         public const string InterfaceId = "uiScale";
+        public const string AutoId = "autoQuality";
 
         public const string SoundId = "sound";
         const string VolumePrefix = "volume.";
@@ -208,7 +272,7 @@ namespace Bastion.UI.App
         /// <summary>
         /// Ajustes' rows (hud.ts settings: the sound, soundSettings, graphicsSettings), for the battle's menu and the
         /// base's: the sound and its volumes, the graphics, then the battle's own if any (`battle`: the speeds and the
-        /// plans), then the clothes and the interface's size, in the 0.10.1's order.
+        /// plans), then the clothes, the interface's size and «Ajuste auto», in the 0.10.1's order.
         /// </summary>
         public static System.Collections.Generic.List<Hud.SettingView> Views(System.Collections.Generic.IEnumerable<Hud.SettingView> battle = null)
         {
@@ -216,6 +280,7 @@ namespace Bastion.UI.App
             rows.AddRange(Graphics());
             if (battle != null) rows.AddRange(battle);
             rows.AddRange(Looks());
+            rows.Add(Auto());
             return rows;
         }
 
@@ -314,6 +379,19 @@ namespace Bastion.UI.App
             },
         };
 
+        /// <summary>The frame-rate guard (settingsPanel.ts autoQualityRow): on or off, and what it has lowered on this computer.</summary>
+        static Hud.SettingView Auto() => new Hud.SettingView
+        {
+            Id = AutoId,
+            Label = "Ajuste auto",
+            About = "Si el combate va a menos de 45 imágenes por segundo, baja los gráficos un nivel cada vez. Si eliges tú los gráficos, no los toca.",
+            Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
+            ChoiceTips = new System.Collections.Generic.List<string> { "Baja la calidad si el combate no va fluido", "Siempre la calidad elegida" },
+            On = AutoQuality ? 0 : 1,
+            Note = AutoNote(),
+            NoteGoesWith = new System.Collections.Generic.List<string> { AutoId, GraphicsId },
+        };
+
         /// <summary>One of those rows changed (its id, the choice's place): kept and applied; false if it isn't one of them.</summary>
         public static bool Change(string id, float value)
         {
@@ -321,6 +399,7 @@ namespace Bastion.UI.App
             else if (id == CapId) FpsCap = Caps[Mathf.Clamp((int)value, 0, Caps.Length - 1)];
             else if (id == CounterId) ShowFps = value == 0;
             else if (id == TintId) SquadTint = value == 1;
+            else if (id == AutoId) AutoQuality = value == 0;
             else if (id == InterfaceId) InterfaceSize = InterfaceSizes[Mathf.Clamp((int)value, 0, InterfaceSizes.Length - 1)];
             else if (id == SoundId)
             {

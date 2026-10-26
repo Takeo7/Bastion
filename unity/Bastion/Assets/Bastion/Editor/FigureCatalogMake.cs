@@ -17,10 +17,128 @@ namespace Bastion.EditorTools
     /// </summary>
     public static class FigureCatalogMake
     {
-        /// <summary>A voice's prefab, by its name, in the packs' Characters folders.</summary>
+        const string UndeadFile = "Assets/Bastion/Client/Resources/Undead.json";
+        /// <summary>Where the living made dead are baked: with Synty, out of git (made again here after an import).</summary>
+        const string UndeadFolder = "Assets/Synty/Extra/Undead";
+
+        /// <summary>
+        /// `mesh`'s blend shapes as `r` weighs them (the preset's build) folded into its vertices, and gone: the figure keeps
+        /// its build, not Sidekick's every shape (17 MB a body with them, the game sets none).
+        /// </summary>
+        static void Flatten(SkinnedMeshRenderer r, Mesh mesh)
+        {
+            int shapes = mesh.blendShapeCount;
+            if (shapes == 0) return;
+            var vertices = mesh.vertices;
+            var normals = mesh.normals;
+            var tangents = mesh.tangents;
+            var dv = new Vector3[vertices.Length];
+            var dn = new Vector3[vertices.Length];
+            var dt = new Vector3[vertices.Length];
+            for (int s = 0; s < shapes; s++)
+            {
+                int frame = mesh.GetBlendShapeFrameCount(s) - 1;
+                if (frame < 0) continue;
+                float w = r.GetBlendShapeWeight(s) / Mathf.Max(1e-4f, mesh.GetBlendShapeFrameWeight(s, frame));
+                if (Mathf.Abs(w) < 1e-5f) continue;
+                mesh.GetBlendShapeFrameVertices(s, frame, dv, dn, dt);
+                for (int i = 0; i < vertices.Length; i++)
+                {
+                    vertices[i] += dv[i] * w;
+                    if (normals.Length == vertices.Length) normals[i] += dn[i] * w;
+                    if (tangents.Length == vertices.Length) tangents[i] += (Vector4)(dt[i] * w);
+                }
+            }
+            mesh.ClearBlendShapes();
+            mesh.vertices = vertices;
+            if (normals.Length == vertices.Length) mesh.normals = normals.Select(n => n.normalized).ToArray();
+            if (tangents.Length == vertices.Length) mesh.tangents = tangents;
+            mesh.RecalculateBounds();
+        }
+
+        /// <summary>
+        /// Each of UndeadFigure.Bodies made as the game would and saved: its mesh, its palette, its material and the prefab,
+        /// by its id; what was there before made again.
+        /// </summary>
+        static Dictionary<string, GameObject> UndeadBake()
+        {
+            var made = new Dictionary<string, GameObject>();
+            if (!AssetDatabase.IsValidFolder(UndeadFolder)) AssetDatabase.CreateFolder(Path.GetDirectoryName(UndeadFolder), Path.GetFileName(UndeadFolder));
+            foreach (var (id, _, _) in UndeadFigure.Bodies)
+            {
+                var model = UndeadFigure.Fresh(id);
+                if (model == null) continue;
+                model.transform.SetParent(null, false);
+                model.SetActive(true);
+                model.name = id;
+                foreach (var r in model.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    var mesh = r.sharedMesh;
+                    if (mesh != null && !AssetDatabase.Contains(mesh))
+                    {
+                        mesh.name = id;
+                        Flatten(r, mesh);
+                        AssetDatabase.CreateAsset(mesh, $"{UndeadFolder}/{id}.mesh.asset");
+                    }
+                    var material = r.sharedMaterial;
+                    if (material == null || AssetDatabase.Contains(material)) continue;
+                    var palette = material.GetTexture("_ColorMap") as Texture2D;
+                    if (palette != null && !AssetDatabase.Contains(palette)) AssetDatabase.CreateAsset(palette, $"{UndeadFolder}/{id}.palette.asset");
+                    material.name = id;
+                    AssetDatabase.CreateAsset(material, $"{UndeadFolder}/{id}.mat");
+                }
+                made[id] = PrefabUtility.SaveAsPrefabAsset(model, $"{UndeadFolder}/{id}.prefab");
+                UnityEngine.Object.DestroyImmediate(model);
+            }
+            Debug.Log($"[figures] the living made dead baked in {UndeadFolder}: {made.Count} of {UndeadFigure.Bodies.Length}");
+            return made;
+        }
+
+        /// <summary>
+        /// Resources/Undead.json: the living presets the living made dead are put together from (UndeadFigure.Bodies), each
+        /// its parts by type and its build, read off its .sk file (0.10.1's convert.ts presetParts, its sliders): a .sk is
+        /// no asset the game can load.
+        /// </summary>
+        static void Undead()
+        {
+            var all = new JObject();
+            foreach (string preset in UndeadFigure.Bodies.Select(b => b.preset).Distinct())
+            {
+                string sk = Directory.GetFiles(Characters, preset + ".sk", SearchOption.AllDirectories).FirstOrDefault();
+                if (sk == null)
+                {
+                    Debug.LogWarning($"[figures] no {preset}.sk under {Characters}");
+                    continue;
+                }
+                var parts = new JArray();
+                string name = null;
+                float type = 0, size = 0, muscle = 0;
+                foreach (string raw in File.ReadLines(sk))
+                {
+                    string line = raw.Trim();
+                    float Value() => float.Parse(line.Substring(line.IndexOf(':') + 1).Trim(), System.Globalization.CultureInfo.InvariantCulture);
+                    if (line.StartsWith("- Name: ")) name = line.Substring(8).Trim();
+                    else if (line.StartsWith("PartType: ") && name != null)
+                    {
+                        parts.Add(new JArray(name, line.Substring(10).Trim()));
+                        name = null;
+                    }
+                    else if (line.StartsWith("BodyTypeValue:")) type = Value();
+                    else if (line.StartsWith("BodySizeValue:")) size = Value();
+                    else if (line.StartsWith("MuscleValue:")) muscle = Value();
+                }
+                all[preset] = new JObject { ["parts"] = parts, ["type"] = type, ["size"] = size, ["muscle"] = muscle };
+            }
+            File.WriteAllText(UndeadFile, all.ToString(Newtonsoft.Json.Formatting.Indented) + "\n");
+            AssetDatabase.ImportAsset(UndeadFile);
+            Debug.Log($"[figures] {UndeadFile}: {all.Count} presets");
+        }
+
+        /// <summary>A POLYGON character's prefab (a voice's, one of the special dead's), by its name, in the packs' Characters folders.</summary>
         static GameObject VoicePrefab(string name)
         {
-            foreach (string folder in new[] { "Assets/Synty/PolygonOffice/Prefabs/Characters", "Assets/Synty/PolygonCity/Prefabs/Characters", "Assets/Synty/PolygonApocalypse/Prefabs/Characters" })
+            foreach (string folder in new[] { "Assets/Synty/PolygonOffice/Prefabs/Characters", "Assets/Synty/PolygonCity/Prefabs/Characters", "Assets/Synty/PolygonApocalypse/Prefabs/Characters",
+                "Assets/Synty/PolygonCityZombies/Prefabs/Characters", "Assets/Synty/PolygonBossZombies/Prefabs" })
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{folder}/{name}.prefab");
                 if (prefab != null) return prefab;
@@ -150,11 +268,23 @@ namespace Bastion.EditorTools
                 .Select(n => (n, prefab: prefabOf(n))).Where(w => w.prefab != null).ToList();
             catalog.weaponNames = weapons.Select(w => w.n).ToArray();
             catalog.weapons = weapons.Select(w => w.prefab).ToArray();
-            // POLYGON's characters for the radio's voices (Bastion.Client.Voices), and the headset they wear.
-            var characters = Voices.Prefabs.Select(n => (n, prefab: VoicePrefab(n))).Where(c => c.prefab != null).ToList();
-            foreach (string n in Voices.Prefabs.Where(n => VoicePrefab(n) == null)) missing.Add(n);
+            // POLYGON's characters for the radio's voices (Bastion.Client.Voices), and the headset they wear; and the special
+            // dead's (UnitViews.DeadPrefabs).
+            var names = Voices.Prefabs.Concat(Bastion.Client.Units.UnitViews.DeadPrefabs).Distinct().ToList();
+            var characters = names.Select(n => (n, prefab: VoicePrefab(n))).Where(c => c.prefab != null).ToList();
+            foreach (string n in names.Where(n => VoicePrefab(n) == null)) missing.Add(n);
             catalog.characterNames = characters.Select(c => c.n).ToArray();
             catalog.characters = characters.Select(c => c.prefab).ToArray();
+            Undead();
+            // The living made dead, baked (UndeadFigure: put together at run time they take 75–290 ms each), as presets.
+            EditorUtility.SetDirty(catalog);
+            var baked = UndeadBake();
+            if (baked.Count > 0)
+            {
+                foreach (var kv in baked) presets[kv.Key] = kv.Value;
+                catalog.presetNames = presets.Keys.ToArray();
+                catalog.presets = presets.Values.ToArray();
+            }
             EditorUtility.SetDirty(catalog);
             AssetDatabase.SaveAssets();
             Debug.Log($"[figures] {Asset}: {presets.Count} presets, {maps.Count} colour maps, {clips.Count} clips, {weapons.Count} weapons, {characters.Count} characters; not in the project: {string.Join(", ", missing)}");

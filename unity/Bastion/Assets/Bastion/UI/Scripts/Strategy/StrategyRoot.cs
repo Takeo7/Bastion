@@ -96,6 +96,9 @@ namespace Bastion.UI.Strategy
         public bool MenuOpen => menu != null && (menu.Open || menu.Asking);
         public bool ModalOpen => modal != null && modal.Open;
 
+        /// <summary>A text field has the keys (Personalizar's name): the base's letters are the field's (screen.ts onKey: input, textarea).</summary>
+        public bool Typing => root?.focusController?.focusedElement is VisualElement f && (f is TextField || f.GetFirstAncestorOfType<TextField>() != null);
+
         void OnEnable()
         {
             var doc = GetComponent<UIDocument>();
@@ -113,7 +116,7 @@ namespace Bastion.UI.Strategy
             top = new TopStrip(root.Q("top"), tips, Icon, relay);
             nav = new NavTabs(root.Q("nav"), tips, Icon, relay);
             proposal = new ProposalPlate(root.Q("proposal"), relay);
-            modal = new StrategyModal(root.Q("modal"), relay, Icon, s => Sound?.Invoke(s));
+            modal = new StrategyModal(root.Q("modal"), relay, Icon, s => Sound?.Invoke(s), tips);
             menu = new GameMenu(root, tips, s => Sound?.Invoke(s));
             menu.Chose += what => MenuChose?.Invoke(what);
             menu.Changed += (id, value) => SettingChanged?.Invoke(id, value);
@@ -308,6 +311,78 @@ namespace Bastion.UI.Strategy
         /// </summary>
         /// <summary>A key for the radio (escape, enter, space): true if it took it (the base's Esc then does nothing else).</summary>
         public bool RadioKey(string key) => radio != null && radio.Key(key);
+
+        /// <summary>
+        /// What a «Ver» points at, or what just changed there, blinks (screen.ts blink; strategy.css .blink: three times in
+        /// 0.45 s, an outline and a wash in the warning's colour), so it is found even when it is already on screen. By
+        /// class, once drawn (the 0.10.1 waited 60 ms).
+        /// </summary>
+        public void Blink(params string[] classes)
+        {
+            if (root == null) return;
+            root.schedule.Execute(() =>
+            {
+                foreach (var name in classes)
+                {
+                    var shown = root.Query(className: name).ToList().Where(el => el.resolvedStyle.display != DisplayStyle.None && el.panel != null).ToList();
+                    foreach (var el in shown) BlinkOn(el);
+                    // What blinks, said (a class that blinks nothing, renamed or not drawn, is noticed).
+                    Debug.Log($"[estrategia] parpadea «{name}»: {shown.Count}");
+                }
+            }).ExecuteLater(60);
+        }
+
+        /// <summary>
+        /// A key waiting for this player's yes pulses while it is up (strategy.css .x-btn.waiting: a ring in the stamp's red,
+        /// every 1.4 s): its own edge, the slant's (--slant-edge, as Escuadra's «Lanzar» outlined), red and back, for as long
+        /// as it is drawn. A frame round it would be cut by the key and square on a slant.
+        /// </summary>
+        public static void Pulse(VisualElement el)
+        {
+            // On the game's clock (the base's runs at 1), so a capture's frames see its beat as the app does.
+            var start = Time.time;
+            el.schedule.Execute(() =>
+            {
+                var t = Mathf.Repeat(Time.time - start, PulseSeconds);
+                el.EnableInClassList("btn-pulse--on", t >= PulseSeconds / 4 && t < PulseSeconds * 3 / 4);
+            }).Every(16).Until(() => el.panel == null);
+        }
+
+        /// <summary>A pulse's beat (strategy.css x-pulse: 1.4 s, the ring at its middle) and a blink's (x-blink: 0.45 s, three).</summary>
+        const float PulseSeconds = 1.4f;
+        const float BlinkSeconds = 0.45f;
+
+        /// <summary>
+        /// A frame over `el` (USS has no outline: one that takes no room), easing in and out three times (x-blink:
+        /// ease-in-out, strongest at the middle of each), then gone. On the game's clock, as Pulse.
+        /// </summary>
+        static void BlinkOn(VisualElement el)
+        {
+            el.Q(className: "blink")?.RemoveFromHierarchy();
+            var frame = new VisualElement { pickingMode = PickingMode.Ignore };
+            frame.AddToClassList("blink");
+            frame.style.opacity = 0;
+            el.Add(frame);
+            var start = Time.time;
+            frame.schedule.Execute(() =>
+            {
+                var t = Time.time - start;
+                if (t >= BlinkSeconds * 3) frame.RemoveFromHierarchy();
+                else frame.style.opacity = 0.5f - 0.5f * Mathf.Cos(2 * Mathf.PI * t / BlinkSeconds);
+            }).Every(16).Until(() => frame.parent == null);
+        }
+
+        /// <summary>Esc on Soldados: the choice open on the sheet (Mano, Cinto, the slots), closed; whether there was one.</summary>
+        public bool CloseSoldierChoice() => soldiers != null && soldiers.CloseChoice();
+
+        /// <summary>Esc on the board while a cell is held: the purchase let go, the board stays; whether one was held.</summary>
+        public bool CancelBoardHold() => skillBoard != null && skillBoard.CancelHold();
+
+        /// <summary>The choice open on Soldados' sheet; null, none (tests). Opening one, as its head's click.</summary>
+        public string SoldierChoice => soldiers?.OpenChoice;
+        public void OpenSoldierChoice(string id) => soldiers?.Open(id);
+        /// <summary>An element's help shown now and kept (the lab's captures, TooltipLayer.Pin).</summary>
+        public void PinTip(VisualElement target) => tips?.Pin(target);
 
         void Dress()
         {

@@ -243,7 +243,8 @@ namespace Bastion.Client.Effects
             var r = holder.gameObject.AddComponent<MeshRenderer>();
             r.sharedMaterial = material;
             r.shadowCastingMode = shadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
-            r.receiveShadows = material == solid;
+            // (fx.ts: no effect takes a shadow; the debris, the shells and the rocks cast one, the smoke none.)
+            r.receiveShadows = false;
             renderer = r;
             return obj;
         }
@@ -275,10 +276,10 @@ namespace Bastion.Client.Effects
         }
 
         /// <summary>A lit faceted shape (a puff, a chunk, a chip): shared colour, it pops in and shrinks away.</summary>
-        Particle Solid(Vector3 at, Mesh mesh, Color colour, float size)
+        Particle Solid(Vector3 at, Mesh mesh, Color colour, float size, bool shadows = true)
         {
             Load();
-            var obj = Make("pieza", mesh ?? cube, solid, mesh != null, true, out var r);
+            var obj = Make("pieza", mesh ?? cube, solid, mesh != null, shadows, out var r);
             obj.position = at;
             obj.rotation = Quaternion.Euler(Rand(0, 360), Rand(0, 360), Rand(0, 360));
             return new Particle { obj = obj, renderer = r, colour = colour, scale = Vector3.one * size * T, opacity = 1 };
@@ -382,7 +383,15 @@ namespace Bastion.Client.Effects
                 ct.Register(() =>
                 {
                     if (!tweens.Remove(w)) return;
-                    w.step(1);
+                    // Its last step, unless what it moves is gone already: cancelled by a destroyCancellationToken as the
+                    // game closes (Red 26/10: a bullet in flight, «NullReferenceException» in Player.log).
+                    try
+                    {
+                        w.step(1);
+                    }
+                    catch (Exception e) when (e is NullReferenceException || e is MissingReferenceException)
+                    {
+                    }
                     w.done.TrySetCanceled();
                 });
             tweens.Add(w);
@@ -445,7 +454,7 @@ namespace Bastion.Client.Effects
             {
                 float a = Rand(0, Mathf.PI * 2);
                 float d = Rand(0, spread);
-                var p = Solid(at + new Vector3(Mathf.Cos(a) * d, Rand(0, 0.15f), Mathf.Sin(a) * d) * T, Shape(f => f.smokePuff), colour, size * Rand(0.7f, 1.3f));
+                var p = Solid(at + new Vector3(Mathf.Cos(a) * d, Rand(0, 0.15f), Mathf.Sin(a) * d) * T, Shape(f => f.smokePuff), colour, size * Rand(0.7f, 1.3f), false);
                 p.colourTo = clears;
                 Spawn(p, life * Rand(0.75f, 1.25f), grow, drag: 1.2f,
                     velocity: new Vector3(Mathf.Cos(a) * away * Rand(0.5f, 1), rise * Rand(0.6f, 1.2f), Mathf.Sin(a) * away * Rand(0.5f, 1)),

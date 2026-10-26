@@ -11,7 +11,7 @@ namespace Bastion.UI.Combat
     /// soldier; «slot=0» opens (or closes) a slot's menu; «act=Curar» presses the menu's line that starts so; «floor=0» a
     /// thing on the floor; «fallen» a fallen soldier's «Coger…»; «offer» the notice's «Cambiar»; «x» the menu's ✕. Also the
     /// map's: «ability=grenade» a key of the bar, «hover=47/57» the pointer on a tile, «click=44/55» a click there, «look=39/38» the camera to it (a slash: the steps'
-    /// lists part on commas); «why=shoot» says in the log why a key is off; «end» ends the turn, its question answered; «sheet=s1» a soldier's sheet, «file=a49» an
+    /// lists part on commas); «why=shoot» says in the log why a key is off; «join» and «drop» the partner (Ana) connected or dropped, «gone» dropped past the grace; «end» ends the turn, its question answered; «sheet=s1» a soldier's sheet, «file=a49» an
     /// enemy's file, «close» the window over them. Whether
     /// it found what to press (it says so in the log).
     /// </summary>
@@ -52,6 +52,16 @@ namespace Bastion.UI.Combat
             if (what == "ability")
             {
                 control.OnAbility(arg);
+                return true;
+            }
+            if (what == "join" || what == "drop" || what == "gone")
+            {
+                // The partner (slot 1, Ana) connected or dropped, as the room would say (SetPlayers: the grace, the notice).
+                var players = control.Players.Where(p => p.Slot != 1).Select(p => new Bastion.Net.PlayerInfo { Slot = p.Slot, Name = p.Name, Color = p.Color, Connected = p.Connected }).ToList();
+                players.Add(new Bastion.Net.PlayerInfo { Slot = 1, Name = "Ana", Color = Bastion.Engine.Content.PlayerColors[1], Connected = what == "join" });
+                control.SetPlayers(players);
+                // «gone»: dropped, and past the server's grace already (its 30 s aren't seen in a capture).
+                if (what == "gone") control.EndGraces();
                 return true;
             }
             if (what == "why")

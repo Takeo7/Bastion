@@ -391,6 +391,37 @@ namespace Bastion.Client.Units
         }
 
         /// <summary>The layers' weights and the motions mixer's inputs' (MOTION_ORDER, the camp's two loops, the variation), for the labs.</summary>
+        /// <summary>How far it moves rather than stands (syntyFigures.ts pose.run: the motions' share but the two idles'), 0 to 1.</summary>
+        public float Moving
+        {
+            get
+            {
+                float total = 0, still = 0;
+                for (int k = 0; k < weights.Length; k++)
+                {
+                    if (!motionClips[k].IsValid()) continue;
+                    total += weights[k];
+                    if (k <= 1) still += weights[k];
+                }
+                return total > 0 ? 1 - still / total : 0;
+            }
+        }
+
+        /// <summary>
+        /// A sway kept in step with the clips (syntyFigures.ts sway): a sine about `still` radians a second through the idle
+        /// it stands in and `moving[k]` through motion k it moves in, each a whole number of times its loop, blended as far
+        /// as it moves (Moving).
+        /// </summary>
+        public float Sway(float still, float[] moving, float offset = 0)
+        {
+            float At(int k, float w) => lengths[k] > 0 ? Mathf.Sin(2 * Mathf.PI * Mathf.Max(1, Mathf.Round(w * lengths[k] / (2 * Mathf.PI))) * (times[k] % lengths[k] / lengths[k]) + offset) : 0;
+            int moves = -1;
+            for (int k = 2; k < weights.Length; k++) if (motionClips[k].IsValid() && (moves < 0 || weights[k] > weights[moves])) moves = k;
+            int stands = weights[1] > weights[0] && motionClips[1].IsValid() ? 1 : 0;
+            float run = Moving;
+            return Mathf.Lerp(run < 1 && motionClips[stands].IsValid() ? At(stands, still) : 0, run > 0 && moves >= 0 ? At(moves, moving[moves]) : 0, run);
+        }
+
         public string Weights()
         {
             if (!graph.IsValid()) return "-";

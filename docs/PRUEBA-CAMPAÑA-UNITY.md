@@ -10,10 +10,11 @@ Cómo abrir las dos apps (doble clic, la segunda con `BASTION_DATOS`, la cuarent
 
 ## Qué no está todavía
 
-- El sonido (lo hace Red).
-- Las sombras con la cámara muy alejada (a más de unas 33 casillas): ya están hechas, pero no van en esta app (es de las 11:33 del 26/10). Tampoco van las armas en la mano: los soldados con pistola llevan las manos vacías.
+La app es la de `unity/Bastion/Builds/Mac/Bastion.app`, de las 13:57 del 26/10 (commit 29bd922). Para Ana, `Builds/Bastion-Mac.zip`.
+
+- El sonido: Ajustes ya tiene sus filas, pero aún no se oye nada (lo hace Red).
+- Cambiar de planta con Mayús y la rueda no funciona en el Mac en esta app (ya está arreglado para la siguiente): usar RePág y AvPág.
 - Los muertos especiales con su cuerpo: el Corredor, el Acorazado, el Chillón y el Hinchado salen todavía como un zombi común (se distinguen por su rótulo), y el Chillón grita sin moverse.
-- En combate: la hoja del soldado (H), la ficha del enemigo, las brechas del asedio y su rosa, y recargar, que aún es una pausa sin animación.
 
 ## 1. Empezar
 
@@ -60,7 +61,12 @@ Mirar cada cosa en las dos ventanas. Lo que hace uno con el otro delante va a vo
 
 1. Escuadra: elegir los soldados. Cada uno pulsa «Lanzar misión»; sale «A punto» hasta que el otro también lo pulsa.
 2. El combate es el del hito 1 (PRUEBA-UNITY.md §3). Además:
-   - los soldados llevan lo que se les puso en la base;
+   - los soldados llevan lo que se les puso en la base: el arma de la Armería en la mano, la pistola en su funda del muslo, el cuchillo o el machete en el cinto; recargar;
+   - la mochila al pie del panel del soldado: usar, curar a otro, dar, coger lo del suelo, cambiar con la mochila llena, registrar la de un caído;
+   - H o clic en el nombre: la hoja del soldado; clic derecho sobre un enemigo: su ficha;
+   - el suelo con sus piedrecitas, papeles y matas, y las calles con sus señales, postes y bocas de riego;
+   - las sombras también con la cámara muy lejos;
+   - Esc → Ajustes: la velocidad de los soldados y el tamaño de la interfaz;
    - la evacuación: el autobús llega, se sube y se va.
 3. Al acabar, el Parte: «Misión cumplida» o «Misión fracasada», heridos, caídos, experiencia y botín. «Continuar» vuelve a la base.
 4. De vuelta en la base:
@@ -77,7 +83,10 @@ Mirar cada cosa en las dos ventanas. Lo que hace uno con el otro delante va a vo
 
 ## 5. Si sale el asedio
 
-Si llega el asedio, en Escuadra el botón es «Defender el Bastión», y la misión se juega en la base. Antes, cada soldado se pone en su puesto del claro (sale de pie en él, con el arma).
+Si llega el asedio, en Escuadra el botón es «Defender el Bastión», y la misión se juega en la base. Antes, cada soldado se pone en su puesto del claro (sale de pie en él, con el arma). En el combate del asedio:
+- la rosa arriba a la derecha marca en rojo los lados de la próxima oleada (si hay una Sala de radio que funciona);
+- las puertas y barricadas dañadas llevan su barra de vida, y al pasar el ratón «Barricada: aguanta 3 de 9»;
+- las barricadas de sacos se gastan con cada golpe; al ceder, su haz naranja y una flecha en el borde («Brecha · sur · 7 casillas»).
 
 ## 6. Qué apuntar
 

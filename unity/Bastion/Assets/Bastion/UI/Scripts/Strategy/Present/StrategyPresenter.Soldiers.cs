@@ -86,6 +86,26 @@ namespace Bastion.UI.Strategy
         /// Soldados (renderBarracks): one's own soldiers by their faces, the recruit's card, the partner's while away (to
         /// prepare them); on the right the picked one's sheet. Personalizar is the screen's own (CustomizerView), not here.
         /// </summary>
+        /// <summary>
+        /// Nobody can go out (screen.ts waitEl; Campaign.MustWait, docs/FASE12.md §11.6): only the hurt left and nothing to
+        /// recruit with. The days go by at the Bastión, both agreeing, as «Esperar un día» (advance); null while someone can.
+        /// </summary>
+        WaitDayView MustWait(CampaignState c)
+        {
+            if (!Campaign.MustWait(c)) return null;
+            var ready = c.AdvanceReady[Slot];
+            var partner = Partner;
+            var together = partner != null && partner.Connected && c.Players.Count > 1;
+            var asked = together && !ready && c.AdvanceReady[partner.Slot];
+            return new WaitDayView
+            {
+                Label = ready ? "ESPERANDO…" : asked ? $"ESPERAR CON {partner.Name.ToUpperInvariant()}" : "ESPERAR A QUE SE CUREN",
+                Ready = ready,
+                Asked = asked,
+                Note = ready && together ? $"Esperando a {partner.Name}" : asked ? $"{partner.Name} quiere esperar a que se curen" : "Nadie puede salir: pasan los días hasta que alguien se cure o haya suministros para reclutar.",
+            };
+        }
+
         public SoldiersView Soldiers(SoldiersPick pick)
         {
             pick = pick ?? new SoldiersPick();
@@ -110,6 +130,7 @@ namespace Bastion.UI.Strategy
                 foreach (var s in theirs) v.Partner.Add(Tile(c, s, picked));
             }
             v.Recruit = Recruit(c, mine.Count(s => s.Alive));
+            v.MustWait = MustWait(c);
             var soldier = c.Soldiers.FirstOrDefault(s => s.Id == picked);
             if (soldier != null && pick.Draft != null && pick.Draft.Soldier == soldier.Id) v.Customizer = Customizer(soldier, pick.Draft);
             else if (soldier != null) v.Sheet = Sheet(c, soldier);
@@ -138,10 +159,11 @@ namespace Bastion.UI.Strategy
             var others = c.Soldiers.Count(x => x.Owner == s.Owner && x.Alive && x.Id != s.Id);
             v.CopyCount = others + 1;
             v.CanCopy = v.CanSave && others > 0 && Tinted;
+            v.CopyTip = Tinted ? "Guarda a este soldado y pinta a todos tus soldados con estos colores; cada uno conserva su nombre, su cabeza y su complexión." : TintOff;
             // The clothes: among those of the soldier's sex; unset, the ones their id picks, the same in every screen.
             var worn = Client.Units.Dress.OutfitOf(look.Character);
             var outfit = new ChoiceGroupView { Id = "outfit", Title = "Ropa" };
-            outfit.Choices.Add(new ChoiceView { Id = "", Label = "Al azar", On = worn == null });
+            outfit.Choices.Add(new ChoiceView { Id = "", Label = "Al azar", On = worn == null, Tip = "Una al azar, y no cambia." });
             foreach (var id in Client.Units.Dress.OutfitsFor(Client.Units.Dress.SexOf(look, s.Id)))
                 outfit.Choices.Add(new ChoiceView { Id = id, Label = Lore.OutfitNames.TryGetValue(id, out var n) ? n : id, On = worn == id });
             v.Groups.Add(outfit);
@@ -164,7 +186,7 @@ namespace Bastion.UI.Strategy
                 var leader = piece == ArmorParts.Helmet && hat == "trim" ? "los detalles" : "la armadura";
                 var mine = Appearances.PartOf(look, piece);
                 var own = mine != null && !string.Equals(mine, Follows(piece), System.StringComparison.OrdinalIgnoreCase);
-                return new ColorRowView { Id = piece, Label = label, Color = mine ?? Follows(piece), Swatches = swatches, Reset = own ? $"↺ como {leader}" : null, Note = own ? null : $"como {leader}" };
+                return new ColorRowView { Id = piece, Label = label, Color = mine ?? Follows(piece), Swatches = swatches, Reset = own ? $"↺ como {leader}" : null, ResetTip = $"Que vuelva a ir como {leader}", Note = own ? null : $"como {leader}" };
             }
             v.Colors.Add(new ColorRowView { Id = "all", Label = "Toda la armadura", Color = look.Primary, Swatches = swatches, Note = "todas las piezas" });
             v.Colors.Add(hat != null ? Piece(ArmorParts.Helmet, hat == "armour" ? "Casco" : head.Name)
@@ -173,7 +195,7 @@ namespace Bastion.UI.Strategy
             v.Colors.Add(Piece(ArmorParts.Arms, "Brazos"));
             v.Colors.Add(Piece(ArmorParts.Legs, "Piernas"));
             v.Colors.Add(new ColorRowView { Id = "trim", Label = "Detalles", Color = look.Secondary, Swatches = swatches, Note = "capucha, boina y gorra" });
-            v.Colors.Add(new ColorRowView { Id = "mark", Label = "Marca de jugador", Color = PlayerColor(s.Owner), Note = "siempre en tu color", Locked = true });
+            v.Colors.Add(new ColorRowView { Id = "mark", Label = "Marca de jugador", Color = PlayerColor(s.Owner), Note = "siempre en tu color", Locked = true, Tip = "La marca brilla siempre en el color de su jugador, para que se sepa de quién es cada soldado." });
             return v;
         }
 
@@ -202,6 +224,7 @@ namespace Bastion.UI.Strategy
                 Id = s.Id, Name = string.IsNullOrEmpty(s.Nickname) ? s.Name.Split(' ')[0] : s.Nickname, Accent = PlayerColor(s.Owner),
                 Skills = SkillsOf(s), Rank = rank, RankTip = RankTip(s), Dead = !s.Alive, Selected = s.Id == picked,
                 Points = s.Owner == Slot && s.Alive && Campaign.CanSpendPoints(c, s), PointsTip = "Puntos por gastar en el tablero",
+                FullName = Appearances.DisplayName(s.Name, s.Nickname),
             };
             if (!s.Alive || s.Infection != null || s.WoundedDays > 0)
             {
@@ -340,6 +363,7 @@ namespace Bastion.UI.Strategy
                 {
                     v.Buttons.Add($"Confirmar el tratamiento ({cost} ✚)");
                     v.Enabled.Add(!tooFew);
+                    v.Pulse = true;
                     v.Buttons.Add("Rechazar");
                     v.Enabled.Add(true);
                 }
@@ -428,18 +452,32 @@ namespace Bastion.UI.Strategy
                 foreach (var m in current.Mods ?? new List<string>()) v.Tags.Add(Content.WeaponMods[m].Name);
             }
             if (!editable) return v;
-            v.Options.Add(new PickOptionView { Id = "none", Name = melee ? "Sin arma: el cuchillo" : "Sin arma: la pistola", Note = current != null ? $"{Content.FoundWeapons[current.Kind].Name} vuelve a la Armería" : null, Current = current == null });
+            // Each against what it carries now, in green and red (weaponDiff); the pistol or the knife too, once there is a weapon to leave.
+            var now = Carried(c, s, melee);
+            var bare = melee ? WeaponIds.Knife : WeaponIds.Pistol;
+            v.Options.Add(new PickOptionView
+            {
+                Id = "none", Name = melee ? "Sin arma: el cuchillo" : "Sin arma: la pistola", Icon = WeaponIcon(bare),
+                Note = current != null ? $"{Content.FoundWeapons[current.Kind].Name} vuelve a la Armería" : null, Current = current == null,
+                Diff = current != null ? Diff(Aim.BaseWeaponProfile(bare), now) : new List<ChipView>(),
+            });
             CampaignSoldier HolderOf(FoundWeapon w) => w.Holder != null ? c.Soldiers.FirstOrDefault(x => x.Id == w.Holder) : null;
             bool Theirs(FoundWeapon w) => HolderOf(w) is CampaignSoldier h && !Content.CommandsFor(Slot, h.Owner, Connected);
             int Rank(FoundWeapon w) => w.Holder == null ? 0 : Theirs(w) ? 2 : 1;
-            var options = (c.FoundWeapons ?? new List<FoundWeapon>()).Where(w => w.Id != current?.Id && (Content.FoundWeapons[w.Kind].Slot == "melee") == melee).OrderBy(Rank);
+            var options = (c.FoundWeapons ?? new List<FoundWeapon>()).Where(w => w.Id != current?.Id && (Content.FoundWeapons[w.Kind].Slot == "melee") == melee).OrderBy(Rank).ToList();
             foreach (var w in options)
             {
                 var holder = HolderOf(w);
                 var theirs = Theirs(w);
                 var note = holder == null ? "En la Armería" : theirs ? $"La lleva {holder.Name}, de {PlayerName(holder.Owner)}" : $"La lleva {holder.Name}: se la quitas";
-                v.Options.Add(new PickOptionView { Id = w.Id, Name = Content.FoundWeapons[w.Kind].Name, Note = note, Enabled = !theirs });
+                v.Options.Add(new PickOptionView
+                {
+                    Id = w.Id, Name = Content.FoundWeapons[w.Kind].Name, Icon = WeaponIcon(Content.FoundWeapons[w.Kind].Weapon), Note = note, Enabled = !theirs,
+                    Tags = WearTags(w), Tip = theirs ? note : null,
+                    Diff = theirs ? new List<ChipView>() : Diff(Aim.WeaponProfileOf(w.Kind, w.Condition ?? 100, w.Mods), now),
+                });
             }
+            if (options.Count == 0) v.Empty = melee ? "No hay armas de cuerpo a cuerpo en la Armería." : "No hay armas en la Armería.";
             return v;
         }
 

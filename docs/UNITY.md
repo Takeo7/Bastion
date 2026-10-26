@@ -115,17 +115,24 @@ La prueba del hito 2 con Arturo: [PRUEBA-CAMPAÑA-UNITY.md](PRUEBA-CAMPAÑA-UNIT
     - **Falta:** las sombras cuando la cámara se aleja (acaban a 50 m y la cámara llega a 63 m). Lo hace Arte, con la medida de lo que cuesta.
 - **La noche:** luces de farolas, coches y ventanas, y las bengalas.
 - **Armas:** hecho el 26/10 (Arte). Pistola, machete y cuchillo en la mano, en la funda y en el cinto, y recargar, en combate y en la base. Quedan detalles: la guardia con la hoja, el fusil al agacharse (`slingOnBack`) y la pistola fuera del muslo (`spreadPistol`).
-- **Muertos especiales** (Arte, informe del 26/10). En Unity todos salen con los 5 zombis de Sidekick. Falta, por este orden:
-  1. los cuerpos de City Zombies (Corredor, Acorazado) y Boss Zombies (Chillón, Hinchado), con los tamaños y el pelo de la 0.10.1;
-  2. el grito del Chillón con su cuerpo y el reventón del Hinchado;
-  3. comprobar con una tira si faltan los estilos de andar (inclinación, cadera, giro);
-  4. los 12 «vivos hechos muertos» del zombi común. Recargar, que en Unity aún es una espera de 1,4 s (`UnitViews.Reload`): en la 0.10.1 es `rifleReload` («Reloading» de Mixamo). Es de Arte.
+- **Muertos especiales** (Arte, hecho el 26/10).
+  - Los cuerpos: City Zombies para el Corredor y el Acorazado, Boss Zombies para el Chillón y el Hinchado, con los tamaños y el pelo de la 0.10.1.
+  - El grito del Chillón con su cuerpo y el reventón del Hinchado.
+  - La inclinación de cada tipo al andar (STYLES), medida por el ángulo del tronco contra la 0.10.1.
+  - Los 17 cuerpos del zombi común, con los 12 «vivos hechos muertos» horneados en `Assets/Synty/Extra/Undead`, fuera de git: los hace FigureCatalogMake.
+  - Con ellos, para todas las unidades: el destello rojo al recibir un golpe y al morir, y la muerte y el golpe según de dónde viene (antes iban al azar).
+  - Quedan detalles: la nube del Hinchado y la mano en la cadera en Soldados.
 - **Rendimiento medido** en el PC de la 3090 («alto» ≤ 4,2 ms) y en el Mac («medio» ≥ 30 fps), con red.log.
 - **Releases de la app de Unity** (versión que decide Arturo) y, entonces, retirar packages/ (Three.js, Electron). El borrador de las notas es [NOTAS-UNITY.md](NOTAS-UNITY.md), de Lore. Antes de la primera, hay que decidir con Arturo dos cosas:
   - **El número de versión.** La app dice hoy «0.1.0», más bajo que la 0.10.1.
   - **El nombre en el Mac.** Las dos apps se llaman `Bastion.app`, así que copiar la de Unity a Aplicaciones sustituye a la de Electron. Las partidas no se pisan, porque Unity guarda en `Bastion-Unity/`.
   - **El tamaño** (Red, 26/10). La app del Mac ocupa 842 MB porque la compilación no comprime nada: el zip ya pesa 224 MB.
-    - Con LZ4HC en AppBuild bajaría a unos 290 MB sin cambiar lo que se ve. Lo hace Red, midiendo la carga antes y después.
+    - Con LZ4HC baja a 306 MB sin cambiar lo que se ve. Red lo midió en el Mac:
+      - la carga sube de 0,2 a 0,6 s (combate 3,5→3,7 s; base 1,2→1,8 s);
+      - los fotogramas no cambian;
+      - compilar tarda 95 s más;
+      - el zip apenas cambia (214→201 MB).
+    - Por defecto se compila sin comprimir; LZ4HC es una opción de AppBuild. En las releases, se decide con Arturo.
     - Las 815 piezas de Sidekick que no usa el armario (181 MB sin comprimir) y los personajes de muestra sin uso los decide Arte después de los «vivos hechos muertos», que necesitan más piezas.
 - **El tiempo real** (realtime.ts): solo si Arturo lo quiere; no estaba en uso.
 
@@ -147,6 +154,9 @@ La prueba del hito 2 con Arturo: [PRUEBA-CAMPAÑA-UNITY.md](PRUEBA-CAMPAÑA-UNIT
 - **Escenas:** un solo dueño por archivo .unity. Partida es de Arte; Inicio, de UI.
 - **En otra máquina, tras clonar:** importar Synty (`unity/tools/importar-synty.sh`), los clips de Mixamo y la herramienta Sidekicks (assets-src/sidekicks-tool), y ejecutar SourceProps.Run, SnowFeatureMake.Run, MapCatalogMake.Run, PieceMake.Run, GradeMake.Run y ProjectSetup.Run (UNITY-ARTE.md §6). El sonido, con `unity/tools/sonido.sh` ([UNITY-SONIDO.md](UNITY-SONIDO.md)): unos 580 MB de WAV generados de la 0.10.1, fuera de git.
 - **Revisión:** cada animación, con tira a 10 fps de cerca y desde la cámara del juego; cada pantalla, junto a la 0.10.1 con el mismo encuadre. Gameplay aprueba.
+- **Medir en el Mac:** con vsync, la GPU de un nivel ligero va medio parada y macOS le baja la frecuencia, así que sus ms de gpu suben sin perder fotogramas. Para comparar niveles, medir sin tope con la GPU llena (`MapLab.Variants`), no la gpu con vsync (Arte, 26/10).
+- **Antes de cada commit y de cada compilación de la app:** preguntar a todos si tienen algo a medio probar en Assets o en engine-cs. A Assets solo se copia lo ya probado. Además de `dotnet test` y `unity.sh`, pasar `CombatLab.Close` y leer sus excepciones (3af21bd se llevó código de armas a medio probar).
+- **Apps de prueba:** reutilizar una compilación y abrirla en modo de prueba (`BASTION_SOLO_LOCAL` o cualquier mando de prueba), que solo escucha en 127.0.0.1. Cada compilación nueva le saca a Arturo los cuadros de macOS del cortafuegos y la red local.
 
 ## 7. Para un Gameplay nuevo
 

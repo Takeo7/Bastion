@@ -141,10 +141,10 @@ namespace Bastion.Client.Net
 
         /// <summary>
         /// A test app of ours, never a player's: BASTION_SOLO_LOCAL=1, or any of the tests' drivers (BASTION_MEDIR,
-        /// BASTION_CAMPANA, BASTION_ANFITRION, BASTION_UNIRSE, BASTION_PASOS_COMBATE, -shotOut). Its room listens on
-        /// 127.0.0.1 only, and nothing is announced or listened for on the network: every build is signed anew, and macOS
-        /// asks again (firewall, local network) for each one that opens a port to the network or broadcasts. Those
-        /// questions were landing on Arturo (26/10).
+        /// BASTION_CAMPANA, BASTION_ANFITRION, BASTION_UNIRSE, BASTION_PASOS_COMBATE, BASTION_SONIDO_GUION, -shotOut). Its
+        /// room listens on 127.0.0.1 only, and nothing is announced or listened for on the network: every build is signed
+        /// anew, and macOS asks again (firewall, local network) for each one that opens a port to the network or broadcasts.
+        /// Those questions were landing on Arturo (26/10).
         /// </summary>
         public bool LocalOnly { get; private set; }
 
@@ -200,7 +200,7 @@ namespace Bastion.Client.Net
             log = new NetLog(Path.Combine(DataDir, "red.log"));
             settings = NetSettings.Load(Path.Combine(DataDir, "conexion.json"));
             LocalOnly = Environment.GetEnvironmentVariable("BASTION_SOLO_LOCAL") == "1"
-                || new[] { "BASTION_MEDIR", "BASTION_CAMPANA", "BASTION_ANFITRION", "BASTION_UNIRSE", "BASTION_PASOS_COMBATE" }.Any((v) => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(v)))
+                || new[] { "BASTION_MEDIR", "BASTION_CAMPANA", "BASTION_ANFITRION", "BASTION_UNIRSE", "BASTION_PASOS_COMBATE", "BASTION_SONIDO_GUION" }.Any((v) => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(v)))
                 || Environment.GetCommandLineArgs().Contains("-shotOut");
             if (LocalOnly) log.Write("[prueba] app de prueba: la sala solo en 127.0.0.1, sin anunciarse ni escuchar la red");
             var mission = Environment.GetEnvironmentVariable("BASTION_MISION");

@@ -1,7 +1,9 @@
 {
     "name": "Bastion.Client.Audio",
     "rootNamespace": "Bastion.Client.Audio",
-    "references": [],
+    "references": [
+        "Bastion.Engine"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

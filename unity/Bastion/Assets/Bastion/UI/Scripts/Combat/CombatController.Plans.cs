@@ -175,6 +175,7 @@ namespace Bastion.UI.Combat
             var colour = PlayerColor(slot);
             var enemy = kind == "enemy";
             AimMarks?.Ping(at, enemy ? MoveOverlay.Hex(0xff4a4a) : ColorUtility.TryParseHtmlString(colour, out var c) ? (Color32)c : MoveOverlay.Hex(0xffffff));
+            Sfx.Mark(at);
             Hud?.Pin(Board.TileToWorld(Shown, tile, 2.9f * Board.Tile), PlayerName(slot), colour);
             if (slot != MySlot) Hud?.Log($"{PlayerName(slot)} marca {(enemy ? "un enemigo" : "una posición")}", colour);
         }

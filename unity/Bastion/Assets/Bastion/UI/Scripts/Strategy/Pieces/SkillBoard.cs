@@ -195,9 +195,18 @@ namespace Bastion.UI.Strategy
             sound?.Invoke("cellHold");
         }
 
+        /// <summary>Esc while a cell is held (hexBoard.ts key: cancelHold): the purchase let go, not the board; whether one was held.</summary>
+        public bool CancelHold()
+        {
+            if (held == null) return false;
+            StopHold();
+            return true;
+        }
+
         void StopHold()
         {
             if (held == null) return;
+            sound?.Invoke("cellHold.stop");
             held.Hold = 0;
             held.MarkDirtyRepaint();
             held = null;
@@ -254,6 +263,8 @@ namespace Bastion.UI.Strategy
             held.MarkDirtyRepaint();
             if (held.Hold < 1) return;
             var id = held.Cell.Id;
+            // Bought: the hold's sound rings out.
+            sound?.Invoke("cellHold.done");
             StopHold();
             sound?.Invoke("cellBuy");
             Bought?.Invoke(id);

@@ -134,6 +134,15 @@ namespace Bastion.EditorTools
             floor.GetComponent<Renderer>().sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = new Color(0.42f, 0.42f, 0.44f) };
             UnityEngine.Object.DestroyImmediate(floor.GetComponent<Collider>());
             state.Units = state.Units.Where(keep).ToList();
+            // The state as open as the floor drawn (city-7 has walls on row 10): what a body falls across (UnitViews.Blows) finds room.
+            for (int y = 0; y < Mathf.Min(state.Height, 24); y++)
+                for (int x = 0; x < Mathf.Min(state.Width, 28); x++)
+                {
+                    int i = y * state.Width + x;
+                    state.Tiles[i] = TileKinds.Floor;
+                    if (state.Elev != null && i < state.Elev.Count) state.Elev[i] = 0;
+                    if (state.Decor != null && i < state.Decor.Count) state.Decor[i] = 0;
+                }
             units = new GameObject("Unidades").AddComponent<UnitViews>();
             fx = new GameObject("Efectos").AddComponent<Fx>();
             var camera = new GameObject("Shot camera").AddComponent<Camera>();
@@ -204,6 +213,221 @@ namespace Bastion.EditorTools
                 await units.StandUpFed();
                 await units.MoveAlong(target.Id, new[] { new Pos { X = 12, Y = 11 } }, 1);
                 Debug.Log($"[combat] {Time.time:0.00} s: done");
+            };
+        }
+
+        /// <summary>
+        /// The special dead (City Zombies' and Boss Zombies' bodies: UnitViews.Dead) as 0.10.1's referencia.html?map=plaza
+        /// films them (scratchpad muertos/make.cjs, seen from the other side): BASTION_TEMPLATE (xenoid unless said; mec,
+        /// sectoid, bloater) with the id BASTION_ID (m0 unless said: which of its bodies) walks three tiles up to a soldier,
+        /// takes a hit, screams if it is the Chillón and, if it eats, lunges, bites, eats it three seconds and gets up; then
+        /// dies (the Hinchado bursting as it falls). BASTION_FILA=1: every
+        /// special body in a row facing the camera, a Sidekick zombie first for size. BASTION_VIEW=game: the game's camera.
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Especiales -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 140 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Especiales()
+        {
+            var first = MapLab.Golden("city-7");
+            string soldierId = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
+            string deadId = first.Units.First(u => u.Alive && u.Template == "zombie").Id;
+            Unit Like(Unit u, string id, string template)
+            {
+                var copy = Bastion.Net.Json.Read<Unit>(Bastion.Net.Json.Write(u));
+                copy.Id = id;
+                copy.Template = template;
+                return copy;
+            }
+            string fila = Environment.GetEnvironmentVariable("BASTION_FILA");
+            if (fila == "1" || fila == "comunes")
+            {
+                // (comunes: the common dead's 17 bodies, in their order, each its id's pick: syntyManifest.ts UNIT_BODIES zombie.)
+                var row = fila == "comunes"
+                    ? new[] { "c2", "c6", "c11", "c15", "c29", "c1", "c5", "c9", "c16", "c0", "c4", "c8", "c17", "c3", "c7", "c10", "c14" }.Select(i => ("zombie", i)).ToArray()
+                    : new[] { ("zombie", "z0"), ("xenoid", "m0"), ("xenoid", "m3"), ("xenoid", "m2"), ("xenoid", "m1"), ("mec", "m0"), ("mec", "m3"), ("mec", "m2"), ("mec", "m1"), ("sectoid", "c0"), ("bloater", "h0") };
+                int last = 2 + row.Length - 1;
+                Plain(u => u.Id == deadId, 2, last);
+                var like = state.Units[0];
+                state.Units = row.Select((r, k) => Put(Like(like, fila == "comunes" ? r.Item2 : r.Item1 + "-" + r.Item2, r.Item1), 2 + k, 10, Math.PI / 2)).ToList();
+                // From high up, as 0.10.1's (8 tiles up and 9 off, over the row's middle).
+                var shot = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).First(c => c.name == "Shot camera");
+                var middle = (MapSpace.World(2, 10) + MapSpace.World(last, 10)) / 2;
+                shot.transform.position = middle + new Vector3(0, 8, -9) * MapSpace.Tile * (row.Length / 11f);
+                shot.transform.LookAt(middle + Vector3.up * 0.9f * MapSpace.Tile);
+                sequence = async () =>
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(0.5f);
+                    Debug.Log($"[combat] especiales: {string.Join(", ", state.Units.Select(u => $"{u.Id} {Figures.FeetOf(u.Id)?.GetComponentInChildren<Animator>()?.name}"))}");
+                    // What each is drawn with: its renderers, each one's submeshes and materials.
+                    foreach (var u in state.Units.Take(3).Concat(state.Units.Skip(9)))
+                        Debug.Log($"[combat] {u.Id} drawn by " + string.Join("; ", Figures.FeetOf(u.Id).GetComponentsInChildren<Renderer>().Select(r => $"{r.name} {(r is SkinnedMeshRenderer s ? s.sharedMesh?.subMeshCount : r.GetComponent<MeshFilter>()?.sharedMesh?.subMeshCount)} sub, {r.sharedMaterials.Length} mat")));
+                };
+                return;
+            }
+            string template = Environment.GetEnvironmentVariable("BASTION_TEMPLATE") ?? "xenoid";
+            string id = Environment.GetEnvironmentVariable("BASTION_ID") ?? "m0";
+            Plain(u => u.Id == soldierId || u.Id == deadId, 14, 18);
+            soldier = Put(state.Units.First(u => u.Id == soldierId), 14, 10, 0);
+            target = Put(Like(state.Units.First(u => u.Id == deadId), id, template), 18, 10, Math.PI);
+            state.Units = new System.Collections.Generic.List<Unit> { soldier, target };
+            // BASTION_MEDIR=1: how far it leans (its trunk, hips to neck, and its head, from upright along its facing, in
+            // degrees), standing six seconds and walking back and forth, as 0.10.1's measured (scratchpad muertos/medir-inclinacion.js).
+            if (Environment.GetEnvironmentVariable("BASTION_MEDIR") == "1")
+            {
+                sequence = async () =>
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(2);
+                    var a = Figures.FeetOf(target.Id).GetComponentInChildren<Animator>();
+                    var root = Figures.FeetOf(target.Id);
+                    (float trunk, float head) Lean()
+                    {
+                        var hips = a.GetBoneTransform(HumanBodyBones.Hips).position;
+                        float Of(Vector3 p) { var d = p - hips; return Mathf.Atan2(Vector3.Dot(d, root.forward), Vector3.Dot(d, Vector3.up)) * Mathf.Rad2Deg; }
+                        return (Of((a.GetBoneTransform(HumanBodyBones.Neck) ?? a.GetBoneTransform(HumanBodyBones.Head)).position), Of(a.GetBoneTransform(HumanBodyBones.Head).position));
+                    }
+                    async Awaitable<string> Mean(float seconds)
+                    {
+                        float t0 = Time.time, trunk = 0, head = 0;
+                        int n = 0;
+                        while (Time.time - t0 < seconds)
+                        {
+                            await Awaitable.NextFrameAsync();
+                            var (x, y) = Lean();
+                            trunk += x;
+                            head += y;
+                            n++;
+                        }
+                        return FormattableString.Invariant($"trunk {trunk / n:0.0}°, head {head / n:0.0}°");
+                    }
+                    Debug.Log($"[lean] {template} still: {await Mean(6)}");
+                    var walk = units.MoveAlong(target.Id, new[] { new Pos { X = 17, Y = 10 }, new Pos { X = 16, Y = 10 }, new Pos { X = 15, Y = 10 } }, 1);
+                    await Awaitable.WaitForSecondsAsync(0.5f);
+                    Debug.Log($"[lean] {template} walking: {await Mean(1.2f)}");
+                    await walk;
+                };
+                return;
+            }
+            bool eats = template == "zombie" || template == "xenoid" || template == "mec";
+            sequence = async () =>
+            {
+                units.Sync(state);
+                Reveal();
+                await Awaitable.WaitForSecondsAsync(1);
+                Debug.Log($"[combat] {Time.time:0.00} s: {template} {id} ({Figures.FeetOf(target.Id)?.GetComponentInChildren<Animator>()?.name}) walks");
+                Debug.Log($"[combat] {soldier.Id} drawn by " + string.Join("; ", Figures.FeetOf(soldier.Id).GetComponentsInChildren<Renderer>().Select(r => $"{r.name} {(r is SkinnedMeshRenderer s ? s.sharedMesh?.subMeshCount : r.GetComponent<MeshFilter>()?.sharedMesh?.subMeshCount)} sub, {r.sharedMaterials.Length} mat")));
+                await units.MoveAlong(target.Id, new[] { new Pos { X = 17, Y = 10 }, new Pos { X = 16, Y = 10 }, new Pos { X = 15, Y = 10 } }, 1);
+                Debug.Log($"[combat] {Time.time:0.00} s: hit");
+                // (The soldier's aim at it: the blow comes from the soldier, as 0.10.1's lab's die(T, from).)
+                await units.RaiseWeapon(soldier.Id, units.Chest(target.Id));
+                await units.HitReact(target.Id, 1);
+                await Awaitable.WaitForSecondsAsync(0.4f);
+                if (template == "sectoid")
+                {
+                    Debug.Log($"[combat] {Time.time:0.00} s: screams");
+                    _ = units.Scream(target.Id);
+                    fx.Scream(units.Head(target.Id));
+                    await Awaitable.WaitForSecondsAsync(0.4f);
+                    // Where its arms point at the scream's height (in its own frame: x its right, z ahead).
+                    var a = Figures.FeetOf(target.Id).GetComponentInChildren<Animator>();
+                    string Dir(HumanBodyBones from, HumanBodyBones to) => a.GetBoneTransform(from) is Transform f && a.GetBoneTransform(to) is Transform t2 ? Figures.FeetOf(target.Id).InverseTransformDirection(t2.position - f.position).normalized.ToString("F2") : "-";
+                    Debug.Log($"[combat] scream: left upper {Dir(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm)} fore {Dir(HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand)}; right upper {Dir(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm)} fore {Dir(HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand)}");
+                    await Awaitable.WaitForSecondsAsync(0.8f);
+                }
+                if (eats)
+                {
+                    Debug.Log($"[combat] {Time.time:0.00} s: lunge");
+                    await units.Lunge(target.Id, soldier.Id, true, () =>
+                    {
+                        fx.Bite(units.Chest(soldier.Id), units.Chest(target.Id));
+                        _ = units.HitReact(soldier.Id, 1);
+                    });
+                    var dies = units.Die(soldier.Id);
+                    await units.Feed(target.Id, soldier.Id, () => fx.Bite(units.Chest(soldier.Id), units.Head(target.Id)));
+                    await dies;
+                    await Awaitable.WaitForSecondsAsync(3);
+                    Debug.Log($"[combat] {Time.time:0.00} s: up");
+                    await units.StandUpFed();
+                    await Awaitable.WaitForSecondsAsync(0.5f);
+                }
+                Debug.Log($"[combat] {Time.time:0.00} s: dies");
+                if (template == "bloater")
+                {
+                    // It bursts as it falls (EventPlayer: the death not waited for, the blast 0.15 s on).
+                    var at = units.Feet(target.Id) + Vector3.up * 0.2f * MapSpace.Tile;
+                    var falls = units.Die(target.Id);
+                    await Awaitable.WaitForSecondsAsync(0.15f);
+                    units.BlastAt(at);
+                    _ = fx.Explosion(at, 1.5f);
+                    fx.Burst(at, 1.5f);
+                    await falls;
+                }
+                else await units.Die(target.Id);
+                Debug.Log($"[combat] {Time.time:0.00} s: done");
+            };
+        }
+
+        /// <summary>
+        /// What a horde costs a frame (Gameplay 26/10, the special dead's bodies): BASTION_N of the dead (40 unless said) on a
+        /// plain floor under the game's camera (24 tiles), in 0.10.1's horde lab's mix (horde.ts TEMPLATES: three common for
+        /// a Corredor, an Acorazado and a Hinchado), every other one walking back and forth; BASTION_SOLO_ZOMBIS=1, all of
+        /// them common (Sidekick's), to weigh against. In play mode, three turns of 120 frames, the least of each turn's
+        /// mean (real time a frame, in the editor on this machine).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Horda -shotPlay -shotCamera "Shot camera" -shotWarm 16 -shotFrames 1 -shotOut &lt;file&gt;
+        /// </summary>
+        public static void Horda()
+        {
+            var first = MapLab.Golden("city-7");
+            string deadId = first.Units.First(u => u.Alive && u.Template == "zombie").Id;
+            int n = int.TryParse(Environment.GetEnvironmentVariable("BASTION_N"), out int count) ? count : 40;
+            bool plain = Environment.GetEnvironmentVariable("BASTION_SOLO_ZOMBIS") == "1";
+            string[] mix = { "zombie", "zombie", "zombie", "xenoid", "mec", "bloater" };
+            Environment.SetEnvironmentVariable("BASTION_VIEW", "game");
+            Plain(u => u.Id == deadId, 8, 16);
+            var like = state.Units[0];
+            state.Units = Enumerable.Range(0, n).Select(k =>
+            {
+                var u = Bastion.Net.Json.Read<Unit>(Bastion.Net.Json.Write(like));
+                u.Id = $"h{k}";
+                u.Template = plain ? "zombie" : mix[k % mix.Length];
+                return Put(u, 6 + k % 8 * 2, 4 + k / 8 * 2, Math.PI / 2);
+            }).ToList();
+            sequence = async () =>
+            {
+                units.Sync(state);
+                Reveal();
+                // Every other one walking two tiles and back, on and on.
+                bool on = true;
+                foreach (var u in state.Units.Where((u, k) => k % 2 == 1))
+                    Walk(u);
+                async void Walk(Unit u)
+                {
+                    var there = new[] { new Pos { X = u.Pos.X + 1, Y = u.Pos.Y }, new Pos { X = u.Pos.X + 2, Y = u.Pos.Y } };
+                    var back = new[] { new Pos { X = u.Pos.X + 1, Y = u.Pos.Y }, new Pos { X = u.Pos.X, Y = u.Pos.Y } };
+                    while (on && Application.isPlaying)
+                    {
+                        await units.MoveAlong(u.Id, there, 1);
+                        await units.MoveAlong(u.Id, back, 1);
+                    }
+                }
+                await Awaitable.WaitForSecondsAsync(3);
+                double least = double.MaxValue;
+                for (int turn = 0; turn < 3; turn++)
+                {
+                    float spent = 0;
+                    for (int k = 0; k < 120; k++)
+                    {
+                        await Awaitable.NextFrameAsync();
+                        spent += Time.unscaledDeltaTime;
+                    }
+                    least = Math.Min(least, spent / 120 * 1000);
+                }
+                on = false;
+                var mixed = state.Units.GroupBy(u => u.Template).Select(g => $"{g.Key} ×{g.Count()}");
+                Debug.Log(FormattableString.Invariant($"[horde] {n} of the dead ({string.Join(", ", mixed)}), half walking: {least:0.00} ms a frame (the least of three turns of 120), {QualitySettings.names[QualitySettings.GetQualityLevel()]}"));
             };
         }
 

@@ -166,9 +166,9 @@ namespace Bastion.UI.Combat
             }
             if (mouse != null)
             {
-                // With Shift the wheel changes floor (the controller's), and over the HUD it is the HUD's.
+                // With Shift or Alt the wheel changes floor (the controller's), and over the HUD it is the HUD's.
                 var wheel = mouse.scroll.ReadValue().y;
-                if (wheel != 0 && (keys == null || !keys.shiftKey.isPressed) && (OverHud == null || !OverHud(mouse.position.ReadValue())))
+                if (wheel != 0 && (keys == null || !keys.shiftKey.isPressed && !keys.altKey.isPressed) && (OverHud == null || !OverHud(mouse.position.ReadValue())))
                 {
                     TakeControl();
                     desiredDistance = Mathf.Clamp(desiredDistance * (1 - wheel * 0.001f), MinDistance, MaxDistance);

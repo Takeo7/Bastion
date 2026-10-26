@@ -99,6 +99,98 @@ namespace Bastion.EditorTools
             UnityEngine.Object.DestroyImmediate(target);
         }
 
+        /// <summary>
+        /// What each way of drawing costs at a quality level (Gameplay 26/10: «medio» spent more of the GPU than «alto» in the
+        /// city): BASTION_MAP (city-7) by day under the game's camera at 24 tiles, at BASTION_CALIDAD (Medio), with each of
+        /// BASTION_VARIANTES in turns three times, the least of each, in ms a frame at 1920×1080: «tal» as the project has it,
+        /// «fplus» its renderer in Forward+, «sinsombras» without the other lights' shadows, «sinluces» without other lights
+        /// (the fill too), «sinssao» without ambient occlusion, «sinniebla» and «singradacion» without those passes. The
+        /// assets are put back as they were.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.Variants -quit
+        /// </summary>
+        public static void Variants()
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+            string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
+            var state = Golden(name);
+            Lighting(true);
+            Map(state, name);
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.farClipPlane = 800;
+            var target = new RenderTexture(1920, 1080, 24);
+            camera.targetTexture = target;
+            camera.aspect = 1920f / 1080;
+            camera.fieldOfView = 40;
+            var probe = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            int frames = int.TryParse(Environment.GetEnvironmentVariable("BASTION_FRAMES"), out int f) ? f : 120;
+            double Frames()
+            {
+                void One()
+                {
+                    camera.Render();
+                    RenderTexture.active = target;
+                    probe.ReadPixels(new Rect(0, 0, 1, 1), 0, 0);
+                    probe.Apply(false);
+                    RenderTexture.active = null;
+                }
+                for (int k = 0; k < 10; k++) One();
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                for (int k = 0; k < frames; k++) One();
+                return watch.Elapsed.TotalMilliseconds / frames;
+            }
+            float tiles = 24, pitch = 52 * Mathf.Deg2Rad, yaw = 45 * Mathf.Deg2Rad, back = Mathf.Cos(pitch) * tiles * MapSpace.Tile;
+            var middle = MapSpace.World(state.Width / 2, state.Height / 2);
+            camera.transform.position = middle + new Vector3(Mathf.Sin(yaw) * back, Mathf.Sin(pitch) * tiles * MapSpace.Tile, -Mathf.Cos(yaw) * back);
+            camera.transform.LookAt(middle);
+            int was = QualitySettings.GetQualityLevel();
+            string level = Environment.GetEnvironmentVariable("BASTION_CALIDAD") ?? "Medio";
+            int index = Array.IndexOf(QualitySettings.names, level);
+            if (index < 0)
+            {
+                Debug.LogWarning($"[variant] no quality level {level}");
+                return;
+            }
+            QualitySettings.SetQualityLevel(index, true);
+            var urp = (UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset)QualitySettings.renderPipeline;
+            var pipeline = new SerializedObject(urp);
+            var data = (UnityEngine.Rendering.Universal.UniversalRendererData)pipeline.FindProperty("m_RendererDataList").GetArrayElementAtIndex(0).objectReferenceValue;
+            var renderer = new SerializedObject(data);
+            var features = data.rendererFeatures.Where(x => x != null).ToDictionary(x => x.name, x => x.isActive);
+            int mode = renderer.FindProperty("m_RenderingMode").intValue, lights = pipeline.FindProperty("m_AdditionalLightsRenderingMode").intValue;
+            bool lightShadows = pipeline.FindProperty("m_AdditionalLightShadowsSupported").boolValue;
+            void Put(string variant)
+            {
+                renderer.Update();
+                pipeline.Update();
+                renderer.FindProperty("m_RenderingMode").intValue = variant == "fplus" ? 2 : mode;
+                pipeline.FindProperty("m_AdditionalLightsRenderingMode").intValue = variant == "sinluces" ? 0 : lights;
+                pipeline.FindProperty("m_AdditionalLightShadowsSupported").boolValue = variant != "sinsombras" && lightShadows;
+                renderer.ApplyModifiedPropertiesWithoutUndo();
+                pipeline.ApplyModifiedPropertiesWithoutUndo();
+                foreach (var feature in data.rendererFeatures.Where(x => x != null))
+                {
+                    bool off = variant == "sinssao" && feature is UnityEngine.Rendering.Universal.ScreenSpaceAmbientOcclusion
+                        || variant == "sinniebla" && feature.name == "Niebla" || variant == "singradacion" && feature.name.StartsWith("Grada");
+                    feature.SetActive(!off && features[feature.name]);
+                }
+                data.SetDirty();
+            }
+            var variants = (Environment.GetEnvironmentVariable("BASTION_VARIANTES") ?? "tal,fplus,sinsombras,sinluces,sinniebla,singradacion").Split(',');
+            var least = variants.ToDictionary(v => v, v => double.MaxValue);
+            for (int turn = 0; turn < 3; turn++)
+                foreach (var variant in variants)
+                {
+                    Put(variant);
+                    least[variant] = Math.Min(least[variant], Frames());
+                }
+            Put("tal");
+            foreach (var variant in variants)
+                Debug.Log(FormattableString.Invariant($"[variant] {level} {variant}: {least[variant]:0.00} ms a frame ({frames} frames, 1920×1080, {tiles} tiles)"));
+            QualitySettings.SetQualityLevel(was, true);
+            camera.targetTexture = null;
+            UnityEngine.Object.DestroyImmediate(target);
+        }
+
         /// <summary>A recorded state by its name (engine-cs/golden/step1/&lt;name&gt;.json).</summary>
         internal static GameState Golden(string name)
         {

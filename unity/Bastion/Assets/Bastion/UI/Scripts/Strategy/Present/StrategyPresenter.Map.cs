@@ -92,7 +92,8 @@ namespace Bastion.UI.Strategy
                 // Its step waits out a siege (#50), hidden like every other operation.
                 var where = o != null ? Campaign.Regions[o.Region].Name : c.Offers.Any(x => x.Quest == q.Id) ? "Tras el asedio" : "Esperando vuestra decisión";
                 var whose = q.Owner != null && c.Players.Count > 1 ? $" · de {PlayerName(q.Owner.Value)}" : "";
-                v.Quests.Add(new MapRowView { Id = o?.Id ?? q.Id, Name = def.Title, Line = $"Paso {q.Step + 1} de {def.Steps.Count} · {where}{whose}", Chip = o?.ExpiresDay != null ? AheadChip(c, o.ExpiresDay.Value) : null, Selected = o != null && pick.Offer == o.Id });
+                // Its id the mission of its step, which a click opens (screen.ts focusOffer); none while it waits, and nothing opens.
+                v.Quests.Add(new MapRowView { Id = o?.Id, Name = def.Title, Line = $"Paso {q.Step + 1} de {def.Steps.Count} · {where}{whose}", Chip = o?.ExpiresDay != null ? AheadChip(c, o.ExpiresDay.Value) : null, Selected = o != null && pick.Offer == o.Id });
             }
             foreach (var r in c.Rumors)
             {
@@ -180,6 +181,7 @@ namespace Bastion.UI.Strategy
                 if (o.Story != 1)
                 {
                     v.Kicker = o.Final ? "Misión final" : o.Facility != null ? "Nido" : o.Story != null ? $"Misión de historia · Hoja {o.Story}" : o.Quest != null ? $"Encargo · {Quests.QuestDefs[o.Quest].Title}" : "Misión";
+                    if (quest != null) v.KickerTip = "Si se pierde o caduca, el encargo se pierde con sus consecuencias";
                     v.KickerTone = o.Final ? "final" : o.Facility != null ? "nest" : o.Story != null ? "story" : o.Quest != null ? "quest" : null;
                 }
                 v.Subtitle = $"{Campaign.Regions[o.Region].Name} · {biome}{(o.Night == true ? $" · {Lore.NightText.Label}" : "")}{(quest != null ? $" · paso {quest.Step + 1} de {Quests.QuestDefs[quest.Id].Steps.Count}" : "")}";

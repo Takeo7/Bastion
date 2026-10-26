@@ -581,6 +581,10 @@ namespace Bastion.UI.Hud
     {
         /// <summary>«Volver al menú de inicio»: not once the mission is over (the report has its own way out).</summary>
         public bool Leave = true;
+        /// <summary>Its help on hover (the base's: «La campaña queda guardada»); null, none.</summary>
+        public string LeaveTip;
+        /// <summary>Under Ajustes' title (the base's: whose they are); null, none.</summary>
+        public string SettingsNote;
         /// <summary>«Abandonar la misión» (Lore's words): its tooltip; with `AbandonWaiting`, off and saying so (one's own call waits).</summary>
         public bool Abandon = true;
         public string AbandonLabel;
@@ -619,6 +623,11 @@ namespace Bastion.UI.Hud
         public bool Percent;
         /// <summary>A row of the sound (its switch, its volumes): in Ajustes' first column, the rest in the second.</summary>
         public bool Sound;
+        /// <summary>Each choice's own help, besides the row's (settingsPanel.ts autoQualityRow: «Sí», «No»).</summary>
+        public List<string> ChoiceTips;
+        /// <summary>A line under the row (Ajuste auto's: what it has lowered); gone as soon as one of `NoteGoesWith` changes.</summary>
+        public string Note;
+        public List<string> NoteGoesWith;
     }
 
     [Serializable]

@@ -112,7 +112,7 @@ namespace Bastion.Client.Units
         }
 
         /// <summary>A colour map's cells, read off the GPU (the maps need not be readable): the middle texel of each.</summary>
-        static Color32[] Cells(Texture2D map)
+        public static Color32[] Cells(Texture2D map)
         {
             var target = RenderTexture.GetTemporary(32, 32, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
             var filter = map.filterMode;

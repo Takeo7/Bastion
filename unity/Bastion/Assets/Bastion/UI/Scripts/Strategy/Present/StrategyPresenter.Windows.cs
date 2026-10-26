@@ -289,23 +289,42 @@ namespace Bastion.UI.Strategy
             var pieces = Base.PieceOrder.Where(id => id != PieceIds.Caravan).ToList();
             var build = new BroughtGroupView { Title = "Para construir" };
             foreach (var id in pieces.Where(id => Base.Pieces[id].Level == level))
-                build.Items.Add(new BroughtView { Icon = PieceIcon(id), Name = Lore.PieceTexts.All[id].Name, Brief = Brief(Lore.PieceTexts.All[id].Line, "piece:" + id) });
+                build.Items.Add(new BroughtView { Icon = PieceIcon(id), Name = Lore.PieceTexts.All[id].Name, Brief = Brief(Lore.PieceTexts.All[id].Line, "piece:" + id), Tip = $"{Lore.PieceTexts.All[id].Name}: {Lore.PieceTexts.All[id].Line}" });
             var up = new BroughtGroupView { Title = "Suben de nivel" };
             foreach (var id in pieces.Where(id => Base.Pieces[id].Kind == PieceKinds.Building))
                 foreach (var to in new[] { 2, 3 }.Where(to => Progression.UpgradeLevel(Base.Pieces[id].Level, to) == level))
                 {
                     var levels = Lore.PieceTexts.All[id].Levels;
-                    up.Items.Add(new BroughtView { Icon = PieceIcon(id), Name = $"{Lore.PieceTexts.All[id].Name}, nivel {to}", Brief = Lore.PieceFigure(id, to) ?? Brief(levels != null && to <= levels.Count ? levels[to - 1] : "") });
+                    var line = levels != null && to <= levels.Count ? levels[to - 1] : Lore.PieceTexts.All[id].Line;
+                    up.Items.Add(new BroughtView { Icon = PieceIcon(id), Name = $"{Lore.PieceTexts.All[id].Name}, nivel {to}", Brief = Lore.PieceFigure(id, to) ?? Brief(levels != null && to <= levels.Count ? levels[to - 1] : ""), Tip = $"{Lore.PieceTexts.All[id].Name}, nivel {to}: {line}" });
                 }
             // The belt's only, as the Armería (fresh.ts, #39).
             var armory = new BroughtGroupView { Title = "En la Armería" };
             foreach (var i in Content.Items.Values.Where(i => i.Level == level && i.Slot == ItemSlots.Utility))
-                armory.Items.Add(new BroughtView { Icon = ItemIcon(i.Id), Name = i.Name, Brief = Brief(i.Description, "item:" + i.Id) });
+                armory.Items.Add(new BroughtView { Icon = BroughtItemIcon(i.Id), Name = i.Name, Brief = Brief(i.Description, "item:" + i.Id), Tip = $"{i.Name}: {i.Description}" });
             var techs = new BroughtGroupView { Title = "Avances" };
             foreach (var t in Progression.Techs.Values.Where(t => t.Level == level))
-                techs.Items.Add(new BroughtView { Icon = "weapon:rifle", Name = t.Name, Brief = Brief(t.Description, "tech:" + t.Id) });
+                techs.Items.Add(new BroughtView { Icon = TechIcon(t.Id), Name = t.Name, Brief = Brief(t.Description, "tech:" + t.Id), Tip = $"{t.Name}: {t.Description}" });
             return new[] { build, up, armory, techs }.Where(g => g.Items.Count > 0).ToList();
         }
+
+        /// <summary>An advance's icon among the HUD's, near the 0.10.1's TECH_ICONS (crafting, armour, explosives, comms, accuracy, syringe); the level's otherwise (mh-xp).</summary>
+        static string TechIcon(string id)
+        {
+            switch (id)
+            {
+                case "magWeapons": return "store:parts";
+                case "plateArmor": case "predatorArmor": return "stat:armor";
+                case "plasmaGrenades": return "grenade";
+                case "encryption": case "signal": return "kind:hack";
+                case "plasmaWeapons": return "stat:aim";
+                case "nanoMedkit": return "store:medicines";
+                default: return "base:level";
+            }
+        }
+
+        /// <summary>A belt's accessory brought (ITEM_ICONS): the grenades', the aid's as the Escuadra's; the vest's armour, the shield's will.</summary>
+        static string BroughtItemIcon(string id) => id == ItemIds.NanoVest ? "stat:armor" : id == ItemIds.MindShield ? "base:will" : ItemIcon(id);
 
         /// <summary>A piece's icon among the HUD's, near the 0.10.1's PIECE_ICONS (the radio's comms, the barracks' helmet…).</summary>
         static string PieceIcon(string id)

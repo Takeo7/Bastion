@@ -1,0 +1,29 @@
+{
+ "rate": 48000,
+ "seconds": 1.2,
+ "seed": 1,
+ "events": [
+  {
+   "at": 0.5,
+   "do": "play",
+   "id": "e",
+   "file": "sintetizados/shot.sniper.1.0.wav",
+   "bus": "sfx",
+   "gain": 1,
+   "rate": 1.03,
+   "pan": 0.3,
+   "delay": 0.01234,
+   "reverb": 0.5
+  },
+  {
+   "at": 0.5,
+   "do": "play",
+   "id": "f",
+   "file": "sintetizados/shot.rifle.1.0.wav",
+   "bus": "sfx",
+   "gain": 1,
+   "rate": 0.97,
+   "delay": 0.0377
+  }
+ ]
+}

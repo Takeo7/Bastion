@@ -119,6 +119,8 @@ namespace Bastion.UI.Strategy
         public string Kicker;
         /// <summary>The kicker's tone: final, nest, story, quest or null.</summary>
         public string KickerTone;
+        /// <summary>The kicker's help on hover (an errand's: what is lost with it); null, none.</summary>
+        public string KickerTip;
         public string Title;
         public string Subtitle;
         /// <summary>LIVING_TIP, the flooded zone's note… in amber.</summary>

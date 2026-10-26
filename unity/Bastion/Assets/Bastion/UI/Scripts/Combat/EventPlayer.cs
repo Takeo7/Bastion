@@ -328,6 +328,8 @@ namespace Bastion.UI.Combat
         {
             try
             {
+                // With the sound's trace on (BASTION_SONIDO_TRAZA), each event as it starts playing, beside what it sounds.
+                Bastion.Client.Audio.Sound.Note($"se toca {item.e.GetType().Name.Replace("Event", "")}");
                 await Play(item.e, item.by, item.epoch);
             }
             catch (OperationCanceledException)
@@ -611,6 +613,7 @@ namespace Bastion.UI.Combat
         async Awaitable LataLeaves()
         {
             var map = Bastion.Client.Map.MapView.Current;
+            if (map?.LataAt is Vector3 bus) control.Sfx.Vehicle(bus);
             if (map != null) await map.LataDeparts(stop);
         }
 
@@ -900,9 +903,15 @@ namespace Bastion.UI.Combat
                     var steps = units.StepSeconds(u.Id, u.Pos, m.Path, m.Ap, pace);
                     var reveal = 0f;
                     for (var k = 0; k < into && k < steps.Length; k++) reveal += steps[k] + (plan != null && k < plan.Waits.Length ? plan.Waits[k] : 0);
+                    // Every other tile reached, a step heard (sfx.ts step), the shade in the fog's too.
+                    var stepped = 0;
+                    Action<Vector3> step = foot =>
+                    {
+                        if (stepped++ % 2 == 0) control.Sfx.Step(u, foot);
+                    };
                     var walk = plan != null
-                        ? units.MoveAlong(u.Id, m.Path, m.Ap, pace, plan.Waits, plan.Passes.Skip(1).ToList(), stop)
-                        : units.MoveAlong(u.Id, m.Path, m.Ap, pace, stop);
+                        ? units.MoveAlong(u.Id, m.Path, m.Ap, pace, plan.Waits, plan.Passes.Skip(1).ToList(), step, stop)
+                        : units.MoveAlong(u.Id, m.Path, m.Ap, pace, step, stop);
                     var start = Time.time;
                     var shown = into == 0;
                     try
@@ -958,7 +967,13 @@ namespace Bastion.UI.Combat
                     if (!ShownToSquad(target)) return;
                     var chest = Chest(target.Id);
                     if (d.Amount > 0) Float(chest, bite ? Lore.BiteFloat : crit ? $"CRÍTICO −{d.Amount}" : shot == "graze" ? $"ROZADURA −{d.Amount}" : $"−{d.Amount}", crit ? "crit" : "damage");
-                    if (d.Mitigated > 0) Float(chest - Vector3.up * 0.45f, $"BLINDAJE −{d.Mitigated}", "info");
+                    // One of ours hurt short of dying (the death has its own): a scream if the dead bit them.
+                    if (d.Amount > 0 && target.Team == Teams.Xcom && target.Hp > d.Amount) control.Sfx.Hurt(target, chest, !bite && from != null && Content.Templates[from.Template].Undead);
+                    if (d.Mitigated > 0)
+                    {
+                        Float(chest - Vector3.up * 0.45f, $"BLINDAJE −{d.Mitigated}", "info");
+                        control.Sfx.Impact("armor", chest);
+                    }
                     if (d.Shred > 0) Float(chest + Vector3.up * 0.45f, "BLINDAJE DAÑADO", "warn");
                     if (crit && Cam()) rig.Shake(0.18f * Board.Tile, 0.3f);
                     if (units != null) await units.HitReact(target.Id, crit ? 1.5f : d.Amount > 0 ? 1 : 0.4f, stop);
@@ -982,6 +997,7 @@ namespace Bastion.UI.Combat
                         StartKillCam(u.Id, close);
                         await Wait(0.35f);
                     }
+                    control.Sfx.Death(u, Chest(u.Id), killer);
                     if (units == null)
                     {
                         await Wait(0.7f);
@@ -1015,6 +1031,7 @@ namespace Bastion.UI.Combat
                     Log($"{u.Name} queda {UnitWords.Agree(u, "aturdido")}", "#6ad8ff");
                     if (!ShownToSquad(u)) return;
                     fx?.Sparks(Chest(u.Id), Fx.Hex(0x6ad8ff), 14);
+                    control.Sfx.Stun(Chest(u.Id));
                     Float(Chest(u.Id), UnitWords.Agree(u, "ATURDIDO"), "warn");
                     await Wait(0.5f);
                     return;
@@ -1042,7 +1059,9 @@ namespace Bastion.UI.Combat
                         return;
                     }
                     var hand = await units.TossStone(u.Id, to, stop);
+                    control.Sfx.StoneThrow(hand);
                     await fx.Stone(hand, struck != null ? Chest(struck.Id) : to, struck != null, stop);
+                    control.Sfx.StoneLand(to, struck != null);
                     return;
                 }
                 case OverwatchEvent _:
@@ -1054,6 +1073,8 @@ namespace Bastion.UI.Combat
                     // The blade's watch (docs/FASE10.md §4) is said as such: on guard, not watching with a gun.
                     var text = e is HunkerEvent ? "CUBRIÉNDOSE" : ((OverwatchEvent)e).KillZone ? "ZONA LETAL" : ((OverwatchEvent)e).Melee == true ? "HOJA EN ALTO" : "VIGILANCIA";
                     Float(Chest(u.Id), text, "info");
+                    if (e is HunkerEvent) control.Sfx.Hunker(Feet(u.Id));
+                    else control.Sfx.Overwatch(Chest(u.Id));
                     await Wait(0.45f);
                     return;
                 }
@@ -1072,6 +1093,7 @@ namespace Bastion.UI.Combat
                         }
                         fx?.Scream(Head(u.Id));
                         Float(Chest(u.Id), "¡GRITA!", "callout");
+                        control.Sfx.Psi(Chest(u.Id));
                         Log($"¡{Capitalize(AnEnemy(u))} grita!", "#e8d8c0");
                         await Wait(Cam() ? 0.7f : 0.3f);
                         return;
@@ -1115,6 +1137,7 @@ namespace Bastion.UI.Combat
                             var from = units.Muzzle(u.Id);
                             units.Recoil(u.Id);
                             fx.MuzzleFlash(from, blue);
+                            control.Sfx.Shot(u, Content.AttackWeapon(u).Id, from);
                             Loose(BulletThen(from, MissPoint(from, chest, i, 1.2f), blue, 60, false, Fx.Hex(0xffd28a), 3));
                             await Wait(0.07f);
                         }
@@ -1180,6 +1203,8 @@ namespace Bastion.UI.Combat
                     if (u != null) units?.ForceVisible(u.Id);
                     // A fallen soldier of ours: the camera settles on the body a moment before it moves.
                     if (u == null && Cam()) await Wait(0.6f);
+                    if (u != null) control.Sfx.Psi(Chest(u.Id));
+                    control.Sfx.Moan(place);
                     if (u != null && fx != null) await fx.PsiBeam(Chest(u.Id) + Vector3.up * 0.35f, place, null, stop);
                     fx?.EvacBeam(Board.TileToWorld(v, corpse.Pos));
                     if (units != null) await units.Reanimate(corpse.Id, rise.Zombie.Id, stop);
@@ -1210,6 +1235,7 @@ namespace Bastion.UI.Combat
                     if (!ShownToSquad(u)) return;
                     Look(Feet(u.Id));
                     Float(Chest(u.Id), "RECARGANDO", "info");
+                    control.Sfx.Reload(Chest(u.Id));
                     if (units != null) await units.Reload(u.Id, stop);
                     else await Wait(0.8f);
                     return;
@@ -1231,6 +1257,7 @@ namespace Bastion.UI.Combat
                     if (healed != null && (medicine || (lastUsed?.unit == u.Id && lastUsed?.ability == AbilityIds.Restoration)))
                     {
                         fx?.Heal(Chest(target.Id));
+                        control.Sfx.Heal(Chest(target.Id));
                         Float(Chest(target.Id), $"+{amount}", "heal");
                         if (!medicine) Log($"{target.Name} recupera {amount}", "#6dff9a");
                         await Wait(0.2f);
@@ -1241,6 +1268,7 @@ namespace Bastion.UI.Combat
                     if (healed != null)
                     {
                         fx?.Heal(Chest(target.Id));
+                        control.Sfx.Heal(Chest(target.Id));
                         Float(Chest(target.Id), $"+{amount}", "heal");
                         // One who treats themself «se cura» (Lore, 26/10).
                         Log(target.Id == u.Id ? $"{u.Name} se cura {amount}" : $"{u.Name} cura {amount} a {target.Name}", "#6dff9a");
@@ -1248,6 +1276,7 @@ namespace Bastion.UI.Combat
                     else
                     {
                         fx?.Shield(Chest(target.Id));
+                        control.Sfx.Shield(Chest(target.Id));
                         Float(Chest(target.Id), $"+{amount} DEFENSA", "info");
                         Log($"{u.Name} protege a {target.Name}", "#54d1ff");
                     }
@@ -1259,9 +1288,11 @@ namespace Bastion.UI.Combat
                     var u = Unit(room.Unit);
                     var place = Feet(u.Id);
                     Look(place);
+                    control.Sfx.Search(place);
                     if (units != null) await units.Rummage(u.Id, place + new Vector3(0.9f, 0.6f, 0), stop);
                     else await Wait(0.6f);
                     Float(Chest(u.Id), Lore.FindLabel(room.Loot), room.Loot?.Weapon != null ? "callout" : room.Loot != null ? "heal" : "info");
+                    if (room.Loot != null) control.Sfx.Found(place);
                     // The seed comes from the event, so both players read the same line.
                     var spot = Looting.RoomAt(v, u.Pos)?.Spot ?? "home";
                     Log(Lore.RoomSearchLine(u.Name, spot, room.Loot, room.Room * 7 + v.Turn), room.Loot?.Weapon != null ? "#ffd23a" : room.Loot != null ? "#6dff9a" : null);
@@ -1341,6 +1372,7 @@ namespace Bastion.UI.Combat
                         Float(Chest(u.Id), Content.FoundWeapons[loot.Weapon].Name.ToUpperInvariant(), "callout");
                         Log(Lore.WeaponEquippedLine(u.Name, loot.Weapon), "#6dff9a");
                     }
+                    control.Sfx.Reload(Feet(u.Id));
                     // The swap itself is seen as the figures sync after it.
                     await Wait(1f);
                     return;
@@ -1443,6 +1475,7 @@ namespace Bastion.UI.Combat
                     Look(Feet(u.Id));
                     Log(Lore.ItemTakenLine(u.Name, item), "#6dff9a");
                     Float(Chest(u.Id), Lore.ItemTakenFloat(item), "callout");
+                    control.Sfx.Data();
                     await Wait(0.9f);
                     return;
                 }
@@ -1471,6 +1504,7 @@ namespace Bastion.UI.Combat
                     if (units != null) await units.Smash(u.Id, smashed.Tile, null, stop);
                     else await Wait(0.4f);
                     fx?.Smash(place, door ? "door" : "barricade", gone);
+                    control.Sfx.Smash(place, door ? "door" : "barricade", gone);
                     Float(place, $"−{smashed.Amount}", "damage");
                     if (gone)
                     {
@@ -1488,10 +1522,15 @@ namespace Bastion.UI.Combat
                     if (v.Breakables != null && v.Breakables.TryGetValue(Grid.NodeOf(v, tc.Pos), out var held) && held > 0 && tc.Kind != "door" && tc.Kind != "doorOpen" && tc.Kind != "low")
                         Log(Lore.GiveWayLine(CombatController.BreakableOf(v, tc.Pos).kind, CombatController.SideOf(v, tc.Pos)), "#ff6b5a");
                     if (fx == null || !IsVisible(tc.Pos.X, tc.Pos.Y)) return;
-                    if (tc.Kind == "doorOpen" && before == "door") return;
+                    if (tc.Kind == "doorOpen" && before == "door")
+                    {
+                        control.Sfx.Door(Board.TileToWorld(v, tc.Pos, Board.Tile));
+                        return;
+                    }
                     if (tc.Kind == "windowBroken")
                     {
                         fx.Debris(Board.TileToWorld(v, tc.Pos, 1.95f), Fx.Hex(0x9fd8ff), 10);
+                        control.Sfx.Glass(Board.TileToWorld(v, tc.Pos, 1.95f));
                         return;
                     }
                     if (before == "door" || before == "doorOpen" || tc.Decor == "sirenCar" || tc.Decor == "part") return;
@@ -1516,10 +1555,12 @@ namespace Bastion.UI.Combat
                         units.Face(u.Id, screen);
                         aim = await units.RaiseWeapon(u.Id, screen, false, stop);
                     }
+                    control.Sfx.Hack(screen);
                     fx?.Sparks(screen, hack.Success ? Fx.Hex(0x4dff9a) : Fx.Hex(0xff4a3a), 16);
                     await Wait(0.5f);
                     Float(screen, hack.Success ? "ARREGLADO" : "NO ARRANCA", hack.Success ? "heal" : "warn");
                     Log($"{u.Name} {(hack.Success ? "arregla el equipo" : "no consigue arreglarlo")} ({AbilityTexts.Number(hack.Chance)}%)", hack.Success ? "#6dff9a" : "#ffc93a");
+                    control.Sfx.Hacked(hack.Success, screen);
                     if (hack.Success) Hud?.Banner("EQUIPO ARREGLADO", "xcom");
                     else
                     {
@@ -1535,6 +1576,7 @@ namespace Bastion.UI.Combat
                     Look(Feet(vip.Id));
                     Float(Chest(vip.Id), UnitWords.Agree(vip, "RESCATADO"), "heal");
                     Log($"{vip.Name} se une a la escuadra", "#6dff9a");
+                    control.Sfx.Rescue();
                     await Wait(0.6f);
                     return;
                 }
@@ -1556,6 +1598,7 @@ namespace Bastion.UI.Combat
                     Look(Board.TileToWorld(v, ri.R.Pos));
                     Hud?.Banner("VIENEN MÁS", "alien");
                     Log("Una bengala roja marca el sitio: llegan más al final del próximo turno enemigo", "#ff6b5a");
+                    control.Sfx.Flare(Board.TileToWorld(v, ri.R.Pos));
                     await Wait(Cam() ? 0.9f : 0.3f);
                     return;
                 }
@@ -1590,6 +1633,7 @@ namespace Bastion.UI.Combat
                     Look(Vector3.Lerp(Feet(u.Id), Board.TileToWorld(v, fell.To), 0.5f));
                     Float(Chest(u.Id), Lore.RubbleText.FallFloat, "alert");
                     if (units != null) await units.Fall(u.Id, fell.To, stop);
+                    control.Sfx.Land(Board.TileToWorld(v, fell.To));
                     await Wait(Cam() ? 0.35f : 0.15f);
                     return;
                 }
@@ -1599,9 +1643,11 @@ namespace Bastion.UI.Combat
                     var place = Board.TileToWorld(v, searched.Tile, 0.9f);
                     var decor = Looting.SearchSpot(v, searched.Tile);
                     Look(Vector3.Lerp(Feet(u.Id), place, 0.5f));
+                    control.Sfx.Search(place);
                     if (units != null) await units.Rummage(u.Id, place, stop);
                     else await Wait(0.6f);
                     Float(place + Vector3.up, Lore.FindLabel(searched.Loot), searched.Loot?.Weapon != null ? "callout" : searched.Loot != null ? "heal" : "info");
+                    if (searched.Loot != null) control.Sfx.Found(place);
                     if (decor != null) Log(Lore.SearchLine(u.Name, decor, searched.Loot, searched.Tile.X * 7 + searched.Tile.Y * 13 + v.Turn), searched.Loot?.Weapon != null ? "#ffd23a" : searched.Loot != null ? "#6dff9a" : null);
                     await Wait(0.5f);
                     return;
@@ -1612,6 +1658,7 @@ namespace Bastion.UI.Combat
                 case ConcealmentBrokenEvent cb:
                 {
                     exposure = cb;
+                    control.Sfx.Reveal();
                     var why = ExposureText(cb);
                     Hud?.Banner("OCULTACIÓN ROTA", "warn", why);
                     Log($"Ocultación rota: {why}", "#ffc93a");
@@ -1641,6 +1688,7 @@ namespace Bastion.UI.Combat
                             if (o.Team != Teams.Xcom && !ShownToSquad(o)) units.Shade(o.Id, false);
                     }
                     if (turn.Team == Teams.Alien && !EnemyTurnShows()) return;
+                    control.Sfx.Turn(turn.Team == Teams.Alien, !v.Concealed);
                     var partner = turn.Team == Teams.Xcom && control.Players.Any(p => p.Slot != control.MySlot && p.Connected) && turn.Command != null && turn.Command != control.MySlot;
                     Hud?.Banner(turn.Team == Teams.Alien ? "TURNO ENEMIGO" : partner ? $"TURNO DE {PlayerName(turn.Command).ToUpperInvariant()}" : "TU TURNO", turn.Team == Teams.Xcom ? "xcom" : "alien", null, turn.Team == Teams.Xcom && !partner);
                     // The squad's turn: the camera to the soldier who plays first (#47).
@@ -1657,6 +1705,7 @@ namespace Bastion.UI.Combat
                 }
                 case CommandPassedEvent cp:
                 {
+                    control.Sfx.Command();
                     if (control.Players.Any(p => p.Slot != control.MySlot && p.Connected))
                     {
                         if (cp.To == control.MySlot) Hud?.Banner("TU TURNO", "xcom", "Tienes el mando: das tú las órdenes", true);
@@ -1668,6 +1717,7 @@ namespace Bastion.UI.Combat
                     return;
                 }
                 case MissionEndedEvent end:
+                    control.Sfx.Outcome(end.Outcome == "victory");
                     await Wait(0.8f);
                     ShowOutcome(end.Outcome, end.Reason);
                     return;
@@ -1718,7 +1768,11 @@ namespace Bastion.UI.Combat
                 look(Vector3.Lerp(Feet(shooter.Id), Feet(target.Id), 0.5f));
                 control.Rig.CinematicZoom(Mathf.Clamp(Vector3.Distance(Feet(shooter.Id), Feet(target.Id)) * 1.1f + 9 * Board.Tile, 13 * Board.Tile, 24 * Board.Tile));
             }
-            if (e.Reaction) Float(Chest(shooter.Id), weapon.Melee ? "TAJO DE REACCIÓN" : "FUEGO DE REACCIÓN", "warn");
+            if (e.Reaction)
+            {
+                Float(Chest(shooter.Id), weapon.Melee ? "TAJO DE REACCIÓN" : "FUEGO DE REACCIÓN", "warn");
+                control.Sfx.Alert();
+            }
             if (units == null || fx == null)
             {
                 await Wait(weapon.Melee ? 0.45f : 0.6f);
@@ -1730,11 +1784,14 @@ namespace Bastion.UI.Combat
             if (weapon.Melee)
             {
                 await Wait(cam() ? 0.2f : 0.05f);
+                control.Sfx.Melee("swing", Chest(shooter.Id));
                 var stun = e.Ability == AbilityIds.StunLance;
                 await units.Lunge(shooter.Id, target.Id, Fells(e) && units.CanFeed(shooter.Id, target.Id), () =>
                 {
                     if (!hit) return;
                     fx.Slash(chest, stun ? Fx.Hex(0x6ad8ff) : Fx.Hex(0xe8f6ff));
+                    control.Sfx.Melee(stun ? "stun" : e.Ability == AbilityIds.Claw ? "claw" : "sword", chest);
+                    control.Sfx.Impact(Bastion.Client.Audio.CombatSound.Body(target), chest, e.Result == "crit");
                     if (e.Ability == AbilityIds.Claw) fx.Bite(chest, Feet(shooter.Id));
                 }, stop);
                 if (!hit) ShowMiss(e, shooter, target);
@@ -1761,12 +1818,16 @@ namespace Bastion.UI.Combat
                 var muzzle = units.Muzzle(shooter.Id);
                 units.Recoil(shooter.Id);
                 fx.MuzzleFlash(muzzle, colour);
+                control.Sfx.Shot(shooter, weapon.Id, muzzle);
                 if (heavy && cam()) control.Rig.Shake(0.08f * Board.Tile, 0.15f);
                 var shots = pellets > 0 ? pellets : 1;
                 for (var p = 0; p < shots; p++)
                 {
                     var dest = hit ? chest + Jitter(pellets > 0 ? 0.6f : 0.25f) : MissPoint(muzzle, chest, i + p, pellets > 0 ? 1.6f : 1);
-                    Loose(BulletThen(muzzle, dest, colour, heavy ? 45 : 60, heavy, hit ? Fx.Hex(0xff7a5a) : Fx.Hex(0xffd28a), pellets > 0 ? 3 : hit ? 8 : 5));
+                    var bullet = BulletThen(muzzle, dest, colour, heavy ? 45 : 60, heavy, hit ? Fx.Hex(0xff7a5a) : Fx.Hex(0xffd28a), pellets > 0 ? 3 : hit ? 8 : 5);
+                    // Where the last round lands, heard (its first pellet): flesh, metal or a miss.
+                    if (i == rounds - 1 && p == 0) bullet = Then(bullet, () => { if (!stop.IsCancellationRequested) control.Sfx.Impact(hit ? Bastion.Client.Audio.CombatSound.Body(target) : "miss", dest, e.Result == "crit"); });
+                    Loose(bullet);
                 }
                 await Wait(weapon.Burst > 3 ? 0.08f : 0.11f);
             }
@@ -1820,6 +1881,7 @@ namespace Bastion.UI.Combat
                 look(to);
                 Float(Board.TileToWorld(V, e.Target, 0.6f), "¡REVIENTA!", "callout");
                 Log($"¡{Capitalize(AnEnemy(u))} revienta!", "#ff6b5a");
+                control.Sfx.Explosion(to);
                 if (cam()) control.Rig.Shake(0.35f * Board.Tile, 0.5f);
                 if (fx != null)
                 {
@@ -1848,6 +1910,7 @@ namespace Bastion.UI.Combat
                     var from = Chest(u.Id) + Vector3.up * 0.5f;
                     var spots = new List<Vector3> { to };
                     for (var i = 0; i < 3; i++) spots.Add(to + new Vector3((float)(dice.NextDouble() - 0.5) * 2, 0, (float)(dice.NextDouble() - 0.5) * 2) * Board.Tile);
+                    control.Sfx.Missile(from);
                     await fx.Missiles(from, spots, stop);
                 }
                 else if (e.Ability == AbilityIds.Launch)
@@ -1856,24 +1919,30 @@ namespace Bastion.UI.Combat
                     var from = units.Muzzle(u.Id);
                     units.Recoil(u.Id);
                     fx.MuzzleFlash(from, Fx.Hex(0xffc080));
+                    control.Sfx.Launch(from);
                     await fx.GrenadeArc(from, to, stop);
+                    control.Sfx.Land(to);
                     Loose(units.LowerWeapon(u.Id, aim, stop));
                 }
                 else
                 {
                     // The arc leaves the free hand as the throw lets it go, and is seen to land.
                     var landed = false;
+                    control.Sfx.Throw(Chest(u.Id));
                     await units.ThrowMotion(u.Id, () => Loose(Then(fx.GrenadeArc(units.ThrowHand(u.Id), to, stop), () => landed = true)), stop);
                     while (!landed && !stop.IsCancellationRequested) await Awaitable.NextFrameAsync(stop);
+                    control.Sfx.Land(to);
                 }
                 if (e.Ability == AbilityIds.Smoke)
                 {
+                    control.Sfx.Explosion(to, "smoke");
                     fx.Puffs(to, Fx.Hex(0xd8d6d0), 12, 0.6f, 1.2f, 0.4f, 0.8f, 3, 1.6f);
                     await Wait(0.3f);
                     return;
                 }
                 if (e.Ability == AbilityIds.Flashbang)
                 {
+                    control.Sfx.Explosion(to, "flash");
                     fx.MuzzleFlash(to + Vector3.up * 0.9f, Color.white);
                     fx.Sparks(to + Vector3.up * 0.9f, Color.white, 24);
                     if (cam()) control.Rig.Shake(0.15f * Board.Tile, 0.3f);
@@ -1881,6 +1950,7 @@ namespace Bastion.UI.Combat
                     return;
                 }
                 var radius = Abilities.BlastRadius(u, e.Ability);
+                control.Sfx.Explosion(to);
                 if (cam()) control.Rig.Shake(0.45f * Board.Tile, 0.6f);
                 Loose(fx.Explosion(to, (float)(radius > 0 ? radius : 2.5), stop));
             }
@@ -1916,6 +1986,10 @@ namespace Bastion.UI.Combat
             }
             if (seen.Count == 0) return;
             if (!grouped) look(Board.TileToWorld(v, seen[0].Pos));
+            // arrivals.ts's sound: the dead's moan, or the living's engine (or boots) at the first of them.
+            var dead = seen.Count(u => Gaits.MovesDead(u.Template));
+            if (dead > 0) control.Sfx.Moan(Board.TileToWorld(v, seen[0].Pos), dead);
+            if (seen.FirstOrDefault(u => !Gaits.MovesDead(u.Template)) is Unit living) control.Sfx.Vehicle(Board.TileToWorld(v, living.Pos));
             // They come in as the figures sync after this event (their fade from the fog is Arte's).
             foreach (var u in seen) Float(Board.TileToWorld(v, u.Pos, 1.5f), $"¡APARECE UN {Content.Templates[u.Template].Name.ToUpperInvariant()}!", "callout");
             await Wait(cam() ? 0.8f : 0.3f);
@@ -1958,6 +2032,7 @@ namespace Bastion.UI.Combat
                 }
                 Float(Chest(m.Id), "!", "alert");
             }
+            control.Sfx.Contact(centre, members.Any(m => Content.Templates[m.Template].Undead));
             var how = ContactCause(e);
             Hud?.Banner("¡CONTACTO!", "alien", how);
             Log($"Contacto: {string.Join(", ", members.Select(m => m.Name))} · {how}", "#ff6b5a");
@@ -2152,7 +2227,7 @@ namespace Bastion.UI.Combat
                 Hud.SetOutcome(null);
                 return;
             }
-            Hud.CloseIntro();
+            Hud.CloseIntro(true);
             var s = control.State;
             var lost = s.Units.Count(u => u.Team == Teams.Xcom && !u.Alive && !u.Evacuated && u.Lost != true);
             var left = s.Units.Count(u => u.Lost == true);

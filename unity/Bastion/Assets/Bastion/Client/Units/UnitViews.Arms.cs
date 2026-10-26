@@ -336,6 +336,8 @@ namespace Bastion.Client.Units
         /// </summary>
         async Awaitable Strike(View v, View target, Action onHit, CancellationToken ct)
         {
+            // A blow at arm's length (unitViews.ts rtStrike: struck).
+            StruckBy(target, v.root.position, true);
             Draw(v, BeltCarry);
             AtRest(v, 0.1f);
             string blade = v.arts.TryGetValue(v.drawn, out var art) ? art.fbx : "";
