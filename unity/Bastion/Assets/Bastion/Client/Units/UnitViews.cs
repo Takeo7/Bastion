@@ -280,6 +280,7 @@ namespace Bastion.Client.Units
                 model.transform.localPosition = Vector3.zero;
                 model.transform.localRotation = Quaternion.identity;
                 model.transform.localScale = Vector3.one * Figures.CharacterScale;
+                view.body = model.transform;
                 view.animator = model.GetComponentInChildren<Animator>();
                 var catalog = FigureCatalog.Load();
                 bool armed = !view.deadKind && Arm(view, u, catalog);

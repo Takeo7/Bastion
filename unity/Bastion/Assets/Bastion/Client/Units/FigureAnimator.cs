@@ -46,7 +46,8 @@ namespace Bastion.Client.Units
         readonly float[] paces = new float[Anims.MotionOrder.Length];
         /// <summary>The motions whose clip holds the gun its own way (Mixamo's armed walk, run and sprint): the held clip off during them.</summary>
         readonly bool[] ownHold = new bool[Anims.MotionOrder.Length];
-        readonly Slot[] slots = { null, null, new Slot(), new Slot(), new Slot() };
+        /// <summary>The layers that play once (Upper, Free, Whole), by their index (the motions, the gun arm and the held rest have none).</summary>
+        readonly Slot[] slots = { null, null, null, new Slot(), new Slot(), new Slot() };
         int motion;
         float speed = 1;
         // The weapon held standing: two clips, the one going and the one coming, crossfaded.
