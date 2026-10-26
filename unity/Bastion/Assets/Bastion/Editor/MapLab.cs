@@ -102,7 +102,8 @@ namespace Bastion.EditorTools
         /// <summary>A recorded state by its name (engine-cs/golden/step1/&lt;name&gt;.json).</summary>
         internal static GameState Golden(string name)
         {
-            string path = Path.GetFullPath(Path.Combine(Application.dataPath, $"../../../engine-cs/golden/step1/{name}.json"));
+            // (Or a saved game's file by its path: a lab's, UI's lab-asedio.json.)
+            string path = name.EndsWith(".json") && File.Exists(name) ? name : Path.GetFullPath(Path.Combine(Application.dataPath, $"../../../engine-cs/golden/step1/{name}.json"));
             var file = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(path));
             return Bastion.Net.Json.Read<GameState>(file["state"].ToString(Newtonsoft.Json.Formatting.None));
         }

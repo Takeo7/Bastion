@@ -143,7 +143,9 @@ namespace Bastion.EditorTools
             camera.backgroundColor = new Color(0.72f, 0.78f, 0.86f);
             var middle = (MapSpace.World(from, 10) + MapSpace.World(to, 10)) / 2;
             camera.fieldOfView = 40;
-            if (Environment.GetEnvironmentVariable("BASTION_VIEW") == "game") MapSpace.Aim(camera, middle, 24);
+            // (BASTION_DIST: the game's camera that many tiles off, 24 unless said; 9 its nearest.)
+            float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float tiles) ? tiles : 24;
+            if (Environment.GetEnvironmentVariable("BASTION_VIEW") == "game") MapSpace.Aim(camera, middle, off);
             else
             {
                 camera.transform.position = middle + new Vector3(0, 1.3f, -6.5f);
@@ -271,6 +273,7 @@ namespace Bastion.EditorTools
                     Reveal();
                     Debug.Log($"[combat] {Time.time:0.00} s: {which}, at rest");
                     await Awaitable.WaitForSecondsAsync(2f);
+                    Debug.Log($"[armas] at rest: {units.ArmsReport(soldier.Id)}");
                     var at = units.Chest(target.Id);
                     Debug.Log($"[combat] {Time.time:0.00} s: aims");
                     int aim = await units.RaiseWeapon(soldier.Id, at, sidearm);
@@ -292,7 +295,8 @@ namespace Bastion.EditorTools
                     await units.MoveAlong(target.Id, new[] { new Pos { X = 13, Y = 10 }, new Pos { X = 12, Y = 10 }, new Pos { X = 11, Y = 10 } }, 1);
                     await Awaitable.WaitForSecondsAsync(0.3f);
                     Debug.Log($"[combat] {Time.time:0.00} s: strikes");
-                    await units.Lunge(soldier.Id, target.Id, false, () => Debug.Log($"[combat] {Time.time:0.00} s: the blow lands"));
+                    await units.Lunge(soldier.Id, target.Id, false, () => Debug.Log($"[combat] {Time.time:0.00} s: the blow lands; {units.ArmsReport(soldier.Id)}"));
+                    Debug.Log($"[armas] after: {units.ArmsReport(soldier.Id)}");
                     await Awaitable.WaitForSecondsAsync(1f);
                     Debug.Log($"[combat] {Time.time:0.00} s: done");
                 }

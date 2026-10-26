@@ -53,10 +53,31 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
-        /// The props whose meshes the map merges as it is made (Mesh.CombineMeshes, which a build only does with meshes it
-        /// can read): the pines of the base's wood past the edge (MapBuilder.Beyond).
+        /// The props whose meshes the map merges as it is made (Mesh.CombineMeshes, which play mode and a build only do
+        /// with meshes they can read: the rest it leaves out, with «Cannot combine mesh that does not allow access»): the
+        /// pines of the base's wood past the edge (MapBuilder.Beyond), and what PropParts merges (UI's GroundCover,
+        /// FrameArt, PumpCanopies and StreetDressing: every prop id they name). UI 26/10: the ground's pebbles, papers, tufts and junk
+        /// were missing in play mode.
         /// </summary>
-        static IEnumerable<string> Merged => BaseWoods.BasePines.Append(BaseWoods.FarPine).Distinct();
+        static IEnumerable<string> Merged => BaseWoods.BasePines.Append(BaseWoods.FarPine).Concat(PropPartsIds).Distinct();
+
+        /// <summary>The prop ids GroundCover, FrameArt, PumpCanopies and StreetDressing name (26/10): a new one there goes here too.</summary>
+        static readonly string[] PropPartsIds =
+        {
+            // GroundCover.
+            "bike", "cardboard", "cardboard2", "cardboard4", "drain", "flowers", "grassBlob", "holdall", "leaves", "luggage", "luggageOpen",
+            "luggageRetro", "manhole", "papers", "pebbles", "pumpIsland", "streetLight", "tire", "trash", "trashBag", "trolley",
+            "trolleyBroken", "tuft", "tuftLow", "tuftWide",
+            // FrameArt.
+            "barricade1", "boulder", "brickStack", "bus", "bush", "carRusted", "carWreck", "cementBags", "cliff", "cliff2", "concreteFence",
+            "container", "containerBlue", "containerOrange", "debrisPile", "debrisPile2", "floodlight", "guardTower", "log", "milBarrierTall",
+            "milCrate", "palletStack", "pineLarge", "pineLarge2", "pipes", "portaloo", "razorWire", "rock", "rubble1", "rubble2", "ruinPile",
+            "sandbags", "sheetFence", "sheetFence2", "tirePile", "trashPile", "tree", "treeDead", "treePine", "van",
+            // PumpCanopies.
+            "pumpCanopy", "pumpCanopyBurnt",
+            // StreetDressing.
+            "hydrant", "mailbox", "pallet", "powerLine", "powerPole", "stopSign", "trashBag2",
+        };
 
         /// <summary>
         /// The models of Merged imported readable (their FBX's importer), those that weren't; and the 4×4's, whose doors

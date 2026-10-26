@@ -37,6 +37,8 @@ namespace Bastion.UI.Strategy
                 App.GameSettings.TintForLab = true;
                 Bastion.Client.Units.SquadTint.On = true;
             }
+            // BASTION_INTERFAZ=1.3: Ajustes' «Interfaz» for this capture (the panel put back as play stops).
+            App.GameSettings.ApplyInterface();
             withRadio = Case.EndsWith("-radio");
             if (withRadio) Case = Case.Substring(0, Case.Length - "-radio".Length);
         }

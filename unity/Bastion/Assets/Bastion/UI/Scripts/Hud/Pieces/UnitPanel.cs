@@ -11,7 +11,7 @@ namespace Bastion.UI.Hud
     public sealed class UnitPanel
     {
         /// <summary>Whether the soldier's sheet is in Unity yet (Lore, 24/10: the panel mustn't promise a key that does nothing).</summary>
-        const bool SheetExists = false;
+        const bool SheetExists = true;
 
         readonly VisualElement host;
         readonly IHudHandlers handlers;

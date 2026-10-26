@@ -16,7 +16,8 @@ namespace Bastion.Client.Net.EditorTools
     /// <summary>
     /// The app, built: the scenes of the build settings, into Builds/&lt;system&gt;/ (or -salida &lt;path&gt;). In batchmode:
     /// unity/tools/unity.sh -executeMethod Bastion.Client.Net.EditorTools.AppBuild.Mac (or .Windows, .Linux). Two copies play
-    /// together on one computer if each has its own BASTION_DATOS (NetLink).
+    /// together on one computer if each has its own BASTION_DATOS (NetLink). Its data packed with LZ4HC: the Synty atlases
+    /// are mostly flat colour and the meshes repeat, 842 MB of app came to some 290 (26/10); -sinComprimir leaves it unpacked.
     /// </summary>
     public static class AppBuild
     {
@@ -125,11 +126,12 @@ pause
                 if (Application.isBatchMode) EditorApplication.Exit(1);
                 return null;
             }
-            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = output, target = target, options = BuildOptions.None });
+            var packed = !args.Contains("-sinComprimir");
+            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = output, target = target, options = packed ? BuildOptions.CompressWithLz4HC : BuildOptions.None });
             var summary = report.summary;
             // Left on another platform, everyone's next run would import the assets again for it (and capture on it).
             if (EditorUserBuildSettings.activeBuildTarget != before) EditorUserBuildSettings.SwitchActiveBuildTarget(BuildPipeline.GetBuildTargetGroup(before), before);
-            Debug.Log($"[red] app ({target}): {summary.result} en {summary.totalTime.TotalSeconds:F0} s · {summary.totalSize / (1024 * 1024)} MB · {summary.totalErrors} errores · {string.Join(", ", scenes)} → {output}");
+            Debug.Log($"[red] app ({target}): {summary.result} en {summary.totalTime.TotalSeconds:F0} s · {summary.totalSize / (1024 * 1024)} MB{(packed ? " (LZ4HC)" : " sin comprimir")} · {summary.totalErrors} errores · {string.Join(", ", scenes)} → {output}");
             if (summary.result == BuildResult.Succeeded) return output;
             if (Application.isBatchMode) EditorApplication.Exit(1);
             return null;

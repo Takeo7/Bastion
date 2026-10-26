@@ -6,6 +6,7 @@
     "Bastion.Client",
     "Bastion.Net",
     "Bastion.Client.Net",
+    "Bastion.Client.Audio",
     "Unity.InputSystem"
   ],
   "includePlatforms": [],

@@ -193,6 +193,9 @@ namespace Bastion.Client.Map
         /// <summary>What the base's pieces put where, as last drawn (0.10.1's tiles: the clearing's fires and seats, Settlement).</summary>
         public IReadOnlyList<PiecePlacement> PiecesPlaced => piecesPlaced;
         List<PiecePlacement> piecesPlaced = new List<PiecePlacement>();
+        /// <summary>A siege's doors' and barricades' dressing as drawn (BasePieces.DrawSiege), and what it was: drawn again when it changes.</summary>
+        readonly List<GameObject> siegeArt = new List<GameObject>();
+        string siegeDrawn;
         /// <summary>The base's pinar past the map's edge (BaseWoods.Wood), made once a map.</summary>
         GameObject beyond;
         /// <summary>How tall and big each prop's model stands as placed (mapView.ts topOf and sizeOf), in tiles, once measured.</summary>
@@ -241,6 +244,7 @@ namespace Bastion.Client.Map
                 for (int i = 0; i < n; i++) Decor(k, i, done);
             }
             DrawPieces();
+            DrawSiege();
             Woods(null);
             Beyond();
             Furnish();
@@ -391,6 +395,29 @@ namespace Bastion.Client.Map
                 pieceArt.Add(o);
             }
             Debug.Log($"[map] the base's pieces: {string.Join(", ", placements.GroupBy(p => p.id).Select(g => $"{g.Key} ×{g.Count()}"))}");
+        }
+
+        /// <summary>
+        /// A siege's doors and barricades on the hand-made map (mapView.ts build: sandbags, fallenDoor, a door's grit), as
+        /// worn as they are; all drawn again when one wears a stage further or gives way (a few dozen models).
+        /// </summary>
+        void DrawSiege()
+        {
+            var placements = new List<PiecePlacement>();
+            BasePieces.DrawSiege(s, pieces, plan?.Owner, placements);
+            string key = string.Join(";", placements.Select(p => p.id + p.matrix.ToString("F3")));
+            if (key == siegeDrawn) return;
+            siegeDrawn = key;
+            foreach (var o in siegeArt) DestroyNow(o);
+            siegeArt.Clear();
+            foreach (var p in placements)
+            {
+                var o = PlaceGame(props[0], p.id, p.matrix);
+                if (o == null) continue;
+                if (!p.shadows) foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                siegeArt.Add(o);
+            }
+            if (placements.Count > 0) Debug.Log($"[map] the siege's doors and barricades: {string.Join(", ", placements.GroupBy(p => p.id).Select(g => $"{g.Key} ×{g.Count()}"))}");
         }
 
         /// <summary>
@@ -546,6 +573,9 @@ namespace Bastion.Client.Map
             s = next;
             Terrain();
             plan?.Follow(terrain);
+            // (A piece or a barricade worn a stage further changes no tile: the 'smashed' event.)
+            DrawPieces();
+            DrawSiege();
             if (changed.Count == 0) return 0;
             ground?.Rebuild(terrain, changed.Where(key => key >> 32 == 0).Select(key => (int)(uint)key).ToList());
             // The walls laid again whole; only the chunks whose pieces changed are made again.
@@ -570,7 +600,6 @@ namespace Bastion.Client.Map
                 Upper(storeys, decks);
             }
             Parapets();
-            DrawPieces();
             Furnish();
             Night();
             var done = new Dictionary<int, HashSet<int>>();
@@ -803,6 +832,8 @@ namespace Bastion.Client.Map
             if (tile != "low" && tile != "high") return;
             // The base's pieces are drawn whole (DrawPieces), and the Bastion's yard with it.
             if (k == 0 && pieces != null && ((pieces.at[i] >= 0 && BasePieces.Drawn.Contains(pieces.spots[pieces.at[i]].piece.Piece)) || pieces.yard.Has(i))) return;
+            // A siege's barricade: its sandbags as worn as it is (DrawSiege).
+            if (k == 0 && tile == "low" && s.Mission?.Siege != null && BasePieces.MadeAs(s, i % s.Width, i / s.Width) == 'b') return;
             var look = Bastion.Engine.Decor.DecorOf(decor[i]);
             if (look == null) return;
             // An object over several tiles: one model over all of them, from its anchor (mapView.ts drawThing).

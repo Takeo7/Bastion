@@ -183,7 +183,10 @@ namespace Bastion.Client
             if (stander.animator != null && stander.animator.isHuman && catalog != null)
             {
                 stander.animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-                stander.gun = UnitViews.Gun(Anims.Weapon(GunOf(entry)), holder, catalog, out _);
+                // (The pistol, the only gun, rides in its holster: Sling.)
+                string gun = GunOf(entry);
+                stander.pistol = gun == "pistol";
+                stander.gun = stander.pistol ? UnitViews.Pistol(holder, catalog) : UnitViews.Gun(Anims.Weapon(gun), holder, catalog, out _);
                 string build = stander.build;
                 stander.anim = new FigureAnimator(stander.animator, m => catalog.Clip(Anims.Motion(build, m, false)), null, m => false);
             }
@@ -198,7 +201,7 @@ namespace Bastion.Client
         {
             int tier = entry.Gear?.Weapon ?? 1;
             var arms = entry.Gear?.Arms;
-            return arms != null ? Anims.FoundModel(arms.Primary, tier) : Anims.UnitWeapon(entry.Template, tier);
+            return arms != null ? arms.Primary != null ? Anims.FoundModel(arms.Primary, tier) : "pistol" : Anims.UnitWeapon(entry.Template, tier);
         }
 
         void DropCampFigure(ICampFigure f)

@@ -139,6 +139,15 @@ namespace Bastion.Client.Net
         /// <summary>The games heard on the network changed (StartLooking).</summary>
         public event Action<IReadOnlyList<LanGame>>? LanGamesChanged;
 
+        /// <summary>
+        /// A test app of ours, never a player's: BASTION_SOLO_LOCAL=1, or any of the tests' drivers (BASTION_MEDIR,
+        /// BASTION_CAMPANA, BASTION_ANFITRION, BASTION_UNIRSE, BASTION_PASOS_COMBATE, -shotOut). Its room listens on
+        /// 127.0.0.1 only, and nothing is announced or listened for on the network: every build is signed anew, and macOS
+        /// asks again (firewall, local network) for each one that opens a port to the network or broadcasts. Those
+        /// questions were landing on Arturo (26/10).
+        /// </summary>
+        public bool LocalOnly { get; private set; }
+
         /// <summary>This app hosts the game.</summary>
         public bool Hosting => host != null;
 
@@ -170,6 +179,7 @@ namespace Bastion.Client.Net
             {
                 var h = host;
                 if (h == null) return new HostAddress[0];
+                if (LocalOnly) return new[] { new HostAddress { Address = $"127.0.0.1:{h.Port}", Kind = "lan" } };
                 return HostAddresses.List().Select((a) => new HostAddress { Address = $"{a.Address}:{h.Port}", Kind = a.Kind }).ToList();
             }
         }
@@ -189,6 +199,10 @@ namespace Bastion.Client.Net
             DataDir = string.IsNullOrEmpty(dir) ? Application.persistentDataPath : dir!;
             log = new NetLog(Path.Combine(DataDir, "red.log"));
             settings = NetSettings.Load(Path.Combine(DataDir, "conexion.json"));
+            LocalOnly = Environment.GetEnvironmentVariable("BASTION_SOLO_LOCAL") == "1"
+                || new[] { "BASTION_MEDIR", "BASTION_CAMPANA", "BASTION_ANFITRION", "BASTION_UNIRSE", "BASTION_PASOS_COMBATE" }.Any((v) => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(v)))
+                || Environment.GetCommandLineArgs().Contains("-shotOut");
+            if (LocalOnly) log.Write("[prueba] app de prueba: la sala solo en 127.0.0.1, sin anunciarse ni escuchar la red");
             var mission = Environment.GetEnvironmentVariable("BASTION_MISION");
             if (!string.IsNullOrEmpty(mission)) Rules = EngineRules.Recorded(mission!);
             Application.logMessageReceivedThreaded += OnLog;
@@ -238,11 +252,11 @@ namespace Bastion.Client.Net
                     var store = new SaveStore(file, log.Write, CampaignRules);
                     // BASTION_SEMILLA, only in the tests' campaign (CampaignRun): the room's dice, as CampaignAutoRun's.
                     var seed = CampaignRun.Seed();
-                    var made = new Room(store, Rules, Version, HostAddresses.List(), rng: seed != null ? new Rng(seed.Value) : null, say: (line) => Debug.Log(line), campaignRules: CampaignRules);
+                    var made = new Room(store, Rules, Version, LocalOnly ? new List<HostAddress>() : HostAddresses.List(), rng: seed != null ? new Rng(seed.Value) : null, say: (line) => Debug.Log(line), campaignRules: CampaignRules);
                     if (seed != null) log.Write($"[prueba] sala con la semilla {seed}");
-                    // Measuring alone (BASTION_MEDIR), on 127.0.0.1 only: nobody else to join, and no firewall asking (its
-                    // window would take the focus, and the telemetry counts only with the game in front).
-                    host = RoomHost.StartFree(made, first, 10, measure != null ? System.Net.IPAddress.Loopback : null);
+                    // A test app (LocalOnly; measuring among them), on 127.0.0.1 only: no firewall asking, whose window would
+                    // also take the focus from the telemetry.
+                    host = RoomHost.StartFree(made, first, 10, LocalOnly ? System.Net.IPAddress.Loopback : null);
                     room = made;
                 }
                 catch (Exception e)
@@ -253,8 +267,8 @@ namespace Bastion.Client.Net
                     if (e is IOException || e is UnauthorizedAccessException) return "No se pudo abrir la partida: no se puede escribir en la carpeta de datos del juego.";
                     return "No se pudo abrir la partida. El motivo queda en red.log.";
                 }
-                log.Write($"anfitrión arrancado: tcp {host.Port} · {string.Join(", ", HostAddresses.List().Select((a) => a.Address))} · versión {Version}");
-                if (measure == null) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
+                log.Write($"anfitrión arrancado: tcp {host.Port} · {(LocalOnly ? "solo 127.0.0.1 (prueba)" : string.Join(", ", HostAddresses.List().Select((a) => a.Address)))} · versión {Version}");
+                if (!LocalOnly) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
             }
             return Open("127.0.0.1", host.Port, name, false);
         }
@@ -356,7 +370,8 @@ namespace Bastion.Client.Net
         /// <summary>Listens for games on the network while the start screen shows; LanGamesChanged says what it hears.</summary>
         public void StartLooking()
         {
-            if (listen != null) return;
+            // A test app hears no network: listening on UDP is one more of macOS's questions.
+            if (listen != null || LocalOnly) return;
             try
             {
                 listen = LanBeacon.Listen((games) => lanHeard.Enqueue(games), (port) => host?.Port == port);

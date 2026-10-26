@@ -734,8 +734,9 @@
 
 /* The sides' scrollbar (strategy.css .strat-left/.strat-right: scrollbar-width thin, mixta's --t-line): thin and faint, and
    only when there is more below (the ScrollViews' Auto). Over the panel's padding, not beside the content: taking its
-   width, the Asentamiento's grid lost a column. */
-.strat-side .unity-scroller--vertical {
+   width, the Asentamiento's grid lost a column. The Asentamiento's own, the same. */
+.strat-side .unity-scroller--vertical,
+.settle-scroll .unity-scroller--vertical {
     position: absolute;
     top: 0;
     bottom: 0;
@@ -746,22 +747,28 @@
 }
 
 .strat-side .unity-scroller--vertical .unity-scroller__low-button,
+.settle-scroll .unity-scroller--vertical .unity-scroller__low-button,
 .strat-side .unity-scroller--vertical .unity-scroller__high-button,
-.strat-side .unity-scroller--vertical .unity-base-slider__dragger-border {
+.settle-scroll .unity-scroller--vertical .unity-scroller__high-button,
+.strat-side .unity-scroller--vertical .unity-base-slider__dragger-border,
+.settle-scroll .unity-scroller--vertical .unity-base-slider__dragger-border {
     display: none;
 }
 
-.strat-side .unity-scroller--vertical .unity-scroller__slider {
+.strat-side .unity-scroller--vertical .unity-scroller__slider,
+.settle-scroll .unity-scroller--vertical .unity-scroller__slider {
     width: 6px;
     margin: 0;
 }
 
-.strat-side .unity-scroller--vertical .unity-base-slider__tracker {
+.strat-side .unity-scroller--vertical .unity-base-slider__tracker,
+.settle-scroll .unity-scroller--vertical .unity-base-slider__tracker {
     border-width: 0;
     background-color: rgba(0, 0, 0, 0);
 }
 
-.strat-side .unity-scroller--vertical .unity-base-slider__dragger {
+.strat-side .unity-scroller--vertical .unity-base-slider__dragger,
+.settle-scroll .unity-scroller--vertical .unity-base-slider__dragger {
     left: 1px;
     width: 4px;
     border-width: 0;

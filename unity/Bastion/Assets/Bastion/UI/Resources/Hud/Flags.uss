@@ -166,3 +166,58 @@
     border-left-width: 3px;
     border-left-color: var(--t-warn);
 }
+
+/* Tags that stay over the map (overlays.ts break-bar, pack-tag): under the flags, gone over the shoulder. */
+.wtag {
+    position: absolute;
+    left: 0;
+    top: 0;
+    flex-direction: row;
+    align-items: center;
+    padding: 2px 4px;
+    border-radius: 2px;
+    background-color: rgba(14, 16, 17, 0.82);
+}
+
+.flags-layer--close .wtag {
+    display: none;
+}
+
+.wtag__text {
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: #f2efe6;
+}
+
+/* A door's or a barricade's bar: what it still holds, red at a third. */
+.wtag__track {
+    width: 28px;
+    height: 5px;
+    margin-right: 4px;
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.wtag__fill {
+    height: 100%;
+    background-color: #d9a441;
+}
+
+.wtag--low .wtag__fill {
+    background-color: #ff5a4a;
+}
+
+.wtag--low .wtag__text {
+    color: #ff8a7a;
+}
+
+/* A fallen soldier's rucksack: «MOCHILA DE CHIARA» on a dark plate with a sand line under it (styles.css .pack-tag). */
+.wtag--pack {
+    padding: 1px 6px;
+    border-bottom-width: 2px;
+    border-bottom-color: #c9b48a;
+}
+
+.wtag--pack .wtag__text {
+    color: #efe6d2;
+    letter-spacing: 0.5px;
+}

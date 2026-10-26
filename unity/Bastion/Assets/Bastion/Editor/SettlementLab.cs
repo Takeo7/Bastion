@@ -168,6 +168,9 @@ namespace Bastion.EditorTools
                 string colour = i % 2 != 0 ? "#4fb0e8" : "#e8a33a", sex = i % 3 != 0 ? "m" : "f";
                 return new LifeEntry { Template = templates[i % templates.Length], Colour = colour, Appearance = Appearances.DefaultAppearance(i % 2, colour, sex), Seed = $"vida{i}" };
             }).ToList();
+            // BASTION_PISTOLA=k[,…]: those out with only the pistol (from the Armería with no gun of their own).
+            foreach (var p in (Environment.GetEnvironmentVariable("BASTION_PISTOLA") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+                if (int.TryParse(p, out int at) && at >= 0 && at < entries.Count) entries[at].Gear = new LifeGear { Weapon = 1, Arms = new Bastion.Engine.Arms() };
             void Go(UnityEditor.PlayModeStateChange change)
             {
                 if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
@@ -770,12 +773,14 @@ namespace Bastion.EditorTools
             bool alone = Environment.GetEnvironmentVariable("BASTION_SOLO") == "1";
             int empty = int.TryParse(Environment.GetEnvironmentVariable("BASTION_LIBRES"), out int e) ? e : 0;
             var campaign = new CampaignState { FoundWeapons = new System.Collections.Generic.List<FoundWeapon>() };
+            // BASTION_PISTOLA=k[,…]: those with no gun of their own in the Armería, only the pistol.
+            var pistols = (Environment.GetEnvironmentVariable("BASTION_PISTOLA") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
             for (int i = 0; i < n; i++)
             {
                 bool first = alone || i < Mathf.CeilToInt(n / 2f);
                 string colour = first ? "#e8a33a" : "#4fb0e8";
                 campaign.Soldiers.Add(new CampaignSoldier { Id = $"lab{i}", Name = $"Lab {i}", Owner = first ? 0 : 1, Alive = true, Appearance = Appearances.DefaultAppearance(first ? 0 : 1, colour, i % 2 == 1 ? "m" : "f") });
-                campaign.FoundWeapons.Add(new FoundWeapon { Id = $"w{i}", Kind = "assaultRifle", Holder = $"lab{i}" });
+                if (!pistols.Contains(i.ToString())) campaign.FoundWeapons.Add(new FoundWeapon { Id = $"w{i}", Kind = "assaultRifle", Holder = $"lab{i}" });
             }
             Bastion.Client.Units.Dress.Roster(campaign.Soldiers);
             Bastion.Client.Units.SquadTint.ColourOf = slot => slot == 0 ? "#e8a33a" : "#4fb0e8";

@@ -11,7 +11,8 @@ Cómo abrir las dos apps (doble clic, la segunda con `BASTION_DATOS`, la cuarent
 ## Qué no está todavía
 
 - El sonido (lo hace Red).
-- Las sombras con la cámara muy alejada (a más de unas 33 casillas): las está ampliando Arte.
+- Las sombras con la cámara muy alejada (a más de unas 33 casillas): ya están hechas, pero no van en esta app (es de las 11:33 del 26/10). Tampoco van las armas en la mano: los soldados con pistola llevan las manos vacías.
+- Los muertos especiales con su cuerpo: el Corredor, el Acorazado, el Chillón y el Hinchado salen todavía como un zombi común (se distinguen por su rótulo), y el Chillón grita sin moverse.
 - En combate: la hoja del soldado (H), la ficha del enemigo, las brechas del asedio y su rosa, y recargar, que aún es una pausa sin animación.
 
 ## 1. Empezar

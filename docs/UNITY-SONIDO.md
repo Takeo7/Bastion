@@ -8,7 +8,7 @@ Todo se genera a partir del sonido de la 0.10.1, que está en git:
 - `packages/client/src/audio/`: las recetas sintetizadas (`sounds.ts`, `synth.ts`, `bank.ts`), la partitura (`music.ts`) y las camas de ambiente (`ambience.ts`);
 - `packages/client/public/audio/`: los grabados (Opus, con su `index.json`) y los WAV de la interfaz.
 
-Lo generado va a `unity/Bastion/Assets/Bastion/Client/Audio/Generado/`, que **no está en git**: son unos 580 MB de WAV. Unity los comprime al compilar la app.
+Lo generado va a `unity/Bastion/Assets/Bastion/Client/Audio/Resources/Generado/`, que **no está en git**: son unos 580 MB de WAV. Unity los comprime al compilar la app.
 
 | Carpeta | Qué | Cómo |
 |---|---|---|

@@ -28,9 +28,11 @@ namespace Bastion.Client.Units
         static readonly Vector3 BeltOut = new Vector3(-0.62f, 0, -0.78f).normalized, BeltAlong = new Vector3(-0.1f, -1, -0.45f).normalized;
 
         /// <summary>The pistol at rest, «Pistol Aim» held this far in (syntyFigures.ts PISTOL_HOLD: one-handed by the thigh).</summary>
-        const float PistolHold = 6.4f;
+        public const float PistolHold = 6.4f;
 
-        /// <summary>How one waits with the pistol (syntyFigures.ts PISTOL_RESTS), by the rifle's way of waiting it would have had.</summary>
+        /// <summary>How one waits with the pistol (syntyFigures.ts PISTOL_RESTS): the stance for the rifle's way of waiting it would have had (RestFor).</summary>
+        public static string PistolStance(string rifleRest) => rifleRest != null && PistolRests.TryGetValue(rifleRest, out var stance) ? stance : "restBase";
+
         static readonly Dictionary<string, string> PistolRests = new Dictionary<string, string> { ["rifleIdle"] = "restBase", ["rifleLowered"] = "handsOnHips", ["rifleIdleLook"] = "thoughtfulL" };
 
         /// <summary>
@@ -51,6 +53,23 @@ namespace Bastion.Client.Units
             return (Anims.UnitWeapon(u.Template, tier),
                 t != null && t.Secondary == "pistol" && t.Weapon != "pistol" ? "pistol" : null,
                 t != null && SquadTemplates.Contains(u.Template) && t.MeleeWeapon == "sword" ? "machete" : null);
+        }
+
+        /// <summary>The pistol's model under `parent`, at the figures' scale (the Settlement's soldiers whose only gun it is).</summary>
+        public static Transform Pistol(Transform parent, FigureCatalog catalog) => WeaponModel(Anims.Weapon("pistol"), parent, catalog, out _);
+
+        /// <summary>
+        /// Where the pistol rides in its holster down the right thigh (hangStows' sidearm), for a figure (`body` its model,
+        /// at the pose it stands in): the thigh's bone, and the place and turn in its frame.
+        /// </summary>
+        public static (Transform bone, Vector3 at, Quaternion turn)? Holster(Animator a, Transform body)
+        {
+            var bone = a != null ? a.GetBoneTransform(HumanBodyBones.RightUpperLeg) : null;
+            if (bone == null || body == null) return null;
+            var hipR = body.InverseTransformPoint(bone.position);
+            var world = body.TransformPoint(new Vector3(hipR.x + 0.075f, hipR.y - HolsterDrop, hipR.z + 0.01f));
+            var turn = body.rotation * Quaternion.LookRotation(new Vector3(0, -1, 0.1f), new Vector3(0, 0, 1));
+            return (bone, bone.InverseTransformPoint(world), Quaternion.Inverse(bone.rotation) * turn);
         }
 
         /// <summary>A weapon's model (any: a gun, the pistol, a blade) under `parent`, at the figures' scale, its muzzle in its own frame.</summary>
@@ -184,8 +203,10 @@ namespace Bastion.Client.Units
             if (v.weapon != null) v.weapon.gameObject.SetActive(true);
             v.muzzle = v.muzzles.TryGetValue(which, out var m) ? m : Vector3.zero;
             v.inHand = v.arts.TryGetValue(which, out var art) ? art.pistol ? Held.Pistol : art.melee ? Held.Blade : Held.Rifle : Held.None;
+            // (The rifle's turn in the hand kept: drawn again, it is held as it was, not level at the waist for a frame.)
             v.pistolGrip = null;
-            v.grip = null;
+            // In the hand at once (else, for the frame, where the root is: at the feet).
+            HoldNow(v);
         }
 
         static float Size(WeaponArt art) => art != null && art.size > 0 ? art.size : 1;
@@ -239,30 +260,34 @@ namespace Bastion.Client.Units
         /// The pistol in the right palm, its barrel along the forearm (syntyFigures.ts clipGrip for a pistol: hand − elbow),
         /// that turn learnt in the hand's frame little by little, levelled as it is aimed (forward.y by 1 − aim).
         /// </summary>
-        static void HoldPistol(View v)
+        static void HoldPistol(View v) => HoldPistol(v.animator, v.weapon, v.root, v.aim, ref v.pistolGrip);
+
+        /// <summary>HoldPistol(View) for any figure: `a`'s right hand on `pistol`, `root` its upright, aimed `aim` (0–1), `grip` its turn learnt in the hand.</summary>
+        public static void HoldPistol(Animator a, Transform pistol, Transform root, float aim, ref Quaternion? grip)
         {
-            var a = v.animator;
+            if (a == null || pistol == null) return;
             Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), elbow = a.GetBoneTransform(HumanBodyBones.RightLowerArm), knuckle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
             if (hand == null || elbow == null) return;
             var palm = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.6f) : hand.position;
             var forearm = (hand.position - elbow.position).normalized;
-            var up = Vector3.ProjectOnPlane(v.root.up, forearm);
-            if (up.sqrMagnitude < 0.04f) up = Vector3.ProjectOnPlane(v.root.forward, forearm);
+            var up = Vector3.ProjectOnPlane(root.up, forearm);
+            if (up.sqrMagnitude < 0.04f) up = Vector3.ProjectOnPlane(root.forward, forearm);
             var want = Quaternion.Inverse(hand.rotation) * Quaternion.LookRotation(forearm, up);
-            v.pistolGrip = v.pistolGrip.HasValue ? Quaternion.Slerp(v.pistolGrip.Value, want, 0.2f) : want;
-            var turn = hand.rotation * v.pistolGrip.Value;
-            if (v.aim > 0)
+            grip = grip.HasValue ? Quaternion.Slerp(grip.Value, want, 0.2f) : want;
+            var turn = hand.rotation * grip.Value;
+            if (aim > 0)
             {
                 var ahead = turn * Vector3.forward;
-                var level = new Vector3(ahead.x, ahead.y * (1 - v.aim), ahead.z);
+                var level = new Vector3(ahead.x, ahead.y * (1 - aim), ahead.z);
                 if (level.sqrMagnitude > 1e-6f) turn = Quaternion.LookRotation(level, Vector3.ProjectOnPlane(Vector3.up, level));
             }
-            v.weapon.SetPositionAndRotation(palm, turn);
+            pistol.SetPositionAndRotation(palm, turn);
         }
 
         /// <summary>
-        /// A blade in the right fist as the hand holds it (syntyFigures.ts clipHold with no clipGrip): its blade out across
-        /// the knuckles from the little finger's side to the index's, its back towards the back of the hand.
+        /// A blade in the right fist as the hand holds it (syntyFigures.ts clipHold with no clipGrip, 0.10.1's weaponLab
+        /// knife and machete): its blade on along the fingers (down by the leg with the arm hanging, out along the arm as it
+        /// swings), its back towards the index's side.
         /// </summary>
         static void HoldBlade(View v)
         {
@@ -271,10 +296,19 @@ namespace Bastion.Client.Units
                 little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
             if (hand == null || index == null || little == null || middle == null) return;
             var palm = Vector3.Lerp(hand.position, middle.position, 0.6f);
-            var across = (index.position - little.position).normalized;
             var fingers = (middle.position - hand.position).normalized;
-            var back = Vector3.Cross(fingers, across);
-            v.weapon.SetPositionAndRotation(palm, Quaternion.LookRotation(across, back));
+            var across = Vector3.ProjectOnPlane(index.position - little.position, fingers);
+            v.weapon.SetPositionAndRotation(palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
+        }
+
+        /// <summary>For the labs: where each of `id`'s weapons is (its carry, what holds it, its place and height over the feet, metres), which is drawn.</summary>
+        public string ArmsReport(string id)
+        {
+            if (!views.TryGetValue(id, out var v)) return "-";
+            var feet = v.root.position;
+            return $"{v.drawn} drawn ({v.inHand}); " + string.Join("; ", v.carried.Select(kv =>
+                $"{kv.Key} {v.arts[kv.Key].fbx} on {kv.Value.parent?.name} at {(kv.Value.position - feet):F2}, scale {kv.Value.lossyScale.x:0.###}, {(kv.Value.gameObject.activeInHierarchy ? "shown" : "hidden")}"))
+                + "; mounts " + string.Join(", ", v.stows.Select(kv => $"{kv.Key} on {kv.Value.parent?.name} at {(kv.Value.position - feet):F2} (scale {kv.Value.lossyScale.x:0.###})"));
         }
 
         // ------------------------------------------------------------ the acts' weapons

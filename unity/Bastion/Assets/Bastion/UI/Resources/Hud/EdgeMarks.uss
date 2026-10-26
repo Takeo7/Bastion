@@ -22,7 +22,7 @@
     background-color: var(--t-panel-hover);
 }
 
-/* On the arrow and the words themselves: Mixta's Label and .triangle set their own colour. */
+/* On the arrow and the words themselves: Mixta's Label sets its own colour. */
 .edge-mark .edge-mark__arrow,
 .edge-mark .edge-mark__label {
     color: var(--t-accent);
@@ -36,6 +36,14 @@
 .edge-mark--alert {
     border-width: 2px;
     border-color: var(--t-danger);
+    transition-property: opacity;
+    transition-duration: 0.7s;
+    transition-timing-function: ease-in-out;
+}
+
+/* Half of its beat (EdgeMarks.cs). */
+.edge-mark--dim {
+    opacity: 0.65;
 }
 
 .edge-mark--alert .edge-mark__arrow,
@@ -43,11 +51,11 @@
     color: var(--t-danger);
 }
 
-/* Narrow and tall, so its point reads whichever way it is turned (an even one looks the same three ways). */
+/* The web's arrow, 20 px, 4 px from the words. */
 .edge-mark__arrow {
-    width: 9px;
-    height: 14px;
-    margin-right: 6px;
+    width: 20px;
+    height: 20px;
+    margin-right: 4px;
 }
 
 .edge-mark__label {

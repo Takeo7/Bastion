@@ -38,6 +38,9 @@ namespace Bastion.UI.Combat
         /// <summary>Being seen, one red for all of it (Ana, 21/10 #46).</summary>
         static readonly Color32 SightRed = Hex(0xf0503c);
 
+        /// <summary>The pointer's ring on any tile (overlays.ts setHover: white), and planning without the command.</summary>
+        public static readonly Color32 PlainRing = Hex(0xffffff);
+        public static readonly Color32 PlanRing = PlanTint;
         /// <summary>The pointer's ring on a tile one action away, on one for the dash (TileLook.ringColors).</summary>
         public static readonly Color32 WalkRing = WalkPath;
         public static readonly Color32 DashRing = DashPath;
@@ -362,7 +365,7 @@ namespace Bastion.UI.Combat
             wayShade.sharedMesh = under.Build(wayShade.sharedMesh);
         }
 
-        /// <summary>The pointer's ring on `tile` in `color` (WalkRing, DashRing, NoticedRing, EnemyRing); null: none.</summary>
+        /// <summary>The pointer's ring on `tile` in `color` (PlainRing, PlanRing, WalkRing, DashRing, NoticedRing, EnemyRing); null: none.</summary>
         public void ShowHover(GameState s, Pos tile, Color32 color)
         {
             hover.gameObject.SetActive(s != null && tile != null);

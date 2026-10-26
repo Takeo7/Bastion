@@ -38,6 +38,7 @@ namespace Bastion.UI.Hud
         Banner banner;
         Cards cards;
         Notes notes;
+        BattleWindow window;
         GameMenu menu;
         VisualElement abilitiesHost;
         HudIconTable icons;
@@ -84,6 +85,7 @@ namespace Bastion.UI.Hud
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
             notes = new Notes(root.Q("notes"));
+            window = new BattleWindow(root, tips, s => Sound?.Invoke(s));
             menu = new GameMenu(root, tips, s => Sound?.Invoke(s));
             menu.Chose += what => MenuChose?.Invoke(what);
             menu.Changed += (id, value) => SettingChanged?.Invoke(id, value);
@@ -99,6 +101,8 @@ namespace Bastion.UI.Hud
 
         void OnDisable()
         {
+            // The window stops listening for busts (a static event) as the HUD goes.
+            window?.Close();
             root = null;
         }
 
@@ -151,6 +155,7 @@ namespace Bastion.UI.Hud
         public void SetMission(MissionView v) => goal.Set(v);
         public void SetCompass(CompassView v) => goal.SetCompass(v);
         public void SetFlags(FlagsView v) => flags.Set(v);
+        public void SetWorldTags(System.Collections.Generic.List<WorldTagView> v) => flags.SetTags(v);
         public void SetEdgeMarks(EdgeMarksView v) => edges.Set(v);
 
         /// <summary>An arrow at the screen's edge clicked: the camera to that point.</summary>
@@ -215,6 +220,12 @@ namespace Bastion.UI.Hud
         public void Log(string text, string color = null) => log.Add(text, color);
         public void ClearLog() => log.Clear();
         public void Toast(string text) => notes.Toast(text);
+
+        /// <summary>The window over the battle (BattleWindow): a soldier's sheet, an enemy's file; open; closed (whether it was).</summary>
+        public void ShowSheet(SoldierSheetView v) => window.Sheet(v);
+        public void ShowEnemyFile(EnemyFileView v) => window.File(v);
+        public bool WindowOpen => window != null && window.Open;
+        public bool CloseWindow() => window != null && window.Close();
         /// <summary>The short note gone, if it still says `text`.</summary>
         public void ClearToast(string text) => notes.ClearToast(text);
         public void Notice(string text, string color = null, Action onSee = null) => notes.Notice(text, color, onSee);

@@ -11,7 +11,8 @@ namespace Bastion.UI.Combat
     /// soldier; «slot=0» opens (or closes) a slot's menu; «act=Curar» presses the menu's line that starts so; «floor=0» a
     /// thing on the floor; «fallen» a fallen soldier's «Coger…»; «offer» the notice's «Cambiar»; «x» the menu's ✕. Also the
     /// map's: «ability=grenade» a key of the bar, «hover=47/57» the pointer on a tile, «click=44/55» a click there, «look=39/38» the camera to it (a slash: the steps'
-    /// lists part on commas); «end» ends the turn, its question answered. Whether
+    /// lists part on commas); «why=shoot» says in the log why a key is off; «end» ends the turn, its question answered; «sheet=s1» a soldier's sheet, «file=a49» an
+    /// enemy's file, «close» the window over them. Whether
     /// it found what to press (it says so in the log).
     /// </summary>
     public static class PackSteps
@@ -26,6 +27,21 @@ namespace Bastion.UI.Combat
                 control.Pick(arg);
                 return true;
             }
+            if (what == "sheet")
+            {
+                control.OnSheet(arg);
+                return true;
+            }
+            if (what == "file")
+            {
+                control.OnEnemyFile(arg);
+                return true;
+            }
+            if (what == "close")
+            {
+                control.Hud?.CloseWindow();
+                return true;
+            }
             if (what == "end")
             {
                 // Twice: with soldiers that can still act it asks first (ToggleReady).
@@ -36,6 +52,13 @@ namespace Bastion.UI.Combat
             if (what == "ability")
             {
                 control.OnAbility(arg);
+                return true;
+            }
+            if (what == "why")
+            {
+                var who = control.State.Units.FirstOrDefault(u => u.Id == control.PickedId);
+                var aims = who != null ? Bastion.Engine.Abilities.RangedTargets(control.State, who, arg).Select(t => t.Id + (control.Visible(t) ? "" : " (sin ver)")) : Enumerable.Empty<string>();
+                Debug.Log($"[lab] {arg}: {control.KeyReason(arg) ?? "no está en la barra"} · {control.PickedId} apunta a {string.Join(", ", aims)}");
                 return true;
             }
             if (what == "hover" || what == "click" || what == "look")

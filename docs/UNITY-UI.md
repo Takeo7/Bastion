@@ -327,7 +327,7 @@ game.ts `missionView()` está hacia la línea 4934.
 
 ### 2.8 Registro (`log`, `.log`)
 
-En la columna de la derecha, bajo el objetivo. Plegado enseña las 2 últimas líneas; abierto, las 30 últimas. Cada línea va en un color según el tono: daño propio, daño al enemigo, enemigos entre sí, cosas buenas.
+En la columna de la derecha, bajo el objetivo. Plegado enseña las 2 últimas líneas; abierto, las 30 últimas. Cada línea lleva a la izquierda una raya del color de su tono (daño propio, daño al enemigo, enemigos entre sí, cosas buenas); el texto, en blanco.
 
 **Lee:** solo eventos. Hoy hay 71 llamadas en game.ts. Por evento:
 - **Combate:** `damaged`, `died`, `stunned`, `suppressed`, `disoriented`, `psi`, `released`, `reanimated`, `infected`, `cleansed`, `aided`.
@@ -597,16 +597,16 @@ unity/Bastion/Assets/Bastion/UI/
 - El proyecto de Unity (`ProjectSettings`, `Packages`) lo crea Arte.
 - Las vistas pasan a los tipos de verdad del motor (`engine-cs/package/Runtime/Types/`) cuando estén.
 
-## 7. Estado (24/10)
+## 7. Estado (26/10)
 
 En `unity/Bastion/Assets/Bastion/UI/` (asmdef `Bastion.UI`). Compila en el proyecto con `unity/tools/unity.sh`. Detalle en su [README](../unity/Bastion/Assets/Bastion/UI/README.md). Capturas en `.dev-snapshots/ui/unity/`.
 
 | Hecho | Pieza |
 |---|---|
 | sí | Vistas (`HudViews`), textos fijos (`HudText`), manejadores (`IHudHandlers` y su relevo), ayudas al pasar el ratón (`TooltipLayer`) |
-| sí | Lista de la escuadra, panel del soldado (sin mochila), barra de acciones con menús y tarjeta, panel de disparo (ataque, apoyo, propia sobre su botón) |
+| sí | Lista de la escuadra, panel del soldado (con la mochila y las marcas del arma), barra de acciones con menús y tarjeta, panel de disparo (ataque, apoyo, propia sobre su botón) |
 | sí | Franja de turno con marco, jugadores y planta; aviso (sello, retenido); botones del turno con los relojes |
-| sí | Tarjeta del objetivo y registro; la rosa del asedio, dibujada pero sin datos todavía (nadie llama a `HudRoot.SetCompass`: repaso del 26/10) |
+| sí | Tarjeta del objetivo y registro; la rosa del asedio con los lados de la próxima oleada en rojo si hay Sala de radio (`CombatController.Siege`) |
 | sí | Marcas sobre las unidades y textos flotantes (del mundo al panel en cada fotograma) |
 | sí | Tarjetas de llamada, llegada y resultado; notas |
 | sí | Dibujos con Painter2D: hexágono de habilidad partido, dial de impacto, aguja, triángulo |
@@ -625,13 +625,15 @@ En `unity/Bastion/Assets/Bastion/UI/` (asmdef `Bastion.UI`). Compila en el proye
 | sí | Los paseos de los zombis repartidos para que nadie ande a través de nadie (`WalkPlan`, de walkPlan.ts), con las esperas de `MoveAlong` |
 | sí | Cono de visión de un enemigo y el ojo en su bandera; marcas de la misión (evacuación, balizas, objeto, bengalas) con flechas en el borde de la pantalla; notas de la casilla bajo el puntero |
 | sí | Planes sin el mando (se ven los del compañero y se recorren al llegar el mando) y señalar un sitio (G, Mayús+clic, clic con la rueda); Mayús+rueda cambia de planta |
-| sí | Menú del juego (Esc o «Menú»): Continuar, Ajustes (velocidad del turno enemigo, seguir las rutas planeadas), Controles con las reglas de la noche, y volver al menú, abandonar y salir, cada uno con su pregunta |
+| sí | Menú del juego (Esc o «Menú»): Continuar, Ajustes (velocidad del turno enemigo y de los soldados, seguir las rutas planeadas, tamaño de la interfaz: `GameSettings.ApplyInterface`, la resolución de referencia del panel entre el tamaño), Controles con las reglas de la noche, y volver al menú, abandonar y salir, cada uno con su pregunta |
 | sí | El camino (y los planes) sobre los peldaños de una escalera, a la altura de la 0.10.1 (`MapSpace.StairLift` de Arte, la misma con la que pisan las figuras); los iconos de puertas, dibujados con Painter2D (`LineIcon`); el «§» como la caja de suministros (`BastionSuministros.ttf`, fuente de reserva de Oswald y Barlow); las notas y las líneas de las banderas no se salen de la pantalla |
 | sí | Rendimiento: telemetría `[rend …]` al red.log del anfitrión cada 10 s (`Perf`, de perf.ts; la cpu es el trabajo del hilo principal, con la espera de la pantalla aparte), y en Ajustes Gráficos (Altos, Medios, Bajos: los niveles de calidad de Arte), Límite de FPS y Mostrar FPS (`GameSettings`); fuera del combate, 60 fps como mucho; `BASTION_PERFILAR=<fotogramas>` saca al registro los marcadores más caros (`Perfil`) |
 | sí | El suelo del mapa (en `Client/Map`, sobre MapSpace y el catálogo de Arte): `GroundMap` y `Bastion/Ground` (ground.ts: losas, bordillos, césped, asfalto con línea central, pasos de cebra, grietas, musgo; el campo y las instalaciones; el agua del canal), lo menudo (`GroundCover`: scatterCover con los mismos hashes, alcantarillas, sumideros, islas de surtidores) y la sombra de contacto horneada (`GroundOcclusion`, de groundAO.ts) |
 | sí | El marco fuera de juego (`FrameArt`, `FrameView`: frameArt.ts con lo que usa de dressing.ts; el canal, la vía, la autovía, el agua y el barranco), las calles vestidas (`StreetDressing`, de dressStreets: farolas, postes y cables, señales, bocas de riego y buzones, bolsas; `GroundView.Lamps` para las luces de noche de Arte), y el foco del corte de edificios de Arte desde el controlador |
-| no | En Ajustes: el sonido (cuando exista en Unity) y el tamaño de la interfaz; la hoja del soldado, la mochila y la ficha del enemigo |
+| sí | Ajustes en dos columnas (el sonido; los gráficos y lo del juego), bajo la franja de arriba y con desplazamiento si no cabe: «Sonido» y los cinco volúmenes sobre `Bastion.Client.Audio.Volumes` de Red, y la tecla M en combate (se oirán cuando llegue su motor de sonido) |
+| no | En Ajustes: «Ajuste auto» (la guarda de imágenes por segundo de la 0.10.1) |
 | sí | Tanda del repaso del 26/10 (UNITY-UI §5.5 y lo que faltaba de hud.ts y game.ts): clic derecho (retirar el plan, cancelar lo armado), «Cámara al soldado» (`turnCamera`), el sello que suelta cualquier clic o la rueda, «Turno enemigo» sobre la barra, la tarjeta de llegada que tapa y se cierra con Intro o Espacio, la pantalla de carga (`AppFlow.RaiseVeil`, `VeilWords`, `LiftVeil`), «Volviendo al Bastión…» y «Misión al azar». Tiras en `.dev-snapshots/ui/unity/combate-tanda1/` (laboratorio: `BASTION_TOQUES`) |
+| sí | Lo que faltaba del combate (26/10): la mochila con sus órdenes por la sala (`Backpack`, `CombatController.Pack`; «Mochila llena… Cambiar»), las marcas del arma, los avisos de enemigo a la vista (`EventPlayer.AnnounceSighted`), la nota de lanzar, la hoja del soldado (H, con el tablero en campaña) y la ficha del enemigo (clic derecho) en `BattleWindow`, y el asedio: la rosa con datos, los haces y las flechas de las brechas, la línea de cada brecha (`GiveWayLine`), las barras de puertas y barricadas y su nota, y «MOCHILA DE X» sobre la de un caído (`UnitFlags.SetTags`); de noche, «A la luz: os ven de lejos» bajo el tirador al apuntar desde una casilla iluminada. Cotejado con la 0.10.1 en el asedio (`.dev-snapshots/ui/unity/asedio-combate/comparacion-0101.png`): de ahí, la distancia en todas las flechas del borde, la flecha dibujada como la de la web y el latido de las rojas, el anillo blanco bajo el puntero en cualquier casilla y la raya de color del registro. Laboratorio: `PackSteps` (pick, slot, act, floor, fallen, offer, ability, why, hover, click, look, end, sheet, file, close), `BASTION_LAB_ARCHIVO`, `BASTION_LAB_CAMPANA`, `BASTION_LAB_OP`; dos apps: `BASTION_PASOS_COMBATE` (`CombatRun`) y `BASTION_RECORRIDO_*` (`TestSteps`). Capturas en `.dev-snapshots/ui/unity/` (mochila, avisos, hoja-y-ficha, asedio-combate, prueba-campana) |
 
 ### 7.1 El estilo del HUD, aparcado (Arturo, 24/10)
 

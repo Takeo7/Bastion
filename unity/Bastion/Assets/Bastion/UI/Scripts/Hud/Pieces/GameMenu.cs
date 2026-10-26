@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -112,8 +113,20 @@ namespace Bastion.UI.Hud
             else if (page == "settings")
             {
                 Ui.Text(HudText.Menu.Settings.ToUpperInvariant(), "game-menu__title font-title", card);
-                var rows = Ui.El("settings", card);
-                foreach (var s in view.Settings) Setting(rows, s);
+                // Two columns (Lore, 26/10: one ran up over the turn strip): the sound's rows, then the rest; one without sound.
+                var rows = Scroll(card, "settings");
+                var sound = view.Settings.Where(s => s.Sound).ToList();
+                if (sound.Count > 0)
+                {
+                    card.AddToClassList("game-menu__card--settings");
+                    rows.AddToClassList("settings--cols");
+                    var first = Ui.El("settings__col", rows);
+                    var second = Ui.El("settings__col settings__col--second", rows);
+                    foreach (var s in sound) Setting(first, s);
+                    foreach (var s in view.Settings.Where(s => !s.Sound)) Setting(second, s);
+                }
+                else
+                    foreach (var s in view.Settings) Setting(rows, s);
                 Entry(card, HudText.Menu.Controls, () => Page("controls"));
                 BackTo(card, "main");
             }
@@ -122,7 +135,7 @@ namespace Bastion.UI.Hud
                 // Wider, so the keys and the night's rules fit whole without a scroll.
                 card.AddToClassList("game-menu__card--wide");
                 Ui.Text(HudText.Menu.Controls.ToUpperInvariant(), "game-menu__title font-title", card);
-                var list = Ui.El("controls", card);
+                var list = Scroll(card, "controls");
                 foreach (var c in view.Controls)
                 {
                     var row = Ui.El("controls__row", list);
@@ -137,6 +150,19 @@ namespace Bastion.UI.Hud
                 }
                 BackTo(card, "settings");
             }
+        }
+
+        /// <summary>
+        /// A list that scrolls when the card would be taller than the screen (Ajustes with the sound, a big «Interfaz»):
+        /// its scrollbar slim, over the card's padding, only when there is more below. The rows go in what it returns.
+        /// </summary>
+        static VisualElement Scroll(VisualElement card, string classes)
+        {
+            var scroll = new ScrollView(ScrollViewMode.Vertical) { verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden };
+            scroll.AddToClassList("game-menu__scroll");
+            Ui.AddClasses(scroll.contentContainer, classes);
+            card.Add(scroll);
+            return scroll.contentContainer;
         }
 
         Button Entry(VisualElement card, string text, Action click, string extra = null)
@@ -172,16 +198,18 @@ namespace Bastion.UI.Hud
             var choices = Ui.El("setting__choices", row);
             if (s.Slider)
             {
-                Ui.Text(s.Low, "setting__end", choices);
+                // A volume's has no words at its ends (settingsPanel.ts volumeRow): only its share beside it.
+                if (!string.IsNullOrEmpty(s.Low)) Ui.Text(s.Low, "setting__end", choices);
                 var slider = new Slider(s.Min, s.Max) { value = s.Value };
                 slider.AddToClassList("setting__slider");
                 choices.Add(slider);
-                Ui.Text(s.High, "setting__end", choices);
-                var value = Ui.Text(Rate(s.Value), "setting__value", choices);
+                if (!string.IsNullOrEmpty(s.High)) Ui.Text(s.High, "setting__end", choices);
+                string Shown(float k) => s.Percent ? $"{Mathf.RoundToInt(k)} %" : Rate(k);
+                var value = Ui.Text(Shown(s.Value), "setting__value", choices);
                 slider.RegisterValueChangedCallback(e =>
                 {
                     var k = s.Step > 0 ? Mathf.Round(e.newValue / s.Step) * s.Step : e.newValue;
-                    value.text = Rate(k);
+                    value.text = Shown(k);
                     s.Value = k;
                     Changed?.Invoke(s.Id, k);
                 });

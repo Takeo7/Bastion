@@ -456,8 +456,12 @@ namespace Bastion.UI.Combat
             if (!mouse.rightButton.wasReleasedThisFrame || rightFrom == null) return;
             rightFrom = null;
             if (rightMoved || (Hud != null && Hud.MenuOpen)) return;
+            // On an enemy in sight, its file (game.ts: a right click, not a drag, while moving); planning, it takes the
+            // picked one's plan away; elsewhere it backs out of what is armed.
+            var enemy = mode == Mode.Move && modeAbility == null && hover != null ? Grid.UnitAt(Shown, hover) : null;
             var planned = Unit();
-            if (mode == Mode.Move && !HasCommand() && planned != null && plans.Any(p => p.unit == planned.Id && p.slot == MySlot)) WithdrawPlan(planned);
+            if (enemy != null && enemy.Alive && enemy.Team == Teams.Alien && Visible(enemy)) ShowEnemyFile(enemy);
+            else if (mode == Mode.Move && !HasCommand() && planned != null && plans.Any(p => p.unit == planned.Id && p.slot == MySlot)) WithdrawPlan(planned);
             else if (mode != Mode.Move || modeAbility != null) CancelMode();
         }
 
@@ -509,6 +513,18 @@ namespace Bastion.UI.Combat
                 if (k.spaceKey.wasReleasedThisFrame) Hurry?.Invoke(false);
                 return;
             }
+            // A sheet or an enemy's file over the battle: only to look at; Esc or H closes it, the other keys wait.
+            if (Hud != null && Hud.WindowOpen)
+            {
+                if (k.escapeKey.wasPressedThisFrame || k.hKey.wasPressedThisFrame) Hud.CloseWindow();
+                return;
+            }
+            // H: the picked soldier's sheet (hud.ts CONTROLS «H · clic en su nombre»).
+            if (k.hKey.wasPressedThisFrame && picked != null)
+            {
+                OpenSheet(picked);
+                return;
+            }
             // The mission's briefing stays until «Entendido» (playtest 14/10 #3; Ana, 20/10 #32): Intro and Space are that
             // button; Esc does nothing over it.
             if (Hud != null && Hud.IntroOpen && (enter || k.spaceKey.wasPressedThisFrame || k.escapeKey.wasPressedThisFrame))
@@ -542,6 +558,8 @@ namespace Bastion.UI.Combat
             if (enter || space) ConfirmOrAttack();
             if (k.escapeKey.wasPressedThisFrame) Escape();
             if (k.cKey.wasPressedThisFrame) PassCommand();
+            // M: all the sound off or back (game.ts KeyM; Red's Volumes, kept as Ajustes' «Sonido»).
+            if (k.mKey.wasPressedThisFrame) Toast(Bastion.Client.Audio.Volumes.ToggleMute() ? "Sonido desactivado (M)" : "Sonido activado (M)");
             if (k.oKey.wasPressedThisFrame) NextMark();
             if (k.gKey.wasPressedThisFrame) Ping();
             if (k.backspaceKey.wasPressedThisFrame) ToggleReady();
@@ -684,14 +702,16 @@ namespace Bastion.UI.Combat
         {
             Overlay?.ShowPath(State, null, null);
             Overlay?.ShowCover(State, null);
-            Overlay?.ShowHover(State, null, default);
+            // On any tile a white ring (overlays.ts setHover), blue planning; a move or an enemy colour it below, a throw has none.
+            Overlay?.ShowHover(State, mode == Mode.Tile ? null : hover, Planning ? MoveOverlay.PlanRing : MoveOverlay.PlainRing);
             ShowVision();
             ShowArmed();
             // At night, a lit tile says what the light does there and how long it lasts (#50); over one of the dead, whom
             // it sees and where it goes next (21/10 #11). A move, a door or a box beside say theirs instead (below).
             var hovered = hover != null ? Grid.UnitAt(Shown, hover) : null;
-            Note(hover, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, IntentNote(hovered));
+            Note(hover, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered));
             if (mode == Mode.Tile) ThrowNote();
+            if (mode == Mode.Target) AimLitNote();
             if (mode != Mode.Move) return;
             var u = Unit();
             if (u != null && hover != null && CanAct() && Commands(u))
@@ -734,7 +754,21 @@ namespace Bastion.UI.Combat
             Overlay?.ShowCover(State, hover);
             Overlay?.ShowHover(State, hover, dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
             // Running, a door or a window is heard (docs/FASE2.md): said under the destination; and at night, whether it ends in the light.
-            Note(hover, path != null ? AbilityTexts.MoveNoise(State, path, dest.Dash) : null, State.Mission.Night == true && Los.IsLit(State, hover) ? "A la luz: os ven de lejos" : null);
+            Note(hover, path != null ? AbilityTexts.MoveNoise(State, path, dest.Dash) : null, LitNote(hover));
+        }
+
+        /// <summary>At night a tile in the light is seen from as far as by day (los.ts sightTo, detectionTo): the previews say so.</summary>
+        string LitNote(Pos tile) => State.Mission.Night == true && tile != null && Los.IsLit(State, tile) ? "A la luz: os ven de lejos" : null;
+
+        /// <summary>Aiming at night from a lit tile (where it strikes from, or where it stands): seen from far, said there instead of the pointer's line.</summary>
+        void AimLitNote()
+        {
+            var u = Unit();
+            var option = CurrentTarget();
+            if (u == null || option == null || !CanAct()) return;
+            var from = option.Tile ?? u.Pos;
+            var lit = LitNote(from);
+            if (lit != null) Note(from, lit);
         }
 
         /// <summary>The line on `tile`: its parts that say something, joined; none, no line.</summary>

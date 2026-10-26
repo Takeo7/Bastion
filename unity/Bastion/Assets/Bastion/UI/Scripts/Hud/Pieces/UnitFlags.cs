@@ -98,6 +98,35 @@ namespace Bastion.UI.Hud
 
         readonly List<Floating> pins = new List<Floating>();
 
+        /// <summary>The tags that stay over the map (a siege's bars, the fallen's rucksacks), and what they were made from.</summary>
+        readonly List<(VisualElement el, Vector3 world)> tags = new List<(VisualElement, Vector3)>();
+        string tagsKey;
+
+        /// <summary>The tags over the map (WorldTagView), made again only when they change.</summary>
+        public void SetTags(List<WorldTagView> list)
+        {
+            var key = list == null ? "" : string.Join("|", list.ConvertAll(Ui.Key));
+            if (key == tagsKey) return;
+            tagsKey = key;
+            foreach (var t in tags) t.el.RemoveFromHierarchy();
+            tags.Clear();
+            if (list == null) return;
+            foreach (var v in list)
+            {
+                var el = Ui.El("wtag wtag--" + v.Kind);
+                el.pickingMode = PickingMode.Ignore;
+                if (v.Kind == "bar")
+                {
+                    el.EnableInClassList("wtag--low", v.Low);
+                    var track = Ui.El("wtag__track", el);
+                    Ui.El("wtag__fill", track).style.width = Length.Percent(Mathf.Clamp01(v.Fill) * 100);
+                }
+                Ui.Text(v.Text, "wtag__text", el).pickingMode = PickingMode.Ignore;
+                layer.Insert(0, el);
+                tags.Add((el, v.World));
+            }
+        }
+
         /// <summary>The line on the tile under the pointer (overlays.ts setNote), and where it stands.</summary>
         Label note;
         Vector3 noteAt;
@@ -148,6 +177,7 @@ namespace Bastion.UI.Hud
                 Place(f.Label, panel, camera, f.World, -FloatRise * t, 0.5f);
                 f.Label.style.opacity = t < 0.7f ? 1f : 1f - (t - 0.7f) / 0.3f;
             }
+            foreach (var t in tags) Place(t.el, panel, camera, t.world, 0, 1f);
             // Under the tile, a little below its middle (the web's margin-top: 30px); near the edge, slid in to be read whole.
             if (note != null) Place(note, panel, camera, noteAt, 30, 0, true);
             for (var i = pins.Count - 1; i >= 0; i--)

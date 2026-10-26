@@ -1,13 +1,15 @@
 using System;
+using System.Globalization;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Bastion.UI.App
 {
     /// <summary>
     /// The graphics settings of Ajustes (settingsPanel.ts graphicsSettings of the 0.10.1), kept on this computer: the
     /// level (bajos, medios, altos: the project's quality levels, whose shadows, ambient occlusion, post-processing and
-    /// render scale are Arte's), a cap on frames per second, and the counter in a corner. Applied as the app starts and
-    /// whenever one changes.
+    /// render scale are Arte's), a cap on frames per second, the counter in a corner, and the interface's size. Applied
+    /// as the app starts and whenever one changes.
     /// </summary>
     public static class GameSettings
     {
@@ -15,10 +17,14 @@ namespace Bastion.UI.App
         const string CapKey = "bastion.fpsCap";
         const string CounterKey = "bastion.showFps";
         const string TintKey = "bastion.squadTint";
+        const string InterfaceKey = "bastion.uiScale";
 
         /// <summary>The levels, low to high, and the quality levels they look for by name (Arte's: Bajo, Medio, Alto).</summary>
         public static readonly string[] LevelNames = { "bajos", "medios", "altos" };
         static readonly string[] QualityNames = { "Bajo", "Medio", "Alto" };
+
+        /// <summary>The interface's sizes there are (settings.ts uiScale).</summary>
+        public static readonly float[] InterfaceSizes = { 0.9f, 1f, 1.15f, 1.3f };
 
         /// <summary>The caps there are (0: none but the screen's own refresh).</summary>
         public static readonly int[] Caps = { 0, 120, 60, 30 };
@@ -102,6 +108,48 @@ namespace Bastion.UI.App
             }
         }
 
+        /// <summary>For a capture (BASTION_INTERFAZ=1.3): the size as if it were so, never kept; and in the editor, the only way it applies.</summary>
+        static readonly float? InterfaceForTest = float.TryParse(Environment.GetEnvironmentVariable("BASTION_INTERFAZ"), NumberStyles.Float, CultureInfo.InvariantCulture, out var f) && Array.IndexOf(InterfaceSizes, f) >= 0 ? f : (float?)null;
+
+        /// <summary>«Interfaz» (settings.ts uiScale): how big the texts and panels are, 90 to 130 %; the 3D view stays.</summary>
+        public static float InterfaceSize
+        {
+            get => InterfaceForTest ?? (Array.IndexOf(InterfaceSizes, PlayerPrefs.GetFloat(InterfaceKey, 1)) is var i && i >= 0 ? InterfaceSizes[i] : 1);
+            set
+            {
+                if (InterfaceForTest == null) PlayerPrefs.SetFloat(InterfaceKey, Array.IndexOf(InterfaceSizes, value) >= 0 ? value : 1);
+                ApplyInterface();
+                Changed?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// The size on the panels the screens draw on (the UIDocuments there are: AppFlow's, whose panel every screen
+        /// shares). They scale with the screen, so their reference resolution is cut by the size: at 130 % a 1440 × 900
+        /// screen is drawn as if it were 1108 × 692 (a panel's `scale` counts only at a constant pixel size). In the
+        /// editor only for a test (BASTION_INTERFAZ): the panel is the project's asset, everyone's captures', and it is
+        /// put back as play stops.
+        /// </summary>
+        public static void ApplyInterface()
+        {
+            if (Application.isEditor && InterfaceForTest == null) return;
+            var size = InterfaceSize;
+            foreach (var doc in UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None))
+            {
+                var panel = doc.panelSettings;
+                if (panel == null) continue;
+                if (!references.TryGetValue(panel, out var own))
+                {
+                    references[panel] = own = panel.referenceResolution;
+                    if (Application.isEditor) Application.quitting += () => panel.referenceResolution = own;
+                }
+                panel.referenceResolution = new Vector2Int(Mathf.RoundToInt(own.x / size), Mathf.RoundToInt(own.y / size));
+            }
+        }
+
+        /// <summary>Each panel's own reference resolution, as the project has it.</summary>
+        static readonly System.Collections.Generic.Dictionary<PanelSettings, Vector2Int> references = new System.Collections.Generic.Dictionary<PanelSettings, Vector2Int>();
+
         /// <summary>For the labs' captures (BASTION_TINTE): the setting as if it were so, without keeping it on this computer.</summary>
         public static bool? TintForLab;
 
@@ -120,6 +168,7 @@ namespace Bastion.UI.App
             Bastion.Client.Map.GroundCover.Density = Level == 0 ? 0.3f : Level == 1 ? 0.6f : 1f;
             // «Ropa con el color del jugador» for Arte's figures, in the battle and on the base.
             Bastion.Client.Units.SquadTint.On = SquadTint;
+            ApplyInterface();
             if (Application.isEditor)
             {
                 Changed?.Invoke();
@@ -151,9 +200,71 @@ namespace Bastion.UI.App
         public const string CapId = "fpsCap";
         public const string CounterId = "showFps";
         public const string TintId = "squadTint";
+        public const string InterfaceId = "uiScale";
 
-        /// <summary>Ajustes' graphics rows (settingsPanel.ts graphicsSettings), for the battle's menu and the base's.</summary>
-        public static System.Collections.Generic.List<Hud.SettingView> Views() => new System.Collections.Generic.List<Hud.SettingView>
+        public const string SoundId = "sound";
+        const string VolumePrefix = "volume.";
+
+        /// <summary>
+        /// Ajustes' rows (hud.ts settings: the sound, soundSettings, graphicsSettings), for the battle's menu and the
+        /// base's: the sound and its volumes, the graphics, then the battle's own if any (`battle`: the speeds and the
+        /// plans), then the clothes and the interface's size, in the 0.10.1's order.
+        /// </summary>
+        public static System.Collections.Generic.List<Hud.SettingView> Views(System.Collections.Generic.IEnumerable<Hud.SettingView> battle = null)
+        {
+            var rows = Sound();
+            rows.AddRange(Graphics());
+            if (battle != null) rows.AddRange(battle);
+            rows.AddRange(Looks());
+            return rows;
+        }
+
+        /// <summary>The volumes' names and help (settingsPanel.ts soundSettings), by Red's keys (Bastion.Client.Audio.Volumes).</summary>
+        static readonly (string key, string label, string about)[] VolumeRows =
+        {
+            (Bastion.Client.Audio.Volumes.Master, "Volumen", "Todo el sonido del juego. La tecla M lo silencia en combate."),
+            (Bastion.Client.Audio.Volumes.Sfx, "Efectos", "Disparos, explosiones, pasos y acciones."),
+            (Bastion.Client.Audio.Volumes.Music, "Música", "La música de la base, del mapa y del combate."),
+            (Bastion.Client.Audio.Volumes.Ambience, "Ambiente", "Viento, ciudad, bosque, máquinas."),
+            (Bastion.Client.Audio.Volumes.Ui, "Interfaz y radio", "Botones, avisos y las transmisiones de radio."),
+        };
+
+        /// <summary>
+        /// The sound on or off (hud.ts «Sonido: activado», the M key's), then each volume from 0 to 100 % in steps of one
+        /// (Ana, 22/10 #25: «si quiero ponerlo al 1 %»), heard as it moves.
+        /// </summary>
+        static System.Collections.Generic.List<Hud.SettingView> Sound()
+        {
+            var rows = new System.Collections.Generic.List<Hud.SettingView>
+            {
+                new Hud.SettingView
+                {
+                    Id = SoundId,
+                    Label = "Sonido",
+                    About = "Todo el sonido del juego, encendido o en silencio. En combate, la tecla M hace lo mismo.",
+                    Choices = new System.Collections.Generic.List<string> { "Activado", "Desactivado" },
+                    On = Bastion.Client.Audio.Volumes.Muted ? 1 : 0,
+                    Sound = true,
+                },
+            };
+            foreach (var (key, label, about) in VolumeRows)
+                rows.Add(new Hud.SettingView
+                {
+                    Id = VolumePrefix + key,
+                    Label = label,
+                    About = about,
+                    Slider = true,
+                    Min = 0,
+                    Max = 100,
+                    Step = 1,
+                    Value = Mathf.Round(Bastion.Client.Audio.Volumes.Get(key) * 100),
+                    Percent = true,
+                    Sound = true,
+                });
+            return rows;
+        }
+
+        static System.Collections.Generic.List<Hud.SettingView> Graphics() => new System.Collections.Generic.List<Hud.SettingView>
         {
             // The level, high to low as the 0.10.1's «Efectos» (the project's quality levels, Arte's).
             new Hud.SettingView
@@ -180,6 +291,10 @@ namespace Bastion.UI.App
                 Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
                 On = ShowFps ? 0 : 1,
             },
+        };
+
+        static System.Collections.Generic.List<Hud.SettingView> Looks() => new System.Collections.Generic.List<Hud.SettingView>
+        {
             // settingsPanel.ts: No first, as the 0.10.1.
             new Hud.SettingView
             {
@@ -188,6 +303,14 @@ namespace Bastion.UI.App
                 About = "Tiñe la ropa de los soldados con los colores de Personalizar y les pone el brazalete del color de su jugador.",
                 Choices = new System.Collections.Generic.List<string> { "No", "Sí" },
                 On = SquadTint ? 1 : 0,
+            },
+            new Hud.SettingView
+            {
+                Id = InterfaceId,
+                Label = "Interfaz",
+                About = "El tamaño de los textos y paneles del juego. La vista 3D no cambia.",
+                Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(InterfaceSizes, k => $"{Mathf.RoundToInt(k * 100)} %")),
+                On = Math.Max(0, Array.IndexOf(InterfaceSizes, InterfaceSize)),
             },
         };
 
@@ -198,6 +321,12 @@ namespace Bastion.UI.App
             else if (id == CapId) FpsCap = Caps[Mathf.Clamp((int)value, 0, Caps.Length - 1)];
             else if (id == CounterId) ShowFps = value == 0;
             else if (id == TintId) SquadTint = value == 1;
+            else if (id == InterfaceId) InterfaceSize = InterfaceSizes[Mathf.Clamp((int)value, 0, InterfaceSizes.Length - 1)];
+            else if (id == SoundId)
+            {
+                if ((value == 1) != Bastion.Client.Audio.Volumes.Muted) Bastion.Client.Audio.Volumes.ToggleMute();
+            }
+            else if (id.StartsWith(VolumePrefix, StringComparison.Ordinal)) Bastion.Client.Audio.Volumes.Set(id.Substring(VolumePrefix.Length), Mathf.Clamp01(value / 100f));
             else return false;
             return true;
         }

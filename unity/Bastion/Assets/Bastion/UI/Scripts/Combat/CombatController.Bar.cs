@@ -30,6 +30,9 @@ namespace Bastion.UI.Combat
         /// <summary>A view of the bar by its id, inside a menu too.</summary>
         AbilityView BarView(string id) => BarKeys().FirstOrDefault(v => v.Id == id);
 
+        /// <summary>Why a key of the bar is off, «sí» if it is on, none if it is not there (tests: PackSteps «why=shoot»).</summary>
+        public string KeyReason(string id) => BarView(id) is AbilityView v ? (v.Enabled ? "sí" : v.Reason) : null;
+
         List<string> AbilityList(Unit u)
         {
             var m = State.Mission;

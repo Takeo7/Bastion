@@ -199,6 +199,8 @@ namespace Bastion.UI.App
             // Not the battle (back to the base, to the menu): nothing to wait for under the veil.
             if (scene.name != battleScene) LiftVeil();
             GameSettings.InMenu = scene.name != battleScene;
+            // Ajustes' «Interfaz» on whatever panel the new scene brought (all share AppFlow's today).
+            GameSettings.ApplyInterface();
             if (scene.name == baseScene)
             {
                 var screens = new GameObject("Base");

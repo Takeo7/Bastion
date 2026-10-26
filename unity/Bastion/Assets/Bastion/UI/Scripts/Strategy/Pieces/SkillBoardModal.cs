@@ -49,6 +49,13 @@ namespace Bastion.UI.Strategy
 
         public bool Open => host.resolvedStyle.display != DisplayStyle.None;
 
+        /// <summary>Drawn again as it is, for a bust drawn since (outside the base, where nothing raises PictureStamp).</summary>
+        public void Repaint()
+        {
+            key = null;
+            if (last != null) Set(last);
+        }
+
         public void Set(SkillBoardView v)
         {
             var k = Ui.Key(v) + "|" + StrategyRoot.PictureStamp;

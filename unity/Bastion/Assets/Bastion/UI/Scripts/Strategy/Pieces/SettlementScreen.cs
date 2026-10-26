@@ -33,7 +33,8 @@ namespace Bastion.UI.Strategy
             this.handlers = handlers;
             left = Ui.El("settle-col settle-col--left", view);
             left.pickingMode = PickingMode.Ignore;
-            leftScroll = new ScrollView(ScrollViewMode.Vertical) { verticalScrollerVisibility = ScrollerVisibility.Hidden, horizontalScrollerVisibility = ScrollerVisibility.Hidden };
+            // Its scrollbar slim and over the padding (Strategy.uss), only when there is more below: a big interface cuts it.
+            leftScroll = new ScrollView(ScrollViewMode.Vertical) { verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden };
             leftScroll.AddToClassList("settle-scroll");
             left.Add(leftScroll);
             // The plates take the clicks; between and under them they reach the clearing.

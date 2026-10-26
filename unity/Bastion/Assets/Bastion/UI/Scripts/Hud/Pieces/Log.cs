@@ -6,7 +6,8 @@ namespace Bastion.UI.Hud
 {
     /// <summary>
     /// The log under the objective (hud.ts log/renderLog; docs/UNITY-UI.md §2.8): what happened, a line each, the newest
-    /// on top, in the colour of its tone (one's own hurt, the enemy's, enemies among themselves, good news). Folded it
+    /// on top, a stroke on its left in the colour of its tone (one's own hurt, the enemy's, enemies among themselves, good
+    /// news), the words in the log's own (styles.css .log-line). Folded it
     /// shows the last two and «▾ 3 más»; open, the last thirty and «▴ Plegar». Lines come from the events, in Lore's words.
     /// </summary>
     public sealed class Log
@@ -48,7 +49,7 @@ namespace Bastion.UI.Hud
         public void Add(string text, string color = null)
         {
             var line = Ui.Text(text, "log__line");
-            if (!string.IsNullOrEmpty(color)) line.style.color = Ui.Hex(color, Color.white);
+            if (!string.IsNullOrEmpty(color)) line.style.borderLeftColor = Ui.Hex(color, Color.white);
             kept.Insert(0, line);
             lines.Insert(0, line);
             while (kept.Count > Keep)

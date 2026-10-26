@@ -35,6 +35,19 @@ namespace Bastion.Client.Net
             return pressed;
         }
 
+        /// <summary>How many buttons showing say `text` (any case), none pressed: whether a screen is up yet.</summary>
+        public static int Shown(string text)
+        {
+            var shown = 0;
+            foreach (var doc in UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None))
+            {
+                var root = doc.rootVisualElement;
+                if (root == null) continue;
+                shown += root.Query<Button>().ToList().Count((x) => string.Equals(x.text, text, StringComparison.OrdinalIgnoreCase) && Showing(x));
+            }
+            return shown;
+        }
+
         /// <summary>
         /// A click on every text showing that says `text` (any case): it goes up to what listens for it, as a player's
         /// click there (the turn's stamp, «clic para seguir»). How many.

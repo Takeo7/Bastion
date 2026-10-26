@@ -192,6 +192,18 @@ namespace Bastion.UI.Hud
             public static string Whose(string name) => string.IsNullOrEmpty(name) ? "DEL OTRO JUGADOR" : $"DE {name.ToUpperInvariant()}";
         }
 
+        /// <summary>The windows over the battle: the soldier's sheet (H) and an enemy's file (right click).</summary>
+        public static class Window
+        {
+            public const string SheetKicker = "HOJA DEL SOLDADO";
+            public const string FileKicker = "FICHA DE ATALAYA";
+            public const string Carries = "Lleva";
+            public const string Skills = "Habilidades";
+            public const string Close = "CERRAR";
+
+            public static string Whose(string name) => $" DE {name.ToUpperInvariant()}";
+        }
+
         /// <summary>The backpack on the soldier's panel (hud.ts backpack, packMenuEl, packOffer; docs/FASE8.md §C).</summary>
         public static class Pack
         {

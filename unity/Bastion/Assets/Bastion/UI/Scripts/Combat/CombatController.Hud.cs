@@ -89,6 +89,7 @@ namespace Bastion.UI.Combat
             turn.InPlay = inPlay?.Name;
             Hud.SetTurn(turn);
             Hud.SetMission(MissionView());
+            Hud.SetCompass(CompassOf(v));
             Hud.SetPlayers(PlayersView(v, sharing ? holder : (int?)null));
             Hud.SetSquad(SquadView(v, inPlay?.Id));
             var shown = UnitById(v, picked);
@@ -129,13 +130,22 @@ namespace Bastion.UI.Combat
             var objective = UnitById(v, m.ObjectiveUnit);
             if (objective != null && objective.Alive && !m.ObjectiveDone) beacons.Add((objective.Pos, objective.Team == Teams.Alien ? 0xff4a6a : 0x4dff9a));
             var item = m.Item != null && m.Item.Carrier == null && m.Item.Evacuated != true ? m.Item.Pos : null;
+            // A siege's breaches: an orange beam each, and an arrow a side at the screen's edge (CombatController.Siege).
+            var breaches = new EdgeMarksView();
+            BreachMarks(v, beacons, breaches);
             Marks?.Show(v, m.EvacZone, beacons, item, m.Reinforcements.Where(r => r.Pos != null && !r.Landed).Select(r => r.Pos).ToList());
             if (Hud == null) return;
+            Hud.SetWorldTags(WorldTags(v));
             var view = new EdgeMarksView();
-            var from = Unit()?.Pos;
             foreach (var (kind, name, pos) in MissionGoals())
-                view.Marks.Add(new EdgeMarkView { Kind = kind, Name = name, Label = from != null ? $"{name} · {Mathf.RoundToInt((float)Grid.Distance(from, pos))} casillas" : name, World = Board.TileToWorld(v, pos, Board.Tile) });
-            if (moment != null && Time.time < momentUntil) view.Marks.Add(new EdgeMarkView { Kind = "alert", Name = moment.Value.who, Label = moment.Value.who, World = moment.Value.at + Vector3.up * Board.Tile });
+                view.Marks.Add(new EdgeMarkView { Kind = kind, Name = name, World = Board.TileToWorld(v, pos, Board.Tile) });
+            view.Marks.AddRange(breaches.Marks);
+            if (moment != null && Time.time < momentUntil) view.Marks.Add(new EdgeMarkView { Kind = "alert", Name = moment.Value.who, World = moment.Value.at + Vector3.up * Board.Tile });
+            // Each says how far it is from the picked soldier (edgeMarks.ts): «Brecha · sur · 7 casillas», on the board's plane.
+            var from = Unit()?.Pos;
+            var here = from != null ? Board.TileToWorld(v, from) : Vector3.zero;
+            foreach (var mark in view.Marks)
+                mark.Label = from != null ? $"{mark.Name} · {Mathf.RoundToInt(Vector2.Distance(new Vector2(here.x, here.z), new Vector2(mark.World.x, mark.World.z)) / Board.Tile)} casillas" : mark.Name;
             Hud.SetEdgeMarks(view);
         }
 
@@ -483,10 +493,7 @@ namespace Bastion.UI.Combat
             // A soldier's own arms (docs/FASE8.md §A): what is in the hand (the pistol if nothing), the pistol beside it, the knife or machete.
             var arms = u.Arms;
             var pistol = Content.Weapons[WeaponIds.Pistol].Name;
-            var weapon = u.WeaponName ?? (arms != null ? (!string.IsNullOrEmpty(arms.Primary) ? Content.FoundWeapons[arms.Primary].Name : pistol) : Content.Weapons[t.Weapon].Name);
-            var extras = arms != null
-                ? new[] { !string.IsNullOrEmpty(arms.Primary) ? pistol : "", !string.IsNullOrEmpty(arms.Melee) ? Content.FoundWeapons[arms.Melee].Name : Content.Weapons[WeaponIds.Knife].Name }
-                : new[] { t.Secondary != null ? Content.Weapons[t.Secondary].Name : "", t.MeleeWeapon != null ? Content.Weapons[t.MeleeWeapon].Name : "" };
+            var (weapon, extras) = ArmsOf(u);
             var clip = Content.ClipOf(u, AbilityIds.Shoot);
             var sidearm = !string.IsNullOrEmpty(arms?.Primary);
             // A soldier's veterancy, in the feminine for a woman.
@@ -502,7 +509,7 @@ namespace Bastion.UI.Combat
                 Skills = SkillValues(u),
                 Name = !string.IsNullOrEmpty(u.Nickname) ? $"{u.Name} «{u.Nickname}»" : u.Name,
                 Weapon = weapon,
-                WeaponTip = string.Join(" · ", new[] { weapon }.Concat(extras).Where(x => !string.IsNullOrEmpty(x))),
+                WeaponTip = string.Join(" · ", new[] { weapon }.Concat(extras)),
             };
             // A partner's soldier says whose, in the partner's colour (Arturo, 17/10).
             if (u.Team == Teams.Xcom && u.Owner != null && u.Owner != MySlot)

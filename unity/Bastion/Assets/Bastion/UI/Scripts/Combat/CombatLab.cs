@@ -118,6 +118,8 @@ namespace Bastion.UI.Combat
             if (string.IsNullOrEmpty(Touches)) Touches = System.Environment.GetEnvironmentVariable("BASTION_TOQUES") ?? "";
             // BASTION_TINTE=1: «Ropa con el color del jugador» on for this capture (Arte's figures), not kept.
             if (System.Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
+            // BASTION_INTERFAZ=1.3: Ajustes' «Interfaz» for this capture (the panel put back as play stops).
+            App.GameSettings.ApplyInterface();
             var path = Path.GetFullPath(Path.Combine(Application.dataPath, "../../../engine-cs/golden", Step, Golden + ".json"));
             if (!File.Exists(path))
             {
@@ -129,10 +131,14 @@ namespace Bastion.UI.Combat
             rng = new Rng(file.RngSeed);
             AbilityCommand shot = null;
             GoldenOp turn = null;
+            // BASTION_LAB_OP=<n>: the recorded order n's events played (those before it on the state), instead of the first big
+            // enemy turn (a small map's turn has fewer than four of the dead walking: arena-siege's blows on its gate, 9).
+            var opAt = int.TryParse(System.Environment.GetEnvironmentVariable("BASTION_LAB_OP"), out var at) ? at : -1;
             if (ToEnemyTurn)
-                foreach (var op in file.Ops)
+                for (var i = 0; i < file.Ops.Count; i++)
                 {
-                    if (op.Cmd is EndTurnCommand && op.Events.Count(x => x is MovedEvent mv && mv.Unit.StartsWith("a")) >= 4)
+                    var op = file.Ops[i];
+                    if (opAt >= 0 ? i == opAt : op.Cmd is EndTurnCommand && op.Events.Count(x => x is MovedEvent mv && mv.Unit.StartsWith("a")) >= 4)
                     {
                         turn = op;
                         break;
@@ -180,6 +186,15 @@ namespace Bastion.UI.Combat
             control.Marks = marks.AddComponent<MissionMarks>();
             control.Hud = Hud;
             control.Order += Play;
+            // BASTION_LAB_CAMPANA=1: the sample campaign (SampleCampaign) as the squad's, its first soldier as the first
+            // of ours, for the soldier's sheet with its board.
+            if (System.Environment.GetEnvironmentVariable("BASTION_LAB_CAMPANA") == "1")
+            {
+                var campaign = Bastion.UI.Strategy.SampleCampaign.Load();
+                control.Campaign = () => campaign;
+                var first = mine.Units.FirstOrDefault(x => x.Team == Teams.Xcom && x.Alive);
+                if (first != null) first.CampaignId = campaign.Soldiers[0].Id;
+            }
             if (Hud != null)
             {
                 Hud.MenuChose += control.MenuChose;

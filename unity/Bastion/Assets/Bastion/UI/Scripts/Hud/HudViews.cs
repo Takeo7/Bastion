@@ -169,6 +169,50 @@ namespace Bastion.UI.Hud
         public PackView Pack;
     }
 
+    // --------------------------------------------------- over the battle
+
+    /// <summary>A line of the soldier's sheet: its name, its value and, when it helps, the long version.</summary>
+    [Serializable]
+    public sealed class SheetRowView
+    {
+        public string Key;
+        public string Value;
+        public string Tip;
+    }
+
+    /// <summary>
+    /// A soldier's sheet over the battle (hud.ts SoldierSheetView; playtest 18/10 #23): who, its figures, what it carries
+    /// and its skills; in a campaign its board beside, as in the Cuartel, not to be touched. Only to look at.
+    /// </summary>
+    [Serializable]
+    public sealed class SoldierSheetView
+    {
+        public string Name;
+        /// <summary>Its veterancy, or what it is if not a soldier.</summary>
+        public string Rank;
+        /// <summary>A partner's: whose (their name) and their colour; empty, one's own.</summary>
+        public string Whose;
+        public string WhoseColor;
+        public List<SheetRowView> Stats = new List<SheetRowView>();
+        public List<SheetRowView> Carries = new List<SheetRowView>();
+        /// <summary>The board's cells it has, by name (a skirmish's, where there is no board to show).</summary>
+        public List<string> Skills = new List<string>();
+        /// <summary>A campaign soldier's board (the Cuartel's window, not editable); null, none.</summary>
+        public Bastion.UI.Strategy.SkillBoardView Board;
+    }
+
+    /// <summary>The Bastion's file on an enemy (hud.ts enemyFile; right click): what it is, what it does, how to beat it.</summary>
+    [Serializable]
+    public sealed class EnemyFileView
+    {
+        public string Name;
+        /// <summary>«Salud 3/3 · Puntería 50».</summary>
+        public string Stats;
+        public string What;
+        public string Does;
+        public string Tip;
+    }
+
     // ------------------------------------------------------------- backpack
 
     /// <summary>An order on a thing carried or on the floor (hud.ts ItemOrder): the engine's `item` command for the soldier shown.</summary>
@@ -452,6 +496,22 @@ namespace Bastion.UI.Hud
         public List<FlagView> Flags = new List<FlagView>();
     }
 
+    /// <summary>
+    /// A tag that stays over a point of the map (overlays.ts setBreakables, setFallenPacks): a siege's door or barricade
+    /// that has taken blows, its bar and what it still holds; a fallen soldier's rucksack, «MOCHILA DE CHIARA».
+    /// </summary>
+    [Serializable]
+    public sealed class WorldTagView
+    {
+        /// <summary>bar or pack.</summary>
+        public string Kind;
+        public string Text;
+        public Vector3 World;
+        /// <summary>A bar's: how full (0 to 1), and whether it is down to a third (red).</summary>
+        public float Fill;
+        public bool Low;
+    }
+
     /// <summary>A mark to point at from the screen's edge (edgeMarks.ts EdgeMark): objective, evac or alert, its words, where.</summary>
     [Serializable]
     public sealed class EdgeMarkView
@@ -555,6 +615,10 @@ namespace Bastion.UI.Hud
         public float Value;
         public string Low;
         public string High;
+        /// <summary>The slider's value as a share («80 %»: a volume), not as a rate («×1,4»).</summary>
+        public bool Percent;
+        /// <summary>A row of the sound (its switch, its volumes): in Ajustes' first column, the rest in the second.</summary>
+        public bool Sound;
     }
 
     [Serializable]

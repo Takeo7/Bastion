@@ -780,9 +780,12 @@
 
 /* =============================================================== the skill board */
 
+/* At most the screen less a little (Ajustes' «Interfaz» at 130 % leaves some 1108 × 692): the board inside fits itself. */
 .board-modal {
     width: 1180px;
     height: 760px;
+    max-width: 96%;
+    max-height: 96%;
     padding: 14px 18px 12px;
     border-width: 2px;
     border-color: rgba(200, 205, 198, 0.4);

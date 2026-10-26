@@ -20,6 +20,8 @@ namespace Bastion.Client
         Animator showAnimator;
         FigureAnimator showAnim;
         Transform showGun;
+        /// <summary>Whether that is the pistol (their only gun), held by the thigh.</summary>
+        bool showPistol;
         Quaternion? showGrip;
         float showTime;
 
@@ -40,7 +42,7 @@ namespace Bastion.Client
 
         /// <summary>
         /// The soldier `soldierId` as `look` (who has none, a body of their sex by `name`), `weapon` (FoundWeaponIds) in the
-        /// hands (none: none yet: the pistol is still to come); `fallen`, their grave. A null id, nobody.
+        /// hands (none: the pistol, at rest by the thigh); `fallen`, their grave. A null id, nobody.
         /// </summary>
         public void Showcase(string soldierId, Appearance look, string weapon, bool fallen, string name = null, string band = null)
         {
@@ -91,13 +93,17 @@ namespace Bastion.Client
             string rest = null;
             if (showAnimator != null && showAnimator.isHuman && catalog != null)
             {
-                showGun = UnitViews.Gun(Anims.Weapon(Anims.FoundModel(weapon)), showFigure, catalog, out _);
-                bool armed = showGun != null;
-                if (armed) rest = UnitViews.RestFor(soldierId);
-                // As the battle's (UnitViews.Make): a gun in the hands, Mixamo's armed idle where there is one.
+                showGun = weapon == null ? UnitViews.Pistol(showFigure, catalog) : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(weapon)), showFigure, catalog, out _);
+                showPistol = weapon == null && showGun != null;
+                bool armed = showGun != null && !showPistol;
+                rest = UnitViews.RestFor(soldierId);
+                // As the battle's (UnitViews.Make): a gun in the hands, Mixamo's armed idle where there is one; the pistol
+                // by the thigh, its way of waiting (PISTOL_RESTS) the body's.
+                string still = showPistol ? Anims.Stance(build, UnitViews.PistolStance(rest)) : null;
                 string ArmedId(string m) => !armed ? null : Anims.Armed("rifle", m) is string a && a != "own" ? a : null;
-                showAnim = new FigureAnimator(showAnimator, m => catalog.Clip(ArmedId(m) ?? Anims.Motion(build, m, false)), null, m => ArmedId(m) != null);
+                showAnim = new FigureAnimator(showAnimator, m => catalog.Clip(ArmedId(m) ?? (m == "idle" && still != null ? still : Anims.Motion(build, m, false))), null, m => ArmedId(m) != null);
                 if (armed) showAnim.Rest(catalog.Clip(rest), 0);
+                if (showPistol) showAnim.ArmRest(catalog.Clip("pistolRest"), UnitViews.PistolHold, 0);
             }
             showTime = 0;
             // Into its pose at once (the clips blend in over a few frames), as it would stand.
@@ -135,6 +141,7 @@ namespace Bastion.Client
             showAnim = null;
             showAnimator = null;
             showGun = null;
+            showPistol = false;
             showGrip = null;
             showFigure = null;
             if (showcase != null)
@@ -152,7 +159,8 @@ namespace Bastion.Client
             {
                 if (dt <= 0) showAnim.Step(0);
                 for (float left = dt; left > 1e-5f; left -= 0.1f) showAnim.Step(Mathf.Min(0.1f, left));
-                UnitViews.Hold(showAnimator, showGun, showFigure, false, ref showGrip);
+                if (showPistol) UnitViews.HoldPistol(showAnimator, showGun, showFigure, 0, ref showGrip);
+                else UnitViews.Hold(showAnimator, showGun, showFigure, false, ref showGrip);
             }
         }
 

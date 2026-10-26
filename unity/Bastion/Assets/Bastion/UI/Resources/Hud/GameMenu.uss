@@ -4,13 +4,14 @@
    so the tints are fainter (0.045 shows as the web's 0.16).
 */
 
-/* Over the whole screen, dimmed; the card in the middle. */
+/* Over the whole screen, dimmed; the card in the middle of what is under the turn strip, never over it (Lore, 26/10). */
 .game-menu {
     position: absolute;
     left: 0;
     top: 0;
     right: 0;
     bottom: 0;
+    padding: 56px 16px 16px;
     align-items: center;
     justify-content: center;
     background-color: rgba(10, 8, 5, 0.55);
@@ -20,10 +21,72 @@
     background-color: rgba(10, 8, 5, 0.6);
 }
 
+/* No taller than the room it has: its lists scroll (GameMenu.Scroll). */
 .game-menu__card {
     width: 360px;
+    max-height: 100%;
     padding: 16px 22px 14px;
     rotate: 0deg;
+}
+
+.game-menu__scroll {
+    flex-shrink: 1;
+}
+
+/* Ajustes in two columns: the sound, then the graphics and the game's (GameMenu: SettingView.Sound). */
+.game-menu__card--settings {
+    width: 720px;
+    max-width: 100%;
+}
+
+.settings--cols {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.settings__col {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+}
+
+.settings__col--second {
+    margin-left: 24px;
+}
+
+/* Thin and faint, over the card's padding, not beside the rows (Strategy.uss .strat-side's). */
+.game-menu__scroll .unity-scroller--vertical {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -14px;
+    width: 6px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.game-menu__scroll .unity-scroller--vertical .unity-scroller__low-button,
+.game-menu__scroll .unity-scroller--vertical .unity-scroller__high-button,
+.game-menu__scroll .unity-scroller--vertical .unity-base-slider__dragger-border {
+    display: none;
+}
+
+.game-menu__scroll .unity-scroller--vertical .unity-scroller__slider {
+    width: 6px;
+    margin: 0;
+}
+
+.game-menu__scroll .unity-scroller--vertical .unity-base-slider__tracker {
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.game-menu__scroll .unity-scroller--vertical .unity-base-slider__dragger {
+    left: 1px;
+    width: 4px;
+    border-width: 0;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 .game-menu__title {

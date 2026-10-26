@@ -23,5 +23,5 @@ unity/Bastion/Assets/Synty.meta
 unity/Bastion/Assets/Mixamo/
 unity/Bastion/Assets/Mixamo.meta
 # The sound, some 600 MB of WAV generated from the 0.10.1's by unity/tools/sonido.sh (docs/UNITY-SONIDO.md).
-unity/Bastion/Assets/Bastion/Client/Audio/Generado/
-unity/Bastion/Assets/Bastion/Client/Audio/Generado.meta
+unity/Bastion/Assets/Bastion/Client/Audio/Resources/Generado/
+unity/Bastion/Assets/Bastion/Client/Audio/Resources/Generado.meta

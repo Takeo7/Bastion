@@ -685,7 +685,6 @@ namespace Bastion.UI.Combat
         /// <summary>The arrival card closed, the stamp let go: the game's (the turn clock), through these events.</summary>
         public event System.Action IntroClosed;
         public event System.Action BannerReleased;
-        public event System.Action<string> SheetAsked;
 
         public void OnIntroClosed() => IntroClosed?.Invoke();
         public void OnBannerReleased() => BannerReleased?.Invoke();
@@ -708,7 +707,7 @@ namespace Bastion.UI.Combat
         /// <summary>A campaign mission over: both back to the base (the room ignores backToMenu then).</summary>
         public void OnReturnToBase() => Send(new ReturnToBaseMessage());
         public void OnBackToMenu() => Send(new BackToMenuMessage());
-        public void OnSheet(string unit) => SheetAsked?.Invoke(unit);
+        public void OnSheet(string unit) => OpenSheet(unit);
         public void OnFloor(int dir) => SetLevel(Level + dir);
         public void OnMenu() => ToggleMenu();
     }

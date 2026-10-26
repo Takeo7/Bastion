@@ -305,7 +305,7 @@ namespace Bastion.UI.EditorTools
                 hud.AddComponent<UIDocument>().panelSettings = Panel();
                 var lab = new GameObject("CombatLab").AddComponent<Bastion.UI.Combat.CombatLab>();
                 lab.Hud = hud.AddComponent<HudRoot>();
-                lab.Golden = "city-11-scavenge";
+                lab.Golden = System.Environment.GetEnvironmentVariable("BASTION_LAB_GOLDEN") ?? "city-11-scavenge";
                 lab.ToEnemyTurn = true;
                 lab.InScene = true;
             };

@@ -53,6 +53,8 @@ namespace Bastion.Client
             public Animator animator;
             public FigureAnimator anim;
             public Transform gun;
+            /// <summary>Whether that is the pistol, its only gun (held at rest by the thigh: UnitViews.HoldPistol), not a two-handed one.</summary>
+            public bool pistol;
             public Quaternion? grip;
             public float yaw;
             /// <summary>Its build's clips (masc, femn); whether its gun is slung on its back (getting in: Sling), and where on which bone.</summary>
@@ -215,14 +217,20 @@ namespace Bastion.Client
             if (stander.animator != null && stander.animator.isHuman && catalog != null)
             {
                 stander.animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-                stander.gun = UnitViews.Gun(Anims.Weapon(Anims.FoundModel(Campaign.SoldierArms(campaign, s).Primary)), holder, catalog, out _);
-                bool armed = stander.gun != null;
+                // The Armería's gun, or the pistol where there is none (syntyFigures.ts armamentOf), at rest by the thigh.
+                string primary = Campaign.SoldierArms(campaign, s)?.Primary;
+                stander.gun = primary == null ? UnitViews.Pistol(holder, catalog) : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(primary)), holder, catalog, out _);
+                stander.pistol = primary == null && stander.gun != null;
+                bool armed = stander.gun != null && !stander.pistol;
                 var rests = Anims.RifleRests;
                 string rest = rests.Count > 0 ? rests[((index % rests.Count) + rests.Count) % rests.Count] : "rifleIdle";
                 string slumped = wounded ? Anims.Stance(build, "slumped") : null;
+                // How it stands: slumped wounded, else with the pistol its way of waiting (PISTOL_RESTS), else its idle.
+                string still = slumped ?? (stander.pistol ? Anims.Stance(build, UnitViews.PistolStance(rest)) : null);
                 string ArmedId(string m) => !armed || slumped != null ? null : Anims.Armed("rifle", m) is string a && a != "own" ? a : null;
-                stander.anim = new FigureAnimator(stander.animator, m => catalog.Clip(ArmedId(m) ?? (m == "idle" && slumped != null ? slumped : Anims.Motion(build, m, false))), null, m => ArmedId(m) != null);
+                stander.anim = new FigureAnimator(stander.animator, m => catalog.Clip(ArmedId(m) ?? (m == "idle" && still != null ? still : Anims.Motion(build, m, false))), null, m => ArmedId(m) != null);
                 if (armed && slumped == null) stander.anim.Rest(catalog.Clip(rest), 0);
+                if (stander.pistol) stander.anim.ArmRest(catalog.Clip("pistolRest"), UnitViews.PistolHold, 0);
             }
             return stander;
         }
@@ -242,6 +250,7 @@ namespace Bastion.Client
             if (dt <= 0) s.anim.Step(0);
             for (float left = dt; left > 1e-5f; left -= 0.1f) s.anim.Step(Mathf.Min(0.1f, left));
             if (s.slung) KeepSlung(s);
+            else if (s.pistol) UnitViews.HoldPistol(s.animator, s.gun, s.root, 0, ref s.grip);
             else UnitViews.Hold(s.animator, s.gun, s.root, false, ref s.grip);
         }
 

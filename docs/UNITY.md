@@ -102,7 +102,7 @@ La prueba del hito 2 con Arturo: [PRUEBA-CAMPAÑA-UNITY.md](PRUEBA-CAMPAÑA-UNIT
 ### Hito 3: lo que queda
 
 - **Sonido** (audio/: sonidos grabados, ambiente, música, radio). Lo hace Red, que hizo el de la 0.10.x (pasó de Arte el 26/10, porque Arte va con el Asentamiento). Cómo se mide sin oír, en la memoria «Medir sonidos».
-  - **Generado y fuera de git** (Gameplay, 26/10). En WAV son unos 575 MB. `unity/tools/sonido.sh` los saca del código y de los Opus de la 0.10.1 a `Assets/Bastion/Client/Audio/Generado/`, que no se sube, como Synty y Mixamo.
+  - **Generado y fuera de git** (Gameplay, 26/10). En WAV son unos 575 MB. `unity/tools/sonido.sh` los saca del código y de los Opus de la 0.10.1 a `Assets/Bastion/Client/Audio/Resources/Generado/`, que no se sube, como Synty y Mixamo.
   - **Más peso en la app:** unos 60 MB, porque Unity lo comprime a Vorbis.
   - **AppBuild se para** si falta. Para compilar sin sonido hay que pedirlo de forma explícita.
   - **Depende de packages/:** de `packages/client/src/audio` y `public/audio`. Al retirar packages/, eso se queda o se mueve a `unity/tools/sonido/`.
@@ -114,9 +114,19 @@ La prueba del hito 2 con Arturo: [PRUEBA-CAMPAÑA-UNITY.md](PRUEBA-CAMPAÑA-UNIT
       - `MapCatalogMake.Check` no echa nada en falta en 25 mapas de campo, 14 de fábrica y 67 de ciudad. Alpine no hace falta para estos mapas.
     - **Falta:** las sombras cuando la cámara se aleja (acaban a 50 m y la cámara llega a 63 m). Lo hace Arte, con la medida de lo que cuesta.
 - **La noche:** luces de farolas, coches y ventanas, y las bengalas.
-- **Armas:** pistola, machete y cuchillo en la mano; Cuervos y muertos especiales. Recargar, que en Unity aún es una espera de 1,4 s (`UnitViews.Reload`): en la 0.10.1 es `rifleReload` («Reloading» de Mixamo). Es de Arte.
+- **Armas:** hecho el 26/10 (Arte). Pistola, machete y cuchillo en la mano, en la funda y en el cinto, y recargar, en combate y en la base. Quedan detalles: la guardia con la hoja, el fusil al agacharse (`slingOnBack`) y la pistola fuera del muslo (`spreadPistol`).
+- **Muertos especiales** (Arte, informe del 26/10). En Unity todos salen con los 5 zombis de Sidekick. Falta, por este orden:
+  1. los cuerpos de City Zombies (Corredor, Acorazado) y Boss Zombies (Chillón, Hinchado), con los tamaños y el pelo de la 0.10.1;
+  2. el grito del Chillón con su cuerpo y el reventón del Hinchado;
+  3. comprobar con una tira si faltan los estilos de andar (inclinación, cadera, giro);
+  4. los 12 «vivos hechos muertos» del zombi común. Recargar, que en Unity aún es una espera de 1,4 s (`UnitViews.Reload`): en la 0.10.1 es `rifleReload` («Reloading» de Mixamo). Es de Arte.
 - **Rendimiento medido** en el PC de la 3090 («alto» ≤ 4,2 ms) y en el Mac («medio» ≥ 30 fps), con red.log.
-- **Releases de la app de Unity** (versión que decide Arturo) y, entonces, retirar packages/ (Three.js, Electron).
+- **Releases de la app de Unity** (versión que decide Arturo) y, entonces, retirar packages/ (Three.js, Electron). El borrador de las notas es [NOTAS-UNITY.md](NOTAS-UNITY.md), de Lore. Antes de la primera, hay que decidir con Arturo dos cosas:
+  - **El número de versión.** La app dice hoy «0.1.0», más bajo que la 0.10.1.
+  - **El nombre en el Mac.** Las dos apps se llaman `Bastion.app`, así que copiar la de Unity a Aplicaciones sustituye a la de Electron. Las partidas no se pisan, porque Unity guarda en `Bastion-Unity/`.
+  - **El tamaño** (Red, 26/10). La app del Mac ocupa 842 MB porque la compilación no comprime nada: el zip ya pesa 224 MB.
+    - Con LZ4HC en AppBuild bajaría a unos 290 MB sin cambiar lo que se ve. Lo hace Red, midiendo la carga antes y después.
+    - Las 815 piezas de Sidekick que no usa el armario (181 MB sin comprimir) y los personajes de muestra sin uso los decide Arte después de los «vivos hechos muertos», que necesitan más piezas.
 - **El tiempo real** (realtime.ts): solo si Arturo lo quiere; no estaba en uso.
 
 ## 6. Cómo se trabaja (lo aprendido)

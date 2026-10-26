@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '../../..');
 const CLIENT = join(ROOT, 'packages/client');
-const DEFAULT_OUT = join(ROOT, 'unity/Bastion/Assets/Bastion/Client/Audio/Generado');
+const DEFAULT_OUT = join(ROOT, 'unity/Bastion/Assets/Bastion/Client/Audio/Resources/Generado');
 
 /** The live pieces: the score where it isn't recorded (the base and the menus, the Map) and every ambience bed. */
 const PIECES = [

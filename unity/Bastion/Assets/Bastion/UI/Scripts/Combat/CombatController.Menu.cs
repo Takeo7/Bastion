@@ -20,16 +20,20 @@ namespace Bastion.UI.Combat
             ("Retroceso", "Terminar turno"),
             // Signalling (playtest 19/10 #14): Shift and a click, G, or the wheel's click.
             ("Mayús + clic · G · clic con la rueda", Lore.SettingsText.PingControls),
+            ("H · clic en su nombre", "Hoja del soldado: tablero, estadísticas y lo que lleva"),
             ("Q / E", "Girar la cámara"),
             ("Rueda", "Acercar o alejar"),
             ("RePág / AvPág · Mayús + rueda", "Subir o bajar de planta"),
             ("WASD", "Mover la cámara"),
             ("F", "Centrar en el soldado"),
             ("O", "Centrar en el objetivo"),
+            ("Clic derecho", "Ficha del enemigo"),
+            ("M", "Sonido"),
             ("Esc", "Cancelar o abrir este menú"),
         };
 
         const string EnemySpeedId = "enemySpeed";
+        const string WalkSpeedId = "walkSpeed";
         const string PlansId = "autoPlan";
 
         /// <summary>«Menú» or Esc: the game's menu with what it can do now, or closed.</summary>
@@ -53,8 +57,8 @@ namespace Bastion.UI.Combat
                 AbandonTip = HudText.Menu.AbandonTip(partner?.Name, Players.Count > 1),
                 // One's own call waiting for the partner: off, saying so.
                 AbandonWaiting = State.AbandonCall != null && State.AbandonCall.By == MySlot ? Lore.EvacWaiting(partner?.Name ?? "el otro jugador") : null,
-                // The graphics' rows (GameSettings), then the battle's own.
-                Settings = App.GameSettings.Views().Concat(new List<SettingView>
+                // The graphics' rows (GameSettings), the battle's own among them, as the 0.10.1's.
+                Settings = App.GameSettings.Views(new List<SettingView>
                 {
                     // The enemy turn's speed, a slider (playtest 18/10 #6); the squad's own actions play at their own pace.
                     new SettingView
@@ -70,6 +74,20 @@ namespace Bastion.UI.Combat
                         Low = "Lenta",
                         High = "Rápida",
                     },
+                    // How fast the soldiers walk and run on screen, to try (Ana, 22/10 #32): the rules don't change.
+                    new SettingView
+                    {
+                        Id = WalkSpeedId,
+                        Label = "Velocidad de los soldados",
+                        About = "Lo rápido que se mueven en pantalla. No cambia las reglas.",
+                        Slider = true,
+                        Min = 0.5f,
+                        Max = 2f,
+                        Step = 0.05f,
+                        Value = EventPlayer.WalkSpeed,
+                        Low = "Lenta",
+                        High = "Rápida",
+                    },
                     new SettingView
                     {
                         Id = PlansId,
@@ -78,7 +96,7 @@ namespace Bastion.UI.Combat
                         Choices = new List<string> { "Sí", "No" },
                         On = AutoPlan ? 0 : 1,
                     },
-                }).ToList(),
+                }),
                 Controls = Controls.Select(c => new ControlView { Keys = c.keys, What = c.what }).ToList(),
                 NightLabel = Lore.NightText.Label,
                 NightRules = Lore.NightText.Rules.ToList(),
@@ -94,6 +112,7 @@ namespace Bastion.UI.Combat
                 // The enemy's turn playing now takes it at once.
                 Hurry?.Invoke(false);
             }
+            else if (id == WalkSpeedId) EventPlayer.WalkSpeed = value;
             else if (id == PlansId) AutoPlan = value == 0;
             else App.GameSettings.Change(id, value);
         }

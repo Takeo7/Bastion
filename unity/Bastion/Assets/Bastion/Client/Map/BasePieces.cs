@@ -486,14 +486,14 @@ namespace Bastion.Client.Map
         /// A piece of sandbags as mapView.ts draws it (its siege barricade's `sandbags`, across the piece's turn): the wall
         /// of bags lower the more worn, and the bags knocked off, most out where the dead strike, a few in.
         /// </summary>
-        public static void DrawSandbags(GameState s, PieceMap map, PieceSpot spot, int wear, List<PiecePlacement> @out)
+        public static void DrawSandbags(GameState s, PieceMap map, PieceSpot spot, int wear, List<PiecePlacement> @out) =>
+            Sandbags(s, spot.piece.X, spot.piece.Y, 0, wear, spot.piece.Rot % 2 != 0 ? 0 : Math.PI / 2, new Art(@out, null, map.spots.IndexOf(spot), spot.anchor));
+
+        /// <summary>mapView.ts sandbags: a barricade's bags on tile (x, y), `base` tiles up, across `yaw`, at `wear` (3: given way).</summary>
+        static void Sandbags(GameState s, int x, int y, double @base, int wear, double yaw, Art art)
         {
-            var art = new Art(@out, null, map.spots.IndexOf(spot), spot.anchor);
-            int x = spot.piece.X;
-            int y = spot.piece.Y;
             double R(int salt) => Hash(x, y, 80 + salt);
-            double yaw = spot.piece.Rot % 2 != 0 ? 0 : Math.PI / 2;
-            art.Put("sandbags", At(x + 0.5, 0, y + 0.5, yaw + (R(0) - 0.5) * 0.08 * wear, 1, new[] { 1, 0.78, 0.5, 0.2 }[wear], 1));
+            art.Put("sandbags", At(x + 0.5, @base, y + 0.5, yaw + (R(0) - 0.5) * 0.08 * wear, 1, new[] { 1, 0.78, 0.5, 0.2 }[wear], 1));
             var into = Inwards(s, x, y);
             int loose = new[] { 0, 2, 4, 7 }[wear];
             for (int k = 0; k < loose; k++)
@@ -503,7 +503,96 @@ namespace Bastion.Client.Map
                 double t = (R(30 + k) - 0.5) * 0.9;
                 double px = x + 0.5 + into.x * side * d + into.z * t;
                 double pz = y + 0.5 + into.z * side * d + into.x * t;
-                art.Put("sandbag", At(px, k > 3 ? 0.05 : 0.01, pz, R(40 + k) * Math.PI * 2), false);
+                art.Put("sandbag", At(px, @base + (k > 3 ? 0.05 : 0.01), pz, R(40 + k) * Math.PI * 2), false);
+            }
+        }
+
+        // ------------------------------------------------------------------ a siege's doors and barricades
+
+        /// <summary>siegeDressing.ts madeAs: what tile (x, y) was when the hand-made map was drawn (its legend: '+' a door, 'b' a barricade), or none.</summary>
+        public static char? MadeAs(GameState s, int x, int y)
+        {
+            if (s.MapId == null || !Maps.All.TryGetValue(s.MapId, out var map) || y < 0 || y >= map.Rows.Count) return null;
+            string row = map.Rows[y];
+            return x >= 0 && x < row.Length ? row[x] : (char?)null;
+        }
+
+        /// <summary>
+        /// siegeDressing.ts wearOf: each ground tile with a door or barricade standing, and its wear (by what it holds left,
+        /// GameState.breakables, against what it held: a base piece's health for its tiles). One given way is the map's
+        /// remains (MadeAs), not worn.
+        /// </summary>
+        public static Dictionary<int, int> SiegeWear(GameState s)
+        {
+            var @out = new Dictionary<int, int>();
+            if (s.Breakables == null) return @out;
+            var full = new Dictionary<int, int>();
+            foreach (var p in s.Base?.Pieces ?? new List<BasePiece>())
+                foreach (var c in Bastion.Engine.Base.CellsOf(p)) full[c.Y * s.Width + c.X] = Bastion.Engine.Base.Pieces[p.Piece].Hp;
+            for (int i = 0; i < s.Width * s.Height && i < s.Tiles.Count; i++)
+            {
+                if (!s.Breakables.TryGetValue(Bastion.Engine.Grid.NodeOf(s, new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 }), out int left) || s.Tiles[i] == TileKinds.Floor) continue;
+                bool door = s.Tiles[i] == TileKinds.Door || s.Tiles[i] == TileKinds.DoorOpen;
+                @out[i] = WearStage(left, full.TryGetValue(i, out int hp) ? hp : door ? Content.Siege.Door : Content.Siege.Barricade);
+            }
+            return @out;
+        }
+
+        /// <summary>
+        /// A siege's doors and barricades on the hand-made map (mapView.ts build, docs/FASE12.md §10): each barricade's
+        /// sandbags as worn as it is; one given way, its bags knocked flat and spread round; a gate or door given way, its
+        /// leaf down flat, fallen in; grit at the foot of a door knocked about. Not on the base's pieces (drawn whole) nor
+        /// its yard. `owner`, the buildings' plan's (a gate of the base's wall is bigger than a building's door).
+        /// </summary>
+        public static void DrawSiege(GameState s, PieceMap map, short[] owner, List<PiecePlacement> @out)
+        {
+            if (s.Mission?.Siege == null) return;
+            var wear = SiegeWear(s);
+            for (int y = 0; y < s.Height; y++)
+                for (int x = 0; x < s.Width; x++)
+                {
+                    int i = y * s.Width + x;
+                    if (i >= s.Tiles.Count) continue;
+                    string kind = s.Tiles[i];
+                    double @base = (s.Elev != null && i < s.Elev.Count ? s.Elev[i] : 0) * Storey;
+                    double cx = x + 0.5, cz = y + 0.5;
+                    var art = new Art(@out, null, -1, i);
+                    // A door knocked about: grit and flakes at its foot, out where the dead strike it.
+                    if ((kind == TileKinds.Door || kind == TileKinds.DoorOpen) && wear.TryGetValue(i, out int worn) && worn > 0)
+                    {
+                        var into = Inwards(s, x, y);
+                        for (int k = 0; k < worn + 1; k++)
+                        {
+                            double R(int salt) => Hash(x, y, 100 + k * 4 + salt);
+                            double t = (R(0) - 0.5) * 0.8;
+                            art.Put("pebbles", At(cx - into.x * (0.35 + R(1) * 0.25) + into.z * t, @base + 0.01, cz - into.z * (0.35 + R(1) * 0.25) + into.x * t, R(2) * Math.PI * 2), false);
+                        }
+                        if (worn == 2) art.Put("rubble1", At(cx - into.x * 0.45, @base, cz - into.z * 0.45, Hash(x, y, 120) * Math.PI * 2, 0.4, 0.35, 0.4));
+                    }
+                    if (kind == TileKinds.Wall || kind == TileKinds.Door || kind == TileKinds.DoorOpen || kind == TileKinds.Window || kind == TileKinds.WindowBroken) continue;
+                    if (map != null && ((map.at[i] >= 0 && Drawn.Contains(map.spots[map.at[i]].piece.Piece)) || map.yard.Has(i))) continue;
+                    var made = MadeAs(s, x, y);
+                    double facing = (s.Decor != null && i < s.Decor.Count ? Bastion.Engine.Decor.DecorOf(s.Decor[i])?.Facing ?? 0 : 0) != 0 ? Math.PI / 2 : 0;
+                    if (kind == TileKinds.Floor && @base == 0)
+                    {
+                        if (made == 'b') Sandbags(s, x, y, @base, 3, facing, art);
+                        else if (made == '+') FallenDoor(s, x, y, @base, owner != null && i < owner.Length && owner[i] < 0 ? 1 : 0.8, art);
+                    }
+                    if (kind == TileKinds.Low && made == 'b') Sandbags(s, x, y, @base, wear.TryGetValue(i, out int stage) ? stage : 0, facing, art);
+                }
+        }
+
+        /// <summary>mapView.ts fallenDoor: a gate or door given way, its leaf down flat, fallen in, the foot on its line, and grit off the posts.</summary>
+        static void FallenDoor(GameState s, int x, int y, double @base, double big, Art art)
+        {
+            double R(int salt) => Hash(x, y, 90 + salt);
+            var into = Inwards(s, x, y);
+            art.Put("gateLeafDown", At(x + 0.5 + into.x * 0.06, @base + 0.09, y + 0.5 + into.z * 0.06, Js.Atan2(-into.x, -into.z) + (R(0) - 0.5) * 0.5, big, big, big, (R(1) - 0.5) * 0.08, -Math.PI / 2 + 0.05));
+            foreach (int side in new[] { -1, 1 })
+            {
+                double px = x + 0.5 + into.z * side * 0.42 + into.x * (R(2 + side) - 0.3) * 0.3;
+                double pz = y + 0.5 + into.x * side * 0.42 + into.z * (R(4 + side) - 0.3) * 0.3;
+                art.Put("pebbles", At(px, @base + 0.01, pz, R(6 + side) * Math.PI * 2), false);
             }
         }
 

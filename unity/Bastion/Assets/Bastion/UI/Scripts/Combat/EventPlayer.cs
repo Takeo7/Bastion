@@ -169,6 +169,13 @@ namespace Bastion.UI.Combat
             set => PlayerPrefs.SetFloat("bastion.enemySpeed", value);
         }
 
+        /// <summary>«Velocidad de los soldados» (settings.ts walkSpeed; Ana, 22/10 #32): how fast the squad walks on screen, ×0.5 to ×2, kept on this computer.</summary>
+        public static float WalkSpeed
+        {
+            get => Mathf.Clamp(PlayerPrefs.GetFloat("bastion.walkSpeed", 1), 0.5f, 2f);
+            set => PlayerPrefs.SetFloat("bastion.walkSpeed", value);
+        }
+
         /// <summary>The space bar held in the enemy's turn: at least «Rápida» until it is let go.</summary>
         public void SetHurry(bool on)
         {
@@ -678,8 +685,9 @@ namespace Bastion.UI.Combat
             }
             else if (e is CommandPassedEvent cp && cp.To == control.MySlot) planDue = true;
             else if (e is MovedEvent || e is DiedEvent || e is EvacuatedEvent) control.DropPlan(UnitOf(e));
-            // A door, a wall, a floor changed: the map rebuilds those tiles and what stood on them (Arte's MapView.Rebuild).
-            if (e is TileChangedEvent || e is FloorBrokenEvent) Bastion.Client.Map.MapView.Current?.Rebuild(V);
+            // A door, a wall, a floor changed: the map rebuilds those tiles and what stood on them (Arte's MapView.Rebuild);
+            // a siege's door or barricade struck, its wear (the bags knocked off, MapBuilder.DrawSiege).
+            if (e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent) Bastion.Client.Map.MapView.Current?.Rebuild(V);
             See();
             ShowSeen();
             control.Refresh();
@@ -885,10 +893,10 @@ namespace Bastion.UI.Combat
                     if (into == 0) units.ForceVisible(u.Id);
                     else units.Shade(u.Id, true);
                     // In a group of the dead, the framing is the group's, they walk a little quicker, and each stands where its
-                    // plan says so nobody walks through anybody.
+                    // plan says so nobody walks through anybody. The squad, at the pace Ajustes sets (only how it looks).
                     WalkPlan.Plan plan = null;
                     if (grouped) groupPlans?.TryGetValue(u.Id, out plan);
-                    var pace = grouped ? WalkersPace * (plan?.Haste ?? 1) : 1;
+                    var pace = grouped ? WalkersPace * (plan?.Haste ?? 1) : u.Team == Teams.Xcom ? WalkSpeed : 1;
                     var steps = units.StepSeconds(u.Id, u.Pos, m.Path, m.Ap, pace);
                     var reveal = 0f;
                     for (var k = 0; k < into && k < steps.Length; k++) reveal += steps[k] + (plan != null && k < plan.Waits.Length ? plan.Waits[k] : 0);
@@ -1455,6 +1463,8 @@ namespace Bastion.UI.Combat
                     var door = kind == "door" || kind == "doorOpen";
                     var place = Board.TileToWorld(v, smashed.Tile, door ? 1.65f : 0.9f);
                     var gone = smashed.Left <= 0;
+                    // What gives way is known even unseen: a breach in the wall is what matters (its line and marks).
+                    if (gone) Log(Lore.GiveWayLine(door ? "door" : "barricade", CombatController.SideOf(v, smashed.Tile)), "#ff6b5a");
                     if (!ShownToSquad(u) && !IsVisible(smashed.Tile.X, smashed.Tile.Y)) return;
                     units?.ForceVisible(u.Id);
                     Look(place);
@@ -1473,6 +1483,10 @@ namespace Bastion.UI.Combat
                 case TileChangedEvent tc:
                 {
                     var before = Grid.KindAt(v, tc.Pos);
+                    // A siege's barricade blown away by a grenade, not by blows: a breach all the same, said once (the blows' in
+                    // Smashed, which leaves it at 0 before this). A door a grenade opens stays a door: it can be shut again.
+                    if (v.Breakables != null && v.Breakables.TryGetValue(Grid.NodeOf(v, tc.Pos), out var held) && held > 0 && tc.Kind != "door" && tc.Kind != "doorOpen" && tc.Kind != "low")
+                        Log(Lore.GiveWayLine(CombatController.BreakableOf(v, tc.Pos).kind, CombatController.SideOf(v, tc.Pos)), "#ff6b5a");
                     if (fx == null || !IsVisible(tc.Pos.X, tc.Pos.Y)) return;
                     if (tc.Kind == "doorOpen" && before == "door") return;
                     if (tc.Kind == "windowBroken")

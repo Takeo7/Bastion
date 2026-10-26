@@ -79,6 +79,8 @@ namespace Bastion.UI.Combat
             control.Hurry = player.SetHurry;
             if (Hud != null) Hud.ClockOf = ClockOf;
             if (net.LastRoom != null) control.Players = net.LastRoom.Players;
+            // The campaign as the squad took off, for the soldiers' boards on their sheets.
+            control.Campaign = () => tookOff;
             // Tests with two apps (BASTION_PASOS_COMBATE): the HUD pressed as a player would.
             CombatRun.FromEnvironment(control);
             net.Message += OnMessage;

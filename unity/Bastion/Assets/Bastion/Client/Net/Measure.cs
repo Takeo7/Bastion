@@ -17,8 +17,9 @@ namespace Bastion.Client.Net
     ///   the arrival card closed, MissionBot plays it, and another begins when one is over, for BASTION_SEGUNDOS (90);
     /// - base: a new campaign on its base, the premise closed, then the Asentamiento, Soldados and Mapa a third of it each
     ///   (120 s at least).
-    /// Each step goes to red.log («[prueba] medir: …»), to tell its lines apart. However it goes, the app quits
-    /// BASTION_SEGUNDOS + 60 seconds in.
+    /// Each step goes to red.log («[prueba] medir: …»), to tell its lines apart, and what the loads take: from the app's
+    /// start to its first frame of the game, and from the case asked for (the mission, the campaign) to its first card
+    /// showing («Entendido»), with the longest frame between. However it goes, the app quits BASTION_SEGUNDOS + 60 seconds in.
     /// </summary>
     internal sealed class Measure
     {
@@ -39,6 +40,11 @@ namespace Bastion.Client.Net
         private bool lastWasEnd;
         private bool done;
         private bool named;
+        private bool booted;
+        /// <summary>When the case's game was first asked for (-1, not yet): its load is timed from there to its first card.</summary>
+        private float askedAt = -1;
+        private float longest;
+        private bool loaded;
 
         private Measure(string which, float seconds, Action<string> log)
         {
@@ -76,6 +82,12 @@ namespace Bastion.Client.Net
         public void Tick(NetLink link, float now)
         {
             if (done) return;
+            if (!booted)
+            {
+                booted = true;
+                log($"[prueba] medir: arranque, primer fotograma del juego a los {now:F1} s");
+            }
+            if (askedAt >= 0 && !loaded) Loading(now);
             // Whatever happens (a case that never begins, one stuck), the app goes in the end: the next case runs.
             if (now > seconds + 60)
             {
@@ -101,7 +113,7 @@ namespace Bastion.Client.Net
             }
             if (phase == RoomPhases.Lobby)
             {
-                if (Due(now, 3)) link.Send(Start());
+                if (Due(now, 3)) Ask(link, Start(), now);
                 return;
             }
             if (phase != RoomPhases.Mission) return;
@@ -135,7 +147,7 @@ namespace Bastion.Client.Net
         {
             if (phase == RoomPhases.Lobby)
             {
-                if (Due(now, 3)) link.Send(new NewCampaignMessage());
+                if (Due(now, 3)) Ask(link, new NewCampaignMessage(), now);
                 return;
             }
             if (phase != RoomPhases.Base) return;
@@ -147,6 +159,22 @@ namespace Bastion.Client.Net
             if (!UiPress.Tab(Tabs[next])) return;
             tab = next;
             log($"[prueba] medir: base · {Tabs[next]}");
+        }
+
+        /// <summary>The case's game asked for (again, every few seconds until it begins): its load timed from the first time.</summary>
+        private void Ask(NetLink link, ClientMessage msg, float now)
+        {
+            if (askedAt < 0) askedAt = now;
+            link.Send(msg);
+        }
+
+        /// <summary>The load, until the case's first card shows (the arrival's, the premise's): how long, and its longest frame.</summary>
+        private void Loading(float now)
+        {
+            longest = Math.Max(longest, Time.unscaledDeltaTime);
+            if (UiPress.Shown("Entendido") == 0) return;
+            loaded = true;
+            log($"[prueba] medir: {which} cargado a los {now - askedAt:F1} s de pedirlo · fotograma más largo {longest * 1000:F0} ms");
         }
 
         /// <summary>The seat's next order, as CampaignRun gives them: once the screen has played the last one, or a few seconds on.</summary>

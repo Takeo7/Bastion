@@ -7,8 +7,9 @@ namespace Bastion.UI.Hud
 {
     /// <summary>
     /// Arrows at the edge of the screen pointing at the marks that are off it (edgeMarks.ts, UX-REVISION-2 #33): the
-    /// objective, the evacuation, where the partner just made something happen; with the distance in tiles from the
-    /// picked soldier. A click centres the camera on it (Look). On screen, a mark needs no arrow: its beam shows.
+    /// objective, the evacuation, a siege's breaches, where the partner just made something happen; with the distance in
+    /// tiles from the picked soldier. The red ones (an alert) beat. A click centres the camera on it (Look). On screen, a
+    /// mark needs no arrow: its beam shows.
     /// </summary>
     public sealed class EdgeMarks
     {
@@ -36,6 +37,14 @@ namespace Bastion.UI.Hud
             this.layer = layer;
             this.tips = tips;
             this.look = look;
+            // USS has no @keyframes: the alerts fade to 0.65 and back (styles.css pulse, 0.7 s each way; the fade is USS's).
+            var dim = false;
+            layer.schedule.Execute(() =>
+            {
+                dim = !dim;
+                foreach (var s in shown)
+                    if (s.View.Kind == "alert") s.El.EnableInClassList("edge-mark--dim", dim);
+            }).Every(700);
         }
 
         /// <summary>The marks to point at; drawn again only when they change.</summary>
@@ -50,8 +59,7 @@ namespace Bastion.UI.Hud
             foreach (var mark in view.Marks)
             {
                 var el = Ui.El("edge-mark panel edge-mark--" + mark.Kind, layer);
-                var arrow = new Triangle(true);
-                arrow.AddToClassList("edge-mark__arrow");
+                var arrow = new Arrow();
                 el.Add(arrow);
                 Ui.Text(mark.Label, "edge-mark__label", el);
                 var at = mark.World;
@@ -102,8 +110,43 @@ namespace Bastion.UI.Hud
                 var px = Mathf.Clamp(cx + dx * t, left + halfW, right - halfW);
                 var py = Mathf.Clamp(cy + dy * t, top + halfH, bottom - halfH);
                 s.El.style.translate = new Translate(px - halfW, py - halfH);
-                // The triangle points up: turned a quarter more than the direction (screen y goes down).
-                s.Arrow.style.rotate = new Rotate(Mathf.Atan2(dy, dx) * Mathf.Rad2Deg + 90);
+                // The arrow points right: turned as the direction (screen y goes down).
+                s.Arrow.style.rotate = new Rotate(Mathf.Atan2(dy, dx) * Mathf.Rad2Deg);
+            }
+        }
+
+        /// <summary>The arrow (styles.css .edge-arrow, its drawing): a shaft and a head, round ends, pointing right, in the text colour.</summary>
+        sealed class Arrow : VisualElement
+        {
+            public Arrow()
+            {
+                AddToClassList("edge-mark__arrow");
+                pickingMode = PickingMode.Ignore;
+                generateVisualContent += Draw;
+            }
+
+            void Draw(MeshGenerationContext ctx)
+            {
+                var r = contentRect;
+                if (r.width <= 0 || r.height <= 0) return;
+                // Its 24 × 24 drawing fitted to the element, centred.
+                var k = Mathf.Min(r.width, r.height) / 24;
+                var o = new Vector2(r.x + (r.width - 24 * k) / 2, r.y + (r.height - 24 * k) / 2);
+                Vector2 At(float x, float y) => o + new Vector2(x, y) * k;
+                var p = ctx.painter2D;
+                p.strokeColor = resolvedStyle.color;
+                p.lineWidth = 2.8f * k;
+                p.lineCap = LineCap.Round;
+                p.lineJoin = LineJoin.Round;
+                p.BeginPath();
+                p.MoveTo(At(3, 12.4f));
+                p.BezierCurveTo(At(8.5f, 11.8f), At(14, 12), At(19.6f, 12.6f));
+                p.Stroke();
+                p.BeginPath();
+                p.MoveTo(At(13.2f, 5.6f));
+                p.BezierCurveTo(At(15.6f, 7.9f), At(17.7f, 9.9f), At(19.8f, 12.2f));
+                p.BezierCurveTo(At(17.6f, 14.3f), At(15.5f, 16.4f), At(13, 18.5f));
+                p.Stroke();
             }
         }
     }

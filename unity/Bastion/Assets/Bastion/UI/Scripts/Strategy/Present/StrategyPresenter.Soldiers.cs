@@ -469,7 +469,12 @@ namespace Bastion.UI.Strategy
         public SkillBoardView SkillBoard(string soldier)
         {
             var s = State.Soldiers.FirstOrDefault(x => x.Id == soldier);
-            if (s == null) return null;
+            return s == null ? null : BoardOf(s, s.Owner == Slot && s.Alive);
+        }
+
+        /// <summary>A campaign soldier's board as the window shows it; `editable`, its cells can be bought (the battle's sheet: never).</summary>
+        public static SkillBoardView BoardOf(CampaignSoldier s, bool editable)
+        {
             var spent = s.Board.Count;
             var rank = Bars.VeterancyRank(spent);
             var def = Bars.Veterancy[rank];
@@ -479,7 +484,7 @@ namespace Bastion.UI.Strategy
             {
                 Kicker = $"Tablero de habilidades · {name}", SoldierId = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname), Rank = name,
                 RankFilled = reward != null ? spent - def.From : Bars.RankStep, RankTotal = Bars.RankStep, Will = reward?.Short ?? "Rango máximo",
-                Points = Bars.PointsLeft(s.Skills, s.Board), Editable = s.Owner == Slot && s.Alive,
+                Points = Bars.PointsLeft(s.Skills, s.Board), Editable = editable,
             };
             v.Board.AddRange(s.Board);
             return v;

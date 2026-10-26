@@ -464,6 +464,19 @@ namespace Bastion.Client
                 foreach (string m in new[] { "idle", "walk", "run", "crouchWalk" }) s.anim.SetMotion(m, catalog.Clip(Anims.Motion(s.build, m, false)));
             }
             var gun = s.gun;
+            // The pistol, its only gun, in its holster down the right thigh (syntyFigures.ts hold: pistolOnly), not on the back.
+            if (s.pistol)
+            {
+                s.anim?.ArmRest(null, 0, 0.2f);
+                if (gun != null && UnitViews.Holster(s.animator, s.animator.transform) is (Transform thigh, Vector3 there, Quaternion holstered))
+                {
+                    s.slingBone = thigh;
+                    s.slingAt = there;
+                    s.slingTurn = holstered;
+                    KeepSlung(s);
+                }
+                return;
+            }
             var bone = s.animator.GetBoneTransform(HumanBodyBones.UpperChest) ?? s.animator.GetBoneTransform(HumanBodyBones.Chest);
             if (gun == null || bone == null) return;
             var figure = s.animator.transform;

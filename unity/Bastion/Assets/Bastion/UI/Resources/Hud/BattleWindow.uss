@@ -1,0 +1,194 @@
+/*
+   The window over the battle (styles.css .soldier-sheet and .enemy-file with mixta's steel): the soldier's sheet, with
+   its board beside in a campaign, and an enemy's file. Loaded by BattleWindow on its own layer.
+*/
+
+.battle-window {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(10, 8, 5, 0.55);
+}
+
+.battle-window__card {
+    padding: 16px 20px 14px;
+    rotate: 0deg;
+}
+
+.battle-window__card--sheet {
+    flex-direction: row;
+    max-height: 94%;
+}
+
+/* With the board: the sheet's column, then the Cuartel's window (1180 px at most, as the 0.10.1), as tall as the board
+   wants and no more than the screen (Ajustes' «Interfaz» at 130 %): the board fits itself in what is left. */
+.battle-window__card--board {
+    height: 650px;
+    max-width: 96%;
+}
+
+.battle-window__card--file {
+    width: 420px;
+}
+
+.battle-window__kicker {
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+/* The Atalaya's file: the stamp's red. */
+.battle-window__kicker--file {
+    color: var(--t-danger);
+}
+
+.battle-window__title {
+    margin: 2px 0 6px;
+    font-size: 26px;
+    color: #ffffff;
+    white-space: normal;
+}
+
+.battle-window__foot {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.battle-window__foot Button {
+    padding: 5px 16px;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+/* ------------------------------------------------------------- the sheet */
+
+.battle-sheet__side {
+    width: 260px;
+    flex-shrink: 0;
+}
+
+.battle-sheet__rank {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.battle-sheet__rank-text {
+    font-size: 13px;
+    color: var(--t-muted);
+}
+
+.battle-sheet__whose {
+    font-size: 13px;
+    -unity-font-style: bold;
+}
+
+.battle-sheet__head {
+    margin: 12px 0 4px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--t-muted);
+}
+
+.battle-sheet__row {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 3px;
+}
+
+/* As a definition list: the name, then its value in bold (styles.css .sheet-rows). */
+.battle-sheet__key {
+    width: 62%;
+    flex-shrink: 0;
+    padding-right: 10px;
+    font-size: 13px;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+.battle-sheet__rows--carries .battle-sheet__key {
+    width: 28%;
+}
+
+.battle-sheet__value {
+    flex-grow: 1;
+    flex-shrink: 1;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--t-text);
+    white-space: normal;
+}
+
+.battle-sheet__skill {
+    font-size: 13px;
+    color: var(--t-text);
+    margin-left: 4px;
+}
+
+/* What is left of the column, so «CERRAR» sits at its foot beside a taller board. */
+.battle-sheet__fill {
+    flex-grow: 1;
+}
+
+/* The Cuartel's board window in the sheet: smaller, flat on the card, its own «Cerrar» hidden (the sheet's closes). */
+.battle-sheet__board {
+    margin-left: 14px;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.battle-sheet__board .board-modal {
+    width: 860px;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    padding: 0;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+}
+
+.battle-sheet__board .board-modal__card {
+    width: 250px;
+}
+
+/* Its head on two lines when the board is narrower (a big «Interfaz»): the points under the rank, not cut. */
+.battle-sheet__board .board-modal__row {
+    flex-wrap: wrap;
+}
+
+.battle-sheet__board .board-modal__foot {
+    display: none;
+}
+
+/* -------------------------------------------------------------- the file */
+
+.battle-file__stats {
+    margin-bottom: 8px;
+    padding: 3px 6px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--t-text);
+    background-color: rgba(240, 80, 60, 0.08);
+    border-left-width: 3px;
+    border-left-color: var(--t-danger);
+}
+
+.battle-file__text {
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--t-text);
+    white-space: normal;
+}
+
+.battle-file__tip {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: var(--t-accent);
+    white-space: normal;
+}
