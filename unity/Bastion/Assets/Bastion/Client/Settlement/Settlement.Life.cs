@@ -147,7 +147,9 @@ namespace Bastion.Client
         void LifeView()
         {
             if (Base == null) return;
-            Life.Set(view == Views.Facilities ? lifeEntries : new List<LifeEntry>());
+            // Those about the clearing but the squad standing by La Lata (clearingArt.ts relife: the same soldier was in both).
+            var inRow = new HashSet<string>(lineupEntries.Where(e => e?.SoldierId != null).Select(e => e.SoldierId));
+            Life.Set(view == Views.Facilities ? lifeEntries.Where(e => e.Seed == null || !inRow.Contains(e.Seed)).ToList() : new List<LifeEntry>());
         }
 
         void StepLife(float dt)
@@ -170,6 +172,7 @@ namespace Bastion.Client
             {
                 var figure = SoldierFigure.Make(dress, s?.Name ?? entry.Seed, true);
                 SquadTint.Paint(figure, look, entry.Colour);
+                FaceLit(figure);
                 figure.transform.SetParent(holder, false);
                 figure.transform.localScale = Vector3.one * Figures.CharacterScale;
                 foreach (var r in figure.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;

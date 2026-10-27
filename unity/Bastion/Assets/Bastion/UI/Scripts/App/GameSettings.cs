@@ -368,6 +368,7 @@ namespace Bastion.UI.App
                 About = "Tiñe la ropa de los soldados con los colores de Personalizar y les pone el brazalete del color de su jugador.",
                 Choices = new System.Collections.Generic.List<string> { "No", "Sí" },
                 On = SquadTint ? 1 : 0,
+                Tail = true,
             },
             new Hud.SettingView
             {
@@ -376,6 +377,7 @@ namespace Bastion.UI.App
                 About = "El tamaño de los textos y paneles del juego. La vista 3D no cambia.",
                 Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(InterfaceSizes, k => $"{Mathf.RoundToInt(k * 100)} %")),
                 On = Math.Max(0, Array.IndexOf(InterfaceSizes, InterfaceSize)),
+                Tail = true,
             },
         };
 
@@ -390,6 +392,7 @@ namespace Bastion.UI.App
             On = AutoQuality ? 0 : 1,
             Note = AutoNote(),
             NoteGoesWith = new System.Collections.Generic.List<string> { AutoId, GraphicsId },
+            Tail = true,
         };
 
         /// <summary>One of those rows changed (its id, the choice's place): kept and applied; false if it isn't one of them.</summary>

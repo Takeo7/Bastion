@@ -499,8 +499,12 @@ namespace Bastion.UI.Combat
             }
             var aimer = enemy != null ? u.Id : null;
             if (aiming != null && aiming != aimer) views.AimAt(aiming, null);
-            if (aimer != null) views.AimAt(aimer, FeetOf(enemy.Id) is Vector3 at ? at + Vector3.up * 1.25f : (Vector3?)null);
+            // On guard for a blow, the blade from the belt; the pistol out of its holster if it fires that (game.ts updateAimPose).
+            var melee = aimer != null && Content.Abilities[modeAbility].Target == AbilityTargets.Melee;
+            var sidearm = aimer != null && Content.IsAttack(modeAbility) && Content.FiresSidearm(u, modeAbility);
+            if (aimer != null) views.AimAt(aimer, FeetOf(enemy.Id) is Vector3 at ? at + Vector3.up * 1.25f : (Vector3?)null, melee, sidearm);
             aiming = aimer;
+            AimCam(enemy != null ? u : null, enemy);
         }
 
         // ------------------------------------------------------- the turn

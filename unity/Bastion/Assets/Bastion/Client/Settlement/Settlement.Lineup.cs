@@ -77,18 +77,38 @@ namespace Bastion.Client
         public void SetLineup(CampaignState campaign, IReadOnlyList<LineupEntry> entries, bool mirror = false, bool halves = true)
         {
             entries = entries ?? new List<LineupEntry>();
-            string key = entries.Count == 0 ? "" : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { mirror, halves, entries.Select(e => e == null ? null : new object[] { e.SoldierId, e.Colour, e.Status, Look(campaign, e.SoldierId) }) });
+            string key = entries.Count == 0 ? "" : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { mirror, halves, entries.Select(e => e == null ? null : Who(campaign, e)) });
             if (key == lineupKey) return;
+            // (Cleared from outside, after boarding: the row made again from nothing, its figures moved or hidden.)
+            bool fresh = lineupKey == "";
             lineupKey = key;
             lineupEntries = entries.ToList();
             lineupCampaign = campaign;
             if (mirror != lineupMirror || halves != lineupHalves) place = null;
             lineupMirror = mirror;
             lineupHalves = halves;
-            ClearLineup();
+            // The pads and graves go; each soldier standing stays by who they are (clearingArt.ts lineupByWho, playtest 21/10 #2:
+            // made again, the whole row hopped back into its idle at every change), unless the row starts afresh.
+            var before = new Dictionary<string, Stander>(lineupByWho);
+            lineupByWho.Clear();
+            standers.Clear();
+            if (fresh)
+            {
+                foreach (var s in before.Values) s.anim?.Dispose();
+                before.Clear();
+            }
+            if (lineupRoot != null)
+                foreach (Transform child in lineupRoot.Cast<Transform>().ToList())
+                    if (!before.Values.Any(s => s.root == child)) DestroyNow(child.gameObject);
             // Its tab's shot for the row as it now is (UI may show the tab before it gives the row).
             if (view == Views.Squad || view == Views.Debrief) needsFrame = true;
-            if (entries.Count == 0) return;
+            // (Those in it no longer about the camp: the same soldier was in both, clearingArt.ts relife.)
+            LifeView();
+            if (entries.Count == 0)
+            {
+                foreach (var s in before.Values) DropStander(s);
+                return;
+            }
             if (lineupRoot == null)
             {
                 lineupRoot = new GameObject("La fila").transform;
@@ -108,8 +128,22 @@ namespace Bastion.Client
                     var cross = Grave(lineupRoot, World(new Vector3(at.x, 0, at.y)), facing);
                     continue;
                 }
-                Stand(s, campaign, i, at, facing + (i % 3 - 1) * 0.12f, entry.Status == "wounded", entry.Colour);
+                string who = Who(campaign, entry);
+                float yaw = facing + (i % 3 - 1) * 0.12f;
+                if (before.TryGetValue(who, out var kept) && kept.root != null)
+                {
+                    before.Remove(who);
+                    kept.root.position = World(new Vector3(at.x, 0, at.y));
+                    kept.yaw = yaw;
+                    standers.Add(kept);
+                    lineupByWho[who] = kept;
+                    continue;
+                }
+                var made = Stand(s, campaign, i, at, yaw, entry.Status == "wounded", entry.Colour);
+                if (made != null) lineupByWho[who] = made;
             }
+            // Those no longer in it go.
+            foreach (var s in before.Values) DropStander(s);
             StepLineup(1.2f);
             if (needsFrame)
             {
@@ -120,15 +154,15 @@ namespace Bastion.Client
 
         bool needsFrame;
 
-        static Appearance Look(CampaignState c, string id) => c?.Soldiers?.FirstOrDefault(s => s.Id == id)?.Appearance;
-
-        void ClearLineup()
+        /// <summary>Who stands on a place, as their figure is made: the soldier, their colour, how they came back, their looks and their gun.</summary>
+        static string Who(CampaignState c, LineupEntry e)
         {
-            foreach (var s in standers) s.anim?.Dispose();
-            standers.Clear();
-            if (lineupRoot != null)
-                foreach (Transform child in lineupRoot.Cast<Transform>().ToList()) DestroyNow(child.gameObject);
+            var s = c?.Soldiers?.FirstOrDefault(x => x.Id == e.SoldierId);
+            return Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { e.SoldierId, e.Colour, e.Status, s?.Appearance, s != null ? Campaign.SoldierArms(c, s)?.Primary : null });
         }
+
+        /// <summary>The row's figures by who each is (Who), kept from one row to the next.</summary>
+        readonly Dictionary<string, Stander> lineupByWho = new Dictionary<string, Stander>();
 
         /// <summary>A place's ring on the ground (0.36 to 0.42 tiles), in its player's colour or an empty place's grey.</summary>
         void Pad(Vector2 at, string colour)
@@ -181,10 +215,11 @@ namespace Bastion.Client
         }
 
         /// <summary>A soldier on their place, their weapon in hand, waiting the `index`th way (restAs), slumped if wounded.</summary>
-        void Stand(CampaignSoldier s, CampaignState campaign, int index, Vector2 at, float yaw, bool wounded, string band)
+        Stander Stand(CampaignSoldier s, CampaignState campaign, int index, Vector2 at, float yaw, bool wounded, string band)
         {
             var stander = Standing(s, campaign, index, World(new Vector3(at.x, 0, at.y)), yaw, wounded, band, lineupRoot);
             if (stander != null) standers.Add(stander);
+            return stander;
         }
 
         /// <summary>That soldier standing at `world` (metres) under `parent`, the lineup's or the posts' (Settlement.Posts); null without a figure.</summary>
@@ -198,6 +233,7 @@ namespace Bastion.Client
             {
                 figure = SoldierFigure.Make(dress, s.Name, true);
                 SquadTint.Paint(figure, look, band);
+                FaceLit(figure);
             }
             catch (System.Exception e)
             {

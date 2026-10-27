@@ -10,7 +10,13 @@ const keep = ['pack', 'fbx', 'fit', 'stretch', 'thick', 'yaw', 'shift', 'origin'
 const props: Record<string, Record<string, unknown>> = {};
 for (const [id, a] of Object.entries(m.PROPS as Record<string, Record<string, unknown>>)) {
   props[id] = Object.fromEntries(keep.filter((k) => a[k] !== undefined).map((k) => [k, a[k]]));
+  // A model with faces taken out (`hole` alone: the shelves emptied as they were stripped) is a model of its own, cut
+  // by SourceProps into Assets/Synty/Extra under this name (the guard tower, cut with `keep` too, is SourceProps' own).
+  if (a.hole && !a.keep) props[id] = { ...props[id], fbx: `${a.fbx}_${id}`, cut: { source: a.fbx, hole: a.hole } };
 }
+// (Unity's own: a wardrobe searched, Town's with its doors and drawers apart, placed as the shut one is; 0.10.1 drew
+// it as the kit piece wardrobeOpen, mapView.ts openWardrobe. MapBuilder.Ransack swings them open.)
+props.wardrobeOpen = { ...props.wardrobe, fbx: 'SM_Prop_Wardrobe_01' };
 const out = join(root, 'unity/Bastion/Assets/Bastion/Client/Resources/MapArt.json');
 writeFileSync(out, JSON.stringify({ props, sets: m.PROP_SETS, footprints: m.FOOTPRINT_FIT }, null, 1) + '\n');
 console.log(Object.keys(props).length, 'props,', Object.keys(m.PROP_SETS).length, 'sets ->', out.slice(root.length + 1));

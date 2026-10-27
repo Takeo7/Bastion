@@ -74,6 +74,7 @@ namespace Bastion.Client
                 figure = SoldierFigure.Make(dress, "Soldado", true);
                 // In their colours and with their player's band if Ajustes says so (SquadTint).
                 SquadTint.Paint(figure, look, band);
+                FaceLit(figure);
             }
             catch (System.Exception e)
             {

@@ -79,7 +79,8 @@ namespace Bastion.Client
             Snow = snow;
             var state = ClearingState(@base, snow);
             ground = state;
-            Mood.Show(snow ? Mood.SnowDay : Mood.Day);
+            // (Its fill fixed, opposite the sun: clearingArt.ts aim.)
+            Mood.Show(snow ? Mood.SnowDay : Mood.Day).FillOpposite = true;
             if (Map == null)
             {
                 Map = new GameObject("Mapa").AddComponent<MapView>();
@@ -89,6 +90,7 @@ namespace Bastion.Client
                 Map.transform.SetParent(transform, false);
             }
             built = Map.Build(state, this.prefabOf, this.materialOf);
+            UnFace(Map.transform);
             // The fire pits lit (clearingArt.ts camp: its fires).
             SetFlames(built.PiecesPlaced.Where(p => p.id == "bFirePit").Select(p => (Vector3)p.matrix.GetColumn(3)).ToList());
             pines = null;
@@ -123,6 +125,7 @@ namespace Bastion.Client
         {
             if (Lata != null) DestroyNow(Lata.gameObject);
             Lata = LaLata.Make(transform, vehicle, prefabOf);
+            UnFace(Lata.transform);
         }
 
         /// <summary>La Lata as the campaign has it (vehicleOf: 0 4×4, 1 van, 2 lorry, 3 the bus); after its going or coming if it is on its way.</summary>

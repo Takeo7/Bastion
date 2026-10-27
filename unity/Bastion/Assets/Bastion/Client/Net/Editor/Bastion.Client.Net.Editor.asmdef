@@ -3,7 +3,8 @@
     "rootNamespace": "Bastion.Client.Net.EditorTools",
     "references": [
         "Bastion.Engine",
-        "Bastion.Net"
+        "Bastion.Net",
+        "Bastion.Client"
     ],
     "includePlatforms": [
         "Editor"

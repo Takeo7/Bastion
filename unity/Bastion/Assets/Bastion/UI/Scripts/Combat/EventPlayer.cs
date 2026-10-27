@@ -86,7 +86,6 @@ namespace Bastion.UI.Combat
         {
             killCam = id;
             control.Rig?.CloseShot(shot.pos, shot.look);
-            Hud?.SetCloseShot(true);
         }
 
         /// <summary>Back from the shot over the shoulder to where the camera was.</summary>
@@ -95,7 +94,6 @@ namespace Bastion.UI.Combat
             if (killCam == null) return;
             killCam = null;
             control.Rig?.EndCloseShot();
-            Hud?.SetCloseShot(false);
         }
 
         /// <summary>
@@ -689,8 +687,11 @@ namespace Bastion.UI.Combat
             else if (e is CommandPassedEvent cp && cp.To == control.MySlot) planDue = true;
             else if (e is MovedEvent || e is DiedEvent || e is EvacuatedEvent) control.DropPlan(UnitOf(e));
             // A door, a wall, a floor changed: the map rebuilds those tiles and what stood on them (Arte's MapView.Rebuild);
-            // a siege's door or barricade struck, its wear (the bags knocked off, MapBuilder.DrawSiege).
-            if (e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent) Bastion.Client.Map.MapView.Current?.Rebuild(V);
+            // a siege's door or barricade struck, its wear (the bags knocked off, MapBuilder.DrawSiege); a search, what was
+            // searched as it stays (mapView.ts searchedSeen: the furniture open, the crate, the boot, the shop's shelves).
+            // A copy: the map keeps the state it drew to tell the next change, and the events change View in place (with
+            // View itself, from the second change on it compared View with View and drew nothing).
+            if (e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent || e is SearchedEvent || e is RoomSearchedEvent) Bastion.Client.Map.MapView.Current?.Rebuild(Events.CloneState(V));
             See();
             ShowSeen();
             control.Refresh();
@@ -1990,7 +1991,8 @@ namespace Bastion.UI.Combat
             var dead = seen.Count(u => Gaits.MovesDead(u.Template));
             if (dead > 0) control.Sfx.Moan(Board.TileToWorld(v, seen[0].Pos), dead);
             if (seen.FirstOrDefault(u => !Gaits.MovesDead(u.Template)) is Unit living) control.Sfx.Vehicle(Board.TileToWorld(v, living.Pos));
-            // They come in as the figures sync after this event (their fade from the fog is Arte's).
+            // They come in on foot from the edge, or get up out of the dust: no capsules (Arrivals, arrivals.ts).
+            await Arrivals.Play(Units, v, seen, Wait, stop);
             foreach (var u in seen) Float(Board.TileToWorld(v, u.Pos, 1.5f), $"¡APARECE UN {Content.Templates[u.Template].Name.ToUpperInvariant()}!", "callout");
             await Wait(cam() ? 0.8f : 0.3f);
         }

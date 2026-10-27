@@ -232,6 +232,7 @@ namespace Bastion.Client.Map
             Roofs.SetParent(root, false);
             Terrain();
             plan = new BuildingPlan(terrain);
+            MedicalFinish();
             ground = new GroundView();
             ground.Build(terrain, plan, Storeys[0]);
             BuildingParts();
@@ -245,9 +246,11 @@ namespace Bastion.Client.Map
             }
             DrawPieces();
             DrawSiege();
+            DrawDropped();
             Woods(null);
             Beyond();
             Furnish();
+            Dressing();
             Night();
             // A winter's map: the snow on what faces up (snow.ts).
             if (Mood.Snowy(s))
@@ -547,6 +550,153 @@ namespace Bastion.Client.Map
             }
         }
 
+        readonly List<GameObject> dressed = new List<GameObject>();
+        /// <summary>The clinics' scenery that lies flat (mapView.ts MEDICAL_FLAT: no shadow), and what lies about at all (MEDICAL_SCATTER).</summary>
+        static readonly HashSet<string> MedicalFlat = new HashSet<string> { "bloodPool", "bloodDrops", "floorGrime", "scatteredPapers" };
+        static readonly HashSet<string> MedicalScatter = new HashSet<string> { "bloodPool", "bloodDrops", "floorGrime", "scatteredPapers", "medicalWaste", "overturnedChair", "fallenIV", "spilledSupplies", "rumpledLinen" };
+
+        /// <summary>
+        /// The clinics' and the houses' dressing (mapView.ts, playtest 18/10 #15: the details, the bodies, blood and mess left
+        /// in them; GameState medical and homes, Dressing): each kept off where what it lies on or hangs from is gone, a
+        /// bed's frame and a screen over a bed's two tiles, a body a Synty character baked lying (a prop), the rest
+        /// MedicalDetails' shapes, merged by storey and building. Made again whole when the map changes.
+        /// </summary>
+        Material dirtMaterial;
+
+        void Dressing()
+        {
+            foreach (var o in dressed) DestroyNow(o);
+            dressed.Clear();
+            var faces = new Dictionary<(int k, int b, bool cast, bool dirt), List<(MedicalDetails.Face face, Matrix4x4 at)>>();
+            float storey = MapSpace.Storey / MapSpace.Tile;
+            var material = Resources.Load<Material>("FrameShape");
+            // The floor's grime see-through (mapView.ts clinicalDirt: opacity 0.24, no depth written), over the tiles.
+            if (dirtMaterial == null && material != null)
+            {
+                dirtMaterial = new Material(material) { name = "Suciedad", renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent, hideFlags = HideFlags.DontSave };
+                dirtMaterial.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                dirtMaterial.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                dirtMaterial.SetFloat("_ZWrite", 0);
+                dirtMaterial.SetColor("_BaseColor", new Color(1, 1, 1, 0.24f));
+                dirtMaterial.SetOverrideTag("RenderType", "Transparent");
+            }
+            var sites = (s.Medical ?? new List<MedicalSite>()).Select(m => (m.X, m.Y, m.W, m.H, m.Dressing)).Concat((s.Homes ?? new List<HomeSite>()).Select(h => (h.X, h.Y, h.W, h.H, h.Dressing)));
+            foreach (var (sx, sy, sw, sh, d) in sites.Where(l => l.Dressing != null).SelectMany(l => l.Dressing.Select(d => (l.X, l.Y, l.W, l.H, d))))
+            {
+                int i = d.Y * s.Width + d.X;
+                if (d.Z < 0 || d.Z >= Storeys.Length || i < 0 || i >= s.Width * s.Height) continue;
+                var tiles = TilesOf(d.Z);
+                var decor = DecorOf(d.Z);
+                string tile = i < tiles.Count ? tiles[i] : null;
+                if (tile == null) continue;
+                var look = i < decor.Count ? Bastion.Engine.Decor.DecorOf(decor[i]) : null;
+                bool bed = d.Kind == "bareBed" || d.Kind == "coveredBed";
+                bool body = d.Kind == "corpseCivilian" || d.Kind == "corpseStaff" || d.Kind == "coveredCorpse";
+                bool wall = d.Kind == "wallCross" || d.Kind == "cautionSign" || d.Kind == "safeSign" || d.Kind == "wallBlood";
+                bool scatter = MedicalScatter.Contains(d.Kind), flat = MedicalFlat.Contains(d.Kind);
+                if (bed && (tile != "low" || look?.Kind != "hospitalBed")) continue;
+                if (body && tile != "floor") continue;
+                if (scatter && tile != "floor" && tile != "low" && tile != "high") continue;
+                if (!scatter && !bed && !body && !wall && tile != "low" && tile != "high") continue;
+                var normal = Bastion.Engine.Grid.Dirs4[d.Facing];
+                int wx = d.X - normal.X, wy = d.Y - normal.Y, wi = wy * s.Width + wx;
+                if (wall && (wx < 0 || wy < 0 || wx >= s.Width || wy >= s.Height || wi >= tiles.Count || tiles[wi] != "wall")) continue;
+                // On a bed over two tiles, its stripped frame or its body over the whole of it, the screen along it.
+                var thing = bed || d.Kind == "privacyScreen" ? Bastion.Engine.Decor.ObjectAt(decor, s.Width, i) : null;
+                float yaw = (4 - d.Facing) % 4 * 90f, up = d.Z * storey + (float)d.Height;
+                var turn = Quaternion.AngleAxis(yaw, Vector3.up);
+                Matrix4x4 at;
+                if (thing != null && thing.Tiles.Count == 2)
+                {
+                    float lx = (thing.Tiles[0] % s.Width + thing.Tiles[1] % s.Width) / 2f, ly = (thing.Tiles[0] / s.Width + thing.Tiles[1] / s.Width) / 2f;
+                    var middle = new Vector3(lx + 0.5f, up, ly + 0.5f);
+                    at = Matrix4x4.TRS(middle, turn, bed ? new Vector3(1.5f, 1.15f, 1.75f) : new Vector3(1, 1, 1.9f));
+                    if (d.Kind == "coveredBed") dressed.Add(Tracked(PlaceGame(props[d.Z], "ivStand", Matrix4x4.TRS(middle, turn, Vector3.one) * Matrix4x4.Translate(new Vector3(-0.45f, 0, 0.6f))), i, d.Z));
+                }
+                else
+                {
+                    at = Matrix4x4.TRS(new Vector3(d.X + 0.5f, up, d.Y + 0.5f), turn, Vector3.one);
+                    if (d.Kind == "coveredBed") dressed.Add(Tracked(PlaceGame(props[d.Z], "ivStand", at * Matrix4x4.Translate(new Vector3(-0.31f, 0, 0.22f))), i, d.Z));
+                }
+                if (d.Kind == "corpseCivilian" || d.Kind == "corpseStaff")
+                {
+                    dressed.Add(Tracked(PlaceGame(props[d.Z], d.Kind, at), i, d.Z));
+                    continue;
+                }
+                int b = i < plan.Owner.Length ? plan.Owner[i] : -1;
+                if (wall)
+                {
+                    // On its own, to go with its wall in the cutaway: an outer wall's the way it looks out (mapView.ts aMedicalWall).
+                    bool outside = wx <= sx || wy <= sy || wx >= sx + sw - 1 || wy >= sy + sh - 1;
+                    var fixture = Shapes($"Pared {d.Kind}", props[d.Z], MedicalDetails.Of(d.Kind, d.Variant ?? 0).Select(f => (f, at)), material, false);
+                    if (fixture != null && b >= 0) Cutaway.Current?.TrackFixture(fixture, b, d.Z, outside ? new Vector2(-normal.X, -normal.Y) : Vector2.zero);
+                    if (fixture != null) dressed.Add(fixture);
+                    continue;
+                }
+                var key = (d.Z, b, !flat, d.Kind == "floorGrime");
+                if (!faces.TryGetValue(key, out var list)) faces[key] = list = new List<(MedicalDetails.Face, Matrix4x4)>();
+                foreach (var f in MedicalDetails.Of(d.Kind, d.Variant ?? 0)) list.Add((f, at));
+            }
+            foreach (var group in faces)
+            {
+                var o = Shapes($"Vestido {group.Key.b}{(group.Key.dirt ? " suciedad" : "")}", props[group.Key.k], group.Value, group.Key.dirt ? dirtMaterial : material, group.Key.cast);
+                if (o == null) continue;
+                if (group.Key.k > 0 && group.Key.b >= 0) Cutaway.Current?.Track(o, group.Key.b, group.Key.k);
+                dressed.Add(o);
+            }
+        }
+
+        /// <summary>MedicalDetails' faces, each placed by its matrix (0.10.1's frame, tiles), as one mesh under `parent`; null if none.</summary>
+        static GameObject Shapes(string name, Transform parent, IEnumerable<(MedicalDetails.Face face, Matrix4x4 at)> faces, Material material, bool cast)
+        {
+            var vertices = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var colours = new List<Color>();
+            var triangles = new List<int>();
+            foreach (var (face, at) in faces)
+            {
+                // In Unity's frame (metres, z north): the mirror turns the winding round (FrameView.Shapes).
+                var p = face.points.Select(v => at.MultiplyPoint3x4(v)).Select(v => new Vector3(v.x * MapSpace.Tile, v.y * MapSpace.Tile, -v.z * MapSpace.Tile)).ToArray();
+                if (p.Length < 3) continue;
+                var n = -Vector3.Cross(p[1] - p[0], p[2] - p[0]).normalized;
+                int start = vertices.Count;
+                foreach (var v in p)
+                {
+                    vertices.Add(v);
+                    normals.Add(n);
+                    colours.Add(face.colour);
+                }
+                for (int k = 1; k + 1 < p.Length; k++)
+                {
+                    triangles.Add(start);
+                    triangles.Add(start + k + 1);
+                    triangles.Add(start + k);
+                }
+            }
+            if (vertices.Count == 0) return null;
+            var mesh = new Mesh { name = name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.SetVertices(vertices);
+            mesh.SetNormals(normals);
+            mesh.SetColors(colours);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateBounds();
+            var o = new GameObject(name);
+            o.transform.SetParent(parent, false);
+            o.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var r = o.AddComponent<MeshRenderer>();
+            r.sharedMaterial = material;
+            r.shadowCastingMode = cast ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
+            return o;
+        }
+
+        /// <summary>`o` on storey k of tile i's building fading with it in the cutaway (as Furnish's), and `o` back.</summary>
+        GameObject Tracked(GameObject o, int i, int k)
+        {
+            int b = i >= 0 && i < plan.Owner.Length ? plan.Owner[i] : -1;
+            if (o != null && k > 0 && b >= 0) Cutaway.Current?.Track(o, b, k);
+            return o;
+        }
+
         /// <summary>
         /// The map brought to `next` (the same map: a door opened, cover blown away, a floor given way; mapView.ts
         /// rebuild): only the tiles that changed are made again, with whatever stood over them too (a car over a tile
@@ -570,12 +720,23 @@ namespace Bastion.Client.Map
                     if (a != b || d != e) changed.Add(Key(k, i));
                 }
             }
+            // Searched since (mapView.ts searchedSeen): the furniture opened, its contents before it, a car's boot up; a
+            // room searched, its supermarket's shelves as stocked as they are now.
+            int area = next.Width * next.Height;
+            foreach (int place in (next.Searched ?? new List<int>()).Except(s.Searched ?? new List<int>()))
+                if (place / area < levels) changed.Add(Key(place / area, place % area));
+            if ((next.RoomsSearched?.Count ?? 0) != (s.RoomsSearched?.Count ?? 0))
+                foreach (var m in next.Markets ?? new List<MarketSite>())
+                    for (int y = m.Y; y < m.Y + m.H; y++)
+                        for (int x = m.X; x < m.X + m.W; x++)
+                            if (x >= 0 && y >= 0 && x < next.Width && y < next.Height) changed.Add(Key(0, y * next.Width + x));
             s = next;
             Terrain();
             plan?.Follow(terrain);
             // (A piece or a barricade worn a stage further changes no tile: the 'smashed' event.)
             DrawPieces();
             DrawSiege();
+            DrawDropped();
             if (changed.Count == 0) return 0;
             ground?.Rebuild(terrain, changed.Where(key => key >> 32 == 0).Select(key => (int)(uint)key).ToList());
             // The walls laid again whole; only the chunks whose pieces changed are made again.
@@ -601,6 +762,7 @@ namespace Bastion.Client.Map
             }
             Parapets();
             Furnish();
+            Dressing();
             Night();
             var done = new Dictionary<int, HashSet<int>>();
             foreach (int k in redo.Select(key => (int)(key >> 32)).Distinct()) done[k] = new HashSet<int>();
@@ -829,6 +991,16 @@ namespace Bastion.Client.Map
             if (i >= tiles.Count || i >= decor.Count) return;
             float floor = k * MapSpace.Storey;
             string tile = tiles[i];
+            // A hack's terminal (mapView.ts addDecor 'console': the objective of a hack): its desk, its back to the wall beside it.
+            if (tile == "console")
+            {
+                int cx0 = i % s.Width, cy0 = i / s.Width;
+                string At(int x, int y) => x >= 0 && y >= 0 && x < s.Width && y < s.Height && y * s.Width + x < tiles.Count ? tiles[y * s.Width + x] : null;
+                bool alongX = BuildingPlan.IsWallLike(At(cx0 - 1, cy0)) || BuildingPlan.IsWallLike(At(cx0 + 1, cy0));
+                var desks = MapArt.Set("console");
+                if (desks.Length > 0) Own(Place(props[k], desks[0], new Vector3((cx0 + 0.5f) * MapSpace.Tile, floor, -(cy0 + 0.5f) * MapSpace.Tile), alongX ? 0 : -90), k, new[] { i });
+                return;
+            }
             if (tile != "low" && tile != "high") return;
             // The base's pieces are drawn whole (DrawPieces), and the Bastion's yard with it.
             if (k == 0 && pieces != null && ((pieces.at[i] >= 0 && BasePieces.Drawn.Contains(pieces.spots[pieces.at[i]].piece.Piece)) || pieces.yard.Has(i))) return;
@@ -853,6 +1025,14 @@ namespace Bastion.Client.Map
             // The base's pines are its own (Woods).
             if (pieces != null && tile == "high" && look.Kind == DecorKinds.Tree) return;
             if (look.Kind == "part") return;
+            // A clinic's bed on a tile of its own that its dressing draws (stripped, or a body under its sheet): nothing more.
+            if (look.Kind == "hospitalBed" && tile == "low" && BedVariant(k, i)) return;
+            // A clinic's own furniture (mapView.ts medicalFurniture), the tall ones on high cover, the rest on low.
+            if (MedicalDetails.IsFurniture(look.Kind) && tile == (MedicalDetails.FurnitureHigh(look.Kind) ? "high" : "low"))
+            {
+                Clinical(k, i, look, floor);
+                return;
+            }
             bool low = tile == "low";
             string set = MapArt.DecorSet(look.Kind, low, s.Biome, s.Site);
             if (set == null) return;
@@ -863,8 +1043,26 @@ namespace Bastion.Client.Map
             float shift = wiggle == 2 ? 0.07f : wiggle == 1 ? 0.035f : 0;
             // 0.10.1's turn, counter-clockwise from above in tiles with y south; Unity's is the other way round.
             float yaw = wiggle == 2 ? MapArt.Hash(x, y, 7) * 360 : turn * 90 + (wiggle == 1 ? (MapArt.Hash(x, y, 6) - 0.5f) * 0.16f * Mathf.Rad2Deg : 0);
-            cx += (MapArt.Hash(x, y, 4) - 0.5f) * 2 * shift;
-            cz += (MapArt.Hash(x, y, 5) - 0.5f) * 2 * shift;
+            // A loot box (mapView.ts lootBox): shut with its lid on, or searched open.
+            if (LootBox(k, i, look.Kind, turn, floor)) return;
+            // Searched furniture (mapView.ts addDecor): opened, its contents on the floor in front of it.
+            if (SearchedAt(k, i) && !look.Kind.StartsWith("loot"))
+            {
+                var front = Bastion.Engine.Grid.Dirs4[MapArt.Facing.Contains(look.Kind) ? look.Facing : Mathf.FloorToInt(MapArt.Hash(x, y, 2) * 4)];
+                var middle = new Vector3((x + 0.5f) * MapSpace.Tile, floor, -(y + 0.5f) * MapSpace.Tile);
+                GameObject opened = null;
+                if (look.Kind == "wardrobe" && !low) opened = OpenWardrobe(Place(props[k], "wardrobeOpen", middle, -turn * 90), x + 0.5f, y + 0.5f, front);
+                else if (look.Kind == "crates" && low) opened = Place(props[k], "crateOpen", middle, -turn * 90);
+                Own(opened, k, new[] { i });
+                Ransack(k, i, look.Kind, front, floor);
+                if (opened != null) return;
+            }
+            if (look.Kind == "windowBarricade")
+            {
+                BarricadeWindow(k, i, x, y, floor, look.Facing);
+                return;
+            }
+            if (Stacked(k, i, look, low, turn, floor)) return;
             if (Furnished(k, i, look, low, turn, floor)) return;
             var ids = MapArt.Set(set);
             string id = ids[Mathf.Min(ids.Length - 1, Mathf.FloorToInt(MapArt.Hash(x, y, 1) * ids.Length))];
@@ -880,6 +1078,27 @@ namespace Bastion.Client.Map
                     Own(Place(props[k], rails[0], new Vector3((x + 0.5f) * MapSpace.Tile, floor, -(y + 0.5f) * MapSpace.Tile), -((4 - f) % 4) * 90), k, new[] { i });
                 }
             }
+        }
+
+        /// <summary>Whether a clinic's dressing draws the bed anchored on tile i of storey k itself (mapView.ts bedVariants: stripped, or a body under its sheet).</summary>
+        bool BedVariant(int k, int i) =>
+            (s.Medical ?? new List<MedicalSite>()).Any(m => m.Dressing != null && m.Dressing.Any(d => (d.Kind == "bareBed" || d.Kind == "coveredBed") && d.Z == k && d.Y * s.Width + d.X == i));
+
+        /// <summary>
+        /// A clinic's own furniture on tile i of storey k (mapView.ts dressed: medicalFurniture), turned the way it faces, a
+        /// little askew as worn as its building is (medicalWear); a dark one now and then; the cart with its kit on top.
+        /// </summary>
+        void Clinical(int k, int i, DecorLook look, float floor)
+        {
+            int x = i % s.Width, y = i / s.Width;
+            var faces = MedicalDetails.Furniture(look.Kind, MapArt.Hash(x, y, 73 + k) < 0.6f);
+            int owner = plan != null && i < plan.Owner.Length ? plan.Owner[i] : -1;
+            double wear = owner >= 0 && owner < plan.Buildings.Count ? plan.Buildings[owner].medicalWear ?? 0 : 0;
+            float yaw = (4 - look.Facing) % 4 * (Mathf.PI / 2) + (MapArt.Hash(x, y, 19) - 0.5f) * (float)wear * 0.7f;
+            var at = Matrix4x4.TRS(new Vector3(x + 0.5f, floor / MapSpace.Tile, y + 0.5f), Quaternion.AngleAxis(yaw * Mathf.Rad2Deg, Vector3.up), Vector3.one);
+            var o = Shapes($"Mueble {look.Kind}", props[k], faces.Select(f => (f, at)), Resources.Load<Material>("FrameShape"), true);
+            Own(o, k, new[] { i });
+            if (look.Kind == "medicalCart") Own(PlaceGame(props[k], "clinicalKit", at * Matrix4x4.Translate(new Vector3(-0.08f, 0.59f, -0.03f))), k, new[] { i });
         }
 
         /// <summary>A fence or gate post still standing on tile (x, y) (mapView.ts fenceAt: the ground's): the fences beside it run their rails to it.</summary>
@@ -941,10 +1160,65 @@ namespace Bastion.Client.Map
         const float ShelfTall = 1.36f, EndTall = 1.35f, WallShelfBack = 0.28f;
 
         /// <summary>
+        /// What mapView.ts addDecor builds of more than one prop, or stood otherwise: pallets stacked, three for low cover and
+        /// six for high, each a little askew; high crates a big one with a smaller one on it, askew; a house's television
+        /// on its stand; a wardrobe or a cabinet low cover knocked over on its face (#15); the factory's genset, high,
+        /// stood taller (1.9).
+        /// </summary>
+        bool Stacked(int k, int i, DecorLook look, bool low, int turn, float floor)
+        {
+            int x = i % s.Width, y = i / s.Width;
+            float cx = x + 0.5f, cz = y + 0.5f, T = MapSpace.Tile;
+            // (0.10.1's frame in tiles to Unity's: z the other way, and the turns with it.)
+            Vector3 At(float ax, float ay, float az) => new Vector3(ax * T, floor + ay * T, -az * T);
+            float yaw = turn * 90;
+            switch (look.Kind)
+            {
+                case "pallets":
+                    for (int n = 0, of = low ? 3 : 6; n < of; n++)
+                    {
+                        float R(int salt) => MapArt.Hash(x, y, 40 + n * 3 + salt) - 0.5f;
+                        Own(Place(props[k], "pallet", At(cx + R(0) * 0.06f, n * 0.19f, cz + R(1) * 0.06f), -(yaw + R(2) * 0.12f * Mathf.Rad2Deg)), k, new[] { i });
+                    }
+                    return true;
+                case "crates" when !low:
+                    Own(Place(props[k], "crates", At(cx, 0, cz), -yaw), k, new[] { i });
+                    Own(Place(props[k], "crate", At(cx + (MapArt.Hash(x, y, 11) - 0.5f) * 0.12f, (float)Measure("crates").top, cz + (MapArt.Hash(x, y, 12) - 0.5f) * 0.12f),
+                        -(yaw + (MapArt.Hash(x, y, 13) - 0.5f) * 0.6f * Mathf.Rad2Deg)), k, new[] { i });
+                    return true;
+                case "tvStand" when low:
+                    Own(Place(props[k], "tvStand", At(cx, 0, cz), -yaw), k, new[] { i });
+                    Own(Place(props[k], "television", At(cx, (float)Measure("tvStand").top, cz), -(yaw + (MapArt.Hash(x, y, 16) - 0.5f) * 0.2f * Mathf.Rad2Deg)), k, new[] { i });
+                    return true;
+                case "wardrobe" when low:
+                case "cabinet" when low:
+                {
+                    var d = Bastion.Engine.Grid.Dirs4[look.Facing];
+                    var ids = MapArt.Set(look.Kind);
+                    if (ids.Length == 0) return false;
+                    string id = ids[Mathf.Min(ids.Length - 1, Mathf.FloorToInt(MapArt.Hash(x, y, 1) * ids.Length))];
+                    var o = Place(props[k], id, At(cx + d.X * 0.35f, 0.28f, cz + d.Y * 0.35f), 0);
+                    // (Euler(π/2, yaw, 0, 'YXZ') there: about y, then onto its face about x.)
+                    if (o != null) o.transform.rotation = Quaternion.AngleAxis(-(yaw + (MapArt.Hash(x, y, 17) - 0.5f) * 0.3f * Mathf.Rad2Deg), Vector3.up) * Quaternion.AngleAxis(-90, Vector3.right);
+                    Own(o, k, new[] { i });
+                    return true;
+                }
+                case "machine" when !low:
+                {
+                    var o = Place(props[k], "machine", At(cx, 0, cz), -yaw);
+                    if (o != null) o.transform.localScale = new Vector3(1, 1.9f, 1);
+                    Own(o, k, new[] { i });
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Furniture as its building is (mapView.ts addDecor): a shop's counter its own; a supermarket's shelving, gondolas
         /// with goods both ways, along its walls wall shelves, a row's low end a display turned to the checkouts; a
         /// grocer's (its FOOD sign) the supermarket's gondolas; tall shelves a house's or an office's (or a bookshop's)
-        /// bookcases, else shelving; a tall cabinet. Not yet: what fell off a supermarket's shelves.
+        /// bookcases, else shelving; a tall cabinet. Under a supermarket's shelving, what fell off it (Litter).
         /// </summary>
         bool Furnished(int k, int i, DecorLook look, bool low, int turn, float floor)
         {
@@ -956,6 +1230,10 @@ namespace Bastion.Client.Map
             string id;
             float tall = 1;
             int quarter = turn;
+            // (A supermarket's shelving: how stocked, against a wall, from its tile's middle; its litter round it.)
+            int stock = -1;
+            bool against = false;
+            float mx = cx, mz = cz;
             if (look.Kind == "counter")
             {
                 if (!low) return false;
@@ -967,7 +1245,9 @@ namespace Bastion.Client.Map
                 int at = (y + back.Y) * s.Width + x + back.X;
                 string behind = at >= 0 && at < s.Tiles.Count ? s.Tiles[at] : null;
                 bool wall = behind == "wall" || behind == "window" || behind == "windowBroken";
-                var odds = ShelfLooks[MarketStock(x, y)];
+                stock = MarketStock(x, y);
+                against = wall;
+                var odds = ShelfLooks[stock];
                 float pick = MapArt.Hash(x, y, 80);
                 int n = 0;
                 while (n < 3 && pick >= odds[n]) pick -= odds[n++];
@@ -995,7 +1275,193 @@ namespace Bastion.Client.Map
             var placed = Place(props[k], id, new Vector3(cx * MapSpace.Tile, floor, -cz * MapSpace.Tile), -quarter * 90);
             if (placed != null) placed.transform.localScale = new Vector3(1, tall, 1);
             Own(placed, k, new[] { i });
+            if (stock >= 0) Litter(k, i, mx, mz, floor, look.Facing, against, stock);
             return true;
+        }
+
+        /// <summary>
+        /// A loot box (mapView.ts lootBox; LOOT_KINDS) on tile i of storey k, turned `turn` quarters: its box with its lid
+        /// (and what sits on it) on, shut; searched, open, the lid and what was in it on the floor before it.
+        /// </summary>
+        bool LootBox(int k, int i, string kind, int turn, float floor)
+        {
+            if (kind != "lootWeapons" && kind != "lootMedical" && kind != "lootAmmo" && kind != "lootFood") return false;
+            bool open = SearchedAt(k, i);
+            float x = i % s.Width + 0.5f, z = i / s.Width + 0.5f, yaw = turn * Mathf.PI / 2, c = Mathf.Cos(yaw), sn = Mathf.Sin(yaw);
+            float R(int salt) => MapArt.Hash((double)x, z, 70 + salt);
+            // A prop at (dx, dz) from the tile's middle in the box's own frame (tiles, 0.10.1's), `dy` up, turned `more` (rad).
+            GameObject Put(string id, float dx, float dz, float dy = 0, float more = 0, bool shadows = true)
+            {
+                float px = x + dx * c + dz * sn, pz = z - dx * sn + dz * c;
+                var o = Place(props[k], id, new Vector3(px * MapSpace.Tile, floor + dy * MapSpace.Tile, -pz * MapSpace.Tile), -(yaw + more) * Mathf.Rad2Deg);
+                Own(shadows ? o : Flat(o), k, new[] { i });
+                return o;
+            }
+            var box = Put(kind, 0, 0);
+            // How high the box stands as placed (tiles), for what goes on it.
+            var parts = box != null ? box.GetComponentsInChildren<Renderer>() : new Renderer[0];
+            float top = parts.Length > 0 ? (parts.Max(r => r.bounds.max.y) - floor) / MapSpace.Tile : 0.3f;
+            switch (kind)
+            {
+                case "lootWeapons":
+                    if (open) Put("lootWeaponsLid", 0.05f, 0.5f, 0, 0.25f + R(1) * 0.3f, false);
+                    else Put("lootWeaponsLid", 0, 0, top * 0.98f);
+                    break;
+                case "lootMedical":
+                    if (open)
+                    {
+                        Put("lootMedicalKit", -0.25f, 0.5f, 0, R(1) * 2);
+                        Put("lootPills", 0.2f, 0.45f, 0, R(2) * 6, false);
+                        Put("lootPills", 0.32f, 0.58f, 0, R(3) * 6, false);
+                    }
+                    else Put("lootMedicalKit", 0, 0, top, 0.2f);
+                    break;
+                case "lootAmmo":
+                    if (open)
+                    {
+                        Put("lootAmmoLid", 0.1f, 0.5f, 0, 0.3f + R(1) * 0.3f, false);
+                        Put("lootAmmoCanOpen", -0.3f, 0.52f, 0, R(2) * 3);
+                    }
+                    else
+                    {
+                        Put("lootAmmoLid", 0, 0, top * 0.98f);
+                        Put("lootAmmoCan", 0, 0, top + 0.02f, 0.4f);
+                    }
+                    break;
+                case "lootFood":
+                    if (open)
+                    {
+                        Put("lootFoodTop", -0.2f, 0.52f, 0, R(1) * 2);
+                        Put("lootCan", 0.18f, 0.45f, 0, R(2) * 6, false);
+                        Put("lootCan2", 0.3f, 0.58f, 0, R(3) * 6, false);
+                        Put("lootRice", 0.05f, 0.62f, 0, R(4) * 6, false);
+                    }
+                    else Put("lootFoodTop", 0.04f, -0.03f, top, 0.35f);
+                    break;
+            }
+            return true;
+        }
+
+        /// <summary>Whether tile i of storey k was searched (GameState.Searched, by node: grid.ts nodeOf).</summary>
+        bool SearchedAt(int k, int i) => s.Searched != null && s.Searched.Contains(k * s.Width * s.Height + i);
+
+        /// <summary>
+        /// What a search leaves in front of a piece of furniture (mapView.ts ransack; `front` the way it faces): drawers
+        /// pulled out and dropped, papers, clothes, opened boxes.
+        /// </summary>
+        void Ransack(int k, int i, string kind, Vec2 front, float floor)
+        {
+            int x = i % s.Width, y = i / s.Width;
+            float R(int salt) => MapArt.Hash(x, y, 60 + salt);
+            void Drop(string id, float along, float @out, int salt, bool shadows = false)
+            {
+                // (On 0.10.1's plane, tiles, z south: out the way it faces, along across it.)
+                float px = x + 0.5f + front.X * @out - front.Y * along, pz = y + 0.5f + front.Y * @out + front.X * along;
+                var o = Place(props[k], id, new Vector3(px * MapSpace.Tile, floor + 0.003f * MapSpace.Tile, -pz * MapSpace.Tile), -R(salt) * 360);
+                Own(shadows ? o : Flat(o), k, new[] { i });
+            }
+            switch (kind)
+            {
+                case "desk":
+                case "cabinet":
+                case "counter":
+                    Drop("drawer", (R(1) - 0.5f) * 0.4f, 0.55f, 2, true);
+                    Drop("papers", (R(3) - 0.5f) * 0.5f, 0.6f, 4);
+                    break;
+                case "wardrobe":
+                case "bed":
+                    Drop("laundry", (R(1) - 0.5f) * 0.4f, 0.55f, 2);
+                    if (kind == "bed") Drop("papers", (R(3) - 0.5f) * 0.5f, 0.5f, 4);
+                    break;
+                case "shelf":
+                case "rack":
+                    Drop("cardboard", (R(1) - 0.5f) * 0.4f, 0.55f, 2, true);
+                    Drop("papers", (R(3) - 0.5f) * 0.5f, 0.6f, 4);
+                    break;
+                case "crates":
+                    Drop("crateLid", (R(1) - 0.5f) * 0.3f, 0.62f, 2);
+                    break;
+                case "table":
+                    Drop("papers", (R(3) - 0.5f) * 0.5f, 0.5f, 4);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// A wardrobe someone has searched (mapView.ts openWardrobe): its doors swung wide out to the room, past square,
+        /// and its drawers pulled out, (cx, cz) its tile's middle (tiles); `wardrobe` Town's with its parts apart, back.
+        /// </summary>
+        static GameObject OpenWardrobe(GameObject wardrobe, float cx, float cz, Vec2 front)
+        {
+            if (wardrobe == null) return null;
+            // Its frame in Unity's world: out the way it faces, and along it (0.10.1's piece x: the facing's (y, −x), z flipped).
+            var @out = new Vector3(front.X, 0, -front.Y);
+            var along = new Vector3(front.Y, 0, front.X);
+            var parts = wardrobe.GetComponentsInChildren<Renderer>().ToList();
+            for (int k = 0; k < parts.Count; k++)
+            {
+                var part = parts[k].transform;
+                var box = parts[k].bounds;
+                var corners = new[] { box.min, box.max, new Vector3(box.min.x, box.min.y, box.max.z), new Vector3(box.max.x, box.min.y, box.min.z) };
+                float lo = corners.Min(c => Vector3.Dot(c, along)), hi = corners.Max(c => Vector3.Dot(c, along)), face = corners.Max(c => Vector3.Dot(c, @out));
+                Vector3 At(float a) => along * a + @out * face + Vector3.up * box.center.y;
+                // A door hinged at its outer edge, the front: from there to its other edge now 1.9 rad round, out to the room.
+                void Swing(Vector3 hinge, Vector3 was, float side)
+                {
+                    var now = Mathf.Cos(1.9f) * side * along + Mathf.Sin(1.9f) * @out;
+                    part.RotateAround(hinge, Vector3.up, Vector3.SignedAngle(was, now, Vector3.up));
+                }
+                if (part.name.EndsWith("Door_01")) Swing(At(lo), along, 1);
+                else if (part.name.EndsWith("Door_02")) Swing(At(hi), -along, -1);
+                else if (part.name.Contains("Drawer")) part.position += @out * ((0.1f + MapArt.Hash(k, Mathf.RoundToInt(cx * 7 + cz), 3) * 0.18f) * MapSpace.Tile);
+            }
+            return wardrobe;
+        }
+
+        /// <summary>How much falls off a supermarket's shelving by its stock (mapView.ts SHELF_LITTER).</summary>
+        static readonly float[] ShelfLitter = { 0.9f, 1.3f, 1.6f };
+
+        /// <summary>
+        /// What fell off a supermarket's shelving into the aisle (mapView.ts addDecor), either side of a gondola (a wall
+        /// shelf's, its front), the more the emptier: papers and wrappers, a few cans rolled about lying on their sides, and
+        /// once it was searched or stripped, boxes torn down. (cx, cz) the tile's middle (tiles), its front `facing`.
+        /// </summary>
+        void Litter(int k, int i, float cx, float cz, float floor, int facing, bool wall, int stock)
+        {
+            int x = i % s.Width, y = i / s.Width;
+            var front = Bastion.Engine.Grid.Dirs4[facing];
+            int litter = (int)Math.Floor(ShelfLitter[stock] * MapArt.Hash(x, y, 81) * 2);
+            for (int n = 0; n < litter; n++)
+            {
+                float R(int salt) => MapArt.Hash(x, y, 82 + n * 7 + salt);
+                float side = wall || R(0) < 0.5f ? 1 : -1;
+                float @out = side * (0.62f + R(1) * 0.22f), along = (R(2) - 0.5f) * 0.8f;
+                // (On 0.10.1's plane, tiles, z south; up in tiles over the floor.)
+                Vector3 At(float dx, float dz, float up) => new Vector3((cx + front.X * (@out + dz) - front.Y * (along + dx)) * MapSpace.Tile, floor + up * MapSpace.Tile, -(cz + front.Y * (@out + dz) + front.X * (along + dx)) * MapSpace.Tile);
+                float what = R(3);
+                if (what < 0.3f && stock > 0)
+                {
+                    var box = Place(props[k], R(4) < 0.5f ? "cardboard" : "cardboard2", At(0, 0, 0), -R(4) * 360);
+                    if (box != null) box.transform.localScale = Vector3.one * 0.8f;
+                    Own(box, k, new[] { i });
+                }
+                else if (what < 0.65f) Own(Flat(Place(props[k], "papers", At(0, 0, 0.003f), -R(4) * 360)), k, new[] { i });
+                else
+                    for (int c = 0; c < 2 + (int)Math.Floor(R(4) * 2); c++)
+                    {
+                        var can = Place(props[k], $"canFallen{(n + c) % 3 + 1}", At((R(5 + c) - 0.5f) * 0.25f, (R(6 + c) - 0.5f) * 0.18f, 0.025f), 0);
+                        // On its side, rolled any way (three's Euler(π/2, θ, 0, 'YXZ'), its z the other way).
+                        if (can != null) can.transform.rotation = Quaternion.Euler(-90, -R(7 + c) * 360, 0);
+                        Own(Flat(can), k, new[] { i });
+                    }
+            }
+        }
+
+        /// <summary>`o` casting no shadow (what lies flat, as 0.10.1 adds it), and `o` back.</summary>
+        static GameObject Flat(GameObject o)
+        {
+            if (o != null) foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return o;
         }
 
         /// <summary>A supermarket's stock where (x, y) is (mapView.ts marketStock): 0 stocked, 1 stocked but searched since, 2 stripped.</summary>
@@ -1035,9 +1501,16 @@ namespace Bastion.Client.Map
                 case "carFront":
                     var cars = MapArt.Set("carFront");
                     id = cars[Mathf.Min(cars.Length - 1, Mathf.FloorToInt(MapArt.Hash(ax, ay, 1) * cars.Length))];
+                    // Searched (its boot or its glovebox), it's the one with the boot lid up.
+                    if (thing.Tiles.Any(j => SearchedAt(Mathf.RoundToInt(floor / MapSpace.Storey), j))) id = "carOpen";
                     break;
                 case "bed":
                     id = x1 - x0 == y1 - y0 ? "bedDouble" : "bed";
+                    break;
+                case "hospitalBed":
+                    // A clinic's bed stripped or with a body under its sheet is its dressing's (Dressing), not Synty's.
+                    if (BedVariant(Mathf.RoundToInt(floor / MapSpace.Storey), thing.Anchor)) return null;
+                    id = "hospitalBed";
                     break;
                 case "bench":
                     // Along its two tiles, its seat the way it faces; a broken one now and then.
@@ -1056,6 +1529,13 @@ namespace Bastion.Client.Map
             }
             float cx = (x0 + x1 + 1) / 2f, cz = (y0 + y1 + 1) / 2f;
             var placed = Place(parent, id, new Vector3(cx * MapSpace.Tile, floor, -cz * MapSpace.Tile), -((4 - thing.Facing) % 4) * 90, MapArt.FootprintOf(id));
+            if (placed != null && thing.Kind == "hospitalBed")
+            {
+                // The slim drip by its head, within its tiles (mapView.ts drawThing), going with the bed.
+                var at = Matrix4x4.TRS(new Vector3(cx, floor / MapSpace.Tile, cz), Quaternion.AngleAxis((4 - thing.Facing) % 4 * 90f, Vector3.up), Vector3.one);
+                var drip = PlaceGame(parent, "ivStand", at * Matrix4x4.Translate(new Vector3(0.45f, 0, 0.6f)));
+                if (drip != null) drip.transform.SetParent(placed.transform, true);
+            }
             if (placed != null && thing.Kind == "carFront")
             {
                 Repaint(placed, Mathf.FloorToInt(MapArt.Hash(ax, ay, 13) * CarPaints.Length) % CarPaints.Length);

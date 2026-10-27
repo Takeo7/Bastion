@@ -73,6 +73,8 @@ namespace Bastion.UI.Combat
         List<WorldTagView> WorldTags(GameState v)
         {
             var list = new List<WorldTagView>();
+            // The loot boxes' marks (CombatController.Loot).
+            LootMarks(v, list);
             var hurt = (v.Breakables ?? new Dictionary<int, int>()).Where(b => b.Value > 0).Select(b => (pos: Grid.PosOf(v, b.Key), left: b.Value)).ToList();
             hurt = hurt.Where(b => b.left < BreakableOf(v, b.pos).full).ToList();
             if (hurt.Count > 0)

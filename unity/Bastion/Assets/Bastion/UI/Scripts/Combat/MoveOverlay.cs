@@ -82,6 +82,9 @@ namespace Bastion.UI.Combat
         Material partnerMaterial;
         Transform partnerHover;
         Material partnerHoverMaterial;
+        /// <summary>The rings under the enemies in sight (ShowEnemies), as many as there have been at once.</summary>
+        readonly List<Transform> enemyRings = new List<Transform>();
+        Mesh enemyRing;
         readonly Transform[] shields = new Transform[4];
         readonly Material[] shieldMaterials = new Material[4];
         Texture2D lowShield;
@@ -137,6 +140,11 @@ namespace Bastion.UI.Combat
             partnerHoverMaterial = theirs.GetComponent<MeshRenderer>().sharedMaterial;
             partnerHover.gameObject.SetActive(false);
 
+            // Under each enemy in sight (unitViews.ts ring: 0.33–0.46 of a tile, ALIEN_COLOR at 0.95).
+            build.Clear();
+            build.Arc(Vector3.zero, 0.33f * T, 0.46f * T, 0, Mathf.PI * 2, 32, Hex(0xff4d4d, 0xf2));
+            enemyRing = build.Build(null);
+
             // A shield on each side (0.62 of a tile), facing the camera, over everything.
             lowShield = ShieldTexture(1);
             highShield = ShieldTexture(2);
@@ -185,6 +193,7 @@ namespace Bastion.UI.Combat
             ShowCover(null, null);
             ShowPicked(null);
             ShowPartner(null, Color.white);
+            ShowEnemies(null);
         }
 
         /// <summary>
@@ -394,6 +403,27 @@ namespace Bastion.UI.Combat
         {
             picked.gameObject.SetActive(feet != null);
             if (feet != null) picked.localPosition = feet.Value + Vector3.up * (0.035f * T);
+        }
+
+        /// <summary>
+        /// A red ring under each enemy in sight, at its feet as it walks (unitViews.ts: the squad's own go without, 18/10
+        /// #28; null or none, none).
+        /// </summary>
+        public void ShowEnemies(IList<Vector3> feet)
+        {
+            var n = feet?.Count ?? 0;
+            while (enemyRings.Count < n)
+            {
+                var ring = Layer("Enemigo", 3102, false, false);
+                ring.sharedMesh = enemyRing;
+                enemyRings.Add(ring.transform);
+            }
+            for (var i = 0; i < enemyRings.Count; i++)
+            {
+                var on = i < n;
+                if (enemyRings[i].gameObject.activeSelf != on) enemyRings[i].gameObject.SetActive(on);
+                if (on) enemyRings[i].localPosition = feet[i] + Vector3.up * (0.03f * T);
+            }
         }
 
         /// <summary>The ring round the soldier the partner has picked, in their colour (null: none).</summary>

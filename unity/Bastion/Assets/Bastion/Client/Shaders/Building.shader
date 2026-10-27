@@ -85,6 +85,10 @@ Shader "Bastion/Building"
         output.normalWS = TransformObjectToWorldNormal(input.normalOS);
         output.uv = input.uv;
         output.swatch = input.swatch;
+        #if !defined(_SWATCH)
+            // (A piece has no patch: its way out instead, for the clinics' walls, MedicalFinish.)
+            output.swatch = float4(input.cut.y, input.cut.z, 0, 0);
+        #endif
         output.outer = input.outer.rgb;
         output.inner = input.inner;
         output.cut = float4(top, fade, input.more.y, input.more.z);
@@ -118,6 +122,88 @@ Shader "Bastion/Building"
         albedo *= 0.94 + 0.1 * WeatherNoise(wp * float2(1.2, 6.0) + 3.0);
         float moss = smoothstep(0.74, 0.78, broad + WeatherNoise(wp * 2.4) * 0.12);
         return lerp(albedo, half3(0.2, 0.22, 0.1) * (0.8 + 0.4 * WeatherNoise(wp * 7.0)), moss * 0.7);
+    }
+
+    // A clinic's own surfaces (0.10.1's medicalFinish.ts): a map of its tiles (_Medical, global: r its wear, 30 + 210 ×
+    // it of 255, g its storeys) scopes them to the clinics' insides, on every storey. Worked out on 0.10.1's world, in
+    // tiles (x east, y up, z south). _MedicalSize: the map's width and height in tiles, and 1 if there is a clinic at all.
+    TEXTURE2D(_Medical);
+    SAMPLER(sampler_point_clamp);
+    float4 _MedicalSize;
+
+    float MedHash(float2 p)
+    {
+        return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+    }
+
+    float MedNoise(float2 p)
+    {
+        float2 i = floor(p), f = frac(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return lerp(lerp(MedHash(i), MedHash(i + float2(1, 0)), f.x), lerp(MedHash(i + float2(0, 1)), MedHash(i + 1.0), f.x), f.y);
+    }
+
+    // Whether `p` (0.10.1's world) is in a clinic, under its top storey, and how worn it is.
+    bool Medical(float3 p, out float wear)
+    {
+        wear = 0;
+        if (_MedicalSize.z < 0.5) return false;
+        float2 uv = p.xz / _MedicalSize.xy;
+        if (any(uv < 0) || any(uv >= 1)) return false;
+        float4 medical = SAMPLE_TEXTURE2D_LOD(_Medical, sampler_point_clamp, uv, 0);
+        if (medical.r <= 0.01 || p.y >= medical.g * 255.0 * 2.3 - 0.08) return false;
+        wear = saturate((medical.r * 255.0 - 30.0) / 210.0);
+        return true;
+    }
+
+    // medicalFinish.ts FLOOR: pale tiles about 65 cm square, dust, tracked-in grime, and with wear cracks and chips.
+    half3 MedicalFloor(float3 p, float wear)
+    {
+        float2 uv = p.xz / 0.44;
+        float2 cell = floor(uv), f = frac(uv);
+        float r = MedHash(cell);
+        float2 edge = min(f, 1.0 - f);
+        float aa = max(fwidth(uv.x), fwidth(uv.y));
+        float grout = 1.0 - smoothstep(0.012, 0.023 + aa * 0.6, min(edge.x, edge.y));
+        float3 tile = lerp(float3(0.64, 0.65, 0.60), float3(0.79, 0.78, 0.70), r);
+        float dust = MedNoise(p.xz * 0.75 + 21.0) * MedNoise(uv * 1.8);
+        tile *= 1.0 - dust * (0.10 + wear * 0.65);
+        float grime = smoothstep(0.43, 0.82, MedNoise(p.xz * 1.15 + p.y * 3.1 + 63.0));
+        grime *= 0.60 + MedNoise(p.xz * 9.0) * 0.40;
+        tile = lerp(tile, float3(0.31, 0.30, 0.22), grime * (0.28 + wear * 0.30));
+        float damaged = step(r, wear * wear * 0.38);
+        float crack = abs(f.y - (0.18 + f.x * 0.48 + MedNoise(float2(f.x * 12.0, r * 71.0)) * 0.13));
+        tile = lerp(tile, float3(0.17, 0.15, 0.13), damaged * (1.0 - smoothstep(0.005, 0.013 + aa * 0.5, crack)));
+        float chip = step(min(edge.x, edge.y) + MedNoise(f * 16.0 + cell) * 0.15, wear * 0.13) * damaged;
+        tile = lerp(tile, float3(0.27, 0.24, 0.19), chip);
+        return lerp(tile, float3(0.23, 0.23, 0.21), grout * 0.78);
+    }
+
+    // medicalFinish.ts WALL: a dark dado, a maroon band over it, pale paint above, a skirting; damp, streaks, and with
+    // wear chips of brick showing through.
+    half3 MedicalWall(float3 p, float3 n, float wear)
+    {
+        float h = fmod(p.y, 2.3);
+        float2 along = abs(n.x) > 0.5 ? float2(p.z, p.y) : p.xy;
+        float3 paint = h < 0.80 ? float3(0.36, 0.34, 0.31) : float3(0.76, 0.75, 0.67);
+        if (h > 0.77 && h < 0.97) paint = float3(0.25, 0.065, 0.055);
+        if (h < 0.095) paint = float3(0.16, 0.17, 0.16);
+        float dirt = MedNoise(along * float2(1.9, 3.2) + 8.0);
+        paint *= 0.93 + dirt * 0.07 - wear * MedNoise(along * 7.0) * 0.17;
+        float damp = (1.0 - smoothstep(0.05, 0.48, h)) * MedNoise(along * float2(5.0, 1.7) + 47.0);
+        paint = lerp(paint, float3(0.25, 0.26, 0.19), damp * (0.35 + wear * 0.25));
+        float streaks = smoothstep(0.70, 0.92, MedNoise(float2(along.x * 21.0, 17.0))) * (1.0 - smoothstep(0.1, 1.15, h));
+        paint *= 1.0 - streaks * (0.10 + wear * 0.12);
+        float wornPatch = MedNoise(along * 1.4 + 31.0) + MedNoise(along * 9.0) * 0.18;
+        float missing = step(1.14 - wear * 0.055, wornPatch) * step(0.2, wear);
+        float2 brickUv = along / float2(0.29, 0.14);
+        brickUv.x += fmod(floor(brickUv.y), 2.0) * 0.5;
+        float2 joint = min(frac(brickUv), 1.0 - frac(brickUv));
+        float3 brick = lerp(float3(0.28, 0.13, 0.08), float3(0.43, 0.23, 0.13), MedHash(floor(brickUv)));
+        brick = lerp(brick, float3(0.39, 0.36, 0.30), 1.0 - smoothstep(0.025, 0.055, min(joint.x, joint.y)));
+        float rim = step(1.115 - wear * 0.055, wornPatch) * step(0.2, wear);
+        paint = lerp(paint, float3(0.48, 0.44, 0.35), rim);
+        return lerp(paint, brick, missing);
     }
 
     void Clip(BuildingVaryings input)
@@ -159,6 +245,13 @@ Shader "Bastion/Building"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             // 1 by night (Mood): the lit windows glow.
             float _Night;
+            // The baked contact occlusion over the map (UI's GroundOcclusion, global): r how much sky, g the height it was
+            // worked out for (m); where it lies (x and z of its corner, its size, m).
+            TEXTURE2D(_GroundAO);
+            SAMPLER(sampler_linear_clamp);
+            float4 _GroundAOArea;
+            // 1 leaves it out (a lab's: MapLab BASTION_SIN_AO, to tell what the occlusion draws).
+            float _GroundAOOff;
 
             half4 Fragment(BuildingVaryings input, bool front : SV_IsFrontFace) : SV_Target
             {
@@ -184,6 +277,25 @@ Shader "Bastion/Building"
                     if (input.cut.z > 0.5) albedo = half3(0.34, 0.32, 0.3) * lerp(half3(1, 1, 1), input.inner.rgb, 0.35);
                 #endif
                 albedo *= _BaseColor.rgb;
+                #if !defined(_GLASS)
+                {
+                    // A clinic's floor (facing up, at a storey's floor) or its walls' inner faces (a wall in the building,
+                    // or an outer one's face turned in), as 0.10.1's medicalFinish.ts patched the floor and piece materials.
+                    float3 p = float3(input.positionWS.x, input.positionWS.y, -input.positionWS.z) / 1.5;
+                    float3 n = normalize(input.normalWS);
+                    n.z = -n.z;
+                    float wear;
+                    if (Medical(p, wear))
+                    {
+                        #if defined(_SWATCH)
+                            if (n.y > 0.8 && fmod(p.y + 0.01, 2.3) < 0.06) albedo = MedicalFloor(p, wear);
+                        #else
+                            float2 out2 = input.swatch.xy;
+                            if (front && abs(n.y) < 0.5 && input.cut.z < 0.5 && (dot(out2, out2) < 0.01 || dot(n.xz, out2) < -0.15)) albedo = MedicalWall(p, n, wear);
+                        #endif
+                    }
+                }
+                #endif
 
                 InputData inputData = (InputData)0;
                 inputData.positionWS = input.positionWS;
@@ -203,6 +315,20 @@ Shader "Bastion/Building"
                 surface.specular = half3(0, 0, 0);
                 surface.smoothness = _Smoothness;
                 surface.occlusion = 1;
+                #if defined(_SWATCH)
+                    // A floor, a raised ground or a solid block's top (what doesn't fade with the cut: buildings.ts
+                    // contactPatch) sits in the occlusion of what stands round it, as the ground does: a room darker by its
+                    // walls and furniture, its open floor lighter (groundAO.ts: the sky light by all of it, the sun's by 85 %).
+                    if (input.inner.z < 0.5 && inputData.normalWS.y > 0.7)
+                    {
+                        float4 cao = SAMPLE_TEXTURE2D(_GroundAO, sampler_linear_clamp, (input.positionWS.xz - _GroundAOArea.xy) / max(_GroundAOArea.zw, 1e-3));
+                        float here = 1.0 - smoothstep(0.15 * 1.5, 0.6 * 1.5, abs(input.positionWS.y - cao.g));
+                        float occlusion = lerp(1.0, cao.r, 0.95 * here * (1 - _GroundAOOff));
+                        float direct = lerp(1.0, occlusion, 0.85);
+                        surface.albedo *= direct;
+                        surface.occlusion = occlusion / max(direct, 1e-3);
+                    }
+                #endif
                 surface.alpha = 1;
                 surface.normalTS = half3(0, 0, 1);
                 #if defined(_GLASS)
@@ -233,15 +359,28 @@ Shader "Bastion/Building"
             ZWrite On
             ZTest LEqual
             ColorMask 0
-            Cull [_Cull]
+            Cull Off
 
             HLSLPROGRAM
             #pragma target 3.5
             #pragma vertex ShadowPassVertex
-            #pragma fragment ShadowPassFragment
+            #pragma fragment ShadowFragment
+            #pragma shader_feature_local _SWATCH
             #pragma multi_compile_instancing
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
             #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
+
+            // As three casts them (0.10.1: a material's shadowSide, the side it doesn't draw): a surface of one side (a floor,
+            // a storey's slab, a roof's top) only by its faces turned away from the light, so a flat roof casts none and
+            // the sun gets into a building cut open, while a closed one (a roof's lip, a block) casts whole; the pieces,
+            // drawn both ways there, by both.
+            half4 ShadowFragment(Varyings input, bool front : SV_IsFrontFace) : SV_TARGET
+            {
+                #if defined(_SWATCH)
+                    if (front) discard;
+                #endif
+                return ShadowPassFragment(input);
+            }
             ENDHLSL
         }
 

@@ -776,10 +776,12 @@ namespace Bastion.Client.Map
         {
             var kit = Kits.TryGetValue(kitId, out var k) ? k : Kits[KitIds.House];
             float gw = kit.glass[0], gh = kit.glass[1], gy = kit.glass[2], gz = kit.glass[3];
-            // A kit's metre is KIT_SCALE metres of the game's, its storey stretched to the game's.
+            // A kit's metre is KIT_SCALE of 0.10.1's tiles across and in depth, its storey stretched to the game's (buildings.ts:
+            // PlaneGeometry(gw × KIT, gh × KIT × fit), in tiles); in metres here. (Its width and depth were in metres of the
+            // kit, a tile short of 0.10.1's: the pane a third narrower and back in the wall, the window's sides pale round it.)
             float fit = Storey * MapSpace.Tile / (kit.storey * Map.Pieces.KitScale);
-            float halfW = gw * Map.Pieces.KitScale / 2, halfH = gh * Map.Pieces.KitScale * fit / 2;
-            float y = gy * Map.Pieces.KitScale * fit, z = gz * Map.Pieces.KitScale * kit.thick;
+            float halfW = gw * Map.Pieces.KitScale * MapSpace.Tile / 2, halfH = gh * Map.Pieces.KitScale * fit / 2;
+            float y = gy * Map.Pieces.KitScale * fit, z = gz * Map.Pieces.KitScale * kit.thick * MapSpace.Tile;
             var mesh = new Mesh { name = $"Cristal {kitId}" };
             mesh.vertices = new[] { new Vector3(-halfW, y - halfH, z), new Vector3(halfW, y - halfH, z), new Vector3(halfW, y + halfH, z), new Vector3(-halfW, y + halfH, z) };
             mesh.normals = new[] { Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward };

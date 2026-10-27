@@ -39,6 +39,7 @@
 }
 
 .strat-brand {
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
     height: 100%;
@@ -74,6 +75,7 @@
 }
 
 .strat-siege {
+    flex-shrink: 0;
     margin-right: 12px;
     padding: 2px 8px;
     font-size: 11px;
@@ -97,12 +99,14 @@
 }
 
 .strat-res {
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
 }
 
 /* Each store in its own well: the pack's icon in the store's colour, the figure in Oswald. */
 .strat-well {
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
     height: 30px;
@@ -181,11 +185,16 @@
 }
 
 /* The Marea: its marks across the rest of the band, red where it has come. */
+/* The room left, the alarm's marks giving way in a narrow window at a big «Interfaz» (1280 at 130 %): the wells and
+   «MENÚ» keep their size. */
 .strat-doom {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
     flex-direction: row;
     align-items: center;
     justify-content: center;
+    margin-right: 8px;
 }
 
 .strat-doom__icon {
@@ -196,6 +205,8 @@
 }
 
 .strat-doom__marks {
+    flex-shrink: 1;
+    min-width: 0;
     flex-direction: row;
     padding: 2px;
     background-color: var(--m-well);
@@ -203,6 +214,8 @@
 }
 
 .strat-doom__mark {
+    flex-shrink: 1;
+    min-width: 5px;
     width: 14px;
     height: 10px;
     margin: 0 1px;
@@ -221,6 +234,7 @@
 }
 
 .strat-menu {
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
     height: 30px;

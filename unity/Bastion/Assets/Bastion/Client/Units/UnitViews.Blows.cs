@@ -62,6 +62,12 @@ namespace Bastion.Client.Units
         }
 
         /// <summary>A blow at `v` from `from` (a bite, a blade at it).</summary>
+        /// <summary>For the labs: unit `id` struck from `from` (its death and its hit then by it), as a blow at arm's length or not.</summary>
+        public void StruckFrom(string id, Vector3 from, bool melee = false)
+        {
+            if (views.TryGetValue(id, out var v)) StruckBy(v, from, melee);
+        }
+
         static void StruckBy(View v, Vector3 from, bool melee)
         {
             if (v != null) v.blow = new Blow { from = from, melee = melee, at = Time.time };

@@ -109,6 +109,18 @@ namespace Bastion.UI.Combat
         void Send(Command c) => Order?.Invoke(c);
         void Send(ClientMessage m) => Message?.Invoke(m);
 
+        readonly List<Vector3> enemyFeet = new List<Vector3>();
+
+        /// <summary>Where the enemies in sight stand now, for their rings (alive, on a floor not cut away over the one shown).</summary>
+        List<Vector3> EnemyFeet()
+        {
+            enemyFeet.Clear();
+            foreach (var u in Shown.Units)
+                if (u.Alive && u.Team == Teams.Alien && !u.Evacuated && u.Pos.Z <= Level && (Visible?.Invoke(u) ?? true) && FeetOf(u.Id) is Vector3 feet)
+                    enemyFeet.Add(feet);
+            return enemyFeet;
+        }
+
         void Toast(string text)
         {
             if (Hud != null) Hud.Toast(text);
@@ -489,9 +501,12 @@ namespace Bastion.UI.Combat
             {
                 Overlay.ShowPicked(Unit() != null ? FeetOf(picked) : null);
                 Overlay.ShowPartner(partnerPicked != picked ? FeetOf(partnerPicked) : null, partnerColor);
+                Overlay.ShowEnemies(EnemyFeet());
             }
             Keys();
             Cutaway();
+            ClearView();
+            CloseFlags();
             var mouse = Mouse.current;
             if (mouse == null || Rig == null) return;
             var at = mouse.position.ReadValue();
@@ -600,6 +615,8 @@ namespace Bastion.UI.Combat
             var close = CloseFocus?.Invoke();
             cut.Focus.closeAttacker = close?.attacker;
             cut.Focus.closeTarget = close?.target;
+            // Over a shoulder, aiming too (game.ts: `close` while rig.closeUp): the buildings stay whole round the shot.
+            cut.Focus.close = Rig != null && Rig.CloseUp;
         }
 
         /// <summary>The keys (game.ts onKey), but the camera's (CameraRig: WASD, arrows, Q/E).</summary>

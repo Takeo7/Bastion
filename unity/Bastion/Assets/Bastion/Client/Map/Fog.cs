@@ -89,7 +89,9 @@ namespace Bastion.Client.Map
             pixels = new Color32[n];
             shellPixels = new Color32[n];
             Remake(ref map, "Niebla");
-            Remake(ref shellMap, "Niebla de los edificios");
+            // (Tile by tile, no blend, as fogOfWar.ts's: which tile a wall's face stands in and which it looks onto. Blended, a
+            // façade's next tile read half its building's, and its face took the inside's fog: tall blocks went dark whole.)
+            Remake(ref shellMap, "Niebla de los edificios", FilterMode.Point);
             Shells(s);
             changed = true;
             Shader.SetGlobalTexture(FogMap, map);
@@ -113,14 +115,14 @@ namespace Bastion.Client.Map
             Shader.SetGlobalColor("_FogLamp", Lamp);
         }
 
-        void Remake(ref Texture2D texture, string name)
+        void Remake(ref Texture2D texture, string name, FilterMode filter = FilterMode.Bilinear)
         {
             if (texture != null)
             {
                 if (Application.isPlaying) Destroy(texture);
                 else DestroyImmediate(texture);
             }
-            texture = new Texture2D(width, height, TextureFormat.RGBA32, false, true) { name = name, filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            texture = new Texture2D(width, height, TextureFormat.RGBA32, false, true) { name = name, filterMode = filter, wrapMode = TextureWrapMode.Clamp };
         }
 
         /// <summary>
@@ -285,6 +287,9 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>How many tiles are in sight and seen (now, fading included).</summary>
+        /// <summary>Whether the squad has seen place `node` this mission (UI's marks over the loot boxes: lootMarks.ts explored).</summary>
+        public bool Explored(int node) => explored != null && node >= 0 && node < explored.Length && explored[node];
+
         public (int sight, int known) Counts() => (sight?.Count(v => v > 0.5f) ?? 0, known?.Count(v => v > 0.5f) ?? 0);
 
         void Update()

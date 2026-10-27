@@ -11,12 +11,15 @@ namespace Bastion.Client
     /// The map by night (0.10.1's night.ts): the warm light of what still works. Every street light's head glows (UI's
     /// GroundView.Lamps), a few wrecks' headlights are left on (MapBuilder), and a fixed pool of real lights goes where it
     /// counts: the Bengalas and fires burning first (the engine's lights that last a few turns), then the street lights
-    /// nearest the point the camera looks at. The lit windows are the panes' (Bastion/Building, _Night). Hidden by day.
+    /// nearest the point the camera looks at, each Bengala and fire with its glowing ball. The lit windows are the panes' (Bastion/Building, _Night). Hidden by day.
     /// three's point lights in tiles and over π become Unity's in metres.
     /// </summary>
     public sealed class NightLights : MonoBehaviour, IShotStep
     {
         public static NightLights Current { get; private set; }
+
+        /// <summary>For the labs, with no battle's views (MapLab: BASTION_BENGALAS): the state whose Bengalas and fires burn.</summary>
+        public static Bastion.Engine.GameState StateForLab;
 
         /// <summary>Where a lamp shines from (a street light's head) or a car's front, which way it faces, how much stronger it is (m).</summary>
         public struct Glow
@@ -38,20 +41,28 @@ namespace Bastion.Client
         /// <summary>three's point light (candela, 1/d² in tiles, over π) as URP's (in metres): times 1.5² over π.</summary>
         static readonly float Unity = MapTile * MapTile / Mathf.PI;
         const float MapTile = Map.MapSpace.Tile;
+        static readonly bool Logs = System.Environment.GetEnvironmentVariable("BASTION_LUCES") == "1";
+        /// <summary>BASTION_SIN_FAROLAS=1 (the labs): the real lights off, the glows kept (to weigh what they light).</summary>
+        static readonly bool Unlit = System.Environment.GetEnvironmentVariable("BASTION_SIN_FAROLAS") == "1";
 
         readonly List<Glow> lamps = new List<Glow>();
         readonly List<GameObject> glows = new List<GameObject>();
         Light[] pool;
-        readonly Dictionary<string, (Vector3 at, Color colour, float radius, float level, bool flare)> burning = new Dictionary<string, (Vector3, Color, float, float, bool)>();
+        readonly Dictionary<string, (Vector3 at, Color colour, float radius, float level, bool flare, GameObject glow)> burning = new Dictionary<string, (Vector3, Color, float, float, bool, GameObject)>();
         float time;
-        Material glowMaterial;
+        Material glowMaterial, burnMaterial, haloMaterial;
+        Texture2D haloTexture;
 
         void OnEnable() => Current = this;
 
         void OnDestroy()
         {
             if (Current == this) Current = null;
+            Publish(true);
             if (glowMaterial != null) DestroyImmediate(glowMaterial);
+            if (burnMaterial != null) DestroyImmediate(burnMaterial);
+            if (haloMaterial != null) DestroyImmediate(haloMaterial);
+            if (haloTexture != null) DestroyImmediate(haloTexture);
         }
 
         /// <summary>The map's street lights and headlights left on (Unity's metres), made again.</summary>
@@ -123,6 +134,73 @@ namespace Bastion.Client
             return o;
         }
 
+        /// <summary>A Bengala's or a fire's glow (night.ts flareGeometry: a ball 0.32 tiles across, a fire's half as big again), drawn through.</summary>
+        GameObject Burn(Vector3 at, bool flare)
+        {
+            if (burnMaterial == null)
+            {
+                var shader = Resources.Load<Effects.FxArt>("FxArt")?.unlit ?? Shader.Find("Bastion/FxUnlit");
+                burnMaterial = new Material(shader) { name = "Brillo de bengala", renderQueue = (int)RenderQueue.Transparent };
+                burnMaterial.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+                burnMaterial.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+                burnMaterial.SetFloat("_ZWrite", 0);
+                burnMaterial.SetFloat("_Cull", (float)CullMode.Back);
+            }
+            var o = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            o.name = flare ? "Brillo de bengala" : "Brillo de fuego";
+            DestroyNow(o.GetComponent<Collider>());
+            o.transform.SetParent(transform, false);
+            o.transform.position = at;
+            o.transform.localScale = Vector3.one * ((flare ? 0.32f : 0.32f * 1.6f) * MapTile);
+            var r = o.GetComponent<MeshRenderer>();
+            r.sharedMaterial = burnMaterial;
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            // Round it, the light it spills (0.10.1's bloom of its HDR colour; ours, gentler, leaves it a hard ball): a soft
+            // glow facing the camera, added (Step turns it), drawn a little towards the camera so the ground doesn't cut it.
+            if (haloMaterial == null)
+            {
+                haloMaterial = new Material(burnMaterial) { name = "Halo de bengala", renderQueue = (int)RenderQueue.Transparent + 1 };
+                haloMaterial.SetFloat("_DstBlend", (float)BlendMode.One);
+                haloMaterial.SetFloat("_Cull", (float)CullMode.Off);
+                haloTexture = Effects.Fx.Glow();
+                haloMaterial.SetTexture("_BaseMap", haloTexture);
+            }
+            var halo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            halo.name = "Halo";
+            DestroyNow(halo.GetComponent<Collider>());
+            halo.transform.SetParent(o.transform, false);
+            halo.transform.localScale = Vector3.one * HaloSize;
+            var hr = halo.GetComponent<MeshRenderer>();
+            hr.sharedMaterial = haloMaterial;
+            hr.shadowCastingMode = ShadowCastingMode.Off;
+            hr.receiveShadows = false;
+            return o;
+        }
+
+        /// <summary>A glow's halo across, in balls, and how bright against the ball.</summary>
+        const float HaloSize = 2.6f, HaloLight = 0.3f;
+
+        /// <summary>A glow's colour (three's linear HDR, for the bloom) at `level` of its opacity.</summary>
+        static void Level(GameObject glow, Color colour, float level)
+        {
+            var c = colour.gamma;
+            c.a = level;
+            var block = new MaterialPropertyBlock();
+            block.SetColor("_BaseColor", c);
+            glow.GetComponent<Renderer>().SetPropertyBlock(block);
+            if (glow.transform.childCount == 0) return;
+            var halo = glow.transform.GetChild(0);
+            c = (colour * HaloLight).gamma;
+            c.a = level;
+            block.SetColor("_BaseColor", c);
+            halo.GetComponent<Renderer>().SetPropertyBlock(block);
+            var camera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+            if (camera == null) return;
+            halo.rotation = camera.transform.rotation;
+            halo.position = glow.transform.position - camera.transform.forward * (0.6f * MapTile);
+        }
+
         void Update()
         {
             if (Application.isPlaying) Step(Time.deltaTime);
@@ -130,21 +208,45 @@ namespace Bastion.Client
 
         public void ShotStep(float dt) => Step(dt);
 
+        static readonly Vector4[] lightAt = new Vector4[RealLights], lightColour = new Vector4[RealLights];
+
+        /// <summary>The real lights as the fog counts them (Fog.shader: _NightLightAt, _NightLightColour); none if `off`.</summary>
+        void Publish(bool off)
+        {
+            for (int k = 0; k < RealLights; k++)
+            {
+                var l = !off && pool != null && k < pool.Length ? pool[k] : null;
+                bool on = l != null && l.enabled && l.intensity > 0;
+                var at = on ? l.transform.position : Vector3.zero;
+                lightAt[k] = on ? new Vector4(at.x, at.y, at.z, 1 / (l.range * l.range)) : new Vector4(0, 0, 0, 1);
+                // (Its colour is given as sRGB, and URP takes it to linear.)
+                lightColour[k] = on ? (Vector4)(l.color.linear * l.intensity) : Vector4.zero;
+            }
+            Shader.SetGlobalVectorArray("_NightLightAt", lightAt);
+            Shader.SetGlobalVectorArray("_NightLightColour", lightColour);
+        }
+
         /// <summary>Fades and flicker, and the real lights put where they count.</summary>
         void Step(float dt)
         {
             bool night = Mood.Current != null && Mood.Current.Now == Mood.Night;
             foreach (var o in glows) if (o != null && o.activeSelf != night) o.SetActive(night);
+            foreach (var b in burning.Values) if (b.glow != null && b.glow.activeSelf != night) b.glow.SetActive(night);
             // (Gone with the map made again, till Show makes them anew.)
-            if (pool == null || pool.Any(l => l == null)) return;
+            if (pool == null || pool.Any(l => l == null))
+            {
+                Publish(true);
+                return;
+            }
             if (!night)
             {
                 foreach (var l in pool) l.enabled = false;
+                Publish(true);
                 return;
             }
             time += dt;
             // The Bengalas and fires burning now (the engine's lights with turns): new ones come up, gone ones die down.
-            var s = UnitViews.Current?.State;
+            var s = UnitViews.Current?.State ?? StateForLab;
             var now = new HashSet<string>();
             if (s?.Lights != null)
                 foreach (var l in s.Lights)
@@ -154,14 +256,22 @@ namespace Bastion.Client
                     if (burning.ContainsKey(l.Id)) continue;
                     bool flare = l.Radius >= 3;
                     var at = Map.MapSpace.TileToWorld(s, l.Tile) + Vector3.up * (flare ? 1.4f : 0.35f) * MapTile;
-                    burning[l.Id] = (at, flare ? Flare : Fire, (float)l.Radius, 0, flare);
+                    burning[l.Id] = (at, flare ? Flare : Fire, (float)l.Radius, 0, flare, null);
                 }
             foreach (string id in burning.Keys.ToList())
             {
                 var b = burning[id];
                 b.level = Mathf.Clamp01(b.level + (now.Contains(id) ? dt : -dt) / Fade);
-                if (!now.Contains(id) && b.level <= 0) burning.Remove(id);
-                else burning[id] = b;
+                if (!now.Contains(id) && b.level <= 0)
+                {
+                    DestroyNow(b.glow);
+                    burning.Remove(id);
+                    continue;
+                }
+                // (Made again if the map made again took it with it.)
+                if (b.glow == null) b.glow = Burn(b.at, b.flare);
+                Level(b.glow, (b.flare ? Flare * 2.2f : Fire * 2.5f), b.level);
+                burning[id] = b;
             }
             int n = 0;
             foreach (var b in burning.Values)
@@ -198,6 +308,11 @@ namespace Bastion.Client
                 light.transform.position = l.at - Vector3.up * 0.6f * MapTile;
             }
             for (; n < pool.Length; n++) pool[n].enabled = false;
+            if (Unlit) foreach (var l in pool) l.enabled = false;
+            // BASTION_LUCES=1 (the labs): where the camera looks and the street lights given the real ones, now and then.
+            if (Logs)
+                Debug.Log($"[luces] focus {focus:F1}, camera {(camera != null ? camera.transform.position.ToString("F1") + " looking " + camera.transform.forward.ToString("F3") : "-")}: {string.Join(" ", nearest.Select(i => lamps[i].at.ToString("F1")))}");
+            Publish(false);
         }
 
         static void DestroyNow(Object o)

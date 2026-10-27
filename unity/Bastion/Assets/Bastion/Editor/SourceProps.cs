@@ -55,8 +55,37 @@ namespace Bastion.EditorTools
         // as there (Plain).
         .Concat(FromApocalypse("SM_Prop_MedicalBox_02", "SM_Prop_Workbench_01"))
         // (And the camp's metal cup, a canteen's, which Unity's Military has only on the canteen: clearingLife.ts CAMP_ITEMS.)
-        .Concat(new[] { "SM_Prop_Crate_Wood_01", "SM_Prop_Crate_Wood_Lid_01", "SM_Item_Canteen_Cup_01" }.Select(m => (m, $"assets-src/synty/POLYGON_Military_SourceFiles/Fbx/{m}.fbx", "PolygonMilitary_01_A", (string)null, (string)null)))
+        // What a search leaves (mapView.ts ransack, lootBox): a dresser's drawer pulled out and dropped, a crate's lid, the ammunition
+        // crate's, inside their models in Unity's packages.
+        .Concat(FromApocalypse("SM_Prop_Dresser_03_Drawer_01", "SM_Prop_Crate_Open_Lid_01"))
+        .Concat(new[] { "SM_Prop_Crate_Wood_01", "SM_Prop_Crate_Wood_Lid_01", "SM_Item_Canteen_Cup_01", "SM_Prop_Crate_Ammo_Lid_01" }.Select(m => (m, $"assets-src/synty/POLYGON_Military_SourceFiles/Fbx/{m}.fbx", "PolygonMilitary_01_A", (string)null, (string)null)))
+        // The supermarket's shelves as stocked as they are (syntyManifest.ts gondolaGaps…wallShelfEmpty: the goods taken out
+        // in sections, `hole`), each a model of its own under the name MapArt.json gives it (its `cut`).
+        .Concat(Cuts())
         .ToArray();
+
+        /// <summary>A pack whose models MapArt.json cuts: its source FBX folder (from the root) and its material; null, none.</summary>
+        static (string folder, string material)? CutPack(string pack) => pack == "town" ? ("assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX", "PolygonTown_01_A") : null;
+
+        /// <summary>MapArt.json's props with a `cut` (map-art-json.mts: `hole` alone), as models to make.</summary>
+        static IEnumerable<(string model, string source, string material, string atlas, string cut)> Cuts()
+        {
+            var art = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText("Assets/Bastion/Client/Resources/MapArt.json"));
+            foreach (var p in ((Newtonsoft.Json.Linq.JObject)art["props"]).Properties())
+            {
+                if (!(p.Value["cut"] is Newtonsoft.Json.Linq.JObject cut)) continue;
+                string pack = (string)p.Value["pack"];
+                // (Called as Models is made: nothing static after it is there yet.)
+                var from = CutPack(pack);
+                if (from == null)
+                {
+                    Debug.LogWarning($"[source props] {p.Name}: no source folder for {pack}");
+                    continue;
+                }
+                yield return ((string)p.Value["fbx"], $"{from.Value.folder}/{(string)cut["source"]}.fbx", from.Value.material, null,
+                    new Newtonsoft.Json.Linq.JObject { ["hole"] = cut["hole"] }.ToString(Newtonsoft.Json.Formatting.None));
+            }
+        }
         /// <summary>
         /// The slots painted from a texture of their own (a wire's alpha) that 0.10.1 drew in one plain colour, the atlas's
         /// at a spot of it (syntyManifest.ts `plain`, Blender's UV; convert.py plain_slots): the workbench's pegboard.
@@ -79,8 +108,11 @@ namespace Bastion.EditorTools
             string root = Path.GetFullPath(Path.Combine(Application.dataPath, "../../.."));
             if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder("Assets/Synty", "Extra");
             var materialOf = MapLab.Materials();
+            // BASTION_SOLO=prefix: only the models whose names start so (the others as they are).
+            string only = System.Environment.GetEnvironmentVariable("BASTION_SOLO");
             foreach (var (model, source, material, atlas, cut) in Models)
             {
+                if (only != null && !model.StartsWith(only)) continue;
                 string from = Path.Combine(root, source), to = $"{Folder}/{model}.fbx";
                 if (!File.Exists(from))
                 {

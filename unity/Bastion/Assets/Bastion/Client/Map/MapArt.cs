@@ -152,6 +152,23 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>Stable pseudo-random value in [0, 1) per tile, as 0.10.1's mapView.ts hash (JavaScript's 32-bit integers).</summary>
+        /// <summary>
+        /// The same over fractional places (mapView.ts hash called with a tile's middle, x + 0.5): JavaScript's numbers, the
+        /// products in doubles and taken to 32 bits as its ^ does (ToInt32).
+        /// </summary>
+        public static float Hash(double x, double y, int salt = 0)
+        {
+            static int ToInt32(double d)
+            {
+                if (double.IsNaN(d) || double.IsInfinity(d)) return 0;
+                double t = Math.Truncate(d) % 4294967296.0;
+                if (t < 0) t += 4294967296.0;
+                return unchecked((int)(uint)t);
+            }
+            int a = ToInt32((x + salt * 31) * 73856093.0), b = ToInt32(y * 19349663.0), c = ToInt32(salt * 83492791.0);
+            return (uint)(a ^ b ^ c) % 1000 / 1000f;
+        }
+
         public static float Hash(int x, int y, int salt = 0)
         {
             int a = unchecked((int)((x + salt * 31L) * 73856093L));

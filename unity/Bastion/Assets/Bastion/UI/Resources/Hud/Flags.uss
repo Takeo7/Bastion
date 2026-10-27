@@ -221,3 +221,23 @@
     color: #efe6d2;
     letter-spacing: 0.5px;
 }
+
+/* A loot box's mark (lootMarks.ts): the icon of what is in it on a plate of the interface's dark steel, ringed in its
+   colour (set inline), scaled with the camera to the map's size. */
+.wtag--loot {
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    justify-content: center;
+    border-width: 5px;
+    border-radius: 32px;
+    background-color: rgba(27, 30, 32, 0.94);
+}
+
+/* A little short of white, so the bloom leaves it be. */
+.wtag__icon {
+    width: 36px;
+    height: 36px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: rgba(255, 255, 255, 0.86);
+}

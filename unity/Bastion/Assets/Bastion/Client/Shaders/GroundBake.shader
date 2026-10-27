@@ -2,7 +2,8 @@
 // solid seen from above (world y into r); pass 1 works out, for each texel of that height field, how much of the sky the
 // things round it hide (horizon-based, as GTAO on the height field): r how much sky it sees (1 open, 0 hidden), g the
 // height there (a floor reads the occlusion only where it is that surface, not a roof over it); b the same seen from the
-// ground's own height (0), whatever stands over it: the ground's, so a car's or a bench's overhang darkens it too.
+// ground's own height (0), whatever stands over it: the ground's, so a car's or a bench's overhang darkens it too. The
+// walls' caps are left out of the heights, as 0.10.1 left them.
 Shader "Hidden/Bastion/GroundBake"
 {
     Properties
@@ -24,20 +25,26 @@ Shader "Hidden/Bastion/GroundBake"
             #pragma fragment Fragment
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            struct Attributes { float4 positionOS : POSITION; };
-            struct Varyings { float4 positionCS : SV_POSITION; float height : TEXCOORD0; };
+            // (TEXCOORD5's y is 1 on a wall's cap, WallsView's AddCap; nothing else has it.)
+            struct Attributes { float4 positionOS : POSITION; float4 more : TEXCOORD5; };
+            struct Varyings { float4 positionCS : SV_POSITION; float height : TEXCOORD0; float cap : TEXCOORD1; };
 
             Varyings Vertex(Attributes input)
             {
                 Varyings output;
                 float3 world = TransformObjectToWorld(input.positionOS.xyz);
                 output.height = world.y;
+                output.cap = input.more.y;
                 output.positionCS = TransformWorldToHClip(world);
                 return output;
             }
 
             float4 Fragment(Varyings input) : SV_Target
             {
+                // The walls' caps are no occluders (buildings.ts: the key 'cap' left out): 0.10.1's walls, upright planes,
+                // left nothing seen from above, so a room's floor got the dark of its furniture and doorways alone, and
+                // was light in the middle (Arte, 27/10: in Unity the rooms came out dark all over).
+                clip(0.5 - input.cap);
                 return float4(input.height, 0, 0, 1);
             }
             ENDHLSL
@@ -106,7 +113,9 @@ Shader "Hidden/Bastion/GroundBake"
                     hidden += horizon;
                     low += floorHorizon;
                 }
-                return float4(pow(saturate(1.0 - hidden / DIRECTIONS), 2.4), h0, pow(saturate(1.0 - low / DIRECTIONS), 2.4), 1);
+                // (Its height as 0.10.1's eight-bit target kept it: a tile at most, 1.5 m. Over a wall's foot the floor blends
+                // towards that, not the wall's whole height, so it stays in the occlusion as close to the wall as there.)
+                return float4(pow(saturate(1.0 - hidden / DIRECTIONS), 2.4), min(h0, 1.5), pow(saturate(1.0 - low / DIRECTIONS), 2.4), 1);
             }
             ENDHLSL
         }

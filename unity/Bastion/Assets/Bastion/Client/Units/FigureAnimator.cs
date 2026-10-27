@@ -24,6 +24,8 @@ namespace Bastion.Client.Units
             public float length;
             public float speed = 1;
             public float weight;
+            /// <summary>The most it takes of its part of the body (a hit's share of the upper body: PlayUpper), 1 all.</summary>
+            public float most = 1;
             public float fadeIn;
             public float fadeOut;
             /// <summary>Stays on its last pose (a death); otherwise it fades out as it ends.</summary>
@@ -140,14 +142,28 @@ namespace Bastion.Client.Units
             return mask;
         }
 
-        /// <summary>Stands or moves in one of MOTION_ORDER's clips, at `speed` times its own (its feet kept on the ground: Gaits.ClipSpeed).</summary>
-        public void Motion(string name, float speed = 1)
+        /// <summary>
+        /// Stands or moves in one of MOTION_ORDER's clips, at `speed` times its own (its feet kept on the ground:
+        /// Gaits.ClipSpeed); `share` of it, the rest the idle's (a search's crouch part way: syntyFigures.ts crouch 0.6).
+        /// </summary>
+        public void Motion(string name, float speed = 1, float share = 1)
         {
             int k = Array.IndexOf(Anims.MotionOrder, name);
             if (k < 0 || !motionClips[k].IsValid()) k = 0;
             motion = k;
             this.speed = speed;
+            motionShare = k == 0 ? 1 : Mathf.Clamp01(share);
         }
+
+        float motionShare = 1;
+
+        /// <summary>
+        /// How far down it is on top of its motion, at once (syntyFigures.ts animate's p.crouch, set by hand: onto a window's
+        /// sill, off it, landing): that share of the idle goes to the crouch's idle, of a moving clip to the crouched walk.
+        /// </summary>
+        public float Crouch;
+
+        readonly float[] shares = new float[Anims.MotionOrder.Length];
 
         /// <summary>
         /// How it holds its weapon standing (a rifle at rest, aimed), looped over the upper body as long as it stands (the
@@ -253,6 +269,15 @@ namespace Bastion.Client.Units
         /// <summary>A clip over the upper body, once (from `at` seconds into it), fading in and out; its seconds from there.</summary>
         public float PlayUpper(AnimationClip clip, float fade = 0.12f, float speed = 1, float at = 0) => Play(Upper, clip, fade, 0.2f, false, at, speed);
 
+        /// <summary>The same taking at most `share` (0 to 1) of the upper body from what it does (a hit reaction: syntyAnims.ts react), fading out over `fadeOut`.</summary>
+        public float PlayUpperShare(AnimationClip clip, float fade, float fadeOut, float share)
+        {
+            float seconds = Play(Upper, clip, fade, fadeOut, false, 0, 1);
+            slots[Upper].most = Mathf.Clamp01(share);
+            if (slots[Upper].weight > slots[Upper].most) slots[Upper].weight = slots[Upper].most;
+            return seconds;
+        }
+
         /// <summary>A clip over the upper body but the gun arm, once (a throw by the free hand); its seconds from `at`.</summary>
         public float PlayFree(AnimationClip clip, float fade = 0.12f, float speed = 1, float at = 0) => Play(Free, clip, fade, 0.2f, false, at, speed);
 
@@ -355,6 +380,16 @@ namespace Bastion.Client.Units
         public void StopVariation() => variationStopping = true;
 
         /// <summary>The whole body's clip let go (a body getting up), over `fade` seconds.</summary>
+        /// <summary>The clip over the whole body held at `time` seconds into it (a death played backwards: UnitViews.Reanimate).</summary>
+        public void WholeAt(float time)
+        {
+            var slot = slots[Whole];
+            if (!slot.clip.IsValid()) return;
+            slot.speed = 0;
+            slot.time = Mathf.Clamp(time, 0, slot.length);
+            slot.clip.SetTime(slot.time);
+        }
+
         public void StopWhole(float fade)
         {
             var slot = slots[Whole];
@@ -385,6 +420,7 @@ namespace Bastion.Client.Units
             slot.loop = false;
             slot.from = 0;
             slot.manual = false;
+            slot.most = 1;
             if (fadeIn <= 0) slot.weight = 1;
             Step(0);
             return (slot.length - slot.time) / Mathf.Max(speed, 1e-3f);
@@ -392,6 +428,9 @@ namespace Bastion.Client.Units
 
         /// <summary>The layers' weights and the motions mixer's inputs' (MOTION_ORDER, the camp's two loops, the variation), for the labs.</summary>
         /// <summary>How far it moves rather than stands (syntyFigures.ts pose.run: the motions' share but the two idles'), 0 to 1.</summary>
+        /// <summary>How much a clip over the whole body takes of it now (a bite, eating, getting up), 0 none.</summary>
+        public float WholeShare => slots[Whole].clip.IsValid() ? slots[Whole].weight : 0;
+
         public float Moving
         {
             get
@@ -437,13 +476,27 @@ namespace Bastion.Client.Units
             for (int k = 0; k < weights.Length; k++)
             {
                 if (!motionClips[k].IsValid()) continue;
-                weights[k] = k == motion ? Mathf.Min(1, weights[k] + dt / Blend) : Mathf.Max(0, weights[k] - dt / Blend);
+                float goal = k == motion ? motionShare : k == 0 ? 1 - motionShare : 0;
+                weights[k] = Mathf.MoveTowards(weights[k], goal, dt / Blend);
                 if (dt == 0 && k == motion && weights[k] == 0) weights[k] = 1;
                 total += weights[k];
                 times[k] += dt * (k == motion ? speed * paces[k] : paces[k]);
             }
+            for (int k = 0; k < weights.Length; k++) shares[k] = motionClips[k].IsValid() && total > 0 ? weights[k] / total : 0;
+            float down = Mathf.Clamp01(Crouch);
+            if (down > 0)
+            {
+                int still = Array.IndexOf(Anims.MotionOrder, "crouchIdle"), low = Array.IndexOf(Anims.MotionOrder, "crouchWalk");
+                for (int k = 0; k < shares.Length; k++)
+                {
+                    int to = k == 0 ? still : k == still || k == low ? -1 : low;
+                    if (to < 0 || !motionClips[to].IsValid() || shares[k] <= 0) continue;
+                    shares[to] += shares[k] * down;
+                    shares[k] *= 1 - down;
+                }
+            }
             // The camp's loop and variation take the idle's place (syntyAnims.ts update: idle × held, the idle what is left).
-            float idleShare = total > 0 && motionClips[0].IsValid() ? weights[0] / total : 0;
+            float idleShare = shares[0];
             float stood = 0;
             for (int k = 0; k < 2; k++)
             {
@@ -482,7 +535,7 @@ namespace Bastion.Client.Units
             for (int k = 0; k < weights.Length; k++)
             {
                 if (!motionClips[k].IsValid()) continue;
-                float w = total > 0 ? weights[k] / total : 0;
+                float w = shares[k];
                 if (k == 0) w = w * (1 - stood) - varied;
                 motions.SetInputWeight(k, Mathf.Max(0, w));
                 motionClips[k].SetTime(times[k] % lengths[k]);
@@ -530,7 +583,7 @@ namespace Bastion.Client.Units
                 bool ending = slot.stopping || (!slot.hold && slot.time >= slot.length - slot.fadeOut * slot.speed);
                 slot.weight = ending
                     ? Mathf.Max(0, slot.weight - dt / Mathf.Max(slot.fadeOut, 1e-3f))
-                    : Mathf.Min(1, slot.weight + (slot.fadeIn > 0 ? dt / slot.fadeIn : 1));
+                    : Mathf.Min(slot.most, slot.weight + (slot.fadeIn > 0 ? dt / slot.fadeIn : 1));
                 slot.clip.SetTime(slot.time);
                 layers.SetInputWeight(layer, slot.weight);
                 if (ending && slot.weight <= 0)

@@ -8,13 +8,17 @@ El objetivo es jugar una campaña entre dos apps de Unity, de la base a una misi
 
 Cómo abrir las dos apps (doble clic, la segunda con `BASTION_DATOS`, la cuarentena de macOS, Linux) está en [PRUEBA-UNITY.md](PRUEBA-UNITY.md) §1. Es igual.
 
-## Qué no está todavía
+## La app
 
-La app es la de `unity/Bastion/Builds/Mac/Bastion.app`, de las 13:57 del 26/10 (commit 29bd922). Para Ana, `Builds/Bastion-Mac.zip`.
+`unity/Bastion/Builds/Mac/Bastion.app`, de las 16:57 del 26/10 (commit 9ff0b7e). Para Ana, `Builds/Bastion-Mac.zip`.
 
-- El sonido: Ajustes ya tiene sus filas, pero aún no se oye nada (lo hace Red).
-- Cambiar de planta con Mayús y la rueda no funciona en el Mac en esta app (ya está arreglado para la siguiente): usar RePág y AvPág.
-- Los muertos especiales con su cuerpo: el Corredor, el Acorazado, el Chillón y el Hinchado salen todavía como un zombi común (se distinguen por su rótulo), y el Chillón grita sin moverse.
+Ya lleva todo lo del hito 2 y además:
+- el sonido de la 0.10.1: combate, base, Mapa, radio, clics y pasos (Ajustes → Sonido; M lo silencia en combate);
+- los muertos especiales con su cuerpo (el Corredor, el Acorazado, el Chillón más alto, el Hinchado), los 17 cuerpos del zombi común, encorvados al andar como en la 0.10.1;
+- el destello rojo al recibir un golpe, y cada uno cae alejándose de quien le dio;
+- «Ajuste auto» en Ajustes: si el combate va lento, baja los gráficos y lo avisa.
+
+La primera vez que se abre tarda unos 4 s más en tener todos los sonidos; la pantalla de inicio funciona mientras.
 
 ## 1. Empezar
 
@@ -92,5 +96,6 @@ Si llega el asedio, en Escuadra el botón es «Defender el Bastión», y la misi
 
 - Lo que se vea mal o vaya distinto de la 0.10.1, con el momento y en qué ventana. Una captura ayuda (Cmd+Mayús+4).
 - Lo que se atasque: un botón que no responde o una votación que no llega al otro.
+- Lo que suene mal, fuera de sitio, demasiado alto o bajo, o que falte, comparado con la 0.10.1.
 - El cursor del juego (flecha, mano sobre lo que se pulsa, mira al apuntar): si en la pantalla del Mac se ve pequeño.
 - Al acabar, los `red.log` de las dos apps (las rutas, en PRUEBA-UNITY.md §5). Cada app manda una línea de rendimiento cada 10 s, también en la base.

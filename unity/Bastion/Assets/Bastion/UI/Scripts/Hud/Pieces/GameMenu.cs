@@ -128,8 +128,17 @@ namespace Bastion.UI.Hud
                     rows.AddToClassList("settings--cols");
                     var first = Ui.El("settings__col", rows);
                     var second = Ui.El("settings__col settings__col--second", rows);
+                    // The last rows, one by one, under the sound's while the first column is the shorter (the battle's second,
+                    // with its speeds and plans, ran past the card at 130 % in 720).
+                    var rest = view.Settings.Where(s => !s.Sound).ToList();
+                    foreach (var s in rest.Where(s => s.Tail).ToList())
+                    {
+                        if (sound.Count >= rest.Count) break;
+                        sound.Add(s);
+                        rest.Remove(s);
+                    }
                     foreach (var s in sound) Setting(first, s);
-                    foreach (var s in view.Settings.Where(s => !s.Sound)) Setting(second, s);
+                    foreach (var s in rest) Setting(second, s);
                 }
                 else
                     foreach (var s in view.Settings) Setting(rows, s);

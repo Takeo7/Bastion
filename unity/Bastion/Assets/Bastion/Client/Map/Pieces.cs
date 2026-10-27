@@ -102,7 +102,8 @@ namespace Bastion.Client.Map
                 var materials = new Material[mesh.subMeshCount];
                 for (int k = 0; k < materials.Length; k++) materials[k] = entry.materials.Length == 0 ? null : entry.materials[Mathf.Min(slot + k, entry.materials.Length - 1)];
                 slot += materials.Length;
-                bool leaf = !string.IsNullOrEmpty(a.leaf) && filter.name == a.leaf;
+                // (A model of one mesh has it on its root, named as the piece: its mesh is named as the leaf, as the gates'.)
+                bool leaf = !string.IsNullOrEmpty(a.leaf) && (filter.name == a.leaf || mesh != null && mesh.name == a.leaf);
                 var box = Box(mesh, matrix);
                 list.Add(new PiecePart
                 {

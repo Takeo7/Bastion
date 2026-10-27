@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using Bastion.Client.Units;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
@@ -21,7 +22,8 @@ namespace Bastion.Client.Net.EditorTools
     /// together on one computer if each has its own BASTION_DATOS (NetLink). Its data unpacked unless -comprimir (LZ4HC):
     /// the Synty atlases are mostly flat colour and the meshes repeat, so the Mac's 844 MB come to 306, but each build takes
     /// some 95 s more and each load some tenths of a second (26/10, docs/UNITY.md); the releases decide. The sound must be
-    /// there as unity/tools/sonido.sh generated it (Sound); -sinSonido builds without checking.
+    /// there as unity/tools/sonido.sh generated it (Sound); -sinSonido builds without checking. So must what the figures
+    /// are made of (Figures): what isn't used goes out of the app, and nothing that is may go with it.
     /// </summary>
     public static class AppBuild
     {
@@ -137,6 +139,12 @@ pause
                 if (Application.isBatchMode) EditorApplication.Exit(1);
                 return null;
             }
+            if (Figures() is string lacking)
+            {
+                Debug.LogError($"[red] app ({target}): no se compila, {lacking}.");
+                if (Application.isBatchMode) EditorApplication.Exit(1);
+                return null;
+            }
             var packed = args.Contains("-comprimir");
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = output, target = target, options = packed ? BuildOptions.CompressWithLz4HC : BuildOptions.None });
             var summary = report.summary;
@@ -145,6 +153,31 @@ pause
             Debug.Log($"[red] app ({target}): {summary.result} en {summary.totalTime.TotalSeconds:F0} s · {summary.totalSize / (1024 * 1024)} MB{(packed ? " (LZ4HC)" : " sin comprimir")} · {summary.totalErrors} errores · {string.Join(", ", scenes)} → {output}");
             if (summary.result == BuildResult.Succeeded) return output;
             if (Application.isBatchMode) EditorApplication.Exit(1);
+            return null;
+        }
+
+        /// <summary>
+        /// What is missing of what the figures are made of, or null: every preset the game draws (UnitViews.PresetsUsed) in
+        /// FigureCatalog, and every Sidekick part the wardrobe names (Wardrobe.json), with the base model, in a Resources
+        /// folder (Sidekick's runtime loads them from there by name). Arte takes what isn't used out of the app (26/10).
+        /// </summary>
+        private static string? Figures()
+        {
+            var catalog = FigureCatalog.Load();
+            if (catalog == null) return "no hay Resources/FigureCatalog.asset";
+            var presets = UnitViews.PresetsUsed.Where((n) => catalog.Preset(n) == null).ToList();
+            if (presets.Count > 0) return $"FigureCatalog no tiene {presets.Count} de los presets que se dibujan: {string.Join(", ", presets)}";
+            var wardrobe = JToken.Parse(File.ReadAllText("Assets/Bastion/Client/Resources/Wardrobe.json"));
+            var parts = new HashSet<string>(wardrobe.SelectTokens("..parts[*]").Select((t) => (string?)t ?? "")) { "SK_BaseModel" };
+            var there = new HashSet<string>(AssetDatabase.FindAssets("t:Model", new[] { "Assets/Synty/SidekickCharacters/Resources" })
+                .Select(AssetDatabase.GUIDToAssetPath).Select(Path.GetFileNameWithoutExtension));
+            var gone = parts.Where((p) => !there.Contains(p)).OrderBy((p) => p).ToList();
+            if (gone.Count > 0) return $"faltan en Resources {gone.Count} piezas de Sidekick que nombra el armario: {string.Join(", ", gone.Take(12))}{(gone.Count > 12 ? "…" : "")}";
+            // More there than the wardrobe names (Synty imported again without FigureCatalogMake.Run after it): the app is
+            // right, but carries them, some 176 MB.
+            var spare = there.Count((p) => !parts.Contains(p));
+            if (spare > 0) Debug.LogWarning($"[red] figuras: {spare} piezas de Sidekick en Resources que no nombra el armario van en la app; FigureCatalogMake.Run las saca (Trim)");
+            Debug.Log($"[red] figuras: {catalog.presetNames.Length} presets en el catálogo, los {UnitViews.PresetsUsed.Count()} que se dibujan; las {parts.Count} piezas del armario en Resources");
             return null;
         }
 

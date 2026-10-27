@@ -148,11 +148,22 @@ namespace Bastion.Client
         /// <summary>The light for `state` (by night if its mission is; by day in winter, the snow's), on «Luz».</summary>
         public static Mood For(GameState state) => Show(state?.Mission?.Night == true ? Night : Snowy(state) ? SnowDay : Day);
 
+        /// <summary>The night shown (Show(Night)): what lights less in the dark (fx.ts by NIGHT: the headlights).</summary>
+        public static bool Dark { get; private set; }
+
+        /// <summary>
+        /// The fill fixed opposite the sun, lower (clearingArt.ts aim: from the far side at 0.6 of its height, at the
+        /// middle), not following the camera: the base's; each Show puts it back on the camera (the battle's).
+        /// </summary>
+        public bool FillOpposite;
+
         public static Mood Show(Values values)
         {
+            Dark = ReferenceEquals(values, Night);
             var mood = Current != null ? Current : FindFirstObjectByType<Mood>();
             if (mood == null) mood = new GameObject("Luz").AddComponent<Mood>();
             Current = mood;
+            mood.FillOpposite = false;
             mood.Apply(values);
             return mood;
         }
@@ -173,7 +184,7 @@ namespace Bastion.Client
             if (sun == null)
             {
                 foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
-                    if (l.type == LightType.Directional && l.name != "Relleno") { sun = l; break; }
+                    if (l.type == LightType.Directional && l.name != "Relleno" && l.name != "Luz de los soldados") { sun = l; break; }
                 if (sun == null)
                 {
                     sun = new GameObject("Sol").AddComponent<Light>();
@@ -185,6 +196,8 @@ namespace Bastion.Client
             sun.intensity = m.sunIntensity / Mathf.PI;
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 1;
+            // The main light URP draws by: the sun, not whichever directional is brightest (the clearing's soldiers have a key of their own).
+            RenderSettings.sun = sun;
             // It shines from sunFrom towards the map's middle (0.10.1's frame: z south, Unity's north).
             sun.transform.rotation = Quaternion.LookRotation(-new Vector3(m.sunFrom.x, m.sunFrom.y, -m.sunFrom.z).normalized, Vector3.up);
             if (fill == null)
@@ -204,6 +217,23 @@ namespace Bastion.Client
             RenderSettings.ambientGroundColor = Scaled(m.groundLight, k);
             var equator = (Hex(m.skyLight).linear + Hex(m.groundLight).linear) * 0.5f * k;
             RenderSettings.ambientEquatorColor = new Color(equator.r, equator.g, equator.b).gamma;
+            // The probe the shaders read, made as three's: Unity smooths the trilight into it, and the top came out at 0.87
+            // of the hemisphere light and the bottom at 1.3 (27/10). three's is linear in the normal's height, which the
+            // probe's first two bands hold exactly (Unity's coefficients carry the bases' constants: the mean and the half difference).
+            var probe = new SphericalHarmonicsL2();
+            var skyLinear = Hex(m.skyLight).linear * k;
+            var groundLinear = Hex(m.groundLight).linear * k;
+            for (int c = 0; c < 3; c++)
+            {
+                probe[c, 0] = (skyLinear[c] + groundLinear[c]) * 0.5f;
+                probe[c, 1] = (skyLinear[c] - groundLinear[c]) * 0.5f;
+            }
+            // (Custom: with Trilight, Unity keeps its own probe. BASTION_TRILIGHT=1: Unity's, to weigh the two.)
+            if (System.Environment.GetEnvironmentVariable("BASTION_TRILIGHT") != "1")
+            {
+                RenderSettings.ambientMode = AmbientMode.Custom;
+                RenderSettings.ambientProbe = probe;
+            }
             // No reflections of the surroundings: 0.10.1's scene has no environment map (glossy glass reflected Unity's
             // default sky, and the windows went pale where 0.10.1's are dark).
             RenderSettings.reflectionIntensity = 0;
@@ -241,7 +271,15 @@ namespace Bastion.Client
         void Follow()
         {
             var camera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
-            if (fill != null && camera != null) fill.transform.rotation = camera.transform.rotation;
+            if (fill == null) return;
+            if (FillOpposite && Now != null)
+            {
+                // (Shining from the sun's far side down at the middle: 0.10.1's (x, −0.6 y, z), its z Unity's −z.)
+                var f = Now.sunFrom;
+                fill.transform.rotation = Quaternion.LookRotation(new Vector3(f.x, -0.6f * f.y, -f.z).normalized, Vector3.up);
+                return;
+            }
+            if (camera != null) fill.transform.rotation = camera.transform.rotation;
         }
 
         void LateUpdate() => Follow();

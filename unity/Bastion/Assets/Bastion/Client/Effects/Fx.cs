@@ -190,8 +190,8 @@ namespace Bastion.Client.Effects
             return mesh;
         }
 
-        /// <summary>The soft radial glow of flashes, sparks and tracers (fx.ts glowTexture).</summary>
-        static Texture2D Glow()
+        /// <summary>The soft radial glow of flashes, sparks and tracers (fx.ts glowTexture), made anew (NightLights' halos too).</summary>
+        public static Texture2D Glow()
         {
             const int n = 64;
             var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { name = "Fx glow", wrapMode = TextureWrapMode.Clamp };
@@ -858,6 +858,33 @@ namespace Bastion.Client.Effects
         }
 
         /// <summary>Dust kicked up by feet or wheels at the ground point `at`.</summary>
+        /// <summary>
+        /// A truck's headlights coming in with the living's arrivals (fx.ts headlights: the first of them, 1.5 tiles past
+        /// the edge, looking in; UI's Arrivals says where): its two lamps a little apart, coming on, holding, then gone
+        /// (1.8 s); one of the effects' lights a few metres ahead and low, by night less (Arturo 17/10: «la luz deslumbra
+        /// mucho de noche»); dust.
+        /// </summary>
+        public void Headlights(Vector3 at, Vector3 dir)
+        {
+            dir.y = 0;
+            dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
+            // (fx.ts (−dir.z, dir.x) × 0.45: across the way it looks, either side.)
+            var side = new Vector3(dir.z, 0, -dir.x) * (0.45f * T);
+            foreach (float s in new[] { 1f, -1f })
+            {
+                var lamp = GlowSprite(at + side * s + Vector3.up * 0.55f * T, Hex(0xfff2c8), 0.9f, 0.95f);
+                Spawn(lamp, 1.8f);
+            }
+            var (set, done) = LampAt(at + dir * 3.5f * T + Vector3.up * 0.7f * T, Hex(0xfff0c0), 0, 10);
+            float peak = Mood.Dark ? 9 : 18;
+            _ = Run(1.8f, t =>
+            {
+                set(peak * Mathf.Sin(Mathf.Min(1, t * 1.4f) * Mathf.PI));
+                if (t >= 1) done();
+            });
+            Dust(at, 8);
+        }
+
         public void Dust(Vector3 at, int amount = 6) =>
             Puffs(at + Vector3.up * 0.1f * T, Hex(0x9a8a72), amount, size: 0.32f, spread: 0.45f, rise: 0.35f, away: 0.4f, life: 1.3f, grow: 1.4f);
 

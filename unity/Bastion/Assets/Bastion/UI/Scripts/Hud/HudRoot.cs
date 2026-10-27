@@ -81,7 +81,7 @@ namespace Bastion.UI.Hud
             cards = new Cards(root.Q("cards"), relay, s => Sound?.Invoke(s));
             goal = new GoalCard(root.Q("goal"), root.Q("compass"), tips, ReopenIntro);
             log = new Log(root.Q("log"), Icon);
-            flags = new UnitFlags(root.Q("flags"));
+            flags = new UnitFlags(root.Q("flags"), Icon);
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
             notes = new Notes(root.Q("notes"));

@@ -173,7 +173,7 @@ namespace Bastion.EditorTools
 
         static SkinnedMeshRenderer Part(string name)
         {
-            string guid = AssetDatabase.FindAssets($"{name} t:Model", new[] { "Assets/Synty/SidekickCharacters/Resources/Meshes" })
+            string guid = AssetDatabase.FindAssets($"{name} t:Model", new[] { UndeadFigure.Meshes.TrimEnd('/'), UndeadFigure.Spare.TrimEnd('/') }.Where(AssetDatabase.IsValidFolder).ToArray())
                 .FirstOrDefault(g => System.IO.Path.GetFileNameWithoutExtension(AssetDatabase.GUIDToAssetPath(g)) == name)
                 ?? throw new ArgumentException($"no Sidekick part {name}");
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid));

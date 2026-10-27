@@ -335,7 +335,7 @@ namespace Bastion.Client.Map
         /// A door's leaf (doors.ts place): turned on its hinge (on the other jamb, `otherHinge`, the other way) a quarter
         /// turn open, or shut; between the piece's place and its thickening, as there. A mesh of its own, placed.
         /// </summary>
-        static void Leaf(Transform parent, WallPiece piece, PiecePart part, Matrix4x4 place, Matrix4x4 thicken, Vector4 outer, Vector4 inner, Vector4 cut, Vector4 more)
+        void Leaf(Transform parent, WallPiece piece, PiecePart part, Matrix4x4 place, Matrix4x4 thicken, Vector4 outer, Vector4 inner, Vector4 cut, Vector4 more)
         {
             var hinge = new Vector3(piece.otherHinge ? part.otherEnd : part.hinge.x, 0, part.hinge.z * piece.thick);
             bool far = piece.otherHinge ? !part.far : part.far;
@@ -352,6 +352,91 @@ namespace Bastion.Client.Map
                 batch.Add(part.mesh, k, world, outer, inner, cut, more);
                 Draw(o, part.materials[k].name, batch.Make($"hoja {piece.tile}"), part.materials[k], true);
             }
+            // (A siege's door on the ground wears and shakes: Wear, Knock.)
+            if (piece.level != 0 || piece.tile < 0) return;
+            var leaf = new Hung { o = o, place = place, rest = thicken * part.fit, hinge = hinge, far = far, open = piece.open, baked = world.inverse };
+            if (!hung.TryGetValue(piece.tile, out var list)) hung[piece.tile] = list = new List<Hung>();
+            list.RemoveAll(h => h.o == null);
+            list.Add(leaf);
+            if (wear.ContainsKey(piece.tile)) Hang(piece.tile, leaf);
+        }
+
+        // ------------------------------------------------------------ a siege's doors as they give (doors.ts)
+
+        /// <summary>Seconds a blow shakes a siege's gate (KNOCK_SECONDS).</summary>
+        const float KnockSeconds = 0.4f;
+
+        /// <summary>
+        /// A siege's door as it gives, by its stage of wear (doors.ts WEAR; 1 knocked about, 2 about to go): a little ajar,
+        /// leaning in or out of its wall, and hanging off its hinge (radians).
+        /// </summary>
+        static readonly (float ajar, float lean, float sag)[] Wears = { (0, 0, 0), (0.1f, 0.06f, 0.03f), (0.28f, 0.15f, 0.085f) };
+
+        /// <summary>A door's leaf as it was drawn (Leaf): its piece's place, hinge and frame, and its drawn turn undone.</summary>
+        sealed class Hung
+        {
+            public Transform o;
+            public Matrix4x4 place, rest, baked;
+            public Vector3 hinge;
+            public bool far, open;
+        }
+
+        readonly Dictionary<int, List<Hung>> hung = new Dictionary<int, List<Hung>>();
+        Dictionary<int, int> wear = new Dictionary<int, int>();
+        readonly Dictionary<int, float> knocks = new Dictionary<int, float>();
+        bool worn;
+
+        /// <summary>A siege's doors as worn as they are now (BasePieces.SiegeWear), by ground tile (buildings.ts wearDoors).</summary>
+        public void Wear(Dictionary<int, int> now)
+        {
+            var doors = now.Where(kv => kv.Value > 0 && hung.ContainsKey(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+            if (doors.Count == wear.Count && doors.All(kv => wear.TryGetValue(kv.Key, out int was) && was == kv.Value)) return;
+            foreach (int tile in wear.Keys) if (!doors.ContainsKey(tile)) knocks.TryAdd(tile, 0);
+            wear = doors;
+            worn = true;
+        }
+
+        /// <summary>For the labs: the ground tiles with a leaf hung, and those worn now (tile:stage).</summary>
+        public string Doors => $"{hung.Count} hung ({string.Join(" ", hung.Keys.Take(12))}), worn {string.Join(" ", wear.Select(kv => $"{kv.Key}:{kv.Value}"))}";
+
+        /// <summary>A blow on the door at ground tile `tile`: it shakes on its hinges for a moment.</summary>
+        public void Knock(int tile)
+        {
+            if (hung.ContainsKey(tile)) knocks[tile] = KnockSeconds;
+        }
+
+        /// <summary>The doors worn or struck put as they hang now (doors.ts update), at the battle's pace.</summary>
+        public void Step(float dt)
+        {
+            if (knocks.Count == 0 && !worn) return;
+            var tiles = new HashSet<int>(knocks.Keys);
+            if (worn) tiles.UnionWith(wear.Keys);
+            foreach (int tile in tiles.ToList()) if (knocks.TryGetValue(tile, out float left)) knocks[tile] = left - dt;
+            foreach (int tile in tiles)
+                if (hung.TryGetValue(tile, out var list))
+                    foreach (var leaf in list) if (leaf.o != null) Hang(tile, leaf);
+            foreach (int tile in knocks.Keys.ToList()) if (knocks[tile] <= 0) knocks.Remove(tile);
+            worn = false;
+        }
+
+        /// <summary>
+        /// A leaf as worn as its door and shaken by a blow (doors.ts place): turned on its hinge, leant and sagging, in
+        /// its piece's frame; set as its object's turn from where it was drawn (its vertices are the world's, its storey's
+        /// object at the origin).
+        /// </summary>
+        void Hang(int tile, Hung leaf)
+        {
+            var w = Wears[wear.TryGetValue(tile, out int stage) ? Mathf.Clamp(stage, 0, 2) : 0];
+            float knock = knocks.TryGetValue(tile, out float left) ? Mathf.Max(0, left) : 0;
+            float shake = knock > 0 ? Mathf.Sin((KnockSeconds - knock) * 46) * 0.05f * (knock / KnockSeconds) : 0;
+            float turn = (leaf.open ? Mathf.PI / 2 : 0) + w.ajar + shake, dir = leaf.far ? -1 : 1;
+            var m = leaf.place * Matrix4x4.Translate(leaf.hinge) * Pieces.RotationY(turn * dir)
+                * Matrix4x4.Rotate(Quaternion.AngleAxis((w.lean + shake * 0.4f) * Mathf.Rad2Deg, Vector3.right))
+                * Matrix4x4.Rotate(Quaternion.AngleAxis(-w.sag * dir * Mathf.Rad2Deg, Vector3.forward))
+                * Matrix4x4.Translate(-leaf.hinge) * leaf.rest;
+            var d = MapSpace.FromGame(m) * leaf.baked;
+            leaf.o.localPosition = d.GetColumn(3);
+            leaf.o.localRotation = d.rotation;
         }
 
         /// <summary>0.10.1's matrix in tiles as one in metres: the same turn and stretch, its translation 1.5 times.</summary>

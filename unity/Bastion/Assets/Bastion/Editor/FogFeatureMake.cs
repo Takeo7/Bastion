@@ -41,6 +41,8 @@ namespace Bastion.EditorTools
                 {
                     there.requirements = Needs;
                     there.passMaterial = material;
+                    // (The depth-stencil bound: the figures' stencil bit keeps the fog off them, Bastion/FigureMask.)
+                    there.bindDepthStencilAttachment = true;
                     EditorUtility.SetDirty(there);
                     EditorUtility.SetDirty(data);
                     Debug.Log($"[fog] {path}: already there, its needs set");
@@ -52,6 +54,7 @@ namespace Bastion.EditorTools
                 feature.injectionPoint = FullScreenPassRendererFeature.InjectionPoint.BeforeRenderingPostProcessing;
                 feature.requirements = Needs;
                 feature.fetchColorBuffer = true;
+                feature.bindDepthStencilAttachment = true;
                 AssetDatabase.AddObjectToAsset(feature, data);
                 data.rendererFeatures.Add(feature);
                 // The renderer keeps its features' local ids alongside (what its inspector would add).

@@ -42,8 +42,16 @@ namespace Bastion.EditorTools
                 m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
             });
             Make("Plain", lit, m => { });
+            var mark = Shader.Find("Bastion/Mark");
+            Make("Mark", mark, m => m.renderQueue = (int)RenderQueue.Transparent);
+            var fade = Shader.Find("Bastion/FigureFade");
+            Make("Fade", fade, m => { });
+            var rim = Shader.Find("Bastion/NightRim");
+            Make("NightRim", rim, m => m.renderQueue = (int)RenderQueue.Transparent);
+            var mask = Shader.Find("Bastion/FigureMask");
+            Make("FigureMask", mask, m => m.renderQueue = (int)RenderQueue.AlphaTest + 49);
             AssetDatabase.SaveAssets();
-            Debug.Log($"[kit] {Folder}: SeeThrough ({unlit?.name}), Glowing and Plain ({lit?.name})");
+            Debug.Log($"[kit] {Folder}: SeeThrough ({unlit?.name}), Glowing and Plain ({lit?.name}), Mark ({mark?.name}), Fade ({fade?.name}), NightRim ({rim?.name}), FigureMask ({mask?.name})");
         }
 
         static void Make(string name, Shader shader, Action<Material> set)

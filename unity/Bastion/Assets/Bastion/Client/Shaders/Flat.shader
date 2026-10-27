@@ -9,6 +9,10 @@ Shader "Bastion/Flat"
         [HideInInspector] _BaseMap ("Base", 2D) = "white" {}
         [HideInInspector] _BaseColor ("Base colour", Color) = (1, 1, 1, 1)
         [HideInInspector] _Cutoff ("Cutoff", Float) = 0.5
+        // Opaque unless a copy says otherwise (a clinic's floor grime: see-through, MapBuilder.Dressing), its alpha _BaseColor's.
+        [HideInInspector] _SrcBlend ("Source blend", Float) = 1
+        [HideInInspector] _DstBlend ("Destination blend", Float) = 0
+        [HideInInspector] _ZWrite ("Depth write", Float) = 1
     }
 
     SubShader
@@ -19,6 +23,8 @@ Shader "Bastion/Flat"
         {
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
 
             HLSLPROGRAM
             #pragma target 3.5
@@ -97,7 +103,7 @@ Shader "Bastion/Flat"
 
                 half4 colour = UniversalFragmentPBR(inputData, surface);
                 colour.rgb = MixFog(colour.rgb, inputData.fogCoord);
-                colour.a = 1;
+                colour.a = _BaseColor.a;
                 return colour;
             }
             ENDHLSL

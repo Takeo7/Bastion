@@ -184,11 +184,100 @@ namespace Bastion.Client.Units
                 var head = upper * Quaternion.AngleAxis(0.32f * live * Mathf.Rad2Deg, Vector3.forward) * Quaternion.AngleAxis((-lean * 0.55f - k * 0.6f) * Mathf.Rad2Deg, Vector3.right);
                 neck.rotation = World(head) * wasNeck;
             }
+            DeadArms(v);
             if (k <= 0) return;
             // (0.10.1's model x is to its left, Unity's −x, and its z behind it, Unity's −z: its own screams, seen from
             // the game's camera and from the side, have the arms out wide and ahead of it.)
             FlingArm(a, v.root, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, new Vector3(-0.85f, -0.15f, 0.4f), new Vector3(-0.8f, 0.25f, 0.35f), k);
             FlingArm(a, v.root, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, new Vector3(0.85f, -0.15f, 0.4f), new Vector3(0.8f, 0.25f, 0.35f), k);
+        }
+
+        /// <summary>The bone 0.10.1 calls Spine_03: the upper chest, or the chest where there is none.</summary>
+        static Transform ChestOf(Animator a) => a.GetBoneTransform(HumanBodyBones.UpperChest) ?? a.GetBoneTransform(HumanBodyBones.Chest);
+
+        /// <summary>syntyFigures.ts SOFT_REACH: the last of an arm's reach eased, so the elbow bends in smoothly (m, the model's).</summary>
+        const float SoftReach = 0.025f;
+        /// <summary>The least of an arm's length a dead one's hand reaches out to (DeadArms).</summary>
+        const float StraightArm = 0.985f;
+
+        /// <summary>
+        /// syntyFigures.ts applyPose, the dead: arms out in front, swaying, raised further on a lunge and closed on its blow;
+        /// each hand 0.4 ahead of the upper chest and 0.02 under it (the model's metres, its rest), 0.12 out to its side,
+        /// where the chest has turned since its rest; reached by two-bone IK, the elbow out, down and back (the pole). Not
+        /// while a clip takes the whole body (a bite, eating, getting up) nor fallen.
+        /// </summary>
+        /// <summary>For the labs: the dead's arms left as their clips have them (to tell what DeadArms does).</summary>
+        public static bool DeadArmsOff;
+
+        static void DeadArms(View v)
+        {
+            var a = v.animator;
+            if (DeadArmsOff || v.dead || v.feeding || v.chestRest is not Quaternion rest || v.anim.WholeShare > 0.01f) return;
+            var chest = ChestOf(a);
+            if (chest == null) return;
+            float scale = v.body != null ? v.body.lossyScale.x : 1;
+            var turn = chest.rotation * Quaternion.Inverse(v.root.rotation * rest);
+            float aim = v.reachAim, grab = v.reachGrab;
+            foreach (var (s, upper, lower, hand) in new[] { (1f, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand), (-1f, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand) })
+            {
+                float sway = v.anim.Sway(1.6f, ArmRates, s) * 0.05f;
+                // (0.10.1's model x is to its left: Unity's −x.)
+                var offset = new Vector3(-s * 0.12f * (1 - 0.7f * grab), -0.02f + aim * 0.12f + sway + grab * 0.05f, 0.4f + aim * 0.08f + grab * 0.12f) * scale;
+                var target = chest.position + turn * (v.root.rotation * offset);
+                var pole = v.root.rotation * new Vector3(-s * 0.8f, -0.7f, -0.3f);
+                Reach(a, upper, lower, hand, target, pole, SoftReach * scale, true);
+            }
+        }
+
+        static readonly float[] ArmRates = { 1.6f, 1.6f, 1.6f, 1.6f, 1.6f, 1.6f };
+
+        /// <summary>
+        /// Two-bone IK (syntyFigures.ts reach): the hand to `target`, the elbow bent towards `pole`, the arm's lengths kept;
+        /// `straight`, out at least StraightArm of its length (the dead's arms).
+        /// </summary>
+        static void Reach(Animator a, HumanBodyBones upperBone, HumanBodyBones lowerBone, HumanBodyBones handBone, Vector3 target, Vector3 pole, float soft, bool straight = false)
+        {
+            Transform shoulder = a.GetBoneTransform(upperBone), elbow = a.GetBoneTransform(lowerBone), hand = a.GetBoneTransform(handBone);
+            if (shoulder == null || elbow == null || hand == null) return;
+            float upperLength = Vector3.Distance(shoulder.position, elbow.position), lowerLength = Vector3.Distance(elbow.position, hand.position);
+            var dir = target - shoulder.position;
+            // (Out as far as the arm goes, near enough straight, as 0.10.1's dead hold them, 160–173° at the elbow, whatever the
+            // body: City Zombies' and Boss Zombies' arms are longer than the 0.4 ahead reaches for a Sidekick's.)
+            if (straight && dir.magnitude < (upperLength + lowerLength) * StraightArm) dir = dir.normalized * (upperLength + lowerLength) * StraightArm;
+            float full = upperLength + lowerLength, len = dir.magnitude;
+            if (len > full - soft) len = full - soft * Mathf.Exp(-(len - (full - soft)) / Mathf.Max(soft, 1e-5f));
+            len = Mathf.Clamp(len, Mathf.Abs(upperLength - lowerLength) + 0.01f, full - 0.001f);
+            dir.Normalize();
+            float cos = Mathf.Clamp((upperLength * upperLength + len * len - lowerLength * lowerLength) / (2 * upperLength * len), -1, 1);
+            // The elbow in the plane of the arm and the pole, on the pole's side.
+            var side = Vector3.ProjectOnPlane(pole, dir);
+            if (side.sqrMagnitude < 1e-8f) side = Vector3.ProjectOnPlane(Vector3.down, dir);
+            side.Normalize();
+            var elbowAt = shoulder.position + (dir * cos + side * Mathf.Sqrt(1 - cos * cos)) * upperLength;
+            var handAt = shoulder.position + dir * len;
+            shoulder.rotation = Quaternion.FromToRotation(elbow.position - shoulder.position, elbowAt - shoulder.position) * shoulder.rotation;
+            elbow.rotation = Quaternion.FromToRotation(hand.position - elbow.position, handAt - elbow.position) * elbow.rotation;
+        }
+
+        /// <summary>A lunge's arms (unitViews.ts lunge: aimFx up as it winds up, swing −1 to 1 through the stroke, back over 0.35 s; grab |swing|).</summary>
+        static async Awaitable LungeArms(View v, System.Threading.CancellationToken ct)
+        {
+            try
+            {
+                float t = 0;
+                for (; t < 0.8f && v.root != null; t += Time.deltaTime)
+                {
+                    // (lunge's own: wound up over 0.2 s, the stroke 0.14 s, back over 0.35 s.)
+                    float hit = WindUp + StrokeTime;
+                    float wind = Mathf.Clamp01(t / WindUp), stroke = Mathf.Clamp01((t - WindUp) / StrokeTime), back = Mathf.Clamp01((t - hit) / Back);
+                    float swing = t < WindUp ? -Mathf.SmoothStep(0, 1, wind) : t < hit ? -1 + 2 * Mathf.SmoothStep(0, 1, stroke) : 1 - Mathf.SmoothStep(0, 1, back);
+                    v.reachAim = t < hit ? wind : 1 - back;
+                    v.reachGrab = Mathf.Abs(swing);
+                    await Awaitable.NextFrameAsync(ct);
+                }
+            }
+            catch (System.OperationCanceledException) { }
+            v.reachAim = v.reachGrab = 0;
         }
 
         /// <summary>syntyFigures.ts setArm, blended in by `k`: the upper arm along `upper`, the forearm along `fore` (the figure's frame).</summary>

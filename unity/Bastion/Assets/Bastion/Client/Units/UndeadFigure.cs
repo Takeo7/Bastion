@@ -14,7 +14,8 @@ namespace Bastion.Client.Units
     /// face and bare body the zombies' (picked by its id), on the preset's own build, painted from its own colour map
     /// but the body's cells (skin, eyes, hair) from one of the five zombies'. Put together by Sidekick's runtime as the
     /// soldiers are (SoldierFigure), one mesh, 75–290 ms each: baked in the editor (FigureCatalogMake, the catalog's
-    /// presets by their id), made here only if the bake is missing, a copy each after.
+    /// presets by their id): in the game only the bakes are drawn (Gameplay 26/10: the Sidekick parts no wardrobe names
+    /// stay out of the app, so there is nothing to put one together from there).
     /// </summary>
     public static class UndeadFigure
     {
@@ -63,18 +64,23 @@ namespace Bastion.Client.Units
             if (presets == null && Resources.Load<TextAsset>("Undead") is TextAsset file) presets = Newtonsoft.Json.Linq.JObject.Parse(file.text);
             return presets;
         }
-        static readonly Dictionary<string, GameObject> made = new Dictionary<string, GameObject>();
         static Transform shelf;
 
-        /// <summary>A new figure of body `id` (one of Bodies); null if its preset or a part is missing.</summary>
-        public static GameObject Make(string id, string name)
+        /// <summary>
+        /// Sidekick's parts, and where those no wardrobe piece names are kept out of Resources, so that they stay out of the app
+        /// (FigureCatalogMake.Trim): in the editor the bake still finds them there.
+        /// </summary>
+        public const string Meshes = "Assets/Synty/SidekickCharacters/Resources/Meshes/", Spare = "Assets/Synty/Extra/SidekickSpare/Meshes/";
+
+        /// <summary>A part's model, from Resources or, in the editor, from where FigureCatalogMake.Trim put it; null if neither.</summary>
+        static GameObject PartModel(SidekickPart part)
         {
-            if (!made.TryGetValue(id, out var model) || model == null) made[id] = model = Build(id);
-            if (model == null) return null;
-            var figure = Object.Instantiate(model);
-            figure.name = name;
-            figure.SetActive(true);
-            return figure;
+            if (part == null) return null;
+            var model = part.GetPartModel();
+#if UNITY_EDITOR
+            if (model == null) model = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(part.Location.Replace('\\', '/').Replace(Meshes, Spare));
+#endif
+            return model;
         }
 
         /// <summary>A body made now, kept by no one (FigureCatalogMake bakes them: in the game they are its presets, ready made).</summary>
@@ -111,7 +117,7 @@ namespace Bastion.Client.Units
                     string bare = Regex.Replace(Regex.Replace(partName, @"^SK_HUMN_BASE_\d\d_", "SK_ZOMB_BASE_01_"), "_HU01$", "_ZB01");
                     if (SidekickPart.SearchForByName(database, bare) != null) partName = bare;
                 }
-                var part = SidekickPart.SearchForByName(database, partName)?.GetPartModel();
+                var part = PartModel(SidekickPart.SearchForByName(database, partName));
                 var renderer = part != null ? part.GetComponentInChildren<SkinnedMeshRenderer>() : null;
                 if (renderer == null)
                 {

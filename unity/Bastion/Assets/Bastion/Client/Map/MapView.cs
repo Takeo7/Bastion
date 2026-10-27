@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Bastion.Engine;
 using UnityEngine;
 
@@ -41,6 +42,7 @@ namespace Bastion.Client.Map
             roofs = builder.Roofs;
             Level = storeys.Length;
             Current = this;
+            wearLeft = -1;
             PlaceLata(state);
             // (BASTION_SOMBRAS_FIJAS=1: the pipeline's own, to weigh what fitting them costs: a test.)
             if (FitShadows && GetComponent<ShadowFit>() == null && Environment.GetEnvironmentVariable("BASTION_SOMBRAS_FIJAS") != "1") gameObject.AddComponent<ShadowFit>();
@@ -164,7 +166,40 @@ namespace Bastion.Client.Map
                 return -1;
             }
             State = state;
+            wearLeft = -1;
             return redone;
+        }
+
+        // ------------------------------------------------------------------------------------------- a siege's doors
+
+        /// <summary>A blow on a siege's door or barricade at `tile` (mapView.ts knock, the 'smashed' event): a gate shakes on its hinges.</summary>
+        public void Knock(Pos tile)
+        {
+            if (State != null && tile != null && tile.Z == 0) builder?.Walls?.Knock(tile.Y * State.Width + tile.X);
+        }
+
+        int wearLeft = -1;
+
+        /// <summary>For the labs: the doors' leaves and their wear (WallsView.Doors).</summary>
+        public string Doors => builder?.Walls?.Doors ?? "-";
+
+        /// <summary>
+        /// A siege's doors to another stage of wear (mapView.ts update: worked out again only when a blow lands, what is
+        /// left adding up to less), and the ones struck shaken.
+        /// </summary>
+        void Update()
+        {
+            var s = Units.UnitViews.Current?.State ?? State;
+            if (s?.Mission?.Siege != null && s.Breakables != null && builder?.Walls != null)
+            {
+                int left = s.Breakables.Values.Sum();
+                if (left != wearLeft)
+                {
+                    wearLeft = left;
+                    builder.Walls.Wear(BasePieces.SiegeWear(s));
+                }
+            }
+            builder?.Walls?.Step(Time.deltaTime);
         }
 
         /// <summary>

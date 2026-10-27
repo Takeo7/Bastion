@@ -61,6 +61,10 @@ namespace Bastion.Client.Map
             cover.Build(state, map, plane.transform);
             // Over the pumps, a canopy a station that fades when the fight is under it (mapView.ts placeCanopies).
             PumpCanopies.Build(state, props, parent);
+            // The trees' crowns fade over what the player looks at (treeFade.ts).
+            TreeFade.Attach(parent);
+            // What the sky has on the horizon (mapView.ts SKY_LAND): a town's roofs, a factory's, or the mountains alone.
+            Sky.Land = state.Biome == "city" ? Sky.Lands.Town : state.Biome == "facility" || state.Site == "industrial" ? Sky.Lands.Industry : Sky.Lands.Country;
             // What closes the map round what is played (the outline), beside the ground: it hides the sky too.
             FrameView.Build(state, props, parent);
             // The contact occlusion, baked once the map is whole (before its next frame) from what stands on it.

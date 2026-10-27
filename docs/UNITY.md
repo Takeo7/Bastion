@@ -101,6 +101,22 @@ La prueba del hito 2 con Arturo: [PRUEBA-CAMPAÑA-UNITY.md](PRUEBA-CAMPAÑA-UNIT
 
 ### Hito 3: lo que queda
 
+**Repaso del dibujo de la 0.10.1 contra Unity** (Arte, 26/10: mapView.ts, fx.ts, unitViews.ts, clearingArt.ts, night.ts). Faltan o están a medias:
+1. Dos fallos de la base: la fila sale también paseando por el campamento, y no cambia el arma hasta que cambia el vehículo.
+2. La terminal de hackeo, que no se dibuja.
+3. Andar (esquinas redondeadas, apartarse, girar suave), apuntar (subir el arma) y la postura de vigilancia.
+4. Lo tirado en el suelo al caer alguien, y el objetivo elegido que se enrojece.
+5. El fundido al entrar en la vista y el paso del zombi al atacar.
+6. Las ventanas tapiadas por dentro y los muebles de las clínicas.
+7. La luz propia de los soldados en la base (Arturo, 23/10).
+8. Escaleras y saltos animados, registrar, copas de árboles que se desvanecen, palés y generadores, el asedio que tiembla, cambiar de arma, levantarse un cadáver.
+9. La multitud horneada y las sombras solo de los 24 más cercanos, según la medida del PC.
+10. El cielo, la luz de relleno fija y detalles raros.
+
+Hecho y revisado con tiras contra la 0.10.1 (27/10), salvo el 9, que espera la medida del PC de la 3090 (`medir.bat`). De paso: la oclusión de los suelos de casas, tiendas y clínicas, como la de la 0.10.1 (UI); la luz del cielo con los números de three (`Mood`, AmbientMode.Custom); las chapas de La Mula, de acero como en Synty (Arturo, 27/10). Detalles en UNITY-ARTE.md y UNITY-UI.md §7.
+
+UI ya hizo la marca de las cajas de botín, el anillo de los enemigos, apartar figuras en el plano al hombro y los tiempos de las llegadas (UNITY-UI §7, 26/10).
+
 - **Sonido** (audio/: sonidos grabados, ambiente, música, radio). Lo hace Red, que hizo el de la 0.10.x (pasó de Arte el 26/10, porque Arte va con el Asentamiento). Cómo se mide sin oír, en la memoria «Medir sonidos».
   - **Generado y fuera de git** (Gameplay, 26/10). En WAV son unos 575 MB. `unity/tools/sonido.sh` los saca del código y de los Opus de la 0.10.1 a `Assets/Bastion/Client/Audio/Resources/Generado/`, que no se sube, como Synty y Mixamo.
   - **Más peso en la app:** unos 60 MB, porque Unity lo comprime a Vorbis.
@@ -133,7 +149,7 @@ La prueba del hito 2 con Arturo: [PRUEBA-CAMPAÑA-UNITY.md](PRUEBA-CAMPAÑA-UNIT
       - compilar tarda 95 s más;
       - el zip apenas cambia (214→201 MB).
     - Por defecto se compila sin comprimir; LZ4HC es una opción de AppBuild. En las releases, se decide con Arturo.
-    - Las 815 piezas de Sidekick que no usa el armario (181 MB sin comprimir) y los personajes de muestra sin uso los decide Arte después de los «vivos hechos muertos», que necesitan más piezas.
+    - Hecho (26/10): fuera de la app los 28 presets de Sidekick que no se dibujan y las 814 piezas que no usa el armario (`FigureCatalogMake.Trim`, a `Assets/Synty/Extra/SidekickSpare`). Con el sonido, la app queda en 686 MB sin comprimir y 189 MB en zip, y entra antes en combate (2,0 s). AppBuild comprueba los presets y las piezas que se usan.
 - **El tiempo real** (realtime.ts): solo si Arturo lo quiere; no estaba en uso.
 
 ## 6. Cómo se trabaja (lo aprendido)

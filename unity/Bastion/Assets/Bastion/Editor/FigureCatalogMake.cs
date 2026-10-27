@@ -219,13 +219,66 @@ namespace Bastion.EditorTools
             return Mathf.Min(clip.length, last + 0.12f);
         }
 
+        /// <summary>
+        /// The Sidekick parts no wardrobe piece names (Wardrobe.json) out of Resources, where every one went into the app
+        /// (Gameplay 26/10, Red's Build Report: 814 parts, 176 MB), to UndeadFigure.Spare, outside git like the rest of Synty;
+        /// and back if the wardrobe names one again. Moved by AssetDatabase, so their GUIDs stay, and with them the presets'
+        /// links and the bake's (UndeadFigure finds them there in the editor). Run does it last; after importing Synty again
+        /// all are back in Resources until it runs. AppBuild checks that the wardrobe's are there.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.FigureCatalogMake.Trim -quit
+        /// </summary>
+        public static void Trim()
+        {
+            var named = new HashSet<string>(JObject.Parse(File.ReadAllText("Assets/Bastion/Client/Resources/Wardrobe.json"))["pieces"]
+                .SelectMany(p => p["parts"].Select(n => (string)n))) { "SK_BaseModel" };
+            int moved = 0, back = 0;
+            long bytes = 0;
+            foreach (var (from, to, away) in new[] { (UndeadFigure.Meshes, UndeadFigure.Spare, true), (UndeadFigure.Spare, UndeadFigure.Meshes, false) })
+            {
+                if (!AssetDatabase.IsValidFolder(from.TrimEnd('/'))) continue;
+                foreach (string path in AssetDatabase.FindAssets("t:Model", new[] { from.TrimEnd('/') }).Select(AssetDatabase.GUIDToAssetPath).Distinct().ToList())
+                {
+                    if (!path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase) || named.Contains(Path.GetFileNameWithoutExtension(path)) == away) continue;
+                    string target = to + path.Substring(from.Length);
+                    Folder(Path.GetDirectoryName(target).Replace('\\', '/'));
+                    string error = AssetDatabase.MoveAsset(path, target);
+                    if (error.Length > 0)
+                    {
+                        Debug.LogWarning($"[figures] {path} not moved: {error}");
+                        continue;
+                    }
+                    if (away)
+                    {
+                        moved++;
+                        bytes += new FileInfo(target).Length;
+                    }
+                    else back++;
+                }
+            }
+            var left = AssetDatabase.FindAssets("t:Model", new[] { UndeadFigure.Meshes.TrimEnd('/') }).Length;
+            Debug.Log($"[figures] Sidekick's parts: {moved} out of Resources ({bytes / 1e6:0} MB of FBX), {back} back; {left} in Resources ({named.Count} named by the wardrobe, the base model among them)");
+        }
+
+        /// <summary>A folder of the project, and those it is in, made if they aren't there.</summary>
+        static void Folder(string path)
+        {
+            if (AssetDatabase.IsValidFolder(path)) return;
+            Folder(Path.GetDirectoryName(path).Replace('\\', '/'));
+            AssetDatabase.CreateFolder(Path.GetDirectoryName(path).Replace('\\', '/'), Path.GetFileName(path));
+        }
+
         public static void Run()
         {
+            // Only the presets the game draws (UnitViews.PresetsUsed; Gameplay 26/10, Red's Build Report: the others went into
+            // the app for nothing, 62 MB of living police, survivors and civilians). The living made dead are baked below.
+            var used = new HashSet<string>(UnitViews.PresetsUsed);
             var presets = new SortedDictionary<string, GameObject>();
+            int left = 0;
             foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { Characters }))
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                presets[Path.GetFileNameWithoutExtension(path)] = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                string path = AssetDatabase.GUIDToAssetPath(guid), name = Path.GetFileNameWithoutExtension(path);
+                if (used.Contains(name)) presets[name] = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                else left++;
             }
             var maps = new SortedDictionary<string, Texture2D>();
             foreach (string guid in AssetDatabase.FindAssets("ColorMap t:Texture2D", new[] { Characters }))
@@ -287,7 +340,9 @@ namespace Bastion.EditorTools
             }
             EditorUtility.SetDirty(catalog);
             AssetDatabase.SaveAssets();
-            Debug.Log($"[figures] {Asset}: {presets.Count} presets, {maps.Count} colour maps, {clips.Count} clips, {weapons.Count} weapons, {characters.Count} characters; not in the project: {string.Join(", ", missing)}");
+            missing.AddRange(used.Where(n => !presets.ContainsKey(n)));
+            Debug.Log($"[figures] {Asset}: {presets.Count} presets ({left} left out: no one draws them), {maps.Count} colour maps, {clips.Count} clips, {weapons.Count} weapons, {characters.Count} characters; not in the project: {string.Join(", ", missing)}");
+            Trim();
             Debug.Log("[figures] deaths settle: " + string.Join(", ", catalog.clipIds.Select((id, k) => (id, k)).Where(p => p.id.StartsWith("death"))
                 .Select(p => $"{p.id} {catalog.settles[p.k]:0.00}/{catalog.clips[p.k].length:0.00} s")));
         }

@@ -16,6 +16,14 @@ namespace Bastion.Client
         public const string Glowing = "Kit/Glowing";
         /// <summary>Lit, plain.</summary>
         public const string Plain = "Kit/Plain";
+        /// <summary>The target's mark (Bastion/Mark: reddened and glowing at the edges), over a body.</summary>
+        public const string Mark = "Kit/Mark";
+        /// <summary>A figure dithered in or out (Bastion/FigureFade: UnitViews.Fade), its colour map set on the copy.</summary>
+        public const string Fade = "Kit/Fade";
+        /// <summary>A figure's night rim (Bastion/NightRim: UnitViews.Rim), its colour map set on the copy.</summary>
+        public const string NightRim = "Kit/NightRim";
+        /// <summary>Where a figure is, a stencil bit, for the fog to leave it be (Bastion/FigureMask: UnitViews.Rim).</summary>
+        public const string FigureMask = "Kit/FigureMask";
 
         /// <summary>A new material copied from `kind`'s, named `name`; null if it isn't there (KitMaterialsMake not run).</summary>
         public static Material New(string kind, string name)

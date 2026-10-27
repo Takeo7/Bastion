@@ -20,6 +20,8 @@ namespace Bastion.EditorTools
 
         public static void Run()
         {
+            // The bodies of the houses' and clinics' dressing, baked lying first (CorpseBake), so they are among the props.
+            CorpseBake.Run();
             var prefabOf = MapLab.Prefabs();
             var materialOf = MapLab.Materials();
             var missing = new List<string>();
@@ -28,6 +30,12 @@ namespace Bastion.EditorTools
             // The props' models, and La Lata's (its vehicles and La Mula's plates).
             var modelNames = MapArt.Models().Concat(LaLata.Models).Append(SnowCover.Mound).Distinct().OrderBy(n => n).ToList();
             var models = modelNames.Select(n => prefabOf(n)).ToList();
+            // The sky's cloud rings, by their own ids (UI's Sky).
+            foreach (var (id, key) in SkyModels)
+            {
+                modelNames.Add(id);
+                models.Add(prefabOf(key));
+            }
             var materialNames = MapBuilder.MaterialsUsed.Distinct().OrderBy(n => n).ToList();
             var materials = materialNames.Select(n => materialOf(n)).ToList();
             for (int k = 0; k < modelNames.Count; k++) if (models[k] == null) missing.Add(modelNames[k]);
@@ -51,6 +59,16 @@ namespace Bastion.EditorTools
             AssetDatabase.SaveAssets();
             Debug.Log($"[catalog] {Asset}: {catalog.models.Length} models, {catalog.materials.Length} materials" + (missing.Count > 0 ? "; missing: " + string.Join(", ", missing) : ""));
         }
+
+        /// <summary>
+        /// syntyManifest.ts SKY_MODELS: Generic's ring, and Alpine Mountain's thinner one (Extra: its FBX from the pack's
+        /// source files, as SnowCover's mound).
+        /// </summary>
+        static readonly (string id, string key)[] SkyModels =
+        {
+            ("cloudRing", "natureGeneric:Assets/Synty/PolygonGeneric/Models/SM_Gen_Env_Cloud_Ring_01"),
+            ("cloudRingThin", "alpine:SM_Env_Cloud_Ring_01"),
+        };
 
         /// <summary>
         /// The props whose meshes the map merges as it is made (Mesh.CombineMeshes, which play mode and a build only do

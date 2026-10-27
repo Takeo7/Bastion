@@ -134,6 +134,8 @@ namespace Bastion.UI.Combat
             }
             var file = Json.Read<GoldenFile>(File.ReadAllText(path));
             host = file.State;
+            // BASTION_LAB_NOCHE=1: the recorded mission at night (its sky and light, side by side with the 0.10.1's same save).
+            if (System.Environment.GetEnvironmentVariable("BASTION_LAB_NOCHE") == "1") host.Mission.Night = true;
             rng = new Rng(file.RngSeed);
             AbilityCommand shot = null;
             GoldenOp turn = null;
@@ -166,6 +168,8 @@ namespace Bastion.UI.Combat
                 }
             }
             if (Evacuate) IntoZone(host);
+            // BASTION_LAB_ESTORBO=1: another of the squad behind the shooter, in the way of the shot over the shoulder (ClearView).
+            if (shot != null && System.Environment.GetEnvironmentVariable("BASTION_LAB_ESTORBO") == "1") InTheWay(host, shot);
             var mine = Events.CloneState(host);
             InScene &= Bastion.Client.Battlefield.Current != null;
             if (InScene) Bastion.Client.Battlefield.Current.Show(mine);
@@ -331,6 +335,99 @@ namespace Bastion.UI.Combat
             else if (Menu == "salir") control.MenuChose(Bastion.UI.Hud.GameMenu.Quit);
         }
 
+        /// <summary>«llegada»: a SpawnedEvent pushed into the player, its four on the tiles in the squad's sight nearest the map's edge (`inside`: farthest).</summary>
+        void ArriveInSight(bool inside = false)
+        {
+            var v = control.View ?? control.State;
+            var sight = Los.TeamVisibility(v, Teams.Xcom);
+            int Edge(Pos p) => Mathf.Min(Mathf.Min(p.X, p.Y), Mathf.Min(v.Width - 1 - p.X, v.Height - 1 - p.Y));
+            var spots = Enumerable.Range(0, v.Width * v.Height).Where(i => i < sight.Length && sight[i])
+                .Select(i => new Pos { X = i % v.Width, Y = i / v.Width, Z = 0 })
+                .Where(p => Grid.IsWalkable(Grid.KindAt(v, p)) && Grid.UnitAt(v, p) == null)
+                .OrderBy(p => inside ? -Edge(p) : Edge(p)).Take(4).ToList();
+            var living = Content.Templates.First(t => t.Value.Team == Teams.Alien && !t.Value.Undead && !t.Value.Robotic).Key;
+            var units = spots.Select((p, k) => Setup.MakeUnit($"lab{k}", k < 3 ? "zombie" : living, Content.Templates[k < 3 ? "zombie" : living].Name, null, p, "plab")).ToList();
+            Debug.Log($"[lab] llegada: {string.Join(", ", units.Select(u => $"{u.Template} ({u.Pos.X},{u.Pos.Y}) a {Edge(u.Pos)} del borde"))}");
+            if (units.Count == 0) return;
+            control.Rig.Focus(Board.TileToWorld(v, spots[0]), true);
+            var pod = new Pod { Id = "plab", UnitIds = units.Select(u => u.Id).ToList(), Patrol = new List<Pos>(), Active = true };
+            player?.Push(new List<GameEvent> { new SpawnedEvent { Units = units, Pod = pod } }, null);
+        }
+
+        /// <summary>«botin»: the first soldier (in the view the player shows) put two tiles from the nearest shut loot box, the fog and the HUD again from there.</summary>
+        void LootNear()
+        {
+            var v = control.View ?? control.State;
+            var by = v.Units.FirstOrDefault(u => u.Alive && u.Team == Teams.Xcom);
+            if (by == null) return;
+            Pos box = null;
+            for (var i = 0; i < v.Width * v.Height; i++)
+            {
+                var p = new Pos { X = i % v.Width, Y = i / v.Width, Z = 0 };
+                if (Looting.SearchSpot(v, p) == null || Looting.WasSearched(v, p)) continue;
+                if (box == null || Mathf.Abs(p.X - by.Pos.X) + Mathf.Abs(p.Y - by.Pos.Y) < Mathf.Abs(box.X - by.Pos.X) + Mathf.Abs(box.Y - by.Pos.Y)) box = p;
+            }
+            if (box == null) return;
+            var near = Grid.Dirs8.Select(d => new Pos { X = box.X + d.X * 2, Y = box.Y + d.Y * 2, Z = 0 }).FirstOrDefault(p => Grid.InBounds(v, p.X, p.Y) && Grid.IsWalkable(Grid.KindAt(v, p)) && Grid.UnitAt(v, p) == null);
+            Debug.Log($"[lab] botín: caja ({box.X},{box.Y}) {Looting.SearchSpot(v, box)}, {by.Id} a {(near == null ? "ningún sitio" : $"({near.X},{near.Y})")}");
+            if (near == null) return;
+            by.Pos = near;
+            Bastion.Client.Map.Fog.Current?.Show(v, true);
+            control.Rig.Focus(Board.TileToWorld(v, box), true);
+            control.Refresh();
+        }
+
+        /// <summary>«caja», «sala»: the camera on the nearest loot box or room to the first soldier, and a second later its search pushed into the player.</summary>
+        async Awaitable SearchSoon(bool room)
+        {
+            var s = control.State;
+            var by = s.Units.FirstOrDefault(u => u.Alive && u.Team == Teams.Xcom);
+            if (by == null) return;
+            float Far(Pos p) => Mathf.Abs(p.X - by.Pos.X) + Mathf.Abs(p.Y - by.Pos.Y);
+            Pos at = null;
+            LootRoom found = null;
+            if (!room)
+            {
+                for (var y = 0; y < s.Height; y++)
+                    for (var x = 0; x < s.Width; x++)
+                    {
+                        var p = new Pos { X = x, Y = y, Z = 0 };
+                        if (Looting.SearchSpot(s, p) != null && (at == null || Far(p) < Far(at))) at = p;
+                    }
+            }
+            else
+            {
+                var counted = new HashSet<int>();
+                var rooms = new List<LootRoom>();
+                for (var y = 0; y < s.Height; y++)
+                    for (var x = 0; x < s.Width; x++)
+                    {
+                        if (counted.Contains(y * s.Width + x)) continue;
+                        var r = Looting.RoomAt(s, new Pos { X = x, Y = y, Z = 0 });
+                        if (r == null) continue;
+                        foreach (var t in r.Tiles) counted.Add(t.Y * s.Width + t.X);
+                        rooms.Add(r);
+                    }
+                found = rooms.OrderBy(r => r.Spot == Spots.Shop ? 0 : 1).ThenBy(r => r.Tiles.Min(Far)).FirstOrDefault();
+                at = found?.Tiles.OrderBy(t => t.X + t.Y).ElementAtOrDefault(found.Tiles.Count / 2);
+            }
+            Debug.Log($"[lab] {(room ? "sala" : "caja")}: {(at == null ? "ninguna" : $"({at.X},{at.Y})" + (found != null ? $", {found.Spot}, {found.Tiles.Count} casillas" : ""))}");
+            if (at == null) return;
+            // In sight without fog, and the pointer there so the building's roof opens (Cutaway).
+            control.Rig.Focus(Board.TileToWorld(s, at), true);
+            control.Hover(at);
+            Bastion.Client.Map.Fog.Current?.SeeAll();
+            await Awaitable.WaitForSecondsAsync(1f, destroyCancellationToken);
+            GameEvent e = room ? new RoomSearchedEvent { Unit = by.Id, Room = found.Id } : new SearchedEvent { Unit = by.Id, Tile = at };
+            player?.Push(new List<GameEvent> { e }, null);
+            // Once it is played (the player paces its events), without fog again: it fogs what the squad doesn't see.
+            var node = Grid.NodeOf(s, at);
+            for (var wait = 0f; wait < 5 && !(room ? control.View.RoomsSearched?.Contains(found.Id) == true : control.View.Searched?.Contains(node) == true); wait += Time.deltaTime)
+                await Awaitable.NextFrameAsync(destroyCancellationToken);
+            control.Hover(at);
+            Bastion.Client.Map.Fog.Current?.SeeAll();
+        }
+
         /// <summary>BASTION_TOQUES played: the keyboard's and the mouse's states queued as a player's would come (Input System).</summary>
         async void TouchesSoon()
         {
@@ -387,6 +484,23 @@ namespace Bastion.UI.Combat
                                 }
                                 Debug.Log($"[lab] Ajuste auto: {App.GameSettings.AutoQuality}, {App.GameSettings.Summary()}");
                             }
+                            break;
+                        case "llegada":
+                        case "llegada-dentro":
+                            // Three of the dead and one of the living arriving where the squad sees them, nearest the edge
+                            // (Arrivals: in on foot from it); «-dentro», farthest from it (up out of the dust where they are).
+                            ArriveInSight(what == "llegada-dentro");
+                            break;
+                        case "botin":
+                            // The first soldier two tiles from the nearest shut loot box, and the fog shown again from there:
+                            // the box seen and a soldier near, its mark over it (CombatController.LootMarks).
+                            LootNear();
+                            break;
+                        case "caja":
+                        case "sala":
+                            // The nearest loot box to the squad, or the nearest room (a shop's first), seen and then searched a
+                            // second later, as the host's event would come (MapBuilder draws it searched: mapView.ts searchedSeen).
+                            await SearchSoon(what == "sala");
                             break;
                         case "tuturno":
                             // The squad's turn opening, as the host's event would come (the stamp held, the camera to its soldier).
@@ -500,6 +614,21 @@ namespace Bastion.UI.Combat
                 return;
             }
             Play(new EvacCommand { Unit = u.Id });
+        }
+
+        /// <summary>Another soldier of the squad put on the line of fire of `shot`, the first free tile two or more from its shooter and short of its target.</summary>
+        static void InTheWay(GameState s, AbilityCommand shot)
+        {
+            var by = s.Units.FirstOrDefault(u => u.Id == shot.Unit);
+            var at = s.Units.FirstOrDefault(u => u.Id == shot.Target);
+            var other = s.Units.FirstOrDefault(u => u.Alive && u.Team == Teams.Xcom && u.Id != shot.Unit);
+            if (by == null || at == null || other == null) return;
+            var far = Mathf.Max(Mathf.Abs(at.Pos.X - by.Pos.X), Mathf.Abs(at.Pos.Y - by.Pos.Y));
+            var on = Enumerable.Range(2, Mathf.Max(0, far - 3))
+                .Select(k => new Pos { X = by.Pos.X + Mathf.RoundToInt((at.Pos.X - by.Pos.X) * (float)k / far), Y = by.Pos.Y + Mathf.RoundToInt((at.Pos.Y - by.Pos.Y) * (float)k / far), Z = by.Pos.Z })
+                .FirstOrDefault(p => Grid.InBounds(s, p.X, p.Y) && Grid.IsWalkable(Grid.KindAt(s, p)) && Grid.UnitAt(s, p) == null);
+            Debug.Log($"[lab] estorbo: {other.Name} a {(on == null ? "ningún sitio" : $"({on.X},{on.Y})")}, entre {by.Name} y {at.Name}");
+            if (on != null) other.Pos = on;
         }
 
         async void FireSoon()

@@ -503,13 +503,17 @@ namespace Bastion.UI.Hud
     [Serializable]
     public sealed class WorldTagView
     {
-        /// <summary>bar or pack.</summary>
+        /// <summary>bar, pack or loot.</summary>
         public string Kind;
         public string Text;
         public Vector3 World;
         /// <summary>A bar's: how full (0 to 1), and whether it is down to a third (red).</summary>
         public float Fill;
         public bool Low;
+        /// <summary>A loot box's mark (lootMarks.ts): its icon's id, its ring's colour, and how wide it is in the world (it grows and shrinks with the camera).</summary>
+        public string Icon;
+        public string Ring;
+        public float Size;
     }
 
     /// <summary>A mark to point at from the screen's edge (edgeMarks.ts EdgeMark): objective, evac or alert, its words, where.</summary>
@@ -628,6 +632,8 @@ namespace Bastion.UI.Hud
         /// <summary>A line under the row (Ajuste auto's: what it has lowered); gone as soon as one of `NoteGoesWith` changes.</summary>
         public string Note;
         public List<string> NoteGoesWith;
+        /// <summary>One of the last rows (the clothes, «Interfaz», «Ajuste auto»): under the sound's when the other column would be the longer.</summary>
+        public bool Tail;
     }
 
     [Serializable]

@@ -19,8 +19,10 @@ namespace Bastion.Client.Map
         public int? level;
         public bool roofs;
         public string closeAttacker, closeTarget;
+        /// <summary>The camera over a shoulder (rig.closeUp), aiming too, whoever is in the shot: game.ts passes `close` then even with neither.</summary>
+        public bool close;
 
-        public bool Close => closeAttacker != null || closeTarget != null;
+        public bool Close => close || closeAttacker != null || closeTarget != null;
     }
 
     /// <summary>
@@ -63,6 +65,10 @@ namespace Bastion.Client.Map
         bool[] visible;
         /// <summary>Things on a storey of a building (furniture, a sign, what stands on a roof), turned off while it hides them.</summary>
         readonly List<(GameObject thing, int building, int level, bool sign)> tracked = new List<(GameObject, int, int, bool)>();
+        /// <summary>What hangs on a wall (a clinic's cross, sign or blood: medicalDetails.ts medicalWallPatch), with the way its wall looks out.</summary>
+        readonly List<(GameObject thing, int building, int level, Vector2 outward)> fixtures = new List<(GameObject, int, int, Vector2)>();
+        /// <summary>The way the camera looks, on the ground (0.10.1's frame: x east, y south; _CutView).</summary>
+        Vector2 lookFlat;
 
         void OnEnable() => Current = this;
 
@@ -88,6 +94,7 @@ namespace Bastion.Client.Map
             shown = new byte[size];
             data = new Color32[size];
             tracked.Clear();
+            fixtures.Clear();
             seenFor = null;
             boxes = plan == null ? Array.Empty<Bounds>() : plan.Buildings.Select(b =>
             {
@@ -104,6 +111,16 @@ namespace Bastion.Client.Map
         public void Track(GameObject thing, int building, int level, bool sign = false)
         {
             if (thing != null && building >= 0 && building < n) tracked.Add((thing, building, level, sign));
+        }
+
+        /// <summary>
+        /// `thing` hangs on a wall of storey `level` of building `building` (medicalWallPatch): it goes with the wall when it
+        /// drops, an inner wall's whenever its building's walls drop, an outer one's (`outward` the way that wall looks out
+        /// of the building, 0.10.1's frame) while it looks towards the camera, or when every wall drops.
+        /// </summary>
+        public void TrackFixture(GameObject thing, int building, int level, Vector2 outward)
+        {
+            if (thing != null && building >= 0 && building < n) fixtures.Add((thing, building, level, outward));
         }
 
         /// <summary>
@@ -189,6 +206,7 @@ namespace Bastion.Client.Map
                 float flat = Mathf.Sqrt(look.x * look.x + look.z * look.z);
                 if (flat < 1e-6f) flat = 1;
                 Shader.SetGlobalVector(CutView, new Vector4(look.x / flat, look.z / flat, 0, 0));
+                lookFlat = new Vector2(look.x / flat, look.z / flat);
             }
             // Every building between the camera and the point `at` (not the one `own` it is in) loses its roof; with
             // `all`, all its walls drop too.
@@ -325,6 +343,20 @@ namespace Bastion.Client.Map
                     continue;
                 }
                 bool gone = level > shown[b] ? now[b * 3] > 0.5f : sign && level == shown[b] && Mathf.Max(now[b * 3 + 1], now[b * 3 + 2]) > 0.5f;
+                if (thing.activeSelf == gone) thing.SetActive(!gone);
+            }
+            for (int k = fixtures.Count - 1; k >= 0; k--)
+            {
+                var (thing, b, level, outward) = fixtures[k];
+                if (thing == null)
+                {
+                    fixtures.RemoveAt(k);
+                    continue;
+                }
+                float Eased(float v) => v * v * (3 - 2 * v);
+                // medicalWallPatch: an inner wall's whenever the walls facing the camera drop; an outer one's as its wall turns to it.
+                float facing = outward.sqrMagnitude < 0.01f ? 1 : Mathf.SmoothStep(0, 1, Mathf.InverseLerp(-0.15f, 0.25f, -Vector2.Dot(outward, lookFlat)));
+                bool gone = level > shown[b] ? now[b * 3] > 0.5f : level == shown[b] && Mathf.Max(Eased(now[b * 3 + 1]) * facing, Eased(now[b * 3 + 2])) > 0.25f;
                 if (thing.activeSelf == gone) thing.SetActive(!gone);
             }
         }

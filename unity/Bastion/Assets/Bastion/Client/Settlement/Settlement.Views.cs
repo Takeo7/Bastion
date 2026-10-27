@@ -588,6 +588,7 @@ namespace Bastion.Client
                 }
             }
             if (!Walking) MoveCamera(Time.deltaTime);
+            StepFaceKey();
             StepFade(Time.deltaTime);
             EndWalk();
         }

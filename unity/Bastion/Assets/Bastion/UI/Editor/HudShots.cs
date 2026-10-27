@@ -288,7 +288,8 @@ namespace Bastion.UI.EditorTools
                 lab.Kills = kills;
                 lab.HoverTarget = hover;
                 lab.InScene = true;
-                lab.Fire = !hover;
+                // BASTION_LAB_SIN_DISPARO=1: aimed and left so, the shot's panel open (the 0.10.1's shot while aiming).
+                lab.Fire = !hover && System.Environment.GetEnvironmentVariable("BASTION_LAB_SIN_DISPARO") != "1";
             };
         }
 

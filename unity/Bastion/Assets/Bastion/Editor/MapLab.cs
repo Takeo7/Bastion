@@ -115,6 +115,14 @@ namespace Bastion.EditorTools
             var state = Golden(name);
             Lighting(true);
             Map(state, name);
+            // BASTION_FIGURAS=1: every unit of the game drawn too, the camera over the middle of the enemy (a crowd's cost).
+            Bastion.Client.Units.UnitViews units = null;
+            if (Environment.GetEnvironmentVariable("BASTION_FIGURAS") == "1")
+            {
+                units = new GameObject("Unidades").AddComponent<Bastion.Client.Units.UnitViews>();
+                units.Sync(state);
+                units.MasksNow();
+            }
             var camera = new GameObject("Shot camera").AddComponent<Camera>();
             camera.farClipPlane = 800;
             var target = new RenderTexture(1920, 1080, 24);
@@ -140,6 +148,9 @@ namespace Bastion.EditorTools
             }
             float tiles = 24, pitch = 52 * Mathf.Deg2Rad, yaw = 45 * Mathf.Deg2Rad, back = Mathf.Cos(pitch) * tiles * MapSpace.Tile;
             var middle = MapSpace.World(state.Width / 2, state.Height / 2);
+            var enemy = state.Units.Where(u => u.Alive && u.Team != "xcom").ToList();
+            if (units != null && enemy.Count > 0) middle = MapSpace.World((float)enemy.Average(u => u.Pos.X), (float)enemy.Average(u => u.Pos.Y));
+            if (units != null) Debug.Log($"[variant] {state.Units.Count(u => u.Alive)} units, {enemy.Count} of the enemy; drawn round {middle}");
             camera.transform.position = middle + new Vector3(Mathf.Sin(yaw) * back, Mathf.Sin(pitch) * tiles * MapSpace.Tile, -Mathf.Cos(yaw) * back);
             camera.transform.LookAt(middle);
             int was = QualitySettings.GetQualityLevel();
@@ -174,6 +185,11 @@ namespace Bastion.EditorTools
                     feature.SetActive(!off && features[feature.name]);
                 }
                 data.SetDirty();
+                if (units != null)
+                {
+                    Bastion.Client.Units.UnitViews.MasksOff = variant == "sinmascara";
+                    units.MasksNow();
+                }
             }
             var variants = (Environment.GetEnvironmentVariable("BASTION_VARIANTES") ?? "tal,fplus,sinsombras,sinluces,sinniebla,singradacion").Split(',');
             var least = variants.ToDictionary(v => v, v => double.MaxValue);
@@ -191,7 +207,185 @@ namespace Bastion.EditorTools
             UnityEngine.Object.DestroyImmediate(target);
         }
 
+        /// <summary>
+        /// How much a point light gives in URP (26/10: the night's lamps lit far less than 0.10.1's): a white plane, the
+        /// ground's own material and URP's Lit, under one point light of intensity 1 at 1 m over it, no other light, drawn
+        /// to a float target with no post; the pixel under it read back (linear). URP: albedo × intensity / d².
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.LightUnit -quit
+        /// </summary>
+        public static void LightUnit()
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = Color.black;
+            RenderSettings.fog = false;
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.transform.SetPositionAndRotation(new Vector3(0, 5, 0), Quaternion.Euler(90, 0, 0));
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = Color.black;
+            var target = new RenderTexture(64, 64, 24, RenderTextureFormat.ARGBFloat);
+            camera.targetTexture = target;
+            var probe = new Texture2D(1, 1, TextureFormat.RGBAFloat, false);
+            var light = new GameObject("Luz").AddComponent<UnityEngine.Light>();
+            light.type = LightType.Point;
+            light.shadows = LightShadows.None;
+            light.transform.position = new Vector3(0, 1, 0);
+            light.range = 100;
+            var plane = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            var shaders = new[] { ("Lit", Shader.Find("Universal Render Pipeline/Lit")), ("Ground", Resources.Load<Material>("Ground")?.shader), ("Building", Shader.Find("Bastion/Building")) };
+            foreach (var (name, shader) in shaders)
+            {
+                if (shader == null)
+                {
+                    Debug.Log($"[light] no {name} shader");
+                    continue;
+                }
+                var material = new Material(shader);
+                if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
+                if (material.HasProperty("_Color")) material.SetColor("_Color", Color.white);
+                if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0);
+                plane.GetComponent<Renderer>().sharedMaterial = material;
+                foreach (float intensity in new[] { 0f, 1f })
+                {
+                    light.intensity = intensity;
+                    light.color = Color.white;
+                    camera.Render();
+                    RenderTexture.active = target;
+                    probe.ReadPixels(new Rect(32, 32, 1, 1), 0, 0);
+                    probe.Apply(false);
+                    RenderTexture.active = null;
+                    Debug.Log(FormattableString.Invariant($"[light] {name}, intensity {intensity}: {probe.GetPixel(0, 0)}"));
+                }
+            }
+            // The night's own light on the white plane (Mood: the sky's hemisphere, the moon, the fill), against what the fog's
+            // pools reckon it to be (Fog.shader: the sky, and the moon by its angle).
+            light.intensity = 0;
+            plane.GetComponent<Renderer>().sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            plane.GetComponent<Renderer>().sharedMaterial.SetColor("_BaseColor", Color.white);
+            plane.GetComponent<Renderer>().sharedMaterial.SetFloat("_Smoothness", 0);
+            foreach (bool day in new[] { false, true })
+            {
+                Lighting(day);
+                RenderSettings.fog = false;
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.Render();
+                RenderTexture.active = target;
+                probe.ReadPixels(new Rect(32, 32, 1, 1), 0, 0);
+                probe.Apply(false);
+                RenderTexture.active = null;
+                Vector4 sky = Shader.GetGlobalVector("_LightSky"), sun = Shader.GetGlobalVector("_LightSun"), from = Shader.GetGlobalVector("_LightSunFrom");
+                var reckoned = (Vector3)sky + (Vector3)sun * Mathf.Max(0, from.y);
+                Debug.Log(FormattableString.Invariant($"[light] {(day ? "day" : "night")}: {probe.GetPixel(0, 0)} on a white floor; the fog reckons {reckoned} (sky {(Vector3)sky}, sun {(Vector3)sun} × {from.y:0.00})"));
+            }
+        }
+
+        /// <summary>
+        /// A kit piece's parts as the catalog has them (BASTION_PIEZA, houseWindow unless said): each mesh, its submeshes'
+        /// materials and the box of their UVs, to tell which faces draw what.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.Piece -quit
+        /// </summary>
+        public static void Piece()
+        {
+            string id = Environment.GetEnvironmentVariable("BASTION_PIEZA") ?? "houseWindow";
+            foreach (var part in Bastion.Client.Map.Pieces.Parts(id))
+                for (int k = 0; k < part.mesh.subMeshCount; k++)
+                {
+                    var tris = part.mesh.GetTriangles(k);
+                    var uv = new List<Vector2>();
+                    part.mesh.GetUVs(0, uv);
+                    var used = tris.Select(t => uv.Count > t ? uv[t] : Vector2.zero).ToList();
+                    Debug.Log(FormattableString.Invariant($"[pieza] {id}/{part.name} sub {k}: {tris.Length / 3} triangles, {(k < part.materials.Length && part.materials[k] != null ? part.materials[k].name + " (" + part.materials[k].shader.name + ")" : "none")}, uv {used.Min(v => v.x):0.000}-{used.Max(v => v.x):0.000} × {used.Min(v => v.y):0.000}-{used.Max(v => v.y):0.000}"));
+                }
+        }
+
         /// <summary>A recorded state by its name (engine-cs/golden/step1/&lt;name&gt;.json).</summary>
+        static void AoRow(GameState state, int y, int x0, int x1)
+        {
+            // (Worked out as something is first drawn: GroundOcclusion's BeforeRendering.)
+            var probe = new GameObject("Sonda").AddComponent<Camera>();
+            probe.targetTexture = RenderTexture.GetTemporary(64, 64, 24);
+            probe.Render();
+            RenderTexture.ReleaseTemporary(probe.targetTexture);
+            UnityEngine.Object.DestroyImmediate(probe.gameObject);
+            var rt = Shader.GetGlobalTexture("_GroundAO") as RenderTexture;
+            if (rt == null) { Debug.Log("[ao] no texture"); return; }
+            var read = new Texture2D(rt.width, rt.height, TextureFormat.RGBAFloat, false, true);
+            var was = RenderTexture.active;
+            RenderTexture.active = rt;
+            read.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            read.Apply();
+            RenderTexture.active = was;
+            int per = rt.width / state.Width;
+            Debug.Log($"[ao] row {y}, {per} texels a tile: " + string.Join(" ", Enumerable.Range(x0, x1 - x0 + 1).Select(x => state.Tiles[y * state.Width + x][0])));
+            // (North up the texture: tile row y's middle at v = 1 − (y + 0.5) / height.)
+            int ty = Mathf.Clamp(Mathf.FloorToInt((1 - (y + 0.5f) / state.Height) * rt.height), 0, rt.height - 1);
+            var cells = new System.Collections.Generic.List<string>();
+            for (int tx = x0 * per; tx < (x1 + 1) * per; tx++)
+            {
+                var c = read.GetPixel(tx, ty);
+                cells.Add($"{c.r:0.00}/{c.g:0.0}");
+            }
+            for (int k = 0; k < cells.Count; k += per) Debug.Log($"[ao] x {x0 + k / per}: " + string.Join(" ", cells.Skip(k).Take(per)));
+        }
+
+        static void AoDump(GameState state, string file)
+        {
+            var probe = new GameObject("Sonda").AddComponent<Camera>();
+            probe.targetTexture = RenderTexture.GetTemporary(64, 64, 24);
+            probe.Render();
+            RenderTexture.ReleaseTemporary(probe.targetTexture);
+            UnityEngine.Object.DestroyImmediate(probe.gameObject);
+            var rt = Shader.GetGlobalTexture("_GroundAO") as RenderTexture;
+            if (rt == null) { Debug.Log("[ao] no texture"); return; }
+            var read = new Texture2D(rt.width, rt.height, TextureFormat.RGBAFloat, false, true);
+            var was = RenderTexture.active;
+            RenderTexture.active = rt;
+            read.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            read.Apply();
+            RenderTexture.active = was;
+            int per = rt.width / state.Width;
+            var lines = new System.Collections.Generic.List<string>();
+            for (int y = 0; y < state.Height; y++)
+            {
+                var row = new System.Collections.Generic.List<string>();
+                for (int x = 0; x < state.Width; x++)
+                {
+                    float sum = 0;
+                    for (int a = 0; a < per; a++)
+                        for (int b = 0; b < per; b++) sum += read.GetPixel(x * per + b, (state.Height - 1 - y) * per + a).r;
+                    row.Add((sum / (per * per)).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture));
+                }
+                lines.Add(string.Join(" ", row));
+            }
+            System.IO.File.WriteAllLines(file, lines);
+            Debug.Log($"[ao] volcado en {file}");
+        }
+
+        /// <summary>reference.ts's mission with a medical site (`medical`: clinic, ward, hospital), as it makes it.</summary>
+        internal static GameState Medical(string medical)
+        {
+            int seed = int.TryParse(Environment.GetEnvironmentVariable("BASTION_SEED"), out int n) ? n : 7;
+            int? story = medical == "clinic" ? 1 : medical == "hospital" ? 2 : (int?)null;
+            return Setup.CreateMission(new MissionOptions
+            {
+                Map = new MapSource { Kind = MapSourceKinds.Generated, Biome = "city", Seed = seed, Medical = medical },
+                Slots = new System.Collections.Generic.List<int> { 0 },
+                Rng = new Rng((uint)seed),
+                Kind = medical == "hospital" ? "rescue" : "recovery",
+                Difficulty = 3,
+                CampaignMission = story != null ? new CampaignMission { Id = "medical-reference", Name = medical == "clinic" ? "El consultorio de Brena" : "La doctora", Story = story } : null,
+            });
+        }
+
+        internal static GameState Generated(string biome, int seed, string kind) => Setup.CreateMission(new MissionOptions
+        {
+            Map = new MapSource { Kind = MapSourceKinds.Generated, Biome = biome, Seed = seed },
+            Slots = new System.Collections.Generic.List<int> { 0 },
+            Rng = new Rng((uint)seed),
+            Kind = kind,
+            Difficulty = 3,
+        });
+
         internal static GameState Golden(string name)
         {
             // (Or a saved game's file by its path: a lab's, UI's lab-asedio.json.)
@@ -214,7 +408,7 @@ namespace Bastion.EditorTools
             foreach (string probe in (Environment.GetEnvironmentVariable("BASTION_PROBAR") ?? "").Split(',').Where(k => k.Length > 0))
             {
                 var found = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None).Where(o => o.name == probe).ToList();
-                Debug.Log($"[probar] {probe}: {found.Count} drawn");
+                Debug.Log($"[probar] {probe}: {found.Count} drawn" + (found.Count > 0 ? ", on " + string.Join(" ", found.Select(o => { var t = MapSpace.WorldToTile(o.position); return $"{t.x},{t.y}"; })) : ""));
                 if (found.Count == 0) continue;
                 foreach (var r in found[0].GetComponentsInChildren<Renderer>(true))
                     Debug.Log($"[probar]   {r.name} ({r.GetType().Name}, on {r.enabled && r.gameObject.activeInHierarchy}): {string.Join(", ", r.sharedMaterials.Select(m => m == null ? "null" : $"{m.name} [{m.shader.name}, queue {m.renderQueue}, cutoff {(m.HasProperty("_Cutoff") ? m.GetFloat("_Cutoff") : -1):0.##}]"))}; box {r.bounds.size:F2}; mesh {(r.GetComponent<MeshFilter>()?.sharedMesh?.vertexCount ?? 0)} vertices");
@@ -225,10 +419,52 @@ namespace Bastion.EditorTools
         static void Build(bool day)
         {
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
-            var state = Golden(name);
+            // BASTION_MEDICAL=clinic|ward|hospital: the mission 0.10.1's referencia.html?medical= makes (city, seed 7 or
+            // BASTION_SEED), generated here: the engines are the same to the bit.
+            string medical = Environment.GetEnvironmentVariable("BASTION_MEDICAL");
+            // BASTION_GENERAR=biome,seed[,kind]: the mission referencia.html?biome=…&seed=…&kind=… makes (difficulty 3), not a recorded one.
+            var made = Environment.GetEnvironmentVariable("BASTION_GENERAR")?.Split(',');
+            var state = medical != null ? Medical(medical) : made != null && made.Length >= 2 ? Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination") : Golden(name);
+            // BASTION_BENGALAS=x,y,radius;…: Bengalas (radius 3 or more) and fires (less) burning there, lighting what they reach
+            // as the engine's (Los.LightTiles from the lamps' height), for the night's glow and pools.
+            foreach (string spec in (Environment.GetEnvironmentVariable("BASTION_BENGALAS") ?? "").Split(';').Where(v => v.Length > 0))
+            {
+                var v = spec.Split(',').Select(k => double.Parse(k, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                var tile = new Pos { X = (int)v[0], Y = (int)v[1] };
+                (state.Lights ??= new List<Bastion.Engine.Light>()).Add(new Bastion.Engine.Light { Id = $"lab{state.Lights.Count}", Tile = tile, Radius = v[2], Turns = 3, Tiles = Los.LightTiles(state, tile, v[2], Content.Night.LampHeight) });
+            }
+            // BASTION_REGISTRADO=x0,y0,x1,y1: every cover tile in there on the ground searched (the furniture opened, a car's boot up).
+            var searched = Environment.GetEnvironmentVariable("BASTION_REGISTRADO")?.Split(',').Select(int.Parse).ToArray();
+            if (searched != null && searched.Length == 4)
+                for (int y = searched[1]; y <= searched[3]; y++)
+                    for (int x = searched[0]; x <= searched[2]; x++)
+                        if (state.Tiles[y * state.Width + x] == "low" || state.Tiles[y * state.Width + x] == "high")
+                        {
+                            (state.Searched ??= new List<int>()).Add(y * state.Width + x);
+                            Debug.Log($"[registrado] {x},{y} {state.Tiles[y * state.Width + x]}: {Bastion.Engine.Decor.DecorOf(state.Decor[y * state.Width + x])?.Kind}");
+                        }
+            // BASTION_CONSOLA=x,y: a hack's terminal on tile (x, y) of the ground (the objective of a hack mission).
+            if (Environment.GetEnvironmentVariable("BASTION_CONSOLA")?.Split(',').Select(int.Parse).ToArray() is int[] console && console.Length == 2)
+                state.Tiles[console[1] * state.Width + console[0]] = "console";
+            Bastion.Client.NightLights.StateForLab = state;
             Lighting(day);
             var view = Map(state, name);
             var root = view.transform;
+            // BASTION_FIGURAS=1: the game's units drawn on it too, standing (to weigh their light against 0.10.1's figures).
+            if (Environment.GetEnvironmentVariable("BASTION_FIGURAS") == "1")
+            {
+                var units = new GameObject("Unidades").AddComponent<Bastion.Client.Units.UnitViews>();
+                units.Sync(state);
+                units.MasksNow();
+            }
+            // BASTION_AO_FILA=y,x0,x1: the contact occlusion (r) and its height (g) across row y from tile x0 to x1, texel by
+            // texel (6 a tile), with the row's tiles (to set against 0.10.1's: what a floor by a wall gets).
+            var aoRow = Environment.GetEnvironmentVariable("BASTION_AO_FILA")?.Split(',').Select(int.Parse).ToArray();
+            if (aoRow != null && aoRow.Length == 3) AoRow(state, aoRow[0], aoRow[1], aoRow[2]);
+            // BASTION_AO_VOLCADO=file: the whole contact occlusion, each tile's mean of r (rows north to south), as text (UI's).
+            if (Environment.GetEnvironmentVariable("BASTION_AO_VOLCADO") is string aoDump) AoDump(state, aoDump);
+            // BASTION_SIN_AO=1: the buildings' floors without the contact occlusion (to tell what it draws).
+            Shader.SetGlobalFloat("_GroundAOOff", Environment.GetEnvironmentVariable("BASTION_SIN_AO") == "1" ? 1 : 0);
             // BASTION_LEVEL: the storey in view (UI's controller decides it in the game).
             if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_LEVEL"), out int level)) view.ShowLevel(level);
             // The cutaway's focus (UI's controller sets it in the game): BASTION_SELECT=1 the squad's first soldier selected,
@@ -255,6 +491,24 @@ namespace Bastion.EditorTools
                 bool sign = r.GetComponentsInParent<Transform>().Any(t => t.name.StartsWith("sign") || t.name == "motelSign");
                 bool shutter = r.GetComponentsInParent<Transform>().Any(t => t.name == "rollerShutter");
                 if ((glass && hide.Contains("glass")) || (sign && hide.Contains("signs")) || (shutter && hide.Contains("shutters"))) r.enabled = false;
+            }
+            // BASTION_SIN_SOMBRA=a,b: what is drawn under a part named so (its path holds it: "Tejados", "Planta 1") casts no shadow.
+            var unshaded = (Environment.GetEnvironmentVariable("BASTION_SIN_SOMBRA") ?? "").Split(',').Where(k => k.Length > 0).ToArray();
+            if (unshaded.Length > 0)
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    // ("a/b": under a part named a and one named b, both.)
+                    var names = r.GetComponentsInParent<Transform>().Select(t => t.name).ToList();
+                    if (unshaded.Any(k => k.Split('/').All(names.Contains))) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
+            // BASTION_SOMBRAS=x,y: what is drawn over tile (x, y), up to 4 storeys, and whether it casts a shadow (what lets the
+            // sun into a cut building or not).
+            var shade = Environment.GetEnvironmentVariable("BASTION_SOMBRAS")?.Split(',');
+            if (shade != null && shade.Length >= 2)
+            {
+                var over = MapSpace.World(int.Parse(shade[0]), int.Parse(shade[1]));
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true).Where(r => r.bounds.min.x <= over.x && r.bounds.max.x >= over.x && r.bounds.min.z <= over.z && r.bounds.max.z >= over.z && r.bounds.max.y > 0.5f))
+                    Debug.Log(FormattableString.Invariant($"[sombras] {string.Join("/", r.GetComponentsInParent<Transform>().Reverse().Skip(1).Select(t => t.name))}: {r.shadowCastingMode}, on {r.enabled && r.gameObject.activeInHierarchy}, {r.sharedMaterial?.shader.name}, y {r.bounds.min.y:0.0}–{r.bounds.max.y:0.0}"));
             }
             // Lights brought in with the models (none should be: the map's light is the scene's).
             var lights = root.GetComponentsInChildren<UnityEngine.Light>(true);
@@ -319,9 +573,28 @@ namespace Bastion.EditorTools
                 var fit = camera.gameObject.AddComponent<Bastion.Client.ShadowFit>();
                 fit.Camera = camera;
                 fit.Fit();
+                // BASTION_PARTES=a,b,c[,far]: the four cascades' splits (and the shadows' reach, m) put by hand, to try them.
+                var parts = Environment.GetEnvironmentVariable("BASTION_PARTES")?.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                if (parts != null && parts.Length >= 3)
+                {
+                    fit.enabled = false;
+                    var asset = (UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset)UnityEngine.QualitySettings.renderPipeline;
+                    asset.cascade4Split = new Vector3(parts[0], parts[1], parts[2]);
+                    if (parts.Length > 3) asset.shadowDistance = parts[3];
+                }
+                // BASTION_ESFERA=0|1: URP's conservative enclosing sphere for the cascades off or on, to try it.
+                var sphere = Environment.GetEnvironmentVariable("BASTION_ESFERA");
+                if (sphere != null)
+                {
+                    var asset = (UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset)UnityEngine.QualitySettings.renderPipeline;
+                    asset.conservativeEnclosingSphere = sphere == "1";
+                }
                 var urp = (UnityEngine.QualitySettings.renderPipeline ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline) as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
                 Debug.Log(FormattableString.Invariant($"[map] shadows fitted: ground seen {fit.Near:0.#}–{fit.Far / 1.08f:0.#} m deep, to {urp?.shadowDistance:0.#} m, {urp?.shadowCascadeCount} cascades at {urp?.cascade4Split}"));
             }
+            // BASTION_SIN_SOMBRAS=1: the sun's shadows off (after the light is put for the last time: against a picture with them, where each one falls).
+            if (Environment.GetEnvironmentVariable("BASTION_SIN_SOMBRAS") == "1")
+                foreach (var l in UnityEngine.Object.FindObjectsByType<UnityEngine.Light>(FindObjectsSortMode.None)) l.shadows = LightShadows.None;
             // BASTION_SHADOWTEST=x,y: a cube 2 m over tile (x, y), to see whose shadow falls where.
             var shadowTest = Environment.GetEnvironmentVariable("BASTION_SHADOWTEST")?.Split(',');
             if (shadowTest != null && shadowTest.Length >= 2)

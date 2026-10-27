@@ -373,8 +373,12 @@ namespace Bastion.EditorTools
             int c = @base.Width / 2;
             var look = Environment.GetEnvironmentVariable("BASTION_LOOK")?.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
             Look(look != null && look.Length >= 3 ? look[0] : c, look != null && look.Length >= 3 ? look[1] : c, look != null && look.Length >= 3 ? look[2] : 34, look != null && look.Length >= 4 ? look[3] : 0);
-            // The fill turned with the camera.
-            Mood.Show(snow ? Mood.SnowDay : Mood.Day);
+            // The light again for the camera put (fixed opposite the sun, as the settlement has it; BASTION_RELLENO=camara,
+            // with the camera, as before E5).
+            Mood.Show(snow ? Mood.SnowDay : Mood.Day).FillOpposite = Environment.GetEnvironmentVariable("BASTION_RELLENO") != "camara";
+            // (BASTION_RELLENO=no: without the fill, to weigh what it gives.)
+            if (Environment.GetEnvironmentVariable("BASTION_RELLENO") == "no")
+                foreach (var l in UnityEngine.Object.FindObjectsByType<UnityEngine.Light>(FindObjectsSortMode.None)) if (l.name == "Relleno") l.enabled = false;
             // BASTION_SOMBRAS_RES=texels,cascades,split: to weigh the shadows' sharpness (a test).
             var res = Environment.GetEnvironmentVariable("BASTION_SOMBRAS_RES")?.Split(',');
             if (res != null && (UnityEngine.QualitySettings.renderPipeline ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline) is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urp)
@@ -398,7 +402,7 @@ namespace Bastion.EditorTools
                     RenderSettings.ambientSkyColor = RenderSettings.ambientEquatorColor = RenderSettings.ambientGroundColor = Color.black;
                     RenderSettings.fog = Environment.GetEnvironmentVariable("BASTION_NIEBLA") == "1";
                 }
-                Debug.Log($"[claro] ambient {RenderSettings.ambientMode} sky {RenderSettings.ambientSkyColor} equator {RenderSettings.ambientEquatorColor} ground {RenderSettings.ambientGroundColor}; probe up {Up(RenderSettings.ambientProbe)}; reflections {RenderSettings.reflectionIntensity} {RenderSettings.defaultReflectionMode}; skybox {(RenderSettings.skybox != null ? RenderSettings.skybox.name : "none")}");
+                Debug.Log($"[claro] ambient {RenderSettings.ambientMode} sky {RenderSettings.ambientSkyColor} equator {RenderSettings.ambientEquatorColor} ground {RenderSettings.ambientGroundColor}; probe up {Up(RenderSettings.ambientProbe)} side {Up(RenderSettings.ambientProbe, Vector3.right)} {Up(RenderSettings.ambientProbe, Vector3.forward)} down {Up(RenderSettings.ambientProbe, Vector3.down)}; reflections {RenderSettings.reflectionIntensity} {RenderSettings.defaultReflectionMode}; skybox {(RenderSettings.skybox != null ? RenderSettings.skybox.name : "none")}");
             }
             // BASTION_GRADE=0: the picture as lit, without the grade (to weigh the light against 0.10.1's before its grade).
             if (Environment.GetEnvironmentVariable("BASTION_GRADE") == "0") Shader.SetGlobalFloat("_GradeOn", 0);
@@ -541,6 +545,8 @@ namespace Bastion.EditorTools
         /// </summary>
         public static void Soldados()
         {
+            // (BASTION_SIN_LUZ=1: without the soldiers' own key and sky, Settlement.Key.)
+            Settlement.FaceKeyOff = Environment.GetEnvironmentVariable("BASTION_SIN_LUZ") == "1";
             if (Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             string root = Path.GetFullPath(Path.Combine(Application.dataPath, "../../.."));
             string file = Environment.GetEnvironmentVariable("BASTION_PARTIDA") ?? Path.Combine(root, ".dev-snapshots/ui/estrategia-0101/partida-muestra.json");
@@ -659,6 +665,33 @@ namespace Bastion.EditorTools
                 settlement.Show(campaign);
                 settlement.Showcase(campaign, Environment.GetEnvironmentVariable("BASTION_SOLDADO") ?? "c1");
                 settlement.SetView(Environment.GetEnvironmentVariable("BASTION_VISTA") ?? Settlement.Views.Barracks);
+                // BASTION_FILA=id,…: those by La Lata (as the Escuadra's row stays up on every tab); 2 s later, who is in the
+                // row and who about the camp (none in both: clearingArt.ts relife).
+                if (Environment.GetEnvironmentVariable("BASTION_FILA") is string row)
+                {
+                    var colours = new[] { "#e8a33a", "#4fb0e8" };
+                    settlement.SetLineup(campaign, row.Split(',').Select(i => new Settlement.LineupEntry { SoldierId = i, Colour = colours[(campaign.Soldiers.FirstOrDefault(s => s.Id == i)?.Owner ?? 0) % 2] }).ToList());
+                    Tell();
+                    async void Tell()
+                    {
+                        await Awaitable.WaitForSecondsAsync(2);
+                        string Names(string root) => string.Join(", ", settlement.transform.Find(root)?.Cast<Transform>().Select(c => c.name).Where(n => n != "sitio").OrderBy(n => n) ?? Enumerable.Empty<string>());
+                        Debug.Log($"[fila] row: {Names("La fila")}; camp: {Names("Vida del campamento")}");
+                        // BASTION_FILA_ARMA=soldier:weapon: that found weapon given them (the Armería), the row set again as UI
+                        // would; each figure of it before and after (the same one kept, a new one where the gun changed).
+                        if (Environment.GetEnvironmentVariable("BASTION_FILA_ARMA") is string arm && arm.Split(':') is var a && a.Length == 2)
+                        {
+                            string Figures() => string.Join("; ", settlement.transform.Find("La fila").Cast<Transform>().Where(c => c.name != "sitio")
+                                .Select(c => $"{c.name} #{c.gameObject.GetInstanceID()} {string.Join("+", c.GetComponentsInChildren<MeshFilter>().Select(f => f.sharedMesh != null ? f.sharedMesh.name : "").Where(n => n.StartsWith("SM_Wep")).Distinct())}"));
+                            Debug.Log("[fila] before: " + Figures());
+                            foreach (var w in campaign.FoundWeapons.Where(w => w.Holder == a[0])) w.Holder = null;
+                            campaign.FoundWeapons.First(w => w.Id == a[1]).Holder = a[0];
+                            settlement.SetLineup(campaign, row.Split(',').Select(i => new Settlement.LineupEntry { SoldierId = i, Colour = colours[(campaign.Soldiers.FirstOrDefault(s => s.Id == i)?.Owner ?? 0) % 2] }).ToList());
+                            await Awaitable.WaitForSecondsAsync(0.5f);
+                            Debug.Log("[fila] after: " + Figures());
+                        }
+                    }
+                }
                 // BASTION_PREPARA=1: Personalizar's outfits made in the background, each step logged, then one shown.
                 if (Environment.GetEnvironmentVariable("BASTION_PREPARA") == "1")
                 {
@@ -739,6 +772,8 @@ namespace Bastion.EditorTools
         /// </summary>
         public static void Escuadra()
         {
+            // (BASTION_SIN_LUZ=1: without the soldiers' own key and sky, Settlement.Key.)
+            Settlement.FaceKeyOff = Environment.GetEnvironmentVariable("BASTION_SIN_LUZ") == "1";
             // BASTION_SUBIR=1, in play mode (-shotPlay): the squad made once it runs (its clips' graphs don't outlive the
             // switch), and a moment later boarding La Lata, which then goes (Settlement.Leave). BASTION_LATA=v another vehicle.
             if (Environment.GetEnvironmentVariable("BASTION_SUBIR") == "1")
@@ -972,10 +1007,10 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>What the ambient probe gives a surface facing up (URP's SampleSH, linear).</summary>
-        static Color Up(UnityEngine.Rendering.SphericalHarmonicsL2 sh)
+        static Color Up(UnityEngine.Rendering.SphericalHarmonicsL2 sh, Vector3? normal = null)
         {
             var colours = new Color[1];
-            sh.Evaluate(new[] { Vector3.up }, colours);
+            sh.Evaluate(new[] { normal ?? Vector3.up }, colours);
             return colours[0];
         }
 

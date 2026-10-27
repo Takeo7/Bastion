@@ -16,6 +16,13 @@ Shader "Bastion/Fog"
         Pass
         {
             Name "Fog"
+            // (Not over the figures: FigureMask's bit.)
+            Stencil
+            {
+                Ref 64
+                ReadMask 64
+                Comp NotEqual
+            }
 
             HLSLPROGRAM
             #pragma vertex Vert
@@ -24,6 +31,8 @@ Shader "Bastion/Fog"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareNormalsTexture.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
             TEXTURE2D(_FogMap);
             SAMPLER(sampler_FogMap);
@@ -43,6 +52,10 @@ Shader "Bastion/Fog"
             float4 _LightGround;
             float4 _LightSun;
             float4 _LightSunFrom;
+            // The night's real lights (NightLights: where, 1/range² in w; their linear colour times intensity), counted in the
+            // light a surface gets: else what a Bengala lights reads as white and its pool drowns the red in orange.
+            float4 _NightLightAt[6];
+            float4 _NightLightColour[6];
 
             float Hash(float2 p)
             {
@@ -81,6 +94,8 @@ Shader "Bastion/Fog"
                 {
                     float3 eye = GetCameraPositionWS();
                     float3 ray = normalize(world - eye);
+                    // Above the horizon it is the sky (Sky, UI's: drawn where nothing else is), out of the fog as 0.10.1's was.
+                    if (ray.y >= -1e-3) return colour;
                     world = eye + ray * (ray.y < -1e-3 ? -eye.y / ray.y : 1e4);
                 }
                 // In 0.10.1's tiles: east along x, south along the map's rows; up in tiles too.
@@ -115,12 +130,22 @@ Shader "Bastion/Fog"
                 }
                 // Night: a lit tile glows warm, so players read where they'd be seen (fogOfWar.ts: the lamp's light over the
                 // surface's own colour, less where it is bright already, on what stands at its floor). How light a
-                // material is: the picture over the light it gets (the sky's hemisphere and the moon).
+                // material is: the picture over the light it gets (the sky's hemisphere, the moon and the real lights).
                 if (_FogNight > 0.5 && !none)
                 {
                     float floorAt = tile.a * 8.0 * 2.3;
                     float near = 1.0 - smoothstep(2.3 * 0.6, 2.3 * 1.2, high - floorAt);
-                    float3 light = lerp(_LightGround.rgb, _LightSky.rgb, 0.5 * normal.y + 0.5) + _LightSun.rgb * saturate(dot(normal, _LightSunFrom.xyz));
+                    // (The moon's shadow in it: in a wall's shade the picture is darker, not the surface, and its pool as bright.)
+                    float moon = none ? 1.0 : MainLightRealtimeShadow(TransformWorldToShadowCoord(world));
+                    float3 light = lerp(_LightGround.rgb, _LightSky.rgb, 0.5 * normal.y + 0.5) + _LightSun.rgb * saturate(dot(normal, _LightSunFrom.xyz)) * moon;
+                    // (URP's point light: 1/d², faded out smooth by its range.)
+                    for (int k = 0; k < 6; k++)
+                    {
+                        float3 to = _NightLightAt[k].xyz - world;
+                        float d2 = max(dot(to, to), 1e-4);
+                        float fade = saturate(1.0 - Sq(d2 * _NightLightAt[k].w));
+                        light += _NightLightColour[k].rgb * (fade * fade / d2) * saturate(dot(normal, to * rsqrt(d2)));
+                    }
                     // As a grey: the night's teal haze is in the picture, and would tint the pool green.
                     float hot = dot(colour.rgb, float3(0.2126, 0.7152, 0.0722));
                     float own = saturate(hot / max(dot(light, float3(0.2126, 0.7152, 0.0722)), 0.02));

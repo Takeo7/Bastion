@@ -32,9 +32,12 @@ namespace Bastion.UI.Hud
             public float Seconds;
         }
 
-        public UnitFlags(VisualElement layer)
+        readonly Func<string, Sprite> icon;
+
+        public UnitFlags(VisualElement layer, Func<string, Sprite> icon = null)
         {
             this.layer = layer;
+            this.icon = icon;
         }
 
         /// <summary>The flags of the units in sight; those left out go.</summary>
@@ -98,8 +101,11 @@ namespace Bastion.UI.Hud
 
         readonly List<Floating> pins = new List<Floating>();
 
-        /// <summary>The tags that stay over the map (a siege's bars, the fallen's rucksacks), and what they were made from.</summary>
-        readonly List<(VisualElement el, Vector3 world)> tags = new List<(VisualElement, Vector3)>();
+        /// <summary>The tags that stay over the map (a siege's bars, the fallen's rucksacks, the loot boxes' marks), where, and how wide in the world (0: as laid out).</summary>
+        readonly List<(VisualElement el, Vector3 world, float size)> tags = new List<(VisualElement, Vector3, float)>();
+
+        /// <summary>A loot box's mark as laid out (Flags.uss .wtag--loot), scaled to its width in the world.</summary>
+        const float MarkPixels = 64;
         string tagsKey;
 
         /// <summary>The tags over the map (WorldTagView), made again only when they change.</summary>
@@ -115,6 +121,17 @@ namespace Bastion.UI.Hud
             {
                 var el = Ui.El("wtag wtag--" + v.Kind);
                 el.pickingMode = PickingMode.Ignore;
+                if (v.Kind == "loot")
+                {
+                    // The icon of what is in it on a plate of dark steel, ringed in its colour (lootMarks.ts material).
+                    el.style.borderTopColor = el.style.borderRightColor = el.style.borderBottomColor = el.style.borderLeftColor = Ui.Hex(v.Ring, Color.white);
+                    var mark = Ui.El("wtag__icon", el);
+                    mark.pickingMode = PickingMode.Ignore;
+                    if (icon?.Invoke(v.Icon) is Sprite sprite) mark.style.backgroundImage = new StyleBackground(sprite);
+                    layer.Insert(0, el);
+                    tags.Add((el, v.World, v.Size));
+                    continue;
+                }
                 if (v.Kind == "bar")
                 {
                     el.EnableInClassList("wtag--low", v.Low);
@@ -123,7 +140,7 @@ namespace Bastion.UI.Hud
                 }
                 Ui.Text(v.Text, "wtag__text", el).pickingMode = PickingMode.Ignore;
                 layer.Insert(0, el);
-                tags.Add((el, v.World));
+                tags.Add((el, v.World, 0));
             }
         }
 
@@ -177,7 +194,20 @@ namespace Bastion.UI.Hud
                 Place(f.Label, panel, camera, f.World, -FloatRise * t, 0.5f);
                 f.Label.style.opacity = t < 0.7f ? 1f : 1f - (t - 0.7f) / 0.3f;
             }
-            foreach (var t in tags) Place(t.el, panel, camera, t.world, 0, 1f);
+            foreach (var t in tags)
+            {
+                if (t.size <= 0)
+                {
+                    Place(t.el, panel, camera, t.world, 0, 1f);
+                    continue;
+                }
+                // At the map's scale (lootMarks.ts SIZE): its width in the world across the screen, wherever the camera is.
+                Place(t.el, panel, camera, t.world, 0, 0.5f);
+                var a = camera.WorldToViewportPoint(t.world);
+                var b = camera.WorldToViewportPoint(t.world + camera.transform.right * t.size);
+                var k = Mathf.Abs(b.x - a.x) * panel.visualTree.layout.width / MarkPixels;
+                t.el.style.scale = new Scale(new Vector3(k, k, 1));
+            }
             // Under the tile, a little below its middle (the web's margin-top: 30px); near the edge, slid in to be read whole.
             if (note != null) Place(note, panel, camera, noteAt, 30, 0, true);
             for (var i = pins.Count - 1; i >= 0; i--)

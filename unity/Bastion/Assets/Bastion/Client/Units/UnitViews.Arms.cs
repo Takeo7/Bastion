@@ -229,6 +229,67 @@ namespace Bastion.Client.Units
             v.anim.Rest(v.inHand == Held.Rifle ? catalog.Clip(RestOf(v)) : null, fade);
         }
 
+        /// <summary>Whether its weapon is up: aimed for a shot, at a target being picked, or on watch.</summary>
+        static bool Up(View v) => v.aiming || v.picking != null || v.watch;
+
+        /// <summary>On guard with the blade: at a target being picked with it, or on watch with it (Unit.WatchMelee).</summary>
+        static bool Guarding(View v) => v.inHand == Held.Blade && (v.picking?.melee == true || v.watch && v.guard && !v.aiming);
+
+        /// <summary>To how it stands with what it holds now: aimed if its weapon is up (Up), on guard with the blade (Guarding), else at rest.</summary>
+        static void Settle(View v, float fade)
+        {
+            if (v.weapon == null) return;
+            if (Guarding(v)) Guard(v, fade);
+            else if (Up(v) && v.inHand != Held.Blade) Aimed(v, fade);
+            else AtRest(v, fade);
+        }
+
+        /// <summary>
+        /// The blade on guard (unitViews.ts GUARD_AIM, syntyFigures.ts's blade raised part way: the hand up by the chest, the
+        /// tip up and ahead): «Stabbing 3» held over the upper body this far in, as it is drawn back to stab, for any blade
+        /// (the machete's swing has nothing like it: its arms go wide). Found with CombatLab.Guardia.
+        /// </summary>
+        const float GuardAt = 0.32f;
+
+        static void Guard(View v, float fade)
+        {
+            var catalog = FigureCatalog.Load();
+            if (v.anim == null || catalog == null) return;
+            v.anim.ArmRest(null, 0, fade);
+            v.anim.Rest(catalog.Clip(KnifeStroke.clip), fade, GuardAt);
+        }
+
+        /// <summary>
+        /// unitViews.ts CLOSE_GAP, CLOSE_BACK: at point blank, its muzzle kept this far short of whoever it aims at, the body
+        /// stepped back for it this far at most (tiles); it goes there as the gun comes up.
+        /// </summary>
+        const float CloseGap = 0.3f, CloseBack = 0.3f;
+
+        /// <summary>
+        /// unitViews.ts apply: at point blank it steps back as it shoulders a long gun, its muzzle short of whoever it aims
+        /// at (a machine gun reached 0.86 of a tile ahead, into one beside): the body, not the unit's place, moves.
+        /// </summary>
+        static void StepBack(View v, float dt)
+        {
+            if (v.body == null || v.dead) return;
+            float want = 0;
+            if (v.close > 0 && v.inHand == Held.Rifle && v.reachOf == v.drawn && v.reach > 0)
+                want = Mathf.Min(CloseBack, Mathf.Max(0, v.reach - (v.close - CloseGap))) * v.up;
+            if (want == v.back) return;
+            // (Eased as the gun comes up; the reach is only measured once it is all the way up.)
+            v.back = Mathf.MoveTowards(v.back, want, dt * CloseBack / AimBlend);
+            v.body.localPosition = new Vector3(0, 0, -v.back * MapSpace.Tile);
+        }
+
+        /// <summary>syntyFigures.ts aimReach: how far ahead of its feet the muzzle of the long gun in its hands comes, measured while it is all the way up.</summary>
+        static void Reach(View v)
+        {
+            if (v.inHand != Held.Rifle || v.weapon == null || v.up < 0.99f || v.reload > 0 || v.dead) return;
+            var muzzle = v.weapon.TransformPoint(v.muzzle) - v.root.position;
+            v.reach = Vector3.Dot(muzzle, v.root.forward) / MapSpace.Tile + v.back;
+            v.reachOf = v.drawn;
+        }
+
         /// <summary>Aimed with what it holds: a rifle's aim (knelt, the kneeling one), the pistol in both hands (pistolAim, syntyFigures.ts direct).</summary>
         static void Aimed(View v, float fade)
         {
@@ -311,6 +372,16 @@ namespace Bastion.Client.Units
                 + "; mounts " + string.Join(", ", v.stows.Select(kv => $"{kv.Key} on {kv.Value.parent?.name} at {(kv.Value.position - feet):F2} (scale {kv.Value.lossyScale.x:0.###})"));
         }
 
+        /// <summary>For the labs: `id`'s blade drawn and its stroke's clip held at `at` seconds (where the guard is looked for).</summary>
+        public void GuardForLab(string id, float at)
+        {
+            if (!views.TryGetValue(id, out var v) || v.anim == null) return;
+            Draw(v, BeltCarry);
+            var stroke = StrokeOf(v);
+            v.anim.ArmRest(null, 0, 0);
+            v.anim.Rest(FigureCatalog.Load()?.Clip(stroke.clip), 0, at);
+        }
+
         // ------------------------------------------------------------ the acts' weapons
 
         /// <summary>unitViews.ts THROWS (syntyFigures.ts): a blade's stroke, its clip and its clock (strike's throwClipTime).</summary>
@@ -325,23 +396,90 @@ namespace Bastion.Client.Units
         static readonly Stroke KnifeStroke = new Stroke { clip = "knifeStab", release = 0.42f, lets = 0.34f, rate = 1.3f, end = 0.75f, after = 1.0f, afterRate = 0.75f };
         static readonly Stroke MacheteStroke = new Stroke { clip = "macheteSwing", release = 1.0f, lets = 0.34f, rate = 2.0f, end = 0.75f, after = 1.0f, afterRate = 1.7f };
 
+        /// <summary>The stroke of the blade in its hands: a knife's stab, anything else the machete's swing.</summary>
+        static Stroke StrokeOf(View v)
+        {
+            string blade = v.arts.TryGetValue(v.drawn, out var art) ? art.fbx : "";
+            return blade.IndexOf("Knife", StringComparison.OrdinalIgnoreCase) >= 0 ? KnifeStroke : MacheteStroke;
+        }
+
         /// <summary>unitViews.ts lunge: how far it steps in (tiles: the gap less LUNGE_SHORT, LUNGE at most), wound up and striking (seconds), back.</summary>
         const float LungeShort = 0.72f, LungeMost = 0.45f, WindUp = 0.2f, StrokeTime = 0.14f, Back = 0.35f;
+        /// <summary>How far into «Zombie Headbutt» the dead's lunge starts it: its blow, 0.45 s in, on lunge's (WindUp + StrokeTime).</summary>
+        const float HeadbuttLead = 0.45f - WindUp - StrokeTime;
+        /// <summary>unitViews.ts BITE_GAP: a bite that kills ends this far from its victim's middle (tiles); it lets go this long after if nothing eats (seconds).</summary>
+        const float BiteGap = 0.42f, BiteHold = 2;
+
+        /// <summary>The way from `home` towards `at` on the ground: the gap less `short` tiles, `most` tiles at most (none if nearer).</summary>
+        static Vector3 Reach(Vector3 home, Vector3 at, float @short, float most)
+        {
+            var gap = at - home;
+            gap.y = 0;
+            float tiles = Mathf.Clamp(gap.magnitude / MapSpace.Tile - @short, 0, most);
+            return gap.sqrMagnitude > 1e-6f ? gap.normalized * tiles * MapSpace.Tile : Vector3.zero;
+        }
+
+        /// <summary>From `from` to `to` over `seconds`, eased in and out (a held still when they are the same).</summary>
+        static async Awaitable Slide(View v, Vector3 from, Vector3 to, float seconds, CancellationToken ct)
+        {
+            for (float t = 0; t < seconds; t += Time.deltaTime)
+            {
+                v.root.position = Vector3.Lerp(from, to, Mathf.SmoothStep(0, 1, t / seconds));
+                await Awaitable.NextFrameAsync(ct);
+            }
+            v.root.position = to;
+        }
+
+        /// <summary>
+        /// A bite that kills (unitViews.ts lunge with its feed clip): in to `home` + `reach` over the clip's `seconds`, there
+        /// by 0.62 of them; then, if nothing eats it within BiteHold (Feed) and no other bite was taken, it lets go: the
+        /// clip off and back home over 0.35 s.
+        /// </summary>
+        async Awaitable Approach(View v, Vector3 home, Vector3 reach, float seconds, int bite, CancellationToken ct)
+        {
+            try
+            {
+                for (float t = 0; t < seconds; t += Time.deltaTime)
+                {
+                    if (v.feeding || v.bites != bite || v.root == null) return;
+                    v.root.position = home + reach * Mathf.SmoothStep(0, 1, Mathf.Min(1, t / seconds * 1.6f));
+                    await Awaitable.NextFrameAsync(ct);
+                }
+                v.root.position = home + reach;
+                await Awaitable.WaitForSecondsAsync(BiteHold, ct);
+                if (v.feeding || v.bites != bite || v.root == null || v.dead) return;
+                v.anim?.StopWhole(0.25f);
+                await Slide(v, v.root.position, home, 0.35f, ct);
+                v.home = Vector3.zero;
+            }
+            catch (OperationCanceledException) { }
+        }
 
         /// <summary>
         /// A living one's blow at `target` (unitViews.ts lunge, syntyFigures.ts strike): the blade drawn from the belt (or its
         /// own, held), wound up 0.2 s, the stroke 0.14 s stepping in, `onHit` as it lands (0.34 s), the stroke's clip on its
         /// clock over the upper body (THROWS: knife, machete; a baton the machete's), back again in 0.35 s, the main weapon
-        /// drawn once more.
+        /// drawn once more. Resolved as the blow lands (unitViews.ts lunge): the stroke and the step back go on by
+        /// themselves (StrokeOn).
         /// </summary>
         async Awaitable Strike(View v, View target, Action onHit, CancellationToken ct)
+        {
+            bool landed = false;
+            _ = StrokeOn(v, target, () =>
+            {
+                landed = true;
+                onHit?.Invoke();
+            }, ct);
+            while (!landed && !ct.IsCancellationRequested) await Awaitable.NextFrameAsync(ct);
+        }
+
+        async Awaitable StrokeOn(View v, View target, Action onHit, CancellationToken ct)
         {
             // A blow at arm's length (unitViews.ts rtStrike: struck).
             StruckBy(target, v.root.position, true);
             Draw(v, BeltCarry);
             AtRest(v, 0.1f);
-            string blade = v.arts.TryGetValue(v.drawn, out var art) ? art.fbx : "";
-            var stroke = blade.IndexOf("Knife", StringComparison.OrdinalIgnoreCase) >= 0 ? KnifeStroke : MacheteStroke;
+            var stroke = StrokeOf(v);
             var clip = FigureCatalog.Load()?.Clip(stroke.clip);
             var home = v.root.position;
             var toward = Vector3.zero;
@@ -374,9 +512,11 @@ namespace Bastion.Client.Units
             }
             if (!hit) onHit?.Invoke();
             v.anim?.Scrub(null, 0, 0);
+            if (v.root == null) return;
             v.root.position = home;
-            Draw(v, MainCarry);
-            AtRest(v, 0.2f);
+            // (On watch with the blade, back on guard.)
+            Draw(v, v.watch && v.guard ? BeltCarry : MainCarry);
+            Settle(v, 0.2f);
         }
 
         /// <summary>unitViews.ts reload: this long, the clip scrubbed through on an ease (spin), coming in and going over its ends.</summary>
@@ -387,6 +527,52 @@ namespace Bastion.Client.Units
         /// in 0.6 s on an ease, coming in and going over its ends (0.12 of it), the gun held fast in the right hand
         /// meanwhile. The pistol has none (0.10.1: its rest or its aim as they were).
         /// </summary>
+        static string ArmsKey(Unit u) => u.Arms != null ? $"{u.Arms.Primary}|{u.Arms.Melee}" : "";
+
+        /// <summary>
+        /// A weapon taken in hand from the backpack (unitViews.ts equip): the one it held turned over and down as a reload's
+        /// (the reload's clip over the eased 0.7 s), and halfway the new ones in its hands and where they ride (Arm).
+        /// </summary>
+        async Awaitable Equip(View v, Unit u)
+        {
+            const float seconds = 0.7f;
+            var clip = Rifled(v) ? FigureCatalog.Load()?.Clip("rifleReload") : null;
+            bool swapped = false;
+            for (float t = 0; t < seconds && v.root != null; t += Time.deltaTime)
+            {
+                float k = t / seconds, spin = k < 0.5f ? 2 * k * k : 1 - (-2 * k + 2) * (-2 * k + 2) / 2;
+                if (clip != null && v.anim != null)
+                {
+                    v.reload = spin > 0 && spin < 1 ? Mathf.Min(1, spin / ReloadEnds, (1 - spin) / ReloadEnds) : 0;
+                    // (None of it, none at all: a clip plugged in at nothing showed whole for a frame.)
+                    v.anim.Scrub(v.reload > 0 ? clip : null, spin * clip.length, v.reload);
+                }
+                if (k >= 0.5f && !swapped)
+                {
+                    swapped = true;
+                    Rearm(v, u);
+                }
+                await Awaitable.NextFrameAsync();
+            }
+            if (!swapped && v.root != null) Rearm(v, u);
+            v.reload = 0;
+            v.anim?.Scrub(null, 0, 0);
+        }
+
+        /// <summary>What it carried gone, and its weapons as `u` has them now, at rest (Arm, Settle).</summary>
+        void Rearm(View v, Unit u)
+        {
+            foreach (var t in v.carried.Values) if (t != null) DestroyNow(t.gameObject);
+            foreach (var t in v.stows.Values) if (t != null) DestroyNow(t.gameObject);
+            v.carried.Clear();
+            v.arts.Clear();
+            v.muzzles.Clear();
+            v.middles.Clear();
+            v.stows.Clear();
+            v.weapon = null;
+            if (Arm(v, u, FigureCatalog.Load())) Settle(v, 0.15f);
+        }
+
         async Awaitable ReloadNow(View v, CancellationToken ct)
         {
             var clip = FigureCatalog.Load()?.Clip("rifleReload");
