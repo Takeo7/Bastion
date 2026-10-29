@@ -308,13 +308,14 @@ namespace Bastion.Client.Units
         }
 
         /// <summary>What it holds where the hands hold it, after the body's pose (syntyFigures.ts clipHold): a gun between them, the pistol along the forearm, a blade in the fist.</summary>
-        static void HoldNow(View v)
+        static void HoldNow(View v, float dt = 0)
         {
             if (v.weapon == null || v.animator == null) return;
             switch (v.inHand)
             {
                 case Held.Pistol:
                     HoldPistol(v);
+                    v.spread.Apply(v.animator, v.anim, v.weapon, dt);
                     break;
                 case Held.Blade:
                     HoldBlade(v);
@@ -392,7 +393,7 @@ namespace Bastion.Client.Units
         {
             if (!views.TryGetValue(id, out var v)) return "-";
             var feet = v.root.position;
-            return $"{v.drawn} drawn ({v.inHand}); " + string.Join("; ", v.carried.Select(kv =>
+            return $"{v.drawn} drawn ({v.inHand}, the arm out {v.spread.Out:0.000}); " + string.Join("; ", v.carried.Select(kv =>
                 $"{kv.Key} {v.arts[kv.Key].fbx} on {kv.Value.parent?.name} at {(kv.Value.position - feet):F2}, scale {kv.Value.lossyScale.x:0.###}, {(kv.Value.gameObject.activeInHierarchy ? "shown" : "hidden")}"))
                 + "; mounts " + string.Join(", ", v.stows.Select(kv => $"{kv.Key} on {kv.Value.parent?.name} at {(kv.Value.position - feet):F2} (scale {kv.Value.lossyScale.x:0.###})"));
         }

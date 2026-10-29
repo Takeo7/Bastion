@@ -21,8 +21,12 @@ namespace Bastion.Client
         public LaLata Lata { get; private set; }
         public BaseState Base { get; private set; }
         public bool Snow { get; private set; }
-        /// <summary>How far from the camera the sun's shadows reach while the clearing is shown (metres: it is seen from 51 m).</summary>
-        public float ShadowMetres = 90;
+        /// <summary>
+        /// How far from the camera the sun's shadows reach while the clearing is shown (metres): past its farthest ground with
+        /// the free look at its farthest (42 tiles, 88 m deep), with the battle's margin (ShadowFit) for URP's fade at the end.
+        /// Not the scene's: its 90 left the top of the screen faded.
+        /// </summary>
+        [NonSerialized] public float ShadowMetres = 95;
 
         Func<string, GameObject> prefabOf;
         Func<string, Material> materialOf;
@@ -155,6 +159,9 @@ namespace Bastion.Client
             StepLife(Time.deltaTime);
             StepWalkAbout(Time.deltaTime);
             StepPosts(Time.deltaTime);
+            // Again every frame, as ShadowFit the battle's: «Gráficos» changed here puts on another level's pipeline asset, with
+            // its own 50 m.
+            if (Map != null) Mood.ShadowReach(ShadowMetres);
             if (nextVehicle != null && Lata != null && !Lata.Moving)
             {
                 int v = nextVehicle.Value;

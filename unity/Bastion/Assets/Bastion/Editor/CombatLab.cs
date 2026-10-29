@@ -1298,6 +1298,8 @@ namespace Bastion.EditorTools
             target = Put(state.Units.First(u => u.Id == deadId), 14, 10, Math.PI);
             string which = Environment.GetEnvironmentVariable("BASTION_ARMAS") ?? "pistola";
             soldier.Template = "rookie";
+            // (BASTION_COMPLEXION=heavy, slim…: its build, the sex kept.)
+            if (Environment.GetEnvironmentVariable("BASTION_COMPLEXION") is string build && soldier.Appearance != null) soldier.Appearance.Build = build;
             soldier.Arms = which switch
             {
                 "fusil" => new Arms { Primary = "assaultRifle" },
@@ -1312,8 +1314,17 @@ namespace Bastion.EditorTools
                 {
                     units.Sync(state);
                     Reveal();
+                    // (BASTION_SIN_ABRIR=1: the pistol at rest not kept out of the thigh.)
+                    PistolSpread.Off = Environment.GetEnvironmentVariable("BASTION_SIN_ABRIR") == "1";
                     Debug.Log($"[combat] {Time.time:0.00} s: {which}, at rest");
-                    await Awaitable.WaitForSecondsAsync(2f);
+                    // (Its arm as it waits, every tenth of a second: the pistol's kept out of the thigh, PistolSpread.)
+                    for (int k = 0; k < 20; k++)
+                    {
+                        await Awaitable.WaitForSecondsAsync(0.1f);
+                        string report = units.ArmsReport(soldier.Id);
+                        int outAt = report.IndexOf("the arm out ", StringComparison.Ordinal);
+                        if (outAt >= 0) Debug.Log($"[armas] {Time.time:0.00} s: {report.Substring(outAt, 17)}");
+                    }
                     Debug.Log($"[armas] at rest: {units.ArmsReport(soldier.Id)}");
                     var at = units.Chest(target.Id);
                     Debug.Log($"[combat] {Time.time:0.00} s: aims");

@@ -125,6 +125,8 @@ namespace Bastion.Client.Units
             public Held inHand;
             /// <summary>The pistol's turn in the right hand's frame (syntyFigures.ts clipGrip for a pistol); how far into a reload it is (0 none).</summary>
             public Quaternion? pistolGrip;
+            /// <summary>The pistol at rest kept out of the thigh (syntyFigures.ts spreadPistol).</summary>
+            public readonly PistolSpread spread = new PistolSpread();
             public float reload;
             /// <summary>The gun's turn in the right hand's frame, learnt while both hands are on it (syntyFigures.ts clipGrip).</summary>
             public Quaternion? grip;
@@ -269,7 +271,7 @@ namespace Bastion.Client.Units
                     Blade(v, AimBlade * v.aim);
                     Straighten(v, AimStraighten * v.aim);
                 }
-                HoldNow(v);
+                HoldNow(v, dt);
                 SearchPose(v);
                 ClimbPose(v);
                 Reach(v);

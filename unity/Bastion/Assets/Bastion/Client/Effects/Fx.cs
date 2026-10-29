@@ -808,12 +808,16 @@ namespace Bastion.Client.Effects
 
         // ------------------------------------------------------------ the dead
 
-        /// <summary>The Hinchado bursting (on top of the blast): a sickly green cloud, gore, dark splashes round it.</summary>
+        /// <summary>
+        /// The Hinchado bursting (on top of the blast): a sickly green cloud, gore, dark splashes round it. The cloud's
+        /// greens lighter and yellower than fx.ts's 0x7f9a3c and 0xa3b452 (Gameplay 26/10: «un poco más clara»): lit as
+        /// URP lights them, its shade came out darker and greener than three's, a fifth darker from the game's camera.
+        /// </summary>
         public void Burst(Vector3 at, float radius)
         {
             var cloud = at + Vector3.up * 0.3f * T;
-            Puffs(cloud, Hex(0x7f9a3c), 9, size: 0.7f, spread: radius * 0.35f, rise: 0.25f, away: radius * 0.7f, life: 3.2f, grow: 1.6f);
-            Puffs(cloud, Hex(0xa3b452), 5, size: 0.5f, spread: radius * 0.25f, rise: 0.35f, away: radius * 0.5f, life: 2.6f, grow: 1.4f);
+            Puffs(cloud, Hex(0x949a4a), 9, size: 0.7f, spread: radius * 0.35f, rise: 0.25f, away: radius * 0.7f, life: 3.2f, grow: 1.6f);
+            Puffs(cloud, Hex(0xbdb464), 5, size: 0.5f, spread: radius * 0.25f, rise: 0.35f, away: radius * 0.5f, life: 2.6f, grow: 1.4f);
             Gore(at + Vector3.up * 0.8f * T, 14, 5);
             for (int i = 0; i < 7; i++)
             {

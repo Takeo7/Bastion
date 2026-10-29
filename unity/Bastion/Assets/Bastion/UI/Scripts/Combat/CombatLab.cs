@@ -749,11 +749,33 @@ namespace Bastion.UI.Combat
             control.OnConfirmTarget();
         }
 
+        /// <summary>BASTION_LAB_TARDA=0.3: the host's answer that late (seconds), as over the network: what shows between an order and its events.</summary>
+        static readonly float Late = float.TryParse(System.Environment.GetEnvironmentVariable("BASTION_LAB_TARDA"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var late) ? late : 0;
+
+        void Play(Command cmd)
+        {
+            if (Late > 0) PlayLate(cmd);
+            else Answer(cmd);
+        }
+
+        async void PlayLate(Command cmd)
+        {
+            try
+            {
+                await Awaitable.WaitForSecondsAsync(Late, destroyCancellationToken);
+                Answer(cmd);
+            }
+            catch (System.OperationCanceledException)
+            {
+                // The lab went first.
+            }
+        }
+
         /// <summary>
         /// An order to the rules, as the host would take it; its events to this player's copy, and then either to the event
         /// player (in the scene) or straight to the capsules.
         /// </summary>
-        void Play(Command cmd)
+        void Answer(Command cmd)
         {
             var result = Rules.ExecuteCommand(host, cmd, 0, new[] { 0 }, rng);
             if (!result.Ok)

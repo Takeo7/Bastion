@@ -20,7 +20,7 @@ namespace Bastion.EditorTools
     ///   BASTION_LATA=v La Lata as vehicle v (0 4×4, 1 van, 2 lorry, 3 the bus) · BASTION_IR=1 it goes, BASTION_VOLVER=1 it
     ///   comes back (a strip: -shotFrames) · BASTION_NIEVE=1 in winter · BASTION_VIENTO=k the trees' wind (MapBuilder.Wind) · BASTION_SEED=s the fresh base's seed · BASTION_BASE_FILE=base.json a base of one's own (as 0.10.1's __claro.base takes it)
     ///   BASTION_LOOK=x,z,distance[,yaw] the camera (the lab's look; yaw in radians, 0 from the south-east) · BASTION_CERCO=1
-    ///   BASTION_SOMBRAS=m how far the shadows reach (90). To weigh the light against 0.10.1's: BASTION_GRADE=0 without the
+    ///   BASTION_SOMBRAS=m how far the shadows reach (95). To weigh the light against 0.10.1's: BASTION_GRADE=0 without the
     ///   grade · BASTION_SOL=0 without sun nor fill · with it BASTION_CIELO=0 without the sky's light, and BASTION_NIEBLA=1
     ///   the haze alone · BASTION_SOMBRAS_RES=texels,cascades,split the shadows' map
     ///   unity/tools/captura.sh -shotOut claro.png -shotSetup Bastion.EditorTools.SettlementLab.Clearing -shotSize 1600x900
@@ -360,7 +360,7 @@ namespace Bastion.EditorTools
             var settlement = new GameObject("Asentamiento").AddComponent<Settlement>();
             if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_LATA"), out int vehicle)) settlement.SetVehicle(vehicle);
             // The sun's shadows over the whole clearing (0.10.1's shadow camera over all of it), as far as the view reaches.
-            settlement.ShadowMetres = float.TryParse(Environment.GetEnvironmentVariable("BASTION_SOMBRAS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float reach) ? reach : 90;
+            settlement.ShadowMetres = float.TryParse(Environment.GetEnvironmentVariable("BASTION_SOMBRAS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float reach) ? reach : 95;
             settlement.Show(@base, snow, MapLab.Prefabs(), MapLab.Materials());
             // BASTION_IR=1: La Lata going, BASTION_VOLVER=1 coming back, from the first frame of a strip.
             if (Environment.GetEnvironmentVariable("BASTION_IR") == "1") settlement.Depart();
@@ -458,7 +458,7 @@ namespace Bastion.EditorTools
                 }
                 QualitySettings.SetQualityLevel(index, true);
                 // The shadows over the whole clearing, on this level's pipeline too.
-                Mood.ShadowReach(90);
+                Mood.ShadowReach(95);
                 if (wood != null) wood.SetActive(true);
                 double with = Frames();
                 if (wood != null) wood.SetActive(false);
@@ -545,6 +545,7 @@ namespace Bastion.EditorTools
         /// </summary>
         public static void Soldados()
         {
+            Bastion.Client.Units.PistolSpread.Off = Environment.GetEnvironmentVariable("BASTION_SIN_ABRIR") == "1";
             // (BASTION_SIN_LUZ=1: without the soldiers' own key and sky, Settlement.Key.)
             Settlement.FaceKeyOff = Environment.GetEnvironmentVariable("BASTION_SIN_LUZ") == "1";
             if (Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
@@ -568,6 +569,9 @@ namespace Bastion.EditorTools
             }
             // BASTION_CAIDO=1: as if they had fallen (their grave).
             if (Environment.GetEnvironmentVariable("BASTION_CAIDO") == "1") settlement.Showcase(id, look, null, true);
+            // BASTION_PISTOLA=1: with the pistol alone, whatever the Armería gives them (0.10.1's references: arms none).
+            else if (Environment.GetEnvironmentVariable("BASTION_PISTOLA") == "1")
+                settlement.Showcase(id, look ?? campaign.Soldiers.First(s => s.Id == id).Appearance, null, false, campaign.Soldiers.First(s => s.Id == id).Name);
             else settlement.Showcase(campaign, id, look);
             var clock = System.Diagnostics.Stopwatch.StartNew();
             settlement.SetArmory(campaign);
@@ -628,7 +632,17 @@ namespace Bastion.EditorTools
                         return System.FormattableString.Invariant($"{side}: upper arm {open:0.0}° from hanging, hand {Vector3.Dot(rel, across) * sign / width:0.00} out and {Vector3.Dot(rel, ahead) / width:0.00} ahead of the hips");
                     }
                     Debug.Log($"[hip] {a.name}: {Arm("L", HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, 1)}; {Arm("R", HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, -1)}");
+                    // The elbow from the shoulder and the hand from its hip joint (out, ahead, down or up; shoulder widths),
+                    // as 0.10.1's (scratchpad pist/start-codo.js).
+                    string Elbow(string side, HumanBodyBones s, HumanBodyBones e, HumanBodyBones h, HumanBodyBones leg, float sign)
+                    {
+                        Vector3 se = P(e) - P(s), gh = P(h) - P(leg);
+                        return System.FormattableString.Invariant($"{side} elbow out {Vector3.Dot(se, across) * sign / width:0.00}; {side} elbow ahead {Vector3.Dot(se, ahead) / width:0.00}; {side} elbow down {-se.y / width:0.00}; {side} hand out of hip {Vector3.Dot(gh, across) * sign / width:0.00}; {side} hand ahead of hip {Vector3.Dot(gh, ahead) / width:0.00}; {side} hand up from hip {gh.y / width:0.00}");
+                    }
+                    Debug.Log($"[codo] {a.name}: {Elbow("L", HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, HumanBodyBones.LeftUpperLeg, 1)}; {Elbow("R", HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, HumanBodyBones.RightUpperLeg, -1)}");
                 }
+            if (Environment.GetEnvironmentVariable("BASTION_CADERA") == "1")
+                Debug.Log(System.FormattableString.Invariant($"[spread] {id}: the pistol arm turned out {settlement.ShowcaseSpread:0.0000} rad"));
             camera.aspect = size.x / size.y;
             settlement.SetInsets(panels);
             clock.Restart();
@@ -643,17 +657,24 @@ namespace Bastion.EditorTools
         /// The scene «Base» as the game has it, in play mode: once it runs, the sample campaign shown as UI shows it
         /// (Settlement.Instance.Show, the game's catalog), BASTION_SOLDADO's soldier on Soldados (c1) and its busts drawn
         /// (Portraits.Know; each logged as it is ready), the camera on BASTION_VISTA's tab (barracks), and on
-        /// to BASTION_LUEGO's if given; BASTION_MAPA=1 into the Mapa and back, through black.
+        /// to BASTION_LUEGO's if given; BASTION_MAPA=1 into the Mapa and back, through black. BASTION_LEJOS=1: once the shot
+        /// has eased in, the camera where the free look is at its farthest (CameraRig: 42 tiles, 52° down, 40° of view, from
+        /// the south-east); BASTION_GRAFICOS=level: «Gráficos» changed to it then, as the app does (GameSettings:
+        /// SetQualityLevel), and the shadows' reach logged before and a few frames after.
         ///   unity/tools/captura.sh -shotOut base.png -shotScene Assets/Bastion/Scenes/Base.unity -shotSetup Bastion.EditorTools.SettlementLab.BaseScene -shotPlay -shotWarm 3 -shotSize 1440x900
         /// </summary>
         public static void BaseScene()
         {
+            // (BASTION_SIN_ABRIR=1: the pistol at rest not kept out of the thigh, PistolSpread off.)
             string root = Path.GetFullPath(Path.Combine(Application.dataPath, "../../.."));
             var campaign = SampleCampaign(Environment.GetEnvironmentVariable("BASTION_PARTIDA") ?? Path.Combine(root, ".dev-snapshots/ui/estrategia-0101/partida-muestra.json"));
             void Go(UnityEditor.PlayModeStateChange change)
             {
                 if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
                 UnityEditor.EditorApplication.playModeStateChanged -= Go;
+                Bastion.Client.Units.PistolSpread.Off = Environment.GetEnvironmentVariable("BASTION_SIN_ABRIR") == "1";
+                // (BASTION_DE_FRENTE=1: the soldier of Soldados facing the camera, without their sway.)
+                Settlement.SwayOff = Environment.GetEnvironmentVariable("BASTION_DE_FRENTE") == "1";
                 var settlement = Settlement.Instance;
                 if (settlement == null)
                 {
@@ -664,7 +685,37 @@ namespace Bastion.EditorTools
                 Portraits.Know(campaign);
                 settlement.Show(campaign);
                 settlement.Showcase(campaign, Environment.GetEnvironmentVariable("BASTION_SOLDADO") ?? "c1");
+                // (BASTION_GIRO=degrees: turned by the player as if dragged, Ana's #5; 90 their right side to the camera.)
+                if (float.TryParse(Environment.GetEnvironmentVariable("BASTION_GIRO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float turn))
+                    settlement.TurnShowcase(turn);
                 settlement.SetView(Environment.GetEnvironmentVariable("BASTION_VISTA") ?? Settlement.Views.Barracks);
+                if (Environment.GetEnvironmentVariable("BASTION_LEJOS") == "1" || Environment.GetEnvironmentVariable("BASTION_GRAFICOS") != null) Far();
+                async void Far()
+                {
+                    while (settlement.CameraMoving) await Awaitable.NextFrameAsync();
+                    if (Environment.GetEnvironmentVariable("BASTION_LEJOS") == "1")
+                    {
+                        settlement.CameraFree = true;
+                        var camera = settlement.Camera;
+                        float pitch = 52 * Mathf.Deg2Rad, yaw = 45 * Mathf.Deg2Rad, distance = 42 * MapSpace.Tile;
+                        var at = settlement.ClearingTarget;
+                        camera.transform.position = at + new Vector3(Mathf.Sin(yaw) * Mathf.Cos(pitch) * distance, Mathf.Sin(pitch) * distance, -Mathf.Cos(yaw) * Mathf.Cos(pitch) * distance);
+                        camera.transform.LookAt(at);
+                        camera.fieldOfView = 40;
+                    }
+                    void Reach(string when)
+                    {
+                        var urp = (QualitySettings.renderPipeline ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline) as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+                        Debug.Log(System.FormattableString.Invariant($"[sombras] {when}: «{QualitySettings.names[QualitySettings.GetQualityLevel()]}», the shadows to {urp?.shadowDistance:0.#} m, {urp?.shadowCascadeCount} cascades, the camera {Vector3.Distance(settlement.Camera.transform.position, settlement.ClearingTarget):0.#} m off"));
+                    }
+                    Reach("before");
+                    if (Environment.GetEnvironmentVariable("BASTION_GRAFICOS") is string level && Array.IndexOf(QualitySettings.names, level) is int index && index >= 0)
+                    {
+                        QualitySettings.SetQualityLevel(index, true);
+                        for (int k = 0; k < 5; k++) await Awaitable.NextFrameAsync();
+                        Reach("after «Gráficos»");
+                    }
+                }
                 // BASTION_FILA=id,…: those by La Lata (as the Escuadra's row stays up on every tab); 2 s later, who is in the
                 // row and who about the camp (none in both: clearingArt.ts relife).
                 if (Environment.GetEnvironmentVariable("BASTION_FILA") is string row)

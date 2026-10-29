@@ -8,7 +8,7 @@ Plan del 23/10, después de la 0.10.1. La 0.10.1 (commit 9ac9753) es la última 
 |---|---|
 | Reglas y servidor | **Todo a C#.** El motor (27.000 líneas de TypeScript) y el servidor de Node se reescriben en C#. |
 | Primer hito | **Una misión de combate.** Un mapa generado, la escuadra y los zombis con sus animaciones, mover, disparar y el turno enemigo, entre dos jugadores. |
-| La versión de Three.js | **Congelada.** Arturo y Ana juegan con la 0.10.1; solo se arregla lo que impida jugar. |
+| La versión de Three.js | **Congelada.** Arturo y Ana jugaron con la 0.10.1 hasta la 0.11.0 (29/10), la primera de Unity; solo se arregla lo que impida jugar. |
 | Instalación | Unity Hub con Homebrew; Arturo inicia sesión (licencia Personal). Después, Unity 6 LTS desde la línea de órdenes, con soporte de Mac y Windows. |
 | Reglas después de la 0.10.1 (28/10) | **Cambian ya, antes de la primera versión de Unity.** Tras la prueba de Ana: zombis al 80 % de un soldado (6,4 casillas por acción), sin haber visto a nadie vagan con las dos acciones, y el Chillón no vuelve hacia los vivos después de retroceder; la base con un solo camino (al sur), un claro de radio 6 a 8 y los muertos del asedio entrando por las veredas de entre los pinos (las partidas guardadas, versión 26, llenan de pinos los caminos viejos); bolardos y papeleras en las aceras en vez de macetas, con las mismas reglas. Lo detalla [PRUEBA-2026-10-28.md](PRUEBA-2026-10-28.md). El motor de C# deja de ser idéntico a la 0.10.1 en eso; las grabaciones de TypeScript se hacen con `engine-cs/golden/since-0101.patch` (engine-cs/README.md). |
 | Las pruebas del motor (29/10) | **TypeScript, solo hasta la tanda del 29/10.** Las reglas de las notas del 28/10 y del 29/10 se escribieron también en TypeScript (sin publicarlo, `engine-cs/golden/since-0101.patch`) para grabar las partidas de referencia. Después, las reglas solo en C#, y las partidas de referencia se graban con el propio C# (engine-cs/README.md). |
@@ -131,20 +131,21 @@ UI ya hizo la marca de las cajas de botín, el anillo de los enemigos, apartar f
       - UI: el `drawBlock` de mapView.ts (silos, camiones, contenedores, depósito de agua) en `MapBuilder.Blocks.cs`, y los techos de los surtidores con su desvanecido;
       - Arte: Woodland Apocalypse Map importado y las cercas con sus raíles (`fenceAt`/`rails`).
       - `MapCatalogMake.Check` no echa nada en falta en 25 mapas de campo, 14 de fábrica y 67 de ciudad. Alpine no hace falta para estos mapas.
-    - **Falta:** las sombras cuando la cámara se aleja (acaban a 50 m y la cámara llega a 63 m). Lo hace Arte, con la medida de lo que cuesta.
+    - **Las sombras con la cámara lejos** (Arte, 26/10, `ShadowFit`): llegan a 95 m en combate y a 90 m en la base, en los tres niveles. En el Mac cuestan 0,4 ms de GPU en Altos con la cámara al máximo. Falta medirlo en el PC de la 3090.
 - **La noche:** luces de farolas, coches y ventanas, y las bengalas.
-- **Armas:** hecho el 26/10 (Arte). Pistola, machete y cuchillo en la mano, en la funda y en el cinto, y recargar, en combate y en la base. Quedan detalles: la guardia con la hoja, el fusil al agacharse (`slingOnBack`) y la pistola fuera del muslo (`spreadPistol`).
+- **Armas:** hecho el 26/10 (Arte). Pistola, machete y cuchillo en la mano, en la funda y en el cinto, y recargar, en combate y en la base. Los detalles, cerrados el 29/10: la pistola fuera del muslo (`PistolSpread`, el `spreadPistol` de la 0.10.1); la guardia con la hoja ya estaba (27/10); el fusil a la espalda al agacharse (`slingOnBack`) no se trae, porque solo salía en el tiempo real.
 - **Muertos especiales** (Arte, hecho el 26/10).
   - Los cuerpos: City Zombies para el Corredor y el Acorazado, Boss Zombies para el Chillón y el Hinchado, con los tamaños y el pelo de la 0.10.1.
   - El grito del Chillón con su cuerpo y el reventón del Hinchado.
   - La inclinación de cada tipo al andar (STYLES), medida por el ángulo del tronco contra la 0.10.1.
   - Los 17 cuerpos del zombi común, con los 12 «vivos hechos muertos» horneados en `Assets/Synty/Extra/Undead`, fuera de git: los hace FigureCatalogMake.
   - Con ellos, para todas las unidades: el destello rojo al recibir un golpe y al morir, y la muerte y el golpe según de dónde viene (antes iban al azar).
-  - Quedan detalles: la nube del Hinchado y la mano en la cadera en Soldados.
+  - Los detalles, cerrados el 29/10: la nube del Hinchado, con los verdes de la 0.10.1; la mano en la cadera en Soldados ya era como allí (lo distinto era el vaivén de la pantalla).
 - **Rendimiento medido** en el PC de la 3090 («alto» ≤ 4,2 ms) y en el Mac («medio» ≥ 30 fps), con red.log.
-- **Releases de la app de Unity** (versión que decide Arturo) y, entonces, retirar packages/ (Three.js, Electron). El borrador de las notas es [NOTAS-UNITY.md](NOTAS-UNITY.md), de Lore. Antes de la primera, hay que decidir con Arturo dos cosas:
-  - **El número de versión.** La app dice hoy «0.1.0», más bajo que la 0.10.1.
-  - **El nombre en el Mac.** Las dos apps se llaman `Bastion.app`, así que copiar la de Unity a Aplicaciones sustituye a la de Electron. Las partidas no se pisan, porque Unity guarda en `Bastion-Unity/`.
+- **Releases de la app de Unity.** La primera es la 0.11.0 (29/10), con las notas de Lore ([NOTAS-UNITY.md](NOTAS-UNITY.md)). Falta retirar packages/ (Three.js, Electron). Lo que decidió Arturo el 29/10:
+  - **El número** sigue a la 0.10.1 (`bundleVersion`; la app decía «0.1.0»).
+  - **En el Mac sigue siendo `Bastion.app`:** al copiarla a Aplicaciones sustituye a la de Electron. Las partidas no se pisan, porque Unity guarda en `Bastion-Unity/`.
+  - **Sin comprimir** y **solo Mac (universal) y Windows**, sin Linux.
   - **El tamaño** (Red, 26/10). La app del Mac ocupa 842 MB porque la compilación no comprime nada: el zip ya pesa 224 MB.
     - Con LZ4HC baja a 306 MB sin cambiar lo que se ve. Red lo midió en el Mac:
       - la carga sube de 0,2 a 0,6 s (combate 3,5→3,7 s; base 1,2→1,8 s);

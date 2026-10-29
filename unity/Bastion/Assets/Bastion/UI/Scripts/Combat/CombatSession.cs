@@ -145,6 +145,7 @@ namespace Bastion.UI.Combat
                     break;
                 case RejectedMessage rejected:
                     Hud?.Toast(rejected.Message);
+                    control.TurnedDown();
                     break;
                 case DeadlineMessage d:
                     if (d.Ms == null) deadlines.Remove(d.Kind);

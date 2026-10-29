@@ -340,7 +340,7 @@ namespace Bastion.UI.Combat
             var tags = new Dictionary<string, (string, string)>();
             var u = Unit();
             var tile = hover;
-            if (u == null || tile == null || !CanAct() || !Commands(u)) return tags;
+            if (u == null || tile == null || !CanAct() || !Commands(u) || u.Id == sent) return tags;
             if (mode == Mode.Tile && HandArmed() == null) return BlastTags(u, modeAbility, tile);
             if (mode != Mode.Move || !Abilities.AbilitiesOf(u).Contains(AbilityIds.Shoot)) return tags;
             var occupant = Grid.UnitAt(State, tile);
@@ -861,6 +861,9 @@ namespace Bastion.UI.Combat
         /// </summary>
         public void Played(IList<GameEvent> events, int? by)
         {
+            // This player's answer (even with no events): what waited for it comes back once they are seen (Red, 29/10:
+            // the partner's, between the confirm and these, release nothing).
+            if (by == MySlot) sent = null;
             foreach (var e in events)
                 if (e is MovedEvent moved && UnitById(State, moved.Unit) is Unit u && u.Owner != null && u.Owner != MySlot) PartnerLast = u.Id;
         }

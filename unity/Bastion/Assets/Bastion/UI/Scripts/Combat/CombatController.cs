@@ -86,6 +86,12 @@ namespace Bastion.UI.Combat
         List<MoveTile> tiles;
         Pos hover;
         bool hoverHeld;
+        /// <summary>
+        /// The soldier whose action was just sent, till its events come (or 2 s, or the host turns it down): its reach, the
+        /// pointer's path and the enemies' tags wait meanwhile, not flashing between the confirm and the action (Gameplay, 29/10).
+        /// </summary>
+        string sent;
+        float sentAt;
 
         public string PickedId => picked;
         public Pos Hovered => hover;
@@ -117,9 +123,23 @@ namespace Bastion.UI.Combat
                 Toast(HudText.Menu.PausedOrder);
                 return;
             }
+            // (Before it goes: the combat lab plays it at once.)
+            if (c is AbilityCommand action)
+            {
+                sent = action.Unit;
+                sentAt = Time.realtimeSinceStartup;
+            }
             Order?.Invoke(c);
         }
         void Send(ClientMessage m) => Message?.Invoke(m);
+
+        /// <summary>The host turned the last order down: what waited for its events comes back.</summary>
+        public void TurnedDown()
+        {
+            if (sent == null) return;
+            sent = null;
+            Refresh();
+        }
 
         readonly List<Vector3> enemyFeet = new List<Vector3>();
 
@@ -432,8 +452,10 @@ namespace Bastion.UI.Combat
             AutoSelect();
             FollowLevel();
             CheckMode();
+            // The action sent has its events now: they keep its marks away while they play.
+            if (sent != null && Busy(sent)) sent = null;
             var u = Unit();
-            var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && u.Ap > 0 && WaitingFor(u.Id) == null && !Busy(u.Id);
+            var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && u.Ap > 0 && WaitingFor(u.Id) == null && !Busy(u.Id) && u.Id != sent;
             reach = moving ? Paths.ComputeReach(State, u, Paths.MaxMoveCost(u)) : null;
             tiles = reach != null ? Tiles(u) : null;
             // Without the command the range is still shown, fainter: it is for planning (#35). Only the floor shown's.
@@ -504,6 +526,8 @@ namespace Bastion.UI.Combat
             guard.Frame();
             if (State == null) return;
             if (Time.unscaledTime >= graceEnds) GraceOver();
+            // An action sent whose events never came (a lost answer): its marks back after 2 s.
+            if (sent != null && Time.realtimeSinceStartup - sentAt > 2f) TurnedDown();
             if (moment != null && Time.time >= momentUntil)
             {
                 moment = null;

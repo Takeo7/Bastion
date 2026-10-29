@@ -248,6 +248,9 @@ namespace Bastion.Client.Units
         bool armOn;
         float armWeight, armFade = 0.25f;
 
+        /// <summary>How much the gun arm is the pistol's at rest now (ArmRest, as it stands): syntyFigures.ts pistolRest, what PistolSpread goes by.</summary>
+        public float PistolRest { get; private set; }
+
         /// <summary>The right arm alone (syntyAnims.ts GUN_ARM: clavicle, shoulder, elbow, hand).</summary>
         static AvatarMask GunArm()
         {
@@ -581,12 +584,14 @@ namespace Bastion.Client.Units
             if (armClip.IsValid())
             {
                 layers.SetInputWeight(ArmLayer, armWeight * standing);
+                PistolRest = armWeight * standing;
                 if (!armOn && armWeight <= 0)
                 {
                     Unplug(layers, ArmLayer);
                     armClip.Destroy();
                 }
             }
+            else PistolRest = 0;
             for (int layer = Upper; layer <= Whole; layer++)
             {
                 var slot = slots[layer];

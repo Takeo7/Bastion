@@ -23,6 +23,14 @@ namespace Bastion.Client
         /// <summary>Whether that is the pistol (their only gun), held by the thigh.</summary>
         bool showPistol;
         Quaternion? showGrip;
+        /// <summary>Their pistol at rest kept out of the thigh (UnitViews' PistolSpread), made again with each figure.</summary>
+        PistolSpread showSpread = new PistolSpread();
+
+        /// <summary>For the labs: the soldier facing their camera, without their sway (to set beside 0.10.1's at the same turn).</summary>
+        public static bool SwayOff;
+
+        /// <summary>For the labs: how far their pistol arm is turned out of the thigh (radians).</summary>
+        public float ShowcaseSpread => showSpread.Out;
         float showTime;
         /// <summary>
         /// The player's turn of the soldier, dragging (Ana's #5: TurnShowcase), and where it is going (radians; its front to
@@ -173,6 +181,7 @@ namespace Bastion.Client
             showGun = null;
             showPistol = false;
             showGrip = null;
+            showSpread = new PistolSpread();
             showFigure = null;
             if (showcase != null)
                 foreach (Transform child in showcase.Cast<Transform>().ToList()) DestroyNow(child.gameObject);
@@ -183,14 +192,18 @@ namespace Bastion.Client
         {
             if (showFigure == null) return;
             showTime += dt;
-            showSway = Mathf.Sin(Time.realtimeSinceStartup * 0.4f) * 0.45f * showSwayK;
+            showSway = SwayOff ? 0 : Mathf.Sin(Time.realtimeSinceStartup * 0.4f) * 0.45f * showSwayK;
             showTurn += (showTurnTo - showTurn) * (1 - Mathf.Exp(-14 * dt));
             showFigure.localRotation = Quaternion.Euler(0, (Mathf.Atan2(soldierView.x, -soldierView.y) - showSway - showTurn) * Mathf.Rad2Deg, 0);
             if (showAnim != null)
             {
                 if (dt <= 0) showAnim.Step(0);
                 for (float left = dt; left > 1e-5f; left -= 0.1f) showAnim.Step(Mathf.Min(0.1f, left));
-                if (showPistol) UnitViews.HoldPistol(showAnimator, showGun, showFigure, 0, ref showGrip);
+                if (showPistol)
+                {
+                    UnitViews.HoldPistol(showAnimator, showGun, showFigure, 0, ref showGrip);
+                    showSpread.Apply(showAnimator, showAnim, showGun, dt);
+                }
                 else UnitViews.Hold(showAnimator, showGun, showFigure, false, ref showGrip);
             }
         }

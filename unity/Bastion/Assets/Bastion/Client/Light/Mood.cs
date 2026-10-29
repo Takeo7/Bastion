@@ -123,7 +123,7 @@ namespace Bastion.Client
                 return;
             }
             var asset = KeptAsset();
-            if (asset != null) asset.shadowDistance = metres.Value;
+            if (asset != null && asset.shadowDistance != metres.Value) asset.shadowDistance = metres.Value;
         }
 
         /// <summary>

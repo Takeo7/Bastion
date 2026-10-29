@@ -56,6 +56,8 @@ namespace Bastion.Client
             /// <summary>Whether that is the pistol, its only gun (held at rest by the thigh: UnitViews.HoldPistol), not a two-handed one.</summary>
             public bool pistol;
             public Quaternion? grip;
+            /// <summary>Its pistol at rest kept out of the thigh (UnitViews' PistolSpread).</summary>
+            public readonly PistolSpread spread = new PistolSpread();
             public float yaw;
             /// <summary>Its build's clips (masc, femn); whether its gun is slung on its back (getting in: Sling), and where on which bone.</summary>
             public string build = "masc";
@@ -294,7 +296,11 @@ namespace Bastion.Client
             if (dt <= 0) s.anim.Step(0);
             for (float left = dt; left > 1e-5f; left -= 0.1f) s.anim.Step(Mathf.Min(0.1f, left));
             if (s.slung) KeepSlung(s);
-            else if (s.pistol) UnitViews.HoldPistol(s.animator, s.gun, s.root, 0, ref s.grip);
+            else if (s.pistol)
+            {
+                UnitViews.HoldPistol(s.animator, s.gun, s.root, 0, ref s.grip);
+                s.spread.Apply(s.animator, s.anim, s.gun, dt);
+            }
             else UnitViews.Hold(s.animator, s.gun, s.root, false, ref s.grip);
         }
 
