@@ -100,7 +100,7 @@ namespace Bastion.Engine.Tests
                         Say(room, players[0], new JObject { ["t"] = "returnToBase" });
                         continue;
                     }
-                    var connected = heard.Room!.Players.Where((x) => x.Connected).Select((x) => x.Slot).ToList();
+                    var connected = heard.Active();
                     foreach (var p in players)
                     {
                         if (p.Heard.Mission == null) continue;

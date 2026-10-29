@@ -320,7 +320,8 @@ namespace Bastion.Client.Map
             if (own == null) return null;
             if (crowns.TryGetValue(own, out var made) && made != null) return made;
             made = new Material(shader) { name = own.name + " (copa)" };
-            var texture = own.HasProperty("_Main_Texture") ? own.GetTexture("_Main_Texture") : own.mainTexture;
+            // (Nature's and Apocalypse's trees: _Main_Texture; Synty/Generic_Basic, the city's street tree: _Albedo_Map.)
+            var texture = own.HasProperty("_Main_Texture") ? own.GetTexture("_Main_Texture") : own.HasProperty("_Albedo_Map") ? own.GetTexture("_Albedo_Map") : own.mainTexture;
             made.SetTexture(BaseMapId, texture);
             var tint = own.HasProperty("_Color_Tint") ? own.GetColor("_Color_Tint") : own.HasProperty("_BaseColor") ? own.GetColor("_BaseColor") : Color.white;
             tint.a = 1;

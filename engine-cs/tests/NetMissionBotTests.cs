@@ -78,5 +78,69 @@ namespace Bastion.Engine.Tests
             state.Outcome = Outcomes.Victory;
             Assert.Null(MissionBot.Next(state, 0, both));
         }
+
+        private static RoomMessage Room(bool pepe, bool pepeAway = false) => new RoomMessage
+        {
+            Phase = RoomPhases.Mission,
+            Players = new List<PlayerInfo>
+            {
+                new PlayerInfo { Slot = 0, Name = "Ana", Connected = true },
+                new PlayerInfo { Slot = 1, Name = "Pepe", Connected = pepe, Away = pepeAway ? true : (bool?)null },
+            },
+        };
+
+        [Fact]
+        public void ADroppedPartnerCountsAsHereTillTheHostsGrace()
+        {
+            var clock = new FakeClock();
+            var heard = new HeardGame(clock);
+            heard.Observe(Room(true));
+            Assert.Equal(new[] { 0, 1 }, heard.Active());
+            // Dropped: here for the host's 30 s, as Room.ActiveSlots has it, then gone.
+            heard.Observe(Room(false));
+            clock.Advance(Bastion.Net.Room.ReconnectGraceMs - 1);
+            Assert.Equal(new[] { 0, 1 }, heard.Active());
+            heard.Observe(Room(false));
+            clock.Advance(1);
+            Assert.Equal(new[] { 0 }, heard.Active());
+            // Back, and dropped again with the game out of sight: five minutes.
+            heard.Observe(Room(true));
+            Assert.Equal(new[] { 0, 1 }, heard.Active());
+            heard.Observe(Room(false, true));
+            clock.Advance(Bastion.Net.Room.AwayGraceMs - 1);
+            Assert.Equal(new[] { 0, 1 }, heard.Active());
+            clock.Advance(1);
+            Assert.Equal(new[] { 0 }, heard.Active());
+        }
+
+        [Fact]
+        public void TheDroppedPartnersSoldiersWaitForTheGrace()
+        {
+            // Pepe drops: what Ana's bot asks for in the grace is all hers, and the host takes it all (with the connected
+            // alone it tried Pepe's soldiers every 0.6 s, «Es de la escuadra del otro jugador.»: the apps, 29/10).
+            var clock = new FakeClock();
+            var heard = new HeardGame(clock);
+            heard.Observe(Room(true));
+            heard.Observe(Room(false));
+            var state = Launch(4);
+            state.Command = null;
+            var rng = new Rng(17);
+            var orders = new List<Command>();
+            for (var i = 0; i < 40 && state.Outcome == null; i++)
+            {
+                var cmd = MissionBot.Next(state, 0, heard.Active());
+                if (cmd == null || cmd is EndTurnCommand) break;
+                orders.Add(cmd);
+                var id = cmd switch { MoveCommand m => m.Unit, AbilityCommand a => a.Unit, EvacCommand e => e.Unit, ItemCommand it => it.Unit, _ => null };
+                var unit = state.Units.FirstOrDefault((u) => u.Id == id);
+                Assert.True(unit == null || unit.Owner != 1, $"an order for Pepe's {unit?.Id}");
+                Assert.True(Rules.ExecuteCommand(state, cmd, 0, new List<int> { 0, 1 }, rng).Ok, $"refused: {Json.Write(cmd)}");
+            }
+            Assert.NotEmpty(orders);
+            // Past the grace his soldiers are hers too, as for the host.
+            clock.Advance(Bastion.Net.Room.ReconnectGraceMs);
+            Assert.Equal(new[] { 0 }, heard.Active());
+            Assert.Contains(state.Units, (u) => u.Team == Teams.Xcom && u.Owner == 1 && Content.CommandsFor(0, u.Owner, heard.Active()));
+        }
     }
 }

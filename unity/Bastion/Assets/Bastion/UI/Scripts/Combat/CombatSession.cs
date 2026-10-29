@@ -264,12 +264,14 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// The turn clocks for the HUD (turnClock.ts turnClockOf): this player's (0) and the partner's (1), the share of the
-        /// turn's time left and whether it runs; none outside the squad's turn.
+        /// turn's time left and whether it runs; none outside the squad's turn, and the partner's only with a partner in the
+        /// game (hud.ts setPlayers' clockSlots: playing alone, no thin bar under this player's).
         /// </summary>
         ClockView ClockOf(int which)
         {
             if (control == null) return null;
             var slot = which == 0 ? control.MySlot : 1 - control.MySlot;
+            if (which == 1 && !control.Players.Any(p => p.Slot == slot)) return null;
             if (clocks == null || slot >= clocks.Count) return null;
             var c = clocks[slot];
             if (c == null || c.Total <= 0) return null;

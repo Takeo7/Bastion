@@ -188,8 +188,8 @@ namespace Bastion.Client.Net
             if (sentAt >= 0 && s.Seq == sentAt && now - sentWhen < 6) return;
             if (!screenIdle && now - sentWhen < (lastWasEnd ? 8 : 3)) return;
             if (now - sentWhen < 0.6f) return;
-            var connected = room.Players.Where((p) => p.Connected).Select((p) => p.Slot).ToList();
-            var cmd = MissionBot.Next(s, link.Slot, connected);
+            // Who counts as here for the host: a dropped partner too, through its grace (their soldiers and command stay theirs).
+            var cmd = MissionBot.Next(s, link.Slot, heard.Active());
             if (cmd == null) return;
             lastWasEnd = cmd is EndTurnCommand;
             link.Send(cmd);
