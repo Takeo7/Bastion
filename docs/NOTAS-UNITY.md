@@ -6,7 +6,7 @@ Borrador de Lore (26/10) para cuando Arturo saque la primera versión hecha en U
 
 **Título:** Bastión [versión]: el juego en Unity
 
-Versión [versión] (commit [commit]). Es la primera versión hecha en Unity. Se juega igual que la 0.10.1: la misma campaña, las mismas misiones y las mismas reglas. Lo que cambia es la app.
+Versión [versión] (commit [commit]). Es la primera versión hecha en Unity. La campaña y las misiones son las de la 0.10.1. Cambian la app y algunas reglas, tras la prueba de Ana del 28/10.
 
 ## Una app nueva
 
@@ -17,6 +17,7 @@ Versión [versión] (commit [commit]). Es la primera versión hecha en Unity. Se
 
 - **La campaña de la 0.10.1 no pasa a esta versión.** Aquí se empieza una campaña nueva.
 - **La de la 0.10.1 sigue en su carpeta:** si se abre la 0.10.1, está como se dejó.
+- **La campaña empezada con las apps de prueba de Unity sigue aquí:** se continúa donde se dejó. [Comprobar al cerrar: la carpeta de las partidas sale del nombre de la app (Bastion-Unity/Bastion). Si cambia al decidir el nombre de la app del Mac, se quita o se cambia esta línea, y también la de los caminos del asedio.]
 
 ## Lo que cambia al jugar
 
@@ -24,6 +25,25 @@ Versión [versión] (commit [commit]). Es la primera versión hecha en Unity. Se
 - **«Ser anfitrión» se llama ahora «Alojar la partida».**
 - **El nombre se escribe en la primera pantalla,** en «Tu nombre».
 - **La dirección para «Unirse por dirección»** lleva ahora el puerto 41391 (por ejemplo, 192.168.1.20:41391). Sale en el menú principal de quien aloja.
+- **Escaramuza ya no tiene el ritmo en tiempo real,** que era una prueba.
+
+### Las reglas
+- **El zombi común y el Acorazado andan más:** el 80 % de lo que anda un soldado (antes, el 60 %).
+- **Un zombi que no ha visto a nadie** gasta sus dos acciones en vagar.
+- **El Chillón ya no se aleja y vuelve en el mismo turno.** Si no os ve, busca desde dónde veros a 5 casillas o más; si estáis más lejos que su grito, se acerca.
+- **En el asedio:**
+  - hay un solo camino, al sur, por el que llega La Lata;
+  - los muertos salen de entre los pinos, por las veredas;
+  - en una campaña nueva, el claro es más pequeño: de 6 a 8 casillas de radio (antes, de 8 a 11);
+  - en una campaña empezada con las apps de prueba, los dos caminos de los lados y el del norte se llenan de pinos; queda el del sur.
+
+### En combate
+- **Esc para la partida a los dos** y tapa la pantalla de quien abre el menú. En la otra pantalla sale «Partida en pausa: Ana está en el menú.».
+- **A 3 turnos de perder la misión,** un aviso: «QUEDAN 3 TURNOS».
+- **F12 guarda una captura** en Imágenes/Bastión. Los atajos de captura del Mac también funcionan, a pantalla completa incluida.
+- **Lanzar enseña siempre la granada,** apagada cuando no quedan.
+- **El escudo de cobertura propio** sale cuando en la misión se ha visto a un enemigo que dispara.
+- **Sin compañía,** no salen el marco del turno ni la lista de jugadores.
 
 ### La base
 - **Pulsar una zona del Mapa** abre su hoja, con todas sus misiones.
@@ -46,12 +66,15 @@ Versión [versión] (commit [commit]). Es la primera versión hecha en Unity. Se
 - **La pistola va en su funda y el fusil, a la espalda,** cuando no se usan.
 - **Las barricadas de sacos se ven gastadas** según el daño que llevan.
 - **Las sombras llegan a todo lo que se ve,** también con la cámara alejada del todo, en el combate y en la base.
+- **Una casa sale en negro hasta que entra un soldado.** Un enemigo que se ve por una ventana sale con su casilla iluminada.
+- **Coches enteros y destrozados,** con la pintura apagada.
+- **En las aceras, bolardos y papeleras;** las macetas con árbol, solo en plazas y parques.
+- **Los muertos no llevan ropa azul ni morada.**
+- **En el asedio,** cada punto cardinal sale también en el borde de la pantalla.
 
 ## Lo que aún no está
 
-[Se ajusta al final: se quita lo que haya llegado.]
-- [**El sonido:** Ajustes ya tiene sus filas, pero aún no se oye nada.]
-- [**Los muertos especiales con su cuerpo:** el Corredor, el Acorazado, el Chillón y el Hinchado se ven como un zombi corriente. Hacen lo mismo que en la 0.10.1.]
+[Se ajusta al final. El sonido y los muertos especiales con su cuerpo ya llegaron (9ff0b7e). Si al cerrar no falta nada, esta sección se quita.]
 
 ## Descargas
 
