@@ -146,10 +146,11 @@ namespace Bastion.Client.Units
             /// </summary>
             public float close, reach, back;
             public string reachOf;
-            /// <summary>Crouched (hunkered, held: unitViews.ts crouchTarget); eating a fallen body; walking.</summary>
+            /// <summary>Crouched (hunkered, held: unitViews.ts crouchTarget); eating a fallen body; walking; striking with the blade (StrokeOn).</summary>
             public bool crouched;
             public bool feeding;
             public bool walking;
+            public bool striking;
             /// <summary>The yaw it turns to (degrees; null, none: where it is) and how fast (unitViews.ts pose.yawTarget, turn).</summary>
             public float? yawTo;
             /// <summary>Out of the way of the shot over a shoulder (Veil).</summary>
@@ -451,7 +452,7 @@ namespace Bastion.Client.Units
             {
                 v.watch = watch;
                 v.guard = guard;
-                if (!v.walking && !v.feeding && !v.aiming && v.picking == null && v.weapon != null)
+                if (!v.walking && !v.feeding && !v.aiming && !v.striking && v.picking == null && v.weapon != null)
                 {
                     Draw(v, guard ? BeltCarry : MainCarry);
                     Settle(v, 0.3f);
@@ -1099,12 +1100,16 @@ namespace Bastion.Client.Units
             await Lowered(v, aim, ct);
         }
 
-        /// <summary>To how it stands now, and 0.3 s on (if `aim` is still its last), the weapon it stands with drawn again.</summary>
+        /// <summary>
+        /// To how it stands now, and 0.3 s on (if `aim` is still its last), the weapon it stands with drawn again; not while
+        /// it strikes with the blade (29/10, Red in Ana's app: the target picked and the blow confirmed, the rifle came back
+        /// into the hands halfway through the chainsaw's stroke, the chainsaw hung up again): the stroke draws it after.
+        /// </summary>
         async Awaitable Lowered(View v, int aim, CancellationToken ct = default)
         {
-            if (v.weapon != null) Settle(v, 0.3f);
+            if (v.weapon != null && !v.striking) Settle(v, 0.3f);
             await Awaitable.WaitForSecondsAsync(0.3f, ct);
-            if (aim != v.aims || v.root == null || v.aiming || v.picking != null) return;
+            if (aim != v.aims || v.root == null || v.aiming || v.striking || v.picking != null) return;
             v.close = 0;
             string carry = v.guard ? BeltCarry : MainCarry;
             if (v.weapon != null && v.drawn != carry)

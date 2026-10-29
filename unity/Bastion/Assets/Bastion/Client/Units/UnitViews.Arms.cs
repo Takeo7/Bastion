@@ -25,6 +25,8 @@ namespace Bastion.Client.Units
 
         /// <summary>The holster this far below the hip (syntyFigures.ts HOLSTER_DROP); the blade out from the hips this way and this far (BELT_OUT, without a body to keep off).</summary>
         const float HolsterDrop = 0.15f, BeltOutBy = 0.13f;
+        /// <summary>Where along it the chainsaw hangs on the back, of the way from its back handle to its middle.</summary>
+        const float SlungBy = 0.35f;
         static readonly Vector3 BeltOut = new Vector3(-0.62f, 0, -0.78f).normalized, BeltAlong = new Vector3(-0.1f, -1, -0.45f).normalized;
 
         /// <summary>The pistol at rest, «Pistol Aim» held this far in (syntyFigures.ts PISTOL_HOLD: one-handed by the thigh).</summary>
@@ -199,7 +201,9 @@ namespace Bastion.Client.Units
                 model.localRotation = Quaternion.identity;
                 float lossy = Mathf.Max(mount.lossyScale.x, 1e-4f);
                 model.localScale = Vector3.one * Figures.CharacterScale * Size(v.arts[kv.Key]) / lossy;
-                model.localPosition = new Vector3(0, 0, ride == MainCarry || ride == SlungCarry ? -v.middles[kv.Key] / lossy : 0);
+                // (The gun by its middle; the chainsaw nearer its motor, so that the motor sits in the middle of the back, not
+                // at the waist: Gameplay 29/10.)
+                model.localPosition = new Vector3(0, 0, ride == MainCarry ? -v.middles[kv.Key] / lossy : ride == SlungCarry ? -v.middles[kv.Key] * SlungBy / lossy : 0);
                 // A blade at the belt by its grip, along the way it runs (the pan by its handle, hanging).
                 if (ride == BeltCarry) Seat(model, v.arts[kv.Key], mount.position, mount.rotation);
             }
@@ -502,6 +506,19 @@ namespace Bastion.Client.Units
         }
 
         async Awaitable StrokeOn(View v, View target, Action onHit, CancellationToken ct)
+        {
+            v.striking = true;
+            try
+            {
+                await Swing(v, target, onHit, ct);
+            }
+            finally
+            {
+                v.striking = false;
+            }
+        }
+
+        async Awaitable Swing(View v, View target, Action onHit, CancellationToken ct)
         {
             // A blow at arm's length (unitViews.ts rtStrike: struck).
             StruckBy(target, v.root.position, true);

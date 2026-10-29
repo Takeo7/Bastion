@@ -860,8 +860,9 @@ namespace Bastion.EditorTools
         /// <summary>
         /// A blade's blow (Ana's #10: the pan, the bat, the crowbar, the chainsaw; BASTION_HOJA, the machete unless said): a
         /// soldier with a rifle in the hands and the blade at the belt (the chainsaw on the back), one of the dead on the next
-        /// tile, as the game strikes; a second in, the blow (Lunge: drawn, swung, back, the rifle again), and then on watch with the blade, on
-        /// guard. On a plain floor, the camera low from the side (BASTION_VIEW=game, the game's).
+        /// tile, as the game strikes; a second in, the blow (Lunge: drawn, swung, back, the rifle again), and then on watch
+        /// with the blade, on guard. On a plain floor, the camera low from the side (BASTION_VIEW=game, the game's).
+        /// BASTION_ELEGIR=1: the target picked first, as the game does (the blade drawn on guard, let go at the confirm).
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Golpes -shotPlay -shotCamera "Shot camera"
         ///     -shotFrames 50 -shotFps 10 -shotOut &lt;folder&gt;
         /// </summary>
@@ -889,7 +890,15 @@ namespace Bastion.EditorTools
                     units.Sync(state);
                     Reveal();
                     Debug.Log($"[combat] {units.ArmsReport(soldier.Id)}");
+                    // (As the game: CombatController.Orders' pick, EventPlayer's wait before the lunge.)
+                    bool pick = Environment.GetEnvironmentVariable("BASTION_ELEGIR") == "1";
+                    if (pick) units.AimAt(soldier.Id, units.Chest(target.Id), true);
                     await Awaitable.WaitForSecondsAsync(1);
+                    if (pick)
+                    {
+                        units.AimAt(soldier.Id, null);
+                        await Awaitable.WaitForSecondsAsync(0.2f);
+                    }
                     Debug.Log($"[combat] {Time.time:0.00} s: the blow ({weapon})");
                     sfx.Melee("swing", units.Chest(soldier.Id), weapon);
                     await units.Lunge(soldier.Id, target.Id, false, () =>
