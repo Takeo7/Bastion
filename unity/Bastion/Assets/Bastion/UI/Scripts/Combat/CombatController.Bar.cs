@@ -47,6 +47,28 @@ namespace Bastion.UI.Combat
         /// <summary>Whether this map has furniture to search (Registrar): the game's, from the map (game.ts hasSpots).</summary>
         public bool HasSpots = true;
 
+        /// <summary>
+        /// A choice a menu always has though the soldier lacks it: Lanzar's grenade (Arturo, 28/10; Ana: «no te da a elegir
+        /// entre granada y piedra»), off, none left. The engine lists it only while a grenade is carried; 0.10.1 did too.
+        /// </summary>
+        AbilityView Missing(Unit u, string menu, string id)
+        {
+            if (menu != "menu:throw" || id != AbilityIds.Grenade || u.Team != Teams.Xcom) return null;
+            var def = Content.Abilities[id];
+            return new AbilityView
+            {
+                Id = id,
+                Name = def.Name,
+                Enabled = false,
+                Reason = AbilityTexts.NoneLeft(ChargeIds.Grenade),
+                Cost = AbilityTexts.CostText(u, id),
+                Description = def.Description,
+                Count = 0,
+                Free = def.Ap == 0,
+                Depleted = true,
+            };
+        }
+
         List<AbilityView> SoldierAbilities(Unit u)
         {
             var list = AbilityList(u);
@@ -107,8 +129,16 @@ namespace Bastion.UI.Combat
                     continue;
                 }
                 if (!done.Add(menu.Id)) continue;
-                var options = menu.Members.Select(id => views.FirstOrDefault(x => x.Id == id)).Where(x => x != null && menu.Shows(x, crate)).ToList();
+                var options = menu.Members.Select(id => views.FirstOrDefault(x => x.Id == id) ?? Missing(u, menu.Id, id)).Where(x => x != null && menu.Shows(x, crate)).ToList();
                 if (options.Count == 0) continue;
+                // Lanzar's choices with none left say so (Lore, 28/10), not the engine's «No quedan usos.».
+                if (menu.Id == "menu:throw")
+                    foreach (var o in options)
+                        if (o.Count == 0 && Content.Abilities[o.Id].Charge is string charge && AbilityTexts.NoneLeft(charge) is string none)
+                        {
+                            o.Enabled = false;
+                            o.Reason = none;
+                        }
                 var usable = options.Where(o => o.Enabled).ToList();
                 var first = options[0];
                 var several = options.Count > 1;

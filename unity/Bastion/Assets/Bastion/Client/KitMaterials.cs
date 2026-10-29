@@ -24,6 +24,8 @@ namespace Bastion.Client
         public const string NightRim = "Kit/NightRim";
         /// <summary>Where a figure is, a stencil bit, for the fog to leave it be (Bastion/FigureMask: UnitViews.Rim).</summary>
         public const string FigureMask = "Kit/FigureMask";
+        /// <summary>A whole car of the street, worn (Bastion/Car: MapBuilder.PaintWhole), its paint's textures set on the copy.</summary>
+        public const string Car = "Kit/Car";
 
         /// <summary>A new material copied from `kind`'s, named `name`; null if it isn't there (KitMaterialsMake not run).</summary>
         public static Material New(string kind, string name)

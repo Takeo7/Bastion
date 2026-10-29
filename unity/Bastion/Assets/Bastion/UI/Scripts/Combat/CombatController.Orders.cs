@@ -27,6 +27,9 @@ namespace Bastion.UI.Combat
 
         /// <summary>Something is armed to aim (an attack, a support ability, something by hand): not a throw, which waits for the pointer.</summary>
         public bool Armed => mode == Mode.Target || HandArmed() != null;
+
+        /// <summary>What is armed and open, for the lab's log.</summary>
+        public string LabState() => $"cobertura {(CoverMatters() ? "sí" : "no")} (disparan: {string.Join(" ", Shown.Units.Where(u => u.Alive && u.Team == Teams.Alien && Shoots(u)).Select(u => u.Template + (Visible(u) ? "*" : "")).Distinct())}), modo {mode} {modeAbility ?? "-"}, blanco {targetId ?? "-"}, menú de la barra {(Hud != null && Hud.AbilityMenuOpen ? "abierto" : "cerrado")}, menú {(Hud != null && Hud.MenuOpen ? "abierto" : "cerrado")}; barra: {string.Join(" ", BarKeys().Select(v => $"{v.Id}{(v.Menu != null ? "<" + v.Menu : "")}{(v.Enabled ? "" : "(off)")}"))}";
         string modeAbility;
         string targetId;
         /// <summary>By hand: the tile picked among those within reach (the pointer, Tab or a click).</summary>
@@ -298,7 +301,12 @@ namespace Bastion.UI.Combat
         {
             if (Hud != null && (Hud.CloseAbilityMenu() || Hud.ClosePackMenu())) return;
             if (mode != Mode.Move) CancelMode();
-            else if (EndArmed) DisarmEndTurn();
+            // (A detected tile's warning too: game.ts.)
+            else if (EndArmed || concealWarn != null)
+            {
+                concealWarn = null;
+                DisarmEndTurn();
+            }
             else ToggleMenu();
         }
 

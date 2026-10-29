@@ -241,7 +241,7 @@ namespace Bastion.UI.Strategy
                 if (press.Button == 0 ? leftUp : rightUp) Up(clearing, tile);
             }
             var keys = Keyboard.current;
-            if (keys != null && tool == Kind.Place && keys.rKey.wasPressedThisFrame) Turn(keys.shiftKey.isPressed ? -1 : 1);
+            if (keys != null && !Bastion.UI.App.Shortcuts.Elsewhere(keys) && tool == Kind.Place && keys.rKey.wasPressedThisFrame) Turn(keys.shiftKey.isPressed ? -1 : 1);
             if (tile != hover)
             {
                 hover = tile;

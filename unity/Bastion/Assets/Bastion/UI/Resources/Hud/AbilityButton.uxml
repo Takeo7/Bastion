@@ -1,7 +1,9 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <!-- A key of the action bar (hud.ts abilityButton; ActionBar.cs fills it): the icon alone, its marks over it. -->
+    <!-- A key of the action bar (hud.ts abilityButton; ActionBar.cs fills it): the icon alone in its round well, its marks over it. -->
     <ui:Button name="key" class="ability">
-        <ui:VisualElement name="icon" class="ability__icon" picking-mode="Ignore" />
+        <ui:VisualElement name="well" class="ability__well" picking-mode="Ignore">
+            <ui:VisualElement name="icon" class="ability__icon" picking-mode="Ignore" />
+        </ui:VisualElement>
         <ui:Label name="note" class="ability__note" picking-mode="Ignore" />
         <ui:Label name="count" class="ability__count" picking-mode="Ignore" />
         <ui:Label name="cooldown" class="ability__cd" picking-mode="Ignore" />

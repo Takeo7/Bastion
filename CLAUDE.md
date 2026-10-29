@@ -1,7 +1,7 @@
 # Bastión: normas para las sesiones de Claude
 
 Táctica por turnos cooperativa para dos jugadores (XCOM 2 con zombis). Desde el 23/10 el juego se está pasando a Unity con todo en C# ([docs/UNITY.md](docs/UNITY.md)):
-- `engine-cs/`: las reglas en C#, deterministas, idénticas al bit con las de TypeScript; también la red (`package/Runtime/Net`);
+- `engine-cs/`: las reglas en C#, deterministas, idénticas al bit con las de TypeScript salvo los cambios de reglas decididos desde el 28/10 (`engine-cs/golden/since-0101.patch`); también la red (`package/Runtime/Net`);
 - `unity/Bastion/`: el proyecto de Unity 6.3 (URP), con el cliente;
 - `packages/`: la versión de TypeScript (engine, server, Three.js, Electron), congelada en la 0.10.1, solo para arreglos graves y como referencia del port.
 

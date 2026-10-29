@@ -446,7 +446,7 @@ namespace Bastion.Engine.Tests
                 }
                 var expected = new Dictionary<string, string[]>
                 {
-                    [Biomes.City] = new[] { DecorKinds.CarFront, DecorKinds.StreetTree, DecorKinds.Shelf, DecorKinds.Desk, DecorKinds.Fountain },
+                    [Biomes.City] = new[] { DecorKinds.CarFront, DecorKinds.Bollard, DecorKinds.Shelf, DecorKinds.Desk, DecorKinds.Fountain },
                     [Biomes.Wilds] = new[] { DecorKinds.Fence, DecorKinds.GatePost, DecorKinds.Hay, DecorKinds.Tree, DecorKinds.Bush, DecorKinds.Rock },
                     [Biomes.Facility] = new[] { DecorKinds.Shelf, DecorKinds.Machine, DecorKinds.Container, DecorKinds.Pallets, DecorKinds.Drums, DecorKinds.Truck, DecorKinds.Silo, DecorKinds.CarFront },
                 }[biome];

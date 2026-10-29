@@ -258,7 +258,7 @@ namespace Bastion.Engine
         public const int FreshCampaignVersion = 20;
 
         /// <summary>Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`.</summary>
-        public const int CampaignVersion = 25;
+        public const int CampaignVersion = 26;
 
         // ------------------------------------------------------------ infection
 

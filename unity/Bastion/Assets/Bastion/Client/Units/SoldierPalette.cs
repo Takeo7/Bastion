@@ -136,6 +136,51 @@ namespace Bastion.Client.Units
             return cells;
         }
 
+        static readonly Dictionary<Material, Material> dulled = new Dictionary<Material, Material>();
+
+        /// <summary>
+        /// The dead's clothes with their blues and purples dulled (Ana 28/10, p11: «Los zombies no deberían ser azules y
+        /// morados»; Arturo: in now): each material of `figure` that paints from a Sidekick palette swapped for a copy whose
+        /// clothes' cells in those hues have a third of their colour and a little less light; the body's cells as they are.
+        /// One copy a material, kept: the figures' fades and night rims are copies of it, so they paint the same.
+        /// </summary>
+        public static void DullDead(GameObject figure)
+        {
+            foreach (var r in figure.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                bool any = false;
+                for (int k = 0; k < mats.Length; k++)
+                {
+                    var m = mats[k];
+                    if (m == null || !m.HasTexture("_ColorMap") || !(m.GetTexture("_ColorMap") is Texture2D map)) continue;
+                    if (!dulled.TryGetValue(m, out var copy) || copy == null)
+                    {
+                        var cells = Cells(map);
+                        for (int c = 0; c < 256; c++) if (!IsBody(c) && !Unused(cells[c])) cells[c] = Dull(cells[c]);
+                        var palette = Texture(cells);
+                        palette.name = m.name + " (apagada)";
+                        copy = dulled[m] = new Material(m) { name = m.name + " (apagada)", hideFlags = HideFlags.DontSave };
+                        copy.SetTexture("_ColorMap", palette);
+                    }
+                    mats[k] = copy;
+                    any = true;
+                }
+                if (any) r.sharedMaterials = mats;
+            }
+        }
+
+        /// <summary>A colour's blue to purple (hue 190°–330°, whole from 205° to 315°) brought down to a third of its saturation and 85 % of its light.</summary>
+        static Color32 Dull(Color32 c)
+        {
+            Color.RGBToHSV(c, out float h, out float s, out float v);
+            float deg = h * 360;
+            float w = Mathf.Clamp01(Mathf.Min((deg - 190) / 15, (330 - deg) / 15));
+            if (w <= 0 || s < 0.12f) return c;
+            var to = Color.HSVToRGB(h, s * (1 - 0.67f * w), v * (1 - 0.15f * w));
+            return new Color(to.r, to.g, to.b, c.a / 255f);
+        }
+
         /// <summary>Whether a cell (y · 16 + x) is the body's, not the clothes': the skin, the eyes, the teeth, the hair.</summary>
         public static bool IsBody(int cell) => BodyCells.Contains(cell);
 

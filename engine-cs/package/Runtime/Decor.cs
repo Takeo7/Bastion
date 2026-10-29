@@ -148,6 +148,8 @@ namespace Bastion.Engine
             [DecorKinds.VegPatch] = 98,
             // A room's windows barricaded from inside (playtest 21/10, #20).
             [DecorKinds.WindowBarricade] = 99,
+            // Along the sidewalks, where the street trees in pots stood (Ana's playtest 28/10).
+            [DecorKinds.Bollard] = 100,
         };
 
         private static readonly string?[] Kinds = MakeKinds();

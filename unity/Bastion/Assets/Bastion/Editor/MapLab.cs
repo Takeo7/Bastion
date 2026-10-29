@@ -394,6 +394,89 @@ namespace Bastion.EditorTools
             return Bastion.Net.Json.Read<GameState>(file["state"].ToString(Newtonsoft.Json.Formatting.None));
         }
 
+        /// <summary>
+        /// The whole cars of the street (MapBuilder.PaintWhole) in a grid: one a row, each of its paints a column, fitted as
+        /// the map fits them, by day, under the game's camera; BASTION_DESGASTE=0 in Synty's paint as it is (to set them
+        /// side by side), BASTION_COCHES_ENTEROS=a,b the rows (all of carFront's whole ones if not said).
+        /// </summary>
+        public static void Cars()
+        {
+            MapBuilder.Worn = Environment.GetEnvironmentVariable("BASTION_DESGASTE") != "0";
+            Lighting(true);
+            var ids = Environment.GetEnvironmentVariable("BASTION_COCHES_ENTEROS")?.Split(',') ?? MapArt.Set("carFront").Where(c => MapBuilder.WholePaintsOf(c).Length > 0).Distinct().ToArray();
+            var prefabs = Prefabs();
+            var materials = Materials();
+            var root = new GameObject("Coches").transform;
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.transform.localScale = Vector3.one * 10;
+            ground.GetComponent<Renderer>().sharedMaterial = Bastion.Client.KitMaterials.New(Bastion.Client.KitMaterials.Plain, "Suelo");
+            ground.GetComponent<Renderer>().sharedMaterial.SetColor("_BaseColor", new Color(0.55f, 0.53f, 0.5f));
+            float across = 2.2f * MapSpace.Tile, along = 1.6f * MapSpace.Tile;
+            int columns = ids.Max(c => MapBuilder.WholePaintsOf(c).Length);
+            for (int row = 0; row < ids.Length; row++)
+            {
+                var art = MapArt.Prop(ids[row]);
+                var model = art != null ? prefabs(MapArt.ModelKey(art)) : null;
+                if (model == null)
+                {
+                    Debug.LogWarning($"[coches] {ids[row]}: no model");
+                    continue;
+                }
+                var paints = MapBuilder.WholePaintsOf(ids[row]);
+                for (int col = 0; col < paints.Length; col++)
+                {
+                    var car = (GameObject)UnityEngine.Object.Instantiate(model, root);
+                    car.name = $"{ids[row]} {paints[col] ?? "propia"}";
+                    // Its long side along the rows, fitted as the map fits it (its longest side to `fit` tiles).
+                    Bounds Box() => car.GetComponentsInChildren<Renderer>().Select(r => r.bounds).Aggregate((a, b) => { a.Encapsulate(b); return a; });
+                    if (Box().size.x > Box().size.z) car.transform.rotation = Quaternion.Euler(0, 90, 0);
+                    var box = Box();
+                    float k = art.fit > 0 ? art.fit * MapSpace.Tile / Mathf.Max(box.size.x, box.size.z) : 1;
+                    car.transform.localScale *= k;
+                    car.transform.position = new Vector3((col - (columns - 1) / 2f) * along, 0, -(row - (ids.Length - 1) / 2f) * across);
+                    if (!MapBuilder.PaintWhole(car, ids[row], paints[col], materials)) Debug.LogWarning($"[coches] {ids[row]}: no {paints[col]}");
+                }
+            }
+            Debug.Log($"[coches] {ids.Length} cars, worn {MapBuilder.Worn}: {string.Join(", ", ids.Select(c => $"{c} ({MapBuilder.WholePaintsOf(c).Length})"))}");
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.farClipPlane = 800;
+            float distance = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : 22;
+            MapSpace.Aim(camera, Vector3.zero, distance, 0);
+            Lighting(true);
+        }
+
+        /// <summary>
+        /// Models side by side as they come (BASTION_MODELOS=pack:fbx,…, MapArt's keys), 2 m apart, by day, the camera on them
+        /// (BASTION_DIST tiles, 6): their size and parts in the log, to pick one for a prop.
+        /// </summary>
+        public static void Models()
+        {
+            Lighting(true);
+            var keys = (Environment.GetEnvironmentVariable("BASTION_MODELOS") ?? "").Split(',').Where(k => k.Length > 0).ToArray();
+            var prefabs = Prefabs();
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.GetComponent<Renderer>().sharedMaterial = Bastion.Client.KitMaterials.New(Bastion.Client.KitMaterials.Plain, "Suelo");
+            ground.GetComponent<Renderer>().sharedMaterial.SetColor("_BaseColor", new Color(0.55f, 0.53f, 0.5f));
+            for (int i = 0; i < keys.Length; i++)
+            {
+                var model = prefabs(keys[i]);
+                if (model == null)
+                {
+                    Debug.LogWarning($"[modelos] {keys[i]}: none");
+                    continue;
+                }
+                var made = (GameObject)UnityEngine.Object.Instantiate(model);
+                made.transform.position = new Vector3((i - (keys.Length - 1) / 2f) * 2, 0, 0);
+                var renderers = made.GetComponentsInChildren<Renderer>();
+                var box = renderers.Select(r => r.bounds).Aggregate((a, b) => { a.Encapsulate(b); return a; });
+                Debug.Log(FormattableString.Invariant($"[modelos] {keys[i]} ({AssetDatabase.GetAssetPath(model)}): {box.size.x:0.00} × {box.size.y:0.00} × {box.size.z:0.00} m, from y {box.min.y:0.00}; {renderers.Length} parts: {string.Join(", ", renderers.Select(r => r.name + " [" + string.Join("+", r.sharedMaterials.Select(m => m != null ? m.name : "-")) + "]"))}"));
+            }
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            float distance = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : 6;
+            MapSpace.Aim(camera, Vector3.zero, distance, 0);
+            Lighting(true);
+        }
+
         /// <summary>The game's light (Bastion.Client.Mood), by day or by night.</summary>
         internal static void Lighting(bool day) => Bastion.Client.Mood.Show(day ? Bastion.Client.Mood.Day : Bastion.Client.Mood.Night);
 
@@ -450,11 +533,15 @@ namespace Bastion.EditorTools
             Lighting(day);
             var view = Map(state, name);
             var root = view.transform;
-            // BASTION_FIGURAS=1: the game's units drawn on it too, standing (to weigh their light against 0.10.1's figures).
-            if (Environment.GetEnvironmentVariable("BASTION_FIGURAS") == "1")
+            // BASTION_FIGURAS=1: the game's units drawn on it too, standing (to weigh their light against 0.10.1's figures);
+            // =vistas, those the squad sees alone, as in the game.
+            string figures = Environment.GetEnvironmentVariable("BASTION_FIGURAS");
+            if (figures == "1" || figures == "vistas")
             {
                 var units = new GameObject("Unidades").AddComponent<Bastion.Client.Units.UnitViews>();
                 units.Sync(state);
+                // (The dead too, seen or not: as 0.10.1's reference block draws them.)
+                if (figures == "1") foreach (var u in state.Units) units.ForceVisible(u.Id);
                 units.MasksNow();
             }
             // BASTION_AO_FILA=y,x0,x1: the contact occlusion (r) and its height (g) across row y from tile x0 to x1, texel by
@@ -483,14 +570,16 @@ namespace Bastion.EditorTools
                 cutaway.Focus.roofs = Environment.GetEnvironmentVariable("BASTION_ROOFS") == "1";
                 Debug.Log($"[map] cutaway focus: selected {cutaway.Focus.selected ?? "-"}, hover {(cutaway.Focus.hover == null ? "-" : $"{cutaway.Focus.hover.X},{cutaway.Focus.hover.Y},{cutaway.Focus.hover.Z}")}");
             }
-            // BASTION_HIDE=glass,signs,shutters: those left out of the picture (to tell what draws what).
+            // BASTION_HIDE=glass,signs,shutters,crowns: those left out of the picture (to tell what draws what; crowns, the
+            // trees with one, TreeFade.Crowns: to see what walks under the pines).
             var hide = (Environment.GetEnvironmentVariable("BASTION_HIDE") ?? "").Split(',');
             foreach (var r in root.GetComponentsInChildren<Renderer>(true))
             {
                 bool glass = r.sharedMaterial != null && r.sharedMaterial.name == "Cristal";
                 bool sign = r.GetComponentsInParent<Transform>().Any(t => t.name.StartsWith("sign") || t.name == "motelSign");
                 bool shutter = r.GetComponentsInParent<Transform>().Any(t => t.name == "rollerShutter");
-                if ((glass && hide.Contains("glass")) || (sign && hide.Contains("signs")) || (shutter && hide.Contains("shutters"))) r.enabled = false;
+                bool crown = hide.Contains("crowns") && r.GetComponentsInParent<Transform>().Any(t => TreeFade.Crowns.Contains(t.name));
+                if ((glass && hide.Contains("glass")) || (sign && hide.Contains("signs")) || (shutter && hide.Contains("shutters")) || crown) r.enabled = false;
             }
             // BASTION_SIN_SOMBRA=a,b: what is drawn under a part named so (its path holds it: "Tejados", "Planta 1") casts no shadow.
             var unshaded = (Environment.GetEnvironmentVariable("BASTION_SIN_SOMBRA") ?? "").Split(',').Where(k => k.Length > 0).ToArray();

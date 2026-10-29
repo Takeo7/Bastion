@@ -20,6 +20,9 @@ namespace Bastion.UI.Hud
 
         readonly VisualElement layer;
         readonly VisualElement modal;
+        /// <summary>The partner's menu open: the battle dimmed under a card saying so (SetPause).</summary>
+        readonly VisualElement pause;
+        string paused;
         readonly TooltipLayer tips;
         readonly Action<string> sound;
         GameMenuView view;
@@ -35,6 +38,10 @@ namespace Bastion.UI.Hud
         {
             this.tips = tips;
             this.sound = sound;
+            // (Under the menu: whoever opens theirs too sees their own.)
+            pause = Ui.El("game-menu game-menu--pause", host);
+            pause.pickingMode = PickingMode.Ignore;
+            Ui.Show(pause, false);
             layer = Ui.El("game-menu", host);
             modal = Ui.El("game-menu game-menu--modal", host);
             Ui.Show(layer, false);
@@ -57,6 +64,7 @@ namespace Bastion.UI.Hud
             if (!Open) sound?.Invoke("paper");
             Open = true;
             Ui.Show(layer, true);
+            layer.EnableInClassList("game-menu--cover", view.Cover);
             Page("main");
         }
 
@@ -67,6 +75,25 @@ namespace Bastion.UI.Hud
             Open = false;
             layer.Clear();
             Ui.Show(layer, false);
+        }
+
+        /// <summary>
+        /// The partner's menu open in the mission (Arturo, 28/10): the battle dimmed under a card with `line` and `sub`, the
+        /// pointer going through (the partner's calls to evacuate or abandon are still answered on the bar). Null, gone.
+        /// </summary>
+        public void SetPause(string line, string sub)
+        {
+            var key = line == null ? null : line + "|" + sub;
+            if (key == paused) return;
+            paused = key;
+            pause.Clear();
+            Ui.Show(pause, line != null);
+            if (line == null) return;
+            var card = Ui.El("panel game-menu__card game-menu__card--pause", pause);
+            PlateFrame.Dress(card);
+            Ui.Text(line, "game-menu__paused font-title", card);
+            if (!string.IsNullOrEmpty(sub)) Ui.Text(sub, "game-menu__note", card);
+            card.Query<VisualElement>().ForEach(x => x.pickingMode = PickingMode.Ignore);
         }
 
         /// <summary>Esc: the question first, then the menu. Whether there was one to close.</summary>
@@ -99,6 +126,7 @@ namespace Bastion.UI.Hud
             {
                 // The same list as the base's (playtest 19/10 #7), one entry a line, all alike; the controls are in Ajustes.
                 Ui.Text(HudText.Menu.Title, "game-menu__title font-title", card);
+                if (!string.IsNullOrEmpty(view.PauseNote)) Ui.Text(view.PauseNote, "game-menu__note", card);
                 Entry(card, HudText.Menu.Continue, Close);
                 Entry(card, HudText.Menu.Settings, () => Page("settings"));
                 if (view.Leave)

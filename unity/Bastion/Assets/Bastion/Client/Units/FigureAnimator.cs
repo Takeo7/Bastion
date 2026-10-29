@@ -62,6 +62,13 @@ namespace Bastion.Client.Units
         readonly float[] restFrozen = { -1, -1 };
         int restNow = -1;
         float restFade = 0.25f;
+        /// <summary>
+        /// Where in its loops this figure plays, a share of each (syntyAnims.ts AnimDriver's `phase`): each its own, so a
+        /// crowd doesn't wait in step (Ana, 28/10: «se mueven a la vez como si estuvieran bailando»).
+        /// </summary>
+        readonly float phase;
+        /// <summary>For the labs' «before» (BASTION_SIN_FASE=1): every figure from the start of its loops, in step.</summary>
+        static readonly bool AllInStep = Environment.GetEnvironmentVariable("BASTION_SIN_FASE") == "1";
 
         /// <summary>
         /// At the camp (syntyAnims.ts campLoop, campVariations): a clip stayed in instead of the idle (sat, knelt, leant,
@@ -93,10 +100,12 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// `clipOf` gives each of MOTION_ORDER's clips (idle, crouchIdle, walk, run, crouchWalk, sprint), or null; `paceOf`
-        /// how much faster than the gait's speed one plays (a soldier's armed walk: gaits.ts armedPace).
+        /// how much faster than the gait's speed one plays (a soldier's armed walk: gaits.ts armedPace). Its loops start at a
+        /// point of their own (PhaseOf: the same for the same figure each time, for the labs' strips).
         /// </summary>
         public FigureAnimator(Animator animator, Func<string, AnimationClip> clipOf, Func<string, float> paceOf = null, Func<string, bool> holdsOwn = null)
         {
+            phase = AllInStep ? 0 : PhaseOf(animator.transform);
             animator.applyRootMotion = false;
             animator.runtimeAnimatorController = null;
             graph = PlayableGraph.Create(animator.gameObject.name);
@@ -121,6 +130,7 @@ namespace Bastion.Client.Units
                 motionClips[k] = AnimationClipPlayable.Create(graph, clip);
                 motionClips[k].SetApplyFootIK(false);
                 lengths[k] = Mathf.Max(clip.length, 1e-3f);
+                times[k] = phase * lengths[k];
                 paces[k] = paceOf?.Invoke(Anims.MotionOrder[k]) ?? 1;
                 ownHold[k] = holdsOwn?.Invoke(Anims.MotionOrder[k]) ?? k > 1;
                 graph.Connect(motionClips[k], 0, motions, k);
@@ -129,6 +139,15 @@ namespace Bastion.Client.Units
             output.SetSourcePlayable(layers);
             graph.Play();
             Step(0);
+        }
+
+        /// <summary>A share (0 to 1) from the names from the scene's top down to `t` (a unit's root is its id): FNV-1a.</summary>
+        static float PhaseOf(Transform t)
+        {
+            uint h = 2166136261;
+            for (var at = t; at != null; at = at.parent)
+                foreach (char c in at.name + "/") h = (h ^ c) * 16777619;
+            return (h % 10007) / 10007f;
         }
 
         /// <summary>The trunk, head and arms (the legs and the root left to the motions underneath); `gunArm` false, the right arm too.</summary>
@@ -189,8 +208,8 @@ namespace Bastion.Client.Units
             rests[next] = AnimationClipPlayable.Create(graph, clip);
             rests[next].SetApplyFootIK(false);
             graph.Connect(rests[next], 0, rest, next);
-            restTimes[next] = 0;
             restLengths[next] = Mathf.Max(clip.length, 1e-3f);
+            restTimes[next] = phase * restLengths[next];
             restFrozen[next] = at >= 0 ? Mathf.Min(at, clip.length) : -1;
             if (restNow < 0) restWeights[next] = fade <= 0 ? 1 : 0;
             restNow = next;
@@ -541,10 +560,11 @@ namespace Bastion.Client.Units
                 motionClips[k].SetTime(times[k] % lengths[k]);
             }
             // The weapon held as long as it stands, or moves in a clip that doesn't hold it (crouched: Synty's legs, the gun
-            // at rest over them): as much as those weigh.
+            // at rest over them): as much as those weigh, the crouch's share in (syntyFigures.ts: stand × (1 − crouch), the
+            // rest the crouch's own hold, a rifle's kneel).
             float standing = 0;
-            for (int k = 0; k < weights.Length; k++) if (!ownHold[k] && motionClips[k].IsValid()) standing += weights[k];
-            standing = total > 0 ? standing / total : 1;
+            for (int k = 0; k < shares.Length; k++) if (!ownHold[k] && motionClips[k].IsValid()) standing += shares[k];
+            if (total <= 0) standing = 1;
             float held = 0;
             for (int k = 0; k < 2; k++)
             {

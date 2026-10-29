@@ -147,20 +147,94 @@ namespace Bastion.Client.Map
         static readonly string[] CarPaints = { null, "PolygonApocalypse_01_B", "PolygonApocalypse_01_C", "PolygonApocalypse_02_A", "PolygonApocalypse_03_A", "PolygonApocalypse_04_A" };
 
         /// <summary>The Synty materials the map asks `materialOf` for (the cars' paints, the containers' colours: MapArt.Atlases), for the game's catalog (MapCatalog).</summary>
-        public static IEnumerable<string> MaterialsUsed => CarPaints.Where(m => m != null).Concat(MapArt.Atlases.Values.Select(a => a.to));
+        public static IEnumerable<string> MaterialsUsed => CarPaints.Concat(WholePaints.Values.SelectMany(p => p.paints)).Where(m => m != null).Concat(MapArt.Atlases.Values.Select(a => a.to));
         const string CarRed = "PolygonApocalypse_01_A";
-
-        void Repaint(GameObject car, int paint)
+        /// <summary>
+        /// The whole cars' paints, by pack (Unity's own, Ana 28/10): the material their models come in, and its alternates
+        /// (Synty's own: City's and Town's atlases, Apocalypse's vehicle sheets), one of them by the car's tile; without, all
+        /// of a pack came in the same blue. Not City's and Town's lime green and orange (_03_C, _01_B) nor Apocalypse's purple
+        /// (Vehicle_04): too loud for a town left behind (Gameplay 28/10).
+        /// </summary>
+        static readonly Dictionary<string, (string from, string[] paints)> WholePaints = new Dictionary<string, (string, string[])>
         {
-            if (CarPaints[paint] == null || materialOf == null) return;
-            var to = materialOf(CarPaints[paint]);
-            if (to == null) return;
+            ["city"] = ("PolygonCity_01_A", new[] { null, "PolygonCity_01_C", "PolygonCity_02_A", "PolygonCity_02_B", "PolygonCity_03_A", "PolygonCity_04_A", "PolygonCity_04_B" }),
+            ["town"] = ("PolygonTown_01_A", new[] { null, "PolygonTown_01_C", "PolygonTown_02_A", "PolygonTown_02_B", "PolygonTown_03_A", "PolygonTown_04_A", "PolygonTown_04_B" }),
+            ["apocalypse"] = ("Vehicle_Standard_01", new[] { null, "Vehicle_01", "Vehicle_02", "Vehicle_03", "Vehicle_05", "Vehicle_06" }),
+        };
+        /// <summary>The street's wrecks (MapArt.json's carFront, 0.10.1's): the others are whole cars (Unity's own).</summary>
+        static readonly HashSet<string> Wrecks = new HashSet<string> { "carWreck", "carRusted", "carSuv", "carOpen" };
+        static readonly bool CarsLogged = Environment.GetEnvironmentVariable("BASTION_COCHES") == "1";
+
+        /// <summary>A car in paint `share` (0 to 1) of its own: a wreck's (CarPaints) or a whole one's by its pack (WholePaints).</summary>
+        void Repaint(GameObject car, string id, float share)
+        {
+            string from = CarRed, paint;
+            if (Wrecks.Contains(id)) paint = CarPaints[Mathf.FloorToInt(share * CarPaints.Length) % CarPaints.Length];
+            else
+            {
+                var paints = WholePaintsOf(id);
+                if (paints.Length == 0) return;
+                paint = paints[Mathf.FloorToInt(share * paints.Length) % paints.Length];
+                if (!PaintWhole(car, id, paint, materialOf)) Missing.Add($"{id} ({paint})");
+                return;
+            }
+            if (paint == null || materialOf == null) return;
+            var to = materialOf(paint);
+            if (to == null)
+            {
+                Missing.Add($"{id} ({paint})");
+                return;
+            }
             foreach (var r in car.GetComponentsInChildren<Renderer>())
             {
                 var mats = r.sharedMaterials;
-                for (int k = 0; k < mats.Length; k++) if (mats[k] != null && mats[k].name.StartsWith(CarRed)) mats[k] = to;
+                for (int k = 0; k < mats.Length; k++) if (mats[k] != null && mats[k].name.StartsWith(from)) mats[k] = to;
                 r.sharedMaterials = mats;
             }
+        }
+
+        /// <summary>The paints whole car `id` comes in (null: its model's own), by its pack; none, not a whole car.</summary>
+        public static string[] WholePaintsOf(string id) =>
+            !Wrecks.Contains(id) && MapArt.Prop(id) is PropArt art && art.pack != null && WholePaints.TryGetValue(art.pack, out var whole) ? whole.paints : Array.Empty<string>();
+
+        /// <summary>
+        /// Whole cars worn (Bastion/Car, Gameplay 28/10: «parecen recién salidos del concesionario»): each paint's copy with
+        /// its colour taken down and dust over it. Off, Synty's paint as it is (a lab's, to set them side by side).
+        /// </summary>
+        public static bool Worn = true;
+        static readonly Dictionary<Material, Material> worn = new Dictionary<Material, Material>();
+
+        /// <summary>Whole car `car` (prop `id`) in paint `paint` (null: its own), worn; false if the paint isn't there.</summary>
+        public static bool PaintWhole(GameObject car, string id, string paint, Func<string, Material> materialOf)
+        {
+            if (!(MapArt.Prop(id) is PropArt art) || art.pack == null || !WholePaints.TryGetValue(art.pack, out var whole)) return false;
+            var to = paint != null && materialOf != null ? materialOf(paint) : null;
+            if (paint != null && to == null) return false;
+            foreach (var r in car.GetComponentsInChildren<Renderer>())
+            {
+                var mats = r.sharedMaterials;
+                for (int k = 0; k < mats.Length; k++)
+                    if (mats[k] != null && mats[k].name.StartsWith(whole.from))
+                    {
+                        var own = to ?? mats[k];
+                        mats[k] = Worn ? WornOf(own) : own;
+                    }
+                r.sharedMaterials = mats;
+            }
+            return true;
+        }
+
+        /// <summary>Paint `paint`'s worn copy (Kit/Car with its textures), made the first time.</summary>
+        static Material WornOf(Material paint)
+        {
+            if (worn.TryGetValue(paint, out var m) && m != null) return m;
+            m = KitMaterials.New(KitMaterials.Car, paint.name + " (gastado)");
+            if (m == null) return paint;
+            m.SetTexture("_BaseMap", paint.HasProperty("_Albedo_Map") ? paint.GetTexture("_Albedo_Map") : paint.mainTexture);
+            var normals = paint.HasProperty("_Normal_Map") ? paint.GetTexture("_Normal_Map") : null;
+            if (normals != null) m.SetTexture("_BumpMap", normals);
+            m.SetFloat("_NormalAmount", normals != null && paint.HasProperty("_Normal_Amount") ? paint.GetFloat("_Normal_Amount") : 0);
+            return worn[paint] = m;
         }
 
         /// <summary>Each storey's objects (0 the ground: its floor, walls and decor; above, each slab and what is on it).</summary>
@@ -1501,8 +1575,9 @@ namespace Bastion.Client.Map
                 case "carFront":
                     var cars = MapArt.Set("carFront");
                     id = cars[Mathf.Min(cars.Length - 1, Mathf.FloorToInt(MapArt.Hash(ax, ay, 1) * cars.Length))];
-                    // Searched (its boot or its glovebox), it's the one with the boot lid up.
-                    if (thing.Tiles.Any(j => SearchedAt(Mathf.RoundToInt(floor / MapSpace.Storey), j))) id = "carOpen";
+                    // Searched (its boot or its glovebox), a wreck is the one with the boot lid up; a whole one (Unity's own,
+                    // Ana 28/10) has none and stays as it is.
+                    if (Wrecks.Contains(id) && thing.Tiles.Any(j => SearchedAt(Mathf.RoundToInt(floor / MapSpace.Storey), j))) id = "carOpen";
                     break;
                 case "bed":
                     id = x1 - x0 == y1 - y0 ? "bedDouble" : "bed";
@@ -1538,7 +1613,14 @@ namespace Bastion.Client.Map
             }
             if (placed != null && thing.Kind == "carFront")
             {
-                Repaint(placed, Mathf.FloorToInt(MapArt.Hash(ax, ay, 13) * CarPaints.Length) % CarPaints.Length);
+                // (BASTION_COCHES=1: each car's long side against its two tiles', to tell a model turned the wrong way.)
+                if (CarsLogged)
+                {
+                    var box = BoundsIn(placed, parent);
+                    bool tilesAlongX = x1 - x0 > y1 - y0, modelAlongX = box.size.x > box.size.z;
+                    Debug.Log($"[coches] {id} at {ax},{ay} facing {thing.Facing}: {(tilesAlongX == modelAlongX ? "along" : "ACROSS")} ({box.size.x:F2} × {box.size.z:F2} m)");
+                }
+                Repaint(placed, id, MapArt.Hash(ax, ay, 13));
                 // Some wrecks still have a battery: their headlights on, by night, at the nose.
                 if (MapArt.Hash(ax, ay, 9) < 0.25f)
                 {

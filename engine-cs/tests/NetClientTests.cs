@@ -237,6 +237,30 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public async Task APauseIsSaidAgainAfterADrop()
+        {
+            var rig = new Rig();
+            rig.Session.Connect("Ana");
+            var (host, _) = await rig.NextHello(0);
+            rig.Welcome(host);
+            rig.Session.Pause(true);
+            Assert.True((bool)host.Take("pause").Single()["paused"]!);
+            // The host lifts it at the drop; back in with the menu still open, it is paused again.
+            host.Close("wifi");
+            rig.Session.Pump();
+            rig.Clock.Advance(500);
+            var (second, _) = await rig.NextHello(1);
+            Assert.Empty(second.Take("pause"));
+            rig.Welcome(second);
+            Assert.True((bool)second.Take("pause").Single()["paused"]!);
+            // Closed, it is not said on the next welcome.
+            rig.Session.Pause(false);
+            Assert.False((bool)second.Take("pause").Single()["paused"]!);
+            rig.Welcome(second);
+            Assert.Empty(second.Take("pause"));
+        }
+
+        [Fact]
         public async Task EveryMessageReachesTheGameInOrder()
         {
             var rig = new Rig();

@@ -941,7 +941,23 @@ namespace Bastion.EditorTools
             UnityEditor.EditorApplication.playModeStateChanged += Go;
         }
 
+        /// <summary>
+        /// A campaign from `file` (a save, or the campaign alone), brought up to now as the game brings a save it opens
+        /// (Campaign.MigrateCampaign: a base from before 28/10 with its old tracks planted); BASTION_NUEVA=seed, a new one
+        /// instead (Campaign.CreateCampaign, one player).
+        /// </summary>
         static CampaignState SampleCampaign(string file)
+        {
+            if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_NUEVA"), out int fresh))
+                return Bastion.Engine.Campaign.CreateCampaign(new[] { 0 }, new Rng(fresh));
+            var c = Loaded(file);
+            int version = c.Version;
+            c = Bastion.Engine.Campaign.MigrateCampaign(c);
+            Debug.Log($"[settlement] campaign of {file}: version {version}, now {c.Version}");
+            return c;
+        }
+
+        static CampaignState Loaded(string file)
         {
             var json = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(file));
             var net = Bastion.Net.Json.Settings;

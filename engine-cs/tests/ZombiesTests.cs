@@ -393,7 +393,8 @@ namespace Bastion.Engine.Tests
             var z = AddUnit(s, "a1", TemplateIds.Zombie, 14, 2, extra: (u) => u.Heard = P(2, 2));
             PodOf(s, "p1", true, z);
             NewSim(s).RunAlienTurn();
-            SamePlace(P(6, 2), z.Pos);
+            // 6,4 tiles an action (80 % of a soldier, 28/10): there in two.
+            SamePlace(P(2, 2), z.Pos);
         }
 
         [Fact(DisplayName = "the dead › the living keep their ways, but seeing nobody they too go where they heard something")]
@@ -454,7 +455,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(2, bites.Count((e) => e.Unit == "a1"));
             Assert.Equal(1, bites.Count((e) => e.Unit == "a2"));
             Assert.Equal(3, Content.Templates[TemplateIds.Zombie].Hp);
-            Assert.Equal(Content.Templates[TemplateIds.Rookie].Mobility * 0.6, Content.Templates[TemplateIds.Zombie].Mobility);
+            Assert.Equal(Content.Templates[TemplateIds.Rookie].Mobility * 0.8, Content.Templates[TemplateIds.Zombie].Mobility);
         }
 
         /// <summary>The test of the dead that measures time, measured alone (it plays a town's whole enemy turn).</summary>

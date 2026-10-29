@@ -424,7 +424,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(1, rig.Campaign.Migrated);
             Assert.Equal("base", rig.Room.Summary().phase);
             // From a newer Bastión: not read, moved aside as it is.
-            save["campaign"]!["version"] = 26;
+            save["campaign"]!["version"] = Campaign.CampaignVersion + 1;
             File.WriteAllText(rig.SavePath, save.ToString());
             rig.Room = rig.Make();
             Assert.True(File.Exists(Path.Combine(rig.Dir, "save.ilegible.json")));

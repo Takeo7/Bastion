@@ -964,7 +964,7 @@ namespace Bastion.Engine
         /// away from the squad and the evac zone; a siege's wave, by the middle half
         /// of its `side` (a DIRS4 index), off the corners, where it would be by two.
         /// </summary>
-        public List<Pos>? ChooseDropZone(int count, bool edge = false, int? side = null)
+        public List<Pos>? ChooseDropZone(int count, bool edge = false, int? side = null, bool alongTrack = false)
         {
             var s = S;
             var soldiers = Grid.Combatants(s, Teams.Xcom);
@@ -975,10 +975,14 @@ namespace Bastion.Engine
             bool Middle(int along, int span) => along >= span / 4.0 && along < (span * 3) / 4.0;
             // In a siege, never in a glade the pines close off: only where the way to the squad is open, or opened by breaking what was built.
             var open = edge && s.Mission.Siege != null ? OpenToSquad() : null;
+            // Nor on the base's track: the dead come out from between the pines, by its ways (Ana's playtest 28/10); down the
+            // track only when there's nowhere else (`alongTrack`), so that a wave always lands.
+            var track = edge && s.Mission.Siege != null && s.Base != null && !alongTrack;
             bool OnEdge(int x, int y, int band) =>
                 (side == null ? Sides(x, y, band).Any((b) => b) : Sides(x, y, band)[side.Value] && (side.Value % 2 == 0 ? Middle(x, s.Width) : Middle(y, s.Height))) &&
                 !s.Mission.EvacZone.Any((z) => Grid.Distance(z, new Vec2 { X = x, Y = y }) < EdgeEvacGap) &&
-                (open == null || open.Contains(Grid.TileIndex(s, x, y)));
+                (open == null || open.Contains(Grid.TileIndex(s, x, y))) &&
+                !(track && Base.OnTrack(s.Width, s.Height, x, y));
             // Further off on a bigger map (docs/MAPAS.md §6: 16 and 10 at 64).
             var scale = Math.Max(1, Math.Max(s.Width, s.Height) / 48.0);
             var bands = edge
@@ -1021,7 +1025,7 @@ namespace Bastion.Engine
                     }
                 }
             }
-            return null;
+            return track ? ChooseDropZone(count, edge, side, true) : null;
         }
 
         /// <summary>The ground tiles joined to a soldier's by ground one can walk, or by what can be broken down (GameState.breakables).</summary>

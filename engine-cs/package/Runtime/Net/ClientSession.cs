@@ -57,6 +57,7 @@ namespace Bastion.Net
         private long probeAt = -1;
         private long probeAsked;
         private bool rejoining;
+        private bool paused;
         private CancellationTokenSource? attempt;
 
         /// <summary>Every message from the host, already read, the session's own handling done (welcome, closing…).</summary>
@@ -134,10 +135,26 @@ namespace Bastion.Net
             Send(new JObject { ["t"] = "away", ["away"] = false }.ToString(Newtonsoft.Json.Formatting.None));
         }
 
+        /// <summary>
+        /// The game's menu opened or closed in a mission (the `pause` message): the host waits for both while it is open.
+        /// Kept, and said again on every welcome: a drop lifts the pause on the host, and the menu may still be open.
+        /// </summary>
+        public void Pause(bool on)
+        {
+            paused = on;
+            SendPause();
+        }
+
+        private void SendPause()
+        {
+            Send(new JObject { ["t"] = "pause", ["paused"] = paused }.ToString(Newtonsoft.Json.Formatting.None));
+        }
+
         /// <summary>Gives up the connection for good (back to the start screen, quitting).</summary>
         public void Stop()
         {
             stopped = true;
+            paused = false;
             retryAt = -1;
             probeAt = -1;
             attempt?.Cancel();
@@ -265,6 +282,8 @@ namespace Bastion.Net
                     Slot = welcome.Slot;
                     welcomed = true;
                     SetRejoining(false);
+                    // Back in with the menu still open: paused again.
+                    if (paused) SendPause();
                     break;
                 case ClosingMessage _:
                     // The host closed the game (its shutdown): there is nobody to reconnect to.

@@ -216,7 +216,10 @@ namespace Bastion.Engine
 
         /// <summary>How far ahead a walk is planned, in actions: enough to go round a building to its door.</summary>
         private const int Lookahead = 4;
-        /// <summary>To a goal on another storey, the way round by the stairs may first lead away: planned as far as it goes.</summary>
+        /// <summary>
+        /// To a goal on another storey, the way round by the stairs may first lead away: planned as far as it goes. In a siege
+        /// too, where the dead know where the living are: the way round a glade the pines close off (28/10).
+        /// </summary>
         private const int LookaheadStoreys = 40;
 
         /// <summary>How much longer a way round its own may be than the way through them, in half-tiles (COST_ORTHO a tile): a few tiles.</summary>
@@ -248,7 +251,7 @@ namespace Bastion.Engine
         /// </summary>
         private static WalkPlan PlanWalk(GameState s, Unit u, Pos goal, double minGap = 0, int actions = 1)
         {
-            var ahead = Grid.StoreysApart(s, u.Pos, goal) > 0 ? LookaheadStoreys : Lookahead;
+            var ahead = Grid.StoreysApart(s, u.Pos, goal) > 0 || s.Mission.Siege != null ? LookaheadStoreys : Lookahead;
             Reach ReachOf(bool round) => Paths.ComputeReach(s, u, Paths.CostPerAp(u) * Math.Max(ahead, actions), u.Pos, round ? null : (Func<Unit, bool>)((o) => !Content.HostileTo(o, u)));
             var through = ReachOf(false);
             var dest = ClosestTo(s, u, through, goal, minGap);
@@ -755,15 +758,44 @@ namespace Bastion.Engine
             return true;
         }
 
-        /// <summary>Nothing seen and nothing heard: a few aimless steps (one action).</summary>
-        private static void Wander(Sim sim, Unit u)
+        /// <summary>
+        /// Where the Chillón, seeing none of the living, would see one of them from its gap (SCREAMER_GAP) or further, whichever
+        /// way it faced: the cheapest within an action, where it stands first. Null when there is nowhere.
+        /// </summary>
+        private static Pos? Lookout(GameState s, Unit u, List<Unit> living)
+        {
+            var reach = Paths.ComputeReach(s, u, Paths.CostPerAp(u));
+            var options = new List<Destination> { new Destination { Pos = u.Pos, Cost = 0 } };
+            options.AddRange(Paths.Destinations(s, u, reach));
+            Destination? best = null;
+            foreach (var o in options)
+            {
+                if (best != null && o.Cost >= best.Cost) continue;
+                if (living.Any((e) => Grid.Distance(o.Pos, e.Pos) < ScreamerGap)) continue;
+                if (living.Any((e) => Los.SightOrigin(s, o.Pos, e.Pos, Los.SightTo(s, u, e.Pos)) != null)) best = o;
+            }
+            return best?.Pos;
+        }
+
+        /// <summary>
+        /// Nothing seen and nothing heard: a few aimless steps (one action). Having walked already this turn, on away
+        /// from where the turn began (`start`), if it can: two steps that undo each other are no walk.
+        /// </summary>
+        private static bool Wander(Sim sim, Unit u, Pos start)
         {
             var s = sim.S;
             var reach = Paths.ComputeReach(s, u, Paths.CostPerAp(u));
             var options = Paths.Destinations(s, u, reach).Where((o) => Grid.Distance(o.Pos, u.Pos) >= 2).ToList();
-            if (options.Count == 0) return;
+            if (!Grid.SamePos(u.Pos, start))
+            {
+                var on = options.Where((o) => Grid.Distance(o.Pos, start) > Grid.Distance(u.Pos, start)).ToList();
+                if (on.Count > 0) options = on;
+            }
+            if (options.Count == 0) return false;
             var path = Paths.BuildPath(s, u, reach, options[sim.Rng.Int(options.Count)].Pos);
-            if (path != null) sim.MoveAlong(u, path, 1);
+            if (path == null) return false;
+            sim.MoveAlong(u, path, 1);
+            return true;
         }
 
         /// <summary>How many of its turns one of the dead follows a soldier it no longer sees before it forgets them (Arturo, 22/10).</summary>
@@ -814,6 +846,26 @@ namespace Bastion.Engine
             var abilities = Abilities.AbilitiesOf(u);
             bool Usable(string a) => abilities.Contains(a) && Abilities.AbilityBlocker(s, u, a) == null;
             var bite = abilities.Find((a) => Content.Abilities[a].Target == AbilityTargets.Melee && Content.IsAttack(a));
+            // The Chillón goes after the living only as far as its gap, and not at all once it has stepped back this turn
+            // (Ana's playtest 28/10: in a siege it stepped back, lost sight of them and walked straight back in).
+            var screamer = abilities.Contains(AbilityIds.Mindspin);
+            var backed = false;
+            // Nor does it step back once it has come in nearer than its gap this turn, to find them.
+            var came = false;
+            // Where its turn began: a second aimless walk goes on from there, not back.
+            var start = Engine.Events.CopyPos(u.Pos);
+            // After the living out of sight. The Chillón, to where it would see one of them from its gap; with nowhere
+            // within an action, as near as its gap lets it; and if that leaves it out of sight still, nearer: hidden by the
+            // pines at its gap, it ended no siege.
+            bool Close(Pos prey, List<Unit> living)
+            {
+                if (!screamer) return Advance(sim, u, prey, 1);
+                var spot = Lookout(s, u, living);
+                if (spot != null) return !Grid.SamePos(spot, u.Pos) && Walk(sim, u, spot, 0);
+                if (Advance(sim, u, prey, ScreamerGap)) return true;
+                came = Advance(sim, u, prey, 1);
+                return came;
+            }
             for (var guard = 0; guard < 6 && u.Alive && u.Ap > 0 && !sim.Over; guard++)
             {
                 // Any of the living: the squad, and the Saqueadores too (18/10 #47).
@@ -823,7 +875,7 @@ namespace Bastion.Engine
                 Js.Sort(seen, ByDistance(s, u.Pos));
                 if (seen.Count > 0) sighting.Prey = seen[0].Id;
 
-                if (abilities.Contains(AbilityIds.Mindspin))
+                if (screamer)
                 {
                     // The Chillón: a scream at whoever it sees (one a turn for the whole horde), or a corpse raised.
                     if (Usable(AbilityIds.Mindspin) && sim.AlienBudget.Psi > 0)
@@ -854,7 +906,13 @@ namespace Bastion.Engine
                     }
                     if (seen.Count > 0)
                     {
-                        if (Grid.Distance(u.Pos, seen[0].Pos) < ScreamerGap && BackAway(sim, u, seen)) continue;
+                        if (!came && Grid.Distance(u.Pos, seen[0].Pos) < ScreamerGap && BackAway(sim, u, seen))
+                        {
+                            backed = true;
+                            continue;
+                        }
+                        // Beyond its scream: nearer, keeping its gap (watching them from afar, it ended no siege).
+                        if (!backed && Grid.Distance(u.Pos, seen[0].Pos) > Content.Abilities[AbilityIds.Mindspin].Range && Advance(sim, u, seen[0].Pos, ScreamerGap)) continue;
                         return;
                     }
                 }
@@ -899,20 +957,21 @@ namespace Bastion.Engine
                     }
                 }
 
+                if (backed) return;
                 // Nobody in sight: in a siege, for the nearest soldier, wherever they are.
                 if (s.Mission.Siege != null)
                 {
                     var sorted = new List<Unit>(soldiers);
                     Js.Sort(sorted, ByDistance(s, u.Pos));
                     var prey = sorted[0];
-                    if (Advance(sim, u, prey.Pos, 1)) continue;
+                    if (Close(prey.Pos, soldiers)) continue;
                     return;
                 }
                 // Out of sight, the one it saw last: after them, wherever they are now, till it forgets them.
                 var hunted = u.Hunting != null ? soldiers.Find((e) => e.Id == u.Hunting.Id) : null;
                 if (hunted != null)
                 {
-                    if (Advance(sim, u, hunted.Pos, 1)) continue;
+                    if (Close(hunted.Pos, soldiers)) continue;
                     return;
                 }
                 // Elsewhere, to the last noise heard, and having found nobody there, wandering.
@@ -921,7 +980,8 @@ namespace Bastion.Engine
                     if (!Arrived(s, u.Pos, u.Heard, 1.5) && Advance(sim, u, u.Heard, 0)) continue;
                     sim.Emit(new ForgotEvent { Unit = u.Id });
                 }
-                Wander(sim, u);
+                // Both actions on it, as the soldiers walk twice (Ana's playtest 28/10: one aimless step a turn was hardly moving).
+                if (Wander(sim, u, start)) continue;
                 return;
             }
         }

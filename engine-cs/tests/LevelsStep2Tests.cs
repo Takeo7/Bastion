@@ -700,8 +700,8 @@ namespace Bastion.Engine.Tests
                 sim.RunAlienTurn();
                 foreach (var e in sim.Events) if (e is MovedEvent m && m.Unit == z.Id) walked.AddRange(m.Path);
             }
-            Assert.Equal(1, z.Pos.Z);
-            // It got there, upstairs (and having found nobody, may wander off).
+            Assert.True(z.Pos.Z >= 1);
+            // It got there, upstairs (and having found nobody, may wander off: with both actions since 28/10, even up to the roof).
             Assert.Contains(walked, (p) => p.Z == 1 && Js.Hypot(p.X - 5, p.Y - 3) <= 1.5);
         }
 

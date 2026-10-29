@@ -29,7 +29,8 @@ namespace Bastion.UI.Combat
             ("O", "Centrar en el objetivo"),
             ("Clic derecho", "Ficha del enemigo"),
             ("M", "Sonido"),
-            ("Esc", "Cancelar o abrir este menú"),
+            ("F12", "Guardar una captura de pantalla"),
+            ("Esc", "Cancelar, o abrir este menú y pausar la partida"),
         };
 
         const string EnemySpeedId = "enemySpeed";
@@ -51,6 +52,9 @@ namespace Bastion.UI.Combat
             {
                 // The main menu (#7): not once it is over, the report has its own way out; nor abandoning then.
                 Leave = !over,
+                // The mission waits while it is open (Arturo, 28/10), for both; the battle hidden under it (Ana).
+                PauseNote = over ? null : ActiveSlots().Count > 1 ? HudText.Menu.PausedBoth : HudText.Menu.PausedSolo,
+                Cover = !over,
                 Abandon = !over,
                 AbandonLabel = Lore.AbandonText.Button,
                 QuitLabel = Lore.QuitText.Button,

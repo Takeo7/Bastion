@@ -206,7 +206,7 @@ namespace Bastion.Engine
         public int Defense { get; set; }
         public int Dodge { get; set; }
         /// <summary>Tiles per action point (XCOM 2 mobility 12 m / 1.5).</summary>
-        public double Mobility { get; set; } // SOLDIER_MOBILITY * ZOMBIE_PACE for the slow dead: 4.8.
+        public double Mobility { get; set; } // SOLDIER_MOBILITY * ZOMBIE_PACE for the slow dead: 6.4.
         /// <summary>Sight radius in tiles (27 m / 1.5).</summary>
         public int Sight { get; set; }
         /// <summary>While XCOM is concealed, this unit only notices soldiers this close (12 m / 1.5).</summary>
@@ -673,9 +673,9 @@ namespace Bastion.Engine
 
         // ---------------------------------------------------------------- templates
 
-        /// <summary>Tiles a soldier covers in an action, and how much of that the dead do (playtest 16/10 #21).</summary>
+        /// <summary>Tiles a soldier covers in an action, and how much of that the dead do (playtest 16/10 #21; 80 %, not 60, Ana's playtest 28/10).</summary>
         public const int SoldierMobility = 8;
-        public const double ZombiePace = 0.6;
+        public const double ZombiePace = 0.8;
 
         private static UnitTemplate Soldier(
             string id,
@@ -812,7 +812,7 @@ namespace Bastion.Engine
             [TemplateIds.Lancer] = Alien(TemplateIds.Lancer, "Cazador", "CAZ", WeaponIds.LancerRifle, meleeWeapon: WeaponIds.StunLance, hp: 4, abilities: new[] { AbilityIds.StunLance, AbilityIds.Shoot, AbilityIds.Reload }),
             // The dead (docs/FASE2.md): claws and teeth, no cover, the horde's AI (ai.ts takeZombieTurn).
             // Harder to put down (playtest 2026-10-15, #12): two more points of health each.
-            // Playtest 16/10 #19 and #21: 3 of health, and they move 60 % of what a soldier does (ZOMBIE_PACE).
+            // Playtest 16/10 #19 and #21: 3 of health; they move 80 % of what a soldier does (ZOMBIE_PACE, 28/10).
             [TemplateIds.Zombie] = Alien(TemplateIds.Zombie, "Zombi", "ZOM", WeaponIds.Claws, meleeWeapon: WeaponIds.Claws, hp: 3, aim: 60, defense: -10, mobility: SoldierMobility * ZombiePace, sight: 14, detection: 6, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
             [TemplateIds.Xenoid] = Alien(TemplateIds.Xenoid, "Corredor", "COR", WeaponIds.XenoPistol, meleeWeapon: WeaponIds.XenoPistol, hp: 7, aim: 60, mobility: 8, detection: 10, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
             [TemplateIds.Mec] = Alien(TemplateIds.Mec, "Acorazado", "ACO", WeaponIds.MecCannon, meleeWeapon: WeaponIds.MecCannon, hp: 9, armor: 1, aim: 60, mobility: SoldierMobility * ZombiePace, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),

@@ -315,6 +315,8 @@ namespace Bastion.Client.Units
         /// <summary>The state last shown (Sync), and whether unit `id` has a figure.</summary>
         public GameState State => state;
         public bool Has(string id) => id != null && views.ContainsKey(id);
+        /// <summary>Whether unit `id`'s figure is on the map now (the squad, an enemy in sight, a shade).</summary>
+        public bool Shown(string id) => id != null && views.TryGetValue(id, out var v) && v.root != null && v.root.gameObject.activeSelf;
         public Vector3 Feet(string id) => views.TryGetValue(id, out var v) ? v.root.position : Vector3.zero;
         public Vector3 Chest(string id) => Bone(id, HumanBodyBones.UpperChest) ?? Bone(id, HumanBodyBones.Chest) ?? Feet(id) + Vector3.up * 1.25f;
         public Vector3 Head(string id) => Figures.HeadOf(id) is Transform h ? h.position : Feet(id) + Vector3.up * 1.75f;
@@ -498,6 +500,7 @@ namespace Bastion.Client.Units
                 }
                 var figure = Instantiate(prefab);
                 figure.name = preset;
+                if (kind == "dead") SoldierPalette.DullDead(figure);
                 SoldierFigure.OwnColours(figure);
                 return figure;
             }

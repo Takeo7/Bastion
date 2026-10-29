@@ -180,9 +180,10 @@ namespace Bastion.Client
         }
 
         /// <summary>
-        /// La Lata by the caravan (clearingArt.ts parkBus), nose out along a track, where nothing is built and no pine stands
-        /// under it: the nearest such spot up each track from the Bastion's lot (never on it), a lane to either side if the
-        /// middle is taken; its doors to the lot. Best where its way out along the track to the clearing's edge is clear too
+        /// La Lata by the caravan (clearingArt.ts parkBus), nose out along the track, where nothing is built and no pine stands
+        /// under it: the nearest such spot up the track from the Bastion's lot (never on it), a lane to either side if the
+        /// middle is taken; its doors to the lot. One track since 28/10, out to the south (Base.TrackSide: Ana's playtest,
+        /// «sólo uno, por donde ha llegado el coche»); 0.10.1 tried each of its four. Best where its way out along the track to the clearing's edge is clear too
         /// (it leaves and comes back by it: busRoute); if no spot has one, it fades out and in where it stands. Nowhere
         /// clear, it is away (hidden). In 0.10.1's tiles (x east, z south).
         /// </summary>
@@ -217,7 +218,8 @@ namespace Bastion.Client
             Vector2 bestDir = default;
             float bestWay = 0, bestCost = 0;
             bool bestRoute = false;
-            foreach (var dir in new[] { new Vector2(1, 0), new Vector2(-1, 0), new Vector2(0, 1), new Vector2(0, -1) })
+            var side = Bastion.Engine.Grid.Dirs4[Bastion.Engine.Base.TrackSide];
+            foreach (var dir in new[] { new Vector2(side.X, side.Y) })
             {
                 float half = (dir.x != 0 ? cw : ch) / 2;
                 for (float reach = half + 0.5f; reach <= half + 9 + 1e-6f; reach += 0.5f)

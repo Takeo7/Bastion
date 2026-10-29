@@ -738,6 +738,8 @@ namespace Bastion.Engine.Tests
         {
             var c = Campaign.CreateCampaign(Both, new Rng(1));
             c.Credits = 500;
+            // (The clearing is small since 28/10: the pines out of the way, not to fell them first.)
+            c.Bastion.Trees = new List<int>();
             // A barracón is dear: a vote (docs/FASE12.md §11.7).
             var spot = CampaignHelpers.FreeSpot(c, PieceIds.Quarters);
             Run(c, Place(PieceIds.Quarters, spot), 0, Both);

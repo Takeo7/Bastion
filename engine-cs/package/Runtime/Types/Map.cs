@@ -267,6 +267,8 @@ namespace Bastion.Engine
         public const string Hydrant = "hydrant";
         /// <summary>A mailbox by the kerb; facing: the street.</summary>
         public const string Mailbox = "mailbox";
+        /// <summary>A bollard along a sidewalk, low cover (since 28/10, where a street tree in a pot stood); facing: the street.</summary>
+        public const string Bollard = "bollard";
         /// <summary>What lies about and stands up (homeDressing, medicalAbandonment: a chair over, bags, a fallen drip): its MedicalDetail draws it.</summary>
         public const string Strewn = "strewn";
         /// <summary>A garden shed at the back of a plot (docs/MAPAS.md §5.4), 2 × 3; facing: its door.</summary>
@@ -297,7 +299,7 @@ namespace Bastion.Engine
             Wire, SirenCar, Pallets, Drums, Forklift, Machine, Silo, Bench, Fridge, Stove, Bathtub, Washbasin, TvStand,
             Wc, Armchair, CoffeeTable, FloorLamp, PottedPlant, Nightstand, DiningChair, TowelRack, CoatRack, CafeTable,
             ReadingTable, DrinksFridge, Wheelbarrow, Tools, Hydrant, Mailbox, Strewn, Shed, WashingLine, VegPatch,
-            WindowBarricade, Part,
+            WindowBarricade, Bollard, Part,
         };
     }
 

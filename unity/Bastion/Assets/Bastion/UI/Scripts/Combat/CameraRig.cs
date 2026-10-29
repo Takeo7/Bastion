@@ -145,7 +145,8 @@ namespace Bastion.UI.Combat
         {
             var dt = Time.unscaledDeltaTime;
             var held = Held != null && Held();
-            var keys = held ? null : Keyboard.current;
+            // (Not with Cmd or Ctrl held: Cmd+W, Cmd+Q, Ctrl+A are the system's.)
+            var keys = held || Bastion.UI.App.Shortcuts.Elsewhere(Keyboard.current) ? null : Keyboard.current;
             var mouse = held ? null : Mouse.current;
             if (keys != null)
             {

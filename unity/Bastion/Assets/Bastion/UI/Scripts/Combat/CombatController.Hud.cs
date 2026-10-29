@@ -60,7 +60,9 @@ namespace Bastion.UI.Combat
             var sharing = PartnerHere() != null && v.ActiveTeam == Teams.Xcom && v.Outcome == null;
             var holder = v.Command == null || !Players.Any(p => p.Slot == v.Command && p.Connected) ? MySlot : v.Command.Value;
             // Whose turn it is, unmistakably (playtest): mine, the partner's while they hold the command, or the enemy's.
-            var turn = new TurnView { Turn = v.Turn, Concealed = v.Concealed };
+            // Alone, with no partner here or just gone (ActiveSlots: within the server's grace), no frame nor players (Ana, 28/10).
+            var alone = ActiveSlots().Count(s => s != MySlot) == 0;
+            var turn = new TurnView { Turn = v.Turn, Concealed = v.Concealed, Alone = alone };
             if (v.Outcome != null) turn.Owner = "over";
             else if (v.ActiveTeam == Teams.Alien)
             {
@@ -90,7 +92,7 @@ namespace Bastion.UI.Combat
             Hud.SetTurn(turn);
             Hud.SetMission(MissionView());
             Hud.SetCompass(CompassOf(v));
-            Hud.SetPlayers(PlayersView(v, sharing ? holder : (int?)null));
+            Hud.SetPlayers(alone ? null : PlayersView(v, sharing ? holder : (int?)null));
             Hud.SetSquad(SquadView(v, inPlay?.Id));
             var shown = UnitById(v, picked);
             Hud.SetSelected(shown != null && shown.Alive ? UnitPanel(shown) : null);
@@ -236,7 +238,8 @@ namespace Bastion.UI.Combat
                 if (u.Team == Teams.Xcom)
                 {
                     // With no shooter in sight nobody flanks anyone: the shield only shows cover, never the red «flanked».
-                    if (watchers.Count == 0) f.Cover = Cover.HasAnyCover(v, u.Pos) ? Cover.CoverSides(v, u.Pos).Max() : -1;
+                    if (!CoverMatters()) f.Cover = -1;
+                    else if (watchers.Count == 0) f.Cover = Cover.HasAnyCover(v, u.Pos) ? Cover.CoverSides(v, u.Pos).Max() : -1;
                     else f.Cover = watchers.Min(a => Cover.CoverAgainst(v, u.Pos, a.Pos));
                 }
                 // How far the soldier sees it: shorter at night, unless it stands in the light (los.ts sightTo).
@@ -786,7 +789,12 @@ namespace Bastion.UI.Combat
                 Turns = mission.TurnsLeft >= 0 ? $"{mission.TurnsLeft} turnos" : null,
                 Briefing = briefing,
             });
-            if (s.Units.Any(u => u.Alive && u.Team == Teams.Alien && !u.Objective && !Content.Templates[u.Template].Undead)) Hud.Log(Lore.LivingTip, FeudColor);
+            if (s.Units.Any(u => u.Alive && u.Team == Teams.Alien && !u.Objective && !Content.Templates[u.Template].Undead))
+            {
+                Hud.Log(Lore.LivingTip, FeudColor);
+                // Said, so the squad's cover shows from now (CoverMatters).
+                shotsSeen = true;
+            }
             if (s.Mission.Night == true) Hud.Log(string.Join(" ", Lore.NightText.Rules), "#2a4a7a");
         }
 

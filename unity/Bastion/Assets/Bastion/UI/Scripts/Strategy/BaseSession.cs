@@ -32,6 +32,8 @@ namespace Bastion.UI.Strategy
 
         void Start()
         {
+            // The battle's time running whatever it was left at (a pause, «Rápida»): the camp's life runs on it.
+            Time.timeScale = 1;
             net = NetLink.Instance;
             var root = GetComponent<StrategyRoot>();
             control = new BaseController(root, Math.Max(0, net.Slot), msg => net.Send(msg))
@@ -220,14 +222,17 @@ namespace Bastion.UI.Strategy
             var root = GetComponent<StrategyRoot>();
             if (control == null || !root.Ready) return;
             control.Tick();
-            if (keys == null) return;
+            // F12: a capture of the screen (Red, 28/10).
+            if (keys != null && keys.f12Key.wasPressedThisFrame) Bastion.UI.App.Screenshots.Take(root.Toast);
+            // Not with Cmd or Ctrl held: the system's (Shortcuts).
+            if (keys == null || Bastion.UI.App.Shortcuts.Elsewhere(keys)) return;
             // Walking about the clearing, Esc is the walk's (Arte's: it ends it in its LateUpdate, so Walking is still on here).
             var walking = Bastion.Client.Settlement.Instance != null && Bastion.Client.Settlement.Instance.Walking;
             if (keys.escapeKey.wasPressedThisFrame && !walking) control.Escape();
             else if (keys.enterKey.wasPressedThisFrame) root.RadioKey("enter");
             else if (keys.spaceKey.wasPressedThisFrame) root.RadioKey("space");
-            // B: in and out of Construir (screen.ts onKey), not while a name is typed nor with Ctrl or Cmd.
-            else if (keys.bKey.wasPressedThisFrame && !walking && !root.Typing && !keys.ctrlKey.isPressed && !keys.leftMetaKey.isPressed && !keys.rightMetaKey.isPressed) control.ToggleBuild();
+            // B: in and out of Construir (screen.ts onKey), not while a name is typed.
+            else if (keys.bKey.wasPressedThisFrame && !walking && !root.Typing) control.ToggleBuild();
         }
     }
 }

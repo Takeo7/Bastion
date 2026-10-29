@@ -180,7 +180,7 @@ namespace Bastion.Client.Map
         /// <summary>Decor whose prop turns the way the generator said (mapView.ts FACING); the others are turned at random.</summary>
         public static readonly HashSet<string> Facing = new HashSet<string>
         {
-            "carFront", "carRear", "fountain", "fountainCorner", "fence", "gatePost", "hay", "shelf", "counter", "table", "sofa", "bed",
+            "carFront", "carRear", "bollard", "fountain", "fountainCorner", "fence", "gatePost", "hay", "shelf", "counter", "table", "sofa", "bed",
             "hospitalBed", "medicalShelf", "gurney", "medicalCart", "medicalCabinet", "wheelchair", "receptionDesk", "waitingSeats",
             "examTable", "medicalMonitor", "xray", "bedsideTable", "visitorChair", "clinicalSink", "sterilizer", "ultrasound",
             "waitingTable", "waterDispenser", "toilet", "clinicalBin", "consultDesk", "desk", "wardrobe", "cabinet", "rack", "pipe",
@@ -206,7 +206,8 @@ namespace Bastion.Client.Map
                 case "carFront":
                 case "carRear":
                     return low ? "carFront" : null;
-                case "planter": case "bin": case "streetTree": case "bench": case "stove": case "bathtub": case "washbasin": case "wc":
+                // (A bollard: the sidewalks' since 28/10, Unity's own, where 0.10.1 had its street tree in a pot.)
+                case "planter": case "bin": case "streetTree": case "bollard": case "bench": case "stove": case "bathtub": case "washbasin": case "wc":
                 case "tvStand": case "counter": case "table": case "sofa": case "bed": case "hospitalBed": case "gurney": case "pipe": case "bush":
                     return low ? kind : null;
                 case "tank":

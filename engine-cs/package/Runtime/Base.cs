@@ -485,7 +485,7 @@ namespace Bastion.Engine
         /// <summary>
         /// A base built on a smaller map, on one `size` across (docs/MAPAS.md phase 6, decided by Arturo 19/10: «con la base
         /// guardada en el centro y lo construido con su tamaño»): all of it set in the middle, what stood at the size it was
-        /// built (BasePiece.size), pines round it as thick as freshBase grows them, the tracks out to each side clear. What
+        /// built (BasePiece.size), pines round it as thick as freshBase grows them, its track clear. What
         /// stands on the Bastion's bigger lot comes down: returned, for the caller to give back what it cost.
         /// </summary>
         public static List<BasePiece> GrowBase(BaseState @base, int size, Rng rng)
@@ -614,17 +614,74 @@ namespace Bastion.Engine
             return @out.ToList();
         }
 
-        /// <summary>On one of the base's tracks: a band three tiles wide through the middle, each way, out to every side (La Lata comes and goes by them).</summary>
+        /// <summary>The side of the map the base's one track runs out to (a DIRS4 index: the south).</summary>
+        public const int TrackSide = 2;
+
+        /// <summary>
+        /// On the base's track: a band three tiles wide from the middle out to the south side, the one La Lata comes and goes
+        /// by. One, not one to each side (Ana's playtest 28/10: «sólo uno, por donde ha llegado el coche»); the dead come
+        /// in from between the pines (siegeTrails).
+        /// </summary>
         public static bool OnTrack(int width, int height, int x, int y)
         {
+            return Math.Abs(x - (width - 1) / 2.0) <= 1 && y >= (height - 1) / 2.0 - 1;
+        }
+
+        /// <summary>On one of the four tracks a base had till 28/10: the band through the middle, each way, out to every side.</summary>
+        public static bool OnOldTrack(int width, int height, int x, int y)
+        {
             return Math.Abs(x - (width - 1) / 2.0) <= 1 || Math.Abs(y - (height - 1) / 2.0) <= 1;
+        }
+
+        /// <summary>
+        /// A base from before 28/10 (migrateCampaign, version 26): its three tracks gone, pines where the wood stood either
+        /// side of them, as thick as it is there; the clearing, what was felled and built, and the squad's places stay open.
+        /// A tile of an old track is planted where a tile beside the band, across it, is a pine.
+        /// </summary>
+        public static void PlantOldTracks(BaseState @base, IEnumerable<Vec2> keep)
+        {
+            var width = @base.Width;
+            var height = @base.Height;
+            var trees = new HashSet<int>(@base.Trees);
+            var felled = new HashSet<int>(@base.Felled ?? new List<int>());
+            var kept = new HashSet<int>(keep.Select((p) => p.Y * width + p.X));
+            bool Band(int x, int y) => OnOldTrack(width, height, x, y);
+            // The first tile past the band from (x, y), stepping (dx, dy): a pine?
+            bool PineBeyond(int x, int y, int dx, int dy)
+            {
+                for (var k = 1; k <= 3; k++)
+                {
+                    var a = x + dx * k;
+                    var b = y + dy * k;
+                    if (a < 0 || b < 0 || a >= width || b >= height) return false;
+                    if (!Band(a, b)) return trees.Contains(b * width + a);
+                }
+                return false;
+            }
+            var planted = new List<int>();
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    var i = y * width + x;
+                    if (!Band(x, y) || OnTrack(width, height, x, y) || trees.Contains(i) || felled.Contains(i) || kept.Contains(i) || PieceAt(@base, x, y) != null) continue;
+                    // Across the band: sideways on a track running north and south, up and down on one running east and west.
+                    var northSouth = Math.Abs(x - (width - 1) / 2.0) <= 1;
+                    var flanked = northSouth ? PineBeyond(x, y, -1, 0) || PineBeyond(x, y, 1, 0) : PineBeyond(x, y, 0, -1) || PineBeyond(x, y, 0, 1);
+                    if (flanked) planted.Add(i);
+                }
+            }
+            if (planted.Count == 0) return;
+            var all = @base.Trees.Concat(planted).ToList();
+            Js.Sort(all, (a, b) => a.CompareTo(b));
+            @base.Trees = all;
         }
 
         /// <summary>
         /// A new base (§11.1): the caravan in the middle of a clearing in the pines.
         /// Every campaign's ground is its own: sometimes thicker pines, sometimes more
         /// clearings, though few big ones; the middle always clear round the caravan,
-        /// and a track out to each side, so the dead (and La Lata) can get in.
+        /// and a track out to the south for La Lata (one since 28/10; the dead come by ways through the pines).
         /// </summary>
         public static BaseState FreshBase(Rng rng, int size = BaseMap)
         {
@@ -653,8 +710,9 @@ namespace Bastion.Engine
             var thickness = 0.5 + rng.Next() * 0.25;
             var cx = (width - 1) / 2.0;
             var cy = (height - 1) / 2.0;
-            // A bigger clearing on a bigger map (docs/MAPAS.md §4.9: 12–16 tiles across from the middle, with its glades).
-            var clearing = Js.Round((6 + rng.Int(3)) * ((double)size / 40));
+            // A bigger clearing on a bigger map: 6 to 8 tiles round the middle on 56 (smaller since Ana's playtest 28/10; it was
+            // 8 to 11), with its glades.
+            var clearing = Js.Round((4 + rng.Int(3)) * ((double)size / 40));
             var trees = new List<int>();
             for (var y = 0; y < height; y++)
             {
@@ -694,9 +752,10 @@ namespace Bastion.Engine
 
         /// <summary>
         /// Narrow ways through the pines for a siege (Ana, 23/10 #33): from every side, every TRAIL_EVERY tiles but by the
-        /// tracks, winding in from the edge until the pines open, so the dead come out from between the trees and not only
-        /// down the tracks. Only on the siege's map: the clearing's own pines stay as they are. Fixed by the base's size, so
-        /// the same base always has the same ways.
+        /// track, winding in from the edge till they reach the open ground joined to the middle, so the dead come out from
+        /// between the trees. Since 28/10, with one track, they go all the way (a way that stopped in a glade the pines close
+        /// off let no one in by its side, and a wave with nowhere to land never came). Only on the siege's map: the
+        /// clearing's own pines stay as they are. Fixed by the base, so the same base always has the same ways.
         /// </summary>
         public static List<int> SiegeTrails(BaseState @base)
         {
@@ -704,33 +763,61 @@ namespace Bastion.Engine
             var height = @base.Height;
             // Only ever asked `has`.
             var trees = new HashSet<int>(@base.Trees);
+            // The open ground joined to the middle of the clearing, by the four ways round.
+            var joined = new HashSet<int>();
+            var middle = (int)Math.Floor((height - 1) / 2.0) * width + (int)Math.Floor((width - 1) / 2.0);
+            var queue = new List<int> { middle };
+            joined.Add(middle);
+            while (queue.Count > 0)
+            {
+                var i = queue[queue.Count - 1];
+                queue.RemoveAt(queue.Count - 1);
+                var x = i % width;
+                var y = i / width;
+                foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    var a = x + dx;
+                    var b = y + dy;
+                    var j = b * width + a;
+                    if (a < 0 || b < 0 || a >= width || b >= height || trees.Contains(j) || joined.Contains(j)) continue;
+                    joined.Add(j);
+                    queue.Add(j);
+                }
+            }
             var @out = new JsSet<int>();
             int Mix(int a, int b) => (int)(unchecked((uint)((a * 73856093) ^ (b * 19349663))) % 1000);
+            // The tile `depth` in from a side's edge, `along` it; -1 off the map.
+            int TileOf(int side, int depth, int along)
+            {
+                var x = side == 0 ? along : side == 1 ? width - 1 - depth : side == 2 ? along : depth;
+                var y = side == 0 ? depth : side == 1 ? along : side == 2 ? height - 1 - depth : along;
+                return x < 0 || y < 0 || x >= width || y >= height ? -1 : y * width + x;
+            }
             for (var side = 0; side < 4; side++)
             {
                 var span = side % 2 == 0 ? width : height;
                 var mid = (span - 1) / 2.0;
                 for (var k = 3; k < span - 3; k += TrailEvery)
                 {
-                    if (Math.Abs(k - mid) < TrailTrackGap) continue;
-                    // From the edge inwards, a step aside now and then; until two open tiles in a row past the band of the edge.
+                    if (side == TrackSide && Math.Abs(k - mid) < TrailTrackGap) continue;
+                    // From the edge inwards, a step aside now and then; until it reaches the open ground joined to the middle,
+                    // past the band of the edge.
                     var along = k;
-                    var open = 0;
-                    for (var depth = 0; depth < span / 2.0 && open < 2; depth++)
+                    for (var depth = 0; depth < span / 2.0; depth++)
                     {
-                        var x = side == 0 ? along : side == 1 ? width - 1 - depth : side == 2 ? along : depth;
-                        var y = side == 0 ? depth : side == 1 ? along : side == 2 ? height - 1 - depth : along;
-                        if (x < 0 || y < 0 || x >= width || y >= height) break;
-                        var i = y * width + x;
-                        if (trees.Contains(i))
-                        {
-                            @out.Add(i);
-                            open = 0;
-                        }
-                        else if (depth > BaseEdge + 1) open++;
+                        var i = TileOf(side, depth, along);
+                        if (i < 0) break;
+                        if (depth > BaseEdge + 1 && joined.Contains(i)) break;
+                        if (trees.Contains(i)) @out.Add(i);
                         var turn = Mix(side * 1000 + k, depth);
+                        var was = along;
                         if (turn < 220) along = Math.Max(1, along - 1);
                         else if (turn > 780) along = Math.Min(span - 2, along + 1);
+                        if (along == was) continue;
+                        // The step aside by the tile beside, not across the corner: nobody cuts between two pines (paths.ts).
+                        var beside = TileOf(side, depth, along);
+                        if (depth > BaseEdge + 1 && joined.Contains(beside)) break;
+                        if (trees.Contains(beside)) @out.Add(beside);
                     }
                 }
             }

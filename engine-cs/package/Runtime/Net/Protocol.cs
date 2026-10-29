@@ -200,6 +200,17 @@ namespace Bastion.Net
         public bool Idle { get; set; }
     }
 
+    /// <summary>
+    /// The game's menu opened (Esc) or closed in a mission (Arturo, 28/10): while either player has it open, the mission
+    /// waits for both (no orders, no turn clock, the screens hold what they play). A drop takes it away; back with the
+    /// menu still open, the app says it again (ClientSession.Pause).
+    /// </summary>
+    public sealed class PauseMessage : ClientMessage
+    {
+        public override string T => "pause";
+        public bool Paused { get; set; }
+    }
+
     /// <summary>A line for the host's red.log: how the screen draws (`[rend …]`), an error, a hang.</summary>
     public sealed class ReportMessage : ClientMessage
     {
@@ -231,6 +242,8 @@ namespace Bastion.Net
         public bool Connected { get; set; }
         /// <summary>Their game out of sight (the `away` message): back soon, their turn waits.</summary>
         public bool? Away { get; set; }
+        /// <summary>Their game's menu open in the mission (the `pause` message): the mission waits for both.</summary>
+        public bool? Paused { get; set; }
     }
 
     /// <summary>The campaign there is, for the lobby's «Continuar campaña»: how far it went, and the mission left half played.</summary>

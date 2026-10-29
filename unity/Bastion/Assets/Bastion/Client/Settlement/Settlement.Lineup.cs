@@ -214,6 +214,13 @@ namespace Bastion.Client
             return ringMaterials[c] = m;
         }
 
+        /// <summary>
+        /// How far down a wounded soldier stands in the row (clearingArt.ts tick: crouch 0.4 over the idle; Synty's
+        /// «slumped» stance stood them up straight, Ana 28/10). With a rifle, its kneel 0.4 more over the legs, which three's
+        /// mixer shares out with the rest (0.8 of 1.4 down) and its lean bends further: 0.7 kneeling, set against 0.10.1's.
+        /// </summary>
+        const float WoundedCrouch = 0.4f, WoundedKneel = 0.7f;
+
         /// <summary>A soldier on their place, their weapon in hand, waiting the `index`th way (restAs), slumped if wounded.</summary>
         Stander Stand(CampaignSoldier s, CampaignState campaign, int index, Vector2 at, float yaw, bool wounded, string band)
         {
@@ -260,12 +267,13 @@ namespace Bastion.Client
                 bool armed = stander.gun != null && !stander.pistol;
                 var rests = Anims.RifleRests;
                 string rest = rests.Count > 0 ? rests[((index % rests.Count) + rests.Count) % rests.Count] : "rifleIdle";
-                string slumped = wounded ? Anims.Stance(build, "slumped") : null;
-                // How it stands: slumped wounded, else with the pistol its way of waiting (PISTOL_RESTS), else its idle.
-                string still = slumped ?? (stander.pistol ? Anims.Stance(build, UnitViews.PistolStance(rest)) : null);
-                string ArmedId(string m) => !armed || slumped != null ? null : Anims.Armed("rifle", m) is string a && a != "own" ? a : null;
+                // How it stands: with the pistol its way of waiting (PISTOL_RESTS), else its idle; wounded, part way down to
+                // the crouch's idle, kneeling with the rifle (UnitViews: the armed crouch is rifleKneel).
+                string still = stander.pistol ? Anims.Stance(build, UnitViews.PistolStance(rest)) : null;
+                string ArmedId(string m) => !armed ? null : m == "crouchIdle" ? "rifleKneel" : Anims.Armed("rifle", m) is string a && a != "own" ? a : null;
                 stander.anim = new FigureAnimator(stander.animator, m => catalog.Clip(ArmedId(m) ?? (m == "idle" && still != null ? still : Anims.Motion(build, m, false))), null, m => ArmedId(m) != null);
-                if (armed && slumped == null) stander.anim.Rest(catalog.Clip(rest), 0);
+                if (armed) stander.anim.Rest(catalog.Clip(rest), 0);
+                if (wounded) stander.anim.Crouch = armed ? WoundedKneel : WoundedCrouch;
                 if (stander.pistol) stander.anim.ArmRest(catalog.Clip("pistolRest"), UnitViews.PistolHold, 0);
             }
             return stander;

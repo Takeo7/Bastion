@@ -163,6 +163,11 @@ for (const out of [[], ['Ana'], ['Ana', 'Mateo'], ['Ana', 'Mateo', 'Chiara']]) e
 for (const [k, v] of Object.entries(L.EVAC_TEXT)) eq(v, `Lore.EvacText.${k[0]!.toUpperCase()}${k.slice(1)}`);
 for (const [k, v] of Object.entries(L.TIME_TEXT)) eq(v, `Lore.TimeText.${k[0]!.toUpperCase()}${k.slice(1)}`);
 for (const n of [5, 1]) eq(L.turnsLeftWarning(n), `Lore.TurnsLeftWarning(${n})`);
+// Not in lore.ts (Ana's playtest, 28/10, approved by Gameplay): the warning with 3 turns left, and its floating word.
+for (const n of [3, 2, 1]) {
+  eq(n === 1 ? 'Queda 1 turno para cumplir el objetivo, o la misión se pierde.' : `Quedan ${n} turnos para cumplir el objetivo, o la misión se pierde.`, `Lore.TurnsToLoseWarning(${n})`);
+  eq(n === 1 ? 'QUEDA 1 TURNO' : `QUEDAN ${n} TURNOS`, `Lore.TurnsLeftFloat(${n})`);
+}
 for (const mine of [true, false]) {
   eq(L.proposalClock('1:25', mine), `Lore.ProposalClock("1:25", ${mine})`);
   eq(L.evacClock('0:40', mine), `Lore.EvacClock("0:40", ${mine})`);

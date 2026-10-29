@@ -16,6 +16,16 @@ namespace Bastion.UI.Combat
         /// <summary>Out of rounds in the magazine, on the key itself (Ana, 20/10 #24).</summary>
         public const string ReloadFirst = "Sin balas: recarga";
 
+        /// <summary>
+        /// Why a choice of Lanzar is off when none are left (Lore, 28/10), instead of the engine's «No quedan usos.»: by
+        /// the use it lacks; null for others.
+        /// </summary>
+        public static string NoneLeft(string charge) =>
+            charge == ChargeIds.Grenade ? "No le quedan granadas."
+            : charge == ChargeIds.Smoke ? "No le quedan granadas de humo."
+            : charge == ChargeIds.Flashbang ? "No le quedan granadas aturdidoras."
+            : null;
+
         /// <summary>Space with nothing armed: the first of these that can be used (game.ts PRIMARY_ATTACKS).</summary>
         public static readonly string[] PrimaryAttacks = { AbilityIds.Shoot, AbilityIds.Pistol, AbilityIds.Slash };
 

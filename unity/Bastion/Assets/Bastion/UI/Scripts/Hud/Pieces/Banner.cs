@@ -5,7 +5,9 @@ namespace Bastion.UI.Hud
 {
     /// <summary>
     /// The stamp in the middle (hud.ts banner; docs/UNITY-UI.md §2.5): «TU TURNO», «TURNO ENEMIGO», «¡CONTACTO!»… with a
-    /// line under it, coming down like a rubber stamp (and its sound). It goes by itself, or, `held`, stays until it is
+    /// line under it, coming down like a rubber stamp (and its sound): as Mixta drew it (mixta-hud.css .banner), a plate of
+    /// dark steel between two hazard bands, yellow or red, its words straight; not the paper stamp under it (styles.css),
+    /// which read badly over the snow (Ana, 28/10). It goes by itself, or, `held`, stays until it is
     /// clicked, or Intro or Esc pressed, or the player does anything else (Release); meanwhile it covers the field and
     /// the turn clock waits (Covering).
     /// </summary>
@@ -38,9 +40,14 @@ namespace Bastion.UI.Hud
             sound?.Invoke("stamp");
             timer?.Pause();
             host.Clear();
-            Ui.Text(text, "banner__text font-title", host);
-            if (!string.IsNullOrEmpty(detail)) Ui.Text(detail, "banner__detail", host);
-            if (hold) Ui.Text(HudText.Banner.Go.ToUpperInvariant(), "banner__go", host);
+            var plate = Ui.El("banner__plate", host);
+            Ui.El("banner__hazard banner__hazard--top", plate);
+            Ui.Text(text, "banner__text font-title", plate);
+            if (!string.IsNullOrEmpty(detail)) Ui.Text(detail, "banner__detail", plate);
+            if (hold) Ui.Text(HudText.Banner.Go.ToUpperInvariant(), "banner__go", plate);
+            Ui.El("banner__hazard banner__hazard--bottom", plate);
+            // The clicks on the plate, the host's (held) or none.
+            plate.Query<VisualElement>().ForEach(e => e.pickingMode = PickingMode.Ignore);
             foreach (var k in new[] { "xcom", "alien", "warn" }) host.EnableInClassList("banner--" + k, kind == k);
             held = hold;
             // Clickable only while held; otherwise the clicks go through to the map.

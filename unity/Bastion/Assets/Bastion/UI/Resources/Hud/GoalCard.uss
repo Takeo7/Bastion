@@ -139,3 +139,27 @@
 .compass-dir--hot {
     color: var(--t-danger);
 }
+
+/* The compass's letters at the screen's edges (Ana, 28/10): big, on a dark slip to read over the snow; N in the accent. */
+.cardinal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    min-width: 30px;
+    padding: 1px 6px;
+    font-size: 22px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--t-text);
+    background-color: rgba(10, 8, 5, 0.62);
+    border-radius: 3px;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.cardinal--n {
+    color: var(--t-accent);
+}
+
+.cardinal--hot {
+    color: var(--t-danger);
+}

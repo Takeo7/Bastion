@@ -102,11 +102,20 @@ namespace Bastion.UI.Combat
             {
                 Hud.Bind(this);
                 Hud.Look += at => LookAt(at - Vector3.up * Board.Tile);
-                if (Hud.HeadOf == null) Hud.HeadOf = id => Figures.HeadOf(id) is Transform t ? t.position + Vector3.up * 0.35f : FeetOf(id) is Vector3 f ? f + Vector3.up * 2f : (Vector3?)null;
+                if (Hud.HeadOf == null) Hud.HeadOf = FlagAt;
             }
         }
 
-        void Send(Command c) => Order?.Invoke(c);
+        void Send(Command c)
+        {
+            // In the pause the host turns orders down; said here at once (PauseTick).
+            if (HeldByPause(c))
+            {
+                Toast(HudText.Menu.PausedOrder);
+                return;
+            }
+            Order?.Invoke(c);
+        }
         void Send(ClientMessage m) => Message?.Invoke(m);
 
         readonly List<Vector3> enemyFeet = new List<Vector3>();
@@ -504,6 +513,7 @@ namespace Bastion.UI.Combat
                 Overlay.ShowEnemies(EnemyFeet());
             }
             Keys();
+            PauseTick();
             Cutaway();
             ClearView();
             CloseFlags();
@@ -530,7 +540,8 @@ namespace Bastion.UI.Combat
                     else RefreshFlags();
                 }
             }
-            var shift = Keyboard.current != null && Keyboard.current.shiftKey.isPressed;
+            // (Not with Cmd or Ctrl too: a screenshot's Cmd+Mayús+4 is no signal. Red, 28/10.)
+            var shift = Keyboard.current != null && Keyboard.current.shiftKey.isPressed && !App.Shortcuts.Elsewhere(Keyboard.current);
             if (!overHud && (Hud == null || !Hud.MenuOpen)) App.GameCursor.Ask(CursorOn(hover, shift));
             if (Hud != null && Hud.MenuOpen) return;
             // Shift and the click, or the wheel's click, mark the tile for both (playtest 19/10 #14); Shift or Alt and the wheel, the floor.
@@ -624,6 +635,15 @@ namespace Bastion.UI.Combat
         {
             var k = Keyboard.current;
             if (k == null) return;
+            // F12: a capture of the screen, whatever is open (Red, 28/10).
+            if (k.f12Key.wasPressedThisFrame) App.Screenshots.Take(Toast);
+            // Cmd or Ctrl held, the keys are the system's (a screenshot's Cmd+Mayús+4 picked the pistol: Ana, 28/10); the
+            // space let go still ends «Rápida».
+            if (Bastion.UI.App.Shortcuts.Elsewhere(k))
+            {
+                if (k.spaceKey.wasReleasedThisFrame) Hurry?.Invoke(false);
+                return;
+            }
             var enter = k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame;
             // The game's menu or a question up: the keys are theirs, but Esc, which closes them.
             if (Hud != null && Hud.MenuOpen)
@@ -653,10 +673,13 @@ namespace Bastion.UI.Combat
             }
             // «TU TURNO» held till it is seen (#50): Intro or Esc let it go and do nothing else; any other key goes on (Arturo, 23/10 #8).
             if ((enter || k.escapeKey.wasPressedThisFrame) && Hud != null && Hud.ReleaseBanner()) return;
-            if (k.anyKey.wasPressedThisFrame && Hud != null) Hud.ReleaseBanner(true);
+            // (Mayús, Ctrl, Alt and Cmd alone don't: game.ts.)
+            if (Hud != null && Bastion.UI.App.Shortcuts.AnyOther(k)) Hud.ReleaseBanner(true);
             for (var n = 0; n <= 9; n++)
             {
-                if (!k[Key.Digit0 + n].wasPressedThisFrame) continue;
+                // (The Input System's keys run Digit1…Digit9, Digit0, then Mayús, Alt, Ctrl and Cmd: Digit0 + n made Mayús
+                // the 1 and left the numbers dead. Ana, 28/10.)
+                if (!k[n == 0 ? Key.Digit0 : Key.Digit1 + (n - 1)].wasPressedThisFrame) continue;
                 NumberKey(n);
                 return;
             }
@@ -870,7 +893,7 @@ namespace Bastion.UI.Combat
             if (u == null || dest == null) return;
             var path = Paths.BuildPath(State, u, reach, hover);
             Overlay?.ShowPath(State, u.Pos, path, dest.Dash, Planning);
-            Overlay?.ShowCover(State, hover);
+            Overlay?.ShowCover(State, CoverMatters() ? hover : null);
             Overlay?.ShowHover(State, hover, dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
             // Running, a door or a window is heard (docs/FASE2.md): said under the destination; and at night, whether it ends in the light.
             Note(hover, path != null ? AbilityTexts.MoveNoise(State, path, dest.Dash) : null, LitNote(hover));
@@ -932,6 +955,46 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>A live unit's feet: its body's (BodyOf), or the middle of its tile.</summary>
+        /// <summary>
+        /// Each figure's top over its feet (m): the highest its head has stood, between 1.2 and 2.4.
+        /// </summary>
+        readonly Dictionary<string, float> tops = new Dictionary<string, float>();
+
+        /// <summary>
+        /// Where a unit's flag hangs: over its feet, at its top and a little more. 0.10.1's hangs from the figure's root
+        /// (unitViews.ts: rig.top + 0.45), so it never moves with the body; hung from the head bone, a figure turning
+        /// about in the fog swung it round and round (Ana, 28/10: «la barra de vida gira»).
+        /// </summary>
+        Vector3? FlagAt(string id)
+        {
+            if (FeetOf(id) is not Vector3 feet) return null;
+            var top = Figures.HeadOf(id) is Transform head ? Mathf.Clamp(head.position.y - feet.y, 1.2f, 2.4f) : 1.65f;
+            if (tops.TryGetValue(id, out var was) && was >= top) top = was;
+            else tops[id] = top;
+            return feet + Vector3.up * (top + 0.35f);
+        }
+
+        /// <summary>Someone who shoots has been seen in this mission, or the arrival card said the living are about.</summary>
+        bool shotsSeen;
+
+        /// <summary>
+        /// Whether the squad's cover is worth showing (Arturo, 28/10; Ana: «si no hay enemigos con pistolas…»): a bite
+        /// doesn't look at it, a shot does (raiders, turrets). So its shields, over the tile under the pointer and on the
+        /// soldiers' flags, show once an enemy that shoots has been seen in the mission, or from the start when the
+        /// arrival card announces the living (Lore.LivingTip); never giving away one not yet seen.
+        /// </summary>
+        bool CoverMatters()
+        {
+            if (shotsSeen || Shown == null) return shotsSeen;
+            foreach (var u in Shown.Units)
+                if (u.Alive && u.Team == Teams.Alien && Shoots(u) && Visible(u)) return shotsSeen = true;
+            return false;
+        }
+
+        /// <summary>Whether `u` has an attack from afar (a gun, a turret's), not only bites and blows.</summary>
+        static bool Shoots(Unit u) =>
+            Content.Templates.TryGetValue(u.Template, out var t) && t.Abilities.Any(a => Content.IsAttack(a) && Content.Abilities[a].Target == AbilityTargets.Enemy);
+
         Vector3? FeetOf(string id)
         {
             var u = id != null ? Shown.Units.FirstOrDefault(x => x.Id == id && x.Alive) : null;

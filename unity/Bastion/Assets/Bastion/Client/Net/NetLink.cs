@@ -427,6 +427,16 @@ namespace Bastion.Client.Net
             session?.Send(Json.Write(msg));
         }
 
+        /// <summary>
+        /// The game's menu opened or closed in a mission (Arturo, 28/10): the host holds the mission for both while either
+        /// player has it open, and each room's players say who (PlayerInfo.Paused). Through here, not Send: the session
+        /// keeps it and says it again if the connection comes back with the menu open.
+        /// </summary>
+        public void Pause(bool on)
+        {
+            session?.Pause(on);
+        }
+
         /// <summary>An order of the engine's for the host to play (in a `cmd`).</summary>
         public void Send(Command cmd)
         {

@@ -136,6 +136,15 @@ namespace Bastion.UI.Hud
             public static string LeaveToo(string partner) => $"{partner} vuelve también al menú.";
             public static string AbandonAsks(string partner) => $"{partner} tiene que aceptarlo.";
             public static string AbandonTip(string partner, bool paired) => partner != null ? $"Se lo pregunta a {partner}" : paired ? "Termina la misión para los dos" : "Termina la misión";
+
+            // The pause (Arturo, 28/10; Lore's words): under «MENÚ» for whoever opened it, alone or with a partner.
+            public const string PausedSolo = "Partida en pausa.";
+            public const string PausedBoth = "Partida en pausa para los dos.";
+            /// <summary>Over the battle, for the other player.</summary>
+            public static string PartnerPaused(string partner) => $"Partida en pausa: {partner} está en el menú.";
+            public const string PartnerPausedSub = "Sigue cuando lo cierre.";
+            /// <summary>An order tried while it waits (the host's own rejection says the same).</summary>
+            public const string PausedOrder = "La partida está en pausa: la orden no se ha hecho.";
         }
 
         public static class Notes

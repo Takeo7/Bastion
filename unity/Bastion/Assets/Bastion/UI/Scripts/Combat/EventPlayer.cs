@@ -184,10 +184,19 @@ namespace Bastion.UI.Combat
         /// <summary>Whether the enemy's turn is on screen now (the space bar hurries it then, and gives no orders).</summary>
         public bool EnemyTurnPlaying => V != null && V.ActiveTeam == Teams.Alien && V.Outcome == null;
 
-        /// <summary>The battle's time: the enemy's turn at its speed while it plays, the rest at 1.</summary>
+        /// <summary>Either player's menu open in the mission (CombatController.PauseTick): the battle's time stands still.</summary>
+        public void SetHalted(bool on)
+        {
+            halted = on;
+            Pace();
+        }
+
+        bool halted;
+
+        /// <summary>The battle's time: stopped in the pause; the enemy's turn at its speed while it plays; the rest at 1.</summary>
         void Pace()
         {
-            Time.timeScale = playing && EnemyTurnPlaying ? (hurry ? Math.Max(EnemySpeed, FastRate) : EnemySpeed) : 1;
+            Time.timeScale = halted ? 0 : playing && EnemyTurnPlaying ? (hurry ? Math.Max(EnemySpeed, FastRate) : EnemySpeed) : 1;
         }
 
         public EventPlayer(CombatController control, CancellationToken stop)
@@ -1695,11 +1704,13 @@ namespace Bastion.UI.Combat
                     // The squad's turn: the camera to the soldier who plays first (#47).
                     if (turn.Team == Teams.Xcom) control.TurnCamera(v, turn.Command ?? control.MySlot, true);
                     var left = v.Mission.TurnsLeft != null && turn.Turn > 1 ? v.Mission.TurnsLeft - 1 : v.Mission.TurnsLeft;
-                    if (turn.Team == Teams.Xcom && v.Mission.Siege == null && !v.Mission.ObjectiveDone && (left == 5 || left == 1))
+                    if (turn.Team == Teams.Xcom && v.Mission.Siege == null && !v.Mission.ObjectiveDone && (left == 5 || left == 3 || left == 1))
                     {
-                        var line = left == 1 ? Lore.TimeText.LastTurn : Lore.TurnsLeftWarning(left.Value);
+                        // Three left: that the mission is lost then (Ana, 28/10; Lore's words), and over the first soldier, big.
+                        var line = left == 1 ? Lore.TimeText.LastTurn : left == 3 ? Lore.TurnsToLoseWarning(3) : Lore.TurnsLeftWarning(left.Value);
                         Log(line, "#ff6b5a");
                         Hud?.Toast(line);
+                        if (left == 3 && control.PickedId != null) Hud?.Pin(Chest(control.PickedId), Lore.TurnsLeftFloat(3), "#ff6b5a", 4);
                     }
                     await Wait(1f);
                     return;

@@ -115,6 +115,11 @@ namespace Bastion.Engine
                 }
                 foreach (var q in c.QuestLog.Values) if (q != null) q.Day = Behind(q.Day);
             }
+            if (version < 26)
+            {
+                // One track, to the south (Ana's playtest 28/10): the other three grow over, as the wood either side of them.
+                Base.PlantOldTracks(c.Bastion, c.SiegePosts?.Values ?? Enumerable.Empty<Vec2>());
+            }
 
             // `??=` in TypeScript: a soldier read without them (C# reads them as empty) gets them.
             foreach (var s in c.Soldiers)

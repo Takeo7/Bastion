@@ -10,7 +10,9 @@ Cómo abrir las dos apps (doble clic, la segunda con `BASTION_DATOS`, la cuarent
 
 ## La app
 
-`unity/Bastion/Builds/Mac/Bastion.app`, de las 16:57 del 26/10 (commit 9ff0b7e). Para Ana, `Builds/Bastion-Mac.zip`.
+`unity/Bastion/Builds/Mac/Bastion.app`, de las 14:48 del 27/10 (commit b10be0b). Para Ana, `Builds/Bastion-Mac.zip` (190 MB).
+
+Desde la del 26/10 lleva el repaso del dibujo contra la 0.10.1: escaleras, saltos y escalas, registrar, cambiar de arma, el cadáver que se levanta, el aro de luna de noche, las salas de las casas con su luz, el cielo y las copas de los árboles que se apartan. Mirad sobre todo una misión de noche (los soldados con el borde azul) y el lado del autobús en la base.
 
 Ya lleva todo lo del hito 2 y además:
 - el sonido de la 0.10.1: combate, base, Mapa, radio, clics y pasos (Ajustes → Sonido; M lo silencia en combate);

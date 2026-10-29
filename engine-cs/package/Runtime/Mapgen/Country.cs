@@ -1036,7 +1036,7 @@ namespace Bastion.Engine
         /// <summary>What may be cleared to open a dead end outdoors: one-tile things that grow or lie about, never a car, the bus or a wall.</summary>
         private static readonly HashSet<string> Soft = new HashSet<string>
         {
-            DecorKinds.Tree, DecorKinds.Bush, DecorKinds.Rock, DecorKinds.StreetTree, DecorKinds.Planter, DecorKinds.Bin, DecorKinds.Fence,
+            DecorKinds.Tree, DecorKinds.Bush, DecorKinds.Rock, DecorKinds.StreetTree, DecorKinds.Bollard, DecorKinds.Planter, DecorKinds.Bin, DecorKinds.Fence,
             DecorKinds.Wire, DecorKinds.Crates, DecorKinds.Barricade, DecorKinds.Pallets, DecorKinds.Drums, DecorKinds.Rubble,
         };
 

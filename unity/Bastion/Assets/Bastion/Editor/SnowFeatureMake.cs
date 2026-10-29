@@ -18,7 +18,7 @@ namespace Bastion.EditorTools
     /// </summary>
     public static class SnowFeatureMake
     {
-        static readonly string[] Renderers = { "Assets/Settings/PC_Renderer.asset", "Assets/Settings/Mobile_Renderer.asset", "Assets/Settings/Bajo_Renderer.asset" };
+        internal static readonly string[] Renderers = { "Assets/Settings/PC_Renderer.asset", "Assets/Settings/Mobile_Renderer.asset", "Assets/Settings/Bajo_Renderer.asset" };
         const string Source = "assets-src/synty/POLYGON_NatureBiomes_AlpineMountain_SourceFiles_v3/Textures/Snow_01.png";
         const string Texture = "Assets/Synty/Extra/Snow_01_Bastion.png";
         const string DecalMaterial = "Assets/Bastion/Client/Resources/SnowDecal.mat";

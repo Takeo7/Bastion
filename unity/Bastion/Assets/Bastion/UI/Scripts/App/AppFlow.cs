@@ -175,6 +175,7 @@ namespace Bastion.UI.App
 
         void Update()
         {
+            GameSettings.WatchScreen();
             if (loading || departing || card != null) return;
             var phase = link.LastRoom?.Phase;
             // The scene for the room's phase: the battle's in a mission, Arte's base on the campaign's base, else the start.

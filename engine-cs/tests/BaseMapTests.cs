@@ -60,7 +60,7 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ the clearing
 
-        [Fact(DisplayName = "the clearing › starts with the caravan in the middle of a clearing, a track out to every side")]
+        [Fact(DisplayName = "the clearing › starts with the caravan in the middle of a clearing, a track out to the south")]
         public void StartsWithTheCaravanInTheMiddleOfAClearing()
         {
             var @base = Base.FreshBase(new Rng(1));
@@ -71,13 +71,10 @@ namespace Bastion.Engine.Tests
             Assert.True(Math.Abs(caravan.X + 2 - Base.BaseMap / 2.0) <= 1, $"caravan x {caravan.X}");
             // Round the caravan, clear ground.
             for (var y = caravan.Y - 4; y <= caravan.Y + 5; y++) for (var x = caravan.X - 3; x <= caravan.X + 6; x++) Assert.False(Base.TreeAt(@base, x, y), $"tree at {x},{y}");
-            // And a way in from every side.
+            // And La Lata's way in, from the south (one track since 28/10; the dead come from between the pines).
             var mid = (int)Math.Floor((Base.BaseMap - 1) / 2.0);
-            for (var i = 0; i < Base.BaseMap; i++)
-            {
-                Assert.False(Base.TreeAt(@base, i, mid), $"tree at {i},{mid}");
-                Assert.False(Base.TreeAt(@base, mid, i), $"tree at {mid},{i}");
-            }
+            for (var i = mid; i < Base.BaseMap; i++) Assert.False(Base.TreeAt(@base, mid, i), $"tree at {mid},{i}");
+            Assert.Contains(Enumerable.Range(0, mid - 8), (i) => Base.TreeAt(@base, mid, i) || Base.TreeAt(@base, i, mid));
         }
 
         [Fact(DisplayName = "the clearing › is its own every time: sometimes thicker pines, sometimes more glades")]
@@ -262,6 +259,43 @@ namespace Bastion.Engine.Tests
             return @base;
         }
 
+        [Fact(DisplayName = "the siege of the base › every side has ways in from between the pines, joined to the clearing (28/10)")]
+        public void EverySideHasWaysInJoinedToTheClearing()
+        {
+            // One track since 28/10, and the dead never come down it while there's another way: a side whose ways stopped in
+            // a glade the pines close off let no wave land, and the siege never ended.
+            for (var seed = 1; seed <= 12; seed++)
+            {
+                var @base = Base.FreshBase(new Rng((uint)seed));
+                var l = Base.BaseLayout(@base);
+                var open = new HashSet<int>();
+                var queue = new List<Vec2> { l.Spawns[0] };
+                open.Add(l.Spawns[0].Y * l.Width + l.Spawns[0].X);
+                while (queue.Count > 0)
+                {
+                    var p = queue[queue.Count - 1];
+                    queue.RemoveAt(queue.Count - 1);
+                    foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                    {
+                        int x = p.X + dx, y = p.Y + dy, i = y * l.Width + x;
+                        if (x < 0 || y < 0 || x >= l.Width || y >= l.Height || open.Contains(i) || l.Tiles[i] != TileKinds.Floor) continue;
+                        open.Add(i);
+                        queue.Add(new Vec2 { X = x, Y = y });
+                    }
+                }
+                for (var side = 0; side < 4; side++)
+                {
+                    var span = side % 2 == 0 ? l.Width : l.Height;
+                    var ways = Enumerable.Range(span / 4, span / 2).Count((k) =>
+                    {
+                        var (x, y) = side == 0 ? (k, 0) : side == 1 ? (l.Width - 1, k) : side == 2 ? (k, l.Height - 1) : (0, k);
+                        return open.Contains(y * l.Width + x) && !Base.OnTrack(l.Width, l.Height, x, y);
+                    });
+                    Assert.True(ways > 0, $"seed {seed}: no way in by side {side}");
+                }
+            }
+        }
+
         [Fact(DisplayName = "the siege of the base › is a siege on the base as it stands: pines, pieces on their tiles, what each holds, the squad by the caravan")]
         public void IsASiegeOnTheBaseAsItStands()
         {
@@ -285,9 +319,10 @@ namespace Bastion.Engine.Tests
             Assert.Equal(1, s.Elev[At(tower.X, tower.Y)]);
             Assert.Equal(TileKinds.Ladder, s.Tiles[At(tower.X + 1, tower.Y + 3)]);
             Assert.Null(Breakable(s, At(tower.X, tower.Y)));
-            // The tracks, trodden earth; the rest, open ground.
+            // The track, trodden earth (to the south); the rest, open ground.
             var mid = (int)Math.Floor((s.Width - 1) / 2.0);
-            Assert.Equal((int?)3, s.Ground?[At(mid, 3)]);
+            Assert.Equal((int?)3, s.Ground?[At(mid, s.Height - 4)]);
+            Assert.Equal((int?)0, s.Ground?[At(mid, 3)]);
             Assert.Equal((int?)0, s.Ground?[At(3, 3)]);
             // The base goes with it, for the client to draw and the campaign to take back; its stumps too.
             Same(@base.Pieces, s.Base?.Pieces);

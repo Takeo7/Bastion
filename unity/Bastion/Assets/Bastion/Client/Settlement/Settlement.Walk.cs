@@ -98,7 +98,9 @@ namespace Bastion.Client
             else if (Application.isFocused)
             {
                 var keys = Keyboard.current;
-                if (keys != null)
+                // With Cmd or Ctrl held, no key is the game's (UI's Shortcuts, Ana 28/10: on the Mac Unity gets the system's
+                // own too, Cmd+W, Cmd+Q, Cmd+Mayús+4, and walking took them).
+                if (keys != null && !(keys.ctrlKey.isPressed || keys.leftMetaKey.isPressed || keys.rightMetaKey.isPressed))
                 {
                     if (keys.escapeKey.wasPressedThisFrame) walkOut = true;
                     ahead = (keys.wKey.isPressed || keys.upArrowKey.isPressed ? 1 : 0) - (keys.sKey.isPressed || keys.downArrowKey.isPressed ? 1 : 0);

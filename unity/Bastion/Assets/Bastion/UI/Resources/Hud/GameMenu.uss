@@ -21,6 +21,35 @@
     background-color: rgba(10, 8, 5, 0.6);
 }
 
+/* The battle's menu: the mission waits, and the battle is hidden under it (Ana, 28/10: «no te debería dejar ver la pantalla»). */
+.game-menu--cover {
+    background-color: rgb(10, 8, 5);
+}
+
+/* The partner's menu open: the battle dimmed under a card saying so; the pointer goes through to the bar's calls. */
+.game-menu--pause {
+    background-color: rgba(10, 8, 5, 0.55);
+}
+
+.game-menu__card--pause {
+    width: 440px;
+    align-items: center;
+}
+
+.game-menu__paused {
+    margin-bottom: 8px;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: #ffffff;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.game-menu__card--pause .game-menu__note {
+    margin: 0;
+    -unity-text-align: middle-center;
+}
+
 /* No taller than the room it has: its lists scroll (GameMenu.Scroll). */
 .game-menu__card {
     width: 360px;

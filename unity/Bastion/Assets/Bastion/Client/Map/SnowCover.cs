@@ -68,6 +68,17 @@ namespace Bastion.Client.Map
         /// <summary>URP's angle fade for a surface whose normal is `up` high (the cosine of its angle from straight up).</summary>
         static float Angle(float up) => (1 - up) / 2 * ((1 - up) / 2) * 180;
 
+        /// <summary>
+        /// Off as the game starts: the app comes with the decals on, as it was built (SnowBuild: else URP strips their
+        /// shaders), and on a map without snow they would cost for nothing.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void Starting()
+        {
+            shown = 0;
+            Decals(false);
+        }
+
         void OnEnable()
         {
             if (counted) return;
@@ -83,7 +94,7 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>The decals of every quality level's renderers on or off («Nieve»: SnowFeatureMake).</summary>
-        static void Decals(bool on)
+        internal static void Decals(bool on)
         {
             for (int q = 0; q < QualitySettings.count; q++)
             {

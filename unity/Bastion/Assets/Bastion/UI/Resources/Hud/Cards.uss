@@ -2,7 +2,11 @@
 
 /* ================================================================ banner */
 
-/* A rubber stamp coming down: big and faint, then its size, in one quick step (the transition). */
+/*
+   Coming down: a little big and faint, then its size, in one quick step (the transition). As Mixta drew it
+   (mixta-hud.css .banner): a plate of dark steel between two hazard bands (Synty's, 6 px), its words straight, yellow
+   on the squad's turn and red on the enemy's. Over the snow the paper stamp it had read badly (Ana, 28/10).
+*/
 .banner {
     position: absolute;
     top: 24%;
@@ -10,8 +14,7 @@
     right: 0;
     align-items: center;
     opacity: 0;
-    scale: 1.6 1.6;
-    rotate: -6deg;
+    scale: 1.25 1.25;
     transition-property: opacity, scale;
     transition-duration: 0.14s, 0.14s;
     transition-timing-function: ease-in, ease-in;
@@ -22,36 +25,74 @@
     scale: 1 1;
 }
 
+.banner__plate {
+    align-items: center;
+    padding: 0 40px;
+    max-width: 640px;
+    background-color: rgba(16, 18, 19, 0.95);
+    background-image: url("../../Textures/steel-plate.png");
+    background-repeat: repeat repeat;
+    background-size: 256px 256px;
+    -unity-background-image-tint-color: rgba(96, 100, 102, 0.95);
+}
+
+/* The bands: the sprite's top half above, its bottom half below, 6 px high, repeated along. */
+.banner__hazard {
+    align-self: stretch;
+    height: 6px;
+    margin: 0 -40px 10px -40px;
+    background-image: url("../../Textures/hazard-yellow-top.png");
+    background-repeat: repeat no-repeat;
+    background-size: 12px 6px;
+}
+
+.banner__hazard--bottom {
+    margin: 10px -40px 0 -40px;
+    background-image: url("../../Textures/hazard-yellow-bottom.png");
+}
+
+.banner--alien .banner__hazard--top {
+    background-image: url("../../Textures/hazard-red-top.png");
+}
+
+.banner--alien .banner__hazard--bottom {
+    background-image: url("../../Textures/hazard-red-bottom.png");
+}
+
 .banner__text {
-    padding: 4px 20px;
-    font-size: 40px;
-    letter-spacing: 3px;
+    font-size: 36px;
+    letter-spacing: 2px;
     color: var(--t-accent);
-    border-width: 4px;
-    border-color: var(--t-accent);
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
 }
 
 .banner--alien .banner__text {
-    color: var(--t-danger);
-    border-color: var(--t-danger);
+    color: rgb(240, 80, 60);
 }
 
 .banner--warn .banner__text {
     color: var(--t-warn);
-    border-color: var(--t-warn);
 }
 
 .banner__detail {
-    margin-top: 6px;
-    padding: 2px 10px;
+    margin-top: 2px;
     font-size: 15px;
-    background-color: var(--t-tag);
+    color: var(--t-text);
+    white-space: normal;
+    -unity-text-align: middle-center;
 }
 
+/* «Clic para seguir»: small, its stamp's colour faded (styles.css .banner-go: opacity 0.6). */
 .banner__go {
     margin-top: 4px;
-    font-size: 12px;
-    color: var(--t-muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--t-accent);
+    opacity: 0.6;
+}
+
+.banner--alien .banner__go {
+    color: rgb(240, 80, 60);
 }
 
 /* ================================================================= cards */

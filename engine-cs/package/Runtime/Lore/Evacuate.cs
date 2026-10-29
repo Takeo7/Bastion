@@ -154,6 +154,21 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// With `n` turns left to do the objective (3; Ana's playtest, 28/10), before the bus leaves without it or the time
+        /// runs out: «Quedan 3 turnos para cumplir el objetivo, o la misión se pierde.» Not in lore.ts.
+        /// </summary>
+        public static string TurnsToLoseWarning(int n)
+        {
+            return n == 1 ? "Queda 1 turno para cumplir el objetivo, o la misión se pierde." : $"Quedan {n} turnos para cumplir el objetivo, o la misión se pierde.";
+        }
+
+        /// <summary>The same, floating, as TimeText.LastTurnFloat: «QUEDAN 3 TURNOS». Not in lore.ts.</summary>
+        public static string TurnsLeftFloat(int n)
+        {
+            return n == 1 ? "QUEDA 1 TURNO" : $"QUEDAN {n} TURNOS";
+        }
+
+        /// <summary>
         /// The countdown on a proposal nobody answers (docs/PRUEBA-2026-10-14.md #28):
         /// when it runs out, it is accepted. `left` comes formatted («1:25»); `mine`:
         /// shown to whoever proposed it.

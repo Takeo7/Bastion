@@ -1,7 +1,7 @@
 // The fog of war (Bastion.Client.Map.Fog; 0.10.1's fogOfWar.ts), over the picture after it is lit: each pixel's place
 // from the depth (and its facing from the normals), and its tile's zone from Fog's texture (red: in sight, green: seen,
-// alpha: its floor), blended between tiles; a building's wall as the street it looks onto, its roof as the street along
-// it (the shells' texture: red its storeys, green the street along it in sight, blue seen). In sight, as it is; seen but out of sight, greyer and darker under a haze, with a low mist drifting over it;
+// alpha: its floor), blended between tiles; a building's wall as the street it looks onto, its roof (and a wall over a
+// lower roof beside it) as the street along it (the shells' texture: red its storeys, green the street along it in sight, blue seen). In sight, as it is; seen but out of sight, greyer and darker under a haze, with a low mist drifting over it;
 // never seen, a dark mist where only the tallest shapes show. The same numbers as 0.10.1's, in its tiles. Off (the
 // picture as it is) while no map has a fog (_FogSize.w 0). A full-screen pass of the renderers (FogFeatureMake).
 Shader "Bastion/Fog"
@@ -117,8 +117,11 @@ Shader "Bastion/Fog"
                 float4 home = SAMPLE_TEXTURE2D(_FogShell, sampler_FogShell, own / _FogSize.xy);
                 float storeys = home.r * 255.0 / 32.0;
                 float built = step(0.5, storeys) * (1.0 - step(0.001, length(outside)));
-                float roof = built * step(storeys * 2.3 - 0.15, high);
-                float face = (built - roof) * step(SAMPLE_TEXTURE2D(_FogShell, sampler_FogShell, front / _FogSize.xy).r, 0.01);
+                // (And a wall where it rises over the roof of a lower one beside it, as the roof: else it took its own tile's,
+                // and that is the inside's, unknown till a soldier goes in.)
+                float beside = SAMPLE_TEXTURE2D(_FogShell, sampler_FogShell, front / _FogSize.xy).r * 255.0 / 32.0;
+                float roof = built * max(step(storeys * 2.3 - 0.15, high), step(0.5, beside) * step(beside * 2.3 - 0.15, high));
+                float face = (built - roof) * step(beside, 0.01);
                 float4 ahead = SAMPLE_TEXTURE2D(_FogMap, sampler_FogMap, front / _FogSize.xy);
                 seen = max(seen, max(smoothstep(0.2, 0.5, ahead.r + (mist - 0.5) * 0.12) * face, smoothstep(0.3, 0.7, home.g) * roof));
                 known = max(known, max(smoothstep(0.12, 0.58, ahead.g + (mist - 0.5) * 0.4) * face, smoothstep(0.22, 0.78, home.b) * roof));

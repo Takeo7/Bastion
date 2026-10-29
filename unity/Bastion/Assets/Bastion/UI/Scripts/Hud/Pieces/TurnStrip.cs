@@ -47,6 +47,7 @@ namespace Bastion.UI.Hud
             foreach (var o in new[] { "mine", "partner", "enemy", "over" })
                 frame.EnableInClassList("turn-frame--" + o, owner == o);
             foreach (var edge in frame.Children()) edge.style.backgroundColor = colour;
+            Ui.Show(frame, v == null || !v.Alone);
             if (v == null) return;
 
             var text = owner == "mine" ? HudText.Turn.Mine : owner == "partner" ? HudText.Turn.Partner(v.OwnerName) : owner == "enemy" ? HudText.Turn.Enemy : HudText.Turn.Over;

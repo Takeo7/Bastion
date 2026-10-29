@@ -78,6 +78,7 @@ namespace Bastion.UI.Combat
             control.Busy = player.IsBusy;
             control.EnemyTurnPlaying = () => player.EnemyTurnPlaying;
             control.Hurry = player.SetHurry;
+            control.Halt = player.SetHalted;
             if (Hud != null) Hud.ClockOf = ClockOf;
             if (net.LastRoom != null) control.SetPlayers(net.LastRoom.Players);
             // The campaign as the squad took off, for the soldiers' boards on their sheets.

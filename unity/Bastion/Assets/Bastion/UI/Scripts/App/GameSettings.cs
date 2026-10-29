@@ -182,16 +182,64 @@ namespace Bastion.UI.App
             }
         }
 
+        /// <summary>For a test (BASTION_DENSIDAD=1|1.5|2): the screen's density as if it were so.</summary>
+        static readonly float? DensityForTest = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DENSIDAD"), NumberStyles.Float, CultureInfo.InvariantCulture, out var dd) && dd > 0 ? dd : (float?)null;
+
+        /// <summary>
+        /// The screen's density, as the system's own scale would have it (a browser's device pixels per CSS pixel): 2 on a
+        /// Retina screen, 1.5 on a 4K of 27", 1 on an ordinary one (by its dots per inch; none known, 1).
+        /// </summary>
+        public static float Density
+        {
+            get
+            {
+                if (DensityForTest is float test) return test;
+                var dpi = Screen.dpi;
+                return dpi >= 180 ? 2 : dpi >= 140 ? 1.5f : 1;
+            }
+        }
+
+        /// <summary>
+        /// How much bigger than at 1440 × 900 the HUD's pixels are on this screen (before Ajustes' «Interfaz»): with the
+        /// screen, but never past its density. The 0.10.1 drew in CSS pixels, which grow only with the density: on a big
+        /// screen of ordinary density its panels stayed their size, and Unity's, grown with the screen, came out two
+        /// thirds bigger (Ana, 28/10: «está todo muy grande»). The map's lines (Bastion/Marks) take the same.
+        /// </summary>
+        public static float PixelScale(int width, int height) => Mathf.Min(Mathf.Sqrt(width / 1440f * height / 900f), Density);
+
+        static Vector2Int appliedFor;
+
+        /// <summary>What the panels draw on: the screen, or the texture a capture gives them (Shots: not the screen's size).</summary>
+        static Vector2Int DrawnOn()
+        {
+            foreach (var doc in UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None))
+            {
+                // (Unity's own null test: an unassigned field is a «fake null» that `is` lets through.)
+                var t = doc.panelSettings != null ? doc.panelSettings.targetTexture : null;
+                if (t != null) return new Vector2Int(t.width, t.height);
+            }
+            return new Vector2Int(Screen.width, Screen.height);
+        }
+
+        /// <summary>Each frame (AppFlow, the labs): the window's size changed, the panels' and the lines' scale again.</summary>
+        public static void WatchScreen()
+        {
+            if (DrawnOn() != appliedFor) ApplyInterface();
+        }
+
         /// <summary>
         /// The size on the panels the screens draw on (the UIDocuments there are: AppFlow's, whose panel every screen
-        /// shares). They scale with the screen, so their reference resolution is cut by the size: at 130 % a 1440 × 900
-        /// screen is drawn as if it were 1108 × 692 (a panel's `scale` counts only at a constant pixel size). In the
-        /// editor only for a test (BASTION_INTERFAZ): the panel is the project's asset, everyone's captures', and it is
-        /// put back as play stops.
+        /// shares). They scale with the screen (ScaleWithScreenSize, 1440 × 900, matched half and half), so their
+        /// reference resolution is set to give PixelScale times «Interfaz»: at 130 % a 1440 × 900 screen is drawn as if it
+        /// were 1108 × 692 (a panel's `scale` counts only at a constant pixel size). In the editor only for a test
+        /// (BASTION_INTERFAZ, BASTION_DENSIDAD): the panel is the project's asset, everyone's captures', and it is put back
+        /// as play stops.
         /// </summary>
         public static void ApplyInterface()
         {
-            if (Application.isEditor && InterfaceForTest == null) return;
+            var on = appliedFor = DrawnOn();
+            if (Application.isEditor && InterfaceForTest == null && DensityForTest == null) return;
+            Shader.SetGlobalFloat(PixelScaleId, PixelScale(on.x, on.y));
             var size = InterfaceSize;
             foreach (var doc in UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None))
             {
@@ -202,9 +250,16 @@ namespace Bastion.UI.App
                     references[panel] = own = panel.referenceResolution;
                     if (Application.isEditor) Application.quitting += () => panel.referenceResolution = own;
                 }
-                panel.referenceResolution = new Vector2Int(Mathf.RoundToInt(own.x / size), Mathf.RoundToInt(own.y / size));
+                // The screen's own scale against the reference (ScaleWithScreenSize's, matched half and half), and the
+                // reference that gives the one wanted instead.
+                var screen = Mathf.Sqrt(on.x * (float)on.y / (own.x * (float)own.y));
+                var wanted = Mathf.Min(screen, Density) * size;
+                var k = wanted > 0 ? screen / wanted : 1 / size;
+                panel.referenceResolution = new Vector2Int(Mathf.RoundToInt(own.x * k), Mathf.RoundToInt(own.y * k));
             }
         }
+
+        static readonly int PixelScaleId = Shader.PropertyToID("_BastionPixelScale");
 
         /// <summary>Each panel's own reference resolution, as the project has it.</summary>
         static readonly System.Collections.Generic.Dictionary<PanelSettings, Vector2Int> references = new System.Collections.Generic.Dictionary<PanelSettings, Vector2Int>();

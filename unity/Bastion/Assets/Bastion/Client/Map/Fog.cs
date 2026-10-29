@@ -11,7 +11,9 @@ namespace Bastion.Client.Map
     /// mission), under a haze and a low mist; never seen, a dark mist. On the storey in view (MapView.Level: each tile as
     /// its highest floor up to it, Los.FloorLevels). A building's walls show as the street they look onto, its roof as the
     /// street along it at its best, its inside room by room: a room any of which has been seen is seen whole, with the
-    /// walls round it (Ana, 22/10 #36). Each tile's zone in a small texture, faded as it changes, which a full-screen pass
+    /// walls round it (Ana, 22/10 #36), but only once a soldier has gone into the building; till then its inside stays
+    /// unknown, whatever is seen of it through a window or a door (Arturo, 28/10, Ana's p1; 0.10.1 showed the room seen
+    /// through it). Each tile's zone in a small texture, faded as it changes, which a full-screen pass
     /// (Bastion/Fog) reads at every pixel's place. UI's event player shows it the state seen (Show) after each event;
     /// Battlefield starts it with each map. On «Niebla» in Partida.
     /// </summary>
@@ -44,6 +46,15 @@ namespace Bastion.Client.Map
 
         Texture2D map, shellMap;
         Color32[] pixels, shellPixels;
+        /// <summary>
+        /// The buildings as one goes in (each tile of one, its walls and windows aside, joined to the next through its
+        /// doors: two houses wall to wall are two), by the ground's tiles; whether a soldier has been in each this mission;
+        /// each tile of a building nobody has been in yet (its walls and windows too), kept unknown.
+        /// </summary>
+        int[] buildingOf;
+        bool[] entered, closed;
+        /// <summary>Where an enemy in sight stands (its node): in a closed building, its tile alone shown, so that it stands on its floor.</summary>
+        readonly HashSet<int> spotted = new HashSet<int>();
         float[] sight, known, sightTo, knownTo, roofSight, roofKnown, roofSightTo, roofKnownTo, lit, litTo;
         bool[] explored, shut;
         bool[] visible, view, lights;
@@ -93,6 +104,7 @@ namespace Bastion.Client.Map
             // façade's next tile read half its building's, and its face took the inside's fog: tall blocks went dark whole.)
             Remake(ref shellMap, "Niebla de los edificios", FilterMode.Point);
             Shells(s);
+            Buildings(s);
             changed = true;
             Shader.SetGlobalTexture(FogMap, map);
             Shader.SetGlobalTexture(FogShell, shellMap);
@@ -167,9 +179,94 @@ namespace Bastion.Client.Map
             for (int i = 0; i < n; i++) shellPixels[i].r = (byte)Mathf.Clamp(storeys[i] * 32, 0, 255);
         }
 
+        /// <summary>The buildings as one goes in (buildingOf), none gone into yet.</summary>
+        void Buildings(GameState s)
+        {
+            int n = width * height;
+            buildingOf = Enumerable.Repeat(-1, n).ToArray();
+            closed = new bool[n];
+            var storeys = s.Storeys;
+            if (storeys == null || storeys.Count != n || s.Tiles == null || s.Tiles.Count != n)
+            {
+                entered = new bool[0];
+                return;
+            }
+            bool Room(int i) => storeys[i] > 0 && s.Tiles[i] != "wall" && s.Tiles[i] != "window" && s.Tiles[i] != "windowBroken";
+            int count = 0;
+            var tiles = new List<int>();
+            for (int start = 0; start < n; start++)
+            {
+                if (buildingOf[start] >= 0 || !Room(start)) continue;
+                tiles.Clear();
+                tiles.Add(start);
+                buildingOf[start] = count;
+                for (int k = 0; k < tiles.Count; k++)
+                {
+                    int i = tiles[k], x = i % width, y = i / width;
+                    foreach (var (nx, ny) in new[] { (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1) })
+                    {
+                        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                        int j = ny * width + nx;
+                        if (buildingOf[j] >= 0 || !Room(j)) continue;
+                        buildingOf[j] = count;
+                        tiles.Add(j);
+                    }
+                }
+                count++;
+            }
+            entered = new bool[count];
+            // A siege's map is the squad's own base: its buildings known inside.
+            if (s.Mission?.Siege != null) for (int k = 0; k < count; k++) entered[k] = true;
+            Close(s);
+        }
+
+        /// <summary>The buildings the squad is in now marked gone into, and what is still closed worked out again.</summary>
+        void Enter(GameState s)
+        {
+            var storeys = s.Storeys;
+            if (buildingOf == null || storeys == null || storeys.Count != width * height) return;
+            foreach (var u in s.Units)
+            {
+                // (Who sees for the squad: not one held there to be rescued.)
+                if (!Los.IsViewer(u, "xcom") || u.Evacuated || u.Pos == null) continue;
+                int x = u.Pos.X, y = u.Pos.Y;
+                if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                int i = y * width + x;
+                // In it: on one of its storeys (on its roof, not).
+                if (storeys[i] <= 0 || u.Pos.Z >= storeys[i]) continue;
+                // (On a wall's or a window's tile, as a storey above may be laid out otherwise: the buildings beside it.)
+                if (buildingOf[i] >= 0) entered[buildingOf[i]] = true;
+                else foreach (int j in Beside(i)) if (buildingOf[j] >= 0) entered[buildingOf[j]] = true;
+            }
+            Close(s);
+        }
+
+        void Close(GameState s)
+        {
+            var storeys = s.Storeys;
+            for (int i = 0; i < closed.Length; i++)
+            {
+                closed[i] = false;
+                if (storeys == null || i >= storeys.Count || storeys[i] <= 0) continue;
+                if (buildingOf[i] >= 0) closed[i] = !entered[buildingOf[i]];
+                // A wall or a window: closed while every building it stands by is.
+                else closed[i] = !Beside(i).Any(j => buildingOf[j] >= 0 && entered[buildingOf[j]]);
+            }
+        }
+
+        IEnumerable<int> Beside(int i)
+        {
+            int x = i % width, y = i / width;
+            if (x > 0) yield return i - 1;
+            if (x < width - 1) yield return i + 1;
+            if (y > 0) yield return i - width;
+            if (y < height - 1) yield return i + width;
+        }
+
         /// <summary>
         /// What the squad sees in `seen` (the state as the player has been shown it): in sight, in view, and what it has
-        /// seen this mission, storey by storey; `instant`, at once (a new map, a return), else fading over SIGHT_FADE.
+        /// seen this mission, storey by storey; `instant`, at once (a new map, a return), else fading over SIGHT_FADE. What
+        /// is seen of a building nobody has been in is not kept.
         /// </summary>
         public void Show(GameState seen, bool instant = false)
         {
@@ -179,8 +276,17 @@ namespace Bastion.Client.Map
             // Lit at night (the engine's lit mask: street lights, a Bengala, a fire, as far as their light reaches).
             lights = Night ? Los.LitMask(seen) : null;
             view = Los.TeamView(seen, "xcom");
+            Enter(seen);
+            spotted.Clear();
+            foreach (var u in seen.Units)
+            {
+                if (!u.Alive || u.Team == "xcom" || u.Evacuated) continue;
+                int node = Bastion.Engine.Grid.NodeOf(seen, u.Pos);
+                if (node >= 0 && node < visible.Length && visible[node]) spotted.Add(node);
+            }
             if (explored == null || explored.Length != view.Length) explored = new bool[view.Length];
-            for (int k = 0; k < view.Length; k++) explored[k] |= view[k] || (k < visible.Length && visible[k]);
+            int area = width * height;
+            for (int k = 0; k < view.Length; k++) explored[k] |= (view[k] || (k < visible.Length && visible[k])) && !closed[k % area];
             Refog(instant);
         }
 
@@ -189,6 +295,8 @@ namespace Bastion.Client.Map
         {
             if (visible == null) return;
             for (int k = 0; k < visible.Length; k++) visible[k] = true;
+            for (int k = 0; k < entered.Length; k++) entered[k] = true;
+            if (last != null) Close(last);
             Refog(true);
         }
 
@@ -208,6 +316,9 @@ namespace Bastion.Client.Map
                 int node = levels[i] * n + i;
                 bool inSight = node < visible.Length && visible[node];
                 bool seen = inSight || (node < view.Length && view[node]) || (node < explored.Length && explored[node]);
+                // (A building nobody has been in: nothing of its inside, though its tiles be in sight through a window; but
+                // the tile an enemy in sight stands on, while it is, with its ring and its shadow: Gameplay, 28/10.)
+                if (closed[i] && !spotted.Contains(node)) inSight = seen = false;
                 sightTo[i] = inSight && !shut[i] ? 1 : 0;
                 litTo[i] = lights != null && node < lights.Length && lights[node] ? 1 : 0;
                 knownTo[i] = seen && !shut[i] ? 1 : 0;
@@ -282,7 +393,7 @@ namespace Bastion.Client.Map
                 }
                 if (!any) continue;
                 foreach (int i in tiles.Concat(round))
-                    if (!shut[i]) knownTo[i] = 1;
+                    if (!shut[i] && !closed[i]) knownTo[i] = 1;
             }
         }
 

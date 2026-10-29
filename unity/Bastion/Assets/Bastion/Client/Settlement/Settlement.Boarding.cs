@@ -461,7 +461,9 @@ namespace Bastion.Client
             if (s.anim != null && catalog != null)
             {
                 s.anim.Rest(null);
-                foreach (string m in new[] { "idle", "walk", "run", "crouchWalk" }) s.anim.SetMotion(m, catalog.Clip(Anims.Motion(s.build, m, false)));
+                foreach (string m in new[] { "idle", "walk", "run", "crouchWalk", "crouchIdle" }) s.anim.SetMotion(m, catalog.Clip(Anims.Motion(s.build, m, false)));
+                // (A wounded one up off the crouch to run: clearingArt.ts, none running.)
+                s.anim.Crouch = 0;
             }
             var gun = s.gun;
             // The pistol, its only gun, in its holster down the right thigh (syntyFigures.ts hold: pistolOnly), not on the back.

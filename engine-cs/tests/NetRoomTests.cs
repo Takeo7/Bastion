@@ -471,6 +471,108 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void APauseHoldsBothTillTheMenuCloses()
+        {
+            using var rig = new Rig();
+            var (ana, pepe) = rig.Mission();
+            rig.Say(ana, new { t = "idle", idle = true });
+            Assert.True((bool)Last(pepe, "turnClock")["clocks"]![0]!["running"]!);
+            rig.Advance(10_000);
+            // Pepe opens the game's menu: both hear it, and Ana's clock stops where it was.
+            rig.Say(pepe, new { t = "pause", paused = true });
+            foreach (var p in new[] { ana, pepe })
+            {
+                var players = Players(Last(p, "room"));
+                Assert.Null(players[0]["paused"]);
+                Assert.True((bool)players[1]["paused"]!);
+            }
+            var clocks = Last(ana, "turnClock")["clocks"]!;
+            Assert.False((bool)clocks[0]!["running"]!);
+            Assert.Equal(80_000, (long)clocks[0]!["left"]!);
+            rig.Advance(100_000);
+            Assert.Empty(rig.Rules.RanOut);
+            // No orders from either; a ping, and the answer to a call to evacuate, still go.
+            rig.Say(ana, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
+            rig.Say(pepe, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
+            Assert.Equal("La partida está en pausa: la orden no se ha hecho.", (string?)ana.Take("rejected").Single()["message"]);
+            Assert.Equal("La partida está en pausa: la orden no se ha hecho.", (string?)pepe.Take("rejected").Single()["message"]);
+            Assert.Empty(rig.Rules.Executed);
+            rig.Say(ana, new { t = "ping", tile = new { x = 1, y = 2 }, kind = "point" });
+            Assert.Single(pepe.Take("ping"));
+            rig.Say(pepe, new { t = "cmd", cmd = new { type = "evacAnswer", accept = false } });
+            Assert.Equal(("evacAnswer", 1), rig.Rules.Executed.Single());
+            rig.Rules.Last!.Outcome = null;
+            // Said again, nothing new; closed, everything goes on.
+            ana.Take("room");
+            rig.Say(pepe, new { t = "pause", paused = true });
+            Assert.Empty(ana.Take("room"));
+            rig.Say(pepe, new { t = "pause", paused = false });
+            Assert.Null(Players(Last(ana, "room"))[1]["paused"]);
+            rig.Say(ana, new { t = "idle", idle = true });
+            Assert.True((bool)Last(pepe, "turnClock")["clocks"]![0]!["running"]!);
+            rig.Say(ana, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
+            Assert.Equal(("endTurn", 0), rig.Rules.Executed.Last());
+        }
+
+        [Fact]
+        public void BothPausedItWaitsForBothMenus()
+        {
+            using var rig = new Rig();
+            var (ana, pepe) = rig.Mission();
+            rig.Say(ana, new { t = "pause", paused = true });
+            rig.Say(pepe, new { t = "pause", paused = true });
+            rig.Say(ana, new { t = "pause", paused = false });
+            rig.Say(ana, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
+            Assert.Single(ana.Take("rejected"));
+            rig.Say(pepe, new { t = "pause", paused = false });
+            rig.Say(ana, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
+            Assert.Empty(ana.Take("rejected"));
+            Assert.Equal(("endTurn", 0), rig.Rules.Executed.Single());
+        }
+
+        [Fact]
+        public void ADropLiftsThePause()
+        {
+            using var rig = new Rig();
+            var (ana, pepe) = rig.Mission();
+            rig.Say(pepe, new { t = "pause", paused = true });
+            pepe.Close("wifi");
+            rig.Room.Pump();
+            var gone = Players(Last(ana, "room"))[1];
+            Assert.False((bool)gone["connected"]!);
+            Assert.Null(gone["paused"]);
+            rig.Say(ana, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
+            Assert.Empty(ana.Take("rejected"));
+            Assert.Equal(("endTurn", 0), rig.Rules.Executed.Single());
+        }
+
+        [Fact]
+        public void APauseIsOnlyForTheMissionUnderWay()
+        {
+            using var rig = new Rig();
+            var ana = rig.Join("Ana");
+            var pepe = rig.Join("Pepe");
+            // In the lobby the menu pauses nothing.
+            pepe.Take("room");
+            rig.Say(ana, new { t = "pause", paused = true });
+            Assert.Empty(pepe.Take("room"));
+            // Left paused for the menu, the next mission starts without it.
+            rig.Say(ana, new { t = "start" });
+            rig.Say(ana, new { t = "pause", paused = true });
+            Assert.True((bool)Players(Last(pepe, "room"))[0]["paused"]!);
+            rig.Say(ana, new { t = "backToMenu" });
+            Assert.Null(Players(Last(pepe, "room"))[0]["paused"]);
+            rig.Say(ana, new { t = "start" });
+            rig.Say(pepe, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
+            Assert.Empty(pepe.Take("rejected"));
+            // Nor over the report: the mission is over.
+            rig.Rules.Last!.Outcome = Outcomes.Victory;
+            pepe.Take("room");
+            rig.Say(ana, new { t = "pause", paused = true });
+            Assert.Empty(pepe.Take("room"));
+        }
+
+        [Fact]
         public void TimeLeftOverIsSecondsMoreNextTurn()
         {
             using var rig = new Rig();

@@ -1,9 +1,12 @@
-/* The action bar (hud.ts setAbilities): 56 px keys with the ability's icon; its card on hover; a menu's choices above it. */
+/*
+   The action bar (hud.ts setAbilities; mixta-hud.css .ability): 60 px keys, 5 px apart, the ability's icon in a round
+   well; its card on hover; a menu's choices above it.
+*/
 
 .ability {
-    width: 56px;
-    height: 56px;
-    margin: 0 3px;
+    width: 60px;
+    height: 60px;
+    margin: 0 2.5px;
     padding: 0;
     align-items: center;
     justify-content: center;
@@ -25,16 +28,96 @@
     -unity-background-image-tint-color: var(--t-good);
 }
 
-/* The icon: the Synty INTERFACE sprite for the ability (set from C# by id), tinted with the text colour. */
+/*
+   The icon's round well (mixta-hud.css .ability: a radial gradient, dark to 21 px, a faint rim to 23): its rim lit amber
+   on hover and when chosen. The keys that are off have none. USS blends in linear space: the alphas here are the web's
+   solved for this plate, so the pixels come out as the 0.10.1's (black 0.42 → 0.63; the rim's white 0.06 → 0.028, over
+   the well's black, which goes under the border too).
+*/
+.ability__well {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-width: 1px;
+    border-radius: 22px;
+    border-color: rgba(255, 255, 255, 0.028);
+    background-color: rgba(0, 0, 0, 0.63);
+}
+
+.ability:hover .ability__well {
+    border-color: rgba(242, 194, 48, 0.15);
+}
+
+.ability--active .ability__well {
+    border-color: rgba(242, 194, 48, 0.41);
+    background-color: rgba(0, 0, 0, 0.52);
+}
+
+/* The icon: the Synty INTERFACE sprite for the ability (set from C# by id), tinted with the text colour; 26 × 28, the
+   guns drawn side on 40 wide (synty-icons.css --sicon-w). */
 .ability__icon {
-    width: 34px;
-    height: 34px;
+    width: 26px;
+    height: 28px;
     -unity-background-scale-mode: scale-to-fit;
     -unity-background-image-tint-color: var(--t-text);
 }
 
+.ability--wide .ability__icon {
+    width: 40px;
+}
+
+/*
+   A key that opens a menu (styles.css .ability.has-menu::after): a small ▲ in its top right corner, 4 px in from the
+   key's edge (3 here, inside its border), at 0.55 of the text colour (0.36 blended in linear).
+*/
+.ability .ability__menu-mark {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 8px;
+    height: 5px;
+    color: rgba(236, 238, 232, 0.36);
+}
+
+/*
+   Off (mixta-hud.css .ability:disabled): a dark key, opaque, faint stripes across it, no well, its icon grey. UI
+   Toolkit's own :disabled fades the key and what is on it to half, and over the snow the keys washed out to pale squares
+   (Ana, 28/10: «no se leen»).
+*/
+.ability:disabled,
+.ability:disabled * {
+    opacity: 1;
+}
+
+.ability:disabled {
+    background-color: rgb(31, 34, 36);
+    border-width: 1px;
+    border-color: var(--m-edge);
+}
+
+/* The web's white at 0.025 over this key, worked out and opaque (in linear it would be under 1/255). */
+.ability__stripes {
+    display: none;
+    color: rgb(36, 39, 41);
+}
+
+.ability:disabled .ability__stripes {
+    display: flex;
+}
+
+.ability:disabled .ability__well {
+    border-color: rgba(0, 0, 0, 0);
+    background-color: rgba(0, 0, 0, 0);
+}
+
 .ability:disabled .ability__icon {
-    -unity-background-image-tint-color: var(--t-muted);
+    -unity-background-image-tint-color: rgb(115, 120, 113);
+}
+
+.ability:disabled .ability__menu-mark {
+    color: rgba(115, 120, 113, 0.38);
 }
 
 /* What to do first, on a slip over the key (#24: «Sin balas: recarga»). */
@@ -76,7 +159,7 @@
     position: absolute;
     left: 6px;
     right: 6px;
-    top: 24px;
+    top: 26px;
     height: 6px;
     rotate: -20deg;
     background-color: var(--t-stamp);
@@ -89,7 +172,7 @@
 
 .ability-menu {
     position: absolute;
-    bottom: 64px;
+    bottom: 68px;
     flex-direction: row;
     padding: 4px;
 }
@@ -97,7 +180,7 @@
 /* Why the keys rest: over the bar. */
 .abilities__lock {
     position: absolute;
-    bottom: 64px;
+    bottom: 68px;
     left: 0;
     right: 0;
     -unity-text-align: middle-center;

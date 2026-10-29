@@ -79,7 +79,7 @@ namespace Bastion.UI.Hud
             shot = new ShotPanel(root.Q("shot-panel"), relay, tips);
             turnActions = new TurnActions(root.Q("turn-actions"), relay, tips, Icon);
             cards = new Cards(root.Q("cards"), relay, s => Sound?.Invoke(s));
-            goal = new GoalCard(root.Q("goal"), root.Q("compass"), tips, ReopenIntro);
+            goal = new GoalCard(root.Q("goal"), root.Q("compass"), tips, ReopenIntro, root.Q("edge-marks"));
             log = new Log(root.Q("log"), Icon);
             flags = new UnitFlags(root.Q("flags"), Icon);
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
@@ -259,6 +259,8 @@ namespace Bastion.UI.Hud
 
         /// <summary>The game's menu opened on its first page with `v`, or closed.</summary>
         public void ToggleMenu(GameMenuView v) => menu.Toggle(v);
+        /// <summary>The partner's menu open: the battle dimmed under a card saying so; null, gone.</summary>
+        public void SetPause(string line, string sub) => menu?.SetPause(line, sub);
         public void CloseMenu() => menu.Close();
 
         /// <summary>The open menu on a page (main, settings, controls): for the labs.</summary>

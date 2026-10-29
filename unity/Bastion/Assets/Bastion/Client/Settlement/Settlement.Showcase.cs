@@ -183,9 +183,13 @@ namespace Bastion.Client
                 holder.SetParent(grave, false);
                 var cross = Instantiate(prefab, holder, false);
                 var renderers = cross.GetComponentsInChildren<Renderer>();
+                // Its height from foot to top, and its foot on the ground: Synty's prefab stands on its middle (measured to
+                // the top from there, it came out twice the size and half underground; Ana, 28/10: «muy grandes»).
+                float bottom = renderers.Length > 0 ? renderers.Min(r => r.bounds.min.y) - holder.position.y : 0;
                 float top = renderers.Length > 0 ? renderers.Max(r => r.bounds.max.y) - holder.position.y : 1;
-                float k = 0.95f * MapSpace.Tile / Mathf.Max(top, 1e-3f);
+                float k = 0.95f * MapSpace.Tile / Mathf.Max(top - bottom, 1e-3f);
                 holder.localScale = Vector3.one * k;
+                holder.localPosition = Vector3.up * (-bottom * k);
                 // Synty's cross has its arms along z: turned a quarter, it shows them to the camera (not edge on, a bare post).
                 holder.localRotation = Quaternion.Euler(0, -(facing + Mathf.PI / 2) * Mathf.Rad2Deg + 90 * MapArt.UnityTurn(art), 0);
             }

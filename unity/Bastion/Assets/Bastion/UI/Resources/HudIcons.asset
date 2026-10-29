@@ -32,7 +32,7 @@ MonoBehaviour:
   - Id: overwatchMelee
     Sprite: {fileID: 21300000, guid: 7f43c38336b908e428cac2195ddc57d7, type: 3}
   - Id: stone
-    Sprite: {fileID: 21300000, guid: 1458be508d6262d43a4afa7d87f4a658, type: 3}
+    Sprite: {fileID: 21300000, guid: 8ed4237e04e3649a4a83e4295a4270ab, type: 3}
   - Id: overwatch
     Sprite: {fileID: 21300000, guid: a8d702d679318b44ca69b4f867c1b332, type: 3}
   - Id: hunker

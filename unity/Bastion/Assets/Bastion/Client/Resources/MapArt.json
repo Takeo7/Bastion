@@ -2581,6 +2581,65 @@
    "fbx": "SM_Prop_Wardrobe_01",
    "fit": 0.95,
    "yaw": 2
+  },
+  "bollard": {
+   "pack": "city",
+   "fbx": "SM_Prop_SidewalkPoles_01",
+   "fit": 1.2,
+   "stretch": true,
+   "thick": 0.9
+  },
+  "carSedan": {
+   "pack": "city",
+   "fbx": "SM_Veh_Car_Sedan_01",
+   "fit": 1.95
+  },
+  "carSmall": {
+   "pack": "city",
+   "fbx": "SM_Veh_Car_Small_01",
+   "fit": 1.95
+  },
+  "carMedium": {
+   "pack": "city",
+   "fbx": "SM_Veh_Car_Medium_01",
+   "fit": 1.95
+  },
+  "carMuscle": {
+   "pack": "city",
+   "fbx": "SM_Veh_Car_Muscle_01",
+   "fit": 1.95
+  },
+  "carTaxi": {
+   "pack": "city",
+   "fbx": "SM_Veh_Car_Taxi_01",
+   "fit": 1.95
+  },
+  "carVan": {
+   "pack": "city",
+   "fbx": "SM_Veh_Car_Van_01",
+   "fit": 1.95
+  },
+  "carConvertible": {
+   "pack": "town",
+   "fbx": "SM_Veh_Convertable_01",
+   "fit": 1.95
+  },
+  "carPickup": {
+   "pack": "town",
+   "fbx": "SM_Veh_Pickup_01",
+   "fit": 1.95
+  },
+  "carUte": {
+   "pack": "apocalypse",
+   "fbx": "SM_Veh_Ute_01",
+   "fit": 1.95,
+   "yaw": 1
+  },
+  "carHatch": {
+   "pack": "apocalypse",
+   "fbx": "SM_Veh_Car_Medium_01",
+   "fit": 1.95,
+   "yaw": 1
   }
  },
  "sets": {
@@ -2637,7 +2696,43 @@
    "carWreck",
    "carRusted",
    "carSuv",
-   "carOpen"
+   "carOpen",
+   "carWreck",
+   "carRusted",
+   "carSuv",
+   "carOpen",
+   "carWreck",
+   "carRusted",
+   "carSuv",
+   "carOpen",
+   "carWreck",
+   "carRusted",
+   "carSuv",
+   "carOpen",
+   "carWreck",
+   "carRusted",
+   "carSuv",
+   "carOpen",
+   "carSedan",
+   "carSmall",
+   "carMedium",
+   "carMuscle",
+   "carTaxi",
+   "carVan",
+   "carConvertible",
+   "carPickup",
+   "carUte",
+   "carHatch",
+   "carSedan",
+   "carSmall",
+   "carMedium",
+   "carMuscle",
+   "carTaxi",
+   "carVan",
+   "carConvertible",
+   "carPickup",
+   "carUte",
+   "carHatch"
   ],
   "planter": [
    "planter"
@@ -2949,6 +3044,36 @@
   },
   "gurney": {
    "fit": 1.75
+  },
+  "carSedan": {
+   "fit": 2.95
+  },
+  "carSmall": {
+   "fit": 2.95
+  },
+  "carMedium": {
+   "fit": 2.95
+  },
+  "carMuscle": {
+   "fit": 2.95
+  },
+  "carTaxi": {
+   "fit": 2.95
+  },
+  "carVan": {
+   "fit": 2.95
+  },
+  "carConvertible": {
+   "fit": 2.95
+  },
+  "carPickup": {
+   "fit": 2.95
+  },
+  "carUte": {
+   "fit": 2.95
+  },
+  "carHatch": {
+   "fit": 2.95
   }
  }
 }

@@ -740,7 +740,11 @@ namespace Bastion.Engine
             }
         }
 
-        /// <summary>Street trees, planters or bins (the same all along one side) at an even spacing along the sidewalks of a block.</summary>
+        /// <summary>
+        /// Bollards or bins (the same all along one side) at an even spacing along the sidewalks of a block. Till 28/10 a street
+        /// tree in a pot stood where the bollard does, and a planter where half the bins do: pots only in squares and parks now
+        /// (Ana's playtest: «no es como una farola, es raro verlo todo el rato»). The same cover, thinned the same way.
+        /// </summary>
         private static void Sidewalk(Canvas c, Rect block, bool[] roads, int every, string kind)
         {
             for (var s = 0; s < 4; s++)
@@ -748,7 +752,7 @@ namespace Bastion.Engine
                 // roads[s] past the end is undefined in TypeScript: no road.
                 if (!(s < roads.Length && roads[s])) continue;
                 var n = SideLen(block, s);
-                var what = new[] { DecorKinds.StreetTree, DecorKinds.Planter, DecorKinds.StreetTree, DecorKinds.Bin }[Mix(block.X + s, block.Y) % 4];
+                var what = new[] { DecorKinds.Bollard, DecorKinds.Bin, DecorKinds.Bollard, DecorKinds.Bin }[Mix(block.X + s, block.Y) % 4];
                 var first = 2 + (int)Math.Floor(((n - 5) % every) / 2.0);
                 for (var u = first; u <= n - 3; u += every)
                 {

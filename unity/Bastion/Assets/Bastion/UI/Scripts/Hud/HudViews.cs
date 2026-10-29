@@ -37,6 +37,8 @@ namespace Bastion.UI.Hud
         public string NightRules;
         /// <summary>The soldier in play while turns go one soldier at a time; empty if not.</summary>
         public string InPlay;
+        /// <summary>Alone (no partner here: Ana, 28/10): no frame round the screen, whose turn it is needs no telling.</summary>
+        public bool Alone;
     }
 
     /// <summary>A player on the strip (hud.ts setPlayers): name, colour, connected, ready, holding the command.</summary>
@@ -596,6 +598,10 @@ namespace Bastion.UI.Hud
         public string AbandonWaiting;
         /// <summary>«Salir de Bastión» (the desktop app; Lore's words).</summary>
         public bool Quit = true;
+        /// <summary>Under «MENÚ»: the mission waits while it is open (the battle's); null, nothing.</summary>
+        public string PauseNote;
+        /// <summary>Over the whole screen, the battle hidden under it (the battle's, paused: Ana, 28/10).</summary>
+        public bool Cover;
         public string QuitLabel;
         public List<SettingView> Settings = new List<SettingView>();
         /// <summary>Controles: each key and what it does; then the night's rules under their heading.</summary>

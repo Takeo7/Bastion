@@ -412,6 +412,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Se acabó el tiempo", Lore.TimeText.TimeUp);
             Assert.Equal("Quedan 5 turnos. Al acabar el último, La Lata se va.", Lore.TurnsLeftWarning(5));
             Assert.Equal("Quedan 1 turnos. Al acabar el último, La Lata se va.", Lore.TurnsLeftWarning(1));
+            Assert.Equal("Quedan 3 turnos para cumplir el objetivo, o la misión se pierde.", Lore.TurnsToLoseWarning(3));
+            Assert.Equal("QUEDAN 3 TURNOS", Lore.TurnsLeftFloat(3));
+            Assert.Equal("Quedan 2 turnos para cumplir el objetivo, o la misión se pierde.", Lore.TurnsToLoseWarning(2));
+            Assert.Equal("QUEDAN 2 TURNOS", Lore.TurnsLeftFloat(2));
+            Assert.Equal("Queda 1 turno para cumplir el objetivo, o la misión se pierde.", Lore.TurnsToLoseWarning(1));
+            Assert.Equal("QUEDA 1 TURNO", Lore.TurnsLeftFloat(1));
             Assert.Equal("Si no contesta, se acepta sola en 1:25", Lore.ProposalClock("1:25", true));
             Assert.Equal("Si no contesta, La Lata sale en 0:40", Lore.EvacClock("0:40", true));
             Assert.Equal("Sin respuesta, se acepta sola en 1:25", Lore.ProposalClock("1:25", false));

@@ -55,6 +55,8 @@ namespace Bastion.Net
             public long? DroppedAt;
             /// <summary>Their game is out of sight (the `away` message): a drop then waits AwayGraceMs.</summary>
             public bool Away;
+            /// <summary>Their game's menu is open in the mission (the `pause` message): it waits for both. Gone with them, and with the mission.</summary>
+            public bool Paused;
             /// <summary>The base screen this player is on (BaseViews), so a reconnecting partner sees it.</summary>
             public string? View;
         }
@@ -320,6 +322,8 @@ namespace Bastion.Net
             if (seat == null || seat.Socket != link.Socket) return;
             seat.Socket = null;
             seat.DroppedAt = clock.Now;
+            // Their menu went with them: the mission doesn't wait on a pause nobody can lift.
+            seat.Paused = false;
             say($"[room] {seat.Name} se ha desconectado.");
             BroadcastRoom();
             idle[seat.Slot] = false;
@@ -535,6 +539,7 @@ namespace Bastion.Net
             seat.Socket = socket;
             seat.DroppedAt = null;
             seat.Away = false;
+            seat.Paused = false;
             seat.Name = name;
             say($"[room] {name} ocupa el puesto {seat.Slot + 1}.");
 
@@ -595,6 +600,7 @@ namespace Bastion.Net
                     if (phase == RoomPhases.Mission && mode == "skirmish") state = null;
                     else if (phase == RoomPhases.Mission && (state == null || state.Outcome != null)) return;
                     phase = RoomPhases.Lobby;
+                    Unpause();
                     BroadcastRoom();
                     Persist();
                     CheckWaits();
@@ -683,6 +689,16 @@ namespace Bastion.Net
                     else Send(seat.Socket!, RoomNow());
                     break;
                 }
+                case PauseMessage m:
+                {
+                    // The game's menu (Arturo, 28/10): only in a mission under way; both hear who holds it.
+                    var on = m.Paused && phase == RoomPhases.Mission && state != null && state.Outcome == null;
+                    if (seat.Paused == on) return;
+                    seat.Paused = on;
+                    say($"[room] {seat.Name} {(on ? "pausa" : "reanuda")} la partida.");
+                    BroadcastRoom();
+                    break;
+                }
 
                 // ---- tactical
                 case AbandonMessage _:
@@ -717,6 +733,12 @@ namespace Bastion.Net
                 case CmdMessage m:
                 {
                     if (phase != RoomPhases.Mission || state == null) return;
+                    // Paused, nobody gives orders; answering the partner's call to evacuate is no order (nor is leaving: abandonAnswer).
+                    if (Paused() && !(m.Cmd is EvacAnswerCommand))
+                    {
+                        Send(seat.Socket!, new RejectedMessage { Message = "La partida está en pausa: la orden no se ha hecho." });
+                        return;
+                    }
                     var result = rules.ExecuteCommand(state, m.Cmd!, seat.Slot, ActiveSlots(), rng);
                     if (!result.Ok)
                     {
@@ -774,6 +796,7 @@ namespace Bastion.Net
             else options.Biome = map;
             state = rules.CreateMission(options, rng);
             phase = RoomPhases.Mission;
+            Unpause();
             say($"[room] Escaramuza ({kind}{(skirmishNight ? ", de noche" : "")}, {state.MapName}) con {slots.Count} jugador(es).");
             BroadcastRoom();
             Broadcast(new SnapshotMessage { State = state });
@@ -805,6 +828,7 @@ namespace Bastion.Net
             BringPlayersIn();
             phase = RoomPhases.Base;
             mode = "campaign";
+            Unpause();
             BroadcastRoom();
             if (campaign != null) Broadcast(new CampaignMessage { State = campaign });
             Persist();
@@ -820,6 +844,7 @@ namespace Bastion.Net
         private void ResumeMission()
         {
             phase = RoomPhases.Mission;
+            Unpause();
             say($"[room] Vuelta a la misión de campaña{(state?.CampaignMission != null ? $": {state.CampaignMission.Name}" : "")}.");
             BroadcastRoom();
             if (campaign != null) Broadcast(new CampaignMessage { State = campaign });
@@ -835,6 +860,7 @@ namespace Bastion.Net
             state = made.Value.state;
             resultApplied = false;
             phase = RoomPhases.Mission;
+            Unpause();
             say($"[room] Misión de campaña: {made.Value.name}.");
             BroadcastRoom();
             Broadcast(new CampaignMessage { State = c });
@@ -886,8 +912,8 @@ namespace Bastion.Net
         /// <summary>
         /// The squad's turn clock (Arturo, 22/10). Each player has TurnMsPerSoldier for each soldier they command, and a
         /// second more for each SavedMsPerSecond they had left at the end of the last turn. Only the holder of the command
-        /// spends theirs, and only while their screen shows nothing going on (an action playing stops it), until they are
-        /// done. At none left, their soldiers take cover and their turn is over (runOutOfTime). Called after anything that
+        /// spends theirs, and only while their screen shows nothing going on (an action playing stops it) and nobody has the
+        /// game paused, until they are done. At none left, their soldiers take cover and their turn is over (runOutOfTime). Called after anything that
         /// may change it; both screens hear whenever it starts, stops or changes.
         /// </summary>
         private void CheckTurnClock()
@@ -932,7 +958,7 @@ namespace Bastion.Net
             if (holder != null)
             {
                 var h = holder.Value;
-                if (!s.Ready[h] && idle[h] && seats[h]?.Socket != null && tc.Left[h] > 0)
+                if (!s.Ready[h] && idle[h] && seats[h]?.Socket != null && tc.Left[h] > 0 && !Paused())
                 {
                     tc.Running = h;
                     tc.Since = now;
@@ -1127,8 +1153,18 @@ namespace Bastion.Net
         {
             return seats
                 .Where((s) => s != null)
-                .Select((s) => new PlayerInfo { Slot = s!.Slot, Name = s.Name, Color = PlayerColors[s.Slot], Connected = s.Socket != null, Away = s.Away ? true : (bool?)null })
+                .Select((s) => new PlayerInfo { Slot = s!.Slot, Name = s.Name, Color = PlayerColors[s.Slot], Connected = s.Socket != null, Away = s.Away ? true : (bool?)null, Paused = s.Paused ? true : (bool?)null })
                 .ToList();
+        }
+
+        /// <summary>Whether someone has the game's menu open in the mission (the `pause` message): it waits for both.</summary>
+        private bool Paused() => seats.Any((s) => s?.Paused == true);
+
+        /// <summary>A mission begins, ends or is left: a menu that was open over the old one pauses nothing.</summary>
+        private void Unpause()
+        {
+            foreach (var s in seats)
+                if (s != null) s.Paused = false;
         }
 
         private void BroadcastRoom()

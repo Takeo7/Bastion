@@ -27,7 +27,12 @@ namespace Bastion.UI.Combat
         void Update()
         {
             if (App.GameSettings.SlowForTest > 0) System.Threading.Thread.Sleep(App.GameSettings.SlowForTest);
+            App.GameSettings.WatchScreen();
+            // The touches' clock: the game's time as it would run at ×1, on through the pause (timeScale 0) and «Rápida».
+            clock += Time.timeScale > 0 ? Time.deltaTime / Time.timeScale : Time.captureDeltaTime > 0 ? Time.captureDeltaTime : Time.unscaledDeltaTime;
         }
+
+        float clock;
 
         /// <summary>A folder of engine-cs/golden (step1, step2).</summary>
         public string Step = "step2";
@@ -57,8 +62,8 @@ namespace Bastion.UI.Combat
         public bool Fire;
 
         /// <summary>
-        /// The recorded orders played up to the first end of turn after which several of the enemy move, and that turn's
-        /// recorded events then played by the event player (a strip of the enemy's turn).
+        /// The recorded orders played up to the first one after which several of the enemy move (the order that ended the
+        /// squad's turn), and its recorded events then played by the event player (a strip of the enemy's turn).
         /// </summary>
         public bool ToEnemyTurn;
 
@@ -146,7 +151,9 @@ namespace Bastion.UI.Combat
                 for (var i = 0; i < file.Ops.Count; i++)
                 {
                     var op = file.Ops[i];
-                    if (opAt >= 0 ? i == opAt : op.Cmd is EndTurnCommand && op.Events.Count(x => x is MovedEvent mv && mv.Unit.StartsWith("a")) >= 4)
+                    // (Whatever order ended the turn: since 28/10 the recordings have no «end turn», the dead's turn comes
+                    // after a soldier's last order, ability, move or pass.)
+                    if (opAt >= 0 ? i == opAt : op.Events.Count(x => x is MovedEvent mv && mv.Unit.StartsWith("a")) >= 4)
                     {
                         turn = op;
                         break;
@@ -220,6 +227,7 @@ namespace Bastion.UI.Combat
             {
                 player = new EventPlayer(control, destroyCancellationToken);
                 player.Load(mine);
+                control.Halt = player.SetHalted;
                 control.Busy = player.IsBusy;
                 control.CloseFocus = () => player.CloseFocus;
             }
@@ -445,13 +453,14 @@ namespace Bastion.UI.Combat
             // (Off from the start: the app had no focus.)
             if (!keys.enabled) InputSystem.EnableDevice(keys);
             if (!mouse.enabled) InputSystem.EnableDevice(mouse);
-            var start = Time.time;
+            // (Its own clock: the pause stops the battle's time, and Esc to close the menu must still come.)
+            var start = clock;
             var steps = Touches.Split(',').Select(t => t.Split(':')).Where(t => t.Length == 2).Select(t => (at: float.Parse(t[0], System.Globalization.CultureInfo.InvariantCulture), what: t[1].Trim())).OrderBy(t => t.at).ToList();
             try
             {
                 foreach (var (at, what) in steps)
                 {
-                    while (Time.time - start < at) await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    while (clock - start < at) await Awaitable.NextFrameAsync(destroyCancellationToken);
                     var cam = control.Rig != null ? control.Rig.Camera : Camera.main;
                     var middle = new Vector2(cam.pixelWidth * 0.5f, cam.pixelHeight * 0.45f);
                     switch (what)
@@ -502,6 +511,21 @@ namespace Bastion.UI.Combat
                             // second later, as the host's event would come (MapBuilder draws it searched: mapView.ts searchedSeen).
                             await SearchSoon(what == "sala");
                             break;
+                        case "giro":
+                            // The enemy nearest the squad turned round and round for 3 s, the camera on it: its flag must
+                            // stay over it (Ana, 28/10: the bar spun with the head).
+                            Spin();
+                            break;
+                        case "pausa-otro":
+                        case "pausa-otro-fin":
+                            // The partner opening the game's menu (or closing it), as the room would say (PlayerInfo.Paused).
+                            var me = control.Players.FirstOrDefault(p => p.Slot == control.MySlot) ?? new PlayerInfo { Slot = control.MySlot, Name = "Arturo", Color = Content.PlayerColors[control.MySlot], Connected = true };
+                            control.SetPlayers(new List<PlayerInfo> { me, new PlayerInfo { Slot = 1 - control.MySlot, Name = "Ana", Color = Content.PlayerColors[1 - control.MySlot], Connected = true, Paused = what == "pausa-otro" ? true : (bool?)null } });
+                            break;
+                        case "turnoenemigo":
+                            // The enemy's stamp held up, as the event player puts it (its red plate).
+                            Hud?.Banner("TURNO ENEMIGO", "alien", null, true);
+                            break;
                         case "tuturno":
                             // The squad's turn opening, as the host's event would come (the stamp held, the camera to its soldier).
                             player?.Push(new List<GameEvent> { new TurnBeganEvent { Team = Teams.Xcom, Turn = control.State.Turn, Command = 0 } }, null);
@@ -535,6 +559,48 @@ namespace Bastion.UI.Combat
                                 }
                                 break;
                             }
+                            if (what.StartsWith("quedan="))
+                            {
+                                // The mission's turns left set so (a turn later than the first), for the warnings as a turn opens.
+                                var n = int.Parse(what.Substring(7));
+                                foreach (var st in new[] { control.State, control.Shown })
+                                {
+                                    if (st == null) continue;
+                                    st.Mission.TurnsLeft = n;
+                                    st.Turn = System.Math.Max(st.Turn, 2);
+                                }
+                                break;
+                            }
+                            if (what.StartsWith("sin-granadas="))
+                            {
+                                // A soldier with no grenades (none in the bag: the engine lists no Granada), for Lanzar's menu.
+                                foreach (var st in new[] { control.State, control.Shown })
+                                    st?.Units.FirstOrDefault(x => x.Id == what.Substring(13))?.Charges.Remove(ChargeIds.Grenade);
+                                control.Refresh();
+                                break;
+                            }
+                            if (what.StartsWith("keep="))
+                            {
+                                // «keep=LeftMeta+Digit4»: those keys down, and left so (a release that never came); «keep=» none.
+                                var down = what.Substring(5).Split('+').Select(n => System.Enum.TryParse<Key>(n, true, out var one) ? one : Key.None).Where(one => one != Key.None).ToArray();
+                                InputSystem.QueueStateEvent(keys, new KeyboardState(down));
+                                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                Debug.Log($"[lab] tras {what}: {control.LabState()}; pulsadas: {string.Join(" ", keys.allKeys.Where(x => x.isPressed).Select(x => x.keyCode))}");
+                                break;
+                            }
+                            if (what.StartsWith("key="))
+                            {
+                                // «key=Digit4», or several held together: «key=LeftMeta+LeftShift+Digit4» (a screenshot's).
+                                var pressed = what.Substring(4).Split('+').Select(n => System.Enum.TryParse<Key>(n, true, out var one) ? one : Key.None).Where(one => one != Key.None).ToArray();
+                                InputSystem.QueueStateEvent(keys, new KeyboardState(pressed));
+                                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                InputSystem.QueueStateEvent(keys, new KeyboardState());
+                                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                Debug.Log($"[lab] tras {what}: {control.LabState()}");
+                                break;
+                            }
                             if (what.StartsWith("hold="))
                             {
                                 var hold = what.Substring(5).Split('/');
@@ -546,8 +612,47 @@ namespace Bastion.UI.Combat
                             PackSteps.Do(control, what);
                             break;
                     }
-                    Debug.Log($"[lab] toque {what} a {Time.time - start:0.0} s");
+                    Debug.Log($"[lab] toque {what} a {clock - start:0.0} s (tiempo del juego {Time.time:0.0}, escala {Time.timeScale:0.##})");
                 }
+            }
+            catch (System.OperationCanceledException)
+            {
+                // The lab went first.
+            }
+        }
+
+        /// <summary>The «giro» touch: the enemy nearest the first soldier turned round fast for 3 s, the camera on it.</summary>
+        async void Spin()
+        {
+            var s = control.Shown;
+            var views = Bastion.Client.Units.UnitViews.Current;
+            var one = s.Units.FirstOrDefault(u => u.Alive && u.Team == Teams.Xcom);
+            var enemy = one == null ? null : s.Units.Where(u => u.Alive && u.Team == Teams.Alien && views != null && views.Has(u.Id))
+                // (One brought into sight by «llegada» first, if any.)
+                .OrderBy(u => u.Id.StartsWith("lab") ? 0 : 1).ThenBy(u => System.Math.Abs(u.Pos.X - one.Pos.X) + System.Math.Abs(u.Pos.Y - one.Pos.Y)).FirstOrDefault();
+            if (enemy == null) return;
+            Debug.Log($"[lab] giro: {enemy.Id} ({enemy.Template}) en {enemy.Pos.X},{enemy.Pos.Y}");
+            control.Rig.Focus(views.Feet(enemy.Id), true);
+            try
+            {
+                var until = Time.time + 3;
+                float most = 0, sum = 0;
+                var frames = 0;
+                while (Time.time < until)
+                {
+                    var a = Time.time * 9;
+                    views.Face(enemy.Id, views.Feet(enemy.Id) + new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a)) * 3);
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    // How far across its flag's point is from its feet (m).
+                    if (Hud?.HeadOf?.Invoke(enemy.Id) is Vector3 flag)
+                    {
+                        var off = Vector2.Distance(new Vector2(flag.x, flag.z), new Vector2(views.Feet(enemy.Id).x, views.Feet(enemy.Id).z));
+                        most = Mathf.Max(most, off);
+                        sum += off;
+                        frames++;
+                    }
+                }
+                Debug.Log($"[lab] giro: la barra, de sus pies, {sum / Mathf.Max(1, frames):0.00} m de media y {most:0.00} como mucho en {frames} fotogramas");
             }
             catch (System.OperationCanceledException)
             {

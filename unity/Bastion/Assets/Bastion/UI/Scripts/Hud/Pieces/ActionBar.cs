@@ -105,7 +105,7 @@ namespace Bastion.UI.Hud
             foreach (var a in keys)
             {
                 choices.TryGetValue(a.Id, out var options);
-                var btn = Key(a, () => Press(a, options));
+                var btn = Key(a, () => Press(a, options), options != null && options.Count > 1);
                 if (a.Id != menu)
                 {
                     host.Add(btn);
@@ -153,7 +153,8 @@ namespace Bastion.UI.Hud
             CloseMenu();
         }
 
-        Button Key(AbilityView a, Action onClick)
+        /// <param name="menu">Whether it opens a menu of choices: a small ▲ in its corner (styles.css .ability.has-menu).</param>
+        Button Key(AbilityView a, Action onClick, bool menu = false)
         {
             var tree = Ui.Clone("AbilityButton");
             var btn = tree.Q<Button>("key");
@@ -162,7 +163,21 @@ namespace Bastion.UI.Hud
             btn.EnableInClassList("ability--active", a.Active);
             btn.EnableInClassList("ability--free", a.Free);
             btn.EnableInClassList("ability--depleted", a.Depleted);
-            var iconId = !string.IsNullOrEmpty(a.Weapon) ? "weapon:" + a.Weapon : a.Icon ?? a.Id;
+            // (Empty, not null, on a menu's choices: Copy goes through JsonUtility, which writes null strings as "". Their
+            // keys came out blank: Ana, 28/10.)
+            var iconId = !string.IsNullOrEmpty(a.Weapon) ? "weapon:" + a.Weapon : !string.IsNullOrEmpty(a.Icon) ? a.Icon : a.Id;
+            // (By its icon, as the web's data-ability: «a.icon ?? a.id».)
+            btn.EnableInClassList("ability--wide", !string.IsNullOrEmpty(a.Weapon) || Array.IndexOf(Wide, !string.IsNullOrEmpty(a.Icon) ? a.Icon : a.Id) >= 0);
+            // Off: stripes under the icon (USS shows them only then).
+            var stripes = new Stripes { name = "stripes" };
+            stripes.AddToClassList("ability__stripes");
+            btn.Insert(0, stripes);
+            if (menu)
+            {
+                var mark = new Triangle(true) { name = "menu-mark" };
+                mark.AddToClassList("ability__menu-mark");
+                btn.Add(mark);
+            }
             var sprite = icon?.Invoke(iconId);
             if (sprite != null) btn.Q("icon").style.backgroundImage = new StyleBackground(sprite);
             // Our own drawings where Synty has none (the doors).
@@ -182,6 +197,9 @@ namespace Bastion.UI.Hud
             btn.RemoveFromHierarchy();
             return btn;
         }
+
+        /// <summary>Guns drawn side on: a wider box for the icon (synty-icons.css, --sicon-w 40px).</summary>
+        static readonly string[] Wide = { "shoot", "pistol", "launch", "aimedShot", "evac", "suppression", "faceoff" };
 
         /// <summary>What hovering a key tells before anything is pressed (hud.ts abilityCard).</summary>
         static VisualElement Card(AbilityView a)

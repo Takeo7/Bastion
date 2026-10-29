@@ -189,6 +189,31 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void ABaseFromBeforeTheOneTrackGrowsOverTheOthers()
+        {
+            // One track since 28/10 (Ana's playtest): a base saved before it (migrateCampaign, version 26) has its other three
+            // grown over where the wood stood either side of them; La Lata's, to the south, and the clearing stay open.
+            var c = Golden(Path.Combine("saves", "v25.json"))["campaign"]!.ToObject<CampaignState>(Serializer)!;
+            var b = c.Bastion;
+            var before = new HashSet<int>(b.Trees);
+            Campaign.MigrateCampaign(c);
+            var planted = b.Trees.Where((i) => !before.Contains(i)).ToList();
+            Assert.NotEmpty(planted);
+            var cx = (b.Width - 1) / 2.0;
+            var cy = (b.Height - 1) / 2.0;
+            foreach (var i in planted)
+            {
+                var x = i % b.Width;
+                var y = i / b.Width;
+                Assert.True(Base.OnOldTrack(b.Width, b.Height, x, y) && !Base.OnTrack(b.Width, b.Height, x, y), $"planted off an old track at {x},{y}");
+                Assert.Null(Base.PieceAt(b, x, y));
+                Assert.True(Js.Hypot(x - cx, y - cy) > 6, $"planted in the clearing at {x},{y}");
+            }
+            var mid = (int)Math.Floor(cx);
+            for (var y = mid; y < b.Height; y++) Assert.False(Base.TreeAt(b, mid, y), $"tree on the track at {mid},{y}");
+        }
+
+        [Fact]
         public void ARewardFromBeforeTheSevenTwoKeepsItsClass()
         {
             // Campaigns of the 0.7.0 and 0.7.1 named the class a recruit came with (MissionReward.recruit): just as true.

@@ -62,13 +62,17 @@ namespace Bastion.UI.EditorTools
         const string Vehicle = "ICON_MilitaryCombat_Map_Vehicle_01_Clean";
         const string Accuracy = "ICON_MilitaryCombat_Stat_Accuracy_01_Clean";
         const string Speed = "ICON_MilitaryCombat_Stat_Speed_02_Clean";
+        // Our own (Textures/Icons): the 0.10.1's stone, a Synty rock's silhouette (synty-sprites.py r-roca), for Lanzar and
+        // Piedra; it had Explosives, the grenade's, and Lanzar read as a grenade (Ana, 28/10).
+        const string Rock = "r-roca";
+        const string OwnIcons = "Assets/Bastion/UI/Textures/Icons";
 
         static readonly (string Id, string File)[] Icons =
         {
             // The bar's keys (synty-icons.css data-ability), and Disparar's by its gun (data-weapon).
             ("shoot", Rifle), ("weapon:rifle", Rifle), ("weapon:pistol", Pistol), ("weapon:shotgun", Shotgun),
             ("weapon:sniper", Sniper), ("weapon:cannon", MachineGun), ("pistol", Pistol),
-            ("slash", Blades), ("overwatchMelee", Blade), ("stone", Explosives), ("overwatch", Target),
+            ("slash", Blades), ("overwatchMelee", Blade), ("stone", Rock), ("overwatch", Target),
             ("hunker", Helmet), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
             ("launch", Launcher), ("smoke", Smoke), ("flashbang", Flashbang), ("firstAid", Healing),
             ("evac", Vehicle), ("evacAccept", Vehicle), ("evacRefuse", Time), ("abandonRefuse", Time),
@@ -122,6 +126,20 @@ namespace Bastion.UI.EditorTools
                 if (files.ContainsKey(name)) continue;
                 var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
                 if (sprite != null) files[name] = sprite;
+            }
+            // Ours, as sprites.
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { OwnIcons }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (AssetImporter.GetAtPath(path) is TextureImporter importer && importer.textureType != TextureImporterType.Sprite)
+                {
+                    importer.textureType = TextureImporterType.Sprite;
+                    importer.spriteImportMode = SpriteImportMode.Single;
+                    importer.alphaIsTransparency = true;
+                    importer.SaveAndReimport();
+                }
+                var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+                if (sprite != null) files[Path.GetFileNameWithoutExtension(path)] = sprite;
             }
             var table = AssetDatabase.LoadAssetAtPath<HudIconTable>(TablePath);
             if (table == null)

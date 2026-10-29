@@ -280,7 +280,8 @@ namespace Bastion.Engine.Tests
                 st.Mission.EvacZone = new List<Vec2> { new Vec2 { X = 39, Y = 39 } };
                 st.Mission.Horde = new List<string> { TemplateIds.Zombie, TemplateIds.Zombie };
                 st.Concealed = true;
-                AddUnit(st, "s1", TemplateIds.Rookie, 20, 20);
+                // Hard to kill: at 80 % of a soldier's pace (28/10), the few that come every turn reach him before the wave lands.
+                AddUnit(st, "s1", TemplateIds.Rookie, 20, 20, extra: (u) => Hp(u, 50));
                 return st;
             }
             List<GameEvent> Turns(GameState st, int n)

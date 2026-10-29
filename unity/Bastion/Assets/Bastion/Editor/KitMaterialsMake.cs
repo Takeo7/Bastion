@@ -50,8 +50,10 @@ namespace Bastion.EditorTools
             Make("NightRim", rim, m => m.renderQueue = (int)RenderQueue.Transparent);
             var mask = Shader.Find("Bastion/FigureMask");
             Make("FigureMask", mask, m => m.renderQueue = (int)RenderQueue.AlphaTest + 49);
+            var car = Shader.Find("Bastion/Car");
+            Make("Car", car, m => { });
             AssetDatabase.SaveAssets();
-            Debug.Log($"[kit] {Folder}: SeeThrough ({unlit?.name}), Glowing and Plain ({lit?.name}), Mark ({mark?.name}), Fade ({fade?.name}), NightRim ({rim?.name}), FigureMask ({mask?.name})");
+            Debug.Log($"[kit] {Folder}: SeeThrough ({unlit?.name}), Glowing and Plain ({lit?.name}), Mark ({mark?.name}), Fade ({fade?.name}), NightRim ({rim?.name}), FigureMask ({mask?.name}), Car ({car?.name})");
         }
 
         static void Make(string name, Shader shader, Action<Material> set)

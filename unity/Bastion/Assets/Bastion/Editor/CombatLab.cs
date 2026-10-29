@@ -1115,7 +1115,8 @@ namespace Bastion.EditorTools
         /// plain floor under the game's camera (24 tiles), in 0.10.1's horde lab's mix (horde.ts TEMPLATES: three common for
         /// a Corredor, an Acorazado and a Hinchado), every other one walking back and forth; BASTION_SOLO_ZOMBIS=1, all of
         /// them common (Sidekick's), to weigh against. In play mode, three turns of 120 frames, the least of each turn's
-        /// mean (real time a frame, in the editor on this machine).
+        /// mean (real time a frame, in the editor on this machine). BASTION_QUIETOS=1: nobody walks (each waiting in its
+        /// own time, Ana 28/10; FigureAnimator's BASTION_SIN_FASE=1, all in step as before); BASTION_DIST its distance.
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Horda -shotPlay -shotCamera "Shot camera" -shotWarm 16 -shotFrames 1 -shotOut &lt;file&gt;
         /// </summary>
         public static void Horda()
@@ -1125,7 +1126,8 @@ namespace Bastion.EditorTools
             int n = int.TryParse(Environment.GetEnvironmentVariable("BASTION_N"), out int count) ? count : 40;
             bool plain = Environment.GetEnvironmentVariable("BASTION_SOLO_ZOMBIS") == "1";
             string[] mix = { "zombie", "zombie", "zombie", "xenoid", "mec", "bloater" };
-            Environment.SetEnvironmentVariable("BASTION_VIEW", "game");
+            if (Environment.GetEnvironmentVariable("BASTION_VIEW") == null) Environment.SetEnvironmentVariable("BASTION_VIEW", "game");
+            bool still = Environment.GetEnvironmentVariable("BASTION_QUIETOS") == "1";
             Plain(u => u.Id == deadId, 8, 16);
             var like = state.Units[0];
             state.Units = Enumerable.Range(0, n).Select(k =>
@@ -1135,13 +1137,20 @@ namespace Bastion.EditorTools
                 u.Template = plain ? "zombie" : mix[k % mix.Length];
                 return Put(u, 6 + k % 8 * 2, 4 + k / 8 * 2, Math.PI / 2);
             }).ToList();
+            // (Still: the camera on the crowd's middle, at BASTION_DIST.)
+            if (still && GameObject.Find("Shot camera")?.GetComponent<Camera>() is Camera shot)
+            {
+                float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float tiles) ? tiles : 24;
+                int rows = (n + 7) / 8;
+                MapSpace.Aim(shot, (MapSpace.World(6, 4) + MapSpace.World(6 + Math.Min(n, 8) * 2 - 2, 4 + rows * 2 - 2)) / 2, off);
+            }
             sequence = async () =>
             {
                 units.Sync(state);
                 Reveal();
                 // Every other one walking two tiles and back, on and on.
                 bool on = true;
-                foreach (var u in state.Units.Where((u, k) => k % 2 == 1))
+                foreach (var u in state.Units.Where((u, k) => !still && k % 2 == 1))
                     Walk(u);
                 async void Walk(Unit u)
                 {

@@ -61,6 +61,14 @@ namespace Bastion.UI.Strategy
                 // A key: the element itself if it is one, else the first inside it (a sheet's care: its main one).
                 if (beat != null && !(beat is UnityEngine.UIElements.Button)) beat = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Button>(beat);
                 if (beat != null) StrategyRoot.Pulse(beat);
+                // BASTION_TABLERO_RATON=cell[:share]: the pointer resting on that cell of the skill board (its wave and card),
+                // and that share of its hold run.
+                var rest = System.Environment.GetEnvironmentVariable("BASTION_TABLERO_RATON")?.Split(':');
+                var hexes = UnityEngine.UIElements.UQueryExtensions.Q<SkillBoard>(root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement);
+                // «cruce»: across the row over the core (its bought cells), left to right in 2 s, then off the board.
+                if (rest != null && rest.Length > 0 && rest[0] == "cruce") hexes?.LabSweep(new Vector2(-150, -45), new Vector2(150, -45), 2);
+                else if (rest != null && rest.Length > 0 && rest[0] != "")
+                    hexes?.LabPoint(rest[0], rest.Length > 1 ? float.Parse(rest[1], System.Globalization.CultureInfo.InvariantCulture) : 0);
                 // BASTION_ESTRATEGIA_DESPLEGABLE=hand|belt: that choice of the sheet open, as a click on its head.
                 var choice = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_DESPLEGABLE");
                 if (!string.IsNullOrEmpty(choice)) root.OpenSoldierChoice(choice);

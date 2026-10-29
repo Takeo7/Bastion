@@ -50,6 +50,8 @@ Shader "Bastion/Marks"
 
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
+            // The HUD's pixel scale (GameSettings.PixelScale: with the screen, never past its density); 0, unset.
+            float _BastionPixelScale;
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
@@ -68,7 +70,7 @@ Shader "Bastion/Marks"
                     // twice the size, a Retina one, the line is twice as wide, as the web's CSS pixels were.
                     float4 ahead = TransformWorldToHClip(world + TransformObjectToWorldDir(v.wide.xyz, false));
                     float2 size = _ScreenParams.xy;
-                    float px = v.wide.w * sqrt(size.x / 1440.0 * size.y / 900.0);
+                    float px = v.wide.w * (_BastionPixelScale > 0 ? _BastionPixelScale : sqrt(size.x / 1440.0 * size.y / 900.0));
                     float2 along = ahead.xy / ahead.w * size - clip.xy / clip.w * size;
                     float2 dir = dot(along, along) > 1e-8 ? normalize(along) : float2(1, 0);
                     clip.xy += float2(-dir.y, dir.x) * (px / size) * clip.w;
