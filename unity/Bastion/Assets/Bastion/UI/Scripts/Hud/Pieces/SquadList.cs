@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -13,6 +14,10 @@ namespace Bastion.UI.Hud
         readonly IHudHandlers handlers;
         readonly TooltipLayer tips;
         string key;
+        SquadView last;
+
+        /// <summary>A soldier's bust by id (Arte's Portraits.Soldier); null, none yet.</summary>
+        public Func<string, Texture> PortraitOf;
 
         public SquadList(VisualElement host, IHudHandlers handlers, TooltipLayer tips)
         {
@@ -23,6 +28,7 @@ namespace Bastion.UI.Hud
 
         public void Set(SquadView view)
         {
+            last = view;
             var k = Ui.Key(view);
             if (k == key) return;
             key = k;
@@ -30,6 +36,13 @@ namespace Bastion.UI.Hud
             Ui.Show(host, view != null && view.Cards.Count > 0);
             if (view == null) return;
             foreach (var c in view.Cards) host.Add(Card(c));
+        }
+
+        /// <summary>A bust came: the cards drawn again with it.</summary>
+        public void Redraw()
+        {
+            key = null;
+            Set(last);
         }
 
         VisualElement Card(SquadCardView c)
@@ -43,6 +56,11 @@ namespace Bastion.UI.Hud
             card.EnableInClassList("squad-card--evacuated", c.Evacuated);
             card.EnableInClassList("squad-card--in-play", c.InPlay);
             tree.Q("accent").style.backgroundColor = Ui.Hex(c.Accent, new Color32(0xe8, 0xed, 0xf2, 0xff));
+            var bust = tree.Q("bust");
+            var portrait = c.Bust ? PortraitOf?.Invoke(c.Id) : null;
+            if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
+            else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
+            Ui.Show(bust, c.Bust);
             if (c.Skills.Length > 0)
             {
                 var hex = new SkillHex();

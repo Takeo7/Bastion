@@ -32,7 +32,7 @@ namespace Bastion.UI.Strategy
         public string Name;
         /// <summary>The owner's colour: the tile's bottom edge.</summary>
         public string Accent;
-        /// <summary>The six lines' experience (SkillIds.All order), for the hexagon.</summary>
+        /// <summary>The cells bought of each line of the board (SkillIds.All order), for the hexagon.</summary>
         public float[] Skills = new float[6];
         public int Rank;
         /// <summary>«Fogueada · 6 puntos gastados en el tablero».</summary>

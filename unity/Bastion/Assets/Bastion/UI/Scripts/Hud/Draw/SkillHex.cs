@@ -7,9 +7,10 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// A soldier's best line by the name (skillSheet.ts skillHex, Ana 23/10 #30): a hexagon of the colour of the
-    /// experience line it has most of, cut like a pie between the lines tied at the top (from the top, clockwise, as
-    /// the CSS conic-gradient was); grey before it has any. USS has no clip-path nor conic-gradient: Painter2D draws it.
+    /// A soldier's line by the name (skillSheet.ts skillHex, Ana 23/10 #30): a hexagon of the colour of the board's line
+    /// it has bought most cells of (Arturo, 29/10: Ana's all blue on the board had it green, by the experience), cut like
+    /// a pie between the lines tied at the top (from the top, clockwise, as the CSS conic-gradient was); grey before it
+    /// has any. USS has no clip-path nor conic-gradient: Painter2D draws it.
     /// </summary>
     public sealed class SkillHex : VisualElement
     {
@@ -45,7 +46,32 @@ namespace Bastion.UI.Hud
             generateVisualContent += Draw;
         }
 
-        /// <summary>The six lines' experience; the tooltip says which are the best.</summary>
+        /// <summary>The cells of each line (SkillIds.All order) among `cells`, a board's cell ids; the core counts for none.</summary>
+        public static float[] Branches(IEnumerable<string> cells)
+        {
+            var counts = new float[SkillIds.All.Count];
+            if (cells == null) return counts;
+            foreach (var id in cells)
+            {
+                var line = id != null && Board.BoardCells.TryGetValue(id, out var cell) ? cell.Line : null;
+                var i = line != null ? IndexOf(line) : -1;
+                if (i >= 0) counts[i]++;
+            }
+            return counts;
+        }
+
+        /// <summary>The same from a unit's perks, for one with no board (a skirmish's veterans): the cells that give them.</summary>
+        public static float[] BranchesOfPerks(IEnumerable<string> perks) =>
+            Branches(perks?.Select(p => Board.Cells.FirstOrDefault(c => c.Perk == p)?.Id));
+
+        static int IndexOf(string line)
+        {
+            for (var i = 0; i < SkillIds.All.Count; i++)
+                if (SkillIds.All[i] == line) return i;
+            return -1;
+        }
+
+        /// <summary>The cells bought of each line (Branches); the tooltip says which lines lead.</summary>
         public void Set(float[] skills, TooltipLayer tips)
         {
             top.Clear();

@@ -128,7 +128,7 @@ namespace Bastion.UI.Strategy
         public List<ChipView> Events = new List<ChipView>();
         /// <summary>Fallen, the base's damage («En la base: 2 rotas…» with «Construir»), the night.</summary>
         public List<DebriefLineView> Lines = new List<DebriefLineView>();
-        /// <summary>«Leer el parte»: the story's page after the mission; null, none.</summary>
+        /// <summary>The story's page after the mission, open by CONTINUAR; null, none.</summary>
         public string Story;
         public string Continue;
         public List<LineupCardView> Cards = new List<LineupCardView>();

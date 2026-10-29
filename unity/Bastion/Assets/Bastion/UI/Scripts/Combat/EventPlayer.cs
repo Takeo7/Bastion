@@ -22,7 +22,8 @@ namespace Bastion.UI.Combat
     /// framing; arrivals and contacts of the same moment, and a blast's results, together. It plays at the chosen speed,
     /// «Rápida» while the space bar is held (Time.timeScale; the camera keeps unscaled time, it is the player's).
     /// Without Arte's figures in the scene (the lab), an event takes only its pause to be read.
-    /// The attack that kills is seen over the shoulder (ShotCam), and one of ours falling, close (Ana, 22/10 #21).
+    /// The attack that kills is seen over the shoulder (ShotCam), and one of ours falling, close (Ana, 22/10 #21); a dead's
+    /// blow on one of ours, over its shoulder too (Ana, Arturo 29/10).
     /// The dead walking together are planned so nobody walks through anybody (WalkPlan, walkPlan.ts).
     /// </summary>
     public sealed class EventPlayer
@@ -82,9 +83,13 @@ namespace Bastion.UI.Combat
         /// <summary>The shot over a shoulder on now, and who is in it (the attacker, the target): the buildings' cutaway leaves its room whole.</summary>
         public (string attacker, string target)? CloseFocus => control.Rig != null && control.Rig.CloseUp ? (lastAttacker, killCam) : ((string, string)?)null;
 
-        void StartKillCam(string id, (Vector3 pos, Vector3 look) shot)
+        /// <summary>The shot on now is a dead's blow, not a kill: its next blow on the same one keeps it.</summary>
+        bool biting;
+
+        void StartKillCam(string id, (Vector3 pos, Vector3 look) shot, bool bite = false)
         {
             killCam = id;
+            biting = bite;
             control.Rig?.CloseShot(shot.pos, shot.look);
         }
 
@@ -93,6 +98,7 @@ namespace Bastion.UI.Combat
         {
             if (killCam == null) return;
             killCam = null;
+            biting = false;
             control.Rig?.EndCloseShot();
         }
 
@@ -261,7 +267,8 @@ namespace Bastion.UI.Combat
                 {
                     Pace();
                     var item = queue.Dequeue();
-                    if (killCam != null && NewAction(item.e)) EndKillCam();
+                    // (A dead's next blow on the same soldier stays over its shoulder: no out and in between two.)
+                    if (killCam != null && NewAction(item.e) && !(biting && item.e is ShotEvent again && again.Unit == lastAttacker && again.Target == killCam)) EndKillCam();
                     // The dead that only walk this turn come last (ai.ts), and walk all at once, under one framing.
                     var walkers = WalkingWith(item);
                     if (walkers.Count > 0)
@@ -779,7 +786,7 @@ namespace Bastion.UI.Combat
 
         Vector3 Head(string id) => Units != null ? Units.Head(id) : Feet(id) + Vector3.up * 1.75f;
 
-        void Float(Vector3 at, string text, string kind) => Hud?.Float(at, text, kind);
+        void Float(Vector3 at, string text, string kind, string iconId = null) => Hud?.Float(at, text, kind, iconId);
 
         static string Capitalize(string text) => string.IsNullOrEmpty(text) ? text : char.ToUpperInvariant(text[0]) + text.Substring(1);
 
@@ -1379,7 +1386,7 @@ namespace Bastion.UI.Combat
                     Look(Feet(u.Id));
                     if (loot?.Weapon != null)
                     {
-                        Float(Chest(u.Id), Content.FoundWeapons[loot.Weapon].Name.ToUpperInvariant(), "callout");
+                        Float(Chest(u.Id), Content.FoundWeapons[loot.Weapon].Name.ToUpperInvariant(), "callout", Ui.WeaponIcon(Content.FoundWeapons[loot.Weapon].Weapon));
                         Log(Lore.WeaponEquippedLine(u.Name, loot.Weapon), "#6dff9a");
                     }
                     control.Sfx.Reload(Feet(u.Id));
@@ -1656,7 +1663,8 @@ namespace Bastion.UI.Combat
                     control.Sfx.Search(place);
                     if (units != null) await units.Rummage(u.Id, place, stop);
                     else await Wait(0.6f);
-                    Float(place + Vector3.up, Lore.FindLabel(searched.Loot), searched.Loot?.Weapon != null ? "callout" : searched.Loot != null ? "heal" : "info");
+                    Float(place + Vector3.up, Lore.FindLabel(searched.Loot), searched.Loot?.Weapon != null ? "callout" : searched.Loot != null ? "heal" : "info",
+                        searched.Loot?.Weapon != null ? Ui.WeaponIcon(Content.FoundWeapons[searched.Loot.Weapon].Weapon) : null);
                     if (searched.Loot != null) control.Sfx.Found(place);
                     if (decor != null) Log(Lore.SearchLine(u.Name, decor, searched.Loot, searched.Tile.X * 7 + searched.Tile.Y * 13 + v.Turn), searched.Loot?.Weapon != null ? "#ffd23a" : searched.Loot != null ? "#6dff9a" : null);
                     await Wait(0.5f);
@@ -1772,9 +1780,15 @@ namespace Bastion.UI.Combat
             var colour = shooter.Team == Teams.Xcom ? Fx.Hex(0x9fe8ff) : Fx.Hex(0xff6b5a);
             var stepOut = e.From.X != shooter.Pos.X || e.From.Y != shooter.Pos.Y || e.From.Z != shooter.Pos.Z;
             var from = stepOut ? Board.TileToWorld(v, e.From, Chest(shooter.Id).y - Board.TileToWorld(v, e.From).y) : Chest(shooter.Id);
-            // The attack that kills, over the shoulder (Arturo, 20/10 #11); one of ours killed, close on them (#21).
-            var close = !cam() || !Fells(e) ? null : target.Team == Teams.Xcom ? DeathShot(target, shooter) : ShownToSquad(shooter) ? ShotCam.OverShoulder(v, from, chest, shooter.Id, target.Id) : null;
-            if (close != null) StartKillCam(target.Id, close.Value);
+            // The attack that kills, over the shoulder (Arturo, 20/10 #11); one of ours killed, close on them (#21); and a
+            // dead's blow on one of ours, over the dead's shoulder too (Ana, Arturo 29/10; not as they come near: a horde would
+            // bring it at every step). Back at the next action.
+            var fells = Fells(e);
+            var bite = !fells && weapon.Melee && shooter.Team != Teams.Xcom && target.Team == Teams.Xcom && ShownToSquad(shooter);
+            var close = !cam() ? null
+                : fells ? (target.Team == Teams.Xcom ? DeathShot(target, shooter) : ShownToSquad(shooter) ? ShotCam.OverShoulder(v, from, chest, shooter.Id, target.Id) : null)
+                : bite ? ShotCam.OverShoulder(v, from, chest, shooter.Id, target.Id) : null;
+            if (close != null) StartKillCam(target.Id, close.Value, bite);
             else if (cam())
             {
                 look(Vector3.Lerp(Feet(shooter.Id), Feet(target.Id), 0.5f));
@@ -1796,13 +1810,13 @@ namespace Bastion.UI.Combat
             if (weapon.Melee)
             {
                 await Wait(cam() ? 0.2f : 0.05f);
-                control.Sfx.Melee("swing", Chest(shooter.Id));
+                control.Sfx.Melee("swing", Chest(shooter.Id), Content.AttackWeapon(shooter, e.Ability).Id);
                 var stun = e.Ability == AbilityIds.StunLance;
                 await units.Lunge(shooter.Id, target.Id, Fells(e) && units.CanFeed(shooter.Id, target.Id), () =>
                 {
                     if (!hit) return;
                     fx.Slash(chest, stun ? Fx.Hex(0x6ad8ff) : Fx.Hex(0xe8f6ff));
-                    control.Sfx.Melee(stun ? "stun" : e.Ability == AbilityIds.Claw ? "claw" : "sword", chest);
+                    control.Sfx.Melee(stun ? "stun" : e.Ability == AbilityIds.Claw ? "claw" : "sword", chest, Content.AttackWeapon(shooter, e.Ability).Id);
                     control.Sfx.Impact(Bastion.Client.Audio.CombatSound.Body(target), chest, e.Result == "crit");
                     if (e.Ability == AbilityIds.Claw) fx.Bite(chest, Feet(shooter.Id));
                 }, stop);
@@ -1893,7 +1907,7 @@ namespace Bastion.UI.Combat
                 look(to);
                 Float(Board.TileToWorld(V, e.Target, 0.6f), "¡REVIENTA!", "callout");
                 Log($"¡{Capitalize(AnEnemy(u))} revienta!", "#ff6b5a");
-                control.Sfx.Explosion(to);
+                control.Sfx.Burst(to);
                 if (cam()) control.Rig.Shake(0.35f * Board.Tile, 0.5f);
                 if (fx != null)
                 {

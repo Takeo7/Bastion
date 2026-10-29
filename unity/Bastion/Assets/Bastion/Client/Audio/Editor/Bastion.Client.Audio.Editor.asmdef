@@ -1,7 +1,10 @@
 {
     "name": "Bastion.Client.Audio.Editor",
     "rootNamespace": "Bastion.Client.Audio.EditorTools",
-    "references": [],
+    "references": [
+        "Bastion.Engine",
+        "Bastion.Client.Audio"
+    ],
     "includePlatforms": [
         "Editor"
     ],

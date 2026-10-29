@@ -3,10 +3,11 @@
 // interface's WAVs as they are, and manifiesto.json with every file's hash. Out of git: Unity's AppBuild checks the
 // folder against the manifest.
 //
-//   node unity/tools/sonido/generar.mjs [--salida <dir>] [--comprobar]
+//   node unity/tools/sonido/generar.mjs [--salida <dir>] [--comprobar | --grabados]
 //
 // --comprobar generates again into a temporary folder and compares: the recordings and the interface byte for byte;
 // what Chromium renders, sample by sample, one bit apart at most (its offline render varies that much between runs).
+// --grabados redoes only the recordings (and their part of the manifest) in a folder already generated.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -62,18 +63,21 @@ function electron(page, fn, fnArgs) {
   return JSON.parse(line.slice('RESULTADO '.length));
 }
 
+/** The 0.10.1's recordings, and those made for Unity since (grabados.mjs: the Hinchado's, the new weapons'). */
 function recorded(out) {
-  const src = join(CLIENT, 'public/audio/recorded');
-  const index = JSON.parse(readFileSync(join(src, 'index.json'), 'utf8'));
   const list = {};
-  for (const [group, takes] of Object.entries(index)) {
-    list[group] = takes.map((t) => {
-      const file = join('grabados', t.file.replace(/\.ogg$/, '.wav'));
-      mkdirSync(dirname(join(out, file)), { recursive: true });
-      // bitexact: the same WAV every time (no encoder tag, no metadata).
-      run('ffmpeg', ['-v', 'error', '-y', '-i', join(src, t.file), '-map_metadata', '-1', '-fflags', '+bitexact', '-flags:a', '+bitexact', '-c:a', 'pcm_s16le', join(out, file)]);
-      return { file, db: t.db ?? 0 };
-    });
+  for (const src of [join(CLIENT, 'public/audio/recorded'), join(HERE, 'grabados')]) {
+    const index = JSON.parse(readFileSync(join(src, 'index.json'), 'utf8'));
+    for (const [group, takes] of Object.entries(index)) {
+      if (list[group]) throw new Error(`${group} está en dos sitios: ${src}`);
+      list[group] = takes.map((t) => {
+        const file = join('grabados', t.file.replace(/\.ogg$/, '.wav'));
+        mkdirSync(dirname(join(out, file)), { recursive: true });
+        // bitexact: the same WAV every time (no encoder tag, no metadata).
+        run('ffmpeg', ['-v', 'error', '-y', '-i', join(src, t.file), '-map_metadata', '-1', '-fflags', '+bitexact', '-flags:a', '+bitexact', '-c:a', 'pcm_s16le', join(out, file)]);
+        return { file, db: t.db ?? 0 };
+      });
+    }
   }
   return list;
 }
@@ -175,6 +179,44 @@ function compare(out) {
   }
 }
 
+/**
+ * Only the recordings, into a folder already generated (a new group, 29/10): the rest stays as it is, so Unity doesn't
+ * import it again, and the manifest keeps its hashes (Chromium's render would come out a bit apart). Files written only
+ * where they differ; those no longer made, gone.
+ */
+function recordingsOnly(out) {
+  const file = join(out, 'manifiesto.json');
+  if (!existsSync(file)) throw new Error(`No hay ${file}: genera primero todo.`);
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  const tmp = mkdtempSync(join(tmpdir(), 'bastion-sonido-grabados-'));
+  try {
+    const grabados = recorded(tmp);
+    const fresh = walk(tmp);
+    let written = 0;
+    let gone = 0;
+    for (const f of fresh) {
+      const bytes = readFileSync(join(tmp, f));
+      if (existsSync(join(out, f)) && readFileSync(join(out, f)).equals(bytes)) continue;
+      mkdirSync(dirname(join(out, f)), { recursive: true });
+      writeFileSync(join(out, f), bytes);
+      written++;
+    }
+    for (const f of Object.keys(manifest.archivos).filter((f) => f.startsWith('grabados/') && !fresh.includes(f))) {
+      rmSync(join(out, f), { force: true });
+      delete manifest.archivos[f];
+      gone++;
+    }
+    for (const f of fresh) manifest.archivos[f] = { sha256: createHash('sha256').update(readFileSync(join(out, f))).digest('hex'), exacto: true };
+    manifest.archivos = Object.fromEntries(Object.keys(manifest.archivos).sort().map((f) => [f, manifest.archivos[f]]));
+    manifest.grabados = grabados;
+    writeFileSync(file, JSON.stringify(manifest, null, 1) + '\n');
+    console.log(`grabados: ${Object.keys(grabados).length} grupos, ${fresh.length} archivos; ${written} escritos, ${gone} quitados → ${out}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 const out = resolve(option('--salida') ?? DEFAULT_OUT);
 if (flag('--comprobar')) compare(out);
+else if (flag('--grabados')) recordingsOnly(out);
 else generate(out);

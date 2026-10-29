@@ -14,7 +14,7 @@ Lo generado va a `unity/Bastion/Assets/Bastion/Client/Audio/Resources/Generado/`
 |---|---|---|
 | `sintetizados/` | las 110 recetas de `sounds.ts`, con todas sus variantes, y los bucles de las que lo son (la sirena) | renderizadas como `bank.ts`: misma semilla por variante, misma normalización; mono, 44,1 kHz |
 | `vivos/` | la partitura de la base y los menús (`musica.base`) y del Mapa (`musica.geo`), 8 min cada una; las cinco camas de ambiente (ciudad, campo, nave, base, globo), 4 min cada una | `music.ts` y `ambience.ts` tal cual, en un OfflineAudioContext con su reloj y sus temporizadores simulados y `Math.random` con semilla. Se quita el fundido de entrada y el final se funde en el principio (6 s, igual potencia): bucles sin costura. Estéreo, 44,1 kHz |
-| `grabados/` | los 12 grupos grabados, con su nivel por toma | de Opus a WAV con ffmpeg, sin tocar nada más; 48 kHz, las dos camas de combate en estéreo |
+| `grabados/` | los 12 grupos grabados de la 0.10.1, y los 10 hechos para Unity desde el 29/10 (el Hinchado y las armas cuerpo a cuerpo: `unity/tools/sonido/grabados/`, docs/SONIDO.md), con su nivel por toma | de Opus a WAV con ffmpeg, sin tocar nada más; 48 kHz, las dos camas de combate en estéreo |
 | `interfaz/` | los 8 sonidos de interfaz | copiados |
 | `manifiesto.json` | qué es cada cosa (bus, nivel, reverb, bucle, variantes) y el sha256 de cada archivo | |
 
@@ -30,6 +30,10 @@ unity/tools/sonido.sh
 - Tarda unos 40 s en el M2 Pro.
 - `--salida <carpeta>` lo deja en otra carpeta, y `--comprobar` lo genera otra vez en una carpeta temporal y lo compara con la de ahora.
 - La primera importación en Unity es larga (cientos de MB): se avisa a los demás antes, y se hace con el cerrojo de `unity/tools/unity.sh`.
+- **`--grabados`** rehace solo los grabados en la carpeta que ya hay, y su parte del manifiesto (29/10). Así se añade un grupo nuevo sin generar lo demás:
+  - Unity no vuelve a importar los cientos de MB;
+  - el manifiesto conserva los hashes de lo que renderizó Chromium, que en otra pasada saldría un bit distinto.
+  Antes, `node unity/tools/sonido/grabados.mjs` recorta los originales de `assets-src/sonido/`.
 
 ## 3. Reproducible, con un bit de margen
 
@@ -129,6 +133,32 @@ El sonido del combate es `CombatSound`, el `Sfx` de `game/sfx.ts` con los mismos
 
 Lo llaman el EventPlayer y el CombatController de UI, en los mismos momentos en que `game.ts` llamaba a `sfx`.
 
+**Lo que no tenía la 0.10.1** (notas de Ana del 29/10, docs/SONIDO.md):
+- **El Hinchado:** tiene sus pasos, su voz al andar (más grave, a 0,75) y su muerte (a 0,85). En la 0.10.1 llevaba las botas de los soldados, el gruñido del zombi y la muerte de los saqueadores.
+- **`Burst(sitio)`:** el Hinchado revienta. La explosión va 2 dB más fuerte y más grave (0,9) que la de la granada, con la salpicadura encima. En la mezcla de Unity da 2–3 dB más que la granada en el primer segundo, según la toma, y 1 dB más de pico.
+- **`Melee(clase, sitio, arma)`:** recibe el arma (`Content.AttackWeapon(…).Id`).
+  - La sartén, el bate y la palanca suenan como el golpe en el cuerpo, con el toque de cada una por encima.
+  - La motosierra acelera al blandirla y corta al acertar.
+  - Los golpes quedan a ±2 dB de los del cuchillo.
+
+**Comprobarlo sin compilar la app:** la prueba de editor `SoundCheck`.
+
+```bash
+QUIT=0 BASTION_SONIDO_TRAZA=1 unity/tools/unity.sh -executeMethod Bastion.Client.Audio.EditorTools.SoundCheck.Combate
+```
+
+En modo de juego, con la mezcla y el manifiesto del juego, toca lo nuevo como lo pide el combate:
+- un golpe con cada arma del cinto, con el id que da `Content.AttackWeapon`;
+- los pasos, la voz, la muerte y el estallido del Hinchado.
+
+El registro dice qué toma suena de cada grupo. La prueba falla si a algún grupo nuevo le faltan tomas.
+
+El 29/10 sonó todo:
+- la sartén, el bate y la palanca, con su golpe en el cuerpo;
+- la motosierra, con su acelerón y su corte;
+- el cuchillo y el machete, con sus cuchillazos de siempre;
+- el Hinchado, con dos gruñidos propios en seis pasos y su muerte; su explosión, a 1,78 (la de la granada, a 1,41), y la salpicadura.
+
 **Al arrancar** se leen los 399 efectos en unos 4 s, a unos 4 ms por fotograma: primero los de la interfaz y luego los más comunes. La pantalla de inicio se puede usar mientras tanto; la lectura más lenta es de 11 ms. Un sonido pedido antes de su turno se lee en ese momento y suena.
 
 ## 8. Lo que cuesta
@@ -195,11 +225,11 @@ Dónde llamaba la 0.10.1 a cada sonido y dónde va en Unity: una línea en cada 
 | 2730 command | `commandPassed` | al empezar (1658) | `Sfx.Command()` |
 | 2741 outcome | `missionEnded` | antes del `Wait(0.8f)` (1671) | `Sfx.Outcome(end.Outcome == "victory")` |
 | 2781 alert | disparo de reacción | con su `Float` (1721) | `Sfx.Alert()` |
-| 2786 melee swing | ataque cuerpo a cuerpo | tras la espera (1732) | `Sfx.Melee("swing", Chest(shooter.Id))` |
-| 2794/2795 | el golpe acierta | en el `onHit` del `Lunge`, tras `fx.Slash` (1737) | `Sfx.Melee(stun ? "stun" : e.Ability == AbilityIds.Claw ? "claw" : "sword", chest); Sfx.Impact(CombatSound.Body(target), chest, e.Result == "crit")` |
+| 2786 melee swing | ataque cuerpo a cuerpo | tras la espera (1732) | `Sfx.Melee("swing", Chest(shooter.Id), Content.AttackWeapon(shooter, e.Ability).Id)` (el arma, desde el 29/10) |
+| 2794/2795 | el golpe acierta | en el `onHit` del `Lunge`, tras `fx.Slash` (1737) | `Sfx.Melee(stun ? "stun" : e.Ability == AbilityIds.Claw ? "claw" : "sword", chest, Content.AttackWeapon(shooter, e.Ability).Id); Sfx.Impact(CombatSound.Body(target), chest, e.Result == "crit")` |
 | 2821 shot | cada ronda, con el destello | tras `fx.MuzzleFlash` (1763) | `Sfx.Shot(shooter, weapon.Id, muzzle)` |
 | 2829 impact | la última ronda, primer perdigón, al llegar | la bala de 1769 con `Then(...)` | `Sfx.Impact(hit ? CombatSound.Body(target) : "miss", dest, e.Result == "crit")` |
-| 2963 explosion | `explosive` (Hinchado) | tras el registro (1822) | `Sfx.Explosion(to)` |
+| 2963 explosion | `explosive` (Hinchado) | tras el registro (1822) | `Sfx.Burst(to)` (su estallido, desde el 29/10) |
 | 2984 missile | misiles | antes de `fx.Missiles` (1851) | `Sfx.Missile(from)` |
 | 2991/2993 | lanzagranadas | con el destello (1858); al caer (1859) | `Sfx.Launch(from)`; `Sfx.Land(to)` |
 | 2996/2999 | lanzar | al empezar el gesto (1865); al caer (1867) | `Sfx.Throw(Chest(u.Id))`; `Sfx.Land(to)` |

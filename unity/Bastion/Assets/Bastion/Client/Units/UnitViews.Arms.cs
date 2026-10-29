@@ -21,7 +21,7 @@ namespace Bastion.Client.Units
         static readonly HashSet<string> SquadTemplates = new HashSet<string> { "rookie", "assault", "grenadier", "sharpshooter", "specialist" };
 
         /// <summary>Where each weapon rides (syntyFigures.ts CARRIES): the main one, the pistol, the blade.</summary>
-        const string MainCarry = "weapon", SidearmCarry = "sidearm", BeltCarry = "belt";
+        const string MainCarry = "weapon", SidearmCarry = "sidearm", BeltCarry = "belt", SlungCarry = "slung";
 
         /// <summary>The holster this far below the hip (syntyFigures.ts HOLSTER_DROP); the blade out from the hips this way and this far (BELT_OUT, without a body to keep off).</summary>
         const float HolsterDrop = 0.15f, BeltOutBy = 0.13f;
@@ -165,6 +165,8 @@ namespace Bastion.Client.Units
             var hips = In(HumanBodyBones.Hips);
             var hipL = In(HumanBodyBones.LeftUpperLeg);
             Hang(BeltCarry, HumanBodyBones.Hips, new Vector3(hips.x, hipL.y + 0.03f, hips.z) + BeltOut * BeltOutBy, BeltAlong, Vector3.Cross(BeltOut, BeltAlong));
+            // (A blade too big for the belt, the chainsaw: across the back the other way, over the left shoulder, behind the gun.)
+            Hang(SlungCarry, chest, new Vector3(0, s3.y - 0.02f, s3.z - 0.2f), new Vector3(-0.45f, 0.9f, 0), new Vector3(0, 0, -1));
         }
 
         /// <summary>
@@ -186,7 +188,7 @@ namespace Bastion.Client.Units
                     model.localScale = Vector3.one * Figures.CharacterScale * Size(v.arts[kv.Key]);
                     continue;
                 }
-                string ride = kv.Key == MainCarry && pistolOnly ? SidearmCarry : kv.Key;
+                string ride = kv.Key == MainCarry && pistolOnly ? SidearmCarry : kv.Key == BeltCarry && v.arts[kv.Key].slung ? SlungCarry : kv.Key;
                 if (!v.stows.TryGetValue(ride, out var mount))
                 {
                     model.gameObject.SetActive(false);
@@ -197,7 +199,9 @@ namespace Bastion.Client.Units
                 model.localRotation = Quaternion.identity;
                 float lossy = Mathf.Max(mount.lossyScale.x, 1e-4f);
                 model.localScale = Vector3.one * Figures.CharacterScale * Size(v.arts[kv.Key]) / lossy;
-                model.localPosition = new Vector3(0, 0, ride == MainCarry ? -v.middles[kv.Key] / lossy : 0);
+                model.localPosition = new Vector3(0, 0, ride == MainCarry || ride == SlungCarry ? -v.middles[kv.Key] / lossy : 0);
+                // A blade at the belt by its grip, along the way it runs (the pan by its handle, hanging).
+                if (ride == BeltCarry) Seat(model, v.arts[kv.Key], mount.position, mount.rotation);
             }
             v.weapon = v.carried.TryGetValue(which, out var held) ? held : null;
             if (v.weapon != null) v.weapon.gameObject.SetActive(true);
@@ -359,7 +363,24 @@ namespace Bastion.Client.Units
             var palm = Vector3.Lerp(hand.position, middle.position, 0.6f);
             var fingers = (middle.position - hand.position).normalized;
             var across = Vector3.ProjectOnPlane(index.position - little.position, fingers);
-            v.weapon.SetPositionAndRotation(palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
+            var art = v.arts.TryGetValue(v.drawn, out var a2) ? a2 : null;
+            Seat(v.weapon, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
+            // Two-handed (the chainsaw): the left hand on its other grip, the elbow out to the left and down.
+            if (art?.two != null && art.two.Length >= 3)
+                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, v.weapon.TransformPoint(new Vector3(art.two[0], art.two[1], art.two[2])),
+                    v.root.TransformDirection(new Vector3(-1, -0.7f, 0)), 0.02f);
+        }
+
+        /// <summary>
+        /// `model` (`art`'s) with its grip at `at` and the way it runs from there along `turn`'s forward, its top (+y) towards
+        /// `turn`'s up (WeaponArt grip and along; without them, as the knife and the machete: its origin, +z).
+        /// </summary>
+        static void Seat(Transform model, WeaponArt art, Vector3 at, Quaternion turn)
+        {
+            var along = art?.along != null && art.along.Length >= 3 ? new Vector3(art.along[0], art.along[1], art.along[2]) : Vector3.forward;
+            model.rotation = turn * Quaternion.Inverse(Quaternion.LookRotation(along, Mathf.Abs(along.normalized.y) > 0.9f ? Vector3.forward : Vector3.up));
+            var grip = art?.grip != null && art.grip.Length >= 3 ? new Vector3(art.grip[0], art.grip[1], art.grip[2]) : Vector3.zero;
+            model.position = at - (model.TransformPoint(grip) - model.position);
         }
 
         /// <summary>For the labs: where each of `id`'s weapons is (its carry, what holds it, its place and height over the feet, metres), which is drawn.</summary>
@@ -395,11 +416,18 @@ namespace Bastion.Client.Units
 
         static readonly Stroke KnifeStroke = new Stroke { clip = "knifeStab", release = 0.42f, lets = 0.34f, rate = 1.3f, end = 0.75f, after = 1.0f, afterRate = 0.75f };
         static readonly Stroke MacheteStroke = new Stroke { clip = "macheteSwing", release = 1.0f, lets = 0.34f, rate = 2.0f, end = 0.75f, after = 1.0f, afterRate = 1.7f };
+        /// <summary>
+        /// From above (Gameplay 29/10, Ana's #10: the pan and the crowbar), Mixamo's axe brought down: its right hand up and
+        /// back at 0.45 s, before the chest at 0.83 s (sampled every 0.05 s on a figure); from 0.2 s, the hand rising.
+        /// </summary>
+        static readonly Stroke ChopStroke = new Stroke { clip = "macheteChop", release = 0.83f, lets = 0.34f, rate = 1.85f, end = 0.75f, after = 0.85f, afterRate = 1.2f };
 
-        /// <summary>The stroke of the blade in its hands: a knife's stab, anything else the machete's swing.</summary>
+        /// <summary>The stroke of the blade in its hands: from above if its art says so (WeaponArt.stroke), a knife's stab, anything else the machete's swing.</summary>
         static Stroke StrokeOf(View v)
         {
-            string blade = v.arts.TryGetValue(v.drawn, out var art) ? art.fbx : "";
+            var art = v.arts.TryGetValue(v.drawn, out var a) ? a : null;
+            if (art?.stroke == "chop") return ChopStroke;
+            string blade = art?.fbx ?? "";
             return blade.IndexOf("Knife", StringComparison.OrdinalIgnoreCase) >= 0 ? KnifeStroke : MacheteStroke;
         }
 

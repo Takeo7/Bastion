@@ -19,7 +19,7 @@ namespace Bastion.Engine
             [SpeakerIds.Nwosu] = new RadioSpeaker { Name = "Dra. Amara Nwosu", Role = "Enfermería" },
             [SpeakerIds.Simon] = new RadioSpeaker { Name = "Simão Ferreira", Role = "Desertor de los Cuervos" },
             [SpeakerIds.Voz] = new RadioSpeaker { Name = "Celia Marsh, «la Voz»", Role = "La Congregación" },
-            [SpeakerIds.Halvorsen] = new RadioSpeaker { Name = "Ruth Halvorsen", Role = "Refugio de Bielsa" },
+            [SpeakerIds.Halvorsen] = new RadioSpeaker { Name = "Ruth Halvorsen", Role = "Refugio de Metsovo" },
             [SpeakerIds.Coro] = new RadioSpeaker { Name = "Voz sin nombre", Role = "Frecuencia de la Congregación" },
         };
 
@@ -47,11 +47,11 @@ namespace Bastion.Engine
             {
                 Id = SceneIds.Council,
                 Title = "El trato con el Refugio",
-                Channel = "Onda corta · Refugio de Bielsa",
+                Channel = "Onda corta · Refugio de Metsovo",
                 When = c => c.Day > 31,
                 Lines = new[]
                 {
-                    new SceneLine { Who = "halvorsen", Text = "Bastión, aquí el Refugio de Bielsa. Lo pactado está en el punto de cambio. No subáis más allá." },
+                    new SceneLine { Who = "halvorsen", Text = "Bastión, aquí el Refugio de Metsovo. Lo pactado está en el punto de cambio. No subáis más allá." },
                     new SceneLine { Who = "halvorsen", Text = "Cada caja sale de una despensa que también pasa hambre. Si no cumplís, se acaba el trato." },
                 },
             },

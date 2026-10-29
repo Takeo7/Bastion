@@ -20,6 +20,16 @@
     background-color: var(--t-accent);
 }
 
+/* The soldier's bust (Arte's Portraits; Ana, Arturo 29/10: the list with their faces and names). */
+.squad-card__bust {
+    width: 30px;
+    height: 30px;
+    margin-right: 5px;
+    align-self: center;
+    background-color: rgba(0, 0, 0, 0.35);
+    -unity-background-scale-mode: scale-and-crop;
+}
+
 .squad-card__body {
     flex-grow: 1;
 }

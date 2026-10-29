@@ -69,6 +69,9 @@ namespace Bastion.UI.Combat
             };
         }
 
+        /// <summary>A weapon found in the field that has a picture of its own on the Tajo's key (the knife and the machete keep the blade).</summary>
+        static bool Found(string weapon) => weapon == WeaponIds.Pan || weapon == WeaponIds.Bat || weapon == WeaponIds.Crowbar || weapon == WeaponIds.Chainsaw;
+
         List<AbilityView> SoldierAbilities(Unit u)
         {
             var list = AbilityList(u);
@@ -77,7 +80,8 @@ namespace Bastion.UI.Combat
             {
                 var id = list[i];
                 var def = Content.Abilities[id];
-                int? charge = def.Charge != null ? AbilityTexts.Charge(u, def.Charge) : (int?)null;
+                // The chainsaw's blows are its fuel's (Content.RunsChainsaw): shown as the grenades' are.
+                int? charge = def.Charge != null ? AbilityTexts.Charge(u, def.Charge) : Content.RunsChainsaw(u, id) ? AbilityTexts.Charge(u, ChargeIds.Fuel) : (int?)null;
                 var reason = !CanAct() ? "No es vuestro turno." : WaitingFor(u.Id) ?? Abilities.AbilityBlocker(State, u, id);
                 if (reason == null && (def.Target == AbilityTargets.Enemy || def.Target == AbilityTargets.Melee || def.Target == AbilityTargets.Ally) && TargetOptions(id).Count == 0)
                     reason = def.Target == AbilityTargets.Ally ? "No hay aliados válidos." : def.Target == AbilityTargets.Melee ? "Ningún enemigo a su alcance." : "Sin enemigos a la vista.";
@@ -86,8 +90,9 @@ namespace Bastion.UI.Combat
                 views.Add(new AbilityView
                 {
                     Id = id,
-                    // Disparar by the gun in hand (Arturo, 23/10 #7): its picture on the key, not always the rifle's.
-                    Weapon = id == AbilityIds.Shoot ? Content.AttackWeapon(u, AbilityIds.Shoot).Id : null,
+                    // Disparar by the gun in hand (Arturo, 23/10 #7): its picture on the key, not always the rifle's; the Tajo by a
+                    // found blunt weapon or the chainsaw (Ana's notes, Arturo 29/10).
+                    Weapon = id == AbilityIds.Shoot ? Content.AttackWeapon(u, AbilityIds.Shoot).Id : id == AbilityIds.Slash && Found(Content.AttackWeapon(u, id).Id) ? Content.AttackWeapon(u, id).Id : null,
                     Enabled = reason == null,
                     Reason = reason,
                     // Out of rounds in the magazine (Ana, 20/10 #24): said on the key.
@@ -146,7 +151,8 @@ namespace Bastion.UI.Combat
                 {
                     Id = menu.Id,
                     Name = menu.Name,
-                    Icon = menu.Icon,
+                    // Lanzar is the stone's, and the grenade's for one without it (since 29/10 a skill of the board's).
+                    Icon = menu.Id == "menu:throw" && options.All(o => o.Id != AbilityIds.Stone) ? AbilityIds.Grenade : menu.Icon,
                     Enabled = usable.Count > 0,
                     Reason = usable.Count > 0 ? null : first.Reason,
                     Note = usable.Count > 0 ? null : options.FirstOrDefault(o => o.Note != null)?.Note,

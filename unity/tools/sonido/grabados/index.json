@@ -1,0 +1,166 @@
+{
+  "bloater.voice": [
+    {
+      "file": "bloater-voice/fs-830859-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-voice/fs-830859-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-voice/fs-830859-3.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-voice/fs-653581-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-voice/fs-653581-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-voice/fs-653581-3.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-voice/fs-653581-4.ogg",
+      "db": 0
+    }
+  ],
+  "bloater.death": [
+    {
+      "file": "bloater-death/fs-653515-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-death/fs-653515-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-death/fs-653515-3.ogg",
+      "db": 0
+    }
+  ],
+  "bloater.step": [
+    {
+      "file": "bloater-step/fs-676531-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-step/fs-676531-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-step/fs-676531-3.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-step/fs-676531-4.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-step/fs-676531-5.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-step/fs-676531-6.ogg",
+      "db": 0
+    }
+  ],
+  "bloater.burst": [
+    {
+      "file": "bloater-burst/fs-344904-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "bloater-burst/fs-504629-1.ogg",
+      "db": 0
+    }
+  ],
+  "melee.blunt": [
+    {
+      "file": "melee-blunt/fs-396345-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blunt/fs-396345-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blunt/fs-396345-3.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blunt/fs-396345-4.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blunt/fs-396345-5.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blunt/fs-396345-6.ogg",
+      "db": 0
+    }
+  ],
+  "melee.pan": [
+    {
+      "file": "melee-pan/fs-529567-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-pan/fs-401706-1.ogg",
+      "db": 0
+    }
+  ],
+  "melee.bat": [
+    {
+      "file": "melee-bat/fs-684607-1.ogg",
+      "db": 0
+    }
+  ],
+  "melee.crowbar": [
+    {
+      "file": "melee-crowbar/fs-443243-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-crowbar/fs-443243-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-crowbar/fs-443243-3.ogg",
+      "db": 0
+    }
+  ],
+  "melee.chainsaw.rev": [
+    {
+      "file": "melee-chainsaw-rev/fs-453259-1.ogg",
+      "db": 0
+    }
+  ],
+  "melee.chainsaw.cut": [
+    {
+      "file": "melee-chainsaw-cut/fs-185579-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-chainsaw-cut/fs-185579-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-chainsaw-cut/fs-185579-3.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-chainsaw-cut/fs-810392-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-chainsaw-cut/fs-810392-2.ogg",
+      "db": 0
+    }
+  ]
+}

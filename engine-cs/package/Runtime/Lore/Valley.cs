@@ -14,11 +14,11 @@ namespace Bastion.Engine
         /// </summary>
         public static readonly IReadOnlyDictionary<string, string> Landmarks = new Dictionary<string, string>
         {
-            // The home: a clearing in the pines above Bielsa (the key is the old one, kept for the map).
+            // The home: a clearing in the pines above Metsovo (the key is the old one, kept for the map).
             ["atalaya"] = "El Bastión",
-            // Bielsa: the old station, burnt in the autumn (Arturo, 18/10: «Atalaya cayó»); just its name, the drawing says the rest.
+            // Metsovo: the old station, burnt in the autumn (Arturo, 18/10: «Atalaya cayó»); just its name, the drawing says the rest.
             ["ruins"] = "Atalaya",
-            // Bielsa: the village of the bells (quest «Las campanas de Tende»).
+            // Metsovo: the village of the bells (quest «Las campanas de Tende»).
             ["telm"] = "Tende",
             // Rudnik: the Sindicato's mine.
             ["mine"] = "Mina",

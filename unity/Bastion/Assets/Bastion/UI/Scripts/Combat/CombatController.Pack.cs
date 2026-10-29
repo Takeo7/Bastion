@@ -98,7 +98,7 @@ namespace Bastion.UI.Combat
             else if (!string.IsNullOrEmpty(l.Weapon))
             {
                 slot.Kind = "weapon";
-                slot.Icon = "stat:weapon";
+                slot.Icon = Ui.WeaponIcon(Content.FoundWeapons[l.Weapon].Weapon);
                 slot.Tip = HudText.Pack.Weapon(Content.FoundWeapons[l.Weapon].Name);
             }
             else if (l.Medicines.GetValueOrDefault() != 0)

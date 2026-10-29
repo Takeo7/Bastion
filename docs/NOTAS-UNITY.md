@@ -18,6 +18,7 @@ Versión [versión] (commit [commit]). Es la primera versión hecha en Unity. La
 - **La campaña de la 0.10.1 no pasa a esta versión.** Aquí se empieza una campaña nueva.
 - **La de la 0.10.1 sigue en su carpeta:** si se abre la 0.10.1, está como se dejó.
 - **La campaña empezada con las apps de prueba de Unity sigue aquí:** se continúa donde se dejó. [Comprobar al cerrar: la carpeta de las partidas sale del nombre de la app (Bastion-Unity/Bastion). Si cambia al decidir el nombre de la app del Mac, se quita o se cambia esta línea, y también la de los caminos del asedio.]
+- **En esa campaña, lo que ya estaba escrito sigue diciendo «Bielsa» y «caravana»:** el registro, el Diario y las misiones que ya estaban en el Mapa.
 
 ## Lo que cambia al jugar
 
@@ -36,6 +37,10 @@ Versión [versión] (commit [commit]). Es la primera versión hecha en Unity. La
   - los muertos salen de entre los pinos, por las veredas;
   - en una campaña nueva, el claro es más pequeño: de 6 a 8 casillas de radio (antes, de 8 a 11);
   - en una campaña empezada con las apps de prueba, los dos caminos de los lados y el del norte se llenan de pinos; queda el del sur.
+- **La piedra ya no es de todos:** se aprende con «Piedras», la primera casilla de Lanzar en el tablero. En una campaña empezada con las apps de prueba, quien tenía «Brazo suelto» tiene ahora «Piedras».
+- **Cuatro armas cuerpo a cuerpo nuevas,** que solo se encuentran registrando: la sartén, el bate, la palanca y la motosierra. La motosierra tiene tres usos por misión.
+- **En la Limpieza también llega la horda,** pero solo la atrae el ruido.
+- **El medidor de ruido,** en la tarjeta del objetivo, cuenta en dB lo que falta para la próxima oleada de la horda: a 90 se oye llegar, y entra por los bordes un turno después.
 
 ### En combate
 - **Esc para la partida a los dos** y tapa la pantalla de quien abre el menú. En la otra pantalla sale «Partida en pausa: Ana está en el menú.».
@@ -50,6 +55,8 @@ Versión [versión] (commit [commit]). Es la primera versión hecha en Unity. La
 - **«Cancelar misión» se vota,** como desplegar y contactar.
 
 ### Los textos
+- **Bielsa se llama ahora Metsovo,** también el Refugio y el consultorio del primer capítulo.
+- **La caravana es una autocaravana:** el Bastión empieza siendo una «Autocaravana», luego una «Autocaravana con toldo».
 - **Nada da por hecho que un soldado es un hombre:**
   - los avisos dicen «No tienes heridas» o «No sufre aturdimiento, desorientación ni pánico»;
   - los rótulos de estado concuerdan con quien los lleva: ATURDIDA, DESORIENTADA, EVACUADA.

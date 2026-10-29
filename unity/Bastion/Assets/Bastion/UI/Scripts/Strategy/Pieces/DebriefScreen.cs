@@ -8,7 +8,8 @@ namespace Bastion.UI.Strategy
     /// The debrief (screen.ts renderDebrief): over the same line-up, a card under each figure (how they came out, their
     /// kills, what they learnt) and at the bottom the result («MISIÓN CUMPLIDA» on green, «FRACASADA» on red), the
     /// mission, the haul in equal tiles (the story's goal first and larger), what changed, the lines (the fallen, the
-    /// base's damage with «Construir», the night), «Leer el parte» and CONTINUAR.
+    /// base's damage with «Construir», the night), the story's page and CONTINUAR. The page shows open (Ana, Arturo
+    /// 29/10: the 0.10.1 folded it under «Leer el parte»).
     /// </summary>
     public sealed class DebriefScreen
     {
@@ -18,7 +19,6 @@ namespace Bastion.UI.Strategy
         readonly IStrategyHandlers handlers;
         readonly LineupCards cards;
         bool shown;
-        bool storyOpen;
         DebriefView last;
         string key;
 
@@ -43,7 +43,7 @@ namespace Bastion.UI.Strategy
 
         public void Set(DebriefView v)
         {
-            var k = Ui.Key(v) + "|" + storyOpen + "|" + StrategyRoot.PictureStamp;
+            var k = Ui.Key(v) + "|" + StrategyRoot.PictureStamp;
             if (k == key) return;
             key = k;
             last = v;
@@ -87,22 +87,11 @@ namespace Bastion.UI.Strategy
                 row.Add(b);
             }
             var foot = Ui.El("debrief-foot", plate);
-            if (!string.IsNullOrEmpty(v.Story))
-            {
-                var toggle = new Button(() =>
-                {
-                    storyOpen = !storyOpen;
-                    key = null;
-                    Set(last);
-                }) { text = (storyOpen ? "▾ " : "▸ ") + "Leer el parte" };
-                toggle.AddToClassList("debrief-story-toggle");
-                foot.Add(toggle);
-            }
+            if (!string.IsNullOrEmpty(v.Story)) Ui.Text(StrategyText.Marked(v.Story), "debrief-story", foot);
             else Ui.El("debrief-foot__space", foot);
             var go = new Button(handlers.OnDebriefContinue) { text = v.Continue.ToUpperInvariant() };
             Ui.AddClasses(go, "debrief-continue btn-primary font-title");
             foot.Add(go);
-            if (storyOpen && !string.IsNullOrEmpty(v.Story)) Ui.Text(StrategyText.Marked(v.Story), "debrief-story", plate);
         }
     }
 }

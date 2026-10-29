@@ -102,6 +102,9 @@ namespace Bastion.UI.Combat
             {
                 Hud.Bind(this);
                 Hud.Look += at => LookAt(at - Vector3.up * Board.Tile);
+                // The squad list's busts (Ana, Arturo 29/10), drawn by Arte's Portraits.
+                Hud.PortraitOf = Bastion.Client.Portraits.Soldier;
+                Bastion.Client.Portraits.Changed += OnBust;
                 if (Hud.HeadOf == null) Hud.HeadOf = FlagAt;
             }
         }

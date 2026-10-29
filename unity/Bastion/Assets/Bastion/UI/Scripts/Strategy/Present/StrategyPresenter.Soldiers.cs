@@ -62,7 +62,8 @@ namespace Bastion.UI.Strategy
 
         static bool Female(CampaignSoldier s) => s.Appearance?.Sex == "f";
 
-        static float[] SkillsOf(CampaignSoldier s) => SkillIds.All.Select(id => (float)(s.Skills.TryGetValue(id, out var v) ? v : 0)).ToArray();
+        /// <summary>For the hexagon by the name: the cells bought of each line of the board (Arturo, 29/10).</summary>
+        static float[] SkillsOf(CampaignSoldier s) => Hud.SkillHex.Branches(s.Board);
 
         /// <summary>Why spending the common stores waits, with the other one here (pendingWhy); '' otherwise.</summary>
         string PendingWhy(CampaignState c)
@@ -282,7 +283,7 @@ namespace Bastion.UI.Strategy
             v.Chips.Add(new ChipView { Text = Campaign.CostText(price) });
             v.Chips.Add(new ChipView { Text = $"Tus soldados {count}/{cap}", Tip = $"Como mucho {cap} soldados por jugador" });
             // Lore, C4: the caravan's eight beds, not the old bunker's.
-            v.Chips.Add(new ChipView { Text = $"Camas libres {System.Math.Max(0, free)}", Tone = free <= 0 ? "warn" : null, Tip = "Cada soldado necesita una cama: la caravana tiene 8, y cada Barracón suma más." });
+            v.Chips.Add(new ChipView { Text = $"Camas libres {System.Math.Max(0, free)}", Tone = free <= 0 ? "warn" : null, Tip = "Cada soldado necesita una cama: la autocaravana tiene 8, y cada Barracón suma más." });
             return v;
         }
 

@@ -13,14 +13,15 @@ namespace Bastion.Client.Units
     /// </summary>
     public sealed partial class UnitViews
     {
-        /// <summary>One of them: its pack's prefab, the body in it, its build, its size over the figures', the attachment it keeps.</summary>
+        /// <summary>One of them: its pack's prefab, the body in it, its build, its size over the figures', the attachments it keeps, the atlas it wears instead of its own (none: its own).</summary>
         sealed class DeadBody
         {
             public string prefab;
             public string body;
             public bool female;
             public float scale = 1;
-            public string keep;
+            public string[] keep;
+            public string atlas;
         }
 
         /// <summary>A City Zombies character by its name (Jock_Male_01: SM_Chr_Zombie_Jock_Male_01 and its body Zombie_Jock_Male_01).</summary>
@@ -29,34 +30,51 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// The Corredores (the recently dead, still quick), the Acorazados (police and soldiers, vest and helmet still on, a
-        /// little bigger), the Chillón (Boss Zombies' Wretch, a head taller than the rest) and the Hinchado (its Blobber), each
-        /// of the bosses with its first hair and nothing else (the Blobber's prefab has a tiara on, 0.10.1's had none).
+        /// little bigger), the Chillón (Boss Zombies' Wretch, a head taller than the rest) and the Hinchados, the bosses with
+        /// their hair and nothing else (the Blobber's prefab has a tiara on, 0.10.1's had none). The Hinchados five (Ana's
+        /// #13, 29/10: «siempre tiene la misma pinta»; Gameplay: not all pink): Boss Zombies' two fat bodies, the Blobber and
+        /// the Slobber, with their hairs (and the Slobber's beard), in their pack's atlases, whose patterns differ.
         /// </summary>
+        static DeadBody Bloater(string body, string atlas, params string[] keep) => new DeadBody { prefab = "SM_Chr_ZombieBoss_" + body + "_01", body = "SM_Chr_ZombieBoss_" + body + "_01", scale = 1.08f, keep = keep, atlas = atlas };
         static readonly Dictionary<string, DeadBody[]> DeadBodies = new Dictionary<string, DeadBody[]>
         {
             ["xenoid"] = new[] { City("Jock_Male_01"), City("Cheerleader_Female_01", true), City("Hoodie_Male_01"), City("SchoolGirl_Female_01", true) },
             ["mec"] = new[] { City("RiotCop_Male_01", false, 1.06f), City("Military_Male_01", false, 1.06f), City("Police_Male_01", false, 1.06f), City("Firefighter_Male_01", false, 1.06f) },
-            ["sectoid"] = new[] { new DeadBody { prefab = "SM_Chr_ZombieBoss_Wretch_01", body = "SM_Chr_ZombieBoss_Wretch_01", scale = 1.12f, keep = "SM_Chr_Attach_Wretch_Hair_01" } },
-            ["bloater"] = new[] { new DeadBody { prefab = "SM_Chr_ZombieBoss_Blobber_01", body = "SM_Chr_ZombieBoss_Blobber_01", scale = 1.08f, keep = "SM_Chr_Attach_Blobber_Hair_01" } },
+            ["sectoid"] = new[] { new DeadBody { prefab = "SM_Chr_ZombieBoss_Wretch_01", body = "SM_Chr_ZombieBoss_Wretch_01", scale = 1.12f, keep = new[] { "SM_Chr_Attach_Wretch_Hair_01" } } },
+            ["bloater"] = new[]
+            {
+                Bloater("Blobber", null, "SM_Chr_Attach_Blobber_Hair_01"),
+                Bloater("Slobber", null, "SM_Chr_Attach_Slobber_Hair_01", "SM_Chr_Attach_Slobber_FacialHair_01"),
+                Bloater("Blobber", "PolygonZombieBoss_03_B", "SM_Chr_Attach_Blobber_Hair_02"),
+                Bloater("Slobber", "PolygonZombieBoss_02_C", "SM_Chr_Attach_Slobber_Hair_01"),
+                Bloater("Blobber", "PolygonZombieBoss_04_A", "SM_Chr_Attach_Blobber_Hair_01"),
+            },
         };
+
+        /// <summary>The atlases the special dead wear instead of their own (FigureCatalogMake puts them in the catalog).</summary>
+        public static IEnumerable<string> DeadAtlases => DeadBodies.Values.SelectMany(b => b).Select(b => b.atlas).Where(a => a != null).Distinct();
 
         /// <summary>
         /// Each pack material without the blood its shader lays over the atlas by a mask (PolygonGeneric's «Bloody» shaders:
-        /// City Zombies' _Blood_Mask, Boss Zombies' _Blood_Map); 0.10.1 drew the atlas alone, its own stains in it. A copy each.
+        /// City Zombies' _Blood_Mask, Boss Zombies' _Blood_Map); 0.10.1 drew the atlas alone, its own stains in it. And its
+        /// atlas's colours dulled as the common dead's are (SoldierPalette.DullAtlas; Ana's #20, 29/10: their blue, purple
+        /// and green skins). A copy each.
         /// </summary>
-        static readonly Dictionary<Material, Material> bloodless = new Dictionary<Material, Material>();
+        static readonly Dictionary<(Material, Texture), Material> bloodless = new Dictionary<(Material, Texture), Material>();
 
         static readonly string[] BloodMasks = { "_Blood_Mask", "_Blood_Map" };
 
-        static Material Bloodless(Material m)
+        /// <summary>`m` without its blood, its atlas dulled; in `atlas` instead of its own if given (a Hinchado's other).</summary>
+        static Material Bloodless(Material m, Texture atlas = null)
         {
             if (m == null || !BloodMasks.Any(m.HasProperty)) return m;
-            if (!bloodless.TryGetValue(m, out var copy) || copy == null)
+            if (!bloodless.TryGetValue((m, atlas), out var copy) || copy == null)
             {
                 copy = new Material(m) { name = m.name + " (sin sangre)" };
                 foreach (string mask in BloodMasks)
                     if (copy.HasProperty(mask)) copy.SetTexture(mask, Texture2D.blackTexture);
-                bloodless[m] = copy;
+                if (copy.HasProperty("_Albedo_Map")) copy.SetTexture("_Albedo_Map", SoldierPalette.DullAtlas(atlas != null ? atlas : copy.GetTexture("_Albedo_Map")));
+                bloodless[(m, atlas)] = copy;
             }
             return copy;
         }
@@ -74,12 +92,13 @@ namespace Bastion.Client.Units
             var figure = Instantiate(prefab);
             figure.name = b.prefab;
             // Its body and what it keeps; the prefab's other bodies and attachments gone.
+            var atlas = b.atlas != null ? catalog.Atlas(b.atlas) : null;
             foreach (var r in figure.GetComponentsInChildren<Renderer>(true).ToList())
             {
-                bool kept = r.gameObject.name == b.body || r.gameObject.name == b.keep;
+                bool kept = r.gameObject.name == b.body || b.keep != null && b.keep.Contains(r.gameObject.name);
                 r.gameObject.SetActive(kept);
                 if (!kept && r.gameObject != figure) DestroyNow(r.gameObject);
-                else r.sharedMaterials = r.sharedMaterials.Select(Bloodless).ToArray();
+                else r.sharedMaterials = r.sharedMaterials.Select(m => Bloodless(m, atlas)).ToArray();
             }
             view.build = b.female ? "femn" : "masc";
             view.size = b.scale;

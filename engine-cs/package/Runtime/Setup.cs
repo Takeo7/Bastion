@@ -946,8 +946,9 @@ namespace Bastion.Engine
                 Quarantine = opts.Quarantine,
                 Reinforcements = reinforcements,
                 Difficulty = difficulty,
-                // The dead keep coming by the edges on every mission you leave by bus (playtest 2026-10-15, #11).
-                Horde = kind != MissionKinds.Elimination ? HordeWave(difficulty) : null,
+                // The dead keep coming by the edges on every mission you leave by bus (playtest 2026-10-15, #11); in a Limpieza,
+                // only as the noise calls them (Arturo, 29/10). A siege has its own waves.
+                Horde = siege == null ? HordeWave(difficulty) : null,
                 Night = opts.Night == true,
                 Siege = siege,
             };
@@ -1119,8 +1120,8 @@ namespace Bastion.Engine
         /// </summary>
         private static class FirstChapter
         {
-            public const string Title = "El consultorio de Bielsa";
-            public const string Briefing = "El consultorio de Bielsa, el pueblo de abajo, sigue cerrado. En su nevera quedaba **insulina**, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. ==Buscad una entrada y traed la insulina.==";
+            public const string Title = "El consultorio de Metsovo";
+            public const string Briefing = "El consultorio de Metsovo, el pueblo de abajo, sigue cerrado. En su nevera quedaba **insulina**, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. ==Buscad una entrada y traed la insulina.==";
         }
 
         /// <summary>

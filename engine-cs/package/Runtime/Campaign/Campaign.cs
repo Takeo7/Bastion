@@ -212,7 +212,7 @@ namespace Bastion.Engine
         {
             [RegionIds.Na] = new RegionDef { Id = RegionIds.Na, Name = "Los Llanos de Ceniza", X = 2.87, Z = 6.95, Roads = new[] { RegionIds.Afr, RegionIds.Me }, Income = 35 },
             [RegionIds.Sa] = new RegionDef { Id = RegionIds.Sa, Name = "Rudnik", X = -11.48, Z = -0.98, Roads = new[] { RegionIds.Weu, RegionIds.Afr }, Income = 25 },
-            [RegionIds.Weu] = new RegionDef { Id = RegionIds.Weu, Name = "Bielsa", X = -6.11, Z = -5.86, Roads = new[] { RegionIds.Oce, RegionIds.Sa, RegionIds.Eeu }, Income = 30 },
+            [RegionIds.Weu] = new RegionDef { Id = RegionIds.Weu, Name = "Metsovo", X = -6.11, Z = -5.86, Roads = new[] { RegionIds.Oce, RegionIds.Sa, RegionIds.Eeu }, Income = 30 },
             [RegionIds.Eeu] = new RegionDef { Id = RegionIds.Eeu, Name = "Sappada", X = 12.64, Z = -8.28, Roads = new[] { RegionIds.Weu, RegionIds.Eas }, Income = 25 },
             [RegionIds.Afr] = new RegionDef { Id = RegionIds.Afr, Name = "Tarbes", X = -6.56, Z = 4.02, Roads = new[] { RegionIds.Oce, RegionIds.Na, RegionIds.Sa }, Income = 25 },
             [RegionIds.Me] = new RegionDef { Id = RegionIds.Me, Name = "Koper", X = 10.82, Z = -2.23, Roads = new[] { RegionIds.Oce, RegionIds.Na }, Income = 30 },

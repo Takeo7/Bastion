@@ -408,6 +408,14 @@ namespace Bastion.UI.Combat
 
         // ------------------------------------------------------- squad
 
+        /// <summary>The soldiers whose busts were asked for (SquadView).</summary>
+        readonly HashSet<string> busts = new HashSet<string>();
+
+        /// <summary>A bust drawn (Portraits.Changed): the squad list again with it.</summary>
+        void OnBust(string id) => Hud?.PicturesChanged();
+
+        void OnDestroy() => Bastion.Client.Portraits.Changed -= OnBust;
+
         /// <summary>
         /// The squad's cards (hud.ts setSquad): one's own first, then the partner's commanded while they're gone, then the
         /// rest; a siege's turrets too, for their health and rounds.
@@ -416,6 +424,10 @@ namespace Bastion.UI.Combat
         {
             var view = new SquadView();
             var units = v.Units.Where(u => u.Team == Teams.Xcom || u.ControlledBy != null).ToList();
+            // Each soldier's bust for its card, asked for once (Arte's Portraits draws one a frame).
+            foreach (var u in units)
+                if (u.Team == Teams.Xcom && busts.Add(u.Id))
+                    Bastion.Client.Portraits.Know(u.Id, u.Appearance, u.Name, Bastion.Client.Units.SquadTint.ColourOf(u.Owner ?? MySlot));
             int Rank(Unit u) => !Commands(u) ? 2 : u.Owner == MySlot || u.Owner == null ? 0 : 1;
             var carrier = v.Mission.Item?.Carrier;
             foreach (var u in units.OrderBy(Rank))
@@ -432,6 +444,7 @@ namespace Bastion.UI.Combat
                     Dead = !u.Alive && !u.Evacuated,
                     Evacuated = u.Evacuated,
                     InPlay = u.Id == inPlay,
+                    Bust = u.Team == Teams.Xcom,
                     Hp = u.Hp,
                     MaxHp = u.MaxHp,
                     Skills = SkillValues(u),
@@ -476,12 +489,15 @@ namespace Bastion.UI.Combat
         /// <summary>What a recovery carries out: the chapter's own name for it, or the default (game.ts recoveryItem).</summary>
         string RecoveryItem() => Shown.CampaignMission?.Item ?? Lore.DefaultItem;
 
-        /// <summary>The six lines' values (SkillIds.All order) for a soldier's hexagon: what it has learnt so far, this mission included.</summary>
-        static float[] SkillValues(Unit u)
+        /// <summary>
+        /// The six lines' values (SkillIds.All order) for a soldier's hexagon: the cells bought of each line of its board
+        /// (Arturo, 29/10), as the campaign had it at take-off; with no campaign, the cells that give its perks.
+        /// </summary>
+        float[] SkillValues(Unit u)
         {
             if (u.Lines == null) return Array.Empty<float>();
-            var skills = Bars.LiveSkills(u.Lines, u.Deeds);
-            return SkillIds.All.Select(id => skills.TryGetValue(id, out var n) ? (float)n : 0).ToArray();
+            var soldier = u.CampaignId != null ? Campaign?.Invoke()?.Soldiers.FirstOrDefault(s => s.Id == u.CampaignId) : null;
+            return soldier != null ? SkillHex.Branches(soldier.Board) : SkillHex.BranchesOfPerks(u.Perks);
         }
 
         // ------------------------------------------------------- the picked one
@@ -601,6 +617,8 @@ namespace Bastion.UI.Combat
             }
             // The hordes on the way are not said on the card (playtest 19/10 #20); a flare drop, still.
             var alert = m.Reinforcements.Any(r => !r.Landed && r.Horde != true && r.Pos != null) ? "VIENEN MÁS" : null;
+            // The noise meter (Ana's notes, Arturo 29/10): the horde's next wave as dB, 40 quiet and 90 as it comes (Math.round).
+            var fill = Rules.HordeFill(s);
             return new MissionView
             {
                 Label = MissionName(m.Kind),
@@ -609,6 +627,9 @@ namespace Bastion.UI.Combat
                 ObjectiveTip = tip,
                 TurnsLeft = m.TurnsLeft ?? -1,
                 Alert = alert,
+                HordeFill = fill.HasValue ? (float)fill.Value : -1,
+                HordeDb = fill.HasValue ? 40 + (int)Math.Floor(50 * fill.Value + 0.5) : 0,
+                HordeTitle = !fill.HasValue ? null : m.Kind == MissionKinds.Elimination ? HudText.Mission.NoiseTipQuiet : HudText.Mission.NoiseTip,
             };
         }
 

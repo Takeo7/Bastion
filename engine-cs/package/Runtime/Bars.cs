@@ -321,6 +321,8 @@ namespace Bastion.Engine
             }
             // Mano de machete wants the machete; Buen brazo, one more grenade in every accessory of them.
             if (perks.Contains(PerkIds.BladeMaster) && arms?.Melee == FoundWeaponIds.Machete) mods = Content.AddMods(mods, new UnitMods { MeleeDamage = 2, MeleeAim = 15 });
+            // The chainsaw, with its fuel for the mission.
+            if (arms?.Melee == FoundWeaponIds.Chainsaw) Add(new Dictionary<string, int> { [ChargeIds.Fuel] = Content.ChainsawFuel });
             if (perks.Contains(PerkIds.GoodArm)) Add(new Dictionary<string, int> { [ChargeIds.Grenade] = gear.Count((id) => Content.Items[id].Charges != null && Of(Content.Items[id].Charges!, ChargeIds.Grenade) != 0) });
             // One more use of what it carries: nothing if it carries none.
             foreach (var c in cells)

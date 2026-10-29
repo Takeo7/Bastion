@@ -40,7 +40,7 @@ namespace Bastion.Engine
         {
             public static readonly IReadOnlyDictionary<string, PieceText> All = new Dictionary<string, PieceText>
             {
-                ["caravan"] = new PieceText("Caravana", "la caravana", "una caravana", "Camas para los primeros soldados y el almacén. No se desmonta."),
+                ["caravan"] = new PieceText("Autocaravana", "la autocaravana", "una autocaravana", "Camas para los primeros soldados y el almacén. No se desmonta."),
                 ["radio"] = new PieceText("Sala de radio", "la Sala de radio", "una Sala de radio", "Avisa de los asedios, por dónde y cuántos, y trae misiones y zonas que contactar.", new[] { "Una radio de coche, una batería y Morse con los cascos.", "Una antena en el pino más alto.", "La antena llega hasta el mar: Morse oye antes lo que viene." }),
                 ["quarters"] = new PieceText("Barracón", "el Barracón", "un Barracón", "Camas para soldados.", new[] { "Literas de madera y una estufa que solo se enciende de noche.", "Un segundo piso de literas.", "Mantas de verdad." }),
                 ["infirmary"] = new PieceText("Enfermería", "la Enfermería", "una Enfermería", "Las heridas curan antes.", new[] { "Una camilla y un hornillo para hervir el agua.", "Agua caliente en la sala de curas.", "Un quirófano de verdad, con lámpara y generador propio." }),
@@ -263,8 +263,8 @@ namespace Bastion.Engine
         /// </summary>
         public static readonly IReadOnlyList<BastionLevel> BastionLevels = new[]
         {
-            new BastionLevel("Caravana", "la caravana", "una caravana"),
-            new BastionLevel("Caravana con toldo", "la caravana con toldo", "una caravana con toldo"),
+            new BastionLevel("Autocaravana", "la autocaravana", "una autocaravana"),
+            new BastionLevel("Autocaravana con toldo", "la autocaravana con toldo", "una autocaravana con toldo"),
             new BastionLevel("Casa móvil", "la casa móvil", "una casa móvil"),
             new BastionLevel("Casa móvil con porche", "la casa móvil con porche", "una casa móvil con porche"),
             new BastionLevel("Albergue", "el albergue", "un albergue"),
@@ -489,7 +489,7 @@ namespace Bastion.Engine
         /// </summary>
         public static readonly IReadOnlyList<Vehicle> Vehicles = new[]
         {
-            new Vehicle("Todoterreno", "el todoterreno", "un todoterreno", false, "El de Teo, el que tiró de la caravana. Cuatro plazas y el maletero."),
+            new Vehicle("Todoterreno", "el todoterreno", "un todoterreno", false, "El de Teo, el que salió de Atalaya detrás de la autocaravana. Cuatro plazas y el maletero."),
             new Vehicle("Furgoneta", "la furgoneta", "una furgoneta", true, "De reparto, con las ventanillas tapadas con chapa."),
             new Vehicle("Camión", "el camión", "un camión", false, "De mudanzas: la caja atrás, con bancos y una trampilla."),
             new Vehicle("Autobús", "el autobús", "un autobús", false, "El de línea de Atalaya, con la chapa que Teo le soldó. La Lata de verdad."),
@@ -571,7 +571,7 @@ namespace Bastion.Engine
             /// <summary>The rule, for the help and the errors (not for the notice).</summary>
             public const string Defenders = "Defienden los sanos. Los heridos y los mordidos se quedan dentro.";
             public const string Fallen = "El Bastión ha caído";
-            public const string FallenLine = "Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la caravana y lo puesto, y vuelven a empezar en otro claro.";
+            public const string FallenLine = "Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la autocaravana y lo puesto, y vuelven a empezar en otro claro.";
             public const string Nobody = "No queda nadie";
             public const string NobodyLine = "El Bastión ha caído con todos dentro. La campaña termina aquí.";
         }

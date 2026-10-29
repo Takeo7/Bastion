@@ -73,11 +73,12 @@ if wanted "$@"; then
   echo "== $name (su carpeta)"
   python3 -I "$tools/upkg-extract.py" --under Assets/Synty/PolygonMapsWoodlandApocalypse "$synty/POLYGON - Woodland Apocalypse Map/Unity/$name.unitypackage" "$project" || failed=1
 fi
-# The HUD's icons (UI): three INTERFACE packs, only their sprites and textures (no prefabs, scripts or samples: the HUD
-# is UI Toolkit, not their uGUI).
+# The HUD's icons (UI): four INTERFACE packs, only their sprites and textures (no prefabs, scripts or samples: the HUD
+# is UI Toolkit, not their uGUI). Dark Fantasy's for the life bars (Ana's #8, 29/10).
 for p in "INTERFACE - Apocalypse HUD/Unity/INTERFACE_Apocalypse_HUD_Unity_2022_3_v1_1_1.unitypackage" \
   "INTERFACE - Military Combat HUD/Unity/INTERFACE_Military_Combat_HUD_Unity_2022_3_v1_1_1.unitypackage" \
-  "INTERFACE - Modern Menus/Unity/INTERFACE_Modern_Menus_Unity_2022_3_v1_0_2.unitypackage"; do
+  "INTERFACE - Modern Menus/Unity/INTERFACE_Modern_Menus_Unity_2022_3_v1_0_2.unitypackage" \
+  "INTERFACE - Dark Fantasy HUD/Unity/INTERFACE_Dark_Fantasy_HUD_Unity_2022_3_v1_1_1.unitypackage"; do
   name=$(basename "$p" .unitypackage)
   wanted "$@" || continue
   echo "== $name (sprites y texturas)"

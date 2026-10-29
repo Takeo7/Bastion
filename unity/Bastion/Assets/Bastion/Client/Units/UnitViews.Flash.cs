@@ -120,8 +120,9 @@ namespace Bastion.Client.Units
         // ------------------------------------------------------------ the target's mark
 
         /// <summary>
-        /// syntyFigures.ts mark: the target being picked (Highlight) marked on its body, coming in and going in a sixth of
-        /// a second (MARK_EASE), breathing by a quarter of it (MARK_PULSE) at 4.5 radians a second (MARK_RATE).
+        /// syntyFigures.ts mark: the target being picked (Highlight) marked on its body (a red line round it, Bastion/Mark;
+        /// Ana's #12, 29/10), coming in and going in a sixth of a second (MARK_EASE), breathing by a quarter of it
+        /// (MARK_PULSE) at 4.5 radians a second (MARK_RATE).
         /// </summary>
         const float MarkEase = 6, MarkPulse = 0.25f, MarkRate = 4.5f;
 
@@ -173,12 +174,24 @@ namespace Bastion.Client.Units
             {
                 m.material = KitMaterials.New(KitMaterials.Mark, "Marca");
                 if (m.material == null) return;
+                Tried(m.material);
             }
             if (on && m.renderers == null) m.renderers = MarkedRenderers(v);
             if (m.material != null) m.material.SetFloat("_Mark", k);
             if (on == m.on || m.renderers == null) return;
             m.on = on;
             Pass(m.renderers, m.material, on);
+        }
+
+        /// <summary>For trying marks out in the lab (BASTION_MARCA_BLANCO=tint,base,rim,edge,line; Bastion/Mark's; 0.10.1's: 0.45,0.1,1.2,2,0), never in a game of the players.</summary>
+        static void Tried(Material material)
+        {
+            var tried = System.Environment.GetEnvironmentVariable("BASTION_MARCA_BLANCO");
+            if (string.IsNullOrEmpty(tried)) return;
+            var names = new[] { "_Tint", "_Base", "_Rim", "_Edge", "_Line" };
+            var values = tried.Split(',');
+            for (int i = 0; i < names.Length && i < values.Length; i++)
+                if (float.TryParse(values[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f)) material.SetFloat(names[i], f);
         }
     }
 }

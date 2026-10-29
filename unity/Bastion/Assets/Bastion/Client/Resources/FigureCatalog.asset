@@ -244,6 +244,7 @@ MonoBehaviour:
   - lookRMasc
   - lookUpFemn
   - lookUpMasc
+  - macheteChop
   - macheteSwing
   - nodFemn
   - nodMasc
@@ -427,6 +428,7 @@ MonoBehaviour:
   - {fileID: 8175901450970974600, guid: c69884a2d39c41248829019f193106a4, type: 3}
   - {fileID: -2831958929223886286, guid: 4357e5e7a9f936c418c06ec083e10f6a, type: 3}
   - {fileID: 3866154431606856205, guid: 0cf455026645aa246b2557c13b8d7d7d, type: 3}
+  - {fileID: -203655887218126122, guid: ea3f5649f81814110aa89437bed37886, type: 3}
   - {fileID: -203655887218126122, guid: 391011ef34e6c4f54853b592910de773, type: 3}
   - {fileID: -8404427272446939001, guid: dd0050c0104f5eb4aa95b5d27d1ba268, type: 3}
   - {fileID: 988025792959221678, guid: 30f296ced4b452641941a636f49bec2f, type: 3}
@@ -503,10 +505,14 @@ MonoBehaviour:
   - {fileID: -203655887218126122, guid: 00b679ed387384456a1d7f75f2490205, type: 3}
   - {fileID: -203655887218126122, guid: 1b442452ce18645898243948ea9a8c30, type: 3}
   weaponNames:
+  - apocalypse:SM_Prop_Pan_01
   - SM_Wep_AssaultRifle_01
   - SM_Wep_AssaultRifle_02
   - SM_Wep_AssaultRifle_03
+  - SM_Wep_Bat_Wood_01
   - SM_Wep_Baton_01
+  - SM_Wep_ChainSaw_01
+  - SM_Wep_Crowbar_01
   - SM_Wep_HuntingRifle_01
   - SM_Wep_HuntingRifle_Clean_01
   - SM_Wep_MachineGun_01
@@ -521,10 +527,14 @@ MonoBehaviour:
   - SM_Wep_SniperRifle_02
   - SM_Wep_SubMGun_01
   weapons:
+  - {fileID: 1335890822894770, guid: 0056b36596874344d8f4adb07dab8d83, type: 3}
   - {fileID: 1900586067242068, guid: ad49a19d2c4adc94b838606a5d459f85, type: 3}
   - {fileID: 1263777055603640, guid: d9f9bf1ca5142254ba3a359ff4a34b3e, type: 3}
   - {fileID: 1490873028196816, guid: a3fe0be603767ae42a0d14c81d777c2b, type: 3}
+  - {fileID: 1145237178023060, guid: d855c6cd18605f34dbfdca25cb40d71c, type: 3}
   - {fileID: 1402644178857166, guid: 4deca74d46c275b40b3255680aa23aff, type: 3}
+  - {fileID: 1074116973428324, guid: d4ca9bcafe7b6124ba175d36e7661b84, type: 3}
+  - {fileID: 1750927141268108, guid: 8775c006a5395ff488d9315934a2a901, type: 3}
   - {fileID: 1862461175073062, guid: f8ee5a952b0a300448ad8d17e2ab2584, type: 3}
   - {fileID: 1311854592980844, guid: 339cc5e61566f63428dc7728c5c3c5a0, type: 3}
   - {fileID: 1167886286928202, guid: c10ff4af96f3d7243ae6a36a3377ce60, type: 3}
@@ -557,6 +567,7 @@ MonoBehaviour:
   - SM_Chr_Zombie_Firefighter_Male_01
   - SM_Chr_ZombieBoss_Wretch_01
   - SM_Chr_ZombieBoss_Blobber_01
+  - SM_Chr_ZombieBoss_Slobber_01
   characters:
   - {fileID: 1975240265096882, guid: 886e38ce682403743b9b058cb21703f2, type: 3}
   - {fileID: 1604611627540692, guid: 0636a8b0926172c499640f89dacb0a94, type: 3}
@@ -576,6 +587,15 @@ MonoBehaviour:
   - {fileID: 1616105819863738, guid: 7cb0205c5f7aeba45b91883f9425fcab, type: 3}
   - {fileID: 1960997148460282, guid: a3029e28af10f4f458f5d25d6118a906, type: 3}
   - {fileID: 1658146812600542, guid: 574d3bbe7d1c8684f9101c2b823c5770, type: 3}
+  - {fileID: 1389694247779218, guid: 6e6f4b3417a0abb45b1cce8fdf021eb5, type: 3}
+  atlasNames:
+  - PolygonZombieBoss_03_B
+  - PolygonZombieBoss_02_C
+  - PolygonZombieBoss_04_A
+  atlases:
+  - {fileID: 2800000, guid: 3fdbf9a55f4f880478cb8708ce899fbe, type: 3}
+  - {fileID: 2800000, guid: d4f9d60c0c446014e99dd0d89986b87d, type: 3}
+  - {fileID: 2800000, guid: 77867349808bc0e42bc13f49a2b1b7bb, type: 3}
   settles:
   - 0.12
   - 0.12
@@ -684,6 +704,7 @@ MonoBehaviour:
   - 0.12
   - 3.0199986
   - 3.0199986
+  - 2.266667
   - 2.4
   - 0.12
   - 0.12

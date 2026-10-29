@@ -60,7 +60,7 @@ namespace Bastion.UI.Strategy
             Siege(c, v);
             var owed = Owed(c);
             var credits = new StoreView { Id = "credits", Value = c.Credits.ToString(), TipName = "Suministros" };
-            // What Bielsa's convoy brings and when, first (#38); the glossary's line under it.
+            // What Metsovo's convoy brings and when, first (#38); the glossary's line under it.
             credits.Tip.Add($"+{Campaign.ConvoyIncome(c)} con el convoy, {ConvoyWhen(c)}");
             credits.Tip.AddRange(StrategyText.Sentences(Lore.Glossary["Suministros"]));
             OwedOn(c, credits, owed.credits);
@@ -147,7 +147,7 @@ namespace Bastion.UI.Strategy
             return lines;
         }
 
-        /// <summary>When Bielsa's next convoy comes, in words (convoyWhen): «tras la próxima misión», «dentro de 6 misiones».</summary>
+        /// <summary>When Metsovo's next convoy comes, in words (convoyWhen): «tras la próxima misión», «dentro de 6 misiones».</summary>
         static string ConvoyWhen(CampaignState c) => Lore.InMissions(System.Math.Max(1, Campaign.ConvoyIn(c)));
 
         // ------------------------------------------------------------- the tabs

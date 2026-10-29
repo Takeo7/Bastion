@@ -328,6 +328,12 @@ namespace Bastion.EditorTools
             foreach (string n in names.Where(n => VoicePrefab(n) == null)) missing.Add(n);
             catalog.characterNames = characters.Select(c => c.n).ToArray();
             catalog.characters = characters.Select(c => c.prefab).ToArray();
+            // The special dead's other atlases (UnitViews.DeadAtlases), found by their texture's name in the zombie packs.
+            var atlases = Bastion.Client.Units.UnitViews.DeadAtlases.Select(n => (n, texture: AssetDatabase.FindAssets($"{n} t:Texture2D", new[] { "Assets/Synty/PolygonBossZombies", "Assets/Synty/PolygonCityZombies" })
+                .Select(AssetDatabase.GUIDToAssetPath).Where(path => Path.GetFileNameWithoutExtension(path) == n).Select(AssetDatabase.LoadAssetAtPath<Texture2D>).FirstOrDefault())).ToList();
+            foreach (var (n, _) in atlases.Where(a => a.texture == null)) missing.Add(n);
+            catalog.atlasNames = atlases.Where(a => a.texture != null).Select(a => a.n).ToArray();
+            catalog.atlases = atlases.Where(a => a.texture != null).Select(a => a.texture).ToArray();
             Undead();
             // The living made dead, baked (UndeadFigure: put together at run time they take 75–290 ms each), as presets.
             EditorUtility.SetDirty(catalog);

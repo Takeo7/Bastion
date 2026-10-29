@@ -139,10 +139,12 @@ namespace Bastion.Client.Units
         static readonly Dictionary<Material, Material> dulled = new Dictionary<Material, Material>();
 
         /// <summary>
-        /// The dead's clothes with their blues and purples dulled (Ana 28/10, p11: «Los zombies no deberían ser azules y
-        /// morados»; Arturo: in now): each material of `figure` that paints from a Sidekick palette swapped for a copy whose
-        /// clothes' cells in those hues have a third of their colour and a little less light; the body's cells as they are.
-        /// One copy a material, kept: the figures' fades and night rims are copies of it, so they paint the same.
+        /// The dead's colours dulled (Ana 28/10, p11: «Los zombies no deberían ser azules y morados»; Arturo: in now): each
+        /// material of `figure` that paints from a Sidekick palette swapped for a copy whose clothes' cells in blue to purple
+        /// have a third of their colour and a little less light, and their loud greens half (Ana's #20, 29/10). And the
+        /// body's (#20: «si es completamente azul no me da sensación de persona»): a skin, hair or eye in green to purple
+        /// as little coloured as the clothes', so that the rotten flesh still shows, greyed. One copy a material, kept:
+        /// the figures' fades and night rims are copies of it, so they paint the same.
         /// </summary>
         public static void DullDead(GameObject figure)
         {
@@ -157,7 +159,7 @@ namespace Bastion.Client.Units
                     if (!dulled.TryGetValue(m, out var copy) || copy == null)
                     {
                         var cells = Cells(map);
-                        for (int c = 0; c < 256; c++) if (!IsBody(c) && !Unused(cells[c])) cells[c] = Dull(cells[c]);
+                        for (int c = 0; c < 256; c++) if (!Unused(cells[c])) cells[c] = IsBody(c) ? DullFlesh(cells[c]) : Dull(cells[c]);
                         var palette = Texture(cells);
                         palette.name = m.name + " (apagada)";
                         copy = dulled[m] = new Material(m) { name = m.name + " (apagada)", hideFlags = HideFlags.DontSave };
@@ -170,14 +172,72 @@ namespace Bastion.Client.Units
             }
         }
 
-        /// <summary>A colour's blue to purple (hue 190°–330°, whole from 205° to 315°) brought down to a third of its saturation and 85 % of its light.</summary>
+        /// <summary>
+        /// A clothes' colour: blue to purple (hue 190°–330°, whole from 205° to 315°) brought down to a third of its
+        /// saturation and 85 % of its light; a loud green (hue 70°–175°, whole from 85° to 160°, as much as its saturation
+        /// and light are both over a half) to half its saturation and 90 % of its light. Olive and dark greens, as they are.
+        /// </summary>
         static Color32 Dull(Color32 c)
         {
             Color.RGBToHSV(c, out float h, out float s, out float v);
             float deg = h * 360;
             float w = Mathf.Clamp01(Mathf.Min((deg - 190) / 15, (330 - deg) / 15));
-            if (w <= 0 || s < 0.12f) return c;
-            var to = Color.HSVToRGB(h, s * (1 - 0.67f * w), v * (1 - 0.15f * w));
+            if (s >= 0.12f && w > 0) return Hsv(c, h, s * (1 - 0.67f * w), v * (1 - 0.15f * w));
+            float green = Mathf.Clamp01(Mathf.Min((deg - 70) / 15, (175 - deg) / 15)) * Mathf.Clamp01((Mathf.Min(s, v) - 0.5f) / 0.1f);
+            return green > 0 ? Hsv(c, h, s * (1 - 0.5f * green), v * (1 - 0.1f * green)) : c;
+        }
+
+        /// <summary>
+        /// A body's colour: green to purple (hue 55°–335°, whole from 70° to 320°) to a third of its saturation, never under
+        /// 0.15, and 90 % of its light. Sidekick's dead skins (olive 76° at 0.34, blue 227° at 0.4, purple 291° at 0.31)
+        /// come down to 0.15, a hint of their hue; the greys (blue-grey 224° at 0.13, the risen's RisenTone at 0.17) about
+        /// as they are; the living's tones (reds, browns, yellows: 23°–28°) untouched.
+        /// </summary>
+        static Color32 DullFlesh(Color32 c)
+        {
+            Color.RGBToHSV(c, out float h, out float s, out float v);
+            float deg = h * 360;
+            float w = Mathf.Clamp01(Mathf.Min((deg - 55) / 15, (335 - deg) / 15));
+            if (w <= 0 || s <= 0.15f) return c;
+            return Hsv(c, h, Mathf.Max(0.15f, s * (1 - 0.67f * w)), v * (1 - 0.1f * w));
+        }
+
+        static readonly Dictionary<Texture, RenderTexture> dulledAtlases = new Dictionary<Texture, RenderTexture>();
+        static Material dullAtlas;
+
+        /// <summary>
+        /// A POLYGON atlas (the special dead's, UnitViews.Dead) with its colours dulled as a common dead's skin (DullFlesh:
+        /// skin and clothes are one texture there): drawn once on the GPU (Resources/Shaders/DullAtlas) into a texture of
+        /// its own at half its size, with its mips, kept.
+        /// The atlas as it is if the shader is missing.
+        /// </summary>
+        public static Texture DullAtlas(Texture atlas)
+        {
+            if (atlas == null) return null;
+            if (dulledAtlases.TryGetValue(atlas, out var made) && made != null && made.IsCreated()) return made;
+            if (dullAtlas == null)
+            {
+                var shader = Resources.Load<Shader>("Shaders/DullAtlas");
+                if (shader == null) return atlas;
+                dullAtlas = new Material(shader) { hideFlags = HideFlags.DontSave };
+            }
+            var rt = new RenderTexture(Mathf.Max(1, atlas.width / 2), Mathf.Max(1, atlas.height / 2), 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
+            {
+                name = atlas.name + " (apagada)",
+                useMipMap = true,
+                autoGenerateMips = true,
+                filterMode = atlas.filterMode,
+                wrapMode = atlas.wrapMode,
+                hideFlags = HideFlags.DontSave,
+            };
+            rt.Create();
+            Graphics.Blit(atlas, rt, dullAtlas);
+            return dulledAtlases[atlas] = rt;
+        }
+
+        static Color32 Hsv(Color32 c, float h, float s, float v)
+        {
+            var to = Color.HSVToRGB(h, s, v);
             return new Color(to.r, to.g, to.b, c.a / 255f);
         }
 

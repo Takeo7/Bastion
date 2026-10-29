@@ -639,15 +639,15 @@ namespace Bastion.Engine.Tests
             Assert.NotNull(next);
             Assert.Equal((2, Progression.LevelCost[1], Progression.LevelMissions[1], 0), (next!.Level, next.Cost, next.Missions, next.Flown));
             c.Credits = 5000;
-            Throws($"Para la caravana con toldo hacen falta {Progression.LevelMissions[1]} misiones hechas: lleváis 0.", c, new LevelUpCommand(), 0, new[] { 0, 1 });
+            Throws($"Para la autocaravana con toldo hacen falta {Progression.LevelMissions[1]} misiones hechas: lleváis 0.", c, new LevelUpCommand(), 0, new[] { 0, 1 });
             c.MissionsFlown = Progression.LevelMissions[1];
             // Always together: a proposal, paid when the partner says yes.
             Run(c, new LevelUpCommand(), 0, new[] { 0, 1 });
-            Assert.Equal("subir el Bastión a la caravana con toldo", c.Proposal?.Text);
+            Assert.Equal("subir el Bastión a la autocaravana con toldo", c.Proposal?.Text);
             Run(c, new VoteCommand { Accept = true }, 1, new[] { 0, 1 });
             Assert.Equal(2, Progression.BastionLevel(c));
             Assert.Equal(5000 - Progression.LevelCost[1], c.Credits);
-            Assert.Contains(c.Log, (l) => l.Text == "El Bastión ya es una caravana con toldo.");
+            Assert.Contains(c.Log, (l) => l.Text == "El Bastión ya es una autocaravana con toldo.");
             // Short of suministros, it waits.
             c.MissionsFlown = 99;
             c.Credits = Progression.LevelCost[2] - 1;

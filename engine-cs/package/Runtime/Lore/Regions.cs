@@ -21,7 +21,7 @@ namespace Bastion.Engine
 
         public static readonly IReadOnlyDictionary<string, RegionLore> RegionLores = new Dictionary<string, RegionLore>
         {
-            ["weu"] = new RegionLore("el Refugio de Bielsa", "Los pueblos de la sierra, bajo el Bastión. La nieve y la altura frenan a los zombis; los Cuervos, no."),
+            ["weu"] = new RegionLore("el Refugio de Metsovo", "Los pueblos de la sierra, bajo el Bastión. La nieve y la altura frenan a los zombis; los Cuervos, no."),
             ["afr"] = new RegionLore("los del Hospital", "La primera ciudad caída. Calles llenas de zombis y farmacias que nadie ha terminado de vaciar."),
             ["eas"] = new RegionLore("la Red Callada", "Un embalse y una central muerta. La Red Callada sobrevivió hablando en lengua de signos: sin un ruido."),
             ["eeu"] = new RegionLore("los Pastores", "Valles cerrados y aldeas que aún resisten. Los Cuervos cobran aquí su peaje."),

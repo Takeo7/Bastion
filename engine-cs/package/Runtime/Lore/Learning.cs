@@ -91,7 +91,7 @@ namespace Bastion.Engine
         /// </summary>
         public static readonly IReadOnlyDictionary<string, string> BoardAbout = new Dictionary<string, string>
         {
-            ["core"] = "Lo que le ha mantenido vivo hasta hoy. Lo demás se aprende encima.",
+            ["core"] = "Lo que ha bastado para seguir con vida hasta hoy. Lo demás se aprende encima.",
             ["steadyHand"] = "Respirar, soltar el aire a medias, y entonces.",
             ["grip"] = "Cinta en el mango y la muñeca firme.",
             ["looseArm"] = "Se pasó la infancia tirando piedras al río.",
@@ -145,7 +145,7 @@ namespace Bastion.Engine
             ["bedside"] = "Alguien que se sienta al lado y no se va.",
             ["toughSkin"] = "Las heridas pequeñas ya ni las nota.",
             ["care"] = "Limpia el arma cada noche, aunque no la haya usado.",
-            ["sideBySide"] = "Con el otro al lado, se apunta mejor.",
+            ["sideBySide"] = "Con alguien al lado, se apunta mejor.",
             ["parapet"] = "El compañero cubre lo que uno no ve.",
             ["picklock"] = "Un alambre doblado abre más puertas que una llave.",
             ["runAndGun"] = "Cuando hace falta, saca fuerzas de donde no hay.",
@@ -201,7 +201,7 @@ namespace Bastion.Engine
             ["fog"] = "Para salir de un sitio sin que lo vean.",
             ["stoning"] = "Una buena pedrada tumba a cualquiera.",
             ["rounds"] = "Otra vuelta antes de que acabe el día.",
-            ["fieldMedic"] = "Ha curado tirado en el barro, bajo la lluvia.",
+            ["fieldMedic"] = "Ha curado de rodillas en el barro, bajo la lluvia.",
             ["ironBlood"] = "Come poco, duerme menos y no enferma nunca.",
             ["cheer"] = "Con alguien así al lado, se aguanta un poco más.",
             ["courage"] = "Tiene miedo, como todos. No se le nota.",
@@ -212,7 +212,7 @@ namespace Bastion.Engine
             ["temperance"] = "Ha oído gritos peores que los de un Chillón.",
             ["lynx"] = "Ve moverse algo en la niebla antes que nadie.",
             ["bodge"] = "No queda bonito, pero aguanta hasta casa.",
-            ["marathon"] = "Va y vuelve de Bielsa sin parar.",
+            ["marathon"] = "Va y vuelve de Metsovo sin parar.",
             ["ironBody"] = "Las caídas, los golpes, el frío: todo le resbala.",
             ["poise"] = "Nada le hace perder la calma.",
             ["feline"] = "Cae de pie y sigue corriendo.",

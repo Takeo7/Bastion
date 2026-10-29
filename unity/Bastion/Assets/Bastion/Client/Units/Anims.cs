@@ -40,6 +40,17 @@ namespace Bastion.Client.Units
         public float sight;
         public bool reflex;
         public float[] muzzle;
+        /// <summary>
+        /// A blade's (Ana's #10, 29/10: the pan, the bat, the crowbar, the chainsaw): where the fist closes on it and which way
+        /// from there it runs along the fingers, in its own frame, unscaled (none: its origin and +z, as the knife and the
+        /// machete); where the left hand takes it too (none: in one hand); and across the back instead of at the belt.
+        /// </summary>
+        public float[] grip;
+        public float[] along;
+        public float[] two;
+        public bool slung;
+        /// <summary>Its blow: "chop", from above (macheteChop: the pan, the crowbar); none, the knife's stab or the machete's swing across.</summary>
+        public string stroke;
     }
 
     /// <summary>
@@ -165,6 +176,10 @@ namespace Bastion.Client.Units
             ["precisionRifle"] = new[] { "sniper", "sniper2", "sniper2" },
             ["machineGun"] = new[] { "machineGun" },
             ["machete"] = new[] { "machete" },
+            ["pan"] = new[] { "pan" },
+            ["bat"] = new[] { "bat" },
+            ["crowbar"] = new[] { "crowbar" },
+            ["chainsaw"] = new[] { "chainsaw" },
             ["huntingRifle"] = new[] { "boltRifle" },
             ["sawnOff"] = new[] { "shotgun" },
             ["scopedRifle"] = new[] { "sniper2" },

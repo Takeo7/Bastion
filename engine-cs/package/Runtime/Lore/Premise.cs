@@ -14,7 +14,7 @@ namespace Bastion.Engine
             public static readonly IReadOnlyList<string> Lines = new[]
             {
                 "La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, **aunque salir sigue siendo peligroso**, quizá sea el momento de volver a intentarlo.",
-                "Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en un claro del pinar, sobre Bielsa, con una caravana y lo puesto. Necesitamos **comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.",
+                "Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en un claro del pinar, sobre Metsovo, con una autocaravana y lo puesto. Necesitamos **comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.",
                 "Toca volver a sacar **La Lata**, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.",
             };
         }

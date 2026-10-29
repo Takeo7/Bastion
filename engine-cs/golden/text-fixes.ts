@@ -25,6 +25,13 @@ export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   [/Heridas: curan ×(\d+) de rápido/g, 'Heridas: curan $1 veces más rápido', 'the Enfermería\'s figure, said plainly (textos directos)'],
   [/^Heridas: −(\d+) días?$/, (_, n) => `Heridas: −${n} ${n === '1' ? 'misión' : 'misiones'}`, 'the Garaje\'s figure: time is counted in missions, as the wounded soldier\'s card says it (26/10)'],
   [/^Fiebre: \+(\d+) días?$/, (_, n) => `Fiebre: +${n} ${n === '1' ? 'misión' : 'misiones'}`, 'the Cuarentena\'s figure: the same, as nextSteps says «se convierte dentro de N misiones» (26/10)'],
+  ['Salimos en el todoterreno de Teo, con la caravana enganchada detrás.', 'Salimos en una autocaravana, con el todoterreno de Teo detrás.', 'EXPEDIENTE, page 1: the Bastion\'s caravan is a motorhome, not towed (Ana\'s notes, 29/10 #6); «la caravana» for short everywhere else'],
+  ['El de Teo, el que tiró de la caravana.', 'El de Teo, el que salió de Atalaya detrás de la autocaravana.', 'VEHICLES, the Todoterreno: the same'],
+  ['Lo que le ha mantenido vivo hasta hoy.', 'Lo que ha bastado para seguir con vida hasta hoy.', 'BOARD_ABOUT, the core: «le ha mantenido vivo» doesn\'t agree with a soldier who is a woman (Lore, 29/10)'],
+  ['Con el otro al lado, se apunta mejor.', 'Con alguien al lado, se apunta mejor.', 'BOARD_ABOUT, sideBySide: the same, for whoever plays with you'],
+  ['Ha curado tirado en el barro, bajo la lluvia.', 'Ha curado de rodillas en el barro, bajo la lluvia.', 'BOARD_ABOUT, fieldMedic: the same'],
+  ['Superviviente recién llegado, con cuchillo y pistola.', 'Quien acaba de unirse al Bastión, con cuchillo y pistola.', 'GLOSSARY, Recluta: the same'],
+  ['una granada, a 26; un registro, a 2.', 'una granada, a 26; una motosierra, a 20; un registro, a 2.', 'GLOSSARY, Ruido: the chainsaw (Ana\'s notes, 29/10 #10), the loudest blow'],
   // transmissions.ts (and lore.ts EXPEDIENTE, page 4, which says the same about the clock)
   ['el reloj de la sala de mando cuenta kilómetros.', 'el reloj cuenta kilómetros.', 'the Bastion has no «sala de mando»: Morse speaks from the Sala de radio (the scene «La Marea» and the diary\'s page 4)'],
   ['A quien la lleve, su arma le sube un nivel. Decidme a quién. Si cae, se pierde.', 'Está en la Armería. Decidme quién la lleva. Si cae, se pierde.', 'the scene «En una mochila»: weapons have no levels since Fase 9; a found one is a weapon of its own'],
@@ -67,6 +74,9 @@ export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   ['La Marea ha llegado al Bastión.', 'Los muertos han llegado al Bastión.', 'the defeat\'s log: before level 4 nobody knows of the Marea'],
   ['El Bastión entra en servicio. Elegid la primera misión.', 'Lo que se levante en este claro será el Bastión. Elegid la primera misión.', 'WELCOME: the Bastion starts as a caravan in a clearing, not a station going into service; as the diary\'s first page (Gameplay, 24/10)'],
   [/^Llega el convoy de Bielsa: Ruth Halvorsen manda (\d+) suministros\.$/, 'Llega el convoy de Ruth Halvorsen: $1 suministros de lo pactado con los enclaves.', 'the convoy\'s log: it brings what every contacted zone pays, not Bielsa\'s alone (Gameplay, 24/10)'],
+  // Names Arturo changed on 29/10 (Ana's old notes): last, so every whole sentence above still finds its text.
+  [/Bielsa/g, 'Metsovo', 'the home zone: Ana disliked «Bielsa» (#17); Arturo chose Metsovo, a mountain town in the Pindus'],
+  [/(?<![Aa]uto)([Cc])aravana/g, (_, c) => (c === 'C' ? 'Autocaravana' : 'autocaravana'), 'the Bastion\'s first piece and its levels: a motorhome (#6), «Autocaravana» everywhere (Arturo)'],
 ];
 
 /**

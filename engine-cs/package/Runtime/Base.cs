@@ -118,7 +118,7 @@ namespace Bastion.Engine
         /// </summary>
         public static readonly IReadOnlyDictionary<string, PieceDef> Pieces = new Dictionary<string, PieceDef>
         {
-            [PieceIds.Caravan] = new PieceDef { Id = PieceIds.Caravan, Name = "Caravana", Kind = PieceKinds.Building, Size = new[] { 5, 2 }, Tile = TileKinds.Wall, Cost = new PieceCost { Supplies = 0 }, Hp = 40, Level = 1, Unique = true },
+            [PieceIds.Caravan] = new PieceDef { Id = PieceIds.Caravan, Name = "Autocaravana", Kind = PieceKinds.Building, Size = new[] { 5, 2 }, Tile = TileKinds.Wall, Cost = new PieceCost { Supplies = 0 }, Hp = 40, Level = 1, Unique = true },
             // Not at the caravan's level (Ana, 21/10 #36): the radio, the Cuarentena and the Camposanto from the next.
             [PieceIds.Radio] = new PieceDef { Id = PieceIds.Radio, Name = "Sala de radio", Kind = PieceKinds.Building, Size = new[] { 4, 4 }, Tile = TileKinds.Wall, Cost = new PieceCost { Supplies = 60 }, Hp = 30, Level = 2, Unique = true, Facility = "relay" },
             [PieceIds.Quarters] = new PieceDef { Id = PieceIds.Quarters, Name = "Barracón", Kind = PieceKinds.Building, Size = new[] { 6, 5 }, Tile = TileKinds.Wall, Cost = new PieceCost { Supplies = 40 }, Hp = 30, Level = 1, Facility = "quarters" },
@@ -582,7 +582,7 @@ namespace Bastion.Engine
         /// <summary>What dismantling `p` gives back: half its cost, if it is whole; the caravan never goes.</summary>
         public static string? DismantleBlocker(BasePiece p)
         {
-            return p.Piece == PieceIds.Caravan ? "La caravana no se desmonta." : null;
+            return p.Piece == PieceIds.Caravan ? "La autocaravana no se desmonta." : null;
         }
 
         public static int DismantleRefund(BasePiece p)

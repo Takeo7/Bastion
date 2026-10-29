@@ -1,3 +1,37 @@
+diff --git a/packages/engine/src/abilities.ts b/packages/engine/src/abilities.ts
+index 58b84b6..7b25109 100644
+--- a/packages/engine/src/abilities.ts
++++ b/packages/engine/src/abilities.ts
+@@ -8,6 +8,7 @@ import {
+   clipOf,
+   conditionOf,
+   firesPrimary,
++  runsChainsaw,
+   fullyLoaded,
+   HACK_BASE,
+   hasMod,
+@@ -47,11 +48,8 @@ export function abilitiesOf(u: Unit): AbilityId[] {
+   if (u.team === 'xcom' && !u.captive && TEMPLATES[u.template].team === 'xcom') {
+     // Evacuating is the squad's, by the bus (the `evac` command, docs/PRUEBA-2026-10-14.md P1), not one soldier's ability.
+     if (u.template !== 'vip') list.push('hack', 'search', 'searchRoom', 'openDoor', 'closeDoor');
+-    // Fase 10 (docs/FASE10.md §4): a stone is always at hand, and the blade can keep watch too.
+-    if (u.arms) {
+-      list.push('stone');
+-      if (list.includes('overwatch')) list.splice(list.indexOf('overwatch') + 1, 0, 'overwatchMelee');
+-    }
++    // Fase 10 (docs/FASE10.md §4): the blade can keep watch too. The stone is the board's since 29/10 (Piedras).
++    if (u.arms && list.includes('overwatch')) list.splice(list.indexOf('overwatch') + 1, 0, 'overwatchMelee');
+   }
+   return list;
+ }
+@@ -148,6 +146,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
+   const cooldown = u.cooldowns[ability] ?? 0;
+   if (cooldown > 0) return `Disponible en ${cooldown} ${cooldown === 1 ? 'turno' : 'turnos'}.`;
+   if (def.charge && !((u.charges[def.charge] ?? 0) > 0)) return 'No quedan usos.';
++  if (runsChainsaw(u, ability) && !((u.charges.fuel ?? 0) > 0)) return 'La motosierra no tiene gasolina hasta la próxima misión.';
+   const ammo = ammoNeeded(u, ability);
+   if (ammo > 0 && (isAttack(ability) ? roundsOf(u, ability) : u.ammo) < ammo) {
+     if (u.mags === 0) return 'Sin munición y sin cargadores.';
 diff --git a/packages/engine/src/ai.ts b/packages/engine/src/ai.ts
 index e77ce61..ed85e2f 100644
 --- a/packages/engine/src/ai.ts
@@ -267,6 +301,21 @@ index e951d49..9fcff2c 100644
        }
      }
    }
+diff --git a/packages/engine/src/board.ts b/packages/engine/src/board.ts
+index 0a2fc51..6614001 100644
+--- a/packages/engine/src/board.ts
++++ b/packages/engine/src/board.ts
+@@ -118,7 +118,9 @@ const SECTORS: Record<SkillId, Skill[]> = {
+     stat('killerInstinct', 'Sin dudar', '+15 de puntería cuerpo a cuerpo.', { mods: { meleeAim: 15 } }),
+   ],
+   throwing: [
+-    stat('looseArm', 'Brazo suelto', '+1 casilla de alcance al lanzar.', { mods: { grenadeRange: 1 } }),
++    // The stone, from the first cell of the line and no longer everyone's (Ana's notes, 29/10: «muy op»); its id kept,
++    // so whoever had bought Brazo suelto has it.
++    active('looseArm', 'Piedras', 'Lanza piedras: suenan donde caen y los zombis van a mirar. Si dan a alguien, 1 de daño. +1 casilla de alcance al lanzar.', 'stones', 'stone', { mods: { grenadeRange: 1 } }),
+     stat('sharpStone', 'Canto afilado', 'La piedra hace +1 de daño.', { mods: { stoneDamage: 1 } }),
+     stat('curtain', 'Cortina', 'Un humo más, si lleva humo.', { spare: { smoke: 1 } }),
+     passive('salvo', 'Sin pausa', 'Lanzar una granada no acaba el turno.', { perk: 'salvo' }),
 diff --git a/packages/engine/src/campaign.ts b/packages/engine/src/campaign.ts
 index 94f4ff9..2b85461 100644
 --- a/packages/engine/src/campaign.ts
@@ -297,10 +346,63 @@ index 94f4ff9..2b85461 100644
    for (const s of c.soldiers) {
      s.skills ??= { ...NO_SKILLS };
 diff --git a/packages/engine/src/content.ts b/packages/engine/src/content.ts
-index dadd517..0572a02 100644
+index dadd517..b34267d 100644
 --- a/packages/engine/src/content.ts
 +++ b/packages/engine/src/content.ts
-@@ -516,7 +516,7 @@ export interface UnitTemplate {
+@@ -150,6 +150,11 @@ export type WeaponId =
+   | 'pistol'
+   | 'sword'
+   | 'knife'
++  // Found in the field (Ana's notes, 29/10): a frying pan, a bat, a crowbar and a chainsaw.
++  | 'pan'
++  | 'bat'
++  | 'crowbar'
++  | 'chainsaw'
+   | 'trooperRifle'
+   | 'turretGun'
+   | 'officerRifle'
+@@ -213,6 +218,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
+   sword: weapon({ id: 'sword', name: 'Machete', damage: 4, spread: 1, critDamage: 2, aim: 20, crit: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
+   /** Everyone's blade in the campaign (docs/FASE8.md §A), until a machete. */
+   knife: weapon({ id: 'knife', name: 'Cuchillo', damage: 3, spread: 1, critDamage: 1, aim: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
++  // What turns up in the field (Ana's notes, 29/10): the pan sure and weak, the bat a machete less sure, the
++  // crowbar through the Acorazado's plates, the chainsaw the strongest and the loudest, while its fuel lasts.
++  pan: weapon({ id: 'pan', name: 'Sartén', damage: 3, spread: 1, critDamage: 1, aim: 15, crit: 5, range: 'none', melee: true, burst: 1, noise: 4 }),
++  bat: weapon({ id: 'bat', name: 'Bate', damage: 4, spread: 1, critDamage: 2, aim: 10, crit: 10, range: 'none', melee: true, burst: 1, noise: 2 }),
++  crowbar: weapon({ id: 'crowbar', name: 'Palanca', damage: 4, spread: 1, critDamage: 1, aim: 10, shred: 1, range: 'none', melee: true, burst: 1, noise: 2 }),
++  chainsaw: weapon({ id: 'chainsaw', name: 'Motosierra', damage: 6, spread: 1, critDamage: 3, aim: 10, crit: 15, range: 'none', melee: true, burst: 1, noise: 20 }),
+   trooperRifle: weapon({ id: 'trooperRifle', name: 'Fusil de caza', damage: 3, critDamage: 1, clip: 3, noise: 12 }),
+   // The base's turret (docs/FASE12.md §11.4): its clip is its piece's charges (base.ts PIECES.turret), reloaded at home with piezas.
+   turretGun: weapon({ id: 'turretGun', name: 'Torreta', damage: 3, critDamage: 1, clip: 6, aim: 5, noise: 16 }),
+@@ -399,8 +410,15 @@ export const FOUND_WEAPONS: Record<FoundWeaponId, FoundWeaponDef> = {
+   sawnOff: { id: 'sawnOff', name: 'Escopeta recortada', find: 'una escopeta recortada', weapon: 'shotgun', slot: 'primary', better: true, mod: 'extMag', weight: 2 },
+   scopedRifle: { id: 'scopedRifle', name: 'Fusil con mira', find: 'un fusil con mira telescópica', weapon: 'sniper', slot: 'primary', better: true, mod: 'scope', weight: 1 },
+   lightMachineGun: { id: 'lightMachineGun', name: 'Ametralladora ligera', find: 'una ametralladora ligera con su cinta', weapon: 'cannon', slot: 'primary', better: true, mod: 'extMag', weight: 1 },
++  pan: { id: 'pan', name: 'Sartén', find: 'una sartén de hierro', weapon: 'pan', slot: 'melee', better: false, weight: 3 },
++  bat: { id: 'bat', name: 'Bate', find: 'un bate', weapon: 'bat', slot: 'melee', better: false, weight: 3 },
++  crowbar: { id: 'crowbar', name: 'Palanca', find: 'una palanca', weapon: 'crowbar', slot: 'melee', better: false, weight: 2 },
++  chainsaw: { id: 'chainsaw', name: 'Motosierra', find: 'una motosierra con algo de gasolina', weapon: 'chainsaw', slot: 'melee', better: false, weight: 1 },
+ };
+ 
++/** The chainsaw's fuel (the 'fuel' charge): the blows it has in each mission (Arturo, 29/10: «un límite de usos»). */
++export const CHAINSAW_FUEL = 3;
++
+ // ------------------------------------------------------- condition and mods
+ 
+ /** A weapon's improvements (docs/FASE9.md §5; names and lines, Lore's). */
+@@ -427,6 +445,11 @@ export function wearOf(weapon: WeaponId): number {
+ }
+ 
+ /** Whether `ability` fires the primary weapon a soldier carries (not the pistol beside it, not a blade). */
++/** Whether `ability` swings a soldier's chainsaw: each blow, or each watch with it, burns a use of its fuel ('fuel'). */
++export function runsChainsaw(u: Pick<Unit, 'arms'>, ability: AbilityId): boolean {
++  return u.arms?.melee === 'chainsaw' && (ability === 'slash' || ability === 'overwatchMelee' || ability === 'elbowRoom');
++}
++
+ export function firesPrimary(u: Pick<Unit, 'arms'>, ability: AbilityId): boolean {
+   return !!u.arms?.primary && (ABILITIES[ability].weapon ?? 'primary') === 'primary' && (isAttack(ability) || ability === 'overwatch' || ability === 'killZone' || ability === 'suppression');
+ }
+@@ -516,7 +539,7 @@ export interface UnitTemplate {
  
  /** Tiles a soldier covers in an action, and how much of that the dead do (playtest 16/10 #21). */
  export const SOLDIER_MOBILITY = 8;
@@ -344,7 +446,7 @@ index 237f2d3..912b501 100644
  /**
   * Opens the dead ends out of doors (playtest 16/10 #20: «muchos caminos
 diff --git a/packages/engine/src/rules.ts b/packages/engine/src/rules.ts
-index 73b01d8..2887997 100644
+index 73b01d8..3049162 100644
 --- a/packages/engine/src/rules.ts
 +++ b/packages/engine/src/rules.ts
 @@ -1,3 +1,4 @@
@@ -352,7 +454,60 @@ index 73b01d8..2887997 100644
  import {
    abilityBlocker,
    abilityTargets,
-@@ -988,7 +989,7 @@ export class Sim {
+@@ -56,6 +57,7 @@ import {
+   NOISE,
+   RESTORATION_HEAL,
+   RUPTURE_DAMAGE,
++  runsChainsaw,
+   SMOKE_TURNS,
+   TEMPLATES,
+   WEAPONS,
+@@ -97,6 +99,7 @@ import type {
+   BlastAbility,
+   ConcealReason,
+   GameState,
++  MissionState,
+   ItemId,
+   Pod,
+   PodCause,
+@@ -124,6 +127,27 @@ const EDGE_EVAC_GAP = 3;
+ /** Everything the squad does makes this much more noise than its table says (Ana, 23/10: «un 15 % más de ruido»). */
+ export const SQUAD_LOUDER = 1.15;
+ 
++/**
++ * Where the horde's clock stands on `turn` (callHorde): the turns gone by and the noise made, a wave every
++ * HORDE.wave. At night the dead are already on their way: the clock runs a turn ahead. In a Limpieza, the noise
++ * alone (Arturo, 29/10).
++ */
++export function hordeClock(m: MissionState, turn: number): number {
++  if (m.kind === 'elimination') return m.noise ?? 0;
++  return (turn + (m.night ? NIGHT.hordeHead : 0)) * HORDE.perTurn + (m.noise ?? 0);
++}
++
++/**
++ * The noise meter (Ana's notes, 29/10): how near the next wave is, from 0 to 1 (at 1 it is called at the end of the
++ * squad's turn, unless the field is full); null without a horde.
++ */
++export function hordeFill(s: GameState): number | null {
++  const m = s.mission;
++  if (!m.horde?.length) return null;
++  const sent = m.reinforcements.filter((r) => r.horde && !r.trickle).length;
++  return Math.max(0, Math.min(1, (hordeClock(m, s.turn) - sent * HORDE.wave) / HORDE.wave));
++}
++
+ /** What leaves the dead's ways as they were (Sim.ways): neither the ground nor where the living stand changes. */
+ const KEEPS_WAYS: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['abilityUsed', 'noise', 'forgot', 'hunting', 'turned', 'smashed', 'shot', 'damaged', 'infected', 'stunned', 'disoriented', 'psi', 'overwatch', 'trapSprung']);
+ 
+@@ -242,7 +266,7 @@ export class Sim {
+     const need = apNeeded(u, ability);
+     // In real time nothing counts actions: its time is what an ability costs (realtime.ts).
+     const ap = this.s.realtime ? 0 : ability === 'runAndGun' ? -1 : endsTurn(u, ability) ? Math.max(u.ap, need) : need;
+-    this.emit({ t: 'abilityUsed', unit: u.id, ability, ap, cooldown: def.cooldown ?? 0, charge: def.charge ?? null });
++    this.emit({ t: 'abilityUsed', unit: u.id, ability, ap, cooldown: def.cooldown ?? 0, charge: def.charge ?? (runsChainsaw(u, ability) ? 'fuel' : null) });
+   }
+ 
+   /**
+@@ -988,7 +1012,7 @@ export class Sim {
     * away from the squad and the evac zone; a siege's wave, by the middle half
     * of its `side` (a DIRS4 index), off the corners, where it would be by two.
     */
@@ -361,7 +516,7 @@ index 73b01d8..2887997 100644
      const s = this.s;
      const soldiers = combatants(s, 'xcom');
      if (!soldiers.length) return null;
-@@ -998,10 +999,12 @@ export class Sim {
+@@ -998,10 +1022,12 @@ export class Sim {
      const middle = (along: number, span: number) => along >= span / 4 && along < (span * 3) / 4;
      // In a siege, never in a glade the pines close off: only where the way to the squad is open, or opened by breaking what was built.
      const open = edge && s.mission.siege ? this.openToSquad() : null;
@@ -375,7 +530,7 @@ index 73b01d8..2887997 100644
      // Further off on a bigger map (docs/MAPAS.md §6: 16 and 10 at 64).
      const scale = Math.max(1, Math.max(s.width, s.height) / 48);
      const bands = edge ? EDGE_GAP.map((lo) => [Math.round(lo * scale), Infinity] as const) : ([[DROP_MIN, DROP_MAX], [4, 20], [2, 60]] as const);
-@@ -1031,7 +1034,7 @@ export class Sim {
+@@ -1031,7 +1057,7 @@ export class Sim {
          }
        }
      }
@@ -384,8 +539,62 @@ index 73b01d8..2887997 100644
    }
  
    /** The ground tiles joined to a soldier's by ground one can walk, or by what can be broken down (GameState.breakables). */
+@@ -1135,14 +1161,14 @@ export class Sim {
+     const alarm = m.kind === 'sabotage' && !m.objectiveDone ? 2 : 1;
+     // A bigger map, more edge to come in by (docs/MAPAS.md §6): as many more as it is longer a side than 48.
+     const few = Math.round(HORDE.trickle[Math.max(1, Math.min(4, m.difficulty ?? 2))]! * alarm * Math.max(1, Math.max(this.s.width, this.s.height) / 48));
+-    if (few) {
++    // Not in a Limpieza (Arturo, 29/10): there only the noise brings them, or the map would never be cleared.
++    if (few && m.kind !== 'elimination') {
+       const r: Reinforcement = { id: `r${m.reinforcements.length + 1}`, turn: turn + 1, pos: null, units: Array.from({ length: few }, () => 'zombie' as const), landed: false, horde: true, trickle: true };
+       this.emit({ t: 'reinforcementsIncoming', r });
+     }
+     // And a whole wave now and then, sooner the more noise the squad makes.
+     const sent = this.s.mission.reinforcements.filter((r) => r.horde && !r.trickle).length;
+-    // At night the dead are already on their way: the clock runs a turn ahead.
+-    const due = Math.floor(((turn + (m.night ? NIGHT.hordeHead : 0)) * HORDE.perTurn + (m.noise ?? 0)) / HORDE.wave);
++    const due = Math.floor(hordeClock(m, turn) / HORDE.wave);
+     if (due <= sent) return;
+     // Heard coming: they're in by an edge at the end of the next enemy turn, and nobody knows where.
+     const r: Reinforcement = { id: `r${this.s.mission.reinforcements.length + 1}`, turn: turn + 1, pos: null, units: [...m.horde], landed: false, horde: true };
+diff --git a/packages/engine/src/setup.ts b/packages/engine/src/setup.ts
+index b19cbca..71131ec 100644
+--- a/packages/engine/src/setup.ts
++++ b/packages/engine/src/setup.ts
+@@ -757,7 +757,8 @@ export function createMission(opts: MissionOptions): GameState {
+     reinforcements,
+     difficulty,
+     // The dead keep coming by the edges on every mission you leave by bus (playtest 2026-10-15, #11).
+-    ...(kind !== 'elimination' ? { horde: hordeWave(difficulty) } : {}),
++    // In a Limpieza, only as the noise calls them (Arturo, 29/10). A siege has its own waves.
++    ...(!siege ? { horde: hordeWave(difficulty) } : {}),
+     night: !!opts.night,
+     ...(siege ? { siege } : {}),
+   };
+diff --git a/packages/engine/src/skills.ts b/packages/engine/src/skills.ts
+index 3c18692..14ebae2 100644
+--- a/packages/engine/src/skills.ts
++++ b/packages/engine/src/skills.ts
+@@ -5,7 +5,7 @@
+ // the hex board, board.ts) and 5–10 % more, at random, of its line's stat.
+ // Veterancy goes up with the points spent on the board (Arturo, 16/10).
+ import { BOARD, BOARD_CELLS, type CellId, CORE, withinReach } from './board';
+-import { addMods, HACK_BASE, ITEMS, MEDKIT_HEAL, TEMPLATES, ZERO_MODS } from './content';
++import { addMods, CHAINSAW_FUEL, HACK_BASE, ITEMS, MEDKIT_HEAL, TEMPLATES, ZERO_MODS } from './content';
+ import type { Rng } from './rng';
+ import type { Arms, ChargeId, ItemId, PerkId, TemplateId, UnitMods } from './types';
+ 
+@@ -181,6 +181,8 @@ export function fighterStats(skills: Skills, growth: Growth, board: readonly Cel
+   }
+   // Mano de machete wants the machete; Buen brazo, one more grenade in every accessory of them.
+   if (perks.includes('bladeMaster') && arms?.melee === 'machete') mods = addMods(mods, { meleeDamage: 2, meleeAim: 15 });
++  // The chainsaw, with its fuel for the mission.
++  if (arms?.melee === 'chainsaw') add({ fuel: CHAINSAW_FUEL });
+   if (perks.includes('goodArm')) add({ grenade: gear.filter((id) => ITEMS[id].charges?.grenade).length });
+   // One more use of what it carries: nothing if it carries none.
+   for (const c of cells) for (const [id, n] of Object.entries(c.spare ?? {}) as [ChargeId, number][]) if (charges[id] !== undefined) charges[id] += n;
 diff --git a/packages/engine/src/types.ts b/packages/engine/src/types.ts
-index dd2949b..e7fb461 100644
+index dd2949b..4241771 100644
 --- a/packages/engine/src/types.ts
 +++ b/packages/engine/src/types.ts
 @@ -251,6 +251,7 @@ export type DecorKind =
@@ -396,3 +605,36 @@ index dd2949b..e7fb461 100644
    /** What lies about and stands up (homeDressing, medicalAbandonment: a chair over, bags, a fallen drip): its MedicalDetail draws it. */
    | 'strewn'
    /** A garden shed at the back of a plot (docs/MAPAS.md §5.4), 2 × 3; facing: its door. */
+@@ -409,7 +410,9 @@ export type ChargeId =
+   | 'firstAid'
+   // Fase 9's talents with uses per mission (skills.ts).
+   | 'restoration'
+-  | 'patchUp';
++  | 'patchUp'
++  /** The chainsaw's: a blow each (CHAINSAW_FUEL). */
++  | 'fuel';
+ 
+ /** Equipment fabricated in the base: one utility item and one ammo type per soldier. */
+ export type ItemId = 'fragGrenade' | 'smokeGrenade' | 'flashbang' | 'firstAid' | 'nanoVest' | 'mindShield' | 'apRounds' | 'tracerRounds';
+@@ -453,7 +456,11 @@ export type FoundWeaponId =
+   | 'huntingRifle'
+   | 'sawnOff'
+   | 'scopedRifle'
+-  | 'lightMachineGun';
++  | 'lightMachineGun'
++  | 'pan'
++  | 'bat'
++  | 'crowbar'
++  | 'chainsaw';
+ 
+ /**
+  * What a campaign soldier carries (docs/FASE8.md §A), besides the pistol everyone has: the class no longer
+@@ -542,6 +549,8 @@ export type PerkId =
+   | 'salvo'
+   | 'goodArm'
+   | 'safeBlast'
++  /** Piedras: the stone is the board's now, no longer everyone's (Ana's notes, 29/10). */
++  | 'stones'
+   // Medicine.
+   | 'revivalProtocol'
+   | 'bridge'

@@ -286,15 +286,8 @@ namespace Bastion.UI.Strategy
             return out_;
         }
 
-        /// <summary>A weapon's silhouette among the HUD's icons (the bar's: rifle, shotgun…; a blade's).</summary>
-        static string WeaponIcon(string weapon)
-        {
-            switch (weapon)
-            {
-                case WeaponIds.Rifle: case WeaponIds.Pistol: case WeaponIds.Shotgun: case WeaponIds.Sniper: case WeaponIds.Cannon: return "weapon:" + weapon;
-                default: return "overwatchMelee";
-            }
-        }
+        /// <summary>A weapon's silhouette among the HUD's icons (the bar's: rifle, shotgun…, the found ones; a blade's).</summary>
+        static string WeaponIcon(string weapon) => Ui.WeaponIcon(weapon);
 
         /// <summary>An accessory's icon among the HUD's (its ability's).</summary>
         static string ItemIcon(string item)

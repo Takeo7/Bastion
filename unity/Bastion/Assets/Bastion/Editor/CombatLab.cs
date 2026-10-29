@@ -857,6 +857,63 @@ namespace Bastion.EditorTools
             };
         }
 
+        /// <summary>
+        /// A blade's blow (Ana's #10: the pan, the bat, the crowbar, the chainsaw; BASTION_HOJA, the machete unless said): a
+        /// soldier with a rifle in the hands and the blade at the belt (the chainsaw on the back), one of the dead on the next
+        /// tile, as the game strikes; a second in, the blow (Lunge: drawn, swung, back, the rifle again), and then on watch with the blade, on
+        /// guard. On a plain floor, the camera low from the side (BASTION_VIEW=game, the game's).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Golpes -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 50 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Golpes()
+        {
+            var first = MapLab.Golden("city-7");
+            string soldierId = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
+            string deadId = first.Units.First(u => u.Alive && u.Template == "zombie").Id;
+            Plain(u => u.Id == soldierId || u.Id == deadId, 10, 11);
+            soldier = Put(state.Units.First(u => u.Id == soldierId), 10, 10, 0);
+            target = Put(state.Units.First(u => u.Id == deadId), 11, 10, Math.PI);
+            soldier.Template = "rookie";
+            // (The knife is no weapon of the Armería: what one strikes with when the belt's slot is empty.)
+            string blade = Environment.GetEnvironmentVariable("BASTION_HOJA") ?? "machete";
+            soldier.Arms = new Arms { Primary = "assaultRifle", Melee = blade == "knife" ? null : blade };
+            // The blow's sounds as EventPlayer plays them (Red's, 29/10: BASTION_SONIDO_TRAZA=1 says which and when).
+            var sfx = new Bastion.Client.Audio.CombatSound();
+            var camera = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).First(c => c.name == "Shot camera");
+            sfx.Attach(camera, () => units.Chest(target.Id), MapSpace.Tile, (s, p) => MapSpace.TileToWorld(s, p, MapSpace.Tile));
+            string weapon = Content.AttackWeapon(soldier, AbilityIds.Slash).Id;
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    Debug.Log($"[combat] {units.ArmsReport(soldier.Id)}");
+                    await Awaitable.WaitForSecondsAsync(1);
+                    Debug.Log($"[combat] {Time.time:0.00} s: the blow ({weapon})");
+                    sfx.Melee("swing", units.Chest(soldier.Id), weapon);
+                    await units.Lunge(soldier.Id, target.Id, false, () =>
+                    {
+                        Debug.Log($"[combat] {Time.time:0.00} s: it lands");
+                        sfx.Melee("sword", units.Chest(target.Id), weapon);
+                        sfx.Impact(Bastion.Client.Audio.CombatSound.Body(target), units.Chest(target.Id));
+                        _ = units.HitReact(target.Id, 1);
+                    });
+                    Debug.Log($"[combat] {Time.time:0.00} s: struck; {units.ArmsReport(soldier.Id)}");
+                    await Awaitable.WaitForSecondsAsync(1);
+                    soldier.Overwatch = true;
+                    soldier.WatchMelee = true;
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: on guard; {units.ArmsReport(soldier.Id)}");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[combat] " + e);
+                }
+            };
+        }
+
         static Unit Put(Unit u, int x, int y, double facing)
         {
             u.Pos = new Pos { X = x, Y = y };
@@ -934,11 +991,13 @@ namespace Bastion.EditorTools
                 return copy;
             }
             string fila = Environment.GetEnvironmentVariable("BASTION_FILA");
-            if (fila == "1" || fila == "comunes")
+            if (fila == "1" || fila == "comunes" || fila == "hinchados")
             {
-                // (comunes: the common dead's 17 bodies, in their order, each its id's pick: syntyManifest.ts UNIT_BODIES zombie.)
+                // (comunes: the common dead's 17 bodies, in their order, each its id's pick: syntyManifest.ts UNIT_BODIES zombie.
+                // hinchados: a common one for size and the five Hinchados, in DeadBodies' order, Ana's #13.)
                 var row = fila == "comunes"
                     ? new[] { "c2", "c6", "c11", "c15", "c29", "c1", "c5", "c9", "c16", "c0", "c4", "c8", "c17", "c3", "c7", "c10", "c14" }.Select(i => ("zombie", i)).ToArray()
+                    : fila == "hinchados" ? new[] { ("zombie", "z0"), ("bloater", "h4"), ("bloater", "h0"), ("bloater", "h1"), ("bloater", "h2"), ("bloater", "h3") }
                     : new[] { ("zombie", "z0"), ("xenoid", "m0"), ("xenoid", "m3"), ("xenoid", "m2"), ("xenoid", "m1"), ("mec", "m0"), ("mec", "m3"), ("mec", "m2"), ("mec", "m1"), ("sectoid", "c0"), ("bloater", "h0") };
                 int last = 2 + row.Length - 1;
                 Plain(u => u.Id == deadId, 2, last);

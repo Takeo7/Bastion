@@ -18,6 +18,10 @@ namespace Bastion.UI.Strategy
         readonly VisualElement right;
         /// <summary>Under the clearing, in the middle (strategy.css .strat-center-bottom): «ESPERAR A QUE SE CUREN».</summary>
         readonly VisualElement bottom;
+        /// <summary>The clearing between the panels, where dragging turns the soldier shown (Ana's #5, Arturo 29/10).</summary>
+        readonly VisualElement turnPad;
+        /// <summary>The pointer's last x while it drags on the pad.</summary>
+        float dragX;
         readonly TooltipLayer tips;
         readonly Func<string, Sprite> icon;
         readonly IStrategyHandlers handlers;
@@ -37,11 +41,36 @@ namespace Bastion.UI.Strategy
         /// <summary>A soldier's bust by id; null, the silhouette.</summary>
         public Func<string, Texture> PortraitOf;
 
+        /// <summary>The soldier shown, turned so many degrees (its front to the right on the screen): Arte's TurnShowcase.</summary>
+        public Action<float> Turn;
+
+        /// <summary>Degrees the soldier turns for each point the pointer drags.</summary>
+        const float TurnPerPoint = 0.4f;
+
         public SoldiersScreen(VisualElement view, TooltipLayer tips, Func<string, Sprite> icon, IStrategyHandlers handlers)
         {
             this.tips = tips;
             this.icon = icon;
             this.handlers = handlers;
+            // Under the panels: a drag on the clearing turns the soldier, a drag on a panel doesn't.
+            turnPad = Ui.El("soldiers-turn", view);
+            turnPad.RegisterCallback<PointerDownEvent>(e =>
+            {
+                if (e.button != 0) return;
+                dragX = e.position.x;
+                turnPad.CapturePointer(e.pointerId);
+            });
+            turnPad.RegisterCallback<PointerMoveEvent>(e =>
+            {
+                if (!turnPad.HasPointerCapture(e.pointerId)) return;
+                var dx = e.position.x - dragX;
+                dragX = e.position.x;
+                if (dx != 0) Turn?.Invoke(dx * TurnPerPoint);
+            });
+            turnPad.RegisterCallback<PointerUpEvent>(e =>
+            {
+                if (turnPad.HasPointerCapture(e.pointerId)) turnPad.ReleasePointer(e.pointerId);
+            });
             left = Ui.El("strat-side strat-side--left panel", view);
             right = Ui.El("strat-side strat-side--right panel", view);
             bottom = Ui.El("strat-center-bottom", view);
@@ -56,6 +85,7 @@ namespace Bastion.UI.Strategy
             shown = on;
             Ui.Show(left, on);
             Ui.Show(right, on && (last?.Sheet != null || last?.Customizer != null));
+            Ui.Show(turnPad, on && (last?.Sheet != null || last?.Customizer != null));
             Ui.Show(bottom, on && last?.MustWait != null);
         }
 
@@ -95,6 +125,7 @@ namespace Bastion.UI.Strategy
             rightBody.Clear();
             bottom.Clear();
             Ui.Show(bottom, shown && v?.MustWait != null);
+            Ui.Show(turnPad, shown && (v?.Sheet != null || v?.Customizer != null));
             if (v == null) return;
             if (v.MustWait != null) MustWait(v.MustWait);
             Head(v.MineHead, null, leftBody);

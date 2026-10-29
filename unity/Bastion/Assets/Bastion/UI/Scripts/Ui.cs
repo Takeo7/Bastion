@@ -10,6 +10,23 @@ namespace Bastion.UI
     /// </summary>
     public static class Ui
     {
+        /// <summary>
+        /// A weapon's picture among the HUD's icons (HudIcons): the guns', and the frying pan's, the bat's, the crowbar's
+        /// and the chainsaw's found in the field (Ana's notes, Arturo 29/10); a blade's for the knife, the machete, the rest.
+        /// </summary>
+        public static string WeaponIcon(string weapon)
+        {
+            switch (weapon)
+            {
+                case Bastion.Engine.WeaponIds.Rifle: case Bastion.Engine.WeaponIds.Pistol: case Bastion.Engine.WeaponIds.Shotgun:
+                case Bastion.Engine.WeaponIds.Sniper: case Bastion.Engine.WeaponIds.Cannon: case Bastion.Engine.WeaponIds.Pan:
+                case Bastion.Engine.WeaponIds.Bat: case Bastion.Engine.WeaponIds.Crowbar: case Bastion.Engine.WeaponIds.Chainsaw:
+                    return "weapon:" + weapon;
+                default:
+                    return "overwatchMelee";
+            }
+        }
+
         /// <summary>A plain element with `classes` (space-separated), added to `parent` if given.</summary>
         public static VisualElement El(string classes = null, VisualElement parent = null)
         {

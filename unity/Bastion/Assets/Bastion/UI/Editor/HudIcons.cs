@@ -27,6 +27,13 @@ namespace Bastion.UI.EditorTools
         const string Shotgun = "ICON_SM_Wep_Shotgun_01_Military_Clean";
         const string MachineGun = "ICON_SM_Wep_MachineGun_Bandit_01_Military_Clean";
         const string Knife = "ICON_SM_Wep_Knife_01_Military_Clean";
+        // The weapons found in the field (Ana's notes, Arturo 29/10): the frying pan, the bat, the crowbar, the chainsaw. The
+        // bat's and the crowbar's flat sprites lie across and read as a line on a key: ours (Textures/Icons) are the packs'
+        // slanted pictures (ICON_SM_Wep_Bat_Wood_01, ICON_SM_Item_Crowbar_01_Military) made white, cut to their edges.
+        const string Pan = "ICON_SM_Wep_Pan_01_BattleRoyale_Clean";
+        const string Bat = "w-bate";
+        const string Crowbar = "w-palanca";
+        const string Chainsaw = "ICON_SM_Wep_ChainSaw_01_Clean";
         const string Revolver = "ICON_SM_Wep_Pistol_Revolver_01_BattleRoyale_Clean";
         const string Launcher = "ICON_SM_Wep_Grenade_Launcher_01_Clean";
         const string Target = "ICON_Apocalpyse_Map_Target_01";
@@ -72,6 +79,7 @@ namespace Bastion.UI.EditorTools
             // The bar's keys (synty-icons.css data-ability), and Disparar's by its gun (data-weapon).
             ("shoot", Rifle), ("weapon:rifle", Rifle), ("weapon:pistol", Pistol), ("weapon:shotgun", Shotgun),
             ("weapon:sniper", Sniper), ("weapon:cannon", MachineGun), ("pistol", Pistol),
+            ("weapon:pan", Pan), ("weapon:bat", Bat), ("weapon:crowbar", Crowbar), ("weapon:chainsaw", Chainsaw),
             ("slash", Blades), ("overwatchMelee", Blade), ("stone", Rock), ("overwatch", Target),
             ("hunker", Helmet), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
             ("launch", Launcher), ("smoke", Smoke), ("flashbang", Flashbang), ("firstAid", Healing),

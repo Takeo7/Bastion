@@ -147,6 +147,15 @@ namespace Bastion.UI.Hud
         public void SetPlayers(PlayersView v) => strip.SetPlayers(v);
         public void SetFloor(FloorView v) => strip.SetFloor(v);
         public void SetSquad(SquadView v) => squad.Set(v);
+
+        /// <summary>A soldier's bust by id for the squad list (Arte's Portraits.Soldier); null, none yet.</summary>
+        public Func<string, Texture> PortraitOf
+        {
+            set => squad.PortraitOf = value;
+        }
+
+        /// <summary>A bust was drawn: the squad list drawn again with it.</summary>
+        public void PicturesChanged() => squad?.Redraw();
         public void SetSelected(UnitPanelView v) => unit.Set(v);
         public void SetAbilities(ActionBarView v) => bar.Set(v);
         public void SetEndTurn(EndTurnView v) => turnActions.SetEndTurn(v);
@@ -238,7 +247,15 @@ namespace Bastion.UI.Hud
         public void PackOffer(string text, Action swap) => notes.Offer(text, HudText.Pack.Swap, swap);
 
         /// <summary>A word or number rising over a point of the world (damage, «ATURDIDO»…).</summary>
-        public void Float(Vector3 world, string text, string kind) => flags.Float(world, text, kind);
+        public void Float(Vector3 world, string text, string kind, string iconId = null) => flags.Float(world, text, kind, iconId);
+
+        /// <summary>For the labs: the help of the first element of class `className` pinned open; whether there was one.</summary>
+        public bool PinTip(string className)
+        {
+            var over = root?.Q(className: className);
+            if (over != null) tips?.Pin(over);
+            return over != null;
+        }
 
         /// <summary>One short line on the tile under the pointer, or none (null).</summary>
         public void SetNote(Vector3? world, string text) => flags.SetNote(world, text);

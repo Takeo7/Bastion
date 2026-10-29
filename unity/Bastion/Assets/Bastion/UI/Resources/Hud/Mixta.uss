@@ -255,6 +255,31 @@ Button:disabled {
     background-color: var(--t-good);
 }
 
+/* Health as Synty Dark Fantasy HUD's slider cut in pieces (Slider_DarkFantasy_Horizontal_01; Ana's #8, Arturo 29/10): its
+   parchment darkened is the slot, and each point of health a piece of it in the health's colour; a point lost leaves the
+   slot nearly bare. */
+.pips--hp {
+    padding: 2px 3px;
+    background-image: url("../../Textures/hp-pergamino.png");
+    -unity-background-image-tint-color: rgba(10, 10, 10, 0.8);
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.pips--hp .pip {
+    width: 8px;
+    height: 5px;
+    margin-right: 1px;
+    border-radius: 0;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("../../Textures/hp-pergamino.png");
+    -unity-background-image-tint-color: rgba(255, 255, 255, 0.08);
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.pips--hp .pip--on {
+    -unity-background-image-tint-color: var(--t-good);
+}
+
 .pips--ap .pip--on {
     background-color: var(--t-accent);
 }

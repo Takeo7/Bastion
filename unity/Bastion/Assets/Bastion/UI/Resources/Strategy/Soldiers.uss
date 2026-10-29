@@ -994,3 +994,12 @@
     font-size: 14px;
     letter-spacing: 1px;
 }
+
+/* The clearing between Soldados' panels, under them: a drag on it turns the soldier shown (Ana's #5, Arturo 29/10). */
+.soldiers-turn {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}

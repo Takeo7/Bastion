@@ -85,7 +85,7 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "the valley › the zones have their names, and ordinary operations are named for the place they go")]
         public void TheZonesHaveTheirNamesAndOrdinaryOperationsAreNamedForThePlaceTheyGo()
         {
-            Assert.Equal("Bielsa", Campaign.Regions[RegionIds.Weu].Name);
+            Assert.Equal("Metsovo", Campaign.Regions[RegionIds.Weu].Name);
             Assert.Equal(new[] { "Tarbes", "Sappada", "Koper", "Rudnik" }, new[] { RegionIds.Afr, RegionIds.Eeu, RegionIds.Me, RegionIds.Sa }.Select((id) => Campaign.Regions[id].Name));
             Assert.Equal(new[] { "La Vega", "El Pantano Gris", "Los Llanos de Ceniza" }, new[] { RegionIds.Oce, RegionIds.Eas, RegionIds.Na }.Select((id) => Campaign.Regions[id].Name));
             var ordinary = 0;
@@ -139,8 +139,8 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ contacting by road
 
-        [Fact(DisplayName = "contacting by road › only zones a road joins to Bielsa or to a contacted zone; the reason says where to go first")]
-        public void OnlyZonesARoadJoinsToBielsaOrToAContactedZone()
+        [Fact(DisplayName = "contacting by road › only zones a road joins to Metsovo or to a contacted zone; the reason says where to go first")]
+        public void OnlyZonesARoadJoinsToMetsovoOrToAContactedZone()
         {
             var c = Quiet();
             Assert.Equal("No hay carretera desde vuestras zonas: contactad antes con La Vega o Rudnik.", Campaign.ContactBlocker(c, RegionIds.Afr));
@@ -154,7 +154,7 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ the Marea
 
-        [Fact(DisplayName = "the Marea › rises zone by zone from Los Llanos as the activity reaches each threshold; Bielsa only falls with the campaign")]
+        [Fact(DisplayName = "the Marea › rises zone by zone from Los Llanos as the activity reaches each threshold; Metsovo only falls with the campaign")]
         public void RisesZoneByZoneFromLosLlanosAsTheActivityReachesEachThreshold()
         {
             var c = Quiet();

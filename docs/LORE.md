@@ -21,13 +21,13 @@ Lo nuevo de verdad es la supervivencia: saquear, el ruido, la infección y la es
 
 ## La idea en una frase
 
-Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se levanta zombi. Atalaya, la vieja estación militar de la sierra donde se refugiaban, cayó en otoño. Los que salieron vivos empiezan de cero en un claro del pinar, sobre Bielsa, con una caravana y La Lata: lo que levantan allí es el Bastión. Los dos jugadores lo dirigen y mandan sus equipos a los pueblos del valle a por comida, medicinas y gente viva. Cada disparo atrae a más.
+Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se levanta zombi. Atalaya, la vieja estación militar de la sierra donde se refugiaban, cayó en otoño. Los que salieron vivos empiezan de cero en un claro del pinar, sobre Metsovo, con una autocaravana y La Lata: lo que levantan allí es el Bastión. Los dos jugadores lo dirigen y mandan sus equipos a los pueblos del valle a por comida, medicinas y gente viva. Cada disparo atrae a más.
 
 **La premisa en el juego** (`PREMISE` en `lore.ts`, la tarjeta antes de la primera misión; la de Ana, aprobada por Arturo en la 0.3.1):
 
 > La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.
 >
-> Atalaya, la vieja estación militar, cayó en otoño. Los que salimos con vida hemos parado en un claro del pinar, sobre Bielsa, con una caravana y lo puesto. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.
+> Atalaya, la vieja estación militar, cayó en otoño. Los que salimos con vida hemos parado en un claro del pinar, sobre Metsovo, con una autocaravana y lo puesto. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.
 >
 > Toca volver a sacar La Lata, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.
 
@@ -43,7 +43,7 @@ La de antes («Hace dos inviernos, la Pandemia vació el valle de Ossau…») qu
 - **Supervivencia seria:** más *The Last of Us* y *This War of Mine* que gore de serie B.
 - **El miedo:** la escasez y el ruido, más que el monstruo.
 - **Los vivos, en sus misiones** ([ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos. Cuervos y Congregación aparecen en las suyas, y ahí son lo más peligroso.
-- **Los nombres de lugar son reales** (prueba del 21/10, #45, Ana: «nombres reales de sitios del mundo que suenen así como un poco a todo»). Son pueblos y ciudades pequeños de verdad, poco conocidos, de varios países, todos de sierra y del sur o del centro de Europa, para que suenen al mismo valle: el valle de Ossau, Bielsa (la de partida), Tarbes, Sappada, Koper (con su Instituto), Rudnik (las minas) y Tende. Los geográficos van en castellano: El Pantano Gris, Los Llanos de Ceniza, La Vega, el Pico Gris. El país sigue sin nombre. Nada que se confunda con el juego (por eso no «Bastia»). Hasta el 21/10 eran inventados: Kessra, Brena, Corran, Velsa, Galen, Carvik y Telm.
+- **Los nombres de lugar son reales** (prueba del 21/10, #45, Ana: «nombres reales de sitios del mundo que suenen así como un poco a todo»). Son pueblos y ciudades pequeños de verdad, poco conocidos, de varios países, todos de sierra y del sur o del centro de Europa, para que suenen al mismo valle: el valle de Ossau, Metsovo (la de partida, en el Pindo griego; hasta el 29/10, Bielsa), Tarbes, Sappada, Koper (con su Instituto), Rudnik (las minas) y Tende. Los geográficos van en castellano: El Pantano Gris, Los Llanos de Ceniza, La Vega, el Pico Gris. El país sigue sin nombre. Nada que se confunda con el juego (por eso no «Bastia»). Hasta el 21/10 eran inventados: Kessra, Brena, Corran, Velsa, Galen, Carvik y Telm.
 - **Gente de todas partes:** el puerto de Koper y el Instituto traían gente de todo el mundo, y el valle fue camino de huida hacia la sierra. Los nombres de soldados y personajes son internacionales.
 
 ## Cronología
@@ -55,7 +55,7 @@ La de antes («Hace dos inviernos, la Pandemia vació el valle de Ossau…») qu
 | Invierno, año 0 | Caen Koper y Tarbes. El ejército se repliega y desaparece. La radio se queda muda. |
 | Año 1 | Los vivos se esconden en los pueblos de la sierra. Aparecen los Cuervos, bandas que viven de saquear a otros. |
 | Años 1 y 2 | Gente de todas partes se va reuniendo en la Estación Atalaya. La dirigen dos personas, a medias. |
-| Otoño, año 2 | Una horda va derecha a Atalaya y la toma. Los que salen vivos huyen en el todoterreno de Teo, con una caravana enganchada, y paran en un claro del pinar sobre Bielsa (Arturo, 18/10). El autobús se queda en la cochera de Atalaya. Más adelante se podrá saber que la llevó la Congregación. |
+| Otoño, año 2 | Una horda va derecha a Atalaya y la toma. Los que salen vivos huyen en una autocaravana, con el todoterreno de Teo detrás, y paran en un claro del pinar sobre Metsovo (Arturo, 18/10; la autocaravana, notas de Ana del 29/10, #6). El autobús se queda en la cochera de Atalaya. Más adelante se podrá saber que la llevó la Congregación. |
 | Invierno, año 2 · Día 1 de la campaña | Las nevadas sepultan a muchos muertos y se vuelve a salir en La Lata. Las misiones están nevadas hasta el capítulo 3. |
 | Deshielo · tras el capítulo 3 | Se calla la sirena de los Llanos y se va la nieve: lo que tapó vuelve a andar. Con el deshielo sube la Marea, que se descubre en el capítulo 4. |
 
@@ -65,7 +65,7 @@ Es una comarca inventada entre una sierra alta y una llanura, con dos ciudades m
 
 | Zona | Id | Qué hay | Enclave (con quien se trata) |
 |---|---|---|---|
-| Bielsa | `weu` | Los pueblos de la sierra, bajo el Bastión (la de partida) | El Refugio de Bielsa |
+| Metsovo | `weu` | Los pueblos de la sierra, bajo el Bastión (la de partida) | El Refugio de Metsovo |
 | Tarbes | `afr` | La primera ciudad caída, llena de zombis | Los del Hospital |
 | El Pantano Gris | `eas` | Un embalse y una central eléctrica muerta | La Red Callada |
 | Sappada | `eeu` | Valles cerrados, aldeas que aún resisten | Los Pastores |
@@ -99,11 +99,11 @@ Los ids del código se mantienen; cambian el nombre, el aspecto y, donde haga fa
 
 ## El Bastión
 
-- **Atalaya cayó** (Arturo, 18/10, con la base nueva de la Fase 12 §11). Era una vieja estación militar en lo alto de la sierra de Bielsa: refugio subterráneo, muros de hormigón y una sola carretera. Aguantó dos años; en otoño una horda fue derecha a ella. Queda como lo que se perdió: en los textos, «Atalaya» es el pasado y nunca la base de ahora.
-- **El Bastión** es lo que se levanta en un claro del pinar, sobre Bielsa: al principio, una caravana y La Lata. Todo lo demás se construye (edificios, defensas, trampas, torretas), y se tala para hacer sitio. Los textos de las piezas están en [LORE-BASE.md](LORE-BASE.md) y en `PIECE_TEXT` (`lore.ts`).
-- **Los niveles del Bastión tienen nombre, nunca número** (prueba del 20/10, #13): Caravana, Caravana con toldo, Casa móvil, Casa móvil con porche, Albergue, Albergue ampliado, Casa y Casa fortificada (`BASTION_LEVELS`, `bastionLevelName` en `lore.ts`). Son los cuatro edificios del solar, cada uno mejorado una vez. No se anuncia qué traerá el siguiente.
-- **Si el Bastión cae**, se huye otra vez, como de Atalaya: los que quedan vuelven a empezar en otro claro con la caravana y lo puesto. Si no queda nadie, la campaña termina.
-- **La Lata:** el apodo del vehículo de la escuadra, por la chapa que Teo le suelda encima (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Era el autobús de línea de Atalaya, que se quedó en su cochera; ahora el apodo pasa de un trasto a otro: el todoterreno de Teo, que tiró de la caravana, y luego una furgoneta, un camión y, al final, el mismo autobús, que se recupera en Atalaya (prueba del 18/10, #45). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
+- **Atalaya cayó** (Arturo, 18/10, con la base nueva de la Fase 12 §11). Era una vieja estación militar en lo alto de la sierra de Metsovo: refugio subterráneo, muros de hormigón y una sola carretera. Aguantó dos años; en otoño una horda fue derecha a ella. Queda como lo que se perdió: en los textos, «Atalaya» es el pasado y nunca la base de ahora.
+- **El Bastión** es lo que se levanta en un claro del pinar, sobre Metsovo: al principio, una autocaravana y La Lata. Hasta las notas de Ana del 29/10 (#6) era una caravana enganchada al todoterreno de Teo; Arturo eligió «Autocaravana» en todas partes: la pieza, sus niveles y los textos (el modelo, `SM_Veh_Camper_01` de Apocalypse). Todo lo demás se construye (edificios, defensas, trampas, torretas), y se tala para hacer sitio. Los textos de las piezas están en [LORE-BASE.md](LORE-BASE.md) y en `PIECE_TEXT` (`lore.ts`).
+- **Los niveles del Bastión tienen nombre, nunca número** (prueba del 20/10, #13): Autocaravana, Autocaravana con toldo, Casa móvil, Casa móvil con porche, Albergue, Albergue ampliado, Casa y Casa fortificada (`BASTION_LEVELS`, `bastionLevelName` en `lore.ts`). Son los cuatro edificios del solar, cada uno mejorado una vez. No se anuncia qué traerá el siguiente.
+- **Si el Bastión cae**, se huye otra vez, como de Atalaya: los que quedan vuelven a empezar en otro claro con la autocaravana y lo puesto. Si no queda nadie, la campaña termina.
+- **La Lata:** el apodo del vehículo de la escuadra, por la chapa que Teo le suelda encima (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Era el autobús de línea de Atalaya, que se quedó en su cochera; ahora el apodo pasa de un trasto a otro: el todoterreno de Teo, que salió de Atalaya detrás de la autocaravana, y luego una furgoneta, un camión y, al final, el mismo autobús, que se recupera en Atalaya (prueba del 18/10, #45). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
 - **Las decisiones a medias se quedan, con otra historia.** Dos grupos que llegaron a la vez y no se fían del todo: lo importante lo deciden los dos. El año pasado, un líder solo vendió su refugio a los Cuervos a cambio de su vida.
 
 ## Personajes
@@ -116,7 +116,7 @@ Se mantienen las voces de la radio que ya existen y cambian sus vidas.
 | **Teodor Vidić, «Teo»** | Mecánico jubilado. Blindó La Lata, arregla armas y enseña oficios. Secreto: trabajó de vigilante en el Instituto Koper la noche en que todo empezó. |
 | **Dra. Amara Nwosu** | Viróloga del Instituto Koper. Huyó con sus cuadernos y cree que hay una vacuna. |
 | **Simão Ferreira** | Desertor de los Cuervos. Sabe dónde guardan lo que roban y a quién. |
-| **Ruth Halvorsen** | Portavoz del Refugio de Bielsa, el enclave más grande. Socia exigente. |
+| **Ruth Halvorsen** | Portavoz del Refugio de Metsovo, el enclave más grande. Socia exigente. |
 | **Celia Marsh, «la Voz»** | Presentadora de radio antes de la Pandemia. Ahora guía a la Congregación y a la Marea con su emisora. |
 
 ## La historia
@@ -125,7 +125,7 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 
 | Nivel | Capítulo | Tipo · zona | Qué pasa |
 |---|---|---|---|
-| 1 | **Primer invierno** | Recuperación · Bielsa | La insulina del consultorio del pueblo, que el frío ha conservado (prueba del 18/10, #34). |
+| 1 | **Primer invierno** | Recuperación · Metsovo | La insulina del consultorio del pueblo, que el frío ha conservado (prueba del 18/10, #34). |
 | 2 | **La doctora** | Rescate · Tarbes | Sacar a la Dra. Nwosu de un hospital lleno de zombis. |
 | 3 | **La sirena** | Sabotaje · Los Llanos de Ceniza | Callar la sirena con la que los Cuervos atraen hordas. |
 | 4 | **La torre del Pico Gris** | Pirateo (arreglar la radio) · El Pantano Gris | Volver a poner en marcha el repetidor: oír a los demás enclaves. |
@@ -138,7 +138,7 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 - Es una horda inmensa que sube desde la llanura con el deshielo, y sustituye a la Partitura.
 - En vez de compases cuenta kilómetros: «La Marea, a 9 km». Cuando llega a 0, el Bastión cae.
 - Hasta el nivel 4 del Bastión (cuando se arregla la radio del Pico Gris) nadie sabe que existe: el reloj se llama **Infestación** («Infestación 3/12») y las zonas caídas están «en manos de los muertos». Desde el nivel 4 es la Marea.
-- Entra por Los Llanos de Ceniza y sube por las carreteras: cubre las zonas a 4, 6, 9, 10 y 11, según lo lejos que estén de Los Llanos ([FASE5.md](FASE5.md)). Bielsa no cae: a 12, la campaña se pierde. Los textos no conjugan verbos con el nombre de la zona, que puede ser plural.
+- Entra por Los Llanos de Ceniza y sube por las carreteras: cubre las zonas a 4, 6, 9, 10 y 11, según lo lejos que estén de Los Llanos ([FASE5.md](FASE5.md)). Metsovo no cae: a 12, la campaña se pierde. Los textos no conjugan verbos con el nombre de la zona, que puede ser plural.
 - Los **Nidos**, sitios donde los zombis se juntan (antes, los Órganos), la alimentan. Quemarlos la hace retroceder.
 
 **El final** (lo deciden los dos). Con la Marea parada y la vacuna en la mano:
@@ -228,7 +228,8 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 | Sala de simulación | **Sala de mapas** |
 | Terminal, hackear, pirateo | **Arreglar** (el equipo, la radio) |
 | La Rosa | **Árbol de habilidades** |
-| Aldren, Volkren | **Bielsa**, **Sappada** |
+| Aldren, Volkren; Bielsa (hasta el 29/10: a Ana no le gustaba) | **Metsovo**, **Sappada** |
+| Caravana (la pieza y sus niveles, hasta el 29/10) | **Autocaravana**, **Autocaravana con toldo** |
 | Agazaparse | **Cubrirse**; el estado, «Cubriéndose» (no «a cubierto», que se confunde con estar detrás de un muro) |
 | Dos llaves, llave doble | Uno propone y el otro acepta; «lo decidís juntos» |
 | Los datos (el objetivo) | El nombre del objeto: «las medicinas»; sin nombre, «la carga» |

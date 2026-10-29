@@ -46,6 +46,20 @@ namespace Bastion.UI.Strategy
         /// <summary>BASTION_ESTRATEGIA_PULSA: a button's text, pressed a few frames after the case is up (TestSteps.Press); the order goes to the log.</summary>
         string press = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_PULSA");
         int pressAt = -1;
+        /// <summary>
+        /// BASTION_ESTRATEGIA_ARRASTRE=points[:seconds]: a drag on Soldados' clearing that far to the right (left if
+        /// negative), 10 points a frame from when the case is up (or from that game time, for a capture's frames), through
+        /// the turning pad's own pointer events.
+        /// </summary>
+        float drag = Number(System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_ARRASTRE"), 0);
+        readonly float dragAt = Number(System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_ARRASTRE"), 1);
+        float dragged;
+
+        static float Number(string list, int i)
+        {
+            var bits = list?.Split(':');
+            return bits != null && i < bits.Length && float.TryParse(bits[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 0;
+        }
         bool blinked;
 
         void Update()
@@ -90,6 +104,7 @@ namespace Bastion.UI.Strategy
                     Debug.Log($"[estrategia] ayuda de «{help}»: {(over != null ? "abierta" : "no está")} ({all.Count} con la clase)");
                 }
             }
+            if (shown && drag != 0 && pressAt >= 0 && Time.frameCount >= pressAt && Time.timeSinceLevelLoad >= dragAt) Drag();
             if (shown && !string.IsNullOrEmpty(press) && pressAt >= 0 && Time.frameCount >= pressAt)
             {
                 Debug.Log($"[estrategia] pulsado «{press}»: {Bastion.UI.TestSteps.Press(press)}");
@@ -193,7 +208,7 @@ namespace Bastion.UI.Strategy
             {
                 Title = "Reclutar un soldado",
                 Blurb = "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.",
-                Chips = { new ChipView { Text = "30 §" }, new ChipView { Text = "Tus soldados 4/6", Tip = "Como mucho 6 soldados por jugador" }, new ChipView { Text = "Camas libres 0", Tone = "warn", Tip = "Cada soldado necesita una cama: la caravana tiene 8, y cada Barracón suma más." } },
+                Chips = { new ChipView { Text = "30 §" }, new ChipView { Text = "Tus soldados 4/6", Tip = "Como mucho 6 soldados por jugador" }, new ChipView { Text = "Camas libres 0", Tone = "warn", Tip = "Cada soldado necesita una cama: la autocaravana tiene 8, y cada Barracón suma más." } },
                 Button = "Reclutar · 30 §",
                 Enabled = false,
                 Why = "No quedan camas: para reclutar más, construid un Barracón.",
@@ -443,7 +458,7 @@ namespace Bastion.UI.Strategy
                 RumorsTip = EngineLore.Glossary["Rumor"] + " Solo se escucha uno a la vez.",
             };
             ZoneMarkView Zone(string id, string name, bool contacted, bool flooded = false) => new ZoneMarkView { Id = id, Name = name, Contacted = contacted, Flooded = flooded, Selected = v.Selected == id };
-            var weu = Zone("weu", "Bielsa", true);
+            var weu = Zone("weu", "Metsovo", true);
             weu.Missions.AddRange(new[] { Story, Op, Story, Op });
             weu.Kinds.AddRange(new[] { "rescue", "recovery", "rescue", "scavenge" });
             var oce = Zone("oce", "La Vega", true);
@@ -456,13 +471,13 @@ namespace Bastion.UI.Strategy
             var eas = Zone("eas", "El Pantano Gris", false);
             eas.Rumor = true;
             v.Zones.AddRange(new[] { Zone("na", "Los Llanos de Ceniza", false, true), Zone("sa", "Rudnik", true), weu, Zone("eeu", "Sappada", false), Zone("afr", "Tarbes", false), me, eas, oce });
-            // The row's help as screen.ts renderMissions: «Historia · Rescate · Bielsa», the kind by its name (MISSION_NAMES).
+            // The row's help as screen.ts renderMissions: «Historia · Rescate · Metsovo», the kind by its name (MISSION_NAMES).
             MissionRowView Row(string id, string tone, string kind, string name, string zoneName, string where, bool on = false) =>
                 new MissionRowView { Id = id, Tone = tone, Kind = kind, Name = name, Where = where, Selected = on, Tip = $"{(tone == Story ? "Historia · " : "")}{Bastion.Engine.Setup.MissionNames[kind]} · {zoneName}" };
-            v.Missions.Add(Row("o1", Story, "rescue", "El consultorio de Bielsa", "Bielsa", "Bielsa"));
+            v.Missions.Add(Row("o1", Story, "rescue", "El consultorio de Metsovo", "Metsovo", "Metsovo"));
             v.Missions.Add(Row("o2", Op, "rescue", "El colegio de La Vega", "La Vega", "La Vega · De noche", mission));
-            v.Missions.Add(Row("o3", Op, "recovery", "El hospital de Bielsa", "Bielsa", "Bielsa · De noche"));
-            v.Missions.Add(Row("o4", Op, "scavenge", "El centro comercial de Bielsa", "Bielsa", "Bielsa"));
+            v.Missions.Add(Row("o3", Op, "recovery", "El hospital de Metsovo", "Metsovo", "Metsovo · De noche"));
+            v.Missions.Add(Row("o4", Op, "scavenge", "El centro comercial de Metsovo", "Metsovo", "Metsovo"));
             v.Wait = new WaitDayView { Label = "Esperar un día", Tip = $"Un día sin salir: se come, se curan las heridas y avanzan el Taller y {EngineLore.DoomSubject(Level)}." };
             v.Nests.Add(new MapRowView { Id = "me", Name = "Koper", Chip = "Sin contacto", ChipTip = EngineLore.NestNoContactTip("me", 110) });
             v.Quests.Add(new MapRowView { Id = "q1", Name = "La estación de números", Line = "Paso 1 de 2 · Esperando vuestra decisión" });
@@ -496,6 +511,38 @@ namespace Bastion.UI.Strategy
         /// (slot 1) with Ana away, as the 0.10.1's references. For now the strip, the tabs and the Asentamiento
         /// (muestra-asentamiento; -bastion with the caravan picked); with «-radio», the recap over it.
         /// </summary>
+        /// <summary>A frame of BASTION_ESTRATEGIA_ARRASTRE: down on the pad's middle, then 10 points on, then up at the end.</summary>
+        void Drag()
+        {
+            var pad = UnityEngine.UIElements.UQueryExtensions.Q(root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement, className: "soldiers-turn");
+            if (pad == null)
+            {
+                Debug.Log("[estrategia] arrastre: no hay dónde girar");
+                drag = 0;
+                return;
+            }
+            var at = pad.worldBound.center + new Vector2(dragged, 0);
+            if (dragged == 0) Send(pad, EventType.MouseDown, at);
+            var step = Mathf.Sign(drag) * Mathf.Min(10, Mathf.Abs(drag) - Mathf.Abs(dragged));
+            dragged += step;
+            Send(pad, EventType.MouseDrag, at + new Vector2(step, 0));
+            if (Mathf.Abs(dragged) < Mathf.Abs(drag)) return;
+            Send(pad, EventType.MouseUp, at + new Vector2(step, 0));
+            Debug.Log($"[estrategia] arrastre de {dragged} puntos sobre el claro (frame {Time.frameCount})");
+            drag = 0;
+        }
+
+        static void Send(UnityEngine.UIElements.VisualElement to, EventType type, Vector2 at)
+        {
+            var e = new Event { type = type, mousePosition = at, button = 0, clickCount = 1 };
+            using (var pe = type == EventType.MouseDown ? (UnityEngine.UIElements.EventBase)UnityEngine.UIElements.PointerDownEvent.GetPooled(e)
+                : type == EventType.MouseUp ? UnityEngine.UIElements.PointerUpEvent.GetPooled(e) : UnityEngine.UIElements.PointerMoveEvent.GetPooled(e))
+            {
+                pe.target = to;
+                to.SendEvent(pe);
+            }
+        }
+
         void Sample(string which)
         {
             // Ana here only for the proposals (70- and 71-propuesta), as the 0.10.1's steps set her connected.
@@ -503,6 +550,19 @@ namespace Bastion.UI.Strategy
             // «escuadra-listo»: Ana here and Arturo ready (his cards' «LISTO»); «parte-caido»: the debrief's first soldier fallen («CAÍDO»).
             if (which == "escuadra-listo") p.State.LaunchReady[1] = true;
             if (which == "parte-caido" && p.State.LastReport?.Squad.Count > 0) p.State.LastReport.Squad[0].Status = "dead";
+            // «armeria-nuevas», «soldados-nuevas»: the weapons found in the field (Ana's notes, Arturo 29/10) on the rack too.
+            if (which.EndsWith("-nuevas"))
+            {
+                p.State.FoundWeapons ??= new List<Bastion.Engine.FoundWeapon>();
+                var kinds = new[] { Bastion.Engine.FoundWeaponIds.Pan, Bastion.Engine.FoundWeaponIds.Bat, Bastion.Engine.FoundWeaponIds.Crowbar, Bastion.Engine.FoundWeaponIds.Chainsaw };
+                for (var i = 0; i < kinds.Length; i++) p.State.FoundWeapons.Add(new Bastion.Engine.FoundWeapon { Id = "wn" + i, Kind = kinds[i] });
+            }
+            // «parte-capitulo»: the debrief of the second chapter won, with its page open (Ana's #15, Arturo 29/10).
+            if (which == "parte-capitulo" && p.State.LastReport != null)
+            {
+                p.State.LastReport.Story = 2;
+                p.State.LastReport.Victory = true;
+            }
             // «mapa-encargo»: the errand «numbers» with its step's mission (the first offer), for its row's click (BASTION_ESTRATEGIA_PULSA).
             if (which == "mapa-encargo") p.State.Offers[0].Quest = "numbers";
             // «esperar»: nobody can go out (Campaign.MustWait: all of them hurt, no suministros to recruit); «esperar-pedido»,
@@ -626,7 +686,8 @@ namespace Bastion.UI.Strategy
         /// <summary>The sample's stores and level: the palette's costs against them (pieceBlocker).</summary>
         const int Credits = 540;
         const int Parts = 9;
-        const int Level = 3;
+        /// <summary>The Bastion's level: 3, or BASTION_ESTRATEGIA_NIVEL (1 shows «Subir a la autocaravana con toldo»).</summary>
+        static readonly int Level = int.TryParse(System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_NIVEL"), out var n) ? n : 3;
 
         /// <summary>
         /// The Asentamiento as the 0.10.1 showed the sample (40-asentamiento and after): the palette from the engine's
@@ -705,7 +766,7 @@ namespace Bastion.UI.Strategy
             // what is missing, levelUpBlocker's: «Para la casa móvil con porche hacen falta 6 misiones hechas: lleváis
             // 3.» or «Faltan N §.».
             if (p.Piece == "caravan")
-                c.Actions.Add(new PieceActionView { Action = "levelUp", Label = $"Subir a {EngineLore.BastionLevelThe(Level + 1)} · 240 §", Hover = EngineLore.LevelUpLine(Level + 1, 240) });
+                c.Actions.Add(new PieceActionView { Action = "levelUp", Label = $"Subir a {EngineLore.BastionLevelThe(Level + 1)}\u00a0·\u00a0240\u00a0§", Hover = EngineLore.LevelUpLine(Level + 1, 240) });
             if (def.Charges != null && (p.Charges ?? 0) < def.Charges)
                 c.Actions.Add(new PieceActionView { Action = "rearm", Label = EngineLore.ActionPrice("rearm", 0, EngineBase.RearmCost(p)) });
             if (EngineBase.DismantleBlocker(p) == null)

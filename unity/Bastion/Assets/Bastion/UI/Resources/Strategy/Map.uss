@@ -434,7 +434,7 @@
     letter-spacing: 1px;
 }
 
-/* A mission's or a zone's name on two lines when it must («Los muelles de carga de Bielsa» was cut at the edge). */
+/* A mission's or a zone's name on two lines when it must («Los muelles de carga de Metsovo» was cut at the edge). */
 .map-detail__title {
     white-space: normal;
 }

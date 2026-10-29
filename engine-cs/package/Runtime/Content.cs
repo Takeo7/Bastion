@@ -29,6 +29,11 @@ namespace Bastion.Engine
         public const string Pistol = "pistol";
         public const string Sword = "sword";
         public const string Knife = "knife";
+        // Found in the field (Ana's notes, 29/10): a frying pan, a bat, a crowbar and a chainsaw.
+        public const string Pan = "pan";
+        public const string Bat = "bat";
+        public const string Crowbar = "crowbar";
+        public const string Chainsaw = "chainsaw";
         public const string TrooperRifle = "trooperRifle";
         public const string TurretGun = "turretGun";
         public const string OfficerRifle = "officerRifle";
@@ -44,8 +49,9 @@ namespace Bastion.Engine
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Rifle, Shotgun, Cannon, Sniper, Pistol, Sword, Knife, TrooperRifle, TurretGun, OfficerRifle, XenoPistol,
-            LancerRifle, StunLance, MecCannon, SectoidPistol, Claws, FragGrenade, MicroMissiles, BloaterBurst,
+            Rifle, Shotgun, Cannon, Sniper, Pistol, Sword, Knife, Pan, Bat, Crowbar, Chainsaw, TrooperRifle, TurretGun,
+            OfficerRifle, XenoPistol, LancerRifle, StunLance, MecCannon, SectoidPistol, Claws, FragGrenade, MicroMissiles,
+            BloaterBurst,
         };
     }
 
@@ -464,6 +470,12 @@ namespace Bastion.Engine
             [WeaponIds.Sword] = Weapon(WeaponIds.Sword, "Machete", 4, spread: 1, critDamage: 2, aim: 20, crit: 10, range: RangeTableIds.None, melee: true, burst: 1, noise: 1),
             // Everyone's blade in the campaign (docs/FASE8.md §A), until a machete.
             [WeaponIds.Knife] = Weapon(WeaponIds.Knife, "Cuchillo", 3, spread: 1, critDamage: 1, aim: 10, range: RangeTableIds.None, melee: true, burst: 1, noise: 1),
+            // What turns up in the field (Ana's notes, 29/10): the pan sure and weak, the bat a machete less sure, the
+            // crowbar through the Acorazado's plates, the chainsaw the strongest and the loudest, while its fuel lasts.
+            [WeaponIds.Pan] = Weapon(WeaponIds.Pan, "Sartén", 3, spread: 1, critDamage: 1, aim: 15, crit: 5, range: RangeTableIds.None, melee: true, burst: 1, noise: 4),
+            [WeaponIds.Bat] = Weapon(WeaponIds.Bat, "Bate", 4, spread: 1, critDamage: 2, aim: 10, crit: 10, range: RangeTableIds.None, melee: true, burst: 1, noise: 2),
+            [WeaponIds.Crowbar] = Weapon(WeaponIds.Crowbar, "Palanca", 4, spread: 1, critDamage: 1, aim: 10, shred: 1, range: RangeTableIds.None, melee: true, burst: 1, noise: 2),
+            [WeaponIds.Chainsaw] = Weapon(WeaponIds.Chainsaw, "Motosierra", 6, spread: 1, critDamage: 3, aim: 10, crit: 15, range: RangeTableIds.None, melee: true, burst: 1, noise: 20),
             [WeaponIds.TrooperRifle] = Weapon(WeaponIds.TrooperRifle, "Fusil de caza", 3, critDamage: 1, clip: 3, noise: 12),
             // The base's turret (docs/FASE12.md §11.4): its clip is its piece's charges (base.ts PIECES.turret), reloaded at home with piezas.
             [WeaponIds.TurretGun] = Weapon(WeaponIds.TurretGun, "Torreta", 3, critDamage: 1, clip: 6, aim: 5, noise: 16),
@@ -602,7 +614,14 @@ namespace Bastion.Engine
             [FoundWeaponIds.SawnOff] = new FoundWeaponDef { Id = FoundWeaponIds.SawnOff, Name = "Escopeta recortada", Find = "una escopeta recortada", Weapon = WeaponIds.Shotgun, Slot = FoundWeaponSlots.Primary, Better = true, Mod = WeaponModIds.ExtMag, Weight = 2 },
             [FoundWeaponIds.ScopedRifle] = new FoundWeaponDef { Id = FoundWeaponIds.ScopedRifle, Name = "Fusil con mira", Find = "un fusil con mira telescópica", Weapon = WeaponIds.Sniper, Slot = FoundWeaponSlots.Primary, Better = true, Mod = WeaponModIds.Scope, Weight = 1 },
             [FoundWeaponIds.LightMachineGun] = new FoundWeaponDef { Id = FoundWeaponIds.LightMachineGun, Name = "Ametralladora ligera", Find = "una ametralladora ligera con su cinta", Weapon = WeaponIds.Cannon, Slot = FoundWeaponSlots.Primary, Better = true, Mod = WeaponModIds.ExtMag, Weight = 1 },
+            [FoundWeaponIds.Pan] = new FoundWeaponDef { Id = FoundWeaponIds.Pan, Name = "Sartén", Find = "una sartén de hierro", Weapon = WeaponIds.Pan, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 3 },
+            [FoundWeaponIds.Bat] = new FoundWeaponDef { Id = FoundWeaponIds.Bat, Name = "Bate", Find = "un bate", Weapon = WeaponIds.Bat, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 3 },
+            [FoundWeaponIds.Crowbar] = new FoundWeaponDef { Id = FoundWeaponIds.Crowbar, Name = "Palanca", Find = "una palanca", Weapon = WeaponIds.Crowbar, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 2 },
+            [FoundWeaponIds.Chainsaw] = new FoundWeaponDef { Id = FoundWeaponIds.Chainsaw, Name = "Motosierra", Find = "una motosierra con algo de gasolina", Weapon = WeaponIds.Chainsaw, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 1 },
         };
+
+        /// <summary>The chainsaw's fuel (ChargeIds.Fuel): the blows it has in each mission (Arturo, 29/10: «un límite de usos»).</summary>
+        public const int ChainsawFuel = 3;
 
         // ------------------------------------------------------- condition and mods
 
@@ -629,6 +648,12 @@ namespace Bastion.Engine
         public static int WearOf(string weapon)
         {
             return weapon == WeaponIds.Sniper ? 2 : 1;
+        }
+
+        /// <summary>Whether `ability` swings a soldier's chainsaw: each blow, or each watch with it, burns a use of its fuel (ChargeIds.Fuel).</summary>
+        public static bool RunsChainsaw(Unit u, string ability)
+        {
+            return u.Arms?.Melee == FoundWeaponIds.Chainsaw && (ability == AbilityIds.Slash || ability == AbilityIds.OverwatchMelee || ability == AbilityIds.ElbowRoom);
         }
 
         /// <summary>Whether `ability` fires the primary weapon a soldier carries (not the pistol beside it, not a blade).</summary>

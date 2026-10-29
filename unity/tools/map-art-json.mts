@@ -35,6 +35,9 @@ const WHOLE_CARS: [id: string, pack: string, fbx: string, yaw: number][] = [
 // (Unity's own too, Gameplay 28/10: the sidewalks' bollards, the engine's decor 100, where a street tree in a pot stood:
 // City's row of four posts, two of them knocked askew, along the kerb, its long side fitted to the tile and a little over.)
 props.bollard = { pack: 'city', fbx: 'SM_Prop_SidewalkPoles_01', fit: 1.2, stretch: true, thick: 0.9 };
+// (Unity's own too, Arturo 29/10 on Ana's #6: the Bastion's first stage, Apocalypse's camper armoured with planks, its
+// roof fenced in, instead of the towed caravan; on the caravan's footprint, as long as it.)
+props.caravan = { ...props.caravan, fbx: 'SM_Veh_Camper_01', fit: 4.6 };
 const sets: Record<string, string[]> = { ...m.PROP_SETS };
 const footprints: Record<string, unknown> = { ...m.FOOTPRINT_FIT };
 for (const [id, pack, fbx, yaw] of WHOLE_CARS) {

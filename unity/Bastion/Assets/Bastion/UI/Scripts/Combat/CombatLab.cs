@@ -547,6 +547,13 @@ namespace Bastion.UI.Combat
                             InputSystem.QueueStateEvent(mouse, new MouseState { position = middle });
                             break;
                         default:
+                            // «ayuda=horde» the help of the first element of that class pinned open (TooltipLayer.Pin), whatever
+                            // the editor's own pointer does.
+                            if (what.StartsWith("ayuda="))
+                            {
+                                Hud?.PinTip(what.Substring("ayuda=".Length));
+                                break;
+                            }
                             // «wheel=1» a notch of the wheel up (-1 down) over the screen's middle; «wheelx=1» sideways, as macOS turns it with Shift.
                             if (what.StartsWith("wheel=") || what.StartsWith("wheelx="))
                             {

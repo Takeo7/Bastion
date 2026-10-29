@@ -7,9 +7,9 @@ Las normas de siempre:
 - seco, sin chistes;
 - nada que se llame como algo del botín (prueba del 18/10, #13).
 
-## La caravana
+## La autocaravana
 
-- **La caravana**: «Literas para los primeros y el almacén debajo de los asientos. Todo lo demás está por levantar.»
+- **La autocaravana**: «Literas para los primeros y el almacén debajo de los asientos. Todo lo demás está por levantar.»
 
 ## Defensas a mano
 
@@ -89,7 +89,7 @@ Cuando llega:
 - **línea:** «Defienden los sanos. Los heridos y los mordidos se quedan dentro.»
 
 La caída:
-- **con supervivientes:** «El Bastión ha caído» + «Se pierde lo levantado y lo del almacén. Los que quedan huyen con la caravana y lo puesto, y vuelven a empezar en otro claro.» Delante va «Otra vez.», por Atalaya.
+- **con supervivientes:** «El Bastión ha caído» + «Se pierde lo levantado y lo del almacén. Los que quedan huyen con la autocaravana y lo puesto, y vuelven a empezar en otro claro.» Delante va «Otra vez.», por Atalaya.
 - **sin nadie:** «No queda nadie» + «El Bastión ha caído con todos dentro. La campaña termina aquí.»
 
 Si se aguanta, se quedan los finales del asedio de prueba: «El Bastión aguanta: los que quedan se retiran» y «…no queda ninguno en pie».

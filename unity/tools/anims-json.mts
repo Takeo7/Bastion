@@ -14,6 +14,8 @@ const clips: Record<string, Record<string, unknown>> = {};
 for (const [id, a] of Object.entries(m.ANIMATIONS as Record<string, Record<string, unknown>>)) {
   clips[id] = Object.fromEntries(keep.filter((k) => a[k] !== undefined).map((k) => [k, a[k]]));
 }
+// (Unity's own, Gameplay 29/10 on Ana's #10: a blow from above for the pan and the crowbar, Mixamo's axe brought down.)
+clips.macheteChop = { pack: 'mixamo', fbx: 'Standing Melee Attack Downward' };
 const out = join(root, 'unity/Bastion/Assets/Bastion/Client/Resources/Anims.json');
 const anims = {
   clips,
@@ -46,5 +48,17 @@ const anims = {
   weapons: Object.fromEntries(Object.entries(m.WEAPONS as Record<string, Record<string, unknown>>).map(([id, w]) => [id, Object.fromEntries(Object.entries(w).filter(([k]) => k !== 'pack'))])),
   unitWeapons: m.UNIT_WEAPONS,
 };
+// (Unity's own, Ana's #10, Arturo 29/10: four blades more, in the belt's slot as the machete; Apocalypse's models, at
+// the size the machete's has against them. `grip` where the fist closes, `along` the way it runs from there, in the
+// model's own frame: the pan by the end of its handle, the pan itself ahead; the bat a hand over its knob; the crowbar
+// by its straight end, the claw ahead; the chainsaw by its back handle, its other hand on the one over its body
+// (`two`), and across the back, too big for the belt. The pan and the crowbar strike from above (`stroke`, macheteChop), the
+// bat and the chainsaw across as the machete.)
+Object.assign(anims.weapons, {
+  pan: { fbx: 'apocalypse:SM_Prop_Pan_01', melee: true, size: 0.75, grip: [-0.4, 0.07, 0], along: [1, 0, 0], stroke: 'chop' },
+  bat: { fbx: 'SM_Wep_Bat_Wood_01', melee: true, size: 0.8, grip: [0, 0, 0.1] },
+  crowbar: { fbx: 'SM_Wep_Crowbar_01', melee: true, size: 0.65, grip: [0, 0, -0.4], stroke: 'chop' },
+  chainsaw: { fbx: 'SM_Wep_ChainSaw_01', melee: true, size: 0.75, grip: [-0.06, 0.02, 0], two: [-0.06, 0.15, 0.28], slung: true },
+});
 writeFileSync(out, JSON.stringify(anims, null, 1) + '\n');
 console.log(Object.keys(clips).length, 'clips ->', out.slice(root.length + 1));

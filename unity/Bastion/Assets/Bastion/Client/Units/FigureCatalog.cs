@@ -22,6 +22,9 @@ namespace Bastion.Client.Units
         /// <summary>POLYGON's characters and attachments by their prefab's name (the radio's voices: Voices).</summary>
         public string[] characterNames = Array.Empty<string>();
         public GameObject[] characters = Array.Empty<GameObject>();
+        /// <summary>POLYGON's other atlases the special dead may wear by their name (UnitViews.DeadAtlases: the Hinchados').</summary>
+        public string[] atlasNames = Array.Empty<string>();
+        public Texture2D[] atlases = Array.Empty<Texture2D>();
         /// <summary>Seconds into each clip after which the body no longer moves (a death: it lies still; syntyAnims.ts settleOf).</summary>
         public float[] settles = Array.Empty<float>();
         /// <summary>
@@ -37,9 +40,13 @@ namespace Bastion.Client.Units
         Dictionary<string, AnimationClip> clipBy;
         Dictionary<string, GameObject> weaponBy;
         Dictionary<string, GameObject> characterBy;
+        Dictionary<string, Texture2D> atlasBy;
 
         /// <summary>A POLYGON character's (or attachment's) prefab by its name (SM_Chr_Boss_Female_01…), or null.</summary>
         public GameObject Character(string name) => Find(ref characterBy, characterNames, characters, name);
+
+        /// <summary>A POLYGON atlas by its texture's name (PolygonZombieBoss_03_A…), or null.</summary>
+        public Texture2D Atlas(string name) => Find(ref atlasBy, atlasNames, atlases, name);
 
         /// <summary>A weapon's model by its Synty name (WeaponArt.fbx), or null.</summary>
         public GameObject Weapon(string fbx) => Find(ref weaponBy, weaponNames, weapons, fbx);

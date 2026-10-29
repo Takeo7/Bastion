@@ -47,7 +47,7 @@ namespace Bastion.UI.Hud
                 Objective = "Abatid a todo lo que haya",
                 Turns = "Sin límite de turnos",
                 // With Lore's marks, as the campaign's briefings come (the key words, the objective).
-                Briefing = "Aviso del Refugio de Bielsa. Allí queda un **equipo de radio** entero. ==Traedlo a La Lata.==",
+                Briefing = "Aviso del Refugio de Metsovo. Allí queda un **equipo de radio** entero. ==Traedlo a La Lata.==",
             });
             hud.Log("La escuadra llega a la zona.", "#8fd05a");
             foreach (var step in Steps) Step(step);

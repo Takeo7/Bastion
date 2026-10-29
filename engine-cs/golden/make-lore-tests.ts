@@ -130,7 +130,7 @@ for (const id of Object.keys(L.REGION_LORE) as (keyof typeof L.REGION_LORE)[]) {
 // Marea before level 4, when nobody knows of it. From level 4 it is the glossary's line; before, «la infestación».
 for (const level of [1, 3, 4, 8])
   eq(level >= L.PARTITURA_LEVEL ? L.GLOSSARY.Nido : 'Sitio donde se juntan los zombis. Hace crecer la infestación; quemarlo la hace retroceder.', `Lore.NestTip(${level})`);
-for (const zone of ['Bielsa', 'El Pantano Gris', 'Los Llanos de Ceniza']) eq(L.rumorAim(zone), `Lore.RumorAim(${lit(zone)})`);
+for (const zone of ['Metsovo', 'El Pantano Gris', 'Los Llanos de Ceniza']) eq(L.rumorAim(zone), `Lore.RumorAim(${lit(zone)})`);
 for (const kind of ['arms', 'ammo', 'armor']) eq(L.craftAim(kind, 'un fusil de asalto'), `Lore.CraftAim(${lit(kind)}, "un fusil de asalto")`);
 
 // ---------------------------------------------------------------- evacuate
@@ -210,7 +210,7 @@ L.VEHICLES.forEach((v, i) => {
   eq(v.female, `Lore.Vehicles[${i}].Female`);
   eq(v.line, `Lore.Vehicles[${i}].Line`);
 });
-for (const zone of ['Bielsa', 'El Pantano Gris', 'La Vega']) {
+for (const zone of ['Metsovo', 'El Pantano Gris', 'La Vega']) {
   eq(L.inZone(zone), `Lore.InZone(${lit(zone)})`);
   for (const tier of [1, 2, 3]) {
     eq(L.vehicleMissionName(tier, zone), `Lore.VehicleMissionName(${tier}, ${lit(zone)})`);
@@ -360,7 +360,8 @@ for (const [k, v] of Object.entries(L.SCAVENGE)) {
   }
   eq(v, `Lore.Scavenge.${cap(k)}`);
 }
-for (const text of [...L.SCAVENGE_BRIEFINGS, L.vehicleBriefing(2, 'Bielsa'), L.PREMISE.lines.join(' '), 'Sin marcas.', '**a** ==b== *c* =d='])
+// The inputs as C# has them too (the premise names the Autocaravana).
+for (const text of [...L.SCAVENGE_BRIEFINGS, L.vehicleBriefing(2, 'Metsovo'), L.PREMISE.lines.join(' '), 'Sin marcas.', '**a** ==b== *c* =d='].map(fixText))
   eq(L.plainMarks(text), `Lore.PlainMarks(${lit(text)})`);
 
 // ---------------------------------------------------------------- searching, loot, glossary, night
@@ -419,7 +420,9 @@ for (const [supplies, items, medicines, food, parts, weapons] of summaries)
   eq(L.lootSummary(supplies, items as never, medicines, food, parts, weapons as never), `Lore.LootSummary(${supplies}, ${list(items)}, ${medicines}, ${food}, ${parts}, ${list(weapons)})`);
 eq(L.lootSummary(34, [], 2), 'Lore.LootSummary(34, new string[] { }, 2)');
 for (const [k, v] of Object.entries(L.GLOSSARY)) eq(v, `Lore.Glossary[${lit(k)}]`);
-count(Object.keys(L.GLOSSARY).length, 'Lore.Glossary');
+// Not in lore.ts (Ana's notes, 29/10 #19, the noise meter in dB): the horde, and in a Limpieza now too, by the noise alone.
+eq('Los muertos que entran por los bordes. El ruido y los turnos que pasan llenan el medidor, en dB: a 90 se oye llegar una oleada, que entra un turno después. En la Limpieza solo lo llena el ruido; en las demás misiones, además, llegan unos pocos cada turno.', 'Lore.Glossary["Horda"]');
+count(Object.keys(L.GLOSSARY).length + 1, 'Lore.Glossary');
 for (const k of ['label', 'briefing', 'report'] as const) eq(L.NIGHT_TEXT[k], `Lore.NightText.${cap(k)}`);
 lines.push(`            Assert.Equal(${fixedList(L.NIGHT_TEXT.rules)}, Lore.NightText.Rules);`);
 eq(L.litNote(), 'Lore.LitNote()');
@@ -472,7 +475,7 @@ for (const [k, v] of Object.entries(L.ALARM_NAMES)) eq(v, `Lore.AlarmNames[${lit
 for (const biome of ['city', 'wilds', 'facility'] as const) for (const seed of [0, 3, 17, -5, 2147483647]) eq(L.missionName(biome, 'El Pantano Gris', seed), `Lore.MissionName(${lit(biome)}, "El Pantano Gris", ${seed})`);
 for (const site of ['roadside', 'industrial'] as const) for (const seed of [1, 6]) eq(L.missionName('city', 'Tarbes', seed, site), `Lore.MissionName("city", "Tarbes", ${seed}, ${lit(site)})`);
 for (const [k, v] of Object.entries(L.LANDMARKS)) eq(v, `Lore.Landmarks[${lit(k)}]`);
-for (const zone of ['Bielsa', 'El Pantano Gris', 'Los Llanos de Ceniza']) {
+for (const zone of ['Metsovo', 'El Pantano Gris', 'Los Llanos de Ceniza']) {
   eq(L.toZone(zone), `Lore.ToZone(${lit(zone)})`);
   eq(L.ofZone(zone), `Lore.OfZone(${lit(zone)})`);
   for (const level of [2, 5]) for (const reached of [true, false]) {
@@ -488,7 +491,7 @@ for (const level of [2, 5]) {
   eq(L.floodedListLabel(level, ['Tarbes', 'Koper', 'Rudnik']), `Lore.FloodedListLabel(${level}, new[] { "Tarbes", "Koper", "Rudnik" })`);
   eq(L.floodedZoneNote(level), `Lore.FloodedZoneNote(${level})`);
 }
-for (const via of [[], ['Bielsa'], ['Bielsa', 'La Vega']]) eq(L.noRoadReason(via), `Lore.NoRoadReason(${list(via)})`);
+for (const via of [[], ['Metsovo'], ['Metsovo', 'La Vega']]) eq(L.noRoadReason(via), `Lore.NoRoadReason(${list(via)})`);
 
 // ---------------------------------------------------------------- story
 section('story');
@@ -554,7 +557,7 @@ for (const region of Object.keys(L.REGION_LORE) as MissionOffer['region'][])
 for (const kind of KINDS)
   for (const map of [{ kind: 'handmade', id: 'clinic' }, { kind: 'generated', biome: 'wilds', seed: 0 }, { kind: 'generated', biome: 'facility', seed: 2147483647 }] as MissionOffer['map'][])
     for (const id of ['m9', 'm10', 'offer-37']) offers.push(plain(id, kind, 'eas', map));
-// Who is held, with and without a title, and an ally with «el» (Bielsa's).
+// Who is held, with and without a title, and an ally with «el» (Metsovo's).
 for (const vip of [undefined, 'Otto Brandt', 'Dr. Femi Adebayo', 'Dra. Irina Sokolova', 'Alcaldesa Mara Velasco', 'Agente Claire Dubois', 'Ing. Kenji Mori'])
   for (const region of ['weu', 'oce'] as const) for (let i = 1; i <= 3; i++) offers.push(plain(`m${i}`, 'rescue', region, { kind: 'generated', biome: 'city', seed: i }, { vip }));
 // What sounds in a sabotage.

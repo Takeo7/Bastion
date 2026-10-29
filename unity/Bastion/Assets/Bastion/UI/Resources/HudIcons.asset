@@ -27,6 +27,14 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 6f9436295675b0a4cbbfa6176cc476e0, type: 3}
   - Id: pistol
     Sprite: {fileID: 21300000, guid: 76a01d15da329774faff16bf89d49346, type: 3}
+  - Id: weapon:pan
+    Sprite: {fileID: 21300000, guid: 6dfd9f944c148704ea74e7cb66c48e07, type: 3}
+  - Id: weapon:bat
+    Sprite: {fileID: 21300000, guid: e1bc92359f5ba4ae68ebe69453cc697e, type: 3}
+  - Id: weapon:crowbar
+    Sprite: {fileID: 21300000, guid: a13e753f3a6c540bfaf07c84592d36f2, type: 3}
+  - Id: weapon:chainsaw
+    Sprite: {fileID: 21300000, guid: a56e1099b67682e40ade6019de67b2c6, type: 3}
   - Id: slash
     Sprite: {fileID: 21300000, guid: c54c4970ee93e2545a8cbffd087741f0, type: 3}
   - Id: overwatchMelee

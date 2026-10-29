@@ -41,12 +41,8 @@ namespace Bastion.Engine
             {
                 // Evacuating is the squad's, by the bus (the `evac` command, docs/PRUEBA-2026-10-14.md P1), not one soldier's ability.
                 if (u.Template != TemplateIds.Vip) list.AddRange(new[] { AbilityIds.Hack, AbilityIds.Search, AbilityIds.SearchRoom, AbilityIds.OpenDoor, AbilityIds.CloseDoor });
-                // Fase 10 (docs/FASE10.md §4): a stone is always at hand, and the blade can keep watch too.
-                if (u.Arms != null)
-                {
-                    list.Add(AbilityIds.Stone);
-                    if (list.Contains(AbilityIds.Overwatch)) list.Insert(list.IndexOf(AbilityIds.Overwatch) + 1, AbilityIds.OverwatchMelee);
-                }
+                // Fase 10 (docs/FASE10.md §4): the blade can keep watch too. The stone is the board's since 29/10 (Piedras).
+                if (u.Arms != null && list.Contains(AbilityIds.Overwatch)) list.Insert(list.IndexOf(AbilityIds.Overwatch) + 1, AbilityIds.OverwatchMelee);
             }
             return list;
         }
@@ -168,6 +164,7 @@ namespace Bastion.Engine
             var cooldown = u.Cooldowns.TryGetValue(ability, out var cd) ? cd : 0;
             if (cooldown > 0) return $"Disponible en {cooldown} {(cooldown == 1 ? "turno" : "turnos")}.";
             if (!string.IsNullOrEmpty(def.Charge) && !((u.Charges.TryGetValue(def.Charge!, out var left) ? left : 0) > 0)) return "No quedan usos.";
+            if (Content.RunsChainsaw(u, ability) && !((u.Charges.TryGetValue(ChargeIds.Fuel, out var fuel) ? fuel : 0) > 0)) return "La motosierra no tiene gasolina hasta la próxima misión.";
             var ammo = AmmoNeeded(u, ability);
             if (ammo > 0 && (Content.IsAttack(ability) ? Content.RoundsOf(u, ability) : u.Ammo) < ammo)
             {

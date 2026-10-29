@@ -110,22 +110,19 @@ namespace Bastion.UI.Combat
             hoverMaterial = hover.GetComponent<MeshRenderer>().sharedMaterial;
             hover.gameObject.SetActive(false);
 
-            // The picked one's: three arcs (0.5–0.58 of a tile), a gap between each, over a thin dark edge that keeps them apart from the ground.
+            // The picked one's: Apocalypse's thin ring, white (0.54 of a tile; Ana, Arturo 29/10: much thinner).
             var ring = Layer("Elegido", 3102, false, false);
+            ring.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = RingTexture();
             build.Clear();
-            build.Arc(Vector3.zero, 0.47f * T, 0.61f * T, 0, Mathf.PI * 2, 48, Hex(0, 0x59));
-            for (var i = 0; i < 3; i++)
-            {
-                var a = i * Mathf.PI * 2 / 3;
-                build.Arc(Vector3.up * 0.004f, 0.5f * T, 0.58f * T, a, a + Mathf.PI * 2 / 3 - 0.35f, 8, Hex(0xffffff, 0xf2));
-            }
+            Ring(build, Vector3.zero, 0.54f * T, Hex(0xffffff, 0xf2));
             ring.sharedMesh = build.Build(null);
             picked = ring.transform;
             picked.gameObject.SetActive(false);
 
             var other = Layer("Elegido del compañero", 3102, false, false);
+            other.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = RingTexture();
             build.Clear();
-            build.Arc(Vector3.zero, 0.5f * T, 0.58f * T, 0, Mathf.PI * 2, 40, Hex(0xffffff, 0xbf));
+            Ring(build, Vector3.zero, 0.54f * T, Hex(0xffffff, 0xbf));
             other.sharedMesh = build.Build(null);
             partner = other.transform;
             partnerMaterial = other.GetComponent<MeshRenderer>().sharedMaterial;
@@ -140,9 +137,9 @@ namespace Bastion.UI.Combat
             partnerHoverMaterial = theirs.GetComponent<MeshRenderer>().sharedMaterial;
             partnerHover.gameObject.SetActive(false);
 
-            // Under each enemy in sight (unitViews.ts ring: 0.33–0.46 of a tile, ALIEN_COLOR at 0.95).
+            // Under each enemy in sight: the same thin ring, 0.42 of a tile, in ALIEN_COLOR at 0.95 (unitViews.ts drew a band 0.33–0.46).
             build.Clear();
-            build.Arc(Vector3.zero, 0.33f * T, 0.46f * T, 0, Mathf.PI * 2, 32, Hex(0xff4d4d, 0xf2));
+            Ring(build, Vector3.zero, 0.42f * T, Hex(0xff4d4d, 0xf2));
             enemyRing = build.Build(null);
 
             // A shield on each side (0.62 of a tile), facing the camera, over everything.
@@ -229,7 +226,7 @@ namespace Bastion.UI.Combat
                         if (n == null && soft != null && soft(p.X + d.X, p.Y + d.Y, p.Z)) continue;
                         Side(p.X, p.Y, side, floor + 0.06f * T, out var a, out var b);
                         (t.Dash ? dashSegs : walkSegs).Add(new[] { a, b });
-                        Strip(p.X, p.Y, side, floor + 0.03f * T, planning ? PlanTint : t.Dash ? DashFill : WalkFill, fill);
+                        Strip(build, p.X, p.Y, side, floor + 0.03f * T, planning ? PlanTint : t.Dash ? DashFill : WalkFill, fill);
                     }
                     if (t.Detected)
                     {
@@ -275,7 +272,37 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>A strip inside a tile's side, the fill's colour at the edge and gone FadeDepth in (overlays.ts fadeTexture: 1, 0.45 at a third, 0).</summary>
-        void Strip(int x, int y, int side, float h, Color32 color, float alpha)
+        static Texture2D ringTexture;
+
+        /// <summary>
+        /// The units' ring: Synty INTERFACE Apocalypse HUD's SPR_HUD_Apocalypse_Ring_Large_02_Clean (Ana's #2, Arturo 29/10), a
+        /// thin white line round 0.887 of the picture's half, tinted by the mark's colour.
+        /// </summary>
+        internal static Texture2D RingTexture()
+        {
+            if (ringTexture != null) return ringTexture;
+            ringTexture = Resources.Load<Texture2D>("Combat/Aro");
+            if (ringTexture != null) ringTexture.wrapMode = TextureWrapMode.Clamp;
+            return ringTexture;
+        }
+
+        /// <summary>
+        /// A flat ring of `radius` round `c` in `color` (RingTexture's picture, sized so its line falls there), with two dark
+        /// threads just outside and two just inside it that keep it apart from snow and light floors.
+        /// </summary>
+        internal static void Ring(MeshBuilder into, Vector3 c, float radius, Color32 color)
+        {
+            void Square(float r, Vector3 at, Color32 tint)
+            {
+                var h = r / 0.887f;
+                into.Quad(at + new Vector3(-h, 0, -h), at + new Vector3(h, 0, -h), at + new Vector3(h, 0, h), at + new Vector3(-h, 0, h), tint);
+            }
+            var dark = Hex(0, (byte)(color.a * 0.6f));
+            foreach (var k in new[] { 1.06f, 1.035f, 0.965f, 0.94f }) Square(radius * k, c, dark);
+            Square(radius, c + Vector3.up * 0.002f, color);
+        }
+
+        static void Strip(MeshBuilder into, int x, int y, int side, float h, Color32 color, float alpha)
         {
             Side(x, y, side, h, out var a, out var b);
             var middle = Board.Corner(x, y, h) + new Vector3(T / 2, 0, -T / 2);
@@ -285,8 +312,34 @@ namespace Bastion.UI.Combat
             var c0 = Alpha(color, alpha);
             var c1 = Alpha(color, alpha * 0.45f);
             var c2 = Alpha(color, 0);
-            build.Quad(a, b, b + inward * k, a + inward * k, c0, c0, c1, c1);
-            build.Quad(a + inward * k, b + inward * k, b + inward * FadeDepth, a + inward * FadeDepth, c1, c1, c2, c2);
+            into.Quad(a, b, b + inward * k, a + inward * k, c0, c0, c1, c1);
+            into.Quad(a + inward * k, b + inward * k, b + inward * FadeDepth, a + inward * FadeDepth, c1, c1, c2, c2);
+        }
+
+        /// <summary>
+        /// An area of tiles bordered as the reach is: a strip fading in from each outer side, and the edge with its corners
+        /// rounded over a dark stroke, all into `into` in `color` (an enemy's field of view: Ana's #14, Arturo 29/10).
+        /// </summary>
+        internal static void Border(MeshBuilder into, GameState s, IList<Pos> tiles, Color32 color, float fill, float edge)
+        {
+            var inside = new HashSet<int>();
+            foreach (var t in tiles) inside.Add(t.X * 1024 + t.Y);
+            var segs = new List<Vector3[]>();
+            foreach (var p in tiles)
+            {
+                var floor = Board.TileToWorld(s, p).y;
+                for (var side = 0; side < 4; side++)
+                {
+                    var d = Grid.Dirs4[side];
+                    if (inside.Contains((p.X + d.X) * 1024 + p.Y + d.Y)) continue;
+                    Side(p.X, p.Y, side, floor + 0.06f * T, out var a, out var b);
+                    segs.Add(new[] { a, b });
+                    Strip(into, p.X, p.Y, side, floor + 0.03f * T, color, fill);
+                }
+            }
+            var rounded = RoundCorners(segs, CornerR);
+            foreach (var seg in rounded) into.Line(seg[0], seg[1], EdgeShadePx, Shade);
+            foreach (var seg in rounded) into.Line(seg[0], seg[1], EdgePx, Alpha(color, edge));
         }
 
         /// <summary>A square frame on a tile (overlays.ts detect: a four-sided ring 0.46–0.63 turned 45°).</summary>
@@ -415,6 +468,7 @@ namespace Bastion.UI.Combat
             while (enemyRings.Count < n)
             {
                 var ring = Layer("Enemigo", 3102, false, false);
+                ring.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = RingTexture();
                 ring.sharedMesh = enemyRing;
                 enemyRings.Add(ring.transform);
             }

@@ -224,7 +224,7 @@ namespace Bastion.Engine.Tests
             var gate = Base.PlacePiece(@base, PieceIds.Gate, 7, 5, 0);
             Assert.Equal(5, Base.DismantleRefund(gate));
             var caravan = Base.PlacePiece(@base, PieceIds.Caravan, 20, 20, 0);
-            Assert.Equal("La caravana no se desmonta.", Base.DismantleBlocker(caravan));
+            Assert.Equal("La autocaravana no se desmonta.", Base.DismantleBlocker(caravan));
             Assert.Null(Base.DismantleBlocker(gate));
         }
 

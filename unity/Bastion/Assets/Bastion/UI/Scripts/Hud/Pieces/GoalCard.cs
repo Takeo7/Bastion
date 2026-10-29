@@ -67,12 +67,17 @@ namespace Bastion.UI.Hud
             tips.Attach(goal, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
             if (m.TurnsLeft >= 0) Ui.Text(HudText.Mission.Turns(m.TurnsLeft), m.TurnsLeft <= 3 ? "timer timer--urgent" : "timer", host);
             if (!string.IsNullOrEmpty(m.WaveText)) tips.Attach(Ui.Text(m.WaveText, m.WaveUrgent ? "timer timer--urgent" : "timer", host), m.WaveTip);
+            // The noise meter (Ana's notes, Arturo 29/10): «RUIDO», the bar with a mark each 10 dB, and the dB; grey, amber
+            // from 60, red from 80.
             if (m.HordeFill >= 0)
             {
-                var horde = Ui.El("horde" + (m.HordeFill >= 1 ? " horde--full" : ""), host);
+                var level = m.HordeFill >= 1 ? " horde--full" : m.HordeDb >= 80 ? " horde--loud" : m.HordeDb >= 60 ? " horde--raised" : "";
+                var horde = Ui.El("horde" + level, host);
                 Ui.Text(HudText.Mission.Horde, "horde__label", horde);
                 var bar = Ui.El("horde__bar well", horde);
                 Ui.El("horde__fill", bar).style.width = Length.Percent(Mathf.Clamp01(m.HordeFill) * 100);
+                for (var db = 50; db < 90; db += 10) Ui.El("horde__mark", bar).style.left = Length.Percent((db - 40) * 2);
+                Ui.Text(HudText.Mission.Decibels(m.HordeDb), "horde__db", horde);
                 tips.Attach(horde, m.HordeTitle);
             }
             if (!string.IsNullOrEmpty(m.Alert)) Ui.Text(m.Alert, "timer timer--urgent", host);

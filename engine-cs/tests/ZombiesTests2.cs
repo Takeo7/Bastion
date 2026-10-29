@@ -324,6 +324,41 @@ namespace Bastion.Engine.Tests
             Assert.Equal(new[] { 2 }, Waves(Turns(loud, 1)).Select((e) => e.R.Turn));
         }
 
+        [Fact(DisplayName = "the Limpieza › only the noise brings the horde (Arturo, 29/10): none come every turn, a wave once the noise fills the clock; the meter says how near")]
+        public void OnlyTheNoiseBringsTheHordeToALimpieza()
+        {
+            GameState Setup()
+            {
+                var st = Field(40, 40);
+                st.Mission.Kind = MissionKinds.Elimination;
+                st.Mission.Horde = new List<string> { TemplateIds.Zombie, TemplateIds.Zombie };
+                AddUnit(st, "s1", TemplateIds.Rookie, 20, 20, extra: (u) => Hp(u, 50));
+                // One left to clear, far off, so the Limpieza isn't won.
+                AddUnit(st, "z1", TemplateIds.Zombie, 1, 1, extra: (u) => Hp(u, 50));
+                return st;
+            }
+            var quiet = Setup();
+            var events = new List<GameEvent>();
+            for (var i = 0; i < 2 * Content.Horde.Wave / Content.Horde.PerTurn; i++)
+            {
+                var turn = NewSim(quiet, i + 1);
+                turn.RunAlienTurn();
+                events.AddRange(turn.Events);
+            }
+            Assert.Empty(Of<ReinforcementsIncomingEvent>(events));
+            Assert.Equal(0, Rules.HordeFill(quiet));
+            var loud = Setup();
+            loud.Mission.Noise = Content.Horde.Wave / 2;
+            Assert.Equal(0.5, Rules.HordeFill(loud));
+            loud.Mission.Noise = Content.Horde.Wave;
+            var sim = NewSim(loud, 1);
+            sim.RunAlienTurn();
+            Assert.Equal(new[] { 2 }, Of<ReinforcementsIncomingEvent>(sim.Events).Select((e) => e.R.Turn));
+            // Without a horde (a siege, with waves of its own), no meter.
+            loud.Mission.Horde = null;
+            Assert.Null(Rules.HordeFill(loud));
+        }
+
         [Fact(DisplayName = "the Saqueo › a few of the dead come in every turn on any mission left by bus, twice as many while a sabotage alarm sounds (playtest 2026-10-15, #11, #14)")]
         public void AFewOfTheDeadComeInEveryTurn()
         {

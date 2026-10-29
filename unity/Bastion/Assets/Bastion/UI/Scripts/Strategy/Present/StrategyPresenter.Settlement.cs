@@ -169,7 +169,7 @@ namespace Bastion.UI.Strategy
             {
                 var up = Campaign.NextLevel(c);
                 if (up == null) v.Note = Lore.LevelText.Top;
-                else v.Actions.Add(new PieceActionView { Action = "levelUp", Label = $"Subir a {Lore.BastionLevelThe(up.Level)} · {up.Cost} §", Why = Or(pending, Campaign.LevelUpBlocker(c) ?? ""), Hover = Lore.LevelUpLine(up.Level, up.Cost) });
+                else v.Actions.Add(new PieceActionView { Action = "levelUp", Label = $"Subir a {Lore.BastionLevelThe(up.Level)}\u00a0·\u00a0{up.Cost}\u00a0§", Why = Or(pending, Campaign.LevelUpBlocker(c) ?? ""), Hover = Lore.LevelUpLine(up.Level, up.Cost) });
             }
             if (def.Charges != null && (p.Charges ?? 0) < def.Charges)
             {

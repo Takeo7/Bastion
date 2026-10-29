@@ -25,7 +25,7 @@ namespace Bastion.UI.Hud
 
         sealed class Floating
         {
-            public Label Label;
+            public VisualElement Label;
             public Vector3 World;
             public float Born;
             /// <summary>A pin's: how long it stays.</summary>
@@ -75,10 +75,22 @@ namespace Bastion.UI.Hud
             layer.EnableInClassList("flags-layer--close", on);
         }
 
-        /// <summary>A word or number rising and fading over `world` (damage, «CRÍTICO −5», «ATURDIDO»…); kind: damage, crit, info, warn, callout.</summary>
-        public void Float(Vector3 world, string text, string kind)
+        /// <summary>
+        /// A word or number rising and fading over `world` (damage, «CRÍTICO −5», «ATURDIDO»…); kind: damage, crit, info, warn,
+        /// callout; `iconId`, a HUD icon before it (a weapon found: Ana's notes, Arturo 29/10).
+        /// </summary>
+        public void Float(Vector3 world, string text, string kind, string iconId = null)
         {
-            var label = Ui.Text(text, "float float--" + kind, layer);
+            VisualElement label;
+            // With a picture, a row of it and the word (a Label with children no longer measures its text).
+            if (iconId != null && icon?.Invoke(iconId) is Sprite picture)
+            {
+                label = Ui.El("float float--" + kind + " float--icon", layer);
+                Ui.El("float__icon", label).style.backgroundImage = new StyleBackground(picture);
+                Ui.Text(text, "float__text", label);
+                label.Query<VisualElement>().ForEach(x => x.pickingMode = PickingMode.Ignore);
+            }
+            else label = Ui.Text(text, "float float--" + kind, layer);
             label.pickingMode = PickingMode.Ignore;
             floats.Add(new Floating { Label = label, World = world, Born = Time.time });
         }

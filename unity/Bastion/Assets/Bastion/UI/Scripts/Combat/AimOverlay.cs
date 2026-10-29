@@ -75,10 +75,12 @@ namespace Bastion.UI.Combat
 
         void Awake()
         {
-            // The target's ring (0.5–0.62 of a tile), tinted by its material; the light under a picked one, a disc that fades out.
+            // The target's ring (the units' thin one, 0.56 of a tile), tinted by its material; the light under a picked one, a
+            // disc that fades out.
             ring = Layer("Blanco", 3106, false);
+            ring.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = MoveOverlay.RingTexture();
             build.Clear();
-            build.Arc(Vector3.zero, 0.5f * T, 0.62f * T, 0, Mathf.PI * 2, 40, MoveOverlay.Hex(0xffffff));
+            MoveOverlay.Ring(build, Vector3.zero, 0.56f * T, MoveOverlay.Hex(0xffffff));
             ring.sharedMesh = build.Build(null);
             ringMaterial = ring.GetComponent<MeshRenderer>().sharedMaterial;
             ring.gameObject.SetActive(false);
@@ -363,7 +365,8 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// One enemy's field of view (overlays.ts setVision; Arturo, 17/10): the tiles it sees in its cone and its line of
-        /// sight washed faintly in sight's red, those where it would notice a hidden soldier more (no edge line: 18/10 #30).
+        /// sight washed faintly in sight's red, those where it would notice a hidden soldier more; bordered as a soldier's
+        /// reach, with its corners rounded (Ana's #14, Arturo 29/10; the web had dropped its square edge line, 18/10 #30).
         /// Null, none. Apart from what is armed (Clear leaves it).
         /// </summary>
         public void ShowVision(GameState s, IList<Pos> seen, IList<Pos> noticed)
@@ -382,6 +385,7 @@ namespace Bastion.UI.Combat
                 }
                 Wash(seen, 0x29, 0.015f);
                 Wash(noticed, 0x38, 0.016f);
+                MoveOverlay.Border(build, s, seen, red, 0.18f, 0.6f);
             }
             vision.sharedMesh = build.Build(vision.sharedMesh);
         }

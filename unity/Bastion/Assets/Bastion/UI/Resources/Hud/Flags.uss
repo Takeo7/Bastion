@@ -30,6 +30,11 @@
     background-color: var(--t-danger);
 }
 
+.uflag--enemy .pips--hp .pip--on {
+    background-color: rgba(0, 0, 0, 0);
+    -unity-background-image-tint-color: var(--t-danger);
+}
+
 .uflag__armor {
     flex-direction: row;
     margin-left: 3px;
@@ -131,12 +136,27 @@
     background-color: rgba(120, 20, 14, 0.9);
 }
 
-/* An enemy that sees one of the squad (styles.css .uflag.watching): an eye in the stamp's red at the row's start. */
+/* A weapon found: its picture before the word, in the word's colour (Ana's notes, Arturo 29/10). */
+.float--icon {
+    flex-direction: row;
+    align-items: center;
+}
+
+.float__icon {
+    width: 30px;
+    height: 18px;
+    margin-right: 6px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+/* An enemy that sees one of the squad (styles.css .uflag.watching): an eye at the row's start, only its outline and
+   pupil in the muted text (Ana, Arturo 29/10: the stamp's red one was too loud). */
 .uflag__eye {
-    width: 16px;
-    height: 10px;
+    width: 13px;
+    height: 8px;
     margin-right: 3px;
-    color: var(--t-stamp);
+    color: var(--t-muted);
 }
 
 /* Whose ping it is (styles.css .ping-tag): white on the player's colour, darkened, a ring of it round. */

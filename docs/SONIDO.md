@@ -108,3 +108,64 @@ Tajo y carne, sin metal que resuene. Para el machete no sirven los golpes de «m
 Descartadas por licencia (salían en la búsqueda de CC0 de OpenGameArt, pero piden atribución o compartir igual): *Dark ambiance* (CC-BY-SA), *Dark Fallout* (CC-BY-SA), *Post Apocalypse* de Alexandr Zhelanov (CC-BY), *Desolate* de Matthew Pablo (CC-BY), *Horror Soundtrack: The Hangar* (CC-BY).
 
 **En total:** 37 originales, 33 MB, en `assets-src/sonido/`. En el repositorio, 51 tomas y fondos: 8,1 MB, en `public/audio/recorded/`.
+
+## Desde la 0.10.1: los de Unity (29/10)
+
+Con `packages/` congelado, los sonidos grabados nuevos van por la parte de Unity:
+- **La herramienta:** `unity/tools/sonido/grabados.mjs`, que recorta igual que `convert.mjs`.
+- **Lo recortado:** `unity/tools/sonido/grabados/`, en git, con su `index.json`.
+- **En el juego:** `generar.mjs` los añade a los de la 0.10.1 (docs/UNITY-SONIDO.md).
+
+Los originales van a `assets-src/sonido/`, como siempre.
+
+```bash
+node unity/tools/sonido/grabados.mjs --bajar
+```
+
+Son para las notas de Ana del 29/10 (docs/PRUEBA-2026-10-29.md):
+- **#1:** el Hinchado, con su voz, sus pasos y su muerte; hasta ahora usaba los del zombi común.
+- **#3:** su estallido, más fuerte.
+- **#10:** las armas cuerpo a cuerpo nuevas.
+
+Arturo dio el «sí» a la descarga el 29/10. Cada licencia está comprobada en la página del sonido, y cada original, por su duración frente a la página.
+
+| Grupo | Cuándo | Tomas |
+|---|---|---|
+| `bloater.voice` | el Hinchado andando, a la vista (como el gruñido del zombi); más grave (0,75) | 7 |
+| `bloater.step` | sus pasos | 6 |
+| `bloater.death` | su muerte, justo antes de reventar; algo más grave (0,85) | 3 |
+| `bloater.burst` | la salpicadura, sobre la explosión (2 dB más fuerte y más grave que la de la granada) | 2 |
+| `melee.blunt` | el golpe en el cuerpo de la sartén, el bate y la palanca | 6 |
+| `melee.pan`, `melee.bat`, `melee.crowbar` | el toque de cada una, por encima (a 0,6, 0,5 y 0,6) | 2, 1 y 3 |
+| `melee.chainsaw.rev` | la motosierra, al blandirla | 1 |
+| `melee.chainsaw.cut` | la motosierra, al acertar | 5 |
+
+| Uso | Sonido | Autor | Duración | Tamaño |
+|---|---|---|---|---|
+| Hinchado, voz | [Abomination Monster Vocalizations](https://freesound.org/people/marlonnnnnn/sounds/830859/) | marlonnnnnn | 13,5 s | 164 KB |
+| Hinchado, voz | [CREAHmn_Zombie01](https://freesound.org/people/InMotionAudio/sounds/653581/) | InMotionAudio | 51 s | 955 KB |
+| Hinchado, muerte | [horrible gurgling monster](https://freesound.org/people/Darsycho/sounds/653515/) | Darsycho | 54,6 s | 1,2 MB |
+| Hinchado, pasos | [Walking on flesh and bones](https://freesound.org/people/DeathRowBot/sounds/676531/) | DeathRowBot | 14,4 s | 187 KB |
+| Hinchado, salpicadura | [Splatter - body falling apart](https://freesound.org/people/Aegersum/sounds/344904/) | Aegersum | 2,2 s | 61 KB |
+| Hinchado, salpicadura | [Gib sound](https://freesound.org/people/RoozyDB/sounds/504629/) | RoozyDB | 0,5 s | 9 KB |
+| Golpe en el cuerpo | [Smacks And Thwacks (m)](https://freesound.org/people/BarryTheWhite/sounds/396345/) | BarryTheWhite | 37 s | 528 KB |
+| Sartén | [Hit with frying pan](https://freesound.org/people/Whiprealgood/sounds/529567/) | Whiprealgood | 0,7 s | 17 KB |
+| Sartén | [Frying Pan Hit](https://freesound.org/people/tbone1999/sounds/401706/) | tbone1999 | 0,4 s | 12 KB |
+| Bate | [Hit by metal baseball bat](https://freesound.org/people/trader_one/sounds/684607/) | trader_one | 0,7 s | 13 KB |
+| Palanca | [Crowbar](https://freesound.org/people/damsur/sounds/443243/) | damsur | 8,6 s | 184 KB |
+| Motosierra, acelerón | [chainsaw start and idle](https://freesound.org/people/kyles/sounds/453259/) | kyles | 10,9 s | 314 KB |
+| Motosierra, corte | [Chainsaw Cutting](https://freesound.org/people/lonemonk/sounds/185579/) | lonemonk | 1:37 | 2,0 MB |
+| Motosierra, corte | [Small Chainsaw 4](https://freesound.org/people/wrinkledsack/sounds/810392/) | wrinkledsack | 2:02 | 1,4 MB |
+
+Medido, sin poder oírlo:
+- **El bate de aluminio** suena como una campana: 460 ms a 1,9 kHz. Solo se usan sus primeros 0,2 s, por debajo del golpe en el cuerpo.
+- **La sartén** suena 190 ms, como los cuchillazos grabados.
+- **La motosierra:** «Chainsaw Cutting» lleva una sirena de ambulancia al principio. Los cortes se toman pasado el segundo 46, cortando a todo gas, y en ellos no hay ningún tono sostenido.
+- **Los golpes nuevos** quedan a ±2 dB de los del cuchillo en la mezcla de Unity.
+
+Se bajaron también tres que se quedan fuera:
+- [gore_gory_blood_smash_flesh_murder](https://freesound.org/people/EricsSoundschmiede/sounds/513309/) (EricsSoundschmiede, 3:24, 2,6 MB): sus tomas eran casi todo siseo, con el brillo en 7 kHz y la media en −32 dB.
+- [Squelching Footsteps](https://freesound.org/people/Adielees9/sounds/369579/) (Adielees9, 11,5 s, 322 KB): está grabado a −50 dB.
+- [Crowbar hits and dings](https://freesound.org/people/lreeve/sounds/862892/) (lreeve, 26 s, 383 KB): golpes de 0,05 s y tintineos que suenan a campana.
+
+**En total:** 17 originales, 10,4 MB, en `assets-src/sonido/`. En el repositorio, 36 tomas: 552 KB, en `unity/tools/sonido/grabados/`.

@@ -150,7 +150,7 @@ groups.town!.push({ name: 'clinic-23-recovery', rngSeed: 23, options: { map: gen
 groups.town!.push({ name: 'ward-24-elimination', rngSeed: 24, options: { map: gen('city', 24, undefined, 'ward'), slots: [...two], kind: 'elimination', difficulty: 3 } });
 groups.town!.push({ name: 'hospital-25-rescue', rngSeed: 25, options: { map: gen('city', 25, undefined, 'hospital'), slots: [...two], kind: 'rescue' } });
 groups.town!.push({ name: 'hospital-26-hack', rngSeed: 26, options: { map: gen('city', 26, undefined, 'hospital'), slots: [0], kind: 'hack', night: true } });
-groups.town!.push({ name: 'story1-27-recovery', rngSeed: 27, options: { map: gen('city', 27), slots: [...two], kind: 'recovery', difficulty: 1, campaignMission: { id: 'story-1', name: 'El consultorio de Bielsa', story: 1 }, snow: true } });
+groups.town!.push({ name: 'story1-27-recovery', rngSeed: 27, options: { map: gen('city', 27), slots: [...two], kind: 'recovery', difficulty: 1, campaignMission: { id: 'story-1', name: 'El consultorio de Metsovo', story: 1 }, snow: true } });
 groups.town!.push({ name: 'story2-28-rescue', rngSeed: 28, options: { map: gen('city', 28), slots: [...two], kind: 'rescue', difficulty: 1, campaignMission: { id: 'story-2', name: 'La doctora', story: 2, item: 'nada' }, vipName: 'Dra. Amara Nwosu' } });
 groups.town!.push({ name: 'living-29-elimination', rngSeed: 29, options: { map: gen('city', 29), slots: [...two], kind: 'elimination', living: true, difficulty: 3 } });
 groups.town!.push({ name: 'vehicle0-30-recovery', rngSeed: 30, options: { map: gen('city', 30), slots: [...two], kind: 'recovery', vehicle: 0 } });

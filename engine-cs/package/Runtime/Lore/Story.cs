@@ -43,16 +43,16 @@ namespace Bastion.Engine
         {
             new StoryChapter
             {
-                Title = "El consultorio de Bielsa",
+                Title = "El consultorio de Metsovo",
                 Kind = "recovery",
                 Biome = "city",
                 Region = "weu",
                 Difficulty = 1,
                 Reward = new MissionReward { Credits = 90 },
-                Briefing = "El consultorio de Bielsa, el pueblo de abajo, sigue cerrado. En su nevera quedaba **insulina**, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. ==Buscad una entrada y traed la insulina.==",
+                Briefing = "El consultorio de Metsovo, el pueblo de abajo, sigue cerrado. En su nevera quedaba **insulina**, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. ==Buscad una entrada y traed la insulina.==",
                 Signature = "",
                 Item = "la insulina",
-                After = "La insulina ya está en la caravana, en una caja con nieve. Hay para todo el invierno.",
+                After = "La insulina ya está en la autocaravana, en una caja con nieve. Hay para todo el invierno.",
             },
             new StoryChapter
             {

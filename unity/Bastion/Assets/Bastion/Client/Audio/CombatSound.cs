@@ -26,6 +26,30 @@ namespace Bastion.Client.Audio
         private const double GrowlChance = 0.5;
         /// <summary>The siren's level right beside it: steady under the fight, not over it.</summary>
         private const float SirenLevel = 0.45f;
+        /// <summary>
+        /// The Hinchado (Ana, 20 p1: each kind of the dead with its own sound): its voice and its death, recorded, played
+        /// lower than taken (they were brighter than the Zombi's growls: 3–5.5 kHz against 1.7–3.8), as something heavier.
+        /// </summary>
+        private const float BloaterVoiceRate = 0.75f;
+        private const float BloaterDeathRate = 0.85f;
+        /// <summary>
+        /// Its burst, a little louder than a grenade (Ana, 20 p1): the blast 2 dB up and deeper, the splatter over it. In
+        /// Unity's mix (29/10), 2–3 dB more over its first second than the grenade's, by the take, and 1 dB more at the peak.
+        /// </summary>
+        private const float BurstBlast = 1.26f;
+        private const float BurstRate = 0.9f;
+        private const float BurstSplatter = 0.45f;
+        /// <summary>
+        /// The new blunt weapons (Ana, 21 p2): a blow is the body's thud with the weapon's own knock over it, at this
+        /// share (the aluminium bat rings: under). The chainsaw revs as it swings and cuts as it hits.
+        /// </summary>
+        private static readonly Dictionary<string, (string group, float gain)> Blunt = new Dictionary<string, (string, float)>
+        {
+            ["pan"] = ("melee.pan", 0.6f),
+            ["bat"] = ("melee.bat", 0.5f),
+            ["crowbar"] = ("melee.crowbar", 0.6f),
+        };
+        private const string Chainsaw = "chainsaw";
 
         private Camera? camera;
         private Func<Vector3> focus = () => Vector3.zero;
@@ -76,10 +100,10 @@ namespace Bastion.Client.Audio
             Sound.Play(name, g, rate, pan, delay, spread: spread);
         }
 
-        private bool Recorded(string group, Vector3? at, float gain = 1, double delay = 0, float spread = 0.04f)
+        private bool Recorded(string group, Vector3? at, float gain = 1, double delay = 0, float spread = 0.04f, float rate = 1, float reverb = 0)
         {
             var (pan, g) = Place(at, gain);
-            return Sound.Recorded(group, g, 1, pan, delay, spread: spread);
+            return Sound.Recorded(group, g, rate, pan, delay, reverb, spread);
         }
 
         /// <summary>The first of these sounds that exists (newer recipes fall back to what is there).</summary>
@@ -101,13 +125,23 @@ namespace Bastion.Client.Audio
         /// <summary>The kind of flesh a target is, for its impacts: «robot» or «flesh».</summary>
         public static string Body(Unit u) => Machine(u) ? "robot" : "flesh";
 
-        /// <summary>«swing», «sword», «stun» or «claw»: the dead's claw bites (their snarl and the bite, recorded); a blade cuts.</summary>
-        public void Melee(string kind, Vector3? at)
+        /// <summary>
+        /// «swing», «sword», «stun» or «claw», with the `weapon` it is done with: the dead's claw bites (their snarl and the
+        /// bite, recorded); a blade cuts; a pan, a bat or a crowbar thuds into the body with its own knock; the chainsaw
+        /// revs as it swings and cuts as it hits.
+        /// </summary>
+        public void Melee(string kind, Vector3? at, string? weapon = null)
         {
             if (kind == "claw" && Sound.HasRecorded("zombie.bite"))
             {
                 Recorded("zombie.attack", at, spread: 0.06f);
                 Recorded("zombie.bite", at, delay: 0.12);
+                return;
+            }
+            if (weapon == Chainsaw && Recorded(kind == "swing" ? "melee.chainsaw.rev" : "melee.chainsaw.cut", at, kind == "swing" ? 1 : 0.8f, spread: 0.03f)) return;
+            if (kind == "sword" && weapon != null && Blunt.TryGetValue(weapon, out var blunt) && Recorded("melee.blunt", at, spread: 0.06f))
+            {
+                Recorded(blunt.group, at, blunt.gain, spread: 0.06f);
                 return;
             }
             if (kind == "sword" && Recorded("melee.blade", at, spread: 0.06f)) return;
@@ -151,42 +185,52 @@ namespace Bastion.Client.Audio
             Sound.Duck(0.55f, 0.6, 1.8);
         }
 
+        /// <summary>The Hinchado bursts (as it dies, or on reaching a soldier): a deeper, louder blast, and what it was full of splattering.</summary>
+        public void Burst(Vector3? at)
+        {
+            At("explosion", at, BurstBlast, rate: BurstRate);
+            Recorded("bloater.burst", at, BurstSplatter, 0.02, reverb: 0.15f);
+            Sound.Duck(0.55f, 0.6, 1.8);
+        }
+
         // ------------------------------------------------------------ moving and acting
 
         public void Step(Unit u, Vector3? at)
         {
             var t = u.Template;
-            At(t == "mec" ? "step.mec" : t == "zombie" ? "step.drag" : "step", at, t == "sectoid" || t == "xenoid" ? 0.6f : 1, spread: 0.1f);
-            if (Template(u)?.Undead == true) DeadWalk(at);
+            // The Hinchado's own, wet and heavy; the rest as in the 0.10.1.
+            if (t != "bloater" || !Recorded("bloater.step", at, 0.8f, spread: 0.06f))
+                At(t == "mec" ? "step.mec" : t == "zombie" ? "step.drag" : "step", at, t == "sectoid" || t == "xenoid" ? 0.6f : 1, spread: 0.1f);
+            if (Template(u)?.Undead == true) DeadWalk(at, t == "bloater");
         }
 
         // ------------------------------------------------------------ the dead and the hurt
 
         private double growlAt = double.NegativeInfinity;
-        private readonly List<Vector3> walking = new List<Vector3>();
+        private readonly List<(Vector3 at, bool bloater)> walking = new List<(Vector3, bool)>();
         private bool walkWaiting;
 
         /// <summary>
         /// One of the dead walking: now and then one growls, the nearest to where the camera looks, and never a choir: one
-        /// at a time, a few seconds apart. Recorded growls only. The steps of a moment are taken together (a group of the
-        /// dead moves at once) and the nearest of them picked.
+        /// at a time, a few seconds apart. Recorded growls only, the Hinchado's its own. The steps of a moment are taken
+        /// together (a group of the dead moves at once) and the nearest of them picked.
         /// </summary>
-        private void DeadWalk(Vector3? at)
+        private void DeadWalk(Vector3? at, bool bloater)
         {
             var player = SoundPlayer.Instance;
             if (at == null || player == null || !Sound.HasRecorded("zombie.growl") || Now - growlAt < GrowlGap) return;
-            walking.Add(at.Value);
+            walking.Add((at.Value, bloater));
             if (walkWaiting) return;
             walkWaiting = true;
             player.After(0.15, () =>
             {
                 walkWaiting = false;
                 var f = focus();
-                var nearest = walking.OrderBy((w) => Vector3.Distance(w, f)).First();
+                var nearest = walking.OrderBy((w) => Vector3.Distance(w.at, f)).First();
                 walking.Clear();
-                if (Vector3.Distance(nearest, f) / tile > GrowlReach || Random() > GrowlChance) return;
+                if (Vector3.Distance(nearest.at, f) / tile > GrowlReach || Random() > GrowlChance) return;
                 growlAt = Now;
-                Recorded("zombie.growl", nearest, 0.8f, spread: 0.08f);
+                if (!nearest.bloater || !Recorded("bloater.voice", nearest.at, 0.8f, spread: 0.08f, rate: BloaterVoiceRate)) Recorded("zombie.growl", nearest.at, 0.8f, spread: 0.08f);
             });
         }
 
@@ -261,9 +305,9 @@ namespace Bastion.Client.Audio
             // The siren falls silent the moment it is destroyed, as its lights go out.
             if (u.Objective && wail != null) Silence(SirenStop.TryGetValue(wail.name, out var s) ? s : 0);
             var t = u.Template;
-            var name = Machine(u) ? "death.robot" : t == "sectoid" ? "death.sectoid" : t == "xenoid" ? "death.runner" : t == "zombie" || t == "mec" ? "death.zombie" : u.Team == Teams.Alien ? "death.advent" : "death.human";
-            // The Acorazado falls as the dead do, heavier.
-            At(name, at, rate: t == "mec" ? 0.85f : 1);
+            var name = Machine(u) ? "death.robot" : t == "sectoid" ? "death.sectoid" : t == "xenoid" ? "death.runner" : t == "zombie" || t == "mec" || t == "bloater" ? "death.zombie" : u.Team == Teams.Alien ? "death.advent" : "death.human";
+            // The Acorazado falls as the dead do, heavier; the Hinchado gurgles its own as it goes (its burst follows).
+            if (t != "bloater" || !Recorded("bloater.death", at, 0.9f, rate: BloaterDeathRate)) At(name, at, rate: t == "mec" ? 0.85f : 1);
             if (u.Team != Teams.Xcom) return;
             Recorded($"soldier.scream.{(u.Appearance?.Sex == "f" ? "f" : "m")}", at, spread: 0.02f);
             if (by != null && Template(by)?.Undead == true) Recorded("zombie.eat", at, delay: 0.5);

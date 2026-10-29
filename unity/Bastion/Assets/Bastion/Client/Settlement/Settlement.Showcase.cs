@@ -24,6 +24,12 @@ namespace Bastion.Client
         bool showPistol;
         Quaternion? showGrip;
         float showTime;
+        /// <summary>
+        /// The player's turn of the soldier, dragging (Ana's #5: TurnShowcase), and where it is going (radians; its front to
+        /// the right on the screen); its sway, faded out once they turn it; and whose turn it is (another soldier, none).
+        /// </summary>
+        float showTurn, showTurnTo, showSway, showSwayK = 1;
+        string showTurnOf;
 
         /// <summary>
         /// A campaign's soldier as Soldados shows them: `look` (Personalizar's draft) or their own, the Armería's weapon in
@@ -49,6 +55,13 @@ namespace Bastion.Client
             string key = soldierId == null ? "" : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { soldierId, look, weapon, fallen, name, band });
             if (key == showcaseKey) return;
             showcaseKey = key;
+            // Turned by the player, they stay so while it is them (Personalizar's draft changes the figure, not them).
+            if (soldierId != showTurnOf)
+            {
+                showTurnOf = soldierId;
+                showTurn = showTurnTo = 0;
+                showSwayK = 1;
+            }
             ClearShowcase();
             if (soldierId == null) return;
             if (showcase == null)
@@ -113,6 +126,22 @@ namespace Bastion.Client
         }
 
         /// <summary>
+        /// The soldier of Soldados and Personalizar turned `degrees` more, as the player drags across them (UI reads the
+        /// drag; Ana's #5): positive turns their front to the right on the screen, following a drag to the right. They
+        /// follow it smoothly and stay as left, without their sway (taken in where it was), until another soldier is shown.
+        /// </summary>
+        public void TurnShowcase(float degrees)
+        {
+            if (showSwayK > 0)
+            {
+                showTurn += showSway;
+                showTurnTo += showSway;
+                showSwayK = 0;
+            }
+            showTurnTo += degrees * Mathf.Deg2Rad;
+        }
+
+        /// <summary>
         /// Personalizar open on `soldierId` (with `draft` as it stands; null, their own look): the other outfits of their sex,
         /// in the draft's head and build, made in the background a step a frame, the nearest in the list to the one worn
         /// first, so that the pointer over one shows it at once. Again when the head or the build changes.
@@ -154,8 +183,9 @@ namespace Bastion.Client
         {
             if (showFigure == null) return;
             showTime += dt;
-            float sway = Mathf.Sin(Time.realtimeSinceStartup * 0.4f) * 0.45f;
-            showFigure.localRotation = Quaternion.Euler(0, (Mathf.Atan2(soldierView.x, -soldierView.y) - sway) * Mathf.Rad2Deg, 0);
+            showSway = Mathf.Sin(Time.realtimeSinceStartup * 0.4f) * 0.45f * showSwayK;
+            showTurn += (showTurnTo - showTurn) * (1 - Mathf.Exp(-14 * dt));
+            showFigure.localRotation = Quaternion.Euler(0, (Mathf.Atan2(soldierView.x, -soldierView.y) - showSway - showTurn) * Mathf.Rad2Deg, 0);
             if (showAnim != null)
             {
                 if (dt <= 0) showAnim.Step(0);

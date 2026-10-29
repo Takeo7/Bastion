@@ -123,7 +123,7 @@ namespace Bastion.Engine
             var need = Abilities.ApNeeded(u, ability);
             // In real time nothing counts actions: its time is what an ability costs (realtime.ts).
             var ap = S.Realtime != null ? 0 : ability == AbilityIds.RunAndGun ? -1 : Abilities.EndsTurn(u, ability) ? Math.Max(u.Ap, need) : need;
-            Emit(new AbilityUsedEvent { Unit = u.Id, Ability = ability, Ap = ap, Cooldown = def.Cooldown ?? 0, Charge = def.Charge });
+            Emit(new AbilityUsedEvent { Unit = u.Id, Ability = ability, Ap = ap, Cooldown = def.Cooldown ?? 0, Charge = def.Charge ?? (Content.RunsChainsaw(u, ability) ? ChargeIds.Fuel : null) });
         }
 
         /// <summary>
@@ -1166,15 +1166,15 @@ namespace Bastion.Engine
             var alarm = m.Kind == MissionKinds.Sabotage && !m.ObjectiveDone ? 2 : 1;
             // A bigger map, more edge to come in by (docs/MAPAS.md §6): as many more as it is longer a side than 48.
             var few = (int)Js.Round(Content.Horde.Trickle[Math.Max(1, Math.Min(4, m.Difficulty ?? 2))] * alarm * Math.Max(1, Math.Max(S.Width, S.Height) / 48.0));
-            if (few != 0)
+            // Not in a Limpieza (Arturo, 29/10): there only the noise brings them, or the map would never be cleared.
+            if (few != 0 && m.Kind != MissionKinds.Elimination)
             {
                 var r = new Reinforcement { Id = $"r{m.Reinforcements.Count + 1}", Turn = turn + 1, Pos = null, Units = Enumerable.Repeat(TemplateIds.Zombie, few).ToList(), Landed = false, Horde = true, Trickle = true };
                 Emit(new ReinforcementsIncomingEvent { R = r });
             }
             // And a whole wave now and then, sooner the more noise the squad makes.
             var sent = S.Mission.Reinforcements.Count((r) => r.Horde == true && r.Trickle != true);
-            // At night the dead are already on their way: the clock runs a turn ahead.
-            var due = (int)Math.Floor((double)((turn + (m.Night == true ? Content.Night.HordeHead : 0)) * Content.Horde.PerTurn + (m.Noise ?? 0)) / Content.Horde.Wave);
+            var due = (int)Math.Floor((double)Rules.HordeClock(m, turn) / Content.Horde.Wave);
             if (due <= sent) return;
             // Heard coming: they're in by an edge at the end of the next enemy turn, and nobody knows where.
             var wave = new Reinforcement { Id = $"r{S.Mission.Reinforcements.Count + 1}", Turn = turn + 1, Pos = null, Units = new List<string>(m.Horde), Landed = false, Horde = true };
@@ -1508,6 +1508,29 @@ namespace Bastion.Engine
     {
         /// <summary>Everything the squad does makes this much more noise than its table says (Ana, 23/10: «un 15 % más de ruido»).</summary>
         public const double SquadLouder = 1.15;
+
+        /// <summary>
+        /// Where the horde's clock stands on `turn` (Sim.CallHorde): the turns gone by and the noise made, a wave every
+        /// Horde.Wave. At night the dead are already on their way: the clock runs a turn ahead. In a Limpieza, the noise
+        /// alone (Arturo, 29/10).
+        /// </summary>
+        public static int HordeClock(MissionState m, int turn)
+        {
+            if (m.Kind == MissionKinds.Elimination) return m.Noise ?? 0;
+            return (turn + (m.Night == true ? Content.Night.HordeHead : 0)) * Content.Horde.PerTurn + (m.Noise ?? 0);
+        }
+
+        /// <summary>
+        /// The noise meter (Ana's notes, 29/10): how near the next wave is, from 0 to 1 (at 1 it is called at the end of the
+        /// squad's turn, unless the field is full); null without a horde.
+        /// </summary>
+        public static double? HordeFill(GameState s)
+        {
+            var m = s.Mission;
+            if (m.Horde == null || m.Horde.Count == 0) return null;
+            var sent = m.Reinforcements.Count((r) => r.Horde == true && r.Trickle != true);
+            return Math.Max(0, Math.Min(1, (double)(HordeClock(m, s.Turn) - sent * Content.Horde.Wave) / Content.Horde.Wave));
+        }
 
         /// <summary>
         /// The places of the whole object standing on place `p` (decor.ts objectAt: a car over three tiles, a bed over two,

@@ -64,17 +64,46 @@
 }
 
 .horde__bar {
-    width: 60px;
+    width: 80px;
     height: 6px;
 }
 
+/* The noise (Ana's notes, Arturo 29/10): grey while quiet, amber from 60 dB, red from 80; a mark each 10 dB. */
 .horde__fill {
     height: 100%;
+    background-color: var(--t-muted);
+}
+
+.horde--raised .horde__fill {
     background-color: var(--t-warn);
 }
 
+.horde--loud .horde__fill,
 .horde--full .horde__fill {
     background-color: var(--t-danger);
+}
+
+.horde__mark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: rgba(10, 12, 13, 0.8);
+}
+
+.horde__db {
+    margin-left: 5px;
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+.horde--raised .horde__db {
+    color: var(--t-warn);
+}
+
+.horde--loud .horde__db,
+.horde--full .horde__db {
+    color: var(--t-danger);
 }
 
 /* ============================================================== compass */

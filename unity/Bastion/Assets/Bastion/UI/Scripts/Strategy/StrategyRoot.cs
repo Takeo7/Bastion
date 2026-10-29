@@ -120,7 +120,7 @@ namespace Bastion.UI.Strategy
             menu = new GameMenu(root, tips, s => Sound?.Invoke(s));
             menu.Chose += what => MenuChose?.Invoke(what);
             menu.Changed += (id, value) => SettingChanged?.Invoke(id, value);
-            soldiers = new SoldiersScreen(root.Q("view"), tips, Icon, relay) { PortraitOf = id => PortraitOf?.Invoke(id) };
+            soldiers = new SoldiersScreen(root.Q("view"), tips, Icon, relay) { PortraitOf = id => PortraitOf?.Invoke(id), Turn = d => Settlement.Instance?.TurnShowcase(d) };
             soldiers.Show(false);
             armory = new ArmoryScreen(root.Q("view"), tips, Icon, relay);
             armory.Show(false);

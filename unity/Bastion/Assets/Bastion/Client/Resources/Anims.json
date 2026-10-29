@@ -730,6 +730,10 @@
   "rifleSprint": {
    "pack": "mixamo",
    "fbx": "Sprint Forward"
+  },
+  "macheteChop": {
+   "pack": "mixamo",
+   "fbx": "Standing Melee Attack Downward"
   }
  },
  "motionOrder": [
@@ -1345,6 +1349,59 @@
    ],
    "sight": 0.122,
    "reflex": true
+  },
+  "pan": {
+   "fbx": "apocalypse:SM_Prop_Pan_01",
+   "melee": true,
+   "size": 0.75,
+   "grip": [
+    -0.4,
+    0.07,
+    0
+   ],
+   "along": [
+    1,
+    0,
+    0
+   ],
+   "stroke": "chop"
+  },
+  "bat": {
+   "fbx": "SM_Wep_Bat_Wood_01",
+   "melee": true,
+   "size": 0.8,
+   "grip": [
+    0,
+    0,
+    0.1
+   ]
+  },
+  "crowbar": {
+   "fbx": "SM_Wep_Crowbar_01",
+   "melee": true,
+   "size": 0.65,
+   "grip": [
+    0,
+    0,
+    -0.4
+   ],
+   "stroke": "chop"
+  },
+  "chainsaw": {
+   "fbx": "SM_Wep_ChainSaw_01",
+   "melee": true,
+   "size": 0.75,
+   "grip": [
+    -0.06,
+    0.02,
+    0
+   ],
+   "two": [
+    -0.06,
+    0.15,
+    0.28
+   ],
+   "slung": true
   }
  },
  "unitWeapons": {

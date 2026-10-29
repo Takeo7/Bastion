@@ -43,6 +43,8 @@ namespace Bastion.EditorTools
             ("throwStone", "mixamo/Throw Object.fbx", true),
             ("knifeStab", "mixamo/Stabbing 3.fbx", false),
             ("macheteSwing", "mixamo/Standing Melee Attack Horizontal.fbx", false),
+            // (A blow from above for the pan and the crowbar: Gameplay 29/10, Ana's #10.)
+            ("macheteChop", "mixamo/Standing Melee Attack Downward.fbx", false),
             ("zombieNeckBite", "mixamo-30fps/Zombie Neck Bite.fbx", false),
             ("zombieHeadbutt", "mixamo-30fps/Zombie Headbutt.fbx", false),
             ("zombieFeed", "mixamo-30fps/Zombie Biting.fbx", false),

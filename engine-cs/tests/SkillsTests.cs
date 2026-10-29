@@ -469,23 +469,63 @@ namespace Bastion.Engine.Tests
             });
         }
 
-        [Fact(DisplayName = "the new actions (docs/FASE10.md §4) › a stone is always at hand, and the blade can keep watch")]
-        public void AStoneIsAlwaysAtHand()
+        [Fact(DisplayName = "the new actions (docs/FASE10.md §4) › the stone comes from the board (Piedras, Ana's notes 29/10), and the blade can keep watch")]
+        public void TheStoneComesFromTheBoard()
         {
             var s = Field16();
             var u = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: Armed);
-            Assert.Contains(AbilityIds.Stone, Abilities.AbilitiesOf(u));
+            Assert.DoesNotContain(AbilityIds.Stone, Abilities.AbilitiesOf(u));
             Assert.Contains(AbilityIds.OverwatchMelee, Abilities.AbilitiesOf(u));
             var list = Abilities.AbilitiesOf(u);
             Assert.Equal(list.IndexOf(AbilityIds.Overwatch) + 1, list.IndexOf(AbilityIds.OverwatchMelee));
+            // The first cell of Lanzar: Brazo suelto's, so whoever had bought it has the stone.
+            var st = Bars.FighterStatsOf(Bars.NoSkills(), Bars.NoGrowth(), new[] { "looseArm" });
+            Assert.Contains(PerkIds.Stones, st.Perks);
+            u.Perks = st.Perks;
+            Assert.Contains(AbilityIds.Stone, Abilities.AbilitiesOf(u));
             Assert.DoesNotContain(AbilityIds.Stone, Abilities.AbilitiesOf(AddUnit(s, "z1", TemplateIds.Zombie, 1, 1)));
+        }
+
+        /// <summary>Armed, and with Piedras bought.</summary>
+        private static void Stones(Unit u)
+        {
+            Armed(u);
+            u.Perks.Add(PerkIds.Stones);
+        }
+
+        [Fact(DisplayName = "the weapons found (Ana's notes, 29/10) › the chainsaw: its fuel comes with it, a blow each, and without it there is no blow")]
+        public void TheChainsaw()
+        {
+            Assert.Equal(Content.ChainsawFuel, Bars.FighterStatsOf(Bars.NoSkills(), Bars.NoGrowth(), new string[0], new string[0], new Arms { Melee = FoundWeaponIds.Chainsaw }).Charges[ChargeIds.Fuel]);
+            var s = Field16();
+            var u = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (x) =>
+            {
+                Armed(x);
+                x.Arms!.Melee = FoundWeaponIds.Chainsaw;
+                x.Charges[ChargeIds.Fuel] = Content.ChainsawFuel;
+            });
+            Assert.Equal(WeaponIds.Chainsaw, Content.AttackWeapon(u, AbilityIds.Slash).Id);
+            Hardy(s, "z1", 6, 5, 60);
+            for (var i = 0; i < Content.ChainsawFuel; i++)
+            {
+                u.Ap = 2;
+                var r = Exec(s, Ability("s1", AbilityIds.Slash, target: "z1"));
+                Assert.True(r.Ok, r.Error);
+            }
+            Assert.Equal(0, u.Charges[ChargeIds.Fuel]);
+            u.Ap = 2;
+            Assert.Equal("La motosierra no tiene gasolina hasta la próxima misión.", Abilities.AbilityBlocker(s, u, AbilityIds.Slash));
+            Assert.Equal("La motosierra no tiene gasolina hasta la próxima misión.", Abilities.AbilityBlocker(s, u, AbilityIds.OverwatchMelee));
+            // Any other blade has no fuel to run out of.
+            u.Arms!.Melee = FoundWeaponIds.Bat;
+            Assert.Null(Abilities.AbilityBlocker(s, u, AbilityIds.Slash));
         }
 
         [Fact(DisplayName = "the new actions (docs/FASE10.md §4) › the stone: heard where it lands, 1 of damage to whoever is there, and the turn goes on")]
         public void TheStone()
         {
             var s = Field16();
-            var u = AddUnit(s, "s1", TemplateIds.Rookie, 2, 2, extra: Armed);
+            var u = AddUnit(s, "s1", TemplateIds.Rookie, 2, 2, extra: Stones);
             var z = Hardy(s, "z1", 8, 2, 5);
             var far = AddUnit(s, "z2", TemplateIds.Zombie, 14, 14);
             var r = Exec(s, Ability("s1", AbilityIds.Stone, tile: P(8, 2)));
@@ -508,7 +548,7 @@ namespace Bastion.Engine.Tests
             var st = Bars.FighterStatsOf(Bars.NoSkills(), Bars.NoGrowth(), new[] { "decoy", "sharpStone" });
             var u = AddUnit(s, "s1", TemplateIds.Rookie, 2, 2, extra: (x) =>
             {
-                Armed(x);
+                Stones(x);
                 x.Mods = st.Mods;
             });
             AddUnit(s, "z1", TemplateIds.Zombie, 14, 14);
@@ -520,7 +560,7 @@ namespace Bastion.Engine.Tests
             var t = Field16();
             AddUnit(t, "s1", TemplateIds.Rookie, 2, 2, extra: (x) =>
             {
-                Armed(x);
+                Stones(x);
                 x.Mods = st.Mods;
             });
             var z = Hardy(t, "z1", 4, 2, 5);

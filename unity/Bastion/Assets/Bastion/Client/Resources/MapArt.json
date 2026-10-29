@@ -161,8 +161,8 @@
   },
   "caravan": {
    "pack": "apocalypse",
-   "fbx": "SK_Veh_Caravan_01",
-   "fit": 3.9,
+   "fbx": "SM_Veh_Camper_01",
+   "fit": 4.6,
    "atlas": "apocalypseVehicle"
   },
   "mobileHome": {

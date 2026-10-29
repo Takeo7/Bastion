@@ -146,7 +146,7 @@ namespace Bastion.Engine.Tests
                     Rng = new Rng(seed),
                     Kind = MissionKinds.Recovery,
                     Difficulty = 1,
-                    CampaignMission = new CampaignMission { Id = "opening", Name = "El consultorio de Bielsa", Story = 1 },
+                    CampaignMission = new CampaignMission { Id = "opening", Name = "El consultorio de Metsovo", Story = 1 },
                 });
                 var label = $"opening/{seed}";
                 Is(MissionKinds.Recovery, s.Mission.Kind, label);

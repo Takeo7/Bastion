@@ -96,7 +96,11 @@ namespace Bastion.UI.Hud
             public const string Random = "MISIÓN AL AZAR";
             public const string ToMenu = "VOLVER AL MENÚ";
             public const string ToMenuTip = "Los dos volvéis al menú principal";
-            public const string Horde = "HORDA";
+            public const string Horde = "RUIDO";
+            public const string NoiseTip = "El ruido que haces y los turnos que pasan atraen a la horda. A 90 dB se oye llegar una oleada, que entra por los bordes un turno después.";
+            public const string NoiseTipQuiet = "Solo el ruido que haces atrae a la horda. A 90 dB se oye llegar una oleada, que entra por los bordes un turno después.";
+
+            public static string Decibels(int db) => $"{db} dB";
 
             public static string Turns(int n) => n == 1 ? "1 TURNO" : $"{n} TURNOS";
         }
@@ -181,10 +185,10 @@ namespace Bastion.UI.Hud
 
         public static class Skills
         {
-            public const string None = "Aún no ha practicado ninguna habilidad";
+            public const string None = "Aún no ha gastado puntos en el tablero";
 
-            public static string Best(string name) => $"Su mejor habilidad: {name}";
-            public static string Tied(string names) => $"Empatan sus mejores habilidades: {names}";
+            public static string Best(string name) => $"Más puntos en el tablero: {name}";
+            public static string Tied(string names) => $"Empatan en el tablero: {names}";
         }
 
         public static class Squad

@@ -17,7 +17,7 @@ namespace Bastion.Engine.Tests
         {
             var played = CampaignAutoRun.Run(4, 2);
             Assert.Null(CampaignAutoRun.Stuck);
-            Assert.Equal(new[] { "El consultorio de Bielsa", "Asedio" }, played.Select((m) => m.Name));
+            Assert.Equal(new[] { "El consultorio de Metsovo", "Asedio" }, played.Select((m) => m.Name));
             Assert.All(played, (m) => Assert.Equal(Outcomes.Victory, m.Outcome));
         }
     }

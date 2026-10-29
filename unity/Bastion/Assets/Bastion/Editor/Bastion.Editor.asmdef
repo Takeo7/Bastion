@@ -3,6 +3,7 @@
     "rootNamespace": "Bastion.EditorTools",
     "references": [
         "Bastion.Client",
+        "Bastion.Client.Audio",
         "Bastion.Engine",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime",

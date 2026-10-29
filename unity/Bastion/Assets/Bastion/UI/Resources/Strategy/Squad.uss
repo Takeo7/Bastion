@@ -523,14 +523,6 @@
     flex-grow: 1;
 }
 
-.debrief-story-toggle {
-    font-size: 13px;
-    background-color: rgba(0, 0, 0, 0);
-    background-image: none;
-    border-width: 0;
-    color: var(--t-accent);
-}
-
 .debrief-continue {
     height: 44px;
     padding: 0 18px;
@@ -538,9 +530,11 @@
     letter-spacing: 2px;
 }
 
+/* The story's page, open beside CONTINUAR (the 0.10.1's p.x-text, 68ch at most). */
 .debrief-story {
-    margin-top: 8px;
+    flex-shrink: 1;
+    max-width: 480px;
+    margin-right: 16px;
     font-size: 13px;
-    -unity-font-style: italic;
     white-space: normal;
 }

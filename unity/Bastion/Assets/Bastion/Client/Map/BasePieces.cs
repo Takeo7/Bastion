@@ -866,7 +866,7 @@ namespace Bastion.Client.Map
         /// <summary>
         /// The Bastion on its lot (playtest 18/10, #40; Base.BastionLot): the building of its stage (two levels each) on its
         /// footprint, its front to the lot's yard (south), the second level of a stage with more on it; worn as the siege
-        /// leaves it. The caravan; the mobile home on its skirt (its porch, its dish); Military's plywood barracón on stilts
+        /// leaves it. The camper (Apocalypse's, Ana's #6: «caravan» still in the code); the mobile home on its skirt (its porch, its dish); Military's plywood barracón on stilts
         /// (solar panels, sandbags, a floodlight); the house with its porch and chimney (sandbags on the porch, a mast).
         /// Round it, its yard: a fire with chairs by it, wood.
         /// </summary>
@@ -896,11 +896,11 @@ namespace Bastion.Client.Map
                     art.Put("caravan", At(spot.x, wear == 3 ? -0.18 : 0, spot.z, spot.yaw, 1, 1, 1, tilt * (r(0) < 0.5 ? -1 : 1), wear == 3 ? 0.06 : 0));
                     if (more && wear < 3)
                     {
-                        // Settled in: its steps, an aerial on the roof and the generator; by its end, its awning (playtest 20/10
-                        // #13: «Caravana con toldo»), a tarp on poles over tiles 0–2 × 5–7 of the lot, a table and two chairs
-                        // under it on 0–1 × 6–7 (base.ts BASTION_YARD), the generator on 7, 3.
+                        // Settled in: its steps and the generator; by its end, its awning (playtest 20/10 #13: «Caravana con
+                        // toldo»), a tarp on poles over tiles 0–2 × 5–7 of the lot, a table and two chairs under it on 0–1 ×
+                        // 6–7 (base.ts BASTION_YARD), the generator on 7, 3. Without 0.10.1's aerial on the roof: the camper
+                        // (Ana's #6, 29/10) has its own full, its panels, drums and a chair under a sunshade in a fence.
                         here.Put("trailerSteps", 0.6, h / 2.0 + 0.25, 0, 0.8);
-                        here.Put("bAerial", -1.1, 0, 0, 0.45, here.Top("caravan") - 0.05);
                         var awning = T(1, 6);
                         foreach (string id in new[] { "bAwning", "bAwningTarp" }) yard.Put(id, awning.u, awning.v, 1, Awning);
                         var table = T(0.5, 6);

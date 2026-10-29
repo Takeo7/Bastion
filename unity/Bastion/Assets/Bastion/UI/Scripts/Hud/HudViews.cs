@@ -109,13 +109,15 @@ namespace Bastion.UI.Hud
         public bool Dead;
         public bool Evacuated;
         public bool InPlay;
+        /// <summary>A soldier, with a bust by the name (a siege's turret has none).</summary>
+        public bool Bust;
         public int Hp;
         public int MaxHp;
         public int Ap;
         public int ApMax;
         /// <summary>A siege's turret: its rounds in place of the actions.</summary>
         public bool Rounds;
-        /// <summary>The six experience lines (skills.ts SKILL_IDS order), for its hexagon; empty for one with none.</summary>
+        /// <summary>The cells bought of each line of its board (SkillIds.All order), for its hexagon; empty for one with none.</summary>
         public float[] Skills = Array.Empty<float>();
         public string Title;
         public List<TagView> Tags = new List<TagView>();
@@ -444,8 +446,10 @@ namespace Bastion.UI.Hud
         public string WaveText;
         public string WaveTip;
         public bool WaveUrgent;
-        /// <summary>Saqueo: how near the next wave of the horde is, 0–1; -1, no horde.</summary>
+        /// <summary>How near the horde's next wave is, 0–1 (Rules.HordeFill); -1, no horde.</summary>
         public float HordeFill = -1;
+        /// <summary>The same as noise (Ana's notes, Arturo 29/10): 40 dB quiet, 90 as the wave comes.</summary>
+        public int HordeDb;
         public string HordeTitle;
         /// <summary>«VIENEN MÁS».</summary>
         public string Alert;

@@ -345,7 +345,7 @@ keep('duo-new', duo);
   keep('ending', end);
 }
 
-if (!extra) writeFileSync(join(out, 'states.json'), JSON.stringify({ states }) + '\n');
+if (!extra) writeFileSync(join(out, 'states.json'), JSON.stringify(fixDeep({ states })) + '\n');
 console.log(`campaign/states.json: ${states.length} estados (${states.map((s) => s.name).join(', ')})`);
 
 // ------------------------------------------------------------------- tables and commands
@@ -365,7 +365,7 @@ const ids = {
   traits: Object.keys(TRAITS),
   baseViews: baseViewSchema.options,
 };
-if (!extra) writeFileSync(join(out, 'tables.json'), JSON.stringify({ regions: REGIONS, roads: ROADS, facilities: FACILITIES, constants, ids }) + '\n');
+if (!extra) writeFileSync(join(out, 'tables.json'), JSON.stringify(fixDeep({ regions: REGIONS, roads: ROADS, facilities: FACILITIES, constants, ids })) + '\n');
 
 const painted: Appearance = { primary: '#826cbd', secondary: '#a678ff', visor: '#9fe3ff', head: 'cap', build: 'normal', sex: 'f', helmet: '#334455', character: 'hunter' };
 const commands: CampaignCommand[] = [

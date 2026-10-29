@@ -2,6 +2,7 @@
     <!-- A soldier's card on the squad list (hud.ts setSquad; SquadList.cs fills it). Styles: SquadList.uss, from Hud.uxml. -->
     <ui:VisualElement name="card" class="squad-card">
         <ui:VisualElement name="accent" class="squad-card__accent" picking-mode="Ignore" />
+        <ui:VisualElement name="bust" class="squad-card__bust" picking-mode="Ignore" />
         <ui:VisualElement class="squad-card__body" picking-mode="Ignore">
             <ui:VisualElement name="name-row" class="squad-card__name-row" picking-mode="Ignore">
                 <ui:Label name="name" class="squad-card__name font-title" picking-mode="Ignore" />

@@ -237,10 +237,12 @@ namespace Bastion.Engine
         // Fase 9's talents with uses per mission (skills.ts).
         public const string Restoration = "restoration";
         public const string PatchUp = "patchUp";
+        /// <summary>The chainsaw's: a blow each (Content.ChainsawFuel).</summary>
+        public const string Fuel = "fuel";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Grenade, Missiles, Smoke, Flashbang, FirstAid, Restoration, PatchUp,
+            Grenade, Missiles, Smoke, Flashbang, FirstAid, Restoration, PatchUp, Fuel,
         };
     }
 
@@ -282,11 +284,15 @@ namespace Bastion.Engine
         public const string SawnOff = "sawnOff";
         public const string ScopedRifle = "scopedRifle";
         public const string LightMachineGun = "lightMachineGun";
+        public const string Pan = "pan";
+        public const string Bat = "bat";
+        public const string Crowbar = "crowbar";
+        public const string Chainsaw = "chainsaw";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             AssaultRifle, PumpShotgun, PrecisionRifle, MachineGun, Machete, HuntingRifle, SawnOff, ScopedRifle,
-            LightMachineGun,
+            LightMachineGun, Pan, Bat, Crowbar, Chainsaw,
         };
     }
 
@@ -433,6 +439,8 @@ namespace Bastion.Engine
         public const string Salvo = "salvo";
         public const string GoodArm = "goodArm";
         public const string SafeBlast = "safeBlast";
+        /// <summary>Piedras: the stone is the board's now, no longer everyone's (Ana's notes, 29/10).</summary>
+        public const string Stones = "stones";
         // Medicine.
         public const string RevivalProtocol = "revivalProtocol";
         public const string Bridge = "bridge";
@@ -448,8 +456,8 @@ namespace Bastion.Engine
         {
             AimedShot, RapidFire, ChainShot, GuardCrit, DeathFromAbove, LightningHands, Serenity, CoveringFire,
             KillZone, Faceoff, Rupture, Suppression, HoloTargeting, ElbowRoom, Implacable, BladeMaster, BladeWall,
-            SecondWind, Salvo, GoodArm, SafeBlast, RevivalProtocol, Bridge, LightHands, Restoration, PatchUp, RunAndGun,
-            Shadowstep,
+            SecondWind, Salvo, GoodArm, SafeBlast, Stones, RevivalProtocol, Bridge, LightHands, Restoration, PatchUp,
+            RunAndGun, Shadowstep,
         };
     }
 }
