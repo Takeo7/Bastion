@@ -19,11 +19,12 @@ namespace Bastion.UI.Combat
     /// «Hueso y óxido», made clean): bone for what one action reaches, rust for the dash, no grid and no wash. Inside
     /// each side on the range's edge a strip bright at the edge and fading inwards, and on it a thin line with its
     /// corners rounded (Ana 22/10 #52), over a dark stroke; never round a thing in the way (Ana 21/10 #18). The way to
-    /// the tile under the pointer, a ring on that tile, and over it a shield on each side with cover. A red frame where
-    /// the squad would be noticed. Round the picked one's feet a white ring in three arcs that turn; round the
-    /// partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and blue.
-    /// Lines keep their width in pixels (Bastion/Marks). The shields are drawn over walls, as the web's; the lines go behind
-    /// the bodies standing over them (Ana, Arturo 31/10 #6), still over the floor and the walls they run along (Pull).
+    /// the tile under the pointer, a ring on that tile, and over it a shield on each side with cover. Where the squad
+    /// would be noticed, an eye in a soft red, no frame (Arturo, 31/10 #14). Round the picked one's feet a white ring in
+    /// three arcs that turn; round the partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and blue.
+    /// Lines keep their width in pixels (Bastion/Marks). The shields are drawn over walls, as the web's; the lines over
+    /// everything but the figures, soldiers and the dead (Arturo, 31/10 #3: not cars, crates or walls), behind the legs
+    /// standing over them (Ana, Arturo 31/10 #6: Pull).
     /// Over a shoulder all but the rings go (Cinematic: #3).
     /// </summary>
     public sealed class MoveOverlay : MonoBehaviour
@@ -37,8 +38,8 @@ namespace Bastion.UI.Combat
         static readonly Color32 PlanTint = Hex(0x7fb2d4);
         /// <summary>The brightest the ground goes under a line (overlays.ts SHADE).</summary>
         static readonly Color32 Shade = Hex(0x56606a);
-        /// <summary>Being seen, one red for all of it (Ana, 21/10 #46).</summary>
-        static readonly Color32 SightRed = Hex(0xf0503c);
+        /// <summary>The eye on a tile where the squad would be noticed: a soft red (Arturo, 31/10 #14; it was 0xf0503c with a frame).</summary>
+        static readonly Color32 SoftSight = Hex(0xe58a80);
 
         /// <summary>The pointer's ring on any tile (overlays.ts setHover: white), and planning without the command.</summary>
         public static readonly Color32 PlainRing = Hex(0xffffff);
@@ -49,6 +50,8 @@ namespace Bastion.UI.Combat
         /// <summary>The pointer's ring on a tile where the squad would be noticed, and on an enemy.</summary>
         public static readonly Color32 NoticedRing = Hex(0xff4a4a);
         public static readonly Color32 EnemyRing = Hex(0xff5a5a);
+        /// <summary>The lit ring of a soldier pointed at from the list (#11), as its flag's arrow (Flags.uss .uflag__pointer).</summary>
+        static readonly Color32 PointedRing = Hex(0xffe27a);
 
         const float T = Board.Tile;
         const float FillAlpha = 0.45f;
@@ -62,8 +65,8 @@ namespace Bastion.UI.Combat
         /// <summary>How far back from a corner of the range its border turns (overlays.ts CORNER_R).</summary>
         const float CornerR = 0.24f * T;
         /// <summary>
-        /// How much nearer the camera the lines are tested against depth (Bastion/Marks _Pull, metres): past half a wall
-        /// they lie in, short of a body standing over them (a line a tile's edge behind the feet is a metre behind the legs).
+        /// How much nearer the camera the lines are tested against a figure's depth (Bastion/Marks _Pull, metres): short of
+        /// a body standing over them (a line a tile's edge behind the feet is a metre behind the legs).
         /// </summary>
         const float Pull = 0.4f;
 
@@ -79,7 +82,6 @@ namespace Bastion.UI.Combat
         readonly MeshBuilder build = new MeshBuilder();
         readonly MeshBuilder under = new MeshBuilder();
         MeshFilter strips;
-        MeshFilter frames;
         MeshFilter rangeShade;
         MeshFilter edges;
         MeshFilter wayShade;
@@ -89,6 +91,8 @@ namespace Bastion.UI.Combat
         Transform picked;
         Transform partner;
         Material partnerMaterial;
+        /// <summary>The soldier whose name is under the pointer in the list: a bigger ring, lit, that beats (Arturo, 31/10 #11).</summary>
+        Transform pointed;
         Transform partnerHover;
         Material partnerHoverMaterial;
         /// <summary>The rings under the enemies in sight (ShowEnemies), as many as there have been at once.</summary>
@@ -105,13 +109,12 @@ namespace Bastion.UI.Combat
             zone = new GameObject("Zona").transform;
             zone.SetParent(transform, false);
             strips = Layer("Alcance (franjas)", 3100, false, false, zone);
-            frames = Layer("Alcance (te verían)", 3101, false, false, zone);
             eyes = Layer("Alcance (ojos)", 3101, false, false, zone);
             eyes.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = EyeTexture();
-            rangeShade = Layer("Alcance (sombra)", 3103, false, true, zone, Pull);
-            edges = Layer("Alcance (bordes)", 3104, false, false, zone, Pull);
-            wayShade = Layer("Camino (sombra)", 3103, false, true, zone, Pull);
-            way = Layer("Camino", 3105, false, false, zone, Pull);
+            rangeShade = Layer("Alcance (sombra)", 3103, false, true, zone, Pull, true);
+            edges = Layer("Alcance (bordes)", 3104, false, false, zone, Pull, true);
+            wayShade = Layer("Camino (sombra)", 3103, false, true, zone, Pull, true);
+            way = Layer("Camino", 3105, false, false, zone, Pull, true);
 
             // The pointer's ring (TileLook.ring: 0.33–0.41 of a tile), tinted by its material.
             hover = Layer("Puntero", 3102, false, false, zone);
@@ -138,6 +141,16 @@ namespace Bastion.UI.Combat
             partner = other.transform;
             partnerMaterial = other.GetComponent<MeshRenderer>().sharedMaterial;
             partner.gameObject.SetActive(false);
+
+            // The soldier pointed at from the list: the same ring, larger and in a warm light (#11).
+            var lit = Layer("Señalado", 3102, false, false);
+            lit.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = RingTexture();
+            build.Clear();
+            Ring(build, Vector3.zero, 0.62f * T, PointedRing);
+            Ring(build, Vector3.zero, 0.52f * T, PointedRing);
+            lit.sharedMesh = build.Build(null);
+            pointed = lit.transform;
+            pointed.gameObject.SetActive(false);
 
             // The partner's pointer (overlays.ts partnerHover: 0.22–0.3 of a tile), in their colour.
             var theirs = Layer("Puntero del compañero", 3102, false, false, zone);
@@ -170,11 +183,11 @@ namespace Bastion.UI.Combat
             }
         }
 
-        MeshFilter Layer(string name, int queue, bool overAll, bool shade, Transform parent = null, float pull = 0)
+        MeshFilter Layer(string name, int queue, bool overAll, bool shade, Transform parent = null, float pull = 0, bool figures = false)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent != null ? parent : transform, false);
-            go.AddComponent<MeshRenderer>().sharedMaterial = MeshBuilder.Material(queue, overAll, shade, pull);
+            go.AddComponent<MeshRenderer>().sharedMaterial = MeshBuilder.Material(queue, overAll, shade, pull, figures);
             return go.AddComponent<MeshFilter>();
         }
 
@@ -193,6 +206,7 @@ namespace Bastion.UI.Combat
             var time = Time.time;
             picked.localRotation = Quaternion.Euler(0, time * 0.9f * Mathf.Rad2Deg, 0);
             partner.localScale = Vector3.one * (1 - Mathf.Sin(time * 5) * 0.06f);
+            pointed.localScale = Vector3.one * (1 + Mathf.Sin(time * 7) * 0.08f);
         }
 
         void LateUpdate()
@@ -223,7 +237,6 @@ namespace Bastion.UI.Combat
             build.Clear();
             under.Clear();
             var lines = new MeshBuilder();
-            var red = new MeshBuilder();
             var eye = new MeshBuilder();
             if (s != null && tiles != null)
             {
@@ -250,11 +263,10 @@ namespace Bastion.UI.Combat
                     }
                     if (t.Detected)
                     {
-                        // A red frame, and an eye in it (patterns besides colour: UX-REVISION-2 #49).
+                        // An eye (a pattern besides colour: UX-REVISION-2 #49), in a soft red and with no frame round it (#14).
                         var c = Board.TileToWorld(s, p, 0.03f * T);
-                        Frame(red, c);
                         var e = 0.17f * T;
-                        eye.Quad(c + new Vector3(-e, 0, -e), c + new Vector3(e, 0, -e), c + new Vector3(e, 0, e), c + new Vector3(-e, 0, e), Alpha(SightRed, 0.95f));
+                        eye.Quad(c + new Vector3(-e, 0, -e), c + new Vector3(e, 0, -e), c + new Vector3(e, 0, e), c + new Vector3(-e, 0, e), Alpha(SoftSight, 0.85f));
                     }
                 }
                 var edge = EdgeAlpha * (planning ? 0.55f : 1);
@@ -264,7 +276,6 @@ namespace Bastion.UI.Combat
             strips.sharedMesh = build.Build(strips.sharedMesh);
             rangeShade.sharedMesh = under.Build(rangeShade.sharedMesh);
             edges.sharedMesh = lines.Build(edges.sharedMesh);
-            frames.sharedMesh = red.Build(frames.sharedMesh);
             eyes.sharedMesh = eye.Build(eyes.sharedMesh);
         }
 
@@ -362,18 +373,6 @@ namespace Bastion.UI.Combat
             foreach (var seg in rounded) into.Line(seg[0], seg[1], EdgePx, Alpha(color, edge));
         }
 
-        /// <summary>A square frame on a tile (overlays.ts detect: a four-sided ring 0.46–0.63 turned 45°).</summary>
-        static void Frame(MeshBuilder into, Vector3 c)
-        {
-            var i = 0.46f * T / Mathf.Sqrt(2);
-            var o = 0.63f * T / Mathf.Sqrt(2);
-            var color = Alpha(SightRed, 0.95f);
-            into.Quad(c + new Vector3(-o, 0, o), c + new Vector3(o, 0, o), c + new Vector3(i, 0, i), c + new Vector3(-i, 0, i), color);
-            into.Quad(c + new Vector3(o, 0, o), c + new Vector3(o, 0, -o), c + new Vector3(i, 0, -i), c + new Vector3(i, 0, i), color);
-            into.Quad(c + new Vector3(o, 0, -o), c + new Vector3(-o, 0, -o), c + new Vector3(-i, 0, -i), c + new Vector3(i, 0, -i), color);
-            into.Quad(c + new Vector3(-o, 0, -o), c + new Vector3(-o, 0, o), c + new Vector3(-i, 0, i), c + new Vector3(-i, 0, -i), color);
-        }
-
         /// <summary>
         /// A border's segments with their right-angled corners rounded (overlays.ts roundCorners): where exactly two meet
         /// square, each stops `r` short of the corner and a curve joins them (a quadratic one, its control the corner,
@@ -469,6 +468,13 @@ namespace Bastion.UI.Combat
                 shields[i].localPosition = Board.TileToWorld(s, tile, 1.25f * T) + new Vector3(d.X, 0, -d.Y) * (0.45f * T);
                 shieldMaterials[i].mainTexture = level >= 2 ? highShield : lowShield;
             }
+        }
+
+        /// <summary>The lit ring round the soldier pointed at from the list, at its feet (null: none; Arturo, 31/10 #11).</summary>
+        public void ShowPointed(Vector3? feet)
+        {
+            pointed.gameObject.SetActive(feet != null);
+            if (feet != null) pointed.localPosition = feet.Value + Vector3.up * (0.04f * T);
         }
 
         /// <summary>The ring round the picked soldier, at its feet (null: none).</summary>

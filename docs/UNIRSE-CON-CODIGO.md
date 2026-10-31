@@ -268,7 +268,7 @@ Lo que necesito para instalarlo y actualizarlo, siempre con el sí de Arturo:
    - el servidor en 127.0.0.1:41401 (el de Red en la tabla de [EQUIPO.md](EQUIPO.md)), con `--retraso` para imitar internet;
    - dos apps con su `BASTION_DATOS`, en modo de prueba (`LocalOnly`), y `BASTION_RELE=127.0.0.1:41401`;
    - quien aloja escribe el código en `red.log` (`[rele] …: código XXXX-XXXX`), y quien se une entra con `BASTION_UNIRSE=<código>`;
-   - la campaña de `BASTION_CAMPANA` con la semilla 4, entera, por el servidor;
+   - la campaña de `BASTION_CAMPANA` con la semilla de `NetCampaignRunTests` (27 desde el 1/11), entera, por el servidor;
    - a mitad: reiniciar el servidor y cortar a quien se une (los dos vuelven a su puesto); al cerrar quien aloja, el otro lo oye;
    - hace falta una compilación de prueba con el código nuevo, que se pide a Gameplay. Es de prueba: solo va a 127.0.0.1 y no saca cuadros de macOS.
 3. **En el servidor de verdad:**

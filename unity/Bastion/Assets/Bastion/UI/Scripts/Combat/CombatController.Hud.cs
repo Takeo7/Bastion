@@ -143,6 +143,10 @@ namespace Bastion.UI.Combat
                 view.Marks.Add(new EdgeMarkView { Kind = kind, Name = name, World = Board.TileToWorld(v, pos, Board.Tile) });
             view.Marks.AddRange(breaches.Marks);
             if (moment != null && Time.time < momentUntil) view.Marks.Add(new EdgeMarkView { Kind = "alert", Name = moment.Value.who, World = moment.Value.at + Vector3.up * Board.Tile });
+            // The soldier pointed at from the list, when it is off the screen (#11): an arrow at the edge, as the marks'.
+            var pointed = UnitById(v, listPointed);
+            if (pointed != null && pointed.Alive && !pointed.Evacuated && FeetOf(pointed.Id) is Vector3 feet)
+                view.Marks.Add(new EdgeMarkView { Kind = "soldier", Name = pointed.Name, World = feet + Vector3.up * Board.Tile });
             // Each says how far it is from the picked soldier (edgeMarks.ts): «Brecha · sur · 7 casillas», on the board's plane.
             var from = Unit()?.Pos;
             var here = from != null ? Board.TileToWorld(v, from) : Vector3.zero;
@@ -205,9 +209,8 @@ namespace Bastion.UI.Combat
         {
             var v = Shown;
             seen.Clear();
-            // In a siege the base has no fog by day (playtest 18/10 #18): every enemy is in sight.
-            var all = v.Mission.Siege != null && v.Mission.Night != true;
-            foreach (var u in all ? v.Units.Where(x => x.Alive && x.Team == Teams.Alien) : Los.VisibleEnemies(v, Teams.Xcom)) seen.Add(u.Id);
+            // A siege too, by day as by night: only those the squad sees (Arturo, 31/10 #5; it was all of them, 18/10 #18).
+            foreach (var u in Los.VisibleEnemies(v, Teams.Xcom)) seen.Add(u.Id);
         }
 
         /// <summary>
@@ -233,7 +236,9 @@ namespace Bastion.UI.Combat
                 // Aboard La Lata (evacuated, or boarding as it is played): out of sight, and so its flag (unitViews.ts board).
                 if (!u.Alive || u.Evacuated || Aboard.Contains(u.Id) || !Visible(u)) continue;
                 var f = new FlagView { Id = u.Id, Enemy = u.Team != Teams.Xcom, Hp = u.Hp, MaxHp = u.MaxHp, Armor = u.Armor, Cover = -1 };
-                if (u.Id == hovered?.Id) f.Name = u.Team == Teams.Xcom && u.Template != TemplateIds.Vip && !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name;
+                // Pointed at from the list (Arturo, 31/10 #11): its name too, and the arrow over it.
+                f.Pointed = u.Id == listPointed;
+                if (u.Id == hovered?.Id || f.Pointed) f.Name = u.Team == Teams.Xcom && u.Template != TemplateIds.Vip && !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name;
                 if (u.Team == Teams.Xcom)
                 {
                     // With no shooter in sight nobody flanks anyone: the shield only shows cover, never the red «flanked».
@@ -297,7 +302,7 @@ namespace Bastion.UI.Combat
                 {
                     if (x == a.Pos.X && y == a.Pos.Y) continue;
                     var p = new Pos { X = x, Y = y, Z = a.Pos.Z };
-                    if (!Grid.CanStandOn(Grid.KindAt(v, p)) || !Los.InViewCone(a, p) || Los.SightOrigin(v, a.Pos, p, Los.SightTo(v, a, p)) == null) continue;
+                    if (!Grid.CanStandOn(Grid.KindAt(v, p)) || !Los.InViewCone(a, p) || Los.SightOrigin(v, a.Pos, p, Los.SightTo(v, a, p), Los.WindowReachOf(a.Team)) == null) continue;
                     seen.Add(p);
                     if (v.Concealed && Grid.Distance(a.Pos, p) <= Los.DetectionTo(v, a, p)) noticed.Add(p);
                 }
@@ -324,7 +329,7 @@ namespace Bastion.UI.Combat
             {
                 if (occupant.Team != Teams.Alien || !Visible(occupant)) return tags;
                 var shot = Aim.PreviewShot(State, u, occupant, new ShotOptions { Ability = AbilityIds.Shoot });
-                tags[occupant.Id] = shot != null ? (shot.Flanked ? "flank" : "aim", $"{shot.Hit} % · crít. {Math.Min(shot.Crit, shot.Hit)} %") : ("none", "Sin línea de tiro");
+                tags[occupant.Id] = shot != null ? (Flanks(occupant, shot) ? "flank" : "aim", $"{shot.Hit} % · crít. {Math.Min(shot.Crit, shot.Hit)} %") : ("none", "Sin línea de tiro");
                 return tags;
             }
             var dest = tiles?.FirstOrDefault(t => Same(t.Pos, tile));
@@ -336,10 +341,19 @@ namespace Bastion.UI.Combat
                 var shot = Aim.PreviewShot(State, u, a, new ShotOptions { Ability = AbilityIds.Shoot, From = tile });
                 if (shot == null) continue;
                 var chance = canShoot ? $"{shot.Hit} %" : "";
-                tags[a.Id] = shot.Flanked ? ("flank", chance != "" ? $"Flanco · {chance}" : "Flanco") : ("sight", chance != "" ? chance : "A la vista");
+                tags[a.Id] = Flanks(a, shot) ? ("flank", chance != "" ? $"Flanco · {chance}" : "Flanco") : ("sight", chance != "" ? chance : "A la vista");
             }
             return tags;
         }
+
+        /// <summary>
+        /// Whether a shot is said to flank its target: never one of the dead (Arturo, 31/10 #13: only the words; the crit
+        /// of catching it in the open still counts, «Al descubierto» on the shot's panel); the living, as the engine says.
+        /// </summary>
+        static bool Flanks(Unit target, ShotPreview shot) => shot.Flanked && !Content.Templates[target.Template].Undead;
+
+        /// <summary>A crit modifier's words for `target`: the engine's «Flanqueo» on one of the dead is being in the open (#13).</summary>
+        static string CritLabel(Unit target, string label) => label == "Flanqueo" && Content.Templates[target.Template].Undead ? "Al descubierto" : label;
 
         /// <summary>
         /// A grenade aimed: what it would take off everyone caught, over their flags (playtest: «no sé dónde está el daño
@@ -696,7 +710,7 @@ namespace Bastion.UI.Combat
                 Crit = Math.Min(shot.Crit, shot.Hit),
                 Graze = shot.Graze,
                 Mods = shot.Mods.Select(m => new ModView { Label = m.Label, Value = m.Value }).ToList(),
-                CritMods = shot.CritMods.Select(m => new ModView { Label = m.Label, Value = m.Value }).ToList(),
+                CritMods = shot.CritMods.Select(m => new ModView { Label = CritLabel(target, m.Label), Value = m.Value }).ToList(),
                 Index = index,
                 Total = list.Count,
                 Note = AbilityTexts.AttackNotes.TryGetValue(ability, out var note) ? note : null,

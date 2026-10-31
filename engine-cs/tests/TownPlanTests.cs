@@ -213,9 +213,11 @@ namespace Bastion.Engine.Tests
                 var s = Setup.CreateMission(Opts(map, seed, MissionKinds.Recovery, difficulty: 2));
                 var l = Mapgen.GenerateLayout(new GenOptions { Biome = Biomes.City, Kind = MissionKinds.Recovery, PodSizes = new List<int> { 3 }, Seed = seed * 7919 });
                 Assert.Equal(Setup.RouteTurns(MissionKinds.Recovery, l.Route!.Value), s.Mission.TurnsLeft);
-                // Eight groups at 48, eleven at 64 (docs/MAPAS.md §6) and a quarter more (20/10): thirteen; and the garrison, if the mission has one.
+                // Eight groups at 48, eleven at 64 (docs/MAPAS.md §6) and a quarter more (20/10): thirteen in a city, and 70 % of
+                // that in an old town, nine (Places.DeadShare, 31/10); and the garrison, if the mission has one.
                 // The lone dead of 22/10 (setup.ts LURKERS) come on top, in pods of their own (l1, l2…).
-                Assert.Equal(13 + (Setup.Garrison(MissionKinds.Recovery, 2) != null ? 1 : 0), s.Pods.Count((p) => !p.Id.StartsWith("l")));
+                var groups = Places.Of(map) == Places.Town ? 9 : 13;
+                Assert.Equal(groups + (Setup.Garrison(MissionKinds.Recovery, 2) != null ? 1 : 0), s.Pods.Count((p) => !p.Id.StartsWith("l")));
                 Same(l.Frame, s.Frame);
             }
         }

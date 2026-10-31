@@ -28,6 +28,15 @@ namespace Bastion.Engine.Tests
         /// <summary>Why a run stopped short (stuck on the base or in a mission), or null.</summary>
         [ThreadStatic] public static string? Stuck;
 
+        /// <summary>
+        /// A mission still on after so many turns is stuck too: of seeds 1 to 50 (1/11), the longest one won took 19 (a
+        /// siege). One the bot can't end, such as a siege with a dead that never comes, used to run all the steps: 25 minutes.
+        /// </summary>
+        public const int MaxTurns = 40;
+
+        /// <summary>Steps for the whole run: two missions take some 100 to 120.</summary>
+        public const int MaxSteps = 2_000;
+
         /// <summary>Up to `missions` missions of a new campaign with the room's Rng at `seed`; `say`, a line for each step.</summary>
         public static List<Mission> Run(int seed, int missions, Action<string>? say = null)
         {
@@ -44,7 +53,7 @@ namespace Bastion.Engine.Tests
                 var refused = new List<string>();
                 int still = 0;
                 string? was = null;
-                for (int step = 0; step < 50_000; step++)
+                for (int step = 0; step < MaxSteps; step++)
                 {
                     foreach (var p in players)
                         while (p.End.Heard.TryDequeue(out var text))
@@ -100,6 +109,12 @@ namespace Bastion.Engine.Tests
                         Say(room, players[0], new JObject { ["t"] = "returnToBase" });
                         continue;
                     }
+                    if (heard.Mission.Turn > MaxTurns)
+                    {
+                        Stuck = $"«{now.Name}» sin acabar en el turno {heard.Mission.Turn} · {where}";
+                        say?.Invoke("atascada: " + Stuck);
+                        return played;
+                    }
                     var connected = heard.Active();
                     foreach (var p in players)
                     {
@@ -110,6 +125,8 @@ namespace Bastion.Engine.Tests
                         Say(room, p, new JObject { ["t"] = "cmd", ["cmd"] = JObject.Parse(Json.Write(cmd)) });
                     }
                 }
+                Stuck = $"sin acabar en {MaxSteps} pasos · {was}";
+                say?.Invoke("atascada: " + Stuck);
                 return played;
             }
             finally

@@ -194,8 +194,11 @@ namespace Bastion.Engine
 
         public const int BaseHp = 5;
         public const int BaseWill = 40;
-        /// <summary>Aim with a firearm or a blade before what the lines add, and before the weapon.</summary>
-        public const int BaseAim = 60;
+        /// <summary>
+        /// Aim with a firearm or a blade before what the lines add, and before the weapon. 60 until 31/10 (Arturo: «los
+        /// porcentajes de disparo son demasiado buenos de primeras»): 55, as a recruit of the templates (Content.Soldier).
+        /// </summary>
+        public const int BaseAim = 55;
         /// <summary>How far a throw reaches before what Lanzar adds (the grenade's range).</summary>
         public const int ThrowRange = 10;
 

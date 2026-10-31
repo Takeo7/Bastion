@@ -71,6 +71,8 @@ namespace Bastion.Client
             public Transform slingBone;
             public Vector3 slingAt;
             public Quaternion slingTurn;
+            /// <summary>Its body's renderers on Bastion/FigureFade, fading out into La Lata (FadeOut); null till then.</summary>
+            public List<SkinnedMeshRenderer> fading;
         }
 
         readonly List<Stander> standers = new List<Stander>();

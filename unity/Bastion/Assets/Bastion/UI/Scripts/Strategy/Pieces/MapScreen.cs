@@ -304,6 +304,7 @@ namespace Bastion.UI.Strategy
                 {
                     var row = Ui.El("map-briefing__row", box);
                     Ui.Text(r.Key.ToUpperInvariant(), "map-briefing__key font-title", row);
+                    if (LineIcon.Has(r.Icon)) Ui.El("map-briefing__icon", row).Add(new LineIcon(r.Icon));
                     Ui.Text(r.Value, "map-briefing__value", row);
                 }
             }

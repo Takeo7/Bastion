@@ -33,7 +33,7 @@ namespace Bastion.Net
                 Night = offer.Night,
                 Living = offer.Living,
                 Squad = Campaign.BuildSquad(c),
-                Pods = Setup.PodsFor(offer.Map, offer.Pods),
+                Pods = Setup.PodsFor(offer.Map, offer.Pods, offer.Story),
                 Difficulty = offer.Difficulty,
                 HackBonus = Campaign.CampaignHackBonus(c),
                 // `...(offer.story ? { story } : {})`, and the same for the kicker and the item: 0 and "" are left out too.

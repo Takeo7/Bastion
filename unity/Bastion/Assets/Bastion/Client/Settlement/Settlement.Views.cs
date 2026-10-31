@@ -415,6 +415,25 @@ namespace Bastion.Client
             }
         }
 
+        /// <summary>
+        /// The pines in `camera`'s frame as it is now, nearer than the shot's target less a tile, taken out of the picture
+        /// too (back with the next shot, as ClearShot's): turned after La Lata as it goes (Follow), the camera brings in those
+        /// beside the row's frame, right before it.
+        /// </summary>
+        void ClearBefore(Camera camera)
+        {
+            if (pines == null || camera == null) return;
+            float depth = Vector3.Distance(camera.transform.position, World(goal.target)) - MapSpace.Tile;
+            if (depth <= 0.5f) return;
+            var planes = GeometryUtility.CalculateFrustumPlanes(Matrix4x4.Perspective(camera.fieldOfView, camera.aspect, 0.1f, depth) * camera.worldToCameraMatrix);
+            foreach (var r in pines)
+            {
+                if (r == null || !r.enabled || !GeometryUtility.TestPlanesAABB(planes, r.bounds)) continue;
+                r.enabled = false;
+                cleared.Add(r);
+            }
+        }
+
         readonly List<Renderer> cleared = new List<Renderer>();
         List<Renderer> pines;
 

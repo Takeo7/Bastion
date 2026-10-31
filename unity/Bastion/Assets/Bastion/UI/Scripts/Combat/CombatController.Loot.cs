@@ -9,8 +9,8 @@ namespace Bastion.UI.Combat
     /// <summary>
     /// The marks over the special loot boxes (lootMarks.ts; mapView.ts markLoot, docs/FASE8.md §B): the icon of what is in
     /// each on a dark plate ringed in its colour, hung over the box at the map's scale. One shows once its box has been in
-    /// sight (the fog's explored, all of it in a siege), with a soldier of the squad within four tiles (Arturo, 22/10: not
-    /// across the map), and not on a storey above the one in view; once the box is opened it goes.
+    /// sight (the fog's explored, in a siege too: Arturo, 31/10 #5), with a soldier of the squad within four tiles (Arturo,
+    /// 22/10: not across the map), and not on a storey above the one in view; once the box is opened it goes.
     /// </summary>
     public sealed partial class CombatController
     {
@@ -36,7 +36,7 @@ namespace Bastion.UI.Combat
             var squad = v.Units.Where(u => u.Alive && u.Team == Teams.Xcom && !u.Evacuated).ToList();
             if (squad.Count == 0) return;
             var fog = Bastion.Client.Map.Fog.Current;
-            var all = v.Mission.Siege != null || fog == null;
+            var all = fog == null;
             var area = v.Width * v.Height;
             var top = Mathf.Min(Level, v.Levels?.Count ?? 0);
             for (var z = 0; z <= top; z++)

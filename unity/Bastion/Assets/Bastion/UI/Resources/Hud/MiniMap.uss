@@ -1,0 +1,46 @@
+/* The map from above (MiniMap.cs; Arturo, 31/10 #12 and 01/11: the camera straight down over all of it): while it is up
+   there, a strip under the turn's that says so and what a click, M and Esc do. */
+.mini-map {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 52px;
+    flex-direction: row;
+    justify-content: center;
+}
+
+.mini-map__strip {
+    flex-direction: row;
+    align-items: center;
+    padding: 5px 14px;
+}
+
+.mini-map__title {
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--t-accent);
+}
+
+.mini-map__hint {
+    margin-left: 16px;
+    font-size: 12px;
+    color: var(--t-muted);
+}
+
+/* The map's key by «Menú» (HudRoot): the base's Mapa pin, the key's height. */
+.side-keys {
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.map-button {
+    margin-right: 5px;
+    padding: 2px 6px;
+    align-items: center;
+    justify-content: center;
+}
+
+.map-button__icon {
+    width: 16px;
+    height: 16px;
+}

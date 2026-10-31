@@ -10,6 +10,7 @@ namespace Bastion.UI.Combat
     /// washed green and beating; a beam of light standing over what is to be reached (the equipment to fix, the one to
     /// rescue, the alarm), with a ring at its foot; the item lying loose, a glowing core under its beam; and where more
     /// are coming, a red flare's smoke and a ring that keeps spreading. Made again only when what they mark changes.
+    /// None of them while La Lata leaves (Cinematic: Arturo, 31/10 #1).
     /// </summary>
     public sealed class MissionMarks : MonoBehaviour
     {
@@ -29,10 +30,14 @@ namespace Bastion.UI.Combat
         Material flareRing;
         MeshFilter flareRings;
         Transform core;
+        /// <summary>What holds them all: off while the event player films La Lata leaving.</summary>
+        Transform shown;
         string key;
 
         void Awake()
         {
+            shown = new GameObject("Marcas").transform;
+            shown.SetParent(transform, false);
             zone = Layer("Evacuación", 3097, false);
             zoneMaterial = zone.GetComponent<MeshRenderer>().sharedMaterial;
             beams = Layer("Balizas", 3108, false);
@@ -60,9 +65,15 @@ namespace Bastion.UI.Combat
         MeshFilter Layer(string name, int queue, bool overAll)
         {
             var go = new GameObject(name);
-            go.transform.SetParent(transform, false);
+            go.transform.SetParent(shown, false);
             go.AddComponent<MeshRenderer>().sharedMaterial = MeshBuilder.Material(queue, overAll);
             return go.AddComponent<MeshFilter>();
+        }
+
+        /// <summary>As a cutscene (La Lata leaving: Arturo, 31/10 #1), none of the mission's marks; back as it ends.</summary>
+        public void Cinematic(bool on)
+        {
+            if (shown != null && shown.gameObject.activeSelf == on) shown.gameObject.SetActive(!on);
         }
 
         void Update()

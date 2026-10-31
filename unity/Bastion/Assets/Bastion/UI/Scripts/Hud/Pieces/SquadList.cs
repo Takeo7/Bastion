@@ -6,7 +6,8 @@ namespace Bastion.UI.Hud
 {
     /// <summary>
     /// The squad list, top left (hud.ts setSquad; docs/UNITY-UI.md §2.1): a card per soldier, one's own first. A click
-    /// on one of this player's picks it. Drawn again only when the view changes.
+    /// on one of this player's picks it; the pointer over any living one points it out on the map (Arturo, 31/10 #11).
+    /// Drawn again only when the view changes.
     /// </summary>
     public sealed class SquadList
     {
@@ -87,6 +88,11 @@ namespace Bastion.UI.Hud
             tips.Attach(card, c.Title);
             var id = c.Id;
             if (c.Mine && !c.Dead) card.RegisterCallback<ClickEvent>(_ => handlers.OnSelectUnit(id));
+            if (!c.Dead && !c.Evacuated)
+            {
+                card.RegisterCallback<PointerEnterEvent>(_ => handlers.OnHoverSquad(id));
+                card.RegisterCallback<PointerLeaveEvent>(_ => handlers.OnHoverSquad(null));
+            }
             return tree;
         }
     }

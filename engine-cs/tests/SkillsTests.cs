@@ -107,9 +107,9 @@ namespace Bastion.Engine.Tests
         public void WhatTheLinesAdd()
         {
             var st = Bars.FighterStatsOf(Bars.NoSkills(), GrowthOf((SkillIds.Shooting, 10), (SkillIds.Melee, 20), (SkillIds.Throwing, 10), (SkillIds.Medicine, 13), (SkillIds.Searching, 10), (SkillIds.Fitness, 23)), new string[0]);
-            // 60 → 66 and 72; a throw of 10 → 11; the medkit's 4 → 5 (4.52); 55 → 61 (60.5); health 5 → 6 (6.15).
+            // 55 (60 until 31/10) → 60.5 and 66; a throw of 10 → 11; the medkit's 4 → 5 (4.52); 55 → 61 (60.5); health 5 → 6 (6.15).
             Assert.Equal(6, st.Mods.GunAim);
-            Assert.Equal(12, st.Mods.MeleeAim);
+            Assert.Equal(11, st.Mods.MeleeAim);
             Assert.Equal(1, st.Mods.GrenadeRange);
             Assert.Equal(1, st.Mods.Heal);
             Assert.Equal(6, st.Mods.Hack);

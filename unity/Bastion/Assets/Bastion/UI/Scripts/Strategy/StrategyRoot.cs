@@ -354,22 +354,52 @@ namespace Bastion.UI.Strategy
 
         /// <summary>
         /// A frame over `el` (USS has no outline: one that takes no room), easing in and out three times (x-blink:
-        /// ease-in-out, strongest at the middle of each), then gone. On the game's clock, as Pulse.
+        /// ease-in-out, strongest at the middle of each), then gone. On the game's clock, as Pulse. Over a text the frame
+        /// goes beside it, laid over its place: a Label holding a child is measured as a box, not by its text, and the
+        /// mission's sheet folded under its title's blink and opened again (Arturo, 31/10 #8).
         /// </summary>
         static void BlinkOn(VisualElement el)
         {
-            el.Q(className: "blink")?.RemoveFromHierarchy();
+            var text = el is TextElement && el.parent != null;
             var frame = new VisualElement { pickingMode = PickingMode.Ignore };
             frame.AddToClassList("blink");
             frame.style.opacity = 0;
-            el.Add(frame);
+            if (text)
+            {
+                var next = el.parent.IndexOf(el) + 1;
+                if (next < el.parent.childCount && el.parent[next].ClassListContains("blink")) el.parent[next].RemoveFromHierarchy();
+                el.parent.Insert(next, frame);
+                Over(frame, el);
+            }
+            else
+            {
+                el.Q(className: "blink")?.RemoveFromHierarchy();
+                el.Add(frame);
+            }
             var start = Time.time;
             frame.schedule.Execute(() =>
             {
                 var t = Time.time - start;
                 if (t >= BlinkSeconds * 3) frame.RemoveFromHierarchy();
-                else frame.style.opacity = 0.5f - 0.5f * Mathf.Cos(2 * Mathf.PI * t / BlinkSeconds);
+                else
+                {
+                    if (text) Over(frame, el);
+                    frame.style.opacity = 0.5f - 0.5f * Mathf.Cos(2 * Mathf.PI * t / BlinkSeconds);
+                }
             }).Every(16).Until(() => frame.parent == null);
+        }
+
+        /// <summary>A blink's frame, beside `el`, over its place: 5 px out each way, as .blink is round what holds it.</summary>
+        static void Over(VisualElement frame, VisualElement el)
+        {
+            var box = el.layout;
+            var parent = el.parent.resolvedStyle;
+            frame.style.left = box.x - parent.borderLeftWidth - 5;
+            frame.style.top = box.y - parent.borderTopWidth - 5;
+            frame.style.width = box.width + 10;
+            frame.style.height = box.height + 10;
+            frame.style.right = StyleKeyword.Auto;
+            frame.style.bottom = StyleKeyword.Auto;
         }
 
         /// <summary>Esc on Soldados: the choice open on the sheet (Mano, Cinto, the slots), closed; whether there was one.</summary>

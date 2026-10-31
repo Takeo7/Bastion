@@ -35,7 +35,7 @@ namespace Bastion.Engine.Tests
             return out_;
         }
 
-        [Fact(DisplayName = "buildings › from afar nobody inside shows, though they see the squad; right before the window, the room and whoever is in it")]
+        [Fact(DisplayName = "buildings › from afar nobody inside shows, nor do they see the squad through the window; right before it, the room and whoever is in it")]
         public void RightBeforeTheWindow()
         {
             var s = House();
@@ -43,7 +43,8 @@ namespace Bastion.Engine.Tests
             // Right behind the glass: los.ts showed it from two steps back.
             var zombie = AddUnit(s, "a1", TemplateIds.Zombie, 3, 3, extra: (u) => u.Facing = System.Math.PI);
             Assert.False(Los.CanSee(s, soldier, zombie));
-            Assert.True(Los.CanSee(s, zombie, soldier));
+            // Nor do they see out through the glass (Arturo, 31/10: the enemies see through no window).
+            Assert.False(Los.CanSee(s, zombie, soldier));
             Assert.Empty(Inside(Los.TeamVisibility(s, Teams.Xcom)));
             Assert.Empty(Los.VisibleEnemies(s, Teams.Xcom));
             // Where it would stand, it would see in (the client's previews).
@@ -90,6 +91,31 @@ namespace Bastion.Engine.Tests
             var runner = AddUnit(s3, "s1", TemplateIds.Rookie, 4, 6);
             Walk(s3, runner, P(4, 5), P(4, 4), P(4, 5), P(4, 6));
             Assert.Equal(9 + 1, s3.Discovered!.Count);
+        }
+
+        [Fact(DisplayName = "windows › the enemies see through none, in or out (Arturo, 31/10); through an open door they do; the squad still does")]
+        public void TheEnemiesSeeThroughNoWindow()
+        {
+            var s = House();
+            var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 1, 3);
+            var zombie = AddUnit(s, "a1", TemplateIds.Zombie, 3, 3, extra: (u) => u.Facing = System.Math.PI);
+            // Right at the glass the squad finds the room and sees in; the dead inside see nobody out.
+            Assert.True(Los.CanSee(s, soldier, zombie));
+            Assert.False(Los.CanSee(s, zombie, soldier));
+            Assert.False(Los.TeamVisibility(s, Teams.Alien)[3 * 12 + 1]);
+            Assert.True(Los.TeamVisibility(s, Teams.Xcom)[3 * 12 + 3]);
+            // Nor the living, who shoot.
+            var raider = AddUnit(s, "a2", TemplateIds.Trooper, 0, 3);
+            zombie.Pos = P(4, 3);
+            Assert.False(Los.CanSee(s, AddUnit(s, "a3", TemplateIds.Trooper, 3, 2), soldier));
+            Assert.Null(Aim.PreviewShot(s, Grid.GetUnit(s, "a3")!, soldier));
+            Assert.True(Los.CanSee(s, raider, soldier));
+            // Out of the house by its door, open: in sight, both ways.
+            var open = House();
+            open.Tiles[5 * 12 + 4] = TileKinds.DoorOpen;
+            var walker = AddUnit(open, "s1", TemplateIds.Rookie, 4, 7);
+            var inside = AddUnit(open, "a1", TemplateIds.Zombie, 4, 3, extra: (u) => u.Facing = System.Math.PI / 2);
+            Assert.True(Los.CanSee(open, inside, walker));
         }
 
         [Fact(DisplayName = "buildings › a siege's map is the squad's own base: nothing hidden; a map without storeys, nothing either")]

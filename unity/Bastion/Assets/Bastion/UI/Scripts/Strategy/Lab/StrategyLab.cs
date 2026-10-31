@@ -532,6 +532,42 @@ namespace Bastion.UI.Strategy
             drag = 0;
         }
 
+        /// <summary>
+        /// BASTION_ESTRATEGIA_LUGARES=1 on the Mapa: the six places' drawings in a strip low on the screen (LineIcon
+        /// place:…; Arturo 31/10 #9), at the card's 16 px and at 48, each with its name, to see them all in one shot.
+        /// </summary>
+        void PlaceDrawings()
+        {
+            var panel = GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement;
+            var strip = new UnityEngine.UIElements.VisualElement();
+            strip.style.position = UnityEngine.UIElements.Position.Absolute;
+            strip.style.left = 400;
+            strip.style.bottom = 90;
+            strip.style.flexDirection = UnityEngine.UIElements.FlexDirection.Row;
+            strip.style.backgroundColor = new Color(0.08f, 0.09f, 0.1f, 0.95f);
+            strip.style.paddingLeft = strip.style.paddingRight = strip.style.paddingTop = strip.style.paddingBottom = 12;
+            foreach (var id in new[] { Bastion.Engine.Places.City, Bastion.Engine.Places.Town, Bastion.Engine.Places.Estate, Bastion.Engine.Places.Factory, Bastion.Engine.Places.Roadside, Bastion.Engine.Places.Country })
+            {
+                var cell = new UnityEngine.UIElements.VisualElement();
+                cell.style.alignItems = UnityEngine.UIElements.Align.Center;
+                cell.style.marginLeft = cell.style.marginRight = 10;
+                foreach (var size in new[] { 16f, 48f })
+                {
+                    var box = new UnityEngine.UIElements.VisualElement();
+                    box.style.width = box.style.height = size;
+                    box.style.marginBottom = 6;
+                    box.style.unityBackgroundImageTintColor = Color.white;
+                    box.Add(new LineIcon("place:" + id));
+                    cell.Add(box);
+                }
+                var name = new UnityEngine.UIElements.Label(Bastion.Engine.Places.Names[id]);
+                name.style.color = Color.white;
+                cell.Add(name);
+                strip.Add(cell);
+            }
+            panel.Add(strip);
+        }
+
         static void Send(UnityEngine.UIElements.VisualElement to, EventType type, Vector2 at)
         {
             var e = new Event { type = type, mousePosition = at, button = 0, clickCount = 1 };
@@ -634,6 +670,7 @@ namespace Bastion.UI.Strategy
                 var offer = which == "mapa-mision" ? p.State.Offers[0] : null;
                 var zone = which == "mapa-zona" ? (p.State.Regions.Find(r => !r.Contacted) ?? p.State.Regions[0]).Id : offer?.Region;
                 root.SetMap(p.Map(new MapPick { Offer = offer?.Id, Region = zone }));
+                if (System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_LUGARES") == "1") PlaceDrawings();
             }
             root.SetProposal(p.Proposal(), p.Waiting(screen));
             if (p.State.Proposal != null) root.ClockOf = () => (EngineLore.ProposalClock("0:24", p.State.Proposal.By == 1), 0.62f, false);

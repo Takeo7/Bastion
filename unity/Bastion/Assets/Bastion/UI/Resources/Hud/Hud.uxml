@@ -18,6 +18,7 @@
     <Style src="Cards.uss" />
     <Style src="EdgeMarks.uss" />
     <Style src="GameMenu.uss" />
+    <Style src="MiniMap.uss" />
     <ui:VisualElement name="hud" class="hud font-text" picking-mode="Ignore">
         <!-- Round the screen, in the colour of whoever plays now. -->
         <ui:VisualElement name="turn-frame" class="turn-frame" picking-mode="Ignore">
@@ -41,13 +42,18 @@
         <ui:VisualElement name="shot-panel" class="shot-panel panel" />
         <ui:VisualElement name="turn-actions" class="turn-actions" picking-mode="Ignore" />
         <ui:VisualElement name="side" class="side" picking-mode="Ignore">
-            <ui:Button name="menu-button" class="menu-button" text="Menú" />
+            <ui:VisualElement class="side-keys" picking-mode="Ignore">
+                <ui:Button name="map-button" class="map-button" />
+                <ui:Button name="menu-button" class="menu-button" text="Menú" />
+            </ui:VisualElement>
             <ui:VisualElement name="goal" class="goal-dock panel" />
             <ui:VisualElement name="compass" class="compass panel" />
             <ui:VisualElement name="log" class="log panel" />
         </ui:VisualElement>
         <ui:VisualElement name="banner" class="banner" />
         <ui:VisualElement name="notes" class="notes" picking-mode="Ignore" />
+        <!-- The camera up over the map (M): what it is and what to do, under the turn's strip. -->
+        <ui:VisualElement name="mini-map" class="mini-map" picking-mode="Ignore" />
         <!-- The cards in the middle: the partner's call, the arrival, the outcome. -->
         <ui:VisualElement name="cards" class="cards" picking-mode="Ignore" />
     </ui:VisualElement>

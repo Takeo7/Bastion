@@ -17,8 +17,11 @@ namespace Bastion.Client.Units
 
         sealed class Fading
         {
-            /// <summary>Each body renderer and its own materials, put back once it is all there.</summary>
-            public List<(Renderer renderer, Material[] own)> saved;
+            /// <summary>
+            /// Each body renderer, its own materials and the colour map its block gives them (a soldier's dyed armour:
+            /// SquadTint), put back once it is all there; the fade draws from that map meanwhile.
+            /// </summary>
+            public List<(Renderer renderer, Material[] own, Texture map)> saved;
             public MaterialPropertyBlock block;
         }
 
@@ -29,7 +32,10 @@ namespace Bastion.Client.Units
 
         static readonly string[] ColourMaps = { "_ColorMap", "_Albedo_Map", "_BaseMap", "_MainTex" };
 
-        static Material FadeCopy(Material m)
+        /// <summary>The Sidekick figures' colour map, as their blocks give it (SoldierFigure.OwnColours, SquadTint.Paint).</summary>
+        const string ColourMap = "_ColorMap";
+
+        internal static Material FadeCopy(Material m)
         {
             if (m == null) return null;
             if (fadeCopies.TryGetValue(m, out var copy) && copy != null) return copy;
@@ -62,11 +68,12 @@ namespace Bastion.Client.Units
             fadings.TryGetValue(v, out var f);
             if (part && f == null)
             {
-                f = fadings[v] = new Fading { block = new MaterialPropertyBlock(), saved = new List<(Renderer, Material[])>() };
+                f = fadings[v] = new Fading { block = new MaterialPropertyBlock(), saved = new List<(Renderer, Material[], Texture)>() };
                 foreach (var r in BodyRenderers(v))
                 {
                     var own = r.sharedMaterials;
-                    f.saved.Add((r, own));
+                    r.GetPropertyBlock(f.block);
+                    f.saved.Add((r, own, f.block.HasTexture(ColourMap) ? f.block.GetTexture(ColourMap) : null));
                     // (The flash's and the mark's passes, over it, left as they are.)
                     r.sharedMaterials = own.Select(m => m == null || IsPass(m) ? m : FadeCopy(m)).ToArray();
                     r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -76,18 +83,26 @@ namespace Bastion.Client.Units
             if (f == null) return;
             if (part)
             {
-                f.block.SetFloat("_Fade", v.fade);
-                foreach (var (r, _) in f.saved) if (r != null) r.SetPropertyBlock(f.block);
+                foreach (var (r, _, map) in f.saved)
+                {
+                    if (r == null) continue;
+                    f.block.Clear();
+                    f.block.SetFloat("_Fade", v.fade);
+                    if (map != null) f.block.SetTexture("_BaseMap", map);
+                    r.SetPropertyBlock(f.block);
+                }
                 if (!v.cut && !v.gone) foreach (var w in v.carried.Values) if (w != null) Show(w, v.fade >= 0.5f);
                 return;
             }
             // All there: its own materials (and any pass laid over them since), its shadow, what it carries.
-            foreach (var (r, own) in f.saved)
+            foreach (var (r, own, map) in f.saved)
             {
                 if (r == null) continue;
                 var now = r.sharedMaterials;
                 r.sharedMaterials = own.Concat(now.Skip(own.Length).Where(IsPass)).ToArray();
-                r.SetPropertyBlock(null);
+                f.block.Clear();
+                if (map != null) f.block.SetTexture(ColourMap, map);
+                r.SetPropertyBlock(map != null ? f.block : null);
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
             }
             if (!v.cut) foreach (var w in v.carried.Values) if (w != null) Show(w, true);

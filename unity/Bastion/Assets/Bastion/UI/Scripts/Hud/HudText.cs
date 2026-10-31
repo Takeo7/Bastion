@@ -191,6 +191,14 @@ namespace Bastion.UI.Hud
             public static string Tied(string names) => $"Empatan en el tablero: {names}";
         }
 
+        /// <summary>The map from above: the camera straight down over all of it (Arturo, 31/10 #12 and 01/11).</summary>
+        public static class MiniMap
+        {
+            public const string Title = "MAPA";
+            public const string Tip = "Mapa (M)";
+            public const string Hint = "Clic: bajar la cámara allí · M o Esc: volver";
+        }
+
         public static class Squad
         {
             public const string Select = "Seleccionar";

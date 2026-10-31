@@ -831,12 +831,15 @@ namespace Bastion.UI.Combat
             return moved;
         }
 
-        /// <summary>The arrivals (`spawned`) or the contacts (`podActivated`) that follow `item`, of its kind: seen at once (playtest 18/10 #6).</summary>
+        /// <summary>
+        /// The arrivals (`spawned`) or the contacts (`podActivated`) that follow `item`, of its kind: seen at once (playtest
+        /// 18/10 #6); and those boarding La Lata, gone by its door at once (Arturo, 31/10 #1).
+        /// </summary>
         List<(GameEvent e, int? by, int epoch)> SameMoment((GameEvent e, int? by, int epoch) item)
         {
             var run = new List<(GameEvent, int?, int)>();
             var kind = item.e.GetType();
-            if (!(item.e is SpawnedEvent) && !(item.e is PodActivatedEvent)) return run;
+            if (!(item.e is SpawnedEvent) && !(item.e is PodActivatedEvent) && !(item.e is EvacuatedEvent)) return run;
             while (queue.Count > 0 && queue.Peek().e.GetType() == kind) run.Add(queue.Dequeue());
             return run;
         }
@@ -869,6 +872,8 @@ namespace Bastion.UI.Combat
                 grouped = false;
                 current = null;
             }
+            // All of them aboard: La Lata goes, before the boarding is on the view (as one alone does: EvacuatedEvent).
+            if (all[0].e is EvacuatedEvent && !NextBoards()) await LataLeaves();
             foreach (var q in all)
             {
                 NoteResult(q.e);
@@ -879,12 +884,44 @@ namespace Bastion.UI.Combat
         /// <summary>Whether the next event is another soldier boarding La Lata (then it waits for them).</summary>
         bool NextBoards() => queue.Count > 0 && queue.Peek().e is EvacuatedEvent;
 
-        /// <summary>La Lata pulling away off the map (game.ts busLeaves: Arte's MapView.LataDeparts, ≈2.6 s; at once without it).</summary>
+        /// <summary>
+        /// How long the camera follows La Lata pulling away (Arturo, 31/10 #1: 2 to 3 s), how far round it turns meanwhile,
+        /// and how far from its bay it goes after it (tiles): no further, so that La Lata drives out of the picture and the
+        /// camera isn't taken off the map with it, over roofs and into the fog.
+        /// </summary>
+        const float FollowLata = 2.5f;
+        const float FollowTurn = 20f;
+        const float FollowReach = 6;
+
+        /// <summary>
+        /// La Lata pulling away off the map (game.ts busLeaves: Arte's MapView.LataDeparts, 2.55 s; at once without it), the
+        /// camera after it for a moment, turning a little as it goes to end up behind it (Arturo, 31/10 #1); a move of the
+        /// player's lets it go.
+        /// </summary>
         async Awaitable LataLeaves()
         {
             var map = Bastion.Client.Map.MapView.Current;
+            control.Film = true;
             if (map?.LataAt is Vector3 bus) control.Sfx.Vehicle(bus);
-            if (map != null) await map.LataDeparts(stop);
+            if (map == null) return;
+            var going = map.LataDeparts(stop);
+            var rig = control.Rig;
+            if (rig != null && map.LataAt is Vector3 start)
+            {
+                var epoch = rig.Epoch;
+                // The way it turns, once it is on its way: round towards its back, whichever side of the screen it heads for.
+                var turn = 0f;
+                for (var t = 0f; t < FollowLata && rig.Epoch == epoch; t += Time.deltaTime)
+                {
+                    if (!(map.LataAt is Vector3 at)) break;
+                    var went = new Vector3(at.x - start.x, 0, at.z - start.z);
+                    rig.Focus(start + Vector3.ClampMagnitude(went, FollowReach * Board.Tile));
+                    if (turn == 0 && went.sqrMagnitude > 0.09f) turn = Vector3.Dot(went, rig.Camera.transform.right) > 0 ? -FollowTurn : FollowTurn;
+                    rig.Turn(turn * Time.deltaTime / FollowLata);
+                    await Awaitable.NextFrameAsync(stop);
+                }
+            }
+            await going;
         }
 
         /// <summary>What a blast leaves on everyone it caught, right after its `explosive`, taken off the queue; none unless at least two.</summary>
@@ -1730,7 +1767,8 @@ namespace Bastion.UI.Combat
                     }
                     Log(Lore.EvacDepartLine(aboard.Select(u => u.Name).ToList()), "#6dff9a");
                     // The camera to La Lata (else the zone), everyone in it boards (the `evacuated` that follow), and then it
-                    // pulls away (Arte's MapView.LataDeparts).
+                    // pulls away (Arte's MapView.LataDeparts): filmed, without the zone nor any other (#1).
+                    control.Film = true;
                     var zone = v.Mission.EvacZone;
                     var lata = Bastion.Client.Map.MapView.Current?.LataAt;
                     if (rig != null && (lata != null || zone.Count > 0))
@@ -1744,15 +1782,15 @@ namespace Bastion.UI.Combat
                 }
                 case EvacuatedEvent evac:
                 {
-                    // Into the bus: a puff of dust where they stood, and out of sight at once (playtest 16/10 #2).
-                    fx?.Dust(Feet(evac.Unit), 4);
-                    await Wait(0.18f);
+                    // Into the bus: no climbing in, they fade where they stand by its door (Arte's Board; Arturo, 31/10 #1),
+                    // all those boarding at once (SameMoment). Their flag goes with them (the HUD's, not the figure's); after
+                    // the last one aboard, La Lata goes (game.ts busLeaves), before the boarding is on the view, as the
+                    // 0.10.1: their sight holds the fog off.
                     units?.Board(evac.Unit);
-                    // Their flag goes with them (the HUD's, not the figure's); after the last one aboard, La Lata goes
-                    // (game.ts busLeaves), before the boarding is on the view, as the 0.10.1: their sight holds the fog off.
                     control.Aboard.Add(evac.Unit);
                     control.Refresh();
-                    if (!NextBoards()) await LataLeaves();
+                    await Wait(UnitViews.BoardSeconds);
+                    if (!grouped && !NextBoards()) await LataLeaves();
                     return;
                 }
                 case LeftBehindEvent lb:

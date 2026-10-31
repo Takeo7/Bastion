@@ -128,13 +128,17 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// A material for the marks (Bastion/Marks): drawn in `queue`; over everything (`overAll`, as the web's lines
-        /// and shields: depthTest false) or behind what stands in front; `shade`, blending by the minimum (a dark stroke
-        /// that leaves dark ground as it is); `pull`, metres nearer the camera for the depth test (Bastion/Marks).
+        /// and shields: depthTest false) or behind what stands in front; `figures`, over everything but the figures (soldiers
+        /// and the dead), behind those that stand in front of it; `shade`, blending by the minimum (a dark stroke that leaves
+        /// dark ground as it is); `pull`, metres nearer the camera for the depth test (Bastion/Marks).
         /// </summary>
-        public static Material Material(int queue, bool overAll = false, bool shade = false, float pull = 0)
+        public static Material Material(int queue, bool overAll = false, bool shade = false, float pull = 0, bool figures = false)
         {
             var m = new Material(Resources.Load<Shader>("Combat/Marks")) { renderQueue = queue };
-            m.SetFloat("_ZTest", (float)(overAll ? CompareFunction.Always : CompareFunction.LessEqual));
+            m.SetFloat("_ZTest", (float)(overAll || figures ? CompareFunction.Always : CompareFunction.LessEqual));
+            m.SetFloat("_StencilComp", (float)(figures ? CompareFunction.NotEqual : CompareFunction.Always));
+            m.SetFloat("_FigureComp", (float)(figures ? CompareFunction.Equal : CompareFunction.Never));
+            m.SetShaderPassEnabled("UniversalForward", figures);
             m.SetFloat("_Pull", pull);
             m.SetFloat("_BlendOp", (float)(shade ? BlendOp.Min : BlendOp.Add));
             m.SetFloat("_SrcBlend", (float)(shade ? BlendMode.One : BlendMode.SrcAlpha));

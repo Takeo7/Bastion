@@ -14,7 +14,9 @@ namespace Bastion.Client.Map
     /// walls round it (Ana, 22/10 #36), but only once the squad has found the building (the engine's Buildings: a soldier
     /// has gone into it, or looked in at one of its windows from the tile just outside it: Arturo, 31/10, Ana's #5); till
     /// then its inside stays unknown, whatever is seen of it through a window or a door from further off (Arturo, 28/10,
-    /// Ana's p1; 0.10.1 showed the room seen through it), and nobody inside is in sight (Ana's #1). Each tile's zone in a small texture, faded as it changes, which a full-screen pass
+    /// Ana's p1; 0.10.1 showed the room seen through it), and nobody inside is in sight (Ana's #1). In a siege by day the
+    /// base and its clearing are known from the start, the pinar round them fogged till a soldier sees it (Arturo, 31/10,
+    /// his #5; 0.10.1 had no fog in a siege: 18/10 #18). Each tile's zone in a small texture, faded as it changes, which a full-screen pass
     /// (Bastion/Fog) reads at every pixel's place. UI's event player shows it the state seen (Show) after each event;
     /// Battlefield starts it with each map. On «Niebla» in Partida.
     /// </summary>
@@ -58,6 +60,13 @@ namespace Bastion.Client.Map
         /// (who stands in the doorway of a building not found shows: the engine's Buildings.Hidden).
         /// </summary>
         readonly HashSet<int> spotted = new HashSet<int>();
+        /// <summary>A siege's by day (Home): by tile, the base and its clearing, seen from the start; null on any other map.</summary>
+        bool[] home;
+        /// <summary>
+        /// How far from the map's middle a siege's clearing goes at most (tiles, on the base's 56 a side): its own (8 at most,
+        /// Base.FreshBase) and the 6 over which its pines thicken; open ground further out is the pinar's.
+        /// </summary>
+        const float HomeReach = 14;
         float[] sight, known, sightTo, knownTo, roofSight, roofKnown, roofSightTo, roofKnownTo, lit, litTo;
         bool[] explored, shut;
         bool[] visible, view, lights;
@@ -110,6 +119,7 @@ namespace Bastion.Client.Map
             closed = new bool[n];
             all = false;
             Close(s);
+            home = Home(s);
             changed = true;
             Shader.SetGlobalTexture(FogMap, map);
             Shader.SetGlobalTexture(FogShell, shellMap);
@@ -206,6 +216,87 @@ namespace Bastion.Client.Map
             }
         }
 
+        /// <summary>
+        /// A siege's base and its clearing by day (Arturo, 31/10, his #5): the ground that is not a pine, but for the ways
+        /// through the pines (two tiles wide or less: a tile's erosion takes them), joined to the middle and within HomeReach
+        /// of it, given back the tile round it; the pines most of whose round is in it (one standing alone in the clearing);
+        /// and what the base has built, wherever, with the tiles round it. On a siege's map without pines, all of it. Null on
+        /// any other map, and by night (as it was: what is near and what the floodlights light).
+        /// </summary>
+        static bool[] Home(GameState s)
+        {
+            int w = s.Width, h = s.Height, n = w * h;
+            if (s.Mission?.Siege == null || s.Mission.Night == true || s.Tiles == null || s.Tiles.Count != n) return null;
+            bool Pine(int x, int y)
+            {
+                int i = y * w + x;
+                return s.Tiles[i] == TileKinds.High && s.Decor != null && i < s.Decor.Count && Decor.DecorOf(s.Decor[i])?.Kind == DecorKinds.Tree;
+            }
+            bool In(int x, int y) => x >= 0 && y >= 0 && x < w && y < h;
+            // (Off the map counts as open: a way out along the track keeps its edge.)
+            bool Open(int x, int y) => !In(x, y) || !Pine(x, y);
+            var home = new bool[n];
+            bool pines = false;
+            for (int i = 0; i < n && !pines; i++) pines = Pine(i % w, i / w);
+            if (!pines)
+            {
+                for (int i = 0; i < n; i++) home[i] = true;
+                return home;
+            }
+            float cx = (w - 1) / 2f, cy = (h - 1) / 2f, reach = HomeReach * Mathf.Max(w, h) / Base.BaseMap;
+            var core = new bool[n];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    bool open = (x - cx) * (x - cx) + (y - cy) * (y - cy) <= reach * reach;
+                    for (int dy = -1; dy <= 1 && open; dy++)
+                        for (int dx = -1; dx <= 1 && open; dx++) open = Open(x + dx, y + dy);
+                    core[y * w + x] = open;
+                }
+            // From the middle, side by side.
+            var reached = new bool[n];
+            var todo = new Queue<int>();
+            for (int i = 0; i < n; i++)
+            {
+                if (!core[i] || Mathf.Abs(i % w - cx) > 4 || Mathf.Abs(i / w - cy) > 4) continue;
+                reached[i] = true;
+                todo.Enqueue(i);
+            }
+            while (todo.Count > 0)
+            {
+                int i = todo.Dequeue(), x = i % w, y = i / w;
+                foreach (var (nx, ny) in new[] { (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1) })
+                {
+                    if (!In(nx, ny) || !core[ny * w + nx] || reached[ny * w + nx]) continue;
+                    reached[ny * w + nx] = true;
+                    todo.Enqueue(ny * w + nx);
+                }
+            }
+            int Round(bool[] set, int x, int y)
+            {
+                int k = 0;
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                        if ((dx != 0 || dy != 0) && In(x + dx, y + dy) && set[(y + dy) * w + x + dx]) k++;
+                return k;
+            }
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                    home[y * w + x] = Open(x, y) && (reached[y * w + x] || Round(reached, x, y) > 0);
+            var lone = new List<int>();
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                    if (Pine(x, y) && Round(home, x, y) >= 5) lone.Add(y * w + x);
+            foreach (int i in lone) home[i] = true;
+            if (s.Base?.Pieces != null)
+                foreach (var p in s.Base.Pieces)
+                    foreach (var c in Base.CellsOf(p))
+                        for (int dy = -1; dy <= 1; dy++)
+                            for (int dx = -1; dx <= 1; dx++)
+                                if (In(c.X + dx, c.Y + dy)) home[(c.Y + dy) * w + c.X + dx] = true;
+            return home;
+        }
+
         IEnumerable<int> Beside(int i)
         {
             int x = i % width, y = i / width;
@@ -239,6 +330,9 @@ namespace Bastion.Client.Map
             if (explored == null || explored.Length != view.Length) explored = new bool[view.Length];
             int area = width * height;
             for (int k = 0; k < view.Length; k++) explored[k] |= (view[k] || (k < visible.Length && visible[k])) && !closed[k % area];
+            // A siege's base and clearing by day, on every storey (its towers' decks): seen, whoever looks.
+            if (home != null)
+                for (int k = 0; k < explored.Length; k++) explored[k] |= home[k % area];
             Refog(instant);
         }
 

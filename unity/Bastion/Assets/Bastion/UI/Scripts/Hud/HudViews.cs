@@ -491,6 +491,8 @@ namespace Bastion.UI.Hud
         public string HoverText;
         /// <summary>The target being picked: the only flag kept over the shoulder.</summary>
         public bool Target;
+        /// <summary>Its card in the list under the pointer: an arrow over it points it out (Arturo, 31/10 #11).</summary>
+        public bool Pointed;
     }
 
     [Serializable]

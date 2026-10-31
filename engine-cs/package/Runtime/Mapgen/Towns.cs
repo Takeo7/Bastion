@@ -892,10 +892,17 @@ namespace Bastion.Engine
         /// objective's block is the one the squad walks to along the streets in OBJECTIVE_WALK, the biggest if several are
         /// (an office or a clinic fits). Returns the objective's ground and the plan.
         /// </summary>
-        private static (Rect Objective, TownPlan Plan) Town(Canvas c, Rng rng, Style map, string role, bool clinic, bool hospital, bool ward)
+        private static (Rect Objective, TownPlan Plan) Town(Canvas c, Rng rng, Style map, string role, bool clinic, bool hospital, bool ward, bool oldTown)
         {
-            // A clinic, a ward or a hospital needs one of a grid's big blocks.
-            var organic = !hospital && !clinic && rng.Next() < 0.5;
+            // A clinic, a ward or a hospital needs one of a grid's big blocks. Any other is old or not by its seed
+            // (Places.OldTownSeed, Arturo 31/10: the card says «Pueblo» before the map is made); the roll it once was stays,
+            // so the rest of the town comes out of the same numbers.
+            var organic = false;
+            if (!hospital && !clinic)
+            {
+                rng.Next();
+                organic = oldTown;
+            }
             var style = CopyStyleTowns(map);
             style.Organic = organic;
             // A hospital's town has the biggest blocks (docs/MAPAS.md §4.2: 16–20 × 24–30).

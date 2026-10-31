@@ -8,8 +8,8 @@ namespace Bastion.UI.Hud
     /// <summary>
     /// The icons that were our own drawings on the web, not Synty's (icons.ts: 24 × 24, a line of 2, round ends): drawn
     /// with Painter2D in the element's tint (USS `-unity-background-image-tint-color`, as the sprites are tinted), so
-    /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, the base's axe, and the
-    /// Coro's wave.
+    /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, the base's axe, the
+    /// Coro's wave, and the missions' places (new in Unity: Synty has no city nor factory).
     /// </summary>
     public sealed class LineIcon : VisualElement
     {
@@ -54,6 +54,64 @@ namespace Bastion.UI.Hud
                 pen.Curve(6.5f, 6, 8.5f, 6, 12, 12);
                 pen.Curve(15.5f, 18, 17.5f, 18, 21, 12);
                 pen.Stroke();
+            },
+            // A mission's place on its card (Places, Arturo 31/10 #9), each on the ground line. The city: three blocks, the
+            // middle one tallest, lit.
+            ["place:city"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (4, 21.5f), (4, 10), (9, 10));
+                pen.Lines(true, false, (9, 21.5f), (9, 4), (15, 4), (15, 21.5f));
+                pen.Lines(true, false, (15, 13), (20, 13), (20, 21.5f));
+                pen.Dot(12, 8.5f, 1);
+                pen.Dot(12, 13, 1);
+            },
+            // The town: a house and its church's steeple with the cross.
+            ["place:town"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (4, 21.5f), (4, 13.5f), (9, 9), (14, 13.5f), (14, 21.5f));
+                pen.Lines(true, false, (8, 21.5f), (8, 17.5f), (10, 17.5f), (10, 21.5f));
+                pen.Lines(true, false, (14, 11), (17, 6.5f), (20, 11), (20, 21.5f));
+                pen.Line(17, 2, 17, 6.5f);
+                pen.Line(15.6f, 3.6f, 18.4f, 3.6f);
+            },
+            // The estate: a shed with a sawtooth roof and its roller door.
+            ["place:estate"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (3, 21.5f), (3, 12), (9, 7), (9, 12), (15, 7), (15, 12), (21, 7), (21, 21.5f));
+                pen.Lines(true, false, (9, 21.5f), (9, 15.5f), (15, 15.5f), (15, 21.5f));
+                pen.Line(9, 18.5f, 15, 18.5f);
+            },
+            // The factory: a flat block with its door, its tall chimney and the smoke off it.
+            ["place:factory"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (3, 21.5f), (3, 12.5f), (14, 12.5f), (14, 21.5f));
+                pen.Lines(true, false, (7, 21.5f), (7, 17), (10, 17), (10, 21.5f));
+                pen.Lines(true, false, (16, 21.5f), (16, 7), (19.5f, 7), (19.5f, 21.5f));
+                pen.Begin(17.7f, 4.2f);
+                pen.Curve(18.6f, 2, 20.6f, 1.8f, 21.8f, 3.2f);
+                pen.Stroke();
+            },
+            // The service area: a fuel pump, its window and its hose.
+            ["place:roadside"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (5, 21.5f), (5, 4), (14, 4), (14, 21.5f));
+                pen.Rect(7.5f, 7, 4, 4);
+                pen.Lines(true, false, (14, 8.5f), (16.5f, 8.5f), (18.5f, 10.5f), (18.5f, 17));
+                pen.Line(18.5f, 17, 17, 18.5f);
+            },
+            // The country: a barn, its roof broken twice, its door crossed.
+            ["place:country"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (4, 21.5f), (4, 11.5f), (7.5f, 6.5f), (16.5f, 6.5f), (20, 11.5f), (20, 21.5f));
+                pen.Lines(true, false, (9, 21.5f), (9, 14.5f), (15, 14.5f), (15, 21.5f));
+                pen.Line(9, 14.5f, 15, 21.5f);
+                pen.Line(15, 14.5f, 9, 21.5f);
             },
         };
 

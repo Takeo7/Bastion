@@ -315,7 +315,7 @@ namespace Bastion.Engine
                 !Content.Templates[t.Template].Robotic &&
                 t.Template != TemplateIds.Zombie &&
                 Grid.Distance(u.Pos, t.Pos) <= range &&
-                Los.CanSeeTile(s, u.Pos, t.Pos, Los.SightTo(s, u, t.Pos)) &&
+                Los.CanSeeTile(s, u.Pos, t.Pos, Los.SightTo(s, u, t.Pos), Los.WindowReachOf(u.Team)) &&
                 RiseSpot(s, t) != null).ToList();
         }
 
@@ -351,7 +351,7 @@ namespace Bastion.Engine
             if (ability == AbilityIds.Search) return Looting.IsSearchable(s, tile) && Looting.ReachesToSearch(s, u.Pos, tile);
             if (ability == AbilityIds.OpenDoor || ability == AbilityIds.CloseDoor) return DoorTiles(s, u, ability == AbilityIds.OpenDoor ? TileKinds.Door : TileKinds.DoorOpen).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Smash) return BreakablesBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
-            return s.Units.Any((o) => Los.IsViewer(o, u.Team) && Los.CanSeeTile(s, o.Pos, tile, Los.SightTo(s, o, tile)));
+            return s.Units.Any((o) => Los.IsViewer(o, u.Team) && Los.CanSeeTile(s, o.Pos, tile, Los.SightTo(s, o, tile), Los.WindowReachOf(o.Team)));
         }
 
         /// <summary>Reach of a targeted ability for this unit (talents can lengthen grenade throws).</summary>

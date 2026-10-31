@@ -115,6 +115,8 @@ namespace Bastion.UI.Strategy
         public string Value;
         /// <summary>What the figure means, on hover; null, none.</summary>
         public string Tip;
+        /// <summary>One of our drawings before the value (LineIcon: a mission's place); null, none.</summary>
+        public string Icon;
     }
 
     /// <summary>«Te esperan»: the partner is ready to go and this player isn't (renderWaiting); null text, none.</summary>

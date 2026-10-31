@@ -52,11 +52,13 @@ namespace Bastion.Engine.Tests
         public void TheOpeningOperationIsDone()
         {
             // 95 of the first 100 seeds when it was written, these eight all; with the dead at 80 % of a soldier's pace and
-            // walking both actions (28/10), 85 of 100, and these eight all but the 6th and the 8th.
+            // walking both actions (28/10), 85 of 100, and these eight all but the 6th and the 8th. With a recruit's aim at 55
+            // and the common dead without their −10 of defence (Arturo, 31/10), 12 of the first 24 (17 before), and of these
+            // eight the 7th and the 8th.
             var played = Enumerable.Range(1, 8).Select(Play).ToList();
             Assert.All(played, (p) => Assert.Equal(0, p.refused));
             var won = played.Count((p) => p.state.Outcome == Outcomes.Victory);
-            Assert.True(won >= 6, $"{won} of 8: {string.Join(", ", played.Select((p) => $"{p.state.Outcome}/{p.state.OutcomeReason}"))}");
+            Assert.True(won >= 2, $"{won} of 8: {string.Join(", ", played.Select((p) => $"{p.state.Outcome}/{p.state.OutcomeReason}"))}");
             Assert.All(played.Where((p) => p.state.Outcome == Outcomes.Victory), (p) => Assert.True(p.state.Mission.Item!.Evacuated || p.state.Units.Any((u) => u.Evacuated && u.Id == p.state.Mission.Item.Carrier)));
         }
 

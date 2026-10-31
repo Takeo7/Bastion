@@ -711,7 +711,8 @@ namespace Bastion.Engine
             IReadOnlyDictionary<string, int> charges,
             int hp = 5,
             int armor = 0,
-            int aim = 65,
+            // 65 until 31/10 (Arturo: «los porcentajes de disparo son demasiado buenos de primeras»).
+            int aim = 55,
             int defense = 0,
             int dodge = 0,
             double mobility = SoldierMobility,
@@ -838,7 +839,7 @@ namespace Bastion.Engine
             // The dead (docs/FASE2.md): claws and teeth, no cover, the horde's AI (ai.ts takeZombieTurn).
             // Harder to put down (playtest 2026-10-15, #12): two more points of health each.
             // Playtest 16/10 #19 and #21: 3 of health; they move 80 % of what a soldier does (ZOMBIE_PACE, 28/10).
-            [TemplateIds.Zombie] = Alien(TemplateIds.Zombie, "Zombi", "ZOM", WeaponIds.Claws, meleeWeapon: WeaponIds.Claws, hp: 3, aim: 60, defense: -10, mobility: SoldierMobility * ZombiePace, sight: 14, detection: 6, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
+            [TemplateIds.Zombie] = Alien(TemplateIds.Zombie, "Zombi", "ZOM", WeaponIds.Claws, meleeWeapon: WeaponIds.Claws, hp: 3, aim: 60, mobility: SoldierMobility * ZombiePace, sight: 14, detection: 6, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
             [TemplateIds.Xenoid] = Alien(TemplateIds.Xenoid, "Corredor", "COR", WeaponIds.XenoPistol, meleeWeapon: WeaponIds.XenoPistol, hp: 7, aim: 60, mobility: 8, detection: 10, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
             [TemplateIds.Mec] = Alien(TemplateIds.Mec, "Acorazado", "ACO", WeaponIds.MecCannon, meleeWeapon: WeaponIds.MecCannon, hp: 9, armor: 1, aim: 60, mobility: SoldierMobility * ZombiePace, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
             // The Chillón doesn't bite: it screams (mindspin, noise 16) and raises the dead.

@@ -343,14 +343,16 @@ namespace Bastion.Engine.Tests
             Assert.False(Los.LineClear(walled, At(9, 3), At(5, 3, 1)));
         }
 
-        [Fact(DisplayName = "sight through storeys › who sees whom: through an upper window both ways, never through a floor")]
+        [Fact(DisplayName = "sight through storeys › who sees whom: through an upper window the squad's way only, never through a floor")]
         public void WhoSeesWhom()
         {
             var s = Building();
             var sniper = AddUnit(s, "a1", TemplateIds.Trooper, 6, 3, 1);
             var street = AddUnit(s, "s1", TemplateIds.Sharpshooter, 12, 3);
             var below = AddUnit(s, "s2", TemplateIds.Assault, 5, 3);
-            Assert.True(Los.CanSee(s, sniper, street));
+            // The street sees the living at the glass; they see nobody out through it (Arturo, 31/10: the enemies see through
+            // no window; los.ts saw both ways).
+            Assert.False(Los.CanSee(s, sniper, street));
             Assert.True(Los.CanSee(s, street, sniper));
             // A step back from the glass, neither (Ana, 23/10 #21).
             sniper.Pos = At(5, 3, 1);

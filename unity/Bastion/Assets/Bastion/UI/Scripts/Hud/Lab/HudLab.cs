@@ -393,6 +393,9 @@ namespace Bastion.UI.Hud
 
         public void OnAbility(string id) => hud.Toast($"Habilidad: {id}");
         public void OnEndTurn() => hud.Toast("Terminar turno");
+        public void OnHoverSquad(string id) => hud.Toast($"Señalado: {id ?? "nadie"}");
+        public void OnMiniMap() => hud.Toast("Mapa");
+
         public void OnSelectUnit(string id)
         {
             selected = id;

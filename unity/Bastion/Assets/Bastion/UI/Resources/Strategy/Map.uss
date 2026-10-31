@@ -414,6 +414,15 @@
     color: var(--t-muted);
 }
 
+/* A mission's place by its name (Arturo, 31/10 #9): our drawing (LineIcon), in white like the value. */
+.map-briefing__icon {
+    width: 16px;
+    height: 16px;
+    margin: 1px 5px 0 0;
+    flex-shrink: 0;
+    -unity-background-image-tint-color: #ffffff;
+}
+
 .map-briefing__value {
     flex-shrink: 1;
     font-size: 14px;

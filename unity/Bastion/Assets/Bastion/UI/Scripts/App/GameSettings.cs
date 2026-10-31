@@ -361,7 +361,7 @@ namespace Bastion.UI.App
                 {
                     Id = SoundId,
                     Label = "Sonido",
-                    About = "Todo el sonido del juego, encendido o en silencio. En combate, la tecla M hace lo mismo.",
+                    About = "Todo el sonido del juego, encendido o en silencio.",
                     Choices = new System.Collections.Generic.List<string> { "Activado", "Desactivado" },
                     On = Bastion.Client.Audio.Volumes.Muted ? 1 : 0,
                     Sound = true,

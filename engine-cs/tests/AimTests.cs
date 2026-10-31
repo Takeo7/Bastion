@@ -29,8 +29,8 @@ namespace Bastion.Engine.Tests
             var shooter = AddUnit(s, "s1", TemplateIds.Specialist, 0, 0);
             var target = AddUnit(s, "a1", TemplateIds.Trooper, 0, 10);
             var p = Aim.PreviewShot(s, shooter, target)!;
-            // 65 aim + medium range at 10 tiles (+4); no cover -> flanked -> +50 crit.
-            Assert.Equal(69, p.Hit);
+            // 55 aim (65 until 31/10) + medium range at 10 tiles (+4); no cover -> flanked -> +50 crit.
+            Assert.Equal(59, p.Hit);
             Assert.True(p.Flanked);
             Assert.Equal(50, p.Crit);
         }
@@ -57,7 +57,7 @@ namespace Bastion.Engine.Tests
             var shooter = AddUnit(s, "s1", TemplateIds.Specialist, 0, 0);
             var target = AddUnit(s, "a1", TemplateIds.Trooper, 0, 10);
             var p = Aim.PreviewShot(s, shooter, target, new ShotOptions { Reaction = true })!;
-            Assert.Equal(69 - (int)Math.Floor(69 * 0.3), p.Hit);
+            Assert.Equal(59 - (int)Math.Floor(59 * 0.3), p.Hit);
             Assert.Equal(0, p.Crit);
         }
 

@@ -28,7 +28,7 @@ namespace Bastion.UI.Combat
             ("F", "Centrar en el soldado"),
             ("O", "Centrar en el objetivo"),
             ("Clic derecho", "Ficha del enemigo"),
-            ("M", "Sonido"),
+            ("M", "Mapa"),
             ("F12", "Guardar una captura de pantalla"),
             ("Esc", "Cancelar, o abrir este menú y pausar la partida"),
         };

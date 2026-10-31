@@ -80,7 +80,7 @@ namespace Bastion.Engine
             var bestShot = 0;
             foreach (var e in enemies)
             {
-                if (Los.SightOrigin(s, e.Pos, pos, Los.SightTo(s, e, pos)) != null)
+                if (Los.SightOrigin(s, e.Pos, pos, Los.SightTo(s, e, pos), Los.WindowReachOf(e.Team)) != null)
                 {
                     var cover = Cover.CoverAgainst(s, pos, e.Pos);
                     score += cover == 2 ? 25 : cover == 1 ? 10 : -30;
@@ -759,6 +759,30 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// In a siege, the free tile beside `prey` the dead can get to by the ground (`ways`, its reach round its own as far
+        /// as LookaheadStoreys goes): the nearest to it, the cheapest of those, as closestTo would pick it. Null when the
+        /// pines, the walls or the squad shut `prey` in (seed 9's siege, 1/11).
+        /// </summary>
+        private static Pos? BesideByGround(GameState s, Unit u, Reach ways, Unit prey)
+        {
+            Pos? best = null;
+            var bestD = 0;
+            var bestCost = 0;
+            foreach (var o in Paths.Destinations(s, u, ways))
+            {
+                if (!Aim.InMeleeReach(s, o.Pos, prey.Pos)) continue;
+                var d = (o.Pos.X - prey.Pos.X) * (o.Pos.X - prey.Pos.X) + (o.Pos.Y - prey.Pos.Y) * (o.Pos.Y - prey.Pos.Y);
+                if (best == null || d < bestD || (d == bestD && (o.Cost < bestCost || (o.Cost == bestCost && (o.Pos.Y < best.Y || (o.Pos.Y == best.Y && o.Pos.X < best.X))))))
+                {
+                    best = o.Pos;
+                    bestD = d;
+                    bestCost = o.Cost;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
         /// Where the Chillón, seeing none of the living, would see one of them from its gap (SCREAMER_GAP) or further, whichever
         /// way it faced: the cheapest within an action, where it stands first. Null when there is nowhere.
         /// </summary>
@@ -772,7 +796,7 @@ namespace Bastion.Engine
             {
                 if (best != null && o.Cost >= best.Cost) continue;
                 if (living.Any((e) => Grid.Distance(o.Pos, e.Pos) < ScreamerGap)) continue;
-                if (living.Any((e) => Los.SightOrigin(s, o.Pos, e.Pos, Los.SightTo(s, u, e.Pos)) != null)) best = o;
+                if (living.Any((e) => Los.SightOrigin(s, o.Pos, e.Pos, Los.SightTo(s, u, e.Pos), Los.WindowReachOf(u.Team)) != null)) best = o;
             }
             return best?.Pos;
         }
@@ -958,14 +982,40 @@ namespace Bastion.Engine
                 }
 
                 if (backed) return;
-                // Nobody in sight: in a siege, for the nearest soldier, wherever they are.
+                // Nobody in sight: in a siege, for the nearest soldier it can get to, beside them by the ground or by breaking
+                // in, wherever they are; with none, the nearest. Seed 9's siege (1/11) never ended: the nearest soldier was shut
+                // in by the pines but for a way past another of the squad, and the Chillón, stepping towards them as the crow
+                // flies, kept to a pocket of the pinar.
                 if (s.Mission.Siege != null)
                 {
                     var sorted = new List<Unit>(soldiers);
                     Js.Sort(sorted, ByDistance(s, u.Pos));
-                    var prey = sorted[0];
-                    if (Close(prey.Pos, soldiers)) continue;
-                    return;
+                    var ways = Paths.ComputeReach(s, u, Paths.CostPerAp(u) * LookaheadStoreys, u.Pos, (o) => !Content.HostileTo(o, u));
+                    var smash = abilities.Contains(AbilityIds.Smash);
+                    var prey = sorted.Find((e) => BesideByGround(s, u, ways, e) != null || (smash && BreachPlanOf(s, u, e.Pos, sim.Ways) != null)) ?? sorted[0];
+                    var beside = screamer ? BesideByGround(s, u, ways, prey) : null;
+                    if (beside == null)
+                    {
+                        if (Close(prey.Pos, soldiers)) continue;
+                        return;
+                    }
+                    // The Chillón, to where it would see one of them from its gap; with nowhere within an action, along the
+                    // way beside them as far as its gap lets it, and on, nearer, if it stands nearer already out of sight.
+                    var spot = Lookout(s, u, soldiers);
+                    if (spot != null)
+                    {
+                        if (!Grid.SamePos(spot, u.Pos) && Walk(sim, u, spot, 0)) continue;
+                        return;
+                    }
+                    var way = WalkPath(s, u, beside);
+                    if (way == null || way.Count == 0) return;
+                    double Gap(Pos p) => soldiers.Min((e) => Grid.Distance(p, e.Pos));
+                    var keep = -1;
+                    if (Gap(u.Pos) >= ScreamerGap) for (var i = 0; i < way.Count && Gap(way[i]) >= ScreamerGap; i++) if (Flights.CanStopAt(s, way[i])) keep = i;
+                    if (keep < 0) came = true;
+                    if (keep == 0 && Grid.SamePos(way[0], u.Pos)) return;
+                    sim.MoveAlong(u, keep < 0 ? way : way.GetRange(0, keep + 1), 1);
+                    continue;
                 }
                 // Out of sight, the one it saw last: after them, wherever they are now, till it forgets them.
                 var hunted = u.Hunting != null ? soldiers.Find((e) => e.Id == u.Hunting.Id) : null;

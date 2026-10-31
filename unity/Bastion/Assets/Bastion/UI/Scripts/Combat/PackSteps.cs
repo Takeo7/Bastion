@@ -71,6 +71,20 @@ namespace Bastion.UI.Combat
                 Debug.Log($"[lab] {arg}: {control.KeyReason(arg) ?? "no está en la barra"} · {control.PickedId} apunta a {string.Join(", ", aims)}");
                 return true;
             }
+            // «list=s3» the pointer over that soldier's card in the list, «list=» off it (#11); «mapa» the camera up over the
+            // map or back, «mapa=40/12» a click on that tile from up there (#12).
+            if (what == "list")
+            {
+                control.OnHoverSquad(arg == "" ? null : arg);
+                return true;
+            }
+            if (what == "mapa")
+            {
+                var xy = arg.Split('/');
+                if (xy.Length == 2 && int.TryParse(xy[0], out var mx) && int.TryParse(xy[1], out var my)) control.OverheadClick(new Bastion.Engine.Pos { X = mx, Y = my, Z = 0 });
+                else control.OnMiniMap();
+                return true;
+            }
             if (what == "hover" || what == "click" || what == "look")
             {
                 var xy = arg.Split('/', ',');

@@ -162,9 +162,12 @@ namespace Bastion.UI.Strategy
             var quest = o.Quest != null ? c.Quests.FirstOrDefault(q => q.Id == o.Quest) : null;
             if (quest != null) rewards.Add($"Al final del encargo: {Quests.Fill(Quests.QuestDefs[quest.Id].Prize, quest.Names)}");
             var chosen = c.ActiveMission == o.Id;
-            // Lore, C12: «Distrito comercial».
-            var biome = o.Map.Kind == MapSourceKinds.Generated && o.Map.Biome != null ? Setup.BiomeNames[o.Map.Biome] : "Distrito comercial";
-            var stars = $"<color=#f0503c>{new string('★', o.Difficulty)}</color> {(o.Difficulty < Difficulty.Length ? Difficulty[o.Difficulty] : "")}";
+            // The kind of place it is (Places: Ciudad, Pueblo…; Arturo, 31/10 #9); without one, the biome. Lore, C12: «Distrito comercial».
+            var place = Places.Of(o.Map, o.Story);
+            var biome = place != null ? Places.Names[place] : o.Map.Kind == MapSourceKinds.Generated && o.Map.Biome != null ? Setup.BiomeNames[o.Map.Biome] : "Distrito comercial";
+            // The stars from the dead there will be (#9: the country, with fewer, easier than the city on the same day).
+            var level = Campaign.OfferStars(o);
+            var stars = $"<color=#f0503c>{new string('★', level)}</color> {(level < Difficulty.Length ? Difficulty[level] : "")}";
             var signature = Campaign.OfferSignature(c, o);
             var v = new MapDetailView { Title = o.Name, Text = { Campaign.OfferBriefing(c, o) }, Note = string.IsNullOrEmpty(signature) ? null : signature };
             if (o.Siege == true)
@@ -188,6 +191,7 @@ namespace Bastion.UI.Strategy
                 // The living hold it (18/10 #47): the dead go for them too.
                 if (o.Living == true) v.Warning = Lore.LivingTip;
                 v.Rows.Add(new RowView { Key = "Tipo", Value = Setup.MissionNames[o.Kind] });
+                if (place != null) v.Rows.Add(new RowView { Key = "Lugar", Value = Places.Names[place], Icon = "place:" + place });
                 v.Rows.Add(new RowView { Key = "Dificultad", Value = stars });
                 var reward = string.Join(" · ", rewards.Where(x => x != ""));
                 v.Rows.Add(new RowView { Key = "Recompensa", Value = reward != "" ? reward : "La victoria" });

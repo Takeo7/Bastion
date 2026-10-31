@@ -119,7 +119,7 @@ namespace Bastion.Engine
             (Rect Objective, bool Inside)? compound = null;
             if (biome == Biomes.Facility) compound = Facility(c, rng, style, role);
             (Rect Objective, TownPlan Plan)? built = null;
-            if (IsTown(biome, site)) built = Town(c, rng, style, role, clinic, hospital, ward);
+            if (IsTown(biome, site)) built = Town(c, rng, style, role, clinic, hospital, ward, Places.OldTownSeed(opts.Seed));
             else if (IsEstate(biome, site)) built = Estate(c, rng, style, role);
             var plan = built?.Plan;
             Rect objRect;

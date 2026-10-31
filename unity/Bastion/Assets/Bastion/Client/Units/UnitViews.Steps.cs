@@ -105,7 +105,10 @@ namespace Bastion.Client.Units
             Vector3 P(HumanBodyBones b) => a.GetBoneTransform(b) is Transform t ? t.position : Vector3.zero;
             var shoulders = P(HumanBodyBones.RightUpperArm) - P(HumanBodyBones.LeftUpperArm);
             var hands = P(HumanBodyBones.LeftHand) - P(HumanBodyBones.RightHand);
-            return $"root {Yaw(v.root.forward):0.0} | chest {Yaw(shoulders) + 90:0.0} | handR->L {Yaw(hands):0.0}";
+            // (Its gun's barrel along the gun's own +z, as its muzzle; its eyes', where it has them.)
+            string barrel = v.weapon != null ? $" | barrel {Yaw(v.weapon.forward):0.0}" : "";
+            string eyes = a.GetBoneTransform(HumanBodyBones.LeftEye) != null ? $" | eyes {Yaw(P(HumanBodyBones.RightEye) - P(HumanBodyBones.LeftEye)) + 90:0.0}" : "";
+            return $"root {Yaw(v.root.forward):0.0} | chest {Yaw(shoulders) + 90:0.0} | handR->L {Yaw(hands):0.0}{barrel}{eyes} | {v.anim?.Weights()}";
         }
 
         /// <summary>Down a storey from `from` onto a ladder (not a building's stairs): climbed down, not jumped (ladderDown).</summary>

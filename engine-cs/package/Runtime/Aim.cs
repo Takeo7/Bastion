@@ -184,10 +184,10 @@ namespace Bastion.Engine
             }
             else
             {
-                origin = Los.SightOrigin(s, from, target.Pos, Los.SightTo(s, shooter, target.Pos));
+                origin = Los.SightOrigin(s, from, target.Pos, Los.SightTo(s, shooter, target.Pos), Los.WindowReachOf(shooter.Team));
                 if (origin == null && primary && Content.HasSquadsight(shooter) && TeamSees(s, shooter.Team, target))
                 {
-                    origin = Los.SightOrigin(s, from, target.Pos, double.PositiveInfinity);
+                    origin = Los.SightOrigin(s, from, target.Pos, double.PositiveInfinity, Los.WindowReachOf(shooter.Team));
                     squadsight = origin != null;
                 }
             }

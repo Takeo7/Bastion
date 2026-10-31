@@ -157,6 +157,10 @@ namespace Bastion.Client.Units
             public float? yawTo;
             /// <summary>Out of the way of the shot over a shoulder (Veil).</summary>
             public bool veiled;
+            /// <summary>Gone into La Lata (Board): fading out, then out of sight for good.</summary>
+            public bool boarded;
+            /// <summary>A shot's kick to play (Recoil) as its step begins.</summary>
+            public bool recoil;
             /// <summary>How much of it is drawn (1 all; UnitViews.Fade), how much is to be, and how fast it goes there.</summary>
             public float fade = 1, fadeGoal = 1, fadeRate;
             /// <summary>It has been through Sync once: what comes into sight after that fades in.</summary>
@@ -233,8 +237,14 @@ namespace Bastion.Client.Units
         /// Shouldered, the trunk turned this much further side-on to the line of fire (degrees, clockwise from above):
         /// «Rifle Aiming Idle» blades the body in its hips, which an upper body mask leaves out of a humanoid's clip (its
         /// body's turn), and three's over Spine_01 keeps. Measured (Stance): the chest 63° off the target in 0.10.1, 22° here.
+        /// The shot's own clip (Mixamo's «Firing Rifle», Recoil) wants it too: without it its gun swung 41° off the line.
         /// </summary>
         const float AimBlade = 41;
+        /// <summary>
+        /// How far the head is turned at most onto the line of fire (Sight, degrees): bladed over «Rifle Aiming Idle» the eyes
+        /// looked 40° off it, to the trunk's side (Arturo's #4).
+        /// </summary>
+        const float SightMost = 60;
 
         /// <summary>The yaw's ease for steps, strikes and aims (unitViews.ts TURN: toward its target by 1 − e^(−dt × this)).</summary>
         const float Turn = 14;
@@ -252,6 +262,7 @@ namespace Bastion.Client.Units
                 }
                 // What stands on a storey the cutaway hides isn't drawn (buildings.ts Cutaway.hides).
                 StepFade(v, dt);
+                if (v.boarded && v.fade <= 0 && v.root.gameObject.activeSelf) v.root.gameObject.SetActive(false);
                 bool cut = cutaway != null && v.place != null && cutaway.Hides(v.place);
                 bool gone = v.fade <= 0;
                 if (cut != v.cut || gone != v.gone)
@@ -265,11 +276,27 @@ namespace Bastion.Client.Units
                 v.aim = Mathf.MoveTowards(v.aim, up && !v.crouched ? 1 : 0, dt / AimBlend);
                 v.up = Mathf.MoveTowards(v.up, up ? 1 : 0, dt / AimBlend);
                 StepBack(v, dt);
+                if (v.recoil)
+                {
+                    v.recoil = false;
+                    v.anim?.PlayUpper(FireClip, 0.03f);
+                }
                 v.anim?.Step(dt);
                 if (v.aim > 0 && v.inHand == Held.Rifle)
                 {
                     Blade(v, AimBlade * v.aim);
                     Straighten(v, AimStraighten * v.aim);
+                    Sight(v, v.aim);
+                }
+                else if (v.aim > 0 && v.inHand == Held.Pistol)
+                {
+                    Square(v, v.aim, false);
+                    Sight(v, v.aim);
+                }
+                else if (v.up > 0 && v.crouched && (v.inHand == Held.Rifle || v.inHand == Held.Pistol) && !v.dead)
+                {
+                    Square(v, v.up, v.inHand == Held.Rifle);
+                    Sight(v, v.up);
                 }
                 HoldNow(v, dt);
                 SearchPose(v);
@@ -294,6 +321,52 @@ namespace Bastion.Client.Units
             if (a == null || !a.isHuman) return;
             foreach (var bone in new[] { HumanBodyBones.Spine, HumanBodyBones.Chest })
                 if (a.GetBoneTransform(bone) is Transform b) b.rotation = Quaternion.AngleAxis(degrees / 2, Vector3.up) * b.rotation;
+        }
+
+        /// <summary>
+        /// The trunk turned about the upright, half at the spine and half at the chest, till what it holds points along the
+        /// line of fire, `share` of the way, no further than SightMost: the pistol along the right forearm (HoldPistol), a
+        /// rifle knelt from the right hand to the left (`hands`: Hold). Mixamo's «Pistol Idle 2» held it some 48° off the
+        /// line and «Idle Crouching Aiming» 52°, their hips' turn left out by the upper body's mask (Arturo, 31/10, his #4).
+        /// </summary>
+        static void Square(View v, float share, bool hands)
+        {
+            var a = v.animator;
+            if (a == null || !a.isHuman || SightOff) return;
+            Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), from = a.GetBoneTransform(hands ? HumanBodyBones.LeftHand : HumanBodyBones.RightLowerArm);
+            if (hand == null || from == null) return;
+            var arm = hands ? from.position - hand.position : hand.position - from.position;
+            var line = v.root.forward;
+            arm.y = line.y = 0;
+            if (arm.sqrMagnitude < 1e-8f || line.sqrMagnitude < 1e-8f) return;
+            Blade(v, Mathf.Clamp(Vector3.SignedAngle(arm, line, Vector3.up), -SightMost, SightMost) * share);
+        }
+
+        /// <summary>For the labs: the head and the pistol's trunk as the clips and the blade leave them (Sight and Square off), to set beside it.</summary>
+        public static bool SightOff;
+
+        /// <summary>Mixamo's «Rifle fire» (Recoil's), once loaded.</summary>
+        static AnimationClip FireClip => fireClip != null ? fireClip : fireClip = FigureCatalog.Load()?.Clip("rifleFire");
+        static AnimationClip fireClip;
+
+        /// <summary>
+        /// The head turned about the upright onto the line of fire (its root's forward), `share` of the way, half at the neck
+        /// and half at the head, no further than SightMost: where its eyes look, as the clips and the blade leave them.
+        /// </summary>
+        static void Sight(View v, float share)
+        {
+            var a = v.animator;
+            if (a == null || !a.isHuman || SightOff) return;
+            Transform left = a.GetBoneTransform(HumanBodyBones.LeftEye), right = a.GetBoneTransform(HumanBodyBones.RightEye);
+            Transform neck = a.GetBoneTransform(HumanBodyBones.Neck), head = a.GetBoneTransform(HumanBodyBones.Head);
+            if (left == null || right == null || head == null) return;
+            var eyes = Vector3.Cross(right.position - left.position, Vector3.up);
+            var line = v.root.forward;
+            eyes.y = line.y = 0;
+            if (eyes.sqrMagnitude < 1e-8f || line.sqrMagnitude < 1e-8f) return;
+            float off = Mathf.Clamp(Vector3.SignedAngle(eyes, line, Vector3.up), -SightMost, SightMost) * share;
+            if (neck != null) neck.rotation = Quaternion.AngleAxis(off / 2, Vector3.up) * neck.rotation;
+            head.rotation = Quaternion.AngleAxis(neck != null ? off / 2 : off, Vector3.up) * head.rotation;
         }
 
         static void Straighten(View v, float degrees)
@@ -372,7 +445,7 @@ namespace Bastion.Client.Units
                 Pose(v, u);
                 v.root.position = MapSpace.StandAt(view, v.place);
                 int node = Bastion.Engine.Grid.NodeOf(view, u.Pos);
-                bool shown = u.Team == "xcom" || forced.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
+                bool shown = v.boarded ? v.fade > 0 : u.Team == "xcom" || forced.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
                 // An enemy coming into sight fades in (not on the first look at the map: what is there at the start just is).
                 if (shown && !v.root.gameObject.activeSelf && v.synced && u.Team != "xcom" && u.Alive) StartFade(v, FadeIn);
                 if (v.root.gameObject.activeSelf != shown) v.root.gameObject.SetActive(shown);
@@ -689,17 +762,30 @@ namespace Bastion.Client.Units
             v.turn = turn;
         }
 
-        /// <summary>The shot's kick: Mixamo's fire clip once over the aim.</summary>
+        /// <summary>
+        /// The shot's kick: Mixamo's fire clip once over the aim, as its next step begins (begun here, the clip's first look
+        /// at the body, at once, undid the blade, the head and the grip till the next frame: the gun flicked off the line).
+        /// </summary>
         public void Recoil(string id)
         {
             // (The pistol's own clip goes unplayed, as in 0.10.1: its aim held.)
-            if (views.TryGetValue(id, out var v) && v.weapon != null && v.inHand == Held.Rifle) v.anim?.PlayUpper(FigureCatalog.Load()?.Clip("rifleFire"), 0.03f);
+            if (views.TryGetValue(id, out var v) && v.weapon != null && v.inHand == Held.Rifle) v.recoil = true;
         }
 
-        /// <summary>Into La Lata: out of sight at once.</summary>
+        /// <summary>Seconds one boarding La Lata takes to fade out by its door (Board; Arturo, 31/10, his #1).</summary>
+        public const float BoardSeconds = 0.5f;
+
+        /// <summary>
+        /// Into La Lata (Arturo, 31/10, his #1: nobody seen climbing in): turned to it, faded out where it stands by its
+        /// door over BoardSeconds (dithered, as the veil), then out of sight. UI's event player waits for it.
+        /// </summary>
         public void Board(string id)
         {
-            if (views.TryGetValue(id, out var v)) v.root.gameObject.SetActive(false);
+            if (!views.TryGetValue(id, out var v)) return;
+            v.boarded = true;
+            if (Map.MapView.Current?.LataAt is Vector3 lata) Face(id, lata);
+            v.fadeGoal = 0;
+            v.fadeRate = 1 / BoardSeconds;
         }
 
         /// <summary>A shade (heard, not seen): drawn in the fog, dark, nothing of what it is (0.10.1's shade).</summary>
@@ -731,7 +817,8 @@ namespace Bastion.Client.Units
         {
             if (!views.TryGetValue(id, out var v) || v.veiled == on) return;
             v.veiled = on;
-            // Dithered out over VeilSeconds, or back in (syntyFigures.ts veil).
+            // Dithered out over VeilSeconds, or back in (syntyFigures.ts veil); one gone into La Lata stays out.
+            if (v.boarded) return;
             v.fadeGoal = on ? 0 : 1;
             v.fadeRate = 1 / VeilSeconds;
         }

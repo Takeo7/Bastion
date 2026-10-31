@@ -592,10 +592,10 @@ namespace Bastion.Engine.Tests
             Assert.Equal(2, member.ArmorTier);
             Assert.Equal(0, member.Rank);
             Assert.Equal(new[] { "aimedShot" }, member.Perks);
-            // 60 grown 25 % is 75, and +3 of Pulso firme; 60 grown 20 % is 72, and +3 of Buen agarre.
-            Assert.Equal(18, member.Mods.GunAim);
+            // 55 (60 until 31/10) grown 25 % is 68.75, and +3 of Pulso firme; 55 grown 20 % is 66, and +3 of Buen agarre.
+            Assert.Equal(17, member.Mods.GunAim);
             Assert.Equal(5, member.Mods.GunCrit);
-            Assert.Equal(15, member.Mods.MeleeAim);
+            Assert.Equal(14, member.Mods.MeleeAim);
             Assert.Equal(0, member.Mods.Damage);
             Assert.Equal(5 + 2, member.MaxHp);
             Assert.Equal(Bars.VeteranWill(0), member.Will);
@@ -608,7 +608,7 @@ namespace Bastion.Engine.Tests
             var shot = Aim.PreviewShot(mission, shooter, target)!;
             Assert.Equal("Puntería", shot.Mods[0].Label);
             Assert.Equal(Bars.BaseAim, shot.Mods[0].Value);
-            Assert.Contains(shot.Mods, (m) => m.Label == "Tiro" && m.Value == 18);
+            Assert.Contains(shot.Mods, (m) => m.Label == "Tiro" && m.Value == 17);
             Assert.Contains("aimedShot", Abilities.AbilitiesOf(shooter));
             // Nobody carries grenades without them on the belt.
             Assert.DoesNotContain("grenade", Abilities.AbilitiesOf(shooter));

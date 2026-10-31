@@ -300,6 +300,7 @@ namespace Bastion.UI.Combat
         void Escape()
         {
             if (Hud != null && (Hud.CloseAbilityMenu() || Hud.ClosePackMenu())) return;
+            if (CloseMiniMap()) return;
             if (mode != Mode.Move) CancelMode();
             // (A detected tile's warning too: game.ts.)
             else if (EndArmed || concealWarn != null)
@@ -678,6 +679,17 @@ namespace Bastion.UI.Combat
         {
             var u = UnitById(State, id);
             if (u != null && u.Alive && Commands(u)) Pick(id);
+        }
+
+        /// <summary>The soldier whose card in the list is under the pointer (#11): its ring lit, an arrow over it or at the edge.</summary>
+        string listPointed;
+
+        public void OnHoverSquad(string id)
+        {
+            if (listPointed == id) return;
+            listPointed = id;
+            RefreshFlags();
+            RefreshMarks();
         }
 
         public void OnConfirmTarget() => ConfirmTarget();

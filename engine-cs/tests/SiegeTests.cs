@@ -381,6 +381,48 @@ namespace Bastion.Engine.Tests
             Assert.True(Math.Abs(z.Pos.X - 5) + Math.Abs(z.Pos.Y - 4) < 9 + 4, $"at {z.Pos.X},{z.Pos.Y}");
         }
 
+        [Fact(DisplayName = "how a siege ends › the nearest shut in by the pines but for a way past another: the dead go round for that other")]
+        public void ShutInByThePines()
+        {
+            // Seed 9's siege (1/11), cut from where it stood at turn 41: three recruits in a pocket of the pinar (H), the
+            // nearest shut in but for a way past the others, and a Chillón in another pocket, out of their sight. It went
+            // nowhere, turn after turn: stepping towards the nearest as the crow flies, back into its pocket.
+            var s = StateFrom(new[]
+            {
+                "HHHH................",
+                "HHHH................",
+                "HHHH................",
+                ".........H...H......",
+                "...HHHH....H...H....",
+                "....HH..HHHHHHHH....",
+                ".......HHHHHHHHH....",
+                ".....HHHHHHHHHHH....",
+                "...HHHHHHHHHHHHH....",
+                "..HHHHHHHHHHHHHH....",
+                ".HH..HHHHHH.HHHH....",
+                "HHH.HHHHHHH.HHHH....",
+                "HHH..HHHHH..HHHH....",
+                "HHHH.HHH............",
+                ".HHH..H..H.HHHHHH...",
+                "........HH..HHHHHH..",
+                "..HH..HHHHH..HHHHHH.",
+            });
+            s.Mission.Siege = new Siege { Hold = Content.Siege.Hold };
+            var chillon = AddUnit(s, "c1", TemplateIds.Sectoid, 2, 8);
+            Pod(s, "p1", new[] { chillon });
+            var squad = new[] { AddUnit(s, "s4", TemplateIds.Rookie, 3, 10), AddUnit(s, "s2", TemplateIds.Rookie, 3, 11), AddUnit(s, "s3", TemplateIds.Rookie, 3, 12) };
+            Assert.DoesNotContain(squad, (e) => Los.CanSee(s, e, chillon));
+            var turns = 0;
+            for (; turns < 6 && !squad.Any((e) => Los.CanSee(s, e, chillon)); turns++)
+            {
+                chillon.Ap = 2;
+                Ai.TakeZombieTurn(RunOf(s), chillon);
+                if (turns == 0) Assert.True(chillon.Pos.X > 4, $"at {chillon.Pos.X},{chillon.Pos.Y}");
+            }
+            // Round the pinar, by the way past the others, till they have it in sight.
+            Assert.True(squad.Any((e) => Los.CanSee(s, e, chillon)), $"turn {turns}: at {chillon.Pos.X},{chillon.Pos.Y}");
+        }
+
         [Fact(DisplayName = "how a siege ends › left undefended, the dead break in and go for the soldiers")]
         public void LeftUndefendedTheDeadBreakIn()
         {

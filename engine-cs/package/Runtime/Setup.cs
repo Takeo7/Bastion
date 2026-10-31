@@ -364,20 +364,30 @@ namespace Bastion.Engine
         /// <summary>How many more of the dead a map bigger than GEN_SIZE has, besides those its size brings (scalePods).</summary>
         public const double BigMapDead = 1.25;
 
-        /// <summary>As many groups as the map's side is longer than 48 (docs/MAPAS.md §6), and a quarter more on a big one: 13 at 64 and 15 at 72 at difficulty 2, the first ones again.</summary>
-        public static List<List<string>> ScalePods(IReadOnlyList<IReadOnlyList<string>> plan, int side)
+        /// <summary>
+        /// As many groups as the map's side is longer than 48 (docs/MAPAS.md §6), and a quarter more on a big one: 13 at 64
+        /// and 15 at 72 at difficulty 2, the first ones again. With a `share` below 1 (Places.DeadShare), that part of them,
+        /// fewer than the plan's own if it comes to that.
+        /// </summary>
+        public static List<List<string>> ScalePods(IReadOnlyList<IReadOnlyList<string>> plan, int side, double share = 1)
         {
             // On the big maps a quarter more besides (Ana and Arturo, 20/10: since the maps grew it had got easier).
-            var n = (int)Js.Round(((double)(plan.Count * side) / Mapgen.GenSize) * (side > Mapgen.GenSize ? BigMapDead : 1));
+            var n = (int)Js.Round(((double)(plan.Count * side) / Mapgen.GenSize) * (side > Mapgen.GenSize ? BigMapDead : 1) * share);
             var out_ = new List<List<string>>();
-            for (var i = 0; i < Math.Max(plan.Count, n); i++) out_.Add(new List<string>(plan[i % plan.Count]));
+            for (var i = 0; i < (share < 1 ? Math.Max(1, n) : Math.Max(plan.Count, n)); i++) out_.Add(new List<string>(plan[i % plan.Count]));
             return out_;
         }
 
-        /// <summary>A plan's groups for the map they go to (scalePods): what a campaign's operation brings when it is launched.</summary>
-        public static List<List<string>> PodsFor(MapSource map, List<List<string>> plan)
+        /// <summary>
+        /// A plan's groups for the map they go to (scalePods): what a campaign's operation brings when it is launched. A
+        /// city's as its size makes them; anywhere else, its place's share of a town's (Places.DeadShare, Arturo 31/10:
+        /// «en la ciudad tiene sentido que haya muchos pero en un pueblo o en el campo menos»), whatever the map's size.
+        /// </summary>
+        public static List<List<string>> PodsFor(MapSource map, List<List<string>> plan, int? story = null)
         {
-            return map.Kind == MapSourceKinds.Generated && plan.Count > 0 ? ScalePods(plan, SideOf(map)) : plan;
+            if (map.Kind != MapSourceKinds.Generated || plan.Count == 0) return plan;
+            var place = Places.Of(map, story);
+            return place == null || place == Places.City ? ScalePods(plan, SideOf(map)) : ScalePods(plan, Mapgen.TownSize, Places.DeadShare[place]);
         }
 
         private static List<List<string>> Groups(params string[][] groups)
@@ -750,7 +760,7 @@ namespace Bastion.Engine
                 Js.Sort(keys, (a, b) => string.CompareOrdinal(a, b));
                 basePlan = keys.Select((k) => handmade.Pods[k].ToList()).ToList();
             }
-            else basePlan = PodsFor(opts.Map, MissionPods(difficulty, kind, opts.Living == true));
+            else basePlan = PodsFor(opts.Map, MissionPods(difficulty, kind, opts.Living == true), opts.CampaignMission?.Story);
             // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
             var extra = Garrison(kind, difficulty, opts.Living == true);
             // A siege by night brings no more than its waves: nobody waits inside the base.

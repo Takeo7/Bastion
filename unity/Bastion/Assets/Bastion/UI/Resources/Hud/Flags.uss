@@ -254,3 +254,12 @@
     -unity-background-scale-mode: scale-to-fit;
     -unity-background-image-tint-color: rgba(255, 255, 255, 0.86);
 }
+
+/* A soldier pointed at from the list (Arturo, 31/10 #11): a down arrow over its flag, in the lit ring's warm light
+   (MoveOverlay PointedRing), bobbing (UnitFlags.PointerArrow). */
+.uflag__pointer {
+    width: 26px;
+    height: 26px;
+    margin-bottom: 2px;
+    color: #ffe27a;
+}

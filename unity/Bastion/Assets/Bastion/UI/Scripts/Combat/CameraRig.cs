@@ -17,6 +17,8 @@ namespace Bastion.UI.Combat
     public sealed class CameraRig : MonoBehaviour
     {
         const float Pitch = 45f;
+        /// <summary>From above (#12): all but straight down, so that north stays up the screen.</summary>
+        const float OverheadPitch = 89f;
         const float MinDistance = 9f * 1.5f;
         /// <summary>
         /// The farthest: 33.5 tiles at 45°, which looks as far beyond the point looked at as the 0.10.1's 42 did at 52°
@@ -50,6 +52,9 @@ namespace Bastion.UI.Combat
         bool springing;
         float yaw = 45f;
         float desiredYaw = 45f;
+        float pitch = Pitch;
+        /// <summary>Where it stood before going up over the map (EnterOverhead): what LeaveOverhead goes back to.</summary>
+        (float yaw, float distance, Vector3 target) beforeOverhead;
         float distance = 24f * 1.5f;
         float desiredDistance = 24f * 1.5f;
         Vector2 dragFrom;
@@ -87,9 +92,43 @@ namespace Bastion.UI.Combat
             if (HeldAt != null) distance = desiredDistance = HeldAt.Value;
         }
 
+        /// <summary>
+        /// Up over the map (Arturo, 31/10 #12 and 01/11: the map as the camera itself): straight down, north up, `metres`
+        /// from `centre`, eased there; meanwhile nothing moves it (Focus, the zooms, the shot over a shoulder and the
+        /// player's keys do nothing) till LeaveOverhead.
+        /// </summary>
+        public bool Overhead { get; private set; }
+
+        public void EnterOverhead(Vector3 centre, float metres)
+        {
+            if (Overhead) return;
+            beforeOverhead = (desiredYaw, desiredDistance, desiredTarget);
+            Overhead = true;
+            closeOn = false;
+            savedDistance = null;
+            desiredYaw = Mathf.Round(desiredYaw / 360f) * 360f;
+            desiredTarget = centre;
+            desiredDistance = metres;
+            springing = true;
+        }
+
+        /// <summary>Back down from above: as it was, over `at` if given (a click on the map); the player's move.</summary>
+        public void LeaveOverhead(Vector3? at = null)
+        {
+            if (!Overhead) return;
+            Overhead = false;
+            Epoch++;
+            TakenAt = Time.unscaledTime;
+            desiredYaw = beforeOverhead.yaw;
+            desiredDistance = beforeOverhead.distance;
+            desiredTarget = at is Vector3 p ? Clamp(new Vector3(p.x, Mathf.Max(0, p.y), p.z)) : beforeOverhead.target;
+            springing = true;
+        }
+
         /// <summary>To `p` on the spring (or at once); it lets go if the player moves the camera meanwhile.</summary>
         public void Focus(Vector3 p, bool instant = false)
         {
+            if (Overhead) return;
             desiredTarget = Clamp(new Vector3(p.x, Mathf.Max(0, p.y), p.z));
             springing = !instant;
             if (!instant) return;
@@ -126,9 +165,13 @@ namespace Bastion.UI.Combat
         /// <summary>A quarter turn left (−1) or right (1).</summary>
         public void Rotate(int dir)
         {
+            if (Overhead) return;
             TakeControl();
             desiredYaw += dir * 90f;
         }
+
+        /// <summary>Round by `degrees` more, eased as a quarter turn is, for a cinematic (La Lata leaving: Arturo, 31/10 #1); not the player's.</summary>
+        public void Turn(float degrees) => desiredYaw += degrees;
 
         /// <summary>The player took the camera (a move, a pick): whatever was taking it somewhere lets go.</summary>
         public void TakeControl()
@@ -152,6 +195,12 @@ namespace Bastion.UI.Combat
         void Update()
         {
             var dt = Time.unscaledDeltaTime;
+            // From above, the player's keys and pointer are the map's (the controller's): it only finishes its move.
+            if (Overhead)
+            {
+                Step(dt);
+                return;
+            }
             var held = Held != null && Held();
             // (Not with Cmd or Ctrl held: Cmd+W, Cmd+Q, Ctrl+A are the system's.)
             var keys = held || Bastion.UI.App.Shortcuts.Elsewhere(Keyboard.current) ? null : Keyboard.current;
@@ -204,6 +253,7 @@ namespace Bastion.UI.Combat
         /// <summary>Closer for an action (metres away, never further than the player had it); RestoreZoom goes back.</summary>
         public void CinematicZoom(float metres)
         {
+            if (Overhead) return;
             if (savedDistance == null) savedDistance = desiredDistance;
             desiredDistance = Mathf.Clamp(Mathf.Min(metres, savedDistance.Value), MinDistance, MaxDistance);
         }
@@ -215,6 +265,7 @@ namespace Bastion.UI.Combat
         /// </summary>
         public void FrameZoom(Vector3 centre, System.Collections.Generic.IList<Vector3> points, float room = 0.72f)
         {
+            if (Overhead) return;
             if (savedDistance == null) savedDistance = desiredDistance;
             // The camera's axes at the turn it is going to and the rig's pitch (Place).
             var rad = desiredYaw * Mathf.Deg2Rad;
@@ -238,7 +289,7 @@ namespace Bastion.UI.Combat
 
         public void RestoreZoom()
         {
-            if (savedDistance == null) return;
+            if (Overhead || savedDistance == null) return;
             desiredDistance = savedDistance.Value;
             savedDistance = null;
         }
@@ -257,6 +308,7 @@ namespace Bastion.UI.Combat
         /// </summary>
         public void CloseShot(Vector3 pos, Vector3 look)
         {
+            if (Overhead) return;
             closeFrom = close != null && closeness > 0.05f ? ShownClose() : ((Vector3, Vector3)?)null;
             swap = closeFrom != null ? 0 : 1;
             close = (pos, look);
@@ -292,7 +344,7 @@ namespace Bastion.UI.Combat
 
         void Step(float dt)
         {
-            if (HeldAt != null)
+            if (HeldAt != null && !Overhead)
             {
                 distance = desiredDistance = HeldAt.Value;
                 savedDistance = null;
@@ -319,6 +371,7 @@ namespace Bastion.UI.Combat
             }
             else target = Vector3.Lerp(target, desiredTarget, k);
             yaw += (desiredYaw - yaw) * k;
+            pitch += ((Overhead ? OverheadPitch : Pitch) - pitch) * k;
             distance += (desiredDistance - distance) * k;
             Place();
             // Into the shot over a shoulder, or back out of it: between the two views, eased at both ends.
@@ -353,9 +406,9 @@ namespace Bastion.UI.Combat
         void Place()
         {
             var rad = yaw * Mathf.Deg2Rad;
-            var pitch = Pitch * Mathf.Deg2Rad;
-            var horizontal = Mathf.Cos(pitch) * distance;
-            transform.position = new Vector3(target.x + Mathf.Sin(rad) * horizontal, target.y + Mathf.Sin(pitch) * distance, target.z - Mathf.Cos(rad) * horizontal);
+            var up = pitch * Mathf.Deg2Rad;
+            var horizontal = Mathf.Cos(up) * distance;
+            transform.position = new Vector3(target.x + Mathf.Sin(rad) * horizontal, target.y + Mathf.Sin(up) * distance, target.z - Mathf.Cos(rad) * horizontal);
             transform.LookAt(target);
         }
 

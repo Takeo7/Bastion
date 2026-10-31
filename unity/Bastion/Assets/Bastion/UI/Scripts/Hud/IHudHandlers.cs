@@ -10,6 +10,10 @@ namespace Bastion.UI.Hud
         void OnAbility(string id);
         void OnEndTurn();
         void OnSelectUnit(string id);
+        /// <summary>The pointer over a soldier's card in the list (its id) or off it (null): pointed at on the map (Arturo, 31/10 #11).</summary>
+        void OnHoverSquad(string id);
+        /// <summary>The map's key by «Menú»: the big map over the fight, open or shut (Arturo, 31/10 #12; also the M).</summary>
+        void OnMiniMap();
         void OnConfirmTarget();
         void OnCancel();
         void OnCycleTarget(int dir);
@@ -52,6 +56,8 @@ namespace Bastion.UI.Hud
         public void OnAbility(string id) { }
         public void OnEndTurn() { }
         public void OnSelectUnit(string id) { }
+        public void OnHoverSquad(string id) { }
+        public void OnMiniMap() { }
         public void OnConfirmTarget() { }
         public void OnCancel() { }
         public void OnCycleTarget(int dir) { }
@@ -84,6 +90,8 @@ namespace Bastion.UI.Hud
         public void OnAbility(string id) => Target.OnAbility(id);
         public void OnEndTurn() => Target.OnEndTurn();
         public void OnSelectUnit(string id) => Target.OnSelectUnit(id);
+        public void OnHoverSquad(string id) => Target.OnHoverSquad(id);
+        public void OnMiniMap() => Target.OnMiniMap();
         public void OnConfirmTarget() => Target.OnConfirmTarget();
         public void OnCancel() => Target.OnCancel();
         public void OnCycleTarget(int dir) => Target.OnCycleTarget(dir);

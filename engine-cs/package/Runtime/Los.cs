@@ -22,6 +22,19 @@ namespace Bastion.Engine
         public const int WindowSightReach = 1;
 
         /// <summary>
+        /// A window reach no window is within: the enemies, the dead and the living alike, see through no window, either
+        /// way, in or out (Arturo, 31/10: «no ven fuera ni dentro… a través de ventanas»); through an open door or a wall
+        /// blown through they do, and they hear as ever. New in C#, not in los.ts.
+        /// </summary>
+        public const double NoWindowReach = -1;
+
+        /// <summary>How near a window a line from one of `team` must start or end to go through it: the squad's WINDOW_SIGHT_REACH, the enemies' none.</summary>
+        public static double WindowReachOf(string team)
+        {
+            return team == Teams.Xcom ? WindowSightReach : NoWindowReach;
+        }
+
+        /// <summary>
         /// Whether a line from `a`, `ha` storeys up, to `b`, `hb` up (by default a
         /// unit's eyes and the body of whoever stands there, on their levels), sees
         /// through: on a map with storeys, through floors and ceilings only where they
@@ -235,7 +248,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>Origin tile a viewer at `from` uses to see `to`, or null if there is no line of sight.</summary>
-        public static Pos? SightOrigin(GameState s, Pos from, Pos to, double range)
+        public static Pos? SightOrigin(GameState s, Pos from, Pos to, double range, double windowReach = WindowSightReach)
         {
             if (Grid.Distance(from, to) > range) return null;
             var targets = PeekOrigins(s, to);
@@ -243,7 +256,7 @@ namespace Bastion.Engine
             {
                 foreach (var t in targets)
                 {
-                    if (LineClear(s, o, t)) return o;
+                    if (LineClear(s, o, t, null, null, windowReach)) return o;
                 }
             }
             return null;
@@ -337,7 +350,7 @@ namespace Bastion.Engine
             var from = viewerPos ?? viewer.Pos;
             // Inside a building the squad has not found, nobody shows to it (Buildings; Ana, 31/10).
             if (viewer.Team == Teams.Xcom && target.Team != Teams.Xcom && Buildings.Hidden(s, target.Pos, new[] { from })) return false;
-            return InViewCone(viewer, target.Pos, from) && SightOrigin(s, from, target.Pos, SightTo(s, viewer, target.Pos)) != null;
+            return InViewCone(viewer, target.Pos, from) && SightOrigin(s, from, target.Pos, SightTo(s, viewer, target.Pos), WindowReachOf(viewer.Team)) != null;
         }
 
         /// <summary>How wide the enemies see, in degrees round where they face (Arturo, 17/10: «en cono y no en área»; the living too, 18/10 #46).</summary>
@@ -372,10 +385,10 @@ namespace Bastion.Engine
         }
 
         /// <summary>Whether a viewer standing at `from` can see the tile `to` (no peeks on the target side).</summary>
-        public static bool CanSeeTile(GameState s, Pos from, Pos to, double range)
+        public static bool CanSeeTile(GameState s, Pos from, Pos to, double range, double windowReach = WindowSightReach)
         {
             if (Grid.Distance(from, to) > range) return false;
-            return PeekOrigins(s, from).Any((o) => LineClear(s, o, to));
+            return PeekOrigins(s, from).Any((o) => LineClear(s, o, to, null, null, windowReach));
         }
 
         /// <summary>Units that give their team vision: alive, not the relay, not a captive VIP.</summary>
@@ -484,7 +497,8 @@ namespace Bastion.Engine
             var mask = new bool[area * levels];
             var lit = s.Mission?.Night == true && reach == null ? LitMask(s) : null;
             // Worked out on every call: it is cheap next to the walks, and the state changes under it.
-            var v = s.Levels != null ? new Viewing { G = SightGridOf(s), W = s.Width, Area = area, N = levels - 1, Elev = s.Elev, Mask = mask, Lit = lit } : null;
+            var windowReach = WindowReachOf(team);
+            var v = s.Levels != null ? new Viewing { G = SightGridOf(s), W = s.Width, Area = area, N = levels - 1, Elev = s.Elev, Mask = mask, Lit = lit, WindowReach = windowReach } : null;
             // The viewers first, each with its origins and the square it looks over. A line found blocked is remembered
             // only for an origin that more than one viewer looks from (a viewer looks at each place once), and only over
             // their squares: no map-sized buffer per origin (docs/MAPAS.md §7.3).
@@ -556,7 +570,7 @@ namespace Bastion.Engine
                         var body = Js.At(s.Elev, i, 0) + Grid.BodyHeight;
                         for (var k = 0; k < look.Origins.Count; k++)
                         {
-                            if (LineClear(s, look.Origins[k], target, look.Eyes[k], body))
+                            if (LineClear(s, look.Origins[k], target, look.Eyes[k], body, windowReach))
                             {
                                 mask[i] = true;
                                 break;
@@ -661,7 +675,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>lineThroughStoreys from tile (ax, ay) to (bx, by) on a SightGrid, step for step.</summary>
-        private static bool GridLine(SightGrid g, int w, int area, int n, int ax, int ay, int bx, int by, double ha, double hb)
+        private static bool GridLine(SightGrid g, int w, int area, int n, int ax, int ay, int bx, int by, double ha, double hb, double windowReach)
         {
             var ground = g.Ground;
             var top = g.Top;
@@ -738,7 +752,7 @@ namespace Bastion.Engine
                 if (
                     kk <= n &&
                     window[kk * area + i] != 0 &&
-                    ((Math.Max(Math.Abs(x - ax), Math.Abs(y - ay)) > WindowSightReach && Math.Max(Math.Abs(x - bx), Math.Abs(y - by)) > WindowSightReach) || ++windows > MaxWindowsSeenThrough)
+                    ((Math.Max(Math.Abs(x - ax), Math.Abs(y - ay)) > windowReach && Math.Max(Math.Abs(x - bx), Math.Abs(y - by)) > windowReach) || ++windows > MaxWindowsSeenThrough)
                 )
                     return false;
                 pi = i;
@@ -763,6 +777,8 @@ namespace Bastion.Engine
             /// <summary>By origin, what was found blocked from it (null: no other viewer looks from there).</summary>
             public Blocked?[] BlockedBy = new Blocked?[0];
             public double Dark;
+            /// <summary>WindowReachOf the team looking.</summary>
+            public double WindowReach = WindowSightReach;
         }
 
         /// <summary>The places of a square (all levels) that lines from one origin were found not to reach.</summary>
@@ -792,7 +808,7 @@ namespace Bastion.Engine
                     var blocked = v.BlockedBy[k];
                     var at = blocked != null ? (z * blocked.H + y - blocked.Y0) * blocked.W + x - blocked.X0 : 0;
                     if (blocked != null && blocked.Data[at] != 0) continue;
-                    if (GridLine(v.G, v.W, area, v.N, v.Ox[k], v.Oy[k], x, y, v.Eyes[k], body))
+                    if (GridLine(v.G, v.W, area, v.N, v.Ox[k], v.Oy[k], x, y, v.Eyes[k], body, v.WindowReach))
                     {
                         v.Mask[node] = true;
                         break;

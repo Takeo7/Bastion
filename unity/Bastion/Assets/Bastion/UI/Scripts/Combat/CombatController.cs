@@ -55,6 +55,12 @@ namespace Bastion.UI.Combat
         public Func<Unit, bool> Visible;
 
         /// <summary>
+        /// The event player filming La Lata leaving (Arturo, 31/10 #1): no zone of any kind, a move's nor the mission's,
+        /// as over a shoulder. Once on it stays: La Lata gone, the mission is over.
+        /// </summary>
+        public bool Film;
+
+        /// <summary>
         /// Where a unit's body stands now (its feet, mid-walk included), to pick it with a click and ring it; by default
         /// its figure's (Arte's Figures), else the middle of its tile.
         /// </summary>
@@ -470,28 +476,20 @@ namespace Bastion.UI.Combat
         bool Planning => !HasCommand();
 
         /// <summary>
-        /// Where `u` can end its move (game.ts reach): past one action's cost, the dash; with only the last action left,
-        /// all of it drawn as the dash (Arturo, 21/10 #10, as XCOM's); where an enemy the squad sees would notice it while
-        /// the squad is hidden.
+        /// Where `u` can end its move (game.ts reach): past one action's cost, the dash; with only the last action left, a
+        /// walk like any other, not a run (Arturo, 31/10 #2: the engine hears a run only when it takes two); where an enemy
+        /// the squad sees would notice it while the squad is hidden.
         /// </summary>
         List<MoveTile> Tiles(Unit u)
         {
             var perAp = Paths.CostPerAp(u);
-            var last = LastAction();
             var watchers = State.Concealed ? State.Units.Where(a => a.Alive && a.Team == Teams.Alien && Visible(a)).ToList() : new List<Unit>();
             return Paths.Destinations(State, u, reach).Select(d => new MoveTile
             {
                 Pos = d.Pos,
-                Dash = last || d.Cost > perAp,
-                Detected = watchers.Any(a => Los.InViewCone(a, d.Pos) && Los.SightOrigin(State, a.Pos, d.Pos, Los.DetectionTo(State, a, d.Pos)) != null),
+                Dash = d.Cost > perAp,
+                Detected = watchers.Any(a => Los.InViewCone(a, d.Pos) && Los.SightOrigin(State, a.Pos, d.Pos, Los.DetectionTo(State, a, d.Pos), Los.WindowReachOf(a.Team)) != null),
             }).ToList();
-        }
-
-        /// <summary>Whether the picked soldier has only its last action left (one gone of two): its move drawn as a dash's (#10).</summary>
-        bool LastAction()
-        {
-            var u = Unit();
-            return u != null && u.Ap == 1 && Content.ApPerTurnOf(u) > 1;
         }
 
         /// <summary>A thing in the way, not a wall (a car or a crate: cover; the objective's console; someone standing): the border leaves it alone (Ana, 21/10 #18).</summary>
@@ -540,16 +538,22 @@ namespace Bastion.UI.Combat
                 Overlay.ShowPicked(Unit() != null ? FeetOf(picked) : null);
                 Overlay.ShowPartner(partnerPicked != picked ? FeetOf(partnerPicked) : null, partnerColor);
                 Overlay.ShowEnemies(EnemyFeet());
+                // The one pointed at from the list (#11), followed as it walks; off once the pointer moves on the map (a list
+                // drawn again under it takes its leaving with it).
+                if (listPointed != null && Mouse.current is var m && m != null && m.delta.ReadValue() != Vector2.zero && Hud != null && !Hud.Over(m.position.ReadValue())) OnHoverSquad(null);
+                Overlay.ShowPointed(listPointed != null ? FeetOf(listPointed) : null);
             }
             Keys();
             PauseTick();
             Cutaway();
             ClearView();
             CloseFlags();
-            // Over a shoulder, and till the camera is back in its own view, no marks of a move (Ana, Arturo 31/10 #3).
-            var away = Rig != null && Rig.Away;
+            // Over a shoulder, and till the camera is back in its own view, no marks of a move (Ana, Arturo 31/10 #3), nor
+            // from above (#12); while La Lata leaves, none of the mission's either (Arturo, 31/10 #1).
+            var away = Rig != null && (Rig.Away || Rig.Overhead) || Film;
             Overlay?.Cinematic(away);
             AimMarks?.Cinematic(away);
+            Marks?.Cinematic(Film);
             var mouse = Mouse.current;
             if (mouse == null || Rig == null) return;
             var at = mouse.position.ReadValue();
@@ -561,6 +565,13 @@ namespace Bastion.UI.Combat
                 Hud.ReleaseBanner(true);
             // A press on the map closes the backpack's menu (one on the HUD, its root: Backpack.PressedAt).
             if (Hud != null && !overHud && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame)) Hud.ClosePackMenu();
+            // From above (#12) a click only brings the camera down there: no pointer on a tile, no order.
+            if (Overhead)
+            {
+                if (!overHud && (Hud == null || !Hud.MenuOpen)) App.GameCursor.Ask(App.GameCursor.Kind.Arrow);
+                if (!overHud && mouse.leftButton.wasPressedThisFrame && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), 0, out var down)) OverheadClick(down);
+                return;
+            }
             RightClick(mouse, at, overHud);
             if (!hoverHeld)
             {
@@ -733,8 +744,8 @@ namespace Bastion.UI.Combat
             if (enter || space) ConfirmOrAttack();
             if (k.escapeKey.wasPressedThisFrame) Escape();
             if (k.cKey.wasPressedThisFrame) PassCommand();
-            // M: all the sound off or back (game.ts KeyM; Red's Volumes, kept as Ajustes' «Sonido»).
-            if (k.mKey.wasPressedThisFrame) Toast(Bastion.Client.Audio.Volumes.ToggleMute() ? "Sonido desactivado (M)" : "Sonido activado (M)");
+            // M: the big map, open or shut (Arturo, 31/10 #12; it was all the sound off, which Ajustes' «Sonido» keeps).
+            if (k.mKey.wasPressedThisFrame) ToggleMiniMap();
             if (k.oKey.wasPressedThisFrame) NextMark();
             if (k.gKey.wasPressedThisFrame) Ping();
             if (k.backspaceKey.wasPressedThisFrame) ToggleReady();

@@ -222,7 +222,7 @@ namespace Bastion.Engine.Tests
         /// (MAX_WINDOWS_SEEN_THROUGH, playtest 2026-10-14), and only those beside
         /// one end of the line (WINDOW_SIGHT_REACH, Ana 23/10 #21).
         /// </summary>
-        private static bool LineClearPhase5(GameState s, Vec2 a, Vec2 b, double? haOr = null, double? hbOr = null)
+        private static bool LineClearPhase5(GameState s, Vec2 a, Vec2 b, double? haOr = null, double? hbOr = null, double windowReach = Los.WindowSightReach)
         {
             var ha = haOr ?? Grid.ElevAt(s, a.X, a.Y) + Grid.EyeHeight;
             var hb = hbOr ?? Grid.ElevAt(s, b.X, b.Y) + Grid.BodyHeight;
@@ -272,7 +272,7 @@ namespace Bastion.Engine.Tests
                 }
                 if (cx == b.X && cy == b.Y) return !ThroughRoof(cx, cy, hb);
                 if (Blocks(cx, cy) || ThroughRoof(cx, cy, LineAt(cx, cy))) return false;
-                if (Grid.IsWindow(Grid.TileAt(s, cx, cy)) && LineAt(cx, cy) < Grid.ElevAt(s, cx, cy) + 1 && ((Math.Max(Math.Abs(cx - a.X), Math.Abs(cy - a.Y)) > Los.WindowSightReach && Math.Max(Math.Abs(cx - b.X), Math.Abs(cy - b.Y)) > Los.WindowSightReach) || ++windows > Los.MaxWindowsSeenThrough)) return false;
+                if (Grid.IsWindow(Grid.TileAt(s, cx, cy)) && LineAt(cx, cy) < Grid.ElevAt(s, cx, cy) + 1 && ((Math.Max(Math.Abs(cx - a.X), Math.Abs(cy - a.Y)) > windowReach && Math.Max(Math.Abs(cx - b.X), Math.Abs(cy - b.Y)) > windowReach) || ++windows > Los.MaxWindowsSeenThrough)) return false;
             }
             return true;
         }
@@ -307,7 +307,7 @@ namespace Bastion.Engine.Tests
                         var i = y * s.Width + x;
                         if (mask[i] || Js.Hypot(u.Pos.X - x, u.Pos.Y - y) > range) continue;
                         var to = new Vec2 { X = x, Y = y };
-                        if (origins.Any((o) => LineClearPhase5(s, o, to))) mask[i] = true;
+                        if (origins.Any((o) => LineClearPhase5(s, o, to, null, null, Los.WindowReachOf(team)))) mask[i] = true;
                     }
                 }
             }
@@ -361,7 +361,7 @@ namespace Bastion.Engine.Tests
             }
         }
 
-        [Fact(DisplayName = "sight through storeys › who sees whom: through an upper window both ways, never through a floor")]
+        [Fact(DisplayName = "sight through storeys › who sees whom: through an upper window the squad's way only, never through a floor")]
         public void WhoSeesWhom()
         {
             // LevelsStep1Tests has this test without its lines on previewShot (aim.ts): here it is whole.
@@ -369,7 +369,9 @@ namespace Bastion.Engine.Tests
             var sniper = AddUnit(s, "a1", TemplateIds.Trooper, 6, 3, 1);
             var street = AddUnit(s, "s1", TemplateIds.Sharpshooter, 12, 3);
             var below = AddUnit(s, "s2", TemplateIds.Assault, 5, 3);
-            Assert.True(Los.CanSee(s, sniper, street));
+            // The street sees the living at the glass; they see nobody out through it (Arturo, 31/10: the enemies see through
+            // no window; los.ts saw both ways).
+            Assert.False(Los.CanSee(s, sniper, street));
             Assert.True(Los.CanSee(s, street, sniper));
             // A step back from the glass, neither (Ana, 23/10 #21).
             sniper.Pos = At(5, 3, 1);
@@ -378,10 +380,13 @@ namespace Bastion.Engine.Tests
             sniper.Pos = At(6, 3, 1);
             Assert.False(Los.CanSee(s, sniper, below));
             Assert.False(Los.CanSee(s, below, sniper));
-            // From up there the shot has the height.
-            var down = Aim.PreviewShot(s, sniper, street);
+            // From up there the shot has the height: the squad's at the glass, at the living in the street, who can't shoot back.
+            var window = AddUnit(s, "s3", TemplateIds.Sharpshooter, 6, 2, 1);
+            var raider = AddUnit(s, "a2", TemplateIds.Trooper, 12, 2);
+            var down = Aim.PreviewShot(s, window, raider);
             Assert.NotNull(down);
             Assert.Contains(down!.Mods, (m) => m.Label == "Ventaja de altura");
+            Assert.Null(Aim.PreviewShot(s, raider, window));
             var up = Aim.PreviewShot(s, street, sniper);
             Assert.NotNull(up);
             Assert.DoesNotContain(up!.Mods, (m) => m.Label == "Ventaja de altura");

@@ -35,6 +35,7 @@ namespace Bastion.UI.Hud
         Log log;
         UnitFlags flags;
         EdgeMarks edges;
+        MiniMap miniMap;
         Banner banner;
         Cards cards;
         Notes notes;
@@ -83,6 +84,7 @@ namespace Bastion.UI.Hud
             log = new Log(root.Q("log"), Icon);
             flags = new UnitFlags(root.Q("flags"), Icon);
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
+            miniMap = new MiniMap(root.Q("mini-map"));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
             notes = new Notes(root.Q("notes"));
             // A menu open on the bar (the guns, Lanzar…): the notes go up over it, not on its keys (Ana, Arturo 31/10 #2).
@@ -97,6 +99,11 @@ namespace Bastion.UI.Hud
             menuButton.text = HudText.Menu.Label;
             menuButton.clicked += () => relay.OnMenu();
             tips.Attach(menuButton, HudText.Menu.Tip);
+            // The big map's key, by the menu's (Arturo, 31/10 #12): the base's Mapa pin.
+            var mapButton = root.Q<Button>("map-button");
+            Ui.Icon(Icon, "tab:geoscape", "map-button__icon", mapButton);
+            mapButton.clicked += () => relay.OnMiniMap();
+            tips.Attach(mapButton, HudText.MiniMap.Tip);
             // A press anywhere on the HUD outside the backpack closes its menu.
             root.RegisterCallback<PointerDownEvent>(e => unit.PressedAt(e.target as VisualElement), TrickleDown.TrickleDown);
         }
@@ -171,6 +178,8 @@ namespace Bastion.UI.Hud
 
         /// <summary>An arrow at the screen's edge clicked: the camera to that point.</summary>
         public event Action<Vector3> Look;
+        /// <summary>The camera up over the map (#12): its strip shown or not.</summary>
+        public void SetMiniMap(bool open) => miniMap?.Set(open);
         public void SetCall(CallView v) => cards.SetCall(v);
         public void SetOutcome(OutcomeView v) => cards.SetOutcome(v);
 

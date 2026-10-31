@@ -773,6 +773,87 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// Aiming all round (Arturo, 31/10, his #4: «mira como de lado»): a soldier with BASTION_ARMA (assaultRifle) on tile
+        /// (12, 10), facing north, and one of the dead four tiles off in each of BASTION_ANGULOS (degrees clockwise from
+        /// north: 0,90,180,270 unless said) in turn: it aims at it, fires once, lowers. Each aim logs where its root, chest,
+        /// hands, barrel and eyes point, and the target (Stance's yaws). The camera low from the south (BASTION_VIEW=game, the
+        /// game's, BASTION_DIST tiles off; =hombro, over its right shoulder at each aim, as UI's shot camera; =cara, from in
+        /// front and to its left, on its face). BASTION_SIN_MIRA=1, the head (and the pistol's trunk) as the clips leave them
+        /// (UnitViews.SightOff); BASTION_AGACHADO=1, crouched (the kneeling aim).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Angulos -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 140 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Angulos()
+        {
+            var first = MapLab.Golden("city-7");
+            string soldierId = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
+            string deadId = first.Units.First(u => u.Alive && u.Template == "zombie").Id;
+            Plain(u => u.Id == soldierId || u.Id == deadId, 11, 13);
+            soldier = Put(state.Units.First(u => u.Id == soldierId), 12, 10, 0);
+            target = Put(state.Units.First(u => u.Id == deadId), 12, 6, Math.PI);
+            soldier.Template = "rookie";
+            soldier.Arms = new Arms { Primary = Environment.GetEnvironmentVariable("BASTION_ARMA") ?? "assaultRifle" };
+            // (BASTION_AGACHADO=1: crouched, as one hunkered down: the kneeling aim.)
+            soldier.Hunkered = Environment.GetEnvironmentVariable("BASTION_AGACHADO") == "1";
+            UnitViews.SightOff = Environment.GetEnvironmentVariable("BASTION_SIN_MIRA") == "1";
+            string close = Environment.GetEnvironmentVariable("BASTION_VIEW");
+            var angles = (Environment.GetEnvironmentVariable("BASTION_ANGULOS") ?? "0,90,180,270").Split(',').Select(a => double.Parse(a, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    var fire = FigureCatalog.Load()?.Clip("rifleFire");
+                    Debug.Log($"[angulos] rifleFire: {(fire != null ? $"{fire.length:0.000} s, {fire.frameRate} fps" : "none")}");
+                    await Awaitable.WaitForSecondsAsync(0.8f);
+                    foreach (var angle in angles)
+                    {
+                        // (North is −y on the map: y grows south.)
+                        double r = angle * Math.PI / 180;
+                        target.Pos = new Pos { X = 12 + (int)Math.Round(4 * Math.Sin(r)), Y = 10 - (int)Math.Round(4 * Math.Cos(r)) };
+                        target.Facing = r + Math.PI;
+                        units.Sync(state);
+                        Reveal();
+                        var at = units.Chest(target.Id);
+                        var to = units.Feet(target.Id) - units.Feet(soldier.Id);
+                        units.AimAt(soldier.Id, at);
+                        if ((close == "hombro" || close == "cara") && Camera.main is Camera eye)
+                        {
+                            var feet = units.Feet(soldier.Id);
+                            var ahead = new Vector3(to.x, 0, to.z).normalized;
+                            var side = Vector3.Cross(Vector3.up, ahead);
+                            eye.transform.position = close == "hombro" ? feet - ahead * 2.4f + side * 1.0f + Vector3.up * 2.0f : feet + ahead * 2.2f - side * 1.6f + Vector3.up * 1.75f;
+                            eye.transform.LookAt(close == "hombro" ? feet + ahead * 3.5f + Vector3.up * 1.2f : feet + Vector3.up * 1.45f);
+                        }
+                        await Awaitable.WaitForSecondsAsync(1.0f);
+                        Debug.Log($"[angulos] {Time.time:0.00} s {angle:0}°: target {Mathf.Atan2(to.x, -to.z) * Mathf.Rad2Deg:0.0} | aimed: {units.Stance(soldier.Id)}");
+                        int aim = await units.RaiseWeapon(soldier.Id, at);
+                        var from = units.Muzzle(soldier.Id);
+                        fx.MuzzleFlash(from, Fx.Hex(0xffd27a));
+                        units.Recoil(soldier.Id);
+                        var flying = fx.Bullet(from, at, Fx.Hex(0xffd27a));
+                        // (Frame by frame: at 60 fps, the game's, the kick is on for some 0.2 s.)
+                        for (int k = 1; k <= 16; k++)
+                        {
+                            await Awaitable.NextFrameAsync();
+                            Debug.Log($"[angulos] {Time.time:0.00} s {angle:0}°: firing +{k}: {units.Stance(soldier.Id)}");
+                        }
+                        await flying;
+                        await Awaitable.WaitForSecondsAsync(0.4f);
+                        await units.LowerWeapon(soldier.Id, aim);
+                        await Awaitable.WaitForSecondsAsync(0.4f);
+                    }
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[combat] " + e);
+                }
+            };
+        }
+
+        /// <summary>
         /// On watch (Gameplay 26/10, A3: unitViews.ts sync's aimTarget, the blade on guard): a soldier with a rifle and one
         /// with the knife at rest, both put on watch (the second with the blade, Unit.WatchMelee), one of the dead walks up
         /// and the rifle fires at it from the watch and goes back to it; then both off watch. On a plain floor, the camera
@@ -1449,8 +1530,11 @@ namespace Bastion.EditorTools
         /// La Lata at a mission's evacuation (mapView.ts placeBus, evacBus.ts): a recorded mission with its bay (BASTION_MAP,
         /// step2/city-11-scavenge unless said), as the campaign's vehicle BASTION_VEHICULO (0 the 4×4, 1 the van, 2 the lorry,
         /// 3 the bus, as unless said), the camera on its bay as the game puts it when it goes (16 tiles off; BASTION_DIST
-        /// another). BASTION_IR=1, in play mode: it goes (MapView.LataDeparts) from the first frame of a strip.
+        /// another). BASTION_IR=1, in play mode: it goes (MapView.LataDeparts) from the first frame of a strip. BASTION_SUBEN=1,
+        /// a strip in edit mode instead: the squad on the zone, all boarding at once 0.3 s in (UnitViews.Board, as UI's event
+        /// player does: Arturo, 31/10, his #1), and La Lata going once they have (made in play mode, the figures weren't drawn).
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Evac -shotOut lata.png
+        ///   BASTION_SUBEN=1 unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Evac -shotFrames 40 -shotFps 10 -shotOut tira
         ///   BASTION_IR=1 unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Evac -shotPlay -shotFrames 30 -shotFps 10 -shotOut tira
         /// </summary>
         public static void Evac()
@@ -1473,6 +1557,18 @@ namespace Bastion.EditorTools
             MapSpace.Aim(camera, MapSpace.TileToWorld(state, new Pos { X = at.X, Y = at.Y }), distance);
             MapLab.Lighting(state.Mission?.Night != true);
             Debug.Log($"[combat] {name}: La Lata ({view.Lata?.Vehicle}) at the bay's ({at.X},{at.Y}), {(view.Lata != null && view.Lata.Shown ? "waiting" : "gone")}");
+            if (Environment.GetEnvironmentVariable("BASTION_SUBEN") == "1" && zone != null)
+            {
+                var squad = state.Units.Where(u => u.Alive && u.Team == "xcom").ToList();
+                for (int k = 0; k < squad.Count; k++)
+                    if (k < zone.Count) squad[k].Pos = new Pos { X = zone[k].X, Y = zone[k].Y, Z = 0 };
+                    else squad[k].Evacuated = true;
+                units = new GameObject("Unidades").AddComponent<UnitViews>();
+                units.Sync(state);
+                units.MasksNow();
+                new GameObject("Subida").AddComponent<Boarding>().squad = squad.Where(u => !u.Evacuated).ToList();
+                return;
+            }
             if (Environment.GetEnvironmentVariable("BASTION_IR") != "1") return;
             void Go(PlayModeStateChange change)
             {
@@ -1487,6 +1583,30 @@ namespace Bastion.EditorTools
                 }
             }
             EditorApplication.playModeStateChanged += Go;
+        }
+
+        /// <summary>Evac's boarding on a strip's clock (Shots steps it): all of `squad` boarding 0.3 s in, La Lata going once they have.</summary>
+        sealed class Boarding : MonoBehaviour, IShotStep
+        {
+            public System.Collections.Generic.List<Unit> squad;
+            float time;
+            bool boarded, going;
+
+            public void ShotStep(float dt)
+            {
+                time += dt;
+                if (!boarded && time >= 0.3f)
+                {
+                    boarded = true;
+                    foreach (var u in squad) units.Board(u.Id);
+                }
+                if (!going && time >= 0.3f + UnitViews.BoardSeconds)
+                {
+                    going = true;
+                    _ = MapView.Current.LataDeparts();
+                    Debug.Log($"[combat] {squad.Count} boarded; La Lata goes at {time:0.00} s");
+                }
+            }
         }
 
         /// <summary>The effects side by side on a plain floor, close up, a moment after they start (-shotWarm 0.05).</summary>

@@ -51,6 +51,17 @@
     color: var(--t-danger);
 }
 
+/* A soldier pointed at from the list and off the screen (Arturo, 31/10 #11): its name in the lit ring's light. */
+.edge-mark--soldier {
+    border-width: 2px;
+    border-color: #ffe27a;
+}
+
+.edge-mark--soldier .edge-mark__arrow,
+.edge-mark--soldier .edge-mark__label {
+    color: #ffe27a;
+}
+
 /* The web's arrow, 20 px, 4 px from the words. */
 .edge-mark__arrow {
     width: 20px;

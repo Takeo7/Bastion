@@ -289,6 +289,8 @@ namespace Bastion.UI.Hud
             el.Clear();
             el.EnableInClassList("uflag--enemy", f.Enemy);
             el.EnableInClassList("uflag--target", f.Target);
+            // Pointed at from the list (Arturo, 31/10 #11): an arrow over all of it, bobbing.
+            if (f.Pointed) el.Add(new PointerArrow());
             if (!string.IsNullOrEmpty(f.HoverText)) Ui.Text(f.HoverText, "uflag__hover uflag__hover--" + f.HoverKind, el);
             // The name only on the one under the pointer (Ana, Arturo 31/10 #9: no longer on the picked one's).
             if (!string.IsNullOrEmpty(f.Name)) Ui.Text(f.Name, "uflag__name", el);
@@ -303,6 +305,46 @@ namespace Bastion.UI.Hud
             foreach (var t in f.Tags) Ui.Text(t.Text, "tag tag--" + t.Kind, row);
             // Nothing in a flag takes the pointer: the clicks go through to the map.
             el.Query<VisualElement>().ForEach(x => x.pickingMode = PickingMode.Ignore);
+        }
+
+        /// <summary>
+        /// The arrow over a soldier pointed at from the list (#11): pointing down, in the lit ring's warm light
+        /// (Flags.uss .uflag__pointer) over a dark stroke, bobbing a few pixels.
+        /// </summary>
+        sealed class PointerArrow : VisualElement
+        {
+            public PointerArrow()
+            {
+                AddToClassList("uflag__pointer");
+                pickingMode = PickingMode.Ignore;
+                generateVisualContent += Draw;
+                var start = Time.time;
+                schedule.Execute(() => style.translate = new Translate(0, Mathf.Sin((Time.time - start) * 7) * 3)).Every(16).Until(() => panel == null);
+            }
+
+            void Draw(MeshGenerationContext ctx)
+            {
+                var r = contentRect;
+                if (r.width <= 0 || r.height <= 0) return;
+                var k = Mathf.Min(r.width, r.height) / 24;
+                var o = new Vector2(r.x + (r.width - 24 * k) / 2, r.y + (r.height - 24 * k) / 2);
+                Vector2 At(float x, float y) => o + new Vector2(x, y) * k;
+                var p = ctx.painter2D;
+                p.lineCap = LineCap.Round;
+                p.lineJoin = LineJoin.Round;
+                foreach (var (width, colour) in new[] { (6.5f, new Color(0.04f, 0.05f, 0.05f, 0.85f)), (3.4f, resolvedStyle.color) })
+                {
+                    p.strokeColor = colour;
+                    p.lineWidth = width * k;
+                    p.BeginPath();
+                    p.MoveTo(At(12, 3));
+                    p.LineTo(At(12, 19));
+                    p.MoveTo(At(5.5f, 12.5f));
+                    p.LineTo(At(12, 19.5f));
+                    p.LineTo(At(18.5f, 12.5f));
+                    p.Stroke();
+                }
+            }
         }
     }
 }

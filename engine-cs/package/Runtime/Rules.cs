@@ -804,7 +804,7 @@ namespace Bastion.Engine
         /// <summary>Whether an overwatcher covers `step`: with its own sight.</summary>
         private bool Watches(Unit o, Pos step)
         {
-            return Los.SightOrigin(S, o.Pos, step, Los.SightTo(S, o, step)) != null;
+            return Los.SightOrigin(S, o.Pos, step, Los.SightTo(S, o, step), Los.WindowReachOf(o.Team)) != null;
         }
 
         // ------------------------------------------------------- pods & stealth
@@ -825,7 +825,7 @@ namespace Bastion.Engine
         public Unit? SpottedFrom(Unit u, Pos p, double? facing = null)
         {
             var face = facing ?? u.Facing;
-            return Grid.Combatants(S, Teams.Xcom).Find((soldier) => Los.InViewCone(u, soldier.Pos, p, face) && Los.SightOrigin(S, p, soldier.Pos, NoticeRange(u, soldier.Pos)) != null);
+            return Grid.Combatants(S, Teams.Xcom).Find((soldier) => Los.InViewCone(u, soldier.Pos, p, face) && Los.SightOrigin(S, p, soldier.Pos, NoticeRange(u, soldier.Pos), Los.WindowReachOf(u.Team)) != null);
         }
 
         /// <summary>The member of `pod` that would notice an XCOM soldier standing on `p`, if any.</summary>
@@ -835,7 +835,7 @@ namespace Bastion.Engine
             {
                 var m = Grid.GetUnit(S, id);
                 if (m == null || !m.Alive) continue;
-                if (Los.InViewCone(m, p) && Los.SightOrigin(S, m.Pos, p, NoticeRange(m, p)) != null) return m;
+                if (Los.InViewCone(m, p) && Los.SightOrigin(S, m.Pos, p, NoticeRange(m, p), Los.WindowReachOf(m.Team)) != null) return m;
             }
             return null;
         }

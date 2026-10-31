@@ -235,5 +235,21 @@ namespace Bastion.Engine
         {
             return c.Outcome == null && c.ActiveMission == null && !c.Soldiers.Any(SoldierReady) && !(CanAfford(c, RecruitCost(c)) && BedsFree(c) > 0);
         }
+
+        /// <summary>
+        /// How hard an operation looks on its card, 1 to 4 (Arturo, 31/10: «que la dificultad se ajuste al entorno por la
+        /// cantidad de zombies»): its dead (Setup.PodsFor) against a town's of the same kind at each difficulty, past
+        /// halfway to the next. Its own difficulty on a hand-made map and on the base.
+        /// </summary>
+        public static int OfferStars(MissionOffer o)
+        {
+            if (o.Siege == true || Places.Of(o.Map, o.Story) == null || o.Pods.Count == 0) return o.Difficulty;
+            int Dead(List<List<string>> pods) => pods.Sum((p) => p.Count);
+            int Town(int d) => Dead(Setup.ScalePods(Setup.MissionPods(d, o.Kind, o.Living == true), Mapgen.TownSize));
+            var dead = Dead(Setup.PodsFor(o.Map, o.Pods, o.Story));
+            var stars = 1;
+            for (var d = 2; d <= 4; d++) if (dead * 2 >= Town(d - 1) + Town(d)) stars = d;
+            return stars;
+        }
     }
 }
