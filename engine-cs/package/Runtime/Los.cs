@@ -335,6 +335,8 @@ namespace Bastion.Engine
         public static bool CanSee(GameState s, Unit viewer, Unit target, Pos? viewerPos = null)
         {
             var from = viewerPos ?? viewer.Pos;
+            // Inside a building the squad has not found, nobody shows to it (Buildings; Ana, 31/10).
+            if (viewer.Team == Teams.Xcom && target.Team != Teams.Xcom && Buildings.Hidden(s, target.Pos, new[] { from })) return false;
             return InViewCone(viewer, target.Pos, from) && SightOrigin(s, from, target.Pos, SightTo(s, viewer, target.Pos)) != null;
         }
 
@@ -401,7 +403,7 @@ namespace Bastion.Engine
             // Across the whole map it costs some 10 ms, and it changes only as the viewers move or the map does (a door, a
             // wall blown through): the last one is kept for whatever else changes (the dead on their turn).
             var viewers = s.Units.Where((u) => IsViewer(u, team)).Select((u) => $"{u.Id}@{u.Pos.X},{u.Pos.Y},{u.Pos.Z}");
-            var key = $"{team}|{s.Width}x{s.Height}|{MapStamp(s)}|{string.Join(";", viewers)}";
+            var key = $"{team}|{s.Width}x{s.Height}|{MapStamp(s)}|{s.Discovered?.Count ?? 0}|{string.Join(";", viewers)}";
             if (lastView?.Key != key) lastView = new LastView(key, TeamVisibility(s, team, ViewReach(s)));
             return (bool[])lastView.Mask.Clone();
         }
@@ -426,7 +428,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>A hash of what stops sight on the map: its tiles on every level and their heights.</summary>
-        private static int MapStamp(GameState s)
+        internal static int MapStamp(GameState s)
         {
             var h = 0;
             unchecked
@@ -563,6 +565,8 @@ namespace Bastion.Engine
                     }
                 }
             }
+            // What is inside a building the squad has not found, it does not see (Buildings; Ana, 31/10).
+            if (team == Teams.Xcom) Buildings.Veil(s, mask);
             return mask;
         }
 

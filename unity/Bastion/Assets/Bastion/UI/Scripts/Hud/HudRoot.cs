@@ -85,6 +85,8 @@ namespace Bastion.UI.Hud
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
             notes = new Notes(root.Q("notes"));
+            // A menu open on the bar (the guns, Lanzar…): the notes go up over it, not on its keys (Ana, Arturo 31/10 #2).
+            bar.MenuShown += open => root.Q("notes").EnableInClassList("notes--over-menu", open);
             window = new BattleWindow(root, tips, s => Sound?.Invoke(s));
             menu = new GameMenu(root, tips, s => Sound?.Invoke(s));
             menu.Chose += what => MenuChose?.Invoke(what);
@@ -220,11 +222,14 @@ namespace Bastion.UI.Hud
         /// <summary>The squad is on its way back to the base (this player's «Volver a la base», or the partner's).</summary>
         public void Returning() => cards.Returning();
 
-        void ReopenIntro()
-        {
-            goal.SetWaiting(true);
-            cards.ReopenIntro();
-        }
+        /// <summary>The mission's window as it stands now (the controller's), for the objective's card to open again; null, none.</summary>
+        public Func<IntroView> IntroNow;
+
+        /// <summary>
+        /// The objective's card pressed: the mission's window again, its whole text as it stands now, and the card stays
+        /// where it is (Ana, Arturo 31/10 #13: it went, with nothing open, in a mission taken up again, which had shown none).
+        /// </summary>
+        void ReopenIntro() => cards.ReopenIntro(IntroNow?.Invoke());
 
         public void Log(string text, string color = null) => log.Add(text, color);
         public void ClearLog() => log.Clear();

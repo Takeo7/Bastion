@@ -3,7 +3,9 @@
 // pixels signed by the side (w): it is widened on screen, the same width near and far, as three.js's Line2 did.
 // A line's segments have no caps: a pixel or two wide, their joints don't show.
 // What it is drawn over (depth test), how it blends (a shade blends by the minimum: tileLooks.ts `shade`) and the
-// render queue are the material's.
+// render queue are the material's. `_Pull` brings a mark that many metres nearer the camera along its own view ray, so
+// it stays where it is on screen: tested against depth that way, a line on the floor goes behind the bodies standing
+// over it, and still over the floor and the walls it runs along.
 Shader "Bastion/Marks"
 {
     Properties
@@ -11,6 +13,7 @@ Shader "Bastion/Marks"
         _MainTex ("Texture", 2D) = "white" {}
         _Color ("Tint", Color) = (1, 1, 1, 1)
         [Enum(UnityEngine.Rendering.CompareFunction)] _ZTest ("Depth test", Float) = 4
+        _Pull ("Pull to the camera (m)", Float) = 0
         [Enum(UnityEngine.Rendering.BlendOp)] _BlendOp ("Blend op", Float) = 0
         [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Source", Float) = 5
         [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend ("Destination", Float) = 10
@@ -56,12 +59,14 @@ Shader "Bastion/Marks"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 half4 _Color;
+                float _Pull;
             CBUFFER_END
 
             Varyings Vert(Attributes v)
             {
                 Varyings o;
                 float3 world = TransformObjectToWorld(v.positionOS.xyz);
+                if (_Pull > 0) world += normalize(_WorldSpaceCameraPos - world) * _Pull;
                 float4 clip = TransformWorldToHClip(world);
                 if (v.wide.w != 0)
                 {

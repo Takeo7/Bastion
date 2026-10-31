@@ -341,7 +341,13 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void TheConstantsAreTypeScripts()
         {
-            var constants = new Dictionary<string, object>
+            SameAs(Golden("tables.json")["constants"]!, Constants(), "constants");
+        }
+
+        /// <summary>tables.json `constants`: campaign.ts's, by their TypeScript names.</summary>
+        internal static Dictionary<string, object> Constants()
+        {
+            return new Dictionary<string, object>
             {
                 ["BUNKER_BEDS"] = Campaign.BunkerBeds,
                 ["HOME_REGION"] = Campaign.HomeRegion,
@@ -381,7 +387,6 @@ namespace Bastion.Engine.Tests
                 ["VEHICLE_FROM"] = Campaign.VehicleFrom,
                 ["LATE_KIT"] = Campaign.LateKit,
             };
-            SameAs(Golden("tables.json")["constants"]!, constants, "constants");
         }
 
         [Fact]

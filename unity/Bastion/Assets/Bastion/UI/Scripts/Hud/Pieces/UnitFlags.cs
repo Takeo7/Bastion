@@ -290,15 +290,9 @@ namespace Bastion.UI.Hud
             el.EnableInClassList("uflag--enemy", f.Enemy);
             el.EnableInClassList("uflag--target", f.Target);
             if (!string.IsNullOrEmpty(f.HoverText)) Ui.Text(f.HoverText, "uflag__hover uflag__hover--" + f.HoverKind, el);
-            // The name only on the picked one's and the one under the pointer (unitViews.ts updateNames: flags kept compact).
+            // The name only on the one under the pointer (Ana, Arturo 31/10 #9: no longer on the picked one's).
             if (!string.IsNullOrEmpty(f.Name)) Ui.Text(f.Name, "uflag__name", el);
             var row = Ui.El("uflag__row", el);
-            if (f.Watching)
-            {
-                var eye = new Eye();
-                eye.AddToClassList("uflag__eye");
-                row.Add(eye);
-            }
             if (f.Cover >= 0) Ui.El("uflag__cover uflag__cover--" + f.Cover, row);
             Ui.Pips(Ui.El("pips pips--hp", row), f.Hp, f.MaxHp);
             if (f.Armor > 0)

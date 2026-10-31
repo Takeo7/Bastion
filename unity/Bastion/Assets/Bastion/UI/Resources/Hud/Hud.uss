@@ -154,6 +154,11 @@
     align-items: center;
 }
 
+/* Over a menu open on the bar (ActionBar.uss .ability-menu: 68px over the keys, a key and its padding tall). */
+.notes--over-menu {
+    bottom: 152px;
+}
+
 .cards {
     position: absolute;
     left: 0;

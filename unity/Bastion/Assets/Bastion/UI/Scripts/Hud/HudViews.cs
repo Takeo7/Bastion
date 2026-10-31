@@ -491,9 +491,6 @@ namespace Bastion.UI.Hud
         public string HoverText;
         /// <summary>The target being picked: the only flag kept over the shoulder.</summary>
         public bool Target;
-
-        /// <summary>An enemy that sees one of the squad: an eye on its flag (playtest 21/10 #11).</summary>
-        public bool Watching;
     }
 
     [Serializable]

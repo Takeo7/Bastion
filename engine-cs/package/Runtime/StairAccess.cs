@@ -76,6 +76,7 @@ namespace Bastion.Engine
                 Snow = s.Snow,
                 Searched = s.Searched,
                 RoomsSearched = s.RoomsSearched,
+                Discovered = s.Discovered,
                 Dropped = s.Dropped,
                 DroppedCount = s.DroppedCount,
                 Breakables = s.Breakables,

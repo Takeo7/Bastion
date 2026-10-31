@@ -13,9 +13,9 @@
 .squad-row {
     flex-direction: row;
     align-items: center;
-    height: 30px;
+    height: 34px;
     margin: 0 0 2px;
-    padding: 0 8px 0 10px;
+    padding: 0 8px 0 4px;
     background-color: rgba(255, 255, 255, 0.03);
     background-image: none;
     border-width: 0 0 0 3px;
@@ -50,6 +50,15 @@
 
 .squad-row:disabled {
     opacity: 0.6;
+}
+
+/* The soldier's bust (Arte's Portraits), as the combat's list's (SquadList.uss .squad-card__bust). */
+.squad-row__bust {
+    width: 30px;
+    height: 30px;
+    margin-right: 6px;
+    background-color: rgba(0, 0, 0, 0.35);
+    -unity-background-scale-mode: scale-and-crop;
 }
 
 .squad-row .skill-hex {

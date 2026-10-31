@@ -152,13 +152,6 @@
 
 /* An enemy that sees one of the squad (styles.css .uflag.watching): an eye at the row's start, only its outline and
    pupil in the muted text (Ana, Arturo 29/10: the stamp's red one was too loud). */
-.uflag__eye {
-    width: 13px;
-    height: 8px;
-    margin-right: 3px;
-    color: var(--t-muted);
-}
-
 /* Whose ping it is (styles.css .ping-tag): white on the player's colour, darkened, a ring of it round. */
 .pin {
     position: absolute;

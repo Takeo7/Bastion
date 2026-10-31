@@ -211,7 +211,8 @@ namespace Bastion.Client
 
         /// <summary>
         /// The clearing from above (clearing.ts and camera.ts CameraRig as it starts): on the caravan's middle, 24 tiles off
-        /// at 52° down, from the south-east, 40° of view.
+        /// at 45° down, the pitch of UI's CameraRig, which takes it over at its own (Arturo, 31/10, Ana's #12; 0.10.1's
+        /// 52°), from the south-east, 40° of view.
         /// </summary>
         public Shot ClearingShot()
         {
@@ -225,7 +226,7 @@ namespace Bastion.Client
                 target = new Vector3(caravan.X + (w - 1) / 2 + 0.5f, 0, caravan.Y + (h - 1) / 2 + 0.5f);
             }
             else target = b != null ? new Vector3(b.Width / 2f, 0, b.Height / 2f) : Vector3.zero;
-            float yaw = Mathf.PI / 4, pitch = 52 * Mathf.Deg2Rad, distance = 24;
+            float yaw = Mathf.PI / 4, pitch = 45 * Mathf.Deg2Rad, distance = 24;
             var back = new Vector3(Mathf.Sin(yaw) * Mathf.Cos(pitch), Mathf.Sin(pitch), Mathf.Cos(yaw) * Mathf.Cos(pitch));
             return new Shot { pos = target + back * distance, target = target, fov = 40 };
         }
@@ -390,12 +391,24 @@ namespace Bastion.Client
                 var to = World(p);
                 return (ray: new Ray(from, to - from), reach: Mathf.Max(0, Vector3.Distance(from, to) - 1.2f * MapSpace.Tile));
             }).ToList();
+            // The row's (Ana's #10, 31/10: seen low, from among the pines past the clearing's edge): every pine in the frame
+            // nearer than a tile before it too, not only those in the way.
+            Plane[] before = null;
+            var camera = Camera;
+            if ((view == Views.Squad || view == Views.Debrief) && camera != null)
+            {
+                var to = World(shot.target);
+                var size = SizeOf(camera);
+                float depth = Vector3.Distance(from, to) - MapSpace.Tile;
+                var look = Matrix4x4.Scale(new Vector3(1, 1, -1)) * Matrix4x4.TRS(from, Quaternion.LookRotation(to - from), Vector3.one).inverse;
+                if (depth > 0.5f && size.y > 0) before = GeometryUtility.CalculateFrustumPlanes(Matrix4x4.Perspective(shot.fov, size.x / size.y, 0.1f, depth) * look);
+            }
             foreach (var r in pines)
             {
                 if (r == null || !r.enabled) continue;
                 var b = r.bounds;
                 bool round = b.SqrDistance(from) < 1.2f * MapSpace.Tile * 1.2f * MapSpace.Tile;
-                bool between = !round && rays.Any(x => b.IntersectRay(x.ray, out float d) && d < x.reach);
+                bool between = !round && (rays.Any(x => b.IntersectRay(x.ray, out float d) && d < x.reach) || (before != null && GeometryUtility.TestPlanesAABB(before, b)));
                 if (!round && !between) continue;
                 r.enabled = false;
                 cleared.Add(r);

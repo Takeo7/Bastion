@@ -141,10 +141,11 @@ namespace Bastion.Engine.Tests
                     var s = StateFrom(rows);
                     s.Tiles[3 * 12 + 2] = glass;
                     Raise(s, 2, 1, 6, 5, storeys);
-                    // Two steps back: the glass, and only what is right behind it.
+                    // Two steps back: the house not found, nothing inside shows, not even what is right behind the glass
+                    // (Ana, 31/10: Buildings); in los.ts, that one tile did.
                     var watcher = AddUnit(s, "s1", TemplateIds.Rookie, 0, 3);
                     var label = $"{glass}, {storeys} storeys";
-                    Assert.True(Room(Los.TeamVisibility(s, Teams.Xcom)).SequenceEqual(new[] { "3,3" }), label);
+                    Assert.True(Room(Los.TeamVisibility(s, Teams.Xcom)).Count == 0, label);
                     var inside = AddUnit(s, "a1", TemplateIds.Zombie, 5, 4);
                     Assert.False(Los.CanSee(s, watcher, inside), label);
                     // Right at the glass: the whole room, and whoever is in there.

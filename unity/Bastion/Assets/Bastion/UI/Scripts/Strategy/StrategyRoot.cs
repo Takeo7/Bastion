@@ -124,7 +124,7 @@ namespace Bastion.UI.Strategy
             soldiers.Show(false);
             armory = new ArmoryScreen(root.Q("view"), tips, Icon, relay);
             armory.Show(false);
-            squad = new SquadScreen(root.Q("view"), tips, relay, Icon);
+            squad = new SquadScreen(root.Q("view"), tips, relay, Icon) { PortraitOf = id => PortraitOf?.Invoke(id) };
             debrief = new DebriefScreen(root.Q("view"), tips, Icon, relay);
             foreach (var cards in new[] { squad.Cards, debrief.Cards })
             {

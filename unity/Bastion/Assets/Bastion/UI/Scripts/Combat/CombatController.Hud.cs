@@ -211,8 +211,9 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// The flags over the units in sight (unitViews.ts renderFlag): health, armour, cover, what is on them; the name on
-        /// the picked one's and the hovered one's; over the enemies, what the pointer's tile means (game.ts enemyTags).
+        /// The flags over the units in sight (unitViews.ts renderFlag): health, armour, what is on them, and the soldiers'
+        /// cover (the enemies' without it: Ana, Arturo 31/10 #7); the name on the hovered one's only (#9); over the enemies,
+        /// what the pointer's tile means (game.ts enemyTags).
         /// </summary>
         /// <summary>Who has boarded La Lata as the event player plays it (EvacuatedEvent), before the view has it: no flag.</summary>
         public readonly HashSet<string> Aboard = new HashSet<string>();
@@ -224,17 +225,15 @@ namespace Bastion.UI.Combat
             var view = new FlagsView();
             // Only those that shoot: cover means nothing against the dead, who come to bite (docs/ZOMBIS-PRIMERO.md).
             var watchers = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && Visible(a) && AbilityTexts.ShootsFromRange(a)).ToList();
-            var selected = UnitById(v, picked);
             var hovered = hover != null ? Grid.UnitAt(v, hover) : null;
             var tags = EnemyTags();
-            var watching = Watching();
             var carrier = v.Mission.Item?.Carrier;
             foreach (var u in v.Units)
             {
                 // Aboard La Lata (evacuated, or boarding as it is played): out of sight, and so its flag (unitViews.ts board).
                 if (!u.Alive || u.Evacuated || Aboard.Contains(u.Id) || !Visible(u)) continue;
                 var f = new FlagView { Id = u.Id, Enemy = u.Team != Teams.Xcom, Hp = u.Hp, MaxHp = u.MaxHp, Armor = u.Armor, Cover = -1 };
-                if (u.Id == picked || u.Id == hovered?.Id) f.Name = u.Team == Teams.Xcom && u.Template != TemplateIds.Vip && !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name;
+                if (u.Id == hovered?.Id) f.Name = u.Team == Teams.Xcom && u.Template != TemplateIds.Vip && !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name;
                 if (u.Team == Teams.Xcom)
                 {
                     // With no shooter in sight nobody flanks anyone: the shield only shows cover, never the red «flanked».
@@ -242,8 +241,6 @@ namespace Bastion.UI.Combat
                     else if (watchers.Count == 0) f.Cover = Cover.HasAnyCover(v, u.Pos) ? Cover.CoverSides(v, u.Pos).Max() : -1;
                     else f.Cover = watchers.Min(a => Cover.CoverAgainst(v, u.Pos, a.Pos));
                 }
-                // How far the soldier sees it: shorter at night, unless it stands in the light (los.ts sightTo).
-                else if (selected != null && selected.Alive && Los.SightOrigin(v, selected.Pos, u.Pos, Los.SightTo(v, selected, u.Pos)) != null) f.Cover = Cover.CoverAgainst(v, u.Pos, selected.Pos);
                 void Tag(bool on, string text, string kind)
                 {
                     if (on) f.Tags.Add(new TagView { Text = text, Kind = kind });
@@ -268,33 +265,12 @@ namespace Bastion.UI.Combat
                     f.HoverText = t.text;
                 }
                 f.Target = mode == Mode.Target && targetId == u.Id && u.Team != Teams.Xcom;
-                f.Watching = watching.Contains(u.Id);
                 view.Flags.Add(f);
             }
             Hud.SetFlags(view);
         }
 
-        /// <summary>
-        /// The enemies in sight that see one of the squad themselves, for an eye on their flag (game.ts watching, playtest
-        /// 21/10 #11). While the squad is hidden nobody has seen it (the frames say how close).
-        /// </summary>
-        HashSet<string> Watching()
-        {
-            var v = Shown;
-            if (watching.state == v && watching.seq == v.Seq) return watching.set;
-            var set = new HashSet<string>();
-            watching = (v, v.Seq, set);
-            if (v.Concealed || v.Outcome != null) return set;
-            var squad = Grid.Combatants(v, Teams.Xcom);
-            foreach (var a in v.Units)
-                if (a.Alive && a.Team == Teams.Alien && Visible(a) && squad.Any(u => Los.CanSee(v, a, u))) set.Add(a.Id);
-            return set;
-        }
-
         (string key, List<Pos> seen, List<Pos> noticed)? vision;
-
-        /// <summary>Who sees one of the squad, worked out once per state seen.</summary>
-        (GameState state, int seq, HashSet<string> set) watching;
 
         /// <summary>
         /// An enemy under the pointer: what it sees (Arturo, 17/10: the dead see in a cone; game.ts visionOf). Not the one
@@ -799,17 +775,7 @@ namespace Bastion.UI.Combat
         {
             var s = State;
             if (Hud == null || s.Outcome != null) return;
-            var mission = MissionView();
-            var cm = s.CampaignMission;
-            var briefing = cm?.Briefing ?? (s.Mission.Siege != null ? Lore.SiegeText.Briefing : null);
-            Hud.Intro(new IntroView
-            {
-                Kicker = Kicker() + (s.Mission.Night == true ? $" · {Lore.NightText.Label.ToUpperInvariant()}" : ""),
-                Title = cm?.Name ?? (s.Mission.Siege != null ? Lore.SiegeText.Name : MissionName(s.Mission.Kind)),
-                Objective = mission.Objective,
-                Turns = mission.TurnsLeft >= 0 ? $"{mission.TurnsLeft} turnos" : null,
-                Briefing = briefing,
-            });
+            Hud.Intro(IntroNow());
             if (s.Units.Any(u => u.Alive && u.Team == Teams.Alien && !u.Objective && !Content.Templates[u.Template].Undead))
             {
                 Hud.Log(Lore.LivingTip, FeudColor);
@@ -817,6 +783,26 @@ namespace Bastion.UI.Combat
                 shotsSeen = true;
             }
             if (s.Mission.Night == true) Hud.Log(string.Join(" ", Lore.NightText.Rules), "#2a4a7a");
+        }
+
+        /// <summary>
+        /// The mission's window as it stands now: its name, the objective and the turns left, the briefing; null once it is
+        /// over. Also what the objective's card opens again (HudRoot.IntroNow).
+        /// </summary>
+        IntroView IntroNow()
+        {
+            var s = State;
+            if (s == null || s.Outcome != null) return null;
+            var mission = MissionView();
+            var cm = s.CampaignMission;
+            return new IntroView
+            {
+                Kicker = Kicker() + (s.Mission.Night == true ? $" · {Lore.NightText.Label.ToUpperInvariant()}" : ""),
+                Title = cm?.Name ?? (s.Mission.Siege != null ? Lore.SiegeText.Name : MissionName(s.Mission.Kind)),
+                Objective = mission.Objective,
+                Turns = mission.TurnsLeft >= 0 ? $"{mission.TurnsLeft} turnos" : null,
+                Briefing = cm?.Briefing ?? (s.Mission.Siege != null ? Lore.SiegeText.Briefing : null),
+            };
         }
 
         /// <summary>The loading veil's words (game.ts raiseVeil: kicker, missionName): the kicker and the operation's name.</summary>

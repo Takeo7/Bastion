@@ -657,8 +657,9 @@ namespace Bastion.EditorTools
         /// The scene «Base» as the game has it, in play mode: once it runs, the sample campaign shown as UI shows it
         /// (Settlement.Instance.Show, the game's catalog), BASTION_SOLDADO's soldier on Soldados (c1) and its busts drawn
         /// (Portraits.Know; each logged as it is ready), the camera on BASTION_VISTA's tab (barracks), and on
-        /// to BASTION_LUEGO's if given; BASTION_MAPA=1 into the Mapa and back, through black. BASTION_LEJOS=1: once the shot
-        /// has eased in, the camera where the free look is at its farthest (CameraRig: 42 tiles, 52° down, 40° of view, from
+        /// to BASTION_LUEGO's if given; BASTION_MAPA=1 into the Mapa and back, through black. BASTION_LATA=v the campaign's
+        /// vehicle; BASTION_PANELES=1 UI's Escuadra plates over it (for the row's shot). BASTION_LEJOS=1: once the shot
+        /// has eased in, the camera where the free look is at its farthest (CameraRig: 33.5 tiles, 45° down, 40° of view, from
         /// the south-east); BASTION_GRAFICOS=level: «Gráficos» changed to it then, as the app does (GameSettings:
         /// SetQualityLevel), and the shadows' reach logged before and a few frames after.
         ///   unity/tools/captura.sh -shotOut base.png -shotScene Assets/Bastion/Scenes/Base.unity -shotSetup Bastion.EditorTools.SettlementLab.BaseScene -shotPlay -shotWarm 3 -shotSize 1440x900
@@ -683,6 +684,14 @@ namespace Bastion.EditorTools
                 }
                 Portraits.Changed += id => Debug.Log($"[portraits] {id} drawn at frame {Time.frameCount} in {Portraits.LastDrawMs:0.0} ms");
                 Portraits.Know(campaign);
+                // BASTION_LATA=v: the campaign's vehicle (0 4×4, 1 van, 2 lorry, 3 the bus).
+                if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_LATA"), out int vehicle)) campaign.Vehicle = vehicle;
+                // BASTION_PANELES=1: UI's Escuadra plates, as its capture at 1440×900 has them (the strip, the two lists, the mission's foot).
+                if (Environment.GetEnvironmentVariable("BASTION_PANELES") == "1")
+                {
+                    Rect R(float x0, float y0, float x1, float y1) => new Rect(x0 / 1440, y0 / 900, (x1 - x0) / 1440, (y1 - y0) / 900);
+                    settlement.SetInsets(new System.Collections.Generic.List<Rect> { R(0, 0, 1440, 46), R(8, 56, 231, 243), R(1203, 60, 1428, 248), R(249, 698, 1191, 852) });
+                }
                 settlement.Show(campaign);
                 settlement.Showcase(campaign, Environment.GetEnvironmentVariable("BASTION_SOLDADO") ?? "c1");
                 // (BASTION_GIRO=degrees: turned by the player as if dragged, Ana's #5; 90 their right side to the camera.)
@@ -697,7 +706,7 @@ namespace Bastion.EditorTools
                     {
                         settlement.CameraFree = true;
                         var camera = settlement.Camera;
-                        float pitch = 52 * Mathf.Deg2Rad, yaw = 45 * Mathf.Deg2Rad, distance = 42 * MapSpace.Tile;
+                        float pitch = 45 * Mathf.Deg2Rad, yaw = 45 * Mathf.Deg2Rad, distance = 33.5f * MapSpace.Tile;
                         var at = settlement.ClearingTarget;
                         camera.transform.position = at + new Vector3(Mathf.Sin(yaw) * Mathf.Cos(pitch) * distance, Mathf.Sin(pitch) * distance, -Mathf.Cos(yaw) * Mathf.Cos(pitch) * distance);
                         camera.transform.LookAt(at);

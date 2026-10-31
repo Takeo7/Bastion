@@ -41,6 +41,10 @@ namespace Bastion.UI.Hud
 
         public bool MenuOpen => menu != null;
 
+        /// <summary>A menu came up over the bar, or went: what sits above the bar makes room for it (the notes: Ana, Arturo 31/10 #2).</summary>
+        public event Action<bool> MenuShown;
+        bool shownOpen;
+
         public void Set(ActionBarView view)
         {
             var k = Ui.Key(view) + "|" + menu;
@@ -86,7 +90,11 @@ namespace Bastion.UI.Hud
             host.Clear();
             menuChoices.Clear();
             var view = last;
-            if (view == null) return;
+            if (view == null)
+            {
+                Tell(false);
+                return;
+            }
             host.EnableInClassList("abilities--locked", !string.IsNullOrEmpty(view.Lock));
             if (!string.IsNullOrEmpty(view.Lock)) Ui.Text(view.Lock, "abilities__lock", host).pickingMode = PickingMode.Ignore;
             var keys = new List<AbilityView>();
@@ -128,6 +136,14 @@ namespace Bastion.UI.Hud
                     }));
                 }
             }
+            Tell(menu != null);
+        }
+
+        void Tell(bool open)
+        {
+            if (shownOpen == open) return;
+            shownOpen = open;
+            MenuShown?.Invoke(open);
         }
 
         void Press(AbilityView a, List<AbilityView> options)

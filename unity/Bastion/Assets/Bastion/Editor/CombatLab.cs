@@ -276,7 +276,8 @@ namespace Bastion.EditorTools
         /// a soldier with a rifle on BASTION_MAP (torre unless said) goes, by the engine's paths, to each of BASTION_RUTA's
         /// places in turn ("x,y,z;x,y,z": unless said, up the ladder by the door to the first storey, out of a window to the
         /// ground, and back). The game's camera over the map's middle, BASTION_DIST tiles off (14), BASTION_AT=x,y another
-        /// middle; the cutaway following the soldier.
+        /// middle; the cutaway following the soldier. BASTION_DESDE=x,y,z where it starts; BASTION_MUERTO=x,y one of the
+        /// map's dead standing there; BASTION_FOG=1 the fog of war.
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Pasos -shotPlay -shotCamera "Shot camera"
         ///     -shotFrames 200 -shotFps 10 -shotOut &lt;folder&gt;
         /// </summary>
@@ -300,7 +301,14 @@ namespace Bastion.EditorTools
             soldier = state.Units.First(u => u.Alive && u.Team == "xcom");
             soldier.Template = "rookie";
             soldier.Arms = new Arms { Primary = "assaultRifle" };
+            var dead = state.Units.FirstOrDefault(u => u.Alive && u.Team != "xcom" && u.Template == "zombie");
             state.Units = new System.Collections.Generic.List<Unit> { soldier };
+            // BASTION_MUERTO=x,y[,z]: one of the map's dead there too, standing still (who is seen inside: Ana's #5).
+            if (dead != null && Environment.GetEnvironmentVariable("BASTION_MUERTO")?.Split(',').Select(int.Parse).ToArray() is int[] place && place.Length >= 2)
+            {
+                dead.Pos = new Pos { X = place[0], Y = place[1], Z = place.Length > 2 ? place[2] : 0 };
+                state.Units.Add(dead);
+            }
             // BASTION_DESDE=x,y,z: where it starts.
             if (Environment.GetEnvironmentVariable("BASTION_DESDE")?.Split(',').Select(int.Parse).ToArray() is int[] start && start.Length >= 2)
                 soldier.Pos = new Pos { X = start[0], Y = start[1], Z = start.Length > 2 ? start[2] : 0 };
@@ -358,7 +366,8 @@ namespace Bastion.EditorTools
                 try
                 {
                     units.Sync(state);
-                    Reveal();
+                    // (With the fog, the dead as the game shows them: only those in the squad's sight.)
+                    if (Environment.GetEnvironmentVariable("BASTION_FOG") != "1") Reveal();
                     // (BASTION_AT unsaid: the camera after the soldier, as the game's follows the one it moves.)
                     bool done = false;
                     if (Environment.GetEnvironmentVariable("BASTION_AT") == null && fixedAt == null)

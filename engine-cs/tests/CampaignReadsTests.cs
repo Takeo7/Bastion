@@ -34,7 +34,7 @@ namespace Bastion.Engine.Tests
             Assert.True(difference == null, $"{label}: {difference}");
         }
 
-        private static CampaignState Source(string source)
+        internal static CampaignState Source(string source)
         {
             if (source.StartsWith("states.json#", StringComparison.Ordinal))
             {
@@ -71,7 +71,7 @@ namespace Bastion.Engine.Tests
         }
 
         /// <summary>record-campaign.ts reads, in C#.</summary>
-        private static JObject Reads(CampaignState c)
+        internal static JObject Reads(CampaignState c)
         {
             var siege = Campaign.ActiveOffer(c)?.Siege == true;
             var posts = (c.SiegePosts ?? new Dictionary<string, Vec2>()).Values.ToList();
@@ -190,15 +190,33 @@ namespace Bastion.Engine.Tests
         public void TheReadingsOfNoCampaignAreTypeScripts()
         {
             var f = (JObject)Recorded["fixed"]!;
-            Same(f["upgradeCost"]!, new JObject(Campaign.Facilities.Keys.Select((id) => new JProperty(id, new JArray(J(Campaign.UpgradeCost(id, 2)), J(Campaign.UpgradeCost(id, 3)))))), "upgradeCost");
-            Same(f["roads"]!, new JObject(RegionIds.All.Select((a) => new JProperty(a, new JObject(RegionIds.All.Select((b) => new JProperty(b, new JArray(J(Campaign.RoadRoute(a, b)), Campaign.RoadHops(a, b)))))))), "roadRoute, roadHops");
-            Same(f["mareaThreshold"]!, new JObject(RegionIds.All.Select((id) => new JProperty(id, J(Campaign.MareaThreshold(id))))), "mareaThreshold");
-            Same(f["floodedZones"]!, new JArray(Enumerable.Range(0, 13).Select((doom) => J(Campaign.FloodedZones(doom)))), "floodedZones");
-            Same(f["oldDaysToNow"]!, new JArray(Enumerable.Range(0, 14).Select((i) => Campaign.OldDaysToNow(i - 1))), "oldDaysToNow");
-            Same(f["costText"]!, new JArray(new[] { 0, 1, 35, 120 }.Select(Campaign.CostText)), "costText");
-            Same(f["campaignOutdated"]!, new JArray(Enumerable.Range(0, 9).Select((i) => Campaign.CampaignOutdated(18 + i))), "campaignOutdated");
-            Same(f["nightFor"]!, new JArray(f["nightFor"]!.Select((p) => new JArray((int)p[0]!, Campaign.NightFor((int)p[0]!)))), "nightFor");
-            Same(f["sexOfPerson"]!, new JArray(f["sexOfPerson"]!.Select((p) => new JArray((string)p[0]!, J(Campaign.SexOfPerson((string)p[0]!))))), "sexOfPerson");
+            var now = Fixed(f);
+            Same(f["upgradeCost"]!, now["upgradeCost"]!, "upgradeCost");
+            Same(f["roads"]!, now["roads"]!, "roadRoute, roadHops");
+            Same(f["mareaThreshold"]!, now["mareaThreshold"]!, "mareaThreshold");
+            Same(f["floodedZones"]!, now["floodedZones"]!, "floodedZones");
+            Same(f["oldDaysToNow"]!, now["oldDaysToNow"]!, "oldDaysToNow");
+            Same(f["costText"]!, now["costText"]!, "costText");
+            Same(f["campaignOutdated"]!, now["campaignOutdated"]!, "campaignOutdated");
+            Same(f["nightFor"]!, now["nightFor"]!, "nightFor");
+            Same(f["sexOfPerson"]!, now["sexOfPerson"]!, "sexOfPerson");
+        }
+
+        /// <summary>record-campaign.ts `fixed`, in C#: the seeds of nightFor and the names of sexOfPerson are the recorded ones.</summary>
+        internal static JObject Fixed(JObject f)
+        {
+            return new JObject
+            {
+                ["upgradeCost"] = new JObject(Campaign.Facilities.Keys.Select((id) => new JProperty(id, new JArray(J(Campaign.UpgradeCost(id, 2)), J(Campaign.UpgradeCost(id, 3)))))),
+                ["roads"] = new JObject(RegionIds.All.Select((a) => new JProperty(a, new JObject(RegionIds.All.Select((b) => new JProperty(b, new JArray(J(Campaign.RoadRoute(a, b)), Campaign.RoadHops(a, b)))))))),
+                ["mareaThreshold"] = new JObject(RegionIds.All.Select((id) => new JProperty(id, J(Campaign.MareaThreshold(id))))),
+                ["floodedZones"] = new JArray(Enumerable.Range(0, 13).Select((doom) => J(Campaign.FloodedZones(doom)))),
+                ["oldDaysToNow"] = new JArray(Enumerable.Range(0, 14).Select((i) => Campaign.OldDaysToNow(i - 1))),
+                ["costText"] = new JArray(new[] { 0, 1, 35, 120 }.Select(Campaign.CostText)),
+                ["campaignOutdated"] = new JArray(Enumerable.Range(0, 9).Select((i) => Campaign.CampaignOutdated(18 + i))),
+                ["nightFor"] = new JArray(f["nightFor"]!.Select((p) => new JArray((int)p[0]!, Campaign.NightFor((int)p[0]!)))),
+                ["sexOfPerson"] = new JArray(f["sexOfPerson"]!.Select((p) => new JArray((string)p[0]!, J(Campaign.SexOfPerson((string)p[0]!))))),
+            };
         }
     }
 }

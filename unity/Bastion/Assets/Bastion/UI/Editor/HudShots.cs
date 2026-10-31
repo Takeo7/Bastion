@@ -43,6 +43,12 @@ namespace Bastion.UI.EditorTools
         /// <summary>Over the shoulder: only the target's flag stays.</summary>
         public static void Shoulder() => Mount("llegada", "disparo", "hombro");
 
+        /// <summary>The partner's «¡contacto!» with Vigilancia's menu open: the notice over the menu (Ana, Arturo 31/10 #2).</summary>
+        public static void ContactMenu() => Mount("llegada", "contacto", "menu");
+
+        /// <summary>The objective's card pressed: the mission's window again, the card where it was (#13).</summary>
+        public static void GoalAgain() => Mount("llegada", "objetivo");
+
         /// <summary>The start screen (StartScreen with Red's NetLink): the name, be the host, the games on the network, join.</summary>
         public static void Entry()
         {

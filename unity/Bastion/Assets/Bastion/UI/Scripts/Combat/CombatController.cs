@@ -112,6 +112,8 @@ namespace Bastion.UI.Combat
                 Hud.PortraitOf = Bastion.Client.Portraits.Soldier;
                 Bastion.Client.Portraits.Changed += OnBust;
                 if (Hud.HeadOf == null) Hud.HeadOf = FlagAt;
+                // The objective's card opens the mission's window as it stands now (#13).
+                Hud.IntroNow = IntroNow;
             }
         }
 
@@ -544,6 +546,10 @@ namespace Bastion.UI.Combat
             Cutaway();
             ClearView();
             CloseFlags();
+            // Over a shoulder, and till the camera is back in its own view, no marks of a move (Ana, Arturo 31/10 #3).
+            var away = Rig != null && Rig.Away;
+            Overlay?.Cinematic(away);
+            AimMarks?.Cinematic(away);
             var mouse = Mouse.current;
             if (mouse == null || Rig == null) return;
             var at = mouse.position.ReadValue();

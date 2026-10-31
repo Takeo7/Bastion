@@ -61,13 +61,14 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>
-        /// The game's camera (0.10.1's camera.ts): 52° down, 40° of view, `distance` tiles from `target`, turned `yaw`
-        /// degrees from the south (0.10.1 starts at 45°: from the south-east, looking north-west).
+        /// The game's camera (0.10.1's camera.ts; UI's CameraRig): 45° down (Arturo, 31/10, Ana's #12: 0.10.1's 52°), 40°
+        /// of view, `distance` tiles from `target`, turned `yaw` degrees from the south (0.10.1 starts at 45°: from the
+        /// south-east, looking north-west).
         /// </summary>
         public static void Aim(Camera camera, Vector3 target, float distance, float yaw = 45)
         {
             float d = distance * Tile;
-            float pitch = 52 * Mathf.Deg2Rad;
+            float pitch = 45 * Mathf.Deg2Rad;
             float h = Mathf.Cos(pitch) * d;
             camera.fieldOfView = 40;
             camera.transform.position = target + new Vector3(Mathf.Sin(yaw * Mathf.Deg2Rad) * h, Mathf.Sin(pitch) * d, -Mathf.Cos(yaw * Mathf.Deg2Rad) * h);

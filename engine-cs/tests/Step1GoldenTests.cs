@@ -456,7 +456,7 @@ namespace Bastion.Engine.Tests
             return e.ValueKind == JsonValueKind.True || e.ValueKind == JsonValueKind.False;
         }
 
-        private static JsonElement AsJson(object value)
+        internal static JsonElement AsJson(object value)
         {
             return JsonDocument.Parse(JsonSerializer.Serialize(value, Options)).RootElement;
         }
@@ -466,6 +466,22 @@ namespace Bastion.Engine.Tests
         {
             var g = Golden("content");
             var t = g.GetProperty("tables");
+            var tables = ContentTables();
+            var diffs = new List<string>();
+            foreach (var p in t.EnumerateObject())
+            {
+                var expected = p.Name == "thrown" ? AsJson(p.Value.EnumerateArray().Select((x) => x.GetString()).OrderBy((x) => x, StringComparer.Ordinal)) : p.Value;
+                SameJson(expected, tables[p.Name], p.Name, diffs);
+                // The tables by id keep TypeScript's order.
+                if (p.Value.ValueKind == JsonValueKind.Object) Assert.Equal(p.Value.EnumerateObject().Select((e) => e.Name), tables[p.Name].EnumerateObject().Select((e) => e.Name));
+            }
+            SameJson(g.GetProperty("constants"), AsJson(ContentConstants()), "constants", diffs);
+            Assert.True(diffs.Count == 0, string.Join("\n", diffs.Take(30)));
+        }
+
+        /// <summary>content.json `tables`: content.ts's tables as C# has them (`thrown` sorted).</summary>
+        internal static Dictionary<string, JsonElement> ContentTables()
+        {
             var items = JsonNode.Parse(JsonSerializer.Serialize(Content.Items, Options))!.AsObject();
             // ITEMS' mods are Partial<UnitMods>: what an item doesn't name is 0 in C#.
             foreach (var item in items)
@@ -490,15 +506,13 @@ namespace Bastion.Engine.Tests
                 ["thrown"] = AsJson(Content.Thrown.OrderBy((x) => x, StringComparer.Ordinal)),
                 ["zeroMods"] = AsJson(Content.ZeroMods),
             };
-            var diffs = new List<string>();
-            foreach (var p in t.EnumerateObject())
-            {
-                var expected = p.Name == "thrown" ? AsJson(p.Value.EnumerateArray().Select((x) => x.GetString()).OrderBy((x) => x, StringComparer.Ordinal)) : p.Value;
-                SameJson(expected, tables[p.Name], p.Name, diffs);
-                // The tables by id keep TypeScript's order.
-                if (p.Value.ValueKind == JsonValueKind.Object) Assert.Equal(p.Value.EnumerateObject().Select((e) => e.Name), tables[p.Name].EnumerateObject().Select((e) => e.Name));
-            }
-            var constants = new Dictionary<string, object>
+            return tables;
+        }
+
+        /// <summary>content.json `constants`: content.ts's, by the names record-step1.ts gave them.</summary>
+        internal static Dictionary<string, object> ContentConstants()
+        {
+            return new Dictionary<string, object>
             {
                 ["apPerTurn"] = Content.ApPerTurn, ["thirdActionRank"] = Content.ThirdActionRank, ["spareMags"] = Content.SpareMags,
                 ["fallDamage"] = Content.FallDamage, ["lowCoverBonus"] = Content.LowCoverBonus, ["highCoverBonus"] = Content.HighCoverBonus,
@@ -526,8 +540,6 @@ namespace Bastion.Engine.Tests
                 },
                 ["infectionBurst"] = Content.Infection.Burst, ["infectionVest"] = Content.Infection.Vest,
             };
-            SameJson(g.GetProperty("constants"), AsJson(constants), "constants", diffs);
-            Assert.True(diffs.Count == 0, string.Join("\n", diffs.Take(30)));
         }
 
         [Fact]

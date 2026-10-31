@@ -30,6 +30,12 @@ namespace Bastion.Client
         const int LineupRow = 8;
         const float LineupStep = 0.95f, LineupGap = 0.5f;
 
+        /// <summary>
+        /// How far down the row's camera looks at them (degrees; Ana's #10, 31/10: 0.10.1's, some 30°, looked down on them):
+        /// low, so they are seen from the front; half as much again, or twice, where something stands in the way.
+        /// </summary>
+        const float LineupPitch = 14;
+
         /// <summary>Where a lineup of `count` stands (tiles) and its camera.</summary>
         sealed class LineupPlace
         {
@@ -340,10 +346,34 @@ namespace Bastion.Client
                 {
                     var q = new Vector3(p.x, 0, p.y) + side * s;
                     points.Add(new Vector3(q.x, 2.3f, q.z));
-                    points.Add(q + toward * 1.8f);
+                    points.Add(q);
                 }
+            // The room their cards take under them: the ground before the row's middle (before each place, seen low, it
+            // widened the row past what it is).
+            var middle = new Vector3(row.spots.Average(p => p.x), 0, row.spots.Average(p => p.y));
+            points.Add(middle + toward * 1.8f);
+            // La Lata whole behind them (Ana's #10: the car came out cut at the top).
+            points.AddRange(LataCorners());
             if (view == Views.Debrief) return Closer(shot, row.spots, DebriefStep(n), 210, true);
             return Closer(Fitted(shot, points, true), row.spots, PlacePixels, 120, false);
+        }
+
+        /// <summary>The corners of La Lata's models as they stand (tiles), each mesh's own box; none while it is away.</summary>
+        List<Vector3> LataCorners()
+        {
+            var corners = new List<Vector3>();
+            if (Lata == null || !Lata.Shown) return corners;
+            foreach (var r in Lata.GetComponentsInChildren<Renderer>())
+            {
+                if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                var mesh = r is SkinnedMeshRenderer skin ? skin.sharedMesh : r.GetComponent<MeshFilter>()?.sharedMesh;
+                if (mesh == null) continue;
+                var b = mesh.bounds;
+                var m = r.transform.localToWorldMatrix;
+                for (int i = 0; i < 8; i++)
+                    corners.Add(Tiles(m.MultiplyPoint3x4(new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z))));
+            }
+            return corners;
         }
 
         /// <summary>
@@ -416,8 +446,9 @@ namespace Bastion.Client
         /// <summary>
         /// Where a lineup of `count` stands, and its camera: along either side of La Lata (its doors turned to them) or
         /// across the track behind it; each seen from straight out to 50° aside, near enough to fill the frame or a little
-        /// further. The one where the fewest pines and buildings come between the camera and the row, and nothing stands
-        /// under the row, the camera least turned. Without La Lata, in front of the caravan.
+        /// further, low (LineupPitch). The one where the fewest buildings and pieces come between the camera and the row
+        /// (the pines before it are taken out of the shot: ClearShot), and nothing stands under the row, the camera least
+        /// turned. Without La Lata, in front of the caravan.
         /// </summary>
         LineupPlace PlaceLineup(int count)
         {
@@ -434,14 +465,15 @@ namespace Bastion.Client
             float length = parked ? (Lata.Vehicle == 3 ? 7 : Lata.Length) : 0;
             float reach = parked ? (Lata.Vehicle == 3 ? 1.7f : Lata.Width) / 2 + 0.95f : 0;
             var footprint = new HashSet<int>(b != null && Bastion.Engine.Base.BastionStage(b) > 0 ? Bastion.Engine.Base.BastionFootprint(b).Select(c => c.Y * b.Width + c.X) : Enumerable.Empty<int>());
-            float Height(float x, float z, bool crowns = true)
+            // (`pines` off: what the camera sees past, as the pines before the row are taken out of its shot: ClearShot.)
+            float Height(float x, float z, bool crowns = true, bool pines = true)
             {
                 if (b == null) return 0;
                 int tx = Mathf.FloorToInt(x), tz = Mathf.FloorToInt(z);
                 if (tx < 0 || tz < 0 || tx >= b.Width || tz >= b.Height) return 0;
-                if (Bastion.Engine.Base.TreeAt(b, tx, tz)) return 4.5f;
+                if (pines && Bastion.Engine.Base.TreeAt(b, tx, tz)) return 4.5f;
                 // A pine's crown spreads over the tiles round its trunk, from a storey or so up.
-                if (crowns)
+                if (pines && crowns)
                     for (int dx = -1; dx <= 1; dx++)
                         for (int dz = -1; dz <= 1; dz++)
                         {
@@ -501,18 +533,18 @@ namespace Bastion.Client
                     foreach (float dist in new[] { near, near + 1.5f, near + 3 })
                         foreach (float lift in new[] { 1, 1.5f, 2 })
                         {
-                            // From higher up, over the pines, rather than turned.
-                            float y = (1.8f + dist * 0.3f) * lift;
+                            // From higher up, over what is built in the way, rather than turned.
+                            float y = 0.5f + dist * Mathf.Tan(LineupPitch * Mathf.Deg2Rad) * lift;
                             var cam = middle + d * dist;
                             // Seen from straight out unless the way is blocked.
                             float cost = standing + Mathf.Abs(a) * 25 + (dist - near) * 0.4f + (lift - 1) * 3;
-                            if (Height(cam.x, cam.y) > y - 0.6f) cost += 60;
+                            if (Height(cam.x, cam.y, false, false) > y - 0.6f) cost += 60;
                             // What comes between the camera and the row's middle, and (half as much: at the frame's edge) its ends.
                             foreach (var (q, weight) in new[] { (middle, 6f), (middle + right * halfWidth, 3f), (middle - right * halfWidth, 3f) })
                                 for (float t = 0.8f; t < dist; t += 0.4f)
                                 {
                                     float f = t / dist;
-                                    if (Height(q.x + (cam.x - q.x) * f, q.y + (cam.y - q.y) * f) > 0.9f + (y - 0.9f) * f) cost += weight;
+                                    if (Height(q.x + (cam.x - q.x) * f, q.y + (cam.y - q.y) * f, false, false) > 0.9f + (y - 0.9f) * f) cost += weight;
                                 }
                             if (cost < bestCost)
                             {

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The relay of «Unirse con código» (docs/UNIRSE-CON-CODIGO.md): a program apart, on a server; Unity doesn't see it. It shares
+       with the apps only RelayWire.cs (the greeting), compiled here as its own (BASTION_RELAY). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Bastion.Relay</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DefineConstants>$(DefineConstants);BASTION_RELAY</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../net/RelayWire.cs" Link="RelayWire.cs" />
+  </ItemGroup>
+</Project>

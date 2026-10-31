@@ -9,7 +9,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="package/Runtime/**/*.cs" Exclude="package/Runtime/Net/**" />
-    <!-- Work in progress (README: engine-cs/wip/): built and tested here, out of Unity's sight until it compiles. -->
-    <Compile Include="wip/**/*.cs" Exclude="wip/Net/**" />
+    <!-- Work in progress (README: engine-cs/wip/): built and tested here, out of Unity's sight until it compiles. Not
+         wip/Relay, parked with csproj files of its own (docs/UNIRSE-CON-CODIGO.md). -->
+    <Compile Include="wip/**/*.cs" Exclude="wip/Net/**;wip/Relay/**" />
   </ItemGroup>
 </Project>

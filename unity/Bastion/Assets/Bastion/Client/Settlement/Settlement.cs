@@ -23,7 +23,8 @@ namespace Bastion.Client
         public bool Snow { get; private set; }
         /// <summary>
         /// How far from the camera the sun's shadows reach while the clearing is shown (metres): past its farthest ground with
-        /// the free look at its farthest (42 tiles, 88 m deep), with the battle's margin (ShadowFit) for URP's fade at the end.
+        /// the free look at its farthest (UI's CameraRig: 33.5 tiles at 45°, some 79 m deep; 42 at 52°, 88 m, till 31/10), with
+        /// the battle's margin (ShadowFit) for URP's fade at the end.
         /// Not the scene's: its 90 left the top of the screen faded.
         /// </summary>
         [NonSerialized] public float ShadowMetres = 95;

@@ -100,6 +100,11 @@ namespace Bastion.Engine
         /// <summary>Rooms the squad has searched, by id (loot.ts roomAt; docs/FASE8.md §B).</summary>
         public List<int>? RoomsSearched { get; set; }
         /// <summary>
+        /// The ground tiles of the buildings the squad has found (Buildings; Ana, 31/10): been into, or looked into from
+        /// just before a window. Inside the rest, it sees nobody. Missing until it finds one.
+        /// </summary>
+        public List<int>? Discovered { get; set; }
+        /// <summary>
         /// Things left on the floor (docs/FASE8.md §C): dropped, found with a full backpack, or what a fallen soldier
         /// carried (Arturo, 18/10 #49: «la mochila de ‹nombre›», Lore), `from` that soldier (its unit id).
         /// </summary>

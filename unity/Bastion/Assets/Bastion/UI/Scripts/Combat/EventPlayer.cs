@@ -25,6 +25,9 @@ namespace Bastion.UI.Combat
     /// The attack that kills is seen over the shoulder (ShotCam), and one of ours falling, close (Ana, 22/10 #21); a dead's
     /// blow on one of ours, over its shoulder too (Ana, Arturo 29/10).
     /// The dead walking together are planned so nobody walks through anybody (WalkPlan, walkPlan.ts).
+    /// Since Ana's notes of the 31/10 (#4, Arturo): in the enemy's turn every walk of the dead goes at once first, those
+    /// who then attack too, under a framing that takes in all of them the squad sees; then the attacks one by one, each
+    /// whole (Choreograph). Only the order on screen: what happens is the engine's.
     /// </summary>
     public sealed class EventPlayer
     {
@@ -56,11 +59,12 @@ namespace Bastion.UI.Combat
 
         // docs/UX-RITMO.md's times (game.ts): a still moment once the camera is on an enemy, an attack's result read,
         // the pause between two enemies acting, how near the camera counts as there, how long a camera the player moved is
-        // theirs, how much quicker the dead walk together.
-        const float SettleTime = 0.35f;
-        const float ReadHit = 0.9f;
-        const float ReadMiss = 0.7f;
-        const float Between = 0.5f;
+        // theirs, how much quicker the dead walk together. The first four a little shorter than the web's (0.35, 0.9, 0.7,
+        // 0.5: Ana, Arturo 31/10 #4, «tarda mucho el turno enemigo»).
+        const float SettleTime = 0.25f;
+        const float ReadHit = 0.75f;
+        const float ReadMiss = 0.55f;
+        const float Between = 0.35f;
         const float NearEnough = 5 * Board.Tile;
         const float PlayerCamera = 2.5f;
         const float WalkersPace = 1.25f;
@@ -78,7 +82,7 @@ namespace Bastion.UI.Combat
         float? killHold;
 
         /// <summary>What starts something new: the shot over the shoulder of the last one ends before it.</summary>
-        static bool NewAction(GameEvent e) => e is ShotEvent || e is MovedEvent || e is AbilityUsedEvent || e is ExplosiveEvent || e is StoneThrownEvent || e is TurnBeganEvent || e is MissionEndedEvent;
+        static bool NewAction(GameEvent e) => e is ShotEvent || e is MovedEvent || e is AbilityUsedEvent || e is ExplosiveEvent || e is StoneThrownEvent || e is TurnBeganEvent || e is MissionEndedEvent || e is WalksEvent;
 
         /// <summary>The shot over a shoulder on now, and who is in it (the attacker, the target): the buildings' cutaway leaves its room whole.</summary>
         public (string attacker, string target)? CloseFocus => control.Rig != null && control.Rig.CloseUp ? (lastAttacker, killCam) : ((string, string)?)null;
@@ -158,6 +162,10 @@ namespace Bastion.UI.Combat
 
         /// <summary>The group's walkers' plans (WalkPlan): when each stands before each step, where it swerves, how quick.</summary>
         Dictionary<string, WalkPlan.Plan> groupPlans;
+        /// <summary>How many steps of its plan each walker has walked: a walk stopped by what befalls it goes on from there.</summary>
+        readonly Dictionary<string, int> walked = new Dictionary<string, int>();
+        /// <summary>The enemy's walks playing all at once (PlayWalks): what befalls a walker doesn't take the camera.</summary>
+        bool walking;
         /// <summary>The command has come to this player: its planned routes are walked once what is queued has been seen.</summary>
         bool planDue;
 
@@ -269,6 +277,12 @@ namespace Bastion.UI.Combat
                     var item = queue.Dequeue();
                     // (A dead's next blow on the same soldier stays over its shoulder: no out and in between two.)
                     if (killCam != null && NewAction(item.e) && !(biting && item.e is ShotEvent again && again.Unit == lastAttacker && again.Target == killCam)) EndKillCam();
+                    // The enemy's turn's walks, all at once (Choreograph).
+                    if (item.e is WalksEvent walks)
+                    {
+                        await PlayWalks(walks, item.by, item.epoch);
+                        continue;
+                    }
                     // The dead that only walk this turn come last (ai.ts), and walk all at once, under one framing.
                     var walkers = WalkingWith(item);
                     if (walkers.Count > 0)
@@ -285,6 +299,7 @@ namespace Bastion.UI.Combat
                         await PlayTogether(moment);
                         continue;
                     }
+                    var took = Time.time;
                     await BeforeActing(item.e);
                     var epoch = control.Rig != null ? control.Rig.Epoch : 0;
                     current = item.e;
@@ -292,6 +307,9 @@ namespace Bastion.UI.Combat
                     current = null;
                     NoteResult(item.e);
                     await Settle(item.e, item.by, false, epoch);
+                    if (Rhythm && Time.time - took > 0.3f) Debug.Log($"[ritmo] {item.e.T} {UnitOf(item.e)}: {Time.time - took:0.0} s");
+                    // The enemy's turn begins: what follows it, in the order it is to be seen.
+                    if (item.e is TurnBeganEvent began && began.Team == Teams.Alien) Choreograph();
                     // The one it killed has fallen: a moment more over the shoulder (on one of ours, longer), then back.
                     if (killCam != null && item.e is DiedEvent fell && fell.Unit == killCam)
                     {
@@ -385,10 +403,15 @@ namespace Bastion.UI.Combat
             await ShowEnemy(new List<Vector3> { Feet(actor.Id) });
         }
 
-        /// <summary>The enemy that `e` makes act in sight in the enemy's turn (it moves, attacks, shouts or throws); null for anything else.</summary>
+        /// <summary>
+        /// The enemy that `e` makes act in sight in the enemy's turn (it moves, attacks, shouts, throws, keeps watch); null for
+        /// anything else, also what only changes its mind (whom it hunts, where it faces, what it forgets: 31/10 #4, they
+        /// took the pause and the camera, 2.3 s each, showing nothing).
+        /// </summary>
         Unit EnemyActor(GameEvent e)
         {
             if (V.ActiveTeam != Teams.Alien || FollowUp(e)) return null;
+            if (!(e is MovedEvent || e is ShotEvent || e is AbilityUsedEvent || e is ExplosiveEvent || e is StoneThrownEvent || e is PsiEvent || e is OverwatchEvent || e is HunkerEvent)) return null;
             var u = Unit(UnitOf(e));
             if (u == null || u.Team != Teams.Alien || !u.Alive) return null;
             var seen = ShownToSquad(u) || (e is MovedEvent m && m.Path.Any(p => IsVisible(p.X, p.Y)));
@@ -417,7 +440,8 @@ namespace Bastion.UI.Combat
                 if (!theirs && Vector3.Distance(centre, rig.Target) > NearEnough)
                 {
                     rig.Focus(centre);
-                    for (var i = 0; i < 24 && !rig.Settled; i++) await Wait(0.05f);
+                    // Most of the way is enough: the still moment that follows lets it arrive (31/10 #4: 1.2 s at most before).
+                    for (var i = 0; i < 16 && !rig.Settled; i++) await Wait(0.05f);
                 }
             }
             await Wait(SettleTime);
@@ -575,6 +599,238 @@ namespace Bastion.UI.Combat
             return map;
         }
 
+        /// <summary>The enemy's turn's walks, to be played at once (Choreograph): each walker's events in order, and all of them in the engine's.</summary>
+        sealed class WalksEvent : GameEvent
+        {
+            public override string T => "ui:walks";
+            public List<List<(GameEvent e, int? by, int epoch)>> Chains = new List<List<(GameEvent, int?, int)>>();
+            public List<(GameEvent e, int? by, int epoch)> Items = new List<(GameEvent, int?, int)>();
+        }
+
+        /// <summary>
+        /// The enemy's turn as it is to be seen (Ana, Arturo 31/10 #4), as it begins: only the order on screen, the
+        /// engine's results as they are. The walks of the dead (patrols too) go first, all at once (a WalksEvent), also
+        /// those of the dead who then attack, each with what befalls it on its way: an overwatch shot, a fall, a trap, a
+        /// door it opens. Then, in their order, one by one and each whole, the attacks (bites, blows, the Chillón's scream,
+        /// a door beaten) and everything else. In their order too, not at once: whoever belongs to a pod found in the turn
+        /// or arrives in it, one that has already attacked, and a walk through a tile that one of ours, felled by an attack
+        /// still to be seen, or one that moves later on screen, would be standing on then.
+        /// </summary>
+        void Choreograph()
+        {
+            var v = V;
+            var all = queue.ToList();
+            var end = all.FindIndex(q => q.e is TurnBeganEvent || q.e is MissionEndedEvent);
+            if (end < 0) end = all.Count;
+            var pre = new HashSet<int>();
+            var chains = new Dictionary<string, List<int>>();
+            var order = new List<string>();
+            // A walk that can't go with the others, what one does once it has stopped walking, who came or was found.
+            var broken = new HashSet<string>();
+            var stopped = new HashSet<string>();
+            var late = new HashSet<string>();
+            // Where someone still stands when the walks play: one of ours felled after, one whose own walk comes after.
+            var held = new HashSet<int>();
+            var at = new Dictionary<string, Pos>();
+            Pos Where(string id) => at.TryGetValue(id, out var p) ? p : Unit(id)?.Pos;
+            string actor = null;
+            var chaining = false;
+            var started = false;
+            for (var i = 0; i < end; i++)
+            {
+                var e = all[i].e;
+                if (e is PatrolEvent || e is PodActivatedEvent || e is SpawnedEvent)
+                {
+                    if (e is PodActivatedEvent pa) late.UnionWith(v.Pods.FirstOrDefault(p => p.Id == pa.Pod)?.UnitIds ?? new List<string>());
+                    if (e is SpawnedEvent sp) late.UnionWith(sp.Units.Select(x => x.Id));
+                    actor = null;
+                    chaining = false;
+                    started = true;
+                    continue;
+                }
+                var who = Starter(e);
+                if (who != null && who != actor)
+                {
+                    actor = who;
+                    var u = Unit(who);
+                    chaining = u != null && u.Alive && !AbilityTexts.ShootsFromRange(u) && !stopped.Contains(who) && !late.Contains(who);
+                    started = true;
+                }
+                if (!started)
+                {
+                    pre.Add(i);
+                    continue;
+                }
+                var moved = e as MovedEvent;
+                if (chaining && OnTheWay(e, actor))
+                {
+                    if (!chains.TryGetValue(actor, out var chain))
+                    {
+                        chains[actor] = chain = new List<int>();
+                        order.Add(actor);
+                    }
+                    chain.Add(i);
+                    if (moved != null && moved.Path.Any(p => held.Contains(Grid.NodeOf(v, p)))) broken.Add(actor);
+                }
+                else
+                {
+                    if (chaining)
+                    {
+                        chaining = false;
+                        stopped.Add(actor);
+                    }
+                    if (e is DiedEvent died && Unit(died.Unit) is Unit dead && dead.Team == Teams.Xcom && Where(dead.Id) is Pos fell) held.Add(Grid.NodeOf(v, fell));
+                    if (moved != null && Where(moved.Unit) is Pos from) held.Add(Grid.NodeOf(v, from));
+                }
+                if (moved != null && moved.Path.Count > 0) at[moved.Unit] = moved.Path[moved.Path.Count - 1];
+            }
+            var walkers = order.Where(id => !broken.Contains(id) && chains[id].Any(i => all[i].e is MovedEvent)).ToList();
+            if (walkers.Count == 0) return;
+            var taken = new HashSet<int>(walkers.SelectMany(id => chains[id]));
+            var walks = new WalksEvent
+            {
+                Chains = walkers.Select(id => chains[id].Select(i => all[i]).ToList()).ToList(),
+                Items = taken.OrderBy(i => i).Select(i => all[i]).ToList(),
+            };
+            var first = walks.Items[0];
+            queue.Clear();
+            foreach (var i in pre.OrderBy(i => i)) queue.Enqueue(all[i]);
+            queue.Enqueue((walks, first.by, first.epoch));
+            for (var i = 0; i < all.Count; i++)
+                if (!pre.Contains(i) && !taken.Contains(i)) queue.Enqueue(all[i]);
+            Debug.Log($"[ritmo] turno enemigo: {walkers.Count} andan a la vez ({walks.Items.Count} sucesos), {all.Count - taken.Count - pre.Count} después en orden");
+        }
+
+        /// <summary>The enemy that `e` starts something with (a walk, an attack, an ability, a throw); null for anything else.</summary>
+        string Starter(GameEvent e)
+        {
+            var id = e is MovedEvent m ? m.Unit
+                : e is ShotEvent s && !s.Reaction ? s.Unit
+                : e is AbilityUsedEvent a ? a.Unit
+                : e is ExplosiveEvent x ? x.Unit
+                : e is StoneThrownEvent st ? st.Unit
+                : e is PsiEvent p ? p.Unit
+                : null;
+            return id != null && Unit(id)?.Team == Teams.Alien ? id : null;
+        }
+
+        /// <summary>Whether `e` belongs to `walker`'s walk: a stretch of it, a shot at it on overwatch, what follows (a fall, a door, a trap).</summary>
+        static bool OnTheWay(GameEvent e, string walker) =>
+            e is MovedEvent m ? m.Unit == walker
+            : e is ShotEvent s ? s.Reaction && s.Target == walker
+            : FollowUp(e) || e is TrapSprungEvent || e is MarkedEvent || e is RupturedEvent || e is HealedEvent || e is RefundEvent || e is SuppressionEndedEvent || e is HuntingEvent;
+
+        /// <summary>
+        /// The enemy's turn's walks at once (Choreograph; Ana, Arturo 31/10 #4): the camera back over all the squad sees of
+        /// them (the fog's don't count), the doors on their way open, and each walker plays its walk with what befalls it
+        /// on the way, all at the same time, planned so nobody walks through anybody. All of them stand where they stopped
+        /// before the view takes it; the newcomers are called out once; and the camera comes back for the attacks.
+        /// </summary>
+        async Awaitable PlayWalks(WalksEvent w, int? by, int epoch)
+        {
+            var v = V;
+            var points = new List<Vector3>();
+            foreach (var q in w.Items)
+            {
+                if (!(q.e is MovedEvent m) || Unit(m.Unit) is not Unit u) continue;
+                if (ShownToSquad(u)) points.Add(Feet(u.Id));
+                points.AddRange(m.Path.Where(p => IsVisible(p.X, p.Y)).Select(p => Board.TileToWorld(v, p)));
+            }
+            var hold = resultHold;
+            resultHold = 0;
+            var framed = false;
+            var from = Time.time;
+            if (points.Count > 0)
+            {
+                var first = lastActor == null;
+                lastActor = "walkers";
+                await Wait(Math.Max(first ? 0 : Between, hold));
+                framed = await FrameAll(points);
+            }
+            else if (hold > 0) await Wait(hold);
+            // The doors they open on their way, first and at once (playtest 17/10 #46): a door and the noise it makes.
+            var doorTiles = w.Items.Where(q => q.e is TileChangedEvent).Select(q => ((TileChangedEvent)q.e).Pos).ToList();
+            var doors = new HashSet<(GameEvent, int?, int)>(w.Items.Where(q => q.e is TileChangedEvent || q.e is NoiseEvent n && doorTiles.Any(t => Grid.SamePos(t, n.Tile))));
+            foreach (var q in w.Items.Where(doors.Contains)) await Settle(q.e, q.by, false, q.epoch);
+            // Each walker's whole walk for the plan; each plays its own stretches, with what befalls it between them.
+            var whole = w.Chains.Select(c => c.Where(q => q.e is MovedEvent).Select(q => (MovedEvent)q.e).ToList())
+                .Select(ms => new MovedEvent { Unit = ms[0].Unit, Path = ms.SelectMany(x => x.Path).ToList(), Ap = ms.Sum(x => x.Ap) }).ToList();
+            groupPlans = PlanGroup(whole);
+            walked.Clear();
+            grouped = true;
+            walking = true;
+            current = w;
+            var before = new HashSet<string>(v.Units.Where(a => a.Alive && a.Team == Teams.Alien && control.Visible(a)).Select(a => a.Id));
+            var walkFrom = Time.time;
+            var plays = w.Chains.Select(c => PlayChain(c, doors)).ToList();
+            try
+            {
+                foreach (var p in plays) await p;
+            }
+            finally
+            {
+                grouped = false;
+                walking = false;
+                groupPlans = null;
+                walked.Clear();
+                current = null;
+            }
+            // All of them where they stopped before the view syncs (playtest 21/10 #21).
+            var settleFrom = Time.time;
+            var rest = w.Items.Where(q => !doors.Contains(q)).ToList();
+            foreach (var q in rest) Events.ApplyEvent(V, q.e);
+            foreach (var q in rest) await Settle(q.e, q.by, true, q.epoch);
+            await AnnounceSighted(rest.FirstOrDefault(q => q.e is MovedEvent).e ?? w, by, before, epoch);
+            Debug.Log($"[ritmo] paseos: encuadre {walkFrom - from:0.0} s, andar {settleFrom - walkFrom:0.0} s, después {Time.time - settleFrom:0.0} s");
+            // The attacks next, one by one, the camera on each (BeforeActing): out of this framing, and nearer again.
+            groupFrame = null;
+            if (framed) control.Rig?.RestoreZoom();
+        }
+
+        /// <summary>One walker's part of the walks: its stretches with nothing between them as one, and what befalls it played where it does.</summary>
+        async Awaitable PlayChain(List<(GameEvent e, int? by, int epoch)> chain, HashSet<(GameEvent, int?, int)> doors)
+        {
+            var mine = chain.Where(q => !doors.Contains(q)).ToList();
+            for (var k = 0; k < mine.Count; k++)
+            {
+                var q = mine[k];
+                if (q.e is MovedEvent m)
+                {
+                    var path = new List<Pos>(m.Path);
+                    var ap = m.Ap;
+                    while (k + 1 < mine.Count && mine[k + 1].e is MovedEvent next)
+                    {
+                        path.AddRange(next.Path);
+                        ap += next.Ap;
+                        k++;
+                    }
+                    await PlaySafe((new MovedEvent { Unit = m.Unit, Path = path, Ap = ap }, q.by, q.epoch));
+                }
+                else await PlaySafe(q);
+            }
+        }
+
+        /// <summary>
+        /// The camera over all of `points` (unless the player has had it lately): to their middle and back until all are in
+        /// view, there, and a still moment; whether it went back (to come nearer again after).
+        /// </summary>
+        async Awaitable<bool> FrameAll(List<Vector3> points)
+        {
+            var rig = control.Rig;
+            var moved = false;
+            if (rig != null && Time.unscaledTime - rig.TakenAt >= PlayerCamera)
+            {
+                var bounds = new Bounds(points[0], Vector3.zero);
+                foreach (var p in points) bounds.Encapsulate(p);
+                rig.Focus(bounds.center);
+                rig.FrameZoom(bounds.center, points);
+                moved = true;
+                for (var i = 0; i < 20 && !rig.Arrived; i++) await Wait(0.05f);
+            }
+            await Wait(SettleTime);
+            return moved;
+        }
+
         /// <summary>The arrivals (`spawned`) or the contacts (`podActivated`) that follow `item`, of its kind: seen at once (playtest 18/10 #6).</summary>
         List<(GameEvent e, int? by, int epoch)> SameMoment((GameEvent e, int? by, int epoch) item)
         {
@@ -726,8 +982,21 @@ namespace Bastion.UI.Combat
                 groupFrame = null;
                 // The space bar hurries the enemy's turn only.
                 if (began.Team == Teams.Xcom) hurry = false;
+                // How long the enemy's turn took on screen, in the battle's time (as at normal speed, «Rápida» or not), for the log.
+                if (began.Team == Teams.Alien) enemyFrom = Time.time;
+                else if (enemyFrom != null)
+                {
+                    Debug.Log($"[ritmo] turno enemigo en pantalla: {Time.time - enemyFrom.Value:0.0} s");
+                    enemyFrom = null;
+                }
             }
         }
+
+        /// <summary>When the enemy's turn began to play (Time.time), for the log.</summary>
+        float? enemyFrom;
+
+        /// <summary>BASTION_RITMO=1 (tests): each event that takes a while to be seen, and how long, in the log.</summary>
+        static readonly bool Rhythm = System.Environment.GetEnvironmentVariable("BASTION_RITMO") == "1";
 
         /// <summary>
         /// Enemies that have just come into the squad's sight (`before`: who was in sight until this event) get a callout
@@ -756,7 +1025,7 @@ namespace Bastion.UI.Combat
             if (v.ActiveTeam == Teams.Alien)
             {
                 if (control.Rig != null && control.Rig.Epoch == epoch) control.Rig.Focus(Feet(fresh[0].Id));
-                await Wait(0.9f);
+                await Wait(0.6f);
             }
             else if (by == control.MySlot) await Wait(0.5f);
         }
@@ -887,7 +1156,7 @@ namespace Bastion.UI.Combat
             var cinematic = by == control.MySlot || alienPhase;
             var rig = control.Rig;
             var at = alienPhase && rig != null ? rig.Epoch : epoch;
-            bool Cam() => cinematic && rig != null && rig.Epoch == at;
+            bool Cam() => cinematic && !walking && rig != null && rig.Epoch == at;
             void Look(Vector3 p)
             {
                 if (Cam()) rig.Focus(p);
@@ -900,6 +1169,13 @@ namespace Bastion.UI.Combat
                 case MovedEvent m:
                 {
                     var u = Unit(m.Unit);
+                    // In a group, where this stretch starts in its walker's plan (the steps before it, walked).
+                    var offset = 0;
+                    if (grouped)
+                    {
+                        walked.TryGetValue(u.Id, out offset);
+                        walked[u.Id] = offset + m.Path.Count;
+                    }
                     // Out of the fog (playtest 20/10 #10): shown from the step it takes into a tile the squad sees.
                     var into = ShownToSquad(u) ? 0 : m.Path.FindIndex(p => IsVisible(p.X, p.Y));
                     if (into < 0) return;
@@ -916,10 +1192,12 @@ namespace Bastion.UI.Combat
                     // plan says so nobody walks through anybody. The squad, at the pace Ajustes sets (only how it looks).
                     WalkPlan.Plan plan = null;
                     if (grouped) groupPlans?.TryGetValue(u.Id, out plan);
+                    var waits = plan?.Waits.Skip(offset).ToArray();
+                    var passes = plan?.Passes.Skip(1 + offset).ToList();
                     var pace = grouped ? WalkersPace * (plan?.Haste ?? 1) : u.Team == Teams.Xcom ? WalkSpeed : 1;
                     var steps = units.StepSeconds(u.Id, u.Pos, m.Path, m.Ap, pace);
                     var reveal = 0f;
-                    for (var k = 0; k < into && k < steps.Length; k++) reveal += steps[k] + (plan != null && k < plan.Waits.Length ? plan.Waits[k] : 0);
+                    for (var k = 0; k < into && k < steps.Length; k++) reveal += steps[k] + (waits != null && k < waits.Length ? waits[k] : 0);
                     // Every other tile reached, a step heard (sfx.ts step), the shade in the fog's too.
                     var stepped = 0;
                     Action<Vector3> step = foot =>
@@ -927,7 +1205,7 @@ namespace Bastion.UI.Combat
                         if (stepped++ % 2 == 0) control.Sfx.Step(u, foot);
                     };
                     var walk = plan != null
-                        ? units.MoveAlong(u.Id, m.Path, m.Ap, pace, plan.Waits, plan.Passes.Skip(1).ToList(), step, stop)
+                        ? units.MoveAlong(u.Id, m.Path, m.Ap, pace, waits, passes, step, stop)
                         : units.MoveAlong(u.Id, m.Path, m.Ap, pace, step, stop);
                     var start = Time.time;
                     var shown = into == 0;

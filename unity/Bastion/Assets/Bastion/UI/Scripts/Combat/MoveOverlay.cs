@@ -22,7 +22,9 @@ namespace Bastion.UI.Combat
     /// the tile under the pointer, a ring on that tile, and over it a shield on each side with cover. A red frame where
     /// the squad would be noticed. Round the picked one's feet a white ring in three arcs that turn; round the
     /// partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and blue.
-    /// Lines keep their width in pixels (Bastion/Marks), and they and the shields are drawn over walls, as the web's.
+    /// Lines keep their width in pixels (Bastion/Marks). The shields are drawn over walls, as the web's; the lines go behind
+    /// the bodies standing over them (Ana, Arturo 31/10 #6), still over the floor and the walls they run along (Pull).
+    /// Over a shoulder all but the rings go (Cinematic: #3).
     /// </summary>
     public sealed class MoveOverlay : MonoBehaviour
     {
@@ -59,6 +61,11 @@ namespace Bastion.UI.Combat
         const float FadeDepth = 0.55f * T;
         /// <summary>How far back from a corner of the range its border turns (overlays.ts CORNER_R).</summary>
         const float CornerR = 0.24f * T;
+        /// <summary>
+        /// How much nearer the camera the lines are tested against depth (Bastion/Marks _Pull, metres): past half a wall
+        /// they lie in, short of a body standing over them (a line a tile's edge behind the feet is a metre behind the legs).
+        /// </summary>
+        const float Pull = 0.4f;
 
         public static Color32 Hex(int rgb, byte alpha = 0xff) => new Color32((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb, alpha);
 
@@ -67,6 +74,8 @@ namespace Bastion.UI.Combat
         /// <summary>The camera the shields face; the main one if none.</summary>
         public Camera View;
 
+        /// <summary>What a move shows (the reach, the way, the pointers, the shields): all of it off over a shoulder.</summary>
+        Transform zone;
         readonly MeshBuilder build = new MeshBuilder();
         readonly MeshBuilder under = new MeshBuilder();
         MeshFilter strips;
@@ -93,17 +102,19 @@ namespace Bastion.UI.Combat
 
         void Awake()
         {
-            strips = Layer("Alcance (franjas)", 3100, false, false);
-            frames = Layer("Alcance (te verían)", 3101, false, false);
-            eyes = Layer("Alcance (ojos)", 3101, false, false);
+            zone = new GameObject("Zona").transform;
+            zone.SetParent(transform, false);
+            strips = Layer("Alcance (franjas)", 3100, false, false, zone);
+            frames = Layer("Alcance (te verían)", 3101, false, false, zone);
+            eyes = Layer("Alcance (ojos)", 3101, false, false, zone);
             eyes.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = EyeTexture();
-            rangeShade = Layer("Alcance (sombra)", 3103, true, true);
-            edges = Layer("Alcance (bordes)", 3104, true, false);
-            wayShade = Layer("Camino (sombra)", 3103, true, true);
-            way = Layer("Camino", 3105, true, false);
+            rangeShade = Layer("Alcance (sombra)", 3103, false, true, zone, Pull);
+            edges = Layer("Alcance (bordes)", 3104, false, false, zone, Pull);
+            wayShade = Layer("Camino (sombra)", 3103, false, true, zone, Pull);
+            way = Layer("Camino", 3105, false, false, zone, Pull);
 
             // The pointer's ring (TileLook.ring: 0.33–0.41 of a tile), tinted by its material.
-            hover = Layer("Puntero", 3102, false, false);
+            hover = Layer("Puntero", 3102, false, false, zone);
             build.Clear();
             build.Arc(Vector3.zero, 0.33f * T, 0.41f * T, 0, Mathf.PI * 2, 36, Hex(0xffffff, 0xe6));
             hover.sharedMesh = build.Build(null);
@@ -129,7 +140,7 @@ namespace Bastion.UI.Combat
             partner.gameObject.SetActive(false);
 
             // The partner's pointer (overlays.ts partnerHover: 0.22–0.3 of a tile), in their colour.
-            var theirs = Layer("Puntero del compañero", 3102, false, false);
+            var theirs = Layer("Puntero del compañero", 3102, false, false, zone);
             build.Clear();
             build.Arc(Vector3.zero, 0.22f * T, 0.3f * T, 0, Mathf.PI * 2, 32, Hex(0xffffff, 0xcc));
             theirs.sharedMesh = build.Build(null);
@@ -151,7 +162,7 @@ namespace Bastion.UI.Combat
             var quad = build.Build(null);
             for (var i = 0; i < 4; i++)
             {
-                var s = Layer("Cobertura " + i, 3110, true, false);
+                var s = Layer("Cobertura " + i, 3110, true, false, zone);
                 s.sharedMesh = quad;
                 shields[i] = s.transform;
                 shieldMaterials[i] = s.GetComponent<MeshRenderer>().sharedMaterial;
@@ -159,12 +170,21 @@ namespace Bastion.UI.Combat
             }
         }
 
-        MeshFilter Layer(string name, int queue, bool overAll, bool shade)
+        MeshFilter Layer(string name, int queue, bool overAll, bool shade, Transform parent = null, float pull = 0)
         {
             var go = new GameObject(name);
-            go.transform.SetParent(transform, false);
-            go.AddComponent<MeshRenderer>().sharedMaterial = MeshBuilder.Material(queue, overAll, shade);
+            go.transform.SetParent(parent != null ? parent : transform, false);
+            go.AddComponent<MeshRenderer>().sharedMaterial = MeshBuilder.Material(queue, overAll, shade, pull);
             return go.AddComponent<MeshFilter>();
+        }
+
+        /// <summary>
+        /// Over a shoulder (the aim's, an attack's): as a cutscene, none of a move's marks, this player's or the partner's
+        /// (Ana, Arturo 31/10 #3); back as it ends. The rings under the units stay.
+        /// </summary>
+        public void Cinematic(bool on)
+        {
+            if (zone != null && zone.gameObject.activeSelf == on) zone.gameObject.SetActive(!on);
         }
 
         void Update()

@@ -4,7 +4,8 @@ using UnityEngine.InputSystem;
 namespace Bastion.UI.Combat
 {
     /// <summary>
-    /// The tactical camera (camera.ts of the 0.10.1, UI's): a fixed pitch of 52°, the yaw in quarter turns (Q/E), WASD or
+    /// The tactical camera (camera.ts of the 0.10.1, UI's): a fixed pitch of 45° (the 0.10.1's 52°, a little less steep:
+    /// Ana, Arturo 31/10 #12), the yaw in quarter turns (Q/E), WASD or
     /// the arrows to move, the wheel to come closer, the right button held to drag. Sent somewhere (Focus), it goes on a
     /// critically damped spring; the player's own moves are followed at once. Whatever the player does raises `Epoch`,
     /// and what was taking the camera somewhere lets go of it: the camera never fights the player.
@@ -15,9 +16,13 @@ namespace Bastion.UI.Combat
     [RequireComponent(typeof(Camera))]
     public sealed class CameraRig : MonoBehaviour
     {
-        const float Pitch = 52f;
+        const float Pitch = 45f;
         const float MinDistance = 9f * 1.5f;
-        const float MaxDistance = 42f * 1.5f;
+        /// <summary>
+        /// The farthest: 33.5 tiles at 45°, which looks as far beyond the point looked at as the 0.10.1's 42 did at 52°
+        /// (about 27 tiles), so neither the sky nor the map's edge comes in round the middle of a map.
+        /// </summary>
+        const float MaxDistance = 33.5f * 1.5f;
         const float Spring = 5.5f;
         /// <summary>Into the shot over the shoulder, out of it, and from one to the next (s).</summary>
         const float CloseIn = 0.8f;
@@ -29,7 +34,7 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// For measuring only (Arte's ShadowFit, BASTION_MEDIR): BASTION_CAMARA=&lt;tiles&gt; holds the camera at that distance
-        /// (42, the farthest), with no zoom of the player's or of an action's nor the shot over the shoulder; where it
+        /// (33.5, the farthest), with no zoom of the player's or of an action's nor the shot over the shoulder; where it
         /// looks goes on moving as always. Unset, nothing changes.
         /// </summary>
         static readonly float? HeldAt = float.TryParse(System.Environment.GetEnvironmentVariable("BASTION_CAMARA"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var tiles)
@@ -68,6 +73,9 @@ namespace Bastion.UI.Combat
 
         /// <summary>Whether a move sent (Focus) has got there.</summary>
         public bool Settled => !springing;
+
+        /// <summary>Whether a move sent has got there and so has the distance asked for (FrameZoom, CinematicZoom).</summary>
+        public bool Arrived => !springing && Mathf.Abs(distance - desiredDistance) < 0.5f;
 
         /// <summary>The quarter turn it faces: 0–3 (camera.ts quadrant), for what is drawn by it.</summary>
         public int Quadrant => ((Mathf.RoundToInt((desiredYaw - 45f) / 90f) % 4) + 4) % 4;
@@ -200,6 +208,34 @@ namespace Bastion.UI.Combat
             desiredDistance = Mathf.Clamp(Mathf.Min(metres, savedDistance.Value), MinDistance, MaxDistance);
         }
 
+        /// <summary>
+        /// Back far enough for all of `points` to be in view round `centre` (the dead walking all at once: Ana, Arturo 31/10
+        /// #4), within the share of the screen `room` leaves clear of the HUD; never nearer than the player had it, never
+        /// past the farthest. RestoreZoom goes back.
+        /// </summary>
+        public void FrameZoom(Vector3 centre, System.Collections.Generic.IList<Vector3> points, float room = 0.72f)
+        {
+            if (savedDistance == null) savedDistance = desiredDistance;
+            // The camera's axes at the turn it is going to and the rig's pitch (Place).
+            var rad = desiredYaw * Mathf.Deg2Rad;
+            var pitch = Pitch * Mathf.Deg2Rad;
+            var forward = -new Vector3(Mathf.Sin(rad) * Mathf.Cos(pitch), Mathf.Sin(pitch), -Mathf.Cos(rad) * Mathf.Cos(pitch));
+            var right = Vector3.Cross(Vector3.up, forward).normalized;
+            var up = Vector3.Cross(forward, right);
+            var tanV = Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * room;
+            var tanH = tanV * cam.aspect;
+            // Each point inside the frame from `need` metres back: its sideways and upwards offsets within the view's slope
+            // at its depth.
+            var need = 0f;
+            foreach (var p in points)
+            {
+                var r = p - centre;
+                var depth = Vector3.Dot(r, forward);
+                need = Mathf.Max(need, Mathf.Abs(Vector3.Dot(r, right)) / tanH - depth, Mathf.Abs(Vector3.Dot(r, up)) / tanV - depth);
+            }
+            desiredDistance = Mathf.Clamp(Mathf.Max(savedDistance.Value, need), MinDistance, MaxDistance);
+        }
+
         public void RestoreZoom()
         {
             if (savedDistance == null) return;
@@ -231,6 +267,9 @@ namespace Bastion.UI.Combat
 
         /// <summary>Whether it is in the shot over a shoulder, or on its way into it.</summary>
         public bool CloseUp => closeOn;
+
+        /// <summary>Whether it is out of its own view at all: in the shot over a shoulder, on its way into it or back.</summary>
+        public bool Away => closeOn || closeness > 0;
 
         (Vector3 pos, Vector3 look) ShownClose()
         {

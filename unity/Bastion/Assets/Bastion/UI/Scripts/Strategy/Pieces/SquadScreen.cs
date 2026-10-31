@@ -39,6 +39,9 @@ namespace Bastion.UI.Strategy
 
         public LineupCards Cards => cards;
 
+        /// <summary>A soldier's bust by id (Arte's Portraits.Soldier), on each row as on the combat's list; null, a dark square.</summary>
+        public Func<string, Texture> PortraitOf;
+
         public void Show(bool on)
         {
             shown = on;
@@ -112,7 +115,7 @@ namespace Bastion.UI.Strategy
             Draw();
         }
 
-        /// <summary>A squad list: its head (and a help under it), and its rows (hexagon, name, rank, a chip).</summary>
+        /// <summary>A squad list: its head (and a help under it), and its rows (bust, hexagon, name, rank, a chip).</summary>
         void List(string head, string tip, List<PickRowView> rows, VisualElement parent, string help = null)
         {
             var h = Ui.El("strat-head", parent);
@@ -128,6 +131,11 @@ namespace Bastion.UI.Strategy
                 row.EnableInClassList("squad-row--picked", r.Picked);
                 row.SetEnabled(r.Enabled);
                 row.style.borderLeftColor = Ui.Hex(r.Accent, new Color(0.95f, 0.65f, 0.2f));
+                // Every row its bust, picked or not (Ana, Arturo 31/10 #11).
+                var bust = Ui.El("squad-row__bust", row);
+                var portrait = PortraitOf?.Invoke(id);
+                if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
+                else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
                 var hex = new SkillHex();
                 hex.Set(r.Skills, tips);
                 row.Add(hex);

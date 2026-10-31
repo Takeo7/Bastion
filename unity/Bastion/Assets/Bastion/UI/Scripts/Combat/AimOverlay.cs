@@ -236,6 +236,12 @@ namespace Bastion.UI.Combat
             plans.sharedMesh = build.Build(plans.sharedMesh);
         }
 
+        /// <summary>Over a shoulder, the moves planned go with the rest of a move's marks (MoveOverlay.Cinematic); back as it ends.</summary>
+        public void Cinematic(bool on)
+        {
+            if (plans != null && plans.gameObject.activeSelf == on) plans.gameObject.SetActive(!on);
+        }
+
         void Update()
         {
             var now = Time.time;

@@ -1,0 +1,238 @@
+--- unity/Bastion/Assets/Bastion/Client/Net/NetLink.cs
++++ unity/Bastion/Assets/Bastion/Client/Net/NetLink.cs (con el relé)
+@@ -26,6 +26,10 @@
+     /// one to its missions, played by MissionBot, and back instead (CampaignRun). BASTION_MEDIR=&lt;case&gt;: a case played
+     /// alone while the telemetry measures it (Measure).
+     ///
++    /// Through the relay (docs/UNIRSE-CON-CODIGO.md): hosting, a code the partner joins with from anywhere
++    /// (Code, CodeChanged), nothing opened on the router; joining, a code instead of an address (Join, JoinCode).
++    /// BASTION_RELE=&lt;host:port&gt; points the test apps at a relay of their own (no TLS), which they don't use otherwise.
++    ///
+     /// Of its own: the seat's token at each host (back after a drop, the same seat), `away` when the window loses or gets
+     /// the focus, and what Net's ServerFeed does: a gap in the events (a `seq` missed) answered with a `sync`, and what
+     /// comes while nobody listens kept for the first who does.
+@@ -44,6 +48,13 @@
+ 
+         private const string NameProblem = "Escribe tu nombre: de 1 a 20 letras.";
+ 
++        private const string CodeProblem = "Escribe el código que sale en el menú de quien aloja la partida: 8 letras y números, como KXRT-4MWP.";
++
++        private const string NoRelay = "Esta app no tiene servidor para unirse con código: escribe la dirección.";
++
++        /// <summary>The game's relay, with its certificate's key: none yet (Arturo chooses where, 31/10).</summary>
++        private static readonly RelayAddress? TheRelay = null;
++
+         private static NetLink? instance;
+ 
+         /// <summary>The app's, made the first time it is asked for if no scene has one; it lives across scenes.</summary>
+@@ -77,6 +88,14 @@
+         private Room? room;
+         private volatile RoomHost? host;
+         private IDisposable? announce;
++        /// <summary>Hosting, the link to the relay that gives the game its code; none without a relay.</summary>
++        private RelayHost? relayLink;
++        /// <summary>The relay's news (its Changed, on a network thread), for Update to tell.</summary>
++        private volatile bool relayNews;
++        /// <summary>Joining by a code: the relay's last no (RelayRefusal), "" when it didn't answer, null when it let in.</summary>
++        private volatile string? refusedBy;
++        /// <summary>The session goes by a code, not an address.</summary>
++        private bool byCode;
+         private IDisposable? listen;
+         private ClientSession? session;
+         /// <summary>Where the session connects, address:port.</summary>
+@@ -136,6 +155,9 @@
+         /// <summary>This seat was opened in another window: this one gives it up.</summary>
+         public event Action? Replaced;
+ 
++        /// <summary>Hosting: the game's code, or how the relay is (CodeState), changed. Said in Update.</summary>
++        public event Action? CodeChanged;
++
+         /// <summary>The games heard on the network changed (StartLooking).</summary>
+         public event Action<IReadOnlyList<LanGame>>? LanGamesChanged;
+ 
+@@ -169,6 +191,15 @@
+         /// <summary>The other seat's name (the last `room`): for a player, whoever hosts (Lore.HostClosedLine, when they close it).</summary>
+         public string? PartnerName => LastRoom?.Players.FirstOrDefault((p) => p.Slot != Slot)?.Name;
+ 
++        /// <summary>
++        /// Hosting, the code a partner joins with from anywhere, as shown and typed («KXRT-4MWP»): a new one each time the
++        /// game is opened, good while it is. Null while the relay hasn't given one, or without a relay.
++        /// </summary>
++        public string? Code => relayLink?.Code is string c ? RelayWire.Show(c) : null;
++
++        /// <summary>Hosting with a relay, how it is (asking, ready, unreachable, the app too old); null without one.</summary>
++        public RelayState? CodeState => relayLink?.State;
++
+         /// <summary>The games heard on the network, last told by LanGamesChanged.</summary>
+         public IReadOnlyList<LanGame> LanGames { get; private set; } = new LanGame[0];
+ 
+@@ -269,22 +300,58 @@
+                 }
+                 log.Write($"anfitrión arrancado: tcp {host.Port} · {(LocalOnly ? "solo 127.0.0.1 (prueba)" : string.Join(", ", HostAddresses.List().Select((a) => a.Address)))} · versión {Version}");
+                 if (!LocalOnly) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
++                var relay = RelayTo();
++                if (relay != null)
++                {
++                    relayLink = new RelayHost(relay, log.Write);
++                    relayLink.Changed += () => relayNews = true;
++                    host.Relay(relayLink);
++                }
+             }
+-            return Open("127.0.0.1", host.Port, name, false);
++            return Open($"127.0.0.1:{host.Port}", name, false, (cancel) => Dial("127.0.0.1", host.Port, cancel));
+         }
+ 
+-        /// <summary>Joins the game at `address` (as typed, or a LanGame's) as `name`. The problem, said for the player, or null.</summary>
++        /// <summary>
++        /// Joins the game at `address` (as typed, or a LanGame's), or with its code, as `name`. The problem, said for the
++        /// player, or null.
++        /// </summary>
+         public string? Join(string address, string name)
+         {
++            // A code: 8 letters and digits, no dot or colon, which an address has unless it is a bare computer name.
++            if (address.IndexOfAny(new[] { '.', ':' }) < 0 && RelayWire.Normalize(address) != null) return JoinCode(address, name);
+             name = name.Trim();
+             if (name.Length < 1 || name.Length > 20) return NameProblem;
+             if (!GameAddress.TryParse(address, out var h, out var p)) return $"Escribe la dirección que aparece en el menú principal de quien aloja la partida; por ejemplo, 192.168.1.20:{RoomHost.FirstPort}.";
+-            return Open(h, p, name, true);
++            return Open($"{h}:{p}", name, false, (cancel) => Dial(h, p, cancel));
+         }
+ 
+-        private string? Open(string address, int port, string name, bool remember)
++        /// <summary>Joins with the code its host's menu shows, through the relay, as `name`. The problem, said for the player, or null.</summary>
++        public string? JoinCode(string code, string name)
+         {
+-            var key = $"{address}:{port}";
++            name = name.Trim();
++            if (name.Length < 1 || name.Length > 20) return NameProblem;
++            var bare = RelayWire.Normalize(code);
++            if (bare == null) return CodeProblem;
++            var relay = RelayTo();
++            if (relay == null) return NoRelay;
++            return Open(RelayWire.Show(bare), name, true, (cancel) => DialCode(relay, bare, cancel));
++        }
++
++        /// <summary>
++        /// The relay (docs/UNIRSE-CON-CODIGO.md): BASTION_RELE=host:port in the tests (no TLS), «no» for none;
++        /// otherwise the game's own, but never for a test app (LocalOnly), which goes nowhere but 127.0.0.1.
++        /// </summary>
++        private RelayAddress? RelayTo()
++        {
++            var set = Environment.GetEnvironmentVariable("BASTION_RELE");
++            if (set == "no") return null;
++            if (!string.IsNullOrEmpty(set)) return RelayAddress.Parse(set);
++            return LocalOnly ? null : TheRelay;
++        }
++
++        private string? Open(string key, string name, bool code, Func<CancellationToken, Task<IConnection>> dial)
++        {
++            var remember = key != $"127.0.0.1:{host?.Port}";
+             settings.Name = name;
+             if (remember) settings.Last = key;
+             settings.Save();
+@@ -299,8 +366,10 @@
+             target = key;
+             joining = true;
+             refused = false;
++            byCode = code;
++            refusedBy = null;
+             feed.Reset();
+-            var s = new ClientSession((cancel) => Dial(address, port, cancel), settings.TokensFor(key), Version);
++            var s = new ClientSession(dial, settings.TokensFor(key), Version);
+             session = s;
+             s.Message += (msg) => { if (s == session) Heard(msg); };
+             s.Unreadable += (why) => { if (s == session) Report($"[red] mensaje del anfitrión que no se entiende: {why}"); };
+@@ -334,6 +403,48 @@
+             return await TcpConnection.ConnectAsync(address, port, ConnectTimeoutMs, cancel).ConfigureAwait(false);
+         }
+ 
++        /// <summary>Through the relay with `code`: its no kept (refusedBy), for the text if joining fails, or to know the game closed.</summary>
++        private async Task<IConnection> DialCode(RelayAddress relay, string code, CancellationToken cancel)
++        {
++            try
++            {
++                var c = await RelayDial.JoinAsync(relay, code, cancel).ConfigureAwait(false);
++                refusedBy = null;
++                return c;
++            }
++            catch (RelayRefusedException e)
++            {
++                refusedBy = e.Reason;
++                throw;
++            }
++            catch (Exception)
++            {
++                refusedBy = "";
++                throw;
++            }
++        }
++
++        /// <summary>Why joining by a code failed, said for the player (the relay's no, RelayRefusal).</summary>
++        private string CodeFailure(string code, string? why)
++        {
++            switch (why)
++            {
++                case RelayRefusal.Unknown:
++                    return $"No hay ninguna partida abierta con el código {code}. El código cambia cada vez que se abre la partida.";
++                case RelayRefusal.Away:
++                case RelayRefusal.Timeout:
++                    return "Quien aloja la partida no contesta ahora. Espera un momento y vuelve a intentarlo.";
++                case RelayRefusal.Limit:
++                    return "Demasiados intentos con códigos que no valen. Espera media hora y vuelve a intentarlo.";
++                case RelayRefusal.Full:
++                    return "El servidor de Bastión está lleno ahora mismo. Vuelve a intentarlo dentro de un rato.";
++                case RelayRefusal.Version:
++                    return "El servidor de Bastión pide una versión más nueva del juego.";
++                default:
++                    return "El servidor de Bastión no responde. Por la red local o por Tailscale se puede jugar igual.";
++            }
++        }
++
+         private void OnStatus(NetStatus status)
+         {
+             Status?.Invoke(status);
+@@ -343,6 +454,12 @@
+             var where = target;
+             Drop();
+             if (!nobody) return;
++            if (byCode)
++            {
++                log.Write($"[red] código {where}: no entra ({(refusedBy is string r && r.Length > 0 ? r : "el servidor no responde")})");
++                Failed?.Invoke(CodeFailure(where, refusedBy));
++                return;
++            }
+             log.Write($"[red] {where}: no responde nadie");
+             Failed?.Invoke($"No responde nadie en {where}. ¿Tiene abierta la partida («Alojar la partida») y estáis en la misma red o en Tailscale?");
+         }
+@@ -412,9 +529,12 @@
+             if (host != null) log.Write("anfitrión cerrado: se avisa a los jugadores");
+             announce?.Dispose();
+             announce = null;
++            // Its relay link too, and the code with it.
+             host?.Stop();
+             host = null;
+             room = null;
++            if (relayLink != null) relayNews = true;
++            relayLink = null;
+         }
+ 
+         // ------------------------------------------------------------- the game
+@@ -470,6 +590,18 @@
+             }
+             while (errors.TryDequeue(out var line))
+                 if (errorsThisMinute++ < ErrorsPerMinute) Report(line);
++            if (relayNews)
++            {
++                relayNews = false;
++                CodeChanged?.Invoke();
++            }
++            // In by a code and the relay knows it no more: the host closed it (its `closing` lost in a drop) or it ran out.
++            if (session != null && byCode && !joining && refusedBy == RelayRefusal.Unknown)
++            {
++                log.Write($"[red] código {target}: la partida ya no está abierta");
++                Drop();
++                HostClosed?.Invoke();
++            }
+             session?.Pump();
+             campaignRun?.Tick(this, Time.realtimeSinceStartup);
+             measure?.Tick(this, Time.realtimeSinceStartup);

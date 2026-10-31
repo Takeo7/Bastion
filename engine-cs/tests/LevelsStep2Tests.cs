@@ -335,7 +335,10 @@ namespace Bastion.Engine.Tests
                     Assert.Equal(LineClearPhase5(s, a, b, ha), Los.LineClear(s, a, b, ha));
                     Assert.Equal(LineClearPhase5(s, a, b), Los.LineClear(s, a, b));
                 }
-                Assert.Equal(VisibilityPhase5(s, Teams.Xcom), Los.TeamVisibility(s, Teams.Xcom));
+                // The squad's, but for what is inside the buildings it has not found (Ana, 31/10: Buildings).
+                var squad = VisibilityPhase5(s, Teams.Xcom);
+                Buildings.Veil(s, squad);
+                Assert.Equal(squad, Los.TeamVisibility(s, Teams.Xcom));
                 Assert.Equal(VisibilityPhase5(s, Teams.Alien), Los.TeamVisibility(s, Teams.Alien));
             }
         }

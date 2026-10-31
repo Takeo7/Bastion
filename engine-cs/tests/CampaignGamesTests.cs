@@ -27,7 +27,7 @@ namespace Bastion.Engine.Tests
         private static JToken J(object? value) => value == null ? JValue.CreateNull() : JToken.Parse(CampaignJsonTests.Write(value));
 
         /// <summary>A recorded change (record-campaign.ts campaignDelta) made to `expected`.</summary>
-        private static void ApplyDelta(JObject expected, JObject delta)
+        internal static void ApplyDelta(JObject expected, JObject delta)
         {
             foreach (var p in delta.Properties())
             {
@@ -47,7 +47,7 @@ namespace Bastion.Engine.Tests
             }
         }
 
-        private static string? Differs(JToken typescript, JToken csharp)
+        internal static string? Differs(JToken typescript, JToken csharp)
         {
             return CampaignJsonTests.FirstDifference(CampaignJsonTests.Clean(typescript), CampaignJsonTests.Clean(csharp));
         }

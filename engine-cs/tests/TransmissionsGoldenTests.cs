@@ -38,10 +38,10 @@ namespace Bastion.Engine.Tests
             return JsonSerializer.Create(settings);
         }
 
-        private static JObject Read(params string[] path) => JObject.Parse(File.ReadAllText(Path.Combine(new[] { Golden }.Concat(path).ToArray())));
+        internal static JObject Read(params string[] path) => JObject.Parse(File.ReadAllText(Path.Combine(new[] { Golden }.Concat(path).ToArray())));
 
         /// <summary>A case's campaign: its base, with each `[path, value]` of the patch set (or, with a third `true`, added to the list).</summary>
-        private static CampaignState Campaign(JObject recorded, JObject sample, JToken k)
+        internal static CampaignState Campaign(JObject recorded, JObject sample, JToken k)
         {
             var name = (string)k["base"]!;
             var state = (name == "muestra" ? sample["campaign"]! : ((JArray)recorded["states"]!).First((s) => (string)s["name"]! == name)["campaign"]!).DeepClone();

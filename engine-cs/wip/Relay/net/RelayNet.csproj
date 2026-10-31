@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- «Unirse con código», aparcado el 31/10 (docs/UNIRSE-CON-CODIGO.md): net/Bastion.Net.csproj with the relay's files,
+       and Connection.cs, RoomHost.cs and Room.cs taken from here instead of package/Runtime/Net (their copies of ef195ce
+       with the relay's changes). No other csproj compiles wip/Relay (Bastion.Engine.csproj leaves it out). -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Bastion.Net</RootNamespace>
+    <AssemblyName>Bastion.Net</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Mine Include="*.cs" />
+    <Compile Include="../../../package/Runtime/Net/**/*.cs" Exclude="@(Mine->'../../../package/Runtime/Net/%(Filename)%(Extension)')" />
+    <Compile Include="@(Mine)" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../Bastion.Engine.csproj" />
+  </ItemGroup>
+</Project>

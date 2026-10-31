@@ -93,7 +93,9 @@ namespace Bastion.UI.Hud
 
         /// <summary>
         /// A state by name, as its button does (for captures in batchmode): turno, disparo, aviso, llamada, resultado,
-        /// registro, flotante, asedio, hombro; and «llegada» (the arrival card, closed if open), «cerrar» (everything off).
+        /// registro, flotante, asedio, hombro; and «llegada» (the arrival card, closed if open), «cerrar» (everything off);
+        /// «contacto» (the partner's notice with «Ver (F)»), «menu» (Vigilancia's menu open on the bar), «objetivo» (a click
+        /// on the objective's card).
         /// </summary>
         public void Step(string what)
         {
@@ -117,6 +119,16 @@ namespace Bastion.UI.Hud
                 case "asedio": siege = !siege; break;
                 case "hombro": close = !close; break;
                 case "llegada": hud.CloseIntro(); break;
+                case "contacto": hud.Notice("Arturo: ¡contacto!", "#e0a030", () => { }); break;
+                case "menu": hud.ToggleAbilityMenu("menu:watch"); break;
+                case "objetivo":
+                    var card = GetComponent<UIDocument>().rootVisualElement.Q("goal");
+                    using (var click = ClickEvent.GetPooled())
+                    {
+                        click.target = card;
+                        card.SendEvent(click);
+                    }
+                    break;
                 case "cerrar":
                     shotState = 0;
                     call = false;

@@ -109,11 +109,12 @@ namespace Bastion.UI.Hud
             Slant.Dress(ok);
         }
 
-        /// <summary>The arrival card up again, from the objective's card (Ana, 20/10 #32).</summary>
-        public void ReopenIntro()
+        /// <summary>The arrival card up again, from the objective's card (Ana, 20/10 #32): `now`, else the one shown last.</summary>
+        public void ReopenIntro(IntroView now = null)
         {
-            if (intro != null || introView == null) return;
-            ShowIntro(introView);
+            var v = now ?? introView;
+            if (intro != null || v == null) return;
+            ShowIntro(v);
             sound?.Invoke("paper");
         }
 

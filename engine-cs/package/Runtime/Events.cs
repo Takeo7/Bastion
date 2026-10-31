@@ -186,6 +186,8 @@ namespace Bastion.Engine
                     if (last != null) u.Facing = Los.FacingTo(before, last) ?? u.Facing;
                     if (last != null) u.Pos = CopyPos(last);
                     u.Ap = Math.Max(0, u.Ap - ev.Ap);
+                    // What the squad finds on the way: the buildings it walks into, and where it stops, those it looks into.
+                    if (Los.IsViewer(u, Teams.Xcom)) for (var k = 0; k < ev.Path.Count; k++) Buildings.Discover(s, ev.Path[k], k == ev.Path.Count - 1);
                     EndSuppression(s, u);
                     // Running, with both actions, teaches Forma física (docs/FASE10.md §3).
                     if (ev.Ap >= 2) Deed(s, u.Id, DeedIds.Run);
@@ -501,6 +503,7 @@ namespace Bastion.Engine
                 {
                     var u = UnitOf(s, ev.Unit);
                     u.Pos = CopyPos(ev.To);
+                    if (Los.IsViewer(u, Teams.Xcom)) Buildings.Discover(s, u.Pos, true);
                     u.Overwatch = false;
                     u.Hunkered = false;
                     break;
@@ -1063,6 +1066,7 @@ namespace Bastion.Engine
                 Snow = s.Snow,
                 Searched = CopyInts(s.Searched),
                 RoomsSearched = CopyInts(s.RoomsSearched),
+                Discovered = CopyInts(s.Discovered),
                 Dropped = CopyList(s.Dropped, (d) => new DroppedLoot { Id = d.Id, Pos = CopyPos(d.Pos), Loot = CloneLoot(d.Loot), From = d.From }),
                 DroppedCount = s.DroppedCount,
                 Breakables = s.Breakables != null ? new Dictionary<int, int>(s.Breakables) : null,
