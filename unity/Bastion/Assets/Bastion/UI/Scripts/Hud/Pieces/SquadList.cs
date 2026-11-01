@@ -97,7 +97,7 @@ namespace Bastion.UI.Hud
             var portrait = c.Bust ? PortraitOf?.Invoke(c.Id) : null;
             if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
             else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
-            var narrow = width < Narrow;
+            var narrow = width - (c.Selected ? PickedMore : 0) < Narrow;
             card.EnableInClassList("squad-card--narrow", narrow);
             tree.Q<Label>("name").text = narrow && !string.IsNullOrEmpty(c.Short) ? c.Short : c.Name;
             Ui.Pips(tree.Q("hp"), c.Hp, c.MaxHp);
