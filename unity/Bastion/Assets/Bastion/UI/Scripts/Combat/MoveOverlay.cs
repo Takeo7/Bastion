@@ -41,15 +41,13 @@ namespace Bastion.UI.Combat
         /// <summary>The eye on a tile where the squad would be noticed: a soft red (Arturo, 31/10 #14; it was 0xf0503c with a frame).</summary>
         static readonly Color32 SoftSight = Hex(0xe58a80);
 
-        /// <summary>The pointer's ring on any tile (overlays.ts setHover: white), and planning without the command.</summary>
-        public static readonly Color32 PlainRing = Hex(0xffffff);
+        /// <summary>The pointer's ring planning without the command (on a reachable tile only: Ana, Arturo 01/11 #1).</summary>
         public static readonly Color32 PlanRing = PlanTint;
         /// <summary>The pointer's ring on a tile one action away, on one for the dash (TileLook.ringColors).</summary>
         public static readonly Color32 WalkRing = WalkPath;
         public static readonly Color32 DashRing = DashPath;
-        /// <summary>The pointer's ring on a tile where the squad would be noticed, and on an enemy.</summary>
+        /// <summary>The pointer's ring on a tile where the squad would be noticed.</summary>
         public static readonly Color32 NoticedRing = Hex(0xff4a4a);
-        public static readonly Color32 EnemyRing = Hex(0xff5a5a);
         /// <summary>The lit ring of a soldier pointed at from the list (#11), as its flag's arrow (Flags.uss .uflag__pointer).</summary>
         static readonly Color32 PointedRing = Hex(0xffe27a);
 
@@ -446,7 +444,7 @@ namespace Bastion.UI.Combat
             wayShade.sharedMesh = under.Build(wayShade.sharedMesh);
         }
 
-        /// <summary>The pointer's ring on `tile` in `color` (PlainRing, PlanRing, WalkRing, DashRing, NoticedRing, EnemyRing); null: none.</summary>
+        /// <summary>The pointer's ring on `tile` in `color` (PlanRing, WalkRing, DashRing, NoticedRing); null: none.</summary>
         public void ShowHover(GameState s, Pos tile, Color32 color)
         {
             hover.gameObject.SetActive(s != null && tile != null);

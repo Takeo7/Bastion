@@ -151,7 +151,10 @@ namespace Bastion.UI.Combat
             var from = Unit()?.Pos;
             var here = from != null ? Board.TileToWorld(v, from) : Vector3.zero;
             foreach (var mark in view.Marks)
-                mark.Label = from != null ? $"{mark.Name} · {Mathf.RoundToInt(Vector2.Distance(new Vector2(here.x, here.z), new Vector2(mark.World.x, mark.World.z)) / Board.Tile)} casillas" : mark.Name;
+            {
+                var far = Mathf.RoundToInt(Vector2.Distance(new Vector2(here.x, here.z), new Vector2(mark.World.x, mark.World.z)) / Board.Tile);
+                mark.Label = from != null ? $"{mark.Name} · {far} {(far == 1 ? "casilla" : "casillas")}" : mark.Name;
+            }
             Hud.SetEdgeMarks(view);
         }
 
@@ -313,7 +316,7 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// Over the enemies' flags, what the pointer's tile means (game.ts enemyTags): on an enemy, the odds of a shot at it;
-        /// on a tile the picked one can move to, whom it would see or flank from there and the odds if it could still shoot;
+        /// on a tile the picked one can move to, whom it would see from there and the odds if it could still shoot;
         /// with a throw armed, what it takes off each one caught (blastTags).
         /// </summary>
         Dictionary<string, (string kind, string text)> EnemyTags()
@@ -329,7 +332,7 @@ namespace Bastion.UI.Combat
             {
                 if (occupant.Team != Teams.Alien || !Visible(occupant)) return tags;
                 var shot = Aim.PreviewShot(State, u, occupant, new ShotOptions { Ability = AbilityIds.Shoot });
-                tags[occupant.Id] = shot != null ? (Flanks(occupant, shot) ? "flank" : "aim", $"{shot.Hit} % · crít. {Math.Min(shot.Crit, shot.Hit)} %") : ("none", "Sin línea de tiro");
+                tags[occupant.Id] = shot != null ? ("aim", $"{shot.Hit} % · crít. {Math.Min(shot.Crit, shot.Hit)} %") : ("none", "Sin línea de tiro");
                 return tags;
             }
             var dest = tiles?.FirstOrDefault(t => Same(t.Pos, tile));
@@ -341,16 +344,11 @@ namespace Bastion.UI.Combat
                 var shot = Aim.PreviewShot(State, u, a, new ShotOptions { Ability = AbilityIds.Shoot, From = tile });
                 if (shot == null) continue;
                 var chance = canShoot ? $"{shot.Hit} %" : "";
-                tags[a.Id] = Flanks(a, shot) ? ("flank", chance != "" ? $"Flanco · {chance}" : "Flanco") : ("sight", chance != "" ? chance : "A la vista");
+                // No «Flanco» over anyone (Ana, Arturo 01/11 #2; over the dead it went on 31/10 #13): the shot's panel says it.
+                tags[a.Id] = ("sight", chance != "" ? chance : "A la vista");
             }
             return tags;
         }
-
-        /// <summary>
-        /// Whether a shot is said to flank its target: never one of the dead (Arturo, 31/10 #13: only the words; the crit
-        /// of catching it in the open still counts, «Al descubierto» on the shot's panel); the living, as the engine says.
-        /// </summary>
-        static bool Flanks(Unit target, ShotPreview shot) => shot.Flanked && !Content.Templates[target.Template].Undead;
 
         /// <summary>A crit modifier's words for `target`: the engine's «Flanqueo» on one of the dead is being in the open (#13).</summary>
         static string CritLabel(Unit target, string label) => label == "Flanqueo" && Content.Templates[target.Template].Undead ? "Al descubierto" : label;

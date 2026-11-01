@@ -531,6 +531,9 @@ namespace Bastion.EditorTools
                 state.Tiles[console[1] * state.Width + console[0]] = "console";
             Bastion.Client.NightLights.StateForLab = state;
             Lighting(day);
+            // BASTION_ATLAS=1: each building's walls in one of its pack's twelve atlases, by the building (Ana's #3, 1/11: the
+            // houses all of one colour), to weigh it.
+            WallsView.MaterialOf = Environment.GetEnvironmentVariable("BASTION_ATLAS") == "1" ? AtlasVariants() : null;
             var view = Map(state, name);
             var root = view.transform;
             // BASTION_FIGURAS=1: the game's units drawn on it too, standing (to weigh their light against 0.10.1's figures);
@@ -740,6 +743,36 @@ namespace Bastion.EditorTools
                 camera.orthographicSize = state.Height * MapSpace.Tile / 2;
                 camera.transform.SetPositionAndRotation(target + Vector3.up * 200, Quaternion.Euler(90, 0, 0));
             }
+        }
+
+        /// <summary>
+        /// A building's own atlas of its pack (Town's, City's, Apocalypse's, Office's: 01_A to 04_C, siding, roofs, brick
+        /// and trims in other colours) for the 01_A its pieces are drawn in, picked by the building; a copy of the
+        /// material each.
+        /// </summary>
+        static Func<Material, int, Material> AtlasVariants()
+        {
+            var packs = new Dictionary<string, string>
+            {
+                ["PolygonTown_01_A"] = "Assets/Synty/PolygonTown/Textures/Alts/PolygonTown_{0}.png",
+                ["PolygonCity_01_A"] = "Assets/Synty/PolygonCity/Textures/PolygonCity_{0}.png",
+                ["PolygonApocalypse_01_A"] = "Assets/Synty/PolygonApocalypse/Textures/Alt/PolygonApocalypse_{0}.png",
+                ["PolygonOffice_01_A"] = "Assets/Synty/PolygonOffice/Textures/PolygonOffice_{0}.png",
+            };
+            string[] codes = { "01_A", "01_B", "01_C", "02_A", "02_B", "02_C", "03_A", "03_B", "03_C", "04_A", "04_B", "04_C" };
+            var made = new Dictionary<(Material, int), Material>();
+            return (m, b) =>
+            {
+                if (m == null || !packs.TryGetValue(m.name, out var path)) return m;
+                int k = (int)(((uint)(b + 1) * 2654435761u >> 16) % (uint)codes.Length);
+                if (made.TryGetValue((m, k), out var copy)) return copy;
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(string.Format(path, codes[k]));
+                if (texture == null) return made[(m, k)] = m;
+                copy = new Material(m) { name = $"{m.name} ({codes[k]})" };
+                copy.SetTexture("_BaseMap", texture);
+                Debug.Log($"[map] atlas {codes[k]} for {m.name}");
+                return made[(m, k)] = copy;
+            };
         }
 
         /// <summary>A Synty material by its name, the first time it is asked for.</summary>

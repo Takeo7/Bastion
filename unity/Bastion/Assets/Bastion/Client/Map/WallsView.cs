@@ -92,6 +92,12 @@ namespace Bastion.Client.Map
             }
         }
 
+        /// <summary>
+        /// For a lab (MapLab's BASTION_ATLAS, Ana's #3 of 1/11): the material building `b`'s pieces are drawn in instead of
+        /// their own, `m` (null, or none given: their own).
+        /// </summary>
+        public static Func<Material, int, Material> MaterialOf;
+
         GameObject Build((int level, int cx, int cz) key, List<WallPiece> list, List<WallPane> glass, List<WallProp> props)
         {
             var holder = new GameObject($"Muros {key.cx},{key.cz}");
@@ -130,8 +136,9 @@ namespace Bastion.Client.Map
                     for (int k = 0; k < part.mesh.subMeshCount; k++)
                     {
                         if (part.materials[k] == null) continue;
-                        first ??= part.materials[k];
-                        BatchOf(part.materials[k]).Add(part.mesh, k, world, outer, inner, cut, more);
+                        var material = MaterialOf?.Invoke(part.materials[k], piece.building) ?? part.materials[k];
+                        first ??= material;
+                        BatchOf(material).Add(part.mesh, k, world, outer, inner, cut, more);
                     }
                 }
                 // Its cap (buildWalls CAP_QUAD): a lid over its footprint at its top, which the cutaway lowers with the wall.

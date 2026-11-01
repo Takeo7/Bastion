@@ -194,6 +194,10 @@ namespace Bastion.UI.Combat
 
         void Update()
         {
+            // The pause (Time.timeScale 0: CombatController.Halt): the camera waits where it is with the battle, whatever it
+            // was doing (over a shoulder, after La Lata, framing the enemy's turn), and goes on from there (Ana, Arturo 01/11
+            // #4); the menu has the keys meanwhile.
+            if (Time.timeScale == 0) return;
             var dt = Time.unscaledDeltaTime;
             // From above, the player's keys and pointer are the map's (the controller's): it only finishes its move.
             if (Overhead)

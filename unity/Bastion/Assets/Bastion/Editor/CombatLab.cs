@@ -569,6 +569,106 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// Eating the fallen (Ana, 1/11, #6 and #7): on a plain floor, one of the dead at (12, 10) bites the soldier at (11, 10)
+        /// dead and eats it (UnitViews.Die and Feed, as UI's event player does), the others of the dead as BASTION_JUNTO
+        /// lists them (x,y;…: (11,9);(12,11);(13,12) unless said) joining in (CanJoinFeed, JoinFeed) or reaching for it
+        /// (ReachFor) within two tiles; then the battle going on (one of them walking off, a Sync every 0.7 s, as each event
+        /// brings one) for BASTION_SEGUNDOS (6), and up (StandUpFed); BASTION_LEVANTA=1, the body getting up as one of the
+        /// dead instead (a Chillón's, Reanimate) while they eat. It logs how far each eater is from the body's chest and
+        /// whether the body is drawn. The camera low from the south (BASTION_VIEW: norte, game).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Devorar -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 120 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Devorar()
+        {
+            var first = MapLab.Golden("city-7");
+            string soldierId = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
+            var deadIds = first.Units.Where(u => u.Alive && u.Template == "zombie").Select(u => u.Id).ToList();
+            var others = (Environment.GetEnvironmentVariable("BASTION_JUNTO") ?? "11,9;12,11;13,12").Split(';', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Split(',').Select(int.Parse).ToArray()).ToList();
+            var keep = new System.Collections.Generic.HashSet<string>(deadIds.Take(1 + others.Count + 2)) { soldierId };
+            Plain(u => keep.Contains(u.Id), 10, 13);
+            soldier = Put(state.Units.First(u => u.Id == soldierId), 11, 10, 0);
+            var dead = state.Units.Where(u => u.Team != "xcom").ToList();
+            target = Put(dead[0], 12, 10, -Math.PI / 2);
+            for (int k = 0; k < others.Count && k + 1 < dead.Count; k++) Put(dead[k + 1], others[k][0], others[k][1], -Math.PI / 2);
+            // (One more, off at (15, 12), that walks by later: an event of the battle going on.)
+            var walker = dead.Count > others.Count + 1 ? Put(dead[others.Count + 1], 15, 12, Math.PI) : null;
+            // (And one kept off the floor for the body to get up as, BASTION_LEVANTA=1.)
+            var risen = dead.Count > others.Count + 2 ? dead[others.Count + 2] : null;
+            bool rises = Environment.GetEnvironmentVariable("BASTION_LEVANTA") == "1" && risen != null;
+            if (risen != null) state.Units.Remove(risen);
+            float seconds = float.TryParse(Environment.GetEnvironmentVariable("BASTION_SEGUNDOS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sec) ? sec : 6;
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(1);
+                    Debug.Log($"[devorar] {Time.time:0.00} s: bites");
+                    await units.Lunge(target.Id, soldier.Id, true, () => _ = units.HitReact(soldier.Id, 1));
+                    soldier.Alive = false;
+                    soldier.Hp = 0;
+                    var fall = units.Die(soldier.Id);
+                    var eat = units.Feed(target.Id, soldier.Id);
+                    var joined = new System.Collections.Generic.List<Awaitable>();
+                    foreach (var u in dead.Skip(1).Take(others.Count))
+                    {
+                        if (units.CanJoinFeed(u.Id, soldier.Id)) joined.Add(units.JoinFeed(u.Id, soldier.Id));
+                        else if (Math.Max(Math.Abs(u.Pos.X - soldier.Pos.X), Math.Abs(u.Pos.Y - soldier.Pos.Y)) <= 2) joined.Add(units.ReachFor(u.Id, soldier.Id));
+                    }
+                    await fall;
+                    await eat;
+                    foreach (var j in joined) await j;
+                    Debug.Log($"[devorar] {Time.time:0.00} s: eating; {Eaters()}");
+                    units.Sync(state);
+                    for (float t = 0; t < seconds; t += 0.7f)
+                    {
+                        if (walker != null && t >= 1.4f && t < 2.1f)
+                        {
+                            var from = walker.Pos;
+                            var path = new[] { new Pos { X = 15, Y = 13 }, new Pos { X = 16, Y = 13 } };
+                            walker.Pos = path[path.Length - 1];
+                            _ = units.MoveAlong(walker.Id, path, 1);
+                        }
+                        await Awaitable.WaitForSecondsAsync(0.7f);
+                        units.Sync(state);
+                        Debug.Log($"[devorar] {Time.time:0.00} s: synced; {Eaters()}");
+                    }
+                    if (rises)
+                    {
+                        risen.Pos = new Pos { X = soldier.Pos.X, Y = soldier.Pos.Y };
+                        state.Units.Add(risen);
+                        soldier.Reanimated = true;
+                        Debug.Log($"[devorar] {Time.time:0.00} s: the body gets up as {risen.Id}");
+                        await units.Reanimate(soldier.Id, risen.Id);
+                        units.Sync(state);
+                        await Awaitable.WaitForSecondsAsync(1.5f);
+                        units.Sync(state);
+                        Debug.Log($"[devorar] {Time.time:0.00} s: risen; {Eaters()}");
+                    }
+                    await units.StandUpFed();
+                    Debug.Log($"[devorar] {Time.time:0.00} s: up; {Eaters()}");
+                    await Awaitable.WaitForSecondsAsync(1);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[combat] " + e);
+                }
+            };
+            string Eaters()
+            {
+                var chest = units.Chest(soldier.Id);
+                var flat = new Vector3(chest.x, 0, chest.z);
+                var body = units.transform.Find(soldier.Id);
+                int drawn = body == null ? -1 : body.GetComponentsInChildren<Renderer>().Count(r => r.enabled && r.gameObject.activeInHierarchy);
+                var near = string.Join(", ", dead.Take(1 + others.Count).Select(u => $"{u.Id} {Vector3.Distance(new Vector3(units.Feet(u.Id).x, 0, units.Feet(u.Id).z), flat) / MapSpace.Tile:0.00}"));
+                return $"body {(body != null && body.gameObject.activeInHierarchy ? "shown" : "gone")} ({drawn} drawn); from its chest (tiles): {near}";
+            }
+        }
+
+        /// <summary>
         /// Coming into sight (Gameplay 26/10, A4: unitViews.ts FADE_IN, syntyFigures.ts fadeIn and veil): one of the dead
         /// out of the soldier's sight at (26, 22), hidden, put four tiles off it at (14, 10) and faded in as Sync shows it;
         /// 1.5 s on veiled (the shot over a shoulder) and back. On a plain floor, the camera low (BASTION_VIEW: norte, game).

@@ -87,8 +87,21 @@ namespace Bastion.UI.Combat
         /// <summary>The shot over a shoulder on now, and who is in it (the attacker, the target): the buildings' cutaway leaves its room whole.</summary>
         public (string attacker, string target)? CloseFocus => control.Rig != null && control.Rig.CloseUp ? (lastAttacker, killCam) : ((string, string)?)null;
 
-        /// <summary>The shot on now is a dead's blow, not a kill: its next blow on the same one keeps it.</summary>
+        /// <summary>The shot on now is a dead's blow, not a kill: the next blow on the same one, whoever's, keeps it.</summary>
         bool biting;
+
+        /// <summary>A blow of an enemy's at hand (a bite, a claw, a slash): what keeps the shot over a shoulder on its target.</summary>
+        bool DeadsBlow(ShotEvent e) => Unit(e.Unit) is Unit by && by.Team != Teams.Xcom && Content.AttackWeapon(by, e.Ability).Melee;
+
+        /// <summary>
+        /// Whether `e` is (or starts: the `abilityUsed` a blow comes after) another blow at hand on the one the shot over a
+        /// shoulder is on (#5).
+        /// </summary>
+        bool BlowOnKillCam(GameEvent e)
+        {
+            if (e is AbilityUsedEvent used) e = queue.Select(q => q.e).FirstOrDefault(NewAction) is ShotEvent next && next.Unit == used.Unit ? next : null;
+            return e is ShotEvent blow && blow.Target == killCam && DeadsBlow(blow);
+        }
 
         void StartKillCam(string id, (Vector3 pos, Vector3 look) shot, bool bite = false)
         {
@@ -275,8 +288,9 @@ namespace Bastion.UI.Combat
                 {
                     Pace();
                     var item = queue.Dequeue();
-                    // (A dead's next blow on the same soldier stays over its shoulder: no out and in between two.)
-                    if (killCam != null && NewAction(item.e) && !(biting && item.e is ShotEvent again && again.Unit == lastAttacker && again.Target == killCam)) EndKillCam();
+                    // (The next blow of any of the dead on the same soldier stays over a shoulder, from one to the next: one way in at
+                    // the first and one out after the last; Ana, Arturo 01/11 #5.)
+                    if (killCam != null && NewAction(item.e) && !(biting && BlowOnKillCam(item.e))) EndKillCam();
                     // The enemy's turn's walks, all at once (Choreograph).
                     if (item.e is WalksEvent walks)
                     {
@@ -881,6 +895,24 @@ namespace Bastion.UI.Combat
             }
         }
 
+        /// <summary>
+        /// The others of the dead round one of ours that one of them has started to eat (Ana, Arturo 01/11 #6; only on the
+        /// screen, the rules move nobody): nearest first, those beside the body with room by it kneel and eat too (Arte's
+        /// CanJoinFeed and JoinFeed, which keeps each one's place); those two tiles or less off who can't, reach for it from
+        /// where they stand (ReachFor). Those the squad doesn't see, nothing. Each until it has been seen.
+        /// </summary>
+        List<Awaitable> Crowd(Unit body, Unit killer)
+        {
+            var units = Units;
+            var joined = new List<Awaitable>();
+            if (units == null) return joined;
+            var near = V.Units.Where(z => z.Alive && z.Team == Teams.Alien && z.Id != killer.Id && Content.Templates[z.Template].Undead && z.Pos.Z == body.Pos.Z && ShownToSquad(z))
+                .Select(z => (z, far: Math.Max(Math.Abs(z.Pos.X - body.Pos.X), Math.Abs(z.Pos.Y - body.Pos.Y)))).Where(n => n.far <= 2).OrderBy(n => n.far);
+            foreach (var (z, _) in near)
+                joined.Add(units.CanJoinFeed(z.Id, body.Id) ? units.JoinFeed(z.Id, body.Id, stop) : units.ReachFor(z.Id, body.Id, stop));
+            return joined;
+        }
+
         /// <summary>Whether the next event is another soldier boarding La Lata (then it waits for them).</summary>
         bool NextBoards() => queue.Count > 0 && queue.Peek().e is EvacuatedEvent;
 
@@ -1345,12 +1377,14 @@ namespace Bastion.UI.Combat
                     // One of ours killed by one of the dead at hand: it goes down with the body and eats (#21).
                     var fall = units.Die(u.Id, stop);
                     var eat = killer != null && units.CanFeed(killer.Id, u.Id) ? units.Feed(killer.Id, u.Id, null, stop) : null;
+                    var crowd = eat != null ? Crowd(u, killer) : new List<Awaitable>();
                     await fall;
                     // One of ours seen falling close: the camera comes down to the body on the ground, and whoever is over it.
                     if (u.Team == Teams.Xcom && killCam == u.Id && Cam() && DeathShot(u, killer, true) is (Vector3, Vector3) low) rig.CloseShot(low.Item1, low.Item2);
                     if (eat != null)
                     {
                         await eat;
+                        foreach (var joined in crowd) await joined;
                         killHold = FeedHold;
                     }
                     if (killer != null && !ShownToSquad(killer)) units.Shade(killer.Id, false);

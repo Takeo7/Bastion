@@ -26,7 +26,8 @@ namespace Bastion.UI.Combat
         /// </summary>
         void PauseTick()
         {
-            var mine = Hud != null && Hud.MenuOpen && State.Outcome == null;
+            // Till the end has been seen, not only decided: La Lata leaving after the last order pauses too (Ana, Arturo 01/11 #4).
+            var mine = Hud != null && Hud.MenuOpen && (Shown ?? State).Outcome == null;
             if (mine != pauseSent)
             {
                 pauseSent = mine;

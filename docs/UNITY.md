@@ -145,7 +145,7 @@ UI ya hizo la marca de las cajas de botín, el anillo de los enemigos, apartar f
   - Con ellos, para todas las unidades: el destello rojo al recibir un golpe y al morir, y la muerte y el golpe según de dónde viene (antes iban al azar).
   - Los detalles, cerrados el 29/10: la nube del Hinchado, con los verdes de la 0.10.1; la mano en la cadera en Soldados ya era como allí (lo distinto era el vaivén de la pantalla).
 - **Rendimiento medido** en el PC de la 3090 («alto» ≤ 4,2 ms) y en el Mac («medio» ≥ 30 fps), con red.log.
-- **Releases de la app de Unity.** La primera es la 0.11.0 (29/10), con las notas de Lore ([NOTAS-UNITY.md](NOTAS-UNITY.md)). La 0.11.1 (31/10, commit 8a3400e) lleva las notas de Ana del 31/10 ([NOTAS-0.11.1.md](NOTAS-0.11.1.md)). Falta retirar packages/ (Three.js, Electron). Lo que decidió Arturo el 29/10:
+- **Releases de la app de Unity.** La primera es la 0.11.0 (29/10), con las notas de Lore ([NOTAS-UNITY.md](NOTAS-UNITY.md)). La 0.11.1 (31/10, commit 8a3400e) lleva las notas de Ana del 31/10 ([NOTAS-0.11.1.md](NOTAS-0.11.1.md)). La 0.11.2 (1/11, commit eca8150), las de Arturo sobre la 0.11.1 ([NOTAS-0.11.2.md](NOTAS-0.11.2.md)). Falta retirar packages/ (Three.js, Electron). Lo que decidió Arturo el 29/10:
   - **El número** sigue a la 0.10.1 (`bundleVersion`; la app decía «0.1.0»).
   - **En el Mac sigue siendo `Bastion.app`:** al copiarla a Aplicaciones sustituye a la de Electron. Las partidas no se pisan, porque Unity guarda en `Bastion-Unity/`.
   - **Sin comprimir** y **solo Mac (universal) y Windows**, sin Linux.

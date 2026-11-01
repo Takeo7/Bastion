@@ -161,6 +161,17 @@ namespace Bastion.Client.Units
             public bool boarded;
             /// <summary>A shot's kick to play (Recoil) as its step begins.</summary>
             public bool recoil;
+            /// <summary>
+            /// Eating (Feed, JoinFeed): whom, at which place round the body (EatPlace), on which side, and whether it is down
+            /// there (from then on it keeps to that place as the body settles).
+            /// </summary>
+            public string feedOn;
+            public int feedPlace = -1;
+            public float feedSide = 1;
+            public bool feedDown;
+            /// <summary>Reaching for a body it can't get to (ReachFor): whom, and how far the arms are out (0 to 1).</summary>
+            public string reachFor;
+            public float reachShare;
             /// <summary>How much of it is drawn (1 all; UnitViews.Fade), how much is to be, and how fast it goes there.</summary>
             public float fade = 1, fadeGoal = 1, fadeRate;
             /// <summary>It has been through Sync once: what comes into sight after that fades in.</summary>
@@ -204,6 +215,8 @@ namespace Bastion.Client.Units
         GameState state;
         string highlighted;
         readonly List<string> fed = new List<string>();
+        /// <summary>Seconds stepped (the arms' sway as they reach).</summary>
+        float clock;
 
         void Awake() => Current = this;
 
@@ -251,6 +264,7 @@ namespace Bastion.Client.Units
 
         void Step(float dt)
         {
+            clock += dt;
             var cutaway = Map.Cutaway.Current;
             foreach (var v in views.Values)
             {
@@ -303,6 +317,9 @@ namespace Bastion.Client.Units
                 ClimbPose(v);
                 Reach(v);
                 if (v.deadKind) DeadPose(v);
+                KeepToBody(v, dt);
+                v.reachShare = Mathf.MoveTowards(v.reachShare, v.reachFor != null && !v.dead ? 1 : 0, dt / ReachBlend);
+                if (v.reachShare > 0 && v.reachFor != null && views.TryGetValue(v.reachFor, out var reached)) ReachPose(v, BodyChest(reached), v.reachShare, clock);
             }
             StepFlashes(dt);
             StepRims();
@@ -433,6 +450,7 @@ namespace Bastion.Client.Units
                 if (u.Evacuated) continue;
                 seen.Add(u.Id);
                 if (!views.TryGetValue(u.Id, out var v)) views[u.Id] = v = Make(u);
+                var was = v.place;
                 v.place = new Pos { X = u.Pos.X, Y = u.Pos.Y, Z = u.Pos.Z };
                 // A weapon from the backpack taken in hand (the engine's weaponEquipped): Equip.
                 if (u.Alive && !v.deadKind && v.anim != null && ArmsKey(u) != v.armsKey)
@@ -443,9 +461,14 @@ namespace Bastion.Client.Units
                 if (!u.Alive && !v.dead) Lie(v);
                 if (u.Alive && v.dead) Stand(v);
                 Pose(v, u);
-                v.root.position = MapSpace.StandAt(view, v.place);
+                // (Who eats a body or reaches for it stays where it is while its tile is the same: put back on the tile's
+                // middle at every event, it went on eating a tile off the body, Ana's #7 of 1/11.)
+                bool still = was != null && was.X == u.Pos.X && was.Y == u.Pos.Y && was.Z == u.Pos.Z;
+                if (!(still && (v.feeding || v.reachFor != null))) v.root.position = MapSpace.StandAt(view, v.place);
                 int node = Bastion.Engine.Grid.NodeOf(view, u.Pos);
-                bool shown = v.boarded ? v.fade > 0 : u.Team == "xcom" || forced.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
+                // (A body that has got up as one of the dead, Reanimate, is gone: the engine keeps it, Reanimated.)
+                bool shown = !u.Alive && u.Reanimated ? false
+                    : v.boarded ? v.fade > 0 : u.Team == "xcom" || forced.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
                 // An enemy coming into sight fades in (not on the first look at the map: what is there at the start just is).
                 if (shown && !v.root.gameObject.activeSelf && v.synced && u.Team != "xcom" && u.Alive) StartFade(v, FadeIn);
                 if (v.root.gameObject.activeSelf != shown) v.root.gameObject.SetActive(shown);
@@ -1012,7 +1035,8 @@ namespace Bastion.Client.Units
             CancellationToken ct)
         {
             if (!views.TryGetValue(id, out var v) || path.Count == 0 || state == null) return;
-            // One eating gets up first (unitViews.ts moveAlong: unfeed).
+            // One eating gets up first (unitViews.ts moveAlong: unfeed); one reaching lets its arms down as it goes.
+            v.reachFor = null;
             if (v.feeding) await GetUp(v, ct);
             var (one, two) = Gaits.Of(v.template);
             var gait = v.crouched ? Gaits.Crouched : ap >= 2 ? two : one;
@@ -1328,6 +1352,10 @@ namespace Bastion.Client.Units
         {
             if (!views.TryGetValue(id, out var v)) return;
             FlashDeath(v);
+            // (One eating or reaching that dies lets go of the body: it falls where it is.)
+            v.feeding = false;
+            v.feedOn = null;
+            v.reachFor = null;
             if (v.anim != null)
             {
                 v.dead = true;
@@ -1356,12 +1384,72 @@ namespace Bastion.Client.Units
 
         /// <summary>unitViews.ts FEED_WAIT, FEED_SIDE, FEED_SEEN: before it goes down; how far beside the body's chest it kneels (tiles); how long it is seen eating.</summary>
         const float FeedWait = 0.4f, FeedSide = 0.4f, FeedSeen = 0.8f;
+        /// <summary>
+        /// The places round a body (Ana's #6, 1/11): 0 by its chest on the killer's side, 1 by its chest on the other, 2 past
+        /// its head, 3 by its knees (on the side the one there came from); how far out from the body those who join kneel
+        /// (tiles: further than the killer, so three down eating don't pile up on the chest, UI 1/11), how far past the
+        /// head, and how far back from the hips the knees are.
+        /// </summary>
+        const int Places = 4;
+        const float JoinSide = 0.62f, PastHead = 0.8f, Knees = 0.7f;
+        /// <summary>How fast one eating keeps up with the body as it settles (tiles a second), and turns to it.</summary>
+        const float KeepUp = 0.8f;
+        /// <summary>
+        /// Reaching for a body (ReachFor): seconds for the arms to go out or come down; the trunk's lean in (degrees), and how
+        /// much of it comes and goes as it strains (twice a second or so), the feet where they are.
+        /// </summary>
+        const float ReachBlend = 0.35f, ReachLean = 34, ReachStrain = 0.25f;
+
+        /// <summary>
+        /// Where one eats `body` at place `k`, on `side` (±1, across the body: the side it came from), and what it faces
+        /// there; on the floor at `y`.
+        /// </summary>
+        (Vector3 at, Vector3 on) EatPlace(View body, int k, float side, float y)
+        {
+            var chest = BodyChest(body);
+            var hips = Bone(body.id, HumanBodyBones.Hips) ?? body.root.position;
+            var head = Bone(body.id, HumanBodyBones.Head) ?? chest;
+            var along = head - hips;
+            along.y = 0;
+            along = along.sqrMagnitude < 1e-4f ? body.root.forward : along.normalized;
+            var across = new Vector3(along.z, 0, -along.x) * side;
+            float t = MapSpace.Tile;
+            var knees = hips - along * Knees * t;
+            var (at, on) = k switch
+            {
+                1 => (chest - across * JoinSide * t, chest),
+                2 => (head + along * PastHead * t, head),
+                3 => (knees + across * JoinSide * t, knees),
+                _ => (chest + across * FeedSide * t, chest),
+            };
+            at.y = y;
+            return (at, on);
+        }
+
+        /// <summary>Which side of `body` (±1, across it) `from` is on.</summary>
+        float SideOf(View body, Vector3 from)
+        {
+            var hips = Bone(body.id, HumanBodyBones.Hips) ?? body.root.position;
+            var head = Bone(body.id, HumanBodyBones.Head) ?? BodyChest(body);
+            var along = head - hips;
+            var across = new Vector3(along.z, 0, -along.x);
+            return Vector3.Dot(across, from - BodyChest(body)) < 0 ? -1 : 1;
+        }
+
+        /// <summary>The places round `victim` free now, those taken by others eating it left out.</summary>
+        List<int> FreePlaces(string victim)
+        {
+            var free = Enumerable.Range(0, Places).ToList();
+            foreach (var other in views.Values)
+                if (other.feedOn == victim) free.Remove(other.feedPlace);
+            return free;
+        }
 
         /// <summary>
         /// The killer eats the fallen (0.10.1, 0.9.7: Mixamo's; its bite was its Lunge): a moment on, it goes down on its
         /// knees beside the body at its chest, across the way it lies, on the side nearer where it stood, coming after it as
-        /// it falls; and eats, round and round, until it gets up at its next action (StandUpFed, or as it walks). `onHit`
-        /// as it starts eating. Ends once it has been seen eating a little.
+        /// it falls; and eats, round and round, keeping to its place by the body (KeepToBody), until it gets up at its next
+        /// action (StandUpFed, or as it walks). `onHit` as it starts eating. Ends once it has been seen eating a little.
         /// </summary>
         public async Awaitable Feed(string killer, string victim, Action onHit = null, CancellationToken ct = default)
         {
@@ -1376,41 +1464,149 @@ namespace Bastion.Client.Units
             }
             if (!k.feeding && k.home == Vector3.zero) k.home = k.root.position;
             k.feeding = true;
+            k.feedOn = victim;
+            k.feedPlace = 0;
+            k.feedDown = false;
             await Awaitable.WaitForSecondsAsync(FeedWait, ct);
-            var start = k.root.position;
-            Vector3 Spot()
-            {
-                var chest = BodyChest(body);
-                var hips = Bone(victim, HumanBodyBones.Hips) ?? body.root.position;
-                var head = Bone(victim, HumanBodyBones.Head) ?? chest;
-                var across = new Vector3(head.z - hips.z, 0, hips.x - head.x);
-                if (across.sqrMagnitude < 1e-4f) across = k.home - chest;
-                across.y = 0;
-                across = across.sqrMagnitude < 1e-4f ? Vector3.forward : across.normalized;
-                if (Vector3.Dot(across, k.home - chest) < 0) across = -across;
-                var spot = chest + across * FeedSide * MapSpace.Tile;
-                spot.y = k.home.y;
-                return spot;
-            }
-            float down = 0.6f;
-            if (Anims.Feed("down") is var (downId, downFrom, downTo)) down = Mathf.Max(0.6f, k.anim.PlayWholePart(catalog.Clip(downId), downFrom, downTo, 0.2f, false));
-            for (float t = 0; t < down; t += Time.deltaTime)
-            {
-                k.root.position = Vector3.Lerp(start, Spot(), Mathf.SmoothStep(0, 1, Mathf.Min(1, t / down * 1.3f)));
-                Face(killer, BodyChest(body));
-                await Awaitable.NextFrameAsync(ct);
-            }
-            if (Anims.Feed("loop") is var (loopId, loopFrom, loopTo)) k.anim.PlayWholePart(catalog.Clip(loopId), loopFrom, loopTo, 0.25f, true);
+            await GoDown(k, body, ct);
             onHit?.Invoke();
             await Awaitable.WaitForSecondsAsync(FeedSeen, ct);
+        }
+
+        /// <summary>
+        /// Whether `id` can join in eating `victim` (Ana's #6, 1/11): one of the dead that eat, up and not eating, on a tile
+        /// beside the body's (the eight round it, on its storey), with a place left by the body.
+        /// </summary>
+        public bool CanJoinFeed(string id, string victim) =>
+            views.TryGetValue(id, out var v) && views.TryGetValue(victim, out var body) && Feeders.Contains(v.template) && !v.dead && !v.feeding
+            && v.place != null && body.place != null && v.place.Z == body.place.Z
+            && Mathf.Max(Mathf.Abs(v.place.X - body.place.X), Mathf.Abs(v.place.Y - body.place.Y)) <= 1 && FreePlaces(victim).Count > 0;
+
+        /// <summary>
+        /// One of the dead beside a body another has started eating joins in (Ana's #6: only on the screen, the rules
+        /// unchanged): the free place by the body nearest it is its own at once (so the next one called takes another), and
+        /// a beat on it goes down on its knees there and eats as the killer does. Ends once it has been seen eating a little.
+        /// </summary>
+        public async Awaitable JoinFeed(string id, string victim, CancellationToken ct = default)
+        {
+            if (!CanJoinFeed(id, victim)) return;
+            var v = views[id];
+            var body = views[victim];
+            v.reachFor = null;
+            if (v.home == Vector3.zero) v.home = v.root.position;
+            float side = SideOf(body, v.home);
+            var free = FreePlaces(victim);
+            v.feedPlace = free.OrderBy(k => Vector3.Distance(EatPlace(body, k, k == 3 ? side : FeedSideOf(victim), v.home.y).at, v.home)).First();
+            v.feedSide = v.feedPlace == 3 ? side : FeedSideOf(victim);
+            v.feedOn = victim;
+            v.feeding = true;
+            v.feedDown = false;
+            fed.Add(id);
+            if (v.anim == null || FigureCatalog.Load() == null)
+            {
+                Face(id, BodyChest(body));
+                await Awaitable.WaitForSecondsAsync(1.2f, ct);
+                return;
+            }
+            // (Each a little after the killer, not all at once: by its id.)
+            await Awaitable.WaitForSecondsAsync(FeedWait + 0.15f + PickIndex(4, id + "|join") * 0.1f, ct);
+            await GoDown(v, body, ct);
+            await Awaitable.WaitForSecondsAsync(FeedSeen, ct);
+        }
+
+        /// <summary>The side the killer of `victim` eats it from (place 0's), or 1.</summary>
+        float FeedSideOf(string victim)
+        {
+            foreach (var other in views.Values)
+                if (other.feedOn == victim && other.feedPlace == 0) return other.feedSide;
+            return 1;
+        }
+
+        /// <summary>One eating `body` down on its knees at its place, coming after the body as it falls; then eating round and round.</summary>
+        async Awaitable GoDown(View v, View body, CancellationToken ct)
+        {
+            var catalog = FigureCatalog.Load();
+            var start = v.root.position;
+            if (v.feedPlace == 0) v.feedSide = SideOf(body, v.home);
+            float down = 0.6f;
+            if (Anims.Feed("down") is var (downId, downFrom, downTo)) down = Mathf.Max(0.6f, v.anim.PlayWholePart(catalog.Clip(downId), downFrom, downTo, 0.2f, false));
+            for (float t = 0; t < down && v.feeding; t += Time.deltaTime)
+            {
+                var (at, on) = EatPlace(body, v.feedPlace, v.feedSide, v.home.y);
+                v.root.position = Vector3.Lerp(start, at, Mathf.SmoothStep(0, 1, Mathf.Min(1, t / down * 1.3f)));
+                Face(v.id, on);
+                await Awaitable.NextFrameAsync(ct);
+            }
+            if (!v.feeding) return;
+            v.feedDown = true;
+            if (Anims.Feed("loop") is var (loopId, loopFrom, loopTo)) v.anim.PlayWholePart(catalog.Clip(loopId), loopFrom, loopTo, 0.25f, true);
+        }
+
+        /// <summary>One down eating kept at its place by the body as the body settles (its fall, its tuck), turned to it.</summary>
+        void KeepToBody(View v, float dt)
+        {
+            if (!v.feeding || !v.feedDown || v.dead || v.feedOn == null || !views.TryGetValue(v.feedOn, out var body)) return;
+            var (at, on) = EatPlace(body, v.feedPlace, v.feedSide, v.home.y);
+            v.root.position = Vector3.MoveTowards(v.root.position, at, KeepUp * MapSpace.Tile * dt);
+            var d = on - v.root.position;
+            d.y = 0;
+            if (d.sqrMagnitude > 1e-4f) TurnTo(v, Quaternion.LookRotation(d).eulerAngles.y);
+        }
+
+        /// <summary>
+        /// One of the dead near a body others are eating, that can't get to it (Ana's #6: no place left, or not beside it):
+        /// where it stands, turned to it, its arms out towards it and leaning in, till its next action (StandUpFed, or as it
+        /// walks). Ends once it has been seen reaching a moment.
+        /// </summary>
+        public async Awaitable ReachFor(string id, string victim, CancellationToken ct = default)
+        {
+            if (!views.TryGetValue(id, out var v) || !views.TryGetValue(victim, out var body) || v.dead || v.feeding) return;
+            await Awaitable.WaitForSecondsAsync(PickIndex(4, id + "|reach") * 0.1f, ct);
+            v.reachFor = victim;
+            Face(id, BodyChest(body));
+            await Awaitable.WaitForSecondsAsync(FeedSeen, ct);
+        }
+
+        /// <summary>
+        /// Arms out towards `to` (a body on the ground), `share` of the way, over what the clips have them in: the trunk
+        /// leaning in by ReachLean, straining (by `time`); each upper arm and forearm turned to point at it, groping; the
+        /// head turned down to it.
+        /// </summary>
+        static void ReachPose(View v, Vector3 to, float share, float time)
+        {
+            var a = v.animator;
+            if (a == null || !a.isHuman) return;
+            var right = v.root.right;
+            float lean = ReachLean * (1 - ReachStrain + ReachStrain * Mathf.Sin(time * 4.4f + v.id.GetHashCode() % 7)) * share;
+            foreach (var bone in new[] { HumanBodyBones.Spine, HumanBodyBones.Chest })
+                if (a.GetBoneTransform(bone) is Transform b) b.rotation = Quaternion.AngleAxis(lean / 2, right) * b.rotation;
+            var arms = new[] { (HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand), (HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand) };
+            for (int k = 0; k < arms.Length; k++)
+            {
+                Transform upper = a.GetBoneTransform(arms[k].Item1), lower = a.GetBoneTransform(arms[k].Item2), hand = a.GetBoneTransform(arms[k].Item3);
+                if (upper == null || lower == null || hand == null) continue;
+                // (Aimed a little above the body and apart, each hand its own way, groping.)
+                var aim = to + Vector3.up * 0.15f + right * (k == 0 ? -0.2f : 0.2f) + new Vector3(Mathf.Sin(time * 2.1f + k * 1.9f), Mathf.Sin(time * 2.7f + k), Mathf.Cos(time * 1.7f + k * 2.3f)) * 0.12f;
+                var want = aim - upper.position;
+                upper.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(lower.position - upper.position, want), share) * upper.rotation;
+                lower.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(hand.position - lower.position, aim - lower.position), share) * lower.rotation;
+            }
+            // (The head down to it: from where it looks along the root to the body, half of it.)
+            if (a.GetBoneTransform(HumanBodyBones.Head) is Transform head)
+            {
+                var down = to - head.position;
+                var ahead = Vector3.ProjectOnPlane(down, Vector3.up);
+                if (ahead.sqrMagnitude > 1e-4f) head.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(ahead, down), share * 0.5f) * head.rotation;
+            }
         }
 
         /// <summary>A body's chest where it lies (its bones), or where it stands.</summary>
         Vector3 BodyChest(View v) => Bone(v.id, HumanBodyBones.Chest) ?? v.root.position;
 
-        /// <summary>Those eating get up (all at once: the dead's turn starts).</summary>
+        /// <summary>Those eating get up and those reaching let their arms down (all at once: the dead's turn starts).</summary>
         public async Awaitable StandUpFed(CancellationToken ct = default)
         {
+            foreach (var v in views.Values) v.reachFor = null;
             var up = fed.Where(views.ContainsKey).Select(id => views[id]).Where(v => v.feeding).ToList();
             fed.Clear();
             if (up.Count == 0) return;
@@ -1422,6 +1618,9 @@ namespace Bastion.Client.Units
         async Awaitable GetUp(View v, CancellationToken ct)
         {
             v.feeding = false;
+            v.feedOn = null;
+            v.feedPlace = -1;
+            v.feedDown = false;
             fed.Remove(v.id);
             var catalog = FigureCatalog.Load();
             float up = 0.35f;
@@ -1538,6 +1737,13 @@ namespace Bastion.Client.Units
             // (unitViews.ts reanimate: the body twitches where it lies, three times, 0.13 s, 0.16 and 0.19; as the body's
             // pose is its death's, its hit doesn't move it there: it lies still that long.) Then it goes.
             views.TryGetValue(corpse, out var body);
+            // (Those eating it get up off it, and those reaching for it let their arms down: Ana's #7, 1/11, the dead went on
+            // eating where the body had been.)
+            foreach (var other in views.Values.ToList())
+            {
+                if (other.reachFor == corpse) other.reachFor = null;
+                if (other.feeding && other.feedOn == corpse) _ = GetUp(other, ct);
+            }
             if (body != null) await Awaitable.WaitForSecondsAsync(0.13f + 0.16f + 0.19f, ct);
             if (body != null) body.root.gameObject.SetActive(false);
             var u = state?.Units.FirstOrDefault(x => x.Id == zombie);

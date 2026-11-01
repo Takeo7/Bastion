@@ -880,16 +880,16 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// What the pointer's tile shows (game.ts updateHover): moving, on an enemy the squad sees a red ring, and on a tile
-        /// the picked one can end its move on the way there, a ring in the band's colour (red where it would be noticed)
-        /// and the cover there; aiming, throwing or by hand, their own marks (Orders: ShowArmed).
+        /// What the pointer's tile shows (game.ts updateHover): moving, on a tile the picked one can end its move on, the
+        /// way there, a ring in the band's colour (red where it would be noticed) and the cover there; on no other tile a
+        /// ring (Ana, Arturo 01/11 #1); aiming, throwing or by hand, their own marks (Orders: ShowArmed).
         /// </summary>
         void ShowWay()
         {
             Overlay?.ShowPath(State, null, null);
             Overlay?.ShowCover(State, null);
-            // On any tile a white ring (overlays.ts setHover), blue planning; a move or an enemy colour it below, a throw has none.
-            Overlay?.ShowHover(State, mode == Mode.Tile ? null : hover, Planning ? MoveOverlay.PlanRing : MoveOverlay.PlainRing);
+            // The pointer's ring only on a tile the picked one can walk to (below; #1: it went on every tile, as the web's).
+            Overlay?.ShowHover(State, null, MoveOverlay.WalkRing);
             ShowVision();
             ShowArmed();
             // At night, a lit tile says what the light does there and how long it lasts (#50); over one of the dead, whom
@@ -929,16 +929,11 @@ namespace Bastion.UI.Combat
             var dest = u != null && hover != null ? tiles?.FirstOrDefault(t => Same(t.Pos, hover)) : null;
             var enemy = hover != null ? Grid.UnitAt(State, hover) : null;
             if (enemy != null && (enemy.Team != Teams.Alien || !Visible(enemy))) enemy = null;
-            if (enemy != null)
-            {
-                Overlay?.ShowHover(State, enemy.Pos, MoveOverlay.EnemyRing);
-                return;
-            }
-            if (u == null || dest == null) return;
+            if (enemy != null || u == null || dest == null) return;
             var path = Paths.BuildPath(State, u, reach, hover);
             Overlay?.ShowPath(State, u.Pos, path, dest.Dash, Planning);
             Overlay?.ShowCover(State, CoverMatters() ? hover : null);
-            Overlay?.ShowHover(State, hover, dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
+            Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
             // Running, a door or a window is heard (docs/FASE2.md): said under the destination; and at night, whether it ends in the light.
             Note(hover, path != null ? AbilityTexts.MoveNoise(State, path, dest.Dash) : null, LitNote(hover));
         }
