@@ -534,9 +534,20 @@ namespace Bastion.UI.Strategy
 
         /// <summary>
         /// BASTION_ESTRATEGIA_LUGARES=1 on the Mapa: the six places' drawings in a strip low on the screen (LineIcon
-        /// place:…; Arturo 31/10 #9), at the card's 16 px and at 48, each with its name, to see them all in one shot.
+        /// place:…; Arturo 31/10 #9), at the card's 16 px and at 48, each with its name, to see them all in one shot;
+        /// BASTION_ESTRATEGIA_TIEMPOS=1, the five weathers' (weather:…; Arturo, 01/11), with the first offer that has one open.
         /// </summary>
         void PlaceDrawings()
+        {
+            Drawings("place:", new[] { Bastion.Engine.Places.City, Bastion.Engine.Places.Town, Bastion.Engine.Places.Estate, Bastion.Engine.Places.Factory, Bastion.Engine.Places.Roadside, Bastion.Engine.Places.Country }.Select(id => (id, Bastion.Engine.Places.Names[id])));
+        }
+
+        void WeatherDrawings()
+        {
+            Drawings("weather:", Bastion.Engine.Weathers.All.Select(id => (id, HudText.Weather.Name(id))));
+        }
+
+        void Drawings(string prefix, System.Collections.Generic.IEnumerable<(string id, string name)> items)
         {
             var panel = GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement;
             var strip = new UnityEngine.UIElements.VisualElement();
@@ -546,7 +557,7 @@ namespace Bastion.UI.Strategy
             strip.style.flexDirection = UnityEngine.UIElements.FlexDirection.Row;
             strip.style.backgroundColor = new Color(0.08f, 0.09f, 0.1f, 0.95f);
             strip.style.paddingLeft = strip.style.paddingRight = strip.style.paddingTop = strip.style.paddingBottom = 12;
-            foreach (var id in new[] { Bastion.Engine.Places.City, Bastion.Engine.Places.Town, Bastion.Engine.Places.Estate, Bastion.Engine.Places.Factory, Bastion.Engine.Places.Roadside, Bastion.Engine.Places.Country })
+            foreach (var (id, label) in items)
             {
                 var cell = new UnityEngine.UIElements.VisualElement();
                 cell.style.alignItems = UnityEngine.UIElements.Align.Center;
@@ -557,10 +568,10 @@ namespace Bastion.UI.Strategy
                     box.style.width = box.style.height = size;
                     box.style.marginBottom = 6;
                     box.style.unityBackgroundImageTintColor = Color.white;
-                    box.Add(new LineIcon("place:" + id));
+                    box.Add(new LineIcon(prefix + id));
                     cell.Add(box);
                 }
-                var name = new UnityEngine.UIElements.Label(Bastion.Engine.Places.Names[id]);
+                var name = new UnityEngine.UIElements.Label(label);
                 name.style.color = Color.white;
                 cell.Add(name);
                 strip.Add(cell);
@@ -667,10 +678,13 @@ namespace Bastion.UI.Strategy
             {
                 // HudShots.EstrategiaBase's own camera for the valley when there is one (the clearing's goes off on the Mapa).
                 root.ValleyCamera = GameObject.Find("Cámara del valle")?.GetComponent<Camera>() ?? Camera.main;
-                var offer = which == "mapa-mision" ? p.State.Offers[0] : null;
+                // With the weathers' strip, the first offer flown in some weather, to see its row on the card.
+                var skies = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_TIEMPOS") == "1";
+                var offer = which == "mapa-mision" ? (skies ? p.State.Offers.Find(o => Bastion.Engine.Campaign.OfferWeather(p.State, o) != null) : null) ?? p.State.Offers[0] : null;
                 var zone = which == "mapa-zona" ? (p.State.Regions.Find(r => !r.Contacted) ?? p.State.Regions[0]).Id : offer?.Region;
                 root.SetMap(p.Map(new MapPick { Offer = offer?.Id, Region = zone }));
                 if (System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_LUGARES") == "1") PlaceDrawings();
+                if (System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_TIEMPOS") == "1") WeatherDrawings();
             }
             root.SetProposal(p.Proposal(), p.Waiting(screen));
             if (p.State.Proposal != null) root.ClockOf = () => (EngineLore.ProposalClock("0:24", p.State.Proposal.By == 1), 0.62f, false);

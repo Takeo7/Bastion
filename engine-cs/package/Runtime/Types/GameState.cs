@@ -28,6 +28,8 @@ namespace Bastion.Engine
         public List<MedicalSite>? Medical { get; set; }
         /// <summary>The houses, their rooms by use and how worn (playtest 2026-10-18, #15).</summary>
         public List<HomeSite>? Homes { get; set; }
+        /// <summary>The buildings with a pitched roof nobody stands on (houses and barns; Arte, 1/11). Missing on older saves.</summary>
+        public List<PitchedRoof>? Pitched { get; set; }
         /// <summary>The supermarkets (playtest 2026-10-20, #18): one on a town's map at most.</summary>
         public List<MarketSite>? Markets { get; set; }
         /// <summary>
@@ -95,6 +97,8 @@ namespace Bastion.Engine
         public int? Vehicle { get; set; }
         /// <summary>Under snow (playtest 16/10): still winter in the campaign. Missing, only the opening chapter is.</summary>
         public bool? Snow { get; set; }
+        /// <summary>Rain or snow falling (Weathers; Arturo, 1/11): what Content.Weather takes from sight and noise. Missing, clear.</summary>
+        public string? Weather { get; set; }
         /// <summary>Tiles already searched, by node (grid.ts nodeOf; on the ground, y * width + x); missing before searching existed.</summary>
         public List<int>? Searched { get; set; }
         /// <summary>Rooms the squad has searched, by id (loot.ts roomAt; docs/FASE8.md §B).</summary>
@@ -104,6 +108,10 @@ namespace Bastion.Engine
         /// just before a window. Inside the rest, it sees nobody. Missing until it finds one.
         /// </summary>
         public List<int>? Discovered { get; set; }
+        /// <summary>The cars left wrecked in the streets (Arturo, 1/11): how each came there, for the client. Missing, none.</summary>
+        public List<Wreck>? Wrecks { get; set; }
+        /// <summary>What burns, all the mission long (Arturo, 1/11): it lights at night and burns whoever steps on it. Missing, none.</summary>
+        public List<Fire>? Fires { get; set; }
         /// <summary>
         /// Things left on the floor (docs/FASE8.md §C): dropped, found with a full backpack, or what a fallen soldier
         /// carried (Arturo, 18/10 #49: «la mochila de ‹nombre›», Lore), `from` that soldier (its unit id).

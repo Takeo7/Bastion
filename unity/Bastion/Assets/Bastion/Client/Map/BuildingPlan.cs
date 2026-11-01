@@ -75,6 +75,8 @@ namespace Bastion.Client.Map
         public bool leveled;
         /// <summary>Its top storey is a roof one can walk on (a flat roof with stairs or a ladder up): drawn as a deck, open where the stairs come up.</summary>
         public bool walkableRoof;
+        /// <summary>Its roof is pitched, nobody stands on it, and whose it is (PitchedKinds: a house's, a barn's); null, flat (BuildingPlan.PitchedOf).</summary>
+        public string pitched;
         /// <summary>A siege's Sala de radio, the heart's building: its mast on the roof (roofProps). False: absent in 0.10.1.</summary>
         public bool radio;
         /// <summary>A block of the outline (docs/MAPAS.md §5.10, GameState.frame): shut, nobody goes in; its inside is plan.Shut. False: absent in 0.10.1.</summary>
@@ -179,6 +181,7 @@ namespace Bastion.Client.Map
             S = s;
             int w = s.Width, h = s.Height;
             int n = w * h;
+            if (s.Wrecks != null) foreach (var wreck in s.Wrecks) if (wreck.Kind == WreckKinds.Wall) wallWrecks.Add(wreck.Anchor);
             Owner = new short[n];
             Array.Fill(Owner, (short)-1);
             Inside = new byte[n];
@@ -402,6 +405,7 @@ namespace Bastion.Client.Map
             }
             FrameBlocks();
             if (s.Biome == Biomes.Wilds) FindRuins();
+            foreach (var b in Buildings) b.pitched = PitchedOf(s, b);
             for (int k = 0; k <= (s.Levels?.Count ?? 0); k++)
             {
                 IList<string> tiles = k != 0 ? s.Levels[k - 1].Tiles : s.Tiles;
@@ -409,6 +413,18 @@ namespace Bastion.Client.Map
                 for (int i = 0; i < was.Length; i++) was[i] = (byte)((IsWallLike(tiles[i]) ? WasWall : 0) | (k != 0 && tiles[i] != null ? WasSlab : 0));
                 before.Add(was);
             }
+        }
+
+        /// <summary>
+        /// Whether building b's roof is pitched, nobody standing on it, and whose (PitchedKinds; null: flat): as the engine
+        /// says (GameState.pitched: Mapgen/Upstairs.cs Pitched, a house's or a barn's, 1/11) where it does; in an older save,
+        /// a house or a barn as the plan reads them, its roof not walked on (all there was before).
+        /// </summary>
+        static string PitchedOf(GameState s, Building b)
+        {
+            if (b.kind == BuildingKinds.Ruin || b.walkableRoof) return null;
+            if (s.Pitched != null) return s.Pitched.FirstOrDefault((p) => b.x0 >= p.X && b.y0 >= p.Y && b.x1 < p.X + p.W && b.y1 < p.Y + p.H)?.Kind;
+            return b.kind == BuildingKinds.House ? PitchedKinds.House : b.kind == BuildingKinds.Barn ? PitchedKinds.Barn : null;
         }
 
         /// <summary>`elev[i] ?? 0`.</summary>
@@ -474,16 +490,25 @@ namespace Bastion.Client.Map
         public bool Breached(int i, int k)
         {
             if (TileIn(TilesAt(k), i) != TileKinds.Low) return false;
-            if ((BeforeAt(k, i) & WasWall) != 0) return true;
+            if ((BeforeAt(k, i) & WasWall) != 0 || (k == 0 && wallWrecks.Contains(i))) return true;
             var decor = k != 0 ? LevelAt(k)?.Decor : S.Decor;
             return Bastion.Engine.Decor.DecorOf(CodeAt(decor, i))?.Kind == DecorKinds.Breach;
         }
 
-        /// <summary>The ground's tile i is part of a building's walls: a wall, a door, a window, or one blown down (breached).</summary>
+        /// <summary>
+        /// The tiles of the walls a car was driven into (GameState.wrecks, «wall», 1/11): low cover with the car, drawn as a
+        /// wall broken down to a stump with the wall over it standing, as a breach.
+        /// </summary>
+        readonly HashSet<int> wallWrecks = new HashSet<int>();
+
+        /// <summary>Whether ground tile i is a wall a car was driven into (its breach broken down nearly to the floor).</summary>
+        public bool CarInWall(int i) => wallWrecks.Contains(i);
+
+        /// <summary>The ground's tile i is part of a building's walls: a wall, a door, a window, or one blown down (breached, or a car driven into it).</summary>
         bool WallIn(int i)
         {
             if (Out[i] != 0) return false;
-            return IsWallLike(S.Tiles[i]) || (S.Tiles[i] == TileKinds.Low && Bastion.Engine.Decor.DecorOf(CodeAt(S.Decor, i))?.Kind == DecorKinds.Breach);
+            return IsWallLike(S.Tiles[i]) || (S.Tiles[i] == TileKinds.Low && (wallWrecks.Contains(i) || Bastion.Engine.Decor.DecorOf(CodeAt(S.Decor, i))?.Kind == DecorKinds.Breach));
         }
 
         /// <summary>Storey k's (≥ 1) slab at tile i was there and is gone: blown through (docs/FASE7.md §5).</summary>

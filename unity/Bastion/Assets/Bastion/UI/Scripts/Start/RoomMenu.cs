@@ -11,7 +11,8 @@ namespace Bastion.UI.Start
 {
     /// <summary>
     /// The room menu, between joining and the mission or the base (lobby.ts; docs/UNITY-UI.md): the commanders and their
-    /// state, where the partner joins (the host's addresses, with «Copiar»); its main page, «Continuar campaña» (the
+    /// state, where the partner joins (the host's addresses, with «Copiar», and the router's: open, its address on the
+    /// internet; else how it goes); its main page, «Continuar campaña» (the
     /// saved one's outings, level and Marea, or the mission left half played), «Nueva campaña» (asked first over a saved
     /// one or without the partner) and «Escaramuza»; and the skirmish's sheet: the mission, the map (the city alone in
     /// the first milestone), day or night, and start (the `start` message). It reads NetLink.LastRoom and never listens to
@@ -36,6 +37,8 @@ namespace Bastion.UI.Start
         RoomMessage previewRoom;
         IReadOnlyList<HostAddress> previewAddresses;
         bool previewHosting;
+        RouterState? previewRouter;
+        string previewInternet;
 
         void OnEnable()
         {
@@ -71,12 +74,17 @@ namespace Bastion.UI.Start
             Draw();
         }
 
-        /// <summary>A room to show without a connection (HudShots.Room): its players, the host's addresses, hosting or not, the page.</summary>
-        public void Preview(RoomMessage room, IReadOnlyList<HostAddress> addresses, bool hosting, string page = "main")
+        /// <summary>
+        /// A room to show without a connection (HudShots.Room): its players, the host's addresses, hosting or not, the page;
+        /// the router's state and, open, its address on the internet.
+        /// </summary>
+        public void Preview(RoomMessage room, IReadOnlyList<HostAddress> addresses, bool hosting, string page = "main", RouterState? router = null, string internet = null)
         {
             previewRoom = room;
             previewAddresses = addresses;
             previewHosting = hosting;
+            previewRouter = router;
+            previewInternet = internet;
             this.page = page;
             key = null;
         }
@@ -84,6 +92,13 @@ namespace Bastion.UI.Start
         RoomMessage Room => previewRoom ?? link.LastRoom;
         IReadOnlyList<HostAddress> Addresses => previewAddresses ?? link.Addresses;
         bool Hosting => previewRoom != null ? previewHosting : link.Hosting;
+        /// <summary>Opening the game's port on the router, hosting (Red's RouterPort; Arturo, 01/11): null, not asked (a test app).</summary>
+        RouterState? Router => previewRoom != null ? previewRouter : link.Router;
+        /// <summary>
+        /// Where the partner joins from the internet, with the room's key (Arturo, 01/11: the protocol is public): «83.45.12.7:41391
+        /// · KXRT5», shown and copied whole, to paste as it is in «Unirse por dirección».
+        /// </summary>
+        string Internet => previewRoom != null ? previewInternet : link.Invite ?? link.Internet;
         int Slot => previewRoom != null ? 0 : link.Slot;
 
         void Update()
@@ -93,7 +108,7 @@ namespace Bastion.UI.Start
             // Drawn again only when who is in, their state, or the choices change.
             var k = room == null ? "" : string.Join("|", room.Players.Select(p => $"{p.Slot}:{p.Name}:{p.Connected}:{p.Away}"));
             var saved = room?.SavedCampaign;
-            k += $"#{Hosting}#{mission}#{night}#{warned}#{page}#{(saved != null ? RoomText.Saved(saved) : "")}#{room?.SetAside}";
+            k += $"#{Hosting}#{mission}#{night}#{warned}#{page}#{(saved != null ? RoomText.Saved(saved) : "")}#{room?.SetAside}#{Router}#{Internet}";
             if (k == key) return;
             key = k;
             Draw();
@@ -211,16 +226,24 @@ namespace Bastion.UI.Start
             if (previewRoom == null) link.Send(msg);
         }
 
-        /// <summary>How the partner joins (lobby.ts invite): the host's addresses, the default route's first, the rest folded.</summary>
+        /// <summary>
+        /// How the partner joins (lobby.ts invite): the host's addresses, the default route's first; then the router's (Arturo,
+        /// 01/11: over the internet without Tailscale), its address once the port is open, a line while it opens or why it
+        /// won't; the rest folded.
+        /// </summary>
         void DrawInvite(List<PlayerInfo> players)
         {
             var invite = root.Q("invite");
             invite.Clear();
             if (!Hosting || players.Count(p => p.Connected) >= 2) return;
-            var addresses = Addresses;
-            if (addresses == null || addresses.Count == 0) return;
+            var addresses = Addresses ?? new List<HostAddress>();
+            var router = Router;
+            var internet = router == RouterState.Open ? Internet : null;
+            if (addresses.Count == 0 && internet == null) return;
             Ui.Text(RoomText.Invite, "start__hint", invite);
-            Address(invite, addresses[0]);
+            if (addresses.Count > 0) Address(invite, addresses[0]);
+            if (internet != null) Address(invite, new HostAddress { Address = internet, Kind = "internet" });
+            else if (router != null && router != RouterState.Open) Ui.Text(RoomText.RouterLine(router.Value), router == RouterState.Trying ? "room__router" : "room__router room__router--off", invite);
             if (addresses.Count > 1)
             {
                 var more = new Foldout { text = RoomText.OtherAddresses(addresses.Count - 1), value = false };
@@ -231,7 +254,7 @@ namespace Bastion.UI.Start
 
         static void Address(VisualElement parent, HostAddress a)
         {
-            Ui.Text(a.Kind == "tailscale" ? RoomText.Tailscale : RoomText.Lan, "room__address-kind", parent);
+            Ui.Text(a.Kind == "tailscale" ? RoomText.Tailscale : a.Kind == "internet" ? RoomText.Internet : RoomText.Lan, "room__address-kind", parent);
             var row = Ui.El("room__address", parent);
             Ui.Text(a.Address, "room__address-text", row);
             Button copy = null;

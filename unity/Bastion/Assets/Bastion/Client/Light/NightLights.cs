@@ -49,6 +49,8 @@ namespace Bastion.Client
         readonly List<GameObject> glows = new List<GameObject>();
         Light[] pool;
         readonly Dictionary<string, (Vector3 at, Color colour, float radius, float level, bool flare, GameObject glow)> burning = new Dictionary<string, (Vector3, Color, float, float, bool, GameObject)>();
+        /// <summary>The map's fires among them (GameState.fires): their flames are FireView's, no ball of glow.</summary>
+        readonly HashSet<string> flamesOwn = new HashSet<string>();
         float time;
         Material glowMaterial, burnMaterial, haloMaterial;
         Texture2D haloTexture;
@@ -251,12 +253,16 @@ namespace Bastion.Client
             if (s?.Lights != null)
                 foreach (var l in s.Lights)
                 {
-                    if (l.Turns == null) continue;
+                    // A map's fire (GameState.fires, 1/11) burns the whole mission, its light without turns; its flames are
+                    // FireView's, so no glowing ball, and it is a fire whatever its radius (a Bengala's is 3 too).
+                    bool mapFire = s.Fires != null && s.Fires.Any(f => f.Id == l.Id);
+                    if (l.Turns == null && !mapFire) continue;
                     now.Add(l.Id);
                     if (burning.ContainsKey(l.Id)) continue;
-                    bool flare = l.Radius >= 3;
-                    var at = Map.MapSpace.TileToWorld(s, l.Tile) + Vector3.up * (flare ? 1.4f : 0.35f) * MapTile;
+                    bool flare = !mapFire && l.Radius >= 3;
+                    var at = Map.MapSpace.TileToWorld(s, l.Tile) + Vector3.up * (flare ? 1.4f : mapFire ? 0.7f : 0.35f) * MapTile;
                     burning[l.Id] = (at, flare ? Flare : Fire, (float)l.Radius, 0, flare, null);
+                    if (mapFire) flamesOwn.Add(l.Id);
                 }
             foreach (string id in burning.Keys.ToList())
             {
@@ -268,9 +274,12 @@ namespace Bastion.Client
                     burning.Remove(id);
                     continue;
                 }
-                // (Made again if the map made again took it with it.)
-                if (b.glow == null) b.glow = Burn(b.at, b.flare);
-                Level(b.glow, (b.flare ? Flare * 2.2f : Fire * 2.5f), b.level);
+                // (Made again if the map made again took it with it; none for a map's fire, whose flames are drawn.)
+                if (!flamesOwn.Contains(id))
+                {
+                    if (b.glow == null) b.glow = Burn(b.at, b.flare);
+                    Level(b.glow, (b.flare ? Flare * 2.2f : Fire * 2.5f), b.level);
+                }
                 burning[id] = b;
             }
             int n = 0;

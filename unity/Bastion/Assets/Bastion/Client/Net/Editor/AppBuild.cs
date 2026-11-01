@@ -33,13 +33,16 @@ namespace Bastion.Client.Net.EditorTools
         /// <summary>
         /// Builds/Mac/Bastion.app, signed ad hoc and checked, and Builds/Bastion-Mac.zip to hand it on. Its executable is
         /// «Bastion»: with the accent, codesign can't seal it («a sealed resource is missing or invalid»). The Finder and the
-        /// menu bar show «Bastión» (CFBundleName, CFBundleDisplayName). A signature that doesn't check fails the build.
+        /// menu bar show «Bastión» (CFBundleName, CFBundleDisplayName). Its icon carries the version (AppIcon), put in
+        /// before signing and checked after. A signature or an icon that doesn't check fails the build.
         /// </summary>
         public static void Mac()
         {
             var app = Build(BuildTarget.StandaloneOSX, "Builds/Mac/Bastion.app");
             if (app == null) return;
             app = Path.GetFullPath(app);
+            var icon = AppIcon.Mac(app);
+            if (icon == null) return;
             var plist = Path.Combine(app, "Contents", "Info.plist");
             var zip = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(app)!)!, "Bastion-Mac.zip");
             var steps = new[]
@@ -51,6 +54,7 @@ namespace Bastion.Client.Net.EditorTools
             };
             foreach (var (tool, arguments) in steps)
                 if (!Ran(tool, arguments)) return;
+            if (!AppIcon.Checked(app, icon)) return;
             if (File.Exists(zip)) File.Delete(zip);
             if (!Ran("ditto", $"-c -k --sequesterRsrc --keepParent \"{app}\" \"{zip}\"")) return;
             Debug.Log($"[red] firma ad hoc comprobada (codesign --verify --deep --strict) · {new FileInfo(zip).Length / (1024 * 1024)} MB → {zip}");
@@ -58,9 +62,10 @@ namespace Bastion.Client.Net.EditorTools
 
         /// <summary>
         /// Builds/Windows/Bastion.exe, with its Bastion_Data and the rest beside it: the folder goes whole. From a Mac only
-        /// with Mono (IL2CPP for Windows needs a Windows computer); it needs Unity's «Windows Build Support (Mono)». Beside
-        /// it, medir.bat (the PC's test, docs/PRUEBA-PC-3090.md), and Builds/Bastion-Windows.zip to hand it on, without
-        /// Burst's folder that isn't to be shipped (*DoNotShip*).
+        /// with Mono (IL2CPP for Windows needs a Windows computer); it needs Unity's «Windows Build Support (Mono)». Its icon
+        /// carries the version (AppIcon, by PlayerSettings while it builds). Beside it, medir.bat (the PC's test, docs/
+        /// PRUEBA-PC-3090.md), and Builds/Bastion-Windows.zip to hand it on, without Burst's folder that isn't to be shipped
+        /// (*DoNotShip*).
         /// </summary>
         public static void Windows()
         {
@@ -146,7 +151,18 @@ pause
                 return null;
             }
             var packed = args.Contains("-comprimir");
-            var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = output, target = target, options = packed ? BuildOptions.CompressWithLz4HC : BuildOptions.None });
+            // The Windows icon goes in through PlayerSettings, put back as it was once built (the Mac's, after: Mac).
+            Action? unicon = target == BuildTarget.StandaloneWindows64 ? AppIcon.Windows() : () => { };
+            if (unicon == null) return null;
+            BuildReport report;
+            try
+            {
+                report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = output, target = target, options = packed ? BuildOptions.CompressWithLz4HC : BuildOptions.None });
+            }
+            finally
+            {
+                unicon();
+            }
             var summary = report.summary;
             // Left on another platform, everyone's next run would import the assets again for it (and capture on it).
             if (EditorUserBuildSettings.activeBuildTarget != before) EditorUserBuildSettings.SwitchActiveBuildTarget(BuildPipeline.GetBuildTargetGroup(before), before);
@@ -231,7 +247,7 @@ pause
         }
 
         /// <summary>A command of the Mac's, waited for (in `directory`, if said); if it fails, what it said goes to the log and the build fails.</summary>
-        private static bool Ran(string tool, string arguments, string? directory = null)
+        internal static bool Ran(string tool, string arguments, string? directory = null)
         {
             var start = new ProcessStartInfo(tool, arguments) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = directory ?? "" };
             using var process = Process.Start(start)!;

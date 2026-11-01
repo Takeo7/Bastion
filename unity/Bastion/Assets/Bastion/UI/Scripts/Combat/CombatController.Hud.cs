@@ -290,7 +290,8 @@ namespace Bastion.UI.Combat
             var key = $"{a.Id}:{v.Seq}:{v.Concealed}:{a.Pos.X},{a.Pos.Y},{a.Pos.Z}:{a.Facing}";
             if (vision?.key != key)
             {
-                var range = Los.SightOf(a);
+                // As far as it sees in this weather (Los.SightIn: a storm cuts it); SightTo below, tile by tile, at night too.
+                var range = Los.SightIn(v, a);
                 var seen = new List<Pos>();
                 var noticed = new List<Pos>();
                 for (var y = Math.Max(0, a.Pos.Y - range); y <= Math.Min(v.Height - 1, a.Pos.Y + range); y++)
@@ -611,6 +612,7 @@ namespace Bastion.UI.Combat
                 HordeFill = fill.HasValue ? (float)fill.Value : -1,
                 HordeDb = fill.HasValue ? 40 + (int)Math.Floor(50 * fill.Value + 0.5) : 0,
                 HordeTitle = !fill.HasValue ? null : m.Kind == MissionKinds.Elimination ? HudText.Mission.NoiseTipQuiet : HudText.Mission.NoiseTip,
+                Weather = s.Weather,
             };
         }
 
@@ -678,7 +680,7 @@ namespace Bastion.UI.Combat
                     Effect = AbilityTexts.SupportEffects.TryGetValue(ability, out var effect) ? effect : def.Description,
                     Index = index,
                     Total = list.Count,
-                    Noise = noise > 0 ? $"Ruido {noise}" : null,
+                    Noise = noise > 0 ? $"Ruido {AbilityTexts.Heard(State, noise)}" : null,
                 };
                 if (dmg != null)
                 {
@@ -706,7 +708,7 @@ namespace Bastion.UI.Combat
                 Total = list.Count,
                 Note = AbilityTexts.AttackNotes.TryGetValue(ability, out var note) ? note : null,
                 Locked = LockLabel(),
-                Noise = loud > 0 ? $"Ruido {loud}" : "Sin ruido",
+                Noise = loud > 0 ? $"Ruido {AbilityTexts.Heard(State, loud)}" : "Sin ruido",
             };
             if (d != null)
             {
@@ -802,7 +804,7 @@ namespace Bastion.UI.Combat
             var cm = s.CampaignMission;
             return new IntroView
             {
-                Kicker = Kicker() + (s.Mission.Night == true ? $" · {Lore.NightText.Label.ToUpperInvariant()}" : ""),
+                Kicker = Kicker() + (s.Mission.Night == true ? $" · {Lore.NightText.Label.ToUpperInvariant()}" : "") + (HudText.Weather.Name(s.Weather) is string sky ? $" · {sky.ToUpperInvariant()}" : ""),
                 Title = cm?.Name ?? (s.Mission.Siege != null ? Lore.SiegeText.Name : MissionName(s.Mission.Kind)),
                 Objective = mission.Objective,
                 Turns = mission.TurnsLeft >= 0 ? $"{mission.TurnsLeft} turnos" : null,

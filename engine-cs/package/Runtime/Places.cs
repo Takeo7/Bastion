@@ -46,6 +46,16 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// What a town is mostly (Arturo, 1/11: «quizás es zona más residencial, o más comercial… que sea random pero con su
+        /// tipo de ciudad»), by its map's seed, as OldTownSeed: TownKinds.
+        /// </summary>
+        public static string TownKindSeed(int seed)
+        {
+            var k = Math.Abs(seed) / 6 % 3;
+            return k == 0 ? TownKinds.Residential : k == 1 ? TownKinds.Commercial : TownKinds.Mixed;
+        }
+
+        /// <summary>
         /// Where a mission goes: null on a hand-made map and on the base. A clinic's, a ward's or a hospital's town is laid
         /// out on a grid (Mapgen.Town), as are the first two missions of the story (a clinic, then a hospital).
         /// </summary>
@@ -58,6 +68,28 @@ namespace Bastion.Engine
             if (map.Site == Sites.Industrial) return Estate;
             var grid = story == 1 || story == 2 || !string.IsNullOrEmpty(map.Medical);
             return !grid && OldTownSeed(map.Seed ?? 0) ? Town : City;
+        }
+    }
+
+    /// <summary>What a town is mostly (Places.TownKindSeed): homes, shops and offices, or both as before.</summary>
+    public static class TownKinds
+    {
+        public const string Residential = "residential";
+        public const string Commercial = "commercial";
+        public const string Mixed = "mixed";
+
+        /// <summary>How much more or less likely each kind makes a lot's program (Mapgen's CityPrograms), next to a mixed town's.</summary>
+        public static double Weight(string kind, string program)
+        {
+            if (kind == Residential)
+            {
+                return program == "houses" ? 1.8 : program == "flats" ? 1.2 : program == "shops" ? 0.8 : program == "highStreet" ? 0.5 : program == "office" ? 0.4 : program == "warehouse" ? 0.6 : 1;
+            }
+            if (kind == Commercial)
+            {
+                return program == "houses" ? 0.5 : program == "shops" ? 1.5 : program == "highStreet" ? 1.8 : program == "office" ? 1.6 : program == "warehouse" ? 0.8 : 1;
+            }
+            return 1;
         }
     }
 }

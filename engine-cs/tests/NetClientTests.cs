@@ -78,6 +78,23 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public async Task TheRoomsKeyGoesWithEachHello()
+        {
+            var rig = new Rig();
+            rig.Session.Key = "KXRT5";
+            rig.Session.Connect("Ana");
+            var (host, hello) = await rig.NextHello(0);
+            Assert.Equal("KXRT5", (string?)hello["key"]);
+            rig.Welcome(host);
+            host.Close("wifi");
+            rig.Session.Pump();
+            rig.Clock.Advance(500);
+            var (_, again) = await rig.NextHello(1);
+            Assert.Equal("KXRT5", (string?)again["key"]);
+            Assert.Equal("ficha-1", (string?)again["token"]);
+        }
+
+        [Fact]
         public async Task ADroppedConnectionComesBackWithItsToken()
         {
             var rig = new Rig();

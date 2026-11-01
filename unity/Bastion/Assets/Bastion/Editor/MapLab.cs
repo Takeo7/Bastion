@@ -332,7 +332,23 @@ namespace Bastion.EditorTools
         {
             var probe = new GameObject("Sonda").AddComponent<Camera>();
             probe.targetTexture = RenderTexture.GetTemporary(64, 64, 24);
+            // (Its first frame bakes the occlusion: what that takes, and a second frame's without it.)
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             probe.Render();
+            double first = clock.Elapsed.TotalMilliseconds;
+            clock.Restart();
+            probe.Render();
+            double next = clock.Elapsed.TotalMilliseconds;
+            // (And baked again, as the game does when the map changes: the least of three.)
+            double again = double.MaxValue;
+            for (int k = 0; k < 3; k++)
+            {
+                UnityEngine.Object.FindFirstObjectByType<GroundOcclusion>()?.MarkDirty();
+                clock.Restart();
+                probe.Render();
+                again = Math.Min(again, clock.Elapsed.TotalMilliseconds);
+            }
+            Debug.Log(FormattableString.Invariant($"[ao] first frame {first:0.0} ms, the next {next:0.0} ms, baked again {again:0.0} ms"));
             RenderTexture.ReleaseTemporary(probe.targetTexture);
             UnityEngine.Object.DestroyImmediate(probe.gameObject);
             var rt = Shader.GetGlobalTexture("_GroundAO") as RenderTexture;
@@ -477,6 +493,9 @@ namespace Bastion.EditorTools
             Lighting(true);
         }
 
+        /// <summary>The weather a lab asks for (ClimaLab), over BASTION_CLIMA.</summary>
+        internal static string WeatherOverride;
+
         /// <summary>The game's light (Bastion.Client.Mood), by day or by night.</summary>
         internal static void Lighting(bool day) => Bastion.Client.Mood.Show(day ? Bastion.Client.Mood.Day : Bastion.Client.Mood.Night);
 
@@ -485,7 +504,11 @@ namespace Bastion.EditorTools
         {
             var view = new GameObject("Mapa").AddComponent<MapView>();
             var clock = System.Diagnostics.Stopwatch.StartNew();
+            // BASTION_JUNTAR=0: the still things left as they were made (MapBuilder.Still), to set the joined map against.
+            bool join = MapBuilder.JoinStill;
+            if (Environment.GetEnvironmentVariable("BASTION_JUNTAR") == "0") MapBuilder.JoinStill = false;
             var builder = view.Build(state, Prefabs(), Materials());
+            MapBuilder.JoinStill = join;
             Debug.Log($"[map] {name}: {state.Width}×{state.Height}, {builder.Placed} props and {builder.Walls?.Laid} wall pieces in {clock.ElapsedMilliseconds} ms; missing: {string.Join(", ", builder.Missing.Concat(builder.Walls?.Missing ?? Enumerable.Empty<string>()).OrderBy(m => m))}");
             // BASTION_PROBAR=id[,id…]: each of those props' first one drawn: its parts, their materials and shaders, their boxes (a test).
             foreach (string probe in (Environment.GetEnvironmentVariable("BASTION_PROBAR") ?? "").Split(',').Where(k => k.Length > 0))
@@ -508,6 +531,8 @@ namespace Bastion.EditorTools
             // BASTION_GENERAR=biome,seed[,kind]: the mission referencia.html?biome=…&seed=…&kind=… makes (difficulty 3), not a recorded one.
             var made = Environment.GetEnvironmentVariable("BASTION_GENERAR")?.Split(',');
             var state = medical != null ? Medical(medical) : made != null && made.Length >= 2 ? Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination") : Golden(name);
+            // BASTION_CLIMA=drizzle|downpour|storm|snowfall|blizzard (or ClimaLab's WeatherOverride): the mission's rain or snow.
+            if ((WeatherOverride ?? Environment.GetEnvironmentVariable("BASTION_CLIMA")) is string weather) state.Weather = weather;
             // BASTION_BENGALAS=x,y,radius;…: Bengalas (radius 3 or more) and fires (less) burning there, lighting what they reach
             // as the engine's (Los.LightTiles from the lamps' height), for the night's glow and pools.
             foreach (string spec in (Environment.GetEnvironmentVariable("BASTION_BENGALAS") ?? "").Split(';').Where(v => v.Length > 0))
@@ -530,7 +555,7 @@ namespace Bastion.EditorTools
             if (Environment.GetEnvironmentVariable("BASTION_CONSOLA")?.Split(',').Select(int.Parse).ToArray() is int[] console && console.Length == 2)
                 state.Tiles[console[1] * state.Width + console[0]] = "console";
             Bastion.Client.NightLights.StateForLab = state;
-            Lighting(day);
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, !day));
             // BASTION_ATLAS=1: each building's walls in one of its pack's twelve atlases, by the building (Ana's #3, 1/11: the
             // houses all of one colour), to weigh it.
             WallsView.MaterialOf = Environment.GetEnvironmentVariable("BASTION_ATLAS") == "1" ? AtlasVariants() : null;
@@ -614,8 +639,8 @@ namespace Bastion.EditorTools
             camera.farClipPlane = 800;
             var target = new Vector3(state.Width * MapSpace.Tile / 2, 0, -state.Height * MapSpace.Tile / 2);
             MapSpace.Aim(camera, target, 40);
-            // Its background the haze, the fill light along it.
-            Lighting(day);
+            // Its background the haze, the fill light along it (its weather's, if it has one).
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, !day));
             // BASTION_CHANGE=0|1: the map as a mission changes it (a door opened, a car's tile cleared, an upper floor's tile
             // given way), the camera on the door; with 1 the changes made (MapView.Rebuild), with 0 not, to compare.
             string change = Environment.GetEnvironmentVariable("BASTION_CHANGE");
@@ -653,11 +678,12 @@ namespace Bastion.EditorTools
                 var squad = state.Units.Where(u => u.Alive && u.Team == "xcom").Select(u => $"{u.Id} ({u.Pos.X},{u.Pos.Y},{u.Pos.Z})");
                 Debug.Log($"[map] fog: {fog.Counts().sight} tiles in sight, {fog.Counts().known} seen of {state.Width * state.Height}; squad {string.Join(", ", squad)}");
             }
-            // BASTION_AT=x,y,distance[,storey]: on tile (x, y) (on that storey's floor), so many tiles off (reference.ts:
-            // rig.focus on the tile's middle).
+            // BASTION_AT=x,y,distance[,storey[,yaw]]: on tile (x, y) (on that storey's floor), so many tiles off (reference.ts:
+            // rig.focus on the tile's middle), the camera turned so (degrees, 45 the game's first turn).
             var at = Environment.GetEnvironmentVariable("BASTION_AT")?.Split(',');
             if (at != null && at.Length >= 3)
-                MapSpace.Aim(camera, MapSpace.World(int.Parse(at[0]), int.Parse(at[1]), at.Length > 3 ? int.Parse(at[3]) : 0), float.Parse(at[2], System.Globalization.CultureInfo.InvariantCulture));
+                MapSpace.Aim(camera, MapSpace.World(int.Parse(at[0]), int.Parse(at[1]), at.Length > 3 ? int.Parse(at[3]) : 0), float.Parse(at[2], System.Globalization.CultureInfo.InvariantCulture),
+                    at.Length > 4 ? float.Parse(at[4], System.Globalization.CultureInfo.InvariantCulture) : 45);
             // The sun's shadows over what the camera sees, as the battle's map has them (ShadowFit); BASTION_SOMBRAS_FIJAS=1, the
             // pipeline's own (50 m), to weigh them.
             if (Environment.GetEnvironmentVariable("BASTION_SOMBRAS_FIJAS") != "1")
@@ -814,6 +840,7 @@ namespace Bastion.EditorTools
             ["apocalypse"] = "PolygonApocalypse", ["city"] = "PolygonCity", ["town"] = "PolygonTown", ["office"] = "PolygonOffice",
             ["military"] = "PolygonMilitary", ["construction"] = "PolygonConstruction", ["farm"] = "PolygonFarm", ["nature"] = "PolygonNature",
             ["alpine"] = "PolygonNatureBiomes", ["industrial"] = "PolygonMapsMilitaryWarehouse", ["woodland"] = "PolygonMapsWoodlandApocalypse",
+            ["dog"] = "PolygonDog",
         };
 
         /// <summary>

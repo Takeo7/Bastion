@@ -447,6 +447,17 @@ namespace Bastion.Client.Map
         /// <summary>Whether the squad has seen place `node` this mission (UI's marks over the loot boxes: lootMarks.ts explored).</summary>
         public bool Explored(int node) => explored != null && node >= 0 && node < explored.Length && explored[node];
 
+        /// <summary>
+        /// Whether ground tile (x, y) is in the squad's sight as the fog shows it (where it is going); with `roof`, a
+        /// building's roof over it (seen as the street along it). For what shows only in sight: Fauna's animals.
+        /// </summary>
+        public bool InSight(int x, int y, bool roof = false)
+        {
+            if (sightTo == null || x < 0 || y < 0 || x >= width || y >= height) return false;
+            int i = y * width + x;
+            return (roof ? roofSightTo[i] : sightTo[i]) > 0.5f;
+        }
+
         public (int sight, int known) Counts() => (sight?.Count(v => v > 0.5f) ?? 0, known?.Count(v => v > 0.5f) ?? 0);
 
         void Update()

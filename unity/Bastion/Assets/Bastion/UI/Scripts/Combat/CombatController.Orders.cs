@@ -479,7 +479,7 @@ namespace Bastion.UI.Combat
             var walls = Abilities.BreachedWalls(State, modeAbility, centre, u).Count;
             var parts = new[]
             {
-                loud > 0 ? $"Ruido {loud}" : null,
+                loud > 0 ? $"Ruido {AbilityTexts.Heard(State, loud)}" : null,
                 walls == 0 ? null : walls == 1 ? "Rompe una pared" : $"Rompe {walls} paredes",
                 Abilities.BreaksFloor(State, modeAbility, centre) ? "Hunde el suelo" : null,
             };

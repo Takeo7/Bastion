@@ -13,6 +13,21 @@ namespace Bastion.Engine
         public int Charges { get; set; }
     }
 
+    /// <summary>
+    /// GameState.weather (Arturo, 1/11: Arte's five, in different missions): rain out of winter, snow in it; missing, clear.
+    /// A storm and a blizzard cut sight, a downpour and a storm the reach of noise (Content.Weather).
+    /// </summary>
+    public static class Weathers
+    {
+        public const string Drizzle = "drizzle";
+        public const string Downpour = "downpour";
+        public const string Storm = "storm";
+        public const string Snowfall = "snowfall";
+        public const string Blizzard = "blizzard";
+
+        public static readonly IReadOnlyList<string> All = new[] { Drizzle, Downpour, Storm, Snowfall, Blizzard };
+    }
+
     /// <summary>Trap.kind: `'mine' | 'spikes' | 'snare'`.</summary>
     public static class TrapKinds
     {
@@ -37,6 +52,42 @@ namespace Bastion.Engine
         public int? Turns { get; set; }
         /// <summary>The tiles it lights, by node (grid.ts nodeOf; on the ground, y * width + x): within `radius` and in its line of sight (los.ts lightTiles).</summary>
         public List<int>? Tiles { get; set; }
+    }
+
+    /// <summary>
+    /// A car left wrecked in the street (Arturo, 1/11; Mapgen.LayWrecks): the car itself is the CarFront of GameState.decor
+    /// at `anchor`, a car like any other to the rules; this says how it came there, for the client to draw it crashed.
+    /// </summary>
+    public sealed class Wreck
+    {
+        /// <summary>The car's anchor, its nose, by tile index (y * width + x, on the ground).</summary>
+        public int Anchor { get; set; }
+        public string Kind { get; set; } = ""; // WreckKinds
+        /// <summary>Degrees it lies askew of its facing, either way (−35 to 35), the map's mirroring already counted.</summary>
+        public int Tilt { get; set; }
+    }
+
+    public static class WreckKinds
+    {
+        /// <summary>One of two or three run into each other by a junction.</summary>
+        public const string Pileup = "pileup";
+        /// <summary>Left in the middle of the road.</summary>
+        public const string Abandoned = "abandoned";
+        /// <summary>Driven into a building's front: its nose where the wall was (that tile is the car's now, low cover).</summary>
+        public const string Wall = "wall";
+    }
+
+    /// <summary>
+    /// Something burning, all the mission long (Arturo, 1/11; Mapgen.LayFires): it lights round it at night (its light in
+    /// GameState.lights has the same id) and whoever steps on its ground burns (Rules.Burn).
+    /// </summary>
+    public sealed class Fire
+    {
+        public string Id { get; set; } = "";
+        /// <summary>The tile of what burns (a car's nose, a bin, drums, or the pile itself), by tile index.</summary>
+        public int Source { get; set; }
+        /// <summary>The ground on fire, tiles one can step on, by tile index (on the ground).</summary>
+        public List<int> Tiles { get; set; } = new List<int>();
     }
 
     /// <summary>A smoke cloud: units inside are harder to hit.</summary>

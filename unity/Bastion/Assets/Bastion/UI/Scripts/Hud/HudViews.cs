@@ -438,6 +438,8 @@ namespace Bastion.UI.Hud
         public string HordeTitle;
         /// <summary>«VIENEN MÁS».</summary>
         public string Alert;
+        /// <summary>The weather (Weathers' ids; Arturo, 01/11): its name and what it changes on the card; null, clear.</summary>
+        public string Weather;
     }
 
     /// <summary>A siege's compass (#34): shown, and the sides (DIRS4: 0 N, 1 E, 2 S, 3 O) the next wave comes in by.</summary>

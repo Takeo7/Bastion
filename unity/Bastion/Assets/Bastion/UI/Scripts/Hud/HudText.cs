@@ -159,6 +159,36 @@ namespace Bastion.UI.Hud
             public static readonly string[] Sides = { "el norte", "el este", "el sur", "el oeste" };
         }
 
+        /// <summary>
+        /// The weather (GameState.weather, Campaign.OfferWeather; Arturo, 01/11): its name, and what it changes, from the
+        /// engine's figures (Content.Weather), for the mission's card and the objective's in the fight.
+        /// </summary>
+        public static class Weather
+        {
+            public static readonly System.Collections.Generic.Dictionary<string, string> Names = new System.Collections.Generic.Dictionary<string, string>
+            {
+                [Bastion.Engine.Weathers.Drizzle] = "Llovizna",
+                [Bastion.Engine.Weathers.Downpour] = "Aguacero",
+                [Bastion.Engine.Weathers.Storm] = "Tormenta",
+                [Bastion.Engine.Weathers.Snowfall] = "Nevada",
+                [Bastion.Engine.Weathers.Blizzard] = "Ventisca",
+            };
+
+            /// <summary>Its name; null for a clear day (or one this version doesn't know).</summary>
+            public static string Name(string weather) => weather != null && Names.TryGetValue(weather, out var name) ? name : null;
+
+            /// <summary>«Tormenta: se ve menos lejos y los ruidos se oyen menos.»</summary>
+            public static string About(string weather)
+            {
+                var name = Name(weather);
+                if (name == null) return null;
+                var sight = Bastion.Engine.Content.Weather.SightOf(weather) < 1;
+                var noise = Bastion.Engine.Content.Weather.NoiseOf(weather) < 1;
+                var what = sight && noise ? "se ve menos lejos y los ruidos se oyen menos" : sight ? "se ve menos lejos" : noise ? "los ruidos se oyen menos" : "no cambia lo que se ve ni lo que se oye";
+                return $"{name}: {what}.";
+            }
+        }
+
         public static class Skills
         {
             public const string None = "Aún no ha gastado puntos en el tablero";

@@ -71,6 +71,27 @@ namespace Bastion.Net
         }
 
         /// <summary>
+        /// An IPv4 address on the internet: not a private network's, nor CG-NAT's or Tailscale's (100.64.0.0/10), nor this
+        /// machine's, a self-assigned or an unspecified one.
+        /// </summary>
+        public static bool OnTheInternet(IPAddress address)
+        {
+            if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+            var b = address.GetAddressBytes();
+            if (b.Length != 4) return false;
+            return !(b[0] == 0 || b[0] == 10 || b[0] == 127 || IsTailscale(address) || (b[0] == 169 && b[1] == 254)
+                || (b[0] == 172 && b[1] >= 16 && b[1] < 32) || (b[0] == 192 && b[1] == 168));
+        }
+
+        /// <summary>Whether a connection's peer (address:port, as IConnection.Peer says it) comes from the internet: through a port the router opened.</summary>
+        public static bool FromTheInternet(string peer)
+        {
+            var at = peer.LastIndexOf(':');
+            var host = (at > 0 ? peer.Substring(0, at) : peer).Trim('[', ']');
+            return IPAddress.TryParse(host, out var address) && OnTheInternet(address);
+        }
+
+        /// <summary>
         /// The address this machine goes out from (its default route), or null without one. A UDP socket that only
         /// connects sends nothing: the system just picks the route. TEST-NET-1 (RFC 5737): nobody there, but routed like
         /// any outside address.

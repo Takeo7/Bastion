@@ -52,8 +52,12 @@ namespace Bastion.EditorTools
             Make("FigureMask", mask, m => m.renderQueue = (int)RenderQueue.AlphaTest + 49);
             var car = Shader.Find("Bastion/Car");
             Make("Car", car, m => { });
+            var clima = Shader.Find("Bastion/Clima");
+            Make("Clima", clima, m => { });
+            var gota = Shader.Find("Bastion/ClimaGota");
+            Make("ClimaGota", gota, m => m.renderQueue = (int)RenderQueue.Transparent);
             AssetDatabase.SaveAssets();
-            Debug.Log($"[kit] {Folder}: SeeThrough ({unlit?.name}), Glowing and Plain ({lit?.name}), Mark ({mark?.name}), Fade ({fade?.name}), NightRim ({rim?.name}), FigureMask ({mask?.name}), Car ({car?.name})");
+            Debug.Log($"[kit] {Folder}: SeeThrough ({unlit?.name}), Glowing and Plain ({lit?.name}), Mark ({mark?.name}), Fade ({fade?.name}), NightRim ({rim?.name}), FigureMask ({mask?.name}), Car ({car?.name}), Clima ({clima?.name}), ClimaGota ({gota?.name})");
         }
 
         static void Make(string name, Shader shader, Action<Material> set)

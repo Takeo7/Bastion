@@ -6,12 +6,13 @@ using Grid = Bastion.Engine.Grid;
 
 namespace Bastion.UI.Combat
 {
-    /// <summary>A tile the picked soldier can end its move on (game.ts reach): one for the dash, one where the squad would be noticed.</summary>
+    /// <summary>A tile the picked soldier can end its move on (game.ts reach): one for the dash, one where the squad would be noticed, one on fire.</summary>
     public sealed class MoveTile
     {
         public Pos Pos;
         public bool Dash;
         public bool Detected;
+        public bool Fire;
     }
 
     /// <summary>
@@ -20,7 +21,8 @@ namespace Bastion.UI.Combat
     /// each side on the range's edge a strip bright at the edge and fading inwards, and on it a thin line with its
     /// corners rounded (Ana 22/10 #52), over a dark stroke; never round a thing in the way (Ana 21/10 #18). The way to
     /// the tile under the pointer, a ring on that tile, and over it a shield on each side with cover. Where the squad
-    /// would be noticed, an eye in a soft red, no frame (Arturo, 31/10 #14). Round the picked one's feet a white ring in
+    /// would be noticed, an eye in a soft red, no frame (Arturo, 31/10 #14); where the ground burns, a flame in orange
+    /// (Arturo, 01/11: it burns whoever steps on it). Round the picked one's feet a white ring in
     /// three arcs that turn; round the partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and blue.
     /// Lines keep their width in pixels (Bastion/Marks). The shields are drawn over walls, as the web's; the lines over
     /// everything but the figures, soldiers and the dead (Arturo, 31/10 #3: not cars, crates or walls), behind the legs
@@ -40,6 +42,8 @@ namespace Bastion.UI.Combat
         static readonly Color32 Shade = Hex(0x56606a);
         /// <summary>The eye on a tile where the squad would be noticed: a soft red (Arturo, 31/10 #14; it was 0xf0503c with a frame).</summary>
         static readonly Color32 SoftSight = Hex(0xe58a80);
+        /// <summary>The flame on a tile of the reach on fire.</summary>
+        static readonly Color32 FireMark = Hex(0xff8a3c);
 
         /// <summary>The pointer's ring planning without the command (on a reachable tile only: Ana, Arturo 01/11 #1).</summary>
         public static readonly Color32 PlanRing = PlanTint;
@@ -101,6 +105,7 @@ namespace Bastion.UI.Combat
         Texture2D lowShield;
         Texture2D highShield;
         MeshFilter eyes;
+        MeshFilter flames;
 
         void Awake()
         {
@@ -109,6 +114,8 @@ namespace Bastion.UI.Combat
             strips = Layer("Alcance (franjas)", 3100, false, false, zone);
             eyes = Layer("Alcance (ojos)", 3101, false, false, zone);
             eyes.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = EyeTexture();
+            flames = Layer("Alcance (fuego)", 3101, false, false, zone);
+            flames.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = FlameTexture();
             rangeShade = Layer("Alcance (sombra)", 3103, false, true, zone, Pull, true);
             edges = Layer("Alcance (bordes)", 3104, false, false, zone, Pull, true);
             wayShade = Layer("Camino (sombra)", 3103, false, true, zone, Pull, true);
@@ -236,6 +243,7 @@ namespace Bastion.UI.Combat
             under.Clear();
             var lines = new MeshBuilder();
             var eye = new MeshBuilder();
+            var flame = new MeshBuilder();
             if (s != null && tiles != null)
             {
                 var range = new Dictionary<int, MoveTile>();
@@ -259,12 +267,20 @@ namespace Bastion.UI.Combat
                         (t.Dash ? dashSegs : walkSegs).Add(new[] { a, b });
                         Strip(build, p.X, p.Y, side, floor + 0.03f * T, planning ? PlanTint : t.Dash ? DashFill : WalkFill, fill);
                     }
+                    // Both on one tile, side by side.
+                    var apart = t.Detected && t.Fire ? new Vector3(0.14f * T, 0, 0) : Vector3.zero;
                     if (t.Detected)
                     {
                         // An eye (a pattern besides colour: UX-REVISION-2 #49), in a soft red and with no frame round it (#14).
-                        var c = Board.TileToWorld(s, p, 0.03f * T);
+                        var c = Board.TileToWorld(s, p, 0.03f * T) - apart;
                         var e = 0.17f * T;
                         eye.Quad(c + new Vector3(-e, 0, -e), c + new Vector3(e, 0, -e), c + new Vector3(e, 0, e), c + new Vector3(-e, 0, e), Alpha(SoftSight, 0.85f));
+                    }
+                    if (t.Fire)
+                    {
+                        var c = Board.TileToWorld(s, p, 0.03f * T) + apart;
+                        var e = 0.17f * T;
+                        flame.Quad(c + new Vector3(-e, 0, -e), c + new Vector3(e, 0, -e), c + new Vector3(e, 0, e), c + new Vector3(-e, 0, e), Alpha(FireMark, 0.9f));
                     }
                 }
                 var edge = EdgeAlpha * (planning ? 0.55f : 1);
@@ -275,6 +291,7 @@ namespace Bastion.UI.Combat
             rangeShade.sharedMesh = under.Build(rangeShade.sharedMesh);
             edges.sharedMesh = lines.Build(edges.sharedMesh);
             eyes.sharedMesh = eye.Build(eyes.sharedMesh);
+            flames.sharedMesh = flame.Build(flames.sharedMesh);
         }
 
         /// <summary>A line and, in the `under` builder, the dark stroke beneath it.</summary>
@@ -587,6 +604,42 @@ namespace Bastion.UI.Combat
                     var almond = Mathf.Abs(dy) <= Mathf.Sqrt(Mathf.Max(0, 1 - dx * dx)) * (1 - 0.15f * dx * dx);
                     var d = Mathf.Sqrt((x - 8) * (x - 8) + (y - 5) * (y - 5));
                     if (almond && (d > 3.2f || d <= 1.6f)) a += 0.25f;
+                }
+                pixels[py * size + px] = new Color(1, 1, 1, a);
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>
+        /// A flame, as the eye is drawn (supersampled, white for its tint): a drop with its tip up, leaning a little, and a
+        /// smaller one cut out of its foot.
+        /// </summary>
+        static Texture2D FlameTexture()
+        {
+            const int size = 64;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var pixels = new Color[size * size];
+            // In 16 × 16 units, y up: a round foot (cx, foot, r) narrowing to a tip at `tip`.
+            bool Drop(float x, float y, float cx, float foot, float r, float tip, float lean)
+            {
+                if ((x - cx) * (x - cx) + (y - foot) * (y - foot) <= r * r) return true;
+                if (y < foot || y > tip) return false;
+                var k = (y - foot) / (tip - foot);
+                var half = r * Mathf.Pow(1 - k, 1.4f);
+                return Mathf.Abs(x - (cx + lean * k * k)) <= half;
+            }
+            for (var py = 0; py < size; py++)
+            for (var px = 0; px < size; px++)
+            {
+                var a = 0f;
+                for (var sy = 0; sy < 2; sy++)
+                for (var sx = 0; sx < 2; sx++)
+                {
+                    var x = (px + 0.25f + sx * 0.5f) / size * 16;
+                    var y = (py + 0.25f + sy * 0.5f) / size * 16;
+                    if (Drop(x, y, 8, 5.6f, 4.6f, 15.2f, 1.2f) && !Drop(x, y, 8.2f, 4.4f, 2.1f, 9.6f, 0.6f)) a += 0.25f;
                 }
                 pixels[py * size + px] = new Color(1, 1, 1, a);
             }

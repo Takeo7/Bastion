@@ -57,6 +57,8 @@ namespace Bastion.Client.Map
         const float WallHalf = 0.1f * Thick * KitTiles;
         /// <summary>A wall blown down to low cover: its stump this tall (storeys).</summary>
         const float BreachHeight = 0.36f;
+        /// <summary>A wall a car was driven into (GameState.wrecks, «wall»): its stump, lower.</summary>
+        const float CarBreach = 0.12f;
         /// <summary>The barbed wire's length in tiles (one piece is stretched to a tile).</summary>
         const float WireLength = 3.94f * KitTiles;
         /// <summary>Tiles a metre of a prop (SYNTY_SCALE).</summary>
@@ -105,6 +107,33 @@ namespace Bastion.Client.Map
                 [KitIds.ShopFront] = brick.With(window: new[] { "shopWindow" }, door: new[] { "shopDoor" }, noLeaf: true, storey: 3 * Storey / ShopFrontTall,
                     glass: new[] { KitTile, 2.71f, 1.495f, 0 }),
             };
+        }
+
+        /// <summary>Town's window frames and front doors a house picks from (Ana's #3, 1/11: not every house alike), and how many in a hundred have shutters.</summary>
+        static readonly string[] HouseWindows = { "houseWindow", "houseWindow2", "houseWindow3", "houseWindow4", "houseWindow5" };
+        static readonly string[] HouseDoors = { "houseDoor", "houseDoor2", "houseDoor3" };
+        const double ShutteredShare = 0.4;
+        /// <summary>How many houses in a hundred with a long plain wall onto open ground have a garage door in it; its width (tiles).</summary>
+        const double GarageShare = 0.5;
+        const int GarageSpan = 4;
+
+        /// <summary>A house's own kit (its window frame and its door from Town's) and whether its windows have shutters, by building.</summary>
+        readonly Dictionary<int, (Kit kit, bool shutters)> houseLooks = new Dictionary<int, (Kit, bool)>();
+        /// <summary>The ground floor's wall tiles a garage door takes (Lay): whether it is the stretch's first, where the stretch's middle is (tiles).</summary>
+        readonly Dictionary<int, (bool first, float x, float z)> garages = new Dictionary<int, (bool, float, float)>();
+
+        /// <summary>
+        /// The kit `kit` as building `bd` has it: a house's (Town's kit, the house's own: HouseLook) its own frame and door
+        /// and its shutters; any other's as it is, without shutters.
+        /// </summary>
+        (Kit kit, bool shutters) LookOf(Building bd, Kit kit)
+        {
+            if (bd == null || bd.kind != BuildingKinds.House || kit != Kits[KitIds.House]) return (kit, false);
+            if (houseLooks.TryGetValue(bd.index, out var look)) return look;
+            string window = HouseWindows[(int)Math.Floor(BuildingPlan.Hash(bd.x0, bd.y0, 32) * HouseWindows.Length)];
+            string door = HouseDoors[(int)Math.Floor(BuildingPlan.Hash(bd.x0, bd.y0, 33) * HouseDoors.Length)];
+            bool shutters = BuildingPlan.Hash(bd.x0, bd.y0, 34) < ShutteredShare;
+            return houseLooks[bd.index] = (kit.With(window: new[] { kit.window[0], window }, door: new[] { kit.door[0], door }), shutters);
         }
 
         /// <summary>
@@ -234,6 +263,8 @@ namespace Bastion.Client.Map
                 face = bd.storeys >= them ? o : new Vec2 { X = -o.X, Y = -o.Y };
             }
             var ob = plan.Buildings[owner];
+            bool shutters;
+            (kit, shutters) = LookOf(ob, kit);
             for (int k = from; k < to; k++)
             {
                 float y0 = ob.@base + k * Storey;
@@ -244,6 +275,7 @@ namespace Bastion.Client.Map
                     continue;
                 }
                 PutAll(glazed ? kit.window : kit.wall, x, z, y0, face, false, owner, kit, false, true);
+                if (glazed && shutters) Put("houseShutters", x, z, y0, face, false, owner, thick: kit.thick, roof: true);
                 if (glazed && kit.top == null) Pane(ob.kit, x, z, y0, face, owner, true);
             }
         }
@@ -366,6 +398,42 @@ namespace Bastion.Client.Map
                     sided.Add(r.side);
                     shutters[r.tile] = Math.Min(3, r.length - 1.4f);
                 }
+            }
+            // A garage door (Ana's #3, 1/11) on half the houses with room for one: Town's roller door, GarageSpan tiles of
+            // the ground floor's plain outer wall onto open ground (nobody's building, and walkable), in the middle of the
+            // longest such stretch; the tiles it takes and the middle one's place.
+            garages.Clear();
+            foreach (var bd in plan.Buildings)
+            {
+                if (bd.kind != BuildingKinds.House || bd.kit != KitIds.House || bd.@base > 0 || BuildingPlan.Hash(bd.x0, bd.y0, 35) >= GarageShare) continue;
+                var sides = new[]
+                {
+                    (bd.x0 + 1, bd.y0, 1, 0, bd.x1 - bd.x0 - 1, 0, -1), (bd.x0 + 1, bd.y1, 1, 0, bd.x1 - bd.x0 - 1, 0, 1),
+                    (bd.x0, bd.y0 + 1, 0, 1, bd.y1 - bd.y0 - 1, -1, 0), (bd.x1, bd.y0 + 1, 0, 1, bd.y1 - bd.y0 - 1, 1, 0),
+                };
+                (int start, int length, int side) best = (0, 0, -1);
+                for (int side = 0; side < 4; side++)
+                {
+                    var (x0, y0, dx, dy, n, ox, oy) = sides[side];
+                    int start = -1;
+                    for (int k = 0; k <= n; k++)
+                    {
+                        int x = x0 + dx * k, y = y0 + dy * k, i = y * w + x;
+                        bool plain = k < n && TileIn(s.Tiles, i) == TileKinds.Wall && plan.Owner[i] == bd.index && InMap(x + ox, y + oy)
+                            && OwnerAt((y + oy) * w + x + ox) < 0 && Bastion.Engine.Grid.IsWalkable(TileIn(s.Tiles, (y + oy) * w + x + ox));
+                        if (plain && start < 0) start = k;
+                        if (!plain && start >= 0)
+                        {
+                            if (k - start > best.length) best = (start, k - start, side);
+                            start = -1;
+                        }
+                    }
+                }
+                if (best.length < GarageSpan) continue;
+                var (gx, gy, gdx, gdy, _, _, _) = sides[best.side];
+                int from = best.start + (best.length - GarageSpan) / 2;
+                float mx = gx + gdx * (from + GarageSpan / 2f) + (gdx == 0 ? 0.5f : 0), mz = gy + gdy * (from + GarageSpan / 2f) + (gdy == 0 ? 0.5f : 0);
+                for (int k = 0; k < GarageSpan; k++) garages[(gy + gdy * (from + k)) * w + gx + gdx * (from + k)] = (k == 0, mx, mz);
             }
 
             // A roller shutter `width` tiles wide on a shed's wall, shut, `tall` of a storey tall, on its outer face. (The
@@ -588,6 +656,8 @@ namespace Bastion.Client.Map
                 var (o, between, other) = Facing(run, 0, 0, b);
                 bool front = level == 0 && !between && kind != TileKinds.Wall && kind != TileKinds.Low && shopFront(building, x, y);
                 var kit = between && building?.kind != BuildingKinds.Medical ? Between : front ? Kits[KitIds.ShopFront] : outerKit;
+                bool shuttered = false;
+                if (kit == outerKit) (kit, shuttered) = LookOf(building, kit);
                 var along = run == 0 ? new Vec2 { X = 1, Y = 0 } : new Vec2 { X = 0, Y = 1 };
                 if (!loose) Storeys(broken ? TileKinds.Wall : kind, cx, cz, run == 0 ? x : y, o, between, b, other);
                 if (IsDoor(kind) && loose && plan.Siege)
@@ -653,6 +723,7 @@ namespace Bastion.Client.Map
                         PutAll(outerKit.lintel, cx, cz, @base, o, between, b, outerKit);
                     }
                     else PutAll(kit.window, cx, cz, @base, o, between, b, kit);
+                    if (shuttered) Put("houseShutters", cx, cz, @base, o, between, b, thick: kit.thick);
                     if (kind == TileKinds.Window)
                         Pane(between ? KitIds.House : front ? KitIds.ShopFront : building != null ? building.kit : plan.LooseKit, cx, cz, @base, o, b, false, between);
                 }
@@ -660,12 +731,19 @@ namespace Bastion.Client.Map
                 {
                     // Blown down: a stump of the wall at low cover's height and the wall over the gap left standing, its
                     // lintel (the storey above stands); the rubble on it is the map's.
-                    for (int n = 0; n < kit.wall.Length; n++) Put(kit.wall[n], cx, cz, @base, o, between, b, thick: kit.thick, tint: n == 0, tall: BreachHeight);
+                    // (One a car was driven into broken nearly to the floor: the car went through it.)
+                    float stump = level == 0 && plan.CarInWall(i) ? CarBreach : BreachHeight;
+                    for (int n = 0; n < kit.wall.Length; n++) Put(kit.wall[n], cx, cz, @base, o, between, b, thick: kit.thick, tint: n == 0, tall: stump);
                     PutAll(kit.lintel, cx, cz, @base, o, between, b, kit);
                 }
                 else
                 {
-                    PutAll(kit.wall, cx, cz, @base, o, between, b, kit);
+                    // A garage door's stretch: the door in its wall, laid once, from the stretch's first tile.
+                    if (level == 0 && !between && garages.TryGetValue(i, out var garage))
+                    {
+                        if (garage.first) Put("houseGarage", garage.x, garage.z, @base, o, between, b, thick: kit.thick, tint: true);
+                    }
+                    else PutAll(kit.wall, cx, cz, @base, o, between, b, kit);
                     if (level == 0 && !between && building != null && shutters.TryGetValue(i, out float width)) shutter(building, cx, cz, @base, o, width, 0.75f);
                 }
                 if (kit.top != null && kind == TileKinds.Wall) Put(kit.top, cx, cz, @base + Storey, o, between, b, along: 1 / WireLength, thick: 1);

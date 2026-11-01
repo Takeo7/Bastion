@@ -169,6 +169,9 @@ namespace Bastion.UI.Strategy
             var level = Campaign.OfferStars(o);
             var stars = $"<color=#f0503c>{new string('★', level)}</color> {(level < Difficulty.Length ? Difficulty[level] : "")}";
             var signature = Campaign.OfferSignature(c, o);
+            // The weather it will be flown in (Arturo, 01/11; the launch's own: Campaign.OfferWeather), beside the night.
+            var weather = Campaign.OfferWeather(c, o);
+            var sky = Bastion.UI.Hud.HudText.Weather.Name(weather);
             var v = new MapDetailView { Title = o.Name, Text = { Campaign.OfferBriefing(c, o) }, Note = string.IsNullOrEmpty(signature) ? null : signature };
             if (o.Siege == true)
             {
@@ -187,11 +190,12 @@ namespace Bastion.UI.Strategy
                     if (quest != null) v.KickerTip = "Si se pierde o caduca, el encargo se pierde con sus consecuencias";
                     v.KickerTone = o.Final ? "final" : o.Facility != null ? "nest" : o.Story != null ? "story" : o.Quest != null ? "quest" : null;
                 }
-                v.Subtitle = $"{Campaign.Regions[o.Region].Name} · {biome}{(o.Night == true ? $" · {Lore.NightText.Label}" : "")}{(quest != null ? $" · paso {quest.Step + 1} de {Quests.QuestDefs[quest.Id].Steps.Count}" : "")}";
+                v.Subtitle = $"{Campaign.Regions[o.Region].Name} · {biome}{(o.Night == true ? $" · {Lore.NightText.Label}" : "")}{(sky != null ? $" · {sky}" : "")}{(quest != null ? $" · paso {quest.Step + 1} de {Quests.QuestDefs[quest.Id].Steps.Count}" : "")}";
                 // The living hold it (18/10 #47): the dead go for them too.
                 if (o.Living == true) v.Warning = Lore.LivingTip;
                 v.Rows.Add(new RowView { Key = "Tipo", Value = Setup.MissionNames[o.Kind] });
                 if (place != null) v.Rows.Add(new RowView { Key = "Lugar", Value = Places.Names[place], Icon = "place:" + place });
+                if (sky != null) v.Rows.Add(new RowView { Key = "Tiempo", Value = sky, Icon = "weather:" + weather, Tip = Bastion.UI.Hud.HudText.Weather.About(weather) });
                 v.Rows.Add(new RowView { Key = "Dificultad", Value = stars });
                 var reward = string.Join(" · ", rewards.Where(x => x != ""));
                 v.Rows.Add(new RowView { Key = "Recompensa", Value = reward != "" ? reward : "La victoria" });
@@ -216,7 +220,7 @@ namespace Bastion.UI.Strategy
             return new MissionRowView
             {
                 Id = o.Id, Tone = o.Final || o.Siege == true ? "#ff5a8a" : OfferTone(o), Kind = o.Kind, Name = o.Name, Selected = selected,
-                Where = $"{(o.Siege == true ? "El Bastión" : Campaign.Regions[o.Region].Name)}{(o.Night == true ? $" · {Lore.NightText.Label}" : "")}",
+                Where = $"{(o.Siege == true ? "El Bastión" : Campaign.Regions[o.Region].Name)}{(o.Night == true ? $" · {Lore.NightText.Label}" : "")}{(Bastion.UI.Hud.HudText.Weather.Name(Campaign.OfferWeather(c, o)) is string sky ? $" · {sky}" : "")}",
                 Tip = o.Siege == true ? $"{Lore.SiegeText.Name} · El Bastión" : $"{(o.Facility != null ? "Nido" : o.Story != null ? $"Historia · {Setup.MissionNames[o.Kind]}" : o.Quest != null ? $"Encargo · {Setup.MissionNames[o.Kind]}" : Setup.MissionNames[o.Kind])} · {Campaign.Regions[o.Region].Name}",
                 Chip = o.ExpiresDay != null ? AheadChip(c, o.ExpiresDay.Value) : null, ChipTone = days != null && days <= 1 ? "bad" : null,
                 ChipTip = o.ExpiresDay == null ? "No caduca" : $"Caduca {AheadText(c, o.ExpiresDay.Value)}",

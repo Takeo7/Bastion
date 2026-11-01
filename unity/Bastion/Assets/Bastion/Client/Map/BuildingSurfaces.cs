@@ -210,7 +210,7 @@ namespace Bastion.Client.Map
         /// A gabled roof over the walls' middle lines of b: two slopes of shingles with eaves, a thickness, and siding
         /// gables at the ends. Returns the height of its top.
         /// </summary>
-        public static double GableRoof(Surfaces @out, Building b, double pitch, Rgb roofTint, Rgb wallTint)
+        public static double GableRoof(Surfaces @out, Building b, double pitch, Rgb roofTint, Rgb wallTint, double eave = 0.36)
         {
             bool along = b.x1 - b.x0 >= b.y1 - b.y0;
             // In the roof's frame: u along the ridge, v across; c the middle.
@@ -218,7 +218,6 @@ namespace Bastion.Client.Map
             double cz = (b.y0 + b.y1) / 2.0 + 0.5;
             double L = (along ? b.x1 - b.x0 : b.y1 - b.y0) / 2.0;
             double W = (along ? b.y1 - b.y0 : b.x1 - b.x0) / 2.0;
-            const double eave = 0.36;
             const double gableOut = 0.22;
             const double thick = 0.1;
             double h0 = b.@base + Storey * b.storeys;
@@ -254,6 +253,179 @@ namespace Bastion.Client.Map
             var hi = along ? V(cx + U, ridge + 0.06, cz + half) : V(cx + half, ridge + 0.06, cz + U);
             @out.Box(lo, hi, Swatch.Shingles, roofTint.Scale(0.6), b.index);
             return ridge + 0.06;
+        }
+
+        /// <summary>
+        /// A house's roof as Town's houses have theirs (Ana's #3, 1/11; Arturo: pitched, of two or four slopes): its ridge
+        /// along the house's length, hipped on some (the ends sloping too, to a point on a square house), gabled on the
+        /// rest; Town's pitch (28°), lower over a wide house so it doesn't tower over the street. Where its faces are.
+        /// </summary>
+        public sealed class HouseRoofShape
+        {
+            /// <summary>Hipped (four slopes) or gabled; the ridge along x (else along z).</summary>
+            public bool hipped, along;
+            /// <summary>Rise over run; the middle (world tiles); half the length and half the width between the walls' middle lines; the walls' top.</summary>
+            public double pitch, cx, cz, L, W, h0;
+
+            /// <summary>Half the ridge's length: the whole house's on a gable, short of the hips' on a hipped roof (0: a point).</summary>
+            public double Ridge => hipped ? Math.Max(0, L - W) : L + GableOut;
+
+            /// <summary>The height of the roof's top face over (x, z) (world tiles), anywhere under it.</summary>
+            public double Top(double x, double z)
+            {
+                double u = Math.Abs(along ? x - cx : z - cz), v = Math.Abs(along ? z - cz : x - cx);
+                double rise = hipped ? Math.Min(W - v, L - u) : W - v;
+                return h0 + RoofThick + rise * pitch;
+            }
+        }
+
+        /// <summary>A house roof's overhang past its walls along the eaves, past the gables, its thickness; Town's pitch (tan 28°).</summary>
+        const double Eave = 0.45, GableOut = 0.22, RoofThick = 0.1, TownPitch = 0.5317094316614788;
+        /// <summary>The most a house's roof rises over its eaves (tiles): a wide house's is pitched lower.</summary>
+        const double RiseMost = 2.2;
+        /// <summary>How many houses in a hundred have a hipped roof (Town's mostly do).</summary>
+        const double HippedShare = 0.6;
+        /// <summary>The gutters along the eaves: Town's grey, so wide and deep (tiles).</summary>
+        static readonly Rgb Gutter = Rgb.Hex(0x6e6e6c);
+        const double GutterSize = 0.12;
+
+        /// <summary>The shape of house b's roof, always the same for a house.</summary>
+        public static HouseRoofShape HouseRoofOf(Building b)
+        {
+            bool along = b.x1 - b.x0 >= b.y1 - b.y0;
+            double W = (along ? b.y1 - b.y0 : b.x1 - b.x0) / 2.0;
+            return new HouseRoofShape
+            {
+                hipped = BuildingPlan.Hash(b.x0, b.y0, 31) < HippedShare, along = along,
+                pitch = Math.Min(TownPitch, RiseMost / Math.Max(1, W)),
+                cx = (b.x0 + b.x1) / 2.0 + 0.5, cz = (b.y0 + b.y1) / 2.0 + 0.5,
+                L = (along ? b.x1 - b.x0 : b.y1 - b.y0) / 2.0, W = W,
+                h0 = b.@base + Storey * b.storeys,
+            };
+        }
+
+        /// <summary>
+        /// House b's roof (HouseRoofOf): its slopes of shingles over eaves with a fascia and a gutter along each, caps along
+        /// the ridge and the hips; a gabled one with its rakes and its siding gables, as GableRoof. Returns the height of
+        /// its top.
+        /// </summary>
+        public static double HouseRoof(Surfaces @out, Building b, Rgb roofTint, Rgb wallTint)
+        {
+            var r = HouseRoofOf(b);
+            if (!r.hipped)
+            {
+                double top = GableRoof(@out, b, r.pitch, roofTint, wallTint, Eave);
+                Gutters(@out, b, r, false);
+                return top;
+            }
+            double L = r.L, W = r.W, pitch = r.pitch;
+            double U = L + Eave, E = W + Eave, R = r.Ridge;
+            double ridge = r.h0 + RoofThick + W * pitch;
+            double low = r.h0 + RoofThick - Eave * pitch;
+            Vec3d P(double u, double y, double v) => r.along ? V(r.cx + u, y, r.cz + v) : V(r.cx + v, y, r.cz + u);
+            Vec3d D(double u, double y, double v) => r.along ? V(u, y, v) : V(v, y, u);
+            double run = E * Js.Hypot(1, pitch);
+            var dark = roofTint.Scale(0.7);
+            var cap = roofTint.Scale(0.6);
+            foreach (int side in new[] { 1, -1 })
+            {
+                // The long slopes, from the ridge down to the eaves; the swatch along the eave and down the slope.
+                var face = new[] { P(-R, ridge, 0), P(R, ridge, 0), P(U, low, side * E), P(-U, low, side * E) };
+                @out.Poly(face, new[] { (-R, 0.0), (R, 0.0), (U, run), (-U, run) }, Swatch.Shingles, roofTint, b.index, D(0, 1, side * pitch));
+                var fascia = new[] { P(-U, low - RoofThick, side * E), P(U, low - RoofThick, side * E), face[2], face[3] };
+                @out.Poly(fascia, new[] { (-U, 0.0), (U, 0.0), (U, RoofThick), (-U, RoofThick) }, Swatch.Shingles, dark, b.index, D(0, 0, side));
+                // The ends: a slope down from the ridge's end to the end's eave (in the end's own frame: v along its eave).
+                int end = side;
+                var hip = new[] { P(end * R, ridge, 0), P(end * U, low, E), P(end * U, low, -E) };
+                @out.Poly(hip, new[] { (0.0, 0.0), (E, run), (-E, run) }, Swatch.Shingles, roofTint, b.index, D(end * pitch, 1, 0));
+                var edge = new[] { P(end * U, low - RoofThick, -E), P(end * U, low - RoofThick, E), hip[1], hip[2] };
+                @out.Poly(edge, new[] { (-E, 0.0), (E, 0.0), (E, RoofThick), (-E, RoofThick) }, Swatch.Shingles, dark, b.index, D(end, 0, 0));
+                // Caps down the two hips from this end of the ridge: a strip over the crease, a little above it.
+                foreach (int across in new[] { 1, -1 })
+                {
+                    double du = end * (U - R), dv = across * E;
+                    double n = Js.Hypot(du, dv);
+                    double ou = -dv / n * 0.07, ov = du / n * 0.07;
+                    var a = (u: end * R, v: 0.0, y: ridge + 0.03);
+                    var z = (u: end * U, v: across * E, y: low + 0.03);
+                    var strip = new[] { P(a.u - ou, a.y, a.v - ov), P(a.u + ou, a.y, a.v + ov), P(z.u + ou, z.y, z.v + ov), P(z.u - ou, z.y, z.v - ov) };
+                    @out.Poly(strip, new[] { (0.0, 0.0), (0.14, 0.0), (0.14, run), (0.0, run) }, Swatch.Shingles, cap, b.index, V(0, 1, 0));
+                }
+            }
+            // A ridge cap, if there is a ridge.
+            if (R > 0.05)
+            {
+                const double half = 0.07;
+                var lo = r.along ? V(r.cx - R, ridge - 0.02, r.cz - half) : V(r.cx - half, ridge - 0.02, r.cz - R);
+                var hi = r.along ? V(r.cx + R, ridge + 0.06, r.cz + half) : V(r.cx + half, ridge + 0.06, r.cz + R);
+                @out.Box(lo, hi, Swatch.Shingles, cap, b.index);
+            }
+            Gutters(@out, b, r, true);
+            return ridge + 0.06;
+        }
+
+        /// <summary>How many houses in a hundred have porches; a porch's depth out from the wall, its height at the wall and its fall to the front (tiles); its posts' colour.</summary>
+        const double PorchShare = 0.7, PorchDepth = 0.85, PorchHigh = Storey * 0.93, PorchFall = 0.3;
+        static readonly Rgb PorchPost = Rgb.Hex(0xe8e4dc);
+
+        /// <summary>
+        /// The porches of house b (Ana's #3, 1/11: Town's houses have them), on some houses: over each door in its outline
+        /// onto open ground (nobody's building, walkable), a canopy of shingles a tile deep, along its wall from a tile
+        /// before the door to a tile after it (short of the corners), sloping out, on two posts at its front corners. Only
+        /// on the screen: the tiles under it are as they were.
+        /// </summary>
+        static void Porches(GameState s, BuildingPlan plan, Building b, Surfaces @out, Looks looks)
+        {
+            if (b.@base > 0 || BuildingPlan.Hash(b.x0, b.y0, 36) >= PorchShare) return;
+            int w = s.Width;
+            var dark = looks.shingles.Scale(0.7);
+            for (int y = b.y0; y <= b.y1; y++)
+                for (int x = b.x0; x <= b.x1; x++)
+                {
+                    bool edge = x == b.x0 || x == b.x1 || y == b.y0 || y == b.y1;
+                    string t = TileIn(s.Tiles, y * w + x);
+                    if (!edge || (t != TileKinds.Door && t != TileKinds.DoorOpen) || plan.Owner[y * w + x] != b.index) continue;
+                    int ox = x == b.x0 ? -1 : x == b.x1 ? 1 : 0, oy = ox != 0 ? 0 : y == b.y0 ? -1 : 1;
+                    int fx = x + ox, fy = y + oy;
+                    if (fx < 0 || fy < 0 || fx >= w || fy >= s.Height || plan.Owner[fy * w + fx] >= 0 || !Grid.IsWalkable(TileIn(s.Tiles, fy * w + fx))) continue;
+                    // In the porch's frame: u along the wall (the door's middle 0), v out from the wall's face.
+                    bool alongX = oy != 0;
+                    double door = alongX ? x + 0.5 : y + 0.5;
+                    double lo = Math.Max(door - 1.5, (alongX ? b.x0 : b.y0) + 0.5), hi = Math.Min(door + 1.5, (alongX ? b.x1 : b.y1) + 0.5);
+                    double face = (alongX ? y + 0.5 + oy * 0.5 : x + 0.5 + ox * 0.5) + (alongX ? oy : ox) * (WallHalf - 0.5);
+                    int sign = alongX ? oy : ox;
+                    Vec3d P(double u, double yy, double v) => alongX ? V(u, yy, face + sign * v) : V(face + sign * v, yy, u);
+                    double top = b.@base + PorchHigh, front = top - PorchFall;
+                    var slope = new[] { P(lo, top, 0), P(hi, top, 0), P(hi, front, PorchDepth), P(lo, front, PorchDepth) };
+                    double run = Js.Hypot(PorchDepth, PorchFall);
+                    @out.Poly(slope, new[] { (lo, 0.0), (hi, 0.0), (hi, run), (lo, run) }, Swatch.Shingles, looks.shingles, b.index, alongX ? V(0, 1, sign * PorchFall) : V(sign * PorchFall, 1, 0));
+                    var fascia = new[] { P(lo, front - RoofThick, PorchDepth), P(hi, front - RoofThick, PorchDepth), slope[2], slope[3] };
+                    @out.Poly(fascia, new[] { (lo, 0.0), (hi, 0.0), (hi, RoofThick), (lo, RoofThick) }, Swatch.Shingles, dark, b.index, alongX ? V(0, 0, sign) : V(sign, 0, 0));
+                    foreach (double u in new[] { lo + 0.12, hi - 0.12 })
+                    {
+                        var a = P(u - 0.05, b.@base, PorchDepth - 0.17);
+                        var z = P(u + 0.05, front - RoofThick, PorchDepth - 0.07);
+                        @out.Box(V(Math.Min(a.x, z.x), a.y, Math.Min(a.z, z.z)), V(Math.Max(a.x, z.x), z.y, Math.Max(a.z, z.z)), Swatch.Flat, PorchPost, b.index);
+                    }
+                }
+        }
+
+        /// <summary>A gutter under each eave of house b's roof `r` (the ends' too on a hipped one), hung below the fascia.</summary>
+        static void Gutters(Surfaces @out, Building b, HouseRoofShape r, bool ends)
+        {
+            double low = r.h0 + RoofThick - Eave * r.pitch - RoofThick;
+            double U = r.L + (r.hipped ? Eave : GableOut), E = r.W + Eave, g = GutterSize;
+            void Run(double u0, double v0, double u1, double v1)
+            {
+                var a = r.along ? V(r.cx + u0, low - g, r.cz + v0) : V(r.cx + v0, low - g, r.cz + u0);
+                var z = r.along ? V(r.cx + u1, low + 0.02, r.cz + v1) : V(r.cx + v1, low + 0.02, r.cz + u1);
+                @out.Box(V(Math.Min(a.x, z.x), a.y, Math.Min(a.z, z.z)), V(Math.Max(a.x, z.x), z.y, Math.Max(a.z, z.z)), Swatch.Flat, Gutter, b.index, true);
+            }
+            foreach (int side in new[] { 1, -1 })
+            {
+                Run(-U, side * E, U, side * (E + g));
+                if (ends) Run(side * U, -E, side * (U + g), E);
+            }
         }
 
         /// <summary>A flat roof over b: a slab of tar on the walls and a parapet round it (both flat colours). Returns the height of its top.</summary>
@@ -329,11 +501,18 @@ namespace Bastion.Client.Map
                 if (b.leveled) StoreyFloors(plan, b, storeys, looks);
                 roofs.Level = b.storeys;
                 double roof;
+                // Pitched where the engine says nobody stands on the roof (Building.pitched), as a house's or a barn's.
                 if (b.walkableRoof) roof = RoofDeck(plan, b, decks, looks);
-                else if (b.kind == BuildingKinds.House) roof = GableRoof(roofs, b, Pitch, looks.shingles, looks.outer);
-                else if (b.kind == BuildingKinds.Barn) roof = GableRoof(roofs, b, HallPitch * 1.8, looks.shingles, looks.outer);
+                else if (b.pitched == PitchedKinds.House) roof = HouseRoof(roofs, b, looks.shingles, looks.outer);
+                else if (b.pitched == PitchedKinds.Barn) roof = GableRoof(roofs, b, HallPitch * 1.8, looks.shingles, looks.outer);
                 else roof = FlatRoof(roofs, b, looks.tar, looks.trim);
                 b.top = (float)roof;
+                if (b.pitched == PitchedKinds.House)
+                {
+                    // Its porches stand on the ground floor's top (they fade from there).
+                    roofs.Level = 1;
+                    Porches(s, plan, b, roofs, looks);
+                }
             }
             Stairs(s, plan, storeys);
             var solid = new Surfaces();
@@ -671,19 +850,22 @@ namespace Bastion.Client.Map
             bool along = b.x1 - b.x0 >= b.y1 - b.y0;
             double cx = (b.x0 + b.x1) / 2.0 + 0.5;
             double cz = (b.y0 + b.y1) / 2.0 + 0.5;
-            if (b.kind == BuildingKinds.House && !b.walkableRoof)
+            if (b.pitched == PitchedKinds.House)
             {
                 if (R(0) < 0.65)
                 {
-                    // On the ridge near one end, half sunk into the roof.
-                    double L = (along ? b.x1 - b.x0 : b.y1 - b.y0) / 2.0 - 1.1;
+                    // Beside the ridge near one end (on a hipped roof, short of the hip, or on the slope if it has hardly a
+                    // ridge), half sunk into the roof.
+                    var shape = HouseRoofOf(b);
+                    double L = Math.Max(0, Math.Min(shape.L - 1.1, shape.Ridge + (shape.hipped ? 0.4 : 0)));
                     double u = (R(1) < 0.5 ? -1 : 1) * L;
                     const double v = 0.35;
-                    @out.Add(new RoofProp("chimney", along ? cx + u : cx + v, b.top - 1.0, along ? cz + v : cz + u, along ? 0 : Math.PI / 2));
+                    double x = along ? cx + u : cx + v, z = along ? cz + v : cz + u;
+                    @out.Add(new RoofProp("chimney", x, shape.Top(x, z) - 0.8, z, along ? 0 : Math.PI / 2));
                 }
                 return @out;
             }
-            if (b.kind == BuildingKinds.Barn || b.kind == BuildingKinds.Ruin) return @out;
+            if (b.pitched == PitchedKinds.Barn || b.kind == BuildingKinds.Ruin) return @out;
             double y = b.@base + Storey * b.storeys + 0.04;
             if (b.radio)
             {

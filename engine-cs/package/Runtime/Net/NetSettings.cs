@@ -9,14 +9,30 @@ namespace Bastion.Net
 {
     /// <summary>
     /// Where a player's app connects: an address as it is typed or pasted (desktop main.ts normalise). «192.168.1.20»,
-    /// «192.168.1.20:41392», «100.116.6.72» (Tailscale) or a name; with no port, the host's first one.
+    /// «192.168.1.20:41392», «100.116.6.72» (Tailscale) or a name; with no port, the host's first one. From the internet,
+    /// with the room's key after it, as the host's menu gives it to copy: «83.45.12.7:41391 · KXRT5» (Room.Key).
     /// </summary>
     public static class GameAddress
     {
         public static bool TryParse(string? text, out string host, out int port)
         {
+            return TryParse(text, out host, out port, out _);
+        }
+
+        /// <summary>The address, and the key after it if there is one (Room.NormalKey'd; null without).</summary>
+        public static bool TryParse(string? text, out string host, out int port, out string? key)
+        {
             host = "";
             port = 0;
+            key = null;
+            var keyed = Regex.Match((text ?? "").Trim(), @"^(\S+?)\s*(?:[·•|,;]\s*|\s+)([A-Za-z0-9][A-Za-z0-9 -]{2,10})$");
+            if (keyed.Success)
+            {
+                text = keyed.Groups[1].Value;
+                key = Room.NormalKey(keyed.Groups[2].Value);
+                // Not a key's length («mac de arturo»): no address either.
+                if (key.Length < 4 || key.Length > 6) return false;
+            }
             var bare = Regex.Replace(Regex.Replace((text ?? "").Trim(), @"^[a-z]+://", "", RegexOptions.IgnoreCase), "/.*$", "");
             var m = Regex.Match(bare, @"^([\w.-]+)(?::(\d{1,5}))?$");
             if (!m.Success) return false;

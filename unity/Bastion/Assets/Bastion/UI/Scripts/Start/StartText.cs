@@ -17,7 +17,7 @@ namespace Bastion.UI.Start
         public const string LanNone = "Ninguna por ahora. Cuando el otro jugador pulse «Alojar la partida», saldrá aquí.";
         public const string JoinLabel = "UNIRSE POR DIRECCIÓN";
         /// <summary>The host's address is on its main menu once the game is open (lobby.ts invite, and so in Unity).</summary>
-        public const string JoinHint = "Por Tailscale, o si la partida no sale arriba: escribe la dirección que aparece en el menú principal de quien la aloja.";
+        public const string JoinHint = "Si la partida no sale arriba, o no estáis en la misma red: escribe la dirección que sale en el menú principal de quien la aloja, con la clave si la lleva.";
         public const string JoinPlaceholder = "192.168.1.20:41391";
         public const string Join = "UNIRSE";
         public const string Quit = "SALIR DE BASTIÓN";

@@ -38,9 +38,22 @@ function findFbx(pack: string, name: string): string | null {
   return found.get(name) ?? null;
 }
 
+// (Unity's own, Ana's #3 of 1/11, Arturo: houses of Town's pieces, not all alike): the kit's other windows, doors and
+// open shutters, each house picking its own, and the roller garage door in its wall, four tiles wide, without the
+// track inside it (WallLayout.HouseLook).
+const HOUSE_PIECES: Record<string, Record<string, unknown>> = {
+  houseWindow2: { pack: 'town', fbx: 'SM_Bld_House_Window_02', centre: [1.25, -0.1], run: 'x', out: -1 },
+  houseWindow3: { pack: 'town', fbx: 'SM_Bld_House_Window_03', centre: [1.25, -0.1], run: 'x', out: -1 },
+  houseWindow4: { pack: 'town', fbx: 'SM_Bld_House_Window_04', centre: [1.25, -0.1], run: 'x', out: -1 },
+  houseWindow5: { pack: 'town', fbx: 'SM_Bld_House_Window_05', centre: [3.75, -0.1], run: 'x', out: -1, drop: ['Glass'] },
+  houseShutters: { pack: 'town', fbx: 'SM_Bld_House_Window_Shutters_Open_01', centre: [1.25, -0.1], run: 'x', out: -1 },
+  houseDoor2: { pack: 'town', fbx: 'SM_Bld_House_Door_02', centre: [1.25, -0.1], run: 'x', out: -1, parts: true, leaf: 'SM_Bld_House_Door' },
+  houseDoor3: { pack: 'town', fbx: 'SM_Bld_House_Door_03', centre: [1.25, -0.1], run: 'x', out: -1, parts: true, leaf: 'SM_Bld_House_Door' },
+  houseGarage: { pack: 'town', fbx: 'SM_Bld_House_ExteriorWall_GarageDoor_01', centre: [2.5, -0.1], run: 'x', out: -1, keep: [[-50, -0.3, -0.02], [50, 0.05, 50]] },
+};
 const pieces: Record<string, Record<string, unknown>> = {};
 const missing: string[] = [];
-for (const [id, p] of Object.entries(m.PIECES as Record<string, Record<string, unknown>>)) {
+for (const [id, p] of Object.entries({ ...(m.PIECES as Record<string, Record<string, unknown>>), ...HOUSE_PIECES })) {
   const src = findFbx(p.pack as string, p.fbx as string);
   if (!src) missing.push(`${id} (${p.pack}/${p.fbx})`);
   pieces[id] = { ...p, src: src ? relative(root, src) : null };

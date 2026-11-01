@@ -698,6 +698,13 @@ namespace Bastion.Engine
 
                 // A trap of the base under one of the dead (docs/FASE12.md §11.4): it stops there.
                 if (u.Team == Teams.Alien && SpringTrap(u, step, Flush)) return;
+                // Fire underfoot (Arturo, 1/11): every burning tile it steps on burns it, and it goes on if it can.
+                if (Burning.At(S, step))
+                {
+                    Flush();
+                    Burn(u, step);
+                    if (!u.Alive || Over) return;
+                }
 
                 var item = S.Mission.Item;
                 if (u.Team == Teams.Xcom && item != null && string.IsNullOrEmpty(item.Carrier) && item.Pos != null && Grid.SamePos(item.Pos, step))
@@ -801,6 +808,25 @@ namespace Bastion.Engine
             return true;
         }
 
+        /// <summary>Fire under `u` (GameState.fires; Arturo, 1/11: «alumbra y quema»): a point of health, armour or not.</summary>
+        private void Burn(Unit u, Pos at)
+        {
+            Emit(new BurnedEvent { Unit = u.Id, Pos = Engine.Events.CopyPos(at) });
+            Damage(u, Content.Flames.Damage, 0, null, 99);
+            CheckOutcome();
+        }
+
+        /// <summary>Whoever of `team` ends its turn on fire burns.</summary>
+        private void BurnStanding(string team)
+        {
+            if (S.Fires == null || S.Fires.Count == 0) return;
+            foreach (var u in S.Units.Where((x) => x.Alive && !x.Evacuated && !x.Objective && x.Team == team && Burning.At(S, x.Pos)).ToList())
+            {
+                if (Over) return;
+                if (u.Alive) Burn(u, u.Pos);
+            }
+        }
+
         /// <summary>Whether an overwatcher covers `step`: with its own sight.</summary>
         private bool Watches(Unit o, Pos step)
         {
@@ -871,6 +897,9 @@ namespace Bastion.Engine
         {
             if (radius <= 0 || Over) return;
             if (by?.Team == Teams.Xcom) radius = Js.Round(radius * Rules.SquadLouder * 10) / 10;
+            // Rain muffles it (Content.Weather; Arturo, 1/11).
+            var muffle = Content.Weather.NoiseOf(S.Weather);
+            if (muffle < 1) radius = Js.Round(radius * muffle * 10) / 10;
             var heard = S.Units.Where((o) =>
                 o.Alive &&
                 o.Team == Teams.Alien &&
@@ -1303,6 +1332,9 @@ namespace Bastion.Engine
         {
             var turn = S.Turn;
             AlienBudget = new AlienBudget { Explosives = 1, Psi = 1 };
+            // Whoever of the squad ends its turn on fire burns.
+            BurnStanding(Teams.Xcom);
+            if (Over) return;
             Emit(new TurnBeganEvent { Team = Teams.Alien, Turn = turn });
             // The base's turrets keep watch through the enemy's turn: each of the dead that moves in sight, once (docs/FASE12.md §11.4).
             foreach (var t in S.Units.Where((x) => x.Alive && x.Automaton != null && Content.LoadedFor(x, AbilityIds.Shoot)).ToList()) Emit(new OverwatchEvent { Unit = t.Id, KillZone = true });
@@ -1364,6 +1396,9 @@ namespace Bastion.Engine
                 else Emit(new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Timer });
                 return;
             }
+            // The enemies that end their turn on fire burn.
+            BurnStanding(Teams.Alien);
+            if (Over) return;
             // Bengalas and fires on their last turn burn out; the rest burn down as the squad's turn begins.
             foreach (var l in (S.Lights ?? new List<Light>()).ToList()) if (l.Turns != null && l.Turns <= 1) Emit(new LightOffEvent { Id = l.Id });
             Emit(new TurnBeganEvent { Team = Teams.Xcom, Turn = turn + 1, Command = OpeningCommander(turn + 1) });

@@ -5,8 +5,8 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// The objective's card under «Menú» (hud.ts setMission; docs/UNITY-UI.md §2.7): the mission's kind, the objective
-    /// as it goes (in full on hover), the turns left, a siege's next wave, the Saqueo's horde, «VIENEN MÁS». A click opens
+    /// The objective's card, top right (hud.ts setMission; docs/UNITY-UI.md §2.7): the mission's kind, the objective as it
+    /// goes (in full on hover), the turns left, a siege's next wave, the weather, the Saqueo's horde, «VIENEN MÁS». A click opens
     /// the arrival card again. Under it, a siege's compass (#34), turned with the camera every frame; and with it, its
     /// four letters at the screen's edges, each on the side its quarter of the map lies (Ana, 28/10: «una N en el lado
     /// que sea el norte, una S en el sur»), the next wave's in red as on the compass.
@@ -67,6 +67,17 @@ namespace Bastion.UI.Hud
             tips.Attach(goal, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
             if (m.TurnsLeft >= 0) Ui.Text(HudText.Mission.Turns(m.TurnsLeft), m.TurnsLeft <= 3 ? "timer timer--urgent" : "timer", host);
             if (!string.IsNullOrEmpty(m.WaveText)) tips.Attach(Ui.Text(m.WaveText, m.WaveUrgent ? "timer timer--urgent" : "timer", host), m.WaveTip);
+            // The weather (Arturo, 01/11): its drawing and its name beside the turns, what it changes in its help.
+            var weather = HudText.Weather.Name(m.Weather);
+            if (weather != null)
+            {
+                var chip = Ui.El("timer weather", host);
+                var icon = Ui.El("weather__icon", chip);
+                icon.pickingMode = PickingMode.Ignore;
+                icon.Add(new LineIcon("weather:" + m.Weather));
+                Ui.Text(weather.ToUpperInvariant(), "weather__name", chip).pickingMode = PickingMode.Ignore;
+                tips.Attach(chip, HudText.Weather.About(m.Weather));
+            }
             // The noise meter (Ana's notes, Arturo 29/10): «RUIDO», the bar with a mark each 10 dB, and the dB; grey, amber
             // from 60, red from 80.
             if (m.HordeFill >= 0)

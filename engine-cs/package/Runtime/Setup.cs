@@ -141,6 +141,8 @@ namespace Bastion.Engine
         public bool? Quarantine { get; set; }
         /// <summary>Still winter in the campaign (campaign.ts wintry): the map under snow.</summary>
         public bool? Snow { get; set; }
+        /// <summary>Rain or snow falling (Weathers; Campaign.OfferWeather); null, clear.</summary>
+        public string? Weather { get; set; }
         /// <summary>A campaign's siege (docs/FASE12.md §11.5): how many of the dead come in all, and by which sides; without it, the test siege's waves.</summary>
         public SiegePlan? SiegePlan { get; set; }
         /// <summary>La Lata's vehicle in a campaign (campaign.ts VEHICLE_SEATS: 0 todoterreno … 3 autobús); the bus without it.</summary>
@@ -703,6 +705,8 @@ namespace Bastion.Engine
             bool Near(int x, int y, IEnumerable<Vec2> ps, double d) => ps.Any((p) => Js.Hypot(p.X - x, p.Y - y) < d);
             var dead = units.Where((u) => u.Team == Teams.Alien).Select((u) => (Vec2)u.Pos).ToList();
             var taken = new HashSet<int>(units.Select((u) => At(u.Pos.X, u.Pos.Y)));
+            // Nobody waits on fire.
+            foreach (var f in layout.Fires ?? new List<Fire>()) taken.UnionWith(f.Tiles);
             var inside = new List<Vec2>();
             var corners = new List<Vec2>();
             var diagonals = new[] { (1, 1), (1, -1), (-1, 1), (-1, -1) };
@@ -994,9 +998,12 @@ namespace Bastion.Engine
                 Ground = layout.Ground != null ? new List<int>(layout.Ground) : null,
                 Medical = layout.Medical?.Select(CopyMedical).ToList(),
                 Homes = layout.Homes?.Select(CopyHome).ToList(),
+                Pitched = layout.Pitched?.Select((p) => new PitchedRoof { X = p.X, Y = p.Y, W = p.W, H = p.H, Kind = p.Kind }).ToList(),
                 Markets = layout.Markets?.Select((m) => new MarketSite { X = m.X, Y = m.Y, W = m.W, H = m.H, Front = m.Front, Stock = m.Stock }).ToList(),
                 Decor = layout.Decor != null ? new List<int>(layout.Decor) : null,
                 Storeys = layout.Storeys != null ? new List<int>(layout.Storeys) : null,
+                Wrecks = layout.Wrecks?.Select((w) => new Wreck { Anchor = w.Anchor, Kind = w.Kind, Tilt = w.Tilt }).ToList(),
+                Fires = layout.Fires?.Select((f) => new Fire { Id = f.Id, Source = f.Source, Tiles = new List<int>(f.Tiles) }).ToList(),
                 Frame = layout.Frame?.Select((f) => new FramePiece { Kind = f.Kind, X = f.X, Y = f.Y, W = f.W, H = f.H, Side = f.Side, Storeys = f.Storeys }).ToList(),
                 Levels = layout.Levels?.Select((l) => new Level { Tiles = new List<string?>(l.Tiles), Decor = l.Decor != null ? new List<int>(l.Decor) : null }).ToList(),
                 Lights = new List<Light>(),
@@ -1013,6 +1020,7 @@ namespace Bastion.Engine
                 OutcomeReason = null,
                 CampaignMission = opts.CampaignMission,
                 Snow = opts.Snow == true ? true : (bool?)null,
+                Weather = !string.IsNullOrEmpty(opts.Weather) ? opts.Weather : null,
                 Breakables = siege != null ? breakables : null,
                 // The campaign's base, as it stands (docs/FASE12.md §11): what the client draws, and what the siege's end gives back.
                 Base = opts.Map.Kind == MapSourceKinds.Base
@@ -1037,6 +1045,12 @@ namespace Bastion.Engine
                 Radius = tile.Radius ?? Content.Night.StreetLight,
                 Tiles = Los.LightTiles(state, Grid.Ground(tile), tile.Radius ?? Content.Night.StreetLight, Content.Night.LampHeight),
             }).ToList();
+            // What burns lights round it at night as a lamp does, lower down, and never goes out: its light has the fire's id.
+            foreach (var f in state.Fires ?? new List<Fire>())
+            {
+                var at = Grid.PosOf(state, f.Source);
+                state.Lights.Add(new Light { Id = f.Id, Tile = at, Radius = Content.Flames.Light, Tiles = Los.LightTiles(state, at, Content.Flames.Light, Content.Flames.LightHeight) });
+            }
             // Paused at the start, while the briefing is read: the space bar (or «Empezar») sets the clock going.
             if (opts.Realtime == true) state.Realtime = new Realtime { Clock = 0, Paused = true, Units = new Dictionary<string, RtUnit>() };
             return state;

@@ -390,6 +390,14 @@ namespace Bastion.Engine
         public int? Facing { get; set; }
     }
 
+    /// <summary>Somebody burns, stepping on fire or ending a turn on it (GameState.fires; Arturo, 1/11). Its harm follows (`damaged`).</summary>
+    public sealed class BurnedEvent : GameEvent
+    {
+        public override string T => "burned";
+        public string Unit { get; set; } = "";
+        public Pos Pos { get; set; } = new Pos();
+    }
+
     /// <summary>A trap of the base goes off under one of the dead (docs/FASE12.md §11.4): one use less. Its harm follows (`damaged`, `stunned`).</summary>
     public sealed class TrapSprungEvent : GameEvent
     {

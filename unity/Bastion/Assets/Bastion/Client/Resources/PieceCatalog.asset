@@ -189,6 +189,40 @@ MonoBehaviour:
     - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
     - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
     - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: houseWindow2
+    model: {fileID: 919132149155446097, guid: 810c104720ecc49efac7af892f286b2b, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: houseWindow3
+    model: {fileID: 919132149155446097, guid: b7c1dbce9eefe4d20bfd430911ff69e2, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: houseWindow4
+    model: {fileID: 919132149155446097, guid: b1f1c8b48fef24d8f8a964d26d873c91, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: houseWindow5
+    model: {fileID: 919132149155446097, guid: 8cf6c85d2838e4a8f9f4e082c4dad12d, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: houseShutters
+    model: {fileID: 919132149155446097, guid: 1f1b4b8d965e244079b3429aa7e6363a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: houseDoor2
+    model: {fileID: 919132149155446097, guid: 40a8ce2c11014481990d061e18038c53, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: houseDoor3
+    model: {fileID: 919132149155446097, guid: c74cfee4ace4346159087ecefa27257e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: houseGarage
+    model: {fileID: 919132149155446097, guid: 632478c2ce9554daa8bb993618641584, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
   glass: {fileID: 2100000, guid: 9687b2ff7e4e8407aa956c2583503912, type: 2}
   floors: {fileID: 2100000, guid: c1928889cb8a747748a8f362da8429e7, type: 2}
   roofs: {fileID: 2100000, guid: e380eff6d4dd44b708eb5651b762e997, type: 2}

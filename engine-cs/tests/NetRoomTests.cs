@@ -115,6 +115,9 @@ namespace Bastion.Engine.Tests
             public Room Room;
             private int peers;
 
+            /// <summary>The room's key, to join from the internet.</summary>
+            public const string Key = "KXRT5";
+
             public Rig()
             {
                 Room = Make();
@@ -126,13 +129,13 @@ namespace Bastion.Engine.Tests
             public Room Make()
             {
                 var store = new SaveStore(SavePath, (line) => Log.Add(line));
-                return new Room(store, Rules, "1.0.0", new[] { new HostAddress { Address = "192.168.1.20", Kind = "lan" } }, Clock, new Rng(7));
+                return new Room(store, Rules, "1.0.0", new[] { new HostAddress { Address = "192.168.1.20", Kind = "lan" } }, Clock, new Rng(7), key: Key);
             }
 
-            /// <summary>A player's end of a new connection to the room.</summary>
-            public MemoryEnd Open()
+            /// <summary>A player's end of a new connection to the room, from the local network unless `peer` says where.</summary>
+            public MemoryEnd Open(string? peer = null)
             {
-                var (player, host) = MemoryEnd.Pair("jugador", $"10.0.0.{++peers}:5000");
+                var (player, host) = MemoryEnd.Pair("jugador", peer ?? $"10.0.0.{++peers}:5000");
                 Room.Connect(host);
                 Room.Pump();
                 return player;
@@ -144,10 +147,10 @@ namespace Bastion.Engine.Tests
                 Room.Pump();
             }
 
-            public MemoryEnd Join(string name, string? token = null, string version = "1.0.0")
+            public MemoryEnd Join(string name, string? token = null, string version = "1.0.0", string? peer = null, string? key = null)
             {
-                var player = Open();
-                Say(player, new { t = "hello", name, token, version });
+                var player = Open(peer);
+                Say(player, new { t = "hello", name, token, version, key });
                 return player;
             }
 
@@ -288,6 +291,73 @@ namespace Bastion.Engine.Tests
             Assert.Equal(1, (int)welcome["slot"]!);
             Assert.NotEqual(token, (string?)welcome["token"]);
             Assert.Equal("Luis", (string?)Players(Last(luis, "room"))[1]["name"]);
+        }
+
+        [Fact]
+        public void FromTheInternetAnOfflineSeatIsOnlyItsOwnPlayers()
+        {
+            using var rig = new Rig();
+            rig.Join("Ana");
+            var pepe = rig.Join("Pepe", peer: "83.45.12.7:51000", key: Rig.Key);
+            var token = (string)pepe.Take("welcome").Single()["token"]!;
+            pepe.Close("se cae");
+            rig.Room.Pump();
+            // Someone else, through the port the router opened and with the key: for them the game is full.
+            var luis = rig.Join("Luis", peer: "203.0.113.9:40000", key: Rig.Key);
+            Assert.Equal("La partida ya tiene dos jugadores.", (string?)luis.Take("error").Single()["message"]);
+            // Pepe from another address on the internet, by his name and the key: his seat, and his token.
+            var back = rig.Join("Pepe", peer: "198.51.100.4:40001", key: "kxrt5").Take("welcome").Single();
+            Assert.Equal(1, (int)back["slot"]!);
+            Assert.Equal(token, (string?)back["token"]);
+        }
+
+        [Fact]
+        public void FromTheInternetOnlyWithTheKey()
+        {
+            using var rig = new Rig();
+            rig.Join("Ana");
+            var none = rig.Join("Pepe", peer: "83.45.12.7:51000");
+            Assert.StartsWith("Por internet hace falta la clave", (string?)none.Take("error").Single()["message"]);
+            Assert.True(none.IsClosed);
+            var wrong = rig.Join("Pepe", peer: "83.45.12.7:51001", key: "KXRT4");
+            Assert.StartsWith("Esa clave no es la de esta partida", (string?)wrong.Take("error").Single()["message"]);
+            // The local network and Tailscale, as ever.
+            Assert.Single(rig.Join("Pepe", peer: "100.101.12.7:40000").Take("welcome"));
+        }
+
+        [Fact]
+        public void ASeatsTokenNeedsNoKey()
+        {
+            using var rig = new Rig();
+            var pepe = rig.Join("Pepe", peer: "83.45.12.7:51000", key: " kxr-t5 ");
+            var token = (string)pepe.Take("welcome").Single()["token"]!;
+            pepe.Close("se cae");
+            rig.Room.Pump();
+            var back = rig.Join("Pepe", token, peer: "198.51.100.4:40001").Take("welcome").Single();
+            Assert.Equal(token, (string?)back["token"]);
+            // A token of no seat is no key.
+            Assert.StartsWith("Por internet hace falta", (string?)rig.Join("Luis", "ficha-falsa", peer: "203.0.113.9:40000").Take("error").Single()["message"]);
+        }
+
+        [Fact]
+        public void TooManyWrongKeysShutAnAddressOut()
+        {
+            using var rig = new Rig();
+            for (var i = 0; i < Room.KeyTries; i++) rig.Join("Pepe", peer: $"203.0.113.9:{40000 + i}", key: "AAAAA");
+            // Shut out, the right key and all; another address isn't.
+            Assert.StartsWith("Demasiadas claves equivocadas", (string?)rig.Join("Pepe", peer: "203.0.113.9:41000", key: Rig.Key).Take("error").Single()["message"]);
+            Assert.Single(rig.Join("Ana", peer: "83.45.12.7:51000", key: Rig.Key).Take("welcome"));
+            rig.Advance(Room.KeyShutMs);
+            Assert.Single(rig.Join("Pepe", peer: "203.0.113.9:41001", key: Rig.Key).Take("welcome"));
+            Assert.Contains(rig.Log, (l) => l.Contains("203.0.113.9: 10 claves equivocadas"));
+        }
+
+        [Fact]
+        public void AKeyIsFiveOfItsSymbols()
+        {
+            var keys = Enumerable.Range(0, 200).Select((_) => new Room(new SaveStore(Path.Combine(Path.GetTempPath(), "bastion-clave-" + Guid.NewGuid().ToString("N"), "save.json"), null), new FakeRules(), "1.0.0").Key).ToList();
+            Assert.All(keys, (k) => Assert.Matches($"^[{Room.KeyAlphabet}]{{{Room.KeyLength}}}$", k));
+            Assert.True(keys.Distinct().Count() > 190);
         }
 
         [Fact]

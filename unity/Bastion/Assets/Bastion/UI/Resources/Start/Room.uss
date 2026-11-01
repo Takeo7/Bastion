@@ -75,6 +75,17 @@
     margin-bottom: 1px;
 }
 
+/* The router's port while it opens (muted), or why it won't (amber): a short line under the first address. */
+.room__router {
+    font-size: 12px;
+    color: var(--t-muted);
+    white-space: normal;
+}
+
+.room__router--off {
+    color: var(--t-warn);
+}
+
 .room__copy {
     margin-left: 6px;
     padding: 3px 8px;

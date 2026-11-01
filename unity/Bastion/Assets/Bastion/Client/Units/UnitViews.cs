@@ -182,6 +182,8 @@ namespace Bastion.Client.Units
             public string stance;
             /// <summary>Where it stood before it went down to eat (it goes back there as it gets up).</summary>
             public Vector3 home;
+            /// <summary>Time it wasn't stepped, unseen (Step): stepped by it once seen again.</summary>
+            public float missed;
             /// <summary>How many bites it has taken (Lunge): letting go after one is for that one only.</summary>
             public int bites;
             /// <summary>
@@ -262,12 +264,32 @@ namespace Bastion.Client.Units
         /// <summary>The yaw's ease for steps, strikes and aims (unitViews.ts TURN: toward its target by 1 − e^(−dt × this)).</summary>
         const float Turn = 14;
 
+        /// <summary>
+        /// A figure not seen isn't animated (Arturo, 1/11, the performance pass: stepping them is 0.6 to 1.5 ms a frame with
+        /// 40 to 66 of them): off the game camera's view (its box this wide, its shadow with it), hidden (the fog's, the
+        /// cutaway's) or faded out. Only its body waits (Gameplay, 1/11): where it goes and turns, how far up its gun is,
+        /// and every wait of the player's go on by the clock. Seen again, its body is stepped by what it missed, up to so
+        /// much (a fall or a getting up seen whole after it, at its end).
+        /// </summary>
+        static readonly Vector3 SeenBox = new Vector3(6, 2.2f, 6);
+        const float MissedMost = 10;
+        readonly Plane[] frustum = new Plane[6];
+        /// <summary>For a lab: figures not seen left unstepped out of play too (RendimientoLab weighs it).</summary>
+        public static bool CullOutOfPlay;
+        /// <summary>BASTION_ANIMAR_TODAS=1: every figure stepped in play too, seen or not (to weigh it against).</summary>
+        static readonly bool StepAll = Environment.GetEnvironmentVariable("BASTION_ANIMAR_TODAS") == "1";
+
         void Step(float dt)
         {
             clock += dt;
             var cutaway = Map.Cutaway.Current;
+            // (Out of play, a lab's: every figure stepped, as its strips have them.)
+            var eye = (Application.isPlaying && !StepAll) || CullOutOfPlay ? Camera.main : null;
+            if (eye != null) GeometryUtility.CalculateFrustumPlanes(eye, frustum);
+            float step = dt;
             foreach (var v in views.Values)
             {
+                dt = step;
                 if (v.yawTo is float yawTo && v.root != null)
                 {
                     float yaw = v.root.eulerAngles.y, left = Mathf.DeltaAngle(yaw, yawTo);
@@ -286,9 +308,22 @@ namespace Bastion.Client.Units
                     foreach (var r in v.root.GetComponentsInChildren<Renderer>(true)) r.enabled = !cut && !gone;
                     if (!cut && !gone && v.fade < 1) foreach (var w in v.carried.Values) if (w != null) Show(w, v.fade >= 0.5f);
                 }
+                // Where it is and how far into what it does go on seen or not (Gameplay, 1/11: what the player waits for keeps to the clock).
                 bool up = Up(v) && !v.dead;
                 v.aim = Mathf.MoveTowards(v.aim, up && !v.crouched ? 1 : 0, dt / AimBlend);
                 v.up = Mathf.MoveTowards(v.up, up ? 1 : 0, dt / AimBlend);
+                v.reachShare = Mathf.MoveTowards(v.reachShare, v.reachFor != null && !v.dead ? 1 : 0, dt / ReachBlend);
+                KeepToBody(v, dt);
+                bool seen = eye == null || (v.root.gameObject.activeInHierarchy && !cut && !gone && GeometryUtility.TestPlanesAABB(frustum, new Bounds(v.root.position + Vector3.up * SeenBox.y / 2, SeenBox)));
+                if (!seen)
+                {
+                    v.missed = Mathf.Min(v.missed + dt, MissedMost);
+                    v.recoil = false;
+                    continue;
+                }
+                // Only the body is left behind: its skeleton and what is posed on it.
+                dt += v.missed;
+                v.missed = 0;
                 StepBack(v, dt);
                 if (v.recoil)
                 {
@@ -317,8 +352,6 @@ namespace Bastion.Client.Units
                 ClimbPose(v);
                 Reach(v);
                 if (v.deadKind) DeadPose(v);
-                KeepToBody(v, dt);
-                v.reachShare = Mathf.MoveTowards(v.reachShare, v.reachFor != null && !v.dead ? 1 : 0, dt / ReachBlend);
                 if (v.reachShare > 0 && v.reachFor != null && views.TryGetValue(v.reachFor, out var reached)) ReachPose(v, BodyChest(reached), v.reachShare, clock);
             }
             StepFlashes(dt);

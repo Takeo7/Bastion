@@ -28,6 +28,20 @@ namespace Bastion.Engine.Tests
             Assert.All(Places.Names.Keys, (k) => Assert.True(Places.DeadShare.ContainsKey(k)));
         }
 
+        [Fact(DisplayName = "places › a town's kind by its seed: a residential one has more houses than a commercial one (Arturo, 1/11)")]
+        public void ATownsKind()
+        {
+            Assert.Equal(TownKinds.Residential, Places.TownKindSeed(1));
+            Assert.Equal(TownKinds.Commercial, Places.TownKindSeed(6));
+            Assert.Equal(TownKinds.Mixed, Places.TownKindSeed(12));
+            int Homes(string kind)
+            {
+                var seeds = Enumerable.Range(1, 400).Where((n) => Places.TownKindSeed(n) == kind && !Places.OldTownSeed(n)).Take(8);
+                return seeds.Sum((seed) => Mapgen.GenerateLayout(new GenOptions { Biome = Biomes.City, Kind = MissionKinds.Elimination, PodSizes = new List<int> { 3 }, Seed = seed }).Homes?.Count ?? 0);
+            }
+            Assert.True(Homes(TownKinds.Residential) > Homes(TownKinds.Commercial), $"{Homes(TownKinds.Residential)} against {Homes(TownKinds.Commercial)}");
+        }
+
         [Fact(DisplayName = "places › the city keeps its dead, the rest their share of them: at difficulty 2, 13, 11, 9, 8 and 7 groups")]
         public void TheCityKeepsItsDead()
         {

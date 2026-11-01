@@ -26,6 +26,9 @@ namespace Bastion.Client
         public const string FigureMask = "Kit/FigureMask";
         /// <summary>A whole car of the street, worn (Bastion/Car: MapBuilder.PaintWhole), its paint's textures set on the copy.</summary>
         public const string Car = "Kit/Car";
+        /// <summary>The rain's and the snow's pass over the picture (Bastion/Clima: Weather), and what falls (Bastion/ClimaGota).</summary>
+        public const string Clima = "Kit/Clima";
+        public const string ClimaGota = "Kit/ClimaGota";
 
         /// <summary>A new material copied from `kind`'s, named `name`; null if it isn't there (KitMaterialsMake not run).</summary>
         public static Material New(string kind, string name)

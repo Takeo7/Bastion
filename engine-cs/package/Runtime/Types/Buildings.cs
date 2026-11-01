@@ -152,6 +152,27 @@ namespace Bastion.Engine
         public List<MedicalDetail>? Dressing { get; set; }
     }
 
+    /// <summary>
+    /// A building with a pitched roof nobody stands on (Mapgen/Upstairs.cs Pitched: not flat, a house or a barn, not in
+    /// ruins): its bounds with its walls, as HomeSite's, and what it is, for the client to draw the roof (Arte, 1/11).
+    /// </summary>
+    public sealed class PitchedRoof
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public int W { get; set; }
+        public int H { get; set; }
+        public string Kind { get; set; } = ""; // PitchedKinds
+    }
+
+    public static class PitchedKinds
+    {
+        /// <summary>A house: a roof on two or four sides.</summary>
+        public const string House = "house";
+        /// <summary>A barn: a gable roof.</summary>
+        public const string Barn = "barn";
+    }
+
     /// <summary>A medical building's bounds, including walls; wear is cosmetic, from 0 to 1.</summary>
     public sealed class MedicalSite
     {

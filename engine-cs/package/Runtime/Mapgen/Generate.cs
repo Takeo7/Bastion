@@ -116,6 +116,7 @@ namespace Bastion.Engine
             // Keep the squad's corner clear.
             for (var y = 0; y < 5; y++) for (var x = 0; x < 5; x++) c.Reserve(x, y);
             var style = PickStyle(rng);
+            style.TownKind = Places.TownKindSeed(opts.Seed);
             (Rect Objective, bool Inside)? compound = null;
             if (biome == Biomes.Facility) compound = Facility(c, rng, style, role);
             (Rect Objective, TownPlan Plan)? built = null;
@@ -360,6 +361,19 @@ namespace Bastion.Engine
                 pods.Add((members, patrol));
             }
 
+            // Wrecks and fires (Arturo, 1/11), last on the ground: off where the squad, the dead, the objective and the
+            // evacuation are, the bus and its way out, the groups' rounds; a car only where it cuts no way.
+            var keepOff = new HashSet<int>(taken);
+            foreach (var p in (bus?.Tiles ?? new List<Vec2>()).Concat(bus?.Lane ?? new List<Vec2>()).Concat(evacZone).Concat(spawns))
+            {
+                foreach (var d in Grid.Dirs8.Concat(new[] { V(0, 0) })) if (c.In(p.X + d.X, p.Y + d.Y)) keepOff.Add(c.I(p.X + d.X, p.Y + d.Y));
+            }
+            foreach (var p in new[] { item, terminal, objectiveSpot }) if (p != null) foreach (var q in TilesIn(Rect(p.X - 2, p.Y - 2, 5, 5))) if (c.In(q.X, q.Y)) keepOff.Add(c.I(q.X, q.Y));
+            foreach (var p in pods.SelectMany((g) => g.Patrol)) keepOff.Add(c.I(p.X, p.Y));
+            var wrecks = LayWrecks(c, opts.Seed, biome, plan?.Roads, IsEstate(biome, site), objRect, startTile, reach, keepOff);
+            var fires = LayFires(c, opts.Seed, biome, plan != null, wrecks, startTile, keepOff);
+            var burning = new HashSet<int>(fires.SelectMany((f) => f.Tiles).Select((p) => c.I(p.X, p.Y)));
+
             TidyDecor(c);
             var heights = BuildingStoreys(c, biome, opts.Seed);
             var tall = StoreysOf(c, heights);
@@ -378,9 +392,10 @@ namespace Bastion.Engine
             var goal = item ?? terminal ?? objectiveSpot;
             var route = goal != null ? MissionRoute(c, spawns.Count > 0 ? spawns[0] : sq, goal, evacZone) : null;
             // None on the bus's way out (parkBus): it would drive through the post.
-            var lamps = StreetLights(c, biome, opts.Seed, plan != null).Where((p) => !(bus != null && bus.Lane.Any((q) => q.X == p.X && q.Y == p.Y))).ToList();
+            var lamps = StreetLights(c, biome, opts.Seed, plan != null).Where((p) => !(bus != null && bus.Lane.Any((q) => q.X == p.X && q.Y == p.Y)) && !burning.Contains(c.I(p.X, p.Y))).ToList();
             // The storeys above the ground (docs/FASE6-PLAN.md), last: stairs and ladders keep off what is already placed.
             var placed = new JsSet<int>(beforePods);
+            foreach (var i in burning) placed.Add(i);
             foreach (var p in lamps) placed.Add(c.I(p.X, p.Y));
             foreach (var p in new[] { item, terminal }) if (p != null) placed.Add(c.I(p.X, p.Y));
             var upper = UpperFloors(c, heights, opts.Seed, placed, reach, squadCenter);
@@ -490,6 +505,16 @@ namespace Bastion.Engine
                         return new MedicalRoom { X = Math.Min(ra.X, rz.X), Y = Math.Min(ra.Y, rz.Y), W = Math.Abs(ra.X - rz.X) + 1, H = Math.Abs(ra.Y - rz.Y) + 1, Z = r.Z, Use = r.Use };
                     }).ToList(),
                 });
+            }
+
+            // The roofs nobody stands on, pitched (Upstairs Pitched), for the client to draw them so (Arte, 1/11).
+            var pitched = new List<PitchedRoof>();
+            foreach (var b in c.Buildings)
+            {
+                if (!Pitched(b) || b.Ruined) continue;
+                var a = T(V(b.Outer.X, b.Outer.Y));
+                var z = T(V(b.Outer.X + b.Outer.W - 1, b.Outer.Y + b.Outer.H - 1));
+                pitched.Add(new PitchedRoof { X = Math.Min(a.X, z.X), Y = Math.Min(a.Y, z.Y), W = Math.Abs(a.X - z.X) + 1, H = Math.Abs(a.Y - z.Y) + 1, Kind = b.Furnish == Furnishes.Barn ? PitchedKinds.Barn : PitchedKinds.House });
             }
 
             // The houses (playtest 18/10, #15): their rooms by use, and what lies about in them.
@@ -617,6 +642,22 @@ namespace Bastion.Engine
                 Ground = ground,
                 Medical = medical.Count > 0 ? medical : null,
                 Homes = homes.Count > 0 ? homes : null,
+                Pitched = pitched.Count > 0 ? pitched : null,
+                // A car whose nose is no longer a car's (a way cut through it after) is no wreck. A mirror turns it the other way.
+                Wrecks = wrecks.Count > 0
+                    ? wrecks.Where((w) => global::Bastion.Engine.Decor.DecorOf(c.Decor[c.I(w.Nose.X, w.Nose.Y)])?.Kind == DecorKinds.CarFront).Select((w) =>
+                    {
+                        var q = T(w.Nose);
+                        return new Wreck { Anchor = q.Y * FW + q.X, Kind = w.Kind, Tilt = flipX ^ flipY ^ swap ? -w.Tilt : w.Tilt };
+                    }).ToList()
+                    : null,
+                Fires = fires.Count > 0
+                    ? fires.Select((f, k) =>
+                    {
+                        var src = T(f.Source);
+                        return new Fire { Id = $"f{k + 1}", Source = src.Y * FW + src.X, Tiles = f.Tiles.Select((p) => T(p)).Select((q) => q.Y * FW + q.X).ToList() };
+                    }).ToList()
+                    : null,
                 Markets = markets.Count > 0 ? markets : null,
                 Decor = decor,
                 Storeys = storeys,

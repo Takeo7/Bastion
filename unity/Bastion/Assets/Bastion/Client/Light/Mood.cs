@@ -38,6 +38,16 @@ namespace Bastion.Client
             public float bloomStrength, bloomThreshold;
             public float saturation, contrast, vignette;
             public Vector3 shadowTint, highlightTint, lift;
+            /// <summary>A night's (Night, or Night under rain or snow: Dark).</summary>
+            public bool night;
+
+            /// <summary>These with the haze so much denser (a night under rain or snow, Weather.NightHaze).</summary>
+            public Values Hazier(float k)
+            {
+                var v = (Values)MemberwiseClone();
+                v.hazeDensity *= k;
+                return v;
+            }
         }
 
         public static readonly Values Day = new Values
@@ -50,7 +60,7 @@ namespace Bastion.Client
 
         public static readonly Values Night = new Values
         {
-            haze = 0x1b3035, hazeDensity = 0.024f, sun = 0x9cc2e0, sunIntensity = 1.0f, sunFrom = new Vector3(-18, 30, -14),
+            night = true, haze = 0x1b3035, hazeDensity = 0.024f, sun = 0x9cc2e0, sunIntensity = 1.0f, sunFrom = new Vector3(-18, 30, -14),
             skyLight = 0x4a7480, groundLight = 0x161c20, skyIntensity = 1.7f, fill = 0x9fb8d0, fillIntensity = 0.15f, exposure = 1.2f,
             bloomStrength = 0.45f, bloomThreshold = 0.88f, saturation = 1.0f, contrast = 1.06f, vignette = 0.34f,
             shadowTint = new Vector3(0.9f, 1.0f, 1.04f), highlightTint = new Vector3(1.06f, 1.0f, 0.9f), lift = new Vector3(0.015f, 0.03f, 0.035f),
@@ -145,8 +155,19 @@ namespace Bastion.Client
 
         static float fittedNear = -1;
 
-        /// <summary>The light for `state` (by night if its mission is; by day in winter, the snow's), on «Luz».</summary>
-        public static Mood For(GameState state) => Show(state?.Mission?.Night == true ? Night : Snowy(state) ? SnowDay : Day);
+        /// <summary>The light for `state` (by night if its mission is; by day under rain or snow, its weather's; in winter, the snow's), on «Luz».</summary>
+        public static Mood For(GameState state) => Show(Of(state));
+
+        /// <summary>
+        /// The light of `state` (`night` if said, else its mission's): the night's, its haze denser under rain or snow
+        /// (Weather.NightHaze); by day its weather's sky (GameState.weather, 1/11), else the winter's, else the day's.
+        /// </summary>
+        public static Values Of(GameState state, bool? night = null)
+        {
+            string weather = state?.Weather;
+            if (night ?? state?.Mission?.Night == true) return weather != null && Weather.NightHaze.TryGetValue(weather, out float k) ? Night.Hazier(k) : Night;
+            return Weather.WeatherMood(weather) ?? (Snowy(state) ? SnowDay : Day);
+        }
 
         /// <summary>The night shown (Show(Night)): what lights less in the dark (fx.ts by NIGHT: the headlights).</summary>
         public static bool Dark { get; private set; }
@@ -159,7 +180,7 @@ namespace Bastion.Client
 
         public static Mood Show(Values values)
         {
-            Dark = ReferenceEquals(values, Night);
+            Dark = values.night;
             var mood = Current != null ? Current : FindFirstObjectByType<Mood>();
             if (mood == null) mood = new GameObject("Luz").AddComponent<Mood>();
             Current = mood;
@@ -251,7 +272,7 @@ namespace Bastion.Client
             var v = VividLevels[VividDefault];
             Shader.SetGlobalFloat("_GradeOn", 1);
             // What glows only at night (the lit windows: Bastion/Building).
-            Shader.SetGlobalFloat("_Night", m == Night ? 1 : 0);
+            Shader.SetGlobalFloat("_Night", m.night ? 1 : 0);
             // The light that reaches a surface, as the fog's lamp pools reckon its own colour by (Fog.shader): the sky's
             // hemisphere and the sun (or moon), linear, as URP's.
             Shader.SetGlobalVector("_LightSky", Hex(m.skyLight).linear * k);

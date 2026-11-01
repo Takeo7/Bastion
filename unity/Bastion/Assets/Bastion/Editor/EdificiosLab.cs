@@ -101,6 +101,31 @@ namespace Bastion.EditorTools
             Debug.Log($"[edificios] {Stretches.Length} stretches, {length:0} m: " + string.Join(", ", spans.Select((s, i) => $"{Stretches[i].name} {s.from:0}–{s.to:0}")));
         }
 
+        /// <summary>
+        /// Each house of the city maps (engine-cs/golden/step1, BASTION_MAP to name some) as it is drawn (Arturo's phase 1
+        /// of #3): its place and size, its roof (hipped or gabled, pitch), the window frame and door it took, whether it
+        /// has shutters and a garage door. To find one to frame in a capture.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.EdificiosLab.Casas -quit
+        /// </summary>
+        public static void Casas()
+        {
+            var names = Environment.GetEnvironmentVariable("BASTION_MAP")?.Split(',') ?? new[] { "city-1", "city-7", "city-5-night" };
+            foreach (string name in names)
+            {
+                var s = MapLab.Golden(name);
+                var plan = new BuildingPlan(s);
+                var layout = WallLayout.Of(s, plan);
+                foreach (var b in plan.Buildings.Where(b => b.kind == BuildingKinds.House || b.pitched != null))
+                {
+                    var mine = layout.Pieces.Where(p => p.building == b.index).Select(p => p.id).ToList();
+                    var roof = BuildingSurfaces.HouseRoofOf(b);
+                    string window = mine.FirstOrDefault(id => id.StartsWith("houseWindow") && id != "houseWindowWall") ?? "-";
+                    string door = mine.FirstOrDefault(id => id.StartsWith("houseDoor") && id != "houseDoorWall") ?? "-";
+                    Debug.Log(FormattableString.Invariant($"[casas] {name} #{b.index} ({b.x0},{b.y0})–({b.x1},{b.y1}) {b.kind}, {b.storeys} storeys, walk {b.walkableRoof}, pitched {b.pitched ?? "-"} (state {(s.Pitched != null ? "says" : "silent")}): {(roof.hipped ? "hipped" : "gabled")} {Mathf.Atan((float)roof.pitch) * Mathf.Rad2Deg:0}°, {window}, {door}, shutters {mine.Contains("houseShutters")}, garage {(layout.Pieces.FirstOrDefault(p => p.building == b.index && p.id == "houseGarage") is WallPiece g ? $"at {g.matrix.m03:0.0},{g.matrix.m23:0.0} facing {g.outward.x:0},{g.outward.y:0}" : "no")}"));
+                }
+            }
+        }
+
         /// <summary>The buildings `prefabs` in a row along x from `x`, their fronts at z = Back, facing the street; where the row ends.</summary>
         static float Lay(Transform root, string[] prefabs, float x)
         {

@@ -268,6 +268,14 @@ namespace Bastion.Engine
             return Content.Templates[u.Template].Sight + (u.Mods?.Sight ?? 0);
         }
 
+        /// <summary>SightOf in this mission's weather: a storm or a blizzard cuts it (Content.Weather).</summary>
+        public static int SightIn(GameState s, Unit u)
+        {
+            var day = SightOf(u);
+            var keep = Content.Weather.SightOf(s.Weather);
+            return keep >= 1 ? day : Math.Max(1, (int)Js.Round(day * keep));
+        }
+
         // ------------------------------------------------------------------ night
 
         /// <summary>
@@ -334,14 +342,15 @@ namespace Bastion.Engine
         /// <summary>How far `viewer` sees something on `p`: its sight by day, or at night unless `p` is lit (`lit`: a litMask, to spare work).</summary>
         public static int SightTo(GameState s, Unit viewer, Pos p, IReadOnlyList<bool>? lit = null)
         {
-            if (s.Mission?.Night != true) return SightOf(viewer);
-            return (lit != null ? lit[Grid.NodeOf(s, Grid.ToPos(p))] : IsLit(s, p)) ? SightOf(viewer) : NightSight(viewer);
+            var day = SightIn(s, viewer);
+            if (s.Mission?.Night != true) return day;
+            return (lit != null ? lit[Grid.NodeOf(s, Grid.ToPos(p))] : IsLit(s, p)) ? day : Math.Min(day, NightSight(viewer));
         }
 
         /// <summary>How close a soldier on `p` must be for `viewer` to notice it while the squad is hidden: halved at night, unless lit.</summary>
         public static double DetectionTo(GameState s, Unit viewer, Pos p)
         {
-            var range = Content.Templates[viewer.Template].Detection;
+            var range = Content.Templates[viewer.Template].Detection * Content.Weather.SightOf(s.Weather);
             return s.Mission?.Night == true && !IsLit(s, p) ? range * Content.Night.Detection : range;
         }
 
@@ -507,7 +516,7 @@ namespace Bastion.Engine
             foreach (var u in s.Units)
             {
                 if (!IsViewer(u, team)) continue;
-                var range = reach ?? SightOf(u);
+                var range = reach ?? SightIn(s, u);
                 var origins = PeekOrigins(s, u.Pos);
                 var eyes = origins.Select((o) => Grid.HeightAt(s, o) + Grid.EyeHeight).ToArray();
                 var look = new Look
@@ -535,7 +544,7 @@ namespace Bastion.Engine
             {
                 var u = look.U;
                 var range = look.Range;
-                var dark = lit != null ? NightSight(u) : range;
+                var dark = lit != null ? Math.Min(NightSight(u), range) : range;
                 if (v != null)
                 {
                     v.Dark = dark;

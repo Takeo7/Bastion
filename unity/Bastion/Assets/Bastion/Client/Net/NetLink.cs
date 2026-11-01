@@ -77,6 +77,10 @@ namespace Bastion.Client.Net
         private Room? room;
         private volatile RoomHost? host;
         private IDisposable? announce;
+        /// <summary>Hosting, the game's port asked of the router (not in a test app).</summary>
+        private RouterPort? router;
+        /// <summary>The router's answer changed, for RouterChanged in Update.</summary>
+        private volatile bool routerNews;
         private IDisposable? listen;
         private ClientSession? session;
         /// <summary>Where the session connects, address:port.</summary>
@@ -139,6 +143,9 @@ namespace Bastion.Client.Net
         /// <summary>The games heard on the network changed (StartLooking).</summary>
         public event Action<IReadOnlyList<LanGame>>? LanGamesChanged;
 
+        /// <summary>Router or Internet changed.</summary>
+        public event Action? RouterChanged;
+
         /// <summary>
         /// A test app of ours, never a player's: BASTION_SOLO_LOCAL=1, or any of the tests' drivers (BASTION_MEDIR,
         /// BASTION_CAMPANA, BASTION_ANFITRION, BASTION_UNIRSE, BASTION_PASOS_COMBATE, BASTION_SONIDO_GUION, -shotOut). Its
@@ -157,7 +164,7 @@ namespace Bastion.Client.Net
         /// <summary>The name last played with, for the start screen.</summary>
         public string? LastName => settings.Name;
 
-        /// <summary>The address last joined (address:port), for the start screen.</summary>
+        /// <summary>The address last joined (address:port, and the room's key after it if one was given), for the start screen.</summary>
         public string? LastAddress => settings.Last;
 
         /// <summary>Who is in the game and which screen it is on: the last `room` heard.</summary>
@@ -183,6 +190,25 @@ namespace Bastion.Client.Net
                 return HostAddresses.List().Select((a) => new HostAddress { Address = $"{a.Address}:{h.Port}", Kind = a.Kind }).ToList();
             }
         }
+
+        /// <summary>
+        /// Hosting, how opening the game's port on the router goes (RouterPort; Arturo, 1/11: playing over the internet
+        /// without Tailscale where the router lets it): Trying; Open, with Internet; or why not (NoRouter, Shared, Refused),
+        /// for which there is Tailscale. Null when not hosting, and in a test app, which never asks.
+        /// </summary>
+        public RouterState? Router => router?.State;
+
+        /// <summary>Hosting, the port open on the router: where the partner joins from the internet (address:port); null otherwise.</summary>
+        public string? Internet => router?.Public;
+
+        /// <summary>Hosting, the room's key: what joining from the internet asks besides the address (Room.Key; Arturo, 1/11).</summary>
+        public string? Key => room?.Key;
+
+        /// <summary>
+        /// Hosting, the port open on the router: the address and the key as one, «83.45.12.7:41391 · KXRT5», for the partner
+        /// to copy into «Unirse por dirección» (GameAddress reads them both); null otherwise.
+        /// </summary>
+        public string? Invite => Internet is string at && Key is string key ? $"{at} · {key}" : null;
 
         private void Awake()
         {
@@ -230,8 +256,9 @@ namespace Bastion.Client.Net
         // ---------------------------------------------------------- start screen
 
         /// <summary>
-        /// Opens a game on this computer and joins it as `name`: the room (from its save, if there is one), its port, and
-        /// its announcement on the network. The problem, said for the player, or null; how joining goes, by the events.
+        /// Opens a game on this computer and joins it as `name`: the room (from its save, if there is one), its port, its
+        /// announcement on the network, and the same port asked of the router for the internet (Router, Internet). The
+        /// problem, said for the player, or null; how joining goes, by the events.
         /// </summary>
         public string? Host(string name)
         {
@@ -268,7 +295,13 @@ namespace Bastion.Client.Net
                     return "No se pudo abrir la partida. El motivo queda en red.log.";
                 }
                 log.Write($"anfitrión arrancado: tcp {host.Port} · {(LocalOnly ? "solo 127.0.0.1 (prueba)" : string.Join(", ", HostAddresses.List().Select((a) => a.Address)))} · versión {Version}");
-                if (!LocalOnly) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
+                if (!LocalOnly)
+                {
+                    announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
+                    router = RouterPort.Open(host.Port, log.Write);
+                    router.Changed += () => routerNews = true;
+                    routerNews = true;
+                }
             }
             return Open("127.0.0.1", host.Port, name, false);
         }
@@ -278,20 +311,22 @@ namespace Bastion.Client.Net
         {
             name = name.Trim();
             if (name.Length < 1 || name.Length > 20) return NameProblem;
-            if (!GameAddress.TryParse(address, out var h, out var p)) return $"Escribe la dirección que aparece en el menú principal de quien aloja la partida; por ejemplo, 192.168.1.20:{RoomHost.FirstPort}.";
-            return Open(h, p, name, true);
+            if (!GameAddress.TryParse(address, out var h, out var p, out var roomKey)) return $"Escribe la dirección que aparece en el menú principal de quien aloja la partida; por ejemplo, 192.168.1.20:{RoomHost.FirstPort}.";
+            return Open(h, p, name, true, roomKey);
         }
 
-        private string? Open(string address, int port, string name, bool remember)
+        /// <summary>`roomKey`: the room's, to join from the internet (with the address, as Invite gives them).</summary>
+        private string? Open(string address, int port, string name, bool remember, string? roomKey = null)
         {
             var key = $"{address}:{port}";
             settings.Name = name;
-            if (remember) settings.Last = key;
+            if (remember) settings.Last = roomKey != null ? $"{key} · {roomKey}" : key;
             settings.Save();
             // The same host and not in yet (a name taken): the same connection, another name.
             if (session != null && joining && target == key)
             {
                 refused = false;
+                session.Key = roomKey;
                 session.Connect(name);
                 return null;
             }
@@ -300,7 +335,7 @@ namespace Bastion.Client.Net
             joining = true;
             refused = false;
             feed.Reset();
-            var s = new ClientSession((cancel) => Dial(address, port, cancel), settings.TokensFor(key), Version);
+            var s = new ClientSession((cancel) => Dial(address, port, cancel), settings.TokensFor(key), Version) { Key = roomKey };
             session = s;
             s.Message += (msg) => { if (s == session) Heard(msg); };
             s.Unreadable += (why) => { if (s == session) Report($"[red] mensaje del anfitrión que no se entiende: {why}"); };
@@ -344,7 +379,7 @@ namespace Bastion.Client.Net
             Drop();
             if (!nobody) return;
             log.Write($"[red] {where}: no responde nadie");
-            Failed?.Invoke($"No responde nadie en {where}. ¿Tiene abierta la partida («Alojar la partida») y estáis en la misma red o en Tailscale?");
+            Failed?.Invoke($"No responde nadie en {where}. ¿Está abierta la partida («Alojar la partida»)? Desde otra red, usa la dirección «Por internet» o la de «Con Tailscale».");
         }
 
         /// <summary>A message from the host, already read on the network thread (ClientSession): a whole mission never costs a frame.</summary>
@@ -407,11 +442,20 @@ namespace Bastion.Client.Net
             old?.Stop();
         }
 
-        private void CloseHost()
+        /// <summary>The game closed: the port on the router taken back too, waited for when `quitting` (after, nobody would).</summary>
+        private void CloseHost(bool quitting = false)
         {
             if (host != null) log.Write("anfitrión cerrado: se avisa a los jugadores");
             announce?.Dispose();
             announce = null;
+            var opened = router;
+            router = null;
+            if (opened != null)
+            {
+                if (quitting) opened.Dispose();
+                else _ = Task.Run(opened.Dispose);
+                routerNews = true;
+            }
             host?.Stop();
             host = null;
             room = null;
@@ -463,6 +507,11 @@ namespace Bastion.Client.Net
                 LanGames = games;
                 LanGamesChanged?.Invoke(games);
             }
+            if (routerNews)
+            {
+                routerNews = false;
+                RouterChanged?.Invoke();
+            }
             if (now - errorMinute > TimeSpan.FromMinutes(1))
             {
                 errorMinute = now;
@@ -505,7 +554,7 @@ namespace Bastion.Client.Net
         private void Shut()
         {
             StopLooking();
-            CloseHost();
+            CloseHost(true);
             Drop();
         }
 

@@ -44,6 +44,8 @@ namespace Bastion.UI.Combat
         string lastAttacker;
         (string unit, string ability)? lastUsed;
         bool biteTick;
+        /// <summary>Who has just been burnt (`burned`): their `damaged`, next, is said as the burn.</summary>
+        readonly HashSet<string> burnt = new HashSet<string>();
         bool medicineHeal;
         bool medicineCure;
         bool itemFell;
@@ -728,11 +730,11 @@ namespace Bastion.UI.Combat
             return id != null && Unit(id)?.Team == Teams.Alien ? id : null;
         }
 
-        /// <summary>Whether `e` belongs to `walker`'s walk: a stretch of it, a shot at it on overwatch, what follows (a fall, a door, a trap).</summary>
+        /// <summary>Whether `e` belongs to `walker`'s walk: a stretch of it, a shot at it on overwatch, what follows (a fall, a door, a trap, the fire).</summary>
         static bool OnTheWay(GameEvent e, string walker) =>
             e is MovedEvent m ? m.Unit == walker
             : e is ShotEvent s ? s.Reaction && s.Target == walker
-            : FollowUp(e) || e is TrapSprungEvent || e is MarkedEvent || e is RupturedEvent || e is HealedEvent || e is RefundEvent || e is SuppressionEndedEvent || e is HuntingEvent;
+            : FollowUp(e) || e is TrapSprungEvent || e is BurnedEvent || e is MarkedEvent || e is RupturedEvent || e is HealedEvent || e is RefundEvent || e is SuppressionEndedEvent || e is HuntingEvent;
 
         /// <summary>
         /// The enemy's turn's walks at once (Choreograph; Ana, Arturo 31/10 #4): the camera back over all the squad sees of
@@ -1316,11 +1318,28 @@ namespace Bastion.UI.Combat
                     }
                     return;
                 }
+                case BurnedEvent b:
+                    // Fire underfoot (Arturo, 01/11): its point of health comes next, as any damage, said as the burn.
+                    burnt.Add(b.Unit);
+                    return;
                 case DamagedEvent d:
                 {
                     var target = Unit(d.Unit);
                     // The bite's toll as the squad's turn begins (playtest 15/10 #13): said as such, not as a hit.
                     var bite = biteTick && target.Infected == true;
+                    // Burnt (the fire's point of health): its own line; one of the dead's only if the squad sees it.
+                    if (burnt.Remove(d.Unit))
+                    {
+                        var squad = target.Team == Teams.Xcom;
+                        if (d.Amount > 0 && (squad || ShownToSquad(target))) Log($"{(squad ? target.Name : Capitalize(AnEnemy(target)))} pierde {d.Amount} de salud por el fuego.", squad ? "#ff6b5a" : "#54d1ff");
+                        if (!ShownToSquad(target)) return;
+                        var burning = Chest(target.Id);
+                        if (d.Amount > 0) Float(burning, $"−{d.Amount}", "damage");
+                        if (d.Amount > 0 && squad && target.Hp > d.Amount) control.Sfx.Hurt(target, burning, false);
+                        if (units != null) await units.HitReact(target.Id, d.Amount > 0 ? 1 : 0.4f, stop);
+                        else await Wait(0.4f);
+                        return;
+                    }
                     var shot = bite ? null : lastShot?.target == d.Unit ? lastShot?.result : null;
                     var crit = shot == "crit";
                     // Enemies fighting each other (18/10 #47): only what the squad sees of it.

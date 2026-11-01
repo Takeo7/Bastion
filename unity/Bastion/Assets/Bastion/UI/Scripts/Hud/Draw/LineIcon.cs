@@ -9,7 +9,7 @@ namespace Bastion.UI.Hud
     /// The icons that were our own drawings on the web, not Synty's (icons.ts: 24 × 24, a line of 2, round ends): drawn
     /// with Painter2D in the element's tint (USS `-unity-background-image-tint-color`, as the sprites are tinted), so
     /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, the base's axe, the
-    /// Coro's wave, the missions' places (new in Unity: Synty has no city nor factory), «Terminar turno».
+    /// Coro's wave, the missions' places and their weather (new in Unity: Synty has neither), «Terminar turno».
     /// </summary>
     public sealed class LineIcon : VisualElement
     {
@@ -113,6 +113,56 @@ namespace Bastion.UI.Hud
                 pen.Line(9, 14.5f, 15, 21.5f);
                 pen.Line(15, 14.5f, 9, 21.5f);
             },
+            // The weather (Arturo, 01/11), each its cloud and what falls from it.
+            ["weather:drizzle"] = pen =>
+            {
+                Cloud(pen);
+                pen.Line(8, 17, 7.3f, 19);
+                pen.Line(12.5f, 17, 11.8f, 19);
+                pen.Line(17, 17, 16.3f, 19);
+                pen.Line(10.2f, 20.8f, 9.5f, 22.8f);
+                pen.Line(14.7f, 20.8f, 14, 22.8f);
+            },
+            ["weather:downpour"] = pen =>
+            {
+                Cloud(pen);
+                pen.Line(7.5f, 16.8f, 5.8f, 22.2f);
+                pen.Line(11.5f, 16.8f, 9.8f, 22.2f);
+                pen.Line(15.5f, 16.8f, 13.8f, 22.2f);
+                pen.Line(19.5f, 16.8f, 17.8f, 22.2f);
+            },
+            ["weather:storm"] = pen =>
+            {
+                Cloud(pen);
+                pen.Begin(13, 15.2f);
+                pen.To(9.6f, 19.6f);
+                pen.To(12.2f, 19.6f);
+                pen.To(10.6f, 23.2f);
+                pen.To(15.4f, 17.8f);
+                pen.To(12.8f, 17.8f);
+                pen.To(14.6f, 15.2f);
+                pen.Fill();
+                pen.Line(7, 16.8f, 6, 19.8f);
+                pen.Line(18.6f, 16.8f, 17.6f, 19.8f);
+            },
+            ["weather:snowfall"] = pen =>
+            {
+                Cloud(pen);
+                pen.Dot(8, 17.8f, 1.15f);
+                pen.Dot(12.5f, 18.4f, 1.15f);
+                pen.Dot(17, 17.8f, 1.15f);
+                pen.Dot(10.2f, 21.8f, 1.15f);
+                pen.Dot(14.8f, 21.8f, 1.15f);
+            },
+            // Snow on the wind: flakes beside two gusts.
+            ["weather:blizzard"] = pen =>
+            {
+                Cloud(pen);
+                pen.Line(4, 18.2f, 13.5f, 18.2f);
+                pen.Dot(17, 18.2f, 1.15f);
+                pen.Line(9, 21.8f, 19.5f, 21.8f);
+                pen.Dot(5.5f, 21.8f, 1.15f);
+            },
             // «Terminar turno» on the bar (UI-COMBATE UI-04): an arrow against a bar, filled like Synty's icons beside it.
             ["endTurn"] = pen =>
             {
@@ -131,6 +181,17 @@ namespace Bastion.UI.Hud
                 pen.Fill();
             },
         };
+
+        /// <summary>The weather's cloud, its foot on 14.5: three bumps, the middle one highest.</summary>
+        static void Cloud(Pen pen)
+        {
+            pen.Begin(6.5f, 14.5f);
+            pen.Round(6.8f, 11.2f, 3.3f, 95, 265);
+            pen.Round(12.5f, 8.3f, 4.5f, 200, 345);
+            pen.Round(17.6f, 11, 3.5f, 255, 450);
+            pen.To(6.5f, 14.5f);
+            pen.Stroke();
+        }
 
         /// <summary>Whether there is a drawing for `id`.</summary>
         public static bool Has(string id) => id != null && Drawings.ContainsKey(id);

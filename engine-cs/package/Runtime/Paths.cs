@@ -311,15 +311,17 @@ namespace Bastion.Engine
         /// siege the dead don't open doors: they break them down (docs/FASE12.md §4).
         /// `ignore`: units a plan may look past, as if gone (ai.ts breachPlan asks
         /// whether the ground leaves a way, its own crowd about to move); never for a
-        /// walk.
+        /// walk. `avoid`: nodes not to step on at all (BuildPath's way round a fire).
         /// </summary>
-        public static Reach ComputeReach(GameState s, Unit u, double maxCost, Pos? from = null, Func<Unit, bool>? ignore = null)
+        public static Reach ComputeReach(GameState s, Unit u, double maxCost, Pos? from = null, Func<Unit, bool>? ignore = null, HashSet<int>? avoid = null)
         {
             var origin = from ?? u.Pos;
             var windows = !OnPatrol(s, u);
             var shut = s.Mission.Siege != null && Content.Templates[u.Template].Undead;
             // Barbed wire (docs/FASE12.md §11.4): costlier to cross, for everyone.
             var slow = s.Slow != null && s.Slow.Count > 0 ? new HashSet<int>(s.Slow) : null;
+            // Fire (Arturo, 1/11): the enemies go round it if they can, through it if not (Content.Flames.Avoid).
+            var fire = u.Team != Teams.Xcom ? Burning.Nodes(s) : null;
             var taken = new HashSet<int>();
             foreach (var o in s.Units)
             {
@@ -346,13 +348,13 @@ namespace Bastion.Engine
                     {
                         var to = step.To;
                         var ni = Grid.NodeOf(s, to);
-                        if (taken.Contains(ni) || (!windows && Grid.IsWindow(Grid.KindAt(s, to))) || (shut && Grid.KindAt(s, to) == TileKinds.Door)) continue;
+                        if (taken.Contains(ni) || (avoid != null && avoid.Contains(ni)) || (!windows && Grid.IsWindow(Grid.KindAt(s, to))) || (shut && Grid.KindAt(s, to) == TileKinds.Door)) continue;
                         if (d.X != 0 && d.Y != 0)
                         {
                             var h = Grid.HeightAt(s, p);
                             if (Blocked(Grid.SurfaceAt(s, to.X, p.Y, h)) || Blocked(Grid.SurfaceAt(s, p.X, to.Y, h))) continue;
                         }
-                        var nc = c + step.Cost + (slow != null && slow.Contains(ni) ? Content.Traps.Wire : 0);
+                        var nc = c + step.Cost + (slow != null && slow.Contains(ni) ? Content.Traps.Wire : 0) + (fire != null && fire.Contains(ni) ? Content.Flames.Avoid : 0);
                         if (nc > maxCost) continue;
                         if (!cost.TryGetValue(ni, out var old) || nc < old)
                         {
@@ -387,13 +389,23 @@ namespace Bastion.Engine
             return out_;
         }
 
-        /// <summary>Path from the reach origin to `to` (origin excluded), or null if unreachable / occupied.</summary>
+        /// <summary>
+        /// Path from the reach origin to `to` (origin excluded), or null if unreachable / occupied. A soldier's goes round
+        /// ground on fire when a way round costs no more actions than the shortest (RoundFire); the reach doesn't change.
+        /// </summary>
         public static List<Pos>? BuildPath(GameState s, Unit u, Reach reach, Pos to)
         {
             if (!Grid.InBounds(s, to.X, to.Y)) return null;
             var end = Grid.NodeOf(s, Grid.ToPos(to));
             var start = Grid.NodeOf(s, reach.Origin);
             if (end == start || !reach.Cost.Has(end) || Occupied(s, end, u) || !Flights.CanStopAt(s, Grid.PosOf(s, end))) return null;
+            var path = Trace(s, reach, start, end);
+            return (u.Team == Teams.Xcom ? RoundFire(s, u, reach, start, end, path) : null) ?? path;
+        }
+
+        /// <summary>The way back from `end` to `start` along a reach's steps, `start` left out.</summary>
+        private static List<Pos> Trace(GameState s, Reach reach, int start, int end)
+        {
             var path = new List<Pos>();
             int? i = end;
             while (i != null && i != start)
@@ -403,6 +415,22 @@ namespace Bastion.Engine
             }
             path.Reverse();
             return path;
+        }
+
+        /// <summary>
+        /// A soldier's way round ground on fire (Arturo, 1/11: «que lo rodee»): when the shortest `path` steps on a burning
+        /// tile before its end, the cheapest way that steps on none, if it takes no more actions than the shortest (a move
+        /// of one action stays one). Null to keep the shortest. The same for the preview and the order (both BuildPath).
+        /// </summary>
+        private static List<Pos>? RoundFire(GameState s, Unit u, Reach reach, int start, int end, List<Pos> path)
+        {
+            var fire = Burning.Nodes(s);
+            if (fire == null || !path.Take(path.Count - 1).Any((p) => fire.Contains(Grid.NodeOf(s, p)))) return null;
+            // The tile it was asked to go to stays allowed: whoever ends on a fire chose it.
+            fire.Remove(end);
+            var budget = CostPerAp(u) * ApForCost(u, reach.Cost.Get(end, 0));
+            var round = ComputeReach(s, u, budget, reach.Origin, null, fire);
+            return round.Cost.Has(end) ? Trace(s, round, start, end) : null;
         }
     }
 }

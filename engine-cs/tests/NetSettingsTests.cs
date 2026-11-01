@@ -21,10 +21,24 @@ namespace Bastion.Engine.Tests
         }
 
         [Theory]
+        [InlineData("83.45.12.7:41391 · KXRT5", "83.45.12.7", 41391, "KXRT5")]
+        [InlineData(" 83.45.12.7:41391   kxrt5 ", "83.45.12.7", 41391, "KXRT5")]
+        [InlineData("83.45.12.7:41392 · KXR-T5", "83.45.12.7", 41392, "KXRT5")]
+        [InlineData("83.45.12.7 KXRT", "83.45.12.7", RoomHost.FirstPort, "KXRT")]
+        [InlineData("192.168.1.20:41391", "192.168.1.20", 41391, null)]
+        public void AnAddressFromTheInternetBringsItsKey(string text, string host, int port, string? key)
+        {
+            Assert.True(GameAddress.TryParse(text, out var h, out var p, out var k));
+            Assert.Equal((host, port, key), (h, p, k));
+        }
+
+        [Theory]
         [InlineData("")]
         [InlineData("192.168.1.20:")]
         [InlineData("192.168.1.20:99999")]
         [InlineData("dos palabras")]
+        [InlineData("mac de arturo")]
+        [InlineData("83.45.12.7:41391 · KX")]
         public void ANonAddressIsNot(string text)
         {
             Assert.False(GameAddress.TryParse(text, out _, out _));

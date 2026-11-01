@@ -144,14 +144,50 @@ namespace Bastion.Net
         private readonly object summaryGate = new object();
         private IReadOnlyList<string> summaryPlayers = new string[0];
         private string summaryPhase = RoomPhases.Lobby;
+        /// <summary>The addresses from the internet that gave a wrong key: how many since when, and till when they're shut out.</summary>
+        private readonly Dictionary<string, (int Wrong, long Since, long Until)> keyTries = new Dictionary<string, (int, long, long)>();
+
+        /// <summary>The symbols of a key: without 0, O, 1, I, L and U, which are read one for another.</summary>
+        public const string KeyAlphabet = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
+
+        /// <summary>A key's length: 30⁵, some 24 million, against KeyTries wrong ones an address.</summary>
+        public const int KeyLength = 5;
+
+        /// <summary>Wrong keys from one address within KeyTriesMs before it is shut out for KeyShutMs.</summary>
+        public const int KeyTries = 10;
+        public const long KeyTriesMs = 10 * 60_000;
+        public const long KeyShutMs = 30 * 60_000;
+
+        /// <summary>
+        /// What a partner gives to join from the internet, through the port the router opened (RouterPort): the repository
+        /// and so the protocol are public, and anyone may knock (Arturo, 1/11). A new one each time the game is hosted; a
+        /// seat's token, given after an earlier key, goes in without it. Not on the local network or Tailscale.
+        /// </summary>
+        public string Key { get; }
+
+        private static string NewKey()
+        {
+            var bytes = new byte[KeyLength];
+            using (var random = System.Security.Cryptography.RandomNumberGenerator.Create()) random.GetBytes(bytes);
+            // 256 isn't a multiple of 30: the first 16 symbols come a little more often (9 in 256 against 8), which leaves it hard enough.
+            return new string(bytes.Select((b) => KeyAlphabet[b % KeyAlphabet.Length]).ToArray());
+        }
+
+        /// <summary>A key as typed: any case, without spaces or dashes.</summary>
+        public static string NormalKey(string? key)
+        {
+            return Regex.Replace((key ?? "").ToUpperInvariant(), @"[\s-]", "");
+        }
 
         /// <summary>
         /// The room, from its save if there is one. `version`: this build's, which every player's must match. `hosts`:
         /// where the partner can connect, for the welcome. `say`: the host's console (room.ts console.log); red.log is the
-        /// store's Log. `campaignRules`: the campaign's; without them, skirmishes only.
+        /// store's Log. `campaignRules`: the campaign's; without them, skirmishes only. `key`: the one to join from the
+        /// internet; by default, a new one each time (Key).
         /// </summary>
-        public Room(SaveStore store, IRules rules, string version, IReadOnlyList<HostAddress>? hosts = null, IClock? clock = null, Rng? rng = null, Action<string>? say = null, ICampaignRules? campaignRules = null)
+        public Room(SaveStore store, IRules rules, string version, IReadOnlyList<HostAddress>? hosts = null, IClock? clock = null, Rng? rng = null, Action<string>? say = null, ICampaignRules? campaignRules = null, string? key = null)
         {
+            Key = key ?? NewKey();
             this.store = store;
             this.rules = rules;
             this.campaignRules = campaignRules;
@@ -487,6 +523,40 @@ namespace Bastion.Net
             store.Log(Regex.IsMatch(text, @"^\[rend[ \]]") ? Regex.Replace(text, @"^\[rend\]", $"[rend {socket.Peer}]") : $"[app {socket.Peer}] {text}");
         }
 
+        /// <summary>
+        /// Whether a hello from the internet brings the room's key. If not, it is told so and closed, and its address counts
+        /// one more wrong one: KeyTries within KeyTriesMs shut it out for KeyShutMs, the right key and all.
+        /// </summary>
+        private bool KeyGiven(IConnection socket, string? key)
+        {
+            var at = socket.Peer.LastIndexOf(':');
+            var address = at > 0 ? socket.Peer.Substring(0, at) : socket.Peer;
+            var now = clock.Now;
+            if (keyTries.Count > 1000)
+                foreach (var old in keyTries.Where((k) => now - k.Value.Since > KeyTriesMs && now > k.Value.Until).Select((k) => k.Key).ToList()) keyTries.Remove(old);
+            keyTries.TryGetValue(address, out var tries);
+            string? refusal = null;
+            if (now < tries.Until) refusal = $"Demasiadas claves equivocadas desde tu conexión. Espera {(KeyShutMs == 30 * 60_000 ? "media hora" : $"{KeyShutMs / 60_000} minutos")} y vuelve a probar.";
+            else if (NormalKey(key) != Key)
+            {
+                tries = now - tries.Since > KeyTriesMs ? (1, now, 0L) : (tries.Wrong + 1, tries.Since, 0L);
+                if (tries.Wrong >= KeyTries)
+                {
+                    tries.Until = now + KeyShutMs;
+                    store.Log($"{address}: {KeyTries} claves equivocadas, fuera durante {KeyShutMs / 60_000} min");
+                }
+                keyTries[address] = tries;
+                // Lore's (1/11): a wrong one is most likely an old one, from an earlier time it was hosted.
+                refusal = string.IsNullOrWhiteSpace(key)
+                    ? "Por internet hace falta la clave de la partida. Quien aloja la ve detrás de la dirección: pídele las dos juntas."
+                    : "Esa clave no es la de esta partida: cambia cada vez que se aloja. Pide la de ahora a quien la aloja.";
+            }
+            if (refusal == null) return true;
+            Send(socket, new ErrorMessage { Message = refusal });
+            socket.Close("sin clave");
+            return false;
+        }
+
         private Seat? Join(IConnection socket, HelloMessage hello)
         {
             var name = hello.Name;
@@ -498,6 +568,8 @@ namespace Bastion.Net
                 socket.Close("otra versión");
                 return null;
             }
+            // From the internet, the key or a seat's token; shut out after too many wrong keys.
+            if (HostAddresses.FromTheInternet(socket.Peer) && !(token != null && seats.Any((s) => s != null && s.Token == token)) && !KeyGiven(socket, hello.Key)) return null;
             // By the seat's token; from an app without it (another computer, a reinstall), by the player's name, so each
             // finds their own seat and soldiers. Only a seat nobody plays from: one in use with that name is someone else's (below).
             var seat = seats.FirstOrDefault((s) => s != null && token != null && s.Token == token) ?? seats.FirstOrDefault((s) => s != null && s.Socket == null && SameName(s.Name, name));
@@ -519,8 +591,10 @@ namespace Bastion.Net
                 }
                 else
                 {
-                    // Both seats taken: allow taking over a seat whose player is offline.
-                    seat = seats.FirstOrDefault((s) => s != null && s.Socket == null);
+                    // Both seats taken: allow taking over a seat whose player is offline. Not from the internet (the port the
+                    // router opened: RouterPort), where anyone may knock: there an offline seat is only its own player's, by
+                    // its token or its name (above).
+                    seat = HostAddresses.FromTheInternet(socket.Peer) ? null : seats.FirstOrDefault((s) => s != null && s.Socket == null);
                     if (seat == null)
                     {
                         Send(socket, new ErrorMessage { Message = "La partida ya tiene dos jugadores." });

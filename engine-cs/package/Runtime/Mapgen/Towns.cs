@@ -25,6 +25,7 @@ namespace Bastion.Engine
                 Furniture = map.Furniture,
                 Organic = map.Organic,
                 Industrial = map.Industrial,
+                TownKind = map.TownKind,
             };
         }
 
@@ -114,11 +115,11 @@ namespace Bastion.Engine
                         var ends = EndOf(l, far, 120);
                         var open = ends != null ? ends.Value.Item1 : l;
                         var rest = ends != null ? ends.Value.Item2 : null;
-                        var program = CityProgram(open.R, rng, role, used, false, style.Industrial);
+                        var program = CityProgram(open.R, rng, role, used, false, style.Industrial, style.TownKind);
                         if (program == CityPrograms.Yard) ContainerYard(c, open.R, FrontOf(c, open.R, open.Roads, rng), rng);
                         else if (program == CityPrograms.Plaza) Plaza(c, open.R, rng, false);
                         else Parking(c, open.R, rng, FrontOf(c, open.R, open.Roads, rng), false);
-                        if (rest != null) CityLot(c, rest.R, CityProgram(rest.R, rng, null, used, organic, style.Industrial), rest.Roads, rng, style);
+                        if (rest != null) CityLot(c, rest.R, CityProgram(rest.R, rng, null, used, organic, style.Industrial, style.TownKind), rest.Roads, rng, style);
                         objective = open.R;
                         continue;
                     }
@@ -135,7 +136,7 @@ namespace Bastion.Engine
                         objective = b.Outer;
                         continue;
                     }
-                    var built = CityLot(c, l.R, CityProgram(l.R, rng, isObj ? role : null, used, organic, style.Industrial), l.Roads, rng, style);
+                    var built = CityLot(c, l.R, CityProgram(l.R, rng, isObj ? role : null, used, organic, style.Industrial, style.TownKind), l.Roads, rng, style);
                     if (isObj) objective = Best(built, (b) => Dist(Centre(b.Outer), far))?.Outer ?? l.R;
                 }
                 Sidewalk(c, block, walks, style.Industrial ? style.Furniture * 3 : style.Furniture, TileKinds.Low);
@@ -1030,10 +1031,10 @@ namespace Bastion.Engine
                         var ends = EndOf(l, far, 120);
                         var open = ends != null ? ends.Value.Item1 : l;
                         var rest = ends != null ? ends.Value.Item2 : null;
-                        var program = CityProgram(open.R, rng, role, used);
+                        var program = CityProgram(open.R, rng, role, used, false, false, style.TownKind);
                         if (program == CityPrograms.Plaza) Plaza(c, open.R, rng, false);
                         else Parking(c, open.R, rng, FrontOf(c, open.R, open.Roads, rng), false);
-                        if (rest != null) CityLot(c, rest.R, CityProgram(rest.R, rng, null, used, organic), rest.Roads, rng, style);
+                        if (rest != null) CityLot(c, rest.R, CityProgram(rest.R, rng, null, used, organic, false, style.TownKind), rest.Roads, rng, style);
                         objective = open.R;
                         continue;
                     }
@@ -1054,7 +1055,7 @@ namespace Bastion.Engine
                         objective = b.Outer;
                         continue;
                     }
-                    var built = CityLot(c, l.R, CityProgram(l.R, rng, isObj ? role : null, used, organic), l.Roads, rng, style);
+                    var built = CityLot(c, l.R, CityProgram(l.R, rng, isObj ? role : null, used, organic, false, style.TownKind), l.Roads, rng, style);
                     if (isObj) objective = Best(built, (b) => Dist(Centre(b.Outer), far))?.Outer ?? l.R;
                 }
                 Sidewalk(c, block, walks, style.Furniture, TileKinds.Low);

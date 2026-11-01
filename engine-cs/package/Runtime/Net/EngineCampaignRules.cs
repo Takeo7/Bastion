@@ -54,6 +54,7 @@ namespace Bastion.Net
                 MedicineCures = Campaign.MedicineCures(c),
                 Quarantine = Campaign.HasQuarantine(c),
                 Snow = info.Snow,
+                Weather = Campaign.OfferWeather(c, offer),
             });
             return (state, offer.Name);
         }

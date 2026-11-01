@@ -1,4 +1,4 @@
-/* The objective's card under «Menú» (hud.ts setMission), and a siege's compass under it (#34). */
+/* The objective's card, top right (hud.ts setMission), and a siege's compass under it (#34). */
 
 .goal-dock {
     width: 100%;
@@ -45,6 +45,27 @@
     background-color: var(--t-tag);
     border-width: 1px;
     border-color: var(--t-line);
+}
+
+/* The weather beside the turns: its drawing and its name, in a cold grey-blue. */
+.weather {
+    flex-direction: row;
+    align-items: center;
+    color: #b9cfe0;
+}
+
+.weather__icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    -unity-background-image-tint-color: #b9cfe0;
+}
+
+.weather__name {
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    color: #b9cfe0;
 }
 
 .timer--urgent {

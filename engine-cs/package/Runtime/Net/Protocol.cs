@@ -54,6 +54,9 @@ namespace Bastion.Net
         public string Name { get; set; } = "";
         public string? Token { get; set; }
         public string? Version { get; set; }
+
+        /// <summary>The room's key (Room.Key): only from the internet, and only without a seat's token.</summary>
+        public string? Key { get; set; }
     }
 
     /// <summary>A skirmish (the only game of the first milestone).</summary>

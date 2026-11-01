@@ -478,7 +478,8 @@ namespace Bastion.UI.Combat
         /// <summary>
         /// Where `u` can end its move (game.ts reach): past one action's cost, the dash; with only the last action left, a
         /// walk like any other, not a run (Arturo, 31/10 #2: the engine hears a run only when it takes two); where an enemy
-        /// the squad sees would notice it while the squad is hidden.
+        /// the squad sees would notice it while the squad is hidden; where the ground burns (Arturo, 01/11: the soldiers'
+        /// ways don't go round it).
         /// </summary>
         List<MoveTile> Tiles(Unit u)
         {
@@ -489,6 +490,7 @@ namespace Bastion.UI.Combat
                 Pos = d.Pos,
                 Dash = d.Cost > perAp,
                 Detected = watchers.Any(a => Los.InViewCone(a, d.Pos) && Los.SightOrigin(State, a.Pos, d.Pos, Los.DetectionTo(State, a, d.Pos), Los.WindowReachOf(a.Team)) != null),
+                Fire = Burning.At(State, d.Pos),
             }).ToList();
         }
 
@@ -895,7 +897,7 @@ namespace Bastion.UI.Combat
             // At night, a lit tile says what the light does there and how long it lasts (#50); over one of the dead, whom
             // it sees and where it goes next (21/10 #11). A move, a door or a box beside say theirs instead (below).
             var hovered = hover != null ? Grid.UnitAt(Shown, hover) : null;
-            Note(hover, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered));
+            Note(hover, hover != null && Burning.At(Shown, hover) ? $"Fuego: quita {Content.Flames.Damage} de salud al pisarlo, y {Content.Flames.Damage} más al acabar el turno en él" : null, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered));
             if (mode == Mode.Tile) ThrowNote();
             if (mode == Mode.Target) AimLitNote();
             if (mode != Mode.Move) return;
@@ -934,8 +936,21 @@ namespace Bastion.UI.Combat
             Overlay?.ShowPath(State, u.Pos, path, dest.Dash, Planning);
             Overlay?.ShowCover(State, CoverMatters() ? hover : null);
             Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
-            // Running, a door or a window is heard (docs/FASE2.md): said under the destination; and at night, whether it ends in the light.
-            Note(hover, path != null ? AbilityTexts.MoveNoise(State, path, dest.Dash) : null, LitNote(hover));
+            // Running, a door or a window is heard (docs/FASE2.md): said under the destination; the fire it goes through; and at
+            // night, whether it ends in the light.
+            Note(hover, path != null ? AbilityTexts.MoveNoise(State, path, dest.Dash) : null, FireNote(path), LitNote(hover));
+        }
+
+        /// <summary>
+        /// The fire on a way (Arturo, 01/11; Lore's words): each burning tile it steps on costs a point of health, and ending
+        /// the turn on one another; none, nothing.
+        /// </summary>
+        string FireNote(List<Pos> path)
+        {
+            var burns = path?.Count(p => Burning.At(State, p)) ?? 0;
+            if (burns == 0) return null;
+            var line = $"Fuego en el camino: −{burns * Content.Flames.Damage} de salud";
+            return Burning.At(State, path[path.Count - 1]) ? $"{line}, y −{Content.Flames.Damage} más si acaba el turno ahí" : line;
         }
 
         /// <summary>At night a tile in the light is seen from as far as by day (los.ts sightTo, detectionTo): the previews say so.</summary>

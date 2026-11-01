@@ -177,7 +177,8 @@ namespace Bastion.UI.Combat
             var watch = Watch(id);
             var weapon = Content.IsAttack(id) ? Content.AttackWeapon(u, id) : watch ? Content.AttackWeapon(u, AbilityIds.Shoot) : null;
             var range = Abilities.AbilityRange(u, id);
-            var reach = weapon != null ? ReachText(weapon.Range, Los.SightOf(u)) : range > 0 ? $"{Number(range)} casillas" : null;
+            // Up to as far as it sees in this weather (Los.SightIn: a storm or a blizzard cuts it).
+            var reach = weapon != null ? ReachText(weapon.Range, Los.SightIn(s, u)) : range > 0 ? $"{Number(range)} casillas" : null;
             var noise = watch ? Content.AttackWeapon(u, AbilityIds.Shoot).Noise : Abilities.NoiseOf(s, u, id);
             u.Cooldowns.TryGetValue(id, out var left);
             var stats = new List<(string, string)>
@@ -186,7 +187,7 @@ namespace Bastion.UI.Combat
                 ("Alcance", reach),
                 ("Daño", DamageValue(s, u, id)),
                 // In tiles, as on the weapons' sheet (Lore, 19/10).
-                ("Ruido", noise > 0 ? $"{noise} casillas{(watch ? " al disparar" : "")}" : Content.IsAttack(id) ? "ninguno" : null),
+                ("Ruido", noise > 0 ? $"{Heard(s, noise)} casillas{(watch ? " al disparar" : "")}" : Content.IsAttack(id) ? "ninguno" : null),
                 ("Usos", def.Charge != null ? Charge(u, def.Charge).ToString() : null),
                 // Ready, how often; waiting, when (Lore: not to mix them up).
                 ("Recarga", left > 0 ? $"lista en {left} {(left == 1 ? "turno" : "turnos")}" : def.Cooldown is int cd && cd > 0 ? $"cada {cd} turnos" : null),
@@ -200,10 +201,10 @@ namespace Bastion.UI.Combat
             if (Watch(id))
             {
                 var w = Content.AttackWeapon(u, AbilityIds.Shoot).Noise;
-                return w > 0 ? $"ruido {w} al disparar" : null;
+                return w > 0 ? $"ruido {Heard(s, w)} al disparar" : null;
             }
             var n = Abilities.NoiseOf(s, u, id);
-            if (n > 0) return $"ruido {n}";
+            if (n > 0) return $"ruido {Heard(s, n)}";
             return Content.IsAttack(id) ? "sin ruido" : null;
         }
 
@@ -217,7 +218,18 @@ namespace Bastion.UI.Combat
             if (kinds.Contains("door")) parts.Add((Content.Noise.Door, "abre una puerta"));
             if (parts.Count == 0) return null;
             parts = parts.OrderByDescending(p => p.Item1).ToList();
-            return $"Ruido {parts[0].Item1}: {string.Join(", ", parts.Select(p => p.Item2))}";
+            return $"Ruido {Heard(s, parts[0].Item1)}: {string.Join(", ", parts.Select(p => p.Item2))}";
+        }
+
+        /// <summary>
+        /// A noise of `n` tiles as far as it will carry in this mission's weather (Content.Weather.NoiseOf; Gameplay, 01/11:
+        /// what will happen, as its ring), rounded as Rules.MakeNoise rounds it: «6», and in a storm «3,6».
+        /// </summary>
+        public static string Heard(GameState s, int n)
+        {
+            var muffle = Content.Weather.NoiseOf(s.Weather);
+            var carries = muffle < 1 ? Js.Round(n * muffle * 10) / 10 : n;
+            return carries == Math.Floor(carries) ? ((long)carries).ToString() : carries.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
         }
 
         /// <summary>The weapon an attack is made with, by name: a found weapon carried as the main one keeps its own (docs/FASE4.md).</summary>

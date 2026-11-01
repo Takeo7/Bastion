@@ -625,6 +625,8 @@ namespace Bastion.Engine
             public bool Organic;
             /// <summary>An industrial estate (playtest 2026-10-14, #25): big blocks of warehouses and container yards, a gate with wire.</summary>
             public bool Industrial;
+            /// <summary>What a town is mostly (Places.TownKindSeed, Arturo 1/11): TownKinds.</summary>
+            public string TownKind = TownKinds.Mixed;
         }
 
         private static Style PickStyle(Rng rng)

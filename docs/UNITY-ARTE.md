@@ -53,6 +53,7 @@ Probablemente sobra **POLYGON - Shopping Plaza Map** (`POLYGON_Shopping_Plaza_Ma
 | Paquete | Para qué |
 |---|---|
 | POLYGON - Woodland Apocalypse Map (`…_Woodland_Apocalypse_Map_Unity_2022_3_v1_0_1`, 140 MB) | El área de servicio del bosque (`roadside`): vallas, pilas de troncos, el cartel de la gasolinera, los camiones y los contenedores. Importado el 26/10 (`importar-synty.sh`): solo su carpeta, `PolygonMapsWoodlandApocalypse`, sin la copia de `PolygonGeneric` que trae (la de los otros paquetes ya está y sus shaders son comunes) ni sus escenas (`upkg-extract.py --under`). Sus prefabs usan los materiales de Apocalypse (`PolygonApocalypse_01_A`, `_02_C`, `Fence_01`), el mismo atlas con que los pintaba la 0.10.1. El contenedor viene rojo; azul y naranja son sus `Shipping_Container_03` y `_05`, que pone `MapBuilder.Place` según el `atlas` de MapArt.json (`MapArt.Atlases`). |
+| POLYGON - Shops Pack (`…_Shops_Unity_2022_3_v1_6_6`), Gang Warfare (`…_Gang_Warfare_Unity_2022_3_v1_7_2`) y Palm City (`…_Palm_City_Unity_2022_3_v1_0_3`) | Los edificios de la ciudad más allá de Town, City y Office (nota #3 de Ana, 1/11; Arturo los quiso traer, [EDIFICIOS-SYNTY.md](EDIFICIOS-SYNTY.md)). Importados el 1/11 (`importar-synty.sh`): solo su carpeta (`PolygonShops`, `PolygonGangWarfare`, `PolygonPalmCity`), sin la copia de `PolygonGeneric` de cada uno. De Palm City tampoco entran `PNB_Core` (el shader de follaje de sus palmeras, con scripts de editor) ni su único script (el ojo de un cartel). Sus materiales usan los shaders de Generic que ya están; las palmeras de Palm City saldrían rosas sin `PNB_Core`, pero no se usan. Sin errores al importar. Aún no se usan en el juego. |
 | POLYGON - Alpine Mountain, entero | Las montañas, rocas y pinos de la base. |
 | POLYGON - Snow Kit (`…_Snow_Kit_Unity_2022_3_v1_6_1`, 108 MB) | La base en la nieve. La nieve de las misiones es un shader nuestro (`snow.ts`), no este paquete. |
 | POLYGON - Icons Pack (`…_Icons_Unity_2022_3_v1_2_2`, 122 MB) | Los renders para la interfaz. |
@@ -239,10 +240,112 @@ Los muros de los edificios son las piezas de Synty, como en la 0.10.1:
 - `WallLayout.Of(estado, plan)` es `buildWalls`. Da cada pieza, cada cristal y cada cosa colgada del muro (la persiana de una nave, el cartel de una tienda, el del motel) con su matriz en el mundo de la 0.10.1, en casillas. Todavía no lleva las fachadas del terreno alto (`layRaised`), los pretiles, lo que hay en los tejados ni las tapas de los muros.
 - `WallsView` junta las piezas de cada trozo de 8×8 casillas y cada planta en una malla por material. Las hojas de las puertas van aparte, abiertas un cuarto de vuelta hacia dentro o cerradas. Al rehacer el mapa se calcula entero (unos ms) y solo se rehacen los trozos que cambian.
 - Las piezas salen del FBX original de Synty, cortadas con Blender (`unity/tools/pieces-cut.py`), y su sitio en la casilla viene de `Resources/Pieces.json` (`pieces-json.mts`). `PieceMake.Run` hace `PieceCatalog.asset`. Por cada material de Synty que usan las piezas crea uno de `Bastion/Building` con su textura, en `Client/Map/Materials`. También crea el cristal (`Shaders/Glass.mat`) y los dos materiales de parches, «Suelos» y «Tejados».
-- `BuildingSurfaces` (el `buildStatic` y el `redoUpper` de `buildings.ts`) da los suelos, tejados, escaleras y la tapa del terreno alto; `roofProps` da lo que va en los tejados. `BuildingLooks` da los colores de cada edificio (`looksOf`). Los dos salen idénticos al bit con el TS en los 108 estados de golden. MapBuilder los dibuja: cada planta en su `Storeys[k]`, los tejados en `Roofs` y la azotea pisable en su planta. También pone los pretiles.
+- `BuildingSurfaces` (el `buildStatic` y el `redoUpper` de `buildings.ts`) da los suelos, tejados, escaleras y la tapa del terreno alto; `roofProps` da lo que va en los tejados. `BuildingLooks` da los colores de cada edificio (`looksOf`). Los dos salían idénticos al bit con el TS en los 108 estados de golden; desde el 1/11 las casas ya no (sus tejados y porches, abajo). MapBuilder los dibuja: cada planta en su `Storeys[k]`, los tejados en `Roofs` y la azotea pisable en su planta. También pone los pretiles.
 - El shader `Shaders/Building.shader`, con URP iluminado y sus cuatro pasadas, pinta dos cosas. Las piezas usan la textura de su paquete, y en la franja de arriba se tiñe el yeso con el color de dentro y las tablas con el de fuera, como en `wallCutPatch`; la cara de atrás sale oscura. Los suelos y tejados (`_SWATCH`) son un parche de la textura de Town repetido sobre el plano del mundo, como en `swatchPatch`. Los colores van por vértice en TEXCOORD2 y 3, porque son lineales y pueden pasar de 1.
 - El suelo de la calle es de UI (`GroundView`, a partir de `ground.ts`).
 - La luz (`Client/Light/Mood.cs`, los MOODS de `renderer.ts`): el sol con sombras, el relleno que sigue a la cámara, la luz de cielo como ambiente de tres colores y la bruma exponencial al cuadrado, de día o de noche (`Mood.For(estado)`). Las intensidades de three van divididas por π (su BRDF es albedo/π y la de URP no). Después del posproceso de URP, `Shaders/Grade.shader` hace la exposición, el tonemapping Khronos Neutral de three y la gradación de `post.ts` en valores sRGB, con el nivel «vivo» 1. `GradeMake.Run` pone ese pase en los tres renderizadores, deja la gradación de URP en HDR y, en el perfil de volumen que usan los tres recursos de URP (`SampleSceneProfile`), quita el tonemapping y la viñeta de URP y pone el brillo de la 0.10.1.
+- **Las casas, fase 1 de la nota #3 de Ana (Arturo, 1/11: [EDIFICIOS-SYNTY.md](EDIFICIOS-SYNTY.md)).** Ya no salen igual que en la 0.10.1. Es casa lo que el cliente ya tenía por casa con tejado que nadie pisa (`kind == House` y `!walkableRoof`), lo mismo que el motor deja sin pisar (`Upstairs.Pitched`, casas y graneros: `roof` arriba, sin escalera ni escalerilla). Así, donde hay tejado inclinado, nadie lo pisa. Los bloques de pisos, que están en `GameState.Homes` pero tienen azotea, siguen con su azotea.
+  - El tejado (`BuildingSurfaces.HouseRoof`, `HouseRoofOf`): cumbrera a lo largo de la casa, a cuatro aguas en 6 de cada 10 (en punta si la casa es cuadrada) y a dos aguas en las demás. Pendiente de Town, 28°, más baja si sube más de 2,2 casillas. Alero de 0,45 casillas con canalón gris (de Town) y caballetes en la cumbrera y en las limatesas. Las tejas siguen siendo el parche de Town («Shingles»). La chimenea va junto a la cumbrera, antes de la limatesa, a la altura del tejado en ese punto.
+  - El porche (`BuildingSurfaces.Porches`), en 7 de cada 10 casas: sobre cada puerta del contorno que da a terreno abierto (de nadie y pisable), un tejadillo de tejas de una casilla de fondo, de una casilla antes de la puerta a una después (sin pasar de las esquinas), con dos postes blancos. Solo en pantalla. Va en «Tejados» con la planta 1: el corte lo quita al mirar la planta baja.
+  - Ventanas, puertas, contraventanas y garaje (`WallLayout.LookOf`, por casa): una de las cinco ventanas de Town (`houseWindow`, `houseWindow2`…`5`) y una de sus tres puertas (`houseDoor`, `2`, `3`); contraventanas rojas abiertas (`houseShutters`) en 4 de cada 10, en todas sus plantas. En la mitad de las casas con un tramo de pared ciega de 4 casillas en la planta baja que dé a terreno abierto, la puerta enrollable de garaje de Town (`houseGarage`, su `ExteriorWall_GarageDoor_01` sin el carril de dentro) en el centro del tramo más largo. Solo en pantalla: el motor sigue teniendo muro ahí. Los tres muros de planta baja de Town no dan variedad: son la misma madera en tres trozos del atlas.
+  - Las piezas nuevas son de Unity, no de la 0.10.1: `HOUSE_PIECES` en `pieces-json.mts`, cortadas con `pieces-cut.py` y metidas en el catálogo con `PieceMake.Run`.
+  - Laboratorio: `EdificiosLab.Casas` dice de cada casa de los mapas de ciudad su tejado, su ventana, su puerta, si lleva contraventanas y dónde va su garaje. En MapLab, `BASTION_AT=x,y,distancia,planta,giro` gira la cámara (45, la del juego) para ver las caras de atrás. Para el corte, `BASTION_HOVER` con `-shotWarm 0.5`. Capturas en `.dev-snapshots/arte/unity/edificios/casas-01-11/`.
+- **Desde el 1/11 el tejado inclinado sale de `GameState.Pitched`** (el motor, Mapgen/Upstairs `Pitched`: casa o granero, sin pisar). `BuildingPlan.PitchedOf` pone `Building.pitched` («house», «barn» o nada) y de ahí leen `BuildingSurfaces` (tejado, porche, chimenea) y `RoofProps`. En partidas viejas sin el campo sigue la regla de antes (casa o granero para el cliente, tejado sin pisar). En city-1 y city-7 salen las mismas 12 casas que antes.
+- **El clima (Arturo, 1/11: las cinco pruebas, todas en el juego, cada una en misiones distintas; el motor lo dice en `GameState.weather`: `drizzle`, `downpour`, `storm`, `snowfall`, `blizzard`).** Lo dibuja `Client/Light/Weather.cs`, que `MapBuilder` crea con el mapa:
+  - **Llovizna:** llovizna en neblina, todo húmedo.
+  - **Aguacero:** lluvia inclinada, salpicaduras y charcos con anillos.
+  - **Tormenta:** más fuerte, a rachas, más oscura, con relámpagos cada 4–13 s, con semilla del mapa.
+  - **Nevada:** copos que bajan despacio y nieve sobre lo que mira arriba.
+  - **Ventisca:** nieve de lado, jirones a ras de suelo, casi blanco.
+  - El cielo de día es el de su clima (`Mood.Of`: `Weather.WeatherMood`). De noche es el de la noche, con la bruma más densa (`Weather.NightHaze`). Las partículas salen más oscuras, porque sin luz brillarían, y el relámpago más fuerte. `Mood.Values.night` dice si es de noche (`Mood.Dark`, `_Night`), también con lluvia.
+  - Las partículas (`ClimaGota.shader`) siguen a la cámara del juego. Cubren el suelo que ve y crecen al alejarse, con su densidad hasta 60×60 m y más claras más allá (`MostArea`).
+  - Una pasada sobre la imagen (`Clima.shader`), después de lo opaco y antes de lo transparente. Pinta lo mojado, los charcos con el cielo reflejado y los anillos de las gotas, la nieve iluminada con la luz de `Mood` y las sombras del sol, y el relámpago.
+  - La pasada se pone solo en la cámara del juego (`beginCameraRendering` y `EnqueuePass`, con render graph): los renderizadores del proyecto no se tocan. Sus dos materiales están en `Resources/Kit` (`Clima`, `ClimaGota`), para que la app tenga los shaders. No pinta las figuras (el bit 64 de la plantilla, como la niebla).
+  - Bajo techo no llueve. Una textura por casilla con la altura de lo alto de los muros de cada edificio deja seco lo que queda por debajo, también al verlo por el corte, y las partículas no se dibujan ahí.
+  - La nieve del invierno (`SnowCover`) sigue igual, y la nevada y la ventisca van encima.
+  - Trampas:
+    - la nieve con huecos de ruido suave salía como manchas borrosas, que parecían sombras: ahora el manto solo cambia de grosor;
+    - un copo sin iluminar sale más oscuro que la nieve iluminada (`_Gain`);
+    - un copo que pasa junto a la cámara se veía enorme (`maxParticleSize`);
+    - con la altura de la cumbrera en el mapa de tejados, las faldas de un tejado inclinado quedaban «bajo techo», secas y sin nieve.
+  - Coste en el Mac, por el camino del juego (`ClimaLab.Coste`, city-1, 1920×1080):
+    - a 24 casillas: en «medio», de 5,47 ms despejado a +0,13 (llovizna) y hasta +0,34 ms (aguacero); en «alto», de 8,47 ms a +0,15 y hasta +0,66 ms (nevada);
+    - a 33,5 casillas (el alejamiento máximo): en «medio», de 6,43 ms a +0,20 y hasta +0,51 ms (tormenta); en «alto», de 10,24 ms a +0,29 y hasta +0,62 ms (ventisca);
+    - el paso de las partículas en la CPU, de 0,04 a 0,34 ms.
+    - Trampa: en el editor, fuera de juego, quitar el clima sin `Weather.Take` dejaba su gancho apuntando a un componente destruido. El fotograma salía vacío (0,9 ms) y parecía gratis.
+  - Laboratorio: `ClimaLab.Llovizna`, `Aguacero`, `Tormenta`, `Nevada` y `Ventisca` hacen el mapa con su clima por el camino del juego. En MapLab, `BASTION_CLIMA=<id>`. `ClimaLab.Coste` mide (`BASTION_DIST`). `BASTION_CLIMA_SIN=particulas|pase` aísla lo que dibuja cada parte. Tiras de las pruebas en `.dev-snapshots/arte/unity/clima/pruebas-01-11/`.
+- **Los animales (Gameplay, 1/11: «más vida»; solo en pantalla, sin reglas).** Los pone `Client/Map/Fauna.cs`, que `MapBuilder` crea al hacer el mapa (`WithFauna`). Son:
+  - perros sin collar del Dog Pack por calles y patios: tres en un pueblo, uno en el campo;
+  - un zorro o un coyote en los claros del campo, a tres casillas de muros y cobertura alta;
+  - cuervos posados en los tejados (en la cumbrera de una casa, en el pretil de una azotea), que se van con su tejado cuando el corte lo abre (`Cutaway.Track`);
+  - palomas picoteando en un sitio abierto de un pueblo.
+  - Dónde salen lo dan las casillas del mapa con su hash, igual para los dos jugadores, lejos de la escuadra y de los muertos.
+  - Solo se ven donde mira la escuadra, como los enemigos (Arturo, 1/11): `Fog.InSight` de su casilla. Los del tejado se ven como su tejado, que la niebla muestra como la calle de al lado. Sin niebla (un laboratorio), siempre.
+  - Cómo se mueven: andan unas casillas, se paran, huelen. Cuando una figura cualquiera (todo lo que dibuja `UnitViews`, vivo o muerto) se acerca a 6 casillas (los salvajes a 9, los pájaros a 4,5), huyen corriendo hacia fuera por terreno libre, o echan a volar. Lejos se calman, y si salen del mapa desaparecen.
+  - El cuervo y la paloma son nuestros: un cuerpo de pocos polígonos y dos alas que aletean, con un material de `Resources/Kit/Plain` para que la app tenga su shader.
+  - Los perros (`dog:…`) están en el catálogo del mapa (`MapCatalogMake` con `Fauna.Models`; `MapLab.PackFolders` con `dog` = `PolygonDog`). Se mueven con el controlador del paquete (`Movement_f`: 0 quieto, 0,5 andar, 1 correr). En la partida, si nadie los ve no se animan (`CullUpdateTransforms`).
+  - El Dog Pack se importa con `importar-synty.sh`, sin sus scripts. Trae también perros zombi, un lobo, un perro robot y un perro de ciencia ficción, que no se usan.
+  - Laboratorio: `AnimalesLab.Perros`, `Pajaros` y `Campo`, con una figura de prueba que se acerca al animal (`Fauna.ExtraThreats`, `Fauna.Stepping`); `BASTION_ANIMAL=k` escoge otro, `BASTION_DIST`, `BASTION_DESDE`. Tiras en `.dev-snapshots/arte/unity/animales/pruebas-01-11/`.
+- **Coches siniestrados y fuego (Arturo, 1/11; datos del motor en `GameState.wrecks` y `GameState.fires`, contrato en engine-cs/README.md).**
+  - Los coches (`MapBuilder.Crash`):
+    - El que choca o arde es siempre uno destrozado, nunca un coche entero. El que arde, la carcasa oxidada.
+    - Va torcido según el `tilt` del motor: el choque y el empotrado giran sobre el morro, el abandonado sobre su centro.
+    - Se mete un poco en lo que golpeó (0,12 casillas en un choque, 0,38 en la fachada).
+    - Alrededor del choque quedan restos: una rueda suelta y piedrecitas.
+    - El empotrado («reventado contra una casa», Arturo, 1/11; legible a 24 casillas):
+      - la casilla cuenta como muro roto (`BuildingPlan.wallWrecks`, `CarInWall`: `WallIn` y `Breached`), y `WallLayout` la dibuja abierta casi hasta el suelo (`CarBreach`, 0,12 plantas), con el muro de encima en pie;
+      - el coche entra 0,62 casillas, con el morro levantado 9° y ladeado 4°;
+      - dentro de la habitación, un montón de escombros, cascotes y piedrecitas; fuera, cascotes al pie del muro y tablones rotos saliendo del agujero;
+      - en la pared, una mancha oscura del golpe y grietas a los lados y encima (`MapBuilder.Cracks`, con la textura de suelo roto de Particle FX).
+    - Al coche de un choque no se le encienden los faros.
+  - El fuego (`Client/Map/FireView.cs`): son las llamas, las brasas y el humo negro de Particle FX (`FxArt.fireBig`, `fire`, `fireSmall`, `embers`, `smoke`, de `FxArtMake`).
+    - Sobre lo que arde van llamas grandes y una columna de humo: sobre la carrocería en un coche (más grandes), y sobre los cubos o el montón en los demás.
+    - En cada casilla de suelo en llamas, llamas pequeñas, cada una con su tamaño y su giro.
+    - Debajo, una mancha de hollín.
+    - De noche alumbra la luz del propio fuego en `GameState.lights`. `NightLights` la reconoce por su id (`f1`…): sin turnos, naranja aunque tenga radio 3 (no es una bengala) y sin bola de brillo, porque ya están las llamas.
+  - Tiras en `.dev-snapshots/arte/unity/fuego-choques/pruebas-01-11/`.
+- **La pasada de rendimiento (Arturo, 1/11).** Se mide en el Mac con `Editor/RendimientoLab.cs`:
+  - `Medir`: cuatro casos pesados como los dibuja el juego (figuras, niebla, animales, clima):
+    - «ciudad»: city-6-hard-veterans, 70 figuras;
+    - «asedio»: el asedio del Bastión con 60 muertos en el claro;
+    - «fuego»: city-3-elimination, con sus dos fuegos y tormenta;
+    - «campo»: wilds-5-recovery, el pinar.
+  - Cómo mide: la cámara del juego a 24 y 33,5 casillas, en «medio» y «alto», a 1920×1080 y sin tope. Cada fotograma es un `camera.Render` con un píxel leído, y se queda lo menor de tres vueltas. Variables: `BASTION_CASOS`, `BASTION_VARIANTES`, `BASTION_DISTANCIAS`, `BASTION_CALIDAD` y `BASTION_JUNTAR=1` (con el juntado del juego).
+  - `Partes`: los renderizadores y los triángulos de cada parte del mapa, contados sin juntar.
+  - Se queda: juntar lo quieto del mapa (`MapBuilder.Still`, con `StaticBatchingUtility`).
+    - Se junta el decorado de cada planta, el contorno («Marco»), lo de los tejados y los trozos de paredes, plantas y suelo.
+    - No se junta lo que se mueve: los árboles con viento, La Lata, los animales, el fuego y el clima.
+    - Lo que el mapa rehace después (una puerta, un muro, lo registrado) se hace aparte, sin juntar.
+    - El corte funciona igual, porque lee el sitio en el mundo y no en el modelo.
+    - En ms por fotograma, antes → después (medio 24 / medio 33,5 / alto 24 / alto 33,5):
+
+      | Caso | Medio 24 | Medio 33,5 | Alto 24 | Alto 33,5 |
+      |---|---|---|---|---|
+      | ciudad | 7,74 → 7,12 | 9,12 → 8,36 | 9,90 → 9,25 | 11,25 → 10,34 |
+      | asedio | 9,19 → 8,86 | 9,57 → 9,21 | 11,51 → 11,20 | 11,66 → 11,18 |
+      | fuego | 8,58 → 8,06 | 9,67 → 8,88 | 10,71 → 10,17 | 11,86 → 10,97 |
+      | campo | 8,27 → 7,44 | 9,43 → 8,73 | 10,63 → 10,08 | 12,23 → 11,53 |
+
+    - Cuesta memoria: lo juntado son copias, cada mapa las suyas. Reserva 128 MB más en city-7 (2,3 M de vértices) y 88 MB en wilds-7, y en el Mac la GPU usa esa misma memoria. Se libera al cambiar de escena (`LoadScene`).
+    - En la app, las mallas tienen que poderse leer: `MapCatalogMake.Readable` lo hace con todos los modelos de MapArt, y una que no se pueda leer se queda sin juntar.
+  - Se queda: no animar el cuerpo de quien no se ve (`UnitViews.Step`).
+    - Cuenta como no visto quien está fuera de la cámara del juego (una caja de 6 × 2,2 × 6 m, para que entre su sombra), oculto por la niebla o el corte, o desvanecido.
+    - Solo se para el cuerpo: el esqueleto y lo que se le pone encima.
+    - Siguen al reloj (Gameplay, 1/11): dónde está y adónde gira, cuánto ha subido el arma, el comer junto al cuerpo y todo lo que espera el reproductor.
+    - Al volver a verse, el cuerpo avanza lo que se perdió, hasta 10 s, y así una caída o un levantarse se ven ya acabados.
+    - El paso de las figuras, en ms: ciudad 0,97 → 0,14–0,19; asedio 1,3–1,5 → 0,8–0,9; fuego 0,80 → 0,02; campo 0,56 → 0,02.
+    - El turno enemigo dura lo mismo con el recorte y sin él (`HudShots.PartidaTurn` con `BASTION_RITMO=1`): city-11 orden 12 (47 muertos), 10,6 s; facility-8 orden 76 (51, todos en la niebla), 1,7 s; wilds-9 orden 9 (24), 12,2 s.
+    - `BASTION_ANIMAR_TODAS=1` los anima todos, para comparar.
+  - No se queda (en «medio», contra la base):
+    - Forward+: +0,18 a +0,28 ms.
+    - El GPU Resident Drawer: +0,14 a +0,30 ms. Es también el camino del instancing en URP, porque el SRP Batcher va antes que el instancing de siempre.
+    - El Resident Drawer con su oclusión por GPU: +0,17 a +0,22 ms.
+    - En «alto», los tres quedan en ±0,07 ms.
+    - El plano lejano ajustado al zum máximo: ±0,04 ms.
+    - Los LOD:
+      - lo que se paga es por píxel y por objeto, no por triángulo: con un cuarto de los píxeles, cada caso baja 1,6–3,5 ms;
+      - los mapas tienen 0,5–1,65 M de triángulos (ciudad 1,18 M, campo 1,65 M), casi todo en el contorno y el decorado.
+  - Trampa: un renderizador juntado tiene por malla el lote entero. `GroundOcclusion` horneaba con `subMeshCount` todos los submeshes del lote, y al cambiar el mapa tardaba 47 ms en vez de 6 (city-7). Ahora un renderizador juntado cuenta sus materiales, y la oclusión sale igual casilla a casilla. Para medirlo, `MapLab` acepta `BASTION_JUNTAR=0` y el volcado de `BASTION_AO_VOLCADO` dice cuánto tarda el horneado.
 - `HomeFurnishing` es `homeFurnishing.ts` (alfombras, lámparas, sillas alrededor de las mesas, toallas…): igual que el TS en los 107 estados de golden. MapBuilder lo pone al construir y lo rehace con cada cambio.
 - `MapArt.UnityTurn`: cuánto está girado cada modelo de Unity respecto al FBX de origen con el que se ajustó la 0.10.1. Medido el 24/10 en todos los de MapArt (`SettlementLab.Boxes`, la caja de cada modelo de Unity contra la del GLB de la 0.10.1), va por su procedencia, sin una excepción entre los 160 que se distinguen: los prefabs de Apocalypse, un cuarto de vuelta; los de cualquier otro paquete y los FBX de origen importados en Extra (también los recortados con Blender), media vuelta. Antes solo se corregían los cuatro coches destrozados y la caravana, así que los demás props, también los del combate del hito 1, estaban girados un cuarto o media vuelta (en la base se notaba: la empalizada y los sacos atravesados, el barracón y la casa del revés). `MapCatalogMake` guarda el de cada modelo según su carpeta (`MapLab.UnityTurnOf`); sin catálogo, por el paquete. Lo usan `MapBuilder.Place` y el `PropParts` de UI.
 - `deck` (de syntyManifest, ahora en MapArt.json): la torre de vigía con su cubierta justo a una planta, como la 0.10.1.

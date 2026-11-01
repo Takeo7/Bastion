@@ -333,7 +333,57 @@ namespace Bastion.Client.Map
                 snow = SnowCover.Make(root, s, plan, prefabOf);
                 SnowCover.Mark(root, plan, s, GroundPlane());
             }
+            // The animals about it (Fauna, Gameplay 1/11): only on the screen. Their tops set (BuildingParts), the crows can stand on the roofs.
+            if (WithFauna) Fauna.Make(root, s, plan, n => prefabOf($"{Fauna.Pack}:{n}"));
+            // What burns all the mission long (GameState.fires, 1/11): flames, smoke and soot (its light by night is NightLights').
+            if (s.Fires != null && s.Fires.Count > 0) FireView.Make(root, s);
+            // Rain or snow (GameState.weather, 1/11): what falls, the wet and the snow lying (Weather; its sky is Mood.For's).
+            Weather.Make(root, s, plan);
+            if (JoinStill) Still();
         }
+
+        /// <summary>Whether a map built has its still things joined (Still); a lab may weigh it without.</summary>
+        public static bool JoinStill = true;
+
+        /// <summary>
+        /// The map's still things joined by material (Arturo, 1/11, the performance pass; RendimientoLab: 0.3 to 0.9 ms a
+        /// frame less on the Mac, the least in the siege's clearing): StaticBatchingUtility over what never moves
+        /// once made, the props of each storey («Decorado»), the outline («Marco»), what stands on the roofs, and the
+        /// walls', the floors' and the ground's chunks (the cutaway reads the world's place, not the model's). Not what
+        /// sways in the wind (Nature's trees: their shader moves each vertex by its place in its own model), La Lata (it
+        /// drives off), the animals, the fire, the weather. What the map makes again later (a door opened, a car blown
+        /// away, a wall's chunk) is made apart and isn't joined; what goes is taken out of the joined mesh as it is. In a
+        /// build the meshes must be readable: MapCatalogMake makes the catalog's so, and one that isn't is left as it is.
+        /// </summary>
+        void Still()
+        {
+            var groups = new HashSet<string> { "Decorado", "Marco", "Tejados", "Paredes", "Suelo", "Plantas", "Suelos" };
+            var apart = new HashSet<string> { "La Lata", "Fauna", "Fuego", "Clima" };
+            var join = new List<GameObject>();
+            foreach (var r in root.GetComponentsInChildren<MeshRenderer>())
+            {
+                var filter = r.GetComponent<MeshFilter>();
+                if (filter == null || filter.sharedMesh == null || r.sharedMaterials.Any(Windy)) continue;
+                if (!Application.isEditor && !filter.sharedMesh.isReadable) continue;
+                bool inGroup = false, isApart = false;
+                for (var t = r.transform; t != null && t != root; t = t.parent)
+                {
+                    if (groups.Contains(t.name)) inGroup = true;
+                    if (apart.Contains(t.name)) isApart = true;
+                }
+                if (inGroup && !isApart) join.Add(r.gameObject);
+            }
+            if (join.Count == 0) return;
+            long before = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
+            StaticBatchingUtility.Combine(join.ToArray(), root.gameObject);
+            // (What it costs in memory: the joined meshes are copies, each map its own.)
+            long grown = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong() - before;
+            var made = join.Select(o => o.GetComponent<MeshFilter>().sharedMesh).Distinct().ToList();
+            Debug.Log($"[map] still things joined: {join.Count}, in {made.Count} meshes of {made.Sum(m => m.vertexCount) / 1000}k vertices, {grown >> 20} MB more");
+        }
+
+        /// <summary>Whether a map built has its animals (Fauna); a lab may leave them out.</summary>
+        public static bool WithFauna = true;
 
         /// <summary>The snow on a winter's map (SnowCover), or none.</summary>
         SnowCover snow;
@@ -1571,11 +1621,17 @@ namespace Bastion.Client.Map
             int y0 = thing.Tiles.Min(t => t / s.Width), y1 = thing.Tiles.Max(t => t / s.Width);
             int ax = thing.Anchor % s.Width, ay = thing.Anchor / s.Width;
             string id;
+            // A car crashed or left in the road (GameState.wrecks, Arturo 1/11), or one burning (GameState.fires).
+            var wreck = thing.Kind == "carFront" && floor == 0 ? s.Wrecks?.FirstOrDefault(w => w.Anchor == thing.Anchor) : null;
+            bool burning = thing.Kind == "carFront" && floor == 0 && s.Fires?.Any(f => f.Source == thing.Anchor) == true;
             switch (thing.Kind)
             {
                 case "carFront":
                     var cars = MapArt.Set("carFront");
                     id = cars[Mathf.Min(cars.Length - 1, Mathf.FloorToInt(MapArt.Hash(ax, ay, 1) * cars.Length))];
+                    // One that crashed or burns is a wreck, never one of the whole cars; one burning, a rusted shell.
+                    if ((wreck != null && wreck.Kind != WreckKinds.Abandoned || burning) && !Wrecks.Contains(id)) id = Crashed[Mathf.FloorToInt(MapArt.Hash(ax, ay, 14) * Crashed.Length)];
+                    if (burning) id = "carRusted";
                     // Searched (its boot or its glovebox), a wreck is the one with the boot lid up; a whole one (Unity's own,
                     // Ana 28/10) has none and stays as it is.
                     if (Wrecks.Contains(id) && thing.Tiles.Any(j => SearchedAt(Mathf.RoundToInt(floor / MapSpace.Storey), j))) id = "carOpen";
@@ -1622,8 +1678,9 @@ namespace Bastion.Client.Map
                     Debug.Log($"[coches] {id} at {ax},{ay} facing {thing.Facing}: {(tilesAlongX == modelAlongX ? "along" : "ACROSS")} ({box.size.x:F2} × {box.size.z:F2} m)");
                 }
                 Repaint(placed, id, MapArt.Hash(ax, ay, 13));
-                // Some wrecks still have a battery: their headlights on, by night, at the nose.
-                if (MapArt.Hash(ax, ay, 9) < 0.25f)
+                if (wreck != null) Crash(parent, placed, thing, wreck, floor);
+                // Some wrecks still have a battery: their headlights on, by night, at the nose (not one crashed askew).
+                if (wreck == null && MapArt.Hash(ax, ay, 9) < 0.25f)
                 {
                     var d = Bastion.Engine.Grid.Dirs4[thing.Facing];
                     float nose = (MapArt.FootprintOf(id)?.fit ?? 2.95f) / 2 - 0.055f;
@@ -1635,6 +1692,134 @@ namespace Bastion.Client.Map
                 }
             }
             return placed;
+        }
+
+        /// <summary>The cracks over a wall round a car's hole: dark, and so much of a tile each, either side and above.</summary>
+        static readonly Color Crack = new Color(0.05f, 0.04f, 0.035f, 1);
+        /// <summary>The smudge of the blow and the dust over the wall round the hole: so dark, so many tiles across.</summary>
+        static readonly Color Smudge = new Color(0.1f, 0.085f, 0.075f, 0.65f);
+        const float SmudgeSize = 2.4f;
+        static Material crackMaterial, smudgeMaterial;
+
+        /// <summary>
+        /// Cracks on a wall's outer face `face` (its middle line out by its half thickness; `nose` into the building, `side`
+        /// along it) round the hole a car made: on the wall either side of it and over it, Particle FX's broken ground.
+        /// </summary>
+        void Cracks(Transform parent, Vector3 face, Vector3 nose, Vector3 side, int seed)
+        {
+            if (crackMaterial == null)
+            {
+                var art = Resources.Load<Effects.FxArt>("FxArt");
+                crackMaterial = KitMaterials.New(KitMaterials.SeeThrough, "Grietas");
+                if (crackMaterial == null || art == null || art.groundCrack == null) return;
+                crackMaterial.mainTexture = art.groundCrack;
+                crackMaterial.SetColor("_BaseColor", Crack);
+            }
+            float storey = MapSpace.Storey;
+            // The blow's smudge first, under the cracks: what reads from the game's camera.
+            if (smudgeMaterial == null)
+            {
+                smudgeMaterial = KitMaterials.New(KitMaterials.SeeThrough, "Golpe");
+                if (smudgeMaterial != null)
+                {
+                    smudgeMaterial.mainTexture = FireView.Blot();
+                    smudgeMaterial.SetColor("_BaseColor", Smudge);
+                }
+            }
+            if (smudgeMaterial != null)
+            {
+                var smudge = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                smudge.name = "golpe";
+                UnityEngine.Object.DestroyImmediate(smudge.GetComponent<Collider>());
+                smudge.transform.SetParent(parent, false);
+                smudge.transform.position = face + Vector3.up * 0.5f * storey - nose * 0.005f;
+                smudge.transform.rotation = Quaternion.LookRotation(nose, Vector3.up);
+                smudge.transform.localScale = new Vector3(SmudgeSize, SmudgeSize * 0.85f, 1) * MapSpace.Tile;
+                var sr = smudge.GetComponent<MeshRenderer>();
+                sr.sharedMaterial = smudgeMaterial;
+                sr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            foreach (var (along, up, size) in new[] { (-1.0f, 0.4f, 1.5f), (1.0f, 0.45f, 1.5f), (0.0f, 0.88f, 1.2f) })
+            {
+                var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                quad.name = "grietas";
+                UnityEngine.Object.DestroyImmediate(quad.GetComponent<Collider>());
+                quad.transform.SetParent(parent, false);
+                quad.transform.position = face + side * along * 0.95f * MapSpace.Tile + Vector3.up * up * storey - nose * 0.01f;
+                // (Facing out of the building, its picture turned its own way.)
+                quad.transform.rotation = Quaternion.LookRotation(nose, Vector3.up) * Quaternion.Euler(0, 0, (seed * (7 + along * 3) % 360));
+                quad.transform.localScale = Vector3.one * size * MapSpace.Tile;
+                var r = quad.GetComponent<MeshRenderer>();
+                r.sharedMaterial = crackMaterial;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+        }
+
+        /// <summary>The wrecks a crashed car is drawn as (not a whole one, nor one with its boot open).</summary>
+        static readonly string[] Crashed = { "carWreck", "carRusted", "carSuv" };
+
+        /// <summary>
+        /// A car as it crashed (GameState.wrecks, Arturo 1/11: «orgánico, no un parche pegado»): askew of its facing by the
+        /// engine's tilt, turned about its nose where it hit (into the others of a pileup, into the wall it was driven
+        /// into) or about its middle when left in the road; pushed on into what it hit; and what was strewn: a wheel off,
+        /// broken glass and bits by a pileup, the wall's rubble either side of its nose in the wall.
+        /// </summary>
+        void Crash(Transform parent, GameObject car, DecorObject thing, Wreck wreck, float floor)
+        {
+            int ax = thing.Anchor % s.Width, ay = thing.Anchor / s.Width;
+            var d = Bastion.Engine.Grid.Dirs4[thing.Facing];
+            var nose = new Vector3(d.X, 0, -d.Y);
+            var side = new Vector3(-nose.z, 0, nose.x);
+            var tile = new Vector3((ax + 0.5f) * MapSpace.Tile, floor, -(ay + 0.5f) * MapSpace.Tile);
+            var pivot = wreck.Kind == WreckKinds.Abandoned ? car.transform.position : tile + nose * 0.3f * MapSpace.Tile;
+            car.transform.RotateAround(pivot, Vector3.up, wreck.Tilt);
+            float push = wreck.Kind == WreckKinds.Wall ? 0.62f : wreck.Kind == WreckKinds.Pileup ? 0.12f : 0;
+            car.transform.position += nose * push * MapSpace.Tile;
+            if (wreck.Kind == WreckKinds.Wall)
+            {
+                // Its nose up on what it smashed through, and over a little to one side: about its back wheels.
+                var back = car.transform.position - nose * 0.9f * MapSpace.Tile;
+                car.transform.RotateAround(back, Vector3.Cross(Vector3.up, nose), -9);
+                car.transform.RotateAround(car.transform.position, nose, (MapArt.Hash(ax, ay, 315) < 0.5f ? -1 : 1) * 4);
+            }
+            float R(int salt) => MapArt.Hash(ax, ay, 300 + salt);
+            void Bit(string id, Vector3 at, float scale)
+            {
+                var bit = Place(parent, id, at, R((int)(at.x * 7 + at.z * 13)) * 360, MapArt.FootprintOf(id));
+                if (bit != null) bit.transform.localScale *= scale;
+            }
+            if (wreck.Kind == WreckKinds.Wall)
+            {
+                // Inside the room it burst into: a heap of the wall and its boards, rubble thrown further in.
+                Bit("debrisPile", tile + (nose * 1.0f + side * (R(30) - 0.5f) * 0.6f) * MapSpace.Tile, 0.7f);
+                for (int k = 0; k < 3; k++)
+                {
+                    float across = (k - 1) * (0.55f + 0.2f * R(31 + k));
+                    float along = 0.7f + 0.8f * R(34 + k);
+                    Bit(R(37 + k) < 0.5f ? "rubble1" : "rubble2", tile + (side * across + nose * along) * MapSpace.Tile, 0.35f + 0.2f * R(40 + k));
+                }
+                Bit("pebbles", tile + (nose * 1.4f + side * (R(43) - 0.5f)) * MapSpace.Tile, 1.1f);
+                // Outside, at the foot of the wall either side of it, and the street's side of the hole.
+                for (int k = 0; k < 2; k++)
+                    Bit(R(44 + k) < 0.5f ? "rubble1" : "rubble2", tile + (side * (k == 0 ? -0.6f : 0.6f) - nose * (0.45f + 0.2f * R(46 + k))) * MapSpace.Tile, 0.4f + 0.2f * R(48 + k));
+                Bit("pebbles", tile - nose * 0.75f * MapSpace.Tile + side * (R(16) - 0.5f) * 0.5f * MapSpace.Tile, 0.9f);
+                // Boards torn off the wall, sticking out of the hole's sides and lying across its sill.
+                for (int k = 0; k < 3; k++)
+                {
+                    var board = Place(parent, "bPlank", tile + side * ((k - 1) * 0.42f) * MapSpace.Tile - nose * 0.15f * MapSpace.Tile + Vector3.up * (0.25f + 0.9f * R(50 + k)), 0);
+                    if (board == null) continue;
+                    board.transform.rotation = Quaternion.LookRotation(Quaternion.AngleAxis((R(53 + k) - 0.5f) * 90, nose) * side, Vector3.up) * Quaternion.Euler((R(56 + k) - 0.5f) * 60, 0, (R(59 + k) - 0.5f) * 70);
+                    board.transform.localScale *= 0.9f + 0.3f * R(62 + k);
+                }
+                // Cracks out from it over the wall either side and above.
+                Cracks(parent, tile - nose * (float)(BuildingSurfaces.WallHalf + 0.02f) * MapSpace.Tile, nose, side, (int)(R(65) * 1000));
+            }
+            else if (wreck.Kind == WreckKinds.Pileup)
+            {
+                // A wheel come off, and glass and bits about its nose.
+                if (R(20) < 0.6f) Bit("tire", tile + (side * (R(21) < 0.5f ? -0.9f : 0.9f) + nose * (R(22) - 0.3f)) * MapSpace.Tile, 0.8f);
+                Bit("pebbles", tile + (side * (R(23) - 0.5f) * 0.6f + nose * 0.55f) * MapSpace.Tile, 0.8f);
+            }
         }
 
         /// <summary>

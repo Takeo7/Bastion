@@ -797,7 +797,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>`used` counts the programs already placed: besides the squad's square and the objective, two open lots at most (a square, a car park, a site, a filling station, a motel), one of each.</summary>
-        private static string CityProgram(Rect lot, Rng rng, string? role, JsMap<string, int> used, bool organic = false, bool industrial = false)
+        private static string CityProgram(Rect lot, Rng rng, string? role, JsMap<string, int> used, bool organic = false, bool industrial = false, string townKind = TownKinds.Mixed)
         {
             var short_ = Math.Min(lot.W, lot.H);
             var long_ = Math.Max(lot.W, lot.H);
@@ -827,6 +827,8 @@ namespace Bastion.Engine
             if (few && used.Get(CityPrograms.Motel, 0) == 0 && short_ >= 11 && long_ >= 13) options.Add((CityPrograms.Motel, 0.9));
             if (few && used.Get(CityPrograms.Site, 0) == 0 && short_ >= 8 && area <= 150) options.Add((CityPrograms.Site, 0.4));
             if (options.Count == 0) options.Add((CityPrograms.Parking, 1));
+            // More homes in a residential town, more shops and offices in a commercial one (TownKinds, Arturo 1/11).
+            if (townKind != TownKinds.Mixed) options = options.Select((o) => (o.Item1, o.Item2 * TownKinds.Weight(townKind, o.Item1))).ToList();
             var pick = Weighted(rng, options);
             used.Set(pick, used.Get(pick, 0) + 1);
             return pick;

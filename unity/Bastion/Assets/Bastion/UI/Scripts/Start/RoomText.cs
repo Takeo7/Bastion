@@ -18,7 +18,10 @@ namespace Bastion.UI.Start
         public const string Invite = "Quien juegue contigo te verá en «Partidas en tu red» de su app. Si no te ve, que use «Unirse por dirección» con:";
         /// <summary>Each of the host's addresses, by what it is (net.ts inviteLinks of the 0.10.1).</summary>
         public const string Lan = "En tu misma red";
-        public const string Tailscale = "Por internet (Tailscale)";
+        /// <summary>«Con Tailscale» (Lore, 01/11: «Por internet» is the router's alone now).</summary>
+        public const string Tailscale = "Con Tailscale";
+        /// <summary>The router's port opened (Red's RouterPort; Arturo, 01/11): the host's address on the internet with the room's key (Lore).</summary>
+        public const string Internet = "Por internet, con la clave";
         public const string Copy = "Copiar";
         public const string Copied = "Copiada";
         public const string Mission = "Misión";
@@ -36,6 +39,16 @@ namespace Bastion.UI.Start
         public const string Replaced = "Has abierto la partida en otra ventana, y esta se ha desconectado.";
 
         public static string OtherAddresses(int n) => $"Otras direcciones ({n})";
+
+        /// <summary>The router's port while it opens, or why it won't (Lore's words, 01/11).</summary>
+        public static string RouterLine(RouterState state) => state switch
+        {
+            RouterState.Trying => "Abriendo el puerto del router…",
+            RouterState.NoRouter => "El router no deja abrir el puerto desde la app. Para jugar por internet, usad Tailscale los dos.",
+            RouterState.Shared => "Tu compañía de internet comparte tu dirección con otros clientes, y desde fuera no se llega a tu router. Para jugar por internet, usad Tailscale los dos.",
+            RouterState.Refused => "El router no ha abierto el puerto. Para jugar por internet, usad Tailscale los dos.",
+            _ => null,
+        };
 
         // The main page and a new campaign's question (lobby.ts renderMain, renderConfirm).
         public const string Continue = "Continuar campaña";

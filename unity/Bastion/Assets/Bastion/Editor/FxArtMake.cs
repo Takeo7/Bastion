@@ -73,6 +73,19 @@ namespace Bastion.EditorTools
             art.lightning = Sprite("PolygonParticles_Lightning_01");
             art.semiCircle = Sprite("PolygonParticles_SemiCircle_01");
 
+            GameObject Effect(string name)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{Pack}/Prefabs/{name}.prefab");
+                if (prefab == null) missing.Add(name);
+                return prefab;
+            }
+
+            art.fireSmall = Effect("FX_Fire_Small_02");
+            art.fire = Effect("FX_Fire_01");
+            art.fireBig = Effect("FX_Fire_Big_01");
+            art.embers = Effect("FX_Embers_01");
+            art.smoke = Effect("FX_Smoke_Black_01");
+
             EditorUtility.SetDirty(art);
             AssetDatabase.SaveAssets();
             Debug.Log("[fx] " + Path + (missing.Count > 0 ? "; missing: " + string.Join(", ", missing) : "; all there"));

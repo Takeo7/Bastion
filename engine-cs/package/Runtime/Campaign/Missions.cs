@@ -26,6 +26,29 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// The weather an operation's battlefield seed says (Arturo, 1/11: Arte's five, in different missions), as NightFor
+        /// but on other bits of it: two in three clear; in winter a snowfall (22 in 100) or a blizzard (12), otherwise a
+        /// drizzle (14), a downpour (12) or a storm (8). Null: clear.
+        /// </summary>
+        public static string? WeatherFor(int seed, bool winter)
+        {
+            var roll = (int)((unchecked(((uint)seed ^ 0x7f4a7c15u) * 0x2545f491u) >> 8) % 100u);
+            if (winter) return roll < 22 ? Weathers.Snowfall : roll < 34 ? Weathers.Blizzard : null;
+            return roll < 14 ? Weathers.Drizzle : roll < 26 ? Weathers.Downpour : roll < 34 ? Weathers.Storm : null;
+        }
+
+        /// <summary>
+        /// The weather an operation is flown in, worked out when asked (the card, the launch), so a winter that ends in
+        /// between changes it the same everywhere: by WeatherFor. Story chapters, the final mission, sieges and hand-made
+        /// maps are clear.
+        /// </summary>
+        public static string? OfferWeather(CampaignState c, MissionOffer o)
+        {
+            if (o.Final || (o.Story ?? 0) != 0 || o.Siege == true || o.Map.Kind != MapSourceKinds.Generated) return null;
+            return WeatherFor(o.Map.Seed ?? 0, Wintry(c));
+        }
+
+        /// <summary>
         /// An offer whose seed says night becomes a night mission, paying half as much
         /// again in suministros (NIGHT.supplies). Story chapters and the final mission
         /// are flown by day.

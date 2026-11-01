@@ -18,7 +18,7 @@ Los edificios del combate se montan con piezas de muro casilla a casilla (`WallL
 | Bloque | City: los dos edificios de pisos (`Apartment_01` y `02`), cortados | Las plantas altas de oficinas y tiendas altas |
 | Valla | Apocalypse: el muro de la cuarentena | Patios |
 
-Por eso todos los edificios son la misma caja: el mismo muro, la misma ventana, tejado plano con pretil. Solo cambia el tamaño y el color del tinte (`BuildingLooks`).
+Por eso todos los edificios son la misma caja: el mismo muro, la misma ventana, tejado plano con pretil. Solo cambia el tamaño y el color del tinte (`BuildingLooks`). (Corrección del 1/11: las casas no; ya llevaban un tejado a dos aguas hecho a mano, con las tejas de Town, siempre el mismo.)
 
 ## 2. Lo que hay en el disco
 
@@ -86,3 +86,9 @@ Si después hace falta más variedad de materiales, se importan Shops (ladrillos
 - Si la dirección vale (forma por tipo de edificio, con piezas de Synty), y por qué fase empezar. Propongo empezar por las casas.
 - Si se ordena la ciudad por zonas en el generador.
 - Si se importan Shops, Gang Warfare o Palm City, o de momento solo lo que ya está en el proyecto.
+
+## 6. Lo que decidió Arturo (1/11) y lo hecho
+
+- **Empezar por las casas** (fase 1), con tejado inclinado a dos o cuatro aguas, porche, garaje y varias ventanas, de Town. Las casas no tienen azotea: el motor ya no deja pisar su tejado ni subir a él (`Upstairs.Pitched`), y el cliente pone el tejado inclinado solo donde nadie lo pisa. Tiendas, oficinas y bloques siguen con su azotea. **Hecho el 1/11** (detalle en [UNITY-ARTE.md](UNITY-ARTE.md), «Las casas, fase 1»; capturas en `.dev-snapshots/arte/unity/edificios/casas-01-11/`).
+- **Importar Shops, Gang Warfare y Palm City.** **Hecho el 1/11** (`importar-synty.sh`, fuera de git). Aún no se usan.
+- **Zonas:** cada ciudad con su carácter al azar (más de viviendas, más comercial, mixta…) y los usos de las manzanas al azar según ese carácter. Es del generador del motor (Gameplay).

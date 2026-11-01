@@ -317,6 +317,19 @@ namespace Bastion.Engine
         /// within its radius, the spikes to whoever falls in, and what crossing barbed
         /// wire adds to a step (path.ts costs, in half-tiles).
         /// </summary>
+        /// <summary>
+        /// What burns (Arturo, 1/11: «alumbra y quema»): a point of health, armour or not, on stepping on its ground and on
+        /// ending a turn there; its light at night, lower and a little wider than a street light's; what the enemies count it
+        /// as, in half-tiles of walk, to go round it if they can.
+        /// </summary>
+        public static class Flames
+        {
+            public const int Damage = 1;
+            public const double Light = 3;
+            public const double LightHeight = 1;
+            public const int Avoid = 8;
+        }
+
         public static class Traps
         {
             public const int Mine = 4;
@@ -368,6 +381,22 @@ namespace Bastion.Engine
         /// paid. A light reaches only what it sees from its height (storeys above its
         /// floor): a street lamp from `lampHeight`.
         /// </summary>
+        /// <summary>
+        /// What the weather takes away (GameState.weather; Arturo, 1/11): in a storm or a blizzard sight and the detection
+        /// ranges keep `Sight` of themselves, by day and by night (the smaller of the two then); in a downpour or a storm a
+        /// noise carries `DownpourNoise` or `StormNoise` of its reach. A drizzle and a snowfall change nothing.
+        /// </summary>
+        public static class Weather
+        {
+            public const double Sight = 0.7;
+            public const double DownpourNoise = 0.8;
+            public const double StormNoise = 0.6;
+
+            public static double SightOf(string? weather) => weather == Weathers.Storm || weather == Weathers.Blizzard ? Sight : 1;
+
+            public static double NoiseOf(string? weather) => weather == Weathers.Downpour ? DownpourNoise : weather == Weathers.Storm ? StormNoise : 1;
+        }
+
         public static class Night
         {
             public const int SightCut = 8;

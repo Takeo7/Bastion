@@ -107,7 +107,8 @@ namespace Bastion.Client.Map
             foreach (var r in Occluders())
             {
                 var filter = r.GetComponent<MeshFilter>();
-                int subs = filter != null && filter.sharedMesh != null ? filter.sharedMesh.subMeshCount : 1;
+                // (Joined (MapBuilder.Still), its mesh is the whole batch's: its own parts are as many as its materials.)
+                int subs = r.isPartOfStaticBatch ? r.sharedMaterials.Length : filter != null && filter.sharedMesh != null ? filter.sharedMesh.subMeshCount : 1;
                 for (int k = 0; k < subs; k++) cmd.DrawRenderer(r, bake, k, 0);
             }
             // Each tree's trunk, its crown left out (mapView.ts TRUNK_OCCLUDER): without it they stood on the ground with

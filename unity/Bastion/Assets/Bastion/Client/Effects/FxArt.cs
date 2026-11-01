@@ -29,5 +29,12 @@ namespace Bastion.Client.Effects
         public Texture2D lightning;
         /// <summary>The blade's arc.</summary>
         public Texture2D semiCircle;
+
+        /// <summary>A map's fires (Map.FireView, Arturo 1/11): Particle FX's flames, small, middling and big; its embers; its black smoke.</summary>
+        public GameObject fireSmall;
+        public GameObject fire;
+        public GameObject fireBig;
+        public GameObject embers;
+        public GameObject smoke;
     }
 }

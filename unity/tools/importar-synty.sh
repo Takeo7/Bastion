@@ -73,6 +73,21 @@ if wanted "$@"; then
   echo "== $name (su carpeta)"
   python3 -I "$tools/upkg-extract.py" --under Assets/Synty/PolygonMapsWoodlandApocalypse "$synty/POLYGON - Woodland Apocalypse Map/Unity/$name.unitypackage" "$project" || failed=1
 fi
+# The city's buildings beyond Town, City and Office (Ana's #3, 1/11; Arturo: houses first, then shops, offices and
+# industry): Shops, Gang Warfare and Palm City, each its own folder alone. Not the copy of PolygonGeneric each brings,
+# nor Palm City's PNB_Core (its palms' foliage shader, with editor scripts), nor Palm City's one script (a sign's eye).
+# And the Dog Pack (Gameplay, 1/11: animals about the map), its dogs, zombie dogs, fox and coyote with their clips,
+# without its scripts (its demo's camera and controller).
+for p in "POLYGON - Shops Pack/Unity/POLYGON_Shops_Unity_2022_3_v1_6_6.unitypackage:PolygonShops" \
+  "POLYGON - Gang Warfare Pack/Unity/POLYGON_Gang_Warfare_Unity_2022_3_v1_7_2.unitypackage:PolygonGangWarfare" \
+  "POLYGON - Palm City/Unity/POLYGON_Palm_City_Unity_2022_3_v1_0_3.unitypackage:PolygonPalmCity" \
+  "POLYGON - Dog Pack/Unity/POLYGON_Dogs_Unity_2022_3_v1_1_1.unitypackage:PolygonDog"; do
+  name=$(basename "${p%%:*}" .unitypackage)
+  wanted "$@" || continue
+  echo "== $name (su carpeta)"
+  python3 -I "$tools/upkg-extract.py" --under "Assets/Synty/${p##*:}" "$synty/${p%%:*}" "$project" || failed=1
+done
+rm -rf "$project/Assets/Synty/PolygonPalmCity/Scripts" "$project/Assets/Synty/PolygonPalmCity/Scripts.meta" "$project/Assets/Synty/PolygonDog/Scripts" "$project/Assets/Synty/PolygonDog/Scripts.meta"
 # The HUD's icons (UI): four INTERFACE packs, only their sprites and textures (no prefabs, scripts or samples: the HUD
 # is UI Toolkit, not their uGUI). Dark Fantasy's for the life bars (Ana's #8, 29/10).
 for p in "INTERFACE - Apocalypse HUD/Unity/INTERFACE_Apocalypse_HUD_Unity_2022_3_v1_1_1.unitypackage" \

@@ -27,8 +27,8 @@ namespace Bastion.EditorTools
             var missing = new List<string>();
             Readable(prefabOf);
 
-            // The props' models, and La Lata's (its vehicles and La Mula's plates).
-            var modelNames = MapArt.Models().Concat(LaLata.Models).Append(SnowCover.Mound).Distinct().OrderBy(n => n).ToList();
+            // The props' models, La Lata's (its vehicles and La Mula's plates) and the animals' (Fauna: the Dog Pack's).
+            var modelNames = MapArt.Models().Concat(LaLata.Models).Concat(Fauna.Models).Append(SnowCover.Mound).Distinct().OrderBy(n => n).ToList();
             var models = modelNames.Select(n => prefabOf(n)).ToList();
             // The sky's cloud rings, by their own ids (UI's Sky).
             foreach (var (id, key) in SkyModels)
@@ -104,7 +104,8 @@ namespace Bastion.EditorTools
         static void Readable(System.Func<string, GameObject> prefabOf)
         {
             var sources = new HashSet<string>();
-            var models = Merged.Select(id => MapArt.Prop(id)).Select(art => art?.fbx != null ? prefabOf(MapArt.ModelKey(art)) : null).Append(prefabOf(LaLata.Bodies[0]));
+            // (Every prop's: the map joins its still things, MapBuilder.Still, and a build only joins readable meshes.)
+            var models = MapArt.Models().Select(prefabOf).Concat(Merged.Select(id => MapArt.Prop(id)).Select(art => art?.fbx != null ? prefabOf(MapArt.ModelKey(art)) : null)).Append(prefabOf(LaLata.Bodies[0]));
             foreach (var model in models)
             {
                 if (model == null) continue;

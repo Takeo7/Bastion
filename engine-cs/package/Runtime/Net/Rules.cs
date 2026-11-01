@@ -51,7 +51,7 @@ namespace Bastion.Net
         public static MissionOptions MissionOptionsOf(SkirmishOptions options, Rng rng)
         {
             var map = options.MapKind == MapSourceKinds.Handmade ? MapSource.Handmade(options.Id ?? "") : MapSource.Generated(options.Biome ?? "", options.Seed, options.Site);
-            return new MissionOptions { Map = map, Slots = options.Slots, Rng = rng, Kind = options.Kind, Veterans = options.Veterans, Night = options.Night };
+            return new MissionOptions { Map = map, Slots = options.Slots, Rng = rng, Kind = options.Kind, Veterans = options.Veterans, Night = options.Night, Weather = options.Weather };
         }
 
         /// <summary>
@@ -95,5 +95,7 @@ namespace Bastion.Net
         public string Kind { get; set; } = MissionKinds.Elimination;
         public bool Veterans { get; set; }
         public bool Night { get; set; }
+        /// <summary>Rain or snow (Weathers); null, clear.</summary>
+        public string? Weather { get; set; }
     }
 }

@@ -19,6 +19,8 @@ namespace Bastion.Engine
         public List<MedicalSite>? Medical { get; set; }
         /// <summary>The houses' rooms by use (playtest 2026-10-18, #15).</summary>
         public List<HomeSite>? Homes { get; set; }
+        /// <summary>The buildings with a pitched roof (GameState.pitched; procedural maps only).</summary>
+        public List<PitchedRoof>? Pitched { get; set; }
         /// <summary>The supermarkets (playtest 2026-10-20, #18).</summary>
         public List<MarketSite>? Markets { get; set; }
         /// <summary>What each piece of cover is meant to be (procedural maps only; cosmetic).</summary>
@@ -31,6 +33,10 @@ namespace Bastion.Engine
         public List<Pos>? Perch { get; set; }
         /// <summary>Where the map's street lights and floodlights stand (procedural maps only; GameState.lights); `radius`, if not a street light's.</summary>
         public List<LayoutLight>? Lights { get; set; }
+        /// <summary>The cars left wrecked (GameState.wrecks; procedural maps only).</summary>
+        public List<Wreck>? Wrecks { get; set; }
+        /// <summary>What burns (GameState.fires; procedural maps only): each gets a light of its own id in GameState.lights.</summary>
+        public List<Fire>? Fires { get; set; }
         public List<Vec2> Spawns { get; set; } = new List<Vec2>();
         /// <summary>Spawn tiles and patrol route of each pod, in the order the pod plan lists them (on the ground unless they say `z`).</summary>
         public List<PodSpot> Pods { get; set; } = new List<PodSpot>();

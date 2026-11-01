@@ -915,6 +915,113 @@
    "parts": true,
    "storey": 2.9,
    "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Prop_Wardrobe_01.fbx"
+  },
+  "houseWindow2": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Window_02",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_02.fbx"
+  },
+  "houseWindow3": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Window_03",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_03.fbx"
+  },
+  "houseWindow4": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Window_04",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_04.fbx"
+  },
+  "houseWindow5": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Window_05",
+   "centre": [
+    3.75,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "drop": [
+    "Glass"
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_05.fbx"
+  },
+  "houseShutters": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Window_Shutters_Open_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_Shutters_Open_01.fbx"
+  },
+  "houseDoor2": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Door_02",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "parts": true,
+   "leaf": "SM_Bld_House_Door",
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Door_02.fbx"
+  },
+  "houseDoor3": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Door_03",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "parts": true,
+   "leaf": "SM_Bld_House_Door",
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Door_03.fbx"
+  },
+  "houseGarage": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_ExteriorWall_GarageDoor_01",
+   "centre": [
+    2.5,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     -50,
+     -0.3,
+     -0.02
+    ],
+    [
+     50,
+     0.05,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_ExteriorWall_GarageDoor_01.fbx"
   }
  }
 }

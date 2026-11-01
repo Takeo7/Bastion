@@ -83,6 +83,9 @@ namespace Bastion.Net
         /// <summary>The seat given on the last welcome (0 or 1), or -1 before.</summary>
         public int Slot { get; private set; } = -1;
 
+        /// <summary>The room's key, to join from the internet (Room.Key), sent with each hello; null on the local network or Tailscale.</summary>
+        public string? Key { get; set; }
+
         /// <summary>
         /// `connect`: opens a connection to the host (TCP in the game). `version`: the app's, which the host checks: a
         /// partner on another build is told so plainly instead of playing a game the two see differently. `read`: how a
@@ -263,6 +266,7 @@ namespace Bastion.Net
             var hello = new JObject { ["t"] = "hello", ["name"] = name, ["version"] = version };
             var token = tokens.Load();
             if (token != null) hello["token"] = token;
+            if (!string.IsNullOrEmpty(Key)) hello["key"] = Key;
             socket?.Send(hello.ToString(Newtonsoft.Json.Formatting.None));
         }
 
