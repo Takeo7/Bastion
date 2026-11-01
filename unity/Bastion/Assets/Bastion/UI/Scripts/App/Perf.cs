@@ -231,15 +231,20 @@ namespace Bastion.UI.App
             if (frames == 0 || spent <= 0) return;
             var fps = Mathf.RoundToInt(frames / spent);
             var p95 = Percentile(intervals, Math.Min(frames, Ring), 0.95f);
-            var sync = QualitySettings.vSyncCount;
-            var refresh = (float)Screen.currentResolution.refreshRateRatio.value;
-            var cap = sync > 0 && refresh > 0 ? $" (tope {Mathf.RoundToInt(refresh / sync)} Hz)" : Application.targetFrameRate > 0 ? $" (límite {Application.targetFrameRate})" : "";
+            var cap = CapNote(QualitySettings.vSyncCount, (float)Screen.currentResolution.refreshRateRatio.value, Application.targetFrameRate, GameSettings.ScreenCap);
             var slow = hitches > 0 ? $" · {hitches} {(hitches == 1 ? "tirón" : "tirones")}" : "";
             var cpu = cpuCount > 0 ? $"{Ms(cpuSum / cpuCount)}/{Ms(Percentile(cpuTimes, Math.Min(cpuCount, Ring), 0.95f))} ms (+{Ms(waitSum / cpuCount)} de espera)" : "n/d";
             var gpu = gpuCount > 0 ? $"{Ms(gpuSum / gpuCount)}/{Ms(Percentile(gpuTimes, Math.Min(gpuCount, Ring), 0.95f))} ms" : "n/d";
             var drawn = drawCalls.Valid ? $" · {Amount(calls / frames)} llamadas · {Amount(tris / frames)} tri" : "";
             Send($"{view} {fps} fps{cap} · p95 {Ms(p95)} ms{slow} · cpu {cpu} · gpu {gpu}{drawn} · {Gpu()} · {GameSettings.Summary()} · {Size()}");
         }
+
+        /// <summary>
+        /// What caps the frames, for the line: the screen's sync («tope 144 Hz»), its refresh as a cap without the sync (the
+        /// Mac in the battle with no cap: «tope 144 Hz sin vsync»), a cap («límite 60»), or nothing.
+        /// </summary>
+        public static string CapNote(int sync, float refresh, int rate, bool screen) =>
+            sync > 0 && refresh > 0 ? $" (tope {Mathf.RoundToInt(refresh / sync)} Hz)" : screen && rate > 0 ? $" (tope {rate} Hz sin vsync)" : rate > 0 ? $" (límite {rate})" : "";
 
         /// <summary>One line to the host's red.log, tagged with this player's name (the host puts the address if there is none).</summary>
         static void Send(string text)

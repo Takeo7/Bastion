@@ -393,9 +393,9 @@ namespace Bastion.EditorTools
             });
         }
 
-        internal static GameState Generated(string biome, int seed, string kind) => Setup.CreateMission(new MissionOptions
+        internal static GameState Generated(string biome, int seed, string kind, string site = null) => Setup.CreateMission(new MissionOptions
         {
-            Map = new MapSource { Kind = MapSourceKinds.Generated, Biome = biome, Seed = seed },
+            Map = new MapSource { Kind = MapSourceKinds.Generated, Biome = biome, Seed = seed, Site = site },
             Slots = new System.Collections.Generic.List<int> { 0 },
             Rng = new Rng((uint)seed),
             Kind = kind,
@@ -553,9 +553,10 @@ namespace Bastion.EditorTools
             // BASTION_MEDICAL=clinic|ward|hospital: the mission 0.10.1's referencia.html?medical= makes (city, seed 7 or
             // BASTION_SEED), generated here: the engines are the same to the bit.
             string medical = Environment.GetEnvironmentVariable("BASTION_MEDICAL");
-            // BASTION_GENERAR=biome,seed[,kind]: the mission referencia.html?biome=…&seed=…&kind=… makes (difficulty 3), not a recorded one.
+            // BASTION_GENERAR=biome,seed[,kind[,site]]: the mission referencia.html?biome=…&seed=…&kind=… makes (difficulty 3), not a
+            // recorded one; with a site, its estate or roadside (Sites: industrial, roadside).
             var made = Environment.GetEnvironmentVariable("BASTION_GENERAR")?.Split(',');
-            var state = medical != null ? Medical(medical) : made != null && made.Length >= 2 ? Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination") : Golden(name);
+            var state = medical != null ? Medical(medical) : made != null && made.Length >= 2 ? Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination", made.Length > 3 ? made[3] : null) : Golden(name);
             // BASTION_CLIMA=drizzle|downpour|storm|snowfall|blizzard (or ClimaLab's WeatherOverride): the mission's rain or snow.
             if ((WeatherOverride ?? Environment.GetEnvironmentVariable("BASTION_CLIMA")) is string weather) state.Weather = weather;
             // BASTION_BENGALAS=x,y,radius;…: Bengalas (radius 3 or more) and fires (less) burning there, lighting what they reach
@@ -879,7 +880,7 @@ namespace Bastion.EditorTools
             ["apocalypse"] = "PolygonApocalypse", ["city"] = "PolygonCity", ["town"] = "PolygonTown", ["office"] = "PolygonOffice",
             ["military"] = "PolygonMilitary", ["construction"] = "PolygonConstruction", ["farm"] = "PolygonFarm", ["nature"] = "PolygonNature",
             ["alpine"] = "PolygonNatureBiomes", ["industrial"] = "PolygonMapsMilitaryWarehouse", ["woodland"] = "PolygonMapsWoodlandApocalypse",
-            ["dog"] = "PolygonDog",
+            ["dog"] = "PolygonDog", ["shops"] = "PolygonShops", ["gang"] = "PolygonGangWarfare",
         };
 
         /// <summary>

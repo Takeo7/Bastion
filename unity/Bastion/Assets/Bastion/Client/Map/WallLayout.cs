@@ -24,11 +24,15 @@ namespace Bastion.Client.Map
             /// <summary>The post's length along the wall (a strip of wall), and whether it's square (a corner post, thickened both ways).</summary>
             public float postAlong;
             public bool postSquare;
+            /// <summary>The post in the building's colours too (a shop's: its render's corner painted as its walls).</summary>
+            public bool postTint;
             public float thick;
             public float storey;
             /// <summary>Its pane: width, height, middle's height and how far out, in the kit's metres.</summary>
             public float[] glass;
             public string top;
+            /// <summary>An office's cornice along the top of its top storey, and its plinth at the foot of its ground floor (phase 3 of #3).</summary>
+            public string crown, plinth;
 
             public Kit With(string[] wall = null, string[] window = null, string[] door = null, string[] lintel = null, bool noLeaf = false, float storey = 0, float[] glass = null)
             {
@@ -96,7 +100,49 @@ namespace Bastion.Client.Map
             // A shed: sheet metal outside a bunker wall (as the warehouses' brick), steel-framed windows, a metal door.
             Kit Shed(string sheet, string lintel, string sill) => brick.With(wall: new[] { "bunkerWall", sheet }, window: new[] { "bunkerWindow", "bunkerSill", sill },
                 door: new[] { "bunkerLintel", lintel }, lintel: new[] { "bunkerLintel", lintel });
-            return new Dictionary<string, Kit>
+            // A shop's facing (phase 2 of #3): POLYGON Shops' wall, its sash window, its door and lintel in that brick or
+            // render; for a post, a square of the wall as thick as it, closed all round. The window's pane as the pack's
+            // glass (0.72 by 1.31 m, its middle 1.3 m up, 6 cm in).
+            var kits = new Dictionary<string, Kit>();
+            foreach (string facing in new[] { ShopFacings.White, ShopFacings.Red, ShopFacings.Coloured, ShopFacings.Render })
+            {
+                string of = facing == ShopFacings.White ? "" : facing;
+                kits[ShopKit(facing)] = new Kit
+                {
+                    wall = new[] { "shopWall" + of }, window = new[] { "shopWindowWall" + of }, door = new[] { "shopDoorWall" + of, "shopSideDoor" },
+                    lintel = new[] { "shopLintel" + of }, post = "shopCorner" + of, postAlong = 1, postSquare = true, postTint = true, thick = Thick, storey = 3,
+                    glass = new[] { 0.718f, 1.314f, 1.299f, -0.064f },
+                };
+            }
+            // An office's facing (phase 3 of #3, the centre's of stone with a cornice, as City's old offices): Shops' wall, door
+            // and corner as a shop's, its tall sash window (its pane as its two sashes' glass: 1.09 by 1.82 m, the middle
+            // 1.44 m up), the cornice and the plinth, in stone blocks (painted as the building) or concrete.
+            foreach (string facing in new[] { OfficeFacings.Ashlar, OfficeFacings.Concrete })
+                kits[OfficeKit(facing)] = new Kit
+                {
+                    wall = new[] { "officeWall" + facing }, window = new[] { "officeWindowWall" + facing }, door = new[] { "officeDoorWall" + facing, "shopSideDoor" },
+                    lintel = new[] { "officeLintel" + facing }, post = "officeCorner" + facing, postAlong = 1, postSquare = true, postTint = true, thick = Thick, storey = 3,
+                    glass = new[] { 1.087f, 1.821f, 1.4425f, 0f }, crown = "officeCrown" + facing, plinth = "officePlinth" + facing,
+                };
+            // A hall's facing (phase 4 of #3, the estates' warehouses): Gang Warfare's brick wall (0.39 m thick, as Shops'
+            // thickened), its factory window a bay a tile (the pane the bay's glass: 1.57 m tall, its middle 1.87 m up, 9 cm
+            // out), its door in its frame and its leaf; or its sheet metal (0.22 m, thickened as any wall), its ribbon window
+            // (1.07 m of glass, its middle 1.47 m up, 7 cm out).
+            foreach (string facing in HallFacings.Brick)
+                kits[HallKit(facing)] = new Kit
+                {
+                    wall = new[] { "hallWall" + facing }, window = new[] { "hallWindowWall" + facing }, door = new[] { "hallDoorWall" + facing, "hallDoor" + facing },
+                    lintel = new[] { "hallLintel" + facing }, post = "hallCorner" + facing, postAlong = 1, postSquare = true, thick = 1, storey = 3,
+                    glass = new[] { KitTile, 1.57f, 1.868f, 0.093f },
+                };
+            foreach (string facing in HallFacings.Sheet)
+                kits[HallKit(facing)] = new Kit
+                {
+                    wall = new[] { "sheetWall" + facing }, window = new[] { "sheetWindowWall" + facing }, door = new[] { "sheetDoorWall" + facing, "sheetDoor" + facing },
+                    lintel = new[] { "sheetLintel" + facing }, post = "sheetCorner" + facing, postAlong = 1, postSquare = true, thick = Thick, storey = 3,
+                    glass = new[] { KitTile, 1.073f, 1.473f, 0.071f },
+                };
+            return new Dictionary<string, Kit>(kits)
             {
                 [KitIds.House] = house, [KitIds.Bunker] = bunker, [KitIds.Brick] = brick, [KitIds.Fence] = fence,
                 [KitIds.ShedGrey] = Shed("sheetGrey", "sheetGreyLintel", "sheetGreySill"),
@@ -108,6 +154,22 @@ namespace Bastion.Client.Map
                     glass: new[] { KitTile, 2.71f, 1.495f, 0 }),
             };
         }
+
+        /// <summary>A shop facing's kit, an office facing's and a hall facing's (BuildingLooks.Facing).</summary>
+        static string ShopKit(string facing) => "shop" + facing;
+        static string OfficeKit(string facing) => "office" + facing;
+        static string HallKit(string facing) => "hall" + facing;
+
+        /// <summary>The kit building `bd`'s outer walls are of: a shop's, an office's or a hall's its facing's, any other's its own; a wall of nobody's, the map's.</summary>
+        string KitIdOf(Building bd) => bd == null ? plan.LooseKit : BuildingLooks.Facing(bd) is string facing
+            ? (bd.kind == BuildingKinds.Office ? OfficeKit(facing) : bd.kind == BuildingKinds.Hall || bd.kind == BuildingKinds.Barn ? HallKit(facing) : ShopKit(facing)) : bd.kit;
+
+        /// <summary>
+        /// Whether `level` is building bd's top storey, the one its cornice runs along: laid from its own tiles (a building of
+        /// real storeys), or its ground floor if it has no other (the storeys above a ground floor are Storeys').
+        /// </summary>
+        static bool TopOf(Building bd, int level) => bd != null && (bd.leveled ? level == bd.storeys - 1 : bd.storeys == 1 && level == 0);
+        Kit KitOf(Building bd) => Kits[KitIdOf(bd)];
 
         /// <summary>Town's window frames and front doors a house picks from (Ana's #3, 1/11: not every house alike), and how many in a hundred have shutters.</summary>
         static readonly string[] HouseWindows = { "houseWindow", "houseWindow2", "houseWindow3", "houseWindow4", "houseWindow5" };
@@ -141,15 +203,18 @@ namespace Bastion.Client.Map
         /// fence's mesh, which is seen through.
         /// </summary>
         static readonly HashSet<string> NoCap = new HashSet<string>(
-            Kits.Values.Append(Between).SelectMany(k => k.door.Concat(k.lintel).Concat(k.leaf != null ? new[] { k.leaf } : Array.Empty<string>()).Concat(k.top != null ? new[] { k.top } : Array.Empty<string>()))
+            Kits.Values.Append(Between).SelectMany(k => k.door.Concat(k.lintel).Concat(new[] { k.leaf, k.top, k.crown, k.plinth }.Where(id => id != null)))
                 .Concat(new[] { "fenceWall", "fenceColumn", "gateLeaf", "gateLeafFar" }));
 
         /// <summary>Shop signs and how long each is (tiles): the long ones are scaled down to fit over a door.</summary>
         static readonly Dictionary<string, float> Signs = new Dictionary<string, float> { ["signShop"] = 1.7f, ["signFood"] = 2.2f, ["signMarket"] = 2.64f, ["signDiner"] = 1.97f };
         /// <summary>MARKET only over a supermarket's door: a shop of one storey this wide at least.</summary>
         const int MarketSpan = 7;
-        /// <summary>A sign's middle this high over its floor, no taller than SignTall (m; the models are 0.63).</summary>
-        const float SignUp = Storey - 0.22f;
+        /// <summary>
+        /// A sign's middle this high over its floor, no taller than SignTall (m; the models are 0.63): over a shop's awning
+        /// (Unity's own: 0.10.1 had it 0.22 down, and no awnings).
+        /// </summary>
+        const float SignUp = Storey - 0.16f;
         const float SignTall = 0.42f;
         /// <summary>A supermarket's MARKET, over its double door on its brick front's deeper band: this big.</summary>
         const float MarketSign = 0.95f;
@@ -191,9 +256,14 @@ namespace Bastion.Client.Map
         bool InMap(int x, int y) => x >= 0 && y >= 0 && x < w && y < h;
         Building BuildingOf(int b) => b >= 0 && b < plan.Buildings.Count ? plan.Buildings[b] : null;
 
-        /// <summary>Wall-like, or a wall blown down (it still joins the walls beside it); a siege's watchtower carries the wall on round its base.</summary>
+        /// <summary>
+        /// Wall-like, or a wall blown down (it still joins the walls beside it); a siege's watchtower carries the wall on round
+        /// its base. Not the outline's own walls out of play, nobody's (frameArt's lots, never laid here: a block of the
+        /// outline against one put half a wall towards it on every tile, a comb along its face; Gameplay, 1/11).
+        /// </summary>
         bool Wallish(int x, int y) =>
-            IsWallLike(At(x, y)) || (InMap(x, y) && (plan.Breached(y * w + x, level) || (level == 0 && plan.Raised[y * w + x] == BuildingPlan.RaisedTower)));
+            (IsWallLike(At(x, y)) && !(InMap(x, y) && plan.Out[y * w + x] != 0 && plan.Owner[y * w + x] < 0))
+            || (InMap(x, y) && (plan.Breached(y * w + x, level) || (level == 0 && plan.Raised[y * w + x] == BuildingPlan.RaisedTower)));
 
         /// <summary>three.js's compose(position, a turn about y, scale), in 0.10.1's world (tiles).</summary>
         static Matrix4x4 Compose(float x, float y, float z, float yaw, Vector3 scale) =>
@@ -225,7 +295,7 @@ namespace Bastion.Client.Map
         }
 
         void Post(Kit kit, float x, float z, float @base, Vec2 o, bool between, int b, bool roof = false) =>
-            Put(kit.post, x, z, @base, o, between, b, along: kit.postAlong, thick: kit.thick, square: kit.postSquare, roof: roof, cap: true);
+            Put(kit.post, x, z, @base, o, between, b, along: kit.postAlong, thick: kit.thick, square: kit.postSquare, tint: kit.postTint, roof: roof, cap: true);
 
         /// <summary>A window pane at (x, z), `base` its storey's floor (upper storeys' go with the roof).</summary>
         void Pane(string kit, float x, float z, float @base, Vec2 o, int b, bool roof, bool between = false)
@@ -249,7 +319,6 @@ namespace Bastion.Client.Map
             var bd = BuildingOf(b);
             // Real storeys are laid from their own tiles.
             if (bd == null || bd.leveled || (other >= 0 && plan.Buildings[other].leveled)) return;
-            var kit = Kits[bd.kit];
             int from = 1, to = between ? 1 : bd.storeys;
             int owner = b;
             var face = o;
@@ -263,12 +332,13 @@ namespace Bastion.Client.Map
                 face = bd.storeys >= them ? o : new Vec2 { X = -o.X, Y = -o.Y };
             }
             var ob = plan.Buildings[owner];
-            bool shutters;
-            (kit, shutters) = LookOf(ob, kit);
+            var (kit, shutters) = LookOf(ob, KitOf(ob));
             for (int k = from; k < to; k++)
             {
                 float y0 = ob.@base + k * Storey;
                 bool glazed = other < 0 && (ground != TileKinds.Wall || (ob.kind != BuildingKinds.House && ob.kind != BuildingKinds.Motel && (t + k) % 2 == 0));
+                // (An office's cornice along its top storey: phase 3.)
+                if (kit.crown != null && k == ob.storeys - 1) Put(kit.crown, x, z, y0, face, false, owner, along: along, thick: kit.thick, tint: true, roof: true);
                 if (along < 1)
                 {
                     for (int n = 0; n < kit.wall.Length; n++) Put(kit.wall[n], x, z, y0, face, false, owner, along: along, thick: kit.thick, tint: n == 0, roof: true);
@@ -276,7 +346,7 @@ namespace Bastion.Client.Map
                 }
                 PutAll(glazed ? kit.window : kit.wall, x, z, y0, face, false, owner, kit, false, true);
                 if (glazed && shutters) Put("houseShutters", x, z, y0, face, false, owner, thick: kit.thick, roof: true);
-                if (glazed && kit.top == null) Pane(ob.kit, x, z, y0, face, owner, true);
+                if (glazed && kit.top == null) Pane(KitIdOf(ob), x, z, y0, face, owner, true);
             }
         }
 
@@ -361,11 +431,11 @@ namespace Bastion.Client.Map
                 return dy == bd.y0 ? y == bd.y0 : dy == bd.y1 ? y == bd.y1 : dx == bd.x0 ? x == bd.x0 : x == bd.x1;
             }
             // Where a shed's roller shutters go: the middle of the longest stretch of plain wall, four tiles or more, on
-            // each of two of its sides; how wide each is.
+            // each of two of its sides; how wide each is. A hall of brick's too (phase 4 of #3: its loading doors).
             var shutters = new Dictionary<int, float>();
             foreach (var bd in plan.Buildings)
             {
-                if (!BuildingPlan.IsShed(bd.kit) || bd.@base > 0) continue;
+                if (!(BuildingPlan.IsShed(bd.kit) || Array.IndexOf(HallFacings.Brick, bd.facing) >= 0) || bd.@base > 0) continue;
                 var runs = new List<(int tile, int length, int side)>();
                 var sides = new[]
                 {
@@ -592,7 +662,7 @@ namespace Bastion.Client.Map
             if (level == 0 && plan.Massive[i] != 0) return;
             var building = loose ? null : plan.Buildings[b];
             float @base = building != null ? building.@base + level * Storey : (i < s.Elev.Count ? s.Elev[i] : 0) * Storey;
-            var outerKit = Kits[building != null ? building.kit : plan.LooseKit];
+            var outerKit = KitOf(building);
             float cx = x + 0.5f, cz = y + 0.5f;
             if (!IsWallLike(kind) && !broken)
             {
@@ -703,6 +773,7 @@ namespace Bastion.Client.Map
                     {
                         foreach (string id in kit.door) Put(id, cx, cz, @base, o, between, b, thick: kit.thick, tint: false, open: open, otherHinge: otherHinge);
                         PutAll(outerKit.lintel, cx, cz, @base, o, between, b, outerKit);
+                        Awning(building, x, y, cx, cz, @base, o, shopFront);
                     }
                     else PutAll(kit.door, cx, cz, @base, o, between, b, kit, open, false, otherHinge);
                     // A shop's name over its front door: the first door of its outline. Not an office's.
@@ -721,11 +792,12 @@ namespace Bastion.Client.Map
                     {
                         foreach (string id in kit.window) Put(id, cx, cz, @base, o, between, b, thick: kit.thick, tint: false);
                         PutAll(outerKit.lintel, cx, cz, @base, o, between, b, outerKit);
+                        Awning(building, x, y, cx, cz, @base, o, shopFront);
                     }
                     else PutAll(kit.window, cx, cz, @base, o, between, b, kit);
                     if (shuttered) Put("houseShutters", cx, cz, @base, o, between, b, thick: kit.thick);
                     if (kind == TileKinds.Window)
-                        Pane(between ? KitIds.House : front ? KitIds.ShopFront : building != null ? building.kit : plan.LooseKit, cx, cz, @base, o, b, false, between);
+                        Pane(between ? KitIds.House : front ? KitIds.ShopFront : KitIdOf(building), cx, cz, @base, o, b, false, between);
                 }
                 else if (broken)
                 {
@@ -747,6 +819,9 @@ namespace Bastion.Client.Map
                     if (level == 0 && !between && building != null && shutters.TryGetValue(i, out float width)) shutter(building, cx, cz, @base, o, width, 0.75f);
                 }
                 if (kit.top != null && kind == TileKinds.Wall) Put(kit.top, cx, cz, @base + Storey, o, between, b, along: 1 / WireLength, thick: 1);
+                // An office's cornice along its top storey, and its plinth along its ground floor but under its doors (phase 3).
+                if (!between && kit.crown != null && TopOf(building, level)) Put(kit.crown, cx, cz, @base, o, false, b, thick: kit.thick, tint: true);
+                if (!between && kit.plinth != null && level == 0 && !IsDoor(kind)) Put(kit.plinth, cx, cz, @base, o, false, b, thick: kit.thick, tint: true);
                 // The open end of a wall gets a post, so its hollow doesn't show (on a perimeter, a gate's column).
                 foreach (int k in run == 0 ? new[] { 1, 3 } : new[] { 0, 2 })
                 {
@@ -770,12 +845,14 @@ namespace Bastion.Client.Map
                 int next = OwnerAt((y + d.Y) * w + x + d.X);
                 int bb = !loose && next >= 0 && next != b && IsWallLike(At(x + d.X, y + d.Y)) ? next : b;
                 var (o, between, other) = Facing(run, d.X, d.Y, bb);
-                var kit = between && building?.kind != BuildingKinds.Medical ? Between : outerKit;
+                var kit = between && building?.kind != BuildingKinds.Medical ? Between : bb == b ? outerKit : KitOf(BuildingOf(bb));
                 float ax = cx + d.X * 0.25f, az = cz + d.Y * 0.25f;
                 for (int n = 0; n < kit.wall.Length; n++) Put(kit.wall[n], ax, az, @base, o, between, bb, along: 0.5f, thick: kit.thick, tint: n == 0, tall: broken ? BreachHeight : 1);
                 if (broken) for (int n = 0; n < kit.lintel.Length; n++) Put(kit.lintel[n], ax, az, @base, o, between, bb, along: 0.5f, thick: kit.thick, tint: n == 0);
                 if (!loose) Storeys(TileKinds.Wall, ax, az, 0, o, between, bb, other, 0.5f);
                 if (kit.top != null) Put(kit.top, ax, az, @base + Storey, o, between, b, along: 0.5f / WireLength, thick: 1);
+                if (!between && kit.crown != null && TopOf(BuildingOf(bb), level)) Put(kit.crown, ax, az, @base, o, false, bb, along: 0.5f, thick: kit.thick, tint: true);
+                if (!between && kit.plinth != null && level == 0) Put(kit.plinth, ax, az, @base, o, false, bb, along: 0.5f, thick: kit.thick, tint: true);
             }
             if (arms == 2)
             {
@@ -784,6 +861,25 @@ namespace Bastion.Client.Map
                 if (building != null && !building.leveled && !between)
                     for (int n = 1; n < building.storeys; n++) Post(outerKit, cx, cz, @base + n * Storey, o, false, b, true);
             }
+        }
+
+        /// <summary>
+        /// The awning over a shop front's window or door (phase 2 of #3: BuildingLooks.ShopAwning), not thickened: its two
+        /// half tiles, each the awning's end where the tile on that side is no window or door of the same front, else its
+        /// middle, so a run of them is one awning. (A piece's x along the wall is (o.y, −o.x); its −x the model's start.)
+        /// </summary>
+        void Awning(Building bd, int x, int y, float cx, float cz, float @base, Vec2 o, Func<Building, int, int, bool> shopFront)
+        {
+            string style = BuildingLooks.ShopAwning(bd);
+            if (style == null) return;
+            bool On(int tx, int ty)
+            {
+                string t = At(tx, ty);
+                return (IsDoor(t) || t == TileKinds.Window || t == TileKinds.WindowBroken) && OwnerAt(ty * w + tx) == bd.index && shopFront(bd, tx, ty);
+            }
+            int px = o.Y, py = -o.X;
+            Put($"awning{style}{(On(x - px, y - py) ? "MidL" : "EndL")}", cx, cz, @base, o, false, bd.index, thick: 1);
+            Put($"awning{style}{(On(x + px, y + py) ? "MidR" : "EndR")}", cx, cz, @base, o, false, bd.index, thick: 1);
         }
 
         /// <summary>plan.Owner at index i as JS reads it: past either end, none.</summary>

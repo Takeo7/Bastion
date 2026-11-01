@@ -33,6 +33,7 @@ Material:
     - _Cull: 2
     - _Cutoff: 0.5
     - _DstBlend: 0
+    - _Dye: 0
     - _Glass: 0
     - _Smoothness: 0.1
     - _SrcBlend: 1

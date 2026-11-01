@@ -1022,6 +1022,2843 @@
     ]
    ],
    "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_ExteriorWall_GarageDoor_01.fbx"
+  },
+  "shopWall": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopWindowWall": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Window_Old_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "drop": [
+    "Glass"
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Window_Old_01.fbx"
+  },
+  "shopDoorWall": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_Door_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_Door_01.fbx"
+  },
+  "shopSideDoor": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Door_01",
+   "centre": [
+    0.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "parts": true,
+   "leaf": "SM_Bld_Base_Door_01",
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Door_01.fbx"
+  },
+  "shopCorner": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    0.1125,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.225,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopLintel": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.43
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopWallRed": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Brick_Red_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopWindowWallRed": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Window_Old_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "drop": [
+    "Glass"
+   ],
+   "as": "shopWindowWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Brick_Red_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Window_Old_01.fbx"
+  },
+  "shopDoorWallRed": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_Door_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopDoorWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Brick_Red_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_Door_01.fbx"
+  },
+  "shopLintelRed": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.43
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopLintel",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Brick_Red_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopCornerRed": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    0.1125,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.225,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "shopCorner",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Brick_Red_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopWallColoured": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Brick_Coloured_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopWindowWallColoured": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Window_Old_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "drop": [
+    "Glass"
+   ],
+   "as": "shopWindowWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Brick_Coloured_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Window_Old_01.fbx"
+  },
+  "shopDoorWallColoured": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_Door_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopDoorWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Brick_Coloured_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_Door_01.fbx"
+  },
+  "shopLintelColoured": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.43
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopLintel",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Brick_Coloured_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopCornerColoured": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    0.1125,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.225,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "shopCorner",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Brick_Coloured_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopWallRender": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Blank_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopWindowWallRender": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Window_Old_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "drop": [
+    "Glass"
+   ],
+   "as": "shopWindowWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Blank_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Window_Old_01.fbx"
+  },
+  "shopDoorWallRender": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_Door_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopDoorWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Blank_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_Door_01.fbx"
+  },
+  "shopLintelRender": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.43
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopLintel",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Blank_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "shopCornerRender": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    0.1125,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.225,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "shopCorner",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Blank_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "awningRedEndL": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_01",
+   "centre": [
+    0.625,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -50
+    ],
+    [
+     0.625,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_01.fbx"
+  },
+  "awningRedMidL": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_01",
+   "centre": [
+    1.25,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.25,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_01.fbx"
+  },
+  "awningRedMidR": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_01",
+   "centre": [
+    1.25,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1.25,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_01.fbx"
+  },
+  "awningRedEndR": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_01",
+   "centre": [
+    1.875,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1.875,
+     -50,
+     -50
+    ],
+    [
+     2.5,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_01.fbx"
+  },
+  "awningBlueEndL": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_02",
+   "centre": [
+    0.625,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -50
+    ],
+    [
+     0.625,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_02.fbx"
+  },
+  "awningBlueMidL": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_02",
+   "centre": [
+    1.25,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.25,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_02.fbx"
+  },
+  "awningBlueMidR": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_02",
+   "centre": [
+    1.25,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1.25,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_02.fbx"
+  },
+  "awningBlueEndR": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_02",
+   "centre": [
+    1.875,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1.875,
+     -50,
+     -50
+    ],
+    [
+     2.5,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_02.fbx"
+  },
+  "awningMaroonEndL": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_03",
+   "centre": [
+    0.625,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -50
+    ],
+    [
+     0.625,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_03.fbx"
+  },
+  "awningMaroonMidL": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_03",
+   "centre": [
+    1.25,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.25,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_03.fbx"
+  },
+  "awningMaroonMidR": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_03",
+   "centre": [
+    1.25,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1.25,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_03.fbx"
+  },
+  "awningMaroonEndR": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Awning_03",
+   "centre": [
+    1.875,
+    0.087
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1.875,
+     -50,
+     -50
+    ],
+    [
+     2.5,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Awning_03.fbx"
+  },
+  "officeWindowWall": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Window_Grid_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "drop": [
+    "Glass"
+   ],
+   "renderer": "SM_Bld_Wall_Window_Grid_01",
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Window_Grid_01.fbx"
+  },
+  "officeCrown": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Trim_Wall_High_03",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Trim_Wall_High_03.fbx"
+  },
+  "officePlinth": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Trim_Wall_Low_02",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Trim_Wall_Low_02.fbx"
+  },
+  "officeWallSillar": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Concrete_Blocks_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "officeDoorWallSillar": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_Door_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopDoorWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Concrete_Blocks_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_Door_01.fbx"
+  },
+  "officeLintelSillar": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.43
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopLintel",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Concrete_Blocks_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "officeCornerSillar": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    0.1125,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.225,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "shopCorner",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Concrete_Blocks_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "officeWindowWallSillar": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Window_Grid_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "drop": [
+    "Glass"
+   ],
+   "renderer": "SM_Bld_Wall_Window_Grid_01",
+   "as": "officeWindowWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Base_Concrete_Blocks_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Window_Grid_01.fbx"
+  },
+  "officeCrownSillar": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Trim_Wall_High_03",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "officeCrown",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_Red_01": "PolygonShops_Mat_Base_Concrete_Blocks_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Trim_Wall_High_03.fbx"
+  },
+  "officePlinthSillar": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Trim_Wall_Low_02",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "officePlinth",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_Red_01": "PolygonShops_Mat_Base_Concrete_Blocks_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Trim_Wall_Low_02.fbx"
+  },
+  "officeWallHormigon": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Concrete_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "officeDoorWallHormigon": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_Door_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopDoorWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Concrete_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_Door_01.fbx"
+  },
+  "officeLintelHormigon": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.43
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "shopLintel",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Concrete_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "officeCornerHormigon": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    0.1125,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.225,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "shopCorner",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Concrete_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Base_Wall_01.fbx"
+  },
+  "officeWindowWallHormigon": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Window_Grid_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "drop": [
+    "Glass"
+   ],
+   "renderer": "SM_Bld_Wall_Window_Grid_01",
+   "as": "officeWindowWall",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_White_01": "PolygonShops_Mat_Concrete_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Window_Grid_01.fbx"
+  },
+  "officeCrownHormigon": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Trim_Wall_High_03",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "officeCrown",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_Red_01": "PolygonShops_Mat_Concrete_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Trim_Wall_High_03.fbx"
+  },
+  "officePlinthHormigon": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Trim_Wall_Low_02",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "as": "officePlinth",
+   "swap": {
+    "PolygonShops_Mat_Base_Brick_Red_01": "PolygonShops_Mat_Concrete_01"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Trim_Wall_Low_02.fbx"
+  },
+  "hallWall": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.875,
+     -50,
+     -50
+    ],
+    [
+     2.125,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallWindowWall": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Window_03",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.25,
+   "drop": [
+    "Glass"
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Window_03.fbx"
+  },
+  "hallDoorWall": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Door_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8,
+     -50,
+     -50
+    ],
+    [
+     2.2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 0.8928571428571429,
+   "drop": [
+    "SM_Bld_Wall_Door_01"
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Door_01.fbx"
+  },
+  "hallDoor": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Door_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 0.8928571428571429,
+   "parts": true,
+   "leaf": "SM_Bld_Wall_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Brick_Door_01"
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Door_01.fbx"
+  },
+  "hallLintel": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.875,
+     -50,
+     2.43
+    ],
+    [
+     2.125,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallCorner": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    0.195,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.39,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "sheetWall": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetWindowWall": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Window_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "Glass"
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Window_01.fbx"
+  },
+  "sheetDoorWall": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.9285714285714286,
+     -50,
+     -50
+    ],
+    [
+     2.071428571428571,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "SM_Bld_Metal_Door_01"
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetDoor": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 1.09375,
+   "parts": true,
+   "leaf": "SM_Bld_Metal_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Metal_Door_01"
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetLintel": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     2.43
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetCorner": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    0.9656428571428571,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -0.2
+    ],
+    [
+     1.074142857142857,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "hallWallLadrilloRojo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.875,
+     -50,
+     -50
+    ],
+    [
+     2.125,
+     50,
+     50
+    ]
+   ],
+   "as": "hallWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallWindowWallLadrilloRojo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Window_03",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.25,
+   "drop": [
+    "Glass"
+   ],
+   "as": "hallWindowWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Window_03.fbx"
+  },
+  "hallDoorWallLadrilloRojo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Door_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8,
+     -50,
+     -50
+    ],
+    [
+     2.2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 0.8928571428571429,
+   "drop": [
+    "SM_Bld_Wall_Door_01"
+   ],
+   "as": "hallDoorWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Door_01.fbx"
+  },
+  "hallDoorLadrilloRojo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Door_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 0.8928571428571429,
+   "parts": true,
+   "leaf": "SM_Bld_Wall_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Brick_Door_01"
+   ],
+   "as": "hallDoor",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Door_01.fbx"
+  },
+  "hallLintelLadrilloRojo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.875,
+     -50,
+     2.43
+    ],
+    [
+     2.125,
+     50,
+     50
+    ]
+   ],
+   "as": "hallLintel",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallCornerLadrilloRojo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    0.195,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.39,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "hallCorner",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallWallLadrilloPardo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.875,
+     -50,
+     -50
+    ],
+    [
+     2.125,
+     50,
+     50
+    ]
+   ],
+   "as": "hallWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallWindowWallLadrilloPardo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Window_03",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.25,
+   "drop": [
+    "Glass"
+   ],
+   "as": "hallWindowWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Window_03.fbx"
+  },
+  "hallDoorWallLadrilloPardo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Door_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8,
+     -50,
+     -50
+    ],
+    [
+     2.2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 0.8928571428571429,
+   "drop": [
+    "SM_Bld_Wall_Door_01"
+   ],
+   "as": "hallDoorWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Door_01.fbx"
+  },
+  "hallDoorLadrilloPardo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Door_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 0.8928571428571429,
+   "parts": true,
+   "leaf": "SM_Bld_Wall_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Brick_Door_01"
+   ],
+   "as": "hallDoor",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Door_01.fbx"
+  },
+  "hallLintelLadrilloPardo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.875,
+     -50,
+     2.43
+    ],
+    [
+     2.125,
+     50,
+     50
+    ]
+   ],
+   "as": "hallLintel",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallCornerLadrilloPardo": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    0.195,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.39,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "hallCorner",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallWallBloque": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.875,
+     -50,
+     -50
+    ],
+    [
+     2.125,
+     50,
+     50
+    ]
+   ],
+   "as": "hallWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallWindowWallBloque": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Window_03",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.25,
+   "drop": [
+    "Glass"
+   ],
+   "as": "hallWindowWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Window_03.fbx"
+  },
+  "hallDoorWallBloque": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Door_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8,
+     -50,
+     -50
+    ],
+    [
+     2.2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 0.8928571428571429,
+   "drop": [
+    "SM_Bld_Wall_Door_01"
+   ],
+   "as": "hallDoorWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Door_01.fbx"
+  },
+  "hallDoorBloque": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_Door_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 0.8928571428571429,
+   "parts": true,
+   "leaf": "SM_Bld_Wall_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Brick_Door_01"
+   ],
+   "as": "hallDoor",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_Door_01.fbx"
+  },
+  "hallLintelBloque": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    1.5,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.875,
+     -50,
+     2.43
+    ],
+    [
+     2.125,
+     50,
+     50
+    ]
+   ],
+   "as": "hallLintel",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "hallCornerBloque": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Brick_01",
+   "centre": [
+    0.195,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.39,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "hallCorner",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Brick_01.fbx"
+  },
+  "sheetWallChapaMarron": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "as": "sheetWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetWindowWallChapaMarron": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Window_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "Glass"
+   ],
+   "as": "sheetWindowWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Window_01.fbx"
+  },
+  "sheetDoorWallChapaMarron": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.9285714285714286,
+     -50,
+     -50
+    ],
+    [
+     2.071428571428571,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "SM_Bld_Metal_Door_01"
+   ],
+   "as": "sheetDoorWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetDoorChapaMarron": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 1.09375,
+   "parts": true,
+   "leaf": "SM_Bld_Metal_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Metal_Door_01"
+   ],
+   "as": "sheetDoor",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetLintelChapaMarron": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     2.43
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "as": "sheetLintel",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetCornerChapaMarron": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    0.9656428571428571,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -0.2
+    ],
+    [
+     1.074142857142857,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "sheetCorner",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetWallChapaRoja": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "as": "sheetWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetWindowWallChapaRoja": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Window_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "Glass"
+   ],
+   "as": "sheetWindowWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Window_01.fbx"
+  },
+  "sheetDoorWallChapaRoja": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.9285714285714286,
+     -50,
+     -50
+    ],
+    [
+     2.071428571428571,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "SM_Bld_Metal_Door_01"
+   ],
+   "as": "sheetDoorWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetDoorChapaRoja": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 1.09375,
+   "parts": true,
+   "leaf": "SM_Bld_Metal_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Metal_Door_01"
+   ],
+   "as": "sheetDoor",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetLintelChapaRoja": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     2.43
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "as": "sheetLintel",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetCornerChapaRoja": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    0.9656428571428571,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -0.2
+    ],
+    [
+     1.074142857142857,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "sheetCorner",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_02_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetWallChapaVerde": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "as": "sheetWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_03_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetWindowWallChapaVerde": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Window_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "Glass"
+   ],
+   "as": "sheetWindowWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_03_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Window_01.fbx"
+  },
+  "sheetDoorWallChapaVerde": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.9285714285714286,
+     -50,
+     -50
+    ],
+    [
+     2.071428571428571,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "SM_Bld_Metal_Door_01"
+   ],
+   "as": "sheetDoorWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_03_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetDoorChapaVerde": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 1.09375,
+   "parts": true,
+   "leaf": "SM_Bld_Metal_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Metal_Door_01"
+   ],
+   "as": "sheetDoor",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_03_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetLintelChapaVerde": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     2.43
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "as": "sheetLintel",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_03_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetCornerChapaVerde": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    0.9656428571428571,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -0.2
+    ],
+    [
+     1.074142857142857,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "sheetCorner",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_03_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetWallChapaAzul": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "as": "sheetWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetWindowWallChapaAzul": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Window_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -50
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "Glass"
+   ],
+   "as": "sheetWindowWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Window_01.fbx"
+  },
+  "sheetDoorWallChapaAzul": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.9285714285714286,
+     -50,
+     -50
+    ],
+    [
+     2.071428571428571,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "drop": [
+    "SM_Bld_Metal_Door_01"
+   ],
+   "as": "sheetDoorWall",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetDoorChapaAzul": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_Door_01",
+   "centre": [
+    1.5,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "squeeze": 1.09375,
+   "parts": true,
+   "leaf": "SM_Bld_Metal_Door_01",
+   "drop": [
+    "SM_Bld_Wall_Metal_Door_01"
+   ],
+   "as": "sheetDoor",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_Door_01.fbx"
+  },
+  "sheetLintelChapaAzul": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    1.4285714285714286,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     2.43
+    ],
+    [
+     2,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 1.09375,
+   "as": "sheetLintel",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "sheetCornerChapaAzul": {
+   "pack": "gang",
+   "fbx": "SM_Bld_Wall_Metal_01",
+   "centre": [
+    0.9656428571428571,
+    -0.0726
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.8571428571428571,
+     -50,
+     -0.2
+    ],
+    [
+     1.074142857142857,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "as": "sheetCorner",
+   "swap": {
+    "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
   }
  }
 }

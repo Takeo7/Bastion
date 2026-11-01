@@ -102,6 +102,52 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// Synty's prefabs `BASTION_PREFABS` (paths under Assets/Synty, without .prefab, by commas; a folder and a name
+        /// pattern, «PolygonShops/Prefabs/Buildings:SM_Bld_ShopFront_*», for all that match) in a row at the buildings'
+        /// scale, their fronts to the south, to pick pieces from (phase 2 of #3, the shops). Each one's size in the log.
+        /// BASTION_DIST how far the camera (metres, 14), BASTION_GIRO its turn from the south (degrees), BASTION_ALTO how
+        /// high it looks down from (degrees, 20).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.EdificiosLab.Muestras -shotOut m.png -shotSize 1600x900
+        /// </summary>
+        public static void Muestras()
+        {
+            MapLab.Lighting(true);
+            var root = new GameObject("Muestras").transform;
+            var paths = new List<string>();
+            foreach (string item in (Environment.GetEnvironmentVariable("BASTION_PREFABS") ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                int colon = item.IndexOf(':');
+                if (colon < 0)
+                {
+                    paths.Add(item.Trim());
+                    continue;
+                }
+                string folder = item.Substring(0, colon).Trim();
+                var pattern = new System.Text.RegularExpressions.Regex("^" + System.Text.RegularExpressions.Regex.Escape(item.Substring(colon + 1).Trim()).Replace("\\*", ".*") + "$");
+                paths.AddRange(System.IO.Directory.GetFiles($"Assets/Synty/{folder}", "*.prefab").Select(System.IO.Path.GetFileNameWithoutExtension).Where(n => pattern.IsMatch(n)).OrderBy(n => n).Select(n => $"{folder}/{n}"));
+            }
+            float length = Lay(root, paths.ToArray(), 0, 1);
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ground.transform.SetParent(root, false);
+            ground.transform.position = new Vector3(length / 2, -0.05f, Back);
+            ground.transform.localScale = new Vector3(length + 40, 0.1f, 60);
+            ground.GetComponent<Renderer>().sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = new Color(0.55f, 0.54f, 0.5f) };
+            UnityEngine.Object.DestroyImmediate(ground.GetComponent<Collider>());
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.farClipPlane = 1500;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.72f, 0.78f, 0.86f);
+            camera.fieldOfView = 30;
+            float Env(string name, float or) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : or;
+            // Far enough for the whole row as wide as the picture, or as BASTION_DIST says.
+            float far = Env("BASTION_DIST", Mathf.Max(14, (length + 2) / 2 / (Mathf.Tan(camera.fieldOfView / 2 * Mathf.Deg2Rad) * 16 / 9)));
+            var look = new Vector3(length / 2, 2.5f, Back);
+            camera.transform.position = look + Quaternion.Euler(Env("BASTION_ALTO", 20), Env("BASTION_GIRO", 0), 0) * new Vector3(0, 0, -far);
+            camera.transform.LookAt(look);
+        }
+
+        /// <summary>
         /// Each house of the city maps (engine-cs/golden/step1, BASTION_MAP to name some) as it is drawn (Arturo's phase 1
         /// of #3): its place and size, its roof (hipped or gabled, pitch), the window frame and door it took, whether it
         /// has shutters and a garage door. To find one to frame in a capture.
@@ -126,8 +172,40 @@ namespace Bastion.EditorTools
             }
         }
 
-        /// <summary>The buildings `prefabs` in a row along x from `x`, their fronts at z = Back, facing the street; where the row ends.</summary>
-        static float Lay(Transform root, string[] prefabs, float x)
+        /// <summary>
+        /// Each shop of the city maps (BASTION_MAP to name some) as the plan has it (phase 2 of #3): its place and size,
+        /// storeys, kit, whether its roof is walked on, the side of its front (its sign's door) and what its sign says.
+        /// To find one to frame in a capture. BASTION_PIEZAS=k also every wall piece of building k (where, which way). A
+        /// generated map by biome:seed[:kind[:site]] (city:3:elimination:industrial), as MapLab's BASTION_GENERAR.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.EdificiosLab.Tiendas -quit
+        /// </summary>
+        public static void Tiendas()
+        {
+            var names = Environment.GetEnvironmentVariable("BASTION_MAP")?.Split(',') ?? new[] { "city-1", "city-7", "city-5-night" };
+            foreach (string name in names)
+            {
+                var made = name.Split(':');
+                var s = made.Length >= 2 ? MapLab.Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination", made.Length > 3 ? made[3] : null) : MapLab.Golden(name);
+                var plan = new BuildingPlan(s);
+                var layout = WallLayout.Of(s, plan);
+                // BASTION_TIPO: another kind of building (office, hall…), or * for all.
+                string kind = Environment.GetEnvironmentVariable("BASTION_TIPO") ?? BuildingKinds.Shop;
+                foreach (var b in plan.Buildings.Where(b => kind == "*" || b.kind == kind))
+                {
+                    var signs = layout.Props.Where(p => p.building == b.index && p.id.StartsWith("sign")).ToList();
+                    string sign = signs.Count > 0 ? FormattableString.Invariant($"{signs[0].id} at {signs[0].matrix.m03:0.0},{signs[0].matrix.m23:0.0}") : "no sign";
+                    int fronts = layout.Pieces.Count(p => p.building == b.index && (p.id == "shopWindow" || p.id == "shopDoor"));
+                    // BASTION_PIEZAS=k: every piece of building k, its tile, storey, place and the way it faces.
+                    if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_PIEZAS"), out int k) && k == b.index)
+                        foreach (var p in layout.Pieces.Where(p => p.building == b.index))
+                            Debug.Log(FormattableString.Invariant($"[piezas] #{b.index} {p.id} tile {p.tile % s.Width},{p.tile / s.Width} storey {p.level} at {p.matrix.m03:0.00},{p.matrix.m13:0.00},{p.matrix.m23:0.00} out {p.outward.x:0},{p.outward.y:0} along x {p.matrix.m00:0.00},{p.matrix.m20:0.00} thick {p.thick:0.00} square {p.square} tint {p.tint} roof {p.roof}"));
+                    Debug.Log(FormattableString.Invariant($"[tiendas] {name} #{b.index} ({b.x0},{b.y0})–({b.x1},{b.y1}) {b.kind}, {b.storeys} storeys, kit {b.kit}, walk {b.walkableRoof}, leveled {b.leveled}, frame {b.frame}, market {(b.market != null ? b.market.ToString() : "-")}: {sign}, {fronts} front pieces, trade {WallLayout.ShopSign(s, b)}, facing {b.facing ?? "-"}, awning {BuildingLooks.ShopAwning(b) ?? "-"}"));
+                }
+            }
+        }
+
+        /// <summary>The buildings `prefabs` in a row along x from `x`, `gap` apart, their fronts at z = Back, facing the street; where the row ends.</summary>
+        static float Lay(Transform root, string[] prefabs, float x, float gap = Gap)
         {
             foreach (var path in prefabs)
             {
@@ -145,9 +223,9 @@ namespace Bastion.EditorTools
                 var box = Bounds(made);
                 made.transform.position += new Vector3(x - box.min.x, -box.min.y, Back - box.min.z);
                 Debug.Log($"[edificios] {path.Split('/').Last()}: {box.size.x:0.0} × {box.size.z:0.0} × {box.size.y:0.0} m at x {x:0}");
-                x += box.size.x + Gap;
+                x += box.size.x + gap;
             }
-            return x - Gap;
+            return x - gap;
         }
 
         static Bounds Bounds(GameObject g)

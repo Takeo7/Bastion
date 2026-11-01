@@ -223,6 +223,466 @@ MonoBehaviour:
     model: {fileID: 919132149155446097, guid: 632478c2ce9554daa8bb993618641584, type: 3}
     materials:
     - {fileID: 2100000, guid: 542b996b29cee445f881ba5760817107, type: 2}
+  - id: shopWall
+    model: {fileID: 919132149155446097, guid: 2270f795d96694134aaf9d04a472a8d4, type: 3}
+    materials:
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+  - id: shopWindowWall
+    model: {fileID: 919132149155446097, guid: d49df8e76095b458292314fd06f9fdec, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+  - id: shopDoorWall
+    model: {fileID: 919132149155446097, guid: 7ce2303fa38e647c7b6ec3eafb64f87b, type: 3}
+    materials:
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+  - id: shopSideDoor
+    model: {fileID: 919132149155446097, guid: eeb7f3331263b4576ae57968f95f0940, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: shopCorner
+    model: {fileID: 919132149155446097, guid: 0cf5a6a4a4a6840a4bafe95bcd6f8315, type: 3}
+    materials:
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+  - id: shopLintel
+    model: {fileID: 919132149155446097, guid: 25e4a20680bac4e2caec6a8062af84b6, type: 3}
+    materials:
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+  - id: shopWallRed
+    model: {fileID: 919132149155446097, guid: 2270f795d96694134aaf9d04a472a8d4, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+  - id: shopWindowWallRed
+    model: {fileID: 919132149155446097, guid: d49df8e76095b458292314fd06f9fdec, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+  - id: shopDoorWallRed
+    model: {fileID: 919132149155446097, guid: 7ce2303fa38e647c7b6ec3eafb64f87b, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+  - id: shopLintelRed
+    model: {fileID: 919132149155446097, guid: 25e4a20680bac4e2caec6a8062af84b6, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+  - id: shopCornerRed
+    model: {fileID: 919132149155446097, guid: 0cf5a6a4a4a6840a4bafe95bcd6f8315, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+  - id: shopWallColoured
+    model: {fileID: 919132149155446097, guid: 2270f795d96694134aaf9d04a472a8d4, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+  - id: shopWindowWallColoured
+    model: {fileID: 919132149155446097, guid: d49df8e76095b458292314fd06f9fdec, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+  - id: shopDoorWallColoured
+    model: {fileID: 919132149155446097, guid: 7ce2303fa38e647c7b6ec3eafb64f87b, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+  - id: shopLintelColoured
+    model: {fileID: 919132149155446097, guid: 25e4a20680bac4e2caec6a8062af84b6, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+  - id: shopCornerColoured
+    model: {fileID: 919132149155446097, guid: 0cf5a6a4a4a6840a4bafe95bcd6f8315, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+    - {fileID: 2100000, guid: 50ca043133b964554a741f1f12e205f7, type: 2}
+  - id: shopWallRender
+    model: {fileID: 919132149155446097, guid: 2270f795d96694134aaf9d04a472a8d4, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+  - id: shopWindowWallRender
+    model: {fileID: 919132149155446097, guid: d49df8e76095b458292314fd06f9fdec, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+  - id: shopDoorWallRender
+    model: {fileID: 919132149155446097, guid: 7ce2303fa38e647c7b6ec3eafb64f87b, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+  - id: shopLintelRender
+    model: {fileID: 919132149155446097, guid: 25e4a20680bac4e2caec6a8062af84b6, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+  - id: shopCornerRender
+    model: {fileID: 919132149155446097, guid: 0cf5a6a4a4a6840a4bafe95bcd6f8315, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+    - {fileID: 2100000, guid: 9dbc7444549d0488fa525665ef84b84f, type: 2}
+  - id: awningRedEndL
+    model: {fileID: 919132149155446097, guid: 18d402f704cdc4d66925e1101fbeb4a6, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningRedMidL
+    model: {fileID: 919132149155446097, guid: 575a60c5c8c6c46e39961a2531e1ccf7, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningRedMidR
+    model: {fileID: 919132149155446097, guid: 6188961fe117f4f8fa89980bac17dfd2, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningRedEndR
+    model: {fileID: 919132149155446097, guid: d4a28aaf204cf4284a493861bce003f6, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningBlueEndL
+    model: {fileID: 919132149155446097, guid: eaed5ed34b37b4f4d944fc9188f5fd43, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningBlueMidL
+    model: {fileID: 919132149155446097, guid: eb942b1b139f44ecaa151480561c47b3, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningBlueMidR
+    model: {fileID: 919132149155446097, guid: 9570a58c7c51247f89e0ba819c36cf08, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningBlueEndR
+    model: {fileID: 919132149155446097, guid: 0359b1a2e76c24581bdc6f01be299283, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningMaroonEndL
+    model: {fileID: 919132149155446097, guid: 296e1b2abe368484789296216dfcaba3, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningMaroonMidL
+    model: {fileID: 919132149155446097, guid: 9d785b7d853204b27a116b3dd1f0169f, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningMaroonMidR
+    model: {fileID: 919132149155446097, guid: 740595b364bef4ae7a83c17213513724, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: awningMaroonEndR
+    model: {fileID: 919132149155446097, guid: 18e7fcd1508a74fc9aff5aa4fca53c0e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+  - id: officeWindowWall
+    model: {fileID: 919132149155446097, guid: 3b1b2d4be9acb4649b7ac55e2e9aeebf, type: 3}
+    materials:
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+    - {fileID: 2100000, guid: aaa7ad43d14f84649991bb4eb75cc1e0, type: 2}
+  - id: officeCrown
+    model: {fileID: 919132149155446097, guid: 13707695e1ed242f0938b0fe09b77ef9, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+  - id: officePlinth
+    model: {fileID: 919132149155446097, guid: 25c737e2eb46e4dd6a9f7c22d5ec6f5f, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 37201f2b1729b4c08a10f8c39875565c, type: 2}
+  - id: officeWallSillar
+    model: {fileID: 919132149155446097, guid: 2270f795d96694134aaf9d04a472a8d4, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+  - id: officeDoorWallSillar
+    model: {fileID: 919132149155446097, guid: 7ce2303fa38e647c7b6ec3eafb64f87b, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+  - id: officeLintelSillar
+    model: {fileID: 919132149155446097, guid: 25e4a20680bac4e2caec6a8062af84b6, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+  - id: officeCornerSillar
+    model: {fileID: 919132149155446097, guid: 0cf5a6a4a4a6840a4bafe95bcd6f8315, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+  - id: officeWindowWallSillar
+    model: {fileID: 919132149155446097, guid: 3b1b2d4be9acb4649b7ac55e2e9aeebf, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+  - id: officeCrownSillar
+    model: {fileID: 919132149155446097, guid: 13707695e1ed242f0938b0fe09b77ef9, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+  - id: officePlinthSillar
+    model: {fileID: 919132149155446097, guid: 25c737e2eb46e4dd6a9f7c22d5ec6f5f, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 8ca934ff4e68e44f8890f5d6394e647d, type: 2}
+  - id: officeWallHormigon
+    model: {fileID: 919132149155446097, guid: 2270f795d96694134aaf9d04a472a8d4, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+  - id: officeDoorWallHormigon
+    model: {fileID: 919132149155446097, guid: 7ce2303fa38e647c7b6ec3eafb64f87b, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+    - {fileID: 2100000, guid: b18c7968ceabb416189b14c42a88323b, type: 2}
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+  - id: officeLintelHormigon
+    model: {fileID: 919132149155446097, guid: 25e4a20680bac4e2caec6a8062af84b6, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+  - id: officeCornerHormigon
+    model: {fileID: 919132149155446097, guid: 0cf5a6a4a4a6840a4bafe95bcd6f8315, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+  - id: officeWindowWallHormigon
+    model: {fileID: 919132149155446097, guid: 3b1b2d4be9acb4649b7ac55e2e9aeebf, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+  - id: officeCrownHormigon
+    model: {fileID: 919132149155446097, guid: 13707695e1ed242f0938b0fe09b77ef9, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+  - id: officePlinthHormigon
+    model: {fileID: 919132149155446097, guid: 25c737e2eb46e4dd6a9f7c22d5ec6f5f, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 0e06f3632e9c14dfd950c4f10dfe7af3, type: 2}
+  - id: hallWall
+    model: {fileID: 919132149155446097, guid: 98392b9397d20464fa52a0ea1a18903c, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallWindowWall
+    model: {fileID: 919132149155446097, guid: a461a48cd2a3644458b9af3016bd26ca, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallDoorWall
+    model: {fileID: 919132149155446097, guid: d492b4d715cea4007b9e716a3e560b48, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallDoor
+    model: {fileID: 919132149155446097, guid: 580d5578be2cf491395d86812c32982e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallLintel
+    model: {fileID: 919132149155446097, guid: 9638ac90a1d9c4fbaa94e1cb6f85458e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallCorner
+    model: {fileID: 919132149155446097, guid: a1851c58a160e4f61a92648f9a31c518, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetWall
+    model: {fileID: 919132149155446097, guid: a2631985f639a409da1a6d046cb60a57, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetWindowWall
+    model: {fileID: 919132149155446097, guid: ee8b0c05621144d6fa0912546cfe61cc, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetDoorWall
+    model: {fileID: 919132149155446097, guid: 5fdc9c2fccbb74ddfa6adcf1cf63066a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetDoor
+    model: {fileID: 919132149155446097, guid: b6e677f489a494ee9925d3bedc15b7a5, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetLintel
+    model: {fileID: 919132149155446097, guid: f94f4b0dd0a8f4a47b7acebbf90cb935, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetCorner
+    model: {fileID: 919132149155446097, guid: 37463ea06051e4acdb2a10108c524e49, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallWallLadrilloRojo
+    model: {fileID: 919132149155446097, guid: 98392b9397d20464fa52a0ea1a18903c, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallWindowWallLadrilloRojo
+    model: {fileID: 919132149155446097, guid: a461a48cd2a3644458b9af3016bd26ca, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallDoorWallLadrilloRojo
+    model: {fileID: 919132149155446097, guid: d492b4d715cea4007b9e716a3e560b48, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallDoorLadrilloRojo
+    model: {fileID: 919132149155446097, guid: 580d5578be2cf491395d86812c32982e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallLintelLadrilloRojo
+    model: {fileID: 919132149155446097, guid: 9638ac90a1d9c4fbaa94e1cb6f85458e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallCornerLadrilloRojo
+    model: {fileID: 919132149155446097, guid: a1851c58a160e4f61a92648f9a31c518, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: hallWallLadrilloPardo
+    model: {fileID: 919132149155446097, guid: 98392b9397d20464fa52a0ea1a18903c, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: hallWindowWallLadrilloPardo
+    model: {fileID: 919132149155446097, guid: a461a48cd2a3644458b9af3016bd26ca, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: hallDoorWallLadrilloPardo
+    model: {fileID: 919132149155446097, guid: d492b4d715cea4007b9e716a3e560b48, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: hallDoorLadrilloPardo
+    model: {fileID: 919132149155446097, guid: 580d5578be2cf491395d86812c32982e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: hallLintelLadrilloPardo
+    model: {fileID: 919132149155446097, guid: 9638ac90a1d9c4fbaa94e1cb6f85458e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: hallCornerLadrilloPardo
+    model: {fileID: 919132149155446097, guid: a1851c58a160e4f61a92648f9a31c518, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: hallWallBloque
+    model: {fileID: 919132149155446097, guid: 98392b9397d20464fa52a0ea1a18903c, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: hallWindowWallBloque
+    model: {fileID: 919132149155446097, guid: a461a48cd2a3644458b9af3016bd26ca, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: hallDoorWallBloque
+    model: {fileID: 919132149155446097, guid: d492b4d715cea4007b9e716a3e560b48, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: hallDoorBloque
+    model: {fileID: 919132149155446097, guid: 580d5578be2cf491395d86812c32982e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: hallLintelBloque
+    model: {fileID: 919132149155446097, guid: 9638ac90a1d9c4fbaa94e1cb6f85458e, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: hallCornerBloque
+    model: {fileID: 919132149155446097, guid: a1851c58a160e4f61a92648f9a31c518, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: sheetWallChapaMarron
+    model: {fileID: 919132149155446097, guid: a2631985f639a409da1a6d046cb60a57, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetWindowWallChapaMarron
+    model: {fileID: 919132149155446097, guid: ee8b0c05621144d6fa0912546cfe61cc, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetDoorWallChapaMarron
+    model: {fileID: 919132149155446097, guid: 5fdc9c2fccbb74ddfa6adcf1cf63066a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetDoorChapaMarron
+    model: {fileID: 919132149155446097, guid: b6e677f489a494ee9925d3bedc15b7a5, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetLintelChapaMarron
+    model: {fileID: 919132149155446097, guid: f94f4b0dd0a8f4a47b7acebbf90cb935, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetCornerChapaMarron
+    model: {fileID: 919132149155446097, guid: 37463ea06051e4acdb2a10108c524e49, type: 3}
+    materials:
+    - {fileID: 2100000, guid: e47228d6c8674407d8ad761a6a0bb83a, type: 2}
+  - id: sheetWallChapaRoja
+    model: {fileID: 919132149155446097, guid: a2631985f639a409da1a6d046cb60a57, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: sheetWindowWallChapaRoja
+    model: {fileID: 919132149155446097, guid: ee8b0c05621144d6fa0912546cfe61cc, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: sheetDoorWallChapaRoja
+    model: {fileID: 919132149155446097, guid: 5fdc9c2fccbb74ddfa6adcf1cf63066a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: sheetDoorChapaRoja
+    model: {fileID: 919132149155446097, guid: b6e677f489a494ee9925d3bedc15b7a5, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: sheetLintelChapaRoja
+    model: {fileID: 919132149155446097, guid: f94f4b0dd0a8f4a47b7acebbf90cb935, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: sheetCornerChapaRoja
+    model: {fileID: 919132149155446097, guid: 37463ea06051e4acdb2a10108c524e49, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 7b0d50b05320f443e808006878160ff1, type: 2}
+  - id: sheetWallChapaVerde
+    model: {fileID: 919132149155446097, guid: a2631985f639a409da1a6d046cb60a57, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 964ef8a5fa76c4bcb88c9146ac99a341, type: 2}
+  - id: sheetWindowWallChapaVerde
+    model: {fileID: 919132149155446097, guid: ee8b0c05621144d6fa0912546cfe61cc, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 964ef8a5fa76c4bcb88c9146ac99a341, type: 2}
+  - id: sheetDoorWallChapaVerde
+    model: {fileID: 919132149155446097, guid: 5fdc9c2fccbb74ddfa6adcf1cf63066a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 964ef8a5fa76c4bcb88c9146ac99a341, type: 2}
+  - id: sheetDoorChapaVerde
+    model: {fileID: 919132149155446097, guid: b6e677f489a494ee9925d3bedc15b7a5, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 964ef8a5fa76c4bcb88c9146ac99a341, type: 2}
+  - id: sheetLintelChapaVerde
+    model: {fileID: 919132149155446097, guid: f94f4b0dd0a8f4a47b7acebbf90cb935, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 964ef8a5fa76c4bcb88c9146ac99a341, type: 2}
+  - id: sheetCornerChapaVerde
+    model: {fileID: 919132149155446097, guid: 37463ea06051e4acdb2a10108c524e49, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 964ef8a5fa76c4bcb88c9146ac99a341, type: 2}
+  - id: sheetWallChapaAzul
+    model: {fileID: 919132149155446097, guid: a2631985f639a409da1a6d046cb60a57, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: sheetWindowWallChapaAzul
+    model: {fileID: 919132149155446097, guid: ee8b0c05621144d6fa0912546cfe61cc, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: sheetDoorWallChapaAzul
+    model: {fileID: 919132149155446097, guid: 5fdc9c2fccbb74ddfa6adcf1cf63066a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: sheetDoorChapaAzul
+    model: {fileID: 919132149155446097, guid: b6e677f489a494ee9925d3bedc15b7a5, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: sheetLintelChapaAzul
+    model: {fileID: 919132149155446097, guid: f94f4b0dd0a8f4a47b7acebbf90cb935, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: sheetCornerChapaAzul
+    model: {fileID: 919132149155446097, guid: 37463ea06051e4acdb2a10108c524e49, type: 3}
+    materials:
+    - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
   glass: {fileID: 2100000, guid: 9687b2ff7e4e8407aa956c2583503912, type: 2}
   floors: {fileID: 2100000, guid: c1928889cb8a747748a8f362da8429e7, type: 2}
   roofs: {fileID: 2100000, guid: e380eff6d4dd44b708eb5651b762e997, type: 2}

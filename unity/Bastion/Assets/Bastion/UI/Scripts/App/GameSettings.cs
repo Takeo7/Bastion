@@ -272,9 +272,8 @@ namespace Bastion.UI.App
 
         /// <summary>
         /// The level's quality level (by its name; while Arte's aren't there, the lowest, middle or highest there is), then
-        /// the cap: none, the screen's refresh (vsync); a cap, that many frames and no vsync; out of the battle, `MenuFps`
-        /// at most. In the app only: in the editor
-        /// the project's own level stays (changing it there would change it for everyone's captures).
+        /// the cap (Pacing). In the app only: in the editor the project's own level stays (changing it there would change it
+        /// for everyone's captures).
         /// </summary>
         public static void Apply()
         {
@@ -293,12 +292,32 @@ namespace Bastion.UI.App
             var quality = Array.FindIndex(names, n => string.Equals(n, QualityNames[level], StringComparison.OrdinalIgnoreCase));
             if (quality < 0 && names.Length > 0) quality = level == 0 ? 0 : level == 2 ? names.Length - 1 : (names.Length - 1) / 2;
             if (quality >= 0 && quality != QualitySettings.GetQualityLevel()) QualitySettings.SetQualityLevel(quality, true);
-            var cap = FpsCap;
-            if (inMenu && (cap == 0 || cap > MenuFps)) cap = MenuFps;
-            QualitySettings.vSyncCount = cap == 0 ? 1 : 0;
-            Application.targetFrameRate = cap == 0 ? -1 : cap;
+            var (sync, rate) = Pacing(FpsCap, inMenu, Application.platform == RuntimePlatform.OSXPlayer, ScreenHz());
+            QualitySettings.vSyncCount = sync;
+            Application.targetFrameRate = rate;
+            ScreenCap = sync == 0 && FpsCap == 0 && !inMenu;
             Changed?.Invoke();
         }
+
+        /// <summary>
+        /// The frames' sync and cap for Unity (vSyncCount, targetFrameRate) by the cap chosen in Ajustes (0: none), out of
+        /// the battle or in it, on the Mac or not, with the screen's refresh in Hz: none, the screen's sync; a cap, that many
+        /// frames and no sync; out of the battle, `MenuFps` at most. On the Mac no sync even with none, the screen's refresh
+        /// (60 if it doesn't say) as the cap instead: with the screen asleep its presentation never came and the battle
+        /// waited for it for ever, also once the screen woke (1/11, 0.11.3).
+        /// </summary>
+        public static (int sync, int rate) Pacing(int cap, bool menu, bool mac, int hz)
+        {
+            if (menu && (cap == 0 || cap > MenuFps)) cap = MenuFps;
+            if (cap == 0 && mac) cap = hz >= 30 ? hz : 60;
+            return cap == 0 ? (1, -1) : (0, cap);
+        }
+
+        /// <summary>The screen's refresh in whole Hz (0 if it doesn't say).</summary>
+        static int ScreenHz() => Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value);
+
+        /// <summary>Whether the frames go at the screen's refresh as a cap, without its sync (the Mac in the battle with no cap): the telemetry says so.</summary>
+        public static bool ScreenCap { get; private set; }
 
         /// <summary>
         /// The settings in short, for the telemetry: «gráficos medios», what the guard took («auto: bajos») or that it is

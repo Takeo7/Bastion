@@ -102,6 +102,7 @@ Material:
     - _DetailNormalMapScale: 1
     - _DstBlend: 10
     - _DstBlendAlpha: 10
+    - _Dye: 0
     - _EnvironmentReflections: 1
     - _Glass: 1
     - _GlossMapScale: 0

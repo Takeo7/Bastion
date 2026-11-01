@@ -41,8 +41,11 @@ def bake(objects):
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
 
-def cut(obj, keep):
-    """Cuts a mesh (its data in the FBX's units) to the box keep = [[x0, y0, z0], [x1, y1, z1]] (convert.py cut)."""
+def cut(obj, keep, fill=False):
+    """
+    Cuts a mesh (its data in the FBX's units) to the box keep = [[x0, y0, z0], [x1, y1, z1]] (convert.py cut); `fill`
+    closes the holes the cut leaves (a post seen from every side: Unity's own).
+    """
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     for axis in range(3):
@@ -51,6 +54,11 @@ def cut(obj, keep):
             normal[axis] = 1
             geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
             bmesh.ops.bisect_plane(bm, geom=geom, plane_co=normal * value, plane_no=normal, clear_inner=above, clear_outer=not above)
+    if fill:
+        bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary], sides=0)
+        # Flat, a face's own normal each: smoothed into the new faces, a post's corners came out rounded.
+        for f in bm.faces:
+            f.smooth = False
     bm.to_mesh(obj.data)
     bm.free()
 
@@ -74,7 +82,7 @@ def piece(pid, p, repo, out_dir):
     unit = p.get('unit', 1)
     for m in meshes:
         if p.get('keep'):
-            cut(m, p['keep'])
+            cut(m, p['keep'], p.get('fill', False))
         # In metres (City's are in hundreds of them).
         m.data.transform(Matrix.Scale(unit, 4))
     for m in [m for m in meshes if not len(m.data.polygons)]:
@@ -122,6 +130,9 @@ def main():
         p = spec.get(pid)
         if p is None or not p.get('src'):
             print(f'[pieces] {pid}: not in Pieces.json, or no source')
+            continue
+        if p.get('as'):
+            print(f'[pieces] {pid}: nothing to cut, the model of {p["as"]}')
             continue
         piece(pid, p, repo, out_dir)
 

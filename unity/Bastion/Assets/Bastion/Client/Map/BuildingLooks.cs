@@ -109,6 +109,40 @@ namespace Bastion.Client.Map
         public int[] flat;
     }
 
+    /// <summary>An office's facing (phase 3 of #3; BuildingPlan.Facings): stone blocks painted its colour, or concrete.</summary>
+    public static class OfficeFacings
+    {
+        public const string Ashlar = "Sillar";
+        public const string Concrete = "Hormigon";
+    }
+
+    /// <summary>
+    /// A hall's facing (phase 4 of #3; BuildingPlan.Facings): POLYGON Gang Warfare's warehouse in one of its atlas's
+    /// colours, its brick red, brown or grey block for a hall of brick, its sheet metal brown, red, green or blue for a shed.
+    /// </summary>
+    public static class HallFacings
+    {
+        public const string RedBrick = "LadrilloRojo";
+        public const string BrownBrick = "LadrilloPardo";
+        public const string Block = "Bloque";
+        public const string BrownSheet = "ChapaMarron";
+        public const string RedSheet = "ChapaRoja";
+        public const string GreenSheet = "ChapaVerde";
+        public const string BlueSheet = "ChapaAzul";
+
+        public static readonly string[] Brick = { RedBrick, BrownBrick, Block };
+        public static readonly string[] Sheet = { BrownSheet, RedSheet, GreenSheet, BlueSheet };
+    }
+
+    /// <summary>A shop's facing (BuildingPlan.Facings, BuildingLooks.Facing): what its walls are of.</summary>
+    public static class ShopFacings
+    {
+        public const string Red = "Red";
+        public const string White = "White";
+        public const string Coloured = "Coloured";
+        public const string Render = "Render";
+    }
+
     /// <summary>The colours of a building, as tints of the patches they go on (buildings.ts looksOf).</summary>
     public sealed class Looks
     {
@@ -261,11 +295,42 @@ namespace Bastion.Client.Map
             [KitIds.ShedGrey] = 0xa4a8aa, [KitIds.ShedRed] = 0x9a4436, [KitIds.ShedBlue] = 0x4a6a8a,
         };
 
+        /// <summary>
+        /// A shop's facing (phase 2 of Ana's #3, 1/11: not a house's boards; WallLayout's shop kits, of POLYGON Shops): its
+        /// red brick, white brick, coloured brick or render; an office's (phase 3), stone blocks or concrete; a hall's
+        /// (phase 4), Gang Warfare's brick or sheet metal (BuildingPlan.Facings); null for any other building, a
+        /// supermarket (brick already), a facility's or the siege's base's.
+        /// </summary>
+        public static string Facing(Building b) => b.facing;
+
+        /// <summary>
+        /// A shop's awning over its front's windows and doors (phase 2 of #3; WallLayout.Awning): one of POLYGON Shops'
+        /// three, red, blue or maroon, by the building, on seven shops in ten with a facing; null for none.
+        /// </summary>
+        public static string ShopAwning(Building b)
+        {
+            if (b.kind != BuildingKinds.Shop || Facing(b) == null) return null;
+            double k = BuildingPlan.Hash(b.x0, b.y0, 37);
+            return k < 0.25 ? "Red" : k < 0.5 ? "Blue" : k < 0.7 ? "Maroon" : null;
+        }
+
+        /// <summary>
+        /// A brick, concrete or sheet metal facing's parapet and trim, its own colour (a render's or stone's is its paint, as
+        /// any building's); a hall's its atlas's brick or sheet on average.
+        /// </summary>
+        public static readonly IReadOnlyDictionary<string, int> ShopTrim = new Dictionary<string, int>
+        {
+            [ShopFacings.Red] = 0x7c4a3e, [ShopFacings.White] = 0xc4c2bc, [ShopFacings.Coloured] = 0xa8927c, [OfficeFacings.Concrete] = 0x9a9a96,
+            [HallFacings.RedBrick] = 0x583c30, [HallFacings.BrownBrick] = 0x79756b, [HallFacings.Block] = 0x7b7b7b,
+            [HallFacings.BrownSheet] = 0x746050, [HallFacings.RedSheet] = 0x815346, [HallFacings.GreenSheet] = 0x4a5f49, [HallFacings.BlueSheet] = 0x5f6e7b,
+        };
+
         /// <summary>The colours of building b, as tints of the patches they go on (buildings.ts looksOf).</summary>
         public static Looks Of(Building b)
         {
             var st = Styles[b.kind];
-            int outer = ShedTint.TryGetValue(b.kit, out int shed) ? shed : Pick(st.outer, b.look);
+            string facing = Facing(b);
+            int outer = facing != null && ShopTrim.TryGetValue(facing, out int brick) ? brick : ShedTint.TryGetValue(b.kit, out int shed) ? shed : Pick(st.outer, b.look);
             return new Looks
             {
                 outer = TintTo(outer, Mean[Patches.Siding]),

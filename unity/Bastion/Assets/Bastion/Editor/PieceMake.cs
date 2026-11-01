@@ -25,8 +25,27 @@ namespace Bastion.EditorTools
         static readonly System.Collections.Generic.Dictionary<string, string> MainMaterials = new System.Collections.Generic.Dictionary<string, string>
         {
             ["apocalypse"] = "PolygonApocalypse_01_A", ["town"] = "PolygonTown_01_A", ["city"] = "PolygonCity_01_A", ["office"] = "PolygonOffice_01_A",
-            ["woodland"] = "PolygonApocalypse_01_A",
+            ["woodland"] = "PolygonApocalypse_01_A", ["shops"] = "PolygonShops_Mat_01_A", ["gang"] = "PolygonGangWarfare_01_A",
         };
+
+        /// <summary>
+        /// Shops' materials painted all over in the building's outer colour (the shops' render, phase 2 of #3; the offices'
+        /// stone blocks, phase 3), and their texture's average (sRGB): those colours are tints of Town's siding
+        /// (BuildingLooks.TintTo, its average 0xbdc2bf), so each is brought up or down to the siding.
+        /// </summary>
+        static readonly System.Collections.Generic.Dictionary<string, Color32> Painted = new System.Collections.Generic.Dictionary<string, Color32>
+        {
+            ["PolygonShops_Mat_Base_Blank_01"] = new Color32(171, 167, 163, 255),
+            ["PolygonShops_Mat_Base_Concrete_Blocks_01"] = new Color32(173, 173, 173, 255),
+        };
+
+        /// <summary>
+        /// How a pack's material takes the building's colours (Bastion/Building's _Dye): Shops' (phase 2 of #3, the shops'
+        /// facings) none, its brick and atlas as they are, but those Painted all over in the building's outer colour; Gang
+        /// Warfare's (phase 4, the halls) none, its colours its atlas's; every other pack's as Town's atlas (its top quarter).
+        /// </summary>
+        static float DyeOf(Material synty) =>
+            synty.name.StartsWith("PolygonGangWarfare_") ? 2 : !synty.name.StartsWith("PolygonShops_") ? 0 : Painted.ContainsKey(synty.name) ? 1 : 2;
 
         public static void Run()
         {
@@ -55,8 +74,11 @@ namespace Bastion.EditorTools
             if (!AssetDatabase.IsValidFolder(MaterialFolder)) AssetDatabase.CreateFolder("Assets/Bastion/Client/Map", "Materials");
             foreach (var p in art.Properties())
             {
-                var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{Folder}/{p.Name}.fbx");
-                var synty = prefabOf((string)p.Value["fbx"]);
+                // (A facing's piece is another's model with its brick swapped: pieces-json.mts `as`, `swap`.)
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{Folder}/{(string)p.Value["as"] ?? p.Name}.fbx");
+                string pack = (string)p.Value["pack"];
+                // (Shops' and Gang Warfare's by their own folders: other packs have models of their names.)
+                var synty = prefabOf(pack == "shops" || pack == "gang" ? $"{pack}:{p.Value["fbx"]}" : (string)p.Value["fbx"]);
                 if (model == null || synty == null)
                 {
                     missing.Add(p.Name + (model == null ? " (not cut)" : " (no Synty model)"));
@@ -64,13 +86,16 @@ namespace Bastion.EditorTools
                 }
                 var theirs = synty != null ? synty.GetComponentsInChildren<Renderer>() : new Renderer[0];
                 // Without the pack's own model in Unity (a few are only in its source files), its main atlas.
-                var main = materialOf(MainMaterials.TryGetValue((string)p.Value["pack"], out var name) ? name : "PolygonApocalypse_01_A");
+                var main = materialOf(MainMaterials.TryGetValue(pack, out var name) ? name : "PolygonApocalypse_01_A");
                 var materials = model.GetComponentsInChildren<MeshFilter>().SelectMany(f =>
                 {
-                    var own = theirs.FirstOrDefault(r => r.name == f.name) ?? theirs.FirstOrDefault();
+                    // (A piece joined from several meshes takes the materials of the renderer it names: pieces-json.mts `renderer`.)
+                    var own = theirs.FirstOrDefault(r => r.name == ((string)p.Value["renderer"] ?? f.name)) ?? theirs.FirstOrDefault();
                     var mats = own != null ? own.sharedMaterials : new Material[0];
                     return Enumerable.Range(0, f.sharedMesh.subMeshCount).Select(k => mats.Length == 0 ? main : mats[Mathf.Min(k, mats.Length - 1)] ?? main);
                 }).ToArray();
+                if (p.Value["swap"] is JObject swap)
+                    materials = materials.Select(m => m != null && swap[m.name] != null ? materialOf((string)swap[m.name]) ?? m : m).ToArray();
                 catalog.pieces.Add(new PieceCatalog.PieceEntry { id = p.Name, model = model, materials = materials.Select(m => Own(m, made)).ToArray() });
             }
             catalog.glass = Glass();
@@ -96,8 +121,12 @@ namespace Bastion.EditorTools
             own = MaterialAsset(synty.name, false);
             own.SetTexture("_BaseMap", Atlas(synty));
             own.SetColor("_BaseColor", synty.HasProperty("_BaseColor") ? synty.GetColor("_BaseColor") : Color.white);
+            // One painted in the building's colour, brought to Town's siding (189, 194, 191 on average; a colour as sRGB: Unity
+            // takes it to linear).
+            if (Painted.TryGetValue(synty.name, out var mean)) own.SetColor("_BaseColor", new Color(189f / mean.r, 194f / mean.g, 191f / mean.b));
             own.SetFloat("_Smoothness", 0.15f);
             own.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
+            own.SetFloat("_Dye", DyeOf(synty));
             EditorUtility.SetDirty(own);
             return made[synty] = own;
         }

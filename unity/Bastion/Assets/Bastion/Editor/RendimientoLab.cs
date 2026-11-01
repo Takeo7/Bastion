@@ -14,7 +14,8 @@ namespace Bastion.EditorTools
     /// <summary>
     /// The heavy cases, measured on this machine (Arturo, 1/11: the performance pass): «ciudad» (city-6-hard-veterans, 70
     /// units), «asedio» (the Bastion's siege with a wave of 60 dead in the clearing), «fuego» (city-3-elimination, its two
-    /// fires, under a storm), «campo» (wilds-5-recovery, its pines); each as the game draws it (its units, its fog as the squad sees, its animals, its weather),
+    /// fires, under a storm), «campo» (wilds-5-recovery, its pines), «poligono» (a city's industrial estate, seed 11); each
+    /// as the game draws it (its units, its fog as the squad sees, its animals, its weather),
     /// the game's camera over the enemy at each of BASTION_DISTANCIAS (24 and 33.5 tiles, the farthest), at each of
     /// BASTION_CALIDAD (Medio, Alto), 1920×1080, in each of BASTION_VARIANTES in turns three times, the least of each (frames
     /// waited for, a pixel read back: no vsync to hold them):
@@ -58,6 +59,9 @@ namespace Bastion.EditorTools
                 }
                 case "campo":
                     return MapLab.Golden("../step2/wilds-5-recovery");
+                // (Phase 4 of #3: an estate's halls of Gang Warfare's sheet metal, two and three storeys of them.)
+                case "poligono":
+                    return MapLab.Generated("city", 11, "elimination", "industrial");
                 case "fuego":
                 {
                     var s = MapLab.Golden("../step2/city-3-elimination");

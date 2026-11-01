@@ -1,7 +1,8 @@
 // The buildings (0.10.1's buildings.ts materials), lit as URP's own: two kinds of surface.
 //  - The kit pieces (WallsView): the pack's atlas, dyed as wallCutPatch did: along the top of Town's atlas the plaster
 //    (left) takes the building's inner colour and the siding (right) its outer one, the trims between keep their white
-//    (in the piece's own atlas, whichever pack). Both faces drawn; the back of a wall, seen through the cut, a flat dark.
+//    (in the piece's own atlas, whichever pack). Shops' (the shops' facings, Unity's own) by _Dye: a render all over in
+//    the outer colour, the brick and the atlas as they are. Both faces drawn; the back of a wall, seen through the cut, a flat dark.
 //    The cutaway (BuildingCut.hlsl): on the storey in view the walls facing the camera drop to CUT_LOW, their caps (a
 //    flat section of the wall) with them; above it everything fades, dithered.
 //  - Floors, roofs and stairs (_SWATCH; BuildingSurfaces): a patch of Town's atlas (TEXCOORD1, glTF's uv: v down)
@@ -19,6 +20,9 @@ Shader "Bastion/Building"
         _BaseColor ("Color", Color) = (1, 1, 1, 1)
         _Cutoff ("Alpha cutoff", Range(0, 1)) = 0.5
         _Smoothness ("Smoothness", Range(0, 1)) = 0.15
+        // How a piece's texture takes its building's colours: 0 as Town's atlas (its top quarter), 1 all of it the outer
+        // colour (a painted render), 2 none (a pack's own brick, tiled past the atlas's square: Shops').
+        _Dye ("Dye", Float) = 0
         [Toggle(_SWATCH)] _Swatch ("Swatches (floors, roofs)", Float) = 0
         [Toggle(_GLASS)] _Glass ("Glass (the windows' panes)", Float) = 0
         [HDR] _EmissionColor ("Emission", Color) = (0, 0, 0, 1)
@@ -270,8 +274,12 @@ Shader "Bastion/Building"
                     albedo = half3(1, 1, 1);
                 #else
                     albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).rgb;
-                    // The top quarter of the atlas (glTF's v < 0.25).
-                    if (input.uv.y > 0.75) albedo *= input.uv.x < 0.4167 ? input.inner.rgb : (input.uv.x > 0.506 ? input.outer : half3(1, 1, 1));
+                    // The top quarter of the atlas (glTF's v < 0.25); or the whole of a render; or nothing.
+                    if (_Dye < 0.5)
+                    {
+                        if (input.uv.y > 0.75) albedo *= input.uv.x < 0.4167 ? input.inner.rgb : (input.uv.x > 0.506 ? input.outer : half3(1, 1, 1));
+                    }
+                    else if (_Dye < 1.5) albedo *= input.outer;
                     if (!front) albedo = half3(0.16, 0.15, 0.14);
                     // A wall's cap: the section of a solid wall, a plain grey a little of the building's inside colour.
                     if (input.cut.z > 0.5) albedo = half3(0.34, 0.32, 0.3) * lerp(half3(1, 1, 1), input.inner.rgb, 0.35);

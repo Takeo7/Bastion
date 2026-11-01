@@ -83,6 +83,11 @@ namespace Bastion.Client.Map
         public bool frame;
         /// <summary>A supermarket (GameState.markets, playtest 20/10 #18): the side (DIRS4) its glass front and sign look onto; null on any other.</summary>
         public int? market;
+        /// <summary>
+        /// A shop's or an office's facing (ShopFacings: its walls' brick or render; OfficeFacings: their stone or concrete;
+        /// BuildingPlan.Facings); null on any other. Absent in 0.10.1.
+        /// </summary>
+        public string facing;
     }
 
     /// <summary>Which tiles make which building: walls round a floor, at ground level.</summary>
@@ -406,6 +411,7 @@ namespace Bastion.Client.Map
             FrameBlocks();
             if (s.Biome == Biomes.Wilds) FindRuins();
             foreach (var b in Buildings) b.pitched = PitchedOf(s, b);
+            Facings();
             for (int k = 0; k <= (s.Levels?.Count ?? 0); k++)
             {
                 IList<string> tiles = k != 0 ? s.Levels[k - 1].Tiles : s.Tiles;
@@ -425,6 +431,37 @@ namespace Bastion.Client.Map
             if (b.kind == BuildingKinds.Ruin || b.walkableRoof) return null;
             if (s.Pitched != null) return s.Pitched.FirstOrDefault((p) => b.x0 >= p.X && b.y0 >= p.Y && b.x1 < p.X + p.W && b.y1 < p.Y + p.H)?.Kind;
             return b.kind == BuildingKinds.House ? PitchedKinds.House : b.kind == BuildingKinds.Barn ? PitchedKinds.Barn : null;
+        }
+
+        /// <summary>
+        /// Each shop's facing (phase 2 of Ana's #3, 1/11: not a house's boards; WallLayout's shop kits, of POLYGON Shops):
+        /// red brick, white brick, coloured brick or render, by the building, but never that of a building it stands
+        /// against or beside (a high street's shops each their own: two alike read as one), the next one along then. Only
+        /// a shop of the house's kit: a supermarket is brick already, a facility's bunker. And each office's (phase 3: the
+        /// centre's of stone with a cornice, as City's old offices), stone blocks or concrete, so too; and each hall's of
+        /// brick or sheet metal (phase 4: the estates' and outskirts' warehouses, a sawmill), Gang Warfare's brick, block
+        /// or sheet in its colours, but the siege's base's (its own, docs/FASE12.md §10).
+        /// </summary>
+        void Facings()
+        {
+            var shops = new[] { ShopFacings.Red, ShopFacings.White, ShopFacings.Coloured, ShopFacings.Render };
+            var offices = new[] { OfficeFacings.Ashlar, OfficeFacings.Concrete };
+            bool Touch(Building a, Building b) => a.x0 <= b.x1 + 1 && b.x0 <= a.x1 + 1 && a.y0 <= b.y1 + 1 && b.y0 <= a.y1 + 1;
+            foreach (var b in Buildings)
+            {
+                // (An office of the house's kit or of brick, phase 3: stone blocks in six of ten, concrete in the rest. A hall
+                // of brick, phase 4: red brick in half, brown in a quarter, block in the rest; a shed's sheet brown, red, green
+                // or blue, about as many each.)
+                bool shop = b.kind == BuildingKinds.Shop && b.kit == KitIds.House;
+                bool office = b.kind == BuildingKinds.Office && (b.kit == KitIds.House || b.kit == KitIds.Brick);
+                bool hall = !Siege && (b.kind == BuildingKinds.Hall || b.kind == BuildingKinds.Barn) && (b.kit == KitIds.Brick || IsShed(b.kit));
+                if (!shop && !office && !hall) continue;
+                var order = shop ? shops : office ? offices : b.kit == KitIds.Brick ? HallFacings.Brick : HallFacings.Sheet;
+                double k = Hash(b.x0, b.y0, 36);
+                int pick = shop ? (k < 0.25 ? 0 : k < 0.5 ? 1 : k < 0.7 ? 2 : 3) : office ? (k < 0.6 ? 0 : 1) : order == HallFacings.Brick ? (k < 0.5 ? 0 : k < 0.75 ? 1 : 2) : (int)Math.Floor(k * 4);
+                for (int n = 1; n < order.Length && Buildings.Any(o => o != b && o.facing == order[pick] && Touch(o, b)); n++) pick = (pick + 1) % order.Length;
+                b.facing = order[pick];
+            }
         }
 
         /// <summary>`elev[i] ?? 0`.</summary>
