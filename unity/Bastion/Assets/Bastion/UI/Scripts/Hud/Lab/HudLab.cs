@@ -7,7 +7,8 @@ namespace Bastion.UI.Hud
     /// <summary>
     /// The HUD with made-up views, to look at and capture each piece without a battle (as src/lab on the web): on the
     /// HudRoot's GameObject, it fills every piece and adds a row of buttons, top centre, to go through their states.
-    /// Six soldiers (two of Ana's), three enemies with flags in front of the camera, a log, the clocks running.
+    /// Six soldiers (two of Ana's: the lab shows them too, the game only one's own), three enemies with flags in front of
+    /// the camera, a log, the clocks running.
     /// </summary>
     [RequireComponent(typeof(HudRoot))]
     public sealed class HudLab : MonoBehaviour, IHudHandlers
@@ -146,11 +147,9 @@ namespace Bastion.UI.Hud
             var owner = new[] { "mine", "partner", "enemy", "over" }[turnState];
             hud.SetTurn(new TurnView
             {
-                Turn = 3,
                 Owner = owner,
                 OwnerName = "Ana",
                 Color = owner == "partner" ? Ana : Arturo,
-                Concealed = turnState == 0,
                 NightLabel = "De noche",
                 NightRules = "De noche se ve menos: hasta 6 casillas, salvo con luz.",
                 InPlay = owner == "partner" ? "Chiara Rossi" : "",
@@ -163,14 +162,11 @@ namespace Bastion.UI.Hud
                     new PlayerView { Slot = 1, Name = "Ana", Color = Ana, Connected = true, Command = owner == "partner", Status = owner == "mine" ? "Con acciones" : "" },
                 },
             });
-            hud.SetFloor(new FloorView { Level = 0, Max = 2 });
             hud.SetSquad(Squad());
             hud.SetSelected(Selected());
             hud.SetAbilities(Bar(owner));
             hud.SetTarget(Shot());
             hud.SetEndTurn(new EndTurnView { Mode = owner == "mine" ? "act" : owner == "partner" ? "waiting" : owner == "enemy" ? "enemy" : "disabled", Detail = owner == "partner" ? "Ana" : null });
-            hud.SetCommand(new CommandView { Shared = owner == "mine" || owner == "partner", Mine = owner == "mine", Holder = owner == "mine" ? "Arturo" : "Ana", CanPass = true });
-            hud.SetGoTo(owner == "mine" ? "Mateo Rojas" : null);
             hud.SetMission(new MissionView
             {
                 Label = siege ? "Asedio" : "Limpieza",
@@ -232,14 +228,13 @@ namespace Bastion.UI.Hud
                 {
                     Id = id,
                     Name = name,
-                    Accent = accent,
+                    Short = name.Split(' ')[0],
                     Mine = mine,
                     Selected = id == selected,
                     Hp = hp,
                     MaxHp = max,
                     Ap = ap,
                     ApMax = 2,
-                    Skills = skills,
                     Title = mine ? "Seleccionar" : "Soldado del otro jugador",
                     Tags = new List<TagView>(tags),
                     Dead = hp == 0,
@@ -401,6 +396,7 @@ namespace Bastion.UI.Hud
             selected = id;
             Fill();
         }
+        public void OnLookUnit(string id) => hud.Toast($"Cámara a {id}");
         public void OnConfirmTarget() => hud.Toast("¡Fuego!");
         public void OnCancel()
         {

@@ -6,12 +6,13 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// The backpack at the foot of the soldier's panel (hud.ts backpack, packMenuEl; docs/FASE2.md, FASE8.md §C): one slot
-    /// per thing carried, § for suministros, the thing's icon otherwise; what lies on its tile, a fallen soldier's
-    /// rucksack with one order that takes what fits; what the whole squad carries. One of the player's own takes clicks: a
-    /// slot opens its menu over the panel (Soltar, Usar, Curar a, Dar a, Equipar, Ponerse, Al cinturón), a thing on the
-    /// floor is picked up, or, with the backpack full, asks which slot to leave for it. The menu closes with ✕, its slot
-    /// again, an order, Esc (Close) or a press anywhere else.
+    /// The backpack over the end of the soldier's sheet (hud.ts backpack, packMenuEl; docs/FASE2.md, FASE8.md §C; where
+    /// UI-COMBATE v1.0 has it, its rules as they were): one slot per thing carried, § for suministros, the thing's icon
+    /// otherwise; over them what lies on its tile, a fallen soldier's rucksack with one order that takes what fits. What
+    /// the whole squad carries is the help of the backpack's mark on the sheet (Haul). One of the player's own takes clicks:
+    /// a slot opens its menu over it (Soltar, Usar, Curar a, Dar a, Equipar, Ponerse, Al cinturón), a thing on the floor
+    /// is picked up, or, with the backpack full, asks which slot to leave for it. The menu closes with ✕, its slot again,
+    /// an order, Esc (Close) or a press anywhere else.
     /// </summary>
     public sealed class Backpack
     {
@@ -141,11 +142,23 @@ namespace Bastion.UI.Hud
                 }
             }
 
-            var line = Ui.El("pack-line", host);
-            var slots = Ui.El("pack-slots", line);
+            var slots = Ui.El("pack-slots", host);
             for (var i = 0; i < pack.Size; i++) slots.Add(Slot(i));
-            var squad = Ui.El("pack-squad", line);
-            tips.Attach(squad, pack.SquadTip);
+
+            menu = Menu();
+            if (menu != null) host.Add(menu);
+        }
+
+        /// <summary>
+        /// The help of the backpack's mark on the sheet: how full it is, and what the whole squad carries («ESCUADRA 12§
+        /// 3▣ ×2») with what that means.
+        /// </summary>
+        public VisualElement Haul()
+        {
+            var card = Ui.El("pack-haul");
+            if (pack == null) return card;
+            Ui.Text(pack.Tip, "pack-haul__line", card);
+            var squad = Ui.El("pack-squad", card);
             Ui.Text(HudText.Pack.Squad, "pack-squad__title", squad);
             if (pack.Totals.Count == 0) Ui.Text(HudText.Pack.Nothing, "pack-squad__none", squad);
             else
@@ -159,9 +172,8 @@ namespace Bastion.UI.Hud
                     if (t.IconAfter && !string.IsNullOrEmpty(t.Icon)) Ui.Icon(icon, t.Icon, "pack-total__icon pack-total__icon--after", e);
                 }
             }
-
-            menu = Menu();
-            if (menu != null) host.Add(menu);
+            if (!string.IsNullOrEmpty(pack.SquadTip)) Ui.Text(pack.SquadTip, "pack-haul__line pack-haul__line--muted", card);
+            return card;
         }
 
         /// <summary>Slot `i`: its thing (a button on one's own, opening its menu), or a free one.</summary>

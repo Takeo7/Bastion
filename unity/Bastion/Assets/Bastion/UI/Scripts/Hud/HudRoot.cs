@@ -8,7 +8,7 @@ namespace Bastion.UI.Hud
     /// The combat HUD on a UIDocument (docs/UNITY-UI.md): it clones Resources/Hud/Hud.uxml into the document, makes a
     /// piece for each holder and hands each its view, as hud.ts's set… methods did. It doesn't read the game: the
     /// presenter (or the lab) calls it with views, and binds the handlers that answer its buttons. Each frame it puts
-    /// the flags over the units and turns the siege's compass with the camera.
+    /// the flags over the units, turns the goal's arrow and the siege's compass with the camera.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class HudRoot : MonoBehaviour
@@ -35,6 +35,7 @@ namespace Bastion.UI.Hud
         Log log;
         UnitFlags flags;
         EdgeMarks edges;
+        GoalArrow goalArrow;
         MiniMap miniMap;
         Banner banner;
         Cards cards;
@@ -42,6 +43,8 @@ namespace Bastion.UI.Hud
         BattleWindow window;
         GameMenu menu;
         VisualElement abilitiesHost;
+        VisualElement squadPlate;
+        VisualElement actions;
         HudIconTable icons;
 
         /// <summary>A sound of the interface by name (stamp, confirm, paper): the game plays it (Red's).</summary>
@@ -72,18 +75,28 @@ namespace Bastion.UI.Hud
             root = doc.rootVisualElement.Q("hud");
             icons = Resources.Load<HudIconTable>("HudIcons");
             tips = new TooltipLayer(root);
-            strip = new TurnStrip(root, relay, tips, Icon);
-            squad = new SquadList(root.Q("squad"), relay, tips);
-            unit = new UnitPanel(root.Q("unit-panel"), relay, tips, Icon);
+            strip = new TurnStrip(root, tips);
+            // The squad's plate, bottom left (UI-COMBATE UI-01): the sheet over the cards, the backpack over the sheet's end.
+            // mixta.css: one of the big plates, in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
+            squadPlate = root.Q("squad");
+            PlateFrame.Dress(squadPlate);
+            squad = new SquadList(root.Q("squad-cards"), squadPlate, relay, tips);
+            unit = new UnitPanel(root.Q("unit-panel"), root.Q("pack"), relay, tips, Icon);
             abilitiesHost = root.Q("abilities");
             bar = new ActionBar(abilitiesHost, relay, tips, Icon);
             shot = new ShotPanel(root.Q("shot-panel"), relay, tips);
-            turnActions = new TurnActions(root.Q("turn-actions"), relay, tips, Icon);
+            turnActions = new TurnActions(root.Q("end-slot"), root.Q("clocks"), relay, tips, Icon);
+            // The keys' row in the screen's middle, but clear of the squad's plate when it grows (eight cards).
+            actions = root.Q("actions");
+            squadPlate.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
+            actions.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
+            root.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
             cards = new Cards(root.Q("cards"), relay, s => Sound?.Invoke(s));
             goal = new GoalCard(root.Q("goal"), root.Q("compass"), tips, ReopenIntro, root.Q("edge-marks"));
             log = new Log(root.Q("log"), Icon);
             flags = new UnitFlags(root.Q("flags"), Icon);
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
+            goalArrow = new GoalArrow(root.Q("goal-arrow"));
             miniMap = new MiniMap(root.Q("mini-map"));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
             notes = new Notes(root.Q("notes"));
@@ -92,18 +105,18 @@ namespace Bastion.UI.Hud
             window = new BattleWindow(root, tips, s => Sound?.Invoke(s));
             menu = new GameMenu(root, tips, s => Sound?.Invoke(s));
             menu.Chose += what => MenuChose?.Invoke(what);
-            menu.Changed += (id, value) => SettingChanged?.Invoke(id, value);
+            menu.Changed += (id, value) =>
+            {
+                // «Cámara al soldado» is the HUD's own, kept on this computer (it was its switch: UI-07).
+                if (id == GameMenu.FollowId)
+                {
+                    TurnActions.FollowsTurn = value != 0;
+                    relay.OnFollowTurn(value != 0);
+                }
+                else SettingChanged?.Invoke(id, value);
+            };
             tips.Front();
             cards.IntroClosed += () => goal.SetWaiting(false);
-            var menuButton = root.Q<Button>("menu-button");
-            menuButton.text = HudText.Menu.Label;
-            menuButton.clicked += () => relay.OnMenu();
-            tips.Attach(menuButton, HudText.Menu.Tip);
-            // The big map's key, by the menu's (Arturo, 31/10 #12): the base's Mapa pin.
-            var mapButton = root.Q<Button>("map-button");
-            Ui.Icon(Icon, "tab:geoscape", "map-button__icon", mapButton);
-            mapButton.clicked += () => relay.OnMiniMap();
-            tips.Attach(mapButton, HudText.MiniMap.Tip);
             // A press anywhere on the HUD outside the backpack closes its menu.
             root.RegisterCallback<PointerDownEvent>(e => unit.PressedAt(e.target as VisualElement), TrickleDown.TrickleDown);
         }
@@ -131,7 +144,19 @@ namespace Bastion.UI.Hud
             if (HeadOf != null) flags.Follow(cam, HeadOf);
             edges.Follow(cam);
             turnActions.TickClocks(ClockOf?.Invoke(0), ClockOf?.Invoke(1));
+            goalArrow.Follow(cam);
             if (cam != null) goal.TurnCompass(NorthOnScreen(cam));
+        }
+
+        /// <summary>The keys' row with its middle at the screen's, or further right while the squad's plate would reach it.</summary>
+        void PlaceActions()
+        {
+            var width = root?.layout.width ?? float.NaN;
+            var row = actions.layout.width;
+            if (float.IsNaN(width) || float.IsNaN(row)) return;
+            // The plate's frame stands 8 px out of it (PlateFrame).
+            var plate = squadPlate.resolvedStyle.display == DisplayStyle.None ? 0 : squadPlate.layout.xMax + 8 + 12;
+            actions.style.left = Mathf.Max(width / 2, plate + row / 2);
         }
 
         /// <summary>
@@ -153,8 +178,14 @@ namespace Bastion.UI.Hud
         // ------------------------------------------------------- the views
 
         public void SetTurn(TurnView v) => strip.SetTurn(v);
-        public void SetPlayers(PlayersView v) => strip.SetPlayers(v);
-        public void SetFloor(FloorView v) => strip.SetFloor(v);
+
+        /// <summary>The players at the top; with a partner, the room for their clock under this player's.</summary>
+        public void SetPlayers(PlayersView v)
+        {
+            strip.SetPlayers(v);
+            turnActions.Paired = v != null && v.Players.Count > 1;
+        }
+
         public void SetSquad(SquadView v) => squad.Set(v);
 
         /// <summary>A soldier's bust by id for the squad list (Arte's Portraits.Soldier); null, none yet.</summary>
@@ -168,13 +199,14 @@ namespace Bastion.UI.Hud
         public void SetSelected(UnitPanelView v) => unit.Set(v);
         public void SetAbilities(ActionBarView v) => bar.Set(v);
         public void SetEndTurn(EndTurnView v) => turnActions.SetEndTurn(v);
-        public void SetCommand(CommandView v) => turnActions.SetCommand(v);
-        public void SetGoTo(string name) => turnActions.SetGoTo(name);
         public void SetMission(MissionView v) => goal.Set(v);
         public void SetCompass(CompassView v) => goal.SetCompass(v);
         public void SetFlags(FlagsView v) => flags.Set(v);
         public void SetWorldTags(System.Collections.Generic.List<WorldTagView> v) => flags.SetTags(v);
         public void SetEdgeMarks(EdgeMarksView v) => edges.Set(v);
+
+        /// <summary>Where the mission's goal lies, for the ring's arrow (UI-06); null, none.</summary>
+        public void SetGoal(Vector3? world) => goalArrow.Set(world);
 
         /// <summary>An arrow at the screen's edge clicked: the camera to that point.</summary>
         public event Action<Vector3> Look;
@@ -189,8 +221,8 @@ namespace Bastion.UI.Hud
             shot.Set(v, abilitiesHost.Q(className: "ability--active"));
         }
 
-        /// <summary>The camera switch («Cámara al soldado»), as last left on this computer.</summary>
-        public bool FollowsTurn => turnActions.FollowsTurn;
+        /// <summary>The camera switch («Cámara al soldado», in the game's menu), as last left on this computer.</summary>
+        public bool FollowsTurn => TurnActions.FollowsTurn;
 
         /// <summary>A menu of the bar is open: the number keys pick its choices.</summary>
         public bool AbilityMenuOpen => bar.MenuOpen;

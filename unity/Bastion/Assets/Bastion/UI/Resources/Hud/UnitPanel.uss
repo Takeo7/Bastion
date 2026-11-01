@@ -1,9 +1,27 @@
-/* The picked soldier's panel (hud.ts setSelected): who, its figures with their icons, its weapon. */
+/*
+   The picked soldier's sheet, one line over the cards (UI-COMBATE UI-02; hud.ts setSelected): who, its weapon, its
+   figures with their icons, the backpack's mark at its end; a long one goes on in a second line.
+*/
+
+.unit-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 5px;
+    padding: 3px 7px;
+    min-height: 28px;
+    border-radius: 2px;
+    background-color: rgba(0, 0, 0, 0.32);
+    border-width: 1px;
+    border-top-color: rgba(0, 0, 0, 0.6);
+    border-left-color: rgba(0, 0, 0, 0.4);
+    border-right-color: rgba(255, 255, 255, 0.05);
+    border-bottom-color: rgba(255, 255, 255, 0.07);
+}
 
 .unit-head {
     flex-direction: row;
     align-items: center;
-    flex-wrap: wrap;
 }
 
 .unit-head--opens:hover .unit-name {
@@ -17,18 +35,22 @@
 }
 
 .unit-name {
-    font-size: 17px;
-    margin-right: 6px;
+    font-size: 16px;
+    margin-right: 5px;
 }
 
 .unit-class {
-    font-size: 11px;
-    letter-spacing: 1px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
 }
 
 /* «DE ANA»: in the partner's colour (set from C#). */
 .whose {
     margin-left: 0;
+}
+
+.unit-bite {
+    margin-left: 5px;
 }
 
 /* Veterancy chevrons: a small stack of marks before the name. */
@@ -44,19 +66,31 @@
     background-color: var(--t-accent);
 }
 
+/* The weapon behind a thin line; its figures after it, or on a second line when they don't fit (no line before them, so
+   none is left at the second line's start). */
+.unit-weapon {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 7px;
+    padding-left: 7px;
+    border-left-width: 1px;
+    border-left-color: var(--t-line);
+}
+
 .unit-stats {
     flex-direction: row;
     flex-wrap: wrap;
-    margin-top: 5px;
+    align-items: center;
+    margin-left: 10px;
 }
 
 .stat {
     flex-direction: row;
     align-items: center;
-    margin: 0 8px 4px 0;
+    margin-right: 8px;
 }
 
-/* The figure's icon (Synty INTERFACE sprites, tinted): set per kind once the sprites are in. */
+/* The figure's icon (Synty INTERFACE sprites, tinted). */
 .stat-icon {
     width: 14px;
     height: 14px;
@@ -74,18 +108,28 @@
     color: var(--t-danger);
 }
 
-.unit-weapon {
-    flex-direction: row;
-    align-items: center;
-    margin-top: 2px;
-    padding-top: 4px;
-    border-top-width: 1px;
-    border-top-color: var(--t-line);
-}
-
 .unit-weapon__name {
     font-size: 12px;
     color: var(--t-muted);
+}
+
+/* The backpack's mark at the line's end, under its slots; what the squad carries in its help. */
+.unit-pack-mark {
+    margin-left: auto;
+    padding-left: 6px;
+    border-left-width: 1px;
+    border-left-color: var(--t-line);
+}
+
+.unit-pack-mark__icon {
+    width: 16px;
+    height: 18px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--t-text);
+}
+
+.unit-pack-mark:hover .unit-pack-mark__icon {
+    -unity-background-image-tint-color: var(--t-accent);
 }
 
 /* A weapon of the Armería's state and improvements (strategy.css .wmarks): «GASTADA», «ROTA», «+2». */
@@ -120,19 +164,15 @@
 
 /* ============================================================== backpack */
 
-/* The backpack (styles.css .unit-pack, mixta-hud.css): what is on the floor, then the slots and the squad's haul on one line. */
+/* The backpack (styles.css .unit-pack; UI-COMBATE v1.0): over the plate's frame at the sheet's end, what is on the floor
+   over its slots. */
 .unit-pack {
-    margin-top: 4px;
-    padding-top: 4px;
-    border-top-width: 1px;
-    border-top-color: var(--t-line);
-}
-
-/* The squad's haul beside the slots, or under them, to the right, when it doesn't fit (styles.css: margin-left auto). */
-.pack-line {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 100%;
+    margin-bottom: 10px;
+    align-items: flex-end;
 }
 
 .pack-slots {
@@ -229,14 +269,24 @@
     border-right-color: var(--t-accent);
 }
 
-/* What the whole squad carries, at the line's end: «ESCUADRA 12§ 3▣ ×2». */
+/* The backpack mark's help: how full it is, and what the whole squad carries («ESCUADRA 12§ 3▣ ×2»). */
+.pack-haul {
+    width: 240px;
+}
+
+.pack-haul__line {
+    font-size: 12px;
+    white-space: normal;
+}
+
+.pack-haul__line--muted {
+    color: var(--t-muted);
+}
+
 .pack-squad {
     flex-direction: row;
     align-items: center;
-    flex-shrink: 1;
-    max-width: 100%;
-    margin-left: auto;
-    padding-left: 6px;
+    margin: 4px 0;
 }
 
 .pack-squad__title {
@@ -290,6 +340,7 @@
 .pack-floor {
     flex-direction: row;
     flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     margin-bottom: 4px;
 }
@@ -359,7 +410,7 @@
 /* The menu over the backpack (mixta-hud.css .pack-menu): riveted steel, a line per order, its cost or why not. */
 .pack-menu {
     position: absolute;
-    left: 0;
+    right: 0;
     bottom: 100%;
     margin-bottom: 6px;
     /* A fixed width, not min/max: so a reason on two lines is measured as two (with the width open, Unity measured one

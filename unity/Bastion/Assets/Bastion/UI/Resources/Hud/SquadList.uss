@@ -1,80 +1,123 @@
-/* The squad list (hud.ts setSquad): a card per soldier, its owner's colour on its edge. */
+/*
+   The squad's cards under the sheet (UI-COMBATE UI-02; hud.ts setSquad): the bust, the name at its foot, health and
+   actions under it filling the card's width; the picked one bigger, all on one foot. Widths from C# (SquadList).
+*/
+
+.squad-cards {
+    flex-direction: row;
+    align-items: flex-end;
+}
 
 .squad-card {
-    flex-direction: row;
-    margin-bottom: 1px;
-    padding: 2px 5px 2px 0;
-    background-color: var(--t-panel-hi);
-    border-radius: 1px;
-    transition-property: background-color;
+    padding: 2px;
+    background-color: var(--m-steel-lo);
+    border-width: 1px;
+    border-radius: 2px;
+    border-top-color: rgba(255, 255, 255, 0.1);
+    border-left-color: rgba(255, 255, 255, 0.05);
+    border-right-color: var(--m-edge);
+    border-bottom-color: var(--m-edge);
+    transition-property: background-color, border-color;
     transition-duration: 0.12s;
 }
 
 .squad-card--mine:hover {
-    background-color: var(--t-panel-hover);
+    background-color: var(--m-steel);
+    border-top-color: var(--t-accent);
 }
 
-.squad-card__accent {
-    width: 3px;
-    margin-right: 5px;
-    background-color: var(--t-accent);
-}
-
-/* The soldier's bust (Arte's Portraits; Ana, Arturo 29/10: the list with their faces and names). */
+/* The soldier's bust (Arte's Portraits, a square drawn in its owner's colour): cropped to the card. */
 .squad-card__bust {
-    width: 30px;
-    height: 30px;
-    margin-right: 5px;
-    align-self: center;
-    background-color: rgba(0, 0, 0, 0.35);
+    height: 72px;
+    overflow: hidden;
+    background-color: var(--m-well);
     -unity-background-scale-mode: scale-and-crop;
 }
 
-.squad-card__body {
-    flex-grow: 1;
+.squad-card--selected .squad-card__bust {
+    height: 86px;
 }
 
-.squad-card__name-row {
-    flex-direction: row;
-    align-items: center;
-}
-
+/* The name on a dark slip along the bust's foot. */
 .squad-card__name {
-    font-size: 12px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 1px 4px 0;
+    font-size: 11px;
+    color: #ffffff;
+    background-color: rgba(0, 0, 0, 0.55);
     -unity-text-overflow-position: end;
     text-overflow: ellipsis;
     overflow: hidden;
-    flex-shrink: 1;
-}
-
-.squad-card__row {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-top: 1px;
-}
-
-.squad-card__row .pips--ap {
-    margin-left: 6px;
-}
-
-.squad-card__tags {
-    flex-direction: row;
-    flex-wrap: wrap;
-}
-
-.squad-card--selected {
-    background-color: var(--t-accent-soft);
-    border-left-width: 0;
+    white-space: nowrap;
 }
 
 .squad-card--selected .squad-card__name {
-    color: var(--t-accent);
+    font-size: 13px;
 }
 
-/* The partner's, not this player's to command: still, a little dimmer. */
-.squad-card--theirs {
-    opacity: 0.8;
+/* More than four: the first name, a size smaller, closer to the edges. */
+.squad-card--narrow .squad-card__name {
+    padding: 1px 2px 0;
+    font-size: 10px;
+}
+
+.squad-card--narrow.squad-card--selected .squad-card__name {
+    font-size: 11px;
+}
+
+/* Its states over the bust's top (VIGILANCIA, MORDIDO…): the first two, small; all of them in its help. */
+.squad-card__tags {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    right: 2px;
+    align-items: flex-start;
+}
+
+.squad-card__tag {
+    margin: 0 0 1px;
+    padding: 0 3px;
+    font-size: 8.5px;
+    max-width: 100%;
+    overflow: hidden;
+    -unity-text-overflow-position: end;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Health and actions as wide as the card: a piece a point (the slot's parchment for health), a bar an action. */
+.squad-card__hp {
+    margin-top: 3px;
+    padding: 2px;
+}
+
+.squad-card__hp .pip {
+    flex-grow: 1;
+    width: 0;
+    height: 5px;
+}
+
+/* (USS has no :last-child: the row reaches past the last bar's margin.) */
+.squad-card__ap {
+    margin-top: 2px;
+    margin-right: -2px;
+}
+
+.squad-card__ap .pip {
+    flex-grow: 1;
+    width: 0;
+    height: 3px;
+    margin-right: 2px;
+}
+
+/* The picked one: lit round it. */
+.squad-card--selected {
+    border-width: 1px;
+    border-color: var(--t-accent);
+    background-color: var(--m-steel);
 }
 
 .squad-card--dead {
@@ -90,6 +133,6 @@
 }
 
 .squad-card--in-play {
-    border-left-width: 2px;
-    border-left-color: var(--t-accent);
+    border-top-width: 2px;
+    border-top-color: var(--t-accent);
 }

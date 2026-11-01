@@ -10,9 +10,11 @@ namespace Bastion.UI.Hud
         void OnAbility(string id);
         void OnEndTurn();
         void OnSelectUnit(string id);
+        /// <summary>A soldier's card clicked twice (UI-COMBATE UI-08): the camera to that soldier.</summary>
+        void OnLookUnit(string id);
         /// <summary>The pointer over a soldier's card in the list (its id) or off it (null): pointed at on the map (Arturo, 31/10 #11).</summary>
         void OnHoverSquad(string id);
-        /// <summary>The map's key by «Menú»: the big map over the fight, open or shut (Arturo, 31/10 #12; also the M).</summary>
+        /// <summary>The map from above, open or shut (Arturo, 31/10 #12): the M, and the labs' steps.</summary>
         void OnMiniMap();
         void OnConfirmTarget();
         void OnCancel();
@@ -22,7 +24,7 @@ namespace Bastion.UI.Hud
         void OnWatchPartner();
         /// <summary>The camera to the soldier whose turn it is, picked.</summary>
         void OnGoToSoldier();
-        /// <summary>The camera switch («Cámara al soldado») flipped.</summary>
+        /// <summary>The camera switch («Cámara al soldado», in the game's menu) flipped.</summary>
         void OnFollowTurn(bool on);
         /// <summary>The partner's call answered: evacAnswer, or the abandonAnswer message.</summary>
         void OnCallAnswer(bool accept);
@@ -38,7 +40,7 @@ namespace Bastion.UI.Hud
         void OnSheet(string unit);
         /// <summary>One floor up (1) or down (-1).</summary>
         void OnFloor(int dir);
-        /// <summary>«Menú» (Esc): the game's menu, open or closed.</summary>
+        /// <summary>The game's menu (Esc), open or closed.</summary>
         void OnMenu();
         /// <summary>An order on the shown soldier's backpack or tile (hud.ts onItem): the engine's `item` command.</summary>
         void OnItem(PackOrder order);
@@ -56,6 +58,7 @@ namespace Bastion.UI.Hud
         public void OnAbility(string id) { }
         public void OnEndTurn() { }
         public void OnSelectUnit(string id) { }
+        public void OnLookUnit(string id) { }
         public void OnHoverSquad(string id) { }
         public void OnMiniMap() { }
         public void OnConfirmTarget() { }
@@ -90,6 +93,7 @@ namespace Bastion.UI.Hud
         public void OnAbility(string id) => Target.OnAbility(id);
         public void OnEndTurn() => Target.OnEndTurn();
         public void OnSelectUnit(string id) => Target.OnSelectUnit(id);
+        public void OnLookUnit(string id) => Target.OnLookUnit(id);
         public void OnHoverSquad(string id) => Target.OnHoverSquad(id);
         public void OnMiniMap() => Target.OnMiniMap();
         public void OnConfirmTarget() => Target.OnConfirmTarget();

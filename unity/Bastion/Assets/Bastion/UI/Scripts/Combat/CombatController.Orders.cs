@@ -675,10 +675,26 @@ namespace Bastion.UI.Combat
         public void OnAbility(string id) => UseAbility(id);
         public void OnEndTurn() => ToggleReady();
 
+        /// <summary>A card clicked (UI-COMBATE UI-02, UI-08): the soldier picked where the camera is; twice, the camera goes to it.</summary>
         public void OnSelectUnit(string id)
         {
             var u = UnitById(State, id);
-            if (u != null && u.Alive && Commands(u)) Pick(id);
+            if (u != null && u.Alive && Commands(u)) Pick(id, false);
+        }
+
+        /// <summary>A card clicked twice (UI-08): the camera to that soldier, on its floor.</summary>
+        public void OnLookUnit(string id)
+        {
+            var u = UnitById(Shown, id);
+            if (u == null || !u.Alive || u.Evacuated) return;
+            SetLevel(u.Pos.Z);
+            // From the map above, the camera comes down there.
+            if (Overhead) OverheadClick(u.Pos);
+            else if (Rig != null)
+            {
+                Rig.TakeControl();
+                Rig.Focus(FeetOf(u.Id) ?? Board.TileToWorld(Shown, u.Pos));
+            }
         }
 
         /// <summary>The soldier whose card in the list is under the pointer (#11): its ring lit, an arrow over it or at the edge.</summary>

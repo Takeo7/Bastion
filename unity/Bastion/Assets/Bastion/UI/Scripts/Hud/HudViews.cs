@@ -20,18 +20,16 @@ namespace Bastion.UI.Hud
 
     // ----------------------------------------------------------------- turn
 
-    /// <summary>The strip at the top (hud.ts setTurn): whose turn, its number, concealment, night, the soldier in play.</summary>
+    /// <summary>Whose turn (hud.ts setTurn): the frame's colour; at the top, the night and the soldier in play.</summary>
     [Serializable]
     public sealed class TurnView
     {
-        public int Turn;
         /// <summary>mine, partner, enemy, or over (the mission is over).</summary>
         public string Owner;
         /// <summary>The partner's name, when it is theirs.</summary>
         public string OwnerName;
         /// <summary>Whose colour, «#rrggbb»; the enemy's is the stamp's red.</summary>
         public string Color;
-        public bool Concealed;
         /// <summary>«De noche», and what the dark changes (its tooltip); empty by day.</summary>
         public string NightLabel;
         public string NightRules;
@@ -72,7 +70,7 @@ namespace Bastion.UI.Hud
         public string Color;
     }
 
-    /// <summary>«Terminar turno» (hud.ts setEndTurn): act, confirm, ready, waiting, enemy or disabled, and its line.</summary>
+    /// <summary>«Terminar turno», the bar's last key (hud.ts setEndTurn): act, confirm, ready, waiting, enemy or disabled, and its help's detail.</summary>
     [Serializable]
     public sealed class EndTurnView
     {
@@ -81,28 +79,17 @@ namespace Bastion.UI.Hud
         public string Detail;
     }
 
-    /// <summary>The command (hud.ts setCommand): «Ceder el mando» for its holder, «Ver a Ana» for the other one.</summary>
-    [Serializable]
-    public sealed class CommandView
-    {
-        public bool Shared;
-        public bool Mine;
-        public string Holder;
-        public string Color;
-        public bool CanPass;
-    }
-
     // ---------------------------------------------------------------- squad
 
-    /// <summary>A soldier's card on the squad list (hud.ts setSquad).</summary>
+    /// <summary>A soldier's card under the sheet (hud.ts setSquad; UI-COMBATE UI-02).</summary>
     [Serializable]
     public sealed class SquadCardView
     {
         public string Id;
         /// <summary>The nickname «in quotes» if it has one, else the name.</summary>
         public string Name;
-        /// <summary>The owner's colour.</summary>
-        public string Accent;
+        /// <summary>For a narrow card (more than four): the first name, or the nickname.</summary>
+        public string Short;
         /// <summary>This player gives its orders (its own, or the partner's while away): it can be picked.</summary>
         public bool Mine;
         public bool Selected;
@@ -117,8 +104,6 @@ namespace Bastion.UI.Hud
         public int ApMax;
         /// <summary>A siege's turret: its rounds in place of the actions.</summary>
         public bool Rounds;
-        /// <summary>The cells bought of each line of its board (SkillIds.All order), for its hexagon; empty for one with none.</summary>
-        public float[] Skills = Array.Empty<float>();
         public string Title;
         public List<TagView> Tags = new List<TagView>();
     }
@@ -463,14 +448,6 @@ namespace Bastion.UI.Hud
         public List<int> Hot = new List<int>();
     }
 
-    /// <summary>Which floor is shown, on maps with storeys (hud.ts setFloor); Max 0 hides it.</summary>
-    [Serializable]
-    public sealed class FloorView
-    {
-        public int Level;
-        public int Max;
-    }
-
     // ---------------------------------------------------------------- flags
 
     /// <summary>The flag over a unit in sight (unitViews.ts renderFlag) and the hover line over an enemy (setTags).</summary>
@@ -605,6 +582,20 @@ namespace Bastion.UI.Hud
         public string PauseNote;
         /// <summary>Over the whole screen, the battle hidden under it (the battle's, paused: Ana, 28/10).</summary>
         public bool Cover;
+        /// <summary>
+        /// The battle's camera and command, under Continuar (UI-COMBATE UI-07; they were over «Terminar turno»): «Ir a Mateo»
+        /// while this player gives the orders and someone has actions, «Ver a Ana» while the partner does; null, none.
+        /// </summary>
+        public string GoTo;
+        public string Watch;
+        /// <summary>«Ceder el mando», for its holder with a partner; off while it can't be passed.</summary>
+        public bool Pass;
+        public bool PassOn;
+        /// <summary>The «Cámara al soldado» switch, as it is now, and its help.</summary>
+        public bool Follow;
+        public bool FollowOn;
+        public string FollowLabel;
+        public string FollowAbout;
         public string QuitLabel;
         public List<SettingView> Settings = new List<SettingView>();
         /// <summary>Controles: each key and what it does; then the night's rules under their heading.</summary>

@@ -8,15 +8,22 @@ namespace Bastion.UI.Hud
 {
     /// <summary>
     /// The game's menu (Esc; hud.ts toggleMenu, renderMenu) and the questions asked before going (confirmLeave,
-    /// confirmAbandon, confirmQuit). Over the battle, dimmed, a plate with one entry a line: Continuar, Ajustes, Volver al
-    /// menú de inicio, Abandonar la misión (in red), Salir de Bastión. Ajustes has its rows and Controles, the keys and the
-    /// night's rules. It decides nothing: what each entry does and what each question says come from the presenter.
+    /// confirmAbandon, confirmQuit). Over the battle, dimmed, a plate with one entry a line: Continuar; in the battle the
+    /// camera and the command, each with its key (UI-COMBATE UI-07: «Ir a Mateo» or «Ver a Ana», «Ceder el mando», the
+    /// «Cámara al soldado» switch, which were on the HUD); Ajustes, Volver al menú principal, Abandonar la misión (in
+    /// red), Salir de Bastión. Ajustes has its rows and Controles, the keys and the night's rules. It decides nothing: what
+    /// each entry does and what each question says come from the presenter.
     /// </summary>
     public sealed class GameMenu
     {
         public const string Leave = "leave";
         public const string Abandon = "abandon";
         public const string Quit = "quit";
+        public const string GoTo = "goTo";
+        public const string Watch = "watch";
+        public const string Pass = "pass";
+        /// <summary>«Cámara al soldado» flipped, in Changed: 1 on, 0 off.</summary>
+        public const string FollowId = "followTurn";
 
         readonly VisualElement layer;
         readonly VisualElement modal;
@@ -128,6 +135,10 @@ namespace Bastion.UI.Hud
                 Ui.Text(HudText.Menu.Title, "game-menu__title font-title", card);
                 if (!string.IsNullOrEmpty(view.PauseNote)) Ui.Text(view.PauseNote, "game-menu__note", card);
                 Entry(card, HudText.Menu.Continue, Close);
+                if (!string.IsNullOrEmpty(view.GoTo)) Keyed(card, view.GoTo, HudText.Command.GoKey, HudText.Command.GoTip, () => Choose(GoTo));
+                if (!string.IsNullOrEmpty(view.Watch)) Keyed(card, view.Watch, HudText.Command.GoKey, HudText.Command.WatchTip, () => Choose(Watch));
+                if (view.Pass) Keyed(card, HudText.Command.Pass, HudText.Command.PassKey, HudText.Command.PassTip, () => Choose(Pass)).SetEnabled(view.PassOn);
+                if (view.Follow) FollowSwitch(card, view.FollowLabel, view.FollowAbout);
                 Entry(card, HudText.Menu.Settings, () => Page("settings"));
                 if (view.Leave)
                 {
@@ -217,6 +228,47 @@ namespace Bastion.UI.Hud
             Ui.AddClasses(b, extra);
             card.Add(b);
             return b;
+        }
+
+        /// <summary>
+        /// An entry with something at its right end (its key, a switch): its words in a label of their own, as a button's
+        /// own text isn't measured once it holds other elements (the entries came out on top of each other).
+        /// </summary>
+        Button Row(VisualElement card, string text, Action click)
+        {
+            var b = new Button(click);
+            b.AddToClassList("game-menu__entry");
+            b.AddToClassList("game-menu__entry--row");
+            b.AddToClassList("font-title");
+            Ui.Text(text.ToUpperInvariant(), "game-menu__words", b).pickingMode = PickingMode.Ignore;
+            card.Add(b);
+            return b;
+        }
+
+        /// <summary>An entry with its key at its right end, and its help.</summary>
+        Button Keyed(VisualElement card, string text, string key, string tip, Action click)
+        {
+            var entry = Row(card, text, click);
+            Ui.Text(key, "game-menu__key", entry).pickingMode = PickingMode.Ignore;
+            tips?.Attach(entry, $"{tip} ({key})");
+            return entry;
+        }
+
+        /// <summary>«Cámara al soldado», an entry with a switch at its right end (as it was on the HUD): a press flips it, at once.</summary>
+        void FollowSwitch(VisualElement card, string text, string tip)
+        {
+            Button entry = null;
+            entry = Row(card, text, () =>
+            {
+                view.FollowOn = !view.FollowOn;
+                entry.EnableInClassList("game-menu__entry--on", view.FollowOn);
+                Changed?.Invoke(FollowId, view.FollowOn ? 1 : 0);
+            });
+            entry.EnableInClassList("game-menu__entry--on", view.FollowOn);
+            var track = Ui.El("game-menu__switch", entry);
+            track.pickingMode = PickingMode.Ignore;
+            Ui.El("game-menu__knob", track).pickingMode = PickingMode.Ignore;
+            if (!string.IsNullOrEmpty(tip)) tips?.Attach(entry, tip);
         }
 
         void BackTo(VisualElement card, string page)

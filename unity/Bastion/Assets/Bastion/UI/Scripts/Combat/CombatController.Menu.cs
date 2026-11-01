@@ -13,6 +13,7 @@ namespace Bastion.UI.Combat
         static readonly (string keys, string what)[] Controls =
         {
             ("Clic", "Seleccionar y mover"),
+            ("Doble clic en un retrato", "Llevar la cámara a ese soldado"),
             ("Tab", "Siguiente soldado u objetivo"),
             ("1–9", "Usar una habilidad; si necesita objetivo, elegirlo y pulsar otra vez"),
             ("Espacio · Intro", "Usar la habilidad elegida; sin ninguna, disparar"),
@@ -37,7 +38,7 @@ namespace Bastion.UI.Combat
         const string WalkSpeedId = "walkSpeed";
         const string PlansId = "autoPlan";
 
-        /// <summary>«Menú» or Esc: the game's menu with what it can do now, or closed.</summary>
+        /// <summary>Esc: the game's menu with what it can do now, or closed.</summary>
         void ToggleMenu()
         {
             if (Hud == null || State == null) return;
@@ -46,10 +47,24 @@ namespace Bastion.UI.Combat
 
         GameMenuView MenuView()
         {
+            var s = State;
             var partner = PartnerHere();
-            var over = State.Outcome != null;
+            var over = s.Outcome != null;
+            // The camera and the command (UI-COMBATE UI-07), as they were over «Terminar turno»: «Ir a …» (#15) while this
+            // player gives the orders and someone still has actions; with a partner, «Ceder el mando» or «Ver a …».
+            var sharing = partner != null && s.ActiveTeam == Teams.Xcom && !over && CanAct();
+            var mine = HasCommand();
+            var next = CanAct() && mine && !s.Ready[MySlot] && s.ActiveTeam == Teams.Xcom ? TurnSoldier(s, MySlot) : null;
             return new GameMenuView
             {
+                GoTo = next != null ? HudText.Command.GoTo(next.Name) : null,
+                Watch = sharing && !mine ? HudText.Command.Watch(PlayerName(s.Command)) : null,
+                Pass = sharing && mine,
+                PassOn = sharing && mine && !s.Ready[partner.Slot] && AbilityTexts.BusySlots(s).Contains(partner.Slot),
+                Follow = !over,
+                FollowOn = Hud.FollowsTurn,
+                FollowLabel = Lore.SettingsText.CameraFollow,
+                FollowAbout = Lore.SettingsText.CameraFollowAbout,
                 // The main menu (#7): not once it is over, the report has its own way out; nor abandoning then.
                 Leave = !over,
                 // The mission waits while it is open (Arturo, 28/10), for both; the battle hidden under it (Ana).
@@ -121,13 +136,24 @@ namespace Bastion.UI.Combat
             else App.GameSettings.Change(id, value);
         }
 
-        /// <summary>An entry of the menu: each asks first when it costs something (hud.ts confirmLeave, confirmAbandon, confirmQuit).</summary>
+        /// <summary>
+        /// An entry of the menu: the camera and the command at once; going, each asks first when it costs something
+        /// (hud.ts confirmLeave, confirmAbandon, confirmQuit).
+        /// </summary>
         public void MenuChose(string what)
         {
             if (Hud == null || State == null) return;
             Hud.CloseMenu();
             var partner = PartnerHere();
-            if (what == GameMenu.Leave)
+            if (what == GameMenu.GoTo || what == GameMenu.Watch || what == GameMenu.Pass)
+            {
+                // The menu shut, the pause goes now, not next frame: the order mustn't be held as paused.
+                PauseTick();
+                if (what == GameMenu.GoTo) GoToSoldier();
+                else if (what == GameMenu.Watch) WatchPartner();
+                else PassCommand();
+            }
+            else if (what == GameMenu.Leave)
             {
                 // Asked with the other one here, who goes too; otherwise at once.
                 if (partner == null)

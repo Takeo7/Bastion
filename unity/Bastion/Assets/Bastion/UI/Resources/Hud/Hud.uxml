@@ -31,21 +31,29 @@
         <ui:VisualElement name="flags" class="flags-layer" picking-mode="Ignore" />
         <!-- Arrows at the screen's edge towards the marks off it (the objective, the evacuation, the partner's moment). -->
         <ui:VisualElement name="edge-marks" class="edge-marks" picking-mode="Ignore" />
+        <!-- The night and the soldier in play (a partner's turn), and the players: no turn tab, no floors (UI-COMBATE UI-03, UI-10). -->
         <ui:VisualElement name="top" class="top" picking-mode="Ignore">
-            <ui:VisualElement name="turn" class="turn" />
-            <ui:VisualElement name="floor" class="floor-ind panel" />
+            <ui:VisualElement name="turn" class="turn" picking-mode="Ignore" />
             <ui:VisualElement name="players" class="players" picking-mode="Ignore" />
         </ui:VisualElement>
-        <ui:VisualElement name="squad" class="squad panel" />
-        <ui:VisualElement name="unit-panel" class="unit-panel panel" />
-        <ui:VisualElement name="abilities" class="abilities" picking-mode="Ignore" />
-        <ui:VisualElement name="shot-panel" class="shot-panel panel" />
-        <ui:VisualElement name="turn-actions" class="turn-actions" picking-mode="Ignore" />
-        <ui:VisualElement name="side" class="side" picking-mode="Ignore">
-            <ui:VisualElement class="side-keys" picking-mode="Ignore">
-                <ui:Button name="map-button" class="map-button" />
-                <ui:Button name="menu-button" class="menu-button" text="Menú" />
+        <!-- The squad, bottom left (UI-01, UI-02): the backpack over the sheet's end, the picked soldier's sheet, the cards. -->
+        <ui:VisualElement name="squad" class="squad panel">
+            <ui:VisualElement name="pack" class="unit-pack" picking-mode="Ignore" />
+            <ui:VisualElement name="unit-panel" class="unit-panel" />
+            <ui:VisualElement name="squad-cards" class="squad-cards" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <!-- The keys and «Terminar turno» in one row, the turn's clock under all of it (UI-04, UI-05). -->
+        <ui:VisualElement name="actions" class="actions" picking-mode="Ignore">
+            <ui:VisualElement class="actions__row" picking-mode="Ignore">
+                <ui:VisualElement name="abilities" class="abilities" picking-mode="Ignore" />
+                <ui:VisualElement name="end-slot" class="end-slot" picking-mode="Ignore" />
             </ui:VisualElement>
+            <ui:VisualElement name="clocks" class="end-clock" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="shot-panel" class="shot-panel panel" />
+        <!-- Where the mission's goal lies, an arrow in a ring, bottom right (UI-06). -->
+        <ui:VisualElement name="goal-arrow" class="goal-arrow" picking-mode="Ignore" />
+        <ui:VisualElement name="side" class="side" picking-mode="Ignore">
             <ui:VisualElement name="goal" class="goal-dock panel" />
             <ui:VisualElement name="compass" class="compass panel" />
             <ui:VisualElement name="log" class="log panel" />

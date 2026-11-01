@@ -9,7 +9,7 @@ namespace Bastion.UI.Hud
     /// The icons that were our own drawings on the web, not Synty's (icons.ts: 24 × 24, a line of 2, round ends): drawn
     /// with Painter2D in the element's tint (USS `-unity-background-image-tint-color`, as the sprites are tinted), so
     /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, the base's axe, the
-    /// Coro's wave, and the missions' places (new in Unity: Synty has no city nor factory).
+    /// Coro's wave, the missions' places (new in Unity: Synty has no city nor factory), «Terminar turno».
     /// </summary>
     public sealed class LineIcon : VisualElement
     {
@@ -112,6 +112,23 @@ namespace Bastion.UI.Hud
                 pen.Lines(true, false, (9, 21.5f), (9, 14.5f), (15, 14.5f), (15, 21.5f));
                 pen.Line(9, 14.5f, 15, 21.5f);
                 pen.Line(15, 14.5f, 9, 21.5f);
+            },
+            // «Terminar turno» on the bar (UI-COMBATE UI-04): an arrow against a bar, filled like Synty's icons beside it.
+            ["endTurn"] = pen =>
+            {
+                pen.Begin(2.5f, 10);
+                pen.To(11, 10);
+                pen.To(11, 5);
+                pen.To(18, 12);
+                pen.To(11, 19);
+                pen.To(11, 14);
+                pen.To(2.5f, 14);
+                pen.Fill();
+                pen.Begin(19.5f, 3.5f);
+                pen.To(22, 3.5f);
+                pen.To(22, 20.5f);
+                pen.To(19.5f, 20.5f);
+                pen.Fill();
             },
         };
 

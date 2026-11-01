@@ -4,10 +4,11 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// Whose turn it is, three ways at once (hud.ts setTurn; docs/UNITY-UI.md §2.5): the label on a tab of that player's
-    /// colour, the frame round the screen in it (fainter for the partner's), and the action bar resting when the orders
-    /// aren't ours (ActionBarView.Lock, set by the presenter). Beside it the concealment, the night and the soldier in
-    /// play; then the floor (setFloor) and the players (setPlayers).
+    /// Whose turn it is (hud.ts setTurn; docs/UNITY-UI.md §2.5): the frame round the screen in that player's colour
+    /// (fainter for the partner's), and the action bar resting when the orders aren't ours (ActionBarView.Lock, set by the
+    /// presenter); the stamp in the middle as each turn starts (Banner). The tab with «TU TURNO» and «OCULTOS» went, and the
+    /// floors' (UI-COMBATE UI-03, UI-10; the floors keep their keys). At the top, the night and the soldier in play; then the
+    /// players (setPlayers).
     /// </summary>
     public sealed class TurnStrip
     {
@@ -16,24 +17,16 @@ namespace Bastion.UI.Hud
         readonly VisualElement turn;
         readonly VisualElement frame;
         readonly VisualElement players;
-        readonly VisualElement floor;
-        readonly IHudHandlers handlers;
         readonly TooltipLayer tips;
-        readonly System.Func<string, Sprite> icon;
         string turnKey;
         string playersKey;
-        string floorKey;
 
-        public TurnStrip(VisualElement root, IHudHandlers handlers, TooltipLayer tips, System.Func<string, Sprite> icon = null)
+        public TurnStrip(VisualElement root, TooltipLayer tips)
         {
-            this.icon = icon;
             turn = root.Q("turn");
             frame = root.Q("turn-frame");
             players = root.Q("players");
-            floor = root.Q("floor");
-            this.handlers = handlers;
             this.tips = tips;
-            Ui.Show(floor, false);
         }
 
         public void SetTurn(TurnView v)
@@ -49,14 +42,7 @@ namespace Bastion.UI.Hud
             foreach (var edge in frame.Children()) edge.style.backgroundColor = colour;
             Ui.Show(frame, v == null || !v.Alone);
             if (v == null) return;
-
-            var text = owner == "mine" ? HudText.Turn.Mine : owner == "partner" ? HudText.Turn.Partner(v.OwnerName) : owner == "enemy" ? HudText.Turn.Enemy : HudText.Turn.Over;
-            var label = Ui.Text(text, "turn-label font-title turn-label--" + owner, turn);
-            if (owner == "mine" || owner == "partner") label.style.backgroundColor = colour;
-            // The number goes in the tooltip: the strip has no room for it next to a partner's name.
-            tips.Attach(label, HudText.Turn.Number(v.Turn));
             if (!string.IsNullOrEmpty(v.InPlay)) tips.Attach(Ui.Text(HudText.Turn.InPlay(v.InPlay), "turn__in-play", turn), HudText.Turn.InPlayTip);
-            Ui.Text(v.Concealed ? HudText.Turn.Concealed : HudText.Turn.Detected, v.Concealed ? "conceal conceal--on" : "conceal conceal--off", turn);
             if (!string.IsNullOrEmpty(v.NightLabel)) tips.Attach(Ui.Text(v.NightLabel.ToUpperInvariant(), "conceal conceal--night", turn), v.NightRules);
         }
 
@@ -80,27 +66,6 @@ namespace Bastion.UI.Hud
                 Ui.Text(p.Name, "player__name", row);
                 if (!string.IsNullOrEmpty(p.Status)) Ui.Text(p.Status, "player__status", row);
             }
-        }
-
-        public void SetFloor(FloorView v)
-        {
-            var k = Ui.Key(v);
-            if (k == floorKey) return;
-            floorKey = k;
-            floor.Clear();
-            Ui.Show(floor, v != null && v.Max > 0);
-            if (v == null || v.Max <= 0) return;
-            var down = new Button(() => handlers.OnFloor(-1));
-            down.Add(new Triangle(false));
-            down.SetEnabled(v.Level > 0);
-            tips.Attach(down, HudText.Floor.Down);
-            floor.Add(down);
-            tips.Attach(Ui.Text(HudText.Floor.Of(v.Level, v.Max).ToUpperInvariant(), "floor-ind__label", floor), HudText.Floor.Tip);
-            var up = new Button(() => handlers.OnFloor(1));
-            up.Add(new Triangle(true));
-            up.SetEnabled(v.Level < v.Max);
-            tips.Attach(up, HudText.Floor.Up);
-            floor.Add(up);
         }
     }
 }

@@ -4,9 +4,11 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// The picked soldier's panel, bottom left (hud.ts setSelected; docs/UNITY-UI.md §2.2): veterancy, its best line's
-    /// hexagon, name, whose; its figures as icons with pips or numbers (words in the tooltips); its weapon with its wear
-    /// and improvements; its backpack (Backpack). A soldier's head opens its sheet (H). Null hides it.
+    /// The picked soldier's sheet, one line over the squad's cards (UI-COMBATE UI-02; hud.ts setSelected; docs/UNITY-UI.md
+    /// §2.2): veterancy, its best line's hexagon, name, whose; its weapon with its wear and improvements; its figures as
+    /// icons with pips or numbers (words in the tooltips), health and actions only when it has no card (its card shows
+    /// them); at its end the backpack's mark, what the squad carries in its help, and the backpack's slots over it
+    /// (Backpack, as they were). A soldier's head opens its sheet (H). Null hides it.
     /// </summary>
     public sealed class UnitPanel
     {
@@ -14,6 +16,7 @@ namespace Bastion.UI.Hud
         const bool SheetExists = true;
 
         readonly VisualElement host;
+        readonly VisualElement packHost;
         readonly IHudHandlers handlers;
         readonly TooltipLayer tips;
         readonly System.Func<string, Sprite> icon;
@@ -21,9 +24,11 @@ namespace Bastion.UI.Hud
         string key;
         string shownId;
 
-        public UnitPanel(VisualElement host, IHudHandlers handlers, TooltipLayer tips, System.Func<string, Sprite> icon = null)
+        /// <param name="packHost">Where the backpack's slots go: over the sheet's end.</param>
+        public UnitPanel(VisualElement host, VisualElement packHost, IHudHandlers handlers, TooltipLayer tips, System.Func<string, Sprite> icon = null)
         {
             this.host = host;
+            this.packHost = packHost;
             this.handlers = handlers;
             this.tips = tips;
             this.icon = icon;
@@ -45,13 +50,11 @@ namespace Bastion.UI.Hud
             Ui.Show(host, view != null);
             if (view == null)
             {
-                backpack.Set(null, null, null);
+                backpack.Set(packHost, null, null);
                 return;
             }
             shownId = view.Id;
             Ui.CloneInto("UnitPanel", host);
-            // mixta.css: one of the big plates, in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
-            PlateFrame.Dress(host);
             var tree = host;
 
             var head = tree.Q("head");
@@ -100,7 +103,16 @@ namespace Bastion.UI.Hud
             foreach (var m in view.WeaponMarks)
                 tips.Attach(Ui.Text(m.Text, "weapon-mark weapon-mark--" + m.Kind, marks), m.Tip);
             Ui.Show(marks, view.WeaponMarks.Count > 0);
-            backpack.Set(tree.Q("pack"), view.Id, view.Pack);
+            backpack.Set(packHost, view.Id, view.Pack);
+            // The backpack's mark at the line's end, its slots over it: in its help, what it carries and what the squad does.
+            var packMark = tree.Q("pack-mark");
+            Ui.Show(packMark, view.Pack != null);
+            if (view.Pack != null)
+            {
+                // Synty's backpack, as on the bar's key to search.
+                Ui.Icon(icon, "search", "unit-pack-mark__icon", packMark);
+                tips.Attach(packMark, backpack.Haul);
+            }
         }
 
         VisualElement Stat(StatView s)

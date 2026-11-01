@@ -1,4 +1,4 @@
-/* Where each piece of the combat HUD stands (styles.css of the 0.10.1: --edge 8px, --unit-w 236px, --end-w 172px). */
+/* Where each piece of the combat HUD stands (styles.css of the 0.10.1: --edge 8px; the bottom as UI-COMBATE v1.0, 01/11). */
 
 .hud {
     position: absolute;
@@ -73,29 +73,33 @@
     align-items: flex-start;
 }
 
+/* The squad (UI-COMBATE UI-01, UI-11): one plate bottom left, its foot level with the clock's under the keys. Its width is
+   set from C# by the cards (SquadList: a quarter of the screen with four, a little more with up to eight). */
 .squad {
-    position: absolute;
-    top: var(--edge);
-    left: var(--edge);
-    width: 206px;
-    padding: 4px 5px;
-}
-
-.unit-panel {
     position: absolute;
     left: var(--edge);
     bottom: var(--edge);
-    width: var(--unit-w);
-    padding: 6px 10px 7px;
+    padding: 6px 8px 7px;
     /* Straight in its steel frame, as Mixta had it (synty-base.css: «Straight, not crooked»). */
     rotate: 0deg;
 }
 
-.abilities {
+/* The keys and «Terminar turno» in one row, the clock under them as wide (UI-04, UI-05): as wide as its row, its middle at
+   the screen's (HudRoot moves it right when the squad's plate would reach it). */
+.actions {
     position: absolute;
     bottom: var(--edge);
-    left: 256px;
-    right: 192px;
+    left: 50%;
+    translate: -50% 0;
+    align-items: stretch;
+}
+
+.actions__row {
+    flex-direction: row;
+    align-items: flex-end;
+}
+
+.abilities {
     flex-direction: row;
     justify-content: center;
     align-items: flex-end;
@@ -111,14 +115,6 @@
     padding: 8px 10px;
 }
 
-.turn-actions {
-    position: absolute;
-    right: var(--edge);
-    bottom: var(--edge);
-    width: var(--end-w);
-    align-items: stretch;
-}
-
 .side {
     position: absolute;
     right: var(--edge);
@@ -131,12 +127,6 @@
     margin-bottom: 5px;
 }
 
-.menu-button {
-    padding: 3px 10px;
-    font-size: 12px;
-    letter-spacing: 1px;
-}
-
 .flags-layer {
     position: absolute;
     left: 0;
@@ -146,17 +136,18 @@
     overflow: hidden;
 }
 
+/* Over the keys and their slips (the keys stand on the clock: 8 + 14 + 60, a slip 14 over them). */
 .notes {
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 96px;
+    bottom: 104px;
     align-items: center;
 }
 
 /* Over a menu open on the bar (ActionBar.uss .ability-menu: 68px over the keys, a key and its padding tall). */
 .notes--over-menu {
-    bottom: 152px;
+    bottom: 166px;
 }
 
 .cards {

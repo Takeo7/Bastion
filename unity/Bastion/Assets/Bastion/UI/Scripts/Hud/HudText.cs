@@ -8,50 +8,38 @@ namespace Bastion.UI.Hud
     {
         public static class Turn
         {
-            public const string Mine = "TU TURNO";
-            public const string Enemy = "TURNO ENEMIGO";
-            public const string Over = "FIN DE LA MISIÓN";
-            public const string Concealed = "OCULTOS";
-            public const string Detected = "DETECTADOS";
             public const string InPlayTip = "Un soldado cada vez: este termina sus acciones antes que otro, o se cede el turno";
             public const string EnemyLock = "Turno enemigo";
 
-            public static string Partner(string name) => $"TURNO DE {name.ToUpperInvariant()}";
             public static string PartnerLock(string name) => $"Turno de {name}: puedes apuntar y planear";
             public static string InPlay(string name) => $"EN JUEGO · {name.ToUpperInvariant()}";
-            public static string Number(int turn) => $"Turno {turn}";
         }
 
+        /// <summary>«Terminar turno», a key of the bar with no words on it (UI-COMBATE UI-04): what it says is in its help.</summary>
         public static class EndTurn
         {
-            public const string Act = "TERMINAR TURNO";
-            public const string ActKey = "Retroceso";
-            public const string Confirm = "¿TERMINAR?";
-            public const string ConfirmAgain = "Pulsa otra vez";
-            /// <summary>With the check sign after it (an icon: ✓ isn't in Oswald).</summary>
-            public const string Ready = "A PUNTO";
-            public const string ReadyCancel = "Pulsa para cancelar";
-            public const string EnemyTurn = "TURNO ENEMIGO";
-            public const string EnemyFaster = "Espacio: más rápido";
-            public const string Plan = "Puedes planear: clic en una casilla";
+            public const string Act = "Terminar turno (Retroceso)";
+            public const string Ready = "A punto. Pulsa para cancelar.";
+            public const string EnemyTurn = "Turno enemigo. Mantén Espacio para verlo más rápido.";
+            public const string Off = "Terminar turno";
 
-            public static string Waiting(string name) => $"Esperando a {name}";
-            public static string Command(string name) => $"MANDO: {name.ToUpperInvariant()}";
-            public static string WithActions(int n) => n == 1 ? "1 soldado con acciones" : $"{n} soldados con acciones";
+            public static string Confirm(string detail) => string.IsNullOrEmpty(detail) ? "¿Terminar? Pulsa otra vez." : $"¿Terminar? {detail}. Pulsa otra vez.";
+            public static string Waiting(string name) => $"A punto. Esperando a {name}. Pulsa para cancelar.";
+            public static string Command(string name) => $"Tiene el mando {name}. Puedes planear: clic en una casilla.";
         }
 
+        /// <summary>The command and the camera, in the game's menu now (UI-COMBATE UI-07): they were keys over «Terminar turno».</summary>
         public static class Command
         {
-            public const string Pass = "CEDER EL MANDO";
+            public const string Pass = "Ceder el mando";
             public const string PassKey = "C";
-            public const string PassTip = "El otro jugador da las órdenes hasta que te lo devuelva (C)";
-            public const string WatchTip = "Lleva la cámara a lo que está haciendo el otro jugador (F)";
-            public const string GoTip = "Lleva la cámara al soldado al que le toca y lo elige (F)";
-            public const string On = " Activada.";
-            public const string Off = " Desactivada.";
+            public const string GoKey = "F";
+            public const string PassTip = "El otro jugador da las órdenes hasta que te lo devuelva";
+            public const string WatchTip = "Lleva la cámara a lo que está haciendo el otro jugador";
+            public const string GoTip = "Lleva la cámara al soldado al que le toca y lo elige";
 
-            public static string Watch(string name) => $"VER A {name.ToUpperInvariant()}";
-            public static string GoTo(string name) => $"IR A {name.Split(' ')[0].ToUpperInvariant()}";
+            public static string Watch(string name) => $"Ver a {name}";
+            public static string GoTo(string name) => $"Ir a {name.Split(' ')[0]}";
         }
 
         public static class Players
@@ -120,8 +108,6 @@ namespace Bastion.UI.Hud
         /// <summary>The game's menu (hud.ts renderMenu, confirmLeave); abandoning and quitting are in Lore's words (the view's).</summary>
         public static class Menu
         {
-            public const string Label = "Menú";
-            public const string Tip = "Menú (Esc)";
             public const string Title = "MENÚ";
             public const string Continue = "Continuar";
             public const string Settings = "Ajustes";
@@ -173,16 +159,6 @@ namespace Bastion.UI.Hud
             public static readonly string[] Sides = { "el norte", "el este", "el sur", "el oeste" };
         }
 
-        public static class Floor
-        {
-            public const string Ground = "Planta baja";
-            public const string Down = "Bajar de planta (AvPág)";
-            public const string Up = "Subir de planta (RePág)";
-            public const string Tip = "RePág / AvPág, o Mayús y la rueda";
-
-            public static string Of(int level, int max) => level == 0 ? Ground : $"Planta {level} de {max}";
-        }
-
         public static class Skills
         {
             public const string None = "Aún no ha gastado puntos en el tablero";
@@ -195,13 +171,12 @@ namespace Bastion.UI.Hud
         public static class MiniMap
         {
             public const string Title = "MAPA";
-            public const string Tip = "Mapa (M)";
             public const string Hint = "Clic: bajar la cámara allí · M o Esc: volver";
         }
 
         public static class Squad
         {
-            public const string Select = "Seleccionar";
+            public const string Select = "Seleccionar · Doble clic: cámara al soldado";
             public const string Theirs = "Soldado del otro jugador";
             public const string TheirsCommanded = "Soldado del otro jugador: lo mandas tú mientras no está";
             public const string Automaton = "Va sola: nadie le da órdenes.";

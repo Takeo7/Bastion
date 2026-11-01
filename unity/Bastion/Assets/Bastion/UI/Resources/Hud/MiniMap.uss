@@ -1,5 +1,5 @@
 /* The map from above (MiniMap.cs; Arturo, 31/10 #12 and 01/11: the camera straight down over all of it): while it is up
-   there, a strip under the turn's that says so and what a click, M and Esc do. */
+   there, a strip at the top that says so and what a click, M and Esc do (M alone opens it: UI-COMBATE v1.0). */
 .mini-map {
     position: absolute;
     left: 0;
@@ -25,22 +25,4 @@
     margin-left: 16px;
     font-size: 12px;
     color: var(--t-muted);
-}
-
-/* The map's key by «Menú» (HudRoot): the base's Mapa pin, the key's height. */
-.side-keys {
-    flex-direction: row;
-    align-items: stretch;
-}
-
-.map-button {
-    margin-right: 5px;
-    padding: 2px 6px;
-    align-items: center;
-    justify-content: center;
-}
-
-.map-button__icon {
-    width: 16px;
-    height: 16px;
 }

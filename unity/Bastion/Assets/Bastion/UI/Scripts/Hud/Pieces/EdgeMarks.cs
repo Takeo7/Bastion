@@ -6,10 +6,10 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// Arrows at the edge of the screen pointing at the marks that are off it (edgeMarks.ts, UX-REVISION-2 #33): the
-    /// objective, the evacuation, a siege's breaches, where the partner just made something happen; with the distance in
+    /// Arrows at the edge of the screen pointing at the marks that are off it (edgeMarks.ts, UX-REVISION-2 #33): a siege's
+    /// breaches, where the partner just made something happen, the soldier pointed at in the list; with the distance in
     /// tiles from the picked soldier. The red ones (an alert) beat. A click centres the camera on it (Look). On screen, a
-    /// mark needs no arrow: its beam shows.
+    /// mark needs no arrow: its beam shows. The objective and the evacuation have the ring's arrow now (GoalArrow, UI-06).
     /// </summary>
     public sealed class EdgeMarks
     {

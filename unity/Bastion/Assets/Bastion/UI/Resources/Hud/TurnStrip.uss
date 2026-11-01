@@ -1,24 +1,9 @@
-/* The strip at the top (hud.ts setTurn, setPlayers, setFloor): whose turn on a tab of their colour, the stamps beside it. */
+/* The strip at the top (hud.ts setTurn, setPlayers): the soldier in play and the night, then the players (no turn tab nor
+   floors: UI-COMBATE UI-03, UI-10). */
 
 .turn {
     flex-direction: row;
     align-items: center;
-}
-
-.turn-label {
-    padding: 3px 14px;
-    font-size: 18px;
-    letter-spacing: 2px;
-    color: #ffffff;
-    background-color: var(--t-accent);
-}
-
-.turn-label--enemy {
-    background-color: var(--t-stamp);
-}
-
-.turn-label--over {
-    background-color: var(--m-steel);
 }
 
 .turn__in-play {
@@ -29,7 +14,7 @@
     background-color: var(--t-tag);
 }
 
-/* OCULTOS / DETECTADOS, and the night: stamps beside the tab. */
+/* The night: a stamp at the top, its rules in its help. */
 .conceal {
     margin-left: 6px;
     padding: 2px 8px;
@@ -40,39 +25,9 @@
     border-width: 1px;
 }
 
-.conceal--on {
-    color: var(--t-good);
-    border-color: rgba(143, 208, 90, 0.5);
-}
-
-.conceal--off {
-    color: var(--t-danger);
-    border-color: rgba(240, 80, 60, 0.5);
-}
-
 .conceal--night {
     color: #9fb8ff;
     border-color: rgba(159, 184, 255, 0.5);
-}
-
-.floor-ind {
-    flex-direction: row;
-    align-items: center;
-    margin-left: 8px;
-    padding: 1px 4px;
-}
-
-.floor-ind Button {
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    font-size: 10px;
-}
-
-.floor-ind__label {
-    margin: 0 6px;
-    font-size: 11px;
-    letter-spacing: 1px;
 }
 
 .players {

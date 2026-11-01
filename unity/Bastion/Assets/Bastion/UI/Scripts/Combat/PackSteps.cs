@@ -11,7 +11,7 @@ namespace Bastion.UI.Combat
     /// soldier; «slot=0» opens (or closes) a slot's menu; «act=Curar» presses the menu's line that starts so; «floor=0» a
     /// thing on the floor; «fallen» a fallen soldier's «Coger…»; «offer» the notice's «Cambiar»; «x» the menu's ✕. Also the
     /// map's: «ability=grenade» a key of the bar, «hover=47/57» the pointer on a tile, «click=44/55» a click there, «look=39/38» the camera to it (a slash: the steps'
-    /// lists part on commas); «why=shoot» says in the log why a key is off; «join» and «drop» the partner (Ana) connected or dropped, «gone» dropped past the grace; «end» ends the turn, its question answered; «sheet=s1» a soldier's sheet, «file=a49» an
+    /// lists part on commas); «why=shoot» says in the log why a key is off; «join» and «drop» the partner (Ana) connected or dropped, «gone» dropped past the grace; «retrato=s2» a click on a soldier's card, «reloj=0.7» the turn's clocks; «end» ends the turn, its question answered, «fin» presses it once; «sheet=s1» a soldier's sheet, «file=a49» an
     /// enemy's file, «close» the window over them. Whether
     /// it found what to press (it says so in the log).
     /// </summary>
@@ -40,6 +40,12 @@ namespace Bastion.UI.Combat
             if (what == "close")
             {
                 control.Hud?.CloseWindow();
+                return true;
+            }
+            // «fin»: one press, as a click on the key (with soldiers that can still act, it asks first: the key armed).
+            if (what == "fin")
+            {
+                control.OnEndTurn();
                 return true;
             }
             if (what == "end")
@@ -76,6 +82,25 @@ namespace Bastion.UI.Combat
             if (what == "list")
             {
                 control.OnHoverSquad(arg == "" ? null : arg);
+                return true;
+            }
+            // «retrato=s2» a click on that soldier's card under the sheet, as the pointer's (two close together: the camera to
+            // it, UI-08); «reloj=0.7» the turn's clocks shown with that much left, as a game's (the lab has none).
+            if (what == "retrato")
+            {
+                var card = control.Hud?.GetComponent<UIDocument>()?.rootVisualElement.Q("card-" + arg);
+                if (card == null) return false;
+                using (var click = ClickEvent.GetPooled())
+                {
+                    click.target = card;
+                    card.SendEvent(click);
+                }
+                return true;
+            }
+            if (what == "reloj")
+            {
+                if (control.Hud == null || !float.TryParse(arg, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var left)) return false;
+                control.Hud.ClockOf = which => new Bastion.UI.Hud.ClockView { Shown = true, Left = which == 0 ? left : Mathf.Min(1, left + 0.15f), Running = true, Color = Bastion.Engine.Content.PlayerColors[which == 0 ? control.MySlot : 1 - control.MySlot] };
                 return true;
             }
             if (what == "mapa")

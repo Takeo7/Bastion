@@ -162,6 +162,61 @@
     color: #ffc2b6;
 }
 
+/* An entry with its key or a switch at its right end: its words in a label of their own (GameMenu.Row). */
+.game-menu__entry--row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* As the entry's own text (Mixta gives every Label its 13 px and colour). */
+.game-menu__words {
+    font-size: 20px;
+    letter-spacing: 1.6px;
+    color: #e6e8e2;
+}
+
+.game-menu__entry:hover .game-menu__words {
+    color: #ffffff;
+}
+
+/* The key (Ir a, Ver a: F; Ceder el mando: C), as the bar's keys say theirs. */
+.game-menu__key {
+    margin: 0 4px 0 8px;
+    padding: 0 5px;
+    font-size: 12px;
+    letter-spacing: 0;
+    color: var(--t-muted);
+    border-width: 1px;
+    border-color: var(--t-line);
+}
+
+/* «Cámara al soldado»: its switch, a track and its knob, on or off (#15, as it was on the HUD). */
+.game-menu__switch {
+    width: 30px;
+    height: 15px;
+    margin: 0 4px 0 8px;
+    padding: 0 2px;
+    flex-shrink: 0;
+    justify-content: center;
+    border-radius: 8px;
+    background-color: var(--m-well);
+}
+
+.game-menu__knob {
+    width: 11px;
+    height: 11px;
+    border-radius: 6px;
+    background-color: var(--t-muted);
+    transition-property: translate, background-color;
+    transition-duration: 0.15s;
+}
+
+.game-menu__entry--on .game-menu__knob {
+    translate: 15px 0;
+    background-color: var(--t-good);
+}
+
 .game-menu__back {
     align-self: flex-start;
     margin-top: 10px;

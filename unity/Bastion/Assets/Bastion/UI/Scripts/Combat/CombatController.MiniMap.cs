@@ -3,10 +3,11 @@ using UnityEngine;
 namespace Bastion.UI.Combat
 {
     /// <summary>
-    /// The map from above (Arturo, 31/10 #12; 01/11: «el minimapa es muy minimapa»): M or the map's key by «Menú» take
-    /// the camera straight up over the map, north up and far enough for all the squad has explored (the whole map with no
-    /// fog), with what the fog lets be seen; a click on the ground brings it back down there, and M or Esc back where it
-    /// was. Up there the marks of a move go, a click orders nothing, and nothing else moves the camera (CameraRig.Overhead).
+    /// The map from above (Arturo, 31/10 #12; 01/11: «el minimapa es muy minimapa»): M (its key on the HUD went with
+    /// UI-COMBATE v1.0) takes the camera straight up over the map, north up and far enough for all the squad has explored
+    /// (the whole map with no fog), with what the fog lets be seen; a click on the ground brings it back down there, and M
+    /// or Esc back where it was. Up there the marks of a move go, a click orders nothing, and nothing else moves the
+    /// camera (CameraRig.Overhead).
     /// </summary>
     public sealed partial class CombatController
     {

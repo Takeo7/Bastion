@@ -27,7 +27,6 @@ namespace Bastion.UI.Combat
             var s = State;
             var busy = AbilityTexts.BusySlots(s);
             var partner = PartnerHere();
-            var sharing = partner != null && s.ActiveTeam == Teams.Xcom && s.Outcome == null;
             var mine = HasCommand();
             var bar = new ActionBarView { Abilities = BarKeys() };
             var u = Unit();
@@ -44,13 +43,6 @@ namespace Bastion.UI.Combat
             var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : !mine ? "waiting" : EndArmed && idle > 0 ? "confirm" : "act";
             var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} con acciones" : !mine && !ready ? PlayerName(s.Command) : waiting;
             Hud.SetEndTurn(new EndTurnView { Mode = endMode, Detail = detail });
-            Hud.SetCommand(sharing && CanAct()
-                ? new CommandView { Shared = true, Mine = mine, Holder = PlayerName(s.Command), Color = PlayerColor(s.Command ?? MySlot), CanPass = mine && !s.Ready[partner.Slot] && busy.Contains(partner.Slot) }
-                : null);
-            // «Ir a …» (#15): while this player gives the orders and someone still has actions.
-            var next = CanAct() && mine && !ready && s.ActiveTeam == Teams.Xcom ? TurnSoldier(s, MySlot) : null;
-            Hud.SetGoTo(next?.Name);
-            Hud.SetFloor(MaxLevel > 0 ? new FloorView { Level = Level, Max = MaxLevel } : new FloorView());
         }
 
         /// <summary>What the player reads about the fight, from what has been seen (game.ts refreshStatus).</summary>
@@ -62,7 +54,7 @@ namespace Bastion.UI.Combat
             // Whose turn it is, unmistakably (playtest): mine, the partner's while they hold the command, or the enemy's.
             // Alone, with no partner here or just gone (ActiveSlots: within the server's grace), no frame nor players (Ana, 28/10).
             var alone = ActiveSlots().Count(s => s != MySlot) == 0;
-            var turn = new TurnView { Turn = v.Turn, Concealed = v.Concealed, Alone = alone };
+            var turn = new TurnView { Alone = alone };
             if (v.Outcome != null) turn.Owner = "over";
             else if (v.ActiveTeam == Teams.Alien)
             {
@@ -120,8 +112,8 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// The mission's marks from what has been seen (game.ts refreshView and marks): the evacuation zone, the beams over
-        /// the equipment to fix and the one to reach, the item lying loose, the flares; and the arrows at the screen's edge
-        /// to the objective (or the evacuation) and to the partner's moment.
+        /// the equipment to fix and the one to reach, the item lying loose, the flares; the ring's arrow to the objective (or
+        /// the evacuation); and the arrows at the screen's edge to the partner's moment and the soldier pointed at.
         /// </summary>
         void RefreshMarks()
         {
@@ -138,9 +130,10 @@ namespace Bastion.UI.Combat
             Marks?.Show(v, m.EvacZone, beacons, item, m.Reinforcements.Where(r => r.Pos != null && !r.Landed).Select(r => r.Pos).ToList());
             if (Hud == null) return;
             Hud.SetWorldTags(WorldTags(v));
+            // Where to go, the ring's arrow (UI-COMBATE UI-06): the objective, else the evacuation, as the O key's.
+            var goals = MissionGoals();
+            Hud.SetGoal(goals.Count > 0 ? Board.TileToWorld(v, goals[0].pos, Board.Tile) : (Vector3?)null);
             var view = new EdgeMarksView();
-            foreach (var (kind, name, pos) in MissionGoals())
-                view.Marks.Add(new EdgeMarkView { Kind = kind, Name = name, World = Board.TileToWorld(v, pos, Board.Tile) });
             view.Marks.AddRange(breaches.Marks);
             if (moment != null && Time.time < momentUntil) view.Marks.Add(new EdgeMarkView { Kind = "alert", Name = moment.Value.who, World = moment.Value.at + Vector3.up * Board.Tile });
             // The soldier pointed at from the list, when it is off the screen (#11): an arrow at the edge, as the marks'.
@@ -405,18 +398,19 @@ namespace Bastion.UI.Combat
         void OnDestroy() => Bastion.Client.Portraits.Changed -= OnBust;
 
         /// <summary>
-        /// The squad's cards (hud.ts setSquad): one's own first, then the partner's commanded while they're gone, then the
-        /// rest; a siege's turrets too, for their health and rounds.
+        /// The squad's cards (hud.ts setSquad; UI-COMBATE UI-02): this player's soldiers (Arturo, 01/11), the fallen and the
+        /// gone too, then the partner's it commands while they're away; not the partner's nor a siege's turrets (their
+        /// flags say how they are).
         /// </summary>
         SquadView SquadView(GameState v, string inPlay)
         {
             var view = new SquadView();
-            var units = v.Units.Where(u => u.Team == Teams.Xcom || u.ControlledBy != null).ToList();
+            var units = v.Units.Where(OnCard).ToList();
             // Each soldier's bust for its card, asked for once (Arte's Portraits draws one a frame).
             foreach (var u in units)
                 if (u.Team == Teams.Xcom && busts.Add(u.Id))
                     Bastion.Client.Portraits.Know(u.Id, u.Appearance, u.Name, Bastion.Client.Units.SquadTint.ColourOf(u.Owner ?? MySlot));
-            int Rank(Unit u) => !Commands(u) ? 2 : u.Owner == MySlot || u.Owner == null ? 0 : 1;
+            int Rank(Unit u) => u.Owner == MySlot || u.Owner == null ? 0 : 1;
             var carrier = v.Mission.Item?.Carrier;
             foreach (var u in units.OrderBy(Rank))
             {
@@ -426,7 +420,7 @@ namespace Bastion.UI.Combat
                 {
                     Id = u.Id,
                     Name = (u.Template == TemplateIds.Rookie ? "" : Content.Templates[u.Template].Short + " ") + (!string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name),
-                    Accent = u.Owner == null ? "#e8edf2" : PlayerColor(u.Owner.Value),
+                    Short = !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name.Split(' ')[0],
                     Mine = mine,
                     Selected = u.Id == picked,
                     Dead = !u.Alive && !u.Evacuated,
@@ -435,21 +429,10 @@ namespace Bastion.UI.Combat
                     Bust = u.Team == Teams.Xcom,
                     Hp = u.Hp,
                     MaxHp = u.MaxHp,
-                    Skills = SkillValues(u),
-                    Title = u.Automaton != null ? "Va sola: nadie le da órdenes." : !theirs ? "Seleccionar" : mine ? "Soldado del otro jugador: lo mandas tú mientras no está" : "Soldado del otro jugador",
+                    Title = theirs ? HudText.Squad.TheirsCommanded : HudText.Squad.Select,
+                    Ap = u.Ap,
+                    ApMax = Math.Max(Content.ApPerTurnOf(u), u.Ap),
                 };
-                if (u.Automaton != null)
-                {
-                    // A turret has no actions of its own: its rounds instead.
-                    card.Rounds = true;
-                    card.Ap = u.Ammo;
-                    card.ApMax = u.Ammo;
-                }
-                else
-                {
-                    card.Ap = u.Ap;
-                    card.ApMax = Math.Max(Content.ApPerTurnOf(u), u.Ap);
-                }
                 void Tag(bool on, string text, string kind, string tip = null)
                 {
                     if (on) card.Tags.Add(new TagView { Text = text, Kind = kind, Tip = tip });
@@ -470,6 +453,12 @@ namespace Bastion.UI.Combat
             }
             return view;
         }
+
+        /// <summary>
+        /// Whether `u` has a card under the sheet: one of this player's soldiers (or one with no owner, alone), or the
+        /// partner's while this player commands it; a living one or not.
+        /// </summary>
+        bool OnCard(Unit u) => u.Team == Teams.Xcom && u.Automaton == null && (u.Owner == MySlot || u.Owner == null || u.Alive && Commands(u));
 
         /// <summary>What a bite does in this mission (playtest 15/10 #13), for the bite tags' tooltip.</summary>
         string BiteNote() => Lore.BiteNote(Shown.Mission.Quarantine != false);
@@ -530,8 +519,12 @@ namespace Bastion.UI.Combat
                 view.BiteTip = BiteNote();
             }
             var aim = t.Aim + u.Mods.Aim;
-            view.Stats.Add(new StatView { Kind = "hp", Tip = $"Salud {u.Hp}/{u.MaxHp}", Filled = u.Hp, Total = u.MaxHp });
-            view.Stats.Add(new StatView { Kind = "ap", Tip = $"Acciones {u.Ap}/{Content.ApPerTurnOf(u)}", Filled = u.Ap, Total = Math.Max(Content.ApPerTurnOf(u), u.Ap) });
+            // Health and actions are on its card (UI-COMBATE UI-02); one with none (the partner's, a turret) has them here.
+            if (!OnCard(u))
+            {
+                view.Stats.Add(new StatView { Kind = "hp", Tip = $"Salud {u.Hp}/{u.MaxHp}", Filled = u.Hp, Total = u.MaxHp });
+                view.Stats.Add(new StatView { Kind = "ap", Tip = $"Acciones {u.Ap}/{Content.ApPerTurnOf(u)}", Filled = u.Ap, Total = Math.Max(Content.ApPerTurnOf(u), u.Ap) });
+            }
             // The spare magazines after the clip (docs/FASE7.md): «+3», red at none; the enemies don't count theirs.
             if (clip > 0)
             {
