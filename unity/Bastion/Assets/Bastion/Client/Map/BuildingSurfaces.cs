@@ -329,10 +329,16 @@ namespace Bastion.Client.Map
             var cap = roofTint.Scale(0.6);
             foreach (int side in new[] { 1, -1 })
             {
-                // The long slopes, from the ridge down to the eaves; the swatch along the eave and down the slope.
-                var face = new[] { P(-R, ridge, 0), P(R, ridge, 0), P(U, low, side * E), P(-U, low, side * E) };
-                @out.Poly(face, new[] { (-R, 0.0), (R, 0.0), (U, run), (-U, run) }, Swatch.Shingles, roofTint, b.index, D(0, 1, side * pitch));
-                var fascia = new[] { P(-U, low - RoofThick, side * E), P(U, low - RoofThick, side * E), face[2], face[3] };
+                // The long slopes, from the ridge down to the eaves; the swatch along the eave and down the slope. A square
+                // house's roof comes to a point (no ridge): its slope a triangle, as Poly takes its normal from its first
+                // three corners (two the same, it was none: the shader's NaN black, and the bloom spread it over the
+                // screen; the 0.11.3's map from above, Bielsa by night, 1/11).
+                var face = R > 1e-6
+                    ? new[] { P(-R, ridge, 0), P(R, ridge, 0), P(U, low, side * E), P(-U, low, side * E) }
+                    : new[] { P(0, ridge, 0), P(U, low, side * E), P(-U, low, side * E) };
+                var faceUv = R > 1e-6 ? new[] { (-R, 0.0), (R, 0.0), (U, run), (-U, run) } : new[] { (0.0, 0.0), (U, run), (-U, run) };
+                @out.Poly(face, faceUv, Swatch.Shingles, roofTint, b.index, D(0, 1, side * pitch));
+                var fascia = new[] { P(-U, low - RoofThick, side * E), P(U, low - RoofThick, side * E), P(U, low, side * E), P(-U, low, side * E) };
                 @out.Poly(fascia, new[] { (-U, 0.0), (U, 0.0), (U, RoofThick), (-U, RoofThick) }, Swatch.Shingles, dark, b.index, D(0, 0, side));
                 // The ends: a slope down from the ridge's end to the end's eave (in the end's own frame: v along its eave).
                 int end = side;

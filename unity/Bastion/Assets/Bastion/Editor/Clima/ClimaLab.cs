@@ -12,6 +12,7 @@ namespace Bastion.EditorTools
     /// The five weathers (Bastion.Client.Weather; Arturo 1/11: all five in the game, each in missions of its own) on
     /// MapLab's map (BASTION_MAP, BASTION_AT as there), as the game draws them: the map made with its GameState.weather
     /// set, its sky Mood.Of's. BASTION_CLIMA_SIN=particulas|pase: without the particles, or the pass, to tell what draws what.
+    /// BASTION_CLIMA_NOCHE=1: by night (MapLab.Night).
     ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.ClimaLab.Aguacero -shotFrames 60 -shotFps 10 -shotWarm 2 …
     /// </summary>
     public static class ClimaLab
@@ -27,7 +28,8 @@ namespace Bastion.EditorTools
             MapLab.WeatherOverride = weather;
             try
             {
-                MapLab.Day();
+                if (Environment.GetEnvironmentVariable("BASTION_CLIMA_NOCHE") == "1") MapLab.Night();
+                else MapLab.Day();
             }
             finally
             {

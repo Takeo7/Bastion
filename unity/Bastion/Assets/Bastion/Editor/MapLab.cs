@@ -402,6 +402,31 @@ namespace Bastion.EditorTools
             Difficulty = 3,
         });
 
+        /// <summary>
+        /// The floors' and roofs' faces with no normal (a polygon's first three corners in a line: the shader's NaN black,
+        /// and the bloom spreads it over the screen; the 0.11.3's square houses, 1/11), in each map of BASTION_MAP (the
+        /// goldens of step1 if not said; a saved game's file by its path too).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.Normales -quit
+        /// </summary>
+        public static void Normales()
+        {
+            var names = Environment.GetEnvironmentVariable("BASTION_MAP")?.Split(',')
+                ?? Directory.GetFiles(Path.Combine(Application.dataPath, "../../../engine-cs/golden/step1"), "*.json").Select(Path.GetFileNameWithoutExtension).Where(n => n != "content" && n != "math").ToArray();
+            foreach (string name in names)
+            {
+                var state = Golden(name);
+                var set = BuildingSurfaces.Of(state, new BuildingPlan(state));
+                var parts = typeof(SurfaceSet).GetFields().Where(f => f.FieldType == typeof(Surfaces)).Select(f => (f.Name, surfaces: (Surfaces)f.GetValue(set))).Where(p => p.surfaces != null);
+                var counts = parts.Select(p =>
+                {
+                    int none = 0, all = p.surfaces.Normal.Count / 3;
+                    for (int k = 0; k < all; k++) if (p.surfaces.Normal[3 * k] == 0 && p.surfaces.Normal[3 * k + 1] == 0 && p.surfaces.Normal[3 * k + 2] == 0) none++;
+                    return $"{p.Name} {none} of {all}";
+                });
+                Debug.Log($"[normales] {Path.GetFileNameWithoutExtension(name)}: vertices with no normal: {string.Join(", ", counts)}");
+            }
+        }
+
         internal static GameState Golden(string name)
         {
             // (Or a saved game's file by its path: a lab's, UI's lab-asedio.json.)
@@ -684,6 +709,20 @@ namespace Bastion.EditorTools
             if (at != null && at.Length >= 3)
                 MapSpace.Aim(camera, MapSpace.World(int.Parse(at[0]), int.Parse(at[1]), at.Length > 3 ? int.Parse(at[3]) : 0), float.Parse(at[2], System.Globalization.CultureInfo.InvariantCulture),
                     at.Length > 4 ? float.Parse(at[4], System.Globalization.CultureInfo.InvariantCulture) : 45);
+            // BASTION_ARRIBA=1: over the whole map as the battle's «Mapa» (M) puts the camera (CameraRig.EnterOverhead: 89°
+            // down, far enough for the map, CombatController.MiniMap's room to spare).
+            if (Environment.GetEnvironmentVariable("BASTION_ARRIBA") == "1")
+            {
+                var centre = MapSpace.World(state.Width / 2, state.Height / 2);
+                float w = state.Width * MapSpace.Tile, h = state.Height * MapSpace.Tile;
+                float tan = Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                float metres = Mathf.Max(h / 2 / tan, w / 2 / (tan * camera.aspect)) / 0.86f;
+                float up = 89 * Mathf.Deg2Rad;
+                camera.transform.position = centre + new Vector3(0, Mathf.Sin(up) * metres, -Mathf.Cos(up) * metres);
+                camera.transform.LookAt(centre);
+                camera.farClipPlane = Mathf.Max(camera.farClipPlane, metres * 1.5f);
+                Debug.Log(FormattableString.Invariant($"[map] from above: {metres:0} m up, far plane {camera.farClipPlane:0} m"));
+            }
             // The sun's shadows over what the camera sees, as the battle's map has them (ShadowFit); BASTION_SOMBRAS_FIJAS=1, the
             // pipeline's own (50 m), to weigh them.
             if (Environment.GetEnvironmentVariable("BASTION_SOMBRAS_FIJAS") != "1")

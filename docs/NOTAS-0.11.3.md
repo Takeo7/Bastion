@@ -1,12 +1,12 @@
 # Notas de la 0.11.3
 
-Texto de Lore para la 0.11.3. **Borrador** desde el 1/11, con lo que ya está hecho: las notas de Ana del 1/11 ([PRUEBA-2026-11-01.md](PRUEBA-2026-11-01.md), las 7), la interfaz de combate nueva (UI-COMBATE v1.0, [UNITY.md](UNITY.md) §1 y UNITY-UI.md §7), el carácter de cada ciudad, las casas, los coches chocados, el fuego, el icono con la versión, el clima, los animales y jugar por internet sin Tailscale. Falta, cuando se cierre: lo de rendimiento. Es para Arturo y Ana: cuenta qué cambia al jugar, no cómo está hecho. Lo que va entre [corchetes] lo completa Gameplay al publicar: el commit. Desde «Título» hasta el final es el texto de la release, con el formato de [NOTAS-UNITY.md](NOTAS-UNITY.md).
+Texto de Lore para la 0.11.3, con las notas de Ana del 1/11 ([PRUEBA-2026-11-01.md](PRUEBA-2026-11-01.md), las 7), la interfaz de combate nueva (UI-COMBATE v1.0, [UNITY.md](UNITY.md) §1 y UNITY-UI.md §7), el carácter de cada ciudad, las casas, los coches chocados, el fuego, el icono con la versión, el clima, los animales, jugar por internet sin Tailscale y la pasada de rendimiento (UNITY-ARTE.md, «La pasada de rendimiento»). Es para Arturo y Ana: cuenta qué cambia al jugar, no cómo está hecho. Lo que va entre [corchetes] lo completa Gameplay al publicar: el commit. Desde «Título» hasta el final es el texto de la release, con el formato de [NOTAS-UNITY.md](NOTAS-UNITY.md).
 
 ---
 
 **Título:** Bastión 0.11.3: interfaz de combate nueva, mal tiempo, fuego y juego por internet
 
-Versión 0.11.3 (commit [commit]). Las notas de Ana del 1/11, con la 0.11.1, y la interfaz de combate de Arturo.
+Versión 0.11.3 (commit [commit]). Las notas de Ana del 1/11 sobre la 0.11.1 y lo que pidió Arturo el mismo día, con la interfaz de combate nueva.
 
 ## Novedades de la 0.11.3
 
@@ -36,7 +36,7 @@ Versión 0.11.3 (commit [commit]). Las notas de Ana del 1/11, con la 0.11.1, y l
 - **El asedio, las misiones de la historia y los mapas hechos a mano** van siempre despejados.
 - **Con tormenta o ventisca, todos ven un 30 % menos lejos:** los soldados, los zombis y los vivos. De noche no se suma: cuenta lo que deje ver menos, la noche o el tiempo.
 - **Con aguacero, el ruido llega un 20 % menos lejos,** y con tormenta, un 40 % menos.
-- **El medidor de ruido también sube más despacio con el ruido:** un 20 % menos con aguacero y un 40 % menos con tormenta. Lo que sube con los turnos no cambia.
+- **Por eso, cada ruido sube también menos el medidor de ruido.** Lo que sube con los turnos no cambia.
 - **La llovizna y la nevada no cambian nada:** solo se ven.
 - **Cómo se ve cada uno:**
   - la llovizna, fina y con neblina;
@@ -51,6 +51,7 @@ Versión 0.11.3 (commit [commit]). Las notas de Ana del 1/11, con la 0.11.1, y l
 - **Dan cobertura baja,** como los coches aparcados, y nunca cierran el paso a ningún sitio.
 - **Están destrozados y oxidados,** cada uno torcido a su manera, con restos alrededor: una rueda suelta, piedras.
 - **El que se empotra en una casa rompe la fachada:** el morro queda dentro y levantado, con grietas y cascotes dentro y fuera.
+- **Ese coche no abre paso:** tapa el hueco de la pared y da cobertura baja a los dos lados. Por encima se ve y se dispara, desde dentro y desde fuera. No es una ventana: los enemigos también ven por ahí.
 
 ### Los animales
 - **En pueblos y ciudades hay perros** por las calles y los patios, cuervos en los tejados y palomas en algún sitio abierto. En el campo, un perro, un zorro o un lobo, y cuervos.
@@ -78,6 +79,12 @@ Versión 0.11.3 (commit [commit]). Las notas de Ana del 1/11, con la 0.11.1, y l
 - **Diez claves equivocadas en 10 minutos** dejan fuera esa conexión durante media hora.
 - **Si el router no deja abrir el puerto,** la sala lo dice. Entonces, Tailscale, como hasta ahora.
 - **En la misma red y con Tailscale, como siempre,** sin clave. La dirección de Tailscale se llama ahora «Con Tailscale».
+
+### Va más fluido
+- **En combate, cada fotograma cuesta menos:** en el Mac, entre 0,3 y 0,9 milisegundos menos, y más con la cámara lejos.
+- **Los soldados y los zombis que no se ven no se animan.** Al volver a verse, ya han acabado lo que hacían: si se caían, ya están en el suelo; si se levantaban, ya están de pie. El turno enemigo dura lo mismo.
+- **A cambio, cada mapa usa algo más de memoria:** hasta unos 128 MB más en una ciudad grande.
+- **La cámara no cambia:** el campo de visión sigue en 40°.
 
 ### La app
 - **El icono vuelve a ser el autobús sobre la sierra,** en el Mac y en Windows. Las versiones de Unity salían con el icono de Unity.
