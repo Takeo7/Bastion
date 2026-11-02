@@ -275,7 +275,9 @@ namespace Bastion.UI.Strategy
             var v = new RecruitView
             {
                 Title = "Reclutar un soldado",
-                Blurb = "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.",
+                // Where the Armería counts the pistols (a campaign since the 0.11.5), a recruit comes with the knife alone.
+                Blurb = c.Pistols == true ? "Un recluta nuevo: sale con un cuchillo, sin pistola, y con algo de práctica en una o dos habilidades. Llega al momento."
+                    : "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.",
                 Button = $"Reclutar · {Campaign.CostText(price)}",
                 Enabled = why == null,
                 Why = why,
@@ -319,8 +321,10 @@ namespace Bastion.UI.Strategy
             v.Care = Care(c, s);
             foreach (var t in s.Traits ?? new List<string>())
                 if (Quests.Traits.TryGetValue(t, out var def)) v.Traits.Add(new ChipView { Text = def.Name, Tip = def.Description });
-            v.Arms.Add(WeaponPick(c, s, false, isMine && s.Alive));
-            v.Arms.Add(WeaponPick(c, s, true, isMine && s.Alive));
+            v.Arms.Add(WeaponPick(c, s, Hand, isMine && s.Alive));
+            // The pistol in its own place where the Armería counts them (CampaignState.Pistols: Arturo, 01/11 #10).
+            if (c.Pistols == true) v.Arms.Add(WeaponPick(c, s, Side, isMine && s.Alive));
+            v.Arms.Add(WeaponPick(c, s, Belt, isMine && s.Alive));
             // The armour the Taller has made is for everyone (docs/FASE9.md §5); what the next one waits for, on its chip.
             var tier = Progression.ArmorTier(c, s);
             var blocker = s.Alive ? Progression.NextTierBlocker(c, s, "armor") : null;
@@ -348,12 +352,9 @@ namespace Bastion.UI.Strategy
             if (s.Infection != null)
             {
                 var cost = Campaign.TreatCost(c);
-                var proposal = c.Treatment;
                 var partner = Partner;
                 var shared = partner != null && partner.Connected;
-                var mine = proposal != null && proposal.Soldier == s.Id && proposal.Ready[Slot];
-                var theirs = proposal != null && proposal.Soldier == s.Id && partner != null && proposal.Ready[partner.Slot];
-                var other = proposal != null && proposal.Soldier != s.Id ? c.Soldiers.FirstOrDefault(x => x.Id == proposal.Soldier) : null;
+                var (mine, theirs, other) = Treating(c, s);
                 var tooFew = have < cost;
                 var v = new CareView
                 {
@@ -378,7 +379,7 @@ namespace Bastion.UI.Strategy
                 {
                     v.Buttons.Add(shared ? $"Proponer el tratamiento ({cost} ✚)" : $"Tratar ({cost} ✚)");
                     v.Enabled.Add(!tooFew && other == null);
-                    v.Why = tooFew ? $"Hacen falta {cost} ✚ y tenéis {have}." : other != null ? $"Ya hay un tratamiento propuesto para {other.Name}: confirmadlo o rechazadlo antes." : null;
+                    v.Why = tooFew ? $"Hacen falta {cost} ✚ y tenéis {have}." : other;
                 }
                 return v;
             }
@@ -404,14 +405,37 @@ namespace Bastion.UI.Strategy
             if (s == null) return null;
             if (s.Infection != null)
             {
-                var proposal = c.Treatment;
-                var partner = Partner;
-                var mine = proposal != null && proposal.Soldier == s.Id && proposal.Ready[Slot];
-                var theirs = proposal != null && proposal.Soldier == s.Id && partner != null && proposal.Ready[partner.Slot];
-                // Confirmar or Rechazar; Retirar la propuesta; Tratar (or Proponer).
+                var (mine, theirs, _) = Treating(c, s);
+                // A proposal of the room's (since the 0.11.5): Confirmar or Rechazar, a vote; Retirar, withdrawn. Tratar (or
+                // Proponer): the engine proposes it, or does it alone. One saved halfway (c.Treatment): its two keys.
+                var voted = c.Proposal?.Action is TreatAction t && t.Soldier == s.Id;
+                if (voted && theirs) return new VoteCommand { Accept = index == 0 };
+                if (voted && mine) return new WithdrawCommand();
                 return new TreatCommand { Soldier = s.Id, Ready = theirs && !mine ? index == 0 : !mine };
             }
             return s.WoundedDays > 0 && index == 0 ? new MedicateCommand { Soldier = s.Id } : null;
+        }
+
+        /// <summary>
+        /// A bite's treatment for `s`: proposed by this player, by the partner, and what keeps it from being proposed now
+        /// (another proposal waits: the room takes one at a time), or null. The proposal of the room's (TreatAction, since
+        /// Arturo's #8 of 01/11) or one of before saved halfway (c.Treatment, two keys).
+        /// </summary>
+        (bool mine, bool theirs, string other) Treating(CampaignState c, CampaignSoldier s)
+        {
+            var p = c.Proposal;
+            if (p?.Action is TreatAction t && t.Soldier == s.Id) return (p.By == Slot, p.By != Slot, null);
+            var old = c.Treatment;
+            if (old != null && old.Soldier == s.Id)
+            {
+                var partner = Partner;
+                var mine = old.Ready[Slot];
+                return (mine, !mine && partner != null && old.Ready[partner.Slot], null);
+            }
+            // (Alone the engine does it at once, whatever waits for the partner.)
+            if (p != null && Partner?.Connected == true) return (false, false, $"Hay otra propuesta esperando ({p.Text}): que se decida antes.");
+            var other = old != null ? c.Soldiers.FirstOrDefault(x => x.Id == old.Soldier) : null;
+            return (false, false, other != null ? $"Ya hay un tratamiento propuesto para {other.Name}: confirmadlo o rechazadlo antes." : null);
         }
 
         // --------------------------------------------------------------- the arms
@@ -423,11 +447,26 @@ namespace Bastion.UI.Strategy
             return $"{Lore.WeaponLabels.Damage} {damage}" + (p.Melee ? "" : $" · {Lore.WeaponLabels.Reach} {Lore.Reaches[p.Reach].Name.ToLowerInvariant()}");
         }
 
-        /// <summary>A soldier's hand (or belt, `melee`): a weapon of the Armería, or the pistol or the knife (carriedProfile).</summary>
+        /// <summary>The sheet's places for a weapon: the hand, the side (the pistol, where the Armería counts them) and the belt.</summary>
+        const string Hand = "hand", Side = "side", Belt = "belt";
+
+        /// <summary>The Armería's weapon a soldier carries in `place`, if any.</summary>
+        static FoundWeapon WeaponIn(CampaignState c, CampaignSoldier s, string place) =>
+            place == Belt ? Progression.MeleeWeaponOf(c, s) : place == Side ? Progression.PistolOf(c, s) : Progression.FoundWeaponOf(c, s);
+
+        /// <summary>
+        /// A soldier's hand (or belt, `melee`) as it fights (carriedProfile): a weapon of the Armería, or with none in the hand
+        /// the pistol (the Armería's at the side, where they are counted) or, with no pistol either, the knife; at the belt
+        /// the machete or the knife.
+        /// </summary>
         static WeaponProfile Carried(CampaignState c, CampaignSoldier s, bool melee)
         {
             var w = melee ? Progression.MeleeWeaponOf(c, s) : Progression.FoundWeaponOf(c, s);
-            return w != null ? Aim.WeaponProfileOf(w.Kind, w.Condition ?? 100, w.Mods) : Aim.BaseWeaponProfile(melee ? WeaponIds.Knife : WeaponIds.Pistol);
+            if (w != null) return Aim.WeaponProfileOf(w.Kind, w.Condition ?? 100, w.Mods);
+            if (melee) return Aim.BaseWeaponProfile(WeaponIds.Knife);
+            if (c.Pistols != true) return Aim.BaseWeaponProfile(WeaponIds.Pistol);
+            var pistol = Progression.PistolOf(c, s);
+            return pistol != null ? Aim.WeaponProfileOf(pistol.Kind, pistol.Condition ?? 100, pistol.Mods) : Aim.BaseWeaponProfile(WeaponIds.Knife);
         }
 
         /// <summary>A weapon's condition in words (conditionEl): «Estado 64», «Gastada · 22», «Rota».</summary>
@@ -435,16 +474,28 @@ namespace Bastion.UI.Strategy
             condition <= 0 ? "Rota" : condition < Content.WornBelow ? $"Gastada · {Js.Round(condition)}" : $"Estado {Js.Round(condition)}";
 
         /// <summary>
-        /// A soldier's hand or belt as a picker (arms.ts weaponPick; Arturo, 17/10): the Armería's weapons for that place,
-        /// free first, then one's own soldiers' (taking it from them), then the partner's (off), and none first of all.
+        /// A soldier's hand, side or belt as a picker (arms.ts weaponPick; Arturo, 17/10): the Armería's weapons for that
+        /// place, free first, then one's own soldiers' (taking it from them), then the partner's (off), and none first of
+        /// all. Where the Armería counts the pistols (Arturo, 01/11 #10) the side has its own, and with nothing in the hand
+        /// nor at the side the soldier has the knife alone.
         /// </summary>
-        PickView WeaponPick(CampaignState c, CampaignSoldier s, bool melee, bool editable)
+        PickView WeaponPick(CampaignState c, CampaignSoldier s, string place, bool editable)
         {
-            var current = melee ? Progression.MeleeWeaponOf(c, s) : Progression.FoundWeaponOf(c, s);
-            var none = melee ? Content.Weapons[WeaponIds.Knife].Name : Content.Weapons[WeaponIds.Pistol].Name;
-            var v = new PickView { Id = melee ? "belt" : "hand", Label = melee ? "Cinto" : "Mano", Value = current != null ? Content.FoundWeapons[current.Kind].Name : none, Editable = editable };
-            v.Lines.Add(WeaponLine(Carried(c, s, melee)));
-            if (!melee) v.Lines.Add(current != null ? "y la pistola al cinto" : "sin arma: la pistola");
+            var melee = place == Belt;
+            var side = place == Side;
+            var counted = c.Pistols == true;
+            var current = WeaponIn(c, s, place);
+            var pistol = counted ? Progression.PistolOf(c, s) : null;
+            var slot = melee ? FoundWeaponSlots.Melee : side ? FoundWeaponSlots.Sidearm : FoundWeaponSlots.Primary;
+            // What is there with nothing of the Armería's: the knife at the belt; the pistol in the hand (counted: the one at
+            // the side, or nothing); nothing at the side.
+            var none = melee ? Content.Weapons[WeaponIds.Knife].Name : side ? "Nada" : !counted || pistol != null ? Content.Weapons[WeaponIds.Pistol].Name : "Nada";
+            var v = new PickView { Id = place, Label = melee ? "Cinto" : side ? "Costado" : "Mano", Value = current != null ? Content.FoundWeapons[current.Kind].Name : none, Editable = editable };
+            if (side) v.Lines.Add(current != null ? WeaponLine(Aim.WeaponProfileOf(current.Kind, current.Condition ?? 100, current.Mods)) : "Sin pistola");
+            else v.Lines.Add(WeaponLine(Carried(c, s, melee)));
+            if (place == Hand && !counted) v.Lines.Add(current != null ? "y la pistola al costado" : "sin arma: la pistola");
+            if (place == Hand && counted) v.Lines.Add(current != null ? (pistol != null ? "y la pistola al costado" : "sin pistola al costado") : pistol != null ? "sin arma en la mano: la pistola" : "sin arma de fuego: solo el cuchillo");
+            if (side && current != null) v.Lines.Add(Progression.FoundWeaponOf(c, s) != null ? "al costado, con su munición" : "su arma, sin otra en la mano");
             if (current != null && !melee)
             {
                 var condition = current.Condition ?? 100;
@@ -453,19 +504,21 @@ namespace Bastion.UI.Strategy
                 foreach (var m in current.Mods ?? new List<string>()) v.Tags.Add(Content.WeaponMods[m].Name);
             }
             if (!editable) return v;
-            // Each against what it carries now, in green and red (weaponDiff); the pistol or the knife too, once there is a weapon to leave.
-            var now = Carried(c, s, melee);
-            var bare = melee ? WeaponIds.Knife : WeaponIds.Pistol;
+            // Each against what it carries now, in green and red (weaponDiff); the pistol or the knife too, once there is a
+            // weapon to leave (the side's against its pistol, or none).
+            var now = side ? (current != null ? Aim.WeaponProfileOf(current.Kind, current.Condition ?? 100, current.Mods) : null) : Carried(c, s, melee);
+            var bare = melee || (counted && pistol == null) ? WeaponIds.Knife : WeaponIds.Pistol;
             v.Options.Add(new PickOptionView
             {
-                Id = "none", Name = melee ? "Sin arma: el cuchillo" : "Sin arma: la pistola", Icon = WeaponIcon(bare),
+                Id = "none", Name = melee ? "Sin arma: el cuchillo" : side ? "Sin pistola" : bare == WeaponIds.Knife ? "Sin arma de fuego: el cuchillo" : "Sin arma: la pistola",
+                Icon = side ? null : WeaponIcon(bare),
                 Note = current != null ? $"{Content.FoundWeapons[current.Kind].Name} vuelve a la Armería" : null, Current = current == null,
-                Diff = current != null ? Diff(Aim.BaseWeaponProfile(bare), now) : new List<ChipView>(),
+                Diff = current != null && !side ? Diff(Aim.BaseWeaponProfile(bare), now) : new List<ChipView>(),
             });
             CampaignSoldier HolderOf(FoundWeapon w) => w.Holder != null ? c.Soldiers.FirstOrDefault(x => x.Id == w.Holder) : null;
             bool Theirs(FoundWeapon w) => HolderOf(w) is CampaignSoldier h && !Content.CommandsFor(Slot, h.Owner, Connected);
             int Rank(FoundWeapon w) => w.Holder == null ? 0 : Theirs(w) ? 2 : 1;
-            var options = (c.FoundWeapons ?? new List<FoundWeapon>()).Where(w => w.Id != current?.Id && (Content.FoundWeapons[w.Kind].Slot == "melee") == melee).OrderBy(Rank).ToList();
+            var options = (c.FoundWeapons ?? new List<FoundWeapon>()).Where(w => w.Id != current?.Id && Content.FoundWeapons[w.Kind].Slot == slot).OrderBy(Rank).ToList();
             foreach (var w in options)
             {
                 var holder = HolderOf(w);
@@ -475,10 +528,11 @@ namespace Bastion.UI.Strategy
                 {
                     Id = w.Id, Name = Content.FoundWeapons[w.Kind].Name, Icon = WeaponIcon(Content.FoundWeapons[w.Kind].Weapon), Note = note, Enabled = !theirs,
                     Tags = WearTags(w), Tip = theirs ? note : null,
-                    Diff = theirs ? new List<ChipView>() : Diff(Aim.WeaponProfileOf(w.Kind, w.Condition ?? 100, w.Mods), now),
+                    // To one with the knife alone, a gun is a first one: its figures against a knife's say nothing useful.
+                    Diff = theirs || now == null ? new List<ChipView>() : place == Hand && counted && current == null && pistol == null ? new List<ChipView> { new ChipView { Text = "Su primera arma de fuego", Tone = "good" } } : Diff(Aim.WeaponProfileOf(w.Kind, w.Condition ?? 100, w.Mods), now),
                 });
             }
-            if (options.Count == 0) v.Empty = melee ? "No hay armas de cuerpo a cuerpo en la Armería." : "No hay armas en la Armería.";
+            if (options.Count == 0) v.Empty = melee ? "No hay armas de cuerpo a cuerpo en la Armería." : side ? "No hay pistolas en la Armería: se hacen en el Taller." : "No hay armas en la Armería.";
             return v;
         }
 

@@ -204,7 +204,7 @@ namespace Bastion.Client
         {
             int tier = entry.Gear?.Weapon ?? 1;
             var arms = entry.Gear?.Arms;
-            return arms != null ? arms.Primary != null ? Anims.FoundModel(arms.Primary, tier) : "pistol" : Anims.UnitWeapon(entry.Template, tier);
+            return arms != null ? arms.Primary != null ? Anims.FoundModel(arms.Primary, tier) : UnitViews.CarriesPistol(arms) ? "pistol" : null : Anims.UnitWeapon(entry.Template, tier);
         }
 
         void DropCampFigure(ICampFigure f)

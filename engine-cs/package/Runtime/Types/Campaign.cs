@@ -440,6 +440,16 @@ namespace Bastion.Engine
         public string Item { get; set; } = ""; // ItemIds
     }
 
+    /// <summary>
+    /// Treating a bite (TreatCommand), paid in medicines: a proposal like the rest since 1/11 (Arturo: «no le llega la
+    /// propuesta al otro»), with the room's clock; CampaignState.Treatment stays only for campaigns saved halfway through one.
+    /// </summary>
+    public sealed class TreatAction : ProposalAction
+    {
+        public override string Type => "treat";
+        public string Soldier { get; set; } = "";
+    }
+
     /// <summary>The base of before (campaigns begun before the 0.7.2): clearing a plot.</summary>
     public sealed class ClearAction : ProposalAction
     {
@@ -651,6 +661,11 @@ namespace Bastion.Engine
         public List<string>? Crafted { get; set; } // CraftIds
         /// <summary>Good weapons found, kept in the Armería: each for one soldier at most.</summary>
         public List<FoundWeapon>? FoundWeapons { get; set; }
+        /// <summary>
+        /// The pistols are the Armería's, counted (Arturo, 1/11: «que no empiecen con pistola, para que el progreso sea más
+        /// lento»): true from campaigns begun then on; absent, every soldier carries one, as before.
+        /// </summary>
+        public bool? Pistols { get; set; }
         /// <summary>Loose improvements for the weapons, waiting in the Armería to be mounted (docs/FASE9.md §5).</summary>
         public Dictionary<string, int>? WeaponMods { get; set; } // WeaponModIds → copies (Partial<Record>)
         /// <summary>Zones under the Marea when it was last looked at (syncMarea), for the alerts; missing before version 14.</summary>

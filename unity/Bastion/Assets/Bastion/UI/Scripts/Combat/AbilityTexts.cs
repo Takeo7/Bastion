@@ -46,7 +46,8 @@ namespace Bastion.UI.Combat
         public static readonly Menu[] Menus =
         {
             new Menu { Id = "menu:watch", Name = "Vigilancia", Icon = AbilityIds.Overwatch, Members = new[] { AbilityIds.Overwatch, AbilityIds.OverwatchMelee }, Shows = (v, crate) => true },
-            new Menu { Id = "menu:throw", Name = "Lanzar", Icon = AbilityIds.Stone, Members = new[] { AbilityIds.Stone, AbilityIds.Grenade, AbilityIds.Smoke, AbilityIds.Flashbang }, Shows = (v, crate) => true },
+            // The molotov before the grenades, as it comes before them (Arturo, 01/11 #10).
+            new Menu { Id = "menu:throw", Name = "Lanzar", Icon = AbilityIds.Stone, Members = new[] { AbilityIds.Stone, AbilityIds.Molotov, AbilityIds.Grenade, AbilityIds.Smoke, AbilityIds.Flashbang }, Shows = (v, crate) => true },
             new Menu { Id = "menu:investigate", Name = "Investigar", Icon = AbilityIds.SearchRoom, Members = new[] { AbilityIds.SearchRoom, AbilityIds.Search }, Shows = (v, crate) => v.Id == AbilityIds.SearchRoom || crate },
         };
 
@@ -58,6 +59,7 @@ namespace Bastion.UI.Combat
             [AbilityIds.Overwatch] = "A distancia",
             [AbilityIds.OverwatchMelee] = "Cuerpo a cuerpo",
             [AbilityIds.Stone] = "Piedra",
+            [AbilityIds.Molotov] = "Molotov",
             [AbilityIds.Grenade] = "Granada",
             [AbilityIds.Smoke] = "Humo",
             [AbilityIds.Flashbang] = "Aturdidora",
@@ -136,6 +138,8 @@ namespace Bastion.UI.Combat
         /// <summary>The damage alone, for the cards' figures (#18): «4–6 por disparo · crítico +2».</summary>
         public static string DamageValue(GameState s, Unit u, string id)
         {
+            // A molotov's fire burns as the map's does (Arturo, 01/11 #10): a point as it falls, on stepping in, and at a turn's end there.
+            if (id == AbilityIds.Molotov) return $"{Content.Flames.Damage} al caer, al entrar y al acabar el turno dentro";
             // Vigilancia fires the rifle at whoever moves: a reaction shot, which only crits with the talent.
             var watch = Watch(id);
             var d = Rules.AbilityDamage(s, u, watch ? AbilityIds.Shoot : id);

@@ -9,7 +9,7 @@ namespace Bastion.UI.Hud
     /// The icons that were our own drawings on the web, not Synty's (icons.ts: 24 × 24, a line of 2, round ends): drawn
     /// with Painter2D in the element's tint (USS `-unity-background-image-tint-color`, as the sprites are tinted), so
     /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, the base's axe, the
-    /// Coro's wave, the missions' places and their weather (new in Unity: Synty has neither), «Terminar turno».
+    /// Coro's wave, the missions' places and their weather (new in Unity: Synty has neither), «Terminar turno», the molotov.
     /// </summary>
     public sealed class LineIcon : VisualElement
     {
@@ -162,6 +162,25 @@ namespace Bastion.UI.Hud
                 pen.Dot(17, 18.2f, 1.15f);
                 pen.Line(9, 21.8f, 19.5f, 21.8f);
                 pen.Dot(5.5f, 21.8f, 1.15f);
+            },
+            // The molotov on the bar (Arturo, 01/11 #10; Synty's icons have none): a bottle, round-shouldered, its rag lit at the
+            // neck, filled like the icons beside it.
+            ["molotov"] = pen =>
+            {
+                pen.Begin(8.5f, 22);
+                pen.To(8.5f, 13.5f);
+                pen.Curve(8.5f, 11.6f, 10.4f, 10.8f, 10.8f, 9.6f);
+                pen.To(10.8f, 7.2f);
+                pen.To(13.2f, 7.2f);
+                pen.To(13.2f, 9.6f);
+                pen.Curve(13.6f, 10.8f, 15.5f, 11.6f, 15.5f, 13.5f);
+                pen.To(15.5f, 22);
+                pen.Fill();
+                pen.Begin(12, 6.2f);
+                pen.Curve(9.4f, 5.4f, 9.6f, 2.6f, 12.6f, 1);
+                pen.Curve(12.1f, 2.9f, 15, 3.2f, 14.2f, 5.4f);
+                pen.Curve(13.8f, 6, 12.9f, 6.3f, 12, 6.2f);
+                pen.Fill();
             },
             // «Terminar turno» on the bar (UI-COMBATE UI-04): an arrow against a bar, filled like Synty's icons beside it.
             ["endTurn"] = pen =>

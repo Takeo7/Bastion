@@ -15,7 +15,7 @@ Antes de nada, lee [docs/UNITY.md](docs/UNITY.md) (estado del port, lo que falta
 - **Repositorio:** `Takeo7/Bastion` es siempre privado, porque lleva modelos de Synty convertidos y la licencia no deja publicarlos. Nadie cambia su visibilidad.
 - **Puertos de los jugadores:** 3000, 3001 y 5173 nunca se usan ni se paran. Para probar, cada uno usa su puerto (tabla en EQUIPO.md).
 - **Arte:**
-  - solo Synty POLYGON y Sidekick (con sus animaciones e interfaces), animaciones de Mixamo (Arturo, 21/10: las de armas, que Synty no tiene), Kenney (CC0) o lo hecho por nosotros; nada de Synty SIMPLE ni MINI, que son de otro estilo; tipografías OFL, como mucho dos familias;
+  - solo Synty POLYGON y Sidekick (con sus animaciones e interfaces), animaciones de Mixamo (Arturo, 21/10: las de armas, que Synty no tiene), Kenney (CC0) o lo hecho por nosotros; nada de Synty SIMPLE ni MINI, que son de otro estilo, salvo los animales de SIMPLE - Forest Animals y el gato de SIMPLE - Cats (Arturo, 1/11: ciervos, jabalíes, conejos y gatos, que POLYGON no tiene); tipografías OFL, como mucho dos familias;
   - los originales de Synty viven en `assets-src/`, que no se sube; todos los paquetes están en el disco externo, en `/Volumes/4T_White/50_INBOX/Synty`;
   - la conversión (`packages/client/tools/synty/convert.ts`, con Blender) se lanza siempre con ids explícitos, nunca entera.
 - **Opciones rechazadas:** no se vuelven a proponer (vóxel, Expediente, Holotáctico, Viñeta, CRT…). Se construye sobre lo elegido.

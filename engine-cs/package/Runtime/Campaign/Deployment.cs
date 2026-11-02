@@ -12,11 +12,14 @@ namespace Bastion.Engine
     {
         // ------------------------------------------------------------- deployment
 
-        /// <summary>A level reached: said, the weapons it brings to the Armería (docs/FASE8.md §A), and the story it may open.</summary>
+        /// <summary>
+        /// A level reached: said, the weapons it brings to the Armería (docs/FASE8.md §A; none where the pistols are counted,
+        /// Arturo 1/11: weapons are only found or made), and the story it may open.
+        /// </summary>
         private static void ReachedLevel(CampaignState c, int level, Rng rng)
         {
             Log(c, $"El Bastión ya es {Lore.BastionLevelA(level)}.", LogTones.Good);
-            var arms = Progression.LevelArms.TryGetValue(level, out var brought) ? brought : new string[0];
+            var arms = c.Pistols != true && Progression.LevelArms.TryGetValue(level, out var brought) ? brought : new string[0];
             foreach (var kind in arms) (c.FoundWeapons ??= new List<FoundWeapon>()).Add(new FoundWeapon { Id = NewId(c, "w"), Kind = kind, Holder = null });
             if (arms.Count > 0) Log(c, $"A la Armería {(arms.Count == 1 ? "llega" : "llegan")} {ListOf(arms.Select((k) => Content.FoundWeapons[k].Find).ToList())}.", LogTones.Good);
             RefreshNarrative(c, rng);
@@ -90,7 +93,7 @@ namespace Bastion.Engine
             foreach (var u in mission.Units.Where((x) => Looting.BringsLootHome(mission, x)))
             {
                 foreach (var l in u.Backpack ?? new List<Loot>()) if (!string.IsNullOrEmpty(l.WeaponId)) cameHome.Add(l.WeaponId!);
-                foreach (var id in new[] { u.Arms?.PrimaryId, u.Arms?.MeleeId }) if (!string.IsNullOrEmpty(id)) cameHome.Add(id!);
+                foreach (var id in new[] { u.Arms?.PrimaryId, u.Arms?.MeleeId, u.Arms?.PistolId }) if (!string.IsNullOrEmpty(id)) cameHome.Add(id!);
             }
             foreach (var u in mission.Units)
             {
@@ -126,11 +129,14 @@ namespace Bastion.Engine
                 }
                 if (u.Arms != null)
                 {
-                    foreach (var primaryHand in new[] { true, false })
+                    // The hand, the belt, and the pistol at the side where the pistols are counted (Arturo, 1/11).
+                    var hands = c.Pistols == true ? new[] { FoundWeaponSlots.Primary, FoundWeaponSlots.Melee, FoundWeaponSlots.Sidearm } : new[] { FoundWeaponSlots.Primary, FoundWeaponSlots.Melee };
+                    foreach (var hand in hands)
                     {
-                        var kind = primaryHand ? u.Arms.Primary : u.Arms.Melee;
-                        var id = primaryHand ? u.Arms.PrimaryId : u.Arms.MeleeId;
-                        var before = primaryHand ? Progression.FoundWeaponOf(c, s) : Progression.MeleeWeaponOf(c, s);
+                        var primaryHand = hand == FoundWeaponSlots.Primary;
+                        var kind = primaryHand ? u.Arms.Primary : hand == FoundWeaponSlots.Melee ? u.Arms.Melee : u.Arms.Pistol == true ? FoundWeaponIds.Pistol : null;
+                        var id = primaryHand ? u.Arms.PrimaryId : hand == FoundWeaponSlots.Melee ? u.Arms.MeleeId : u.Arms.PistolId;
+                        var before = primaryHand ? Progression.FoundWeaponOf(c, s) : hand == FoundWeaponSlots.Melee ? Progression.MeleeWeaponOf(c, s) : Progression.PistolOf(c, s);
                         if (before != null && before.Id != id)
                         {
                             before.Holder = null;

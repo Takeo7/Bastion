@@ -662,4 +662,19 @@ namespace Bastion.Engine
         public override string T => "lightOff";
         public string Id { get; set; } = "";
     }
+
+    /// <summary>A molotov sets the ground on fire (Arturo, 1/11): GameState.fires gets it, for its turns.</summary>
+    public sealed class FireLitEvent : GameEvent
+    {
+        public override string T => "fireLit";
+        public string Unit { get; set; } = "";
+        public Fire Fire { get; set; } = new Fire();
+    }
+
+    /// <summary>A molotov's fire burns out, at the end of the enemy's turn as its last one goes.</summary>
+    public sealed class FireOutEvent : GameEvent
+    {
+        public override string T => "fireOut";
+        public string Id { get; set; } = "";
+    }
 }

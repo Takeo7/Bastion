@@ -139,6 +139,10 @@ namespace Bastion.Engine
         public bool? MedicineCures { get; set; }
         /// <summary>The campaign's Bastion has a Cuarentena (#13): false, the bitten can't board La Lata.</summary>
         public bool? Quarantine { get; set; }
+        /// <summary>The campaign counts its pistols (CampaignState.Pistols; Arturo, 1/11): MissionState.Pistols.</summary>
+        public bool? Pistols { get; set; }
+        /// <summary>The campaign's first mission without pistols: a police car with two to search (MissionState.PoliceCar).</summary>
+        public bool? PoliceCar { get; set; }
         /// <summary>Still winter in the campaign (campaign.ts wintry): the map under snow.</summary>
         public bool? Snow { get; set; }
         /// <summary>Rain or snow falling (Weathers; Campaign.OfferWeather); null, clear.</summary>
@@ -185,6 +189,8 @@ namespace Bastion.Engine
                 Mods = a.Mods != null ? new List<string>(a.Mods) : null,
                 Melee = a.Melee,
                 MeleeId = a.MeleeId,
+                Pistol = a.Pistol,
+                PistolId = a.PistolId,
             };
         }
 
@@ -202,13 +208,14 @@ namespace Bastion.Engine
             var arms = CopyArms(marms);
             var withArms = Events.CloneUnit(u);
             withArms.Arms = arms;
-            var ammo = Content.ClipOf(withArms, AbilityIds.Shoot);
+            // Without a gun at all (Arturo, 1/11: no pistol, nothing in the hand), nothing to load.
+            var ammo = Content.HasGun(withArms) ? Content.ClipOf(withArms, AbilityIds.Shoot) : 0;
             var primary = !string.IsNullOrEmpty(arms.Primary);
             return (unit) =>
             {
                 unit.Arms = arms;
                 unit.Ammo = ammo;
-                if (primary) unit.PistolAmmo = Content.PistolClip;
+                if (primary && arms.Pistol != false) unit.PistolAmmo = Content.PistolClip;
                 unit.Mags = mags ?? 0;
             };
         }
@@ -572,21 +579,24 @@ namespace Bastion.Engine
         private const int SiegeGroup = 5;
 
         /// <summary>
-        /// A siege's waves (docs/FASE12.md, hito 1): five, more each time, each with its
-        /// own: a Corredor, a Hinchado, an Acorazado, and a Chillón with the last. They
-        /// overlap (Ana, 23/10: «que lleguen de todos lados y a la vez… no ha sido un
-        /// asedio, ha sido esperar a que vengan»): one at the end of each of the first
-        /// enemy turns, with a breath between the third and the fourth, and each one's
-        /// groups spread over every side the siege comes by at once.
+        /// A siege's waves (docs/FASE12.md, hito 1): one at the end of every enemy turn
+        /// from the first to the eighth, with no turn empty (Arturo, 1/11: «tienen que
+        /// aparecer cada turno zombies»; before, five, with a breath after the third and
+        /// nothing after the sixth), more as it goes on, with the same specials: a Corredor,
+        /// a Hinchado, an Acorazado, and a Corredor and a Chillón with the last. Each one's
+        /// groups spread over every side the siege comes by at once (Ana, 23/10: «que
+        /// lleguen de todos lados y a la vez»).
         /// </summary>
         public static List<Reinforcement> SiegeWaves(int difficulty, Rng rng, SiegePlan? plan = null)
         {
             var d = Math.Max(1, Math.Min(4, difficulty));
             List<string> Zombies(int n) => Enumerable.Repeat(TemplateIds.Zombie, n).ToList();
             // A campaign's siege brings its own count, the same five specials and the zombies for the rest, spread over
-            // the five waves (more each time; what the rounding leaves, to the waves it shortchanged most).
-            var share = new[] { 0.14, 0.18, 0.2, 0.22, 0.26 };
-            var total = plan != null ? Math.Max(share.Length, plan.Count - 5) : 0;
+            // the eight waves (more as it goes on; what the rounding leaves, to the waves it shortchanged most). One too small
+            // for them all, the first (Campaign.SiegeOpening), is plain zombies, one a turn at least.
+            var share = new[] { 0.08, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.17 };
+            var plain = plan != null && plan.Count < share.Length + 5;
+            var total = plan != null ? Math.Max(share.Length, plain ? plan.Count : plan.Count - 5) : 0;
             var counts = share.Select((s) => Math.Max(1, (int)Math.Floor(total * s))).ToArray();
             var order = share.Select((s, k) => k).ToList();
             Js.Sort(order, (a, b) =>
@@ -600,13 +610,17 @@ namespace Bastion.Engine
                 counts[k]++;
             }
             int Many(int k, int test) => plan != null ? counts[k] : test;
+            IEnumerable<string> With(params string[] specials) => plain ? new string[0] : specials;
             var waves = new List<(int Turn, List<string> Units)>
             {
-                (1, Zombies(Many(0, 3 + d))),
-                (2, Zombies(Many(1, 4 + d)).Concat(new[] { TemplateIds.Xenoid }).ToList()),
-                (3, Zombies(Many(2, 4 + d)).Concat(new[] { TemplateIds.Bloater }).ToList()),
-                (5, Zombies(Many(3, 5 + d)).Concat(new[] { TemplateIds.Mec }).ToList()),
-                (6, Zombies(Many(4, 5 + d)).Concat(new[] { TemplateIds.Xenoid, TemplateIds.Sectoid }).ToList()),
+                (1, Zombies(Many(0, 1 + d))),
+                (2, Zombies(Many(1, 2 + d)).Concat(With(TemplateIds.Xenoid)).ToList()),
+                (3, Zombies(Many(2, 2 + d)).Concat(With(TemplateIds.Bloater)).ToList()),
+                (4, Zombies(Many(3, 2 + d))),
+                (5, Zombies(Many(4, 3 + d)).Concat(With(TemplateIds.Mec)).ToList()),
+                (6, Zombies(Many(5, 3 + d))),
+                (7, Zombies(Many(6, 3 + d))),
+                (8, Zombies(Many(7, 3 + d)).Concat(With(TemplateIds.Xenoid, TemplateIds.Sectoid)).ToList()),
             };
             // By the sides the plan says (what the Sala de radio hears), or any of the four.
             var sides = plan != null && plan.Sides.Count > 0 ? plan.Sides : new List<int> { 0, 1, 2, 3 };
@@ -958,6 +972,7 @@ namespace Bastion.Engine
                 MedicineCures = opts.MedicineCures == true ? true : (bool?)null,
                 Alarm = !string.IsNullOrEmpty(opts.Alarm) ? opts.Alarm : null,
                 Quarantine = opts.Quarantine,
+                Pistols = opts.Pistols == true ? true : (bool?)null,
                 Reinforcements = reinforcements,
                 Difficulty = difficulty,
                 // The dead keep coming by the edges on every mission you leave by bus (playtest 2026-10-15, #11); in a Limpieza,
@@ -1051,9 +1066,49 @@ namespace Bastion.Engine
                 var at = Grid.PosOf(state, f.Source);
                 state.Lights.Add(new Light { Id = f.Id, Tile = at, Radius = Content.Flames.Light, Tiles = Los.LightTiles(state, at, Content.Flames.Light, Content.Flames.LightHeight) });
             }
+            if (opts.PoliceCar == true) PlacePoliceCar(state);
             // Paused at the start, while the briefing is read: the space bar (or «Empezar») sets the clock going.
             if (opts.Realtime == true) state.Realtime = new Realtime { Clock = 0, Paused = true, Units = new Dictionary<string, RtUnit>() };
             return state;
+        }
+
+        /// <summary>
+        /// The police car of the campaign's first mission (Arturo, 1/11: nobody starts with a pistol, two in a police car):
+        /// a whole car on the ground, not burning, with a tile to search it from, the one nearest 9 tiles from the squad
+        /// (5 to 16; any other car if none). With no car at all, the two pistols lie at the feet of the first two soldiers.
+        /// </summary>
+        private static void PlacePoliceCar(GameState s)
+        {
+            var squad = s.Units.Where((u) => u.Team == Teams.Xcom && u.Automaton == null).ToList();
+            if (squad.Count == 0) return;
+            double cx = squad.Average((u) => u.Pos.X), cy = squad.Average((u) => u.Pos.Y);
+            var burning = new HashSet<int>((s.Fires ?? new List<Fire>()).SelectMany((f) => f.Tiles.Append(f.Source)));
+            bool Searchable(int i)
+            {
+                int x = i % s.Width, y = i / s.Width;
+                return Grid.Dirs4.Any((d) => Grid.InBounds(s, x + d.X, y + d.Y) && Grid.IsWalkable(s.Tiles[(y + d.Y) * s.Width + x + d.X]));
+            }
+            // A car is its nose (CarFront) and the parts behind it (Decor.ObjectAt): the boot, the farthest of them.
+            var cars = new List<(int Front, int Rear, double Far)>();
+            for (var i = 0; i < (s.Decor?.Count ?? 0); i++)
+            {
+                var look = Decor.DecorOf(s.Decor![i]);
+                if (look == null || look.Kind != DecorKinds.CarFront) continue;
+                var car = Decor.ObjectAt(s.Decor, s.Width, i);
+                if (car == null || car.Tiles.Count < 2) continue;
+                var rear = car.Tiles.OrderByDescending((j) => Js.Hypot(j % s.Width - i % s.Width, j / s.Width - i / s.Width)).First();
+                if (car.Tiles.Any(burning.Contains) || !Searchable(i) || !Searchable(rear)) continue;
+                cars.Add((i, rear, Js.Hypot(i % s.Width - cx, i / s.Width - cy)));
+            }
+            var near = cars.Where((c) => c.Far >= 5 && c.Far <= 16).ToList();
+            var pick = (near.Count > 0 ? near : cars).OrderBy((c) => Math.Abs(c.Far - 9)).ThenBy((c) => c.Front).Select((c) => ((int, int)?)(c.Front, c.Rear)).FirstOrDefault();
+            if (pick != null)
+            {
+                s.Mission.PoliceCar = new List<int> { pick.Value.Item1, pick.Value.Item2 };
+                return;
+            }
+            s.Dropped = Enumerable.Range(1, 2).Select((n) => new DroppedLoot { Id = $"l{n}", Pos = Engine.Events.CopyPos(squad[(n - 1) % squad.Count].Pos), Loot = new Loot { Weapon = FoundWeaponIds.Pistol } }).ToList();
+            s.DroppedCount = 2;
         }
 
         private static Appearance CopyAppearance(Appearance a)

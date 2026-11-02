@@ -88,6 +88,8 @@ namespace Bastion.Engine
         public int Source { get; set; }
         /// <summary>The ground on fire, tiles one can step on, by tile index (on the ground).</summary>
         public List<int> Tiles { get; set; } = new List<int>();
+        /// <summary>The squad's turns it still burns, a molotov's (Arturo, 1/11); absent, the map's own, for ever.</summary>
+        public int? Turns { get; set; }
     }
 
     /// <summary>A smoke cloud: units inside are harder to hit.</summary>
@@ -178,6 +180,13 @@ namespace Bastion.Engine
         public bool? MedicineCures { get; set; }
         /// <summary>The campaign's Bastion has a Cuarentena (playtest 2026-10-15, #13); false, the bitten can't board La Lata. Missing (a skirmish, older saves): no rule.</summary>
         public bool? Quarantine { get; set; }
+        /// <summary>The campaign counts its pistols (CampaignState.Pistols; Arturo, 1/11): searches turn them up too.</summary>
+        public bool? Pistols { get; set; }
+        /// <summary>
+        /// The campaign's first mission without a pistol in the squad (Arturo, 1/11): a police car with one in the front and
+        /// one in the boot, its two tiles by tile index (on the ground), searched as a box is (Looting.PoliceCar).
+        /// </summary>
+        public List<int>? PoliceCar { get; set; }
         public List<Reinforcement> Reinforcements { get; set; } = new List<Reinforcement>();
         /// <summary>1–4, for the loot tables (missing in missions saved before searching: 2).</summary>
         public int? Difficulty { get; set; }

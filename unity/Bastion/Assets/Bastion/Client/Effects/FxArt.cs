@@ -36,5 +36,7 @@ namespace Bastion.Client.Effects
         public GameObject fireBig;
         public GameObject embers;
         public GameObject smoke;
+        /// <summary>A molotov's bottle (Arturo, 1/11: thrown as a grenade, its pool of petrol burning): Apocalypse's, its rag lit by a small fire (Fx.Molotov).</summary>
+        public GameObject molotov;
     }
 }

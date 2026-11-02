@@ -280,6 +280,60 @@ Los muros de los edificios son las piezas de Synty, como en la 0.10.1:
   - `MapLab.Normales` sobre todos los goldens: 0 vértices sin normal.
   - Para encontrarlas: `EdificiosLab.Tiendas` acepta mapas generados (`city:11:elimination:industrial`) y `BASTION_TIPO='*'`; `MapLab` acepta el sitio en `BASTION_GENERAR` (`city,11,elimination,industrial`).
   - Capturas en `.dev-snapshots/arte/unity/edificios/naves-01-11/`.
+- **Los animales (notas #3 y #7 de Arturo del 1/11, para la 0.11.5: [PRUEBA-2026-11-01-ARTURO.md](PRUEBA-2026-11-01-ARTURO.md)).**
+  - **#3, los perros no se animaban.** Los prefabs del Dog Pack apuntan a un controlador (GUID `1edb0168…`) que no está en el proyecto. El del paquete (`Animation_Dog.controller`) apunta a 18 clips que tampoco están, entre ellos los de andar, correr y estar quieto: el paquete se importó con GUID nuevos y esas referencias quedaron colgando. Así que perros, lobo, zorro y coyote estaban en su pose de modelo, también en el laboratorio, donde al deslizarse no se notaba. Se vio con una sonda en la escena del combate en modo de juego (`BASTION_SONDA_FAUNA=1`, `Fauna.AnimatorReport`): «controller none».
+  - Ahora llevan un controlador nuestro, `Resources/Animales.controller`, hecho por `FaunaMake` con los clips del paquete que sí están. Al estar en Resources, entra en la app.
+    - Quieto, andar y correr por `Movement_f` (0, 0,5 y 1).
+    - De pie, de vez en cuando un gesto (`Accion` con `Gesto`): olfatear, mover la cola, sacudirse, bostezar, escarbar (el zorro) o aullar (el lobo). Termina y vuelve a estar de pie, o vuelve al momento si se mueve.
+    - Sentarse o tumbarse un rato (`Accion` 7 y 8). Mientras está abajo, o bajando o subiendo, no anda (estados con la etiqueta `Suelo`), así que al asustarse se levanta y luego corre.
+    - Qué hace cada uno al pararse lo elige `Fauna.Choose`, con su azar.
+  - **#7, más variedad y menos en la base.**
+    - Los perros, solo en pueblos y ciudades (tres).
+    - En el campo y en las instalaciones, tres del lobo y el zorro del Dog Pack, en claros (sin coyote: no los hay en Europa, Lore).
+    - En la base y su asedio (`GameState.base`), uno o dos, solo en el pinar: algún pino a dos casillas, ninguno pegado (para que las copas no los tapen del todo) y a tres casillas del borde. Sin cuervos en sus tejados. Antes, en `hoy-ola3`, salían 1 perro, 2 animales en el claro y 6 cuervos.
+  - **Los de SIMPLE (Arturo dijo sí el 1/11: el ciervo, el venado, el jabalí y el conejo de SIMPLE - Forest Animals; ningún otro SIMPLE, CLAUDE.md).**
+    - Importados con `importar-synty.sh` en `Assets/Synty/SimpleForestAnimal` (su carpeta es `Assets/SimpleForestAnimal`: `upkg-extract.py --move`), sin sus otros animales.
+    - Llevan sus controladores, que sí encuentran sus clips (`Speed_f` mezcla quieto, andar y correr; `Eat_b` come), y nuestro material (`Resources/AnimalesSimple.mat`, URP Lit con su textura, hecho por `FaunaMake`), porque el suyo es el Standard de Unity sin URP y saldría rosa. Se escalan a su altura: ciervo 1,75 m, venado 1,4 m, jabalí 0,85 m y conejo 0,55 m (tamaño de liebre: a 0,4 m las matas de hierba lo tapaban desde la cámara del juego).
+    - En el campo y las instalaciones, en claros: dos de lobo o zorro, un ciervo con un venado al lado, un jabalí y dos conejos (`Fauna.Populate`, cada uno separado de los que ya ha puesto). En la base, uno o dos de cualquiera, en el pinar.
+    - Comen tres veces de cada cinco que se paran. El conejo anda despacio, a saltos (su clip), y huye a 12 casillas y a 7 m/s; ciervo y venado, a 10 casillas y 8,5 m/s; el jabalí, a 7 y 6,5 (`Fauna.Grazing`).
+    - El catálogo del mapa (`MapCatalogMake`) los lleva, y ahora también el lobo, que no se había añadido al cambiar `Fauna.Wild`.
+    - Laboratorio: `AnimalesLab.Conejo` y `Ciervo` (`BASTION_RAZA`), con `BASTION_EN=x,y` para ponerlo donde la cámara lo vea, `BASTION_SEGUIR=1` para seguirlo y `BASTION_MIRA`.
+  - **Ciervos y conejos.** No los hay ni en las fuentes ni en los paquetes de Unity de POLYGON. Los conejos, zorros y gatos de Fantasy Village (`AnimalCharacters`) son aldeanos que andan a dos patas. SIMPLE - Forest Animals tiene ciervo y cierva, alce, conejo, jabalí, oso, mapache, mofeta y lobo.
+    - Tira de comparación: `AnimalesLab.Comparar` pone en fila los del Dog Pack y los de SIMPLE, estos traídos un momento a `Assets/Synty/_PruebaSimple` (fuera de git; ya quitada) y llevados a su tamaño real. La de la cierva 01 tiene una mancha roja de su paleta; se usó la 02.
+    - Los de SIMPLE son más cuadrados y de color liso. El conejo, de 0,3 m, a 24 casillas es un punto.
+    - Capturas en `.dev-snapshots/arte/unity/animales-01-11/`. Arturo los aprobó el 1/11 (arriba).
+- **Lo que dibuja la #10 de Arturo (1/11, para la 0.11.5: nadie empieza con pistola, el cóctel molotov, el coche de policía).** Capturas en `.dev-snapshots/arte/unity/reglas-10-01-11/`.
+  - **Sin pistola.** `UnitViews.ArmamentOf`:
+    - sin pistola (`Content.HasPistol` falso), la funda va vacía;
+    - sin ningún arma de fuego, la hoja (el cuchillo, o su machete, sartén…) va en la mano como arma principal y no hay nada al cinto.
+    - Esperan con la hoja baja de Sword Combat (`bladeIdle`, `A_Idle_Base_Sword`, la postura «blade»; `StanceOf`), no con la de la pistola. Andan y corren con los clips de Synty, con la hoja en la mano.
+    - Al recoger o soltar un arma a mitad de misión (`Rearm`), la postura se vuelve a elegir: quien encuentra una pistola pasa a las de pistola.
+    - En la base (la fila, la ficha y el claro), quien no tiene pistola va con las manos vacías (`UnitViews.CarriesPistol`).
+  - **El cóctel molotov.**
+    - La botella de Apocalypse (`SM_Wep_Molotov_01`, `FxArt.molotov`), con la mecha encendida: una llama mediana de Particle FX hecha pequeña (`Fx.Molotov`).
+    - En la mano izquierda durante el gesto de lanzar, hasta soltarla (`ThrowMotion(…, held: "molotov")`), y dando vueltas en el arco (`Fx.MolotovArc`). El fogonazo al romperse lo pone UI en `EventPlayer`.
+    - El fuego (`FireView.Light` con `FireLitEvent`; `FireView.Out` con `FireOutEvent`) es un charco de gasolina: dos llamas bajas en cada una de sus casillas, poco humo, unas brasas y el suelo chamuscado, sin hollín en las paredes.
+    - Al encenderse crece en 0,6 s desde donde se rompió la botella. Al apagarse dejan de salir llamas, se va en unos segundos y el suelo chamuscado se queda.
+    - La luz es la de `NightLights` (la del `LightOnEvent`, sin bola de brillo porque el id está en `s.Fires`).
+    - Las llamas pequeñas de Particle FX (`FX_Fire_Small_02`) miden 0,1 y desde la cámara del juego no se ven; por eso el charco usa `FX_Fire_01` hecha pequeña.
+    - `MapBuilder` hace ahora siempre la `FireView`, aunque el mapa no tenga fuegos.
+  - **El sonido del molotov** (Gameplay 1/11): la botella, con el `impact.glass` de la 0.10.1; el golpe de llama y el crepitar, hechos por nosotros (`unity/tools/sonido/propios.mjs`), porque ni Synty ni el Kenney que tenemos traen fuego. Detalle en [UNITY-SONIDO.md](UNITY-SONIDO.md), §2.
+  - **El coche de policía** (`MissionState.PoliceCar`): el morro y la postura del coche que eligió el motor, con el coche patrulla de City (`sirenPolice`, el del sabotaje) en su pintura propia, gastada.
+  - **Una trampa de nombres.** Desde que entraron Shops, Gang Warfare y Palm City, `MapLab.Prefabs` buscaba por nombre solo y se quedaba con el último paquete en orden alfabético. Al rehacer `FigureCatalog`, la pistola pasaba a ser la de Shops y la palanca la de Gang Warfare. Ahora esos tres van los últimos al buscar por nombre solo (`LatePacks`); pedidos con su paquete delante, siguen encontrándose. En los catálogos de la 0.11.4 no había entrado nada de ellos.
+  - Laboratorios:
+    - `CombatLab.Molotov` y `CombatLab.Desarmado`, con `BASTION_TRAMO=inicio` o `final` para el encuadre de lado;
+    - `MapLab` con `BASTION_POLICIA=1`, que pone el coche de policía en un mapa generado y lleva la cámara hasta él.
+- **Comer, más corto (nota #6 de Arturo del 1/11, «están demasiado rato comiendo»; con UI, para la 0.11.5).** En `UnitViews`:
+  - `FeedWait` de 0,4 a 0,2 s y `FeedSeen` de 0,8 a 0,4 s;
+  - arrodillarse («down» de `GoDown`) a velocidad 1,8 (`DownSpeed`), con el camino hasta su sitio tan largo como el clip acelerado (unos 1,1 s);
+  - los escalonados de `JoinFeed` (`FeedWait` + 0,05 + 0,05 por turno) y `ReachFor` (0,05 por turno), a la mitad.
+  - UI bajó la espera de después en `EventPlayer` (`FeedHold`, de 0,5 a 0,2 s). La muerte con la comida pasa de unos 4,2 a unos 2,4 s.
+  - La tira de UI a 10 fps (arena-evac 74) no muestra saltos al arrodillarse más rápido.
+- **Las rayas de la niebla en la chapa (0.11.5; lo encontró UI con la app de la 0.11.4, `.dev-snapshots/ui/unity/app-0114/`).** Con niebla, las paredes de chapa de las naves salían con rayas que seguían las ondas: claras en lo visto, casi negras en lo que no se ha descubierto. La niebla (`Fog.shader`) sigue la normal de cada píxel. Mira la casilla del muro un poco hacia dentro y la casilla a la que da la pared hacia fuera; si da a la calle, la pared toma lo que se ve de la calle. Los laterales de cada onda de la chapa de Gang Warfare miran 59° hacia el lado (0,86 a lo largo del muro, 0,51 hacia fuera) y son cerca de una cuarta parte de la cara. Su casilla de delante caía en el mismo muro, así que tomaban la casilla del muro, que nunca se ve. Comprobado con un `Fog.shader` de depuración (rojo, a la vista; verde, conocido; azul, pared que da a la calle): los laterales salían «nunca visto» y el resto de la pared, bien.
+  - El arreglo: una cara de muro en diagonal (normal casi horizontal y con las dos componentes por encima de 0,15) se gira hacia el eje cuya casilla vecina, por ese lado, no es de un edificio, si solo lo es una de las dos. Las paredes rectas no cambian. En la tienda de la tira cambian 98 píxeles de 1,44 millones, en biseles de marcos, y no se ve.
+  - Lo negro que queda en las ventanas es el interior sin descubrir, visto a través del cristal, como en cualquier edificio.
+  - No cuesta: el polígono con lo quieto juntado, 6,34 / 7,25 / 8,40 / 9,53 ms (antes 6,28 / 7,21 / 8,35 / 9,61), y la ciudad, 7,25 / 8,34 / 9,39 / 10,33 (antes 7,19 / 8,23 / 9,36 / 10,36).
+  - Capturas, con niebla y desde la cámara del juego, en `.dev-snapshots/arte/unity/edificios/niebla-chapa-01-11/`.
 - **El peine de los bloques del borde (Gameplay, 1/11).** Un bloque del borde pegado a un solar del marco (casillas de muro fuera de juego, `ground` 4, sin dueño, que dibuja el marco y nunca `WallLayout`) ponía media pared hacia el solar en cada casilla de su fachada: un peine. Ya pasaba con la madera. Ahora `WallLayout.Wallish` no cuenta esas casillas como muro vecino, y la fachada sale lisa, con sus ventanas de arriba. Tira en `.dev-snapshots/arte/unity/edificios/peine-01-11/`.
 - **Desde el 1/11 el tejado inclinado sale de `GameState.Pitched`** (el motor, Mapgen/Upstairs `Pitched`: casa o granero, sin pisar). `BuildingPlan.PitchedOf` pone `Building.pitched` («house», «barn» o nada) y de ahí leen `BuildingSurfaces` (tejado, porche, chimenea) y `RoofProps`. En partidas viejas sin el campo sigue la regla de antes (casa o granero para el cliente, tejado sin pisar). En city-1 y city-7 salen las mismas 12 casas que antes.
 - **El clima (Arturo, 1/11: las cinco pruebas, todas en el juego, cada una en misiones distintas; el motor lo dice en `GameState.weather`: `drizzle`, `downpour`, `storm`, `snowfall`, `blizzard`).** Lo dibuja `Client/Light/Weather.cs`, que `MapBuilder` crea con el mapa:
@@ -306,8 +360,8 @@ Los muros de los edificios son las piezas de Synty, como en la 0.10.1:
     - Trampa: en el editor, fuera de juego, quitar el clima sin `Weather.Take` dejaba su gancho apuntando a un componente destruido. El fotograma salía vacío (0,9 ms) y parecía gratis.
   - Laboratorio: `ClimaLab.Llovizna`, `Aguacero`, `Tormenta`, `Nevada` y `Ventisca` hacen el mapa con su clima por el camino del juego. En MapLab, `BASTION_CLIMA=<id>`. `ClimaLab.Coste` mide (`BASTION_DIST`). `BASTION_CLIMA_SIN=particulas|pase` aísla lo que dibuja cada parte. Tiras de las pruebas en `.dev-snapshots/arte/unity/clima/pruebas-01-11/`.
 - **Los animales (Gameplay, 1/11: «más vida»; solo en pantalla, sin reglas).** Los pone `Client/Map/Fauna.cs`, que `MapBuilder` crea al hacer el mapa (`WithFauna`). Son:
-  - perros sin collar del Dog Pack por calles y patios: tres en un pueblo, uno en el campo;
-  - un zorro o un coyote en los claros del campo, a tres casillas de muros y cobertura alta;
+  - perros sin collar del Dog Pack por calles y patios: tres en un pueblo (desde el 1/11, #7, ninguno en el campo);
+  - zorros y lobos en los claros del campo, a tres casillas de muros y cobertura alta (el coyote, quitado el 1/11: no los hay en Europa);
   - cuervos posados en los tejados (en la cumbrera de una casa, en el pretil de una azotea), que se van con su tejado cuando el corte lo abre (`Cutaway.Track`);
   - palomas picoteando en un sitio abierto de un pueblo.
   - Dónde salen lo dan las casillas del mapa con su hash, igual para los dos jugadores, lejos de la escuadra y de los muertos.

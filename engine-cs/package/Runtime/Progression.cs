@@ -51,6 +51,8 @@ namespace Bastion.Engine
         public const string MakeSniper = "makeSniper";
         public const string MakeMachineGun = "makeMachineGun";
         public const string MakeMachete = "makeMachete";
+        /// <summary>Only where the pistols are counted (CampaignState.Pistols; Arturo, 1/11).</summary>
+        public const string MakePistol = "makePistol";
         public const string Ammo1 = "ammo1";
         public const string Ammo2 = "ammo2";
         public const string Ammo3 = "ammo3";
@@ -63,7 +65,7 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> All = new[]
         {
             Armor2, Armor3, MakeRifle, MakeShotgun, MakeSniper, MakeMachineGun, MakeMachete, Ammo1, Ammo2, Ammo3, MakeStock,
-            MakeSilencer, MakeScope, MakeExtMag,
+            MakeSilencer, MakeScope, MakeExtMag, MakePistol,
         };
     }
 
@@ -180,6 +182,7 @@ namespace Bastion.Engine
             [CraftIds.MakeShotgun] = new CraftDef { Id = CraftIds.MakeShotgun, Name = "Escopeta", The = "una escopeta", Kind = CraftKinds.Arms, Makes = FoundWeaponIds.PumpShotgun, Tech = null, Workshop = 1, After = null, Cost = 30, Parts = 3, Days = 2 },
             [CraftIds.MakeMachete] = new CraftDef { Id = CraftIds.MakeMachete, Name = "Machete", The = "un machete", Kind = CraftKinds.Arms, Makes = FoundWeaponIds.Machete, Tech = null, Level = 2, Workshop = 1, After = null, Cost = 15, Parts = 2, Days = 1 },
             [CraftIds.MakeSniper] = new CraftDef { Id = CraftIds.MakeSniper, Name = "Fusil de precisión", The = "un fusil de precisión", Kind = CraftKinds.Arms, Makes = FoundWeaponIds.PrecisionRifle, Tech = null, Level = 3, Workshop = 1, After = null, Cost = 45, Parts = 5, Days = 3 },
+            [CraftIds.MakePistol] = new CraftDef { Id = CraftIds.MakePistol, Name = "Pistola", The = "una pistola", Kind = CraftKinds.Arms, Makes = FoundWeaponIds.Pistol, Tech = null, Workshop = 1, After = null, Cost = 15, Parts = 2, Days = 1 },
             [CraftIds.MakeMachineGun] = new CraftDef { Id = CraftIds.MakeMachineGun, Name = "Ametralladora", The = "una ametralladora", Kind = CraftKinds.Arms, Makes = FoundWeaponIds.MachineGun, Tech = null, Level = 4, Workshop = 1, After = null, Cost = 45, Parts = 5, Days = 3 },
             // Munition: each one more spare magazine for every soldier who sets out (docs/FASE8.md §A).
             [CraftIds.Ammo1] = new CraftDef { Id = CraftIds.Ammo1, Name = "Primeros cargadores", The = "la primera tanda de cargadores", Kind = CraftKinds.Ammo, Tech = null, Workshop = 1, After = null, Cost = 25, Parts = 2, Days = 2 },
@@ -195,9 +198,9 @@ namespace Bastion.Engine
         /// <summary>`Object.keys(CRAFTS)`'s order: its keys as progression.ts writes them (the machete before the precision rifle).</summary>
         public static readonly IReadOnlyList<string> CraftOrder = new[]
         {
-            CraftIds.Armor2, CraftIds.Armor3, CraftIds.MakeRifle, CraftIds.MakeShotgun, CraftIds.MakeMachete, CraftIds.MakeSniper,
-            CraftIds.MakeMachineGun, CraftIds.Ammo1, CraftIds.Ammo2, CraftIds.Ammo3, CraftIds.MakeStock, CraftIds.MakeSilencer,
-            CraftIds.MakeScope, CraftIds.MakeExtMag,
+            CraftIds.Armor2, CraftIds.Armor3, CraftIds.MakePistol, CraftIds.MakeRifle, CraftIds.MakeShotgun, CraftIds.MakeMachete,
+            CraftIds.MakeSniper, CraftIds.MakeMachineGun, CraftIds.Ammo1, CraftIds.Ammo2, CraftIds.Ammo3, CraftIds.MakeStock,
+            CraftIds.MakeSilencer, CraftIds.MakeScope, CraftIds.MakeExtMag,
         };
 
         /// <summary>What the Bastion's level brings to the Armería (docs/FASE8.md §A), by the level reached.</summary>
@@ -245,6 +248,12 @@ namespace Bastion.Engine
         public static FoundWeapon? MeleeWeaponOf(IReadOnlyList<FoundWeapon>? foundWeapons, string soldierId)
         {
             return foundWeapons?.FirstOrDefault((w) => w.Holder == soldierId && Content.FoundWeapons[w.Kind].Slot == FoundWeaponSlots.Melee);
+        }
+
+        /// <summary>The Armería's pistol a soldier carries at the side, if any (Arturo, 1/11).</summary>
+        public static FoundWeapon? PistolOf(IReadOnlyList<FoundWeapon>? foundWeapons, string soldierId)
+        {
+            return foundWeapons?.FirstOrDefault((w) => w.Holder == soldierId && Content.FoundWeapons[w.Kind].Slot == FoundWeaponSlots.Sidearm);
         }
 
         /// <summary>Weapons have no tiers (docs/FASE9.md §5): every weapon is what it is. The client still draws by it.</summary>
@@ -355,6 +364,8 @@ namespace Bastion.Engine
         public static FoundWeapon? FoundWeaponOf(CampaignState c, CampaignSoldier s) => FoundWeaponOf(c.FoundWeapons, s.Id);
 
         public static FoundWeapon? MeleeWeaponOf(CampaignState c, CampaignSoldier s) => MeleeWeaponOf(c.FoundWeapons, s.Id);
+
+        public static FoundWeapon? PistolOf(CampaignState c, CampaignSoldier s) => PistolOf(c.FoundWeapons, s.Id);
 
         /// <remarks>`armorTier(c, _s?)`: the soldier changes nothing.</remarks>
         public static int ArmorTier(CampaignState c, CampaignSoldier? s = null) => ArmorTier(c.Crafted);

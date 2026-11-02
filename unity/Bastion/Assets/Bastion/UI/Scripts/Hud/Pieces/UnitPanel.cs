@@ -118,7 +118,9 @@ namespace Bastion.UI.Hud
         VisualElement Stat(StatView s)
         {
             var e = Ui.El("stat stat--" + s.Kind);
-            Ui.Icon(icon, "stat:" + s.Kind, "stat-icon stat-icon--" + s.Kind, e);
+            var pic = Ui.Icon(icon, "stat:" + s.Kind, "stat-icon stat-icon--" + s.Kind, e);
+            // Our own drawing where Synty has no icon (the molotovs: Arturo, 01/11 #10).
+            if (icon?.Invoke("stat:" + s.Kind) == null && LineIcon.Has(s.Kind)) pic.Add(new LineIcon(s.Kind));
             if (s.Total > 0)
             {
                 var pips = Ui.El("pips pips--" + (s.Kind == "ap" ? "ap" : s.Kind == "ammo" || s.Kind == "sidearm" ? "ammo" : "hp"), e);

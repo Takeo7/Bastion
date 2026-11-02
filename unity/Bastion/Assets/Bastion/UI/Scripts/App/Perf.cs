@@ -61,6 +61,10 @@ namespace Bastion.UI.App
         float gpuSum;
         double calls;
         double tris;
+        // What capped the frames as this line's counting started: Sample says that, not what caps them as the line goes
+        // (a menu's last line goes out once the battle is loaded, with the battle's cap: in 0.11.4, «menú 57 fps (tope
+        // 144 Hz sin vsync)»).
+        string capNote = "";
 
         int counterFrames;
         float counterFrom;
@@ -213,6 +217,7 @@ namespace Bastion.UI.App
             gpuSum = 0;
             calls = 0;
             tris = 0;
+            capNote = CapNote(QualitySettings.vSyncCount, (float)Screen.currentResolution.refreshRateRatio.value, Application.targetFrameRate, GameSettings.ScreenCap);
         }
 
         /// <summary>Where the player went, once the view has settled: the graphics card, the settings, the size, the cores.</summary>
@@ -231,12 +236,11 @@ namespace Bastion.UI.App
             if (frames == 0 || spent <= 0) return;
             var fps = Mathf.RoundToInt(frames / spent);
             var p95 = Percentile(intervals, Math.Min(frames, Ring), 0.95f);
-            var cap = CapNote(QualitySettings.vSyncCount, (float)Screen.currentResolution.refreshRateRatio.value, Application.targetFrameRate, GameSettings.ScreenCap);
             var slow = hitches > 0 ? $" · {hitches} {(hitches == 1 ? "tirón" : "tirones")}" : "";
             var cpu = cpuCount > 0 ? $"{Ms(cpuSum / cpuCount)}/{Ms(Percentile(cpuTimes, Math.Min(cpuCount, Ring), 0.95f))} ms (+{Ms(waitSum / cpuCount)} de espera)" : "n/d";
             var gpu = gpuCount > 0 ? $"{Ms(gpuSum / gpuCount)}/{Ms(Percentile(gpuTimes, Math.Min(gpuCount, Ring), 0.95f))} ms" : "n/d";
             var drawn = drawCalls.Valid ? $" · {Amount(calls / frames)} llamadas · {Amount(tris / frames)} tri" : "";
-            Send($"{view} {fps} fps{cap} · p95 {Ms(p95)} ms{slow} · cpu {cpu} · gpu {gpu}{drawn} · {Gpu()} · {GameSettings.Summary()} · {Size()}");
+            Send($"{view} {fps} fps{capNote} · p95 {Ms(p95)} ms{slow} · cpu {cpu} · gpu {gpu}{drawn} · {Gpu()} · {GameSettings.Summary()} · {Size()}");
         }
 
         /// <summary>

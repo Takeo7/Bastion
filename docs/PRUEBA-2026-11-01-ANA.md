@@ -1,0 +1,17 @@
+# Notas de Ana, «Informe para desarrollo 2» (1/11)
+
+Once puntos de Ana sobre varias versiones (las capturas, de antes de la interfaz de combate nueva). Arturo decidió cada uno el 1/11, en el cuadro de preguntas, para la 0.11.6. El PDF y sus páginas, en `.dev-snapshots/gameplay/notas-ana-01-11-b/`.
+
+| # | Nota | Quién | Cómo queda |
+|---|---|---|---|
+| 1 | Diferenciar «Cubrirse» (menos acierto contra él) y «Esconderse» (menos visibilidad), y que escondidos u ocultos vayan agachados | Gameplay, UI, Arte | Arturo: una acción nueva, «Esconderse». «Cubrirse» queda igual (+30 de defensa y +50 de esquiva hasta su turno). «Esconderse» acaba el turno y, hasta el próximo, los zombis solo lo ven a la mitad de distancia. Escondido, y mientras la escuadra va oculta, el soldado va agachado, también al andar. Pendiente |
+| 2 | Quitar el retrato de la tarjeta del soldado elegido en Escuadra: su cara ya se ve en la figura | UI | Arturo: sí, la tarjeta solo con su nombre. Pendiente |
+| 3 | La vista de la pestaña Soldados, recta y de frente, sin picado | Arte | Arturo: sí. Pendiente |
+| 4 | Cada zombi con su propia vista y oído: que uno vea a un soldado no hace que lo detecten los demás | Gameplay, UI | Arturo: cada zombi por su cuenta. Va a por el soldado el que lo ve o lo oye; los demás de su grupo, solo si lo ven u oyen ellos. Un disparo lo oyen todos los que están a su alcance, como siempre. Antes, uno veía y despertaba el grupo entero. Pendiente |
+| 5 | El soldado que se levanta como zombi conserva su cuerpo, rasgos, ropa y equipo; solo cambia la piel | Arte | Arturo: sí. Ana vio que el cuerpo desaparecía y salía un zombi morado (quizá en una versión anterior): Arte lo comprueba y, si aún pasa, el levantado es la misma figura con la piel de zombi. Pendiente |
+| 6 | Zombis más realistas, sin pieles moradas, azules ni verdes, y sin repetir a los muy reconocibles (la misma chica con falda tres veces juntas); los policías sí pueden repetirse | Arte | Arturo: pieles grises, pálidas o enfermizas, nunca moradas, azules ni verdes; ropa menos llamativa; uno muy reconocible no se repite cerca en el mismo mapa. Pendiente |
+| 7 | Quitar el borde gris de los aros bajo los zombis: solo el trazo rojo | UI | Arturo: sí. Pendiente |
+| 8 | Quitar la brújula del asedio | UI | Arturo: no; se queda |
+| 9 | Los zombis que tienen que moverse, todos a la vez | UI | Ya andan a la vez, salvo los que van en su orden (la #5 de Arturo de la misma tarde, [PRUEBA-2026-11-01-ARTURO.md](PRUEBA-2026-11-01-ARTURO.md)); con la #10 cambia el orden |
+| 10 | El turno de los zombis: primero los ataques y, cuando acaben, los movimientos | UI | Arturo: solo en pantalla, sin cambiar reglas. Primero muerden, de uno en uno, los que ya estaban al lado de un soldado; luego andan todos a la vez; al final muerden los que han llegado. Cambia la #4 de Ana del 31/10 (primero andar, luego morder). Pendiente |
+| 11 | Menos perros y algunos gatos, con una cantidad moderada de animales | Arte | Arturo: un perro por pueblo o ciudad (antes tres) y uno o dos gatos de SIMPLE - Cats, el único gato animado que hay (otra excepción a la norma de SIMPLE, como los animales del bosque). Pendiente |

@@ -587,6 +587,8 @@ namespace Bastion.Engine.Tests
             // Plate armour made by the Taller (docs/FASE4.md): everyone wears it, whatever their veterancy.
             c.Level = 4;
             c.Crafted = new List<string> { "armor2" };
+            // A gun to aim with: since 1/11 nobody starts with a pistol (Arturo).
+            c.FoundWeapons = new List<FoundWeapon> { new FoundWeapon { Id = "w9", Kind = FoundWeaponIds.Pistol, Holder = s.Id } };
             var member = Campaign.SquadMember(c, s);
             Assert.Equal(1, member.WeaponTier);
             Assert.Equal(2, member.ArmorTier);
@@ -820,8 +822,8 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(Campaign.NextSteps(c, 0), (x) => x.Label.StartsWith("Equipa", StringComparison.Ordinal));
             Run(c, new ChooseMissionCommand { Id = c.Offers[0].Id }, 0, new[] { 0 });
             Assert.Equal("squad", Campaign.NextSteps(c, 0)[0].View);
-            // Starting stock: 2 extra grenades and a medkit, all utility.
-            Assert.Equal(3, Campaign.NextSteps(c, 0).FirstOrDefault((x) => x.Label.StartsWith("Equipa", StringComparison.Ordinal))?.Count);
+            // Nothing in stock to start with (Arturo, 1/11: no grenades, no medkit), so nothing to fit.
+            Assert.DoesNotContain(Campaign.NextSteps(c, 0), (x) => x.Label.StartsWith("Equipa", StringComparison.Ordinal));
         }
 
         [Fact(DisplayName = "helping the players › after a bad mission, too few ready soldiers puts recruiting before the next operation")]

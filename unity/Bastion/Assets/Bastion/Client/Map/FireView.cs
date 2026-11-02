@@ -11,10 +11,17 @@ namespace Bastion.Client.Map
     /// flames, embers and a column of black smoke (over a car's body, a bin's or drums' top, a heap); on each tile of the
     /// ground on fire small flames, each its own size and turn; the ground under them scorched. Particle FX's (FxArt).
     /// By night its light is NightLights' (the fire's own in GameState.lights). Made with the map: the fires are there from
-    /// the start and burn to the end.
+    /// the start and burn to the end. A molotov's (Arturo, 1/11: Fire.Turns) lit and put out as the battle goes (Light,
+    /// Out: EventPlayer's FireLitEvent and FireOutEvent), a pool of petrol burning: low flames spread over its tiles, a
+    /// thin smoke, the ground scorched (left when it goes out), nothing over what burns.
     /// </summary>
     public sealed class FireView : MonoBehaviour
     {
+        /// <summary>The map's in view (the last made).</summary>
+        public static FireView Current { get; private set; }
+
+        /// <summary>A molotov's fire growing to its size, and dying down once out (s).</summary>
+        const float Grows = 0.6f, DiesDown = 3;
         /// <summary>How high the big flames stand over what burns (m): a car's body, bins and drums, a heap on the ground.</summary>
         const float OverCar = 0.55f, OverBins = 0.45f, OverHeap = 0.1f;
         /// <summary>The soot under the fire: its colour and how dark.</summary>
@@ -27,11 +34,89 @@ namespace Bastion.Client.Map
         {
             var view = new GameObject("Fuego").AddComponent<FireView>();
             view.transform.SetParent(parent, false);
+            Current = view;
             var art = Resources.Load<FxArt>("FxArt");
-            if (art == null || s.Fires == null) return view;
-            foreach (var fire in s.Fires) view.Burn(s, fire, art);
+            if (art == null || s.Fires == null || s.Fires.Count == 0) return view;
+            foreach (var fire in s.Fires)
+            {
+                if (fire.Turns != null) view.Pool(s, fire, art, false);
+                else view.Burn(s, fire, art);
+            }
             Debug.Log($"[fuego] {s.Fires.Count} fires, {s.Fires.Sum(f => f.Tiles.Count)} tiles burning");
             return view;
+        }
+
+        void OnDestroy()
+        {
+            if (Current == this) Current = null;
+        }
+
+        /// <summary>A fire lit now (a molotov's, FireLitEvent): growing quickly; nothing if it burns already.</summary>
+        public void Light(GameState s, Fire fire)
+        {
+            var art = Resources.Load<FxArt>("FxArt");
+            if (art == null || fire == null || transform.Find(fire.Id) != null) return;
+            if (fire.Turns != null) Pool(s, fire, art, Application.isPlaying);
+            else Burn(s, fire, art);
+        }
+
+        /// <summary>A fire put out (FireOutEvent): its flames and smoke no longer coming, gone once they die down; its scorch stays.</summary>
+        public void Out(string id)
+        {
+            var holder = id != null ? transform.Find(id) : null;
+            if (holder == null) return;
+            holder.name = id + " (apagado)";
+            foreach (Transform part in holder.Cast<Transform>().ToList())
+            {
+                if (part.name == "hollín") continue;
+                foreach (var ps in part.GetComponentsInChildren<ParticleSystem>()) ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+                if (Application.isPlaying) Destroy(part.gameObject, DiesDown);
+                else DestroyImmediate(part.gameObject);
+            }
+        }
+
+        /// <summary>
+        /// A molotov's fire: a pool of petrol burning over its tiles (the 3×3 one can step on), low flames on each, a little
+        /// smoke and embers over the middle, the ground scorched under it all; `grow`, from where the bottle broke out to
+        /// its size (Grows).
+        /// </summary>
+        void Pool(GameState s, Fire fire, FxArt art, bool grow)
+        {
+            int w = s.Width;
+            int sx = fire.Source % w, sy = fire.Source / w;
+            var at = MapSpace.World(sx, sy);
+            var holder = new GameObject(fire.Id).transform;
+            holder.SetParent(transform, false);
+            holder.position = at;
+            // (A thin smoke, low: a pool's, not a car's column.)
+            Effect(art.smoke, holder, at + Vector3.up * 0.2f, 0, 0.28f);
+            Effect(art.embers, holder, at + Vector3.up * 0.1f, 0, 0.7f);
+            Scorch(holder, at, 3.4f, MapArt.Hash(sx, sy, 440) * 360);
+            foreach (int i in fire.Tiles)
+            {
+                int x = i % w, y = i / w;
+                float r(int salt) => MapArt.Hash(x, y, 450 + salt);
+                // (Two flames a tile, low: a pool's, not a car's; the middle's a little bigger. The middling fire made small:
+                // the small one's flames are a few centimetres, nothing from the game's camera.)
+                for (int k = 0; k < 2; k++)
+                {
+                    var spot = MapSpace.World(x, y) + new Vector3(r(k * 3) - 0.5f, 0, r(k * 3 + 1) - 0.5f) * 0.7f * MapSpace.Tile;
+                    Effect(art.fire, holder, spot, r(k * 3 + 2) * 360, (i == fire.Source && k == 0 ? 0.6f : 0.36f) + 0.14f * r(7 + k));
+                }
+            }
+            if (grow) StartCoroutine(Grow(holder));
+        }
+
+        /// <summary>From a tenth of its size to its own over Grows, eased out.</summary>
+        static System.Collections.IEnumerator Grow(Transform holder)
+        {
+            for (float t = 0; t < Grows && holder != null; t += Time.deltaTime)
+            {
+                float k = 1 - (1 - t / Grows) * (1 - t / Grows);
+                holder.localScale = Vector3.one * Mathf.Lerp(0.1f, 1, k);
+                yield return null;
+            }
+            if (holder != null) holder.localScale = Vector3.one;
         }
 
         void Burn(GameState s, Fire fire, FxArt art)

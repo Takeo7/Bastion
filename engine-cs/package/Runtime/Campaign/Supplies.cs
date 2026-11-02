@@ -101,6 +101,7 @@ namespace Bastion.Engine
         public static string? CraftBlocker(CampaignState c, string id)
         {
             var def = Progression.Crafts[id];
+            if (def.Makes == FoundWeaponIds.Pistol && c.Pistols != true) return "En esta campaña, todos los soldados ya llevan pistola.";
             // A weapon or an improvement for the Armería is made again and again (docs/FASE8.md §A).
             if (def.Kind != CraftKinds.Arms && def.Kind != CraftKinds.Mod && Progression.HasCrafted(c.Crafted, id)) return "Ya está hecho.";
             if (c.Base.Works.Any((w) => w.Project == id)) return "Ya se está haciendo.";
@@ -117,19 +118,28 @@ namespace Bastion.Engine
             return null;
         }
 
-        /// <summary>What a soldier's card reads for the weapon in hand: a good one by its name, a plain one by its tier's; without, the pistol.</summary>
+        /// <summary>
+        /// What a soldier's card reads for the weapon in hand: a good one by its name, a plain one by its tier's; without, the
+        /// pistol, or where they are counted and it has none (Arturo, 1/11), its blade.
+        /// </summary>
         public static string WeaponLabel(CampaignState c, CampaignSoldier s)
         {
             var found = Progression.FoundWeaponOf(c.FoundWeapons, s.Id);
-            if (found == null) return Content.Weapons[WeaponIds.Pistol].Name;
-            return Content.FoundWeapons[found.Kind].Name;
+            if (found != null) return Content.FoundWeapons[found.Kind].Name;
+            if (c.Pistols != true || Progression.PistolOf(c.FoundWeapons, s.Id) != null) return Content.Weapons[WeaponIds.Pistol].Name;
+            var melee = Progression.MeleeWeaponOf(c.FoundWeapons, s.Id);
+            return melee != null ? Content.FoundWeapons[melee.Kind].Name : Content.Weapons[WeaponIds.Knife].Name;
         }
 
-        /// <summary>What a soldier carries from the Armería (docs/FASE8.md §A): the weapon in hand, if any, and the machete or the knife.</summary>
+        /// <summary>
+        /// What a soldier carries from the Armería (docs/FASE8.md §A): the weapon in hand, if any, the machete or the knife,
+        /// and where the pistols are counted (CampaignState.Pistols), the pistol at the side or none.
+        /// </summary>
         public static Arms SoldierArms(CampaignState c, CampaignSoldier s)
         {
             var primary = Progression.FoundWeaponOf(c.FoundWeapons, s.Id);
             var melee = Progression.MeleeWeaponOf(c.FoundWeapons, s.Id);
+            var pistol = c.Pistols == true ? Progression.PistolOf(c.FoundWeapons, s.Id) : null;
             return new Arms
             {
                 Primary = primary?.Kind,
@@ -138,6 +148,8 @@ namespace Bastion.Engine
                 Mods = primary?.Mods != null && primary.Mods.Count > 0 ? new List<string>(primary.Mods) : null,
                 Melee = melee?.Kind,
                 MeleeId = melee?.Id,
+                Pistol = c.Pistols == true ? pistol != null : (bool?)null,
+                PistolId = pistol?.Id,
             };
         }
 

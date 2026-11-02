@@ -65,6 +65,39 @@ namespace Bastion.UI.Strategy
         public string Tip;
         /// <summary>The siege's defender in hand, to post on the clearing.</summary>
         public bool Picked;
+        /// <summary>Their sheet in short, by the list while the pointer is on the row (Arturo, 1/11 #2).</summary>
+        public SoldierPeekView Peek;
+    }
+
+    /// <summary>
+    /// A soldier's sheet in short (Arturo, 1/11 #2): the rank, health, aim and movement, the weapon and the belt, the
+    /// board's abilities, and their wounds or bite.
+    /// </summary>
+    [Serializable]
+    public sealed class SoldierPeekView
+    {
+        public string Name;
+        /// <summary>«Fogueada · tuya».</summary>
+        public string Kicker;
+        public List<PeekStatView> Stats = new List<PeekStatView>();
+        /// <summary>«Fusil de asalto · Machete».</summary>
+        public string Weapon;
+        /// <summary>«Botiquín · Granada de humo»; null, nothing.</summary>
+        public string Belt;
+        /// <summary>The board's abilities by name; empty, none yet.</summary>
+        public List<string> Abilities = new List<string>();
+        /// <summary>«Sin heridas», «Heridas · 2 misiones», «Mordisco · se convierte en 3 días».</summary>
+        public string Health;
+        /// <summary>good, bad, warn or null.</summary>
+        public string HealthTone;
+    }
+
+    [Serializable]
+    public sealed class PeekStatView
+    {
+        /// <summary>«Salud», «Puntería», «Movimiento».</summary>
+        public string Name;
+        public string Value;
     }
 
     [Serializable]

@@ -248,27 +248,30 @@ namespace Bastion.Engine.Tests
             Assert.Contains(c.Log, (l) => l.Alert != null && Regex.IsMatch(l.Alert.Title, "se ha convertido"));
         }
 
-        [Fact(DisplayName = "infection at the base › treating takes both keys (alone, one) and 2 ✚, 1 with the Enfermería at level 2")]
-        public void TreatingTakesBothKeys()
+        [Fact(DisplayName = "infection at the base › treating is a proposal like the rest (alone, at once) and 2 ✚, 1 with the Enfermería at level 2")]
+        public void TreatingIsAProposal()
         {
             var (c, _, sick, _) = Bitten(2);
             var a = sick[0];
             var b = sick[1];
             c.Medicines = 5;
+            // On the board for the partner to see (Arturo, 1/11: «no le está llegando la propuesta al otro»), with the room's clock.
             Assert.True(Run(c, new TreatCommand { Soldier = a.Id, Ready = true }, 0).Ok);
-            Assert.Equal(a.Id, c.Treatment?.Soldier);
-            Assert.Equal(new[] { true, false }, c.Treatment!.Ready);
+            Assert.Equal(a.Id, (c.Proposal?.Action as TreatAction)?.Soldier);
+            Assert.Equal(0, c.Proposal!.By);
+            Assert.Equal($"tratar el mordisco de {a.Name} (2 ✚)", c.Proposal.Text);
+            Assert.Null(c.Treatment);
             Assert.NotNull(a.Infection);
             // Another proposal waits for this one.
             Assert.False(Run(c, new TreatCommand { Soldier = b.Id, Ready = true }, 1).Ok);
-            Assert.True(Run(c, new TreatCommand { Soldier = a.Id, Ready = true }, 1).Ok);
+            Assert.True(Run(c, new VoteCommand { Accept = true }, 1).Ok);
             Assert.Null(a.Infection);
             Assert.Equal(3, c.Medicines);
-            Assert.Null(c.Treatment);
+            Assert.Null(c.Proposal);
             // The partner can turn it down.
             Run(c, new TreatCommand { Soldier = b.Id, Ready = true }, 0);
-            Run(c, new TreatCommand { Soldier = b.Id, Ready = false }, 1);
-            Assert.Null(c.Treatment);
+            Run(c, new VoteCommand { Accept = false }, 1);
+            Assert.Null(c.Proposal);
             Assert.NotNull(b.Infection);
             // With the Enfermería at level 2, one ✚; and a player alone needs no second key.
             Raise(c, PieceIds.Infirmary, 2);

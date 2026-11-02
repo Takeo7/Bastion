@@ -110,11 +110,13 @@ namespace Bastion.UI.Combat
                 else control.OnMiniMap();
                 return true;
             }
+            // «hover=8/6/1»: on that storey (a molotov aimed up a floor: Arturo, 01/11 #10).
             if (what == "hover" || what == "click" || what == "look")
             {
                 var xy = arg.Split('/', ',');
-                if (xy.Length != 2 || !int.TryParse(xy[0], out var x) || !int.TryParse(xy[1], out var y)) return false;
-                var tile = new Bastion.Engine.Pos { X = x, Y = y, Z = 0 };
+                if (xy.Length < 2 || xy.Length > 3 || !int.TryParse(xy[0], out var x) || !int.TryParse(xy[1], out var y)) return false;
+                var z = xy.Length == 3 && int.TryParse(xy[2], out var storey) ? storey : 0;
+                var tile = new Bastion.Engine.Pos { X = x, Y = y, Z = z };
                 if (what == "hover") control.Hover(tile);
                 else if (what == "look") control.Rig?.Focus(Board.TileToWorld(control.State, tile));
                 else control.ClickAt(tile);

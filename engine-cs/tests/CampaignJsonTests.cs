@@ -269,6 +269,7 @@ namespace Bastion.Engine.Tests
                 new BuildAction { Plot = "p1", Facility = "workshop" },
                 new UpgradeAction { Plot = "p2" },
                 new CancelMissionAction { Id = "m4" },
+                new TreatAction { Soldier = "c2" },
             };
             foreach (var action in others)
             {
@@ -277,7 +278,7 @@ namespace Bastion.Engine.Tests
                 Assert.Equal(action.GetType(), back.Action.GetType());
                 Assert.Equal(json, Write(back));
             }
-            Assert.Equal(19, new TagConverter<ProposalAction>("type", (a) => a.Type).Tags.Count);
+            Assert.Equal(20, new TagConverter<ProposalAction>("type", (a) => a.Type).Tags.Count);
         }
 
         // ------------------------------------------------------------------- the commands

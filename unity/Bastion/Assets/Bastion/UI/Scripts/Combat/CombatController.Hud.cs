@@ -491,8 +491,10 @@ namespace Bastion.UI.Combat
             var arms = u.Arms;
             var pistol = Content.Weapons[WeaponIds.Pistol].Name;
             var (weapon, extras) = ArmsOf(u);
-            var clip = Content.ClipOf(u, AbilityIds.Shoot);
-            var sidearm = !string.IsNullOrEmpty(arms?.Primary);
+            // Without a gun (Arturo, 01/11 #10: the knife alone), no rounds nor aim with one.
+            var gun = Content.HasGun(u);
+            var clip = gun ? Content.ClipOf(u, AbilityIds.Shoot) : 0;
+            var sidearm = !string.IsNullOrEmpty(arms?.Primary) && Content.HasPistol(u);
             // A soldier's veterancy, in the feminine for a woman.
             var soldier = u.Team == Teams.Xcom && u.Template == TemplateIds.Rookie;
             var step = soldier && u.Rank < Bars.Veterancy.Count ? Bars.Veterancy[u.Rank] : null;
@@ -534,9 +536,10 @@ namespace Bastion.UI.Combat
             }
             // The pistol carried beside a main gun counts its own rounds; the spares serve both.
             if (sidearm) view.Stats.Add(new StatView { Kind = "sidearm", Tip = $"{pistol}: {u.PistolAmmo ?? 0}/{Content.PistolClip}", Filled = u.PistolAmmo ?? 0, Total = Content.PistolClip });
-            view.Stats.Add(new StatView { Kind = "aim", Tip = $"Puntería con armas de fuego {aim + u.Mods.GunAim}", Value = (aim + u.Mods.GunAim).ToString() });
+            if (gun) view.Stats.Add(new StatView { Kind = "aim", Tip = $"Puntería con armas de fuego {aim + u.Mods.GunAim}", Value = (aim + u.Mods.GunAim).ToString() });
             if (soldier) view.Stats.Add(new StatView { Kind = "melee", Tip = $"Puntería cuerpo a cuerpo {aim + u.Mods.MeleeAim}", Value = (aim + u.Mods.MeleeAim).ToString() });
             if (u.Charges.TryGetValue(ChargeIds.Grenade, out var grenades)) view.Stats.Add(new StatView { Kind = "grenade", Tip = $"Granadas: {grenades}", Value = $"×{grenades}" });
+            if (u.Charges.TryGetValue(ChargeIds.Molotov, out var molotovs)) view.Stats.Add(new StatView { Kind = "molotov", Tip = $"Cócteles molotov: {molotovs}", Value = $"×{molotovs}" });
             if (u.Armor > 0) view.Stats.Add(new StatView { Kind = "armor", Tip = $"Blindaje {u.Armor}", Value = u.Armor.ToString() });
             // A vest found and put on out there (playtest 16/10): its health is already in the pips.
             foreach (var item in u.Worn ?? new List<string>())
@@ -746,7 +749,15 @@ namespace Bastion.UI.Combat
             var room = slots - (u.Backpack?.Count ?? 0);
             view.Title = Lore.BoxTitle(decor);
             view.Detail = $"Mochila: {(room == 1 ? "queda 1 hueco" : $"quedan {room} huecos")} de {slots}";
-            view.Hint = $"Otra vez, Espacio o clic en la caja: abrir{(others > 0 ? $" · Tab: {(others == 1 ? "la otra" : "otra")} caja" : "")} · Esc: cancelar";
+            // The first mission's police car (Lore, 0.11.5): «clic en el coche», and its other half for Tab.
+            var car = decor == Looting.PoliceCar;
+            if (car)
+            {
+                // Its button and its words, not the box's (Arturo, 0.11.5; Lore goes over them in the 0.11.6).
+                view.Action = view.Title;
+                view.Effect = "Registra esta mitad del coche de policía: dentro hay una pistola.";
+            }
+            view.Hint = $"Otra vez, Espacio o clic en {(car ? "el coche" : "la caja")}: abrir{(others > 0 ? $" · Tab: {(others == 1 ? "la otra" : "otra")} {(car ? "mitad" : "caja")}" : "")} · Esc: cancelar";
             return view;
         }
 

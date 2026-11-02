@@ -26,8 +26,9 @@ namespace Bastion.Engine
             {
                 if (!list.Contains(AbilityIds.Slash)) list.Insert(list.IndexOf(AbilityIds.Shoot) + 1, AbilityIds.Slash);
                 var pistol = list.IndexOf(AbilityIds.Pistol);
-                if (!string.IsNullOrEmpty(u.Arms.Primary) && pistol < 0) list.Insert(list.IndexOf(AbilityIds.Slash) + 1, AbilityIds.Pistol);
-                if (string.IsNullOrEmpty(u.Arms.Primary) && pistol >= 0) list.RemoveAt(pistol);
+                var second = !string.IsNullOrEmpty(u.Arms.Primary) && u.Arms.Pistol != false;
+                if (second && pistol < 0) list.Insert(list.IndexOf(AbilityIds.Slash) + 1, AbilityIds.Pistol);
+                if (!second && pistol >= 0) list.RemoveAt(pistol);
             }
             // Nobody throws grenades without having carried some (docs/FASE9.md §4): the squad's come only from the belt.
             if (u.Team == Teams.Xcom && !u.Charges.ContainsKey(ChargeIds.Grenade) && list.Contains(AbilityIds.Grenade)) list.RemoveAt(list.IndexOf(AbilityIds.Grenade));
@@ -44,7 +45,16 @@ namespace Bastion.Engine
                 // Fase 10 (docs/FASE10.md §4): the blade can keep watch too. The stone is the board's since 29/10 (Piedras).
                 if (u.Arms != null && list.Contains(AbilityIds.Overwatch)) list.Insert(list.IndexOf(AbilityIds.Overwatch) + 1, AbilityIds.OverwatchMelee);
             }
+            // No gun at all (Arturo, 1/11: nobody starts with a pistol): the blade and what is thrown, nothing fired.
+            if (!Content.HasGun(u)) list.RemoveAll(Fired);
             return list;
+        }
+
+        /// <summary>What fires a gun: a shot of any kind, keeping watch with it, and reloading it.</summary>
+        private static bool Fired(string ability)
+        {
+            if (ability == AbilityIds.Overwatch || ability == AbilityIds.KillZone || ability == AbilityIds.Suppression || ability == AbilityIds.Reload) return true;
+            return Content.IsAttack(ability) && Content.Abilities[ability].Weapon != AbilityWeapons.Melee;
         }
 
         /// <summary>On the evac zone: it lies on the ground.</summary>
@@ -351,6 +361,8 @@ namespace Bastion.Engine
             if (ability == AbilityIds.Search) return Looting.IsSearchable(s, tile) && Looting.ReachesToSearch(s, u.Pos, tile);
             if (ability == AbilityIds.OpenDoor || ability == AbilityIds.CloseDoor) return DoorTiles(s, u, ability == AbilityIds.OpenDoor ? TileKinds.Door : TileKinds.DoorOpen).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Smash) return BreakablesBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
+            // Fire burns on the ground only (Burning): a molotov is thrown at the street or a ground floor.
+            if (ability == AbilityIds.Molotov && tile.Z != 0) return false;
             return s.Units.Any((o) => Los.IsViewer(o, u.Team) && Los.CanSeeTile(s, o.Pos, tile, Los.SightTo(s, o, tile), Los.WindowReachOf(o.Team)));
         }
 

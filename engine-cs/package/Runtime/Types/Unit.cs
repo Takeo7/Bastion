@@ -89,6 +89,13 @@ namespace Bastion.Engine
         /// <summary>At the belt; null, the knife.</summary>
         public string? Melee { get; set; } // FoundWeaponIds
         public string? MeleeId { get; set; }
+        /// <summary>
+        /// The pistol at the side (Arturo, 1/11: nobody starts with one, the Armería's like any weapon): true, one carried,
+        /// PistolId the Armería's (absent, picked up out there); false, none, and without a weapon in the hand no gun at all;
+        /// absent, the one every soldier had before, not counted (campaigns from before, CampaignState.Pistols).
+        /// </summary>
+        public bool? Pistol { get; set; }
+        public string? PistolId { get; set; }
     }
 
     /// <summary>

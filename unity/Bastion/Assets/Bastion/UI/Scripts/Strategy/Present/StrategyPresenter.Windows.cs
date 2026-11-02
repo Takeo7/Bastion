@@ -16,7 +16,7 @@ namespace Bastion.UI.Strategy
         {
             var c = State;
             var p = c.Proposal;
-            if (p == null) return null;
+            if (p == null) return Treatment(c);
             var mine = p.By == Slot;
             var owed = Owed(c);
             var price = string.Join(" y ", new[] { owed.credits != 0 ? $"{owed.credits} §" : "", owed.parts != 0 ? $"{owed.parts} {(owed.parts == 1 ? "pieza" : "piezas")}" : "" }.Where(x => x != ""));
@@ -28,6 +28,32 @@ namespace Bastion.UI.Strategy
             var (rows, see) = ProposalDetail(c, p.Action);
             v.Rows.AddRange(rows);
             v.CanSee = see;
+            return v;
+        }
+
+        /// <summary>
+        /// A bite's treatment of before, saved halfway (c.Treatment: two keys; since Arturo's #8 of 01/11 it is a proposal of
+        /// the room's, TreatAction, and comes as the rest), on the plate as the proposals: who, whom, the medicines it
+        /// takes. It has no clock: it waits for the other's key. Null with none, or with the partner away.
+        /// </summary>
+        ProposalView Treatment(CampaignState c)
+        {
+            var t = c.Treatment;
+            var partner = Partner;
+            var s = t != null ? c.Soldiers.FirstOrDefault(x => x.Id == t.Soldier) : null;
+            if (s == null || partner == null || !partner.Connected) return null;
+            var mine = t.Ready[Slot];
+            if (!mine && !t.Ready[partner.Slot]) return null;
+            var name = Appearances.DisplayName(s.Name, s.Nickname);
+            var cost = Campaign.TreatCost(c);
+            var v = new ProposalView
+            {
+                Mine = mine, Partner = partner.Name, PartnerColor = PlayerColor(partner.Slot), Treat = s.Id,
+                Text = $"tratar el mordisco de {name}", Cost = $"{cost} ✚",
+            };
+            v.Rows.Add(new RowView { Key = "Soldado", Value = $"{name} · {(s.Owner == Slot ? "de los tuyos" : $"de {PlayerName(s.Owner)}")}" });
+            v.Rows.Add(new RowView { Key = "Medicinas", Value = $"{cost} ✚ de {c.Medicines ?? 0}" });
+            v.Rows.Add(new RowView { Key = "Qué hace", Value = "Le quita la fiebre. Sin el tratamiento, se convierte." });
             return v;
         }
 
@@ -161,6 +187,16 @@ namespace Bastion.UI.Strategy
                     rows.Add(Row("Tiempo", $"Sale {Lore.InMissions(MissionsFor(def.Days))}"));
                     rows.Add(Row("Suministros", $"{Campaign.CostText(def.Cost)} y {def.Parts} piezas"));
                     rows.Add(Row("Qué hace", Lore.CraftAim(def.Kind, def.The)));
+                    return (rows, false);
+                }
+                // A bite's treatment (Arturo, 01/11 #8): the partner doesn't see the soldier, so the plate says who and whose.
+                case TreatAction a:
+                {
+                    var s = c.Soldiers.FirstOrDefault(x => x.Id == a.Soldier);
+                    if (s == null) return (rows, false);
+                    rows.Add(Row("Soldado", $"{Appearances.DisplayName(s.Name, s.Nickname)} · {(s.Owner == Slot ? "de los tuyos" : $"de {PlayerName(s.Owner)}")}"));
+                    rows.Add(Row("Medicinas", $"{Campaign.TreatCost(c)} ✚ de {c.Medicines ?? 0}"));
+                    rows.Add(Row("Qué hace", "Le quita la fiebre. Sin el tratamiento, se convierte."));
                     return (rows, false);
                 }
             }

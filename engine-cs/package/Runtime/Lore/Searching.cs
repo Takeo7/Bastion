@@ -10,16 +10,19 @@ namespace Bastion.Engine
         /// <summary>A piece of furniture that can be searched, as the log and the button read it.</summary>
         public sealed class SearchSpot
         {
-            public SearchSpot(string name, IReadOnlyList<string> supplies)
+            public SearchSpot(string name, IReadOnlyList<string> supplies, bool masculine = false)
             {
                 Name = name;
                 Supplies = supplies;
+                Masculine = masculine;
             }
 
             /// <summary>With its article, as it reads after «Abrir»: «la caja de armas».</summary>
             public string Name { get; }
             /// <summary>What the supplies found in it were; one is picked by seed.</summary>
             public IReadOnlyList<string> Supplies { get; }
+            /// <summary>Whether Name is masculine, for what agrees with it: «Está vacío», «ya está abierto».</summary>
+            public bool Masculine { get; }
         }
 
         /// <summary>
@@ -32,6 +35,8 @@ namespace Bastion.Engine
             ["lootMedical"] = new SearchSpot("la caja de medicinas", new string[0]),
             ["lootAmmo"] = new SearchSpot("la caja de munición", new string[0]),
             ["lootFood"] = new SearchSpot("la caja de comida", new string[0]),
+            // Looting.PoliceCar: the first mission's police car, a pistol in the front and another in the boot (Arturo, 1/11).
+            ["policeCar"] = new SearchSpot("el coche de policía", new string[0], masculine: true),
         };
 
         /// <summary>A room as its furniture makes it (loot.ts Room.spot): what it is called, and what the supplies found in it were.</summary>
@@ -149,9 +154,10 @@ namespace Bastion.Engine
         /// <summary>The log line for opening a marked box: «Ana abre la caja de armas: un fusil de asalto.»</summary>
         public static string SearchLine(string who, string decor, Loot? find, int seed)
         {
-            var where = SearchSpots.TryGetValue(decor, out var spot) ? spot.Name : "la caja";
+            var known = SearchSpots.TryGetValue(decor, out var spot);
+            var where = known ? spot.Name : "la caja";
             var parts = FindParts(find, new string[0], seed);
-            return parts.Count > 0 ? $"{who} abre {where}: {JoinAnd(parts)}." : $"{who} abre {where}. Está vacía.";
+            return parts.Count > 0 ? $"{who} abre {where}: {JoinAnd(parts)}." : $"{who} abre {where}. Está {(known && spot.Masculine ? "vacío" : "vacía")}.";
         }
 
         /// <summary>The log line for searching a room (docs/FASE8.md §B): «Ana registra el despacho: una radio de manivela (+12 §) y 1 pieza.» `spot`: loot.ts Room.spot.</summary>

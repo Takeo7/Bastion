@@ -19,7 +19,8 @@ namespace Bastion.UI.Combat
     /// The marks of a move on the map (overlays.ts, UI's, Gameplay 23/10), in the look Arturo chose (tileLooks.ts, 18/10:
     /// «Hueso y óxido», made clean): bone for what one action reaches, rust for the dash, no grid and no wash. Inside
     /// each side on the range's edge a strip bright at the edge and fading inwards, and on it a thin line with its
-    /// corners rounded (Ana 22/10 #52), over a dark stroke; never round a thing in the way (Ana 21/10 #18). The way to
+    /// corners rounded (Ana 22/10 #52), over a dark stroke, unbroken: it goes round the outside of a thing in the way at
+    /// the edge, never stops at it nor rings one inside (Ana 21/10 #18, Arturo 01/11 #4: Outline). The way to
     /// the tile under the pointer, a ring on that tile, and over it a shield on each side with cover. Where the squad
     /// would be noticed, an eye in a soft red, no frame (Arturo, 31/10 #14); where the ground burns, a flame in orange
     /// (Arturo, 01/11: it burns whoever steps on it). Round the picked one's feet a white ring in
@@ -235,7 +236,7 @@ namespace Bastion.UI.Combat
         /// <summary>
         /// The tiles the picked one can end its move on, on the floor shown (game.ts refreshInteractive): the strips and
         /// lines round each band, a red frame where it would be noticed. `planning`: without the command, fainter and
-        /// in the planning blue. `soft(x, y, z)`: a thing in the way the border leaves alone.
+        /// in the planning blue. `soft(x, y, z)`: a thing in the way the border goes round the outside of (Outline).
         /// </summary>
         public void ShowRange(GameState s, IList<MoveTile> tiles, bool planning = false, Func<int, int, int, bool> soft = null)
         {
@@ -246,27 +247,27 @@ namespace Bastion.UI.Combat
             var flame = new MeshBuilder();
             if (s != null && tiles != null)
             {
-                var range = new Dictionary<int, MoveTile>();
-                foreach (var t in tiles) range[t.Pos.X * 1024 + t.Pos.Y] = t;
                 var walkSegs = new List<Vector3[]>();
                 var dashSegs = new List<Vector3[]>();
                 var fill = FillAlpha * (planning ? 0.5f : 1);
-                foreach (var t in tiles)
+                var bands = Outline(tiles, soft);
+                foreach (var (p, dash) in bands.Values)
                 {
-                    var p = t.Pos;
                     var floor = Board.TileToWorld(s, p).y;
                     for (var side = 0; side < 4; side++)
                     {
                         var d = Grid.Dirs4[side];
-                        range.TryGetValue((p.X + d.X) * 1024 + p.Y + d.Y, out var n);
-                        var outside = t.Dash ? n == null : n == null || n.Dash;
+                        var has = bands.TryGetValue(Key(p.X + d.X, p.Y + d.Y), out var n);
+                        var outside = dash ? !has : !has || n.dash;
                         if (!outside) continue;
-                        // Not round a thing in the way: no line on the side that faces it.
-                        if (n == null && soft != null && soft(p.X + d.X, p.Y + d.Y, p.Z)) continue;
                         Side(p.X, p.Y, side, floor + 0.06f * T, out var a, out var b);
-                        (t.Dash ? dashSegs : walkSegs).Add(new[] { a, b });
-                        Strip(build, p.X, p.Y, side, floor + 0.03f * T, planning ? PlanTint : t.Dash ? DashFill : WalkFill, fill);
+                        (dash ? dashSegs : walkSegs).Add(new[] { a, b });
+                        Strip(build, p.X, p.Y, side, floor + 0.03f * T, planning ? PlanTint : dash ? DashFill : WalkFill, fill);
                     }
+                }
+                foreach (var t in tiles)
+                {
+                    var p = t.Pos;
                     // Both on one tile, side by side.
                     var apart = t.Detected && t.Fire ? new Vector3(0.14f * T, 0, 0) : Vector3.zero;
                     if (t.Detected)
@@ -292,6 +293,97 @@ namespace Bastion.UI.Combat
             edges.sharedMesh = lines.Build(edges.sharedMesh);
             eyes.sharedMesh = eye.Build(eyes.sharedMesh);
             flames.sharedMesh = flame.Build(flames.sharedMesh);
+        }
+
+        static int Key(int x, int y) => x * 1024 + y;
+
+        /// <summary>
+        /// What the reach's border goes round, each tile in its band (dash or not): the reach; the things in the way beside
+        /// it (`soft`: a car, a crate, a console, someone standing), in the walk's band if they touch it; and any hole left
+        /// inside of nothing but such things. So the line goes on round the outside of a thing at its edge (Arturo, 01/11
+        /// #4: it broke off at each one, 30 to 80 sides on a city's reach) and never rings one inside (Ana, 21/10 #18);
+        /// walls and holes with a wall in them it goes round as before.
+        /// </summary>
+        static Dictionary<int, (Pos pos, bool dash)> Outline(IList<MoveTile> tiles, Func<int, int, int, bool> soft)
+        {
+            var bands = new Dictionary<int, (Pos pos, bool dash)>();
+            foreach (var t in tiles) bands[Key(t.Pos.X, t.Pos.Y)] = (t.Pos, t.Dash);
+            if (soft == null || tiles.Count == 0) return bands;
+            var reach = new HashSet<int>(bands.Keys);
+            var z = tiles[0].Pos.Z;
+            int x0 = int.MaxValue, y0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue;
+            foreach (var t in tiles)
+            {
+                x0 = Mathf.Min(x0, t.Pos.X);
+                y0 = Mathf.Min(y0, t.Pos.Y);
+                x1 = Mathf.Max(x1, t.Pos.X);
+                y1 = Mathf.Max(y1, t.Pos.Y);
+                for (var side = 0; side < 4; side++)
+                {
+                    var d = Grid.Dirs4[side];
+                    int x = t.Pos.X + d.X, y = t.Pos.Y + d.Y;
+                    var k = Key(x, y);
+                    if (reach.Contains(k)) continue;
+                    // A thing taken in already: in the walk's band once any of the walk touches it.
+                    if (bands.ContainsKey(k))
+                    {
+                        if (!t.Dash) bands[k] = (bands[k].pos, false);
+                        continue;
+                    }
+                    if (soft(x, y, z)) bands[k] = (new Pos { X = x, Y = y, Z = z }, t.Dash);
+                }
+            }
+            // The holes: what the rim of the box round it all (two tiles out: the things beside are one) doesn't reach.
+            x0 -= 2;
+            y0 -= 2;
+            x1 += 2;
+            y1 += 2;
+            var outside = new HashSet<int>();
+            var queue = new Queue<(int x, int y)>();
+            for (var x = x0; x <= x1; x++)
+            {
+                queue.Enqueue((x, y0));
+                queue.Enqueue((x, y1));
+            }
+            for (var y = y0; y <= y1; y++)
+            {
+                queue.Enqueue((x0, y));
+                queue.Enqueue((x1, y));
+            }
+            while (queue.Count > 0)
+            {
+                var (x, y) = queue.Dequeue();
+                if (x < x0 || x > x1 || y < y0 || y > y1 || bands.ContainsKey(Key(x, y)) || !outside.Add(Key(x, y))) continue;
+                foreach (var d in Grid.Dirs4) queue.Enqueue((x + d.X, y + d.Y));
+            }
+            var hole = new List<(int x, int y)>();
+            var seen = new HashSet<int>();
+            for (var x = x0; x <= x1; x++)
+                for (var y = y0; y <= y1; y++)
+                {
+                    if (bands.ContainsKey(Key(x, y)) || outside.Contains(Key(x, y)) || seen.Contains(Key(x, y))) continue;
+                    hole.Clear();
+                    var things = true;
+                    var walk = false;
+                    queue.Enqueue((x, y));
+                    while (queue.Count > 0)
+                    {
+                        var (a, b) = queue.Dequeue();
+                        var k = Key(a, b);
+                        if (bands.TryGetValue(k, out var by))
+                        {
+                            walk |= !by.dash;
+                            continue;
+                        }
+                        if (outside.Contains(k) || !seen.Add(k)) continue;
+                        hole.Add((a, b));
+                        things &= soft(a, b, z);
+                        foreach (var d in Grid.Dirs4) queue.Enqueue((a + d.X, b + d.Y));
+                    }
+                    if (!things) continue;
+                    foreach (var (a, b) in hole) bands[Key(a, b)] = (new Pos { X = a, Y = b, Z = z }, !walk);
+                }
+            return bands;
         }
 
         /// <summary>A line and, in the `under` builder, the dark stroke beneath it.</summary>
@@ -616,7 +708,7 @@ namespace Bastion.UI.Combat
         /// A flame, as the eye is drawn (supersampled, white for its tint): a drop with its tip up, leaning a little, and a
         /// smaller one cut out of its foot.
         /// </summary>
-        static Texture2D FlameTexture()
+        internal static Texture2D FlameTexture()
         {
             const int size = 64;
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };

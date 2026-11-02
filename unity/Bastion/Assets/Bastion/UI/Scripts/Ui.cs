@@ -98,9 +98,18 @@ namespace Bastion.UI
             foreach (var c in children) parent.Add(c);
         }
 
-        /// <summary>What a view is compared by: its JSON (hud.ts drew a piece again only when this changed).</summary>
+        /// <summary>
+        /// What a view is compared by: its JSON (hud.ts drew a piece again only when this changed). A list's, item by item:
+        /// JsonUtility writes «{}» for a list on its own, and the line-up's cards kept the first names (Arturo, 1/11 #1).
+        /// </summary>
         public static string Key(object view)
         {
+            if (view is System.Collections.IList items)
+            {
+                var keys = new string[items.Count];
+                for (var i = 0; i < keys.Length; i++) keys[i] = Key(items[i]);
+                return "[" + string.Join(",", keys) + "]";
+            }
             return view == null ? "" : JsonUtility.ToJson(view);
         }
 

@@ -311,11 +311,17 @@ namespace Bastion.Engine
         /// </summary>
         public const int SiegeFirstIn = 1;
         public const int SiegeEvery = 3;
-        /// <summary>The dead in that first siege: a small one, with the base hardly built yet (Arturo, 22/10).</summary>
-        public const int SiegeOpening = 6;
-        /// <summary>The dead a siege is counted from after that: each one held brings SIEGE_GROWTH more, and every point of the Marea one more.</summary>
-        public const int SiegeFirst = 14;
-        public const int SiegeGrowth = 6;
+        /// <summary>
+        /// The dead in that first siege: a small one, with the base hardly built yet (Arturo, 22/10); since they come every
+        /// turn (Arturo, 1/11), eight plain zombies, one a turn, without the specials (Setup.SiegeWaves; before 6).
+        /// </summary>
+        public const int SiegeOpening = 8;
+        /// <summary>
+        /// The dead a siege is counted from after that: each one held brings SIEGE_GROWTH more, and every point of the Marea one
+        /// more. A fifth more since they come every turn (Arturo, 1/11; before 14 and 6).
+        /// </summary>
+        public const int SiegeFirst = 17;
+        public const int SiegeGrowth = 7;
         /// <summary>Days that go by with each mission (docs/FASE12.md §11.6): time is counted in missions, the clock inside in days.</summary>
         public const int DaysPerMission = 1;
         /// <summary>One siege in three by night (Arturo, 18/10), never the first one held: in the dark only the floodlights let the squad see far.</summary>

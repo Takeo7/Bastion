@@ -182,13 +182,15 @@ namespace Bastion.Engine
         public const string Smoke = "smoke";
         public const string Flashbang = "flashbang";
         public const string FirstAid = "firstAid";
+        /// <summary>The cóctel molotov (Arturo, 1/11): thrown, it sets the ground round where it lands on fire.</summary>
+        public const string Molotov = "molotov";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             Shoot, Pistol, Slash, StunLance, Overwatch, Hunker, Reload, Grenade, Launch, Missiles, Evac, Hack, Search,
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
-            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid,
+            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov,
         };
     }
 
@@ -222,8 +224,9 @@ namespace Bastion.Engine
         public const string Smoke = "smoke";
         public const string Flashbang = "flashbang";
         public const string Burst = "burst";
+        public const string Molotov = "molotov";
 
-        public static readonly IReadOnlyList<string> All = new[] { Grenade, Launch, Missiles, Smoke, Flashbang, Burst };
+        public static readonly IReadOnlyList<string> All = new[] { Grenade, Launch, Missiles, Smoke, Flashbang, Burst, Molotov };
     }
 
     /// <summary>Limited-use items.</summary>
@@ -239,10 +242,11 @@ namespace Bastion.Engine
         public const string PatchUp = "patchUp";
         /// <summary>The chainsaw's: a blow each (Content.ChainsawFuel).</summary>
         public const string Fuel = "fuel";
+        public const string Molotov = "molotov";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Grenade, Missiles, Smoke, Flashbang, FirstAid, Restoration, PatchUp, Fuel,
+            Grenade, Missiles, Smoke, Flashbang, FirstAid, Restoration, PatchUp, Fuel, Molotov,
         };
     }
 
@@ -257,10 +261,12 @@ namespace Bastion.Engine
         public const string MindShield = "mindShield";
         public const string ApRounds = "apRounds";
         public const string TracerRounds = "tracerRounds";
+        /// <summary>Before the grenades (Arturo, 1/11): from the Bastión's first level.</summary>
+        public const string Molotov = "molotov";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            FragGrenade, SmokeGrenade, Flashbang, FirstAid, NanoVest, MindShield, ApRounds, TracerRounds,
+            Molotov, FragGrenade, SmokeGrenade, Flashbang, FirstAid, NanoVest, MindShield, ApRounds, TracerRounds,
         };
     }
 
@@ -288,11 +294,13 @@ namespace Bastion.Engine
         public const string Bat = "bat";
         public const string Crowbar = "crowbar";
         public const string Chainsaw = "chainsaw";
+        /// <summary>The pistol at the side, the Armería's since 1/11 (Arturo: nobody starts with one); see Arms.Pistol.</summary>
+        public const string Pistol = "pistol";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             AssaultRifle, PumpShotgun, PrecisionRifle, MachineGun, Machete, HuntingRifle, SawnOff, ScopedRifle,
-            LightMachineGun, Pan, Bat, Crowbar, Chainsaw,
+            LightMachineGun, Pan, Bat, Crowbar, Chainsaw, Pistol,
         };
     }
 

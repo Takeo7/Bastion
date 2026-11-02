@@ -162,5 +162,17 @@
       "file": "melee-chainsaw-cut/fs-810392-2.ogg",
       "db": 0
     }
+  ],
+  "fire.ignite": [
+    {
+      "file": "fire-ignite/propio-fuego-prende-1.ogg",
+      "db": 0
+    }
+  ],
+  "fire.crackle": [
+    {
+      "file": "fire-crackle/propio-fuego-crepita-1.ogg",
+      "db": 0
+    }
   ]
 }

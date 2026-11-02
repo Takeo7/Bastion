@@ -109,10 +109,11 @@ namespace Bastion.Engine.Tests
             Assert.Equal(13, holds.Count((h) => h.Value == Content.Siege.Door));
             Assert.Equal(12, holds.Count((h) => h.Value == Content.Siege.Barricade));
             foreach (var h in holds) Assert.Contains(s.Tiles[h.Key], new[] { TileKinds.Door, TileKinds.Low });
-            // Five waves that overlap, each over several sides at once (Ana, 23/10: from every side and together).
+            // A wave every enemy turn from the first to the eighth (Arturo, 1/11), each over several sides at once (Ana, 23/10:
+            // from every side and together).
             var waves = s.Mission.Reinforcements;
-            Assert.Equal(new[] { 1, 2, 3, 5, 6 }, waves.Select((r) => r.Turn).Distinct());
-            foreach (var turn in new[] { 2, 3, 5, 6 }) Assert.True(waves.Where((r) => r.Turn == turn).Select((r) => r.Side).Distinct().Count() > 1, $"turn {turn}");
+            Assert.Equal(Enumerable.Range(1, 8), waves.Select((r) => r.Turn).Distinct());
+            foreach (var turn in Enumerable.Range(1, 8)) Assert.True(waves.Where((r) => r.Turn == turn).Select((r) => r.Side).Distinct().Count() > 1, $"turn {turn}");
             foreach (var r in waves)
             {
                 Assert.Equal(true, r.Horde);

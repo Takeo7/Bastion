@@ -17,13 +17,91 @@ namespace Bastion.EditorTools
     public static class AnimalesLab
     {
         public static void Perros() => Show("Dog");
+
+        /// <summary>BASTION_SONDA_FAUNA=1: in play mode, each dog's animator in the log every second (Fauna.AnimatorReport).</summary>
+        [InitializeOnLoadMethod]
+        static void Probe()
+        {
+            if (Environment.GetEnvironmentVariable("BASTION_SONDA_FAUNA") != "1") return;
+            double next = 0;
+            EditorApplication.update += () =>
+            {
+                if (!Application.isPlaying || Fauna.Current == null || EditorApplication.timeSinceStartup < next) return;
+                next = EditorApplication.timeSinceStartup + 1;
+                foreach (string line in Fauna.Current.AnimatorReport()) Debug.Log($"[sonda] {Time.time:0.0} s {line}");
+            };
+        }
         public static void Pajaros() => Show("Crow");
         public static void Campo() => Show("Wild");
+        /// <summary>A rabbit (SIMPLE's, Arturo 1/11) on a country map, wilds-7: hopping off as the stand-in comes, before the rest.</summary>
+        public static void Conejo() => Show("Grazer", "Rabbit");
+        /// <summary>The stag (BASTION_RAZA another: Doe, Boar).</summary>
+        public static void Ciervo() => Show("Grazer", Environment.GetEnvironmentVariable("BASTION_RAZA") ?? "Stag");
+
+        /// <summary>
+        /// For Arturo's #7 (1/11, more animals: POLYGON has no deer nor rabbits, SIMPLE - Forest Animals has): the Dog Pack's
+        /// wolf, fox, coyote and a dog, then SIMPLE's wolf, doe, stag, boar and rabbit, in a row on a clearing of MapLab's
+        /// map (wilds-7, where its first wild one stands), under the game's light and camera (BASTION_DIST tiles off, 24).
+        /// SIMPLE's models from a test folder outside git (Assets/Synty/_PruebaSimple, its source FBX and texture), each
+        /// brought to its real size.
+        /// </summary>
+        public static void Comparar()
+        {
+            MapLab.Day();
+            var fauna = Fauna.Current;
+            var spot = fauna?.Animals.FirstOrDefault(a => a.kind == "Wild").root;
+            if (spot == null)
+            {
+                Debug.LogWarning("[animales] no clearing found");
+                return;
+            }
+            var at = spot.position;
+            fauna.gameObject.SetActive(false);
+            var prefabOf = MapLab.Prefabs();
+            var controller = Resources.Load<RuntimeAnimatorController>(Fauna.ControllerName);
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Synty/_PruebaSimple/SimpleForestAnimalsTexture.png");
+            var simple = new Material(Shader.Find("Universal Render Pipeline/Lit")) { mainTexture = texture };
+            simple.SetFloat("_Smoothness", 0.15f);
+            var row = new (string model, float tall)[]
+            {
+                ("dog:SK_Dog_Wolf_01", 0), ("dog:SK_Dog_Fox_01", 0), ("dog:SK_Dog_Coyote_01", 0), ("dog:SK_Dog_Labrador_01", 0),
+                ("SM_Wolf_01", 0.85f), (Environment.GetEnvironmentVariable("BASTION_CIERVA") ?? "SM_Doe_02", 1.4f), ("SM_Stag_01", 1.6f), ("SM_Boar_01", 0.8f), ("SM_Rabbit_01", 0.3f),
+            };
+            // (Across the picture, along the camera's right, from the clearing's edge into it: each as near as the others.)
+            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            MapSpace.Aim(camera, at, Number("BASTION_DIST", 24), Number("BASTION_GIRO", 45));
+            var right = Vector3.ProjectOnPlane(camera.transform.right, Vector3.up).normalized;
+            var down = Vector3.ProjectOnPlane(-camera.transform.up, Vector3.up).normalized;
+            at += right * Number("BASTION_DERECHA", 5) * MapSpace.Tile + down * Number("BASTION_ABAJO", 2) * MapSpace.Tile;
+            float x = -(row.Length - 1) / 2f * 1.3f * MapSpace.Tile;
+            foreach (var (model, tall) in row)
+            {
+                var prefab = tall == 0 ? prefabOf(model) : AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Synty/_PruebaSimple/{model}.fbx");
+                if (prefab == null)
+                {
+                    Debug.LogWarning($"[animales] missing {model}");
+                    continue;
+                }
+                var made = (GameObject)UnityEngine.Object.Instantiate(prefab);
+                made.name = model;
+                made.transform.position = at + right * x;
+                made.transform.rotation = Quaternion.LookRotation(right);
+                x += 1.3f * MapSpace.Tile;
+                var animator = made.GetComponentInChildren<Animator>();
+                if (animator != null && controller != null) animator.runtimeAnimatorController = controller;
+                if (tall == 0) continue;
+                foreach (var r in made.GetComponentsInChildren<Renderer>()) r.sharedMaterial = simple;
+                var box = made.GetComponentsInChildren<Renderer>().Select(r => r.bounds).Aggregate((a, b) => { a.Encapsulate(b); return a; });
+                made.transform.localScale *= tall / Mathf.Max(box.size.y, 1e-4f);
+            }
+            MapSpace.Aim(camera, at, Number("BASTION_DIST", 24), Number("BASTION_GIRO", 45));
+            Debug.Log($"[animales] a row of {row.Length} at {MapSpace.WorldToTile(at)}");
+        }
 
         static float Number(string name, float otherwise) =>
             float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : otherwise;
 
-        static void Show(string kind)
+        static void Show(string kind, string breed = null)
         {
             MapLab.Day();
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
@@ -39,10 +117,21 @@ namespace Bastion.EditorTools
             var middle = MapSpace.World(state.Width / 2, state.Height / 2);
             // (BASTION_ANIMAL=k: the k-th so, not the first.)
             int skip = (int)Number("BASTION_ANIMAL", 0);
-            var first = fauna.Animals.Where(a => a.kind == kind).OrderBy(a => Vector3.Distance(a.root.position, middle)).Skip(skip).FirstOrDefault().root;
+            var first = fauna.Animals.Where(a => a.kind == kind && (breed == null || a.root.name.StartsWith(breed))).OrderBy(a => Vector3.Distance(a.root.position, middle)).Skip(skip).FirstOrDefault().root;
             if (first == null)
             {
                 Debug.LogWarning($"[animales] no {kind} on {name}");
+                return;
+            }
+            // (BASTION_EN=x,y: put there, on a tile the camera sees, past the woods that hide where it was.)
+            if (Environment.GetEnvironmentVariable("BASTION_EN")?.Split(',') is string[] en && en.Length == 2)
+                first.position = MapSpace.World(int.Parse(en[0]), int.Parse(en[1]));
+            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            // (BASTION_SOLO=1: nobody coming, the camera on the animal: how it stands and wanders.)
+            if (Environment.GetEnvironmentVariable("BASTION_SOLO") == "1")
+            {
+                MapSpace.Aim(camera, first.position, Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
+                Debug.Log($"[animales] {kind} {first.name} alone, at {MapSpace.WorldToTile(first.position)}");
                 return;
             }
             // The stand-in: from so many tiles off (to the south-east, the camera's side) towards the animal, at 1.4 m/s.
@@ -57,14 +146,19 @@ namespace Bastion.EditorTools
             void Place() => post.transform.position = Vector3.MoveTowards(start, goal, Mathf.Max(0, walked - delay) * 1.4f) + Vector3.up * 0.9f;
             Place();
             Fauna.ExtraThreats = () => new[] { post.transform.position };
+            // (BASTION_SEGUIR=1: the camera following the animal as it runs, the stand-in in view too.)
+            bool follow = Environment.GetEnvironmentVariable("BASTION_SEGUIR") == "1";
+            Camera shot = null;
             Fauna.Stepping = dt =>
             {
                 walked += dt;
                 Place();
+                if (follow && (shot ??= GameObject.Find("Shot camera")?.GetComponent<Camera>()) != null)
+                    MapSpace.Aim(shot, Vector3.Lerp(first.position, post.transform.position - Vector3.up * 0.9f, Number("BASTION_MIRA", 0.3f)), Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
             };
-            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
             // (On the animal, at its height, the stand-in coming in from the bottom of the picture.)
-            MapSpace.Aim(camera, Vector3.Lerp(first.position, start, 0.3f), Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
+            // (BASTION_MIRA: how far towards the stand-in's start the camera looks, 0.3.)
+            MapSpace.Aim(camera, Vector3.Lerp(first.position, start, Number("BASTION_MIRA", 0.3f)), Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
             var tile = MapSpace.WorldToTile(first.position);
             Debug.Log(FormattableString.Invariant($"[animales] {kind} {first.name} on {tile.x},{tile.y} at {first.position.y:0.00} m; ") + string.Join(", ", fauna.Animals.Select(a => $"{a.kind} {MapSpace.WorldToTile(a.root.position)}")));
         }

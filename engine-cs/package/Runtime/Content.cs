@@ -147,8 +147,10 @@ namespace Bastion.Engine
     {
         public const string Primary = "primary";
         public const string Melee = "melee";
+        /// <summary>The pistol at the side (Arturo, 1/11), beside the weapon in the hand or as the only gun.</summary>
+        public const string Sidearm = "sidearm";
 
-        public static readonly IReadOnlyList<string> All = new[] { Primary, Melee };
+        public static readonly IReadOnlyList<string> All = new[] { Primary, Melee, Sidearm };
     }
 
     public sealed class FoundWeaponDef
@@ -160,7 +162,7 @@ namespace Bastion.Engine
         public string Find { get; set; } = "";
         /// <summary>The weapon it fires as.</summary>
         public string Weapon { get; set; } = ""; // WeaponIds
-        /// <summary>In the hand (fusil, escopeta, fusil de precisión, ametralladora) or at the belt (the machete).</summary>
+        /// <summary>In the hand (fusil, escopeta, fusil de precisión, ametralladora), at the belt (the machete) or at the side (the pistol).</summary>
         public string Slot { get; set; } = ""; // FoundWeaponSlots
         /// <summary>A good one: it comes with an improvement mounted (`mod`, docs/FASE9.md §5).</summary>
         public bool Better { get; set; }
@@ -283,7 +285,7 @@ namespace Bastion.Engine
         /// <summary>What is thrown by hand: Lanzar fills with it and its reach reaches it all (docs/FASE10.md §2).</summary>
         public static readonly IReadOnlyCollection<string> Thrown = new HashSet<string>
         {
-            AbilityIds.Grenade, AbilityIds.Launch, AbilityIds.Smoke, AbilityIds.Flashbang, AbilityIds.Stone,
+            AbilityIds.Grenade, AbilityIds.Launch, AbilityIds.Smoke, AbilityIds.Flashbang, AbilityIds.Stone, AbilityIds.Molotov,
         };
 
         /// <summary>Shooting down from a higher level (XCOM 2 height advantage).</summary>
@@ -598,6 +600,8 @@ namespace Bastion.Engine
             [AbilityIds.Smash] = new AbilityDef { Id = AbilityIds.Smash, Name = "Golpear", Description = "Golpea la puerta o la barricada que tiene al lado hasta tirarla. Se oye, y acuden más.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 1.5, Noise = Siege.SmashNoise },
             [AbilityIds.Smoke] = new AbilityDef { Id = AbilityIds.Smoke, Name = "Granada de humo", Description = "Cubre una zona de humo durante 2 turnos: −20 a la puntería contra quien esté dentro.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = true, Charge = ChargeIds.Smoke, Range = 10, Radius = 2, Noise = 4 },
             [AbilityIds.Flashbang] = new AbilityDef { Id = AbilityIds.Flashbang, Name = "Granada aturdidora", Description = "Desorienta a los enemigos de la zona (−20 de puntería, sin explosivos). No hace daño.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = true, Charge = ChargeIds.Flashbang, Range = 10, Radius = 2.5, Noise = 18 },
+            // Arturo, 1/11: before the grenades, and the 3×3 for 2 turns. On the ground only, where fires burn (Burning).
+            [AbilityIds.Molotov] = new AbilityDef { Id = AbilityIds.Molotov, Name = "Cóctel molotov", Description = "Lanza un cóctel molotov: arde un cuadrado de 3×3 casillas durante 2 turnos. Quita 1 de salud a quien esté dentro al caer, a quien entre y a quien acabe el turno dentro, también a los tuyos. Solo se lanza a la calle o a una planta baja.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = true, Charge = ChargeIds.Molotov, Range = 10, Radius = 1.5, Noise = 10 },
             [AbilityIds.FirstAid] = new AbilityDef { Id = AbilityIds.FirstAid, Name = "Botiquín", Description = "Cura 4 de salud a uno mismo o a un compañero de al lado.", Target = AbilityTargets.Ally, Ap = 1, EndsTurn = false, Charge = ChargeIds.FirstAid, Range = 1.5 },
         };
 
@@ -615,6 +619,8 @@ namespace Bastion.Engine
         public const int RestorationHeal = 2;
         public const int SmokeDefense = 20;
         public const int SmokeTurns = 2;
+        /// <summary>The squad's turns a molotov's fire lasts (Arturo, 1/11: «Fuego 3×3, 2 turnos»).</summary>
+        public const int MolotovTurns = 2;
 
         // ------------------------------------------------------------------ items
 
@@ -628,9 +634,9 @@ namespace Bastion.Engine
 
         /// <summary>
         /// The Armería's weapons (docs/FASE8.md §A): the campaign's soldiers start with a
-        /// knife and a pistol, and these are found, made in the Taller or brought by the
-        /// Bastion's level. Anyone may carry any of them. The good ones (docs/FASE4.md)
-        /// fight a tier above. Names are placeholders for Lore.
+        /// knife (and, in campaigns from before 1/11, a pistol), and these are found, made
+        /// in the Taller or brought by the Bastion's level. Anyone may carry any of them.
+        /// The good ones (docs/FASE4.md) fight a tier above. Names are placeholders for Lore.
         /// </summary>
         public static readonly IReadOnlyDictionary<string, FoundWeaponDef> FoundWeapons = new Dictionary<string, FoundWeaponDef>
         {
@@ -647,6 +653,8 @@ namespace Bastion.Engine
             [FoundWeaponIds.Bat] = new FoundWeaponDef { Id = FoundWeaponIds.Bat, Name = "Bate", Find = "un bate", Weapon = WeaponIds.Bat, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 3 },
             [FoundWeaponIds.Crowbar] = new FoundWeaponDef { Id = FoundWeaponIds.Crowbar, Name = "Palanca", Find = "una palanca", Weapon = WeaponIds.Crowbar, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 2 },
             [FoundWeaponIds.Chainsaw] = new FoundWeaponDef { Id = FoundWeaponIds.Chainsaw, Name = "Motosierra", Find = "una motosierra con algo de gasolina", Weapon = WeaponIds.Chainsaw, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 1 },
+            // The commonest find, but only where pistols are counted (MissionState.Pistols; Looting.FoundWeapon).
+            [FoundWeaponIds.Pistol] = new FoundWeaponDef { Id = FoundWeaponIds.Pistol, Name = "Pistola", Find = "una pistola", Weapon = WeaponIds.Pistol, Slot = FoundWeaponSlots.Sidearm, Better = false, Weight = 12 },
         };
 
         /// <summary>The chainsaw's fuel (ChargeIds.Fuel): the blows it has in each mission (Arturo, 29/10: «un límite de usos»).</summary>
@@ -715,7 +723,9 @@ namespace Bastion.Engine
         public static readonly IReadOnlyDictionary<string, ItemDef> Items = new Dictionary<string, ItemDef>
         {
             // The belt (docs/FASE9.md §4): two of these; ammunition goes into the weapons' mods instead.
-            [ItemIds.FragGrenade] = new ItemDef { Id = ItemIds.FragGrenade, Name = "Granadas", Description = "Dos granadas de fragmentación, en el cinturón. Quien no las lleva, no puede lanzar.", Slot = ItemSlots.Utility, Cost = 20, Level = 1, Charges = new Dictionary<string, int> { [ChargeIds.Grenade] = 2 } },
+            [ItemIds.Molotov] = new ItemDef { Id = ItemIds.Molotov, Name = "Cócteles molotov", Description = "Dos botellas con gasolina y un trapo, en el cinturón. Donde cae una, arde un cuadrado de 3×3 casillas durante 2 turnos.", Slot = ItemSlots.Utility, Cost = 10, Level = 1, Charges = new Dictionary<string, int> { [ChargeIds.Molotov] = 2 }, Ability = AbilityIds.Molotov },
+            // From the Bastión's third level (Arturo, 1/11: the molotov comes first).
+            [ItemIds.FragGrenade] = new ItemDef { Id = ItemIds.FragGrenade, Name = "Granadas", Description = "Dos granadas de fragmentación, en el cinturón. Quien no las lleva, no puede lanzar.", Slot = ItemSlots.Utility, Cost = 20, Level = 3, Charges = new Dictionary<string, int> { [ChargeIds.Grenade] = 2 } },
             [ItemIds.SmokeGrenade] = new ItemDef { Id = ItemIds.SmokeGrenade, Name = "Granada de humo", Description = "Humo durante 2 turnos: −20 a la puntería contra quien esté dentro.", Slot = ItemSlots.Utility, Cost = 25, Level = 1, Charges = new Dictionary<string, int> { [ChargeIds.Smoke] = 1 }, Ability = AbilityIds.Smoke },
             [ItemIds.FirstAid] = new ItemDef { Id = ItemIds.FirstAid, Name = "Botiquín", Description = "Dos usos: cura 4 a uno mismo o a un compañero de al lado.", Slot = ItemSlots.Utility, Cost = 25, Level = 1, Charges = new Dictionary<string, int> { [ChargeIds.FirstAid] = 2 }, Ability = AbilityIds.FirstAid },
             [ItemIds.Flashbang] = new ItemDef { Id = ItemIds.Flashbang, Name = "Granada aturdidora", Description = "Desorienta a los enemigos de la zona.", Slot = ItemSlots.Utility, Cost = 30, Level = 2, Charges = new Dictionary<string, int> { [ChargeIds.Flashbang] = 1 }, Ability = AbilityIds.Flashbang },
@@ -932,6 +942,18 @@ namespace Bastion.Engine
             return w.Clip + (FiresPrimary(u, ability) && HasMod(u, WeaponModIds.ExtMag) ? ExtMag : 0);
         }
 
+        /// <summary>Whether the soldier carries a pistol (Arms.Pistol): a unit without arms of its own, its template's.</summary>
+        public static bool HasPistol(Unit u)
+        {
+            return u.Arms == null || u.Arms.Pistol != false;
+        }
+
+        /// <summary>Whether the soldier has a gun at all: a weapon in the hand, or a pistol (Arturo, 1/11: nobody starts with one).</summary>
+        public static bool HasGun(Unit u)
+        {
+            return u.Arms == null || !string.IsNullOrEmpty(u.Arms.Primary) || u.Arms.Pistol != false;
+        }
+
         /// <summary>Whether `ability` fires the pistol carried beside a primary weapon: it has its own rounds (Unit.pistolAmmo).</summary>
         public static bool FiresSidearm(Unit u, string ability)
         {
@@ -957,13 +979,13 @@ namespace Bastion.Engine
         {
             var main = ClipOf(u, AbilityIds.Shoot);
             if (u.Ammo < main || string.IsNullOrEmpty(u.Arms?.Primary)) u.Ammo = main;
-            else u.PistolAmmo = PistolClip;
+            else if (HasPistol(u)) u.PistolAmmo = PistolClip;
         }
 
         /// <summary>Whether every gun the soldier carries is full.</summary>
         public static bool FullyLoaded(Unit u)
         {
-            return u.Ammo >= ClipOf(u, AbilityIds.Shoot) && (string.IsNullOrEmpty(u.Arms?.Primary) || (u.PistolAmmo ?? 0) >= PistolClip);
+            return u.Ammo >= ClipOf(u, AbilityIds.Shoot) && (string.IsNullOrEmpty(u.Arms?.Primary) || !HasPistol(u) || (u.PistolAmmo ?? 0) >= PistolClip);
         }
 
         /// <summary>Squadsight: the class's, and with arms of its own only with a fusil de precisión in hand (docs/FASE8.md §A).</summary>

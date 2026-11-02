@@ -123,6 +123,7 @@ namespace Bastion.UI.Strategy
                 {
                     Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname), Accent = PlayerColor(s.Owner), Skills = SkillsOf(s),
                     Rank = Bars.VeterancyRank(s.Board.Count), RankTip = RankTip(s), Enabled = s.Owner == Slot, Picked = s.Id == postPick,
+                    Peek = Peek(c, s),
                 };
                 if (posts.ContainsKey(s.Id)) (row.Chip, row.ChipTone, row.ChipTip) = ("Puesto", "good", "Empieza el asedio donde está en el claro");
                 else (row.Chip, row.ChipTone, row.ChipTip) = ("Junto al Bastión", null, "Sin puesto: empieza junto al Bastión");
@@ -146,15 +147,45 @@ namespace Bastion.UI.Strategy
                 Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname), Accent = PlayerColor(s.Owner), Skills = SkillsOf(s),
                 Rank = Bars.VeterancyRank(s.Board.Count), RankTip = RankTip(s), In = on,
                 Enabled = !(siege || s.Owner != Slot || (!ready && !on)),
-                Tip = string.Join(" · ", new[] { s.Loadout.Utility, s.Loadout.Ammo }.Where(g => g != null).Select(g => Content.Items[g].Name)),
+                // The belt, once a tip over the row, is on the sheet in short by the list now (Arturo, 1/11 #2).
+                Peek = Peek(c, s),
             };
             if (on) (row.Chip, row.ChipTone, row.ChipTip) = ("✓", "good", StrategyText.Squad.InTip);
             else if (ready) { }
             // Lore, C2: «Mordisco», «Heridas».
             else if (s.Infection != null) (row.Chip, row.ChipTone, row.ChipTip) = ("Fiebre", "bad", "Mordisco: necesita el tratamiento antes de salir.");
             else (row.Chip, row.ChipTone, row.ChipTip) = (MissionsText(MissionsFor(s.WoundedDays)), "warn", "Heridas");
-            if (row.Tip == "") row.Tip = null;
             return row;
+        }
+
+        /// <summary>
+        /// A soldier's sheet in short, by the squad's lists (Arturo, 1/11 #2): what the sheet in Soldados says of them, the
+        /// aim with firearms, the movement in tiles, the weapon, the belt, the board's abilities and how they are.
+        /// </summary>
+        SoldierPeekView Peek(CampaignState c, CampaignSoldier s)
+        {
+            var stats = Campaign.SquadMember(c, s);
+            var template = Content.Templates.TryGetValue(stats.Template ?? "", out var t) ? t : Content.Templates[TemplateIds.Rookie];
+            var move = template.Mobility + stats.Mods.Mobility;
+            var v = new SoldierPeekView
+            {
+                Name = Appearances.DisplayName(s.Name, s.Nickname),
+                Kicker = $"{Campaign.VeterancyName(s)} · {(s.Owner == Slot ? (Female(s) ? "tuya" : "tuyo") : $"de {PlayerName(s.Owner)}")}",
+                Weapon = Campaign.WeaponLabel(c, s),
+                Belt = string.Join(" · ", new[] { s.Loadout.Utility, s.Loadout.Ammo }.Where(g => g != null).Select(g => Content.Items[g].Name)),
+            };
+            v.Stats.Add(new PeekStatView { Name = "Salud", Value = stats.MaxHp.ToString() });
+            v.Stats.Add(new PeekStatView { Name = "Puntería", Value = (template.Aim + stats.Mods.Aim + stats.Mods.GunAim).ToString() });
+            v.Stats.Add(new PeekStatView { Name = "Movimiento", Value = move.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) });
+            if (v.Belt == "") v.Belt = null;
+            foreach (var id in s.Board)
+                if (Board.BoardCells.TryGetValue(id, out var cell) && (cell.Kind == CellKinds.Passive || cell.Kind == CellKinds.Active)) v.Abilities.Add(cell.Name);
+            var (health, tone, _) = Health(c, s, false);
+            // Ready: what Arturo asked for is the wounds, so it says there are none.
+            if (tone == "good") (health, tone) = ("Sin heridas", null);
+            v.Health = health;
+            v.HealthTone = tone;
+            return v;
         }
 
         /// <summary>Whose half of the hangar a pad is in (padSide).</summary>

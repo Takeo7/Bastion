@@ -44,6 +44,10 @@ const SOURCES = [
   // An ambulance's siren at its start: the cuts are from where it cuts at full revs, well after.
   { name: 'fs-185579', url: fs(185579, 230160), group: 'melee.chainsaw.cut', cuts: [[46, 2.5], [58, 2.5], [68, 2.5]] },
   { name: 'fs-810392', url: fs(810392, 2040107), group: 'melee.chainsaw.cut', cuts: [[4, 2.5], [108, 2.5]] },
+  // Our own (propios.mjs: made, not downloaded, WAV): the molotov's flame catching, and its fire crackling, a loop (no
+  // fades at its ends: it runs on without a seam; Gameplay 1/11, Arturo's #10).
+  { name: 'propio-fuego-prende', own: true, group: 'fire.ignite', takes: 1 },
+  { name: 'propio-fuego-crepita', own: true, group: 'fire.crackle', cuts: [[0, 8]], loop: true },
 ];
 
 /** How long a take may last, by group (seconds): shorter pieces are clicks and breaths, longer ones are cut. */
@@ -56,6 +60,7 @@ const SPAN = {
   'melee.pan': [0.2, 0.8],
   'melee.bat': [0.2, 0.8],
   'melee.crowbar': [0.12, 0.8],
+  'fire.ignite': [0.3, 2],
 };
 
 /** Short takes' loudness (mean, dB) and the most their peaks may reach (Opus lifts them a little). */
@@ -96,7 +101,7 @@ function fetchMissing() {
   mkdirSync(SRC, { recursive: true });
   for (const s of SOURCES) {
     const file = join(SRC, `${s.name}.ogg`);
-    if (existsSync(file)) continue;
+    if (s.own || existsSync(file)) continue;
     console.log(`bajando ${s.name} · ${s.url}`);
     execFileSync('curl', ['-fsSL', '--retry', '2', '-o', file, s.url], { stdio: 'inherit' });
   }
@@ -107,9 +112,9 @@ function convert() {
   mkdirSync(OUT, { recursive: true });
   const index = {};
   for (const s of SOURCES) {
-    const file = join(SRC, `${s.name}.ogg`);
+    const file = join(SRC, `${s.name}.${s.own ? 'wav' : 'ogg'}`);
     if (!existsSync(file)) {
-      console.log(`falta ${s.name} (con --bajar se baja)`);
+      console.log(`falta ${s.name} (${s.own ? 'node unity/tools/sonido/propios.mjs lo hace' : 'con --bajar se baja'})`);
       continue;
     }
     const dir = join(OUT, s.group.replace(/\./g, '-'));
@@ -131,7 +136,9 @@ function convert() {
       const out = join(dir, `${s.name}-${i + 1}.ogg`);
       const fade = s.cuts ? Math.min(0.25, length / 4) : Math.min(0.08, length / 4);
       const fadeIn = s.cuts ? 0.04 : 0.01;
-      run(['-y', '-ss', a.toFixed(3), '-t', length.toFixed(3), '-i', file, '-af', `volume=${gain.toFixed(2)}dB,afade=t=in:d=${fadeIn},afade=t=out:st=${(length - fade).toFixed(3)}:d=${fade.toFixed(3)}`, '-ac', '1', '-ar', '48000', '-c:a', 'libopus', '-b:a', '64k', out]);
+      // (A loop's ends meet: no fades.)
+      const fades = s.loop ? '' : `,afade=t=in:d=${fadeIn},afade=t=out:st=${(length - fade).toFixed(3)}:d=${fade.toFixed(3)}`;
+      run(['-y', '-ss', a.toFixed(3), '-t', length.toFixed(3), '-i', file, '-af', `volume=${gain.toFixed(2)}dB${fades}`, '-ac', '1', '-ar', '48000', '-c:a', 'libopus', '-b:a', '64k', out]);
       (index[s.group] ??= []).push({ file: `${s.group.replace(/\./g, '-')}/${s.name}-${i + 1}.ogg`, db: s.db ?? 0 });
     });
     console.log(`${s.group} ← ${s.name} (${spans.length} ${spans.length === 1 ? 'toma' : 'tomas'})`);

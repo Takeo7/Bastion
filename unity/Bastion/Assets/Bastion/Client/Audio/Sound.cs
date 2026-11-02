@@ -160,6 +160,19 @@ namespace Bastion.Client.Audio
             return new SoundLoop(p.Mix, p.Mix.Loop(sample, bus ?? def.bus, gain, reverb, p.Random() * sample.Seconds));
         }
 
+        /// <summary>
+        /// A recorded group's first take looping (Unity's own, the molotov's fire crackling: grabados.mjs's loops, cut with
+        /// no fades), from somewhere along it, at its own level; null when there is none.
+        /// </summary>
+        public static SoundLoop? LoopRecorded(string group, float gain = 1, float reverb = 0, Bus bus = Bus.Sfx)
+        {
+            if (!(Live() is var (p, m)) || !m.recorded.TryGetValue(group, out var takes) || takes.Length == 0) return null;
+            var sample = m.Samples(takes[0].file);
+            if (sample == null) return null;
+            Trace($"bucle {takes[0].file}", bus, gain * Db(takes[0].db), 0, 0);
+            return new SoundLoop(p.Mix, p.Mix.Loop(sample, bus, gain * Db(takes[0].db), reverb, p.Random() * sample.Seconds));
+        }
+
         /// <summary>engine.ts duck: the music lowered by `depth` for `hold` seconds, back over `release`.</summary>
         public static void Duck(float depth = 0.45f, double hold = 0.5, double release = 1.4) => SoundPlayer.Instance?.Mix.Duck(depth, hold, release);
 

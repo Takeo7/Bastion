@@ -3,13 +3,20 @@
 #   python3 -I upkg-extract.py <package> <project folder> [asset path…]   (paths as in the package: Assets/Synty/…)
 #   python3 -I upkg-extract.py --only Sprites,Textures <package> <project folder>
 #   python3 -I upkg-extract.py --under Assets/Synty/<pack folder> <package> <project folder>
+#   python3 -I upkg-extract.py --move Assets/<its folder>=Assets/Synty/<ours> --under Assets/<its folder> <package> <project>
 # With no paths, the whole package but its demo scenes and samples (Assets/<…>/<pack>/Scenes, Samples); with --only,
 # only what lies in folders of those names (and the folders above them, for their .meta); with --under, only what lies
-# under that folder (and the folder itself), but its demo scenes and samples.
+# under that folder (and the folder itself), but its demo scenes and samples; with --move, what lies under the first
+# folder written under the second instead (a pack outside Assets/Synty, kept off GitHub with the rest: its GUIDs go with
+# its .meta, so what it refers to it still finds).
 import os, sys, tarfile
 args = sys.argv[1:]
 only = None
 under = None
+move = None
+if args[:1] == ['--move']:
+    move = tuple(args[1].rstrip('/').split('=', 1))
+    args = args[2:]
 if args[:1] == ['--only']:
     only = set(args[1].split(','))
     args = args[2:]
@@ -41,7 +48,10 @@ with tarfile.open(package, 'r:gz') as t:
     for m in members:
         folder, _, part = m.name.partition('/')
         if folder in folders and part in ('asset', 'asset.meta'):
-            out = os.path.join(project, folders[folder] + ('.meta' if part == 'asset.meta' else ''))
+            path = folders[folder]
+            if move and (path == move[0] or path.startswith(move[0] + '/')):
+                path = move[1] + path[len(move[0]):]
+            out = os.path.join(project, path + ('.meta' if part == 'asset.meta' else ''))
             os.makedirs(os.path.dirname(out), exist_ok=True)
             with open(out, 'wb') as f:
                 f.write(t.extractfile(m).read())
@@ -52,6 +62,8 @@ with tarfile.open(package, 'r:gz') as t:
     with_asset = {m.name.partition('/')[0] for m in members if m.name.endswith('/asset')}
     for folder, path in folders.items():
         if folder not in with_asset:
+            if move and (path == move[0] or path.startswith(move[0] + '/')):
+                path = move[1] + path[len(move[0]):]
             os.makedirs(os.path.join(project, path), exist_ok=True)
 print(f'{written} files from {os.path.basename(package)}')
 missing = wanted - set(folders.values())

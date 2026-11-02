@@ -390,6 +390,8 @@ namespace Bastion.Client.Audio
         /// </summary>
         public void Siren(Func<GameState?>? view)
         {
+            // (The molotovs' fires by the same view: Fires.)
+            Fires(view);
             var s = view?.Invoke();
             var relay = s != null && s.Mission.Kind == MissionKinds.Sabotage && s.Outcome == null ? Relay(s) : null;
             var player = SoundPlayer.Instance;
@@ -430,6 +432,86 @@ namespace Bastion.Client.Audio
             if (w == null) return;
             wail = null;
             w.loop?.Stop(windDown);
+        }
+
+        // ------------------------------------------------------------ the molotov (Arturo, 1/11)
+
+        /// <summary>How loud a fire's crackle is at its nearest, and how long it takes to die away once it is out (s).</summary>
+        private const float CrackleLevel = 0.55f, CrackleDown = 1.5f;
+
+        /// <summary>
+        /// A molotov breaking where it lands: the bottle's glass (impact.glass, a little higher), and the flame catching over
+        /// it (fire.ignite, Unity's own: propios.mjs), under a grenade's blast (its loudest tenth of a second 5 dB below,
+        /// Mezcla). The fire's crackle is Fires'.
+        /// </summary>
+        public void Molotov(Vector3? at)
+        {
+            At("impact.glass", at, 0.9f, rate: 1.15f);
+            Recorded("fire.ignite", at, 0.6f, 0.03, reverb: 0.15f);
+        }
+
+        private sealed class Blaze
+        {
+            public Vector3 at;
+            public SoundLoop? loop;
+            /// <summary>Its level as it dies away once out (1 while it burns).</summary>
+            public float left = 1;
+            public bool gone;
+        }
+
+        private readonly Dictionary<string, Blaze> blazes = new Dictionary<string, Blaze>();
+        private Func<GameState?>? fireView;
+        private bool firesWatched;
+
+        /// <summary>
+        /// Each fire burning a few turns (a molotov's, Fire.Turns) crackling where it burns (fire.crackle, a loop: Unity's
+        /// own), louder near and panned by its place on screen, from when `view`'s state has it (FireLitEvent) till it
+        /// hasn't (FireOutEvent), dying away then; all of them silent with no view (the mission left). Read ten times a
+        /// second, as the siren.
+        /// </summary>
+        public void Fires(Func<GameState?>? view)
+        {
+            fireView = view;
+            if (view == null)
+            {
+                foreach (var b in blazes.Values) b.loop?.Stop(0);
+                blazes.Clear();
+                return;
+            }
+            if (firesWatched) return;
+            firesWatched = true;
+            void Tick()
+            {
+                var player = SoundPlayer.Instance;
+                var s = fireView?.Invoke();
+                if (s == null || player == null)
+                {
+                    firesWatched = false;
+                    foreach (var b in blazes.Values) b.loop?.Stop(0);
+                    blazes.Clear();
+                    return;
+                }
+                var now = s.Fires?.Where((f) => f.Turns != null).ToList() ?? new List<Fire>();
+                foreach (var f in now)
+                    if (!blazes.ContainsKey(f.Id))
+                        blazes[f.Id] = new Blaze { at = world(s, new Pos { X = f.Source % s.Width, Y = f.Source / s.Width }) };
+                foreach (var (id, b) in blazes.ToList())
+                {
+                    if (!b.gone && now.All((f) => f.Id != id)) b.gone = true;
+                    if (b.gone) b.left -= 0.1f / CrackleDown;
+                    if (b.left <= 0)
+                    {
+                        b.loop?.Stop(0);
+                        blazes.Remove(id);
+                        continue;
+                    }
+                    b.loop ??= Sound.LoopRecorded("fire.crackle", 0, 0.1f);
+                    var (pan, level) = Place(b.at, CrackleLevel * b.left);
+                    b.loop?.Set(level, pan);
+                }
+                player.After(0.1, Tick);
+            }
+            Tick();
         }
 
         /// <summary>Like Place, for a sound meant to carry across the whole map: gentler with distance, losing its highs far away.</summary>

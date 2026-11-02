@@ -9,7 +9,8 @@ namespace Bastion.UI.Strategy
     /// <summary>
     /// Escuadra (screen.ts renderSquad): one's own soldiers to pick on the left (the partner's on the right, to look at),
     /// who is ready above the mission, the mission's plate at the bottom with LANZAR and «Volver al Bastión», and a card
-    /// under each figure of the line-up (LineupCards). With no mission chosen, only that and «Ir al mapa».
+    /// under each figure of the line-up (LineupCards). With no mission chosen, only that and «Ir al mapa». The pointer on
+    /// a soldier's row shows their sheet in short beside its list (Arturo, 1/11 #2).
     /// </summary>
     public sealed class SquadScreen
     {
@@ -17,6 +18,8 @@ namespace Bastion.UI.Strategy
         readonly VisualElement right;
         readonly VisualElement bottom;
         readonly VisualElement empty;
+        readonly VisualElement view;
+        readonly VisualElement peek;
         readonly TooltipLayer tips;
         readonly Func<string, Sprite> icon;
         readonly IStrategyHandlers handlers;
@@ -24,17 +27,28 @@ namespace Bastion.UI.Strategy
         bool shown;
         SquadView last;
         string key;
+        /// <summary>Each row's soldier: its row, its sheet in short and whether its list is the left one.</summary>
+        readonly Dictionary<string, (VisualElement row, SoldierPeekView peek, bool atLeft)> peeks = new Dictionary<string, (VisualElement, SoldierPeekView, bool)>();
+        /// <summary>The soldier whose sheet shows, kept while the lists are drawn again (a click puts them in); null, none.</summary>
+        string peeking;
+        /// <summary>The row's top the sheet was put level with, in the view's pixels.</summary>
+        float peekTop;
 
         public SquadScreen(VisualElement view, TooltipLayer tips, IStrategyHandlers handlers, Func<string, Sprite> icon = null)
         {
             this.tips = tips;
             this.icon = icon;
             this.handlers = handlers;
+            this.view = view;
             cards = new LineupCards(view, tips, handlers) { Floor = () => bottom.worldBound.yMin };
             left = Ui.El("strat-side strat-side--left strat-side--fit squad-list panel", view);
             right = Ui.El("strat-side strat-side--right strat-side--fit squad-list panel", view);
             bottom = Ui.El("squad-bottom", view);
             empty = Ui.El("squad-empty panel", view);
+            peek = Ui.El("squad-peek panel", view);
+            peek.pickingMode = PickingMode.Ignore;
+            peek.RegisterCallback<GeometryChangedEvent>(_ => Clamp());
+            Ui.Show(peek, false);
         }
 
         public LineupCards Cards => cards;
@@ -58,6 +72,8 @@ namespace Bastion.UI.Strategy
             right.Clear();
             bottom.Clear();
             empty.Clear();
+            peeks.Clear();
+            Ui.Show(peek, false);
             cards.Set(v?.Cards);
             if (v == null) return;
             if (!string.IsNullOrEmpty(v.Empty))
@@ -113,6 +129,8 @@ namespace Bastion.UI.Strategy
                 actions.Add(back);
             }
             Draw();
+            // The sheet in short again, on the row drawn anew under the pointer, once it is laid out.
+            if (peeking != null) peek.schedule.Execute(() => { if (peeking != null) Peek(peeking); });
         }
 
         /// <summary>A squad list: its head (and a help under it), and its rows (bust, hexagon, name, rank, a chip).</summary>
@@ -152,8 +170,75 @@ namespace Bastion.UI.Strategy
                     if (!string.IsNullOrEmpty(r.ChipTip)) tips.Attach(chip, r.ChipTip);
                 }
                 if (!string.IsNullOrEmpty(r.Tip)) tips.Attach(row, r.Tip);
+                if (r.Peek != null)
+                {
+                    peeks[id] = (row, r.Peek, parent == left);
+                    row.RegisterCallback<PointerEnterEvent>(_ => Peek(id));
+                    row.RegisterCallback<PointerLeaveEvent>(_ =>
+                    {
+                        if (peeking == id) peeking = null;
+                        Ui.Show(peek, false);
+                    });
+                }
                 parent.Add(row);
             }
+        }
+
+        /// <summary>The pointer on a soldier's row as the lab puts it there (StrategyLab, BASTION_ESTRATEGIA_ENCIMA).</summary>
+        public void LabPeek(string id) => Peek(id);
+
+        /// <summary>
+        /// A soldier's sheet in short (Arturo, 1/11 #2), beside their list and never over it (right of the left one, left of
+        /// the right one), level with their row and above the mission's plate.
+        /// </summary>
+        void Peek(string id)
+        {
+            if (!peeks.TryGetValue(id, out var at)) return;
+            peeking = id;
+            var p = at.peek;
+            peek.Clear();
+            Ui.Text(p.Kicker.ToUpperInvariant(), "squad-peek__kicker font-title", peek);
+            Ui.Text(p.Name, "squad-peek__name font-title", peek);
+            var stats = Ui.El("squad-peek__stats", peek);
+            foreach (var s in p.Stats)
+            {
+                var stat = Ui.El("squad-peek__stat", stats);
+                Ui.Text(s.Value, "squad-peek__value font-title", stat);
+                Ui.Text(s.Name, "squad-peek__label", stat);
+            }
+            void Line(string head, string text)
+            {
+                var line = Ui.El("squad-peek__line", peek);
+                Ui.Text(head, "squad-peek__head font-title", line);
+                Ui.Text(text, "squad-peek__text", line);
+            }
+            Line("ARMA", p.Weapon);
+            if (!string.IsNullOrEmpty(p.Belt)) Line("CINTURÓN", p.Belt);
+            Line("HABILIDADES", p.Abilities.Count > 0 ? string.Join(" · ", p.Abilities) : "Ninguna todavía");
+            var health = Ui.Text(p.Health, "squad-peek__health font-title", peek);
+            if (!string.IsNullOrEmpty(p.HealthTone)) health.AddToClassList("squad-peek__health--" + p.HealthTone);
+            var list = at.atLeft ? left : right;
+            var x = at.atLeft ? list.worldBound.xMax + PeekGap : list.worldBound.xMin - PeekGap - PeekWidth;
+            var place = view.WorldToLocal(new Vector2(x, at.row.worldBound.yMin));
+            peekTop = place.y;
+            peek.style.left = place.x;
+            peek.style.top = peekTop;
+            Ui.Show(peek, true);
+            Clamp();
+        }
+
+        /// <summary>The sheet's width (Squad.uss .squad-peek) and its gap to the list.</summary>
+        const float PeekWidth = 228;
+        const float PeekGap = 8;
+
+        /// <summary>The sheet kept above the mission's plate once its height is known.</summary>
+        void Clamp()
+        {
+            var height = peek.resolvedStyle.height;
+            if (float.IsNaN(height) || peek.resolvedStyle.display == DisplayStyle.None) return;
+            var floor = view.WorldToLocal(new Vector2(0, bottom.worldBound.yMin)).y - PeekGap;
+            var top = Mathf.Max(PeekGap, Mathf.Min(peekTop, floor - height));
+            if (!Mathf.Approximately(peek.resolvedStyle.top, top)) peek.style.top = top;
         }
 
         void Draw()
@@ -163,6 +248,11 @@ namespace Bastion.UI.Strategy
             Ui.Show(left, shown && !isEmpty && last != null);
             Ui.Show(right, shown && !isEmpty && last != null && last.Partner.Count > 0);
             Ui.Show(bottom, shown && !isEmpty && last != null);
+            if (!shown || isEmpty)
+            {
+                peeking = null;
+                Ui.Show(peek, false);
+            }
             cards.Show(shown && !isEmpty);
         }
     }

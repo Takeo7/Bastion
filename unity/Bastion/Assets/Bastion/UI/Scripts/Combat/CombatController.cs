@@ -490,7 +490,8 @@ namespace Bastion.UI.Combat
                 Pos = d.Pos,
                 Dash = d.Cost > perAp,
                 Detected = watchers.Any(a => Los.InViewCone(a, d.Pos) && Los.SightOrigin(State, a.Pos, d.Pos, Los.DetectionTo(State, a, d.Pos), Los.WindowReachOf(a.Team)) != null),
-                Fire = Burning.At(State, d.Pos),
+                // As shown, not as the engine has it already: a molotov's fire marks the reach once it has caught on screen.
+                Fire = Burning.At(Shown, d.Pos),
             }).ToList();
         }
 
@@ -551,11 +552,13 @@ namespace Bastion.UI.Combat
             ClearView();
             CloseFlags();
             // Over a shoulder, and till the camera is back in its own view, no marks of a move (Ana, Arturo 31/10 #3), nor
-            // from above (#12); while La Lata leaves, none of the mission's either (Arturo, 31/10 #1).
+            // from above (#12); while La Lata leaves, none of the mission's either (Arturo, 31/10 #1), nor over a shoulder
+            // till the camera is back (Gameplay, 01/11: the item one of ours dropped as they fell, its core and its ring,
+            // filled half the picture); from above, they stay.
             var away = Rig != null && (Rig.Away || Rig.Overhead) || Film;
             Overlay?.Cinematic(away);
             AimMarks?.Cinematic(away);
-            Marks?.Cinematic(Film);
+            Marks?.Cinematic(Film || Rig != null && Rig.Away);
             var mouse = Mouse.current;
             if (mouse == null || Rig == null) return;
             var at = mouse.position.ReadValue();
@@ -918,7 +921,8 @@ namespace Bastion.UI.Combat
                     var name = Capitalize(Lore.SearchSpots.TryGetValue(decor, out var spot) ? spot.Name : "la caja");
                     if (Looting.WasSearched(State, hover))
                     {
-                        Note(hover, $"{name} · ya está abierta");
+                        // Agreeing with what it is (Lore's Masculine): «El coche de policía · ya está abierto» (0.11.5).
+                        Note(hover, $"{name} · ya está {(spot != null && spot.Masculine ? "abierto" : "abierta")}");
                         return;
                     }
                     var near = HandTiles(AbilityIds.Search).Any(t => Same(t, hover));
@@ -947,10 +951,10 @@ namespace Bastion.UI.Combat
         /// </summary>
         string FireNote(List<Pos> path)
         {
-            var burns = path?.Count(p => Burning.At(State, p)) ?? 0;
+            var burns = path?.Count(p => Burning.At(Shown, p)) ?? 0;
             if (burns == 0) return null;
             var line = $"Fuego en el camino: −{burns * Content.Flames.Damage} de salud";
-            return Burning.At(State, path[path.Count - 1]) ? $"{line}, y −{Content.Flames.Damage} más si acaba el turno ahí" : line;
+            return Burning.At(Shown, path[path.Count - 1]) ? $"{line}, y −{Content.Flames.Damage} más si acaba el turno ahí" : line;
         }
 
         /// <summary>At night a tile in the light is seen from as far as by day (los.ts sightTo, detectionTo): the previews say so.</summary>

@@ -8,11 +8,15 @@ namespace Bastion.Client.Map
 {
     /// <summary>
     /// The animals about a map (Gameplay, 1/11: «más vida»; only on the screen, the rules untouched): stray dogs in a
-    /// town's streets and yards, a fox or a coyote out in the country, crows on the roofs and pigeons pecking about a
-    /// square. They stand, sniff and wander a few tiles; when anyone comes near (a soldier, one of the dead: every
-    /// figure UnitViews draws, and the lab's ExtraThreats) the dogs and the wild ones run off and the birds take wing;
-    /// once far enough they settle again, or are gone past the map's edge. Where they start is the map's own (its tiles,
-    /// hashed), the same for both players; how they move, the frame's.
+    /// town's streets and yards, a fox or a wolf out in the country (Arturo's #7 of 1/11: no dogs there; Lore: no coyotes in
+    /// Europe, so none in the Pindo) with a stag and a doe, a boar and rabbits (SIMPLE - Forest Animals', the one SIMPLE
+    /// Arturo allowed, 1/11: POLYGON has none; grazing now and then, the rabbit hopping and off first), crows
+    /// on the roofs and pigeons pecking about a square; at the Bastion's base, one or two wild ones in the pinar round it
+    /// and nothing in its clearing. They stand (now and then sniffing, wagging, shaking, yawning, digging, howling, or
+    /// sitting or lying a while: #3, FaunaMake's controller), and wander a few tiles; when anyone comes near (a soldier,
+    /// one of the dead: every figure UnitViews draws, and the lab's ExtraThreats) the dogs and the wild ones get up and
+    /// run off and the birds take wing; once far enough they settle again, or are gone past the map's edge. Where they
+    /// start is the map's own (its tiles, hashed), the same for both players; how they move, the frame's.
     /// </summary>
     public sealed class Fauna : MonoBehaviour, IShotStep
     {
@@ -23,12 +27,17 @@ namespace Bastion.Client.Map
         /// <summary>For a lab: called with each step's dt before the animals move (to walk the stand-in).</summary>
         public static Action<float> Stepping;
 
-        enum Kind { Dog, Wild, Crow, Pigeon }
+        enum Kind { Dog, Wild, Grazer, Crow, Pigeon }
         enum State { Idle, Walk, Flee, Fly }
 
         sealed class Animal
         {
             public Kind kind;
+            /// <summary>Its model's name (which gestures are its own: a wolf howls, a fox digs).</summary>
+            public string breed;
+            /// <summary>What it does while it stands (Fauna.Gestures' Accion, Sit, Lie; 0 nothing), chosen as it stops.</summary>
+            public int doing;
+            public bool chosen;
             public Transform root;
             public Animator animator;
             public Transform body, left, right;
@@ -50,14 +59,44 @@ namespace Bastion.Client.Map
             "SK_Dog_Labrador_01", "SK_Dog_GermanShepherd_01", "SK_Dog_Husky_01", "SK_Dog_Doberman_01", "SK_Dog_GoldenRetrieve_01",
             "SK_Dog_Pointer_01", "SK_Dog_Ridgeback_01", "SK_Dog_Greyhound_01", "SK_Dog_Shiba_01", "SK_Dog_Dalmatian_01",
         };
-        public static readonly string[] Wild = { "SK_Dog_Fox_01", "SK_Dog_Coyote_01" };
-        /// <summary>The Dog Pack's key (MapArt.ModelKey's pack), and every model of it the map may ask for (MapCatalogMake puts them in the game's catalog).</summary>
-        public const string Pack = "dog";
-        public static IEnumerable<string> Models => Strays.Concat(Wild).Select(n => $"{Pack}:{n}");
+        public static readonly string[] Wild = { "SK_Dog_Fox_01", "SK_Dog_Wolf_01" };
+        /// <summary>SIMPLE - Forest Animals' stags, does, boars and rabbits (each in its colours).</summary>
+        static readonly string[] Stags = { "Stag_01", "Stag_02", "Stag_03" }, Does = { "Doe_01", "Doe_02" }, Boars = { "Boar_01", "Boar_02", "Boar_03" }, Rabbits = { "Rabbit_01", "Rabbit_02", "Rabbit_03" };
+        /// <summary>The packs' keys (MapArt.ModelKey's pack), and every model the map may ask for (MapCatalogMake puts them in the game's catalog).</summary>
+        public const string Pack = "dog", SimplePack = "simple";
+        public static IEnumerable<string> Models => Strays.Concat(Wild).Select(n => $"{Pack}:{n}").Concat(Stags.Concat(Does).Concat(Boars).Concat(Rabbits).Select(n => $"{SimplePack}:{n}"));
+        /// <summary>SIMPLE's animals' material (Resources; FaunaMake): its own is the built-in pipeline's.</summary>
+        public const string SimpleMaterial = "AnimalesSimple";
+        static Material simpleMaterial;
+        /// <summary>A grazer grazing (its controller's Eat_b, while it stands so).</summary>
+        const int Graze = 9;
+
+        /// <summary>The animals' animator (Resources; made by FaunaMake), for the Dog Pack's prefabs name one that isn't in the project.</summary>
+        public const string ControllerName = "Animales";
+        static RuntimeAnimatorController controller;
+        /// <summary>The gestures a standing animal makes (the controller's Accion with Gesto): its number, its state, the Dog Pack's clip.</summary>
+        public static readonly (int accion, string name, string clip)[] Gestures =
+        {
+            (1, "Olfatear", "Actions_Standing/_POLYGON_Dog_Action_Standing_Sniff"),
+            (2, "Cola", "Actions_Standing/_POLYGON_Dog_Action_Standing_TailWag"),
+            (3, "Sacudirse", "Actions_Standing/_POLYGON_Dog_Action_Standing_Shake"),
+            (4, "Bostezar", "Actions_Standing/_POLYGON_Dog_Action_Standing_Yawn"),
+            (5, "Escarbar", "Actions_Standing/_POLYGON_Dog_Action_Standing_Dig"),
+            (6, "Aullar", "Actions_Standing/_POLYGON_Dog_Action_Standing_Howl"),
+        };
+        /// <summary>Sitting and lying down a while (the controller's Accion while it lasts).</summary>
+        public const int Sit = 7, Lie = 8;
 
         /// <summary>Walking and running (m/s), how near anyone scares them and how far they run (tiles), how far they wander.</summary>
         const float DogWalk = 1.1f, DogRun = 6.5f, WildWalk = 1.0f, WildRun = 7.5f;
         const float DogFear = 6, WildFear = 9, BirdFear = 4.5f, Calm = 14, Wander = 5;
+
+        /// <summary>
+        /// A grazer's walk and run (m/s), how near anyone scares it (tiles), and how tall it stands (m): the rabbit off first
+        /// and quick, a hare's size (as a rabbit's, the tufts hid it from the game's camera).
+        /// </summary>
+        static (float walk, float run, float fear, float tall) Grazing(string breed) =>
+            breed.StartsWith("Rabbit") ? (0.6f, 7f, 12, 0.55f) : breed.StartsWith("Boar") ? (0.9f, 6.5f, 7, 0.85f) : breed.StartsWith("Stag") ? (1.0f, 8.5f, 10, 1.75f) : (1.0f, 8.5f, 10, 1.4f);
         /// <summary>A bird's take-off: away and up (m/s), and how long before it is gone (s).</summary>
         const float FlyAway = 6.5f, FlyUp = 3.2f, FlyFor = 5;
 
@@ -72,6 +111,15 @@ namespace Bastion.Client.Map
         /// <summary>The animals there are and where (a lab's framing): their kind (Dog, Wild, Crow, Pigeon) and their root.</summary>
         public IEnumerable<(string kind, Transform root)> Animals => animals.Where(a => !a.gone).Select(a => (a.kind.ToString(), a.root));
 
+        /// <summary>For a probe: each animal's animator as it is now (what it plays, what it does, whether it is drawn and seen).</summary>
+        public IEnumerable<string> AnimatorReport() => animals.Where(a => a.animator != null).Select(a =>
+        {
+            var clips = a.animator.isActiveAndEnabled ? a.animator.GetCurrentAnimatorClipInfo(0) : new AnimatorClipInfo[0];
+            string clip = clips.Length > 0 ? clips[0].clip.name : "-";
+            bool visible = a.renderers.Any(r => r != null && r.isVisible);
+            return FormattableString.Invariant($"{a.root.name} {a.state} doing {a.doing} down {Down(a)} active {a.animator.isActiveAndEnabled} culling {a.animator.cullingMode} clip {clip} move {a.animator.GetFloat("Movement_f"):0.00} shown {a.shown} visible {visible} controller {(a.animator.runtimeAnimatorController != null ? a.animator.runtimeAnimatorController.name : "none")}");
+        });
+
         void OnDisable()
         {
             if (Current == this) Current = null;
@@ -79,7 +127,7 @@ namespace Bastion.Client.Map
 
         /// <summary>
         /// The animals of map `s` (its buildings as `plan` has them, their tops set by BuildingSurfaces), under `parent`;
-        /// the dogs' prefabs by name from `dogOf` (none drawn if it has none).
+        /// their prefabs by key (`dog:SK_Dog_…`, `simple:Stag_01`…) from `dogOf` (none drawn if it has none).
         /// </summary>
         public static Fauna Make(Transform parent, GameState s, BuildingPlan plan, Func<string, GameObject> dogOf)
         {
@@ -116,8 +164,10 @@ namespace Bastion.Client.Map
             IEnumerable<(int x, int y)> Spots(int salt, int squad, int dead, int apart) =>
                 open.OrderBy(p => Hash(p.x, p.y, salt)).Where(p => Clear(p.x, p.y, squad, dead) && taken.All(t => Math.Max(Math.Abs(t.x - p.x), Math.Abs(t.y - p.y)) >= apart));
             bool town = s.Biome == Biomes.City;
-            // Dogs in a town (three), a farm dog out in the country; the fox and the coyote in the country.
-            int dogs = town ? 3 : s.Biome == Biomes.Wilds ? 1 : 2;
+            // (The Bastion's base, and its siege: no more than in the wood round it, and only in its pinar, #7.)
+            bool home = s.Base != null;
+            // Dogs only in a town (three); the fox and the wolf in the country (three), at the base one or two.
+            int dogs = town && !home ? 3 : 0;
             foreach (var p in Spots(70, 12, 4, 8).Take(dogs).ToList())
             {
                 taken.Add(p);
@@ -136,14 +186,63 @@ namespace Bastion.Client.Map
                     }
                 return true;
             }
-            if (s.Biome == Biomes.Wilds)
-                foreach (var p in Spots(72, 14, 6, 10).Where(p => Clearing(p.x, p.y)).Take(2).ToList())
+            // (At the base, in its pinar: a pine two tiles off, but none beside it, so their crowns don't hide it; three tiles
+            // in from the map's edge.)
+            bool Tree(int x, int y)
+            {
+                if (x < 0 || y < 0 || x >= s.Width || y >= s.Height) return false;
+                int i = y * s.Width + x;
+                return s.Tiles[i] == TileKinds.High && s.Decor != null && i < s.Decor.Count && Bastion.Engine.Decor.DecorOf(s.Decor[i])?.Kind == DecorKinds.Tree;
+            }
+            bool Pinar(int x, int y)
+            {
+                if (x < 3 || y < 3 || x >= s.Width - 3 || y >= s.Height - 3) return false;
+                bool near = false;
+                for (int dy = -2; dy <= 2; dy++)
+                    for (int dx = -2; dx <= 2; dx++)
+                    {
+                        if (!Tree(x + dx, y + dy)) continue;
+                        if (Math.Abs(dx) <= 1 && Math.Abs(dy) <= 1) return false;
+                        near = true;
+                    }
+                return near;
+            }
+            string Pick(string[] list, int x, int y, int salt) => list[(int)(Hash(x, y, salt) * list.Length) % list.Length];
+            if (home)
+            {
+                // At the base, one or two, any of them, among the pines.
+                var any = Wild.Select(n => (n, Kind.Wild)).Concat(new[] { Stags[0], Does[0], Boars[0], Rabbits[0] }.Select(n => (n, Kind.Grazer))).ToArray();
+                // (Taken as they are put: each apart from those before it.)
+                int count = 1 + (int)(Hash(s.Width, s.Height, 84) * 2);
+                foreach (var p in Spots(72, 14, 6, 10).Where(p => Pinar(p.x, p.y)))
                 {
+                    if (count-- <= 0) break;
                     taken.Add(p);
-                    AddDog(Wild[(int)(Hash(p.x, p.y, 73) * Wild.Length)], p, Kind.Wild, dogOf);
+                    var (name, kind) = any[(int)(Hash(p.x, p.y, 73) * any.Length) % any.Length];
+                    string breed = kind == Kind.Grazer ? Pick(name.StartsWith("Stag") ? Stags : name.StartsWith("Doe") ? Does : name.StartsWith("Boar") ? Boars : Rabbits, p.x, p.y, 85) : name;
+                    AddDog(breed, p, kind, dogOf);
                 }
+            }
+            else if (!town)
+            {
+                // Out in the country, in its clearings: a fox or a wolf, two; a stag with a doe beside it, a boar, two rabbits.
+                int k = -1;
+                foreach (var p in Spots(72, 14, 6, 6).Where(p => Clearing(p.x, p.y)))
+                {
+                    if (++k >= 6) break;
+                    taken.Add(p);
+                    if (k < 2) AddDog(Pick(Wild, p.x, p.y, 73), p, Kind.Wild, dogOf);
+                    else if (k == 2)
+                    {
+                        AddDog(Pick(Stags, p.x, p.y, 86), p, Kind.Grazer, dogOf);
+                        var by = new[] { (p.x + 1, p.y), (p.x, p.y + 1), (p.x - 1, p.y), (p.x, p.y - 1) }.FirstOrDefault(q => Outdoors(q.Item1, q.Item2));
+                        if (by != default) AddDog(Pick(Does, p.x, p.y, 87), by, Kind.Grazer, dogOf);
+                    }
+                    else AddDog(k == 3 ? Pick(Boars, p.x, p.y, 88) : Pick(Rabbits, p.x, p.y, 89), p, Kind.Grazer, dogOf);
+                }
+            }
             // Crows on the roofs: two or three buildings, two to four on each, along a house's ridge or a flat roof's front edge.
-            var roofs = plan.Buildings.Where(b => b.kind != BuildingKinds.Ruin && !b.frame && b.top > 0).OrderBy(b => Hash(b.x0, b.y0, 74)).Take(town ? 3 : 2).ToList();
+            var roofs = plan.Buildings.Where(b => b.kind != BuildingKinds.Ruin && !b.frame && b.top > 0).OrderBy(b => Hash(b.x0, b.y0, 74)).Take(home ? 0 : town ? 3 : 2).ToList();
             foreach (var b in roofs)
             {
                 int n = 2 + (int)(Hash(b.x0, b.y0, 75) * 3);
@@ -166,7 +265,7 @@ namespace Bastion.Client.Map
                         AddBird(Kind.Pigeon, at, Hash(p.x + k, p.y, 81) * 360, (uint)(p.x * 977 + p.y * 31 + k + 1));
                     }
                 }
-            Debug.Log($"[fauna] {animals.Count(a => a.kind == Kind.Dog)} dogs, {animals.Count(a => a.kind == Kind.Wild)} wild, {animals.Count(a => a.kind == Kind.Crow)} crows, {animals.Count(a => a.kind == Kind.Pigeon)} pigeons");
+            Debug.Log($"[fauna] {animals.Count(a => a.kind == Kind.Dog)} dogs, {animals.Count(a => a.kind == Kind.Wild)} wild, {animals.Count(a => a.kind == Kind.Grazer)} grazing ({string.Join(", ", animals.Where(a => a.kind == Kind.Grazer).Select(a => a.breed))}), {animals.Count(a => a.kind == Kind.Crow)} crows, {animals.Count(a => a.kind == Kind.Pigeon)} pigeons");
         }
 
         /// <summary>Where a bird stands on building b's roof, `along` metres from its middle: a house's ridge, else its roof's front edge.</summary>
@@ -184,7 +283,8 @@ namespace Bastion.Client.Map
 
         void AddDog(string prefab, (int x, int y) p, Kind kind, Func<string, GameObject> dogOf)
         {
-            var model = dogOf?.Invoke(prefab);
+            bool grazer = kind == Kind.Grazer;
+            var model = dogOf?.Invoke($"{(grazer ? SimplePack : Pack)}:{prefab}");
             if (model == null) return;
             var root = new GameObject(prefab).transform;
             root.SetParent(transform, false);
@@ -193,16 +293,30 @@ namespace Bastion.Client.Map
             root.rotation = Quaternion.Euler(0, yaw, 0);
             var made = Instantiate(model, root, false);
             made.name = "modelo";
+            if (grazer)
+            {
+                // SIMPLE's in our material (theirs is the built-in pipeline's), at their true size.
+                simpleMaterial ??= Resources.Load<Material>(SimpleMaterial);
+                var drawn = made.GetComponentsInChildren<Renderer>();
+                if (simpleMaterial != null) foreach (var r in drawn) r.sharedMaterial = simpleMaterial;
+                if (drawn.Length > 0)
+                {
+                    float tall = drawn.Select(r => r.bounds.max.y).Max() - root.position.y;
+                    if (tall > 1e-3f) made.transform.localScale *= Grazing(prefab).tall / tall;
+                }
+            }
             var animator = made.GetComponentInChildren<Animator>();
             if (animator != null)
             {
+                // (The Dog Pack's prefabs name a controller that isn't there: ours; SIMPLE's their own.)
+                controller ??= Resources.Load<RuntimeAnimatorController>(ControllerName);
+                if (controller != null && !grazer) animator.runtimeAnimatorController = controller;
                 animator.applyRootMotion = false;
                 // (Not moved while no camera sees it, in the game; a lab's shot camera draws into a texture, unseen.)
                 animator.cullingMode = Application.isPlaying ? AnimatorCullingMode.CullUpdateTransforms : AnimatorCullingMode.AlwaysAnimate;
-                animator.SetBool("Grounded_b", true);
             }
             foreach (var r in made.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-            animals.Add(new Animal { kind = kind, root = root, animator = animator, state = State.Idle, wait = 1 + Hash(p.y, p.x, 83) * 4, yaw = yaw, rng = (uint)(p.x * 7919 + p.y * 104729 + 1), renderers = made.GetComponentsInChildren<Renderer>() });
+            animals.Add(new Animal { kind = kind, breed = prefab, root = root, animator = animator, state = State.Idle, wait = 1 + Hash(p.y, p.x, 83) * 4, yaw = yaw, rng = (uint)(p.x * 7919 + p.y * 104729 + 1), renderers = made.GetComponentsInChildren<Renderer>() });
         }
 
         Transform AddBird(Kind kind, Vector3 at, float yaw, uint seed)
@@ -439,22 +553,29 @@ namespace Bastion.Client.Map
         void StepDog(Animal a, float dt)
         {
             var (threat, distance) = Nearest(a.root.position);
-            float fear = (a.kind == Kind.Wild ? WildFear : DogFear) * MapSpace.Tile;
+            var graze = a.kind == Kind.Grazer ? Grazing(a.breed) : default;
+            float fear = (a.kind == Kind.Grazer ? graze.fear : a.kind == Kind.Wild ? WildFear : DogFear) * MapSpace.Tile;
             if (distance < fear && a.state != State.Flee)
             {
                 a.state = State.Flee;
                 a.target = Away(a, threat);
+                Stand(a);
             }
-            float speed = a.state == State.Flee ? (a.kind == Kind.Wild ? WildRun : DogRun) : a.state == State.Walk ? (a.kind == Kind.Wild ? WildWalk : DogWalk) : 0;
+            float speed = a.kind == Kind.Grazer ? (a.state == State.Flee ? graze.run : a.state == State.Walk ? graze.walk : 0)
+                : a.state == State.Flee ? (a.kind == Kind.Wild ? WildRun : DogRun) : a.state == State.Walk ? (a.kind == Kind.Wild ? WildWalk : DogWalk) : 0;
             if (a.state == State.Idle)
             {
+                if (!a.chosen) Choose(a);
                 a.wait -= dt;
                 if (a.wait <= 0)
                 {
+                    Stand(a);
                     a.target = Somewhere(a, a.root.position, Wander);
                     a.state = State.Walk;
                 }
             }
+            // (Sitting or lying, or getting up: it moves once on its feet.)
+            else if (Down(a)) { }
             else
             {
                 var to = a.target - a.root.position;
@@ -484,11 +605,60 @@ namespace Bastion.Client.Map
                     a.root.position += to / left * Mathf.Min(left, speed * facing * dt);
                 }
             }
-            if (a.animator != null)
+            if (a.animator != null && a.animator.runtimeAnimatorController != null)
             {
                 float movement = a.state == State.Flee ? 1 : a.state == State.Walk ? 0.5f : 0;
-                a.animator.SetFloat("Movement_f", Mathf.MoveTowards(a.animator.GetFloat("Movement_f"), movement, 3 * dt));
+                // (SIMPLE's controller: Speed_f the same way, Eat_b while it grazes.)
+                string pace = a.kind == Kind.Grazer ? "Speed_f" : "Movement_f";
+                a.animator.SetFloat(pace, Mathf.MoveTowards(a.animator.GetFloat(pace), movement, 3 * dt));
+                if (a.kind == Kind.Grazer) a.animator.SetBool("Eat_b", a.doing == Graze && a.state == State.Idle);
             }
+        }
+
+        /// <summary>
+        /// What animal `a` does as it stops (once): nothing, a gesture (a dog wags its tail, a wolf howls, a fox
+        /// digs), or sitting or lying a while; and how long it stands so.
+        /// </summary>
+        void Choose(Animal a)
+        {
+            a.chosen = true;
+            // A grazer grazes, three times in five, a while (SIMPLE's Eat), or stands.
+            if (a.kind == Kind.Grazer)
+            {
+                a.doing = Random01(a) < 0.6f ? Graze : 0;
+                a.wait = a.doing == Graze ? 3 + 5 * Random01(a) : 1 + 3 * Random01(a);
+                return;
+            }
+            bool dog = a.kind == Kind.Dog, fox = a.breed.Contains("Fox"), howls = a.breed.Contains("Wolf");
+            // Its share of each, in turn: nothing, sniffing, the tail, shaking, yawning, digging, howling, sitting, lying.
+            float[] shares = dog ? new[] { 0.3f, 0.15f, 0.1f, 0.08f, 0.07f, 0.05f, 0, 0.15f, 0.1f } : new[] { 0.35f, 0.2f, 0, 0.05f, 0.1f, fox ? 0.1f : 0, howls ? 0.12f : 0, 0.1f, 0 };
+            float at = Random01(a) * shares.Sum();
+            int pick = 0;
+            while (pick < shares.Length - 1 && at >= shares[pick]) at -= shares[pick++];
+            a.doing = pick <= 6 ? pick : pick == 7 ? Sit : Lie;
+            float k = Random01(a);
+            a.wait = a.doing == 0 ? 1 + 4 * k : a.doing == Sit ? 6 + 8 * k : a.doing == Lie ? 10 + 10 * k : 2.5f + 2 * k;
+            if (a.animator == null || a.doing == 0) return;
+            a.animator.SetInteger("Accion", a.doing);
+            a.animator.SetTrigger("Gesto");
+        }
+
+        /// <summary>On its feet again (it was sitting or lying, or about to make a gesture): to choose again at its next stop.</summary>
+        static void Stand(Animal a)
+        {
+            a.chosen = false;
+            a.doing = 0;
+            if (a.animator == null || a.animator.runtimeAnimatorController == null || a.kind == Kind.Grazer) return;
+            a.animator.SetInteger("Accion", 0);
+            a.animator.ResetTrigger("Gesto");
+        }
+
+        /// <summary>Whether animal `a` is sitting, lying, or getting down or up (it can't walk till it's on its feet).</summary>
+        static bool Down(Animal a)
+        {
+            var an = a.animator;
+            if (an == null || !an.isActiveAndEnabled || an.runtimeAnimatorController == null) return false;
+            return an.IsInTransition(0) ? an.GetNextAnimatorStateInfo(0).IsTag("Suelo") : an.GetCurrentAnimatorStateInfo(0).IsTag("Suelo");
         }
 
         void StepBird(Animal a, float dt)

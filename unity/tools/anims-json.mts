@@ -16,6 +16,9 @@ for (const [id, a] of Object.entries(m.ANIMATIONS as Record<string, Record<strin
 }
 // (Unity's own, Gameplay 29/10 on Ana's #10: a blow from above for the pan and the crowbar, Mixamo's axe brought down.)
 clips.macheteChop = { pack: 'mixamo', fbx: 'Standing Melee Attack Downward' };
+// (Unity's own, Arturo 1/11: soldiers with no gun at all wait with their blade held low, Sword Combat's one-handed
+// sword's, not the pistol's; they walk and run in Synty's own, the blade in the hand: UnitViews.StanceOf.)
+clips.bladeIdle = { pack: 'swordCombat', fbx: 'Animations/Polygon/Idle/Base/A_Idle_Base_Sword' };
 const out = join(root, 'unity/Bastion/Assets/Bastion/Client/Resources/Anims.json');
 const anims = {
   clips,
@@ -24,7 +27,7 @@ const anims = {
   deadMotions: m.DEAD_MOTIONS,
   idleVariations: m.IDLE_VARIATIONS,
   stanceOrder: m.STANCE_ORDER,
-  stances: m.STANCES,
+  stances: Object.fromEntries(Object.entries(m.STANCES as Record<string, Record<string, string>>).map(([build, s]) => [build, { ...s, blade: 'bladeIdle' }])),
   gestureOrder: m.GESTURE_ORDER,
   gestures: m.GESTURES,
   deaths: m.DEATHS,

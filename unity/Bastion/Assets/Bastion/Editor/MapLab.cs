@@ -393,9 +393,11 @@ namespace Bastion.EditorTools
             });
         }
 
+        /// <summary>A generated mission (BASTION_GENERAR); BASTION_POLICIA=1 with the campaign's first mission's police car (MissionState.PoliceCar).</summary>
         internal static GameState Generated(string biome, int seed, string kind, string site = null) => Setup.CreateMission(new MissionOptions
         {
             Map = new MapSource { Kind = MapSourceKinds.Generated, Biome = biome, Seed = seed, Site = site },
+            PoliceCar = Environment.GetEnvironmentVariable("BASTION_POLICIA") == "1" ? true : (bool?)null,
             Slots = new System.Collections.Generic.List<int> { 0 },
             Rng = new Rng((uint)seed),
             Kind = kind,
@@ -707,6 +709,12 @@ namespace Bastion.EditorTools
             // BASTION_AT=x,y,distance[,storey[,yaw]]: on tile (x, y) (on that storey's floor), so many tiles off (reference.ts:
             // rig.focus on the tile's middle), the camera turned so (degrees, 45 the game's first turn).
             var at = Environment.GetEnvironmentVariable("BASTION_AT")?.Split(',');
+            // (BASTION_POLICIA=1 without BASTION_AT: on the police car, BASTION_DIST tiles off, 12.)
+            if (at == null && state.Mission?.PoliceCar is System.Collections.Generic.List<int> police && police.Count > 0)
+            {
+                Debug.Log($"[policia] the police car: its nose on {police[0] % state.Width},{police[0] / state.Width}, its boot on {police[^1] % state.Width},{police[^1] / state.Width}");
+                at = new[] { (police[0] % state.Width).ToString(), (police[0] / state.Width).ToString(), Environment.GetEnvironmentVariable("BASTION_DIST") ?? "12" };
+            }
             if (at != null && at.Length >= 3)
                 MapSpace.Aim(camera, MapSpace.World(int.Parse(at[0]), int.Parse(at[1]), at.Length > 3 ? int.Parse(at[3]) : 0), float.Parse(at[2], System.Globalization.CultureInfo.InvariantCulture),
                     at.Length > 4 ? float.Parse(at[4], System.Globalization.CultureInfo.InvariantCulture) : 45);
@@ -875,12 +883,15 @@ namespace Bastion.EditorTools
         internal static int UnityTurnOf(string path) => path.StartsWith("Assets/Synty/PolygonApocalypse/") ? 1 : 2;
 
         /// <summary>The packs' folders in Assets/Synty, by MapArt.json's pack names.</summary>
+        /// <summary>Packs found last by a model's name alone (Prefabs): imported after the rest, with models of the others' names.</summary>
+        static readonly string[] LatePacks = { "PolygonShops", "PolygonGangWarfare", "PolygonPalmCity" };
+
         static readonly Dictionary<string, string> PackFolders = new Dictionary<string, string>
         {
             ["apocalypse"] = "PolygonApocalypse", ["city"] = "PolygonCity", ["town"] = "PolygonTown", ["office"] = "PolygonOffice",
             ["military"] = "PolygonMilitary", ["construction"] = "PolygonConstruction", ["farm"] = "PolygonFarm", ["nature"] = "PolygonNature",
             ["alpine"] = "PolygonNatureBiomes", ["industrial"] = "PolygonMapsMilitaryWarehouse", ["woodland"] = "PolygonMapsWoodlandApocalypse",
-            ["dog"] = "PolygonDog", ["shops"] = "PolygonShops", ["gang"] = "PolygonGangWarfare",
+            ["dog"] = "PolygonDog", ["shops"] = "PolygonShops", ["gang"] = "PolygonGangWarfare", ["simple"] = "SimpleForestAnimal",
         };
 
         /// <summary>
@@ -900,6 +911,15 @@ namespace Bastion.EditorTools
                 string name = Path.GetFileNameWithoutExtension(p);
                 if (!candidates.TryGetValue(name, out var list)) candidates[name] = list = new List<string>();
                 if (!list.Contains(p)) list.Add(p);
+            }
+            // (The packs brought in for the buildings on 1/11 last, by a name alone: they have models of the others' names,
+            // and a pistol, a crowbar, a prop asked so would have become theirs. Asked by their pack, theirs.)
+            foreach (var list in candidates.Values)
+            {
+                var late = list.Where(p => LatePacks.Any(f => p.StartsWith($"Assets/Synty/{f}/"))).ToList();
+                if (late.Count == 0 || late.Count == list.Count) continue;
+                list.RemoveAll(late.Contains);
+                list.AddRange(late);
             }
             string PathOf(string asked)
             {

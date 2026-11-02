@@ -20,8 +20,9 @@ namespace Bastion.Engine
             /// <summary>In place of MISSION_NAMES: the card and the strip.</summary>
             public const string Name = "Asedio";
             /// <summary>The skirmish menu's line under «El Bastión», like the other maps'.</summary>
-            public const string Menu = "La muralla, cuatro torres y cinco oleadas";
-            public const string Briefing = "Vienen en oleadas, cada una más grande, y van a por los vivos. Tiran puertas y barricadas para llegar a vosotros, y no se sabe por dónde entrarán.";
+            public const string Menu = "La muralla, cuatro torres y ocho oleadas";
+            /// <summary>One wave at the end of every enemy turn, the first to the eighth (Arturo, 1/11; Setup.SiegeWaves).</summary>
+            public const string Briefing = "Llegan en ocho oleadas, una al final de cada turno y cada vez más grandes, y van a por los vivos. Tiran puertas y barricadas para llegar a vosotros, y no se sabe por dónde entrarán.";
             /// <summary>Once the last wave is in.</summary>
             public const string NoMoreWaves = "No vienen más";
             /// <summary>The outcomes: held to the last turn, every wave down, nobody left.</summary>
@@ -62,7 +63,7 @@ namespace Bastion.Engine
             return Capital(WaveTurn(turn, now));
         }
 
-        /// <summary>The log line as a wave comes in, from wherever it does: «Entra la oleada 2 de 5.»; the last one says so.</summary>
+        /// <summary>The log line as a wave comes in, from wherever it does: «Entra la oleada 2 de 8.»; the last one says so.</summary>
         public static string WaveEntersLine(int n, int total)
         {
             return n >= total ? "Entra la última oleada." : $"Entra la oleada {n} de {total}.";

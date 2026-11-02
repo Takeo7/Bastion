@@ -533,10 +533,8 @@ namespace Bastion.Client.Units
                 bool armed = !view.deadKind && Arm(view, u, catalog);
                 bool rifled = armed && Rifled(view);
                 // With a gun in the hands it moves in Mixamo's armed clips where there is one (ARMED_MOTIONS), crouches
-                // kneeling with it; the rest Synty's (with the pistol, its own: 'own'). It stands in its stance
-                // (syntyFigures.ts: the dead drunk, the living enemy aggressive; with the pistol, one of PISTOL_RESTS).
-                string stance = view.deadKind ? "drunk" : LivingEnemies.Contains(u.Template) ? "aggressive"
-                    : armed && PistolMain(view) && PistolRests.TryGetValue(view.rest ?? "", out var waits) ? waits : null;
+                // kneeling with it; the rest Synty's (with the pistol, its own: 'own'). It stands in its stance (StanceOf).
+                string stance = StanceOf(view, u, armed);
                 view.stance = stance;
                 string ArmedId(string m) => !rifled ? null : m == "crouchIdle" ? "rifleKneel" : Anims.Armed("rifle", m) is string a && a != "own" ? a : null;
                 string IdOf(string m) => ArmedId(m) ?? (m == "idle" ? Anims.Stance(view.build, stance) : null) ?? Anims.Motion(view.build, m, view.deadKind);
@@ -1415,8 +1413,14 @@ namespace Bastion.Client.Units
             Lie(v);
         }
 
-        /// <summary>unitViews.ts FEED_WAIT, FEED_SIDE, FEED_SEEN: before it goes down; how far beside the body's chest it kneels (tiles); how long it is seen eating.</summary>
-        const float FeedWait = 0.4f, FeedSide = 0.4f, FeedSeen = 0.8f;
+        /// <summary>
+        /// unitViews.ts FEED_WAIT, FEED_SIDE, FEED_SEEN: before it goes down; how far beside the body's chest it kneels
+        /// (tiles); how long it is seen eating. The waits halved (Arturo's #6 of 1/11, «están demasiado rato comiendo»: the
+        /// kill about half as long, with its going down quicker, GoDown, and EventPlayer's hold after it).
+        /// </summary>
+        const float FeedWait = 0.2f, FeedSide = 0.4f, FeedSeen = 0.4f;
+        /// <summary>The going down on its knees to eat played this much quicker (#6: its clip's two seconds in about one).</summary>
+        const float DownSpeed = 1.8f;
         /// <summary>
         /// The places round a body (Ana's #6, 1/11): 0 by its chest on the killer's side, 1 by its chest on the other, 2 past
         /// its head, 3 by its knees (on the side the one there came from); how far out from the body those who join kneel
@@ -1542,7 +1546,7 @@ namespace Bastion.Client.Units
                 return;
             }
             // (Each a little after the killer, not all at once: by its id.)
-            await Awaitable.WaitForSecondsAsync(FeedWait + 0.15f + PickIndex(4, id + "|join") * 0.1f, ct);
+            await Awaitable.WaitForSecondsAsync(FeedWait + 0.05f + PickIndex(4, id + "|join") * 0.05f, ct);
             await GoDown(v, body, ct);
             await Awaitable.WaitForSecondsAsync(FeedSeen, ct);
         }
@@ -1562,7 +1566,8 @@ namespace Bastion.Client.Units
             var start = v.root.position;
             if (v.feedPlace == 0) v.feedSide = SideOf(body, v.home);
             float down = 0.6f;
-            if (Anims.Feed("down") is var (downId, downFrom, downTo)) down = Mathf.Max(0.6f, v.anim.PlayWholePart(catalog.Clip(downId), downFrom, downTo, 0.2f, false));
+            // (Its way to its place as long as the clip, quickened.)
+            if (Anims.Feed("down") is var (downId, downFrom, downTo)) down = Mathf.Max(0.6f, v.anim.PlayWholePart(catalog.Clip(downId), downFrom, downTo, 0.2f, false, DownSpeed));
             for (float t = 0; t < down && v.feeding; t += Time.deltaTime)
             {
                 var (at, on) = EatPlace(body, v.feedPlace, v.feedSide, v.home.y);
@@ -1594,7 +1599,7 @@ namespace Bastion.Client.Units
         public async Awaitable ReachFor(string id, string victim, CancellationToken ct = default)
         {
             if (!views.TryGetValue(id, out var v) || !views.TryGetValue(victim, out var body) || v.dead || v.feeding) return;
-            await Awaitable.WaitForSecondsAsync(PickIndex(4, id + "|reach") * 0.1f, ct);
+            await Awaitable.WaitForSecondsAsync(PickIndex(4, id + "|reach") * 0.05f, ct);
             v.reachFor = victim;
             Face(id, BodyChest(body));
             await Awaitable.WaitForSecondsAsync(FeedSeen, ct);
@@ -1696,13 +1701,36 @@ namespace Bastion.Client.Units
 
         Vector3 LeftHand(string id) => Bone(id, HumanBodyBones.LeftHand) ?? Hand(id);
 
-        /// <summary>A grenade's throw, by the free left hand (Mixamo's, mirrored); `onHit` as it leaves it (where the arc starts: ThrowHand(id)).</summary>
-        public async Awaitable ThrowMotion(string id, Action onHit = null, CancellationToken ct = default)
+        /// <summary>
+        /// A grenade's throw, by the free left hand (Mixamo's, mirrored); `onHit` as it leaves it (where the arc starts:
+        /// ThrowHand(id)). `held` "molotov": the bottle in that hand, its rag lit, till it lets it go (Fx.Molotov; its arc
+        /// is Fx.MolotovArc).
+        /// </summary>
+        public async Awaitable ThrowMotion(string id, Action onHit = null, CancellationToken ct = default, string held = null)
         {
             float rest = 0.2f;
             if (views.TryGetValue(id, out var v) && v.anim != null && FigureCatalog.Load()?.Clip("tossGrenade") is AnimationClip toss)
                 rest = Mathf.Max(0.1f, v.anim.PlayFree(toss, 0.1f, 1, GrenadeRelease - GrenadeLead) - GrenadeLead - 0.2f);
-            await Awaitable.WaitForSecondsAsync(GrenadeLead, ct);
+            Transform bottle = null;
+            if (held == "molotov" && v?.animator != null && v.animator.isHuman && v.animator.GetBoneTransform(HumanBodyBones.LeftHand) is Transform hand)
+            {
+                bottle = Effects.Fx.Molotov(hand);
+                // (In the palm, the neck up the way the fingers run: the middle finger's first bone from the hand's.)
+                if (bottle != null && v.animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal) is Transform finger)
+                {
+                    var along = finger.position - hand.position;
+                    bottle.position = hand.position + along * 0.9f;
+                    bottle.rotation = Quaternion.FromToRotation(Vector3.up, along.normalized);
+                }
+            }
+            try
+            {
+                await Awaitable.WaitForSecondsAsync(GrenadeLead, ct);
+            }
+            finally
+            {
+                if (bottle != null) DestroyNow(bottle.gameObject);
+            }
             onHit?.Invoke();
             await Awaitable.WaitForSecondsAsync(rest, ct);
         }

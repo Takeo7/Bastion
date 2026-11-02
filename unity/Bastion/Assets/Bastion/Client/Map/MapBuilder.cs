@@ -162,6 +162,8 @@ namespace Bastion.Client.Map
             ["town"] = ("PolygonTown_01_A", new[] { null, "PolygonTown_01_C", "PolygonTown_02_A", "PolygonTown_02_B", "PolygonTown_03_A", "PolygonTown_04_A", "PolygonTown_04_B" }),
             ["apocalypse"] = ("Vehicle_Standard_01", new[] { null, "Vehicle_01", "Vehicle_02", "Vehicle_03", "Vehicle_05", "Vehicle_06" }),
         };
+        /// <summary>The patrol car's prop (MissionState.PoliceCar): City's, as the sabotage's siren car.</summary>
+        const string PoliceCar = "sirenPolice";
         /// <summary>The street's wrecks (MapArt.json's carFront, 0.10.1's): the others are whole cars (Unity's own).</summary>
         static readonly HashSet<string> Wrecks = new HashSet<string> { "carWreck", "carRusted", "carSuv", "carOpen" };
         static readonly bool CarsLogged = Environment.GetEnvironmentVariable("BASTION_COCHES") == "1";
@@ -334,9 +336,10 @@ namespace Bastion.Client.Map
                 SnowCover.Mark(root, plan, s, GroundPlane());
             }
             // The animals about it (Fauna, Gameplay 1/11): only on the screen. Their tops set (BuildingParts), the crows can stand on the roofs.
-            if (WithFauna) Fauna.Make(root, s, plan, n => prefabOf($"{Fauna.Pack}:{n}"));
+            if (WithFauna) Fauna.Make(root, s, plan, prefabOf);
             // What burns all the mission long (GameState.fires, 1/11): flames, smoke and soot (its light by night is NightLights').
-            if (s.Fires != null && s.Fires.Count > 0) FireView.Make(root, s);
+            // (Made with no fire too: a molotov's are lit as the battle goes, FireView.Light.)
+            FireView.Make(root, s);
             // Rain or snow (GameState.weather, 1/11): what falls, the wet and the snow lying (Weather; its sky is Mood.For's).
             Weather.Make(root, s, plan);
             if (JoinStill) Still();
@@ -1624,6 +1627,8 @@ namespace Bastion.Client.Map
             // A car crashed or left in the road (GameState.wrecks, Arturo 1/11), or one burning (GameState.fires).
             var wreck = thing.Kind == "carFront" && floor == 0 ? s.Wrecks?.FirstOrDefault(w => w.Anchor == thing.Anchor) : null;
             bool burning = thing.Kind == "carFront" && floor == 0 && s.Fires?.Any(f => f.Source == thing.Anchor) == true;
+            // The police car of the campaign's first mission (MissionState.PoliceCar, Arturo 1/11: its two pistols to search for).
+            bool police = thing.Kind == "carFront" && floor == 0 && s.Mission?.PoliceCar != null && s.Mission.PoliceCar.Contains(thing.Anchor);
             switch (thing.Kind)
             {
                 case "carFront":
@@ -1635,6 +1640,8 @@ namespace Bastion.Client.Map
                     // Searched (its boot or its glovebox), a wreck is the one with the boot lid up; a whole one (Unity's own,
                     // Ana 28/10) has none and stays as it is.
                     if (Wrecks.Contains(id) && thing.Tiles.Any(j => SearchedAt(Mathf.RoundToInt(floor / MapSpace.Storey), j))) id = "carOpen";
+                    // City's patrol car, where it stands and as it is turned (the sabotage's siren car's model).
+                    if (police) id = PoliceCar;
                     break;
                 case "bed":
                     id = x1 - x0 == y1 - y0 ? "bedDouble" : "bed";
@@ -1677,7 +1684,9 @@ namespace Bastion.Client.Map
                     bool tilesAlongX = x1 - x0 > y1 - y0, modelAlongX = box.size.x > box.size.z;
                     Debug.Log($"[coches] {id} at {ax},{ay} facing {thing.Facing}: {(tilesAlongX == modelAlongX ? "along" : "ACROSS")} ({box.size.x:F2} × {box.size.z:F2} m)");
                 }
-                Repaint(placed, id, MapArt.Hash(ax, ay, 13));
+                // (The patrol car in its own livery, worn: another's paint would make it any car.)
+                if (police) PaintWhole(placed, id, null, materialOf);
+                else Repaint(placed, id, MapArt.Hash(ax, ay, 13));
                 if (wreck != null) Crash(parent, placed, thing, wreck, floor);
                 // Some wrecks still have a battery: their headlights on, by night, at the nose (not one crashed askew).
                 if (wreck == null && MapArt.Hash(ax, ay, 9) < 0.25f)

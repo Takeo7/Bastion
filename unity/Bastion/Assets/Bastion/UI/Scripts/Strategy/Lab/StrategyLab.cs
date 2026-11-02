@@ -14,7 +14,8 @@ namespace Bastion.UI.Strategy
     /// diario, fin, menu, soldados, personalizar, tablero, armeria, armeria-arma, escuadra, parte, mapa, mapa-mision,
     /// mapa-zona, asentamiento, asentamiento-mano, asentamiento-talar, asentamiento-bastion, asentamiento-barracon,
     /// asentamiento-muro, asentamiento-foso, volver (none: the plain base); any with «-radio» after it, the radio's recap
-    /// over it (asentamiento-radio, tablero-radio). «muestra-…»: the same from the sample campaign through the presenter
+    /// over it (asentamiento-radio, tablero-radio); with «-propuesta» before that, Ana's proposal's plate too (mapa-propuesta-radio:
+    /// the radio under the plate, 0.11.5). «muestra-…»: the same from the sample campaign through the presenter
     /// (muestra-soldados, -esperar, -esperar-pedido, -mapa-encargo, -escuadra-listo, -parte-caido, -armeria, -armeria-arma, -escuadra, -parte, -mapa, -mapa-mision, -mapa-zona, -asentamiento,
     /// -asentamiento-bastion, -propuesta, -propuesta-mia, -diario).
     /// </summary>
@@ -83,6 +84,9 @@ namespace Bastion.UI.Strategy
                 if (rest != null && rest.Length > 0 && rest[0] == "cruce") hexes?.LabSweep(new Vector2(-150, -45), new Vector2(150, -45), 2);
                 else if (rest != null && rest.Length > 0 && rest[0] != "")
                     hexes?.LabPoint(rest[0], rest.Length > 1 ? float.Parse(rest[1], System.Globalization.CultureInfo.InvariantCulture) : 0);
+                // BASTION_ESTRATEGIA_ENCIMA=s3: the pointer on that soldier's row of Escuadra, their sheet in short beside the list.
+                var pointed = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_ENCIMA");
+                if (!string.IsNullOrEmpty(pointed)) root.PeekSquad(pointed);
                 // BASTION_ESTRATEGIA_DESPLEGABLE=hand|belt: that choice of the sheet open, as a click on its head.
                 var choice = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_DESPLEGABLE");
                 if (!string.IsNullOrEmpty(choice)) root.OpenSoldierChoice(choice);
@@ -140,7 +144,7 @@ namespace Bastion.UI.Strategy
             if (Case == "personalizar") soldiers.Customizer = Customizer();
             root.SetSoldiers(soldiers);
             if (Case == "tablero") root.SetSkillBoard(new SkillBoardView { Kicker = "Tablero de habilidades · Novato", SoldierId = "s6", Name = "Rafael Costa", Rank = "Novato", RankFilled = 2, RankTotal = 5, Will = "+10 de voluntad", Points = 10, Editable = true, Board = { "steadyHand", "grip" } });
-            root.SetProposal(Case == "propuesta" ? Proposal(false) : Case == "propuesta-mia" ? Proposal(true) : null, Case == "espera" ? new WaitingView { Text = "Ana está a punto para salir: El colegio de La Vega.", Button = "Ir a la Escuadra" } : null);
+            root.SetProposal(Case == "propuesta" || Case.EndsWith("-propuesta") ? Proposal(false) : Case == "propuesta-mia" ? Proposal(true) : null, Case == "espera" ? new WaitingView { Text = "Ana está a punto para salir: El colegio de La Vega.", Button = "Ir a la Escuadra" } : null);
             if (Case.StartsWith("acontecimiento")) root.SetModal(Event(Case == "acontecimiento-voto"));
             if (Case == "diario") root.SetModal(Diary());
             if (Case == "fin") root.SetModal(new StrategyModalView { Kind = "end", Kicker = "Fin de la campaña", Title = "Campaña perdida", Text = "No queda nadie que conteste por radio. El Bastión se queda a oscuras.", Buttons = { "Volver al menú" } });
@@ -224,7 +228,7 @@ namespace Bastion.UI.Strategy
             sheet.Stats.Add(new SheetStatView { Icon = "stat:aim", Value = "68", Color = "#ffffff", Tip = "Puntería con armas de fuego: 60 de base, más lo que suman las barras de Disparo y el tablero" });
             sheet.Stats.Add(new SheetStatView { Icon = "stat:melee", Value = "63", Color = "#ffffff", Tip = "Puntería cuerpo a cuerpo: 60 de base, más lo que suman las barras de Cuerpo a cuerpo y el tablero" });
             sheet.Stats.Add(new SheetStatView { Icon = "stat:ap", Value = "40", Color = "#a678ff", Tip = "Voluntad" });
-            var hand = new PickView { Id = "hand", Label = "Mano", Value = "Fusil de asalto", Lines = { "Daño 3–5 · Alcance medio", "y la pistola al cinto" }, Condition = 100, ConditionText = "Estado 100", Tags = { "Mira" }, Editable = true };
+            var hand = new PickView { Id = "hand", Label = "Mano", Value = "Fusil de asalto", Lines = { "Daño 3–5 · Alcance medio", "y la pistola al costado" }, Condition = 100, ConditionText = "Estado 100", Tags = { "Mira" }, Editable = true };
             hand.Options.Add(new PickOptionView { Id = "none", Name = "Sin arma: la pistola", Note = "Fusil de asalto vuelve a la Armería" });
             hand.Options.Add(new PickOptionView { Id = "w103", Name = "Fusil de precisión", Note = "En la Armería" });
             hand.Options.Add(new PickOptionView { Id = "w104", Name = "Escopeta", Note = "La lleva Hiro Sato, de Arturo", Enabled = false });
@@ -348,7 +352,7 @@ namespace Bastion.UI.Strategy
             var d = new ArmoryDetailView
             {
                 Kicker = "Arma · Mano", Name = "Fusil de asalto", Art = "weapon:rifle",
-                Text = { "Para un soldado: la lleva en la mano y la pistola al cinto. Si cae, se pierde." },
+                Text = { "Para un soldado: la lleva en la mano y la pistola al costado. Si cae, se pierde." },
                 Figures =
                 {
                     new RowView { Key = "Daño", Value = "3–5" }, new RowView { Key = "Daño crítico", Value = "5–7" },
@@ -389,7 +393,20 @@ namespace Bastion.UI.Strategy
             {
                 Id = id, Name = name, Accent = accent, Skills = new float[] { 30, 20, 10, 10, 5, 10 }, Rank = rank, Chip = chip, ChipTone = tone, In = inSquad, Enabled = enabled,
                 ChipTip = chip == "✓" ? StrategyText.Squad.InTip : chip == "Fiebre" ? "Mordisco: necesita el tratamiento antes de salir." : chip != null ? "Heridas" : null,
+                Peek = new SoldierPeekView
+                {
+                    Name = name, Kicker = (rank > 0 ? "Fogueado" : "Novato") + (accent == Arturo ? " · tuyo" : " · de Ana"),
+                    Stats = { new PeekStatView { Name = "Salud", Value = "7" }, new PeekStatView { Name = "Puntería", Value = rank > 0 ? "72" : "65" }, new PeekStatView { Name = "Movimiento", Value = "8" } },
+                    Weapon = "Fusil de asalto · Machete", Belt = "Botiquín · Granada de humo",
+                    Abilities = rank > 0 ? new List<string> { "Pulso firme", "Tajo" } : new List<string>(),
+                    Health = chip == "Fiebre" ? "Mordisco · se convierte en 3 días" : tone == "warn" ? "Heridas · " + chip : "Sin heridas",
+                    HealthTone = chip == "Fiebre" ? "bad" : tone == "warn" ? "warn" : null,
+                },
             };
+
+        /// <summary>Who stands in the lab's line-up, in order: the toggles of «escuadra» take them out and put them in (Arturo, 1/11 #1).</summary>
+        static readonly List<(string id, string name, string rank)> labSquad = new List<(string, string, string)> { ("s1", "Yuki Tanaka", "Fogueada"), ("s7", "Lucía Ortega", "Novata"), ("s3", "Dmitri Volkov", "Fogueado") };
+        static readonly Dictionary<string, (string name, string rank)> labRoster = new Dictionary<string, (string, string)> { ["s1"] = ("Yuki Tanaka", "Fogueada"), ["s7"] = ("Lucía Ortega", "Novata"), ["s3"] = ("Dmitri Volkov", "Fogueado"), ["s5"] = ("Hiro Sato", "Novato") };
 
         static SquadView Squad()
         {
@@ -409,10 +426,14 @@ namespace Bastion.UI.Strategy
             v.Partner.Add(Pick("s2", "Arjun Mehta", Ana, 0, "2 misiones", "warn", false, false));
             v.Partner.Add(Pick("s4", "Chiara Rossi", Ana, 0, null, null, false, false));
             v.Partner.Add(Pick("s0", "Anja Kowalska", Ana, 0, null, null, false, false));
-            v.Cards.Add(new LineupCardView { Id = "s1", Name = "Yuki Tanaka", Accent = Arturo, Lines = { "Fogueada" }, Removable = true });
-            v.Cards.Add(new LineupCardView { Id = "s7", Name = "Lucía Ortega", Accent = Arturo, Lines = { "Novata" }, Removable = true });
-            v.Cards.Add(new LineupCardView { Id = "s3", Name = "Dmitri Volkov", Accent = Arturo, Lines = { "Fogueado" }, Removable = true });
-            v.Cards.Add(new LineupCardView { Tip = "Elige un soldado a la izquierda" });
+            foreach (var (id, name, rank) in labSquad) v.Cards.Add(new LineupCardView { Id = id, Name = name, Accent = Arturo, Lines = { rank }, Removable = true });
+            while (v.Cards.Count < 4) v.Cards.Add(new LineupCardView { Tip = "Elige un soldado a la izquierda" });
+            foreach (var row in v.Mine)
+            {
+                row.In = labSquad.Any(e => e.id == row.Id);
+                if (row.Enabled) (row.Chip, row.ChipTone) = row.In ? ("✓", "good") : (null, null);
+            }
+            v.MineHead = $"Tus soldados · {labSquad.Count}/4";
             return v;
         }
 
@@ -604,6 +625,17 @@ namespace Bastion.UI.Strategy
                 var kinds = new[] { Bastion.Engine.FoundWeaponIds.Pan, Bastion.Engine.FoundWeaponIds.Bat, Bastion.Engine.FoundWeaponIds.Crowbar, Bastion.Engine.FoundWeaponIds.Chainsaw };
                 for (var i = 0; i < kinds.Length; i++) p.State.FoundWeapons.Add(new Bastion.Engine.FoundWeapon { Id = "wn" + i, Kind = kinds[i] });
             }
+            // «…-pistolas»: the pistols counted (Arturo, 01/11 #10: CampaignState.Pistols): one at Lucía's side by her shotgun,
+            // one on the Armería's rack, and Yuki with nothing in the hand nor at the side (the knife alone). «…-nivel1»: the
+            // Bastión at its first level (the shop's grenades wait for the third).
+            if (which.Contains("-pistolas"))
+            {
+                p.State.Pistols = true;
+                p.State.FoundWeapons.RemoveAll(w => w.Holder == "c4");
+                p.State.FoundWeapons.Add(new Bastion.Engine.FoundWeapon { Id = "wp1", Kind = Bastion.Engine.FoundWeaponIds.Pistol, Holder = "c2" });
+                p.State.FoundWeapons.Add(new Bastion.Engine.FoundWeapon { Id = "wp2", Kind = Bastion.Engine.FoundWeaponIds.Pistol });
+            }
+            if (which.Contains("-nivel1")) p.State.Level = 1;
             // «parte-capitulo»: the debrief of the second chapter won, with its page open (Ana's #15, Arturo 29/10).
             if (which == "parte-capitulo" && p.State.LastReport != null)
             {
@@ -626,7 +658,13 @@ namespace Bastion.UI.Strategy
             if (which.StartsWith("parte-") && int.TryParse(which.Substring("parte-".Length), out var kept) && p.State.LastReport != null)
                 p.State.LastReport.Squad = p.State.LastReport.Squad.Take(kept).ToList();
             // 70- and 71-propuesta: a recruit proposed by Ana or by Arturo, with the engine's sentence (Lore).
-            if (which.StartsWith("propuesta"))
+            // «propuesta-tratamiento», «propuesta-tratamiento-mio»: a bite's treatment for Hiro proposed by Ana, or by Arturo, on
+            // the plate (#8): a proposal of the room's (TreatAction); «-viejo», one of before saved halfway (c.Treatment).
+            if (which.StartsWith("propuesta-tratamiento-viejo"))
+                p.State.Treatment = new Bastion.Engine.Treatment { Soldier = "c6", Ready = new[] { true, false } };
+            else if (which.StartsWith("propuesta-tratamiento"))
+                p.State.Proposal = new Bastion.Engine.Proposal { By = which.EndsWith("-mio") ? 1 : 0, Action = new Bastion.Engine.TreatAction { Soldier = "c6" }, Text = "tratar el mordisco de Hiro Sato (2 ✚)" };
+            else if (which.StartsWith("propuesta"))
                 p.State.Proposal = new Bastion.Engine.Proposal { By = which == "propuesta-mia" ? 1 : 0, Action = new Bastion.Engine.RecruitAction { For = which == "propuesta-mia" ? 1 : 0 }, Text = "reclutar un soldado (30 §)" };
             // 50-escuadra: the first offer chosen, as its steps sent chooseMission (the command, with Red's room: the
             // squad the engine fills for whoever is connected).
@@ -647,6 +685,9 @@ namespace Bastion.UI.Strategy
                 root.SetNav(p.Nav(screen));
             }
             var soldiersPick = new SoldiersPick { Soldier = which.StartsWith("acontecimiento") ? null : p.State.Soldiers.Find(s => s.Owner == 0 && s.Alive)?.Id };
+            // BASTION_ESTRATEGIA_SOLDADO=c4: that soldier's sheet instead.
+            var sheetOf = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_SOLDADO");
+            if (!string.IsNullOrEmpty(sheetOf)) soldiersPick.Soldier = sheetOf;
             // 11-personalizar: Personalizar open on that soldier, the draft as they are.
             if (which == "personalizar" && p.State.Soldiers.Find(s => s.Id == soldiersPick.Soldier) is Bastion.Engine.CampaignSoldier own)
                 soldiersPick.Draft = new CustomDraft { Soldier = own.Id, Name = own.Name, Nickname = own.Nickname ?? "", Look = CustomDraft.Copy(own.Appearance) ?? Bastion.Engine.Appearances.DefaultAppearance(own.Owner, null, null, own.Id) };
@@ -672,7 +713,9 @@ namespace Bastion.UI.Strategy
             if (screen == "debrief") root.SetDebrief(p.Debrief());
             // 20- to 22-armeria: the belt with its first item, and the gear with the Armería's first weapon; «armeria-arma-ana»,
             // with Ana here: Rafael, who carries it, is hers, so its keys are off.
-            if (screen == "engineering") root.SetArmory(p.Armory(which.StartsWith("armeria-arma") ? new ArmoryPick { Tab = "gear", Pick = "f:" + p.State.FoundWeapons[0].Id } : new ArmoryPick()));
+            // BASTION_ESTRATEGIA_ARMA=wp2: that weapon of the Armería instead.
+            var weaponOf = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_ARMA");
+            if (screen == "engineering") root.SetArmory(p.Armory(which.StartsWith("armeria-arma") ? new ArmoryPick { Tab = "gear", Pick = "f:" + (string.IsNullOrEmpty(weaponOf) ? p.State.FoundWeapons[0].Id : weaponOf) } : new ArmoryPick()));
             // 30- to 32-mapa: nothing picked, the first offer, the first zone without contact.
             if (screen == "geoscape")
             {
@@ -914,7 +957,16 @@ namespace Bastion.UI.Strategy
         public void OnArmoryTab(string tab) => root.SetArmory(tab == "gear" ? Gear() : Items());
         public void OnArmoryPick(string id) => Debug.Log("[estrategia] armory pick " + id);
         public void OnArmoryAction(string action, string arg) => Debug.Log($"[estrategia] armory {action} {arg}");
-        public void OnSquadToggle(string id, bool on) => Debug.Log($"[estrategia] squad {id} {on}");
+        public void OnSquadToggle(string id, bool on)
+        {
+            Debug.Log($"[estrategia] squad {id} {on}");
+            // «escuadra»: the line-up as the toggle leaves it, drawn again as the game's presenter would (Arturo, 1/11 #1).
+            if (Case != "escuadra" || !labRoster.TryGetValue(id, out var who)) return;
+            labSquad.RemoveAll(e => e.id == id);
+            if (on && labSquad.Count < 4) labSquad.Add((id, who.name, who.rank));
+            root.SetSquad(Squad());
+            Debug.Log($"[estrategia] escuadra: {string.Join(", ", labSquad.Select(e => e.name))}");
+        }
         public void OnLaunch() => Debug.Log("[estrategia] launch");
         public void OnSquadBack() => Debug.Log("[estrategia] squad back");
         public void OnSquadRecruit() => Debug.Log("[estrategia] squad recruit");

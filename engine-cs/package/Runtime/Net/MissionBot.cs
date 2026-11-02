@@ -7,10 +7,12 @@ namespace Bastion.Net
     /// <summary>
     /// A player that plays a mission by itself, with the engine's own functions, for the tests between two apps
     /// (BASTION_CAMPANA, the app's CampaignRun): never in a game of the players. Each seat plays its own soldiers while it
-    /// holds the command, one at a time: it reloads, shoots what it is likely to hit or what is close, and otherwise goes
-    /// for the objective (a Botín's item; with it carried, La Lata, everyone) or the nearest enemy; in La Lata with the job
-    /// done and everyone aboard (or time short), it calls the bus; the partner's call it answers yes. With nothing to do,
-    /// it keeps watch or takes cover, and with no soldier with actions it ends its turn. Deterministic: no dice of its own.
+    /// holds the command, one at a time: it reloads, shoots or strikes what it is likely to hit or what is close, and
+    /// otherwise goes for the objective (a Botín's item; with it carried, La Lata, everyone) or the nearest enemy; in La
+    /// Lata with the job done and everyone aboard (or time short), it calls the bus; the partner's call it answers yes.
+    /// Without a gun (the campaign starts with the blade only: Arturo, 1/11) it goes for a pistol first, the police car's
+    /// or one on the floor, and puts it on; and with the blade it walks up to the dead and strikes. With nothing to do, it
+    /// keeps watch or takes cover, and with no soldier with actions it ends its turn. Deterministic: no dice of its own.
     /// </summary>
     public static class MissionBot
     {
@@ -65,13 +67,30 @@ namespace Bastion.Net
                     && Enemies(s).Any((e) => Grid.Distance(holder.Pos, e.Pos) <= 2);
                 if (all || hurry || cornered) return new EvacCommand { Unit = u.Id };
             }
+            var armed = Content.HasGun(u);
+            var carrier = s.Mission.Item?.Carrier == u.Id;
+            if (!armed)
+            {
+                var pistol = PackedPistol(u);
+                if (pistol != null) return new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Index = pistol };
+                // One at its feet is picked up (free); the police car beside it, searched.
+                var dropped = s.Dropped?.FirstOrDefault((d) => d.Loot.Weapon == FoundWeaponIds.Pistol && Grid.SamePos(d.Pos, u.Pos));
+                if (dropped != null && (u.Backpack?.Count ?? 0) < Looting.PackSlots(u)) return new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Id = dropped.Id };
+                var car = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault((p) => Looting.SearchSpot(s, p) == Looting.PoliceCar) : null;
+                if (car != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = car };
+            }
             if (u.Ammo <= 0 && Usable(s, u, AbilityIds.Reload)) return Ability(u, AbilityIds.Reload);
             // Only what is close is shot at: a shot is heard, and draws more of them (docs/FASE2.md).
             var shot = BestShot(s, u, Close);
             var nearest = Enemies(s).Select((e) => Grid.Distance(u.Pos, e.Pos)).DefaultIfEmpty(double.MaxValue).Min();
-            var carrier = s.Mission.Item?.Carrier == u.Id;
             if (shot != null && !carrier && shot.Value.hit >= 30) return shot.Value.cmd;
-            var goal = Goal(s, u, leaving);
+            // The blade alone: a step up to one of the dead, keeping an action to strike.
+            if (!armed && !carrier)
+            {
+                var close = MoveToStrike(s, u);
+                if (close != null) return close;
+            }
+            var goal = (!armed && !leaving ? PistolGoal(s, u) : null) ?? Goal(s, u, leaving);
             if (goal != null && !(leaving && Abilities.InEvacZone(s, u.Pos)))
             {
                 // Dashing with nobody close, and always with the item: one action of moving keeps one to shoot.
@@ -81,6 +100,7 @@ namespace Bastion.Net
             }
             if (shot != null && shot.Value.hit >= 15) return shot.Value.cmd;
             if (Usable(s, u, AbilityIds.Overwatch) && nearest <= Close * 2) return Ability(u, AbilityIds.Overwatch);
+            if (Usable(s, u, AbilityIds.OverwatchMelee) && nearest <= Close) return Ability(u, AbilityIds.OverwatchMelee);
             if (Usable(s, u, AbilityIds.Hunker)) return Ability(u, AbilityIds.Hunker);
             return null;
         }
@@ -95,6 +115,63 @@ namespace Bastion.Net
             if (leaving && bus != null) return bus;
             if (m.Kind == MissionKinds.Recovery && m.Item != null && m.Item.Pos != null) return m.Item.Pos;
             return Enemies(s).OrderBy((e) => Grid.Distance(u.Pos, e.Pos)).ThenBy((e) => e.Id, System.StringComparer.Ordinal).Select((e) => e.Pos).FirstOrDefault() ?? bus;
+        }
+
+        /// <summary>A pistol in `u`'s backpack (Loot.weapon), by its index; null with none.</summary>
+        private static int? PackedPistol(Unit u)
+        {
+            var i = u.Backpack?.FindIndex((l) => l.Weapon == FoundWeaponIds.Pistol) ?? -1;
+            return i >= 0 ? i : (int?)null;
+        }
+
+        /// <summary>
+        /// Where a soldier without a gun finds one: the police car's halves still shut, or a pistol on the floor (with no
+        /// car, at the first soldier's feet). Only as many go as there are pistols, the nearest to them; null for the rest.
+        /// </summary>
+        private static Pos? PistolGoal(GameState s, Unit u)
+        {
+            var found = new List<Pos>();
+            foreach (var i in s.Mission.PoliceCar ?? new List<int>())
+            {
+                var p = new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
+                if (Looting.IsSearchable(s, p)) found.Add(p);
+            }
+            found.AddRange((s.Dropped ?? new List<DroppedLoot>()).Where((d) => d.Loot.Weapon == FoundWeaponIds.Pistol).Select((d) => d.Pos));
+            if (found.Count == 0) return null;
+            double Near(Unit x) => found.Min((p) => Grid.Distance(x.Pos, p));
+            var going = Grid.Combatants(s, Teams.Xcom).Where((x) => !x.Evacuated && !Content.HasGun(x) && PackedPistol(x) == null && s.Mission.Item?.Carrier != x.Id)
+                .OrderBy(Near).ThenBy((x) => x.Id, System.StringComparer.Ordinal).Take(found.Count);
+            if (!going.Any((x) => x.Id == u.Id)) return null;
+            return found.OrderBy((p) => Grid.Distance(u.Pos, p)).First();
+        }
+
+        /// <summary>
+        /// The blade's move (Arturo, 16/10: striking is striking and moving is moving): with two actions, one move to a
+        /// tile beside one of the dead the squad sees, keeping the second to strike. The weakest first, then where fewest
+        /// others can bite, then the shortest; null when none is that near.
+        /// </summary>
+        private static Command? MoveToStrike(GameState s, Unit u)
+        {
+            if (u.Ap < 2 || !Usable(s, u, AbilityIds.Slash)) return null;
+            var enemies = Enemies(s).ToList();
+            var seen = enemies.Where((e) => Aim.TeamSees(s, u.Team, e)).ToList();
+            if (seen.Count == 0) return null;
+            var reach = Paths.ComputeReach(s, u, Paths.CostPerAp(u));
+            Destination? best = null;
+            (int hp, int crowd, double cost) bestKey = default;
+            foreach (var o in Paths.Destinations(s, u, reach))
+            {
+                var beside = seen.Where((e) => Aim.InMeleeReach(s, o.Pos, e.Pos)).ToList();
+                if (beside.Count == 0) continue;
+                var key = (hp: beside.Min((e) => e.Hp), crowd: enemies.Count((e) => Grid.Distance(o.Pos, e.Pos) <= 2.5), cost: o.Cost);
+                if (best == null || key.hp < bestKey.hp || (key.hp == bestKey.hp && (key.crowd < bestKey.crowd || (key.crowd == bestKey.crowd && key.cost < bestKey.cost - 1e-9))))
+                {
+                    best = o;
+                    bestKey = key;
+                }
+            }
+            if (best == null || Paths.BuildPath(s, u, reach, best.Pos) == null) return null;
+            return new MoveCommand { Unit = u.Id, To = best.Pos };
         }
 
         /// <summary>
@@ -124,12 +201,12 @@ namespace Bastion.Net
             return new MoveCommand { Unit = u.Id, To = best.Pos };
         }
 
-        /// <summary>The likeliest shot `u` has now (rifle or pistol) at an enemy `within` tiles, and how likely.</summary>
+        /// <summary>The likeliest attack `u` has now (rifle, pistol or the blade) at an enemy `within` tiles, and how likely.</summary>
         private static (Command cmd, int hit)? BestShot(GameState s, Unit u, double within)
         {
             (Command cmd, int hit)? best = null;
             var abilities = Abilities.AbilitiesOf(u);
-            foreach (var a in new[] { AbilityIds.Shoot, AbilityIds.Pistol })
+            foreach (var a in new[] { AbilityIds.Shoot, AbilityIds.Pistol, AbilityIds.Slash })
             {
                 if (!abilities.Contains(a) || !Usable(s, u, a)) continue;
                 foreach (var t in Abilities.AbilityTargets(s, u, a))

@@ -40,8 +40,9 @@ namespace Bastion.Client.Units
         /// <summary>
         /// syntyFigures.ts armamentOf: the main weapon, the pistol (sidearm) and the blade (belt) one carries. A squad
         /// soldier's from its arms: the Armería's gun at its tier (else the pistol as its main gun, and then no sidearm), its
-        /// blade (else the knife). Anyone else's from its template: UNIT_WEAPONS at its tier, the pistol as a second gun, a
-        /// squad soldier's machete for a sword.
+        /// blade (else the knife); without a pistol (Arms.Pistol false: Arturo, 1/11, nobody starts with one) none in the
+        /// holster, and with no gun at all its blade in the hand, nothing at the belt. Anyone else's from its template:
+        /// UNIT_WEAPONS at its tier, the pistol as a second gun, a squad soldier's machete for a sword.
         /// </summary>
         static (string weapon, string sidearm, string belt) ArmamentOf(Unit u)
         {
@@ -49,7 +50,10 @@ namespace Bastion.Client.Units
             if (u.Arms != null && SquadTemplates.Contains(u.Template))
             {
                 string primary = u.Arms.Primary;
-                return (primary != null ? Anims.FoundModel(primary, tier) : "pistol", primary != null ? "pistol" : null, u.Arms.Melee != null ? Anims.FoundModel(u.Arms.Melee, tier) : "knife");
+                string blade = u.Arms.Melee != null ? Anims.FoundModel(u.Arms.Melee, tier) : "knife";
+                bool pistol = Content.HasPistol(u);
+                if (primary != null) return (Anims.FoundModel(primary, tier), pistol ? "pistol" : null, blade);
+                return pistol ? ("pistol", null, blade) : (blade, null, null);
             }
             Content.Templates.TryGetValue(u.Template ?? "", out var t);
             return (Anims.UnitWeapon(u.Template, tier),
@@ -59,6 +63,9 @@ namespace Bastion.Client.Units
 
         /// <summary>The pistol's model under `parent`, at the figures' scale (the Settlement's soldiers whose only gun it is).</summary>
         public static Transform Pistol(Transform parent, FigureCatalog catalog) => WeaponModel(Anims.Weapon("pistol"), parent, catalog, out _);
+
+        /// <summary>Whether a soldier of these arms carries a pistol (Content.HasPistol: arms from before carry one; Arturo, 1/11: nobody starts with one).</summary>
+        public static bool CarriesPistol(Arms arms) => arms == null || arms.Pistol != false;
 
         /// <summary>
         /// Where the pistol rides in its holster down the right thigh (hangStows' sidearm), for a figure (`body` its model,
@@ -139,6 +146,19 @@ namespace Bastion.Client.Units
 
         /// <summary>Whether its main weapon is the pistol (its own way of waiting, its arms its own as it moves).</summary>
         static bool PistolMain(View v) => v.arts.TryGetValue(MainCarry, out var a) && a.pistol;
+
+        /// <summary>Whether its main weapon is a blade: no gun at all (Arms.Pistol false, nothing from the Armería).</summary>
+        static bool BladeMain(View v) => v.arts.TryGetValue(MainCarry, out var a) && a.melee;
+
+        /// <summary>
+        /// How it stands (syntyFigures.ts: the dead drunk, the living enemy aggressive): with the pistol one of
+        /// PISTOL_RESTS; with only a blade, Sword Combat's blade held low (Arturo, 1/11: soldiers without a gun, not the
+        /// pistol's); else its idle (null).
+        /// </summary>
+        static string StanceOf(View v, Unit u, bool armed) =>
+            v.deadKind ? "drunk" : LivingEnemies.Contains(u.Template) ? "aggressive"
+            : armed && PistolMain(v) && PistolRests.TryGetValue(v.rest ?? "", out var waits) ? waits
+            : armed && BladeMain(v) ? "blade" : null;
 
         /// <summary>
         /// syntyFigures.ts hangStows: a place for each carry on its bone, at the pose it is made in. The main gun across the
@@ -617,6 +637,13 @@ namespace Bastion.Client.Units
             v.stows.Clear();
             v.weapon = null;
             if (Arm(v, u, FigureCatalog.Load())) Settle(v, 0.15f);
+            // (Its way of waiting with what it has now: a pistol found, or its gun gone and the blade in the hand.)
+            string stance = StanceOf(v, u, v.carried.Count > 0);
+            if (stance != v.stance && v.anim != null)
+            {
+                v.stance = stance;
+                if (!v.slumped) v.anim.SetMotion("idle", FigureCatalog.Load()?.Clip(Anims.Stance(v.build, stance) ?? Anims.Motion(v.build, "idle", v.deadKind)));
+            }
         }
 
         async Awaitable ReloadNow(View v, CancellationToken ct)

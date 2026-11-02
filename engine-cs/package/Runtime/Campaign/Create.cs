@@ -27,6 +27,15 @@ namespace Bastion.Engine
         /// and its needs come after. The server calls it on a campaign it has just
         /// created (createCampaign itself leaves the choice open).
         /// </summary>
+        /// <summary>
+        /// The police car with two pistols (Arturo, 1/11: nobody starts with one): on the story's first operation, in a
+        /// campaign that counts its pistols (CampaignState.Pistols).
+        /// </summary>
+        public static bool OpeningPistols(CampaignState c, MissionOffer offer)
+        {
+            return c.Pistols == true && offer.Story == 1;
+        }
+
         public static void OpeningMission(CampaignState c)
         {
             var first = c.Offers.FirstOrDefault((o) => o.Story == 1) ?? c.Offers.FirstOrDefault();
@@ -57,7 +66,8 @@ namespace Bastion.Engine
                 Level = 1,
                 Vehicle = 0,
                 Soldiers = new List<CampaignSoldier>(),
-                Inventory = new Dictionary<string, int> { [ItemIds.FragGrenade] = 2, [ItemIds.FirstAid] = 1 },
+                // Nothing on the belts, no pistols at the side, a knife each (Arturo, 1/11: «para que el progreso sea más lento»).
+                Inventory = new Dictionary<string, int>(),
                 Medicines = StartMedicines,
                 NextMedicineDay = 1 + EnclaveDays,
                 Treatment = null,
@@ -67,6 +77,7 @@ namespace Bastion.Engine
                 Parts = 0,
                 Crafted = new List<string>(),
                 FoundWeapons = new List<FoundWeapon>(),
+                Pistols = true,
                 Flooded = new List<string>(),
                 Base = new BaseWorks(),
                 Bastion = bastion,

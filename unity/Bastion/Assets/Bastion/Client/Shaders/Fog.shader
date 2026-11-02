@@ -104,6 +104,19 @@ Shader "Bastion/Fog"
                 // The way it faces, across: a wall's own tile a little into it, and the tile it looks onto (FACE_OUT).
                 float3 normal = none ? float3(0, 1, 0) : SampleSceneNormals(uv);
                 float2 facing = float2(normal.x, -normal.z);
+                // (A wall's face turned aslant, as the sides of a sheet's corrugations, faces out of its tile: along the axis
+                // whose next tile that way is nobody's building, if just one is. Else they looked along the wall into its next
+                // tile, and took the wall's own, never seen: stripes over the halls' sheet metal, 0.11.4.)
+                if (!none && abs(normal.y) < 0.7 && min(abs(facing.x), abs(facing.y)) > 0.15)
+                {
+                    float2 at = floor(cell) + 0.5;
+                    float2 alongX = float2(sign(facing.x), 0.0);
+                    float2 alongY = float2(0.0, sign(facing.y));
+                    float wall = step(0.5, SAMPLE_TEXTURE2D_LOD(_FogShell, sampler_FogShell, at / _FogSize.xy, 0).r * 255.0 / 32.0);
+                    float openX = 1.0 - step(0.5, SAMPLE_TEXTURE2D_LOD(_FogShell, sampler_FogShell, (at + alongX) / _FogSize.xy, 0).r * 255.0 / 32.0);
+                    float openY = 1.0 - step(0.5, SAMPLE_TEXTURE2D_LOD(_FogShell, sampler_FogShell, (at + alongY) / _FogSize.xy, 0).r * 255.0 / 32.0);
+                    if (wall > 0.5 && openX != openY) facing = openX > 0.5 ? alongX : alongY;
+                }
                 float2 own = cell - facing * 0.3;
                 float2 front = cell + facing * 0.6;
                 float4 tile = SAMPLE_TEXTURE2D(_FogMap, sampler_FogMap, own / _FogSize.xy);

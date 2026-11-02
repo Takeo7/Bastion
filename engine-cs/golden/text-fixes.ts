@@ -30,7 +30,7 @@ export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   ['Lo que le ha mantenido vivo hasta hoy.', 'Lo que ha bastado para seguir con vida hasta hoy.', 'BOARD_ABOUT, the core: «le ha mantenido vivo» doesn\'t agree with a soldier who is a woman (Lore, 29/10)'],
   ['Con el otro al lado, se apunta mejor.', 'Con alguien al lado, se apunta mejor.', 'BOARD_ABOUT, sideBySide: the same, for whoever plays with you'],
   ['Ha curado tirado en el barro, bajo la lluvia.', 'Ha curado de rodillas en el barro, bajo la lluvia.', 'BOARD_ABOUT, fieldMedic: the same'],
-  ['Superviviente recién llegado, con cuchillo y pistola.', 'Quien acaba de unirse al Bastión, con cuchillo y pistola.', 'GLOSSARY, Recluta: the same'],
+  ['Superviviente recién llegado, con cuchillo y pistola.', 'Quien acaba de unirse al Bastión, con un cuchillo.', 'GLOSSARY, Recluta: the same; and since 1/11 nobody starts with a pistol (Arturo, PRUEBA-2026-11-01-ARTURO.md #10)'],
   ['una granada, a 26; un registro, a 2.', 'una granada, a 26; una motosierra, a 20; un registro, a 2.', 'GLOSSARY, Ruido: the chainsaw (Ana\'s notes, 29/10 #10), the loudest blow'],
   // transmissions.ts (and lore.ts EXPEDIENTE, page 4, which says the same about the clock)
   ['el reloj de la sala de mando cuenta kilómetros.', 'el reloj cuenta kilómetros.', 'the Bastion has no «sala de mando»: Morse speaks from the Sala de radio (the scene «La Marea» and the diary\'s page 4)'],
@@ -77,6 +77,10 @@ export const TEXT_FIXES: [string | RegExp, Fix, string][] = [
   // Names Arturo changed on 29/10 (Ana's old notes): last, so every whole sentence above still finds its text.
   [/Bielsa/g, 'Metsovo', 'the home zone: Ana disliked «Bielsa» (#17); Arturo chose Metsovo, a mountain town in the Pindus'],
   [/(?<![Aa]uto)([Cc])aravana/g, (_, c) => (c === 'C' ? 'Autocaravana' : 'autocaravana'), 'the Bastion\'s first piece and its levels: a motorhome (#6), «Autocaravana» everywhere (Arturo)'],
+  // Rules Arturo changed on 1/11 (PRUEBA-2026-11-01-ARTURO.md), in C# only: after the renames, which they are written over.
+  ['con una autocaravana y lo puesto. Necesitamos **comida, medicinas y suministros**', 'con una autocaravana y lo puesto: **un cuchillo cada uno**, sin pistolas, sin granadas y sin botiquín. Necesitamos **armas, comida, medicinas y suministros**', 'PREMISE: a new campaign starts with a knife each, nothing on the belt (#10)'],
+  ['La muralla, cuatro torres y cinco oleadas', 'La muralla, cuatro torres y ocho oleadas', 'SIEGE_TEXT.menu: a wave at the end of every enemy turn, the first to the eighth (#9)'],
+  ['Vienen en oleadas, cada una más grande, y van a por los vivos.', 'Llegan en ocho oleadas, una al final de cada turno y cada vez más grandes, y van a por los vivos.', 'SIEGE_TEXT.briefing: the same'],
 ];
 
 /**

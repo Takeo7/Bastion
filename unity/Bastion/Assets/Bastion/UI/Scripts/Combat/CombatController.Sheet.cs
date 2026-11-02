@@ -22,9 +22,15 @@ namespace Bastion.UI.Combat
             var t = Content.Templates[u.Template];
             var arms = u.Arms;
             var pistol = Content.Weapons[WeaponIds.Pistol].Name;
-            var weapon = u.WeaponName ?? (arms != null ? (!string.IsNullOrEmpty(arms.Primary) ? Content.FoundWeapons[arms.Primary].Name : pistol) : Content.Weapons[t.Weapon].Name);
+            // With no pistol (where the Armería counts them: Arturo, 01/11 #10) and nothing in the hand, the knife or the machete is all.
+            var hasPistol = Content.HasPistol(u);
+            var blade = arms != null && !string.IsNullOrEmpty(arms.Melee) ? Content.FoundWeapons[arms.Melee].Name : Content.Weapons[WeaponIds.Knife].Name;
+            var bare = arms != null && string.IsNullOrEmpty(arms.Primary) && !hasPistol;
+            // The unit's own name for its weapon only with one in the hand: it said «Cuchillo» still with a pistol put on (0.11.5).
+            var held = arms == null || !string.IsNullOrEmpty(arms.Primary);
+            var weapon = (held ? u.WeaponName : null) ?? (arms != null ? (!string.IsNullOrEmpty(arms.Primary) ? Content.FoundWeapons[arms.Primary].Name : hasPistol ? pistol : blade) : Content.Weapons[t.Weapon].Name);
             var extras = arms != null
-                ? new[] { !string.IsNullOrEmpty(arms.Primary) ? pistol : "", !string.IsNullOrEmpty(arms.Melee) ? Content.FoundWeapons[arms.Melee].Name : Content.Weapons[WeaponIds.Knife].Name }
+                ? new[] { !string.IsNullOrEmpty(arms.Primary) && hasPistol ? pistol : "", bare ? "" : blade }
                 : new[] { t.Secondary != null ? Content.Weapons[t.Secondary].Name : "", t.MeleeWeapon != null ? Content.Weapons[t.MeleeWeapon].Name : "" };
             return (weapon, extras.Where(x => !string.IsNullOrEmpty(x)).ToArray());
         }

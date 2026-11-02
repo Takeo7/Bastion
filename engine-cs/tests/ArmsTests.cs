@@ -77,17 +77,41 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ the weapons from zero
 
-        [Fact(DisplayName = "the weapons from zero › a new campaign: knife and pistol, nothing else, and no spare magazines")]
-        public void ANewCampaignKnifeAndPistolNothingElse()
+        [Fact(DisplayName = "the weapons from zero › a new campaign: the knife, nothing else, no gun and no spare magazines")]
+        public void ANewCampaignTheKnifeNothingElse()
         {
+            // Arturo, 1/11: «que no empiecen con pistola, para que el progreso sea más lento»; nor grenades nor a medkit.
             var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
             c.Squad = c.Soldiers.Take(4).Select((x) => x.Id).ToList();
+            Assert.True(c.Pistols);
             Assert.Empty(c.FoundWeapons ?? new List<FoundWeapon>());
+            Assert.Empty(c.Inventory);
             var m = Campaign.BuildSquad(c)[0];
             Assert.NotNull(m.Arms);
-            Assert.Equal(((string?)null, (string?)null, (int?)0, "Pistola"), (m.Arms!.Primary, m.Arms.Melee, m.Mags, m.WeaponName));
+            Assert.Equal(((string?)null, (string?)null, (bool?)false, (int?)0, "Cuchillo"), (m.Arms!.Primary, m.Arms.Melee, m.Arms.Pistol, m.Mags, m.WeaponName));
+            var s = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, 3), Slots = new List<int> { 0 }, Rng = new Rng(1), Squad = Campaign.BuildSquad(c), Pistols = true });
+            var u = s.Units.First((x) => x.Team == Teams.Xcom);
+            Assert.True(s.Mission.Pistols);
+            Assert.False(Content.HasGun(u));
+            Assert.Equal("knife", Content.AttackWeapon(u, AbilityIds.Slash).Id);
+            Assert.Equal((0, 0), (u.Ammo, u.Mags));
+            var abilities = Abilities.AbilitiesOf(u);
+            Assert.Contains(AbilityIds.Slash, abilities);
+            foreach (var gun in new[] { AbilityIds.Shoot, AbilityIds.Pistol, AbilityIds.Overwatch, AbilityIds.Reload }) Assert.DoesNotContain(gun, abilities);
+            Assert.Contains(AbilityIds.OverwatchMelee, abilities);
+        }
+
+        [Fact(DisplayName = "the weapons from zero › a campaign from before the pistols were counted: knife and pistol, as ever")]
+        public void ACampaignFromBeforeKnifeAndPistol()
+        {
+            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            c.Pistols = null;
+            c.Squad = c.Soldiers.Take(4).Select((x) => x.Id).ToList();
+            var m = Campaign.BuildSquad(c)[0];
+            Assert.Equal(((string?)null, (string?)null, (bool?)null, (int?)0, "Pistola"), (m.Arms!.Primary, m.Arms.Melee, m.Arms.Pistol, m.Mags, m.WeaponName));
             var s = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, 3), Slots = new List<int> { 0 }, Rng = new Rng(1), Squad = Campaign.BuildSquad(c) });
             var u = s.Units.First((x) => x.Team == Teams.Xcom);
+            Assert.Null(s.Mission.Pistols);
             Assert.Equal("pistol", Content.AttackWeapon(u, AbilityIds.Shoot).Id);
             Assert.Equal("knife", Content.AttackWeapon(u, AbilityIds.Slash).Id);
             Assert.Equal((Content.PistolClip, 0), (u.Ammo, u.Mags));
@@ -176,6 +200,8 @@ namespace Bastion.Engine.Tests
             c.Crafted.Add(CraftIds.MakeRifle);
             Assert.Null(Campaign.CraftBlocker(c, CraftIds.MakeRifle));
             Assert.Equal("Ya está hecho.", Campaign.CraftBlocker(c, CraftIds.Ammo1));
+            // The level's weapons, in a campaign from before the pistols were counted (since, none: PistolsAndMolotovTests).
+            c.Pistols = null;
             LevelTo(c, 3, new Rng(1));
             Assert.Equal(new[] { FoundWeaponIds.AssaultRifle, FoundWeaponIds.Machete, FoundWeaponIds.PrecisionRifle, FoundWeaponIds.PumpShotgun }, (c.FoundWeapons ?? new List<FoundWeapon>()).Select((w) => w.Kind).OrderBy((k) => k, StringComparer.Ordinal));
         }

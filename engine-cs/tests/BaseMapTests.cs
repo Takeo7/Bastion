@@ -359,7 +359,7 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "the siege of the base › a campaign siege brings as many as its clock says, and someone by every side it heard")]
         public void ACampaignSiegeBringsAsManyAsItsClockSays()
         {
-            foreach (var (count, sides) in new[] { (14, new[] { 1, 3 }), (20, new[] { 0, 1, 2 }), (31, new[] { 2 }), (10, new[] { 0, 3 }) })
+            foreach (var (count, sides) in new[] { (14, new[] { 1, 3 }), (20, new[] { 0, 1, 2 }), (31, new[] { 2 }), (10, new[] { 0, 3 }), (8, new[] { 1 }) })
             {
                 for (var seed = 1; seed <= 20; seed++)
                 {
@@ -367,11 +367,14 @@ namespace Bastion.Engine.Tests
                     Assert.Equal(count, waves.SelectMany((w) => w.Units).Count());
                     var heard = new HashSet<int?>(waves.Select((w) => w.Side));
                     Assert.True(heard.SetEquals(sides.Select((x) => (int?)x)), $"count {count}, seed {seed}: sides {string.Join(",", heard)}");
-                    // More each time, and the five specials as ever.
-                    var sizes = new[] { 1, 2, 3, 5, 6 }.Select((t) => waves.Where((w) => w.Turn == t).Sum((w) => w.Units.Count)).ToList();
-                    Assert.True(sizes.Select((n, i) => i == 0 || n >= sizes[i - 1]).All((x) => x), $"count {count}, seed {seed}: sizes {string.Join(",", sizes)}");
+                    // Someone every turn from the first to the eighth (Arturo, 1/11), the last no fewer than the first, and the five
+                    // specials as ever but in a siege too small for them (the first, 8: plain zombies, one a turn).
+                    var sizes = Enumerable.Range(1, 8).Select((t) => waves.Where((w) => w.Turn == t).Sum((w) => w.Units.Count)).ToList();
+                    Assert.True(sizes.All((n) => n > 0), $"count {count}, seed {seed}: sizes {string.Join(",", sizes)}");
+                    Assert.True(sizes[7] >= sizes[0], $"count {count}, seed {seed}: sizes {string.Join(",", sizes)}");
+                    Assert.Equal(Enumerable.Range(1, 8), waves.Select((w) => w.Turn).Distinct().OrderBy((t) => t));
                     Assert.Equal(
-                        new[] { TemplateIds.Bloater, TemplateIds.Mec, TemplateIds.Sectoid, TemplateIds.Xenoid, TemplateIds.Xenoid },
+                        count < 13 ? new string[0] : new[] { TemplateIds.Bloater, TemplateIds.Mec, TemplateIds.Sectoid, TemplateIds.Xenoid, TemplateIds.Xenoid },
                         waves.SelectMany((w) => w.Units).Where((u) => u != TemplateIds.Zombie).OrderBy((u) => u, StringComparer.Ordinal).ToList());
                 }
             }

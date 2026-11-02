@@ -143,6 +143,7 @@ MonoBehaviour:
   - armsFoldedMasc
   - biteFemn
   - biteMasc
+  - bladeIdle
   - calmFemn
   - calmMasc
   - checkWatchFemn
@@ -327,6 +328,7 @@ MonoBehaviour:
   - {fileID: 3500441788533752169, guid: 91511b5a45e1ba74ea9a4fe911a9b831, type: 3}
   - {fileID: -2151151782601869563, guid: 04d64f10c715b614e968ca3b7c4a3b4c, type: 3}
   - {fileID: 5813458319478382356, guid: dc74f8d445c024b49b51b408eb1aabae, type: 3}
+  - {fileID: 1375766457120316241, guid: b94969b4c36c3c94284f72888ad9289d, type: 3}
   - {fileID: 2932854061072239333, guid: 01cb165adb1636146b1d4b343a60921a, type: 3}
   - {fileID: -3449111482906632840, guid: f9a06b50aeaaada408ceaa22c3da8242, type: 3}
   - {fileID: 8120349703716848241, guid: 247bec766313edf479f4a9d4cde485b6, type: 3}
@@ -597,6 +599,7 @@ MonoBehaviour:
   - {fileID: 2800000, guid: d4f9d60c0c446014e99dd0d89986b87d, type: 3}
   - {fileID: 2800000, guid: 77867349808bc0e42bc13f49a2b1b7bb, type: 3}
   settles:
+  - 0.12
   - 0.12
   - 0.12
   - 0.12

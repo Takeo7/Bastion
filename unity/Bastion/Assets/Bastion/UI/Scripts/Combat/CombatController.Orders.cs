@@ -455,7 +455,7 @@ namespace Bastion.UI.Combat
                 var centre = AbilityTexts.ThrowTile(u, modeAbility, hover);
                 var area = Abilities.BlastTiles(State, modeAbility, centre, u);
                 var allies = area.Where(t => Grid.UnitAt(State, t)?.Team == Teams.Xcom).ToList();
-                AimMarks.ShowBlast(State, centre, area, Abilities.CanTargetTile(State, u, modeAbility, centre), allies, Abilities.BreachedWalls(State, modeAbility, centre, u));
+                AimMarks.ShowBlast(State, centre, area, Abilities.CanTargetTile(State, u, modeAbility, centre), allies, Abilities.BreachedWalls(State, modeAbility, centre, u), modeAbility == AbilityIds.Molotov);
                 return;
             }
             var option = CurrentTarget();
@@ -477,8 +477,12 @@ namespace Bastion.UI.Combat
             var centre = AbilityTexts.ThrowTile(u, modeAbility, hover);
             var loud = Abilities.NoiseOf(State, u, modeAbility);
             var walls = Abilities.BreachedWalls(State, modeAbility, centre, u).Count;
+            // A molotov burns on the ground floor only (Arturo, 01/11 #10): up a storey it says so, else how long it burns.
+            var molotov = modeAbility == AbilityIds.Molotov;
             var parts = new[]
             {
+                molotov && centre.Z != 0 ? "Solo a la calle o a una planta baja" : null,
+                molotov && centre.Z == 0 ? $"Arde {Content.MolotovTurns} turnos" : null,
                 loud > 0 ? $"Ruido {AbilityTexts.Heard(State, loud)}" : null,
                 walls == 0 ? null : walls == 1 ? "Rompe una pared" : $"Rompe {walls} paredes",
                 Abilities.BreaksFloor(State, modeAbility, centre) ? "Hunde el suelo" : null,

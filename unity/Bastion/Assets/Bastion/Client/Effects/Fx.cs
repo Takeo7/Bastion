@@ -700,6 +700,73 @@ namespace Bastion.Client.Effects
         }
 
         /// <summary>
+        /// A molotov (Arturo, 1/11): Apocalypse's bottle at the figures' size, its rag lit (Particle FX's middling fire made
+        /// a candle's) over its neck, under `parent` where it stands; null without FxArt's bottle.
+        /// </summary>
+        public static Transform Molotov(Transform parent)
+        {
+            var art = Resources.Load<FxArt>("FxArt");
+            if (art == null || art.molotov == null) return null;
+            var bottle = Instantiate(art.molotov, parent, false).transform;
+            bottle.name = "molotov";
+            foreach (var c in bottle.GetComponentsInChildren<Collider>()) DestroyNow(c);
+            float lossy = parent != null ? Mathf.Max(parent.lossyScale.x, 1e-4f) : 1;
+            bottle.localScale = Vector3.one * Bastion.Client.Units.Figures.CharacterScale / lossy;
+            // (Its neck the top of its mesh, in its own frame.)
+            var filter = bottle.GetComponentInChildren<MeshFilter>();
+            var neck = filter != null && filter.sharedMesh != null ? new Vector3(filter.sharedMesh.bounds.center.x, filter.sharedMesh.bounds.max.y, filter.sharedMesh.bounds.center.z) : Vector3.up * 0.25f;
+            if (filter != null && filter.transform != bottle) neck = bottle.InverseTransformPoint(filter.transform.TransformPoint(neck));
+            if (art.fire != null)
+            {
+                var flame = Instantiate(art.fire, bottle, false).transform;
+                flame.name = "mecha";
+                flame.localPosition = neck;
+                flame.localRotation = Quaternion.identity;
+                // (A rag's flame, a hand high, whatever the bottle's size.)
+                flame.localScale = Vector3.one * 0.12f / Mathf.Max(bottle.lossyScale.x, 1e-4f);
+                foreach (var ps in flame.GetComponentsInChildren<ParticleSystem>())
+                {
+                    var main = ps.main;
+                    main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+                    main.simulationSpace = ParticleSystemSimulationSpace.World;
+                    main.loop = true;
+                    if (!Application.isPlaying) ps.Simulate(1, false, true);
+                    else ps.Play();
+                }
+            }
+            return bottle;
+        }
+
+        /// <summary>
+        /// A molotov thrown (as a grenade's arc, GrenadeArc): the bottle tumbling end over end from the hand to `to`, its rag
+        /// burning; ends as it lands, where it breaks (the caller's flash; the fire is FireView's, FireLitEvent).
+        /// </summary>
+        public async Awaitable MolotovArc(Vector3 from, Vector3 to, CancellationToken ct = default)
+        {
+            Load();
+            var bottle = Molotov(transform);
+            if (bottle == null)
+            {
+                await GrenadeArc(from, to, ct);
+                return;
+            }
+            float d = Vector3.Distance(from, to) / T;
+            float height = (1.5f + d * 0.3f) * T;
+            try
+            {
+                await Run(0.55f + d * 0.03f, t =>
+                {
+                    bottle.position = Vector3.Lerp(from, to, t) + Vector3.up * Mathf.Sin(t * Mathf.PI) * height;
+                    bottle.rotation = Quaternion.LookRotation(new Vector3(to.x - from.x, 0, to.z - from.z).normalized + Vector3.up * 1e-3f) * Quaternion.Euler(t * 540, 0, 0);
+                }, ct);
+            }
+            finally
+            {
+                DestroyNow(bottle.gameObject);
+            }
+        }
+
+        /// <summary>
         /// A stone thrown: a low, quick arc from the hand to `to`, a dull knock where it lands and it lies there a
         /// moment. `struck`: `to` is someone's chest, and from there it drops at their feet. Ends as it lands or strikes.
         /// </summary>

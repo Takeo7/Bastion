@@ -16,6 +16,9 @@ namespace Bastion.EditorTools
         const string Pack = "Assets/Synty/PolygonParticleFX";
         const string Path = "Assets/Bastion/Client/Resources/FxArt.asset";
 
+        /// <summary>A molotov's bottle (FxArt.molotov): Apocalypse's.</summary>
+        const string Molotov = "Assets/Synty/PolygonApocalypse/Prefabs/Weapons/Misc/SM_Wep_Molotov_01.prefab";
+
         public static void Run()
         {
             var missing = new List<string>();
@@ -85,6 +88,8 @@ namespace Bastion.EditorTools
             art.fireBig = Effect("FX_Fire_Big_01");
             art.embers = Effect("FX_Embers_01");
             art.smoke = Effect("FX_Smoke_Black_01");
+            art.molotov = AssetDatabase.LoadAssetAtPath<GameObject>(Molotov);
+            if (art.molotov == null) missing.Add(Molotov);
 
             EditorUtility.SetDirty(art);
             AssetDatabase.SaveAssets();

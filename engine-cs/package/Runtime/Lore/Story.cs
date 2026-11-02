@@ -150,6 +150,13 @@ namespace Bastion.Engine
             return chapter == SimonChapter && simon == SimonChoices.Refused ? SimonRefused.Briefing : Story[chapter - 1].Briefing;
         }
 
+        /// <summary>
+        /// The first story mission's card in a campaign that counts its pistols (Campaign.OpeningPistols; Arturo, 1/11:
+        /// nobody starts with one): the police car near the squad, a pistol in the front and another in the boot
+        /// (Setup.PlacePoliceCar). A paragraph of its own, after the briefing.
+        /// </summary>
+        public const string PoliceCarBriefing = "Cerca de donde para La Lata hay **un coche de policía**. Dentro quedan **dos pistolas**, una delante y otra en el maletero: registradlo.";
+
         /// <summary>Who waits at the objective of a story rescue.</summary>
         public static string? StoryVip(int chapter, string? simon)
         {

@@ -72,10 +72,13 @@ namespace Bastion.UI.Combat
         const float WalkersPace = 1.25f;
         /// <summary>«Rápida»: everything takes 0.6 of the time (tween.ts FAST_RATE).</summary>
         const float FastRate = 1 / 0.6f;
-        /// <summary>The shot over the shoulder stays this long once the target has fallen; on one of ours, longer; eaten, a moment more.</summary>
+        /// <summary>
+        /// The shot over the shoulder stays this long once the target has fallen; on one of ours, longer; eaten, a moment
+        /// (Arte's FeedSeen has shown it eating already: 0.5 s more till Arturo's 01/11 #6, «too long eating»).
+        /// </summary>
         const float KillHold = 0.5f;
         const float DeathHold = 1.2f;
-        const float FeedHold = 0.5f;
+        const float FeedHold = 0.2f;
         /// <summary>A shooter stepping out onto a tile something takes leans this far towards it instead.</summary>
         const float LeanOut = 0.35f * Board.Tile;
 
@@ -701,8 +704,18 @@ namespace Bastion.UI.Combat
                 if (moved != null && moved.Path.Count > 0) at[moved.Unit] = moved.Path[moved.Path.Count - 1];
             }
             var walkers = order.Where(id => !broken.Contains(id) && chains[id].Any(i => all[i].e is MovedEvent)).ToList();
-            if (walkers.Count == 0) return;
             var taken = new HashSet<int>(walkers.SelectMany(id => chains[id]));
+            // Why each of the dead that walk in their order does, for the log (Arturo, 01/11 #5: «why didn't they all move at once?»).
+            string Why(string id) => late.Contains(id) ? "recién llegados o descubiertos" : broken.Contains(id) ? "su camino pasa por donde aún hay alguien"
+                : Unit(id) is Unit u && AbilityTexts.ShootsFromRange(u) ? "disparan" : stopped.Contains(id) ? "andan después de atacar" : "otros";
+            var apart = all.Take(end).Where((q, i) => !pre.Contains(i) && !taken.Contains(i) && q.e is MovedEvent m && Unit(m.Unit)?.Team == Teams.Alien)
+                .Select(q => ((MovedEvent)q.e).Unit).Distinct().GroupBy(Why).Select(g => $"{g.Count()} {g.Key}").ToList();
+            var why = apart.Count > 0 ? $"; andan en su orden: {string.Join(", ", apart)}" : "";
+            if (walkers.Count == 0)
+            {
+                if (apart.Count > 0) Debug.Log($"[ritmo] turno enemigo: ninguno anda a la vez{why}");
+                return;
+            }
             var walks = new WalksEvent
             {
                 Chains = walkers.Select(id => chains[id].Select(i => all[i]).ToList()).ToList(),
@@ -714,7 +727,7 @@ namespace Bastion.UI.Combat
             queue.Enqueue((walks, first.by, first.epoch));
             for (var i = 0; i < all.Count; i++)
                 if (!pre.Contains(i) && !taken.Contains(i)) queue.Enqueue(all[i]);
-            Debug.Log($"[ritmo] turno enemigo: {walkers.Count} andan a la vez ({walks.Items.Count} sucesos), {all.Count - taken.Count - pre.Count} después en orden");
+            Debug.Log($"[ritmo] turno enemigo: {walkers.Count} andan a la vez ({walks.Items.Count} sucesos), {all.Count - taken.Count - pre.Count} después en orden{why}");
         }
 
         /// <summary>The enemy that `e` starts something with (a walk, an attack, an ability, a throw); null for anything else.</summary>
@@ -1316,6 +1329,23 @@ namespace Bastion.UI.Combat
                     {
                         if (shade && !(Fells(s) && units.CanFeed(shooter.Id, s.Target))) units.Shade(shooter.Id, false);
                     }
+                    return;
+                }
+                // A molotov's fire catching and going out (Arturo, 01/11 #10): said where the squad sees it; Arte draws it.
+                case FireLitEvent lit:
+                {
+                    // Arte's fire, as the bottle has landed (its light is NightLights', from LightOnEvent).
+                    Bastion.Client.Map.FireView.Current?.Light(V, lit.Fire);
+                    if (!lit.Fire.Tiles.Any(i => IsVisible(i % V.Width, i / V.Width))) return;
+                    Log($"Arden {lit.Fire.Tiles.Count} casillas durante {lit.Fire.Turns ?? Content.MolotovTurns} turnos.", "#ff8a3c");
+                    await Wait(0.2f);
+                    return;
+                }
+                case FireOutEvent gone:
+                {
+                    Bastion.Client.Map.FireView.Current?.Out(gone.Id);
+                    var fire = V.Fires?.FirstOrDefault(f => f.Id == gone.Id);
+                    if (fire != null && fire.Tiles.Any(i => IsVisible(i % V.Width, i / V.Width))) Log("Se apaga el fuego del cóctel molotov.", "#c9a27a");
                     return;
                 }
                 case BurnedEvent b:
@@ -2259,9 +2289,13 @@ namespace Bastion.UI.Combat
         /// A throw, a launch, missiles, the Hinchado bursting (game.ts playExplosive): the throw's motion and its arc, then
         /// the blast, the smoke or the flash, and the walls it broke said.
         /// </summary>
+        /// <summary>What the last throw or launch was, for what gave the squad away (a molotov doesn't explode).</summary>
+        string lastThrown;
+
         async Awaitable PlayExplosive(ExplosiveEvent e, Func<bool> cam, Action<Vector3> look)
         {
             lastShot = null;
+            lastThrown = e.Ability;
             var u = Unit(e.Unit);
             lastAttacker = u.Id;
             var def = Content.Abilities[e.Ability];
@@ -2324,7 +2358,9 @@ namespace Bastion.UI.Combat
                     // The arc leaves the free hand as the throw lets it go, and is seen to land.
                     var landed = false;
                     control.Sfx.Throw(Chest(u.Id));
-                    await units.ThrowMotion(u.Id, () => Loose(Then(fx.GrenadeArc(units.ThrowHand(u.Id), to, stop), () => landed = true)), stop);
+                    // A molotov is Arte's bottle, its rag lit, in the hand and along the arc (not the grenade's ball).
+                    var molotov = e.Ability == AbilityIds.Molotov;
+                    await units.ThrowMotion(u.Id, () => Loose(Then(molotov ? fx.MolotovArc(units.ThrowHand(u.Id), to, stop) : fx.GrenadeArc(units.ThrowHand(u.Id), to, stop), () => landed = true)), stop, molotov ? "molotov" : null);
                     while (!landed && !stop.IsCancellationRequested) await Awaitable.NextFrameAsync(stop);
                     control.Sfx.Land(to);
                 }
@@ -2332,6 +2368,17 @@ namespace Bastion.UI.Combat
                 {
                     control.Sfx.Explosion(to, "smoke");
                     fx.Puffs(to, Fx.Hex(0xd8d6d0), 12, 0.6f, 1.2f, 0.4f, 0.8f, 3, 1.6f);
+                    await Wait(0.3f);
+                    return;
+                }
+                // A molotov breaks where it lands (Arturo, 01/11 #10): an orange flash and sparks, the glass and the petrol
+                // catching (Arte's sound), no blast; the fire itself comes with its FireLitEvent (Arte's FireView).
+                if (e.Ability == AbilityIds.Molotov)
+                {
+                    control.Sfx.Molotov(to);
+                    fx.MuzzleFlash(to + Vector3.up * 0.3f, Fx.Hex(0xff8a3c));
+                    fx.Sparks(to + Vector3.up * 0.2f, Fx.Hex(0xffb24a), 28);
+                    fx.Puffs(to, Fx.Hex(0x3a332e), 6, 0.4f, 0.8f, 0.3f, 0.6f, 2, 1.2f);
                     await Wait(0.3f);
                     return;
                 }
@@ -2497,7 +2544,7 @@ namespace Bastion.UI.Combat
                 case "attack":
                     return $"{Capitalize(who)} ha atacado{(alien != null ? $" a {AnEnemy(alien)}" : "")}: el combate os delata.";
                 case "explosive":
-                    return $"La explosión de {who} se ha oído en toda la zona.";
+                    return lastThrown == AbilityIds.Molotov ? $"El cóctel molotov de {who} se ha oído en toda la zona." : $"La explosión de {who} se ha oído en toda la zona.";
                 case "alarm":
                     return $"{(soldier != null ? $"{who} no ha podido arreglarlo" : "El arreglo ha fallado")}: ha saltado la alarma.";
                 case "reinforcements":

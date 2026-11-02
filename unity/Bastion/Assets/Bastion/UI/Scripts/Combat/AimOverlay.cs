@@ -17,6 +17,8 @@ namespace Bastion.UI.Combat
         static readonly Color32 EnemyLine = MoveOverlay.Hex(0xff5a5a);
         static readonly Color32 Friend = MoveOverlay.Hex(0x4dff9a);
         static readonly Color32 Blast = MoveOverlay.Hex(0xff8a2a);
+        /// <summary>A molotov's fire (Arturo, 01/11 #10): redder than a grenade's blast, and drawn as the reach is, with flames.</summary>
+        static readonly Color32 Fire = MoveOverlay.Hex(0xff4f1e);
         static readonly Color32 Off = MoveOverlay.Hex(0x8a939c);
         static readonly Color32 Breach = MoveOverlay.Hex(0xffd08a);
         static readonly Color32 Reach = MoveOverlay.Hex(0xffb070);
@@ -35,6 +37,8 @@ namespace Bastion.UI.Combat
         MeshFilter area;
         MeshFilter centreRing;
         MeshFilter walls;
+        /// <summary>The flames over a molotov's area as it is aimed.</summary>
+        MeshFilter flames;
         MeshFilter range;
         MeshFilter spots;
         MeshFilter vision;
@@ -108,6 +112,8 @@ namespace Bastion.UI.Combat
             area = Layer("Área", 3100, false);
             centreRing = Layer("Área (centro)", 3106, false);
             walls = Layer("Área (paredes)", 3108, true);
+            flames = Layer("Área (llamas)", 3101, false);
+            flames.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = MoveOverlay.FlameTexture();
             range = Layer("Alcance de lanzar", 3104, true);
             spots = Layer("A mano", 3108, true);
             vision = Layer("Lo que ve", 3096, false);
@@ -325,14 +331,33 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// A throw's area round `centre`: its tiles orange (red where one of the squad stands: `danger`), all grey if it can't
-        /// be thrown there (`valid`); a ring on the centre; a frame halfway up each wall it breaks (docs/FASE7.md §4).
+        /// be thrown there (`valid`); a ring on the centre; a frame halfway up each wall it breaks (docs/FASE7.md §4). A
+        /// molotov's (`fire`), what will burn: bordered as the reach, in the fire's red-orange, a flame on each tile (Arturo,
+        /// 01/11 #10: unlike a grenade's).
         /// </summary>
-        public void ShowBlast(GameState s, Pos centre, IList<Pos> tiles, bool valid, IList<Pos> danger, IList<Pos> breached)
+        public void ShowBlast(GameState s, Pos centre, IList<Pos> tiles, bool valid, IList<Pos> danger, IList<Pos> breached, bool fire = false)
         {
             build.Clear();
             var mid = new MeshBuilder();
             var frames = new MeshBuilder();
-            if (s != null && centre != null)
+            var burns = new MeshBuilder();
+            if (s != null && centre != null && fire)
+            {
+                var c = valid ? Fire : Off;
+                MoveOverlay.Border(build, s, tiles, c, 0.5f, 0.95f);
+                foreach (var t in tiles)
+                {
+                    var hot = danger != null && Contains(danger, t);
+                    var a = Board.Corner(t.X, t.Y, Board.TileToWorld(s, t).y + 0.02f * T);
+                    var wash = hot ? Enemy : c;
+                    build.Flat(a.x, a.z, a.x + T, a.z - T, a.y, new Color32(wash.r, wash.g, wash.b, (byte)(hot ? 0x5c : 0x30)));
+                    var at = Board.TileToWorld(s, t, 0.03f * T);
+                    var e = 0.15f * T;
+                    burns.Quad(at + new Vector3(-e, 0, -e), at + new Vector3(e, 0, -e), at + new Vector3(e, 0, e), at + new Vector3(-e, 0, e), new Color32(c.r, c.g, c.b, (byte)(valid ? 0xd8 : 0x70)));
+                }
+                mid.Arc(Board.TileToWorld(s, centre, 0.05f * T), 0.2f * T, 0.32f * T, 0, Mathf.PI * 2, 32, valid ? Fire : Enemy);
+            }
+            else if (s != null && centre != null)
             {
                 var inset = 0.05f * T;
                 foreach (var t in tiles)
@@ -349,6 +374,7 @@ namespace Bastion.UI.Combat
             area.sharedMesh = build.Build(area.sharedMesh);
             centreRing.sharedMesh = mid.Build(centreRing.sharedMesh);
             walls.sharedMesh = frames.Build(walls.sharedMesh);
+            flames.sharedMesh = burns.Build(flames.sharedMesh);
         }
 
         /// <summary>How far a throw reaches from the thrower: a thin circle on the ground (tiles of `radius`); none at 0.</summary>

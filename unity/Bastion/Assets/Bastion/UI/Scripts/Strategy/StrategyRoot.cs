@@ -143,6 +143,8 @@ namespace Bastion.UI.Strategy
             radioCard = Ui.El("radio panel");
             root.Insert(root.IndexOf(root.Q("toast")), radioCard);
             radio = new RadioPanel(radioCard, tips, s => Sound?.Invoke(s)) { VoiceOf = id => VoiceOf?.Invoke(id) };
+            root.Q("proposal").RegisterCallback<GeometryChangedEvent>(_ => Unstack());
+            radioCard.RegisterCallback<GeometryChangedEvent>(_ => Unstack());
             skillBoard = new SkillBoardModal(root.Q("board"), relay, s => Sound?.Invoke(s), tips) { PortraitOf = id => PortraitOf?.Invoke(id) };
             toast = root.Q<Label>("toast");
             Ui.Show(toast, false);
@@ -176,6 +178,23 @@ namespace Bastion.UI.Strategy
             if (now == insets) return;
             insets = now;
             clearing.SetInsets(panels);
+        }
+
+        /// <summary>
+        /// The radio under the proposal's plate while one is up and they would meet (the Mapa and the Escuadra have both at
+        /// the top centre: it covered the plate's head, 0.11.5); otherwise where its screen puts it. By the plate's bounds
+        /// only, so moving the radio down doesn't move it back.
+        /// </summary>
+        void Unstack()
+        {
+            var plate = root.Q("proposal");
+            var p = plate.worldBound;
+            var r = radioCard.worldBound;
+            var up = plate.style.display.value != DisplayStyle.None && p.height > 0 && r.width > 0;
+            var atTop = radioCard.ClassListContains("radio--geoscape") || radioCard.ClassListContains("radio--squad") || radioCard.ClassListContains("radio--debrief");
+            var meet = up && atTop && r.xMin < p.xMax && r.xMax > p.xMin;
+            var top = meet ? new StyleLength(radioCard.parent.WorldToLocal(new Vector2(0, p.yMax)).y + 8) : new StyleLength(StyleKeyword.Null);
+            if (radioCard.style.top != top) radioCard.style.top = top;
         }
 
         /// <summary>Place `i` of a row of `n` by La Lata on this panel (Arte's Settlement.PadWorld through its camera); null without it, or behind.</summary>
@@ -237,6 +256,7 @@ namespace Bastion.UI.Strategy
         public void SetProposal(ProposalView p, WaitingView waiting)
         {
             proposal.Set(p, waiting);
+            Unstack();
             Dress();
         }
 
@@ -260,6 +280,7 @@ namespace Bastion.UI.Strategy
             settlement.Show(view == "facilities");
             // Where the radio sits goes with the screen (transmissions.css): the free corner of each.
             foreach (var v in new[] { "geoscape", "squad", "debrief", "barracks" }) radioCard.EnableInClassList("radio--" + v, view == v);
+            Unstack();
             Dress();
         }
 
@@ -413,6 +434,8 @@ namespace Bastion.UI.Strategy
         public void OpenSoldierChoice(string id) => soldiers?.Open(id);
         /// <summary>An element's help shown now and kept (the lab's captures, TooltipLayer.Pin).</summary>
         public void PinTip(VisualElement target) => tips?.Pin(target);
+        /// <summary>A soldier's sheet in short by Escuadra's list, as the pointer on their row shows it (the lab's captures).</summary>
+        public void PeekSquad(string id) => squad?.LabPeek(id);
 
         void Dress()
         {

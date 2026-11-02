@@ -14,7 +14,7 @@ Lo generado va a `unity/Bastion/Assets/Bastion/Client/Audio/Resources/Generado/`
 |---|---|---|
 | `sintetizados/` | las 110 recetas de `sounds.ts`, con todas sus variantes, y los bucles de las que lo son (la sirena) | renderizadas como `bank.ts`: misma semilla por variante, misma normalización; mono, 44,1 kHz |
 | `vivos/` | la partitura de la base y los menús (`musica.base`) y del Mapa (`musica.geo`), 8 min cada una; las cinco camas de ambiente (ciudad, campo, nave, base, globo), 4 min cada una | `music.ts` y `ambience.ts` tal cual, en un OfflineAudioContext con su reloj y sus temporizadores simulados y `Math.random` con semilla. Se quita el fundido de entrada y el final se funde en el principio (6 s, igual potencia): bucles sin costura. Estéreo, 44,1 kHz |
-| `grabados/` | los 12 grupos grabados de la 0.10.1, y los 10 hechos para Unity desde el 29/10 (el Hinchado y las armas cuerpo a cuerpo: `unity/tools/sonido/grabados/`, docs/SONIDO.md), con su nivel por toma | de Opus a WAV con ffmpeg, sin tocar nada más; 48 kHz, las dos camas de combate en estéreo |
+| `grabados/` | los 12 grupos grabados de la 0.10.1, y los 12 hechos para Unity desde el 29/10 (el Hinchado y las armas cuerpo a cuerpo: `unity/tools/sonido/grabados/`, docs/SONIDO.md; el molotov, 1/11: `fire.ignite` y el bucle `fire.crackle`, hechos por nosotros), con su nivel por toma | de Opus a WAV con ffmpeg, sin tocar nada más; 48 kHz, las dos camas de combate en estéreo |
 | `interfaz/` | los 8 sonidos de interfaz | copiados |
 | `manifiesto.json` | qué es cada cosa (bus, nivel, reverb, bucle, variantes) y el sha256 de cada archivo | |
 
@@ -34,6 +34,11 @@ unity/tools/sonido.sh
   - Unity no vuelve a importar los cientos de MB;
   - el manifiesto conserva los hashes de lo que renderizó Chromium, que en otra pasada saldría un bit distinto.
   Antes, `node unity/tools/sonido/grabados.mjs` recorta los originales de `assets-src/sonido/`.
+- **Los propios** (Arte, 1/11, el molotov de la #10 de Arturo): ni el banco de la 0.10.1 ni los paquetes que tenemos traen fuego, así que `node unity/tools/sonido/propios.mjs` los sintetiza, con su propio azar fijo, como originales WAV en `assets-src/sonido/` (`propio-…`):
+  - el golpe de llama: un golpe a 60 Hz, un soplo de ruido que sube de 250 a 900 Hz y baja, rumor y algún chasquido;
+  - el crepitar: chasquidos sueltos sobre un rumor suave desde 70 Hz, 8 s con el final fundido en el principio.
+  `grabados.mjs` los corta y convierte con los demás (`own`; un bucle, `loop`, va sin fundidos en los extremos). Se oyen con `CombatSound.Molotov` (el cristal de `impact.glass` y el golpe de llama, 5 dB por debajo de una granada) y con `CombatSound.Fires` (el crepitar de cada fuego con turnos del estado que se ve, en bucle con `Sound.LoopRecorded`, hasta que sale del estado; lo vigila `Siren(view)`). Se prueban con `Bastion.EditorTools.SonidoMolotov.Probar`.
+  - Ojo: `grabados.mjs` vuelve a convertir todos los originales, y el Opus de este ffmpeg no sale idéntico byte a byte. Las tomas que no han cambiado se devuelven a las de git (`git checkout`) antes del commit.
 
 ## 3. Reproducible, con un bit de margen
 

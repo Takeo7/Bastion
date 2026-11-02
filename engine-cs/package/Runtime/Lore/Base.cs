@@ -166,6 +166,7 @@ namespace Bastion.Engine
             ["tech:nanoMedkit"] = "Curas +2 y botiquines con un uso más",
             ["tech:predatorArmor"] = "Armadura: +4 de salud y +1 de blindaje",
             ["tech:signal"] = "Abre la misión final",
+            ["item:molotov"] = "Fuego en 3×3 casillas durante 2 turnos",
             ["item:fragGrenade"] = "Dos granadas para el cinturón",
             ["item:smokeGrenade"] = "Humo: −20 a acertar a quien está dentro",
             ["item:firstAid"] = "Cura 4; dos usos",

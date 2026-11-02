@@ -53,6 +53,8 @@ namespace Bastion.Net
                 ItemOutdoors = info.ItemOutdoors,
                 MedicineCures = Campaign.MedicineCures(c),
                 Quarantine = Campaign.HasQuarantine(c),
+                Pistols = c.Pistols == true ? true : (bool?)null,
+                PoliceCar = Campaign.OpeningPistols(c, offer) ? true : (bool?)null,
                 Snow = info.Snow,
                 Weather = Campaign.OfferWeather(c, offer),
             });

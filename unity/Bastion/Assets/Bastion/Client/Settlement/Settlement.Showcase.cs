@@ -51,16 +51,18 @@ namespace Bastion.Client
                 Showcase((string)null, null, null, false);
                 return;
             }
-            Showcase(s.Id, look ?? s.Appearance, s.Alive ? Campaign.SoldierArms(campaign, s).Primary : null, !s.Alive, s.Name, SquadTint.ColourOf(s.Owner));
+            var arms = Campaign.SoldierArms(campaign, s);
+            Showcase(s.Id, look ?? s.Appearance, s.Alive ? arms.Primary : null, !s.Alive, s.Name, SquadTint.ColourOf(s.Owner), UnitViews.CarriesPistol(arms));
         }
 
         /// <summary>
         /// The soldier `soldierId` as `look` (who has none, a body of their sex by `name`), `weapon` (FoundWeaponIds) in the
-        /// hands (none: the pistol, at rest by the thigh); `fallen`, their grave. A null id, nobody.
+        /// hands (none: the pistol, at rest by the thigh; without one, `pistol` false, empty-handed); `fallen`, their grave.
+        /// A null id, nobody.
         /// </summary>
-        public void Showcase(string soldierId, Appearance look, string weapon, bool fallen, string name = null, string band = null)
+        public void Showcase(string soldierId, Appearance look, string weapon, bool fallen, string name = null, string band = null, bool pistol = true)
         {
-            string key = soldierId == null ? "" : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { soldierId, look, weapon, fallen, name, band });
+            string key = soldierId == null ? "" : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { soldierId, look, weapon, fallen, name, band, pistol });
             if (key == showcaseKey) return;
             showcaseKey = key;
             // Turned by the player, they stay so while it is them (Personalizar's draft changes the figure, not them).
@@ -115,7 +117,7 @@ namespace Bastion.Client
             string rest = null;
             if (showAnimator != null && showAnimator.isHuman && catalog != null)
             {
-                showGun = weapon == null ? UnitViews.Pistol(showFigure, catalog) : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(weapon)), showFigure, catalog, out _);
+                showGun = weapon == null ? pistol ? UnitViews.Pistol(showFigure, catalog) : null : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(weapon)), showFigure, catalog, out _);
                 showPistol = weapon == null && showGun != null;
                 bool armed = showGun != null && !showPistol;
                 rest = UnitViews.RestFor(soldierId);

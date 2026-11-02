@@ -105,11 +105,12 @@ namespace Bastion.Engine
         private static readonly IReadOnlyDictionary<string, LootTable> Tables = new Dictionary<string, LootTable>
         {
             // Special rounds aren't found any more: the weapons' mods took their place (docs/FASE9.md §5).
-            [Spots.Home] = new LootTable { Supplies = 30, Item = 8, Medicines = 3, Food = 20, Parts = 0, Weapon = 2, Mod = 0, Mags = 4, Items = new[] { ItemIds.FirstAid, ItemIds.SmokeGrenade, ItemIds.NanoVest, ItemIds.MindShield } },
+            // The molotovs where there is a bottle and petrol; the grenades few and only in a warehouse (Arturo, 1/11).
+            [Spots.Home] = new LootTable { Supplies = 30, Item = 8, Medicines = 3, Food = 20, Parts = 0, Weapon = 2, Mod = 0, Mags = 4, Items = new[] { ItemIds.FirstAid, ItemIds.SmokeGrenade, ItemIds.NanoVest, ItemIds.MindShield, ItemIds.Molotov } },
             [Spots.Office] = new LootTable { Supplies = 30, Item = 8, Medicines = 2, Food = 4, Parts = 15, Weapon = 0, Mod = 1, Mags = 3, Items = new[] { ItemIds.FirstAid, ItemIds.Flashbang, ItemIds.MindShield } },
-            [Spots.Shop] = new LootTable { Supplies = 35, Item = 8, Medicines = 12, Food = 25, Parts = 2, Weapon = 0, Mod = 1, Mags = 6, Items = new[] { ItemIds.FirstAid, ItemIds.SmokeGrenade, ItemIds.FragGrenade } },
+            [Spots.Shop] = new LootTable { Supplies = 35, Item = 8, Medicines = 12, Food = 25, Parts = 2, Weapon = 0, Mod = 1, Mags = 6, Items = new[] { ItemIds.FirstAid, ItemIds.SmokeGrenade, ItemIds.Molotov } },
             [Spots.Store] = new LootTable { Supplies = 30, Item = 14, Medicines = 2, Food = 15, Parts = 15, Weapon = 3, Mod = 4, Mags = 10, Items = new[] { ItemIds.FragGrenade, ItemIds.SmokeGrenade, ItemIds.Flashbang } },
-            [Spots.Trunk] = new LootTable { Supplies = 30, Item = 14, Medicines = 8, Food = 5, Parts = 15, Weapon = 4, Mod = 3, Mags = 10, Items = new[] { ItemIds.FragGrenade, ItemIds.FirstAid, ItemIds.NanoVest } },
+            [Spots.Trunk] = new LootTable { Supplies = 30, Item = 14, Medicines = 8, Food = 5, Parts = 15, Weapon = 4, Mod = 3, Mags = 10, Items = new[] { ItemIds.Molotov, ItemIds.FirstAid, ItemIds.NanoVest } },
             [Spots.Glovebox] = new LootTable { Supplies = 25, Item = 5, Medicines = 12, Food = 3, Parts = 5, Weapon = 1, Mod = 1, Mags = 8, Items = new[] { ItemIds.FirstAid } },
         };
 
@@ -121,10 +122,11 @@ namespace Bastion.Engine
         /// Which weapon turns up, by FOUND_WEAPONS weight, as it is found (docs/FASE9.md
         /// §5): somewhat worn, and a good one with its improvement mounted.
         /// </summary>
-        private static Loot FoundWeapon(Rng rng)
+        private static Loot FoundWeapon(Rng rng, bool pistols)
         {
-            // Object.values(FOUND_WEAPONS): in the order of its keys, FoundWeaponIds.All's.
-            var all = FoundWeaponIds.All.Select((id) => Content.FoundWeapons[id]).ToList();
+            // Object.values(FOUND_WEAPONS): in the order of its keys, FoundWeaponIds.All's. The pistol only where they are
+            // counted (MissionState.Pistols; Arturo, 1/11): anywhere else everyone carries one already.
+            var all = FoundWeaponIds.All.Where((id) => pistols || id != FoundWeaponIds.Pistol).Select((id) => Content.FoundWeapons[id]).ToList();
             var roll = rng.Int(all.Sum((w) => w.Weight));
             var def = all.First((w) => (roll -= w.Weight) < 0);
             var loot = new Loot { Weapon = def.Id, Condition = rng.Range(FoundCondition[0], FoundCondition[1]) };
@@ -157,11 +159,11 @@ namespace Bastion.Engine
         /// </summary>
         public static Loot? RollLoot(string decor, int difficulty, Rng rng, bool night = false, bool mags = false)
         {
-            return SpotsOf.TryGetValue(decor, out var spot) ? RollSpot(spot, difficulty, rng, night, mags) : null;
+            return SpotsOf.TryGetValue(decor, out var spot) ? RollSpot(spot, difficulty, rng, night, mags, false) : null;
         }
 
         /// <summary>What searching a place of kind `spot` turns up: rollLoot by the kind of place, not the piece of furniture.</summary>
-        private static Loot? RollSpot(string spot, int difficulty, Rng rng, bool night, bool mags)
+        private static Loot? RollSpot(string spot, int difficulty, Rng rng, bool night, bool mags, bool pistols)
         {
             var d = Math.Max(1, Math.Min(4, difficulty));
             var t = Tables[spot];
@@ -176,7 +178,7 @@ namespace Bastion.Engine
             if (roll < edge) return new Loot { Medicines = 1 };
             if (roll < (edge += t.Food)) return new Loot { Food = rng.Range(FoodFind[0], FoodFind[1]) };
             if (roll < (edge += t.Parts)) return new Loot { Parts = rng.Range(PartsFind[0], PartsFind[1]) };
-            if (roll < (edge += t.Weapon)) return FoundWeapon(rng);
+            if (roll < (edge += t.Weapon)) return FoundWeapon(rng, pistols);
             if (roll < (edge += t.Mod)) return FoundMod(rng);
             if (roll < (edge += t.Mags)) return mags ? new Loot { Mags = 1 } : null;
             return null;
@@ -190,17 +192,25 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> LootBoxes = new[] { DecorKinds.LootWeapons, DecorKinds.LootMedical, DecorKinds.LootAmmo, DecorKinds.LootFood };
 
         /// <summary>
+        /// The police car of the campaign's first mission (MissionState.PoliceCar; Arturo, 1/11): a pistol in the front and
+        /// another in the boot, each searched as a box is.
+        /// </summary>
+        public const string PoliceCar = "policeCar";
+
+        /// <summary>
         /// What opening a box of `kind` turns up: a good weapon, one or two
         /// medicines, two magazines (for a searcher who counts them; nothing for
         /// anyone else), or three to five rations.
         /// </summary>
-        public static Loot? RollBox(string kind, Rng rng, bool mags)
+        public static Loot? RollBox(string kind, Rng rng, bool mags, bool pistols = false)
         {
             switch (kind)
             {
+                case PoliceCar:
+                    return new Loot { Weapon = FoundWeaponIds.Pistol };
                 case DecorKinds.LootWeapons:
                     // A weapon, or now and then an improvement for one (docs/FASE9.md §5).
-                    return rng.Int(10) < 3 ? FoundMod(rng) : FoundWeapon(rng);
+                    return rng.Int(10) < 3 ? FoundMod(rng) : FoundWeapon(rng, pistols);
                 case DecorKinds.LootMedical:
                     return new Loot { Medicines = rng.Range(1, 2) };
                 case DecorKinds.LootAmmo:
@@ -231,6 +241,7 @@ namespace Bastion.Engine
             var kind = Grid.KindAt(s, p);
             if (kind != TileKinds.Low && kind != TileKinds.High) return null;
             var i = Grid.TileIndex(s, p.X, p.Y);
+            if (p.Z == 0 && s.Mission.PoliceCar != null && s.Mission.PoliceCar.Contains(i)) return PoliceCar;
             var look = Decor.DecorOf(i < decor.Count ? decor[i] : (int?)null);
             return look != null && LootBoxes.Contains(look.Kind) ? look.Kind : null;
         }
@@ -328,10 +339,10 @@ namespace Bastion.Engine
         /// supermarket with its shelves still stocked (`market` 'full') always gives food, 6 to 10 rations (Ana, 21/10:
         /// «siempre que estén las estanterías llenas de cosas se pueda lutear»); a picked one, a shop's roll.
         /// </summary>
-        public static Loot? RollRoom(LootRoom room, int difficulty, Rng rng, bool night = false, bool mags = false, string? market = null)
+        public static Loot? RollRoom(LootRoom room, int difficulty, Rng rng, bool night = false, bool mags = false, string? market = null, bool pistols = false)
         {
             if (market == MarketStocks.Full) return new Loot { Food = rng.Range(MarketFood[0], MarketFood[1]) };
-            return RollSpot(market != null ? Spots.Shop : room.Spot, difficulty, rng, night, mags);
+            return RollSpot(market != null ? Spots.Shop : room.Spot, difficulty, rng, night, mags, pistols);
         }
 
         /// <summary>Room in a soldier's backpack: BACKPACK_SLOTS, one more with the Chapistería (docs/FASE8.md §C).</summary>
@@ -450,6 +461,13 @@ namespace Bastion.Engine
                 var blade = new Loot { Weapon = arms!.Melee };
                 if (!string.IsNullOrEmpty(arms.MeleeId)) blade.WeaponId = arms.MeleeId;
                 out_.Add(blade);
+            }
+            // A counted pistol (Arturo, 1/11); the one everyone carried before goes with its bearer.
+            if (arms?.Pistol == true)
+            {
+                var pistol = new Loot { Weapon = FoundWeaponIds.Pistol };
+                if (!string.IsNullOrEmpty(arms.PistolId)) pistol.WeaponId = arms.PistolId;
+                out_.Add(pistol);
             }
             var left = new Dictionary<string, int>(u.Charges);
             var all = (u.Belted ?? new List<string>()).Concat(u.Gear ?? new List<string>()).ToList();

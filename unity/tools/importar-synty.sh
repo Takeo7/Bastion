@@ -88,6 +88,16 @@ for p in "POLYGON - Shops Pack/Unity/POLYGON_Shops_Unity_2022_3_v1_6_6.unitypack
   python3 -I "$tools/upkg-extract.py" --under "Assets/Synty/${p##*:}" "$synty/${p%%:*}" "$project" || failed=1
 done
 rm -rf "$project/Assets/Synty/PolygonPalmCity/Scripts" "$project/Assets/Synty/PolygonPalmCity/Scripts.meta" "$project/Assets/Synty/PolygonDog/Scripts" "$project/Assets/Synty/PolygonDog/Scripts.meta"
+# SIMPLE - Forest Animals (Arturo, 1/11: its stags, does, boars and rabbits, which POLYGON hasn't; nothing else of SIMPLE,
+# CLAUDE.md): under Assets/Synty with the rest (its own folder is Assets/SimpleForestAnimal), without its other animals.
+name=SIMPLE_Forest_Animals_Unity_2020_3_v1_02
+if wanted "$@"; then
+  echo "== $name (ciervos, jabalíes y conejos)"
+  python3 -I "$tools/upkg-extract.py" --move Assets/SimpleForestAnimal=Assets/Synty/SimpleForestAnimal --under Assets/SimpleForestAnimal \
+    "$synty/SIMPLE - Forest Animals/Unity/$name.unitypackage" "$project" || failed=1
+  for other in Bear Fox Moose Raccoon Skunk Wolf; do rm -f "$project/Assets/Synty/SimpleForestAnimal/Prefabs/$other"_* ; done
+  rm -f "$project/Assets/Synty/SimpleForestAnimal/Models/"{Bear,Fox}.fbx* "$project/Assets/Synty/SimpleForestAnimal/Models/SFA_Animal_"{Bear,Fox}.controller*
+fi
 # The HUD's icons (UI): four INTERFACE packs, only their sprites and textures (no prefabs, scripts or samples: the HUD
 # is UI Toolkit, not their uGUI). Dark Fantasy's for the life bars (Ana's #8, 29/10).
 for p in "INTERFACE - Apocalypse HUD/Unity/INTERFACE_Apocalypse_HUD_Unity_2022_3_v1_1_1.unitypackage" \

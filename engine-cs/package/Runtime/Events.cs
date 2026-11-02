@@ -144,8 +144,9 @@ namespace Bastion.Engine
                         foreach (var u in s.Units) u.Marked = 0;
                         foreach (var cloud in s.Smoke) cloud.Turns--;
                         s.Smoke = s.Smoke.Where((cloud) => cloud.Turns > 0).ToList();
-                        // Bengalas and fires burn down (the last turn goes out with a lightOff before this).
+                        // Bengalas and fires burn down (the last turn goes out with a lightOff and a fireOut before this).
                         foreach (var light in s.Lights ?? new List<Light>()) if (light.Turns != null) light.Turns--;
+                        foreach (var fire in s.Fires ?? new List<Fire>()) if (fire.Turns != null) fire.Turns--;
                     }
                     foreach (var u in s.Units)
                     {
@@ -739,6 +740,12 @@ namespace Bastion.Engine
                 case LightOffEvent ev:
                     if (s.Lights != null) s.Lights = s.Lights.Where((l) => l.Id != ev.Id).ToList();
                     break;
+                case FireLitEvent ev:
+                    (s.Fires ??= new List<Fire>()).Add(new Fire { Id = ev.Fire.Id, Source = ev.Fire.Source, Tiles = new List<int>(ev.Fire.Tiles), Turns = ev.Fire.Turns });
+                    break;
+                case FireOutEvent ev:
+                    if (s.Fires != null) s.Fires = s.Fires.Where((f) => f.Id != ev.Id).ToList();
+                    break;
             }
         }
 
@@ -757,6 +764,11 @@ namespace Bastion.Engine
             var kind = loot.Weapon!;
             var id = loot.WeaponId;
             var arms = u.Arms!;
+            if (Content.FoundWeapons[kind].Slot == FoundWeaponSlots.Sidearm)
+            {
+                EquipPistol(s, u, id);
+                return;
+            }
             var melee = Content.FoundWeapons[kind].Slot == FoundWeaponSlots.Melee;
             var old = melee ? arms.Melee : arms.Primary;
             var oldId = melee ? arms.MeleeId : arms.PrimaryId;
@@ -787,6 +799,30 @@ namespace Bastion.Engine
                 if (!string.IsNullOrEmpty(oldId)) kept.WeaponId = oldId;
                 Stow(s, u, kept);
             }
+        }
+
+        /// <summary>
+        /// A pistol at the side (Arturo, 1/11), loaded: the main gun without a weapon in the hand. One carried already, the
+        /// Armería's, goes into the backpack (or to the floor); one everyone carried before, uncounted, is just swapped.
+        /// </summary>
+        private static void EquipPistol(GameState s, Unit u, string? id)
+        {
+            var arms = u.Arms!;
+            var had = arms.Pistol == true;
+            var oldId = arms.PistolId;
+            arms.Pistol = true;
+            arms.PistolId = !string.IsNullOrEmpty(id) ? id : null;
+            // Without a weapon in the hand it is the gun the card names (it said the knife's).
+            if (string.IsNullOrEmpty(arms.Primary))
+            {
+                u.Ammo = Content.PistolClip;
+                u.WeaponName = Content.FoundWeapons[FoundWeaponIds.Pistol].Name;
+            }
+            else u.PistolAmmo = Content.PistolClip;
+            if (!had) return;
+            var kept = new Loot { Weapon = FoundWeaponIds.Pistol };
+            if (!string.IsNullOrEmpty(oldId)) kept.WeaponId = oldId;
+            Stow(s, u, kept);
         }
 
         /// <summary>
@@ -910,7 +946,7 @@ namespace Bastion.Engine
                 Ap = u.Ap,
                 Ammo = u.Ammo,
                 Mags = u.Mags,
-                Arms = u.Arms != null ? new Arms { Primary = u.Arms.Primary, PrimaryId = u.Arms.PrimaryId, Condition = u.Arms.Condition, Mods = CopyStrings(u.Arms.Mods), Melee = u.Arms.Melee, MeleeId = u.Arms.MeleeId } : null,
+                Arms = u.Arms != null ? new Arms { Primary = u.Arms.Primary, PrimaryId = u.Arms.PrimaryId, Condition = u.Arms.Condition, Mods = CopyStrings(u.Arms.Mods), Melee = u.Arms.Melee, MeleeId = u.Arms.MeleeId, Pistol = u.Arms.Pistol, PistolId = u.Arms.PistolId } : null,
                 PistolAmmo = u.PistolAmmo,
                 Charges = new Dictionary<string, int>(u.Charges),
                 Overwatch = u.Overwatch,
@@ -1042,6 +1078,8 @@ namespace Bastion.Engine
                     Alarm = m.Alarm,
                     MedicineCures = m.MedicineCures,
                     Quarantine = m.Quarantine,
+                    Pistols = m.Pistols,
+                    PoliceCar = CopyInts(m.PoliceCar),
                     Reinforcements = m.Reinforcements.Select(CopyReinforcement).ToList(),
                     Difficulty = m.Difficulty,
                     Noise = m.Noise,
@@ -1070,7 +1108,7 @@ namespace Bastion.Engine
                 RoomsSearched = CopyInts(s.RoomsSearched),
                 Discovered = CopyInts(s.Discovered),
                 Wrecks = CopyList(s.Wrecks, (w) => new Wreck { Anchor = w.Anchor, Kind = w.Kind, Tilt = w.Tilt }),
-                Fires = CopyList(s.Fires, (f) => new Fire { Id = f.Id, Source = f.Source, Tiles = new List<int>(f.Tiles) }),
+                Fires = CopyList(s.Fires, (f) => new Fire { Id = f.Id, Source = f.Source, Tiles = new List<int>(f.Tiles), Turns = f.Turns }),
                 Dropped = CopyList(s.Dropped, (d) => new DroppedLoot { Id = d.Id, Pos = CopyPos(d.Pos), Loot = CloneLoot(d.Loot), From = d.From }),
                 DroppedCount = s.DroppedCount,
                 Breakables = s.Breakables != null ? new Dictionary<int, int>(s.Breakables) : null,

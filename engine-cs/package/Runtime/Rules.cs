@@ -199,6 +199,9 @@ namespace Bastion.Engine
                 case AbilityIds.Flashbang:
                     Flashbang(u, tile!);
                     break;
+                case AbilityIds.Molotov:
+                    Molotov(u, tile!);
+                    break;
                 case AbilityIds.FirstAid:
                     // What Curar has grown and the board's cells heal more (docs/FASE10.md); Primeros auxilios and the rest also shelter.
                     // Entre los dos (board.ts): 2 more on the other player's soldiers.
@@ -530,6 +533,41 @@ namespace Bastion.Engine
             ActivatePods(pods, new Activation { Cause = PodCauses.Attacked, Unit = u.Id, By = hit.Count > 0 ? hit[0].Id : null });
         }
 
+        /// <summary>
+        /// The cóctel molotov (Arturo, 1/11): the ground round where it lands on fire, the 3×3 one can step on, for
+        /// MOLOTOV_TURNS of the squad's turns, lighting the night as the map's fires do; whoever is in it burns once now, and
+        /// then as on any fire (Burn). The scenery is left alone, and nobody is spared.
+        /// </summary>
+        private void Molotov(Unit u, Pos center)
+        {
+            CoveringFire(u);
+            if (!u.Alive || Over) return;
+            Emit(new ExplosiveEvent { Unit = u.Id, Ability = AbilityIds.Molotov, Target = center });
+            var tiles = Abilities.BlastTiles(S, AbilityIds.Molotov, center, u)
+                .Where((p) => p.Z == 0 && Grid.IsWalkable(Grid.KindAt(S, p)))
+                .Select((p) => Grid.TileIndex(S, p.X, p.Y))
+                .ToList();
+            var victims = S.Units.Where((v) => v.Alive && !v.Evacuated && !v.Objective && v.Pos.Z == 0 && tiles.Contains(Grid.TileIndex(S, v.Pos.X, v.Pos.Y))).ToList();
+            if (tiles.Count > 0)
+            {
+                // Its own id, after the molotovs still burning: «m1», «m2»…, the light's the same.
+                var n = 1 + (S.Fires ?? new List<Fire>()).Where((f) => f.Id.StartsWith("m")).Select((f) => int.TryParse(f.Id.Substring(1), out var k) ? k : 0).DefaultIfEmpty(0).Max();
+                var at = new Pos { X = center.X, Y = center.Y, Z = 0 };
+                Emit(new FireLitEvent { Unit = u.Id, Fire = new Fire { Id = $"m{n}", Source = Grid.TileIndex(S, center.X, center.Y), Tiles = tiles, Turns = Content.MolotovTurns } });
+                Emit(new LightOnEvent { Light = new Light { Id = $"m{n}", Tile = at, Radius = Content.Flames.Light, Turns = Content.MolotovTurns, Tiles = Los.LightTiles(S, at, Content.Flames.Light, Content.Flames.LightHeight) } });
+            }
+            foreach (var v in victims)
+            {
+                if (Over) break;
+                if (v.Alive) Burn(v, v.Pos);
+            }
+            if (u.Team == Teams.Xcom) BreakConcealment(ConcealReasons.Explosive, u.Id);
+            var hit = new List<string>();
+            foreach (var v in victims) if (!string.IsNullOrEmpty(v.PodId) && !hit.Contains(v.PodId!)) hit.Add(v.PodId!);
+            ActivatePods(hit, new Activation { Cause = PodCauses.Attacked, Unit = u.Team == Teams.Xcom ? u.Id : null });
+            CheckOutcome();
+        }
+
         private void Restoration(Unit u)
         {
             var range = Content.Abilities[AbilityIds.Restoration].Range ?? 0;
@@ -613,7 +651,7 @@ namespace Bastion.Engine
         private void Search(Unit u, Pos tile)
         {
             var box = Looting.SearchSpot(S, tile);
-            var loot = box != null ? Looting.RollBox(box, Rng, u.Mags != null) : null;
+            var loot = box != null ? Looting.RollBox(box, Rng, u.Mags != null, S.Mission.Pistols == true) : null;
             Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Loot = loot });
         }
 
@@ -622,7 +660,7 @@ namespace Bastion.Engine
         {
             var room = Looting.RoomAt(S, u.Pos);
             if (room == null) return;
-            var loot = Looting.RollRoom(room, S.Mission.Difficulty ?? 2, Rng, S.Mission.Night == true, u.Mags != null, Looting.MarketStock(S, room));
+            var loot = Looting.RollRoom(room, S.Mission.Difficulty ?? 2, Rng, S.Mission.Night == true, u.Mags != null, Looting.MarketStock(S, room), S.Mission.Pistols == true);
             Emit(new RoomSearchedEvent { Unit = u.Id, Room = room.Id, Loot = loot });
         }
 
@@ -1401,6 +1439,7 @@ namespace Bastion.Engine
             if (Over) return;
             // Bengalas and fires on their last turn burn out; the rest burn down as the squad's turn begins.
             foreach (var l in (S.Lights ?? new List<Light>()).ToList()) if (l.Turns != null && l.Turns <= 1) Emit(new LightOffEvent { Id = l.Id });
+            foreach (var f in (S.Fires ?? new List<Fire>()).ToList()) if (f.Turns != null && f.Turns <= 1) Emit(new FireOutEvent { Id = f.Id });
             Emit(new TurnBeganEvent { Team = Teams.Xcom, Turn = turn + 1, Command = OpeningCommander(turn + 1) });
             // The bitten weaken: one point of health at every turn of the squad (playtest 2026-10-15, #13), armour or not.
             foreach (var u in S.Units.Where((x) => x.Alive && x.Team == Teams.Xcom && x.Infected == true).ToList()) Damage(u, 1, 0, null, 99);

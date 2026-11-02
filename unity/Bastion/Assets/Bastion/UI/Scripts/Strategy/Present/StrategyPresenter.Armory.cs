@@ -101,18 +101,23 @@ namespace Bastion.UI.Strategy
                     : TierDetail(c, picked);
                 return v;
             }
-            // Only what goes on the belt (docs/FASE9.md §4), and what the Bastion's level allows (#13).
-            var belt = Content.Items.Values.Where(i => i.Slot == ItemSlots.Utility && Progression.ItemUnlocked(c, i.Id)).ToList();
+            // Only what goes on the belt (docs/FASE9.md §4): what the Bastion's level allows (#13), then what it doesn't yet,
+            // with the level it waits for (Arturo, 01/11 #10: the grenades from the third, after the molotov).
+            var belt = Content.Items.Values.Where(i => i.Slot == ItemSlots.Utility).OrderBy(i => Progression.ItemUnlocked(c, i.Id) ? 0 : i.Level).ToList();
             if (picked != null && !belt.Any(i => i.Id == picked)) picked = null;
-            picked = picked ?? belt.FirstOrDefault()?.Id;
+            picked = picked ?? belt.FirstOrDefault(i => Progression.ItemUnlocked(c, i.Id))?.Id ?? belt.FirstOrDefault()?.Id;
             pick.Pick = picked;
             var list = new ArmorySectionView();
             foreach (var item in belt)
+            {
+                var open = Progression.ItemUnlocked(c, item.Id);
                 list.Rows.Add(new ArmoryRowView
                 {
-                    Id = item.Id, Name = item.Name, Price = Campaign.CostText(Campaign.ShopPrice(c, item.Id)), Right = StockText(c, item.Id),
-                    Selected = picked == item.Id, New = IsNew("item:" + item.Id), NewKey = "item:" + item.Id, Tip = "Se equipan en la ficha de cada soldado",
+                    Id = item.Id, Name = item.Name, Price = open ? Campaign.CostText(Campaign.ShopPrice(c, item.Id)) : null, Right = StockText(c, item.Id),
+                    Chip = open ? null : new ChipView { Text = $"Nivel {item.Level}", Tone = "warn", Tip = Lore.NeedsLevelLine(item.Level) },
+                    Selected = picked == item.Id, New = open && IsNew("item:" + item.Id), NewKey = "item:" + item.Id, Tip = open ? "Se equipan en la ficha de cada soldado" : Lore.NeedsLevelLine(item.Level),
                 });
+            }
             v.Sections.Add(list);
             if (Campaign.FacilityCount(c, "workshop") > 0) v.Note = $"Taller: −{Js.Round((1 - (double)Campaign.ShopPrice(c, ItemIds.SmokeGrenade) / Content.Items[ItemIds.SmokeGrenade].Cost) * 100)} %";
             if (picked != null) v.Detail = ItemDetail(c, Content.Items[picked]);
@@ -120,7 +125,7 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>Where a weapon of the Armería goes (placeOf): the hand or the belt.</summary>
-        static string PlaceOf(string kind) => Content.FoundWeapons[kind].Slot == "melee" ? "Cinto" : "Mano";
+        static string PlaceOf(string kind) => Content.FoundWeapons[kind].Slot == FoundWeaponSlots.Melee ? "Cinto" : Content.FoundWeapons[kind].Slot == FoundWeaponSlots.Sidearm ? "Costado" : "Mano";
 
         /// <summary>«Gastada» or «Rota», and «+2» for its improvements (wearMarks): a firearm's only.</summary>
         static List<ChipView> WearTags(FoundWeapon w)
@@ -267,12 +272,15 @@ namespace Bastion.UI.Strategy
             if (w == null) return new ArmoryDetailView { Kicker = "Arma", Name = "", Text = { "Esa arma ya no está." } };
             var def = Content.FoundWeapons[w.Kind];
             var holder = w.Holder != null ? c.Soldiers.FirstOrDefault(x => x.Id == w.Holder) : null;
-            var melee = def.Slot == "melee";
+            var melee = def.Slot == FoundWeaponSlots.Melee;
+            var side = def.Slot == FoundWeaponSlots.Sidearm;
             var profile = Aim.WeaponProfileOf(w.Kind, w.Condition ?? 100, w.Mods);
+            // Where the Armería counts the pistols (Arturo, 01/11 #10), a rifle's pistol is the one at the side, if any.
+            var hand = c.Pistols == true ? "Para un soldado: la lleva en la mano, y al costado su pistola si tiene una." : "Para un soldado: la lleva en la mano y la pistola al costado.";
             var v = new ArmoryDetailView
             {
-                Kicker = $"{(def.Better ? "Arma buena" : melee ? "Cuerpo a cuerpo" : "Arma")} · {PlaceOf(w.Kind)}", Name = def.Name, Art = WeaponIcon(def.Weapon),
-                Text = { melee ? "Para un soldado, en lugar del cuchillo. Si cae, se pierde." : $"Para un soldado: la lleva en la mano y la pistola al cinto.{(def.Better && def.Mod != null ? $" Vino con {Content.WeaponMods[def.Mod].Name.ToLowerInvariant()}." : "")} Si cae, se pierde." },
+                Kicker = $"{(def.Better ? "Arma buena" : melee ? "Cuerpo a cuerpo" : side ? "Pistola" : "Arma")} · {PlaceOf(w.Kind)}", Name = def.Name, Art = WeaponIcon(def.Weapon),
+                Text = { melee ? "Para un soldado, en lugar del cuchillo. Si cae, se pierde." : side ? "Para un soldado: al costado, con su munición; sin otra arma en la mano, es su arma. Si cae, se pierde." : $"{hand}{(def.Better && def.Mod != null ? $" Vino con {Content.WeaponMods[def.Mod].Name.ToLowerInvariant()}." : "")} Si cae, se pierde." },
                 Figures = FigureRows(profile), Range = RangeOf(profile),
             };
             if (!melee) Care(c, w, v);
@@ -283,13 +291,18 @@ namespace Bastion.UI.Strategy
             v.SoldiersEmpty = "No tienes soldados que puedan llevarla.";
             foreach (var s in mine)
             {
-                var carries = melee ? (Progression.MeleeWeaponOf(c, s) != null ? "Machete" : "Cuchillo") : Campaign.WeaponLabel(c, s);
-                var row = new CarrierView { Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname) + (s.Owner == Slot ? "" : $" · de {PlayerName(s.Owner)}"), Note = $"· {(melee ? "al cinto" : "en la mano")}: {carries}" };
+                var pistol = side ? Progression.PistolOf(c, s) : null;
+                var carries = melee ? (Progression.MeleeWeaponOf(c, s) != null ? "Machete" : "Cuchillo") : side ? (pistol != null ? "Pistola" : "nada") : Campaign.WeaponLabel(c, s);
+                var row = new CarrierView { Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname) + (s.Owner == Slot ? "" : $" · de {PlayerName(s.Owner)}"), Note = $"· {(melee ? "al cinto" : side ? "al costado" : "en la mano")}: {carries}" };
                 if (s.Id == w.Holder) row.Chip = "La lleva";
                 else
                 {
                     row.Button = "Dársela";
-                    row.Diff = Diff(profile, Carried(c, s, melee));
+                    // A pistol against the one at the side; to one with none, what it gives: a first gun, or one beside the hand's
+                    // (against a knife or a rifle its figures say nothing useful).
+                    if (side && pistol == null) row.Diff = new List<ChipView> { new ChipView { Text = Progression.FoundWeaponOf(c, s) != null ? "Una pistola al costado" : "Su primera arma de fuego", Tone = "good" } };
+                    else if (!melee && !side && c.Pistols == true && Progression.FoundWeaponOf(c, s) == null && Progression.PistolOf(c, s) == null) row.Diff = new List<ChipView> { new ChipView { Text = "Su primera arma de fuego", Tone = "good" } };
+                    else row.Diff = Diff(profile, side ? Aim.WeaponProfileOf(pistol.Kind, pistol.Condition ?? 100, pistol.Mods) : Carried(c, s, melee));
                 }
                 v.Soldiers.Add(row);
             }

@@ -133,6 +133,8 @@ namespace Bastion.UI.Strategy
             // does the plate when the partner just said «a punto» for the mission or the siege (renderWaiting).
             var partnerSlot = 1 - p.Slot;
             if (c.Proposal != null && c.Proposal.By != p.Slot && prev?.Proposal?.Text != c.Proposal.Text) root.Blink("strat-proposal");
+            // So does a treatment the partner just proposed (#8).
+            if (c.Proposal == null && c.Treatment != null && !c.Treatment.Ready[p.Slot] && (prev?.Treatment == null || prev.Treatment.Soldier != c.Treatment.Soldier)) root.Blink("strat-proposal");
             else if (prev != null && c.Players.Count > 1 && c.LaunchReady[partnerSlot] && !prev.LaunchReady[partnerSlot] && !c.LaunchReady[p.Slot]) root.Blink("strat-proposal");
             // The partner's «a punto», heard even with a proposal blinking (screen.ts).
             if (prev != null && c.Players.Count > 1 && c.LaunchReady[partnerSlot] && !prev.LaunchReady[partnerSlot] && !c.LaunchReady[p.Slot]) Bastion.Client.Audio.UiSounds.Play("bell");
@@ -397,8 +399,9 @@ namespace Bastion.UI.Strategy
             if (root.ModalOpen || root.MenuOpen || board != null) return;
             if (view == "barracks" || view == "facilities") Go(view == "facilities" ? "barracks" : "facilities");
         }
-        public void OnVote(bool accept) => Order(new VoteCommand { Accept = accept });
-        public void OnWithdraw() => Order(new WithdrawCommand());
+        /// <summary>The plate's keys: a vote, or a bite's treatment's (its own command: Arturo, 01/11 #8).</summary>
+        public void OnVote(bool accept) => Order(p.Proposal()?.Treat is string treat ? new TreatCommand { Soldier = treat, Ready = accept } : (CampaignCommand)new VoteCommand { Accept = accept });
+        public void OnWithdraw() => Order(p.Proposal()?.Treat is string treat ? new TreatCommand { Soldier = treat, Ready = false } : (CampaignCommand)new WithdrawCommand());
         public void OnWaitingGo() => Go("squad");
         public void OnOption(int index) => Order(new AnswerEventCommand { Option = index });
 
@@ -567,9 +570,10 @@ namespace Bastion.UI.Strategy
             var c = p.State;
             var s = c?.Soldiers.FirstOrDefault(x => x.Id == soldiers.Soldier);
             if (s == null) return;
-            if (pick == "hand" || pick == "belt")
+            // The hand, the belt, and the side's pistol where the Armería counts them (Arturo, 01/11 #10): one weapon each.
+            if (pick == "hand" || pick == "belt" || pick == "side")
             {
-                var current = pick == "belt" ? Progression.MeleeWeaponOf(c, s) : Progression.FoundWeaponOf(c, s);
+                var current = pick == "belt" ? Progression.MeleeWeaponOf(c, s) : pick == "side" ? Progression.PistolOf(c, s) : Progression.FoundWeaponOf(c, s);
                 if (option == "none") Order(current != null ? new AssignWeaponCommand { Weapon = current.Id, Soldier = null } : null);
                 else if (option != current?.Id) Order(new AssignWeaponCommand { Weapon = option, Soldier = s.Id });
                 return;

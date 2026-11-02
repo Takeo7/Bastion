@@ -734,6 +734,10 @@
   "macheteChop": {
    "pack": "mixamo",
    "fbx": "Standing Melee Attack Downward"
+  },
+  "bladeIdle": {
+   "pack": "swordCombat",
+   "fbx": "Animations/Polygon/Idle/Base/A_Idle_Base_Sword"
   }
  },
  "motionOrder": [
@@ -802,7 +806,8 @@
    "handsOnHips": "handsOnHipsMasc",
    "thoughtful": "thoughtfulMasc",
    "thoughtfulL": "thoughtfulLMasc",
-   "restBase": "restBaseMasc"
+   "restBase": "restBaseMasc",
+   "blade": "bladeIdle"
   },
   "femn": {
    "drunk": "drunkFemn",
@@ -812,7 +817,8 @@
    "handsOnHips": "handsOnHipsFemn",
    "thoughtful": "thoughtfulFemn",
    "thoughtfulL": "thoughtfulLFemn",
-   "restBase": "restBaseFemn"
+   "restBase": "restBaseFemn",
+   "blade": "bladeIdle"
   }
  },
  "gestureOrder": [

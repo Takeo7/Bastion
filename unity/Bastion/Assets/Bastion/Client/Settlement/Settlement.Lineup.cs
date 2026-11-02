@@ -270,9 +270,11 @@ namespace Bastion.Client
             if (stander.animator != null && stander.animator.isHuman && catalog != null)
             {
                 stander.animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-                // The Armería's gun, or the pistol where there is none (syntyFigures.ts armamentOf), at rest by the thigh.
-                string primary = Campaign.SoldierArms(campaign, s)?.Primary;
-                stander.gun = primary == null ? UnitViews.Pistol(holder, catalog) : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(primary)), holder, catalog, out _);
+                // The Armería's gun, or the pistol where there is none (syntyFigures.ts armamentOf), at rest by the thigh; with
+                // no pistol either (Arturo, 1/11), empty-handed.
+                var arms = Campaign.SoldierArms(campaign, s);
+                string primary = arms?.Primary;
+                stander.gun = primary == null ? UnitViews.CarriesPistol(arms) ? UnitViews.Pistol(holder, catalog) : null : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(primary)), holder, catalog, out _);
                 stander.pistol = primary == null && stander.gun != null;
                 bool armed = stander.gun != null && !stander.pistol;
                 var rests = Anims.RifleRests;

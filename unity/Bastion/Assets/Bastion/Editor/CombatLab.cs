@@ -211,6 +211,107 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// Soldiers with no gun (Arturo, 1/11: nobody starts with a pistol; Arms.Pistol false, nothing from the Armería): one
+        /// with the knife on row 9, one with the machete on row 11, waiting, walking four tiles east, running six, waiting
+        /// again. The camera low from the side (on the start, BASTION_TRAMO=inicio, or the end, final; else the middle), or
+        /// the game's (BASTION_VIEW=game, BASTION_DIST tiles off).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Desarmado -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 110 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Desarmado()
+        {
+            var first = MapLab.Golden("city-7");
+            var ids = first.Units.Where(u => u.Alive && u.Team == "xcom").Select(u => u.Id).Take(2).ToList();
+            string stretch = Environment.GetEnvironmentVariable("BASTION_TRAMO");
+            Plain(u => ids.Contains(u.Id), stretch == "inicio" ? 6 : stretch == "final" ? 16 : 8, stretch == "inicio" ? 8 : 18);
+            var a = Put(state.Units.First(u => u.Id == ids[0]), 7, 9, 0);
+            var b = Put(state.Units.First(u => u.Id == ids[1]), 7, 11, 0);
+            a.Arms = new Arms { Pistol = false };
+            b.Arms = new Arms { Pistol = false, Melee = "machete" };
+            Pos P(int x, int y) => new Pos { X = x, Y = y };
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: walk");
+                    var one = units.MoveAlong(a.Id, Enumerable.Range(8, 4).Select(x => P(x, 9)).ToList(), 1, 1);
+                    var two = units.MoveAlong(b.Id, Enumerable.Range(8, 4).Select(x => P(x, 11)).ToList(), 1, 1);
+                    await one;
+                    await two;
+                    await Awaitable.WaitForSecondsAsync(0.8f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: run");
+                    one = units.MoveAlong(a.Id, Enumerable.Range(12, 6).Select(x => P(x, 9)).ToList(), 2, 1);
+                    two = units.MoveAlong(b.Id, Enumerable.Range(12, 6).Select(x => P(x, 11)).ToList(), 2, 1);
+                    await one;
+                    await two;
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            };
+        }
+
+        /// <summary>
+        /// A molotov (Arturo, 1/11): a soldier with no gun at (9, 10) throws one at (14, 10), the bottle lit in its hand and
+        /// tumbling in its arc (UnitViews.ThrowMotion's held, Fx.MolotovArc); where it breaks a flash and sparks, and the
+        /// 3×3 round it burns (FireView.Light) three seconds, then goes out (FireView.Out). Camera as Desarmado's.
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Molotov -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 100 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Molotov()
+        {
+            var first = MapLab.Golden("city-7");
+            string id = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
+            Plain(u => u.Id == id, 9, 14);
+            var soldier = Put(state.Units.First(u => u.Id == id), 9, 10, 0);
+            soldier.Arms = new Arms { Pistol = false };
+            var target = new Pos { X = 14, Y = 10 };
+            var fire = new Fire { Id = "m1", Source = target.Y * state.Width + target.X, Turns = 2 };
+            for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) fire.Tiles.Add((target.Y + dy) * state.Width + target.X + dx);
+            FireView.Make(new GameObject("Mapa").transform, state);
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(1);
+                    var to = MapSpace.TileToWorld(state, target, 0.2f);
+                    units.Face(id, to);
+                    await Awaitable.WaitForSecondsAsync(0.25f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: throw");
+                    bool landed = false;
+                    async Awaitable Arc()
+                    {
+                        await fx.MolotovArc(units.ThrowHand(id), to);
+                        landed = true;
+                        fx.MuzzleFlash(to + Vector3.up * 0.3f, Fx.Hex(0xff9a40));
+                        fx.Sparks(to + Vector3.up * 0.2f, Fx.Hex(0xffb060), 18);
+                        state.Fires = new System.Collections.Generic.List<Fire> { fire };
+                        FireView.Current?.Light(state, fire);
+                        Debug.Log($"[combat] {Time.time:0.00} s: broken, burning");
+                    }
+                    await units.ThrowMotion(id, () => _ = Arc(), default, "molotov");
+                    while (!landed) await Awaitable.NextFrameAsync();
+                    await Awaitable.WaitForSecondsAsync(3);
+                    FireView.Current?.Out(fire.Id);
+                    Debug.Log($"[combat] {Time.time:0.00} s: out");
+                    await Awaitable.WaitForSecondsAsync(3);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            };
+        }
+
+        /// <summary>
         /// A siege's door as the dead beat on it (Gameplay 27/10, D2: unitViews.ts smash, doors.ts knock and WEAR): on the
         /// base's map (step2/bastion-siege), one of the dead at (17, 5) strikes the gate at (17, 6) BASTION_GOLPES times (5),
         /// 4 of its 18 a blow, a second apart: its leaf shakes, ajar, leant and sagging as it gives. The game's camera

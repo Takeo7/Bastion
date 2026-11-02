@@ -9,8 +9,8 @@ namespace Bastion.UI.Combat
     /// <summary>
     /// Where the camera stands for the shot over the shoulder (shotCam.ts; the attack that kills, playtest 20/10 #11):
     /// behind the attacker's head, to its right, on the line of fire carried back, so the attacker fills the left third
-    /// and the target is in the middle. Never in a wall, a slab, a car or a window: it comes in towards the head, goes
-    /// over the other shoulder or follows the line of fire less steeply; and only where it sees the target. The web's
+    /// and the target is in the middle. Never in a wall, a slab, a car, a window or La Lata: it comes in towards the head,
+    /// goes over the other shoulder or follows the line of fire less steeply; and only where it sees the target. The web's
     /// lengths were in tiles: here times 1.5, in metres.
     /// </summary>
     public static class ShotCam
@@ -84,6 +84,7 @@ namespace Bastion.UI.Combat
                 if (new Vector2(feet.x - head.x, feet.z - head.z).magnitude > BodyNear) continue;
                 bodies.Add(feet);
             }
+            var things = Things();
             var pitch = Mathf.Clamp(Mathf.Atan2(to.y - head.y, run), -Steep, Steep);
             Vector3? best = null;
             var bestScore = float.NegativeInfinity;
@@ -97,10 +98,10 @@ namespace Bastion.UI.Combat
                     var want = head - flat * (Mathf.Cos(p) * back) + right * (Mathf.Sin(turn) * Reach);
                     want.y += lift - Mathf.Sin(p) * back;
                     var reach = Vector3.Distance(head, want);
-                    var free = FreeLength(s, bodies, head, want) / reach;
+                    var free = FreeLength(s, bodies, things, head, want) / reach;
                     if (free * reach < Nearest) continue;
                     var pos = Vector3.Lerp(head, want, free);
-                    if (!Sees(s, pos, to)) continue;
+                    if (!Sees(s, things, pos, to)) continue;
                     // Room counts most; then the order of Turns, the line of fire, and the least height over it.
                     var score = free - n * 0.03f - (1 - tilt) * 0.02f - lift / T * 0.05f;
                     if (score > bestScore)
@@ -120,15 +121,42 @@ namespace Bastion.UI.Combat
             return (at, look);
         }
 
-        /// <summary>How far from `a` towards `b` the camera can go with room round it, out of the walls and of `bodies` (their feet).</summary>
-        static float FreeLength(GameState s, List<Vector3> bodies, Vector3 a, Vector3 b)
+        /// <summary>
+        /// What stands where no tile says so, as boxes the camera keeps out of and doesn't see through: La Lata by its bay,
+        /// each of its pieces in its own box, turned as it is (Gameplay, 01/11: a bite's shot over the shoulder stood 3 s
+        /// inside the bus, arena-evac).
+        /// </summary>
+        static List<(Matrix4x4 into, Bounds box, Vector3 scale)> Things()
+        {
+            var boxes = new List<(Matrix4x4, Bounds, Vector3)>();
+            var lata = MapView.Current != null ? MapView.Current.Lata : null;
+            if (lata == null || !lata.Shown) return boxes;
+            foreach (var r in lata.GetComponentsInChildren<Renderer>())
+                if (r.enabled && r.gameObject.activeInHierarchy) boxes.Add((r.transform.worldToLocalMatrix, r.localBounds, r.transform.lossyScale));
+            return boxes;
+        }
+
+        /// <summary>Whether `p` is within `room` (metres) of any of `things`.</summary>
+        static bool InThing(List<(Matrix4x4 into, Bounds box, Vector3 scale)> things, Vector3 p, float room)
+        {
+            foreach (var (into, b, scale) in things)
+            {
+                var box = b;
+                box.Expand(new Vector3(room * 2 / Mathf.Max(1e-4f, Mathf.Abs(scale.x)), room * 2 / Mathf.Max(1e-4f, Mathf.Abs(scale.y)), room * 2 / Mathf.Max(1e-4f, Mathf.Abs(scale.z))));
+                if (box.Contains(into.MultiplyPoint3x4(p))) return true;
+            }
+            return false;
+        }
+
+        /// <summary>How far from `a` towards `b` the camera can go with room round it, out of the walls, of `things` and of `bodies` (their feet).</summary>
+        static float FreeLength(GameState s, List<Vector3> bodies, List<(Matrix4x4, Bounds, Vector3)> things, Vector3 a, Vector3 b)
         {
             var length = Vector3.Distance(a, b);
             var free = 0f;
             for (var d = Step; d <= length + 1e-6f; d += Step)
             {
                 var p = Vector3.Lerp(a, b, Mathf.Min(1, d / length));
-                if (Crowded(s, p)) break;
+                if (Crowded(s, p) || InThing(things, p, Room)) break;
                 var hit = false;
                 foreach (var f in bodies)
                     if (new Vector2(p.x - f.x, p.z - f.z).magnitude < Body + Room && p.y > f.y - Room && p.y < f.y + BodyTop + Room)
@@ -150,14 +178,14 @@ namespace Bastion.UI.Combat
                 || SolidAt(s, p + Vector3.up * Room, Solid) || SolidAt(s, p - Vector3.up * Room, Solid);
         }
 
-        /// <summary>Whether the camera at `pos` sees the target's chest `to`: nothing opaque between, its own cover left out.</summary>
-        static bool Sees(GameState s, Vector3 pos, Vector3 to)
+        /// <summary>Whether the camera at `pos` sees the target's chest `to`: nothing opaque between, nor La Lata, its own cover left out.</summary>
+        static bool Sees(GameState s, List<(Matrix4x4, Bounds, Vector3)> things, Vector3 pos, Vector3 to)
         {
             var length = Vector3.Distance(pos, to) - SightSpare;
             for (var d = SightStep; d < length; d += SightStep)
             {
                 var p = Vector3.Lerp(pos, to, d / (length + SightSpare));
-                if (SolidAt(s, p, d < (length + SightSpare) / 2 ? OpaqueNear : Opaque)) return false;
+                if (SolidAt(s, p, d < (length + SightSpare) / 2 ? OpaqueNear : Opaque) || InThing(things, p, 0)) return false;
             }
             return true;
         }
