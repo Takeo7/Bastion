@@ -359,7 +359,13 @@ namespace Bastion.Engine
             var from = viewerPos ?? viewer.Pos;
             // Inside a building the squad has not found, nobody shows to it (Buildings; Ana, 31/10).
             if (viewer.Team == Teams.Xcom && target.Team != Teams.Xcom && Buildings.Hidden(s, target.Pos, new[] { from })) return false;
-            return InViewCone(viewer, target.Pos, from) && SightOrigin(s, from, target.Pos, SightTo(s, viewer, target.Pos), WindowReachOf(viewer.Team)) != null;
+            return InViewCone(viewer, target.Pos, from) && SightOrigin(s, from, target.Pos, SightTo(s, viewer, target.Pos) * HiddenShare(viewer, target), WindowReachOf(viewer.Team)) != null;
+        }
+
+        /// <summary>How much of its sight `viewer` has on `target`: HIDE_SIGHT on an enemy hiding (Esconderse; Ana's #1 of 1/11).</summary>
+        public static double HiddenShare(Unit viewer, Unit target)
+        {
+            return target.Hidden == true && viewer.Team != target.Team ? Content.HideSight : 1;
         }
 
         /// <summary>How wide the enemies see, in degrees round where they face (Arturo, 17/10: «en cono y no en área»; the living too, 18/10 #46).</summary>

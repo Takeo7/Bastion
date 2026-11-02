@@ -47,8 +47,15 @@ namespace Bastion.Client.Units
             ["bloater"] = (new Gait("walk", 0.86f), new Gait("walk", 0.64f)),
         };
 
-        /// <summary>Moving crouched (hunkered, held): the crouched walk.</summary>
-        public static readonly Gait Crouched = new Gait("crouchWalk", 0.71f);
+        /// <summary>
+        /// Moving crouched (hunkered, held, hidden, the squad unseen): the crouched walk, as fast as the gait it would stand
+        /// in (Arturo, 2/11: crouched at the plain pace; gaits.ts CROUCHED had its own 0.71 s a tile), its clip quickened
+        /// to keep its feet (ClipSpeed). A dash it runs standing (Rises).
+        /// </summary>
+        public static Gait Crouched(Gait standing) => new Gait("crouchWalk", standing.seconds);
+
+        /// <summary>Whether one crouched gets up for a move of `ap` actions, runs it as one standing and crouches once there (Arturo, 2/11: a dash).</summary>
+        public static bool Rises(int ap) => ap >= 2;
 
         public static (Gait one, Gait two) Of(string template) => Dead.TryGetValue(template ?? "", out var g) ? g : Living;
 
@@ -110,6 +117,9 @@ namespace Bastion.Client.Units
             public Blow blow;
             public bool deadKind;
             public string seed;
+            /// <summary>One of the dead: which of its kind it is on the map (its turn at the map's bodies, Dealt; −1 none) and the map's id.</summary>
+            public int dealt = -1;
+            public string map;
             /// <summary>The weapon in its hands (UnitViews.Arms: a gun, the pistol, a blade), its muzzle in its frame, how it is held at rest.</summary>
             public Transform weapon;
             public Vector3 muzzle;
@@ -150,6 +160,10 @@ namespace Bastion.Client.Units
             public string reachOf;
             /// <summary>Crouched (hunkered, held: unitViews.ts crouchTarget); eating a fallen body; walking; striking with the blade (StrokeOn).</summary>
             public bool crouched;
+            /// <summary>Gone into hiding (Unit.Hidden: Hide played or begun), and going down for it now.</summary>
+            public bool hidden, hiding;
+            /// <summary>Up from its crouch for a dash (Walk, Gaits.Rises): Pose leaves it standing till it is there.</summary>
+            public bool risen;
             public bool feeding;
             public bool walking;
             public bool striking;
@@ -518,6 +532,7 @@ namespace Bastion.Client.Units
             // (they share their template's name).
             var view = new View { id = u.Id, template = u.Template, team = u.Team, root = root, seed = u.CampaignId ?? (u.Team == "xcom" ? u.Name : u.Id), armsKey = ArmsKey(u) };
             view.deadKind = Gaits.MovesDead(u.Template);
+            if (view.deadKind) (view.dealt, view.map) = (TurnOf(u), state?.MapId);
             var model = FigureOf(u, view);
             if (model != null)
             {
@@ -561,13 +576,15 @@ namespace Bastion.Client.Units
         static string RestOf(View v) => v.crouched ? "rifleKneel" : v.rest;
 
         /// <summary>
-        /// What the state says of how it stands: crouched when hunkered or held (unitViews.ts crouchTarget), a soldier
-        /// slumped under half its health (setStance 'slumped').
+        /// What the state says of how it stands: crouched when hunkered, held or hidden (unitViews.ts crouchTarget; Unit.Hidden,
+        /// Esconderse), and the whole squad while it's still unseen (GameState.Concealed; Ana's #1 of 1/11), still and
+        /// walking; a soldier slumped under half its health (setStance 'slumped').
         /// </summary>
         void Pose(View v, Unit u)
         {
             if (v.anim == null || v.dead) return;
-            bool crouched = u.Hunkered || u.Captive;
+            bool hidden = u.Hidden == true && u.Alive;
+            bool crouched = u.Hunkered || u.Captive || hidden || (u.Team == "xcom" && u.Alive && state != null && state.Concealed);
             bool slumped = u.Team == "xcom" && u.Alive && u.Hp * 2 <= u.MaxHp;
             if (slumped != v.slumped)
             {
@@ -587,7 +604,19 @@ namespace Bastion.Client.Units
                     Settle(v, 0.3f);
                 }
             }
-            if (crouched == v.crouched) return;
+            // Gone into hiding: down behind its cover once (Hide: UI's event player waits for it, else it begins here), not
+            // when it was so as the map came in.
+            if (!hidden) v.hidden = false;
+            else if (!v.hidden)
+            {
+                v.hidden = true;
+                if (v.synced && !v.walking && !v.feeding)
+                {
+                    _ = GoIntoHiding(v, u);
+                    return;
+                }
+            }
+            if (crouched == v.crouched || v.hiding || v.risen) return;
             v.crouched = crouched;
             if (!v.walking && !v.feeding) v.anim.Motion(IdleOf(v));
             if (v.weapon != null) Settle(v, 0.3f);
@@ -609,17 +638,20 @@ namespace Bastion.Client.Units
         public static IEnumerable<string> PresetsUsed => Bodies.Values.SelectMany(b => b.Select(p => p.preset)).Distinct();
 
         /// <summary>Its figure: a preset whole for the enemy, a soldier put together from their dress for anyone else; null, none.</summary>
-        static GameObject FigureOf(Unit u, View view)
+        GameObject FigureOf(Unit u, View view)
         {
             var catalog = FigureCatalog.Load();
             // An objective (the relay: its siren car) is no body: a stand-in until it is drawn as its own.
             if (catalog == null || u.Objective) return null;
+            // A soldier of the squad risen as one of the dead: that soldier's figure (Ana's #5, 1/11: the body went and a
+            // purple zombie got up).
+            if (u.RisenFrom != null && u.Appearance != null && RisenFigureOf(u, view) is GameObject risen) return risen;
             // The special dead: City Zombies' and Boss Zombies' (UnitViews.Dead); Sidekick's dead if their prefab is missing.
             if (DeadFigureOf(u, view, catalog) is GameObject special) return special;
             string kind = view.deadKind ? "dead" : u.Template;
             if (Bodies.TryGetValue(kind, out var bodies))
             {
-                var (preset, female) = bodies[PickIndex(bodies.Length, view.seed)];
+                var (preset, female) = bodies[view.deadKind ? Dealt(bodies.Length, view, i => bodies[i].preset) : PickIndex(bodies.Length, view.seed)];
                 view.build = female ? "femn" : "masc";
                 var prefab = catalog.Preset(preset);
                 if (prefab == null)
@@ -650,6 +682,61 @@ namespace Bastion.Client.Units
                 Debug.LogWarning($"[units] {u.Id}: no soldier figure ({e.Message})");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// A soldier risen as one of the dead (Rules.RisenUnit: it keeps their look): the figure they had, their body, face,
+        /// hair, clothes and what they wear, only their skin the dead's (Dress.Of risen: SoldierPalette.RisenTone); in their
+        /// Personalizar colours, without their player's band (they are nobody's now). Null if it can't be made.
+        /// </summary>
+        GameObject RisenFigureOf(Unit u, View view)
+        {
+            // Dressed by the soldier's seed as Make gave it them: their campaign id, or their name («Zombi · Clara Bosch»'s).
+            var corpse = state?.Units.FirstOrDefault(x => x.Id == u.RisenFrom);
+            int named = u.Name.LastIndexOf(" · ", StringComparison.Ordinal);
+            string seed = corpse != null ? corpse.CampaignId ?? corpse.Name : named >= 0 ? u.Name.Substring(named + 3) : u.Name;
+            try
+            {
+                var dress = Dress.Of(u.Appearance, seed, null, true);
+                view.build = dress.sex == "f" ? "femn" : "masc";
+                var figure = SoldierFigure.Make(dress, "Levantado");
+                SquadTint.Paint(figure, u.Appearance, null);
+                return figure;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[units] {u.Id}: no risen figure of {u.RisenFrom} ({e.Message})");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Which of the dead of its kind (the common ones, or each special's) `u` is on the map shown, in the order the state
+        /// lists them (which only grows); the risen not counted (they are themselves). −1 if it isn't there (a lab's).
+        /// </summary>
+        int TurnOf(Unit u)
+        {
+            if (state == null) return -1;
+            string kind = DeadBodies.ContainsKey(u.Template) ? u.Template : "dead";
+            int n = 0;
+            foreach (var x in state.Units)
+            {
+                if (x.Id == u.Id) return n;
+                if (x.RisenFrom == null && Gaits.MovesDead(x.Template) && (DeadBodies.ContainsKey(x.Template) ? x.Template : "dead") == kind) n++;
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// One of the dead's body among `count` (Ana's #6, 1/11: «la misma chica con falda tres veces juntas»): the bodies in
+        /// an order of the map's own, dealt out in turn (View.dealt), so that none comes again before all the others have,
+        /// and those of a group, listed together, are all different; without a turn, by its seed (0.10.1's pick).
+        /// </summary>
+        static int Dealt(int count, View view, Func<int, string> idOf)
+        {
+            if (view.dealt < 0) return PickIndex(count, view.seed);
+            var order = Enumerable.Range(0, count).OrderBy(i => Fnv(view.map + "|" + idOf(i))).ThenBy(i => i).ToArray();
+            return order[view.dealt % count];
         }
 
         /// <summary>
@@ -718,11 +805,13 @@ namespace Bastion.Client.Units
         }
 
         /// <summary>wardrobe.ts pick's hash (FNV-1a of the seed) over `n`.</summary>
-        static int PickIndex(int n, string seed)
+        static int PickIndex(int n, string seed) => (int)(Fnv(seed) % (uint)n);
+
+        static uint Fnv(string seed)
         {
             uint h = 0x811c9dc5;
             foreach (char c in seed ?? "") h = unchecked((h ^ c) * 0x01000193);
-            return (int)(h % (uint)n);
+            return h;
         }
 
         /// <summary>A stand-in where there is no figure: a body of the team's colour, its front marked.</summary>
@@ -840,6 +929,94 @@ namespace Bastion.Client.Units
             if (Map.MapView.Current?.LataAt is Vector3 lata) Face(id, lata);
             v.fadeGoal = 0;
             v.fadeRate = 1 / BoardSeconds;
+        }
+
+        /// <summary>
+        /// Into hiding (Esconderse, HiddenEvent; Ana's #1 of 1/11): turned to its cover (CoverYaw) and down on a knee with
+        /// the rifle or the pistol in hand (Mixamo's «Stand To Kneel»), crouched from there as Pose keeps it while
+        /// Unit.Hidden; with neither in hand, or crouched already (the squad unseen), it only turns. UI's event player
+        /// waits for it; without that, the Sync that finds it hidden begins it.
+        /// </summary>
+        public async Awaitable Hide(string id, CancellationToken ct = default)
+        {
+            if (!views.TryGetValue(id, out var v) || v.dead || v.anim == null) return;
+            if (!v.hidden && state?.Units.FirstOrDefault(x => x.Id == id) is Unit u)
+            {
+                v.hidden = true;
+                await GoIntoHiding(v, u, ct);
+                return;
+            }
+            while (v.hiding) await Awaitable.NextFrameAsync(ct);
+        }
+
+        /// <summary>Seconds the clip of going down into hiding fades into the crouch over, and the turn to the cover's ease (as Turn).</summary>
+        const float HideFade = 0.3f, HideTurn = 6;
+
+        async Awaitable GoIntoHiding(View v, Unit u, CancellationToken ct = default)
+        {
+            v.hiding = true;
+            try
+            {
+                if (CoverYaw(v, u) is float yaw) TurnTo(v, yaw, HideTurn);
+                bool was = v.crouched;
+                v.crouched = true;
+                string down = was ? null : v.inHand == Held.Rifle ? "rifleKneelDown" : v.inHand == Held.Pistol ? "pistolKneelDown" : null;
+                var clip = down != null ? FigureCatalog.Load()?.Clip(down) : null;
+                float seconds = clip != null ? v.anim.PlayWholePart(clip, 0, clip.length, 0.15f, false) : 0;
+                // (Crouched under it already: the clip lets go into the crouch, the rifle's kneel of the same set.)
+                if (!was)
+                {
+                    v.anim.Motion(IdleOf(v));
+                    if (v.weapon != null) Settle(v, HideFade);
+                }
+                await Awaitable.WaitForSecondsAsync(Mathf.Max(0.45f, seconds - HideFade), ct);
+                if (clip == null) return;
+                v.anim.StopWhole(HideFade);
+                await Awaitable.WaitForSecondsAsync(HideFade, ct);
+            }
+            finally
+            {
+                v.hiding = false;
+            }
+        }
+
+        /// <summary>
+        /// The way one hiding on `u`'s tile turns (Hide): to the side of it with cover most toward the nearest of the enemy
+        /// in sight, within the angle cover holds against it (Cover.CoverMinDot); with none in sight, to the side with the
+        /// most cover, the nearest to where it faces. Null, it stays as it is: no cover, or none against that enemy.
+        /// </summary>
+        float? CoverYaw(View v, Unit u)
+        {
+            if (state == null || v.root == null) return null;
+            var sides = Cover.CoverSides(state, u.Pos);
+            var inSight = Los.TeamVisibility(state, Teams.Xcom);
+            Unit near = null;
+            foreach (var e in state.Units)
+            {
+                if (!e.Alive || e.Team != Teams.Alien) continue;
+                int node = Bastion.Engine.Grid.NodeOf(state, e.Pos);
+                if (node < 0 || node >= inSight.Length || !inSight[node]) continue;
+                if (near == null || Bastion.Engine.Grid.Distance(u.Pos, e.Pos) < Bastion.Engine.Grid.Distance(u.Pos, near.Pos)) near = e;
+            }
+            var toward = near != null ? MapSpace.World(near.Pos.X, near.Pos.Y) - MapSpace.World(u.Pos.X, u.Pos.Y) : v.root.forward;
+            toward.y = 0;
+            if (toward.sqrMagnitude < 1e-6f) return null;
+            toward.Normalize();
+            float? best = null;
+            float most = float.MinValue;
+            for (int k = 0; k < sides.Length; k++)
+            {
+                if (sides[k] <= 0) continue;
+                var d = Bastion.Engine.Grid.Dirs4[k];
+                var side = (MapSpace.World(u.Pos.X + d.X, u.Pos.Y + d.Y) - MapSpace.World(u.Pos.X, u.Pos.Y)).normalized;
+                float dot = Vector3.Dot(side, toward);
+                if (near != null && dot < Cover.CoverMinDot) continue;
+                float score = near != null ? dot + sides[k] * 0.1f : sides[k] + dot * 0.5f;
+                if (score <= most) continue;
+                most = score;
+                best = Quaternion.LookRotation(side).eulerAngles.y;
+            }
+            return best;
         }
 
         /// <summary>A shade (heard, not seen): drawn in the fog, dark, nothing of what it is (0.10.1's shade).</summary>
@@ -1016,7 +1193,8 @@ namespace Bastion.Client.Units
         {
             string template = views.TryGetValue(id, out var v) ? v.template : "";
             var (one, two) = Gaits.Of(template);
-            var gait = v != null && v.crouched ? Gaits.Crouched : ap >= 2 ? two : one;
+            var gait = ap >= 2 ? two : one;
+            if (v != null && v.crouched && !Gaits.Rises(ap)) gait = Gaits.Crouched(gait);
             float tile = gait.seconds / Mathf.Max(0.01f, pace);
             var seconds = new float[path.Count];
             var at = from;
@@ -1070,7 +1248,17 @@ namespace Bastion.Client.Units
             v.reachFor = null;
             if (v.feeding) await GetUp(v, ct);
             var (one, two) = Gaits.Of(v.template);
-            var gait = v.crouched ? Gaits.Crouched : ap >= 2 ? two : one;
+            var gait = ap >= 2 ? two : one;
+            // Crouched, a dash is run standing (Gaits.Rises): it gets up as it sets off, in the motions' blend, and crouches
+            // again once there, as the state still has it (Pose), in the same time as one standing.
+            bool rises = v.crouched && Gaits.Rises(ap);
+            if (v.crouched && !rises) gait = Gaits.Crouched(gait);
+            if (rises)
+            {
+                v.crouched = false;
+                v.risen = true;
+                if (v.weapon != null) Settle(v, 0.2f);
+            }
             float tile = gait.seconds / Mathf.Max(0.01f, pace);
             v.walking = true;
             float clip = Gaits.ClipSpeed(v.template, gait) * pace;
@@ -1085,7 +1273,7 @@ namespace Bastion.Client.Units
                 if (Hold(k) > 0.02f)
                 {
                     Face(id, MapSpace.StandAt(state, path[k]));
-                    v.anim?.Motion("idle");
+                    v.anim?.Motion(IdleOf(v));
                     await Awaitable.WaitForSecondsAsync(Hold(k), ct);
                     v.anim?.Motion(gait.motion, clip);
                 }
@@ -1143,6 +1331,11 @@ namespace Bastion.Client.Units
             v.root.position = MapSpace.StandAt(state, path[path.Count - 1]);
             v.walking = false;
             v.onSill = false;
+            if (v.risen)
+            {
+                v.risen = false;
+                if (state.Units.FirstOrDefault(x => x.Id == id) is Unit u) Pose(v, u);
+            }
             v.anim?.Motion(IdleOf(v));
         }
 

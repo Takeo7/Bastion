@@ -28,6 +28,8 @@ namespace Bastion.UI.Strategy
         public Func<int, int, Vector2?> PadAt;
         /// <summary>A soldier's bust by id; null, the silhouette.</summary>
         public Func<string, Texture> PortraitOf;
+        /// <summary>Whether a card has the soldier's bust: not in Escuadra, where the figure over it shows the face (Ana, Arturo 01/11 #2).</summary>
+        public bool Busts = true;
         /// <summary>The lowest a card's bottom may go (the top of the panels at the bottom), in panel pixels.</summary>
         public Func<float> Floor;
 
@@ -78,12 +80,15 @@ namespace Bastion.UI.Strategy
             if (!v.Ready && !v.Fallen) card.style.borderTopColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
             card.EnableInClassList("lineup-card--ready", v.Ready);
             card.EnableInClassList("lineup-card--fallen", v.Fallen);
-            card.AddToClassList("lineup-card--bust");
-            var bust = Ui.El("lineup-card__bust", card);
-            if (!v.Fallen) bust.style.borderTopColor = bust.style.borderBottomColor = bust.style.borderLeftColor = bust.style.borderRightColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
-            var portrait = PortraitOf?.Invoke(v.Id);
-            if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
-            else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
+            if (Busts)
+            {
+                card.AddToClassList("lineup-card--bust");
+                var bust = Ui.El("lineup-card__bust", card);
+                if (!v.Fallen) bust.style.borderTopColor = bust.style.borderBottomColor = bust.style.borderLeftColor = bust.style.borderRightColor = Ui.Hex(v.Accent, new Color(0.95f, 0.65f, 0.2f));
+                var portrait = PortraitOf?.Invoke(v.Id);
+                if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
+                else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
+            }
             if (v.Removable)
             {
                 var id = v.Id;

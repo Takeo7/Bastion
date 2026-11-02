@@ -891,7 +891,7 @@ namespace Bastion.EditorTools
             ["apocalypse"] = "PolygonApocalypse", ["city"] = "PolygonCity", ["town"] = "PolygonTown", ["office"] = "PolygonOffice",
             ["military"] = "PolygonMilitary", ["construction"] = "PolygonConstruction", ["farm"] = "PolygonFarm", ["nature"] = "PolygonNature",
             ["alpine"] = "PolygonNatureBiomes", ["industrial"] = "PolygonMapsMilitaryWarehouse", ["woodland"] = "PolygonMapsWoodlandApocalypse",
-            ["dog"] = "PolygonDog", ["shops"] = "PolygonShops", ["gang"] = "PolygonGangWarfare", ["simple"] = "SimpleForestAnimal",
+            ["dog"] = "PolygonDog", ["shops"] = "PolygonShops", ["gang"] = "PolygonGangWarfare", ["simple"] = "SimpleForestAnimal", ["cats"] = "SimpleCats",
         };
 
         /// <summary>

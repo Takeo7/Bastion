@@ -45,6 +45,9 @@ namespace Bastion.UI.EditorTools
         const string Explosives = "ICON_Apocalpyse_Inventory_Explosives_01";
         const string Healing = "ICON_Apocalpyse_Inventory_Healing_01";
         const string Helmet = "ICON_Apocalpyse_Inventory_Helmets_01";
+        // Esconderse (Ana's #1 of 1/11): a hood, Dark Fantasy HUD's «stealthy»; its dotted figure («invisible») is thin on a
+        // key and says unseen, not seen from half as far.
+        const string Hood = "ICON_DarkFantasy_Status_Stealthy_01_Clean";
         const string Reload = "ICON_ModernMenus_Reload_01_Clean";
         const string FastForward = "ICON_ModernMenus_FastForward_01_Clean";
         const string Settings = "ICON_ModernMenus_Settings_01_Clean";
@@ -81,7 +84,7 @@ namespace Bastion.UI.EditorTools
             ("weapon:sniper", Sniper), ("weapon:cannon", MachineGun), ("pistol", Pistol),
             ("weapon:pan", Pan), ("weapon:bat", Bat), ("weapon:crowbar", Crowbar), ("weapon:chainsaw", Chainsaw),
             ("slash", Blades), ("overwatchMelee", Blade), ("stone", Rock), ("overwatch", Target),
-            ("hunker", Helmet), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
+            ("hunker", Helmet), ("hide", Hood), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
             ("launch", Launcher), ("smoke", Smoke), ("flashbang", Flashbang), ("firstAid", Healing),
             ("evac", Vehicle), ("evacAccept", Vehicle), ("evacRefuse", Time), ("abandonRefuse", Time),
             ("abandon", Flag), ("abandonAccept", Flag), ("hack", Settings), ("search", Backpack), ("searchRoom", Backpack),

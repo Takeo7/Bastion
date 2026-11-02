@@ -697,7 +697,8 @@ namespace Bastion.UI.Combat
                 Events.ApplyEvent(host, e);
                 Events.ApplyEvent(control.State, e);
             }
-            player.Push(events, null);
+            // BASTION_LAB_MIO=1: as this player's own order (its camera), for a squad's turn's order (BASTION_LAB_OP).
+            player.Push(events, System.Environment.GetEnvironmentVariable("BASTION_LAB_MIO") == "1" ? control.MySlot : (int?)null);
             control.Refresh();
         }
 

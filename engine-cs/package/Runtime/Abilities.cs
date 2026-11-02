@@ -42,6 +42,8 @@ namespace Bastion.Engine
             {
                 // Evacuating is the squad's, by the bus (the `evac` command, docs/PRUEBA-2026-10-14.md P1), not one soldier's ability.
                 if (u.Template != TemplateIds.Vip) list.AddRange(new[] { AbilityIds.Hack, AbilityIds.Search, AbilityIds.SearchRoom, AbilityIds.OpenDoor, AbilityIds.CloseDoor });
+                // Esconderse beside Cubrirse (Ana's #1 of 1/11).
+                if (list.Contains(AbilityIds.Hunker) && !list.Contains(AbilityIds.Hide)) list.Insert(list.IndexOf(AbilityIds.Hunker) + 1, AbilityIds.Hide);
                 // Fase 10 (docs/FASE10.md §4): the blade can keep watch too. The stone is the board's since 29/10 (Piedras).
                 if (u.Arms != null && list.Contains(AbilityIds.Overwatch)) list.Insert(list.IndexOf(AbilityIds.Overwatch) + 1, AbilityIds.OverwatchMelee);
             }

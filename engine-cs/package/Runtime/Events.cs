@@ -164,6 +164,7 @@ namespace Bastion.Engine
                         u.KillZone = false;
                         u.ReactedTo = new List<string>();
                         u.Hunkered = false;
+                        u.Hidden = null;
                         u.Aided = 0;
                         u.Refunded = false;
                         EndSuppression(s, u);
@@ -249,6 +250,7 @@ namespace Bastion.Engine
                     u.Ap = 0;
                     u.Overwatch = false;
                     u.Hunkered = false;
+                    u.Hidden = null;
                     u.Aided = 0;
                     EndSuppression(s, u);
                     if (!string.IsNullOrEmpty(u.SuppressedBy))
@@ -294,6 +296,9 @@ namespace Bastion.Engine
                 case HunkerEvent ev:
                     UnitOf(s, ev.Unit).Hunkered = true;
                     Deed(s, ev.Unit, DeedIds.Hunker);
+                    break;
+                case HiddenEvent ev:
+                    UnitOf(s, ev.Unit).Hidden = true;
                     break;
                 case StoneThrownEvent ev:
                     s.Blow = new Blow { Unit = ev.Unit, Kind = BlowKinds.Blast };
@@ -507,6 +512,7 @@ namespace Bastion.Engine
                     if (Los.IsViewer(u, Teams.Xcom)) Buildings.Discover(s, u.Pos, true);
                     u.Overwatch = false;
                     u.Hunkered = false;
+                    u.Hidden = null;
                     break;
                 }
                 case TileChangedEvent ev:
@@ -560,6 +566,16 @@ namespace Bastion.Engine
                 {
                     var pod = s.Pods.Find((p) => p.Id == ev.Pod);
                     if (pod != null) pod.Active = true;
+                    break;
+                }
+                case PodSplitEvent ev:
+                {
+                    // Those of a group who saw or heard it go on their own (Ana's #4 of 1/11); the rest stay as they were.
+                    var pod = s.Pods.Find((p) => p.Id == ev.Pod);
+                    if (pod == null) break;
+                    pod.UnitIds = pod.UnitIds.Where((id) => !ev.Units.Contains(id)).ToList();
+                    s.Pods.Add(new Pod { Id = ev.Into, Active = false, UnitIds = new List<string>(ev.Units), Patrol = new List<Pos>(), PatrolIndex = 0 });
+                    foreach (var id in ev.Units) UnitOf(s, id).PodId = ev.Into;
                     break;
                 }
                 case ConcealmentBrokenEvent _:
@@ -951,6 +967,7 @@ namespace Bastion.Engine
                 Charges = new Dictionary<string, int>(u.Charges),
                 Overwatch = u.Overwatch,
                 Hunkered = u.Hunkered,
+                Hidden = u.Hidden,
                 Aided = u.Aided,
                 Stunned = u.Stunned,
                 Alive = u.Alive,

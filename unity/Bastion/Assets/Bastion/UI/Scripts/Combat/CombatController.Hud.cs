@@ -249,6 +249,7 @@ namespace Bastion.UI.Combat
                 Tag(u.ControlledBy != null, UnitWords.Agree(u, "CONTROLADO"), "psi");
                 Tag(u.Overwatch, u.KillZone ? "ZONA LETAL" : u.WatchMelee == true ? "HOJA EN ALTO" : "VIGILANCIA", "ow");
                 Tag(u.Hunkered, "CUBRIÉNDOSE", "hk");
+                Tag(u.Hidden == true, UnitWords.Agree(u, "ESCONDIDO"), "hide");
                 Tag(u.Aided > 0, UnitWords.Agree(u, "PROTEGIDO"), "aid");
                 Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun");
                 Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi");
@@ -299,9 +300,11 @@ namespace Bastion.UI.Combat
                 {
                     if (x == a.Pos.X && y == a.Pos.Y) continue;
                     var p = new Pos { X = x, Y = y, Z = a.Pos.Z };
-                    if (!Grid.CanStandOn(Grid.KindAt(v, p)) || !Los.InViewCone(a, p) || Los.SightOrigin(v, a.Pos, p, Los.SightTo(v, a, p), Los.WindowReachOf(a.Team)) == null) continue;
+                    // One of ours hiding there, at half of it (Esconderse, Ana's #1 of 1/11: Los.HiddenShare, as Los.CanSee has it).
+                    var share = Grid.UnitAt(v, p) is Unit there ? Los.HiddenShare(a, there) : 1;
+                    if (!Grid.CanStandOn(Grid.KindAt(v, p)) || !Los.InViewCone(a, p) || Los.SightOrigin(v, a.Pos, p, Los.SightTo(v, a, p) * share, Los.WindowReachOf(a.Team)) == null) continue;
                     seen.Add(p);
-                    if (v.Concealed && Grid.Distance(a.Pos, p) <= Los.DetectionTo(v, a, p)) noticed.Add(p);
+                    if (v.Concealed && Grid.Distance(a.Pos, p) <= Los.DetectionTo(v, a, p) * share) noticed.Add(p);
                 }
                 vision = (key, seen, noticed);
             }
@@ -449,6 +452,7 @@ namespace Bastion.UI.Combat
                 Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data");
                 Tag(u.Overwatch, u.KillZone ? "ZONA LETAL" : u.WatchMelee == true ? "HOJA EN ALTO" : "VIGILANCIA", "ow");
                 Tag(u.Hunkered, "CUBRIÉNDOSE", "hk");
+                Tag(u.Hidden == true, UnitWords.Agree(u, "ESCONDIDO"), "hide");
                 Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun");
                 view.Cards.Add(card);
             }
@@ -749,15 +753,20 @@ namespace Bastion.UI.Combat
             var room = slots - (u.Backpack?.Count ?? 0);
             view.Title = Lore.BoxTitle(decor);
             view.Detail = $"Mochila: {(room == 1 ? "queda 1 hueco" : $"quedan {room} huecos")} de {slots}";
-            // The first mission's police car (Lore, 0.11.5): «clic en el coche», and its other half for Tab.
+            // The first mission's police car (Lore, 0.11.6): its front and its boot, as the mission's card says them
+            // (MissionState.PoliceCar: the nose, then the boot).
             var car = decor == Looting.PoliceCar;
+            bool Boot(Pos p) => State.Mission.PoliceCar!.IndexOf(Grid.TileIndex(State, p.X, p.Y)) == 1;
             if (car)
             {
-                // Its button and its words, not the box's (Arturo, 0.11.5; Lore goes over them in the 0.11.6).
+                if (Boot(tile)) view.Title = "Abrir el maletero";
                 view.Action = view.Title;
-                view.Effect = "Registra esta mitad del coche de policía: dentro hay una pistola.";
+                view.Effect = $"Abre {(Boot(tile) ? "el maletero del coche de policía" : "el coche de policía por delante")}: hay una pistola. Hace un poco de ruido.";
             }
-            view.Hint = $"Otra vez, Espacio o clic en {(car ? "el coche" : "la caja")}: abrir{(others > 0 ? $" · Tab: {(others == 1 ? "la otra" : "otra")} {(car ? "mitad" : "caja")}" : "")} · Esc: cancelar";
+            // Tab to the car's other part names it; anything else is a box.
+            var next = others == 1 ? HandTiles().FirstOrDefault(t => !Same(t, tile)) : null;
+            var tab = next != null && Looting.SearchSpot(State, next) == Looting.PoliceCar ? (Boot(next) ? "el maletero" : car ? "delante" : "el coche") : others == 1 ? "la otra caja" : "otra caja";
+            view.Hint = $"Otra vez, Espacio o clic en {(car ? "el coche" : "la caja")}: abrir{(others > 0 ? $" · Tab: {tab}" : "")} · Esc: cancelar";
             return view;
         }
 

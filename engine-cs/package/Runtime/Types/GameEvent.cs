@@ -160,6 +160,25 @@ namespace Bastion.Engine
         public string Unit { get; set; } = "";
     }
 
+    /// <summary>A soldier hides (Esconderse; Ana's #1 of 1/11): Unit.hidden till its next turn.</summary>
+    public sealed class HiddenEvent : GameEvent
+    {
+        public override string T => "hidden";
+        public string Unit { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Some of a group of enemies, those who saw or heard what woke them, go on their own as a new group, `into`, and the
+    /// rest stay as they were (Ana's #4 of 1/11: each of the dead with its own eyes and ears).
+    /// </summary>
+    public sealed class PodSplitEvent : GameEvent
+    {
+        public override string T => "podSplit";
+        public string Pod { get; set; } = "";
+        public string Into { get; set; } = "";
+        public List<string> Units { get; set; } = new List<string>();
+    }
+
     /// <summary>A stone thrown at `target` (docs/FASE10.md §4); `hit`, who was standing there.</summary>
     public sealed class StoneThrownEvent : GameEvent
     {

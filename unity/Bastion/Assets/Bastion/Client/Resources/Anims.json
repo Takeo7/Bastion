@@ -689,6 +689,14 @@
    "pack": "mixamo",
    "fbx": "Idle Crouching Aiming"
   },
+  "rifleKneelDown": {
+   "pack": "mixamo",
+   "fbx": "Rifle Stand To Kneel"
+  },
+  "pistolKneelDown": {
+   "pack": "mixamo",
+   "fbx": "Pistol Stand To Kneel"
+  },
   "pistolRest": {
    "pack": "mixamo",
    "fbx": "Pistol Aim"
@@ -1045,6 +1053,8 @@
   "rifleTurnR180",
   "rifleKneel",
   "rifleKneelAim",
+  "rifleKneelDown",
+  "pistolKneelDown",
   "pistolRest",
   "pistolAim",
   "pistolFire",

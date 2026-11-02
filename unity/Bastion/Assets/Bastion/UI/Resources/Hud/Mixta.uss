@@ -316,6 +316,11 @@ Button:disabled {
     color: #9fe08a;
 }
 
+/* Esconderse (Ana's #1 of 1/11): apart from Cubrirse's green, a shadow's grey-blue. */
+.tag--hide {
+    color: #a9bfd6;
+}
+
 .tag--stun {
     color: #ffcf5a;
 }

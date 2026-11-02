@@ -32,7 +32,7 @@ namespace Bastion.EditorTools
             if (Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
-            state = MapLab.Golden(name);
+            state = Seen(MapLab.Golden(name));
             MapLab.Lighting(true);
             MapLab.Map(state, name);
             units = new GameObject("Unidades").AddComponent<UnitViews>();
@@ -68,7 +68,8 @@ namespace Bastion.EditorTools
         /// <summary>
         /// The same actions close up, on a plain floor (Gameplay reviews each figure's strips so, and from the game's camera):
         /// a soldier and one of the dead alone (BASTION_TEMPLATE, zombie unless said), the soldier walking three tiles and
-        /// stopping four short of it; the camera at BASTION_DIST tiles (6 unless said; 24 is the game's).
+        /// stopping four short of it; the camera at BASTION_DIST tiles (6 unless said; 24 is the game's). BASTION_AP=2: the
+        /// walk as a dash; BASTION_PIES=1: its feet and root logged each frame of it ([pies]), for how far the planted foot slides.
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Close -shotPlay -shotCamera "Shot camera"
         ///     -shotFrames 110 -shotFps 10 -shotOut &lt;folder&gt;
         /// </summary>
@@ -76,7 +77,7 @@ namespace Bastion.EditorTools
         {
             if (Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
-            state = MapLab.Golden("city-7");
+            state = Seen(MapLab.Golden("city-7"));
             MapLab.Lighting(true);
             var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
             floor.name = "Suelo";
@@ -119,13 +120,23 @@ namespace Bastion.EditorTools
         static Func<Awaitable> sequence;
 
         /// <summary>
+        /// The state with the squad seen, as the strips have always had it: unseen (GameState.Concealed, as a mission
+        /// starts) it goes crouched, Ana's #1 of 1/11. BASTION_OCULTOS=1 keeps it unseen.
+        /// </summary>
+        static GameState Seen(GameState s)
+        {
+            if (Environment.GetEnvironmentVariable("BASTION_OCULTOS") != "1") s.Concealed = false;
+            return s;
+        }
+
+        /// <summary>
         /// A plain floor round tile (12, 10) of city-7's state with these of its units alone, each where it is put, and the
         /// camera low from the side on tiles `from` to `to` (Gameplay's strips that close an animation).
         /// </summary>
         static void Plain(Func<Unit, bool> keep, int from, int to)
         {
             if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
-            state = MapLab.Golden("city-7");
+            state = Seen(MapLab.Golden("city-7"));
             MapLab.Lighting(true);
             var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
             floor.name = "Suelo";
@@ -322,7 +333,7 @@ namespace Bastion.EditorTools
         public static void Asedio()
         {
             if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
-            state = MapLab.Golden("../step2/bastion-siege");
+            state = Seen(MapLab.Golden("../step2/bastion-siege"));
             var dead = MapLab.Golden("city-7").Units.First(u => u.Alive && u.Template == "zombie");
             dead.Pos = new Pos { X = 17, Y = 5, Z = 0 };
             dead.Facing = 0;
@@ -388,7 +399,7 @@ namespace Bastion.EditorTools
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "torre";
             // BASTION_GENERAR=biome,seed[,kind]: the mission referencia.html?biome=…&seed=…&kind=… makes (reference.ts), not a recorded one.
             var made = Environment.GetEnvironmentVariable("BASTION_GENERAR")?.Split(',');
-            state = made != null && made.Length >= 2
+            state = Seen(made != null && made.Length >= 2
                 ? Setup.CreateMission(new MissionOptions
                 {
                     Map = new MapSource { Kind = MapSourceKinds.Generated, Biome = made[0], Seed = int.Parse(made[1]) },
@@ -397,7 +408,7 @@ namespace Bastion.EditorTools
                     Kind = made.Length > 2 ? made[2] : "elimination",
                     Difficulty = 3,
                 })
-                : MapLab.Golden(name);
+                : MapLab.Golden(name));
             Debug.Log($"[pasos] {state.MapId} {state.Width}x{state.Height}: {string.Join(" ", state.Tiles.GroupBy(t => t).OrderBy(g => g.Key).Select(g => $"{g.Key} {g.Count()}"))}; units {state.Units.Count}");
             soldier = state.Units.First(u => u.Alive && u.Team == "xcom");
             soldier.Template = "rookie";
@@ -512,7 +523,8 @@ namespace Bastion.EditorTools
 
         /// <summary>
         /// A body that gets up as one of the dead (Gameplay 27/10, D4: unitViews.ts reanimate): a soldier at (11, 10) shot dead
-        /// from two tiles west 0.8 s in, a second later risen as a zombie out of its body's death played backwards. On a plain
+        /// from two tiles west 0.8 s in, a second later risen as a zombie out of its body's death played backwards: as the
+        /// engine makes it (Rules.RisenUnit), with that soldier's look, so the soldier dead (Ana's #5, 1/11). On a plain
         /// floor, the camera low (BASTION_VIEW: norte, game).
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Levanta -shotPlay -shotCamera "Shot camera"
         ///     -shotFrames 50 -shotFps 10 -shotOut &lt;folder&gt;
@@ -526,6 +538,7 @@ namespace Bastion.EditorTools
             soldier = Put(state.Units.First(u => u.Id == soldierId), 11, 10, 0);
             soldier.Template = "rookie";
             soldier.Arms = new Arms { Primary = "assaultRifle" };
+            soldier.Appearance ??= new Appearance();
             sequence = async () =>
             {
                 try
@@ -540,6 +553,9 @@ namespace Bastion.EditorTools
                     risen.Id = "r1";
                     risen.Pos = new Pos { X = soldier.Pos.X, Y = soldier.Pos.Y, Z = 0 };
                     risen.Facing = soldier.Facing;
+                    risen.Name = Rules.RisenName(soldier);
+                    risen.RisenFrom = soldier.Id;
+                    risen.Appearance = Bastion.Net.Json.Read<Appearance>(Bastion.Net.Json.Write(soldier.Appearance));
                     state.Units.Add(risen);
                     Debug.Log($"[combat] {Time.time:0.00} s: rises");
                     await units.Reanimate(soldier.Id, risen.Id);
@@ -818,7 +834,7 @@ namespace Bastion.EditorTools
         /// </summary>
         public static void Tirado()
         {
-            state = MapLab.Golden("city-7");
+            state = Seen(MapLab.Golden("city-7"));
             Pos At(int x) => new Pos { X = x, Y = 12 };
             state.Dropped = new System.Collections.Generic.List<DroppedLoot>
             {
@@ -874,7 +890,7 @@ namespace Bastion.EditorTools
         public static void Esquina()
         {
             if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
-            state = MapLab.Golden("city-7");
+            state = Seen(MapLab.Golden("city-7"));
             MapLab.Lighting(true);
             MapLab.Map(state, "city-7");
             var walker = state.Units.First(u => u.Alive && u.Team == "xcom");
@@ -1572,6 +1588,104 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// Hiding (Esconderse, Ana's #1 of 1/11): on city-7's map (BASTION_MAP), a soldier walks to a tile with cover two to
+        /// six tiles off, with one of the dead in sight beyond that cover, hides (UnitViews.Hide, then HiddenEvent, as UI's
+        /// event player plays it), waits hidden, and gets up as the squad's turn comes (Unit.Hidden gone). BASTION_ARMAS=
+        /// pistola: the pistol alone. BASTION_ANTES=1: the event left out, as the client was before it. The camera the
+        /// game's, BASTION_DIST tiles off (24 unless said; 9 its nearest), or low from the side (BASTION_VIEW=side).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Esconderse -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 100 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Esconderse()
+        {
+            if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
+            string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
+            state = Seen(MapLab.Golden(name));
+            MapLab.Lighting(true);
+            MapLab.Map(state, name);
+            units = new GameObject("Unidades").AddComponent<UnitViews>();
+            fx = new GameObject("Efectos").AddComponent<Fx>();
+            static int Off(Pos a, Pos b) => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
+            soldier = state.Units.First(u => u.Alive && u.Team == "xcom" && !u.Objective);
+            if (Environment.GetEnvironmentVariable("BASTION_ARMAS") == "pistola") soldier.Arms = new Arms { Primary = null, Pistol = true };
+            var start = soldier.Pos;
+            var reach = Paths.ComputeReach(state, soldier, Paths.CostPerAp(soldier));
+            var far = Paths.ComputeReach(state, soldier, Paths.MaxMoveCost(soldier) * 3);
+            // (Where it ends and where the dead one stands: cover between them, in its sight; the nearest such, the higher cover first.)
+            var dead = state.Units.Where(u => u.Alive && u.Team != "xcom" && !u.Objective).ToList();
+            Pos end = null, spot = null;
+            foreach (var d in Paths.Destinations(state, soldier, reach).Where(d => Off(d.Pos, start) is >= 2 and <= 6 && Cover.HasAnyCover(state, d.Pos))
+                .OrderByDescending(d => Cover.CoverSides(state, d.Pos).Max()).ThenBy(d => d.Cost))
+            {
+                soldier.Pos = d.Pos;
+                foreach (var t in Paths.Destinations(state, soldier, far).Where(t => Off(t.Pos, d.Pos) is >= 5 and <= 7 && Cover.CoverAgainst(state, d.Pos, t.Pos) > 0))
+                {
+                    dead[0].Pos = new Pos { X = t.Pos.X, Y = t.Pos.Y, Z = t.Pos.Z };
+                    if (!Los.CanSee(state, soldier, dead[0])) continue;
+                    spot = dead[0].Pos;
+                    break;
+                }
+                if (spot == null) continue;
+                end = d.Pos;
+                break;
+            }
+            soldier.Pos = start;
+            target = dead[0];
+            path = Paths.BuildPath(state, soldier, reach, end).ToArray();
+            Debug.Log($"[combat] {name}: {soldier.Id} ({start.X},{start.Y}) walks {path.Length} tiles to ({end.X},{end.Y}), cover {string.Join(" ", Cover.CoverSides(state, end))} (N E S W), {target.Id} {target.Template} at ({spot.X},{spot.Y})");
+
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.farClipPlane = 800;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.72f, 0.78f, 0.86f);
+            camera.fieldOfView = 40;
+            float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float tiles) ? tiles : 24;
+            // (BASTION_VIEW=side: low from the west, the soldier in profile, to check the clip.)
+            if (Environment.GetEnvironmentVariable("BASTION_VIEW") == "side")
+            {
+                var at = MapSpace.TileToWorld(state, end);
+                camera.transform.position = at + new Vector3(-5.5f, 1.3f, -1.5f);
+                camera.transform.LookAt(at + Vector3.up * 0.8f);
+            }
+            else MapSpace.Aim(camera, Vector3.Lerp(MapSpace.TileToWorld(state, end), MapSpace.TileToWorld(state, spot), 0.3f), off);
+            bool before = Environment.GetEnvironmentVariable("BASTION_ANTES") == "1";
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(1);
+                    Debug.Log($"[combat] {Time.time:0.00} s: walks");
+                    await units.MoveAlong(soldier.Id, path, 1);
+                    soldier.Pos = end;
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(0.5f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: hides");
+                    if (!before)
+                    {
+                        await units.Hide(soldier.Id);
+                        Events.ApplyEvent(state, new HiddenEvent { Unit = soldier.Id });
+                        units.Sync(state);
+                    }
+                    Debug.Log($"[combat] {Time.time:0.00} s: hidden, facing {units.Feet(soldier.Id)}");
+                    await Awaitable.WaitForSecondsAsync(3);
+                    Debug.Log($"[combat] {Time.time:0.00} s: the squad's turn");
+                    soldier.Hidden = null;
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(2);
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            };
+            EditorApplication.playModeStateChanged += Started;
+        }
+
+        /// <summary>
         /// A soldier's weapons as 0.10.1's ARMS_CASES (weaponLab.ts; BASTION_ARMAS: «pistola» the pistol alone, «fusil» a
         /// rifle and the pistol drawn to fire, «cuchillo» a rifle and the knife at the belt, «machete» a shotgun and the
         /// machete): at rest 2 s, aims at one of the dead four tiles off and fires twice, lowers it, reloads, and strikes the
@@ -1657,7 +1771,7 @@ namespace Bastion.EditorTools
         public static void Heads()
         {
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "../step2/city-3-elimination";
-            state = MapLab.Golden(name);
+            state = Seen(MapLab.Golden(name));
             MapLab.Lighting(true);
             units = new GameObject("Unidades").AddComponent<UnitViews>();
             sequence = async () =>
@@ -1707,7 +1821,7 @@ namespace Bastion.EditorTools
         public static void Partida()
         {
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
-            state = MapLab.Golden(name);
+            state = Seen(MapLab.Golden(name));
             EditorApplication.playModeStateChanged += change =>
             {
                 if (change != PlayModeStateChange.EnteredPlayMode) return;
@@ -1741,7 +1855,7 @@ namespace Bastion.EditorTools
         public static void Evac()
         {
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "../step2/city-11-scavenge";
-            state = MapLab.Golden(name);
+            state = Seen(MapLab.Golden(name));
             if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_VEHICULO"), out int vehicle)) state.Vehicle = vehicle;
             MapLab.Lighting(state.Mission?.Night != true);
             var view = MapLab.Map(state, name);
@@ -1857,8 +1971,19 @@ namespace Bastion.EditorTools
                 units.Sync(state);
                 Reveal();
                 await Awaitable.WaitForSecondsAsync(1);
+                // (BASTION_AP=2: the walk as a dash.)
+                int ap = Environment.GetEnvironmentVariable("BASTION_AP") == "2" ? 2 : 1;
                 Debug.Log($"[combat] {Time.time:0.00} s: walks");
-                await units.MoveAlong(soldier.Id, path, 1);
+                var walking = units.MoveAlong(soldier.Id, path, ap);
+                // (BASTION_PIES=1: both feet and the root each frame of the walk, for how far the foot it stands on slides.)
+                var rig = Environment.GetEnvironmentVariable("BASTION_PIES") == "1" ? units.transform.Find(soldier.Id)?.GetComponentInChildren<Animator>() : null;
+                while (rig != null && !walking.IsCompleted)
+                {
+                    Vector3 l = rig.GetBoneTransform(HumanBodyBones.LeftFoot).position, r = rig.GetBoneTransform(HumanBodyBones.RightFoot).position, o = units.Feet(soldier.Id);
+                    Debug.Log(FormattableString.Invariant($"[pies] {Time.time:0.0000} {l.x:0.0000} {l.y:0.0000} {l.z:0.0000} {r.x:0.0000} {r.y:0.0000} {r.z:0.0000} {o.x:0.0000} {o.z:0.0000}"));
+                    await Awaitable.NextFrameAsync();
+                }
+                await walking;
                 Debug.Log($"[combat] {Time.time:0.00} s: there, {units.Feet(soldier.Id)}");
 
                 Debug.Log($"[combat] {Time.time:0.00} s: aims");

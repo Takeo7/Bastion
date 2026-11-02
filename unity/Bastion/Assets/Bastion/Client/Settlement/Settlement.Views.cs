@@ -231,11 +231,15 @@ namespace Bastion.Client
             return new Shot { pos = target + back * distance, target = target, fov = 40 };
         }
 
-        /// <summary>Soldados: the soldier by the caravan (or the barracks), seen from out in the clearing, the pines behind it (clearingArt.ts soldierShot).</summary>
+        /// <summary>
+        /// Soldados: the soldier by the caravan (or the barracks), seen from out in the clearing, the pines behind it
+        /// (clearingArt.ts soldierShot); level and from the front, at the height of their waist (Ana's #3, 1/11: «sin picado»;
+        /// it was from 1.5 tiles over their chest, 20° to 27° down).
+        /// </summary>
         public Shot SoldierShot()
         {
-            var target = new Vector3(soldierAt.x, 1.0f, soldierAt.y);
-            return new Shot { pos = target + new Vector3(soldierView.x * soldierDistance, 1.5f, soldierView.y * soldierDistance), target = target, fov = 38 };
+            var target = new Vector3(soldierAt.x, 0.8f, soldierAt.y);
+            return new Shot { pos = target + new Vector3(soldierView.x * soldierDistance, 0, soldierView.y * soldierDistance), target = target, fov = 38 };
         }
 
         static bool Finite(Vector3 v) => !(float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z) || float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z));

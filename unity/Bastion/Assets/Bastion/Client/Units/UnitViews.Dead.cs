@@ -64,8 +64,11 @@ namespace Bastion.Client.Units
 
         static readonly string[] BloodMasks = { "_Blood_Mask", "_Blood_Map" };
 
-        /// <summary>`m` without its blood, its atlas dulled; in `atlas` instead of its own if given (a Hinchado's other).</summary>
-        static Material Bloodless(Material m, Texture atlas = null)
+        /// <summary>
+        /// `m` without its blood, its atlas dulled (`flesh`: Boss Zombies', their skin's swatch as skin); in `atlas` instead of its
+        /// own if given (a Hinchado's other).
+        /// </summary>
+        static Material Bloodless(Material m, Texture atlas = null, bool flesh = false)
         {
             if (m == null || !BloodMasks.Any(m.HasProperty)) return m;
             if (!bloodless.TryGetValue((m, atlas), out var copy) || copy == null)
@@ -73,7 +76,7 @@ namespace Bastion.Client.Units
                 copy = new Material(m) { name = m.name + " (sin sangre)" };
                 foreach (string mask in BloodMasks)
                     if (copy.HasProperty(mask)) copy.SetTexture(mask, Texture2D.blackTexture);
-                if (copy.HasProperty("_Albedo_Map")) copy.SetTexture("_Albedo_Map", SoldierPalette.DullAtlas(atlas != null ? atlas : copy.GetTexture("_Albedo_Map")));
+                if (copy.HasProperty("_Albedo_Map")) copy.SetTexture("_Albedo_Map", SoldierPalette.DullAtlas(atlas != null ? atlas : copy.GetTexture("_Albedo_Map"), flesh));
                 bloodless[(m, atlas)] = copy;
             }
             return copy;
@@ -82,11 +85,11 @@ namespace Bastion.Client.Units
         /// <summary>The prefabs the special dead are drawn from (FigureCatalogMake puts them in the catalog's characters).</summary>
         public static IEnumerable<string> DeadPrefabs => DeadBodies.Values.SelectMany(b => b).Select(b => b.prefab).Distinct();
 
-        /// <summary>A special one's figure, picked by its seed as 0.10.1's pick (its build and size in `view`); null if it isn't one or its prefab is missing.</summary>
+        /// <summary>A special one's figure, dealt among its kind's (Dealt; its build and size in `view`); null if it isn't one or its prefab is missing.</summary>
         static GameObject DeadFigureOf(Unit u, View view, FigureCatalog catalog)
         {
             if (!DeadBodies.TryGetValue(u.Template, out var bodies)) return null;
-            var b = bodies[PickIndex(bodies.Length, view.seed)];
+            var b = bodies[Dealt(bodies.Length, view, i => bodies[i].prefab + "|" + bodies[i].body + "|" + bodies[i].atlas)];
             var prefab = catalog.Character(b.prefab);
             if (prefab == null) return null;
             var figure = Instantiate(prefab);
@@ -98,7 +101,7 @@ namespace Bastion.Client.Units
                 bool kept = r.gameObject.name == b.body || b.keep != null && b.keep.Contains(r.gameObject.name);
                 r.gameObject.SetActive(kept);
                 if (!kept && r.gameObject != figure) DestroyNow(r.gameObject);
-                else r.sharedMaterials = r.sharedMaterials.Select(m => Bloodless(m, atlas)).ToArray();
+                else r.sharedMaterials = r.sharedMaterials.Select(m => Bloodless(m, atlas, b.prefab.StartsWith("SM_Chr_ZombieBoss_"))).ToArray();
             }
             view.build = b.female ? "femn" : "masc";
             view.size = b.scale;

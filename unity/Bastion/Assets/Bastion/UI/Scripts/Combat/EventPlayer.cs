@@ -25,9 +25,10 @@ namespace Bastion.UI.Combat
     /// The attack that kills is seen over the shoulder (ShotCam), and one of ours falling, close (Ana, 22/10 #21); a dead's
     /// blow on one of ours, over its shoulder too (Ana, Arturo 29/10).
     /// The dead walking together are planned so nobody walks through anybody (WalkPlan, walkPlan.ts).
-    /// Since Ana's notes of the 31/10 (#4, Arturo): in the enemy's turn every walk of the dead goes at once first, those
-    /// who then attack too, under a framing that takes in all of them the squad sees; then the attacks one by one, each
-    /// whole (Choreograph). Only the order on screen: what happens is the engine's.
+    /// Since Ana's notes of the 01/11 (#10, Arturo; before, the 31/10's #4): in the enemy's turn the dead already beside one
+    /// of ours bite first, one by one, each whole; then every walk of the dead goes at once, those who then attack too,
+    /// under a framing that takes in all of them the squad sees; then the attacks of those who arrived, one by one
+    /// (Choreograph). Only the order on screen: what happens is the engine's.
     /// </summary>
     public sealed class EventPlayer
     {
@@ -53,6 +54,11 @@ namespace Bastion.UI.Combat
         bool risenSeen;
         bool departedOnTime;
         ConcealmentBrokenEvent exposure;
+        /// <summary>
+        /// Groups of which only some woke (PodSplitEvent; Ana's #4 of 1/11, each of the dead with its own eyes and ears): the
+        /// new group's id → the one the rest stay in, asleep.
+        /// </summary>
+        readonly Dictionary<string, string> splitFrom = new Dictionary<string, string>();
 
         /// <summary>A partner's moment (game.ts moment): where it happened, for «Ver» (F) while its notice is up.</summary>
         Vector3? moment;
@@ -627,12 +633,13 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// The enemy's turn as it is to be seen (Ana, Arturo 31/10 #4), as it begins: only the order on screen, the
-        /// engine's results as they are. The walks of the dead (patrols too) go first, all at once (a WalksEvent), also
-        /// those of the dead who then attack, each with what befalls it on its way: an overwatch shot, a fall, a trap, a
-        /// door it opens. Then, in their order, one by one and each whole, the attacks (bites, blows, the Chillón's scream,
-        /// a door beaten) and everything else. In their order too, not at once: whoever belongs to a pod found in the turn
-        /// or arrives in it, one that has already attacked, and a walk through a tile that one of ours, felled by an attack
+        /// The enemy's turn as it is to be seen (Ana, Arturo 31/10 #4 and 01/11 #10), as it begins: only the order on screen,
+        /// the engine's results as they are. First, one by one and each whole, the bites of the dead already beside one of
+        /// ours (FrontBites). Then the walks of the dead (patrols too), all at once (a WalksEvent), also those of the dead
+        /// who then attack, each with what befalls it on its way: an overwatch shot, a fall, a trap, a door it opens. Then,
+        /// in their order, one by one and each whole, the attacks of those who arrived (bites, blows, the Chillón's scream, a
+        /// door beaten) and everything else. In their order too, not at once: whoever belongs to a pod found in the turn or
+        /// arrives in it, one that has already attacked, and a walk through a tile that one of ours, felled by an attack
         /// still to be seen, or one that moves later on screen, would be standing on then.
         /// </summary>
         void Choreograph()
@@ -641,6 +648,8 @@ namespace Bastion.UI.Combat
             var all = queue.ToList();
             var end = all.FindIndex(q => q.e is TurnBeganEvent || q.e is MissionEndedEvent);
             if (end < 0) end = all.Count;
+            var kept = new List<string>();
+            var front = FrontBites(all, end, kept, out var biters);
             var pre = new HashSet<int>();
             var chains = new Dictionary<string, List<int>>();
             var order = new List<string>();
@@ -657,10 +666,16 @@ namespace Bastion.UI.Combat
             var started = false;
             for (var i = 0; i < end; i++)
             {
-                var e = all[i].e;
-                if (e is PatrolEvent || e is PodActivatedEvent || e is SpawnedEvent)
+                // (The bites seen first are out of it: the walk one of them takes after its bite goes with the others.)
+                if (front.Contains(i))
                 {
-                    if (e is PodActivatedEvent pa) late.UnionWith(v.Pods.FirstOrDefault(p => p.Id == pa.Pod)?.UnitIds ?? new List<string>());
+                    started = true;
+                    continue;
+                }
+                var e = all[i].e;
+                if (e is PatrolEvent || e is PodActivatedEvent || e is PodSplitEvent || e is SpawnedEvent)
+                {
+                    if (e is PodActivatedEvent pa) late.UnionWith(Woken(all, i, pa.Pod));
                     if (e is SpawnedEvent sp) late.UnionWith(sp.Units.Select(x => x.Id));
                     actor = null;
                     chaining = false;
@@ -711,24 +726,96 @@ namespace Bastion.UI.Combat
             var apart = all.Take(end).Where((q, i) => !pre.Contains(i) && !taken.Contains(i) && q.e is MovedEvent m && Unit(m.Unit)?.Team == Teams.Alien)
                 .Select(q => ((MovedEvent)q.e).Unit).Distinct().GroupBy(Why).Select(g => $"{g.Count()} {g.Key}").ToList();
             var why = apart.Count > 0 ? $"; andan en su orden: {string.Join(", ", apart)}" : "";
-            if (walkers.Count == 0)
+            // And why those beside one of ours who don't bite first bite in their order (01/11 #10).
+            var inOrder = kept.GroupBy(k => k).Select(g => $"{g.Count()} {g.Key}").ToList();
+            if (inOrder.Count > 0) why += $"; muerden en su orden, aunque ya estaban al lado: {string.Join(", ", inOrder)}";
+            if (walkers.Count == 0 && front.Count == 0)
             {
-                if (apart.Count > 0) Debug.Log($"[ritmo] turno enemigo: ninguno anda a la vez{why}");
+                if (apart.Count > 0 || inOrder.Count > 0) Debug.Log($"[ritmo] turno enemigo: ninguno anda a la vez{why}");
                 return;
             }
-            var walks = new WalksEvent
+            var walks = walkers.Count > 0 ? new WalksEvent
             {
                 Chains = walkers.Select(id => chains[id].Select(i => all[i]).ToList()).ToList(),
                 Items = taken.OrderBy(i => i).Select(i => all[i]).ToList(),
-            };
-            var first = walks.Items[0];
+            } : null;
             queue.Clear();
             foreach (var i in pre.OrderBy(i => i)) queue.Enqueue(all[i]);
-            queue.Enqueue((walks, first.by, first.epoch));
+            foreach (var i in front.OrderBy(i => i)) queue.Enqueue(all[i]);
+            if (walks != null) queue.Enqueue((walks, walks.Items[0].by, walks.Items[0].epoch));
             for (var i = 0; i < all.Count; i++)
-                if (!pre.Contains(i) && !taken.Contains(i)) queue.Enqueue(all[i]);
-            Debug.Log($"[ritmo] turno enemigo: {walkers.Count} andan a la vez ({walks.Items.Count} sucesos), {all.Count - taken.Count - pre.Count} después en orden{why}");
+                if (!pre.Contains(i) && !front.Contains(i) && !taken.Contains(i)) queue.Enqueue(all[i]);
+            Debug.Log($"[ritmo] turno enemigo: {biters} muerden primero ({front.Count} sucesos), {walkers.Count} andan a la vez ({walks?.Items.Count ?? 0} sucesos), {all.Count - taken.Count - pre.Count - front.Count} después en orden{why}");
         }
+
+        /// <summary>
+        /// The bites of the dead already beside one of ours as the turn begins (Ana, Arturo 01/11 #10), to be seen first: the
+        /// events of each one that starts its turn with a blow at hand on one of ours, from its first one to what it does
+        /// next (a walk, another acting). Only if what it jumps over in the engine's order doesn't change it: none on one
+        /// who walks, fires or falls in it, nor a blow that fells one touched in it. Not those found or arrived in the turn.
+        /// `kept`, why each of the others that start so bites in its order; `biters`, how many go first.
+        /// </summary>
+        HashSet<int> FrontBites(List<(GameEvent e, int? by, int epoch)> all, int end, List<string> kept, out int biters)
+        {
+            var front = new HashSet<int>();
+            biters = 0;
+            var seen = new HashSet<string>();
+            var late = new HashSet<string>();
+            // Who the events jumped over touch, and those of them whose place matters: who walks, fires on overwatch or falls.
+            var touched = new HashSet<string>();
+            var fixedOnes = new HashSet<string>();
+            var started = false;
+            for (var i = 0; i < end; i++)
+            {
+                var e = all[i].e;
+                if (e is PodActivatedEvent pa) late.UnionWith(Woken(all, i, pa.Pod));
+                if (e is SpawnedEvent sp) late.UnionWith(sp.Units.Select(x => x.Id));
+                var who = Starter(e);
+                if (who != null && seen.Add(who) && !(e is MovedEvent) && Unit(who) is Unit u && u.Alive && !AbilityTexts.ShootsFromRange(u))
+                {
+                    var j = i + 1;
+                    while (j < end && !(Starter(all[j].e) is string other && other != who) && !(all[j].e is PatrolEvent || all[j].e is PodActivatedEvent || all[j].e is PodSplitEvent || all[j].e is SpawnedEvent)
+                        && !(all[j].e is MovedEvent own && own.Unit == who)) j++;
+                    var block = all.Skip(i).Take(j - i).Select(q => q.e).ToList();
+                    if (block.Any(x => x is ShotEvent s && !s.Reaction && s.Unit == who && DeadsBlow(s) && Unit(s.Target)?.Team != Teams.Alien))
+                    {
+                        var fell = new HashSet<string>(block.OfType<DiedEvent>().Select(d => d.Unit));
+                        var clash = block.SelectMany(Touches).Where(touched.Contains).Distinct().ToList();
+                        var fells = clash.Any(fell.Contains);
+                        if (!late.Contains(who) && !fells && !clash.Any(fixedOnes.Contains))
+                        {
+                            for (var k = i; k < j; k++) front.Add(k);
+                            biters++;
+                            started = true;
+                            i = j - 1;
+                            continue;
+                        }
+                        kept.Add(late.Contains(who) ? "recién llegados o descubiertos" : fells ? "tumban a quien otro ataca antes" : "su presa anda, dispara o cae antes");
+                    }
+                }
+                if (who != null || e is PatrolEvent || e is PodActivatedEvent || e is PodSplitEvent || e is SpawnedEvent) started = true;
+                // (What comes before anybody acts stays before these bites: it isn't jumped over.)
+                if (!started) continue;
+                touched.UnionWith(Touches(e));
+                if (e is MovedEvent || e is DiedEvent || e is FellEvent || e is ReanimatedEvent || e is ShotEvent { Reaction: true }) fixedOnes.UnionWith(Touches(e).Take(1));
+            }
+            return front;
+        }
+
+        /// <summary>Whom `e` is about (its unit, and a shot's target); none for what only changes an enemy's mind or a noise.</summary>
+        static IEnumerable<string> Touches(GameEvent e)
+        {
+            if (e is HuntingEvent || e is ForgotEvent || e is TurnedEvent || e is NoiseEvent) yield break;
+            if (UnitOf(e) is string id && id != "") yield return id;
+            if (e is ShotEvent s && !string.IsNullOrEmpty(s.Target)) yield return s.Target;
+        }
+
+        /// <summary>
+        /// Whom a contact in `all` before `upTo` wakes: those a split there gave the new group (PodSplitEvent: «p3» leaves «p3.1»
+        /// with those who saw, not yet on the view; Ana's #4 of 1/11), else the group as the view has it.
+        /// </summary>
+        List<string> Woken(List<(GameEvent e, int? by, int epoch)> all, int upTo, string pod) =>
+            all.Take(upTo).Select(q => q.e).OfType<PodSplitEvent>().LastOrDefault(x => x.Into == pod)?.Units ?? V.Pods.FirstOrDefault(p => p.Id == pod)?.UnitIds ?? new List<string>();
 
         /// <summary>The enemy that `e` starts something with (a walk, an attack, an ability, a throw); null for anything else.</summary>
         string Starter(GameEvent e)
@@ -743,11 +830,16 @@ namespace Bastion.UI.Combat
             return id != null && Unit(id)?.Team == Teams.Alien ? id : null;
         }
 
-        /// <summary>Whether `e` belongs to `walker`'s walk: a stretch of it, a shot at it on overwatch, what follows (a fall, a door, a trap, the fire).</summary>
+        /// <summary>
+        /// Whether `e` belongs to `walker`'s walk: a stretch of it, a shot at it on overwatch, what follows (a fall, a door, a
+        /// trap, the fire), and what only changes its mind on the way (it forgets, it turns: one that walked, forgot and
+        /// walked on went apart, «andan después de atacar», 01/11 #10).
+        /// </summary>
         static bool OnTheWay(GameEvent e, string walker) =>
             e is MovedEvent m ? m.Unit == walker
             : e is ShotEvent s ? s.Reaction && s.Target == walker
-            : FollowUp(e) || e is TrapSprungEvent || e is BurnedEvent || e is MarkedEvent || e is RupturedEvent || e is HealedEvent || e is RefundEvent || e is SuppressionEndedEvent || e is HuntingEvent;
+            : FollowUp(e) || e is TrapSprungEvent || e is BurnedEvent || e is MarkedEvent || e is RupturedEvent || e is HealedEvent || e is RefundEvent || e is SuppressionEndedEvent || e is HuntingEvent
+                || e is ForgotEvent || e is TurnedEvent;
 
         /// <summary>
         /// The enemy's turn's walks at once (Choreograph; Ana, Arturo 31/10 #4): the camera back over all the squad sees of
@@ -883,9 +975,9 @@ namespace Bastion.UI.Combat
                 if (q.e is SpawnedEvent sp) points.AddRange(sp.Units.Where(u => IsVisible(u.Pos.X, u.Pos.Y)).Select(u => Board.TileToWorld(v, u.Pos)));
                 else if (q.e is PodActivatedEvent pa)
                 {
-                    var feud = pa.Cause == "attacked" && pa.Unit == null;
+                    // Those of the pod the squad sees (PlayContact).
                     var pod = v.Pods.FirstOrDefault(p => p.Id == pa.Pod);
-                    points.AddRange((pod?.UnitIds ?? new List<string>()).Select(Unit).Where(m => m != null && m.Alive && (!feud || ShownToSquad(m))).Select(m => Board.TileToWorld(v, m.Pos)));
+                    points.AddRange((pod?.UnitIds ?? new List<string>()).Select(Unit).Where(m => m != null && m.Alive && ShownToSquad(m)).Select(m => Board.TileToWorld(v, m.Pos)));
                 }
             }
             if (points.Count > 0 && (v.ActiveTeam == Teams.Alien || all.Any(q => q.by == control.MySlot))) await ShowEnemy(points);
@@ -1019,6 +1111,7 @@ namespace Bastion.UI.Combat
             var before = new HashSet<string>(V.Units.Where(a => a.Alive && a.Team == Teams.Alien && control.Visible(a)).Select(a => a.Id));
             var floorBefore = new HashSet<string>((V.Dropped ?? new List<DroppedLoot>()).Select(d => d.Id));
             if (!applied) Events.ApplyEvent(V, e);
+            if (e is PodSplitEvent split) splitFrom[split.Into] = split.Pod;
             // A soldier falls and their rucksack stays on the floor (#49), said once.
             if (e is DiedEvent died && (V.Dropped ?? new List<DroppedLoot>()).Any(d => d.From == died.Unit && !floorBefore.Contains(d.Id)) && Unit(died.Unit) is Unit fallen) Log(Lore.FallenPackLine(fallen.Name), "#ff8a78");
             // A find with the backpack full stays on the floor (docs/FASE8.md §C).
@@ -1481,16 +1574,20 @@ namespace Bastion.UI.Combat
                 }
                 case OverwatchEvent _:
                 case HunkerEvent _:
+                case HiddenEvent _:
                 {
-                    var u = Unit(e is OverwatchEvent ow ? ow.Unit : ((HunkerEvent)e).Unit);
+                    var u = Unit(e is OverwatchEvent ow ? ow.Unit : e is HiddenEvent hidden ? hidden.Unit : ((HunkerEvent)e).Unit);
                     if (!ShownToSquad(u)) return;
                     Look(Feet(u.Id));
-                    // The blade's watch (docs/FASE10.md §4) is said as such: on guard, not watching with a gun.
-                    var text = e is HunkerEvent ? "CUBRIÉNDOSE" : ((OverwatchEvent)e).KillZone ? "ZONA LETAL" : ((OverwatchEvent)e).Melee == true ? "HOJA EN ALTO" : "VIGILANCIA";
+                    // The blade's watch (docs/FASE10.md §4) is said as such: on guard, not watching with a gun. Esconderse, as its
+                    // tag says it (Ana's #1 of 1/11).
+                    var text = e is HunkerEvent ? "CUBRIÉNDOSE" : e is HiddenEvent ? UnitWords.Agree(u, "ESCONDIDO") : ((OverwatchEvent)e).KillZone ? "ZONA LETAL" : ((OverwatchEvent)e).Melee == true ? "HOJA EN ALTO" : "VIGILANCIA";
                     Float(Chest(u.Id), text, "info");
-                    if (e is HunkerEvent) control.Sfx.Hunker(Feet(u.Id));
+                    if (e is HunkerEvent || e is HiddenEvent) control.Sfx.Hunker(Feet(u.Id));
                     else control.Sfx.Overwatch(Chest(u.Id));
-                    await Wait(0.45f);
+                    // Into hiding seen whole (Arte's UnitViews.Hide: turned to its cover, down on a knee) before what comes next.
+                    if (e is HiddenEvent && units != null) await units.Hide(u.Id, stop);
+                    else await Wait(0.45f);
                     return;
                 }
                 case AbilityUsedEvent used:
@@ -2438,7 +2535,11 @@ namespace Bastion.UI.Combat
             await Wait(cam() ? 0.8f : 0.3f);
         }
 
-        /// <summary>A pod woken (game.ts podActivated): its «!», the contact's stamp and line, or the living and the dead fighting.</summary>
+        /// <summary>
+        /// A pod woken (game.ts podActivated): its «!», the contact's stamp and line, or the living and the dead fighting. Only
+        /// those it has: of a group split by who saw (Ana's #4 of 1/11), the new one; the rest stay as they were, and the line
+        /// says how many of them the squad sees.
+        /// </summary>
         async Awaitable PlayContact(PodActivatedEvent e, GameState v, Func<bool> cam, Action<Vector3> look)
         {
             var pod = v.Pods.FirstOrDefault(p => p.Id == e.Pod);
@@ -2460,9 +2561,15 @@ namespace Bastion.UI.Combat
                 return;
             }
             var centre = members.Aggregate(Vector3.zero, (acc, m) => acc + Board.TileToWorld(v, m.Pos)) / members.Count;
-            if (!grouped)
+            // The camera only to those of them the squad sees: the middle of all of them could be behind or inside a tall
+            // building that nothing opens, and it showed its roof up close (0.11.5's test, Priya's shot). None seen, it stays.
+            var seen = members.Where(ShownToSquad).ToList();
+            var rest = splitFrom.TryGetValue(e.Pod, out var from) ? v.Pods.FirstOrDefault(p => p.Id == from) : null;
+            var asleep = rest != null && !rest.Active ? rest.UnitIds.Select(Unit).Where(m => m != null && m.Alive).ToList() : new List<Unit>();
+            if (Rhythm) Debug.Log($"[ritmo] contacto: {members.Count} del grupo, {seen.Count} a la vista{(rest != null ? $"; aparte de {from} ({e.Pod}), siguen sin enterarse {asleep.Count}, {asleep.Count(ShownToSquad)} a la vista" : "")}");
+            if (!grouped && seen.Count > 0)
             {
-                look(centre);
+                look(seen.Aggregate(Vector3.zero, (acc, m) => acc + Board.TileToWorld(v, m.Pos)) / seen.Count);
                 if (cam()) await Wait(0.35f);
             }
             foreach (var m in members)
@@ -2476,9 +2583,13 @@ namespace Bastion.UI.Combat
                 Float(Chest(m.Id), "!", "alert");
             }
             control.Sfx.Contact(centre, members.Any(m => Content.Templates[m.Template].Undead));
-            var how = ContactCause(e);
+            var how = ContactCause(e, members.Count == 1, seen.Count == 0);
             Hud?.Banner("¡CONTACTO!", "alien", how);
-            Log($"Contacto: {string.Join(", ", members.Select(m => m.Name))} · {how}", "#ff6b5a");
+            // Those of its group the squad sees that didn't notice: they still can be ambushed (only the ones in sight: the
+            // others would give away who is out there).
+            var calm = asleep.Count(ShownToSquad);
+            var others = calm == 0 ? "" : calm == 1 ? " · otro de su grupo no se ha enterado" : $" · otros {calm} de su grupo no se han enterado";
+            Log($"Contacto: {string.Join(", ", members.Select(m => m.Name))} · {how}{others}", "#ff6b5a");
             await Wait(0.9f);
         }
 
@@ -2554,24 +2665,29 @@ namespace Bastion.UI.Combat
             }
         }
 
-        /// <summary>Who found whom in a contact: they saw the squad, the squad came upon them, they were attacked or heard it.</summary>
-        string ContactCause(PodActivatedEvent e)
+        /// <summary>
+        /// Who found whom in a contact: they saw the squad, the squad came upon them, they were attacked or heard it. `one`: a
+        /// single one woke, said so (with each of the dead on its own, Ana's #4 of 1/11, often only the one that saw).
+        /// `unseen`: none of them in the squad's sight, so it was they who saw (not «Tariq lo ha avistado»).
+        /// </summary>
+        string ContactCause(PodActivatedEvent e, bool one, bool unseen)
         {
             var soldier = Unit(e.Unit);
             var who = soldier?.Name ?? "la escuadra";
             switch (e.Cause)
             {
                 case "sighted":
-                    if (exposure != null && exposure.Reason == "spotted" && exposure.By == e.By && exposure.Unit == e.Unit) return $"Os han visto: han descubierto a {who}";
-                    return $"{Capitalize(who)} los ha avistado";
+                    if (unseen || exposure != null && exposure.Reason == "spotted" && exposure.By == e.By && exposure.Unit == e.Unit) return one ? $"Os ha visto: ha descubierto a {who}" : $"Os han visto: han descubierto a {who}";
+                    return $"{Capitalize(who)} {(one ? "lo" : "los")} ha avistado";
                 case "patrol":
                     return $"Una patrulla ha dado con {who}";
                 case "attacked":
-                    return soldier != null ? $"Responden al ataque de {who}" : "Responden al ataque";
+                    return soldier != null ? $"{(one ? "Responde" : "Responden")} al ataque de {who}" : one ? "Responde al ataque" : "Responden al ataque";
                 case "noise":
-                    return "Han oído la explosión";
+                    var blast = lastThrown == AbilityIds.Molotov ? "el cóctel molotov" : "la explosión";
+                    return one ? $"Ha oído {blast}" : $"Han oído {blast}";
                 default:
-                    return "Os han localizado";
+                    return one ? "Os ha localizado" : "Os han localizado";
             }
         }
 

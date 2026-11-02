@@ -12,8 +12,9 @@ namespace Bastion.EditorTools
     /// the build), of the pack's clips that are: standing, walking and running by Movement_f (0, 0.5, 1); a gesture now and
     /// then while it stands (Gesto with Accion: Fauna.Gestures), back to standing once played, or at once if it moves; and
     /// sitting or lying down, getting up again when Accion changes or it moves (the states it can't walk in tagged Suelo).
-    /// And SIMPLE - Forest Animals' material (Arturo allowed its stags, does, boars and rabbits, 1/11): theirs is the
-    /// built-in pipeline's Standard, pink under URP; ours URP's Lit with their texture, in Resources too.
+    /// And SIMPLE - Forest Animals' material (Arturo allowed its stags, does, boars and rabbits, 1/11) and SIMPLE - Cats'
+    /// (its cats, Ana's #11): theirs are the built-in pipeline's Standard, pink under URP; ours URP's Lit with their
+    /// textures, in Resources too.
     ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.FaunaMake.Run -quit
     /// </summary>
     public static class FaunaMake
@@ -21,29 +22,29 @@ namespace Bastion.EditorTools
         const string Path = "Assets/Bastion/Client/Resources/" + Bastion.Client.Map.Fauna.ControllerName + ".controller";
         const string Clips = "Assets/Synty/PolygonDog/Animations/";
 
-        const string SimplePath = "Assets/Bastion/Client/Resources/" + Bastion.Client.Map.Fauna.SimpleMaterial + ".mat";
-        const string SimpleTexture = "Assets/Synty/SimpleForestAnimal/Textures/SimpleForestAnimalsTexture.png";
+        const string Folder = "Assets/Bastion/Client/Resources/";
 
-        /// <summary>SIMPLE's animals' material: URP's Lit with their texture, a little gloss as Synty's.</summary>
-        static void Simple()
+        /// <summary>SIMPLE's animals' material (`name` in Resources, Folder): URP's Lit with their `texture`, a little gloss as Synty's.</summary>
+        static void Simple(string name, string texturePath, string package)
         {
-            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(SimpleTexture);
+            string path = Folder + name + ".mat";
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
             if (texture == null)
             {
-                Debug.LogError($"[fauna] no {SimpleTexture}: unity/tools/importar-synty.sh SIMPLE_Forest_Animals_Unity_2020_3_v1_02");
+                Debug.LogError($"[fauna] no {texturePath}: unity/tools/importar-synty.sh {package}");
                 return;
             }
-            var material = AssetDatabase.LoadAssetAtPath<Material>(SimplePath);
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null)
             {
-                material = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "Animales SIMPLE" };
-                AssetDatabase.CreateAsset(material, SimplePath);
+                material = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = name };
+                AssetDatabase.CreateAsset(material, path);
             }
             material.SetTexture("_BaseMap", texture);
             material.SetColor("_BaseColor", Color.white);
             material.SetFloat("_Smoothness", 0.15f);
             EditorUtility.SetDirty(material);
-            Debug.Log($"[fauna] {SimplePath}");
+            Debug.Log($"[fauna] {path}");
         }
 
         static AnimationClip Clip(string file)
@@ -56,7 +57,8 @@ namespace Bastion.EditorTools
 
         public static void Run()
         {
-            Simple();
+            Simple(Bastion.Client.Map.Fauna.SimpleMaterial, "Assets/Synty/SimpleForestAnimal/Textures/SimpleForestAnimalsTexture.png", "SIMPLE_Forest_Animals_Unity_2020_3_v1_02");
+            Simple(Bastion.Client.Map.Fauna.CatMaterial, "Assets/Synty/SimpleCats/Textures/SimpleCats.png", "SIMPLE_Cats_Unity_2020_3_v1_0_1");
             if (AssetDatabase.LoadAssetAtPath<AnimatorController>(Path) != null) AssetDatabase.DeleteAsset(Path);
             var controller = AnimatorController.CreateAnimatorControllerAtPath(Path);
             controller.AddParameter("Movement_f", AnimatorControllerParameterType.Float);

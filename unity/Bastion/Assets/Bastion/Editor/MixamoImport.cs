@@ -27,6 +27,9 @@ namespace Bastion.EditorTools
             ("rifleReload", "mixamo/Reloading.fbx", false),
             ("rifleKneel", "mixamo/Rifle Kneel Idle.fbx", false),
             ("rifleKneelAim", "mixamo/Idle Crouching Aiming.fbx", false),
+            // Hiding (Esconderse, Ana's #1 of 1/11): down onto a knee with the rifle, or the pistol, in hand.
+            ("rifleKneelDown", "mixamo/Rifle Stand To Kneel.fbx", false),
+            ("pistolKneelDown", "mixamo/Pistol Stand To Kneel.fbx", false),
             ("rifleWalk", "mixamo/Rifle Walk.fbx", false),
             ("rifleRun", "mixamo/Rifle Run.fbx", false),
             ("rifleSprint", "mixamo/Sprint Forward.fbx", false),

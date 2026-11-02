@@ -23,8 +23,8 @@ namespace Bastion.Client.Units
             "553d34 553d34 553d34 4c3b34 5d483f 5d483f 4c3b34 5d483f 5d483f 5b4c45 5d483f 5d483f 4c3b34 553d34".Split(' '),
         };
 
-        /// <summary>A risen soldier's skin: Sidekick's grey-green dead (ApocalypseZombie_04).</summary>
-        public static readonly string[] RisenTone = "5c6b59 5c6b59 5c6b59 494a40 494a40 494a40 373831 494a40 494a40 383f27 494a40 494a40 6d6f5b 5c6b59".Split(' ');
+        /// <summary>A risen soldier's skin: Sidekick's grey-green dead (ApocalypseZombie_04) made sallow as the common dead's (DullFlesh).</summary>
+        public static readonly string[] RisenTone = "807c6e 807c6e 807c6e 555349 555349 555349 42403a 555349 555349 4c4941 555349 555349 7f7c6c 807c6e".Split(' ');
 
         /// <summary>Hair colours: black, dark brown, brown, auburn, ginger, blonde, grey.</summary>
         public static readonly string[] HairColors = { "151515", "2b1915", "5b3b21", "8a4f2c", "b06545", "c9a46a", "8c8782" };
@@ -141,9 +141,9 @@ namespace Bastion.Client.Units
         /// <summary>
         /// The dead's colours dulled (Ana 28/10, p11: «Los zombies no deberían ser azules y morados»; Arturo: in now): each
         /// material of `figure` that paints from a Sidekick palette swapped for a copy whose clothes' cells in blue to purple
-        /// have a third of their colour and a little less light, and their loud greens half (Ana's #20, 29/10). And the
-        /// body's (#20: «si es completamente azul no me da sensación de persona»): a skin, hair or eye in green to purple
-        /// as little coloured as the clothes', so that the rotten flesh still shows, greyed. One copy a material, kept:
+        /// have a third of their colour and a little less light, their loud greens half (Ana's #20, 29/10) and anything
+        /// loud less (Ana's #6, 1/11). And the body's (#20: «si es completamente azul no me da sensación de persona»; #6:
+        /// grey, pale or sickly): a skin, hair or eye in green to purple a dead man's (DullFlesh). One copy a material, kept:
         /// the figures' fades and night rims are copies of it, so they paint the same.
         /// </summary>
         public static void DullDead(GameObject figure)
@@ -176,8 +176,19 @@ namespace Bastion.Client.Units
         /// A clothes' colour: blue to purple (hue 190°–330°, whole from 205° to 315°) brought down to a third of its
         /// saturation and 85 % of its light; a loud green (hue 70°–175°, whole from 85° to 160°, as much as its saturation
         /// and light are both over a half) to half its saturation and 90 % of its light. Olive and dark greens, as they are.
+        /// Then anything loud (Ana's #6, 1/11: «ropa menos llamativa»), as much as its saturation and light are both over
+        /// 0.45 (whole from 0.6), to 60 % of its saturation and 90 % of its light: the reds, yellows and pinks too.
         /// </summary>
-        static Color32 Dull(Color32 c)
+        static Color32 Dull(Color32 c) => Quiet(Hued(c));
+
+        static Color32 Quiet(Color32 c)
+        {
+            Color.RGBToHSV(c, out float h, out float s, out float v);
+            float loud = Mathf.Clamp01((Mathf.Min(s, v) - 0.45f) / 0.15f);
+            return loud > 0 ? Hsv(c, h, s * (1 - 0.4f * loud), v * (1 - 0.1f * loud)) : c;
+        }
+
+        static Color32 Hued(Color32 c)
         {
             Color.RGBToHSV(c, out float h, out float s, out float v);
             float deg = h * 360;
@@ -188,33 +199,36 @@ namespace Bastion.Client.Units
         }
 
         /// <summary>
-        /// A body's colour: green to purple (hue 55°–335°, whole from 70° to 320°) to a third of its saturation, never under
-        /// 0.15, and 90 % of its light. Sidekick's dead skins (olive 76° at 0.34, blue 227° at 0.4, purple 291° at 0.31)
-        /// come down to 0.15, a hint of their hue; the greys (blue-grey 224° at 0.13, the risen's RisenTone at 0.17) about
-        /// as they are; the living's tones (reds, browns, yellows: 23°–28°) untouched.
+        /// A body's colour (Ana's #6, 1/11: «pieles grises, pálidas o enfermizas, nunca moradas, azules ni verdes»): green to
+        /// purple (hue 55°–335°, whole from 70° to 320°) made a dead man's, a fifth lighter: the greens and olives sallow
+        /// (a yellowish grey, 45° at 0.14 at most), the blues grey (35° at 0.05), the purples pale (25° at 0.07, a third
+        /// lighter). Sidekick's dead skins come out so (olive 636d48 837e70, blue-grey 616570 868480, blue 686f88 a3a09b,
+        /// green 5c6b59 807c6e, purple 6d5c70 97918d); the living's tones (reds, browns, yellows: 23°–28°) untouched.
         /// </summary>
         static Color32 DullFlesh(Color32 c)
         {
             Color.RGBToHSV(c, out float h, out float s, out float v);
             float deg = h * 360;
             float w = Mathf.Clamp01(Mathf.Min((deg - 55) / 15, (335 - deg) / 15));
-            if (w <= 0 || s <= 0.15f) return c;
-            return Hsv(c, h, Mathf.Max(0.15f, s * (1 - 0.67f * w)), v * (1 - 0.1f * w));
+            if (w <= 0) return c;
+            var (hue, sat, light) = deg < 170 ? (45f, Mathf.Min(s, 0.14f), 1.2f) : deg < 260 ? (35f, 0.05f, 1.2f) : (25f, 0.07f, 1.35f);
+            return Color32.Lerp(c, Hsv(c, hue / 360, sat, Mathf.Min(1, v * light)), w);
         }
 
-        static readonly Dictionary<Texture, RenderTexture> dulledAtlases = new Dictionary<Texture, RenderTexture>();
+        static readonly Dictionary<(Texture, bool), RenderTexture> dulledAtlases = new Dictionary<(Texture, bool), RenderTexture>();
         static Material dullAtlas;
 
         /// <summary>
-        /// A POLYGON atlas (the special dead's, UnitViews.Dead) with its colours dulled as a common dead's skin (DullFlesh:
-        /// skin and clothes are one texture there): drawn once on the GPU (Resources/Shaders/DullAtlas) into a texture of
-        /// its own at half its size, with its mips, kept.
+        /// A POLYGON atlas (the special dead's, UnitViews.Dead) with its colours dulled (skin and clothes are one texture
+        /// there): City Zombies' blues to purples and its loud colours, as the clothes' (Dull); with `flesh`, Boss Zombies',
+        /// so and their skin's swatch as a common dead's skin (DullFlesh), pink, teal and olive made grey, pale or sickly.
+        /// Drawn once on the GPU (Resources/Shaders/DullAtlas) into a texture of its own at half its size, with its mips, kept.
         /// The atlas as it is if the shader is missing.
         /// </summary>
-        public static Texture DullAtlas(Texture atlas)
+        public static Texture DullAtlas(Texture atlas, bool flesh = false)
         {
             if (atlas == null) return null;
-            if (dulledAtlases.TryGetValue(atlas, out var made) && made != null && made.IsCreated()) return made;
+            if (dulledAtlases.TryGetValue((atlas, flesh), out var made) && made != null && made.IsCreated()) return made;
             if (dullAtlas == null)
             {
                 var shader = Resources.Load<Shader>("Shaders/DullAtlas");
@@ -223,7 +237,7 @@ namespace Bastion.Client.Units
             }
             var rt = new RenderTexture(Mathf.Max(1, atlas.width / 2), Mathf.Max(1, atlas.height / 2), 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
             {
-                name = atlas.name + " (apagada)",
+                name = atlas.name + (flesh ? " (piel apagada)" : " (apagada)"),
                 useMipMap = true,
                 autoGenerateMips = true,
                 filterMode = atlas.filterMode,
@@ -231,8 +245,9 @@ namespace Bastion.Client.Units
                 hideFlags = HideFlags.DontSave,
             };
             rt.Create();
+            dullAtlas.SetFloat("_Flesh", flesh ? 1 : 0);
             Graphics.Blit(atlas, rt, dullAtlas);
-            return dulledAtlases[atlas] = rt;
+            return dulledAtlases[(atlas, flesh)] = rt;
         }
 
         static Color32 Hsv(Color32 c, float h, float s, float v)

@@ -7,8 +7,9 @@ using UnityEngine;
 namespace Bastion.Client.Map
 {
     /// <summary>
-    /// The animals about a map (Gameplay, 1/11: «más vida»; only on the screen, the rules untouched): stray dogs in a
-    /// town's streets and yards, a fox or a wolf out in the country (Arturo's #7 of 1/11: no dogs there; Lore: no coyotes in
+    /// The animals about a map (Gameplay, 1/11: «más vida»; only on the screen, the rules untouched): a stray dog in a
+    /// town's streets and a cat or two by its walls (Ana's #11, 1/11: one dog, not three; SIMPLE - Cats', the cat Arturo
+    /// allowed, off before the dog), a fox or a wolf out in the country (Arturo's #7 of 1/11: no dogs there; Lore: no coyotes in
     /// Europe, so none in the Pindo) with a stag and a doe, a boar and rabbits (SIMPLE - Forest Animals', the one SIMPLE
     /// Arturo allowed, 1/11: POLYGON has none; grazing now and then, the rabbit hopping and off first), crows
     /// on the roofs and pigeons pecking about a square; at the Bastion's base, one or two wild ones in the pinar round it
@@ -27,7 +28,7 @@ namespace Bastion.Client.Map
         /// <summary>For a lab: called with each step's dt before the animals move (to walk the stand-in).</summary>
         public static Action<float> Stepping;
 
-        enum Kind { Dog, Wild, Grazer, Crow, Pigeon }
+        enum Kind { Dog, Wild, Grazer, Cat, Crow, Pigeon }
         enum State { Idle, Walk, Flee, Fly }
 
         sealed class Animal
@@ -62,12 +63,19 @@ namespace Bastion.Client.Map
         public static readonly string[] Wild = { "SK_Dog_Fox_01", "SK_Dog_Wolf_01" };
         /// <summary>SIMPLE - Forest Animals' stags, does, boars and rabbits (each in its colours).</summary>
         static readonly string[] Stags = { "Stag_01", "Stag_02", "Stag_03" }, Does = { "Doe_01", "Doe_02" }, Boars = { "Boar_01", "Boar_02", "Boar_03" }, Rabbits = { "Rabbit_01", "Rabbit_02", "Rabbit_03" };
+        /// <summary>SIMPLE - Cats' street cats: the tabbies, grey and ginger, and the grey Russian (not its sphynx, Persians or Siamese).</summary>
+        static readonly string[] Cats =
+        {
+            "SimpleCats_Tabby_01", "SimpleCats_Tabby_02", "SimpleCats_Tabby_03", "SimpleCats_StripedTabby_01", "SimpleCats_StripedTabby_02",
+            "SimpleCats_StripedTabby_03", "SimpleCats_RussianBlue_01", "SimpleCats_RussianBlue_02", "SimpleCats_RussianBlue_03",
+        };
         /// <summary>The packs' keys (MapArt.ModelKey's pack), and every model the map may ask for (MapCatalogMake puts them in the game's catalog).</summary>
-        public const string Pack = "dog", SimplePack = "simple";
-        public static IEnumerable<string> Models => Strays.Concat(Wild).Select(n => $"{Pack}:{n}").Concat(Stags.Concat(Does).Concat(Boars).Concat(Rabbits).Select(n => $"{SimplePack}:{n}"));
-        /// <summary>SIMPLE's animals' material (Resources; FaunaMake): its own is the built-in pipeline's.</summary>
-        public const string SimpleMaterial = "AnimalesSimple";
-        static Material simpleMaterial;
+        public const string Pack = "dog", SimplePack = "simple", CatPack = "cats";
+        public static IEnumerable<string> Models => Strays.Concat(Wild).Select(n => $"{Pack}:{n}").Concat(Stags.Concat(Does).Concat(Boars).Concat(Rabbits).Select(n => $"{SimplePack}:{n}"))
+            .Concat(Cats.Select(n => $"{CatPack}:{n}"));
+        /// <summary>SIMPLE's animals' materials (Resources; FaunaMake): their own are the built-in pipeline's.</summary>
+        public const string SimpleMaterial = "AnimalesSimple", CatMaterial = "AnimalesGatos";
+        static Material simpleMaterial, catMaterial;
         /// <summary>A grazer grazing (its controller's Eat_b, while it stands so).</summary>
         const int Graze = 9;
 
@@ -92,11 +100,12 @@ namespace Bastion.Client.Map
         const float DogFear = 6, WildFear = 9, BirdFear = 4.5f, Calm = 14, Wander = 5;
 
         /// <summary>
-        /// A grazer's walk and run (m/s), how near anyone scares it (tiles), and how tall it stands (m): the rabbit off first
-        /// and quick, a hare's size (as a rabbit's, the tufts hid it from the game's camera).
+        /// A grazer's or a cat's walk and run (m/s), how near anyone scares it (tiles), and how tall it stands (m): the rabbit
+        /// off first and quick, a hare's size (as a rabbit's, the tufts hid it from the game's camera); the cat off before
+        /// the dog (DogFear), a big tom's size for the same reason.
         /// </summary>
         static (float walk, float run, float fear, float tall) Grazing(string breed) =>
-            breed.StartsWith("Rabbit") ? (0.6f, 7f, 12, 0.55f) : breed.StartsWith("Boar") ? (0.9f, 6.5f, 7, 0.85f) : breed.StartsWith("Stag") ? (1.0f, 8.5f, 10, 1.75f) : (1.0f, 8.5f, 10, 1.4f);
+            breed.StartsWith("SimpleCats") ? (0.7f, 6f, 9, 0.5f) : breed.StartsWith("Rabbit") ? (0.6f, 7f, 12, 0.55f) : breed.StartsWith("Boar") ? (0.9f, 6.5f, 7, 0.85f) : breed.StartsWith("Stag") ? (1.0f, 8.5f, 10, 1.75f) : (1.0f, 8.5f, 10, 1.4f);
         /// <summary>A bird's take-off: away and up (m/s), and how long before it is gone (s).</summary>
         const float FlyAway = 6.5f, FlyUp = 3.2f, FlyFor = 5;
 
@@ -166,12 +175,23 @@ namespace Bastion.Client.Map
             bool town = s.Biome == Biomes.City;
             // (The Bastion's base, and its siege: no more than in the wood round it, and only in its pinar, #7.)
             bool home = s.Base != null;
-            // Dogs only in a town (three); the fox and the wolf in the country (three), at the base one or two.
-            int dogs = town && !home ? 3 : 0;
+            // Dogs only in a town, one (Ana's #11, 1/11); the fox and the wolf in the country, at the base one or two.
+            int dogs = town && !home ? 1 : 0;
             foreach (var p in Spots(70, 12, 4, 8).Take(dogs).ToList())
             {
                 taken.Add(p);
                 AddDog(Strays[(int)(Hash(p.x, p.y, 71) * Strays.Length)], p, Kind.Dog, dogOf);
+            }
+            // And a cat or two by a building's wall (any open tile if none is), apart from the dog.
+            bool ByWall(int x, int y) => new[] { (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1) }.Any(q => q.Item1 >= 0 && q.Item2 >= 0 && q.Item1 < s.Width && q.Item2 < s.Height && plan.Owner[q.Item2 * s.Width + q.Item1] >= 0);
+            int cats = town && !home ? 1 + (int)(Hash(s.Width, s.Height, 90) * 2) : 0;
+            for (int k = 0; k < cats; k++)
+            {
+                var spots = Spots(91, 10, 4, 8).ToList();
+                var p = spots.Where(q => ByWall(q.x, q.y)).Concat(spots).FirstOrDefault();
+                if (p == default) break;
+                taken.Add(p);
+                AddDog(Cats[(int)(Hash(p.x, p.y, 92) * Cats.Length) % Cats.Length], p, Kind.Cat, dogOf);
             }
             // (The wild ones out in the open: three tiles clear of the woods' edge, of walls and of tall cover, where the pines' crowns don't hide them.)
             bool Clearing(int x, int y)
@@ -265,7 +285,7 @@ namespace Bastion.Client.Map
                         AddBird(Kind.Pigeon, at, Hash(p.x + k, p.y, 81) * 360, (uint)(p.x * 977 + p.y * 31 + k + 1));
                     }
                 }
-            Debug.Log($"[fauna] {animals.Count(a => a.kind == Kind.Dog)} dogs, {animals.Count(a => a.kind == Kind.Wild)} wild, {animals.Count(a => a.kind == Kind.Grazer)} grazing ({string.Join(", ", animals.Where(a => a.kind == Kind.Grazer).Select(a => a.breed))}), {animals.Count(a => a.kind == Kind.Crow)} crows, {animals.Count(a => a.kind == Kind.Pigeon)} pigeons");
+            Debug.Log($"[fauna] {animals.Count(a => a.kind == Kind.Dog)} dogs, {animals.Count(a => a.kind == Kind.Cat)} cats, {animals.Count(a => a.kind == Kind.Wild)} wild, {animals.Count(a => a.kind == Kind.Grazer)} grazing ({string.Join(", ", animals.Where(a => a.kind == Kind.Grazer).Select(a => a.breed))}), {animals.Count(a => a.kind == Kind.Crow)} crows, {animals.Count(a => a.kind == Kind.Pigeon)} pigeons");
         }
 
         /// <summary>Where a bird stands on building b's roof, `along` metres from its middle: a house's ridge, else its roof's front edge.</summary>
@@ -281,10 +301,13 @@ namespace Bastion.Client.Map
             return At(cx + along / MapSpace.Tile, b.top, b.y1 + 0.5f + (float)BuildingSurfaces.WallHalf);
         }
 
+        /// <summary>Whether it is one of SIMPLE's (a grazer or a cat): their own controller (Speed_f, Eat_b, a cat's Sit_b), our material.</summary>
+        static bool Simple(Kind kind) => kind == Kind.Grazer || kind == Kind.Cat;
+
         void AddDog(string prefab, (int x, int y) p, Kind kind, Func<string, GameObject> dogOf)
         {
-            bool grazer = kind == Kind.Grazer;
-            var model = dogOf?.Invoke($"{(grazer ? SimplePack : Pack)}:{prefab}");
+            bool grazer = Simple(kind);
+            var model = dogOf?.Invoke($"{(kind == Kind.Cat ? CatPack : grazer ? SimplePack : Pack)}:{prefab}");
             if (model == null) return;
             var root = new GameObject(prefab).transform;
             root.SetParent(transform, false);
@@ -297,8 +320,10 @@ namespace Bastion.Client.Map
             {
                 // SIMPLE's in our material (theirs is the built-in pipeline's), at their true size.
                 simpleMaterial ??= Resources.Load<Material>(SimpleMaterial);
+                catMaterial ??= Resources.Load<Material>(CatMaterial);
+                var material = kind == Kind.Cat ? catMaterial : simpleMaterial;
                 var drawn = made.GetComponentsInChildren<Renderer>();
-                if (simpleMaterial != null) foreach (var r in drawn) r.sharedMaterial = simpleMaterial;
+                if (material != null) foreach (var r in drawn) r.sharedMaterial = material;
                 if (drawn.Length > 0)
                 {
                     float tall = drawn.Select(r => r.bounds.max.y).Max() - root.position.y;
@@ -553,15 +578,15 @@ namespace Bastion.Client.Map
         void StepDog(Animal a, float dt)
         {
             var (threat, distance) = Nearest(a.root.position);
-            var graze = a.kind == Kind.Grazer ? Grazing(a.breed) : default;
-            float fear = (a.kind == Kind.Grazer ? graze.fear : a.kind == Kind.Wild ? WildFear : DogFear) * MapSpace.Tile;
+            var graze = Simple(a.kind) ? Grazing(a.breed) : default;
+            float fear = (Simple(a.kind) ? graze.fear : a.kind == Kind.Wild ? WildFear : DogFear) * MapSpace.Tile;
             if (distance < fear && a.state != State.Flee)
             {
                 a.state = State.Flee;
                 a.target = Away(a, threat);
                 Stand(a);
             }
-            float speed = a.kind == Kind.Grazer ? (a.state == State.Flee ? graze.run : a.state == State.Walk ? graze.walk : 0)
+            float speed = Simple(a.kind) ? (a.state == State.Flee ? graze.run : a.state == State.Walk ? graze.walk : 0)
                 : a.state == State.Flee ? (a.kind == Kind.Wild ? WildRun : DogRun) : a.state == State.Walk ? (a.kind == Kind.Wild ? WildWalk : DogWalk) : 0;
             if (a.state == State.Idle)
             {
@@ -608,10 +633,11 @@ namespace Bastion.Client.Map
             if (a.animator != null && a.animator.runtimeAnimatorController != null)
             {
                 float movement = a.state == State.Flee ? 1 : a.state == State.Walk ? 0.5f : 0;
-                // (SIMPLE's controller: Speed_f the same way, Eat_b while it grazes.)
-                string pace = a.kind == Kind.Grazer ? "Speed_f" : "Movement_f";
+                // (SIMPLE's controller: Speed_f the same way, Eat_b while it grazes, a cat's Sit_b while it sits.)
+                string pace = Simple(a.kind) ? "Speed_f" : "Movement_f";
                 a.animator.SetFloat(pace, Mathf.MoveTowards(a.animator.GetFloat(pace), movement, 3 * dt));
-                if (a.kind == Kind.Grazer) a.animator.SetBool("Eat_b", a.doing == Graze && a.state == State.Idle);
+                if (Simple(a.kind)) a.animator.SetBool("Eat_b", a.doing == Graze && a.state == State.Idle);
+                if (a.kind == Kind.Cat) a.animator.SetBool("Sit_b", a.doing == Sit && a.state == State.Idle);
             }
         }
 
@@ -627,6 +653,14 @@ namespace Bastion.Client.Map
             {
                 a.doing = Random01(a) < 0.6f ? Graze : 0;
                 a.wait = a.doing == Graze ? 3 + 5 * Random01(a) : 1 + 3 * Random01(a);
+                return;
+            }
+            // A cat sits a long while, half the times, or eats something off the ground now and then, or stands.
+            if (a.kind == Kind.Cat)
+            {
+                float roll = Random01(a);
+                a.doing = roll < 0.5f ? Sit : roll < 0.62f ? Graze : 0;
+                a.wait = a.doing == Sit ? 8 + 10 * Random01(a) : a.doing == Graze ? 3 + 3 * Random01(a) : 1 + 3 * Random01(a);
                 return;
             }
             bool dog = a.kind == Kind.Dog, fox = a.breed.Contains("Fox"), howls = a.breed.Contains("Wolf");
@@ -648,7 +682,7 @@ namespace Bastion.Client.Map
         {
             a.chosen = false;
             a.doing = 0;
-            if (a.animator == null || a.animator.runtimeAnimatorController == null || a.kind == Kind.Grazer) return;
+            if (a.animator == null || a.animator.runtimeAnimatorController == null || Simple(a.kind)) return;
             a.animator.SetInteger("Accion", 0);
             a.animator.ResetTrigger("Gesto");
         }
@@ -658,7 +692,10 @@ namespace Bastion.Client.Map
         {
             var an = a.animator;
             if (an == null || !an.isActiveAndEnabled || an.runtimeAnimatorController == null) return false;
-            return an.IsInTransition(0) ? an.GetNextAnimatorStateInfo(0).IsTag("Suelo") : an.GetCurrentAnimatorStateInfo(0).IsTag("Suelo");
+            var state = an.IsInTransition(0) ? an.GetNextAnimatorStateInfo(0) : an.GetCurrentAnimatorStateInfo(0);
+            // (A cat's: SIMPLE's controller has no tags, its sitting down, sitting and getting up by name.)
+            if (a.kind == Kind.Cat) return state.IsName("Sit_Start") || state.IsName("Sit_Idle") || state.IsName("Sit_Up");
+            return state.IsTag("Suelo");
         }
 
         void StepBird(Animal a, float dt)

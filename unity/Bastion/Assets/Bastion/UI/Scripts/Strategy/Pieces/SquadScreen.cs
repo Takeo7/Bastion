@@ -40,7 +40,7 @@ namespace Bastion.UI.Strategy
             this.icon = icon;
             this.handlers = handlers;
             this.view = view;
-            cards = new LineupCards(view, tips, handlers) { Floor = () => bottom.worldBound.yMin };
+            cards = new LineupCards(view, tips, handlers) { Floor = () => bottom.worldBound.yMin, Busts = false };
             left = Ui.El("strat-side strat-side--left strat-side--fit squad-list panel", view);
             right = Ui.El("strat-side strat-side--right strat-side--fit squad-list panel", view);
             bottom = Ui.El("squad-bottom", view);

@@ -45,6 +45,8 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: a8d702d679318b44ca69b4f867c1b332, type: 3}
   - Id: hunker
     Sprite: {fileID: 21300000, guid: 28a19294736fdde4ba1551844e2941da, type: 3}
+  - Id: hide
+    Sprite: {fileID: 21300000, guid: 08fafd1278ff9a347a20ce95ede5ef10, type: 3}
   - Id: reload
     Sprite: {fileID: 21300000, guid: 29b8fbca4442f9f40911e8aba1bf1801, type: 3}
   - Id: grenade

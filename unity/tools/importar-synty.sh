@@ -98,6 +98,16 @@ if wanted "$@"; then
   for other in Bear Fox Moose Raccoon Skunk Wolf; do rm -f "$project/Assets/Synty/SimpleForestAnimal/Prefabs/$other"_* ; done
   rm -f "$project/Assets/Synty/SimpleForestAnimal/Models/"{Bear,Fox}.fbx* "$project/Assets/Synty/SimpleForestAnimal/Models/SFA_Animal_"{Bear,Fox}.controller*
 fi
+# SIMPLE - Cats (Ana's #11, 1/11; Arturo: its cat, the one animated there is, CLAUDE.md): under Assets/Synty too (its own
+# folder is Assets/SimpleCats), its cats alone: not its props (bowls, litter trays, yarn…) nor its demo scene.
+name=SIMPLE_Cats_Unity_2020_3_v1_0_1
+if wanted "$@"; then
+  echo "== $name (gatos)"
+  python3 -I "$tools/upkg-extract.py" --move Assets/SimpleCats=Assets/Synty/SimpleCats --under Assets/SimpleCats \
+    "$synty/SIMPLE - Cats/Unity/$name.unitypackage" "$project" || failed=1
+  rm -rf "$project/Assets/Synty/SimpleCats/Scenes" "$project/Assets/Synty/SimpleCats/Scenes.meta"
+  rm -f "$project/Assets/Synty/SimpleCats/Prefabs/SC_Prop_"* "$project/Assets/Synty/SimpleCats/Models/SM_Prop_"* "$project/Assets/Synty/SimpleCats/Materials/Ground.mat"*
+fi
 # The HUD's icons (UI): four INTERFACE packs, only their sprites and textures (no prefabs, scripts or samples: the HUD
 # is UI Toolkit, not their uGUI). Dark Fantasy's for the life bars (Ana's #8, 29/10).
 for p in "INTERFACE - Apocalypse HUD/Unity/INTERFACE_Apocalypse_HUD_Unity_2022_3_v1_1_1.unitypackage" \

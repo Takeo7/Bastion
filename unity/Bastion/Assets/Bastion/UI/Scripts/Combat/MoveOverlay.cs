@@ -167,9 +167,10 @@ namespace Bastion.UI.Combat
             partnerHoverMaterial = theirs.GetComponent<MeshRenderer>().sharedMaterial;
             partnerHover.gameObject.SetActive(false);
 
-            // Under each enemy in sight: the same thin ring, 0.42 of a tile, in ALIEN_COLOR at 0.95 (unitViews.ts drew a band 0.33–0.46).
+            // Under each enemy in sight: the same thin ring, 0.42 of a tile, in ALIEN_COLOR at 0.95 (unitViews.ts drew a band 0.33–0.46);
+            // the red line alone, without the dark threads, that looked a grey edge by it (Ana, Arturo 01/11 #7).
             build.Clear();
-            Ring(build, Vector3.zero, 0.42f * T, Hex(0xff4d4d, 0xf2));
+            Ring(build, Vector3.zero, 0.42f * T, Hex(0xff4d4d, 0xf2), false);
             enemyRing = build.Build(null);
 
             // A shield on each side (0.62 of a tile), facing the camera, over everything.
@@ -426,9 +427,10 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// A flat ring of `radius` round `c` in `color` (RingTexture's picture, sized so its line falls there), with two dark
-        /// threads just outside and two just inside it that keep it apart from snow and light floors.
+        /// threads just outside and two just inside it that keep it apart from snow and light floors (`threads`: the
+        /// enemies' go without them).
         /// </summary>
-        internal static void Ring(MeshBuilder into, Vector3 c, float radius, Color32 color)
+        internal static void Ring(MeshBuilder into, Vector3 c, float radius, Color32 color, bool threads = true)
         {
             void Square(float r, Vector3 at, Color32 tint)
             {
@@ -436,7 +438,8 @@ namespace Bastion.UI.Combat
                 into.Quad(at + new Vector3(-h, 0, -h), at + new Vector3(h, 0, -h), at + new Vector3(h, 0, h), at + new Vector3(-h, 0, h), tint);
             }
             var dark = Hex(0, (byte)(color.a * 0.6f));
-            foreach (var k in new[] { 1.06f, 1.035f, 0.965f, 0.94f }) Square(radius * k, c, dark);
+            if (threads)
+                foreach (var k in new[] { 1.06f, 1.035f, 0.965f, 0.94f }) Square(radius * k, c, dark);
             Square(radius, c + Vector3.up * 0.002f, color);
         }
 

@@ -184,13 +184,15 @@ namespace Bastion.Engine
         public const string FirstAid = "firstAid";
         /// <summary>The cóctel molotov (Arturo, 1/11): thrown, it sets the ground round where it lands on fire.</summary>
         public const string Molotov = "molotov";
+        /// <summary>Esconderse (Ana's #1 of 1/11): crouched out of sight till the soldier's next turn; Cubrirse is Hunker.</summary>
+        public const string Hide = "hide";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             Shoot, Pistol, Slash, StunLance, Overwatch, Hunker, Reload, Grenade, Launch, Missiles, Evac, Hack, Search,
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
-            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov,
+            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide,
         };
     }
 

@@ -35,6 +35,8 @@ namespace Bastion.EditorTools
         public static void Campo() => Show("Wild");
         /// <summary>A rabbit (SIMPLE's, Arturo 1/11) on a country map, wilds-7: hopping off as the stand-in comes, before the rest.</summary>
         public static void Conejo() => Show("Grazer", "Rabbit");
+        /// <summary>A cat (SIMPLE - Cats', Ana's #11 of 1/11) on a city, by a wall: sitting, off before the dog as the stand-in comes.</summary>
+        public static void Gatos() => Show("Cat");
         /// <summary>The stag (BASTION_RAZA another: Doe, Boar).</summary>
         public static void Ciervo() => Show("Grazer", Environment.GetEnvironmentVariable("BASTION_RAZA") ?? "Stag");
 

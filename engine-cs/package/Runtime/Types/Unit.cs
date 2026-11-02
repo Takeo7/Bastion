@@ -209,6 +209,8 @@ namespace Bastion.Engine
         public Dictionary<string, int> Charges { get; set; } = new Dictionary<string, int>(); // ChargeIds → uses (Partial<Record>)
         public bool Overwatch { get; set; }
         public bool Hunkered { get; set; }
+        /// <summary>Hiding (Esconderse) till its next turn: the enemies see it at HIDE_SIGHT of their range; absent, not.</summary>
+        public bool? Hidden { get; set; }
         /// <summary>Aid Protocol: defense bonus until the start of the squad's next turn (0 = none).</summary>
         public int Aided { get; set; }
         /// <summary>Stunned units start their next turn with a single action.</summary>

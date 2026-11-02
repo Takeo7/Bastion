@@ -1,13 +1,18 @@
-// The special dead's atlas with its colours dulled (SoldierPalette.DullAtlas; Ana's #17 of 28/10 and #20 of 29/10): its
-// skin and its clothes are one texture, so as a common dead's skin (SoldierPalette.DullFlesh) all of it, green to purple
-// (hue 55°–335°, whole from 70° to 320°) to a third of its saturation, never under 0.15, and 90 % of its light; reds,
-// oranges, yellows and browns as they are. In the texture's own (sRGB) values, as the palettes are. Drawn once an atlas
-// into a texture of its own; in Resources, so the app keeps it.
+// The special dead's atlas with its colours dulled (SoldierPalette.DullAtlas; Ana's #17 of 28/10, #20 of 29/10 and #6 of
+// 1/11): its skin and its clothes are one texture. City Zombies' (_Flesh 0), their skin a greyed beige already: green to
+// purple (hue 55°–335°, whole from 70° to 320°) to a third of its saturation, never under 0.15, and 90 % of its light,
+// and anything loud (saturation and light both over 0.45, whole from 0.6) to 60 % of its saturation and 90 % of its
+// light. Boss Zombies' (_Flesh 1) the same but for their skin's swatch, pink, teal or olive by the atlas (the last of the
+// strip's columns, the same in all of them: the Blobber's face and arms, some of a dress), as a common dead's skin
+// (SoldierPalette.DullFlesh), green to pink (hue 55°–355°, whole from 70° to 345°) made grey, pale or sickly: their
+// clothes keep their colours, dulled as City's. In the texture's own (sRGB) values, as the palettes are. Drawn once an
+// atlas into a texture of its own; in Resources, so the app keeps it.
 Shader "Hidden/Bastion/DullAtlas"
 {
     Properties
     {
         _MainTex ("Atlas", 2D) = "white" {}
+        _Flesh ("Boss Zombies' skin swatch", Float) = 0
     }
     SubShader
     {
@@ -21,6 +26,7 @@ Shader "Hidden/Bastion/DullAtlas"
             #include "UnityCG.cginc"
 
             sampler2D _MainTex;
+            float _Flesh;
 
             float3 Hsv(float3 c)
             {
@@ -42,12 +48,25 @@ Shader "Hidden/Bastion/DullAtlas"
                 float4 t = tex2D(_MainTex, i.uv);
                 float3 hsv = Hsv(saturate(LinearToGammaSpace(t.rgb)));
                 float deg = hsv.x * 360;
+                // (The swatch: u 0.712–0.729, v 0.818–0.888 of PolygonZombieBoss_0X_Y, 2048 px.)
+                float2 inside = step(float2(0.712, 0.818), i.uv) * step(i.uv, float2(0.729, 0.888));
+                if (_Flesh > 0.5 && inside.x * inside.y > 0)
+                {
+                    // SoldierPalette.DullFlesh, the pinks too: the greens and olives sallow, the blues grey, the purples and pinks pale.
+                    float k = saturate(min((deg - 55) / 15, (355 - deg) / 10));
+                    float3 dead = deg < 170 ? float3(45.0 / 360, min(hsv.y, 0.14), min(1, hsv.z * 1.2))
+                        : deg < 260 ? float3(35.0 / 360, 0.05, min(1, hsv.z * 1.2)) : float3(25.0 / 360, 0.07, min(1, hsv.z * 1.35));
+                    return float4(GammaToLinearSpace(lerp(Rgb(hsv), Rgb(dead), k)), t.a);
+                }
                 float w = saturate(min((deg - 55) / 15, (335 - deg) / 15));
                 if (w > 0 && hsv.y > 0.15)
                 {
                     hsv.y = max(0.15, hsv.y * (1 - 0.67 * w));
                     hsv.z *= 1 - 0.1 * w;
                 }
+                float loud = saturate((min(hsv.y, hsv.z) - 0.45) / 0.15);
+                hsv.y *= 1 - 0.4 * loud;
+                hsv.z *= 1 - 0.1 * loud;
                 return float4(GammaToLinearSpace(Rgb(hsv)), t.a);
             }
             ENDCG

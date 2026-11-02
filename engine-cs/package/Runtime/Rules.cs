@@ -222,6 +222,9 @@ namespace Bastion.Engine
                 case AbilityIds.Hunker:
                     Emit(new HunkerEvent { Unit = u.Id });
                     break;
+                case AbilityIds.Hide:
+                    Emit(new HiddenEvent { Unit = u.Id });
+                    break;
                 case AbilityIds.Reload:
                     Emit(new ReloadEvent { Unit = u.Id });
                     break;
@@ -882,7 +885,10 @@ namespace Bastion.Engine
         /// <summary>How far `u` notices a soldier on `p`: its detection while the squad is hidden, its sight after (both shorter at night, unless lit).</summary>
         private double NoticeRange(Unit u, Pos p)
         {
-            return S.Concealed ? Los.DetectionTo(S, u, p) : Los.SightTo(S, u, p);
+            var range = S.Concealed ? Los.DetectionTo(S, u, p) : Los.SightTo(S, u, p);
+            // One hiding there, at half of it (Esconderse).
+            var there = Grid.UnitAt(S, p);
+            return there != null ? range * Los.HiddenShare(u, there) : range;
         }
 
         /// <summary>The first soldier an alien standing on `p` would spot (`facing`: the dead see ahead of them, the way they walk).</summary>
@@ -984,9 +990,24 @@ namespace Bastion.Engine
             double? range = spotter != null && spotted != null ? Los.DetectionTo(S, spotter, spotted.Pos) : spotter != null ? Content.Templates[spotter.Template].Detection : (double?)null;
             // Woken by the dead (18/10 #47: they fight the living too), not by the squad: it stays hidden.
             if (first.Cause != PodCauses.Attacked || !string.IsNullOrEmpty(first.Unit)) BreakConcealment(Exposure[first.Cause], first.Unit, first.By, seen && spotter != null ? range : null);
+            // Each of the dead with its own eyes and ears (Ana's #4 of 1/11): of a group, only those who saw or heard it wake.
+            var whys = new Dictionary<string, Activation>();
+            for (var k = 0; k < pods.Count; k++)
+            {
+                var why = whyOf(pods[k]);
+                var woken = Perceivers(pods[k], why);
+                if (woken != null)
+                {
+                    var into = SplitPodId(pods[k]);
+                    Emit(new PodSplitEvent { Pod = pods[k].Id, Into = into, Units = woken });
+                    pods[k] = S.Pods.Find((p) => p.Id == into)!;
+                }
+                whys[pods[k].Id] = why;
+            }
+            Activation WhyOf(Pod pod) => whys[pod.Id];
             foreach (var pod in pods)
             {
-                var why = whyOf(pod);
+                var why = WhyOf(pod);
                 Emit(new PodActivatedEvent { Pod = pod.Id, Cause = why.Cause, Unit = why.Unit, By = why.By });
             }
             foreach (var pod in pods) Scamper(pod.UnitIds);
@@ -994,7 +1015,7 @@ namespace Bastion.Engine
             // whoever saw (Ana, 23/10 #25: one of a group came, the rest stood by).
             foreach (var pod in pods)
             {
-                var id = whyOf(pod).Unit;
+                var id = WhyOf(pod).Unit;
                 var prey = !string.IsNullOrEmpty(id) ? Grid.GetUnit(S, id!) : null;
                 if (prey?.Team != Teams.Xcom || !prey.Alive || Over) continue;
                 foreach (var m in pod.UnitIds.Select((x) => Grid.GetUnit(S, x)).ToList())
@@ -1007,6 +1028,28 @@ namespace Bastion.Engine
             }
             // Woken by the sight of a soldier: whoever else of the dead sees them goes after them.
             if (seen && spotted?.Team == Teams.Xcom && spotted.Alive && !Over) HuntedBy(spotted);
+        }
+
+        /// <summary>
+        /// Of the dead of `pod`, those that a soldier's sight or strike wakes (Ana's #4 of 1/11): the one that saw or was struck
+        /// and whoever else of them sees that soldier. Null for the whole group: a blast, a noise, the living, or all of them.
+        /// </summary>
+        private List<string>? Perceivers(Pod pod, Activation why)
+        {
+            if (why.Cause == PodCauses.Noise || string.IsNullOrEmpty(why.By)) return null;
+            var members = pod.UnitIds.Select((id) => Grid.GetUnit(S, id)).Where((m) => m != null && m.Alive).Select((m) => m!).ToList();
+            if (members.Any((m) => !Content.Templates[m.Template].Undead)) return null;
+            var prey = !string.IsNullOrEmpty(why.Unit) ? Grid.GetUnit(S, why.Unit!) : null;
+            var woken = members.Where((m) => m.Id == why.By || (prey != null && Los.InViewCone(m, prey.Pos) && Los.SightOrigin(S, m.Pos, prey.Pos, NoticeRange(m, prey.Pos), Los.WindowReachOf(m.Team)) != null)).Select((m) => m.Id).ToList();
+            return woken.Count == 0 || woken.Count == members.Count ? null : woken;
+        }
+
+        /// <summary>The id of a group split off `pod`: «p3.1», «p3.2»…, after those split off it already.</summary>
+        private string SplitPodId(Pod pod)
+        {
+            var n = 1;
+            while (S.Pods.Any((p) => p.Id == $"{pod.Id}.{n}")) n++;
+            return $"{pod.Id}.{n}";
         }
 
         /// <summary>Free move to the best nearby cover, without spending actions. The dead don't take cover.</summary>

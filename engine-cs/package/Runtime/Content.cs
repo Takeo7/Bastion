@@ -540,6 +540,8 @@ namespace Bastion.Engine
             [AbilityIds.Stone] = new AbilityDef { Id = AbilityIds.Stone, Name = "Piedra", Description = "Lanza una piedra: suena donde cae y los zombis van a mirar. Si le da a alguien, 1 de daño.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 10, Noise = 8 },
             [AbilityIds.OverwatchMelee] = new AbilityDef { Id = AbilityIds.OverwatchMelee, Name = "Vigilancia cuerpo a cuerpo", Description = "Golpea con la hoja al primer enemigo que se le ponga al lado.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
             [AbilityIds.Hunker] = new AbilityDef { Id = AbilityIds.Hunker, Name = "Cubrirse", Description = "+30 de defensa y +50 de esquiva hasta tu próximo turno.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
+            // Ana's #1 of 1/11 (Arturo: a new action, Cubrirse as it was).
+            [AbilityIds.Hide] = new AbilityDef { Id = AbilityIds.Hide, Name = "Esconderse", Description = "Se agacha y se esconde hasta tu próximo turno: los enemigos tienen que estar a la mitad de la distancia de siempre para ver al soldado. A diferencia de Cubrirse, no da defensa ni esquiva.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
             [AbilityIds.Reload] = new AbilityDef { Id = AbilityIds.Reload, Name = "Recargar", Description = "Mete un cargador lleno y gasta uno de repuesto: primero en el arma principal y, si está llena, en la pistola. Los de repuesto los hace el Taller; registrando aparecen más.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = false },
             [AbilityIds.Grenade] = new AbilityDef { Id = AbilityIds.Grenade, Name = "Granada", Description = "Lanza una granada: daña a todos en el área, destruye cobertura y abre boquetes en las paredes. Arriba hunde el suelo donde cae, y quien esté encima cae.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = true, Charge = ChargeIds.Grenade, Range = 10, Radius = 2.5, Explosive = WeaponIds.FragGrenade },
             [AbilityIds.Launch] = new AbilityDef { Id = AbilityIds.Launch, Name = "Lanzagranadas", Description = "Dispara una granada más lejos y con más radio. También abre boquetes en las paredes y, arriba, hunde el suelo donde cae.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = true, Charge = ChargeIds.Grenade, Range = 14, Radius = 3.5, Explosive = WeaponIds.FragGrenade },
@@ -618,6 +620,8 @@ namespace Bastion.Engine
         public const int ControlTurns = 2;
         public const int RestorationHeal = 2;
         public const int SmokeDefense = 20;
+        /// <summary>The share of their sight the enemies have on a soldier hiding (Esconderse; Arturo, 1/11: half).</summary>
+        public const double HideSight = 0.5;
         public const int SmokeTurns = 2;
         /// <summary>The squad's turns a molotov's fire lasts (Arturo, 1/11: «Fuego 3×3, 2 turnos»).</summary>
         public const int MolotovTurns = 2;

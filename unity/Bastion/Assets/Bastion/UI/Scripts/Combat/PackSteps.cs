@@ -124,6 +124,15 @@ namespace Bastion.UI.Combat
             }
             var root = control.Hud != null ? control.Hud.GetComponent<UIDocument>()?.rootVisualElement : null;
             if (root == null) return false;
+            // «ficha=hide»: that key's card pinned open, as the pointer over it shows it (Esconderse's: Ana's #1 of 1/11).
+            if (what == "ficha")
+            {
+                var place = control.KeyIndex(arg);
+                var keys = root.Q("abilities")?.Query<Button>(className: "ability").ToList();
+                if (keys == null || place < 0 || place >= keys.Count) return false;
+                keys[place].AddToClassList("lab-pin");
+                return control.Hud.PinTip("lab-pin");
+            }
             int.TryParse(arg, out var n);
             Button button = null;
             switch (what)

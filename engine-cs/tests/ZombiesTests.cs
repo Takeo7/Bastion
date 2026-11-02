@@ -185,7 +185,9 @@ namespace Bastion.Engine.Tests
             Assert.True(z1.Pos.X > 13);
             var woke = Of<PodActivatedEvent>(turn.Events);
             Assert.NotEmpty(woke);
-            Assert.Equal(("p1", PodCauses.Patrol), (woke[0].Pod, woke[0].Cause));
+            // The pod, or those of it who saw the runner (Ana's #4 of 1/11: «p1.1»).
+            Assert.StartsWith("p1", woke[0].Pod);
+            Assert.Equal(PodCauses.Patrol, woke[0].Cause);
             var broken = Of<ConcealmentBrokenEvent>(turn.Events);
             Assert.NotEmpty(broken);
             Assert.Equal(ConcealReasons.Patrol, broken[0].Reason);
@@ -567,11 +569,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal(("a1", "s1", 0), (hunting[0].Unit, hunting[0].Target, hunting[0].Missed));
         }
 
-        // ------------------------------------------------------------ a group comes all together (Ana, 23/10 #25)
+        // ------------------------------------------------------------ each of the dead on its own (Ana, 1/11 #4)
 
-        [Fact(DisplayName = "a group comes all together (Ana, 23/10 #25) › a pod woken by a soldier turns to them and goes after them, all of it, not only whoever saw")]
-        public void APodWokenByASoldierGoesAfterThemAllOfIt()
+        [Fact(DisplayName = "each of the dead on its own (Ana, 1/11 #4) › of a group, only those who see the soldier wake and go after them; the rest stay as they were")]
+        public void OnlyThoseWhoSeeWake()
         {
+            // Before (Ana, 23/10 #25), one saw and the whole group came; Arturo, 1/11: each with its own eyes and ears.
             var s = Field(30, 30);
             s.Concealed = false;
             var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 5, 15);
@@ -583,19 +586,48 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(others, (o) => Los.CanSee(s, o, soldier));
             var t = NewSim(s);
             t.ActivatePods(t.PodsNoticing(soldier.Pos), new Activation { Cause = PodCauses.Sighted, Unit = "s1", By = "a1" });
-            Assert.True(s.Pods[0].Active);
-            foreach (var z in new[] { seer }.Concat(others))
-            {
-                Assert.NotNull(z.Hunting);
-                Assert.Equal(("s1", 0), (z.Hunting!.Id, z.Hunting.Missed));
-                Assert.True(Los.CanSee(s, z, soldier));
-            }
-            // On their turn, the whole group comes.
-            s.ActiveTeam = Teams.Alien;
-            foreach (var z in new[] { seer }.Concat(others)) z.Ap = 2;
-            var before = others.Select((o) => Grid.Distance(o.Pos, soldier.Pos)).ToList();
+            var split = Assert.Single(Of<PodSplitEvent>(t.Events));
+            Assert.Equal(("p1", "p1.1"), (split.Pod, split.Into));
+            Assert.Equal(new[] { "a1" }, split.Units);
+            Assert.Equal(("p1.1", true), (seer.PodId, s.Pods.Single((p) => p.Id == "p1.1").Active));
+            Assert.Equal(("s1", 0), (seer.Hunting!.Id, seer.Hunting.Missed));
+            var rest = s.Pods.Single((p) => p.Id == "p1");
+            Assert.False(rest.Active);
+            Assert.Equal(new[] { "a2", "a3" }, rest.UnitIds);
+            foreach (var o in others) Assert.Null(o.Hunting);
+            // With all of them seeing it, the group wakes as one, as before.
+            var u = Field(30, 30);
+            u.Concealed = false;
+            var target = AddUnit(u, "s1", TemplateIds.Rookie, 5, 15);
+            var all = new[] { AddUnit(u, "a1", TemplateIds.Zombie, 12, 15), AddUnit(u, "a2", TemplateIds.Zombie, 12, 14) };
+            foreach (var z in all) z.Facing = Los.FacingTo(z.Pos, target.Pos)!.Value;
+            PodOf(u, "p1", false, all);
+            var w = NewSim(u);
+            w.ActivatePods(w.PodsNoticing(target.Pos), new Activation { Cause = PodCauses.Sighted, Unit = "s1", By = "a1" });
+            Assert.Empty(Of<PodSplitEvent>(w.Events));
+            Assert.True(u.Pods.Single().Active);
+        }
+
+        [Fact(DisplayName = "each of the dead on its own (Ana, 1/11 #4) › Esconderse: till the soldier's next turn, the enemies see it at half their range")]
+        public void HidingHalvesTheirSight()
+        {
+            var s = Field(30, 30);
+            s.Concealed = false;
+            var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 5, 15);
+            AddUnit(s, "s2", TemplateIds.Rookie, 1, 1);
+            var range = Los.SightTo(s, AddUnit(s, "a1", TemplateIds.Zombie, 5, 15), soldier.Pos);
+            var z = Grid.GetUnit(s, "a1")!;
+            z.Pos = P(5 + (int)Math.Floor(range * 0.75), 15);
+            z.Facing = Los.FacingTo(z.Pos, soldier.Pos)!.Value;
+            Assert.True(Los.CanSee(s, z, soldier));
+            Assert.Contains(AbilityIds.Hide, Abilities.AbilitiesOf(soldier));
+            Assert.True(Exec(s, Ability("s1", AbilityIds.Hide)).Ok);
+            Assert.True(soldier.Hidden);
+            Assert.Equal(0, soldier.Ap);
+            Assert.False(Los.CanSee(s, z, soldier));
+            // Its next turn, it shows again.
             NewSim(s, 2).RunAlienTurn();
-            for (var i = 0; i < others.Length; i++) Assert.True(Grid.Distance(others[i].Pos, soldier.Pos) < before[i] - 3);
+            Assert.Null(soldier.Hidden);
         }
 
         [Fact(DisplayName = "a group comes all together (Ana, 23/10 #25) › an unaware pod walks its round even when its leader is boxed in by the rest")]
