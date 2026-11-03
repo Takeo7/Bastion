@@ -166,7 +166,7 @@ namespace Bastion.Engine
             {
                 // The stone, from the first cell of the line and no longer everyone's (Ana's notes, 29/10: «muy op»); its id kept,
                 // so whoever had bought Brazo suelto has it.
-                Active("looseArm", "Piedras", "Lanza piedras: suenan donde caen y los zombis van a mirar. Si dan a alguien, 1 de daño. +1 casilla de alcance al lanzar.", PerkIds.Stones, AbilityIds.Stone, mods: new UnitMods { GrenadeRange = 1 }),
+                Active("looseArm", "Piedras", "Lanza piedras: suenan donde caen y los zombis van a mirar. No hacen daño. +1 casilla de alcance al lanzar.", PerkIds.Stones, AbilityIds.Stone, mods: new UnitMods { GrenadeRange = 1 }),
                 Stat("sharpStone", "Canto afilado", "La piedra hace +1 de daño.", mods: new UnitMods { StoneDamage = 1 }),
                 Stat("curtain", "Cortina", "Un humo más, si lleva humo.", spare: Uses(ChargeIds.Smoke, 1)),
                 Passive("salvo", "Sin pausa", "Lanzar una granada no acaba el turno.", perk: PerkIds.Salvo),

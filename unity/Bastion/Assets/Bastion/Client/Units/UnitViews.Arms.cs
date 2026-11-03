@@ -89,7 +89,8 @@ namespace Bastion.Client.Units
             if (prefab == null) return null;
             var model = Instantiate(prefab, parent, false);
             model.name = "arma";
-            foreach (var part in model.GetComponentsInChildren<Transform>(true).Where(t => t.name.Contains("Silencer")).ToList()) part.gameObject.SetActive(false);
+            // (Apocalypse's silencers, and a sword's sheath: Gang Warfare's comes on it.)
+            foreach (var part in model.GetComponentsInChildren<Transform>(true).Where(t => t.name.Contains("Silencer") || t.name.Contains("Sheath")).ToList()) part.gameObject.SetActive(false);
             var box = new Bounds(Vector3.zero, Vector3.zero);
             foreach (var r in model.GetComponentsInChildren<Renderer>())
                 foreach (var corner in Corners(r.bounds)) box.Encapsulate(model.transform.InverseTransformPoint(corner));
@@ -97,6 +98,22 @@ namespace Bastion.Client.Units
             model.transform.localScale = Vector3.one * Figures.CharacterScale * (art.size > 0 ? art.size : 1);
             foreach (var c in model.GetComponentsInChildren<Collider>()) DestroyNow(c);
             return model.transform;
+        }
+
+        /// <summary>The middle of what a model draws, in its own frame, unscaled.</summary>
+        static Vector3 CentreOf(Transform model)
+        {
+            var box = new Bounds(Vector3.zero, Vector3.zero);
+            bool any = false;
+            foreach (var r in model.GetComponentsInChildren<Renderer>())
+                foreach (var corner in Corners(r.bounds))
+                {
+                    var p = model.InverseTransformPoint(corner);
+                    if (!any) box = new Bounds(p, Vector3.zero);
+                    else box.Encapsulate(p);
+                    any = true;
+                }
+            return any ? box.center : Vector3.zero;
         }
 
         /// <summary>A model's middle along its barrel or blade (syntyFigures.ts equip's userData.middle), in its own frame scaled: a slung gun hangs by it.</summary>
@@ -226,6 +243,16 @@ namespace Bastion.Client.Units
                 model.localPosition = new Vector3(0, 0, ride == MainCarry ? -v.middles[kv.Key] / lossy : ride == SlungCarry ? -v.middles[kv.Key] * SlungBy / lossy : 0);
                 // A blade at the belt by its grip, along the way it runs (the pan by its handle, hanging).
                 if (ride == BeltCarry) Seat(model, v.arts[kv.Key], mount.position, mount.rotation);
+                // One across the back whose length runs another way than +z (the rake's, the sword's): turned so, and by a
+                // point SlungBy of the way from its grip to its middle along it, as the others by their middle.
+                else if (ride == SlungCarry && v.arts[kv.Key].along != null)
+                {
+                    var slung = v.arts[kv.Key];
+                    Seat(model, slung, mount.position, mount.rotation);
+                    var along = new Vector3(slung.along[0], slung.along[1], slung.along[2]).normalized;
+                    var grip = slung.grip != null && slung.grip.Length >= 3 ? new Vector3(slung.grip[0], slung.grip[1], slung.grip[2]) : Vector3.zero;
+                    model.position -= mount.forward * (Vector3.Dot(CentreOf(model) - grip, along) * model.lossyScale.x * SlungBy);
+                }
             }
             v.weapon = v.carried.TryGetValue(which, out var held) ? held : null;
             if (v.weapon != null) v.weapon.gameObject.SetActive(true);
@@ -583,6 +610,56 @@ namespace Bastion.Client.Units
             // (On watch with the blade, back on guard.)
             Draw(v, v.watch && v.guard ? BeltCarry : MainCarry);
             Settle(v, 0.2f);
+        }
+
+        /// <summary>
+        /// The crowbar at a boarded window (Arturo's A11 of 2/11, BoardsRemovedEvent): turned to `place`, the bar drawn from
+        /// the belt and brought down on the boards as a blow from above (ChopStroke), with no step in; as it lands the heap
+        /// topples (MapView.Topple), then the bar is put away. Without the bar in hand (no figure, no crowbar), a search's
+        /// rummage. UI's event player waits for it.
+        /// </summary>
+        public async Awaitable Pry(string id, Vector3 place, Pos tile, CancellationToken ct = default)
+        {
+            if (!views.TryGetValue(id, out var v) || v.anim == null || !v.carried.ContainsKey(BeltCarry) || v.arts[BeltCarry].fbx != Anims.Weapon("crowbar")?.fbx)
+            {
+                await Rummage(id, place, ct);
+                Map.MapView.Current?.Topple(tile);
+                await Awaitable.WaitForSecondsAsync(0.45f, ct);
+                return;
+            }
+            Face(id, place);
+            v.striking = true;
+            try
+            {
+                Draw(v, BeltCarry);
+                AtRest(v, 0.1f);
+                var clip = FigureCatalog.Load()?.Clip(ChopStroke.clip);
+                bool toppled = false;
+                for (float t = 0; t < ChopStroke.end + 0.45f; t += Time.deltaTime)
+                {
+                    if (clip != null)
+                    {
+                        float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (ChopStroke.end - t) / 0.15f));
+                        v.anim.Scrub(t < ChopStroke.end ? clip : null, Mathf.Clamp(ChopStroke.ClipTime(t), 0, clip.length), share);
+                    }
+                    if (!toppled && t >= ChopStroke.lets)
+                    {
+                        toppled = true;
+                        Map.MapView.Current?.Topple(tile);
+                    }
+                    await Awaitable.NextFrameAsync(ct);
+                }
+                v.anim.Scrub(null, 0, 0);
+            }
+            finally
+            {
+                v.striking = false;
+                if (v.root != null)
+                {
+                    Draw(v, MainCarry);
+                    Settle(v, 0.2f);
+                }
+            }
         }
 
         /// <summary>unitViews.ts reload: this long, the clip scrubbed through on an ease (spin), coming in and going over its ends.</summary>

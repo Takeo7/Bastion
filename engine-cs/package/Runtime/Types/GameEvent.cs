@@ -160,6 +160,14 @@ namespace Bastion.Engine
         public string Unit { get; set; } = "";
     }
 
+    /// <summary>A soldier takes the boards off a window or a door with the crowbar (Arturo, 2/11): `tile`, a window's pile, is open floor; a doorway's planks, a shut door.</summary>
+    public sealed class BoardsRemovedEvent : GameEvent
+    {
+        public override string T => "boardsRemoved";
+        public string Unit { get; set; } = "";
+        public Pos Tile { get; set; } = new Pos();
+    }
+
     /// <summary>A soldier hides (Esconderse; Ana's #1 of 1/11): Unit.hidden till its next turn.</summary>
     public sealed class HiddenEvent : GameEvent
     {

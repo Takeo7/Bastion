@@ -311,8 +311,10 @@ namespace Bastion.Client.Map
 
         /// <summary>
         /// The storeys above the ground floor of a stretch of wall (`along` its length, centred on (x, z)): the building's
-        /// own outer walls up to its roof, windows over doors and windows (and every other tile on shops and offices);
-        /// over a wall shared with a lower neighbour, what stands above the neighbour's roof, facing it.
+        /// own outer walls up to its roof, windows over doors and windows (and on shops and offices every other tile, the
+        /// same on every storey, in columns: Arturo, 2/11, Ana's #3, missing rows of windows; 0.10.1's buildings.ts moved
+        /// them a tile along from one storey to the next, a checkerboard); over a wall shared with a lower neighbour, what
+        /// stands above the neighbour's roof, facing it.
         /// </summary>
         void Storeys(string ground, float x, float z, int t, Vec2 o, bool between, int b, int other, float along = 1)
         {
@@ -336,7 +338,8 @@ namespace Bastion.Client.Map
             for (int k = from; k < to; k++)
             {
                 float y0 = ob.@base + k * Storey;
-                bool glazed = other < 0 && (ground != TileKinds.Wall || (ob.kind != BuildingKinds.House && ob.kind != BuildingKinds.Motel && (t + k) % 2 == 0));
+                bool glazed = other < 0 && (ground != TileKinds.Wall || (ob.kind != BuildingKinds.House && ob.kind != BuildingKinds.Motel
+                    && t % 2 == 0));
                 // (An office's cornice along its top storey: phase 3.)
                 if (kit.crown != null && k == ob.storeys - 1) Put(kit.crown, x, z, y0, face, false, owner, along: along, thick: kit.thick, tint: true, roof: true);
                 if (along < 1)

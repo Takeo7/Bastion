@@ -27,7 +27,8 @@ namespace Bastion.Engine
 
         /// <summary>
         /// What can be opened (docs/FASE8.md §B): the marked boxes, one kind each. They
-        /// always give what they say, so they need no supplies of their own.
+        /// always give what they say, so they need no supplies of their own. A boot's
+        /// suministros are what was in it, as a room's are.
         /// </summary>
         public static readonly IReadOnlyDictionary<string, SearchSpot> SearchSpots = new Dictionary<string, SearchSpot>
         {
@@ -35,8 +36,10 @@ namespace Bastion.Engine
             ["lootMedical"] = new SearchSpot("la caja de medicinas", new string[0]),
             ["lootAmmo"] = new SearchSpot("la caja de munición", new string[0]),
             ["lootFood"] = new SearchSpot("la caja de comida", new string[0]),
-            // Looting.PoliceCar: the first mission's police car, a pistol in the front and another in the boot (Arturo, 1/11).
-            ["policeCar"] = new SearchSpot("el coche de policía", new string[0], masculine: true),
+            // A car's boot, a police car's, and a dead enemy's body (Arturo, 2/11): Looting.CarBoot, PoliceBoot and Body.
+            ["carBoot"] = new SearchSpot("el maletero", new[] { "una caja de herramientas", "cables de arranque y un gato", "una lona y una cuerda", "una bolsa de deporte con ropa" }, masculine: true),
+            ["policeBoot"] = new SearchSpot("el maletero del coche de policía", new[] { "bengalas de carretera", "una linterna y unas esposas", "una manta térmica y cinta de balizar" }, masculine: true),
+            ["body"] = new SearchSpot("el cuerpo", new string[0], masculine: true),
         };
 
         /// <summary>A room as its furniture makes it (loot.ts Room.spot): what it is called, and what the supplies found in it were.</summary>
@@ -151,12 +154,16 @@ namespace Bastion.Engine
             return parts;
         }
 
-        /// <summary>The log line for opening a marked box: «Ana abre la caja de armas: un fusil de asalto.»</summary>
+        /// <summary>
+        /// The log line for opening a marked box or a boot, or searching a body: «Ana abre la caja de armas: un fusil de
+        /// asalto.»
+        /// </summary>
         public static string SearchLine(string who, string decor, Loot? find, int seed)
         {
             var known = SearchSpots.TryGetValue(decor, out var spot);
             var where = known ? spot.Name : "la caja";
-            var parts = FindParts(find, new string[0], seed);
+            var parts = FindParts(find, known ? spot.Supplies : new string[0], seed);
+            if (decor == Looting.Body) return parts.Count > 0 ? $"{who} registra {where}: {JoinAnd(parts)}." : $"{who} registra {where}. No lleva nada.";
             return parts.Count > 0 ? $"{who} abre {where}: {JoinAnd(parts)}." : $"{who} abre {where}. Está {(known && spot.Masculine ? "vacío" : "vacía")}.";
         }
 
@@ -168,10 +175,29 @@ namespace Bastion.Engine
             return parts.Count > 0 ? $"{who} registra {room.Name}: {JoinAnd(parts)}." : $"{who} registra {room.Name}. {EmptyFinds[seed % EmptyFinds.Count]}";
         }
 
-        /// <summary>Opening a marked box, for the action's title: «Abrir la caja de armas».</summary>
+        /// <summary>
+        /// What opening `decor` does, for the action's panel (Arturo, 2/11: boots and bodies too): a box's sure find, a boot's
+        /// chances (Spots.Trunk; Looting.PoliceBootGun), a body's gun (Looting.RollBody, Content.Uniforms).
+        /// </summary>
+        public static string SearchEffect(string decor)
+        {
+            switch (decor)
+            {
+                case Looting.CarBoot:
+                    return "Abre el maletero de un coche que tengas al lado. Sale lo que haya: suministros, piezas, medicinas, algún cargador o accesorio y, a veces, un arma. Hace un poco de ruido.";
+                case Looting.PoliceBoot:
+                    return "Abre el maletero de un coche de policía que tengas al lado. Una vez de cada tres hay un arma; si no, lo que haya en cualquier maletero. Hace un poco de ruido.";
+                case Looting.Body:
+                    return "Registra el cuerpo de un enemigo caído a tu lado o a tus pies. Los vivos llevan siempre su arma. Un zombi casi nunca lleva una, salvo los policías y los militares: uno de cada cuatro. Hace un poco de ruido.";
+                default:
+                    return "Abre una caja marcada que tengas al lado. Da siempre lo suyo: un arma, una o dos medicinas, dos cargadores o de 3 a 5 raciones. Hace un poco de ruido.";
+            }
+        }
+
+        /// <summary>Opening a marked box, for the action's title: «Abrir la caja de armas»; a body's, «Registrar el cuerpo».</summary>
         public static string BoxTitle(string decor)
         {
-            return $"Abrir {(SearchSpots.TryGetValue(decor, out var spot) ? spot.Name : "la caja")}";
+            return $"{(decor == Looting.Body ? "Registrar" : "Abrir")} {(SearchSpots.TryGetValue(decor, out var spot) ? spot.Name : "la caja")}";
         }
 
         /// <summary>What a search turned up, short, to float over the furniture: «+12 §», «Botiquín», «Medicinas», «+2 raciones», «+1 pieza», a weapon's name, «+1 cargador» or «Nada».</summary>

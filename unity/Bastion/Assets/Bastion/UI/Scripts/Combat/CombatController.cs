@@ -570,11 +570,17 @@ namespace Bastion.UI.Combat
                 Hud.ReleaseBanner(true);
             // A press on the map closes the backpack's menu (one on the HUD, its root: Backpack.PressedAt).
             if (Hud != null && !overHud && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame)) Hud.ClosePackMenu();
-            // From above (#12) a click only brings the camera down there: no pointer on a tile, no order.
+            // From above (#12) a click only brings the camera down there: no pointer on a tile, no order. Marks, as in the
+            // view (Arturo, 02/11 A3): Shift and the click, or the wheel's click, on the tile under the pointer (G: Keys).
             if (Overhead)
             {
                 if (!overHud && (Hud == null || !Hud.MenuOpen)) App.GameCursor.Ask(App.GameCursor.Kind.Arrow);
-                if (!overHud && mouse.leftButton.wasPressedThisFrame && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), 0, out var down)) OverheadClick(down);
+                var marking = Keyboard.current != null && Keyboard.current.shiftKey.isPressed && !App.Shortcuts.Elsewhere(Keyboard.current);
+                if (!overHud && (Hud == null || !Hud.MenuOpen) && (mouse.leftButton.wasPressedThisFrame || mouse.middleButton.wasPressedThisFrame) && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), 0, out var down))
+                {
+                    if (marking || mouse.middleButton.wasPressedThisFrame) Ping(down);
+                    else OverheadClick(down);
+                }
                 return;
             }
             RightClick(mouse, at, overHud);
@@ -835,7 +841,8 @@ namespace Bastion.UI.Combat
                 return;
             }
             // A closed door beside the soldier: the click opens it, for free (playtest 13/10 #2). Furniture beside: it searches it (18/10 #29).
-            foreach (var id in new[] { AbilityIds.OpenDoor, AbilityIds.Search })
+            // A boarded window beside, with the crowbar: the boards come off (02/11 A11).
+            foreach (var id in new[] { AbilityIds.OpenDoor, AbilityIds.Search, AbilityIds.Pry })
             {
                 if (!HandTiles(id).Any(t => Same(t, tile))) continue;
                 var view = BarView(id);
@@ -914,21 +921,33 @@ namespace Bastion.UI.Combat
                     Note(hover, "Puerta · clic: abrir (no gasta acciones)");
                     return;
                 }
+                // A boarded window or door beside one with the crowbar (02/11 A11): a click takes the boards off.
+                if (Abilities.AbilitiesOf(u).Contains(AbilityIds.Pry) && HandTiles(AbilityIds.Pry).Any(t => Same(t, hover)))
+                {
+                    var stop = Abilities.AbilityBlocker(State, u, AbilityIds.Pry);
+                    var what = Abilities.Boards(State, hover) == DecorKinds.DoorBoards ? "Puerta tapiada" : "Ventana tapiada";
+                    AimMarks?.ShowSpots(State, new List<Pos> { hover }, stop == null ? hover : null);
+                    Note(hover, stop != null ? $"{what} · {stop.TrimEnd('.').ToLowerInvariant()}" : $"{what} · clic: quitar las tablas");
+                    return;
+                }
                 // A box the squad has seen: its name, and whether it can be opened from here (docs/FASE8.md §B).
                 var decor = HasSpots ? Looting.SearchSpot(State, hover) : null;
                 if (decor != null)
                 {
                     var name = Capitalize(Lore.SearchSpots.TryGetValue(decor, out var spot) ? spot.Name : "la caja");
+                    // A body is searched, the rest opened (Arturo, 02/11 A9, A13).
+                    var body = decor == Looting.Body;
                     if (Looting.WasSearched(State, hover))
                     {
-                        // Agreeing with what it is (Lore's Masculine): «El coche de policía · ya está abierto» (0.11.5).
-                        Note(hover, $"{name} · ya está {(spot != null && spot.Masculine ? "abierto" : "abierta")}");
+                        // Agreeing with what it is (Lore's Masculine): «El maletero · ya está abierto» (0.11.5).
+                        Note(hover, body ? $"{name} · ya está registrado" : $"{name} · ya está {(spot != null && spot.Masculine ? "abierto" : "abierta")}");
                         return;
                     }
                     var near = HandTiles(AbilityIds.Search).Any(t => Same(t, hover));
                     var blocked = near ? Abilities.AbilityBlocker(State, u, AbilityIds.Search) : null;
+                    var verb = body ? "registrar" : "abrir";
                     AimMarks?.ShowSpots(State, new List<Pos> { hover }, near && blocked == null ? hover : null);
-                    Note(hover, !near ? $"{name} · se puede abrir" : blocked != null ? $"{name} · {blocked.TrimEnd('.').ToLowerInvariant()}" : $"{name} · clic: abrir");
+                    Note(hover, !near ? $"{name} · se puede {verb}" : blocked != null ? $"{name} · {blocked.TrimEnd('.').ToLowerInvariant()}" : $"{name} · clic: {verb}");
                     return;
                 }
             }

@@ -274,6 +274,36 @@ namespace Bastion.Engine.Tests
             Assert.Null(Campaign.CraftBlocker(c, CraftIds.MakeStock));
         }
 
+        [Fact(DisplayName = "the Taller › weapons and improvements by the dozen (Arturo, 2/11): several at once, paid and timed as one after another; armour once")]
+        public void SeveralAtOnce()
+        {
+            var (c, _) = Workshop(1, 2);
+            c.Pistols = true;
+            var def = Progression.Crafts[CraftIds.MakePistol];
+            Assert.Equal("Eso se hace una sola vez.", Campaign.CraftBlocker(c, CraftIds.Armor2, 2));
+            Assert.Equal($"De 1 a {Campaign.MaxBatch} de una vez.", Campaign.CraftBlocker(c, CraftIds.MakePistol, Campaign.MaxBatch + 1));
+            var r = Run(c, new CraftCommand { Project = CraftIds.MakePistol, Count = 3 });
+            Assert.True(r.Ok, r.Error);
+            Assert.Equal((1000 - 3 * def.Cost, 30 - 3 * def.Parts), (c.Credits, c.Parts));
+            var work = Assert.Single(c.Base.Works);
+            Assert.Equal(3, work.Count);
+            var pistols = (c.FoundWeapons ?? new List<FoundWeapon>()).Count((w) => w.Kind == FoundWeaponIds.Pistol);
+            Days(c, work.Total);
+            Assert.Equal(pistols + 3, c.FoundWeapons!.Count((w) => w.Kind == FoundWeaponIds.Pistol));
+        }
+
+        [Fact(DisplayName = "the shop › several at once (Arturo, 2/11: «comprar 4 cócteles molotov»), paid for all")]
+        public void BuyingSeveral()
+        {
+            var (c, _) = Workshop(1, 2);
+            var price = Campaign.ShopPrice(c, ItemIds.Molotov);
+            var r = Run(c, new BuyCommand { Item = ItemIds.Molotov, Count = 4 });
+            Assert.True(r.Ok, r.Error);
+            Assert.Equal(4, c.Inventory[ItemIds.Molotov]);
+            Assert.Equal(1000 - 4 * price, c.Credits);
+            Assert.False(Run(c, new BuyCommand { Item = ItemIds.Molotov, Count = 0 }).Ok);
+        }
+
         [Fact(DisplayName = "the Taller › armour 3 needs the Taller at level 2, its level of the Bastion and armour 2 made first; two players decide together")]
         public void Armour3NeedsTheTallerAtLevel2()
         {
@@ -299,7 +329,9 @@ namespace Bastion.Engine.Tests
         /// <summary>A campaign whose last mission brought home `kind`, carried by its first soldier.</summary>
         private static (CampaignState c, MissionReport report) Found(string kind = FoundWeaponIds.HuntingRifle)
         {
+            // Without the opening arms (Arturo, 2/11): the Armería holds only what comes home.
             var c = Quiet(Both);
+            c.FoundWeapons = null;
             var offer = Campaign.CreateCampaign(Both, new Rng(2)).Offers.First((o) => !Story(o));
             c.Offers.Add(offer);
             if (!Run(c, new ChooseMissionCommand { Id = offer.Id }, 0, new[] { 0 }).Ok) throw new InvalidOperationException("mission");

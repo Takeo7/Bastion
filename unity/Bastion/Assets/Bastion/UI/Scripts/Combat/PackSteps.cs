@@ -55,6 +55,17 @@ namespace Bastion.UI.Combat
                 control.OnEndTurn();
                 return true;
             }
+            // «banner» the stamp let go, «confirm» the aimed shot fired: the app's (CombatRun), for the lab's touches too.
+            if (what == "banner")
+            {
+                control.Hud?.ReleaseBanner();
+                return true;
+            }
+            if (what == "confirm")
+            {
+                control.OnConfirmTarget();
+                return true;
+            }
             if (what == "ability")
             {
                 control.OnAbility(arg);
@@ -108,6 +119,14 @@ namespace Bastion.UI.Combat
                 var xy = arg.Split('/');
                 if (xy.Length == 2 && int.TryParse(xy[0], out var mx) && int.TryParse(xy[1], out var my)) control.OverheadClick(new Bastion.Engine.Pos { X = mx, Y = my, Z = 0 });
                 else control.OnMiniMap();
+                return true;
+            }
+            // «marca-mapa=40/12»: from above, a mark on that tile, as Shift and a click there (Arturo, 02/11 A3).
+            if (what == "marca-mapa")
+            {
+                var xy = arg.Split('/');
+                if (xy.Length != 2 || !int.TryParse(xy[0], out var mx) || !int.TryParse(xy[1], out var my)) return false;
+                control.MarkFromAbove(new Bastion.Engine.Pos { X = mx, Y = my, Z = 0 });
                 return true;
             }
             // «hover=8/6/1»: on that storey (a molotov aimed up a floor: Arturo, 01/11 #10).

@@ -34,6 +34,11 @@ namespace Bastion.Engine
         public const string Bat = "bat";
         public const string Crowbar = "crowbar";
         public const string Chainsaw = "chainsaw";
+        // And Ana's of 2/11 (#5 of her third report): a katana, a sword, a rake and a stick.
+        public const string Katana = "katana";
+        public const string Longsword = "longsword";
+        public const string Rake = "rake";
+        public const string Stick = "stick";
         public const string TrooperRifle = "trooperRifle";
         public const string TurretGun = "turretGun";
         public const string OfficerRifle = "officerRifle";
@@ -51,7 +56,7 @@ namespace Bastion.Engine
         {
             Rifle, Shotgun, Cannon, Sniper, Pistol, Sword, Knife, Pan, Bat, Crowbar, Chainsaw, TrooperRifle, TurretGun,
             OfficerRifle, XenoPistol, LancerRifle, StunLance, MecCannon, SectoidPistol, Claws, FragGrenade, MicroMissiles,
-            BloaterBurst,
+            BloaterBurst, Katana, Longsword, Rake, Stick,
         };
     }
 
@@ -279,8 +284,21 @@ namespace Bastion.Engine
         public const int SquadsightDistanceMod = -2;
         public const int SquadsightCritMod = -10;
         public const int MedkitHeal = 4;
-        /// <summary>The stone's damage, before Canto afilado and the rest (docs/FASE10.md §4).</summary>
-        public const int StoneDamage = 1;
+        /// <summary>
+        /// The dead in uniform (Unit.Outfit; Arturo, 2/11), in a hundred common zombies, and the chance in a hundred that
+        /// searching a body turns up a gun (Looting.RollBody): one in four on a policeman or a soldier, hardly ever on anyone
+        /// else.
+        /// </summary>
+        public static class Uniforms
+        {
+            public const int Police = 10;
+            public const int Military = 5;
+            public const int Gun = 25;
+            public const int AnyGun = 1;
+        }
+
+        /// <summary>The stone's damage, before Canto afilado and the rest (docs/FASE10.md §4): none, only noise, until one of them (Arturo, 2/11).</summary>
+        public const int StoneDamage = 0;
 
         /// <summary>What is thrown by hand: Lanzar fills with it and its reach reaches it all (docs/FASE10.md §2).</summary>
         public static readonly IReadOnlyCollection<string> Thrown = new HashSet<string>
@@ -356,17 +374,15 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// The Saqueo's horde (docs/FASE2.md): each squad turn winds its clock up by
-        /// `perTurn` points and every noise the squad makes by its radius / `perNoise`
-        /// (hordePoints); every `wave` points a wave comes in by the edges. One a turn
-        /// at most, and none while `cap` enemies are already on the field. A quiet
-        /// squad sees one every 5 turns; a firefight (four rifle shots a turn) one
-        /// every 3. Tuned with a headless Saqueo against a scripted squad.
+        /// The Saqueo's horde (docs/FASE2.md): every noise the squad makes winds its
+        /// clock up by its radius / `perNoise` (hordePoints); every `wave` points a wave
+        /// comes in by the edges. One a turn at most, and none while `cap` enemies are
+        /// already on the field. A quiet squad sees none (Arturo, 2/11: the turns no
+        /// longer wind it); a firefight (four rifle shots a turn) one every 3 turns or so.
         /// </summary>
         /// <remarks>`trickle`: the dead that come in every turn whatever happens (playtest 2026-10-15, #11), by difficulty (1–4); twice that while a sabotage's alarm sounds.</remarks>
         public static class Horde
         {
-            public const int PerTurn = 10;
             public const int PerNoise = 5;
             public const int Wave = 50;
             public const int Cap = 60;
@@ -378,9 +394,8 @@ namespace Bastion.Engine
         /// less (never under `minSight`) and the dead as ever, but whoever stands in
         /// the light is seen from as far as by day; the enemy detects the hidden squad
         /// at `detection` of its range, unless lit. Lights: the map's street lights
-        /// and the base's floodlights. One more group of the dead, the Saqueo's horde
-        /// `hordeHead` turns sooner, and `supplies` times the suministros found and
-        /// paid. A light reaches only what it sees from its height (storeys above its
+        /// and the base's floodlights. One more group of the dead, and `supplies` times
+        /// the suministros found and paid. A light reaches only what it sees from its height (storeys above its
         /// floor): a street lamp from `lampHeight`.
         /// </summary>
         /// <summary>
@@ -408,7 +423,6 @@ namespace Bastion.Engine
             /// <summary>A floodlight of the base (docs/FASE12.md §11.4; Arturo, 18/10: for the sieges by night) lights twice as far.</summary>
             public const int Floodlight = 4;
             public const int LampHeight = 2;
-            public const int HordeHead = 1;
             public const double Supplies = 1.5;
         }
 
@@ -507,6 +521,12 @@ namespace Bastion.Engine
             [WeaponIds.Bat] = Weapon(WeaponIds.Bat, "Bate", 4, spread: 1, critDamage: 2, aim: 10, crit: 10, range: RangeTableIds.None, melee: true, burst: 1, noise: 2),
             [WeaponIds.Crowbar] = Weapon(WeaponIds.Crowbar, "Palanca", 4, spread: 1, critDamage: 1, aim: 10, shred: 1, range: RangeTableIds.None, melee: true, burst: 1, noise: 2),
             [WeaponIds.Chainsaw] = Weapon(WeaponIds.Chainsaw, "Motosierra", 6, spread: 1, critDamage: 3, aim: 10, crit: 15, range: RangeTableIds.None, melee: true, burst: 1, noise: 20),
+            // Ana's of 2/11: the long blades strike everyone alongside (Content.Sweeps), the katana the best of them and quiet;
+            // the rake weak but a tile further (Content.ReachOf); the stick the weakest, and hardly ever misses.
+            [WeaponIds.Katana] = Weapon(WeaponIds.Katana, "Katana", 5, spread: 1, critDamage: 2, aim: 20, crit: 15, range: RangeTableIds.None, melee: true, burst: 1, noise: 1),
+            [WeaponIds.Longsword] = Weapon(WeaponIds.Longsword, "Espada", 4, spread: 1, critDamage: 2, aim: 15, crit: 10, range: RangeTableIds.None, melee: true, burst: 1, noise: 1),
+            [WeaponIds.Rake] = Weapon(WeaponIds.Rake, "Rastrillo", 2, spread: 1, critDamage: 1, aim: 10, range: RangeTableIds.None, melee: true, burst: 1, noise: 2),
+            [WeaponIds.Stick] = Weapon(WeaponIds.Stick, "Palo", 2, critDamage: 1, aim: 35, range: RangeTableIds.None, melee: true, burst: 1, noise: 1),
             [WeaponIds.TrooperRifle] = Weapon(WeaponIds.TrooperRifle, "Fusil de caza", 3, critDamage: 1, clip: 3, noise: 12),
             // The base's turret (docs/FASE12.md §11.4): its clip is its piece's charges (base.ts PIECES.turret), reloaded at home with piezas.
             [WeaponIds.TurretGun] = Weapon(WeaponIds.TurretGun, "Torreta", 3, critDamage: 1, clip: 6, aim: 5, noise: 16),
@@ -531,14 +551,14 @@ namespace Bastion.Engine
             [AbilityIds.Shoot] = new AbilityDef { Id = AbilityIds.Shoot, Name = "Disparar", Description = "Dispara el arma principal.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Primary },
             [AbilityIds.Pistol] = new AbilityDef { Id = AbilityIds.Pistol, Name = "Pistola", Description = "Dispara la pistola, sin gastar las balas del arma principal.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Secondary },
             // An action, like a shot (playtest 16/10): the turn goes on.
-            [AbilityIds.Slash] = new AbilityDef { Id = AbilityIds.Slash, Name = "Tajo", Description = "Golpea con la hoja a un enemigo que tengas al lado. Ignora la cobertura.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
+            [AbilityIds.Slash] = new AbilityDef { Id = AbilityIds.Slash, Name = "Tajo", Description = "Golpea a un enemigo que tengas al lado. Ignora la cobertura. La katana, la espada y la motosierra golpean a todos los que tengas al lado, y el rastrillo llega a dos casillas.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
             [AbilityIds.StunLance] = new AbilityDef { Id = AbilityIds.StunLance, Name = "Red y porra", Description = "Atrapa con la red y golpea con la porra: aturde.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = true, Weapon = AbilityWeapons.Melee },
             // An action, and the turn goes on: with two, a bite and a step, or two bites (playtest 16/10 #21).
             [AbilityIds.Claw] = new AbilityDef { Id = AbilityIds.Claw, Name = "Mordisco", Description = "Muerde a quien tiene al lado.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
             [AbilityIds.Overwatch] = new AbilityDef { Id = AbilityIds.Overwatch, Name = "Vigilancia", Description = "Dispara al primer enemigo que se mueva a la vista.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
             // Fase 10 (docs/FASE10.md §4): the reach is the throw's (abilityRange), the noise grows with Señuelo and Reclamo.
-            [AbilityIds.Stone] = new AbilityDef { Id = AbilityIds.Stone, Name = "Piedra", Description = "Lanza una piedra: suena donde cae y los zombis van a mirar. Si le da a alguien, 1 de daño.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 10, Noise = 8 },
-            [AbilityIds.OverwatchMelee] = new AbilityDef { Id = AbilityIds.OverwatchMelee, Name = "Vigilancia cuerpo a cuerpo", Description = "Golpea con la hoja al primer enemigo que se le ponga al lado.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
+            [AbilityIds.Stone] = new AbilityDef { Id = AbilityIds.Stone, Name = "Piedra", Description = "Lanza una piedra: suena donde cae y los zombis van a mirar. No hace daño, salvo con Canto afilado, Pedrusco, Pedrada u Honda.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 10, Noise = 8 },
+            [AbilityIds.OverwatchMelee] = new AbilityDef { Id = AbilityIds.OverwatchMelee, Name = "Vigilancia cuerpo a cuerpo", Description = "Golpea al primer enemigo que se le ponga al lado.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
             [AbilityIds.Hunker] = new AbilityDef { Id = AbilityIds.Hunker, Name = "Cubrirse", Description = "+30 de defensa y +50 de esquiva hasta tu próximo turno.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
             // Ana's #1 of 1/11 (Arturo: a new action, Cubrirse as it was).
             [AbilityIds.Hide] = new AbilityDef { Id = AbilityIds.Hide, Name = "Esconderse", Description = "Se agacha y se esconde hasta tu próximo turno: los enemigos tienen que estar a la mitad de la distancia de siempre para ver al soldado. A diferencia de Cubrirse, no da defensa ni esquiva.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
@@ -561,8 +581,8 @@ namespace Bastion.Engine
             [AbilityIds.Search] = new AbilityDef
             {
                 Id = AbilityIds.Search,
-                Name = "Abrir la caja",
-                Description = "Abre una caja marcada que tengas al lado. Da siempre lo suyo: un arma, una o dos medicinas, dos cargadores o de 3 a 5 raciones. Hace un poco de ruido.",
+                Name = "Abrir o registrar",
+                Description = "Abre una caja marcada o el maletero cerrado de un coche que tengas al lado, o registra el cuerpo de un enemigo caído a tu lado o a tus pies. Hace un poco de ruido.",
                 Target = AbilityTargets.Tile,
                 Ap = 1,
                 EndsTurn = false,
@@ -580,6 +600,8 @@ namespace Bastion.Engine
                 Noise = 2,
             },
             // A door beside the soldier, without moving: free, and as quiet as walking through it (NOISE.door). Texts are placeholders for Lore.
+            // The crowbar's (Arturo, 2/11): as loud as opening a box.
+            [AbilityIds.Pry] = new AbilityDef { Id = AbilityIds.Pry, Name = "Quitar las tablas", Description = "Con la palanca, quita lo que tapia una ventana o una puerta que tengas al lado: las tablas y, en una ventana, también los muebles. Después, por la ventana se puede pasar y disparar, y la puerta se puede abrir. Hace un poco de ruido.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 1.5, Noise = 2 },
             [AbilityIds.OpenDoor] = new AbilityDef { Id = AbilityIds.OpenDoor, Name = "Abrir la puerta", Description = "Abre una puerta cerrada que tengas al lado.", Target = AbilityTargets.Tile, Ap = 0, EndsTurn = false, Range = 1.5, Noise = 1 },
             [AbilityIds.CloseDoor] = new AbilityDef { Id = AbilityIds.CloseDoor, Name = "Cerrar la puerta", Description = "Cierra una puerta abierta que tengas al lado, si no hay nadie en ella.", Target = AbilityTargets.Tile, Ap = 0, EndsTurn = false, Range = 1.5, Noise = 1 },
             [AbilityIds.RunAndGun] = new AbilityDef { Id = AbilityIds.RunAndGun, Name = "Correr y disparar", Description = "Una acción más este turno.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false, Cooldown = 4 },
@@ -657,6 +679,10 @@ namespace Bastion.Engine
             [FoundWeaponIds.Bat] = new FoundWeaponDef { Id = FoundWeaponIds.Bat, Name = "Bate", Find = "un bate", Weapon = WeaponIds.Bat, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 3 },
             [FoundWeaponIds.Crowbar] = new FoundWeaponDef { Id = FoundWeaponIds.Crowbar, Name = "Palanca", Find = "una palanca", Weapon = WeaponIds.Crowbar, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 2 },
             [FoundWeaponIds.Chainsaw] = new FoundWeaponDef { Id = FoundWeaponIds.Chainsaw, Name = "Motosierra", Find = "una motosierra con algo de gasolina", Weapon = WeaponIds.Chainsaw, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 1 },
+            [FoundWeaponIds.Katana] = new FoundWeaponDef { Id = FoundWeaponIds.Katana, Name = "Katana", Find = "una katana", Weapon = WeaponIds.Katana, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 1 },
+            [FoundWeaponIds.Longsword] = new FoundWeaponDef { Id = FoundWeaponIds.Longsword, Name = "Espada", Find = "una espada", Weapon = WeaponIds.Longsword, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 1 },
+            [FoundWeaponIds.Rake] = new FoundWeaponDef { Id = FoundWeaponIds.Rake, Name = "Rastrillo", Find = "un rastrillo", Weapon = WeaponIds.Rake, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 2 },
+            [FoundWeaponIds.Stick] = new FoundWeaponDef { Id = FoundWeaponIds.Stick, Name = "Palo", Find = "un palo", Weapon = WeaponIds.Stick, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 3 },
             // The commonest find, but only where pistols are counted (MissionState.Pistols; Looting.FoundWeapon).
             [FoundWeaponIds.Pistol] = new FoundWeaponDef { Id = FoundWeaponIds.Pistol, Name = "Pistola", Find = "una pistola", Weapon = WeaponIds.Pistol, Slot = FoundWeaponSlots.Sidearm, Better = false, Weight = 12 },
         };
@@ -689,6 +715,19 @@ namespace Bastion.Engine
         public static int WearOf(string weapon)
         {
             return weapon == WeaponIds.Sniper ? 2 : 1;
+        }
+
+        /// <summary>The long blades (Ana's #5 of 2/11): a Tajo with one strikes every enemy alongside, not one.</summary>
+        public static bool Sweeps(Unit u)
+        {
+            var melee = u.Arms?.Melee;
+            return melee == FoundWeaponIds.Katana || melee == FoundWeaponIds.Longsword || melee == FoundWeaponIds.Chainsaw;
+        }
+
+        /// <summary>How far a soldier's blade reaches, in tiles: the rake two (Ana's #5 of 2/11), anything else one.</summary>
+        public static int ReachOf(Unit u)
+        {
+            return u.Arms?.Melee == FoundWeaponIds.Rake ? 2 : 1;
         }
 
         /// <summary>Whether `ability` swings a soldier's chainsaw: each blow, or each watch with it, burns a use of its fuel (ChargeIds.Fuel).</summary>

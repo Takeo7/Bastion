@@ -19,7 +19,7 @@ namespace Bastion.Client.Units
         public AnimationClip[] clips = Array.Empty<AnimationClip>();
         public string[] weaponNames = Array.Empty<string>();
         public GameObject[] weapons = Array.Empty<GameObject>();
-        /// <summary>POLYGON's characters and attachments by their prefab's name (the radio's voices: Voices).</summary>
+        /// <summary>POLYGON's characters by their prefab's name (the special dead: UnitViews.DeadPrefabs).</summary>
         public string[] characterNames = Array.Empty<string>();
         public GameObject[] characters = Array.Empty<GameObject>();
         /// <summary>POLYGON's other atlases the special dead may wear by their name (UnitViews.DeadAtlases: the Hinchados').</summary>

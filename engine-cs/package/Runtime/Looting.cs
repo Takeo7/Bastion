@@ -192,22 +192,52 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> LootBoxes = new[] { DecorKinds.LootWeapons, DecorKinds.LootMedical, DecorKinds.LootAmmo, DecorKinds.LootFood };
 
         /// <summary>
-        /// The police car of the campaign's first mission (MissionState.PoliceCar; Arturo, 1/11): a pistol in the front and
-        /// another in the boot, each searched as a box is.
+        /// A car's boot, while it is shut (Arturo, 2/11: «se puede lootear cualquier coche que tenga el maletero cerrado"):
+        /// any whole car on the ground but a wreck, searched once as a box is, with what a boot holds (Spots.Trunk).
         /// </summary>
-        public const string PoliceCar = "policeCar";
+        public const string CarBoot = "carBoot";
+        /// <summary>A police car's boot (MissionState.PoliceCar): a gun one time in PoliceBootGun, a boot's finds otherwise.</summary>
+        public const string PoliceBoot = "policeBoot";
+        public const int PoliceBootGun = 3;
+        /// <summary>A dead enemy's body (Arturo, 2/11: «registras cualquier cuerpo»): what it carried (RollBody).</summary>
+        public const string Body = "body";
+
+        /// <summary>The gun a living enemy carried, as the Armería has it: dropped for whoever searches its body.</summary>
+        private static readonly IReadOnlyDictionary<string, string> CarriedGuns = new Dictionary<string, string>
+        {
+            [TemplateIds.Trooper] = FoundWeaponIds.AssaultRifle,
+            [TemplateIds.Officer] = FoundWeaponIds.AssaultRifle,
+            [TemplateIds.Lancer] = FoundWeaponIds.PumpShotgun,
+        };
+
+        /// <summary>
+        /// What searching `body` turns up (Arturo, 2/11): a living enemy's gun, always; on one of the dead, a gun one time in
+        /// four if it wore a uniform (a policeman's pistol; a soldier's, now and then a rifle) and hardly ever otherwise.
+        /// </summary>
+        public static Loot? RollBody(Unit body, Rng rng, bool pistols)
+        {
+            if (CarriedGuns.TryGetValue(body.Template, out var gun)) return new Loot { Weapon = gun, Condition = rng.Range(FoundCondition[0], FoundCondition[1]) };
+            var uniform = body.Outfit == Outfits.Police || body.Outfit == Outfits.Military;
+            if (rng.Int(100) >= (uniform ? Content.Uniforms.Gun : Content.Uniforms.AnyGun)) return null;
+            if (!uniform) return FoundWeapon(rng, pistols);
+            var sidearm = pistols ? FoundWeaponIds.Pistol : FoundWeaponIds.PumpShotgun;
+            var kind = body.Outfit == Outfits.Military && rng.Int(3) == 0 ? FoundWeaponIds.AssaultRifle : sidearm;
+            return new Loot { Weapon = kind, Condition = rng.Range(FoundCondition[0], FoundCondition[1]) };
+        }
 
         /// <summary>
         /// What opening a box of `kind` turns up: a good weapon, one or two
         /// medicines, two magazines (for a searcher who counts them; nothing for
         /// anyone else), or three to five rations.
         /// </summary>
-        public static Loot? RollBox(string kind, Rng rng, bool mags, bool pistols = false)
+        public static Loot? RollBox(string kind, Rng rng, bool mags, bool pistols = false, int difficulty = 2, bool night = false)
         {
             switch (kind)
             {
-                case PoliceCar:
-                    return new Loot { Weapon = FoundWeaponIds.Pistol };
+                case CarBoot:
+                    return RollSpot(Spots.Trunk, difficulty, rng, night, mags, pistols);
+                case PoliceBoot:
+                    return rng.Int(PoliceBootGun) == 0 ? FoundWeapon(rng, pistols) : RollSpot(Spots.Trunk, difficulty, rng, night, mags, pistols);
                 case DecorKinds.LootWeapons:
                     // A weapon, or now and then an improvement for one (docs/FASE9.md §5).
                     return rng.Int(10) < 3 ? FoundMod(rng) : FoundWeapon(rng, pistols);
@@ -230,20 +260,44 @@ namespace Bastion.Engine
 
         /// <summary>
         /// The loot box on `p`, opened or not; null if there is none or it was blown
-        /// away. Furniture and cars are no longer searched one by one (docs/FASE8.md
-        /// §B): a room is, as a whole (roomAt).
+        /// away. Furniture is no longer searched piece by piece (docs/FASE8.md §B): a
+        /// room is, as a whole (roomAt). A car by its boot, and a dead enemy's body
+        /// (Arturo, 2/11).
         /// </summary>
         public static string? SearchSpot(GameState s, Pos at)
         {
             var p = Grid.ToPos(at);
+            if (!Grid.InBounds(s, p.X, p.Y)) return null;
+            if (BodyAt(s, p) != null) return Body;
             var decor = DecorLayer(s, p.Z);
-            if (decor == null || !Grid.InBounds(s, p.X, p.Y)) return null;
+            if (decor == null) return null;
             var kind = Grid.KindAt(s, p);
             if (kind != TileKinds.Low && kind != TileKinds.High) return null;
             var i = Grid.TileIndex(s, p.X, p.Y);
-            if (p.Z == 0 && s.Mission.PoliceCar != null && s.Mission.PoliceCar.Contains(i)) return PoliceCar;
+            if (p.Z == 0 && BootOf(s, i) is int nose) return (s.Mission.PoliceCar ?? new List<int>()).Contains(nose) ? PoliceBoot : CarBoot;
             var look = Decor.DecorOf(i < decor.Count ? decor[i] : (int?)null);
             return look != null && LootBoxes.Contains(look.Kind) ? look.Kind : null;
+        }
+
+        /// <summary>The dead enemy lying on `p` that can be searched: not risen again, nor an objective, nor the alarm.</summary>
+        public static Unit? BodyAt(GameState s, Pos p)
+        {
+            return s.Units.FirstOrDefault((u) => !u.Alive && !u.Evacuated && u.Team == Teams.Alien && !u.Objective && !u.Reanimated && u.Template != TemplateIds.Relay && Grid.SamePos(u.Pos, p));
+        }
+
+        /// <summary>
+        /// The nose of the car whose boot is on ground tile `i`, or null: a whole car (Decor.ObjectAt, its CarFront the
+        /// anchor), its boot the farthest of its tiles from the nose, and no wreck (GameState.Wrecks: its boot burst open).
+        /// </summary>
+        public static int? BootOf(GameState s, int i)
+        {
+            if (s.Decor == null) return null;
+            var car = Decor.ObjectAt(s.Decor, s.Width, i);
+            if (car == null || car.Kind != DecorKinds.CarFront || car.Tiles.Count < 2) return null;
+            if ((s.Wrecks ?? new List<Wreck>()).Any((w) => car.Tiles.Contains(w.Anchor))) return null;
+            int nx = car.Anchor % s.Width, ny = car.Anchor / s.Width;
+            var boot = car.Tiles.OrderByDescending((j) => Js.Hypot(j % s.Width - nx, j / s.Width - ny)).First();
+            return boot == i ? car.Anchor : (int?)null;
         }
 
         // ------------------------------------------------------------- the rooms
@@ -383,7 +437,13 @@ namespace Bastion.Engine
         /// <summary>Furniture `u` can search right now from where it stands (any backpack room aside).</summary>
         public static List<Pos> SearchableTiles(GameState s, Unit u)
         {
-            return Grid.Dirs8.Select((d) => new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z }).Where((p) => IsSearchable(s, p) && ReachesToSearch(s, u.Pos, p)).ToList();
+            return Grid.Dirs8.Select((d) => new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z }).Append(Grid.ToPos(u.Pos)).Where((p) => IsSearchable(s, p) && ReachesToOpen(s, u.Pos, p)).ToList();
+        }
+
+        /// <summary>Whether a soldier on `from` can open what is on `p`: beside it (ReachesToSearch), or standing on a body.</summary>
+        public static bool ReachesToOpen(GameState s, Pos from, Pos p)
+        {
+            return ReachesToSearch(s, from, p) || (Grid.SamePos(from, p) && BodyAt(s, p) != null);
         }
 
         // --------------------------------------------------------------- the haul

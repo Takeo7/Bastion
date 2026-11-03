@@ -95,6 +95,13 @@ namespace Bastion.UI.Combat
             public List<GoldenOp> Ops { get; set; } = new List<GoldenOp>();
         }
 
+        /// <summary>A room's save (datos/save.json): what the lab takes of it, the mission's state and the dice.</summary>
+        sealed class SavedRoom
+        {
+            public GameState State { get; set; }
+            public List<long> Rng { get; set; }
+        }
+
         /// <summary>A recorded order (record-step2.ts): what was asked, the events it gave, and the dice before it.</summary>
         sealed class GoldenOp
         {
@@ -131,17 +138,26 @@ namespace Bastion.UI.Combat
             if (System.Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             // BASTION_INTERFAZ=1.3: Ajustes' «Interfaz» for this capture (the panel put back as play stops).
             App.GameSettings.ApplyInterface();
-            var path = Path.GetFullPath(Path.Combine(Application.dataPath, "../../../engine-cs/golden", Step, Golden + ".json"));
+            // BASTION_LAB_GUARDADO: a room's save (an app's datos/save.json) instead of a recording, its state and its dice,
+            // played on by BASTION_TOQUES as the app was (the camera over a rooftop in Metsovo, the 0.11.6's test).
+            var saved = System.Environment.GetEnvironmentVariable("BASTION_LAB_GUARDADO");
+            var path = !string.IsNullOrEmpty(saved) ? saved : Path.GetFullPath(Path.Combine(Application.dataPath, "../../../engine-cs/golden", Step, Golden + ".json"));
             if (!File.Exists(path))
             {
                 Debug.LogError("Combat lab: no " + path);
                 return;
             }
-            var file = Json.Read<GoldenFile>(File.ReadAllText(path));
+            var file = !string.IsNullOrEmpty(saved) ? new GoldenFile() : Json.Read<GoldenFile>(File.ReadAllText(path));
+            if (!string.IsNullOrEmpty(saved))
+            {
+                var room = Json.Read<SavedRoom>(File.ReadAllText(path));
+                file.State = room.State;
+                rng = room.Rng != null ? new Rng(room.Rng) : new Rng(0);
+            }
+            else rng = new Rng(file.RngSeed);
             host = file.State;
             // BASTION_LAB_NOCHE=1: the recorded mission at night (its sky and light, side by side with the 0.10.1's same save).
             if (System.Environment.GetEnvironmentVariable("BASTION_LAB_NOCHE") == "1") host.Mission.Night = true;
-            rng = new Rng(file.RngSeed);
             AbilityCommand shot = null;
             GoldenOp turn = null;
             // BASTION_LAB_OP=<n>: the recorded order n's events played (those before it on the state), instead of the first big
@@ -203,6 +219,11 @@ namespace Bastion.UI.Combat
             control.Marks = marks.AddComponent<MissionMarks>();
             control.Hud = Hud;
             control.Order += Play;
+            // A mark, back as the host sends it to both (CombatController.OnPing), its owner this player.
+            control.Message += m =>
+            {
+                if (m is PingMessage ping) control.OnPing(control.MySlot, ping.Tile, ping.Kind);
+            };
             // BASTION_LAB_CAMPANA=1: the sample campaign (SampleCampaign) as the squad's, its first soldier as the first
             // of ours, for the soldier's sheet with its board.
             if (System.Environment.GetEnvironmentVariable("BASTION_LAB_CAMPANA") == "1")

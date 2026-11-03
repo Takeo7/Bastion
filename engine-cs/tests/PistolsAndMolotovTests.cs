@@ -9,7 +9,8 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// Arturo's rules of 1/11 (docs/PRUEBA-2026-11-01-ARTURO.md #10): a new campaign without pistols, grenades or medkits,
-    /// the pistol a weapon of the Armería, the police car of the first mission, and the cóctel molotov before the grenades.
+    /// the pistol a weapon of the Armería, and the cóctel molotov before the grenades. The police car of the first mission
+    /// gave way on 2/11 to the police cars of any mission (NotesOfTwoNovTests).
     /// New in C#, not in the TypeScript engine.
     /// </summary>
     public class PistolsAndMolotovTests
@@ -81,6 +82,8 @@ namespace Bastion.Engine.Tests
         public void OneCarriedComesHome()
         {
             var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            // Without the opening arms (Arturo, 2/11), to see the one picked up come home.
+            c.FoundWeapons = null;
             c.Squad = c.Soldiers.Take(4).Select((x) => x.Id).ToList();
             var s = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, 3), Slots = new List<int> { 0 }, Rng = new Rng(1), Squad = Campaign.BuildSquad(c), Pistols = true });
             var u = s.Units.First((x) => x.CampaignId == c.Squad[0]);
@@ -93,46 +96,6 @@ namespace Bastion.Engine.Tests
             Assert.Equal("En esta campaña, todos los soldados ya llevan pistola.", Campaign.CraftBlocker(new CampaignState { Pistols = null, Base = c.Base, Crafted = new List<string>() }, CraftIds.MakePistol));
         }
 
-        [Fact(DisplayName = "pistols › the first mission has a police car with one in the front and one in the boot")]
-        public void ThePoliceCar()
-        {
-            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
-            Campaign.OpeningMission(c);
-            var offer = Campaign.ActiveOffer(c)!;
-            Assert.True(Campaign.OpeningPistols(c, offer));
-            var found = 0;
-            for (var seed = 1; seed <= 6; seed++)
-            {
-                var s = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, seed), Slots = new List<int> { 0 }, Rng = new Rng(seed), Squad = Campaign.BuildSquad(c), Pistols = true, PoliceCar = true });
-                if (s.Mission.PoliceCar == null)
-                {
-                    // No car on the map: the two lie at the feet of the first soldier.
-                    Assert.Equal(2, s.Dropped!.Count((d) => d.Loot.Weapon == FoundWeaponIds.Pistol));
-                    continue;
-                }
-                found++;
-                var front = s.Mission.PoliceCar[0];
-                var rear = s.Mission.PoliceCar[1];
-                Assert.Equal(DecorKinds.CarFront, Decor.DecorOf(s.Decor![front])!.Kind);
-                Assert.Contains(rear, Decor.ObjectAt(s.Decor, s.Width, front)!.Tiles);
-                foreach (var i in s.Mission.PoliceCar)
-                {
-                    var at = Grid.PosOf(s, i);
-                    Assert.Equal(Looting.PoliceCar, Looting.SearchSpot(s, at));
-                    Assert.Equal(FoundWeaponIds.Pistol, Looting.RollBox(Looting.PoliceCar, new Rng(seed), false, true)!.Weapon);
-                }
-            }
-            Assert.True(found >= 4, $"{found}");
-            // Searched as a box is: the pistol into the backpack.
-            var (field, soldier) = Field(new Arms { Pistol = false }, 3, 3);
-            field.Decor = Enumerable.Repeat(0, field.Width * field.Height).ToList();
-            field.Tiles[Grid.TileIndex(field, 4, 3)] = TileKinds.Low;
-            field.Mission.PoliceCar = new List<int> { Grid.TileIndex(field, 4, 3), Grid.TileIndex(field, 5, 3) };
-            field.Decor[Grid.TileIndex(field, 4, 3)] = Decor.DecorCode(DecorKinds.CarFront, 1);
-            Assert.True(Rules.ExecuteCommand(field, Ability("s1", AbilityIds.Search, tile: P(4, 3)), Ctx()).Ok);
-            Assert.Equal(FoundWeaponIds.Pistol, Assert.Single(soldier.Backpack!).Weapon);
-        }
-
         [Fact(DisplayName = "pistols › where they are counted, a level reached brings no weapons: they are only found or made")]
         public void ALevelBringsNoWeapons()
         {
@@ -140,6 +103,7 @@ namespace Bastion.Engine.Tests
             {
                 var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
                 c.Pistols = counted;
+                c.FoundWeapons = null;
                 CampaignHelpers.LevelTo(c, 2);
                 Assert.Equal(counted == true ? 0 : 2, (c.FoundWeapons ?? new List<FoundWeapon>()).Count);
             }

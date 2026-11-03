@@ -81,15 +81,26 @@ namespace Bastion.Net
         }
 
         /// <summary>
-        /// What `slot` does on the base before launching: the partner's proposal, yes; an event, the host's first option;
-        /// else its key to launch. Null: wait (one's own proposal, the partner's event).
+        /// What `slot` does on the base before launching: the partner's proposal, yes; an event, the host's first option it
+        /// can take (the convoy's wants someone fit to send); with none of its soldiers in the squad and one fit to go (the
+        /// recruit who comes when nobody is left: Arturo, 2/11), that one in; with nobody in the squad at all, a day's wait
+        /// till someone heals or comes, or in a siege (it takes everyone fit by itself, and nobody can wait) the host's
+        /// recruit straight into it; else its key to launch. Null: wait (one's own proposal, the partner's event).
         /// </summary>
         public CampaignCommand? BaseOrder(int slot, bool hosting)
         {
             var c = Campaign;
             if (c == null) return null;
             if (c.Proposal != null) return c.Proposal.By != slot ? new VoteCommand { Accept = true } : null;
-            if (c.Event != null) return hosting ? new AnswerEventCommand { Option = 0 } : null;
+            if (c.Event != null) return hosting ? new AnswerEventCommand { Option = Engine.Campaign.EventOptionAvailable(c, 0) || !Engine.Campaign.EventOptionAvailable(c, 1) ? 0 : 1 } : null;
+            var siege = c.Offers.FirstOrDefault((o) => o.Id == c.ActiveMission)?.Siege == true;
+            if (c.ActiveMission != null && !siege && c.Squad.Count < Engine.Campaign.SquadMax(c))
+            {
+                var mine = c.Soldiers.Where((s) => s.Owner == slot).ToList();
+                var left = mine.FirstOrDefault((s) => Engine.Campaign.SoldierReady(s) && !c.Squad.Contains(s.Id));
+                if (left != null && !mine.Any((s) => c.Squad.Contains(s.Id))) return new SquadCommand { Soldier = left.Id, On = true };
+            }
+            if (c.ActiveMission != null && c.Squad.Count == 0) return !siege ? new AdvanceCommand { Ready = true } : hosting ? new RecruitCommand { Squad = true } : null;
             return new LaunchCommand { Ready = true };
         }
     }

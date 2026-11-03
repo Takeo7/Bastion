@@ -150,6 +150,8 @@ namespace Bastion.Engine
             [DecorKinds.WindowBarricade] = 99,
             // Along the sidewalks, where the street trees in pots stood (Ana's playtest 28/10).
             [DecorKinds.Bollard] = 100,
+            // A door boarded up (Arturo, 2/11): the crowbar's.
+            [DecorKinds.DoorBoards] = 101,
         };
 
         private static readonly string?[] Kinds = MakeKinds();

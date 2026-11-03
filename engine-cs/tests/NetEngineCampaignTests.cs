@@ -64,6 +64,7 @@ namespace Bastion.Engine.Tests
         {
             public readonly string Dir = Path.Combine(Path.GetTempPath(), "bastion-campana-motor-" + Guid.NewGuid().ToString("N"));
             public readonly List<string> Log = new List<string>();
+            public readonly FakeClock Clock = new FakeClock();
             public Room Room;
             private int peers;
 
@@ -77,7 +78,19 @@ namespace Bastion.Engine.Tests
             public Room Make()
             {
                 var rules = new EngineCampaignRules();
-                return new Room(new SaveStore(SavePath, Log.Add, rules), new EngineRules(), "1.0.0", null, new FakeClock(), new Rng(11), null, rules);
+                return new Room(new SaveStore(SavePath, Log.Add, rules), new EngineRules(), "1.0.0", null, Clock, new Rng(11), null, rules);
+            }
+
+            /// <summary>The campaign as the room last saved it.</summary>
+            public CampaignState Saved()
+            {
+                return new SaveStore(SavePath, null, new EngineCampaignRules()).Load()!.Campaign!;
+            }
+
+            public void Advance(long ms)
+            {
+                Clock.Advance(ms);
+                Room.Pump();
             }
 
             public MemoryEnd Join(string name, string? token = null)
@@ -161,6 +174,67 @@ namespace Bastion.Engine.Tests
             var theirs = c["soldiers"]!.Where((s) => (int)s["owner"]! == 1).Select((s) => (string)s["id"]!).ToList();
             Assert.NotEmpty(theirs);
             Assert.Contains(c["squad"]!.Select((x) => (string)x!), (id) => theirs.Contains(id));
+        }
+
+        /// <summary>
+        /// A decision of the story is a proposal as the base's are (Ana's notes of 2/11, #4: «Un desertor», that the players
+        /// saw reach nought and not go ahead). Whoever proposes it, host or guest, the room says yes for the other after 30 s;
+        /// with their window out of sight, after 5 min; dropped, as when here or away.
+        /// </summary>
+        [Theory]
+        [InlineData(0, "here", 30_000L)]
+        [InlineData(1, "here", 30_000L)]
+        [InlineData(0, "away", Room.AwayGraceMs)]
+        [InlineData(1, "away", Room.AwayGraceMs)]
+        [InlineData(0, "gone", 30_000L)]
+        [InlineData(1, "away and gone", Room.AwayGraceMs)]
+        public void AStoryDecisionNobodyAnswersGoesAhead(int by, string other, long wait)
+        {
+            using var host = new Host();
+            var first = host.Join("Ana");
+            host.Join("Pepe");
+            host.Say(first, new { t = "newCampaign" });
+            // The deserter at the door, as the save keeps it, and the host opened again.
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            save.Campaign!.Event = CampaignEventIds.Defector;
+            save.Campaign.Doom = 3;
+            store.Save(save);
+            host.Room = host.Make();
+            var players = new[] { host.Join("Ana"), host.Join("Pepe") };
+            var (proposer, answerer) = (players[by], players[1 - by]);
+            host.Say(proposer, Ccmd(new { type = "answerEvent", option = 1 }));
+            Assert.Equal("event", (string?)CampaignSent(answerer)["proposal"]!["action"]!["type"]);
+            if (other.StartsWith("away")) host.Say(answerer, new { t = "away", away = true });
+            if (other.EndsWith("gone"))
+            {
+                answerer.Close("dormido");
+                host.Room.Pump();
+            }
+            if (wait > 30_000)
+            {
+                // Away: at 30 s the wait goes on, and both see what is left of the five minutes («se acepta sola en 4:30»).
+                host.Advance(30_000);
+                Assert.Equal(wait - 30_000, (long)proposer.Take("deadline").Last()["ms"]!);
+                host.Advance(wait - 30_000 - 1);
+            }
+            else host.Advance(wait - 1);
+            Assert.Equal(CampaignEventIds.Defector, host.Saved().Event);
+            host.Advance(1);
+            // «Mandarlo a llevarse una horda lejos»: the dead fall back, and both hear it is over.
+            var c = host.Saved();
+            Assert.Null(c.Event);
+            Assert.Null(c.Proposal);
+            Assert.Equal(2, c.Doom);
+            var told = CampaignSent(proposer);
+            Assert.Null(told["proposal"]);
+            Assert.Null(told["event"]);
+            Assert.Null(proposer.Take("deadline").Last()["ms"]);
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo"));
+            // red.log says so, and, away, that it waited for them.
+            var name = by == 0 ? "Pepe" : "Ana";
+            Assert.Contains($"[campaña] Propuesta sin respuesta de {name}: responder «Mandarlo a llevarse una horda lejos», sigue adelante", host.Log);
+            Assert.Equal(wait > 30_000, host.Log.Contains($"[campaña] {name} no tiene el juego a la vista: la propuesta espera 270 s más"));
         }
 
         [Fact]

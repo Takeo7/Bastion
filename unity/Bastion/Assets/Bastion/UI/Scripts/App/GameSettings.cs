@@ -7,6 +7,7 @@ namespace Bastion.UI.App
 {
     /// <summary>
     /// The graphics settings of Ajustes (settingsPanel.ts graphicsSettings of the 0.10.1), kept on this computer: the
+    /// screen (full, borderless on Windows, or a window) and its resolution (Arturo, 02/11 A5: Unity's player keeps them), the
     /// level (bajos, medios, altos: the project's quality levels, whose shadows, ambient occlusion, post-processing and
     /// render scale are Arte's), a cap on frames per second, the counter in a corner, the interface's size, and «Ajuste
     /// auto», the guard that takes the level down while a battle isn't fluid (QualityGuard). Applied as the app starts
@@ -313,6 +314,57 @@ namespace Bastion.UI.App
             return cap == 0 ? (1, -1) : (0, cap);
         }
 
+        /// <summary>
+        /// The ways the game can take the screen here (Arturo, 02/11 A5), by name: on the Mac its own full screen (a desktop of
+        /// its own) and a window; on Windows the full screen to itself, the borderless one and a window.
+        /// </summary>
+        static (FullScreenMode mode, string name)[] Modes() => Application.platform == RuntimePlatform.WindowsPlayer
+            ? new[] { (FullScreenMode.ExclusiveFullScreen, "Completa"), (FullScreenMode.FullScreenWindow, "Sin bordes"), (FullScreenMode.Windowed, "Ventana") }
+            : new[] { (FullScreenMode.FullScreenWindow, "Completa"), (FullScreenMode.Windowed, "Ventana") };
+
+        /// <summary>The screen's own size, in pixels.</summary>
+        static Vector2Int NativeSize()
+        {
+            var w = Display.main.systemWidth;
+            var h = Display.main.systemHeight;
+            return w > 0 && h > 0 ? new Vector2Int(w, h) : new Vector2Int(Screen.currentResolution.width, Screen.currentResolution.height);
+        }
+
+        /// <summary>
+        /// The sizes to choose for `mode`, biggest first: the screen's own and the usual heights under it in its shape (none
+        /// stretched); a window, only those smaller than the screen. At most four.
+        /// </summary>
+        static System.Collections.Generic.List<Vector2Int> Sizes(FullScreenMode mode)
+        {
+            var native = NativeSize();
+            var sizes = new System.Collections.Generic.List<Vector2Int>();
+            if (mode != FullScreenMode.Windowed) sizes.Add(native);
+            foreach (var h in new[] { 1440, 1080, 900, 720 })
+            {
+                if (h >= native.y || sizes.Count >= 4) continue;
+                var w = Mathf.RoundToInt(h * (float)native.x / native.y);
+                sizes.Add(new Vector2Int(w - w % 2, h));
+            }
+            if (sizes.Count == 0) sizes.Add(native);
+            return sizes;
+        }
+
+        /// <summary>What was last asked for (the screen takes it a frame later): Ajustes shows it meanwhile.</summary>
+        static FullScreenMode? askedMode;
+        static Vector2Int? askedSize;
+
+        static FullScreenMode ScreenMode => askedMode ?? Screen.fullScreenMode;
+        static Vector2Int ScreenSize => askedSize ?? new Vector2Int(Screen.width, Screen.height);
+
+        /// <summary>The screen taken so, at that size: in the app only (the editor's window is its own).</summary>
+        static void SetScreen(FullScreenMode mode, Vector2Int size)
+        {
+            askedMode = mode;
+            askedSize = size;
+            if (Application.isEditor) return;
+            Screen.SetResolution(size.x, size.y, mode);
+        }
+
         /// <summary>The screen's refresh in whole Hz (0 if it doesn't say).</summary>
         static int ScreenHz() => Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value);
 
@@ -333,6 +385,8 @@ namespace Bastion.UI.App
             return $"gráficos {LevelNames[Level]}{auto} ({own})" + (cap > 0 ? $", límite {cap} fps" : "");
         }
     
+        public const string ScreenId = "screenMode";
+        public const string ResolutionId = "resolution";
         public const string GraphicsId = "graphics";
         public const string CapId = "fpsCap";
         public const string CounterId = "showFps";
@@ -365,7 +419,7 @@ namespace Bastion.UI.App
             (Bastion.Client.Audio.Volumes.Sfx, "Efectos", "Disparos, explosiones, pasos y acciones."),
             (Bastion.Client.Audio.Volumes.Music, "Música", "La música de la base, del mapa y del combate."),
             (Bastion.Client.Audio.Volumes.Ambience, "Ambiente", "Viento, ciudad, bosque, máquinas."),
-            (Bastion.Client.Audio.Volumes.Ui, "Interfaz y radio", "Botones, avisos y las transmisiones de radio."),
+            (Bastion.Client.Audio.Volumes.Ui, "Botones y avisos", "Los sonidos de los botones y de los avisos."),
         };
 
         /// <summary>
@@ -405,6 +459,26 @@ namespace Bastion.UI.App
 
         static System.Collections.Generic.List<Hud.SettingView> Graphics() => new System.Collections.Generic.List<Hud.SettingView>
         {
+            // The screen and its resolution first (Arturo, 02/11 A5).
+            new Hud.SettingView
+            {
+                Id = ScreenId,
+                Label = "Pantalla",
+                About = Application.platform == RuntimePlatform.WindowsPlayer
+                    ? "Completa: el juego ocupa toda la pantalla. Sin bordes: también, pero como una ventana, y se cambia antes a otro programa. Ventana: del tamaño de la resolución."
+                    : "Completa: el juego ocupa toda la pantalla, en un escritorio propio. Ventana: del tamaño de la resolución.",
+                Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(Modes(), m => m.name)),
+                On = Math.Max(0, Array.FindIndex(Modes(), m => m.mode == ScreenMode)),
+            },
+            new Hud.SettingView
+            {
+                Id = ResolutionId,
+                Label = "Resolución",
+                About = "Cuántos puntos tiene la imagen. Con menos va más fluido y se ve menos nítido; la interfaz guarda su tamaño.",
+                Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(Sizes(ScreenMode), z => $"{z.x} × {z.y}")),
+                ChoiceTips = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(Sizes(ScreenMode), z => z == NativeSize() ? "La de la pantalla" : "")),
+                On = Math.Max(0, Sizes(ScreenMode).FindIndex(z => z == ScreenSize)),
+            },
             // The level, high to low as the 0.10.1's «Efectos» (the project's quality levels, Arte's).
             new Hud.SettingView
             {
@@ -472,7 +546,19 @@ namespace Bastion.UI.App
         /// <summary>One of those rows changed (its id, the choice's place): kept and applied; false if it isn't one of them.</summary>
         public static bool Change(string id, float value)
         {
-            if (id == GraphicsId) Level = 2 - (int)value;
+            if (id == ScreenId)
+            {
+                var mode = Modes()[Mathf.Clamp((int)value, 0, Modes().Length - 1)].mode;
+                // The size kept if this way has it; a window the size under the screen's, else the screen's own.
+                var sizes = Sizes(mode);
+                SetScreen(mode, sizes.Contains(ScreenSize) ? ScreenSize : sizes[0]);
+            }
+            else if (id == ResolutionId)
+            {
+                var sizes = Sizes(ScreenMode);
+                SetScreen(ScreenMode, sizes[Mathf.Clamp((int)value, 0, sizes.Count - 1)]);
+            }
+            else if (id == GraphicsId) Level = 2 - (int)value;
             else if (id == CapId) FpsCap = Caps[Mathf.Clamp((int)value, 0, Caps.Length - 1)];
             else if (id == CounterId) ShowFps = value == 0;
             else if (id == TintId) SquadTint = value == 1;

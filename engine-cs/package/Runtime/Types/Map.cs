@@ -283,6 +283,11 @@ namespace Bastion.Engine
         /// </summary>
         public const string WindowBarricade = "windowBarricade";
         /// <summary>
+        /// A door boarded up with planks (Arturo, 2/11), a `high` tile in the doorway that nobody opens nor crosses till the
+        /// crowbar takes the boards off (it is a shut door then). Facing: out of the building.
+        /// </summary>
+        public const string DoorBoards = "doorBoards";
+        /// <summary>
         /// Another tile of an object that stands over several (docs/MAPAS.md, phase 1: a car 1 × 3, a bed 1 × 2): what it is
         /// is its anchor's, the tile that says the object's kind; facing: the step towards the anchor (decor.ts objectTiles).
         /// </summary>
@@ -299,7 +304,7 @@ namespace Bastion.Engine
             Wire, SirenCar, Pallets, Drums, Forklift, Machine, Silo, Bench, Fridge, Stove, Bathtub, Washbasin, TvStand,
             Wc, Armchair, CoffeeTable, FloorLamp, PottedPlant, Nightstand, DiningChair, TowelRack, CoatRack, CafeTable,
             ReadingTable, DrinksFridge, Wheelbarrow, Tools, Hydrant, Mailbox, Strewn, Shed, WashingLine, VegPatch,
-            WindowBarricade, Bollard, Part,
+            WindowBarricade, Bollard, Part, DoorBoards,
         };
     }
 

@@ -177,6 +177,8 @@ namespace Bastion.Engine
     {
         public override string Type => "buy";
         public string Item { get; set; } = ""; // ItemIds
+        /// <summary>How many at once (Arturo, 2/11), 1 to Campaign.MaxBatch; absent, one.</summary>
+        public int? Count { get; set; }
     }
 
     public sealed class EquipCommand : CampaignCommand
@@ -228,6 +230,8 @@ namespace Bastion.Engine
     {
         public override string Type => "craft";
         public string Project { get; set; } = ""; // CraftIds
+        /// <summary>How many at once, of a weapon or an improvement (Arturo, 2/11); absent, one.</summary>
+        public int? Count { get; set; }
     }
 
     /// <summary>A found weapon from the Armería to one of your soldiers (null: back on the rack).</summary>

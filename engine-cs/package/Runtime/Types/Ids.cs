@@ -63,6 +63,13 @@ namespace Bastion.Engine
     }
 
     /// <summary>'rookie': a recruit with no class yet (classes.ts), a rifle and the basic actions.</summary>
+    /// <summary>What a zombie wore, when it was a uniform (Unit.Outfit).</summary>
+    public static class Outfits
+    {
+        public const string Police = "police";
+        public const string Military = "military";
+    }
+
     public static class TemplateIds
     {
         // ClassId.
@@ -186,13 +193,15 @@ namespace Bastion.Engine
         public const string Molotov = "molotov";
         /// <summary>Esconderse (Ana's #1 of 1/11): crouched out of sight till the soldier's next turn; Cubrirse is Hunker.</summary>
         public const string Hide = "hide";
+        /// <summary>The crowbar's (Arturo, 2/11): the boards off a window or a door beside it (Abilities.BoardedBeside).</summary>
+        public const string Pry = "pry";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             Shoot, Pistol, Slash, StunLance, Overwatch, Hunker, Reload, Grenade, Launch, Missiles, Evac, Hack, Search,
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
-            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide,
+            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry,
         };
     }
 
@@ -296,13 +305,17 @@ namespace Bastion.Engine
         public const string Bat = "bat";
         public const string Crowbar = "crowbar";
         public const string Chainsaw = "chainsaw";
+        public const string Katana = "katana";
+        public const string Longsword = "longsword";
+        public const string Rake = "rake";
+        public const string Stick = "stick";
         /// <summary>The pistol at the side, the Armería's since 1/11 (Arturo: nobody starts with one); see Arms.Pistol.</summary>
         public const string Pistol = "pistol";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             AssaultRifle, PumpShotgun, PrecisionRifle, MachineGun, Machete, HuntingRifle, SawnOff, ScopedRifle,
-            LightMachineGun, Pan, Bat, Crowbar, Chainsaw, Pistol,
+            LightMachineGun, Pan, Bat, Crowbar, Chainsaw, Pistol, Katana, Longsword, Rake, Stick,
         };
     }
 

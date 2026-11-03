@@ -393,11 +393,10 @@ namespace Bastion.EditorTools
             });
         }
 
-        /// <summary>A generated mission (BASTION_GENERAR); BASTION_POLICIA=1 with the campaign's first mission's police car (MissionState.PoliceCar).</summary>
+        /// <summary>A generated mission (BASTION_GENERAR), with the police cars the engine puts in any (MissionState.PoliceCar; Arturo, 2/11, A13).</summary>
         internal static GameState Generated(string biome, int seed, string kind, string site = null) => Setup.CreateMission(new MissionOptions
         {
             Map = new MapSource { Kind = MapSourceKinds.Generated, Biome = biome, Seed = seed, Site = site },
-            PoliceCar = Environment.GetEnvironmentVariable("BASTION_POLICIA") == "1" ? true : (bool?)null,
             Slots = new System.Collections.Generic.List<int> { 0 },
             Rng = new Rng((uint)seed),
             Kind = kind,
@@ -710,7 +709,7 @@ namespace Bastion.EditorTools
             // rig.focus on the tile's middle), the camera turned so (degrees, 45 the game's first turn).
             var at = Environment.GetEnvironmentVariable("BASTION_AT")?.Split(',');
             // (BASTION_POLICIA=1 without BASTION_AT: on the police car, BASTION_DIST tiles off, 12.)
-            if (at == null && state.Mission?.PoliceCar is System.Collections.Generic.List<int> police && police.Count > 0)
+            if (at == null && Environment.GetEnvironmentVariable("BASTION_POLICIA") == "1" && state.Mission?.PoliceCar is System.Collections.Generic.List<int> police && police.Count > 0)
             {
                 Debug.Log($"[policia] the police car: its nose on {police[0] % state.Width},{police[0] / state.Width}, its boot on {police[^1] % state.Width},{police[^1] / state.Width}");
                 at = new[] { (police[0] % state.Width).ToString(), (police[0] / state.Width).ToString(), Environment.GetEnvironmentVariable("BASTION_DIST") ?? "12" };

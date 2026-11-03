@@ -12,8 +12,8 @@ namespace Bastion.Client.Map
     /// ground on fire small flames, each its own size and turn; the ground under them scorched. Particle FX's (FxArt).
     /// By night its light is NightLights' (the fire's own in GameState.lights). Made with the map: the fires are there from
     /// the start and burn to the end. A molotov's (Arturo, 1/11: Fire.Turns) lit and put out as the battle goes (Light,
-    /// Out: EventPlayer's FireLitEvent and FireOutEvent), a pool of petrol burning: low flames spread over its tiles, a
-    /// thin smoke, the ground scorched (left when it goes out), nothing over what burns.
+    /// Out: EventPlayer's FireLitEvent and FireOutEvent), a pool of petrol burning: low flames all over its tiles, the
+    /// ground under them aglow, a thin smoke, the ground scorched (left when it goes out), nothing over what burns.
     /// </summary>
     public sealed class FireView : MonoBehaviour
     {
@@ -29,6 +29,31 @@ namespace Bastion.Client.Map
 
         static Material soot;
         static Mesh quad;
+        static Texture2D embers;
+        /// <summary>
+        /// A molotov's burning ground under its flames (Arturo's #8 of 2/11: the fire over the whole tile, not a little of
+        /// it): its colour (over 1, for the bloom) and how much it flickers.
+        /// </summary>
+        static readonly Color Ablaze = new Color(2.2f, 0.75f, 0.18f, 0.5f);
+        const float Flicker = 0.35f;
+        /// <summary>The burning ground of each pool, by its fire: its own flicker, and since when it dies down (Out; null, burning).</summary>
+        readonly Dictionary<string, (Material material, float seed, float? since)> glows = new Dictionary<string, (Material, float, float?)>();
+
+        void Update()
+        {
+            foreach (var id in glows.Keys.ToList())
+            {
+                var (material, seed, since) = glows[id];
+                if (material == null)
+                {
+                    glows.Remove(id);
+                    continue;
+                }
+                float n = Mathf.PerlinNoise(Time.time * 2.6f, seed);
+                float left = since is float t ? Mathf.Clamp01(1 - (Time.time - t) / DiesDown) : 1;
+                material.SetColor("_BaseColor", new Color(Ablaze.r, Ablaze.g, Ablaze.b, Ablaze.a * (1 - Flicker + Flicker * 2 * n) * left));
+            }
+        }
 
         public static FireView Make(Transform parent, GameState s)
         {
@@ -66,6 +91,7 @@ namespace Bastion.Client.Map
             var holder = id != null ? transform.Find(id) : null;
             if (holder == null) return;
             holder.name = id + " (apagado)";
+            if (glows.TryGetValue(id, out var glow)) glows[id] = (glow.material, glow.seed, Time.time);
             foreach (Transform part in holder.Cast<Transform>().ToList())
             {
                 if (part.name == "hollín") continue;
@@ -92,16 +118,21 @@ namespace Bastion.Client.Map
             Effect(art.smoke, holder, at + Vector3.up * 0.2f, 0, 0.28f);
             Effect(art.embers, holder, at + Vector3.up * 0.1f, 0, 0.7f);
             Scorch(holder, at, 3.4f, MapArt.Hash(sx, sy, 440) * 360);
+            var glow = Glow(holder, fire.Id);
             foreach (int i in fire.Tiles)
             {
                 int x = i % w, y = i / w;
                 float r(int salt) => MapArt.Hash(x, y, 450 + salt);
-                // (Two flames a tile, low: a pool's, not a car's; the middle's a little bigger. The middling fire made small:
-                // the small one's flames are a few centimetres, nothing from the game's camera.)
-                for (int k = 0; k < 2; k++)
+                // The ground of the tile aglow, a soft blot over it and into its neighbours', so the pool reads whole.
+                if (glow != null) Patch(holder, glow, MapSpace.World(x, y), 1.6f, r(9) * 360);
+                // (Four flames a tile, low, one in each quarter, so they cover it: a pool's, not a car's; the middle's a
+                // little bigger. The middling fire made small: the small one's flames are a few centimetres, nothing from the
+                // game's camera.)
+                for (int k = 0; k < 4; k++)
                 {
-                    var spot = MapSpace.World(x, y) + new Vector3(r(k * 3) - 0.5f, 0, r(k * 3 + 1) - 0.5f) * 0.7f * MapSpace.Tile;
-                    Effect(art.fire, holder, spot, r(k * 3 + 2) * 360, (i == fire.Source && k == 0 ? 0.6f : 0.36f) + 0.14f * r(7 + k));
+                    var quarter = new Vector3((k % 2) - 0.5f, 0, (k / 2) - 0.5f) * 0.5f + new Vector3(r(k * 3) - 0.5f, 0, r(k * 3 + 1) - 0.5f) * 0.25f;
+                    var spot = MapSpace.World(x, y) + quarter * MapSpace.Tile;
+                    Effect(art.fire, holder, spot, r(k * 3 + 2) * 360, (i == fire.Source && k == 0 ? 0.62f : 0.42f) + 0.16f * r(13 + k));
                 }
             }
             if (grow) StartCoroutine(Grow(holder));
@@ -172,6 +203,46 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>The ground scorched round `at`: a dark blot `size` tiles across, lying on the ground.</summary>
+        /// <summary>A pool's burning ground (Ablaze), its own copy for its flicker (Update), gone with the pool; null without the kit.</summary>
+        Material Glow(Transform holder, string id)
+        {
+            var material = KitMaterials.New(KitMaterials.SeeThrough, "Fuego en el suelo " + id);
+            if (material == null) return null;
+            material.SetColor("_BaseColor", Ablaze);
+            material.mainTexture = embers ??= Embers();
+            material.renderQueue = 2991;
+            glows[id] = (material, MapArt.Hash(id.Length, id.GetHashCode() & 1023, 460) * 100, null);
+            holder.gameObject.AddComponent<Owned>().material = material;
+            return material;
+        }
+
+        /// <summary>A pool's copy of its material, destroyed with it.</summary>
+        sealed class Owned : MonoBehaviour
+        {
+            public Material material;
+
+            void OnDestroy()
+            {
+                if (material == null) return;
+                if (Application.isPlaying) Destroy(material);
+                else DestroyImmediate(material);
+            }
+        }
+
+        /// <summary>A flat blot of `material` on the ground at `at`, `size` tiles across, turned by `yaw`.</summary>
+        static void Patch(Transform parent, Material material, Vector3 at, float size, float yaw)
+        {
+            quad ??= Quad();
+            var blot = new GameObject("brasas");
+            blot.transform.SetParent(parent, false);
+            blot.transform.SetPositionAndRotation(at + Vector3.up * 0.03f, Quaternion.Euler(0, yaw, 0));
+            blot.transform.localScale = Vector3.one * size * MapSpace.Tile;
+            blot.AddComponent<MeshFilter>().sharedMesh = quad;
+            var r = blot.AddComponent<MeshRenderer>();
+            r.sharedMaterial = material;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
         static void Scorch(Transform parent, Vector3 at, float size, float yaw)
         {
             if (soot == null)
@@ -206,6 +277,24 @@ namespace Bastion.Client.Map
                     float ragged = 0.75f + 0.25f * Mathf.Sin(Mathf.Atan2(p.y, p.x) * 5 + 1.3f) * Mathf.Sin(Mathf.Atan2(p.y, p.x) * 3);
                     float a = Mathf.Clamp01(1 - p.magnitude / ragged);
                     pixels[y * size + x] = new Color32(255, 255, 255, (byte)(255 * a * a));
+                }
+            t.SetPixels32(pixels);
+            t.Apply(true);
+            return t;
+        }
+
+        /// <summary>A round, soft blot, even over most of it and a little uneven (alpha only): a pool's burning ground.</summary>
+        static Texture2D Embers()
+        {
+            const int size = 64;
+            var t = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, name = "Brasas" };
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    var p = new Vector2(x + 0.5f - size / 2f, y + 0.5f - size / 2f) / (size / 2f);
+                    float a = (1 - Mathf.SmoothStep(0.3f, 1, p.magnitude)) * (0.75f + 0.25f * Mathf.PerlinNoise(x * 0.15f, y * 0.15f));
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(255 * a));
                 }
             t.SetPixels32(pixels);
             t.Apply(true);

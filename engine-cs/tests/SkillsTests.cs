@@ -521,7 +521,7 @@ namespace Bastion.Engine.Tests
             Assert.Null(Abilities.AbilityBlocker(s, u, AbilityIds.Slash));
         }
 
-        [Fact(DisplayName = "the new actions (docs/FASE10.md §4) › the stone: heard where it lands, 1 of damage to whoever is there, and the turn goes on")]
+        [Fact(DisplayName = "the new actions (docs/FASE10.md §4) › the stone: heard where it lands, no damage to whoever is there (Arturo, 2/11), and the turn goes on")]
         public void TheStone()
         {
             var s = Field16();
@@ -532,13 +532,13 @@ namespace Bastion.Engine.Tests
             Assert.True(r.Ok, r.Error);
             var stone = r.Events!.OfType<StoneThrownEvent>().First();
             Assert.Equal(("s1", "z1"), (stone.Unit, stone.Hit));
-            Assert.Equal(4, z.Hp);
+            Assert.Equal(5, z.Hp);
             Assert.Equal(1, u.Ap);
             var noise = r.Events!.OfType<NoiseEvent>().First();
             Assert.Equal((8, 2), (noise.Tile.X, noise.Tile.Y));
             Assert.Equal(Js.Round(8 * Rules.SquadLouder * 10) / 10, noise.Radius);
             Assert.True(far.Alive);
-            SameMap(DeedsOf((DeedIds.Throw, 1), (DeedIds.ThrowHit, 1)), u.Deeds);
+            SameMap(DeedsOf((DeedIds.Throw, 1)), u.Deeds);
         }
 
         [Fact(DisplayName = "the new actions (docs/FASE10.md §4) › a stone on the floor only sounds; Señuelo makes it heard further, Canto afilado hurts more")]
@@ -565,7 +565,7 @@ namespace Bastion.Engine.Tests
             });
             var z = Hardy(t, "z1", 4, 2, 5);
             Assert.True(Exec(t, Ability("s1", AbilityIds.Stone, tile: P(4, 2))).Ok);
-            Assert.Equal(3, z.Hp);
+            Assert.Equal(4, z.Hp);
         }
 
         private static List<Pos> Walk(int x, int from, int to)

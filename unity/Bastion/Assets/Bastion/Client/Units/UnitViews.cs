@@ -485,12 +485,23 @@ namespace Bastion.Client.Units
 
         // ------------------------------------------------------------ the state seen
 
+        /// <summary>
+        /// What the squad sees (Los.TeamVisibility) of `s` as it is now, if the last Sync worked it out for it (that state, at
+        /// that Seq), else null: the cutaway goes by it too, not working it out again (1.8 ms on Metsovo's 64 × 64).
+        /// </summary>
+        public bool[] SightOf(GameState s) => s != null && s == sightOf && s.Seq == sightSeq ? sight : null;
+
+        bool[] sight;
+        GameState sightOf;
+        int sightSeq;
+
         /// <summary>The figures as the state seen says: those that come in made, those gone taken away, each on its tile.</summary>
         public void Sync(GameState view)
         {
             state = view;
             // The enemy shows where the squad has it in sight (teamVisibility), or where UI shows it (ForceVisible, a shade).
             var inSight = Los.TeamVisibility(view, "xcom");
+            (sight, sightOf, sightSeq) = (inSight, view, view.Seq);
             var seen = new HashSet<string>();
             foreach (var u in view.Units)
             {
@@ -648,9 +659,15 @@ namespace Bastion.Client.Units
             if (u.RisenFrom != null && u.Appearance != null && RisenFigureOf(u, view) is GameObject risen) return risen;
             // The special dead: City Zombies' and Boss Zombies' (UnitViews.Dead); Sidekick's dead if their prefab is missing.
             if (DeadFigureOf(u, view, catalog) is GameObject special) return special;
+            // One of the common dead in a soldier's uniform (Unit.Outfit; Arturo's A9 of 2/11): City Zombies' soldier.
+            if (view.deadKind && u.Outfit == Outfits.Military && DeadFigureOf(Soldiers, view, catalog) is GameObject uniformed) return uniformed;
             string kind = view.deadKind ? "dead" : u.Template;
-            if (Bodies.TryGetValue(kind, out var bodies))
+            if (Bodies.TryGetValue(kind, out var all))
             {
+                // (The common dead in a policeman's uniform from Sidekick's police, the others never one of them: a deck of
+                // their own each, TurnOf.)
+                var bodies = view.deadKind && u.Template == TemplateIds.Zombie ? all.Where(b => IsCop(b.preset) == (u.Outfit == Outfits.Police)).ToArray() : all;
+                if (bodies.Length == 0) bodies = all;
                 var (preset, female) = bodies[view.deadKind ? Dealt(bodies.Length, view, i => bodies[i].preset) : PickIndex(bodies.Length, view.seed)];
                 view.build = female ? "femn" : "masc";
                 var prefab = catalog.Preset(preset);
@@ -717,15 +734,21 @@ namespace Bastion.Client.Units
         int TurnOf(Unit u)
         {
             if (state == null) return -1;
-            string kind = DeadBodies.ContainsKey(u.Template) ? u.Template : "dead";
+            string kind = DeckOf(u);
             int n = 0;
             foreach (var x in state.Units)
             {
                 if (x.Id == u.Id) return n;
-                if (x.RisenFrom == null && Gaits.MovesDead(x.Template) && (DeadBodies.ContainsKey(x.Template) ? x.Template : "dead") == kind) n++;
+                if (x.RisenFrom == null && Gaits.MovesDead(x.Template) && DeckOf(x) == kind) n++;
             }
             return -1;
         }
+
+        /// <summary>Which deck one of the dead is dealt from: its special kind's, or the common dead's by what they wore (Unit.Outfit).</summary>
+        static string DeckOf(Unit u) => DeadBodies.ContainsKey(u.Template) ? u.Template : "dead" + (u.Template == TemplateIds.Zombie ? u.Outfit : null);
+
+        /// <summary>Whether a body of the common dead's (Bodies' dead) is one of Sidekick's policemen made dead.</summary>
+        static bool IsCop(string preset) => preset.StartsWith("skZombieCop");
 
         /// <summary>
         /// One of the dead's body among `count` (Ana's #6, 1/11: «la misma chica con falda tres veces juntas»): the bodies in

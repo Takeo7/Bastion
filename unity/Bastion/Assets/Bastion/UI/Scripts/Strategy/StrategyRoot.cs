@@ -35,8 +35,6 @@ namespace Bastion.UI.Strategy
         DebriefScreen debrief;
         MapScreen map;
         SettlementScreen settlement;
-        RadioPanel radio;
-        VisualElement radioCard;
         ValleyMap valley;
         ClearingLabels labels;
         Label toast;
@@ -58,9 +56,6 @@ namespace Bastion.UI.Strategy
         /// <summary>A base piece's picture by id, for the Asentamiento's palette (Arte's PiecePictures).</summary>
         public Func<string, Texture> PieceArtOf = PiecePictures.Of;
 
-        /// <summary>A radio voice's bust by speaker (Arte's Portraits.Voice); null, their initials.</summary>
-        public Func<string, Texture> VoiceOf = Portraits.Voice;
-
         /// <summary>
         /// Goes up when a bust is drawn (Portraits.Changed, once a frame at most): the screens that show busts take it into
         /// their keys, so the same view draws again with it.
@@ -72,9 +67,6 @@ namespace Bastion.UI.Strategy
         SquadView lastSquad;
         DebriefView lastDebrief;
         SkillBoardView lastBoard;
-
-        /// <summary>The radio's card: Radio (the controller) plays the scenes on it.</summary>
-        public RadioPanel RadioCard => radio;
 
         /// <summary>
         /// Where the card of pad `i` of `n` of the line-up goes, in panel pixels (its top centre): Arte's
@@ -139,12 +131,6 @@ namespace Bastion.UI.Strategy
             map.Show(false);
             settlement = new SettlementScreen(root.Q("view"), tips, Icon, relay) { ArtOf = id => PieceArtOf?.Invoke(id) };
             settlement.Show(false);
-            // The radio over everything but the short note, as the 0.10.1 appended it (transmissions.ts; z-index 13).
-            radioCard = Ui.El("radio panel");
-            root.Insert(root.IndexOf(root.Q("toast")), radioCard);
-            radio = new RadioPanel(radioCard, tips, s => Sound?.Invoke(s)) { VoiceOf = id => VoiceOf?.Invoke(id) };
-            root.Q("proposal").RegisterCallback<GeometryChangedEvent>(_ => Unstack());
-            radioCard.RegisterCallback<GeometryChangedEvent>(_ => Unstack());
             skillBoard = new SkillBoardModal(root.Q("board"), relay, s => Sound?.Invoke(s), tips) { PortraitOf = id => PortraitOf?.Invoke(id) };
             toast = root.Q<Label>("toast");
             Ui.Show(toast, false);
@@ -180,23 +166,6 @@ namespace Bastion.UI.Strategy
             clearing.SetInsets(panels);
         }
 
-        /// <summary>
-        /// The radio under the proposal's plate while one is up and they would meet (the Mapa and the Escuadra have both at
-        /// the top centre: it covered the plate's head, 0.11.5); otherwise where its screen puts it. By the plate's bounds
-        /// only, so moving the radio down doesn't move it back.
-        /// </summary>
-        void Unstack()
-        {
-            var plate = root.Q("proposal");
-            var p = plate.worldBound;
-            var r = radioCard.worldBound;
-            var up = plate.style.display.value != DisplayStyle.None && p.height > 0 && r.width > 0;
-            var atTop = radioCard.ClassListContains("radio--geoscape") || radioCard.ClassListContains("radio--squad") || radioCard.ClassListContains("radio--debrief");
-            var meet = up && atTop && r.xMin < p.xMax && r.xMax > p.xMin;
-            var top = meet ? new StyleLength(radioCard.parent.WorldToLocal(new Vector2(0, p.yMax)).y + 8) : new StyleLength(StyleKeyword.Null);
-            if (radioCard.style.top != top) radioCard.style.top = top;
-        }
-
         /// <summary>Place `i` of a row of `n` by La Lata on this panel (Arte's Settlement.PadWorld through its camera); null without it, or behind.</summary>
         Vector2? ClearingPad(int i, int n)
         {
@@ -220,7 +189,6 @@ namespace Bastion.UI.Strategy
             if (lastSquad != null) squad.Set(lastSquad);
             if (lastDebrief != null) debrief.Set(lastDebrief);
             if (lastBoard != null) skillBoard.Set(lastBoard);
-            radio.RepaintPortrait();
             Dress();
         }
 
@@ -242,7 +210,6 @@ namespace Bastion.UI.Strategy
             }
             if (picturesChanged) Repaint();
             Insets();
-            radio.Tick(Time.unscaledDeltaTime);
             var clock = ClockOf?.Invoke();
             proposal.Tick(clock?.text, clock?.left ?? 0, clock?.hurry ?? false);
             modal.Tick(clock?.text, clock?.left ?? 0, clock?.hurry ?? false);
@@ -256,7 +223,6 @@ namespace Bastion.UI.Strategy
         public void SetProposal(ProposalView p, WaitingView waiting)
         {
             proposal.Set(p, waiting);
-            Unstack();
             Dress();
         }
 
@@ -278,9 +244,6 @@ namespace Bastion.UI.Strategy
             debrief.Show(view == "debrief");
             map.Show(view == "geoscape");
             settlement.Show(view == "facilities");
-            // Where the radio sits goes with the screen (transmissions.css): the free corner of each.
-            foreach (var v in new[] { "geoscape", "squad", "debrief", "barracks" }) radioCard.EnableInClassList("radio--" + v, view == v);
-            Unstack();
             Dress();
         }
 
@@ -330,9 +293,6 @@ namespace Bastion.UI.Strategy
         /// (mixta.css: border-image, --m-rivets, clip-path; strategy.css .recruit-card). Once each, after every change,
         /// since the screens make some of them again.
         /// </summary>
-        /// <summary>A key for the radio (escape, enter, space): true if it took it (the base's Esc then does nothing else).</summary>
-        public bool RadioKey(string key) => radio != null && radio.Key(key);
-
         /// <summary>
         /// What a «Ver» points at, or what just changed there, blinks (screen.ts blink; strategy.css .blink: three times in
         /// 0.45 s, an outline and a wash in the warning's colour), so it is found even when it is already on screen. By
@@ -440,7 +400,6 @@ namespace Bastion.UI.Strategy
         void Dress()
         {
             if (root == null) return;
-            PlateFrame.Dress(radioCard, false);
             foreach (var cls in FramedPlates) root.Query(className: cls).ForEach(e => PlateFrame.Dress(e));
             root.Query(className: "strat-proposal").ForEach(e => PlateFrame.Dress(e, false));
             root.Query<Button>(className: "btn-primary").ForEach(Slant.Dress);

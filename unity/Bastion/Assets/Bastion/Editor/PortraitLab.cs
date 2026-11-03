@@ -11,8 +11,8 @@ namespace Bastion.EditorTools
 {
     /// <summary>
     /// The busts (Bastion.Client.Portraits) drawn to PNG files, to set beside 0.10.1's: the soldiers of UI's sample campaign
-    /// (BASTION_PARTIDA, .dev-snapshots/ui/estrategia-0101/partida-muestra.json unless said) and every radio voice, into
-    /// BASTION_OUT (<id>.png, voz-<speaker>.png). Makes Resources/PortraitTone.mat if it is missing.
+    /// (BASTION_PARTIDA, .dev-snapshots/ui/estrategia-0101/partida-muestra.json unless said), into BASTION_OUT (<id>.png).
+    /// Makes Resources/PortraitTone.mat if it is missing.
     ///   BASTION_OUT=dir unity/tools/unity.sh -executeMethod Bastion.EditorTools.PortraitLab.Muestra -quit
     /// </summary>
     public static class PortraitLab
@@ -39,12 +39,9 @@ namespace Bastion.EditorTools
                 Portraits.Know(id, s["appearance"]?.ToObject<Appearance>(serializer), (string)s["name"], Bastion.Client.Units.SquadTint.ColourOf((int?)s["owner"] ?? 0));
                 ids.Add(id);
             }
-            var speakers = typeof(SpeakerIds).GetFields().Where(f => f.IsLiteral).Select(f => (string)f.GetValue(null)).ToList();
-            foreach (string speaker in speakers) Portraits.Voice(speaker);
             Portraits.Flush();
             foreach (string id in ids) Save(Portraits.Soldier(id), Path.Combine(folder, id + ".png"));
-            foreach (string speaker in speakers) Save(Portraits.Voice(speaker), Path.Combine(folder, "voz-" + speaker + ".png"));
-            Debug.Log($"[portraits] {ids.Count} soldiers and {speakers.Count} voices in {Path.GetFullPath(folder)}");
+            Debug.Log($"[portraits] {ids.Count} soldiers in {Path.GetFullPath(folder)}");
         }
 
         static void Save(Texture texture, string path)

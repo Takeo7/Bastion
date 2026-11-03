@@ -272,7 +272,7 @@ namespace Bastion.UI.Hud
         /// </summary>
         void ReopenIntro() => cards.ReopenIntro(IntroNow?.Invoke());
 
-        public void Log(string text, string color = null) => log.Add(text, color);
+        public void Log(string text, string color = null, Action see = null) => log.Add(text, color, see);
         public void ClearLog() => log.Clear();
         public void Toast(string text) => notes.Toast(text);
 
@@ -294,6 +294,9 @@ namespace Bastion.UI.Hud
 
         /// <summary>A word or number rising over a point of the world (damage, «ATURDIDO»…).</summary>
         public void Float(Vector3 world, string text, string kind, string iconId = null) => flags.Float(world, text, kind, iconId);
+
+        /// <summary>An enemy just seen: a mark on its flag for 2 s, an eye if it hasn't noticed the squad, a «!» if it has (UnitFlags.Spot).</summary>
+        public void Spot(string id, bool alert) => flags.Spot(id, alert);
 
         /// <summary>For the labs: the help of the first element of class `className` pinned open; whether there was one.</summary>
         public bool PinTip(string className)

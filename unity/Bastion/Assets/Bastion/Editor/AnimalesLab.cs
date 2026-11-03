@@ -129,6 +129,25 @@ namespace Bastion.EditorTools
             if (Environment.GetEnvironmentVariable("BASTION_EN")?.Split(',') is string[] en && en.Length == 2)
                 first.position = MapSpace.World(int.Parse(en[0]), int.Parse(en[1]));
             var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            // (BASTION_SONDA_PERRO=1: its place, turn and animator each frame, [perro] t x z yaw speed state time param.)
+            if (Environment.GetEnvironmentVariable("BASTION_SONDA_PERRO") == "1")
+            {
+                var animator = first.GetComponentInChildren<Animator>();
+                var last = first.position;
+                float clock = 0;
+                var before = Fauna.Stepping;
+                Fauna.Stepping = dt =>
+                {
+                    before?.Invoke(dt);
+                    clock += dt;
+                    var p = first.position;
+                    float speed = Vector3.Distance(new Vector3(p.x, 0, p.z), new Vector3(last.x, 0, last.z)) / Mathf.Max(dt, 1e-4f);
+                    last = p;
+                    var info = animator != null && animator.isActiveAndEnabled ? animator.GetCurrentAnimatorStateInfo(0) : default;
+                    float pace = animator != null && animator.isActiveAndEnabled && animator.parameters.Any(q => q.name == "Movement_f") ? animator.GetFloat("Movement_f") : -1;
+                    Debug.Log(FormattableString.Invariant($"[perro] {clock:0.000} {p.x:0.000} {p.z:0.000} {first.eulerAngles.y:0.0} {speed:0.00} {info.shortNameHash} {info.normalizedTime:0.000} {pace:0.00} {(animator != null && animator.IsInTransition(0) ? 1 : 0)}"));
+                };
+            }
             // (BASTION_SOLO=1: nobody coming, the camera on the animal: how it stands and wanders.)
             if (Environment.GetEnvironmentVariable("BASTION_SOLO") == "1")
             {
@@ -151,8 +170,10 @@ namespace Bastion.EditorTools
             // (BASTION_SEGUIR=1: the camera following the animal as it runs, the stand-in in view too.)
             bool follow = Environment.GetEnvironmentVariable("BASTION_SEGUIR") == "1";
             Camera shot = null;
+            var probe = Fauna.Stepping;
             Fauna.Stepping = dt =>
             {
+                probe?.Invoke(dt);
                 walked += dt;
                 Place();
                 if (follow && (shot ??= GameObject.Find("Shot camera")?.GetComponent<Camera>()) != null)

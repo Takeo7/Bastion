@@ -531,12 +531,12 @@ namespace Bastion.Engine.Tests
                 ["noise"] = new { door = Content.Noise.Door, breach = Content.Noise.Breach, dash = Content.Noise.Dash, alarm = Content.Noise.Alarm },
                 ["traps"] = new { mine = Content.Traps.Mine, mineRadius = Content.Traps.MineRadius, spikes = Content.Traps.Spikes, wire = Content.Traps.Wire },
                 ["siege"] = new { door = Content.Siege.Door, barricade = Content.Siege.Barricade, smashNoise = Content.Siege.SmashNoise, mags = Content.Siege.Mags, hold = Content.Siege.Hold },
-                ["horde"] = new { perTurn = Content.Horde.PerTurn, perNoise = Content.Horde.PerNoise, wave = Content.Horde.Wave, cap = Content.Horde.Cap, trickle = Content.Horde.Trickle },
+                ["horde"] = new { perNoise = Content.Horde.PerNoise, wave = Content.Horde.Wave, cap = Content.Horde.Cap, trickle = Content.Horde.Trickle },
                 ["night"] = new
                 {
                     sightCut = Content.Night.SightCut, minSight = Content.Night.MinSight, detection = Content.Night.Detection,
                     streetLight = Content.Night.StreetLight, floodlight = Content.Night.Floodlight, lampHeight = Content.Night.LampHeight,
-                    hordeHead = Content.Night.HordeHead, supplies = Content.Night.Supplies,
+                    supplies = Content.Night.Supplies,
                 },
                 ["infectionBurst"] = Content.Infection.Burst, ["infectionVest"] = Content.Infection.Vest,
             };

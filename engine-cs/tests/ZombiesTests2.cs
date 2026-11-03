@@ -270,7 +270,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(1, back.Medicines);
         }
 
-        [Fact(DisplayName = "the Saqueo › the horde comes in by the edges every few turns, sooner the more noise, on the prowl")]
+        [Fact(DisplayName = "the Saqueo › the horde comes in by the edges when the noise fills its clock, on the prowl; the turns alone don’t (Arturo, 2/11)")]
         public void TheHordeComesInByTheEdges()
         {
             GameState Setup()
@@ -295,19 +295,22 @@ namespace Bastion.Engine.Tests
                 }
                 return events;
             }
-            // Quiet: the first wave is announced once the turns alone fill the clock (the fifth), to land a turn later.
+            // Quiet: no wave however many turns go by. (The few that come every turn, playtest 2026-10-15 #11, apart.)
             var quiet = Setup();
-            var first = Content.Horde.Wave / Content.Horde.PerTurn;
-            // (The few that come every turn, playtest 2026-10-15 #11, apart.)
             List<ReinforcementsIncomingEvent> Waves(List<GameEvent> events) => Of<ReinforcementsIncomingEvent>(events).Where((e) => e.R.Trickle != true).ToList();
-            var announced = Waves(Turns(quiet, first));
-            Assert.Equal(new[] { first + 1 }, announced.Select((e) => e.R.Turn));
+            Assert.Empty(Waves(Turns(quiet, 10)));
+            Assert.Equal(0, Rules.HordeFill(quiet));
+            // Once the noise fills the clock, a wave is announced, to land a turn later.
+            var noisy = Setup();
+            noisy.Mission.Noise = Content.Horde.Wave;
+            var announced = Waves(Turns(noisy, 1));
+            Assert.Equal(new[] { 2 }, announced.Select((e) => e.R.Turn));
             var r = announced[0].R;
             Assert.True(r.Horde);
             // No exact spot is ever announced (playtest 2026-10-13).
             Assert.Null(r.Pos);
             // It lands unaware by an edge, far from the squad, heading for it: the squad stays hidden until they see it.
-            var landing = Turns(quiet, 1);
+            var landing = Turns(noisy, 1);
             var spawned = Of<SpawnedEvent>(landing).First((e) => e.Units.Count == r.Units.Count);
             foreach (var u in spawned.Units)
             {
@@ -318,10 +321,10 @@ namespace Bastion.Engine.Tests
             Assert.True(spawned.Units.All((u) => u.Heard != null && u.Heard.X == 20 && u.Heard.Y == 20));
             // (The few that came before it, every turn, may have found the squad by now: the wave itself doesn't.)
             Assert.DoesNotContain(Of<ConcealmentBrokenEvent>(landing), (e) => spawned.Units.Any((u) => u.Id == e.By));
-            // Noisy: a firefight's worth of noise brings it on the first turn.
+            // Short of a wave's worth of noise, none.
             var loud = Setup();
-            loud.Mission.Noise = Content.Horde.Wave - Content.Horde.PerTurn;
-            Assert.Equal(new[] { 2 }, Waves(Turns(loud, 1)).Select((e) => e.R.Turn));
+            loud.Mission.Noise = Content.Horde.Wave - 1;
+            Assert.Empty(Waves(Turns(loud, 1)));
         }
 
         [Fact(DisplayName = "the Limpieza › only the noise brings the horde (Arturo, 29/10): none come every turn, a wave once the noise fills the clock; the meter says how near")]
@@ -339,7 +342,7 @@ namespace Bastion.Engine.Tests
             }
             var quiet = Setup();
             var events = new List<GameEvent>();
-            for (var i = 0; i < 2 * Content.Horde.Wave / Content.Horde.PerTurn; i++)
+            for (var i = 0; i < 10; i++)
             {
                 var turn = NewSim(quiet, i + 1);
                 turn.RunAlienTurn();
@@ -387,7 +390,7 @@ namespace Bastion.Engine.Tests
         /// <summary>A campaign of two whose first offer, made a mission of `kind`, has been chosen; and that mission.</summary>
         private static (CampaignState c, MissionOffer offer, GameState mission) Flown(string kind)
         {
-            var c = Campaign.CreateCampaign(new[] { 0, 1 }, new Rng(2));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(new[] { 0, 1 }, new Rng(2)), true);
             var offer = c.Offers[0];
             offer.Kind = kind;
             CampaignHelpers.Ok(c, new ChooseMissionCommand { Id = offer.Id });

@@ -84,7 +84,7 @@ namespace Bastion.UI.EditorTools
             ("weapon:sniper", Sniper), ("weapon:cannon", MachineGun), ("pistol", Pistol),
             ("weapon:pan", Pan), ("weapon:bat", Bat), ("weapon:crowbar", Crowbar), ("weapon:chainsaw", Chainsaw),
             ("slash", Blades), ("overwatchMelee", Blade), ("stone", Rock), ("overwatch", Target),
-            ("hunker", Helmet), ("hide", Hood), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
+            ("hunker", Helmet), ("hide", Hood), ("pry", Crowbar), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
             ("launch", Launcher), ("smoke", Smoke), ("flashbang", Flashbang), ("firstAid", Healing),
             ("evac", Vehicle), ("evacAccept", Vehicle), ("evacRefuse", Time), ("abandonRefuse", Time),
             ("abandon", Flag), ("abandonAccept", Flag), ("hack", Settings), ("search", Backpack), ("searchRoom", Backpack),

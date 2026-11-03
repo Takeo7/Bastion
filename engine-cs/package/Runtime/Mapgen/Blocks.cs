@@ -192,7 +192,11 @@ namespace Bastion.Engine
                 }
             }
             // Now and then a room held out in: its windows barricaded from inside (#20).
-            if (medicalRooms == null && plan != Plans.Hall && plan != Plans.Market && (furnish == Furnishes.Home || furnish == Furnishes.Shop || furnish == Furnishes.Office)) BarricadeRooms(c, b, rooms);
+            if (medicalRooms == null && plan != Plans.Hall && plan != Plans.Market && (furnish == Furnishes.Home || furnish == Furnishes.Shop || furnish == Furnishes.Office))
+            {
+                BarricadeRooms(c, b, rooms);
+                BoardDoors(c, b);
+            }
             if (medicalRooms != null)
             {
                 foreach (var room in medicalRooms) FurnishMedical(c, room, rng, medicalKind == MedicalSiteKinds.Clinic ? null : medicalKind);

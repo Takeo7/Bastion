@@ -152,11 +152,11 @@ namespace Bastion.Engine
                 case ContactAction _:
                     return ContactCost(c);
                 case CraftAction a:
-                    return Progression.Crafts[a.Project].Cost;
+                    return Progression.Crafts[a.Project].Cost * Batch(a.Count);
                 case RecruitAction _:
                     return RecruitCost(c);
                 case BuyAction a:
-                    return ShopPrice(c, a.Item);
+                    return ShopPrice(c, a.Item) * Batch(a.Count);
                 default:
                     return 0;
             }
@@ -244,7 +244,7 @@ namespace Bastion.Engine
         {
             return c.Squad
                 .Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id))
-                .Where((s) => s != null && SoldierReady(s))
+                .Where((s) => s != null && (SoldierReady(s) || (ActiveOffer(c)?.Siege == true && Defends(c, s))))
                 .Select((s) => SquadMember(c, s!))
                 .ToList();
         }

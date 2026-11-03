@@ -19,6 +19,9 @@ clips.macheteChop = { pack: 'mixamo', fbx: 'Standing Melee Attack Downward' };
 // (Unity's own, Arturo 1/11: soldiers with no gun at all wait with their blade held low, Sword Combat's one-handed
 // sword's, not the pistol's; they walk and run in Synty's own, the blade in the hand: UnitViews.StanceOf.)
 clips.bladeIdle = { pack: 'swordCombat', fbx: 'Animations/Polygon/Idle/Base/A_Idle_Base_Sword' };
+// (Unity's own, Ana's #1 of 1/11: hiding, down onto a knee with the rifle or the pistol in hand: UnitViews.Hide.)
+clips.rifleKneelDown = { pack: 'mixamo', fbx: 'Rifle Stand To Kneel' };
+clips.pistolKneelDown = { pack: 'mixamo', fbx: 'Pistol Stand To Kneel' };
 const out = join(root, 'unity/Bastion/Assets/Bastion/Client/Resources/Anims.json');
 const anims = {
   clips,
@@ -62,6 +65,16 @@ Object.assign(anims.weapons, {
   bat: { fbx: 'SM_Wep_Bat_Wood_01', melee: true, size: 0.8, grip: [0, 0, 0.1] },
   crowbar: { fbx: 'SM_Wep_Crowbar_01', melee: true, size: 0.65, grip: [0, 0, -0.4], stroke: 'chop' },
   chainsaw: { fbx: 'SM_Wep_ChainSaw_01', melee: true, size: 0.75, grip: [-0.06, 0.02, 0], two: [-0.06, 0.15, 0.28], slung: true },
+});
+// (Unity's own, Ana's B5 and Arturo, 2/11: four more found, in the same slot. The katana from Apocalypse, its fist at its
+// guard and its blade along +z as the machete's; Gang Warfare's straight sword (its sheath left off: UnitViews.Arms), its
+// grip at its origin and its blade up; Farm's rake hung from the top of its handle, held a third of the way down and its
+// other hand lower, struck from above; Apocalypse's stick, held by an end. The long ones across the back.)
+Object.assign(anims.weapons, {
+  katana: { fbx: 'apocalypse:SM_Wep_Katana_01', melee: true, size: 1.3, slung: true },
+  longsword: { fbx: 'gang:SM_Wep_Sword_02', melee: true, size: 1.15, grip: [0, 0, 0], along: [0, 1, 0], slung: true },
+  rake: { fbx: 'farm:SM_Prop_Tool_Rake_01', melee: true, size: 1, grip: [0, -0.35, 0], along: [0, -1, 0], two: [0, -0.75, 0], slung: true, stroke: 'chop' },
+  stick: { fbx: 'apocalypse:SM_Item_Stick_01', melee: true, size: 1.4, grip: [0, -0.22, 0], along: [0, 1, 0] },
 });
 writeFileSync(out, JSON.stringify(anims, null, 1) + '\n');
 console.log(Object.keys(clips).length, 'clips ->', out.slice(root.length + 1));

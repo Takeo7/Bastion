@@ -11,6 +11,8 @@ namespace Bastion.UI.Strategy
         public string Tab = "items";
         /// <summary>The row picked: an item's id; «f:» a weapon, «x:» a loose mod, «a1»–«a3» an armour, «m:» a work; null, the first.</summary>
         public string Pick;
+        /// <summary>How many to buy or make of it (Arturo, 02/11 A7), 1 to Campaign.MaxBatch; back to 1 with another pick.</summary>
+        public int Count = 1;
     }
 
     public sealed partial class StrategyPresenter
@@ -97,7 +99,7 @@ namespace Bastion.UI.Strategy
                 v.Sections.Add(make);
                 v.Detail = picked.StartsWith("f:") ? FoundDetail(c, picked.Substring(2))
                     : picked.StartsWith("x:") ? ModDetail(c, picked.Substring(2))
-                    : picked.StartsWith("m:") ? MakeDetail(c, picked.Substring(2))
+                    : picked.StartsWith("m:") ? MakeDetail(c, picked.Substring(2), pick.Count)
                     : TierDetail(c, picked);
                 return v;
             }
@@ -120,7 +122,7 @@ namespace Bastion.UI.Strategy
             }
             v.Sections.Add(list);
             if (Campaign.FacilityCount(c, "workshop") > 0) v.Note = $"Taller: −{Js.Round((1 - (double)Campaign.ShopPrice(c, ItemIds.SmokeGrenade) / Content.Items[ItemIds.SmokeGrenade].Cost) * 100)} %";
-            if (picked != null) v.Detail = ItemDetail(c, Content.Items[picked]);
+            if (picked != null) v.Detail = ItemDetail(c, Content.Items[picked], pick.Count);
             return v;
         }
 
@@ -167,19 +169,25 @@ namespace Bastion.UI.Strategy
             return work != null ? new ChipView { Text = $"Taller · {MissionsText(MissionsFor(work.DaysLeft))}", Tone = "good", Tip = $"El Taller está en ello: sale {Lore.InMissions(MissionsFor(work.DaysLeft))}." } : null;
         }
 
-        /// <summary>A belt's accessory: what it does, how many there are, and Comprar with its reason.</summary>
-        ArmoryDetailView ItemDetail(CampaignState c, ItemDef item)
+        /// <summary>
+        /// A belt's accessory: what it does, how many there are, and Comprar with its reason; `count` of it at once (Arturo,
+        /// 02/11 A7), the price that many times.
+        /// </summary>
+        ArmoryDetailView ItemDetail(CampaignState c, ItemDef item, int count = 1)
         {
             var unlocked = Progression.ItemUnlocked(c, item.Id);
-            var cost = Campaign.ShopPrice(c, item.Id);
+            var each = Campaign.ShopPrice(c, item.Id);
+            var cost = each * count;
             var v = new ArmoryDetailView { Kicker = "Accesorio · Cinturón", Name = item.Name, Art = ItemIcon(item.Id), Text = { item.Description } };
             v.Chips.Add(new ChipView { Text = StockText(c, item.Id) ?? "No tienes ninguno", Tip = "Se equipa en la ficha del soldado; si cae, se pierde" });
-            v.Chips.Add(unlocked ? new ChipView { Text = Campaign.CostText(cost) } : new ChipView { Text = Lore.NeedsLevelLine(item.Level), Tone = "warn" });
+            v.Chips.Add(unlocked ? new ChipView { Text = Campaign.CostText(cost), Tip = count > 1 ? $"{Campaign.CostText(each)} cada uno" : null } : new ChipView { Text = Lore.NeedsLevelLine(item.Level), Tone = "warn" });
             if (!unlocked) return v;
             // With the other one here a purchase is proposed (Ana, 21/10 #31): one at a time, as the rest.
             var why = PendingWhy(c);
-            v.Button = "Comprar";
+            v.Button = count > 1 ? $"Comprar ×{count}" : "Comprar";
             v.Action = "buy";
+            v.Count = count;
+            v.CountMax = Campaign.MaxBatch;
             v.Enabled = Campaign.CanAfford(c, cost) && why == "";
             var said = why != "" ? why : Shortfall(c, cost);
             v.Why = said != "" ? said : null;
@@ -283,6 +291,13 @@ namespace Bastion.UI.Strategy
                 Text = { melee ? "Para un soldado, en lugar del cuchillo. Si cae, se pierde." : side ? "Para un soldado: al costado, con su munición; sin otra arma en la mano, es su arma. Si cae, se pierde." : $"{hand}{(def.Better && def.Mod != null ? $" Vino con {Content.WeaponMods[def.Mod].Name.ToLowerInvariant()}." : "")} Si cae, se pierde." },
                 Figures = FigureRows(profile), Range = RangeOf(profile),
             };
+            // What a blade does besides one blow at hand (Ana's #5 of 2/11), as the engine has it for one who carries it.
+            if (melee)
+            {
+                var bearer = new Unit { Arms = new Arms { Melee = w.Kind } };
+                if (Content.Sweeps(bearer)) v.Text.Add("Golpea a la vez a todos los enemigos que tenga al lado.");
+                else if (Content.ReachOf(bearer) > 1) v.Text.Add($"Llega hasta {Content.ReachOf(bearer)} casillas, en línea o en diagonal.");
+            }
             if (!melee) Care(c, w, v);
             v.Holder = new HolderView { Head = "La lleva", Name = holder != null ? Appearances.DisplayName(holder.Name, holder.Nickname) : "Nadie: está en la Armería.", Button = holder != null && Commands(holder.Owner) ? "Quitársela" : null };
             // One's own, then the partner's while away (their name says whose).
@@ -292,7 +307,9 @@ namespace Bastion.UI.Strategy
             foreach (var s in mine)
             {
                 var pistol = side ? Progression.PistolOf(c, s) : null;
-                var carries = melee ? (Progression.MeleeWeaponOf(c, s) != null ? "Machete" : "Cuchillo") : side ? (pistol != null ? "Pistola" : "nada") : Campaign.WeaponLabel(c, s);
+                // The blade by its name (it said «Machete» for any: a katana, a frying pan…).
+                var blade = melee ? Progression.MeleeWeaponOf(c, s) : null;
+                var carries = melee ? (blade != null ? Content.FoundWeapons[blade.Kind].Name : "Cuchillo") : side ? (pistol != null ? "Pistola" : "nada") : Campaign.WeaponLabel(c, s);
                 var row = new CarrierView { Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname) + (s.Owner == Slot ? "" : $" · de {PlayerName(s.Owner)}"), Note = $"· {(melee ? "al cinto" : side ? "al costado" : "en la mano")}: {carries}" };
                 if (s.Id == w.Holder) row.Chip = "La lleva";
                 else
@@ -369,13 +386,18 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
-        /// <summary>A weapon, munition or improvement the Taller can make (makePanel): what it does, and «Hacer» with its cost.</summary>
-        ArmoryDetailView MakeDetail(CampaignState c, string id)
+        /// <summary>
+        /// A weapon, munition or improvement the Taller can make (makePanel): what it does, and «Hacer» with its cost; a
+        /// weapon or an improvement `count` at once (Arturo, 02/11 A7), the cost and the days that many times.
+        /// </summary>
+        ArmoryDetailView MakeDetail(CampaignState c, string id, int count = 1)
         {
             if (!Progression.Crafts.TryGetValue(id, out var def)) return null;
+            var batch = def.Kind == CraftKinds.Arms || def.Kind == CraftKinds.Mod;
+            if (!batch) count = 1;
             var work = c.Base.Works.FirstOrDefault(w => w.Project == def.Id);
             var done = def.Kind == CraftKinds.Ammo && c.Crafted != null && c.Crafted.Contains(def.Id);
-            var blocker = Campaign.CraftBlocker(c, def.Id);
+            var blocker = Campaign.CraftBlocker(c, def.Id, count);
             var text = def.Kind == CraftKinds.Ammo
                 ? $"Un cargador de repuesto más para cada soldado que salga de misión. Ahora cada uno sale con {Progression.SpareMags(c)} de repuesto."
                 : def.Kind == CraftKinds.Mod && def.MakesMod != null
@@ -397,11 +419,16 @@ namespace Bastion.UI.Strategy
             else if (work != null) v.Text.Add($"El Taller está en ello: sale {Lore.InMissions(MissionsFor(work.DaysLeft))}.");
             else
             {
-                v.Chips.Add(new ChipView { Text = Campaign.CostText(def.Cost) });
-                v.Chips.Add(new ChipView { Text = $"{def.Parts} piezas", Tip = $"Tenéis {c.Parts ?? 0}" });
-                v.Chips.Add(new ChipView { Text = MissionsText(MissionsFor(def.Days)), Tip = $"Sale {Lore.InMissions(MissionsFor(def.Days))}" });
-                v.Button = $"Hacer {def.The}";
+                v.Chips.Add(new ChipView { Text = Campaign.CostText(def.Cost * count), Tip = count > 1 ? $"{Campaign.CostText(def.Cost)} cada una" : null });
+                v.Chips.Add(new ChipView { Text = $"{def.Parts * count} piezas", Tip = $"Tenéis {c.Parts ?? 0}" });
+                v.Chips.Add(new ChipView { Text = MissionsText(MissionsFor(def.Days * count)), Tip = $"Sale{(count > 1 ? $"n las {count}" : "")} {Lore.InMissions(MissionsFor(def.Days * count))}" });
+                v.Button = count > 1 ? $"Hacer {count}" : $"Hacer {def.The}";
                 v.Action = "craft";
+                if (batch)
+                {
+                    v.Count = count;
+                    v.CountMax = Campaign.MaxBatch;
+                }
                 v.Enabled = blocker == null;
                 v.Why = blocker;
             }

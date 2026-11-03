@@ -82,9 +82,11 @@ namespace Bastion.Engine.Tests
         {
             // Arturo, 1/11: «que no empiecen con pistola, para que el progreso sea más lento»; nor grenades nor a medkit.
             var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            // Without the four arms the squad opens with (Arturo, 2/11; NotesOfTwoNovTests): a soldier left with nothing.
+            Assert.Equal(4, c.FoundWeapons!.Count);
+            c.FoundWeapons = null;
             c.Squad = c.Soldiers.Take(4).Select((x) => x.Id).ToList();
             Assert.True(c.Pistols);
-            Assert.Empty(c.FoundWeapons ?? new List<FoundWeapon>());
             Assert.Empty(c.Inventory);
             var m = Campaign.BuildSquad(c)[0];
             Assert.NotNull(m.Arms);
@@ -106,6 +108,7 @@ namespace Bastion.Engine.Tests
         {
             var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
             c.Pistols = null;
+            c.FoundWeapons = null;
             c.Squad = c.Soldiers.Take(4).Select((x) => x.Id).ToList();
             var m = Campaign.BuildSquad(c)[0];
             Assert.Equal(((string?)null, (string?)null, (bool?)null, (int?)0, "Pistola"), (m.Arms!.Primary, m.Arms.Melee, m.Arms.Pistol, m.Mags, m.WeaponName));
@@ -202,6 +205,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Ya está hecho.", Campaign.CraftBlocker(c, CraftIds.Ammo1));
             // The level's weapons, in a campaign from before the pistols were counted (since, none: PistolsAndMolotovTests).
             c.Pistols = null;
+            c.FoundWeapons = null;
             LevelTo(c, 3, new Rng(1));
             Assert.Equal(new[] { FoundWeaponIds.AssaultRifle, FoundWeaponIds.Machete, FoundWeaponIds.PrecisionRifle, FoundWeaponIds.PumpShotgun }, (c.FoundWeapons ?? new List<FoundWeapon>()).Select((w) => w.Kind).OrderBy((k) => k, StringComparer.Ordinal));
         }

@@ -1,8 +1,8 @@
 // The special dead's atlas with its colours dulled (SoldierPalette.DullAtlas; Ana's #17 of 28/10, #20 of 29/10 and #6 of
 // 1/11): its skin and its clothes are one texture. City Zombies' (_Flesh 0), their skin a greyed beige already: green to
 // purple (hue 55°–335°, whole from 70° to 320°) to a third of its saturation, never under 0.15, and 90 % of its light,
-// and anything loud (saturation and light both over 0.45, whole from 0.6) to 60 % of its saturation and 90 % of its
-// light. Boss Zombies' (_Flesh 1) the same but for their skin's swatch, pink, teal or olive by the atlas (the last of the
+// and anything loud (saturation and light both over 0.45, whole from 0.6; or light, over 0.5, whole from 0.65, and
+// some coloured, saturation over 0.3, whole from 0.45) to 60 % of its saturation and 90 % of its light. Boss Zombies' (_Flesh 1) the same but for their skin's swatch, pink, teal or olive by the atlas (the last of the
 // strip's columns, the same in all of them: the Blobber's face and arms, some of a dress), as a common dead's skin
 // (SoldierPalette.DullFlesh), green to pink (hue 55°–355°, whole from 70° to 345°) made grey, pale or sickly: their
 // clothes keep their colours, dulled as City's. In the texture's own (sRGB) values, as the palettes are. Drawn once an
@@ -64,7 +64,7 @@ Shader "Hidden/Bastion/DullAtlas"
                     hsv.y = max(0.15, hsv.y * (1 - 0.67 * w));
                     hsv.z *= 1 - 0.1 * w;
                 }
-                float loud = saturate((min(hsv.y, hsv.z) - 0.45) / 0.15);
+                float loud = max(saturate((min(hsv.y, hsv.z) - 0.45) / 0.15), saturate((hsv.y - 0.3) / 0.15) * saturate((hsv.z - 0.5) / 0.15));
                 hsv.y *= 1 - 0.4 * loud;
                 hsv.z *= 1 - 0.1 * loud;
                 return float4(GammaToLinearSpace(Rgb(hsv)), t.a);

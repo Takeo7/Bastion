@@ -83,6 +83,12 @@ namespace Bastion.Engine.Tests
                             now = null;
                         }
                         if (played.Count >= missions) return played;
+                        // Lost, the squad gone or the dead at the gates: over, not stuck (an event may still be pending).
+                        if (c?.Outcome != null)
+                        {
+                            say?.Invoke($"campaña acabada: {c.Outcome}");
+                            return played;
+                        }
                         foreach (var p in players)
                         {
                             var order = p.Heard.BaseOrder(p.Slot, p.Slot == 0);

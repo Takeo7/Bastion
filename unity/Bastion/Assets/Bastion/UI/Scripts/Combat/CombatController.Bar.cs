@@ -107,13 +107,14 @@ namespace Bastion.UI.Combat
                     // Out of rounds in the magazine (Ana, 20/10 #24): said on the key.
                     Note = reason != null && reason.EndsWith(": recarga.", StringComparison.Ordinal) ? AbilityTexts.ReloadFirst : null,
                     // An attack's card names the weapon it fires: its cost and its noise are that weapon's.
-                    Name = attack ? $"{def.Name} · {AbilityTexts.WeaponLabel(u, id)}" : id == AbilityIds.Hack ? $"{def.Name} · {Abilities.HackChance(State, u)}%" : def.Name,
+                    // Registrar by what is beside (a body, a boot: Arturo, 02/11 A9, A13), as its title says it (Lore.BoxTitle).
+                    Name = attack ? $"{def.Name} · {AbilityTexts.WeaponLabel(u, id)}" : id == AbilityIds.Hack ? $"{def.Name} · {Abilities.HackChance(State, u)}%" : id == AbilityIds.Search && SearchBeside(u) is string spot ? Lore.BoxTitle(spot) : def.Name,
                     Cost = AbilityTexts.CostText(u, id),
                     Limits = AbilityTexts.LimitsText(u, id),
                     Damage = AbilityTexts.DamageText(State, u, id),
                     Noise = AbilityTexts.NoiseText(State, u, id),
                     Stats = AbilityTexts.AbilityStats(State, u, id),
-                    Description = def.Description,
+                    Description = id == AbilityIds.Search && SearchBeside(u) is string beside ? AbilityTexts.SearchWords(beside).effect : def.Description,
                     Active = mode != Mode.Move && modeAbility == id,
                     Count = charge ?? -1,
                     Cooldown = cooldown,
@@ -179,7 +180,7 @@ namespace Bastion.UI.Combat
                 foreach (var o in options)
                 {
                     o.Menu = menu.Id;
-                    if (AbilityTexts.MenuLabels.TryGetValue(o.Id, out var label) && several) o.Name = label;
+                    if (AbilityTexts.MenuLabels.TryGetValue(o.Id, out var label) && several) o.Name = o.Id == AbilityIds.Search && SearchBeside(u) is string spot ? AbilityTexts.SearchWords(spot).label : label;
                 }
                 keys.Add((key, options));
             }
@@ -203,17 +204,27 @@ namespace Bastion.UI.Combat
             return bar;
         }
 
-        /// <summary>A box beside the soldier, opened or not, that its hands reach (loot.ts searchSpot, reachesToSearch).</summary>
-        bool CrateBeside(Unit u)
+        /// <summary>A box beside the soldier, opened or not, that its hands reach: a body at its feet too (SearchBeside).</summary>
+        bool CrateBeside(Unit u) => SearchBeside(u) != null;
+
+        /// <summary>
+        /// What Registrar would work on beside `u`, by kind (Looting.SearchSpot: a box, a car's boot, a body, the one it
+        /// stands on too: Looting.ReachesToOpen): one still to search first, else any its hands reach; null, none.
+        /// </summary>
+        string SearchBeside(Unit u)
         {
+            if (u == null) return null;
+            string opened = null;
             for (var dx = -1; dx <= 1; dx++)
                 for (var dy = -1; dy <= 1; dy++)
                 {
-                    if (dx == 0 && dy == 0) continue;
                     var p = new Pos { X = u.Pos.X + dx, Y = u.Pos.Y + dy, Z = u.Pos.Z };
-                    if (Looting.SearchSpot(State, p) != null && Looting.ReachesToSearch(State, u.Pos, p)) return true;
+                    var kind = Looting.SearchSpot(State, p);
+                    if (kind == null || !Looting.ReachesToOpen(State, u.Pos, p)) continue;
+                    if (!Looting.WasSearched(State, p)) return kind;
+                    opened ??= kind;
                 }
-            return false;
+            return opened;
         }
 
         static AbilityView CallKey(string id, string name, string description, string limits = null)

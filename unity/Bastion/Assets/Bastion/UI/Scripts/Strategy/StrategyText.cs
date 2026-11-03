@@ -78,28 +78,6 @@ namespace Bastion.UI.Strategy
             public const string ZoneMissions = "Misiones en la zona";
         }
 
-        /// <summary>The radio's card (transmissions.ts): its fixed words.</summary>
-        public static class Radio
-        {
-            public const string Kicker = "Transmisión";
-            public const string CloseTip = "Cerrar (Esc)";
-            public const string Next = "Seguir";
-            public const string End = "Fin";
-            public const string Ok = "Entendido";
-            /// <summary>After «Seguir ▸» once the line is typed (the battle's card takes clicks only: Hint without «o Intro»).</summary>
-            public const string Hint = "· clic o Intro";
-
-            /// <summary>{saludo} and {yo}: «Comandantes Ana y Luis», «Comandante Ana» (transmissions.ts greeting).</summary>
-            public static string Greeting(IList<string> names)
-            {
-                var list = new List<string>();
-                foreach (var n in names) if (!string.IsNullOrEmpty(n)) list.Add(n);
-                if (list.Count == 0) return "Comandantes";
-                if (list.Count == 1) return $"Comandante {list[0]}";
-                return $"Comandantes {string.Join(", ", list.GetRange(0, list.Count - 1))} y {list[list.Count - 1]}";
-            }
-        }
-
         /// <summary>«Volver al menú principal» from the base (Lore, 24/10: as in the HUD; «menú principal», not «de inicio»).</summary>
         public static class Leave
         {

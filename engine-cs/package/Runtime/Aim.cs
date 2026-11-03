@@ -151,6 +151,19 @@ namespace Bastion.Engine
             return Adjacent(a, b) && Grid.HeightAt(s, a) == Grid.HeightAt(s, b);
         }
 
+        /// <summary>
+        /// Whether `u`'s blade reaches `b` from `a`: alongside, or with the rake (Content.ReachOf) two tiles off in a straight
+        /// line or a diagonal, on the same level, over a tile it could stand on with nobody in it.
+        /// </summary>
+        public static bool InReachOf(GameState s, Unit u, Pos a, Pos b)
+        {
+            if (InMeleeReach(s, a, b)) return true;
+            int dx = b.X - a.X, dy = b.Y - a.Y;
+            if (Content.ReachOf(u) < 2 || Math.Max(Math.Abs(dx), Math.Abs(dy)) != 2 || (dx % 2 != 0) || (dy % 2 != 0) || Grid.HeightAt(s, a) != Grid.HeightAt(s, b)) return false;
+            var mid = new Pos { X = a.X + dx / 2, Y = a.Y + dy / 2, Z = a.Z };
+            return Flights.CanStopAt(s, mid) && Grid.HeightAt(s, mid) == Grid.HeightAt(s, a) && Grid.UnitAt(s, mid) == null && Paths.StepBetween(s, a, mid) != null && Paths.StepBetween(s, mid, b) != null;
+        }
+
         /// <summary>Whether any living member of `team` can see `target`.</summary>
         public static bool TeamSees(GameState s, string team, Unit target)
         {
@@ -180,7 +193,7 @@ namespace Bastion.Engine
             var squadsight = false;
             if (weapon.Melee)
             {
-                origin = InMeleeReach(s, from, target.Pos) ? from : null;
+                origin = InReachOf(s, shooter, from, target.Pos) ? from : null;
             }
             else
             {

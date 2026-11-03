@@ -83,24 +83,24 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ campaign setup
 
-        [Fact(DisplayName = "campaign setup › two players start with four soldiers each, credits, a level-1 Bastion, two operations and the first story chapter")]
-        public void TwoPlayersStartWithFourSoldiersEach()
+        [Fact(DisplayName = "campaign setup › two players start with two soldiers each (Arturo, 2/11), credits, a level-1 Bastion, two operations and the first story chapter")]
+        public void TwoPlayersStartWithTwoSoldiersEach()
         {
             var c = Campaign.CreateCampaign(Both, new Rng(1));
-            Assert.Equal(4, c.Soldiers.Count((s) => s.Owner == 0));
-            Assert.Equal(4, c.Soldiers.Count((s) => s.Owner == 1));
+            Assert.Equal(2, c.Soldiers.Count((s) => s.Owner == 0));
+            Assert.Equal(2, c.Soldiers.Count((s) => s.Owner == 1));
             Assert.Equal(2, c.Offers.Count((o) => !IsStory(o)));
             Assert.Equal(new int?[] { 1 }, c.Offers.Where(IsStory).Select((o) => o.Story));
             Assert.True(c.Credits > 0);
             Assert.Equal(1, Progression.BastionLevel(c));
         }
 
-        [Fact(DisplayName = "campaign setup › a solo campaign gives all eight soldiers to the only player")]
-        public void ASoloCampaignGivesAllEightSoldiersToTheOnlyPlayer()
+        [Fact(DisplayName = "campaign setup › a solo campaign gives all four soldiers to the only player")]
+        public void ASoloCampaignGivesAllFourSoldiersToTheOnlyPlayer()
         {
             var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
             Assert.True(c.Soldiers.All((s) => s.Owner == 0));
-            Assert.Equal(8, c.Soldiers.Count);
+            Assert.Equal(4, c.Soldiers.Count);
         }
 
         // ---------------------------------------------------------- shared decisions
@@ -184,7 +184,7 @@ namespace Bastion.Engine.Tests
         /// <summary>Two commanders with a squad of six (La Lata a furgoneta: 18/10 #45), three each.</summary>
         private static (CampaignState C, MissionOffer Offer, List<CampaignSoldier> Mine, List<CampaignSoldier> Theirs) Ready()
         {
-            var c = Campaign.CreateCampaign(Both, new Rng(2));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(Both, new Rng(2)), true);
             c.Vehicle = 1;
             var offer = c.Offers[0];
             Run(c, new ChooseMissionCommand { Id = offer.Id }, 0, new[] { 0 });
@@ -209,7 +209,7 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "missions › each their own part: a part the other leaves empty stays empty, and nobody touches the other's (Arturo, 18/10 #43)")]
         public void EachTheirOwnPart()
         {
-            var c = Campaign.CreateCampaign(Both, new Rng(2));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(Both, new Rng(2)));
             c.Vehicle = 1;
             var theirs = c.Soldiers.Where((s) => s.Owner == 1).ToList();
             // Player 1 has a single soldier fit to fight.
@@ -691,7 +691,7 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "helping the players › a chosen mission comes with its squad: the most seasoned ready soldiers first")]
         public void AChosenMissionComesWithItsSquad()
         {
-            var c = Campaign.CreateCampaign(Both, new Rng(2));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(Both, new Rng(2)));
             c.Vehicle = 1;
             var mine = c.Soldiers.Where((s) => s.Owner == 0).ToList();
             var veteran = mine[mine.Count - 1];
@@ -713,7 +713,7 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "helping the players › in the hangar each commander has a half, and nobody moves when others come and go")]
         public void InTheHangarEachCommanderHasAHalf()
         {
-            var c = Campaign.CreateCampaign(Both, new Rng(2));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(Both, new Rng(2)));
             c.Vehicle = 1;
             Run(c, new ChooseMissionCommand { Id = c.Offers[0].Id }, 0);
             Run(c, new VoteCommand { Accept = true }, 1);
@@ -735,7 +735,7 @@ namespace Bastion.Engine.Tests
         {
             Func<CampaignState, Func<string?, int?>> owner = (k) => (id) => k.Soldiers.FirstOrDefault((s) => s.Id == id)?.Owner;
             // A squad picked across both halves (the partner away) stays where it stood, then each goes to their own half.
-            var c = Campaign.CreateCampaign(Both, new Rng(2));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(Both, new Rng(2)));
             c.Vehicle = 1;
             Run(c, new ChooseMissionCommand { Id = c.Offers[0].Id }, 0);
             Run(c, new VoteCommand { Accept = true }, 1);
@@ -743,7 +743,9 @@ namespace Bastion.Engine.Tests
             c.Pads = ids.Select((id, i) => (id, i)).ToDictionary((p) => p.id!, (p) => (p.i + 3) % 6);
             Assert.Equal(new int?[] { 0, 0, 0, 1, 1, 1 }, Campaign.SquadPads(c).Select(owner(c)));
             // Alone, the whole hangar; then a partner arrives, takes over rookies, and the squad is picked again.
-            var d = Campaign.CreateCampaign(new[] { 0 }, new Rng(3));
+            var d = CampaignHelpers.FourEach(Campaign.CreateCampaign(new[] { 0 }, new Rng(3)));
+            // Handed over as before 2/11: four, keeping three (CampaignState.Pistols).
+            d.Pistols = null;
             d.Vehicle = 1;
             Run(d, new ChooseMissionCommand { Id = d.Offers[0].Id }, 0, new[] { 0 });
             Campaign.SyncPads(d);
@@ -763,7 +765,9 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "helping the players › alone, a commander keeps both kits; a partner who arrives later takes over the untouched rookies")]
         public void AloneACommanderKeepsBothKits()
         {
-            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(3));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(new[] { 0 }, new Rng(3)));
+            // A campaign from before 2/11: four each, a partner takes four and leaves three (CampaignState.Pistols).
+            c.Pistols = null;
             Assert.Equal(12, Campaign.SoldierCap(c));
             var veteran = c.Soldiers[0];
             veteran.Missions = 2;
@@ -778,7 +782,9 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "helping the players › a partner who arrives never takes the reserves the first commander needs: fresh recruits instead")]
         public void APartnerWhoArrivesNeverTakesTheReserves()
         {
-            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(3));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(new[] { 0 }, new Rng(3)));
+            // A campaign from before 2/11: four each, a partner takes four and leaves three (CampaignState.Pistols).
+            c.Pistols = null;
             // After a hard mission only three soldiers are fit, and they have never fought.
             for (var i = 0; i < c.Soldiers.Count; i++) c.Soldiers[i].WoundedDays = i < 5 ? 6 : 0;
             var fit = c.Soldiers.Where((s) => s.WoundedDays == 0).Select((s) => s.Id).ToList();
@@ -789,7 +795,8 @@ namespace Bastion.Engine.Tests
             // TypeScript's «Llega el segundo comandante» is «Se une el otro jugador» in C# (text-fixes.ts).
             Assert.Contains(c.Log, (l) => Regex.IsMatch(l.Text, "Se une el otro jugador"));
             // Three fit rookies are all the first commander has (the veterans are wounded): they stay, and the partner gets recruits.
-            var d = Campaign.CreateCampaign(new[] { 0 }, new Rng(3));
+            var d = CampaignHelpers.FourEach(Campaign.CreateCampaign(new[] { 0 }, new Rng(3)));
+            d.Pistols = null;
             foreach (var s in d.Soldiers.Skip(3))
             {
                 s.Missions = 1;
@@ -829,7 +836,7 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "helping the players › after a bad mission, too few ready soldiers puts recruiting before the next operation")]
         public void AfterABadMissionRecruitingComesFirst()
         {
-            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(new[] { 0 }, new Rng(1)));
             // Not about the sieges: the first one far off (it comes straight after the first mission: Ana, 22/10).
             c.Siege.In = 99;
             var mine = c.Soldiers.Where((s) => s.Owner == 0).ToList();

@@ -229,10 +229,25 @@ namespace Bastion.UI.Strategy
         void MainButton(ArmoryDetailView d, VisualElement parent)
         {
             var action = d.Action;
+            var host = parent;
+            // How many (Arturo, 02/11 A7): «−», the number and «+» before the button.
+            if (d.Count > 0)
+            {
+                host = Ui.El("armory-buy", parent);
+                var less = new Button(() => handlers.OnArmoryAction("count", "-1")) { text = "−" };
+                Ui.AddClasses(less, "armory-count__key font-title");
+                less.SetEnabled(d.Count > 1);
+                host.Add(less);
+                Ui.Text(d.Count.ToString(), "armory-count font-title", host).pickingMode = PickingMode.Ignore;
+                var more = new Button(() => handlers.OnArmoryAction("count", "1")) { text = "+" };
+                Ui.AddClasses(more, "armory-count__key font-title");
+                more.SetEnabled(d.Count < d.CountMax);
+                host.Add(more);
+            }
             var b = new Button(() => handlers.OnArmoryAction(action, null)) { text = d.Button.ToUpperInvariant() };
             Ui.AddClasses(b, "armory-main btn-primary font-title");
             b.SetEnabled(d.Enabled);
-            parent.Add(b);
+            host.Add(b);
             if (!string.IsNullOrEmpty(d.Why)) Ui.Text(d.Why, "strat-why strat-why--small", parent);
         }
 

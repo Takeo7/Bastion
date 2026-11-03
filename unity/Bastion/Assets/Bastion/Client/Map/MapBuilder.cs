@@ -489,11 +489,14 @@ namespace Bastion.Client.Map
             return list;
         }
 
-        /// <summary>The base's pieces on the map as it is now, and the map without them (mapView.ts build: pieceMap, terrainOf).</summary>
+        /// <summary>
+        /// The base's pieces on the map as it is now, and the map without them (mapView.ts build: pieceMap, terrainOf), its
+        /// boarded doorways shut doors (Doors).
+        /// </summary>
         void Terrain()
         {
             pieces = BasePieces.MapOf(s);
-            terrain = pieces != null ? BasePieces.TerrainOf(s, pieces) : s;
+            terrain = Doors(pieces != null ? BasePieces.TerrainOf(s, pieces) : s);
         }
 
         /// <summary>
@@ -664,7 +667,9 @@ namespace Bastion.Client.Map
         {
             foreach (var o in furnished) DestroyNow(o);
             furnished.Clear();
-            var all = HomeFurnishing.Homes(s).Concat(HomeFurnishing.Shops(s, plan.Buildings)).Concat(HomeFurnishing.Barns(s, plan.Buildings)).Concat(HomeFurnishing.OwnTiles(s));
+            // (A boarded doorway a door, kept clear as the others: Doors.)
+            var rooms = Doors(s);
+            var all = HomeFurnishing.Homes(rooms).Concat(HomeFurnishing.Shops(rooms, plan.Buildings)).Concat(HomeFurnishing.Barns(rooms, plan.Buildings)).Concat(HomeFurnishing.OwnTiles(rooms));
             foreach (var f in all)
             {
                 int i = f.y * s.Width + f.x;
@@ -905,6 +910,10 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>`o` noted as standing on those tiles of storey k.</summary>
+        /// <summary>What is drawn on `tile` (its storey's props and things), as it is now.</summary>
+        public IReadOnlyList<GameObject> On(Pos tile) =>
+            tile != null && onTile.TryGetValue(Key(tile.Z, tile.Y * s.Width + tile.X), out var list) ? list.Where(o => o != null).ToList() : new List<GameObject>();
+
         void Own(GameObject o, int k, IEnumerable<int> tiles)
         {
             if (o == null) return;
@@ -1153,6 +1162,12 @@ namespace Bastion.Client.Map
             // The base's pines are its own (Woods).
             if (pieces != null && tile == "high" && look.Kind == DecorKinds.Tree) return;
             if (look.Kind == "part") return;
+            // A boarded doorway: its door the walls' (Doors), the planks over it.
+            if (look.Kind == DecorKinds.DoorBoards)
+            {
+                BoardDoor(k, i, i % s.Width, i / s.Width, floor, look.Facing);
+                return;
+            }
             // A clinic's bed on a tile of its own that its dressing draws (stripped, or a body under its sheet): nothing more.
             if (look.Kind == "hospitalBed" && tile == "low" && BedVariant(k, i)) return;
             // A clinic's own furniture (mapView.ts medicalFurniture), the tall ones on high cover, the rest on low.
@@ -1509,6 +1524,12 @@ namespace Bastion.Client.Map
                 case "crates":
                     Drop("crateLid", (R(1) - 0.5f) * 0.3f, 0.62f, 2);
                     break;
+                case "boot":
+                    // (A whole car's boot, behind its bumper: Thing.)
+                    Drop("cardboard", (R(1) - 0.5f) * 0.4f, 1.2f, 2, true);
+                    Drop("papers", (R(3) - 0.5f) * 0.6f, 1.35f, 4);
+                    Drop("laundry", (R(5) - 0.5f) * 0.5f, 1.15f, 6);
+                    break;
                 case "table":
                     Drop("papers", (R(3) - 0.5f) * 0.5f, 0.5f, 4);
                     break;
@@ -1688,6 +1709,13 @@ namespace Bastion.Client.Map
                 if (police) PaintWhole(placed, id, null, materialOf);
                 else Repaint(placed, id, MapArt.Hash(ax, ay, 13));
                 if (wreck != null) Crash(parent, placed, thing, wreck, floor);
+                // A whole car's boot searched (Looting.CarBoot; Arturo's A13 of 2/11): its model has no lid to lift (only a
+                // wreck turns into the one with its boot open), so what was in it lies on the ground behind it.
+                if (!Wrecks.Contains(id) && floor == 0)
+                {
+                    int boot = thing.Tiles.OrderByDescending(j => (j % s.Width - ax) * (j % s.Width - ax) + (j / s.Width - ay) * (j / s.Width - ay)).First();
+                    if (SearchedAt(0, boot)) Ransack(0, boot, "boot", Bastion.Engine.Grid.Dirs4[(thing.Facing + 2) % 4], floor);
+                }
                 // Some wrecks still have a battery: their headlights on, by night, at the nose (not one crashed askew).
                 if (wreck == null && MapArt.Hash(ax, ay, 9) < 0.25f)
                 {

@@ -10,18 +10,22 @@ namespace Bastion.UI.Hud
     /// name, health, armour, cover, states), the hover line over an enemy (setTags), and the floating words (fx.ts
     /// floatText, UI's now). Every frame each is put over its point in the world with
     /// RuntimePanelUtils.CameraTransformWorldToPanel, only its translate changing (no layout is rebuilt); one behind the
-    /// camera is hidden. Over the shoulder only the target's flag stays.
+    /// camera is hidden. Over the shoulder only the target's flag stays. An enemy just seen carries a mark at the start of
+    /// its flag for 2 s (Spot; Arturo's B2 of 2/11: marks, not callouts).
     /// </summary>
     public sealed class UnitFlags
     {
         const float FloatRise = 40f;
         const float FloatSeconds = 1.4f;
+        const float SpotSeconds = 2f;
 
         readonly VisualElement layer;
         readonly Dictionary<string, VisualElement> flags = new Dictionary<string, VisualElement>();
         readonly Dictionary<string, string> keys = new Dictionary<string, string>();
         readonly List<Floating> floats = new List<Floating>();
         readonly List<string> gone = new List<string>();
+        /// <summary>The enemies just seen (Spot): whether they have noticed the squad, and since when.</summary>
+        readonly Dictionary<string, (bool alert, float born)> spots = new Dictionary<string, (bool, float)>();
 
         sealed class Floating
         {
@@ -60,6 +64,7 @@ namespace Bastion.UI.Hud
                         flags[f.Id] = el;
                     }
                     Fill(el, f);
+                    Mark(el, f.Id);
                 }
             foreach (var id in gone)
             {
@@ -67,6 +72,28 @@ namespace Bastion.UI.Hud
                 flags.Remove(id);
                 keys.Remove(id);
             }
+        }
+
+        /// <summary>
+        /// An enemy just seen (Arturo's B2 of 2/11): for 2 s, at the start of its flag, a grey eye if it hasn't noticed the
+        /// squad, a red «!» if it has; its flag made now or later (Fill), the mark fading at the end (Follow).
+        /// </summary>
+        public void Spot(string id, bool alert)
+        {
+            spots[id] = (alert, Time.time);
+            if (flags.TryGetValue(id, out var el)) Mark(el, id);
+        }
+
+        /// <summary>A flag's mark of being just seen (Spot), put again at the start of its row; none once it is over.</summary>
+        void Mark(VisualElement el, string id)
+        {
+            el.Q(className: "uflag__spot")?.RemoveFromHierarchy();
+            if (!spots.TryGetValue(id, out var spot) || Time.time - spot.born >= SpotSeconds) return;
+            var row = el.Q(className: "uflag__row");
+            if (row == null) return;
+            VisualElement mark = spot.alert ? Ui.Text("!", "uflag__spot uflag__spot--alert") : new EyeMark();
+            mark.pickingMode = PickingMode.Ignore;
+            row.Insert(0, mark);
         }
 
         /// <summary>The shot over the shoulder: only the target's flag (and the floats) stay.</summary>
@@ -193,6 +220,23 @@ namespace Bastion.UI.Hud
                 if (Place(pair.Value, panel, camera, head, 0, 1f) is float left) KeepLinesIn(pair.Value, left, wide);
             }
             var now = Time.time;
+            // The marks of those just seen, fading over their last half second and gone after 2 s.
+            if (spots.Count > 0)
+            {
+                gone.Clear();
+                foreach (var pair in spots)
+                {
+                    var t = (now - pair.Value.born) / SpotSeconds;
+                    var mark = flags.TryGetValue(pair.Key, out var flag) ? flag.Q(className: "uflag__spot") : null;
+                    if (t >= 1)
+                    {
+                        mark?.RemoveFromHierarchy();
+                        gone.Add(pair.Key);
+                    }
+                    else if (mark != null) mark.style.opacity = t < 0.75f ? 1f : 1f - (t - 0.75f) / 0.25f;
+                }
+                foreach (var id in gone) spots.Remove(id);
+            }
             for (var i = floats.Count - 1; i >= 0; i--)
             {
                 var f = floats[i];
@@ -305,6 +349,43 @@ namespace Bastion.UI.Hud
             foreach (var t in f.Tags) Ui.Text(t.Text, "tag tag--" + t.Kind, row);
             // Nothing in a flag takes the pointer: the clicks go through to the map.
             el.Query<VisualElement>().ForEach(x => x.pickingMode = PickingMode.Ignore);
+        }
+
+        /// <summary>
+        /// The eye of an enemy just seen that hasn't noticed the squad (Spot), drawn as the move zone's (MoveOverlay.EyeTexture,
+        /// styles.css's mask): an almond and its pupil, in the colour of its class (Flags.uss .uflag__spot--eye).
+        /// </summary>
+        sealed class EyeMark : VisualElement
+        {
+            public EyeMark()
+            {
+                AddToClassList("uflag__spot");
+                AddToClassList("uflag__spot--eye");
+                generateVisualContent += Draw;
+            }
+
+            void Draw(MeshGenerationContext ctx)
+            {
+                var r = contentRect;
+                if (r.width <= 0 || r.height <= 0) return;
+                // In the drawing's 16 × 10 units, centred.
+                var k = Mathf.Min(r.width / 16, r.height / 10);
+                var o = new Vector2(r.x + (r.width - 16 * k) / 2, r.y + (r.height - 10 * k) / 2);
+                Vector2 At(float x, float y) => o + new Vector2(x, y) * k;
+                var p = ctx.painter2D;
+                p.strokeColor = p.fillColor = resolvedStyle.color;
+                p.lineWidth = 1.6f * k;
+                p.lineJoin = LineJoin.Round;
+                p.BeginPath();
+                p.MoveTo(At(0.8f, 5));
+                p.BezierCurveTo(At(4, 0.2f), At(12, 0.2f), At(15.2f, 5));
+                p.BezierCurveTo(At(12, 9.8f), At(4, 9.8f), At(0.8f, 5));
+                p.ClosePath();
+                p.Stroke();
+                p.BeginPath();
+                p.Arc(At(8, 5), 2.2f * k, Angle.Degrees(0), Angle.Degrees(360));
+                p.Fill();
+            }
         }
 
         /// <summary>

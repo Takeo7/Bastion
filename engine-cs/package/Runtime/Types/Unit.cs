@@ -211,6 +211,11 @@ namespace Bastion.Engine
         public bool Hunkered { get; set; }
         /// <summary>Hiding (Esconderse) till its next turn: the enemies see it at HIDE_SIGHT of their range; absent, not.</summary>
         public bool? Hidden { get; set; }
+        /// <summary>
+        /// What a zombie wore (Arturo, 2/11): Outfits.Police or Outfits.Military, a gun more likely on the body
+        /// (Looting.RollBody); absent, a civilian's clothes. The client dresses it so.
+        /// </summary>
+        public string? Outfit { get; set; } // Outfits
         /// <summary>Aid Protocol: defense bonus until the start of the squad's next turn (0 = none).</summary>
         public int Aided { get; set; }
         /// <summary>Stunned units start their next turn with a single action.</summary>

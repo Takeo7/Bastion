@@ -443,8 +443,8 @@ namespace Bastion.Engine.Tests
             }
         }
 
-        [Fact(DisplayName = "night › the Saqueo’s horde comes a turn sooner at night")]
-        public void TheSaqueosHordeComesATurnSoonerAtNight()
+        [Fact(DisplayName = "night › the Saqueo’s horde comes with the noise, at night as by day (Arturo, 2/11: no longer a turn sooner)")]
+        public void TheSaqueosHordeComesWithTheNoiseAtNight()
         {
             int? First(bool night)
             {
@@ -453,6 +453,7 @@ namespace Bastion.Engine.Tests
                 s.Mission.EvacZone = new List<Vec2> { new Vec2 { X = 39, Y = 39 } };
                 s.Mission.Horde = new List<string> { TemplateIds.Zombie, TemplateIds.Zombie };
                 s.Mission.Night = night;
+                s.Mission.Noise = Content.Horde.Wave;
                 AddUnit(s, "s1", TemplateIds.Rookie, 20, 20);
                 for (var turn = 1; turn < 10; turn++)
                 {
@@ -463,7 +464,8 @@ namespace Bastion.Engine.Tests
                 }
                 return null;
             }
-            Assert.Equal(First(false) - Content.Night.HordeHead, First(true));
+            Assert.Equal(1, First(false));
+            Assert.Equal(First(false), First(true));
         }
 
         [Fact(DisplayName = "night › clients replaying a night end with the host state")]

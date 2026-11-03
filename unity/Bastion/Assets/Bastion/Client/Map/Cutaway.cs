@@ -61,12 +61,18 @@ namespace Bastion.Client.Map
         Texture2D map;
         Color32[] data = Array.Empty<Color32>();
         GameState seenFor;
+        /// <summary>The state's Seq when the squad's sight was worked out: the view is changed in place, event by event.</summary>
+        int seenSeq;
+        /// <summary>A frame waited for UnitViews' sight of the state as it is now (SightOf), rather than working it out again.</summary>
+        bool waited;
         int[] seenInside = Array.Empty<int>();
         bool[] visible;
         /// <summary>Things on a storey of a building (furniture, a sign, what stands on a roof), turned off while it hides them.</summary>
         readonly List<(GameObject thing, int building, int level, bool sign)> tracked = new List<(GameObject, int, int, bool)>();
         /// <summary>What hangs on a wall (a clinic's cross, sign or blood: medicalDetails.ts medicalWallPatch), with the way its wall looks out.</summary>
         readonly List<(GameObject thing, int building, int level, Vector2 outward)> fixtures = new List<(GameObject, int, int, Vector2)>();
+        /// <summary>Something tracked since the last Upload: it is shown or hidden at once, not at the cut's next change.</summary>
+        bool fresh;
         /// <summary>The way the camera looks, on the ground (0.10.1's frame: x east, y south; _CutView).</summary>
         Vector2 lookFlat;
 
@@ -110,7 +116,9 @@ namespace Bastion.Client.Map
         /// <summary>`thing` stands on storey `level` of building `building` (a sign: it goes while its building is cut on its storey).</summary>
         public void Track(GameObject thing, int building, int level, bool sign = false)
         {
-            if (thing != null && building >= 0 && building < n) tracked.Add((thing, building, level, sign));
+            if (thing == null || building < 0 || building >= n) return;
+            tracked.Add((thing, building, level, sign));
+            fresh = true;
         }
 
         /// <summary>
@@ -120,7 +128,9 @@ namespace Bastion.Client.Map
         /// </summary>
         public void TrackFixture(GameObject thing, int building, int level, Vector2 outward)
         {
-            if (thing != null && building >= 0 && building < n) fixtures.Add((thing, building, level, outward));
+            if (thing == null || building < 0 || building >= n) return;
+            fixtures.Add((thing, building, level, outward));
+            fresh = true;
         }
 
         /// <summary>
@@ -173,10 +183,15 @@ namespace Bastion.Client.Map
             int view = focus.level ?? selectedUnit?.Pos.Z ?? 0;
             // Chosen by hand (not the selected soldier's own): it wins over where the soldier stands.
             bool chosen = focus.level != null && focus.level != (selectedUnit?.Pos.Z ?? 0);
-            if (s != seenFor)
+            // (UnitViews.Sync works it out after each event the player applies: a frame's wait for it saves doing it twice.)
+            var shared = s != seenFor || s.Seq != seenSeq ? UnitViews.Current?.SightOf(s) : null;
+            if ((s != seenFor || s.Seq != seenSeq) && shared == null && !waited && UnitViews.Current != null) waited = true;
+            else if (s != seenFor || s.Seq != seenSeq)
             {
+                waited = false;
                 seenFor = s;
-                visible = Los.TeamVisibility(s, "xcom");
+                seenSeq = s.Seq;
+                visible = shared ?? Los.TeamVisibility(s, "xcom");
                 var seen = new HashSet<int>();
                 int area = s.Width * s.Height;
                 for (int k = 0; k < visible.Length; k++)
@@ -318,12 +333,13 @@ namespace Bastion.Client.Map
                     changed = true;
                 }
             }
-            if (changed) Upload();
+            if (changed || fresh) Upload();
         }
 
         /// <summary>The fades into the cut map (smoothstepped), the storey each shows in its alpha; what they hide off.</summary>
         void Upload()
         {
+            fresh = false;
             for (int b = 0; b < n; b++)
             {
                 byte Eased(float v) => (byte)Mathf.RoundToInt(v * v * (3 - 2 * v) * 255);

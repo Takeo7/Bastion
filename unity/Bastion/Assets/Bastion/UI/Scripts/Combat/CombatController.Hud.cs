@@ -618,7 +618,7 @@ namespace Bastion.UI.Combat
                 Alert = alert,
                 HordeFill = fill.HasValue ? (float)fill.Value : -1,
                 HordeDb = fill.HasValue ? 40 + (int)Math.Floor(50 * fill.Value + 0.5) : 0,
-                HordeTitle = !fill.HasValue ? null : m.Kind == MissionKinds.Elimination ? HudText.Mission.NoiseTipQuiet : HudText.Mission.NoiseTip,
+                HordeTitle = !fill.HasValue ? null : HudText.Mission.NoiseTip,
                 Weather = s.Weather,
             };
         }
@@ -713,7 +713,7 @@ namespace Bastion.UI.Combat
                 CritMods = shot.CritMods.Select(m => new ModView { Label = CritLabel(target, m.Label), Value = m.Value }).ToList(),
                 Index = index,
                 Total = list.Count,
-                Note = AbilityTexts.AttackNotes.TryGetValue(ability, out var note) ? note : null,
+                Note = AbilityTexts.AttackNotes.TryGetValue(ability, out var note) ? note : AbilityTexts.BladeNote(u, ability),
                 Locked = LockLabel(),
                 Noise = loud > 0 ? $"Ruido {AbilityTexts.Heard(State, loud)}" : "Sin ruido",
             };
@@ -741,6 +741,13 @@ namespace Bastion.UI.Combat
             var def = Content.Abilities[id];
             var others = HandTiles().Count - 1;
             var view = new ShotView { Kind = "self", Action = def.Name, Locked = LockLabel(), Cost = AbilityTexts.CostText(u, id), Noise = AbilityTexts.NoiseText(State, u, id), Effect = def.Description, Title = def.Name };
+            // The crowbar on a boarded window or door (Arturo, 02/11 A11).
+            if (id == AbilityIds.Pry)
+            {
+                var what = Abilities.Boards(State, tile) == DecorKinds.DoorBoards ? "la puerta" : "la ventana";
+                view.Hint = $"Otra vez, Espacio o clic en {what}: quitar las tablas{(others > 0 ? $" · Tab: {(others == 1 ? "la otra" : "otra")} tapiada" : "")} · Esc: cancelar";
+                return view;
+            }
             if (id != AbilityIds.Search)
             {
                 var what = id == AbilityIds.OpenDoor ? "abrir" : "cerrar";
@@ -753,20 +760,17 @@ namespace Bastion.UI.Combat
             var room = slots - (u.Backpack?.Count ?? 0);
             view.Title = Lore.BoxTitle(decor);
             view.Detail = $"Mochila: {(room == 1 ? "queda 1 hueco" : $"quedan {room} huecos")} de {slots}";
-            // The first mission's police car (Lore, 0.11.6): its front and its boot, as the mission's card says them
-            // (MissionState.PoliceCar: the nose, then the boot).
-            var car = decor == Looting.PoliceCar;
-            bool Boot(Pos p) => State.Mission.PoliceCar!.IndexOf(Grid.TileIndex(State, p.X, p.Y)) == 1;
-            if (car)
+            // A body or a car's boot (Arturo, 02/11 A9, A13): its own button and words, not a box's.
+            if (!Looting.LootBoxes.Contains(decor))
             {
-                if (Boot(tile)) view.Title = "Abrir el maletero";
                 view.Action = view.Title;
-                view.Effect = $"Abre {(Boot(tile) ? "el maletero del coche de policía" : "el coche de policía por delante")}: hay una pistola. Hace un poco de ruido.";
+                view.Effect = AbilityTexts.SearchWords(decor).effect;
             }
-            // Tab to the car's other part names it; anything else is a box.
+            // Tab to the next names it (the body, the boot, the box of weapons…).
+            string NameOf(string spot) => Lore.SearchSpots.TryGetValue(spot, out var s) ? s.Name : "la caja";
             var next = others == 1 ? HandTiles().FirstOrDefault(t => !Same(t, tile)) : null;
-            var tab = next != null && Looting.SearchSpot(State, next) == Looting.PoliceCar ? (Boot(next) ? "el maletero" : car ? "delante" : "el coche") : others == 1 ? "la otra caja" : "otra caja";
-            view.Hint = $"Otra vez, Espacio o clic en {(car ? "el coche" : "la caja")}: abrir{(others > 0 ? $" · Tab: {tab}" : "")} · Esc: cancelar";
+            var tab = next != null && Looting.SearchSpot(State, next) is string after ? NameOf(after) : "el siguiente";
+            view.Hint = $"Otra vez, Espacio o clic en {NameOf(decor)}: {(decor == Looting.Body ? "registrar" : "abrir")}{(others > 0 ? $" · Tab: {tab}" : "")} · Esc: cancelar";
             return view;
         }
 

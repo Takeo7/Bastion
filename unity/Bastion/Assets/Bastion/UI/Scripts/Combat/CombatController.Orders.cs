@@ -358,12 +358,13 @@ namespace Bastion.UI.Combat
         /// <summary>Registrar, or a door opened or closed (playtest 13/10 #2), armed on the tiles beside the soldier.</summary>
         string HandArmed() => mode == Mode.Tile && modeAbility != null && AbilityTexts.Hand.Contains(modeAbility) ? modeAbility : null;
 
-        /// <summary>The tiles beside the soldier `id` works on: furniture to search, closed or open doors.</summary>
+        /// <summary>The tiles beside the soldier `id` works on: furniture to search, closed or open doors, boarded windows.</summary>
         List<Pos> HandTiles(string id = null)
         {
             id ??= HandArmed();
             var u = Unit();
             if (u == null || id == null) return new List<Pos>();
+            if (id == AbilityIds.Pry) return Abilities.BoardedBeside(State, u.Pos);
             return id == AbilityIds.Search ? Looting.SearchableTiles(State, u) : Abilities.DoorTiles(State, u, id == AbilityIds.OpenDoor ? "door" : "doorOpen");
         }
 
@@ -405,7 +406,7 @@ namespace Bastion.UI.Combat
             }
             if (tile == null)
             {
-                Toast(id == AbilityIds.Search ? "No hay nada que registrar al lado." : "No hay ninguna puerta a tu lado.");
+                Toast(id == AbilityIds.Search ? "No hay nada que abrir ni registrar a tu lado." : id == AbilityIds.Pry ? "No hay ninguna ventana ni puerta tapiada a tu lado." : "No hay ninguna puerta a tu lado.");
                 return;
             }
             Send(new AbilityCommand { Unit = u.Id, Ability = id, Tile = tile });

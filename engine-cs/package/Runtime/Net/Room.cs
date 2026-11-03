@@ -1122,6 +1122,7 @@ namespace Bastion.Net
                 wait.At = now + left;
                 wait.Timer = After(left, () => AnswerForPartner(kind, key));
                 Broadcast(new DeadlineMessage { Kind = kind, Ms = left });
+                if (kind == DeadlineKinds.Proposal) store.Log($"[campaña] {seats[answerer!.Value]?.Name ?? $"el puesto {answerer!.Value + 1}"} no tiene el juego a la vista: la propuesta espera {Math.Round(left / 1000.0)} s más");
                 return;
             }
             waits.Remove(kind);
@@ -1130,9 +1131,12 @@ namespace Bastion.Net
             if (kind == DeadlineKinds.Proposal && campaign?.Proposal != null && campaignRules != null && phase == RoomPhases.Base)
             {
                 var partner = campaign.Proposal.By == 0 ? 1 : 0;
+                var text = campaign.Proposal.Text;
                 // Who is really here: a mission chosen this way fills La Lata as without the partner, not with their soldiers.
                 var result = campaignRules.ExecuteCampaignCommand(campaign, new VoteCommand { Accept = true }, partner, ConnectedSlots(), rng);
                 say($"[room] Propuesta sin respuesta: sigue adelante{(result.Ok ? "" : $" ({result.Error})")}.");
+                // In red.log too, to tell afterwards whether the room went ahead (Ana's notes of 2/11, #4).
+                store.Log($"[campaña] Propuesta sin respuesta de {seats[partner]?.Name ?? $"el puesto {partner + 1}"}: {text}, sigue adelante{(result.Ok ? "" : $" ({result.Error})")}");
                 if (result.Ok && result.Launch) LaunchCampaignMission();
                 else Broadcast(new CampaignMessage { State = campaign });
                 Persist();

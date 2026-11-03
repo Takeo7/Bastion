@@ -511,7 +511,11 @@ MonoBehaviour:
   - {fileID: -203655887218126122, guid: 00b679ed387384456a1d7f75f2490205, type: 3}
   - {fileID: -203655887218126122, guid: 1b442452ce18645898243948ea9a8c30, type: 3}
   weaponNames:
+  - apocalypse:SM_Item_Stick_01
   - apocalypse:SM_Prop_Pan_01
+  - apocalypse:SM_Wep_Katana_01
+  - farm:SM_Prop_Tool_Rake_01
+  - gang:SM_Wep_Sword_02
   - SM_Wep_AssaultRifle_01
   - SM_Wep_AssaultRifle_02
   - SM_Wep_AssaultRifle_03
@@ -533,7 +537,11 @@ MonoBehaviour:
   - SM_Wep_SniperRifle_02
   - SM_Wep_SubMGun_01
   weapons:
+  - {fileID: 1246845882456928, guid: 6cf91da3d004a0b4096c83c7a865dfec, type: 3}
   - {fileID: 1335890822894770, guid: 0056b36596874344d8f4adb07dab8d83, type: 3}
+  - {fileID: 1104172259794306, guid: c93dc5e6b62380f499e6ec8328bc0160, type: 3}
+  - {fileID: 1851300905487520, guid: 79e26d971e19c1f449f5d11c36eb05de, type: 3}
+  - {fileID: 1592597363156974, guid: 1410f1cba8074a1429937abe0289a307, type: 3}
   - {fileID: 1900586067242068, guid: ad49a19d2c4adc94b838606a5d459f85, type: 3}
   - {fileID: 1263777055603640, guid: d9f9bf1ca5142254ba3a359ff4a34b3e, type: 3}
   - {fileID: 1490873028196816, guid: a3fe0be603767ae42a0d14c81d777c2b, type: 3}
@@ -555,14 +563,6 @@ MonoBehaviour:
   - {fileID: 1886666021998926, guid: 3027fd935d242c541a7114d06d974130, type: 3}
   - {fileID: 1025874851918808, guid: e22ad038422a02c49b86a09ff69dedfc, type: 3}
   characterNames:
-  - SM_Chr_Boss_Female_01
-  - SM_Chr_Boss_Male_01
-  - SM_Chr_Business_Female_03
-  - Character_Male_Jacket
-  - SM_Chr_Business_Female_04
-  - Character_BusinessWoman
-  - SM_Chr_Nun_Female_01
-  - SM_Chr_Attachment_Headset_02
   - SM_Chr_Zombie_Jock_Male_01
   - SM_Chr_Zombie_Cheerleader_Female_01
   - SM_Chr_Zombie_Hoodie_Male_01
@@ -575,14 +575,6 @@ MonoBehaviour:
   - SM_Chr_ZombieBoss_Blobber_01
   - SM_Chr_ZombieBoss_Slobber_01
   characters:
-  - {fileID: 1975240265096882, guid: 886e38ce682403743b9b058cb21703f2, type: 3}
-  - {fileID: 1604611627540692, guid: 0636a8b0926172c499640f89dacb0a94, type: 3}
-  - {fileID: 1822189464268616, guid: f78a881d3ec75d945ac878527dc26674, type: 3}
-  - {fileID: 1018949230691400, guid: d461c345ada76d14f94fe72087cec0f9, type: 3}
-  - {fileID: 1360405817128342, guid: 39959bef43f00bd4296c4c6bf8333a52, type: 3}
-  - {fileID: 1441525330016004, guid: c0f44381dd01e904c87fad2431087f45, type: 3}
-  - {fileID: 1082915869594634, guid: 1099c32bb8860d34e9d77177fdc8ddf6, type: 3}
-  - {fileID: 1601352576217198, guid: 4668ce04a1b17784a8c1ce39df82a47c, type: 3}
   - {fileID: 1562126803887444, guid: e05321c6e6ad7b845942de92aafc2395, type: 3}
   - {fileID: 1343261146546640, guid: 4003093fe4a231c4d9c155a6540ec590, type: 3}
   - {fileID: 1115666180268534, guid: 15fa57f984877cc4f9acd0e63babc93e, type: 3}

@@ -689,14 +689,6 @@
    "pack": "mixamo",
    "fbx": "Idle Crouching Aiming"
   },
-  "rifleKneelDown": {
-   "pack": "mixamo",
-   "fbx": "Rifle Stand To Kneel"
-  },
-  "pistolKneelDown": {
-   "pack": "mixamo",
-   "fbx": "Pistol Stand To Kneel"
-  },
   "pistolRest": {
    "pack": "mixamo",
    "fbx": "Pistol Aim"
@@ -746,6 +738,14 @@
   "bladeIdle": {
    "pack": "swordCombat",
    "fbx": "Animations/Polygon/Idle/Base/A_Idle_Base_Sword"
+  },
+  "rifleKneelDown": {
+   "pack": "mixamo",
+   "fbx": "Rifle Stand To Kneel"
+  },
+  "pistolKneelDown": {
+   "pack": "mixamo",
+   "fbx": "Pistol Stand To Kneel"
   }
  },
  "motionOrder": [
@@ -1053,8 +1053,6 @@
   "rifleTurnR180",
   "rifleKneel",
   "rifleKneelAim",
-  "rifleKneelDown",
-  "pistolKneelDown",
   "pistolRest",
   "pistolAim",
   "pistolFire",
@@ -1418,6 +1416,65 @@
     0.28
    ],
    "slung": true
+  },
+  "katana": {
+   "fbx": "apocalypse:SM_Wep_Katana_01",
+   "melee": true,
+   "size": 1.3,
+   "slung": true
+  },
+  "longsword": {
+   "fbx": "gang:SM_Wep_Sword_02",
+   "melee": true,
+   "size": 1.15,
+   "grip": [
+    0,
+    0,
+    0
+   ],
+   "along": [
+    0,
+    1,
+    0
+   ],
+   "slung": true
+  },
+  "rake": {
+   "fbx": "farm:SM_Prop_Tool_Rake_01",
+   "melee": true,
+   "size": 1,
+   "grip": [
+    0,
+    -0.35,
+    0
+   ],
+   "along": [
+    0,
+    -1,
+    0
+   ],
+   "two": [
+    0,
+    -0.75,
+    0
+   ],
+   "slung": true,
+   "stroke": "chop"
+  },
+  "stick": {
+   "fbx": "apocalypse:SM_Item_Stick_01",
+   "melee": true,
+   "size": 1.4,
+   "grip": [
+    0,
+    -0.22,
+    0
+   ],
+   "along": [
+    0,
+    1,
+    0
+   ]
   }
  },
  "unitWeapons": {

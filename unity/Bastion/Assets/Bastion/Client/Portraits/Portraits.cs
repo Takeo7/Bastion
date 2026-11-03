@@ -14,8 +14,7 @@ namespace Bastion.Client
     /// The busts (0.10.1's strategy/portraits.ts): each soldier's head and shoulders in their resting pose, turned a little
     /// so it isn't a passport photo, in a soft studio light (a warm key from the front left, a cool rim from behind, a
     /// soft sky; three's ACES at 1.1), rendered once into a texture of its own (160 px, clear round the figure) and kept;
-    /// made again when their looks change (Changed). And the radio's voices (Voice). Until one is drawn it is null: UI
-    /// shows a silhouette.
+    /// made again when their looks change (Changed). Until one is drawn it is null: UI shows a silhouette.
     /// Soldiers are known by the campaign (Know); in play mode a bust is made a frame at a time, in edit mode (the labs)
     /// at Flush.
     /// </summary>
@@ -48,7 +47,6 @@ namespace Bastion.Client
         static bool listening;
 
         static readonly Dictionary<string, Bust> soldiers = new Dictionary<string, Bust>();
-        static readonly Dictionary<string, Bust> voices = new Dictionary<string, Bust>();
         static readonly Queue<(string id, Bust bust)> queue = new Queue<(string, Bust)>();
         static Worker worker;
 
@@ -100,20 +98,6 @@ namespace Bastion.Client
 
         /// <summary>A soldier's bust (null until it is drawn).</summary>
         public static Texture Soldier(string id) => id != null && soldiers.TryGetValue(id, out var b) && b.drawn ? b.texture : null;
-
-        /// <summary>A radio voice's bust by its speaker (SpeakerIds; null until it is drawn: asking for it starts it).</summary>
-        public static Texture Voice(string speaker)
-        {
-            if (speaker == null) return null;
-            if (!voices.TryGetValue(speaker, out var bust))
-            {
-                var voice = Voices.Of(speaker);
-                if (voice == null) return null;
-                voices[speaker] = bust = new Bust { key = speaker, make = voice.Make, turn = voice.turn, backlit = voice.backlit, build = voice.female ? "femn" : "masc" };
-                Enqueue(speaker, bust);
-            }
-            return bust.drawn ? bust.texture : null;
-        }
 
         static void Enqueue(string id, Bust bust)
         {

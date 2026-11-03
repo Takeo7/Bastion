@@ -227,6 +227,15 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Who defends a siege (docs/FASE12.md §11.5): the fit; with nobody fit, the wounded too, or nobody could
+        /// (Arturo, 2/11). The bitten stay in.
+        /// </summary>
+        public static bool Defends(CampaignState c, CampaignSoldier s)
+        {
+            return SoldierReady(s) || (s.Alive && s.Infection == null && !c.Soldiers.Any(SoldierReady));
+        }
+
+        /// <summary>
         /// Nobody fit to go out and nobody to recruit (18/10 test: after a fall, only
         /// the wounded left and no suministros): time, which only goes by with the
         /// missions, would stand still. Then, and only then, one waits for them to heal.

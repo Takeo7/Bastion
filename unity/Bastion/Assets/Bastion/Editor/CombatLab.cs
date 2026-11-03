@@ -1307,18 +1307,22 @@ namespace Bastion.EditorTools
                 return copy;
             }
             string fila = Environment.GetEnvironmentVariable("BASTION_FILA");
-            if (fila == "1" || fila == "comunes" || fila == "hinchados")
+            if (fila == "1" || fila == "comunes" || fila == "hinchados" || fila == "uniformes")
             {
                 // (comunes: the common dead's 17 bodies, in their order, each its id's pick: syntyManifest.ts UNIT_BODIES zombie.
                 // hinchados: a common one for size and the five Hinchados, in DeadBodies' order, Ana's #13.)
-                var row = fila == "comunes"
+                // (uniformes: twelve of the common dead, the first four in a policeman's uniform, the next two in a soldier's,
+                // the rest of no uniform: Unit.Outfit, Arturo's A9 of 2/11.)
+                var row = fila == "uniformes" ? Enumerable.Range(0, 12).Select(i => ("zombie", "u" + i)).ToArray()
+                    : fila == "comunes"
                     ? new[] { "c2", "c6", "c11", "c15", "c29", "c1", "c5", "c9", "c16", "c0", "c4", "c8", "c17", "c3", "c7", "c10", "c14" }.Select(i => ("zombie", i)).ToArray()
                     : fila == "hinchados" ? new[] { ("zombie", "z0"), ("bloater", "h4"), ("bloater", "h0"), ("bloater", "h1"), ("bloater", "h2"), ("bloater", "h3") }
                     : new[] { ("zombie", "z0"), ("xenoid", "m0"), ("xenoid", "m3"), ("xenoid", "m2"), ("xenoid", "m1"), ("mec", "m0"), ("mec", "m3"), ("mec", "m2"), ("mec", "m1"), ("sectoid", "c0"), ("bloater", "h0") };
                 int last = 2 + row.Length - 1;
                 Plain(u => u.Id == deadId, 2, last);
                 var like = state.Units[0];
-                state.Units = row.Select((r, k) => Put(Like(like, fila == "comunes" ? r.Item2 : r.Item1 + "-" + r.Item2, r.Item1), 2 + k, 10, Math.PI / 2)).ToList();
+                state.Units = row.Select((r, k) => Put(Like(like, fila == "comunes" || fila == "uniformes" ? r.Item2 : r.Item1 + "-" + r.Item2, r.Item1), 2 + k, 10, Math.PI / 2)).ToList();
+                if (fila == "uniformes") for (int k = 0; k < state.Units.Count; k++) state.Units[k].Outfit = k < 4 ? Outfits.Police : k < 6 ? Outfits.Military : null;
                 // From high up, as 0.10.1's (8 tiles up and 9 off, over the row's middle).
                 var shot = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).First(c => c.name == "Shot camera");
                 var middle = (MapSpace.World(2, 10) + MapSpace.World(last, 10)) / 2;
@@ -1333,6 +1337,24 @@ namespace Bastion.EditorTools
                     // What each is drawn with: its renderers, each one's submeshes and materials.
                     foreach (var u in state.Units.Take(3).Concat(state.Units.Skip(9)))
                         Debug.Log($"[combat] {u.Id} drawn by " + string.Join("; ", Figures.FeetOf(u.Id).GetComponentsInChildren<Renderer>().Select(r => $"{r.name} {(r is SkinnedMeshRenderer s ? s.sharedMesh?.subMeshCount : r.GetComponent<MeshFilter>()?.sharedMesh?.subMeshCount)} sub, {r.sharedMaterials.Length} mat")));
+                    // (BASTION_PALETA=c17: that one's colour maps, each material's and the one its renderer draws with, and the
+                    // colour of each cell its mesh paints from, as drawn.)
+                    if (Environment.GetEnvironmentVariable("BASTION_PALETA") is string paint && Figures.FeetOf(paint) is Transform feet)
+                        foreach (var r in feet.GetComponentsInChildren<SkinnedMeshRenderer>())
+                        {
+                            var block = new MaterialPropertyBlock();
+                            r.GetPropertyBlock(block);
+                            var drawn = (block.GetTexture("_ColorMap") ?? r.sharedMaterial?.GetTexture("_ColorMap")) as Texture2D;
+                            Debug.Log($"[paleta] {r.name}: {string.Join(", ", r.sharedMaterials.Select(m => $"{m?.name} ({(m != null && m.HasTexture("_ColorMap") ? m.GetTexture("_ColorMap")?.name : "-")})"))}; drawn with {drawn?.name}");
+                            if (drawn == null || r.sharedMesh == null) continue;
+                            var cells = SoldierPalette.Cells(drawn);
+                            var used = r.sharedMesh.uv.Select(SoldierPalette.CellOf).Distinct().OrderBy(c => c);
+                            Debug.Log("[paleta]   " + string.Join(" ", used.Select(c =>
+                            {
+                                Color.RGBToHSV(cells[c], out float h, out float sat, out float v);
+                                return FormattableString.Invariant($"{c % 16},{c / 16}={ColorUtility.ToHtmlStringRGB(cells[c])}(s{sat:0.00} v{v:0.00})");
+                            })));
+                        }
                 };
                 return;
             }
@@ -1588,6 +1610,103 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// The crowbar on a boarded window (Arturo's A11 of 2/11): on city-7's map (BASTION_MAP), a soldier with the pistol and
+        /// the crowbar on a free tile inside beside the first boarded window (Abilities.BoardedBeside), the cutaway open on
+        /// it; it pries (UnitViews.Pry: the heap topples), then BoardsRemovedEvent and the map drawn again, as UI's event
+        /// player does. BASTION_PUERTA=1: a boarded doorway, from the tile out in front of it (city-1 has two; BASTION_N=1
+        /// the second). The camera the game's, BASTION_DIST tiles off (12), low from the side (BASTION_VIEW=side) or in front
+        /// (=front, BASTION_DIST metres off, 5.5).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Palanca -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 60 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Palanca()
+        {
+            if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
+            string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
+            state = Seen(MapLab.Golden(name));
+            MapLab.Lighting(true);
+            // (The map from a copy, as UI's event player's: Rebuild tells what changed against it.)
+            var view = MapLab.Map(Events.CloneState(state), name);
+            units = new GameObject("Unidades").AddComponent<UnitViews>();
+            fx = new GameObject("Efectos").AddComponent<Fx>();
+            soldier = state.Units.First(u => u.Alive && u.Team == "xcom" && !u.Objective);
+            soldier.Arms = new Arms { Primary = null, Pistol = true, Melee = FoundWeaponIds.Crowbar };
+            Pos stand = null, boards = null;
+            int skip = int.TryParse(Environment.GetEnvironmentVariable("BASTION_N"), out int nth) ? nth : 0;
+            for (int i = 0; i < state.Width * state.Height && boards == null && Environment.GetEnvironmentVariable("BASTION_PUERTA") == "1"; i++)
+            {
+                var look = Bastion.Engine.Decor.DecorOf(state.Decor[i]);
+                if (state.Tiles[i] != TileKinds.High || look?.Kind != DecorKinds.DoorBoards || skip-- > 0) continue;
+                var d = Bastion.Engine.Grid.Dirs4[look.Facing];
+                boards = new Pos { X = i % state.Width, Y = i / state.Width };
+                stand = new Pos { X = boards.X + d.X, Y = boards.Y + d.Y };
+            }
+            for (int i = 0; i < state.Width * state.Height && boards == null; i++)
+            {
+                var p = new Pos { X = i % state.Width, Y = i / state.Width };
+                if (state.Tiles[i] != TileKinds.Floor || Bastion.Engine.Grid.UnitAt(state, p) != null) continue;
+                var near = Abilities.BoardedBeside(state, p);
+                if (near.Count == 0) continue;
+                stand = p;
+                boards = near[0];
+            }
+            soldier.Pos = stand;
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.farClipPlane = 800;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.72f, 0.78f, 0.86f);
+            camera.fieldOfView = 40;
+            var at = Vector3.Lerp(MapSpace.TileToWorld(state, stand), MapSpace.TileToWorld(state, boards), 0.5f);
+            if (Environment.GetEnvironmentVariable("BASTION_VIEW") == "side")
+            {
+                var across = Vector3.Cross(Vector3.up, MapSpace.TileToWorld(state, boards) - MapSpace.TileToWorld(state, stand)).normalized;
+                camera.transform.position = at + across * 4.5f + Vector3.up * 1.6f;
+                camera.transform.LookAt(at + Vector3.up * 0.7f);
+            }
+            else if (Environment.GetEnvironmentVariable("BASTION_VIEW") == "front")
+            {
+                // (In front of it, a little to one side, past the soldier.)
+                var wall = MapSpace.TileToWorld(state, boards);
+                var outward = (MapSpace.TileToWorld(state, stand) - wall).normalized;
+                float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float metres) ? metres : 5.5f;
+                camera.transform.position = wall + outward * off + Vector3.Cross(Vector3.up, outward).normalized * off * 0.58f + Vector3.up * 1.8f;
+                camera.transform.LookAt(wall + Vector3.up * 1.2f);
+            }
+            else
+            {
+                float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float tiles) ? tiles : 12;
+                MapSpace.Aim(camera, at, off);
+            }
+            if (Cutaway.Current != null) Cutaway.Current.Focus.selected = soldier.Id;
+            // BASTION_CORTE=0: no cutaway (to see the walls whole).
+            if (Cutaway.Current != null && Environment.GetEnvironmentVariable("BASTION_CORTE") == "0") Cutaway.Current.enabled = false;
+            Debug.Log($"[combat] {name}: {soldier.Id} on ({stand.X},{stand.Y}) by the boarded {Abilities.Boards(state, boards)} at ({boards.X},{boards.Y})");
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(1);
+                    Debug.Log($"[combat] {Time.time:0.00} s: pries; {units.ArmsReport(soldier.Id)}; map {(MapView.Current == view ? "current" : "not current")}");
+                    await units.Pry(soldier.Id, MapSpace.TileToWorld(state, boards, 0.9f), boards);
+                    Events.ApplyEvent(state, new BoardsRemovedEvent { Unit = soldier.Id, Tile = boards });
+                    Debug.Log($"[combat] rebuilt {view.Rebuild(Events.CloneState(state))} tiles");
+                    units.Sync(state);
+                    Debug.Log($"[combat] {Time.time:0.00} s: boards gone, ({boards.X},{boards.Y}) {state.Tiles[boards.Y * state.Width + boards.X]}");
+                    await Awaitable.WaitForSecondsAsync(2);
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            };
+            EditorApplication.playModeStateChanged += Started;
+        }
+
+        /// <summary>
         /// Hiding (Esconderse, Ana's #1 of 1/11): on city-7's map (BASTION_MAP), a soldier walks to a tile with cover two to
         /// six tiles off, with one of the dead in sight beyond that cover, hides (UnitViews.Hide, then HiddenEvent, as UI's
         /// event player plays it), waits hidden, and gets up as the squad's turn comes (Unit.Hidden gone). BASTION_ARMAS=
@@ -1710,6 +1829,10 @@ namespace Bastion.EditorTools
                 "fusil" => new Arms { Primary = "assaultRifle" },
                 "cuchillo" => new Arms { Primary = "assaultRifle" },
                 "machete" => new Arms { Primary = "pumpShotgun", Melee = "machete" },
+                // (hoja:katana, hoja:rake…: a rifle and that blade where it rides, at the belt or across the back.)
+                _ when which.StartsWith("hoja:") => new Arms { Primary = "assaultRifle", Melee = which.Substring(5) },
+                // (pistola-hoja:crowbar…: the pistol in the hand and that blade, as a new campaign's start.)
+                _ when which.StartsWith("pistola-hoja:") => new Arms { Primary = null, Pistol = true, Melee = which.Substring(13) },
                 _ => new Arms { Primary = null },
             };
             bool sidearm = which == "fusil";

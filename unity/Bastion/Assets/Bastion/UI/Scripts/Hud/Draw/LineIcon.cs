@@ -9,7 +9,7 @@ namespace Bastion.UI.Hud
     /// The icons that were our own drawings on the web, not Synty's (icons.ts: 24 × 24, a line of 2, round ends): drawn
     /// with Painter2D in the element's tint (USS `-unity-background-image-tint-color`, as the sprites are tinted), so
     /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, the base's axe, the
-    /// Coro's wave, the missions' places and their weather (new in Unity: Synty has neither), «Terminar turno», the molotov.
+    /// missions' places and their weather (new in Unity: Synty has neither), «Terminar turno», the molotov.
     /// </summary>
     public sealed class LineIcon : VisualElement
     {
@@ -45,15 +45,6 @@ namespace Bastion.UI.Hud
                 pen.To(12.4f, 6.9f);
                 pen.To(10.8f, 5.3f);
                 pen.Fill();
-            },
-            // The Coro's mark on the radio when it has no bust (transmissions.ts portrait: «∿», which none of our fonts
-            // has): one period of a sine wave, up then down.
-            ["wave"] = pen =>
-            {
-                pen.Begin(3, 12);
-                pen.Curve(6.5f, 6, 8.5f, 6, 12, 12);
-                pen.Curve(15.5f, 18, 17.5f, 18, 21, 12);
-                pen.Stroke();
             },
             // A mission's place on its card (Places, Arturo 31/10 #9), each on the ground line. The city: three blocks, the
             // middle one tallest, lit.

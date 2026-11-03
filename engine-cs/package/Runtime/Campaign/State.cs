@@ -100,7 +100,32 @@ namespace Bastion.Engine
                 Traits = new List<string>(),
             };
             c.Soldiers.Add(s);
+            // In a siege every soldier fit defends (docs/FASE12.md §11.5): one who comes once it has started, too (Red, 2/11).
+            if (ActiveOffer(c)?.Siege == true)
+            {
+                c.Squad.Add(s.Id);
+                SyncPads(c);
+            }
             return s;
+        }
+
+        /// <summary>
+        /// A commander left without a soldier alive gets a recruit for nothing (Arturo, 2/11: with two each, a bad mission
+        /// can leave nobody to go out), at the base at once. True if anyone came.
+        /// </summary>
+        private static bool NobodyLeft(CampaignState c, Rng rng)
+        {
+            if (c.Outcome != null) return false;
+            var came = false;
+            foreach (var owner in c.Players)
+            {
+                if (c.Soldiers.Any((s) => s.Owner == owner && s.Alive)) continue;
+                var s = AddSoldier(c, owner, rng);
+                // Whose it is, without naming a side: left and right are each player's own (Lore, 2/11).
+                Log(c, $"{s.Name} se une al Bastión como recluta: {(c.Players.Count > 1 ? "a un jugador no le quedaban" : "no quedaban")} soldados vivos.", LogTones.Good);
+                came = true;
+            }
+            return came;
         }
 
         /// <summary>The player with the fewest soldiers gets newcomers.</summary>

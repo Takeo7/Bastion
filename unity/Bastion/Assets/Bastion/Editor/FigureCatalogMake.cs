@@ -134,8 +134,8 @@ namespace Bastion.EditorTools
             Debug.Log($"[figures] {UndeadFile}: {all.Count} presets");
         }
 
-        /// <summary>A POLYGON character's prefab (a voice's, one of the special dead's), by its name, in the packs' Characters folders.</summary>
-        static GameObject VoicePrefab(string name)
+        /// <summary>A POLYGON character's prefab (one of the special dead's), by its name, in the packs' Characters folders.</summary>
+        static GameObject CharacterPrefab(string name)
         {
             foreach (string folder in new[] { "Assets/Synty/PolygonOffice/Prefabs/Characters", "Assets/Synty/PolygonCity/Prefabs/Characters", "Assets/Synty/PolygonApocalypse/Prefabs/Characters",
                 "Assets/Synty/PolygonCityZombies/Prefabs/Characters", "Assets/Synty/PolygonBossZombies/Prefabs" })
@@ -321,11 +321,11 @@ namespace Bastion.EditorTools
                 .Select(n => (n, prefab: prefabOf(n))).Where(w => w.prefab != null).ToList();
             catalog.weaponNames = weapons.Select(w => w.n).ToArray();
             catalog.weapons = weapons.Select(w => w.prefab).ToArray();
-            // POLYGON's characters for the radio's voices (Bastion.Client.Voices), and the headset they wear; and the special
-            // dead's (UnitViews.DeadPrefabs).
-            var names = Voices.Prefabs.Concat(Bastion.Client.Units.UnitViews.DeadPrefabs).Distinct().ToList();
-            var characters = names.Select(n => (n, prefab: VoicePrefab(n))).Where(c => c.prefab != null).ToList();
-            foreach (string n in names.Where(n => VoicePrefab(n) == null)) missing.Add(n);
+            // POLYGON's characters for the special dead (UnitViews.DeadPrefabs; the radio's voices went with the radio, Ana's #1
+            // of 2/11).
+            var names = Bastion.Client.Units.UnitViews.DeadPrefabs.Distinct().ToList();
+            var characters = names.Select(n => (n, prefab: CharacterPrefab(n))).Where(c => c.prefab != null).ToList();
+            foreach (string n in names.Where(n => CharacterPrefab(n) == null)) missing.Add(n);
             catalog.characterNames = characters.Select(c => c.n).ToArray();
             catalog.characters = characters.Select(c => c.prefab).ToArray();
             // The special dead's other atlases (UnitViews.DeadAtlases), found by their texture's name in the zombie packs.

@@ -183,8 +183,8 @@ namespace Bastion.Engine
         /// <summary>The campaign counts its pistols (CampaignState.Pistols; Arturo, 1/11): searches turn them up too.</summary>
         public bool? Pistols { get; set; }
         /// <summary>
-        /// The campaign's first mission without a pistol in the squad (Arturo, 1/11): a police car with one in the front and
-        /// one in the boot, its two tiles by tile index (on the ground), searched as a box is (Looting.PoliceCar).
+        /// The police cars (Arturo, 2/11: any mission may have some), two ground tile indices each, its nose and its boot;
+        /// the boot holds a gun more often (Looting.PoliceBoot). In the 0.11.5 and the 0.11.6, the first mission's one.
         /// </summary>
         public List<int>? PoliceCar { get; set; }
         public List<Reinforcement> Reinforcements { get; set; } = new List<Reinforcement>();

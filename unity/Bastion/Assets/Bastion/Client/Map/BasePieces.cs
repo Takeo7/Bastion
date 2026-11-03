@@ -155,8 +155,8 @@ namespace Bastion.Client.Map
             return new PieceMap { spots = spots, at = at, yard = yard };
         }
 
-        /// <summary>GameState's properties, for TerrainOf's copy.</summary>
-        static readonly PropertyInfo[] StateProperties = typeof(GameState).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        /// <summary>GameState's properties, for TerrainOf's copy (and MapBuilder.Doors').</summary>
+        internal static readonly PropertyInfo[] StateProperties = typeof(GameState).GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where((p) => p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0).ToArray();
 
         /// <summary>

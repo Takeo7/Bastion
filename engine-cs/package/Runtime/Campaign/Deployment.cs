@@ -19,6 +19,8 @@ namespace Bastion.Engine
         private static void ReachedLevel(CampaignState c, int level, Rng rng)
         {
             Log(c, $"El Bastión ya es {Lore.BastionLevelA(level)}.", LogTones.Good);
+            // What only the radio told before the transmissions went (Ana's #1 of 2/11).
+            if (level == Lore.PartituraLevel) Log(c, Lore.MareaNamed);
             var arms = c.Pistols != true && Progression.LevelArms.TryGetValue(level, out var brought) ? brought : new string[0];
             foreach (var kind in arms) (c.FoundWeapons ??= new List<FoundWeapon>()).Add(new FoundWeapon { Id = NewId(c, "w"), Kind = kind, Holder = null });
             if (arms.Count > 0) Log(c, $"A la Armería {(arms.Count == 1 ? "llega" : "llegan")} {ListOf(arms.Select((k) => Content.FoundWeapons[k].Find).ToList())}.", LogTones.Good);
@@ -355,6 +357,7 @@ namespace Bastion.Engine
                 TopUpOffers(c, rng);
                 if (c.Siege.In == 0 && !siege) StartSiege(c, rng);
                 else Log(c, HasRadio(c) ? Lore.SiegeWarning(c.Siege.In, c.Siege.Count, c.Siege.Sides) : Lore.SiegeWarning(c.Siege.In), c.Siege.In <= 1 ? LogTones.Bad : LogTones.Info);
+                NobodyLeft(c, rng);
             }
             return report;
         }

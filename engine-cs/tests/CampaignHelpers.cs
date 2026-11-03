@@ -20,6 +20,28 @@ namespace Bastion.Engine.Tests
             return Campaign.ExecuteCampaignCommand(c, cmd, new CampaignContext { Slot = slot, Connected = connected ?? new[] { 0 }, Rng = new Rng(seed) });
         }
 
+        /// <summary>
+        /// Tops each commander up to four rookies (eight alone), as a campaign started before 2/11 (Arturo: two each now), for the tests
+        /// about picking a squad, the hangar's halves and the rest, which need more soldiers than two. Without the opening
+        /// arms either, when `bare`.
+        /// </summary>
+        public static CampaignState FourEach(CampaignState c, bool bare = false)
+        {
+            var rng = new Rng(99);
+            var kit = c.Players.Count > 1 ? 4 : 8;
+            foreach (var owner in c.Players)
+            {
+                while (c.Soldiers.Count((s) => s.Owner == owner) < kit)
+                {
+                    var id = $"c{++c.NextId}";
+                    var lines = Bars.RecruitSkills(rng);
+                    c.Soldiers.Add(new CampaignSoldier { Id = id, Name = $"Recluta {id}", Owner = owner, Skills = lines.Skills, Growth = lines.Growth, Board = new List<string>(), Alive = true, Loadout = new Loadout(), Nickname = "", Appearance = Appearances.DefaultAppearance(owner, null, null, id), Traits = new List<string>() });
+                }
+            }
+            if (bare) c.FoundWeapons = null;
+            return c;
+        }
+
         /// <summary>As Run, and it must go through (the test files' `run` that throws on `!r.ok`).</summary>
         public static CampaignResult Ok(CampaignState c, CampaignCommand cmd, int slot = 0, IReadOnlyList<int>? connected = null, int seed = 7)
         {

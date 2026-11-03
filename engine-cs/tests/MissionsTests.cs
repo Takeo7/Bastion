@@ -420,7 +420,7 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "skirmish soldiers (docs/FASE10.md §7) › the campaign is untouched: its soldiers bring exactly what they learnt")]
         public void TheCampaignIsUntouchedItsSoldiersBringExactlyWhatTheyLearnt()
         {
-            var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(3));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(new[] { 0 }, new Rng(3)));
             c.Squad = c.Soldiers.Take(6).Select((s) => s.Id).ToList();
             var squad = Campaign.BuildSquad(c);
             Assert.Equal(6, squad.Count);

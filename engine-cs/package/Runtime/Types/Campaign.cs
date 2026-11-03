@@ -174,6 +174,8 @@ namespace Bastion.Engine
         public int Total { get; set; }
         /// <summary>What it makes.</summary>
         public string? Project { get; set; } // CraftIds
+        /// <summary>How many of it (Arturo, 2/11); absent, one.</summary>
+        public int? Count { get; set; }
     }
 
     /// <summary>
@@ -424,6 +426,7 @@ namespace Bastion.Engine
     {
         public override string Type => "craft";
         public string Project { get; set; } = ""; // CraftIds
+        public int? Count { get; set; }
     }
 
     /// <summary>The shared supplies go to a vote too (Ana, 21/10 #31): a recruit for `for`, straight into the squad with `squad`; an accessory for the Armería.</summary>
@@ -438,6 +441,7 @@ namespace Bastion.Engine
     {
         public override string Type => "buy";
         public string Item { get; set; } = ""; // ItemIds
+        public int? Count { get; set; }
     }
 
     /// <summary>

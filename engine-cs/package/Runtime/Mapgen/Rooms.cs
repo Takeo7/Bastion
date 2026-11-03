@@ -646,6 +646,30 @@ namespace Bastion.Engine
             }
         }
 
+        /// <summary>One door out in BOARDED is boarded up (BoardDoors).</summary>
+        private const int Boarded = 4;
+
+        /// <summary>
+        /// Doors out of a house, a shop or an office boarded up with planks (Arturo, 2/11: the crowbar takes them off): one
+        /// in BOARDED, by position (no rng drawn), and never the last a building has, so there is always a way in. The
+        /// doorway becomes a `high` tile dressed 'doorBoards', facing out.
+        /// </summary>
+        private static void BoardDoors(Canvas c, Rect b)
+        {
+            bool Outer(Vec2 q) => q.X == b.X || q.Y == b.Y || q.X == b.X + b.W - 1 || q.Y == b.Y + b.H - 1;
+            var doors = TilesIn(b).Where((p) => Outer(p) && (c.Get(p.X, p.Y) == TileKinds.Door || c.Get(p.X, p.Y) == TileKinds.DoorOpen)).ToList();
+            var open = doors.Count;
+            foreach (var p in doors)
+            {
+                if (open <= 1 || Mix(p.X * 7 + 3, p.Y * 11 + 5) % Boarded != 0) continue;
+                // Out of the building: the side whose step leaves it.
+                var facing = Enumerable.Range(0, Grid.Dirs4.Count).FirstOrDefault((f) => !InRect(b, Add(p, Grid.Dirs4[f])));
+                c.Force(p.X, p.Y, TileKinds.High);
+                c.Dress(p, DecorKinds.DoorBoards, facing);
+                open--;
+            }
+        }
+
         /// <summary>One room in BARRICADED has its windows barricaded from inside (barricadeRooms).</summary>
         private const int Barricaded = 4;
 

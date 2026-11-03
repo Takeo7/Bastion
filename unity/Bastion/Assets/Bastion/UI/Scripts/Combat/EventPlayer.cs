@@ -59,6 +59,10 @@ namespace Bastion.UI.Combat
         /// new group's id → the one the rest stay in, asleep.
         /// </summary>
         readonly Dictionary<string, string> splitFrom = new Dictionary<string, string>();
+        /// <summary>The enemies already marked as seen in this mission (Arturo's B2 of 2/11): one coming back into sight isn't again.</summary>
+        readonly HashSet<string> announced = new HashSet<string>();
+        /// <summary>The turn whose «¡CONTACTO!» stamp was shown: only the first of a turn has one (B2); the rest, their «!» and line.</summary>
+        (int turn, string team)? stamped;
 
         /// <summary>A partner's moment (game.ts moment): where it happened, for «Ver» (F) while its notice is up.</summary>
         Vector3? moment;
@@ -948,6 +952,7 @@ namespace Bastion.UI.Combat
                 moved = true;
                 for (var i = 0; i < 20 && !rig.Arrived; i++) await Wait(0.05f);
             }
+            if (Rhythm) Debug.Log($"[ritmo] encuadre de los que andan: {(moved ? "la cámara va" : "la cámara es del jugador")} ({points.Count} puntos; tomada hace {(rig != null ? Time.unscaledTime - rig.TakenAt : -1):0.0} s)");
             await Wait(SettleTime);
             return moved;
         }
@@ -1140,7 +1145,7 @@ namespace Bastion.UI.Combat
             // searched as it stays (mapView.ts searchedSeen: the furniture open, the crate, the boot, the shop's shelves).
             // A copy: the map keeps the state it drew to tell the next change, and the events change View in place (with
             // View itself, from the second change on it compared View with View and drew nothing).
-            if (e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent || e is SearchedEvent || e is RoomSearchedEvent) Bastion.Client.Map.MapView.Current?.Rebuild(Events.CloneState(V));
+            if (e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent || e is SearchedEvent || e is RoomSearchedEvent || e is BoardsRemovedEvent) Bastion.Client.Map.MapView.Current?.Rebuild(Events.CloneState(V));
             See();
             ShowSeen();
             control.Refresh();
@@ -1176,29 +1181,29 @@ namespace Bastion.UI.Combat
         static readonly bool Rhythm = System.Environment.GetEnvironmentVariable("BASTION_RITMO") == "1";
 
         /// <summary>
-        /// Enemies that have just come into the squad's sight (`before`: who was in sight until this event) get a callout
-        /// over them and a line in the log, so nobody «appears out of nowhere» (game.ts announceSighted; playtest): «A LA
-        /// VISTA» a group that hasn't noticed the squad (the chance of an ambush), «¡APARECE UN …!» one that has. In the
-        /// enemy's turn the camera holds on the first a moment, unless the player took it during the event (`epoch`);
-        /// after one's own action a short pause; the partner's get the callout alone. Contacts, arrivals and the risen
+        /// Enemies that have just come into the squad's sight (`before`: who was in sight until this event) and weren't seen
+        /// before in this mission, so nobody «appears out of nowhere» (game.ts announceSighted; playtest): a mark on each one's
+        /// flag for 2 s, a grey eye if its group hasn't noticed the squad (the chance of an ambush), a red «!» if it has, and
+        /// one line for all of them, «A la vista: 4 zombis» (Arturo's B2 of 2/11: marks, not a callout over each, which piled
+        /// up). In the enemy's turn the camera holds on the first a moment, unless the player took it during the event
+        /// (`epoch`); after one's own action a short pause; the partner's line has «Ver». Contacts, arrivals and the risen
         /// have their own show.
         /// </summary>
         async Awaitable AnnounceSighted(GameEvent e, int? by, HashSet<string> before, int epoch)
         {
             if (e is PodActivatedEvent || e is SpawnedEvent || e is ReanimatedEvent || e is MissionEndedEvent) return;
             var v = V;
-            var fresh = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && !a.Objective && control.Visible(a) && !before.Contains(a.Id)).ToList();
+            var fresh = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && !a.Objective && control.Visible(a) && !before.Contains(a.Id) && !announced.Contains(a.Id)).ToList();
             if (fresh.Count == 0) return;
-            bool Alert(Unit a) => v.Pods.FirstOrDefault(p => p.Id == a.PodId)?.Active == true;
             foreach (var a in fresh)
             {
-                var name = Content.Templates[a.Template].Name.ToUpperInvariant();
-                Float(Chest(a.Id), Alert(a) ? $"¡APARECE UN {name}!" : $"A LA VISTA: {name}", "callout");
+                announced.Add(a.Id);
+                Hud?.Spot(a.Id, Aware(v, a));
             }
-            var names = string.Join(", ", fresh.Select(a => a.Name));
             // A group that hasn't noticed the squad yet: the chance to set up an ambush.
-            var unaware = !fresh.Any(Alert);
-            Log(unaware ? $"A la vista: {names}{(v.Concealed ? " (aún no os han visto)" : "")}" : fresh.Count == 1 ? $"¡Aparece {AnEnemy(fresh[0])}!" : $"¡Aparecen: {names}!", "#ff6b5a");
+            var aware = fresh.Count(a => Aware(v, a));
+            var noticed = aware == 0 ? v.Concealed ? fresh.Count == 1 ? " (aún no os ha visto)" : " (aún no os han visto)" : "" : aware == fresh.Count ? fresh.Count == 1 ? " (os ha visto)" : " (os han visto)" : aware == 1 ? " (uno os ha visto)" : $" ({aware} os han visto)";
+            Log($"A la vista: {HeardCount(fresh)}{noticed}", aware > 0 ? "#ff6b5a" : "#b4bec6", Partners(by, Board.TileToWorld(v, fresh[0].Pos)));
             if (v.ActiveTeam == Teams.Alien)
             {
                 if (control.Rig != null && control.Rig.Epoch == epoch) control.Rig.Focus(Feet(fresh[0].Id));
@@ -1222,7 +1227,25 @@ namespace Bastion.UI.Combat
         /// <summary>Whether the squad sees tile (x, y) (mapView.isVisible).</summary>
         bool IsVisible(int x, int y) => sight != null && Grid.InBounds(V, x, y) && sight[y * V.Width + x];
 
-        void Log(string text, string color = null) => Hud?.Log(text, color);
+        void Log(string text, string color = null, Action see = null) => Hud?.Log(text, color, see);
+
+        /// <summary>Whether `a`'s group has noticed the squad (hunts it): its mark is a «!», else an eye (AnnounceSighted).</summary>
+        static bool Aware(GameState v, Unit a) => v.Pods.FirstOrDefault(p => p.Id == a.PodId)?.Active == true;
+
+        /// <summary>
+        /// A line of what the partner's soldiers found (`by` the partner): «Ver» at its end takes the camera to `at` (Arturo's
+        /// B2 of 2/11: in the log, no longer a notice over the bar); one's own and the enemy's, none.
+        /// </summary>
+        Action Partners(int? by, Vector3 at)
+        {
+            if (by == null || by == control.MySlot) return null;
+            return () =>
+            {
+                if (control.Rig == null) return;
+                control.Rig.TakeControl();
+                control.Rig.Focus(at);
+            };
+        }
 
         /// <summary>A unit's feet: its figure's, else its tile's middle.</summary>
         Vector3 Feet(string id) => Units != null && Figures.FeetOf(id) != null ? Units.Feet(id) : Figures.FeetOf(id) is Transform t ? t.position : Unit(id) is Unit u ? Board.TileToWorld(V, u.Pos) : Vector3.zero;
@@ -2166,8 +2189,24 @@ namespace Bastion.UI.Combat
                     await Wait(0.5f);
                     return;
                 }
+                case BoardsRemovedEvent boards:
+                {
+                    // The crowbar on a boarded window or door (Arturo, 02/11 A11): Arte's blow topples the boards, and the map is
+                    // drawn again (Settle). Which one it was is read before the event is applied, when the planks are still
+                    // there (after it, a doorway's tile is a shut door).
+                    var u = Unit(boards.Unit);
+                    var place = Board.TileToWorld(v, boards.Tile, 0.9f);
+                    var door = Abilities.Boards(v, boards.Tile) == DecorKinds.DoorBoards || Grid.KindAt(v, boards.Tile) == TileKinds.Door;
+                    Look(Vector3.Lerp(Feet(u.Id), place, 0.5f));
+                    control.Sfx.Search(place);
+                    if (units != null) await units.Pry(u.Id, place, boards.Tile, stop);
+                    else await Wait(0.6f);
+                    Log($"{u.Name} quita las tablas de la {(door ? "puerta" : "ventana")}.", "#e8d8c0");
+                    await Wait(0.3f);
+                    return;
+                }
                 case PodActivatedEvent pod:
-                    await PlayContact(pod, v, Cam, Look);
+                    await PlayContact(pod, by, v, Cam, Look);
                     return;
                 case ConcealmentBrokenEvent cb:
                 {
@@ -2531,16 +2570,22 @@ namespace Bastion.UI.Combat
             if (seen.FirstOrDefault(u => !Gaits.MovesDead(u.Template)) is Unit living) control.Sfx.Vehicle(Board.TileToWorld(v, living.Pos));
             // They come in on foot from the edge, or get up out of the dust: no capsules (Arrivals, arrivals.ts).
             await Arrivals.Play(Units, v, seen, Wait, stop);
-            foreach (var u in seen) Float(Board.TileToWorld(v, u.Pos, 1.5f), $"¡APARECE UN {Content.Templates[u.Template].Name.ToUpperInvariant()}!", "callout");
+            // Their mark, a «!»: they come for the squad (B2: no longer «¡APARECE UN …!» over each).
+            foreach (var u in seen)
+            {
+                announced.Add(u.Id);
+                Hud?.Spot(u.Id, true);
+            }
             await Wait(cam() ? 0.8f : 0.3f);
         }
 
         /// <summary>
         /// A pod woken (game.ts podActivated): its «!», the contact's stamp and line, or the living and the dead fighting. Only
         /// those it has: of a group split by who saw (Ana's #4 of 1/11), the new one; the rest stay as they were, and the line
-        /// says how many of them the squad sees.
+        /// says how many of them the squad sees. The «!» of those in sight on their flags; the stamp only for the first of a
+        /// turn; the partner's line with «Ver», no notice (Arturo's B2 of 2/11).
         /// </summary>
-        async Awaitable PlayContact(PodActivatedEvent e, GameState v, Func<bool> cam, Action<Vector3> look)
+        async Awaitable PlayContact(PodActivatedEvent e, int? by, GameState v, Func<bool> cam, Action<Vector3> look)
         {
             var pod = v.Pods.FirstOrDefault(p => p.Id == e.Pod);
             var all = pod?.UnitIds.Select(Unit).Where(m => m != null && m.Alive).ToList() ?? new List<Unit>();
@@ -2580,16 +2625,26 @@ namespace Bastion.UI.Combat
                     units.Face(m.Id, ClosestSoldier(m.Pos));
                     Loose(units.Alert(m.Id, stop));
                 }
-                Float(Chest(m.Id), "!", "alert");
+                // On its flag, those in sight; over the rest, which have none, rising.
+                if (ShownToSquad(m))
+                {
+                    announced.Add(m.Id);
+                    Hud?.Spot(m.Id, true);
+                }
+                else Float(Chest(m.Id), "!", "alert");
             }
             control.Sfx.Contact(centre, members.Any(m => Content.Templates[m.Template].Undead));
             var how = ContactCause(e, members.Count == 1, seen.Count == 0);
-            Hud?.Banner("¡CONTACTO!", "alien", how);
+            if (stamped != (v.Turn, v.ActiveTeam))
+            {
+                stamped = (v.Turn, v.ActiveTeam);
+                Hud?.Banner("¡CONTACTO!", "alien", how);
+            }
             // Those of its group the squad sees that didn't notice: they still can be ambushed (only the ones in sight: the
             // others would give away who is out there).
             var calm = asleep.Count(ShownToSquad);
             var others = calm == 0 ? "" : calm == 1 ? " · otro de su grupo no se ha enterado" : $" · otros {calm} de su grupo no se han enterado";
-            Log($"Contacto: {string.Join(", ", members.Select(m => m.Name))} · {how}{others}", "#ff6b5a");
+            Log($"Contacto: {string.Join(", ", members.Select(m => m.Name))} · {how}{others}", "#ff6b5a", Partners(by, seen.Count > 0 ? Board.TileToWorld(v, seen[0].Pos) : centre));
             await Wait(0.9f);
         }
 
@@ -2719,14 +2774,9 @@ namespace Bastion.UI.Combat
             string text;
             switch (e)
             {
-                case PodActivatedEvent pod:
-                {
-                    if (pod.Cause == "attacked" && pod.Unit == null) return;
-                    var first = v.Pods.FirstOrDefault(p => p.Id == pod.Pod)?.UnitIds.Select(Unit).FirstOrDefault(m => m != null && m.Alive);
-                    pos = first?.Pos;
-                    text = $"{who}: ¡contacto!";
-                    break;
-                }
+                // A contact: its line in the log, with «Ver» (PlayContact; Arturo's B2 of 2/11).
+                case PodActivatedEvent:
+                    return;
                 case ConcealmentBrokenEvent cb:
                 {
                     var spotter = Unit(cb.By);

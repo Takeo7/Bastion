@@ -25,7 +25,6 @@ namespace Bastion.UI.Strategy
         readonly StrategyRoot root;
         readonly Action<ClientMessage> send;
         readonly StrategyPresenter p;
-        Radio radio;
         string view = "barracks";
         readonly SoldiersPick soldiers = new SoldiersPick();
         readonly ArmoryPick armory = new ArmoryPick();
@@ -108,7 +107,7 @@ namespace Bastion.UI.Strategy
 
         /// <summary>
         /// The campaign as the host has it now (screen.ts update): the windows for what changed since the last one, the
-        /// premise once, the hangar when a mission is chosen and the debrief when one is back, the radio; then drawn.
+        /// premise once, the hangar when a mission is chosen and the debrief when one is back; then drawn.
         /// </summary>
         public void Campaign(CampaignState c)
         {
@@ -124,7 +123,6 @@ namespace Bastion.UI.Strategy
             // The draft's own bust, drawn again over what Know just put back.
             if (soldiers.Draft != null) Portraits.Know(soldiers.Draft.Soldier, soldiers.Draft.Look, NameOf(soldiers.Draft.Soldier));
             p.SeeNews(view);
-            radio = radio ?? new Radio(root.RadioCard, p.Slot, Vars);
             // One's own proposal that costs: said at once that nothing is paid until the yes (playtest 16/10 #5).
             if (c.Proposal != null && c.Proposal.By == p.Slot && prev?.Proposal?.Text != c.Proposal.Text && p.Proposal()?.Cost != null)
                 root.Toast($"Propuesto a {PartnerName}: se paga cuando diga que sí.");
@@ -140,6 +138,13 @@ namespace Bastion.UI.Strategy
             if (prev != null && c.Players.Count > 1 && c.LaunchReady[partnerSlot] && !prev.LaunchReady[partnerSlot] && !c.LaunchReady[p.Slot]) Bastion.Client.Audio.UiSounds.Play("bell");
             if (settlement.Piece != null && !c.Bastion.Pieces.Any(x => x.Id == settlement.Piece)) settlement.Piece = null;
             if (prev != null) alerts.AddRange(p.Alerts(prev));
+            // A commander left with nobody alive gets a recruit (Campaign.NobodyLeft; Arturo, 2/11): its line in the debrief
+            // back from the mission, or a note when it came with a day gone by (the base shows no log of its own).
+            if (prev != null && p.FreeRecruit(prev) is string joined)
+            {
+                if (ReportPending(c)) p.Joined = joined;
+                else root.Toast(joined);
+            }
             // The clock as the days pass.
             if (prev != null && c.Day > prev.Day) Bastion.Client.Audio.UiSounds.Play("tick");
             var premise = p.Premise();
@@ -149,7 +154,6 @@ namespace Bastion.UI.Strategy
             else if (prev?.ActiveMission != null && c.ActiveMission == null && view == "squad") SetView("geoscape");
             if (ReportPending(c) && view != "debrief") SetView("debrief");
             if (!viewSent) SetView(view);
-            radio.Update(c, view == "debrief" || ReportPending(c));
             Render();
         }
 
@@ -206,13 +210,6 @@ namespace Bastion.UI.Strategy
 
         bool PartnerHere => p.State != null && p.State.Players.Count > 1 && p.Seats.Any(s => s.Slot != p.Slot && s.Connected);
 
-        /// <summary>The radio's placeholders: {yo}, this player's name; {saludo}, the commanders'.</summary>
-        Dictionary<string, string> Vars()
-        {
-            var mine = p.Seats.FirstOrDefault(s => s.Slot == p.Slot)?.Name ?? "Comandante";
-            var all = p.Seats.OrderBy(s => s.Slot).Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).ToList();
-            return new Dictionary<string, string> { ["yo"] = StrategyText.Radio.Greeting(new[] { mine }), ["saludo"] = StrategyText.Radio.Greeting(all.Count > 0 ? all : new List<string> { mine }) };
-        }
 
         // ------------------------------------------------------------ drawing
 
@@ -247,8 +244,10 @@ namespace Bastion.UI.Strategy
                     break;
             }
             root.SetSkillBoard(board != null ? p.SkillBoard(board) : null);
-            root.SetProposal(p.Proposal(), p.Waiting(view));
             shown = Modal();
+            // The event's window has the vote on its answer under its options: the plate isn't shown behind it too (Red's
+            // capture of 2/11, «Un desertor»).
+            root.SetProposal(shown?.Vote != null ? null : p.Proposal(), p.Waiting(view));
             root.SetModal(shown);
             var clearing = Settlement.Instance;
             if (clearing == null) return;
@@ -257,8 +256,9 @@ namespace Bastion.UI.Strategy
             if (view == "barracks") clearing.Showcase(p.State, soldiers.Soldier, soldiers.Draft?.Look);
             // The Armería's corner, and the squad by La Lata (the debrief's while it is to be read): each only if it changed.
             clearing.SetArmory(p.State);
-            var (mirror, halves) = p.LineupSides();
-            clearing.SetLineup(p.State, p.Lineup(ReportPending(p.State)), mirror, halves);
+            var report = ReportPending(p.State);
+            var (mirror, halves) = p.LineupSides(report);
+            clearing.SetLineup(p.State, p.Lineup(report), mirror, halves);
             // Back from a mission: La Lata up its track (screen.ts arrive), the first time the clearing is shown after the
             // debrief (screen.ts go: fixed shots too, as Soldados; in the debrief it stands parked behind the row; the Mapa
             // is the valley's).
@@ -718,11 +718,13 @@ namespace Bastion.UI.Strategy
         {
             armory.Tab = tab;
             armory.Pick = null;
+            armory.Count = 1;
             Render();
         }
 
         public void OnArmoryPick(string id)
         {
+            if (armory.Pick != id) armory.Count = 1;
             armory.Pick = id;
             Render();
         }
@@ -738,12 +740,18 @@ namespace Bastion.UI.Strategy
             var weapon = picked.StartsWith("f:") ? picked.Substring(2) : null;
             switch (action)
             {
+                // How many at once (Arturo, 02/11 A7): «−» and «+» by the button; one goes as none (the engine's default).
+                case "count":
+                    armory.Count = Mathf.Clamp(armory.Count + (int.TryParse(arg, out var step) ? step : 0), 1, Bastion.Engine.Campaign.MaxBatch);
+                    Render();
+                    break;
                 case "buy":
-                    Order(new BuyCommand { Item = picked });
+                    Order(new BuyCommand { Item = picked, Count = armory.Count > 1 ? armory.Count : (int?)null });
                     break;
                 case "craft":
                     var project = StrategyPresenter.CraftOf(picked);
-                    Order(project != null ? new CraftCommand { Project = project } : null);
+                    var batch = project != null && (Progression.Crafts[project].Kind == CraftKinds.Arms || Progression.Crafts[project].Kind == CraftKinds.Mod);
+                    Order(project != null ? new CraftCommand { Project = project, Count = batch && armory.Count > 1 ? armory.Count : (int?)null } : null);
                     break;
                 case "repair":
                     Order(weapon != null ? new RepairCommand { Weapon = weapon } : null);
@@ -784,6 +792,7 @@ namespace Bastion.UI.Strategy
         {
             var c = p.State;
             if (c?.LastReport != null) LocalMarks.Write(LocalMarks.Key("seenReport", c), new[] { ReportKey(c) });
+            p.Joined = null;
             Go(c?.ActiveMission != null ? "squad" : "geoscape");
         }
 
@@ -1112,13 +1121,13 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>
-        /// Esc (the base's; screen.ts back): the radio first, then the menu's page, the board, the window asked, the choice
+        /// Esc (the base's; screen.ts back): the menu's page first, then the board, the window asked, the choice
         /// open on the sheet and Personalizar, what is in hand or picked, and the menu. A notice or an event is answered
         /// with its own buttons: Esc leaves it be.
         /// </summary>
         public void Escape()
         {
-            if (root.RadioKey("escape") || root.MenuBack()) return;
+            if (root.MenuBack()) return;
             // On the board, a cell held to buy is let go first (hexBoard.ts key), the board after.
             if (board != null && root.CancelBoardHold()) return;
             if (board != null) OnBoardClose();

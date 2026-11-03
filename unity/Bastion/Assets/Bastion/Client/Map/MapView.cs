@@ -170,6 +170,123 @@ namespace Bastion.Client.Map
             return redone;
         }
 
+        /// <summary>
+        /// What boards up the window by `tile` pulled down (the crowbar, BoardsRemovedEvent; Arturo's A11 of 2/11): its
+        /// boards and its heap of furniture toppling sideways along the wall over Topples, each tipped on an edge of its
+        /// foot, as it goes; a doorway's planks off the wall one after another and down at its foot (Fall). The map's next
+        /// Rebuild takes them away.
+        /// </summary>
+        public void Topple(Pos tile)
+        {
+            if (builder == null || tile == null || State == null) return;
+            // (The way the window looks out, the heap's facing: Decor.)
+            var decor = tile.Z == 0 ? State.Decor : State.Levels != null && tile.Z - 1 < State.Levels.Count ? State.Levels[tile.Z - 1].Decor : null;
+            int i = tile.Y * State.Width + tile.X;
+            var look = decor != null && i < decor.Count ? Bastion.Engine.Decor.DecorOf(decor[i]) : null;
+            var d = Bastion.Engine.Grid.Dirs4[look?.Facing ?? 0];
+            var outward = new Vector3(d.X, 0, -d.Y);
+            float side = MapArt.Hash(tile.X, tile.Y, 90) < 0.5f ? 1 : -1;
+            // (Its pieces made again apart: the map's are joined and can't move.)
+            var loose = builder.LooseBarricade(tile);
+            if (loose == null) return;
+            if (look.Kind == DecorKinds.DoorBoards)
+            {
+                // The top one first, as a crowbar pries them; down onto the ground in front of the door.
+                float ground = transform.position.y + tile.Z * MapSpace.Storey;
+                var planks = loose.Cast<Transform>().OrderByDescending(p => p.position.y).ToList();
+                for (int n = 0; n < planks.Count; n++) StartCoroutine(Fall(planks[n], outward, ground, n * PlankAfter, MapArt.Hash(tile.X, tile.Y, 91 + n)));
+                StartCoroutine(Sink(loose, planks.Count * PlankAfter + PlankFalls + 0.35f));
+                return;
+            }
+            foreach (Transform thing in loose) StartCoroutine(Tip(thing, outward, side));
+            StartCoroutine(Sink(loose, Topples + 0.35f));
+        }
+
+        /// <summary>A pulled-down heap, once over, down through the floor and gone (the tile is open now) `after` seconds on.</summary>
+        static System.Collections.IEnumerator Sink(Transform loose, float after)
+        {
+            yield return new WaitForSeconds(after);
+            for (float t = 0; t < Sinks && loose != null; t += Time.deltaTime)
+            {
+                loose.position += Vector3.down * (SinkBy / Sinks) * Time.deltaTime;
+                yield return null;
+            }
+            if (loose != null) Destroy(loose.gameObject);
+        }
+
+        /// <summary>How long a pulled-down heap takes to sink out of sight, and how far (m).</summary>
+        const float Sinks = 0.4f, SinkBy = 1.2f;
+
+        /// <summary>Seconds a heap takes to topple, and how far over it goes (degrees).</summary>
+        const float Topples = 0.45f, ToppleBy = 80;
+
+        /// <summary>Seconds between a doorway's planks coming off, and the longest one takes to fall.</summary>
+        const float PlankAfter = 0.06f, PlankFalls = 0.55f;
+
+        /// <summary>
+        /// A doorway's plank pried off (Topple), `after` seconds on: out from the wall and down onto the ground at its foot
+        /// (`ground`, m) as anything falls, turning over flat as it goes, a little round on itself (`spin`, 0 to 1).
+        /// </summary>
+        static System.Collections.IEnumerator Fall(Transform plank, Vector3 outward, float ground, float after, float spin)
+        {
+            yield return new WaitForSeconds(after);
+            if (plank == null) yield break;
+            var from = CentreOf(plank);
+            // To lie on the ground a little way out, as a plank lies (its middle a couple of centimetres up).
+            var to = new Vector3(from.x, ground + 0.03f, from.z) + outward * (0.35f + spin * 0.3f);
+            float falls = Mathf.Min(PlankFalls, Mathf.Sqrt(2 * Mathf.Max(0.05f, from.y - to.y) / 9.8f));
+            var wall = Vector3.Cross(Vector3.up, outward).normalized;
+            float turned = 0, spun = 0, over = 90, round = (spin - 0.5f) * 50;
+            for (float t = 0; t < falls && plank != null; t += Time.deltaTime)
+            {
+                float k = t / falls;
+                var at = Vector3.Lerp(from, to, k);
+                at.y = from.y - (from.y - to.y) * k * k;
+                plank.position += at - CentreOf(plank);
+                plank.RotateAround(at, wall, over * k - turned);
+                plank.RotateAround(at, Vector3.up, round * k - spun);
+                (turned, spun) = (over * k, round * k);
+                yield return null;
+            }
+            if (plank == null) yield break;
+            plank.position += to - CentreOf(plank);
+            plank.RotateAround(to, wall, over - turned);
+            plank.RotateAround(to, Vector3.up, round - spun);
+        }
+
+        static Vector3 CentreOf(Transform thing)
+        {
+            var box = new Bounds(thing.position, Vector3.zero);
+            bool first = true;
+            foreach (var r in thing.GetComponentsInChildren<Renderer>())
+            {
+                if (first) box = r.bounds;
+                else box.Encapsulate(r.bounds);
+                first = false;
+            }
+            return box.center;
+        }
+
+        static System.Collections.IEnumerator Tip(Transform thing, Vector3 axis, float side)
+        {
+            if (thing == null) yield break;
+            var box = new Bounds(thing.position, Vector3.zero);
+            foreach (var r in thing.GetComponentsInChildren<Renderer>()) box.Encapsulate(r.bounds);
+            // (Round the window's way, over the edge of its foot along the wall.)
+            var wall = Vector3.Cross(Vector3.up, axis).normalized;
+            float reach = Mathf.Abs(Vector3.Dot(box.extents, new Vector3(Mathf.Abs(wall.x), 0, Mathf.Abs(wall.z))));
+            var pivot = new Vector3(box.center.x, box.min.y, box.center.z) + wall * side * reach * 0.9f;
+            float done = 0;
+            for (float t = 0; t < Topples && thing != null; t += Time.deltaTime)
+            {
+                float angle = ToppleBy * (t / Topples) * (t / Topples);
+                thing.RotateAround(pivot, axis, -(angle - done) * side);
+                done = angle;
+                yield return null;
+            }
+            if (thing != null) thing.RotateAround(pivot, axis, -(ToppleBy - done) * side);
+        }
+
         // ------------------------------------------------------------------------------------------- a siege's doors
 
         /// <summary>A blow on a siege's door or barricade at `tile` (mapView.ts knock, the 'smashed' event): a gate shakes on its hinges.</summary>

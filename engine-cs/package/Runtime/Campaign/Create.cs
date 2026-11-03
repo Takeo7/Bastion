@@ -27,15 +27,6 @@ namespace Bastion.Engine
         /// and its needs come after. The server calls it on a campaign it has just
         /// created (createCampaign itself leaves the choice open).
         /// </summary>
-        /// <summary>
-        /// The police car with two pistols (Arturo, 1/11: nobody starts with one): on the story's first operation, in a
-        /// campaign that counts its pistols (CampaignState.Pistols).
-        /// </summary>
-        public static bool OpeningPistols(CampaignState c, MissionOffer offer)
-        {
-            return c.Pistols == true && offer.Story == 1;
-        }
-
         public static void OpeningMission(CampaignState c)
         {
             var first = c.Offers.FirstOrDefault((o) => o.Story == 1) ?? c.Offers.FirstOrDefault();
@@ -48,8 +39,13 @@ namespace Bastion.Engine
             if (welcome != null) welcome.Text = WelcomeOpening;
         }
 
-        /// <summary>Soldiers each player starts with.</summary>
-        private const int StartKit = 4;
+        /// <summary>Soldiers each player starts with (Arturo, 2/11: two, not four).</summary>
+        private const int StartKit = 2;
+        /// <summary>
+        /// What the opening squad carries between them, each to one soldier at random (Arturo, 2/11): two pistols, a machete
+        /// and a crowbar, which takes the boards off a window. The rest, the knife.
+        /// </summary>
+        private static readonly IReadOnlyList<string> StartArms = new[] { FoundWeaponIds.Pistol, FoundWeaponIds.Pistol, FoundWeaponIds.Machete, FoundWeaponIds.Crowbar };
         /// <summary>Ready soldiers a commander keeps when a partner arrives: a squad share.</summary>
         private const int KeepReady = 3;
 
@@ -66,7 +62,7 @@ namespace Bastion.Engine
                 Level = 1,
                 Vehicle = 0,
                 Soldiers = new List<CampaignSoldier>(),
-                // Nothing on the belts, no pistols at the side, a knife each (Arturo, 1/11: «para que el progreso sea más lento»).
+                // Nothing on the belts and a knife each (Arturo, 1/11: «para que el progreso sea más lento»); the arms of StartArms.
                 Inventory = new Dictionary<string, int>(),
                 Medicines = StartMedicines,
                 NextMedicineDay = 1 + EnclaveDays,
@@ -113,6 +109,14 @@ namespace Bastion.Engine
             };
             // Everyone starts as a recruit: classes come at Capitán.
             for (var i = 0; i < 2 * StartKit; i++) AddSoldier(c, players.Count > 1 ? players[i % 2] : players[0], rng);
+            var empty = c.Soldiers.ToList();
+            foreach (var kind in StartArms)
+            {
+                if (empty.Count == 0) break;
+                var s = empty[rng.Int(empty.Count)];
+                empty.Remove(s);
+                (c.FoundWeapons ??= new List<FoundWeapon>()).Add(new FoundWeapon { Id = NewId(c, "w"), Kind = kind, Holder = s.Id });
+            }
             var a = MakeOffer(c, rng);
             var b = MakeOffer(c, rng);
             c.Offers.Add(a);
@@ -136,7 +140,8 @@ namespace Bastion.Engine
                 c.Squad = c.Squad.Where((id) => id != place.Evict).ToList();
                 Log(c, $"{gone.Name} deja su hueco a {soldier.Name}.");
             }
-            c.Squad.Add(soldier.Id);
+            // A siege has already put them in (AddSoldier).
+            if (!c.Squad.Contains(soldier.Id)) c.Squad.Add(soldier.Id);
         }
 
         /// <summary>Writes down the pads the squad stands on now, so they stay put.</summary>
@@ -167,12 +172,15 @@ namespace Bastion.Engine
             // Untouched rookies change hands, but never the reserves the commander already there
             // needs: they keep at least a squad share of ready soldiers (UX-REVISION-2 #37).
             // Whatever is missing comes as fresh recruits.
+            // A campaign of two soldiers each (CampaignState.Pistols, Arturo 2/11) hands over two and keeps two.
+            var kit = c.Pistols == true ? StartKit : LateKit;
+            var keep = c.Pistols == true ? StartKit : KeepReady;
             int Ready(int owner) => c.Soldiers.Count((s) => s.Owner == owner && SoldierReady(s));
             var rookies = new List<CampaignSoldier>();
             foreach (var s in Enumerable.Reverse(c.Soldiers.Where((x) => x.Owner != slot && x.Alive && x.Missions == 0).ToList()))
             {
-                if (rookies.Count >= LateKit) break;
-                if (SoldierReady(s) && Ready(s.Owner) - rookies.Count((r) => r.Owner == s.Owner && SoldierReady(r)) <= KeepReady) continue;
+                if (rookies.Count >= kit) break;
+                if (SoldierReady(s) && Ready(s.Owner) - rookies.Count((r) => r.Owner == s.Owner && SoldierReady(r)) <= keep) continue;
                 rookies.Add(s);
             }
             // A squad being picked is redone for both by whoever calls this (see the server's bringPlayersIn).
@@ -186,13 +194,13 @@ namespace Bastion.Engine
                 s.Loadout = new Loadout();
             }
             var recruits = new List<CampaignSoldier>();
-            for (var i = rookies.Count; i < LateKit; i++) recruits.Add(AddSoldier(c, slot, rng));
+            for (var i = rookies.Count; i < kit; i++) recruits.Add(AddSoldier(c, slot, rng));
             // Whoever was already there learns who changed hands, and who joined.
             var moved = rookies.Count > 0 ? $"Pasan a su mando: {ListOf(rookies.Select((s) => s.Name).ToList())}." : "";
             var joined = recruits.Count > 0 ? $"{(rookies.Count > 0 ? "Además, se alistan" : "Se alistan a sus órdenes")}: {ListOf(recruits.Select((s) => s.Name).ToList())}." : "";
             // «Llega el segundo comandante» (text-fixes.ts, Lore 24/10): the partner may be Ana.
             Log(c, string.Join(" ", new[] { "Se une el otro jugador.", moved, joined }.Where((x) => x != "")), LogTones.Good, Alert("RELEVO", "Se une el otro jugador"));
-            return LateKit;
+            return kit;
         }
     }
 }

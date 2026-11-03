@@ -10,8 +10,9 @@ namespace Bastion.Net
     /// holds the command, one at a time: it reloads, shoots or strikes what it is likely to hit or what is close, and
     /// otherwise goes for the objective (a Botín's item; with it carried, La Lata, everyone) or the nearest enemy; in La
     /// Lata with the job done and everyone aboard (or time short), it calls the bus; the partner's call it answers yes.
-    /// Without a gun (the campaign starts with the blade only: Arturo, 1/11) it goes for a pistol first, the police car's
-    /// or one on the floor, and puts it on; and with the blade it walks up to the dead and strikes. With nothing to do, it
+    /// Without a gun (the campaign starts with two pistols for four: Arturo, 2/11) it goes for one first, in a police car's
+    /// boot or on the floor, and puts it on; and with the blade it walks up to the dead and strikes. Walled off from where it
+    /// goes (a boarded door: Arturo, 2/11), it takes the boards off with the crowbar or goes round. With nothing to do, it
     /// keeps watch or takes cover, and with no soldier with actions it ends its turn. Deterministic: no dice of its own.
     /// </summary>
     public static class MissionBot
@@ -71,13 +72,13 @@ namespace Bastion.Net
             var carrier = s.Mission.Item?.Carrier == u.Id;
             if (!armed)
             {
-                var pistol = PackedPistol(u);
-                if (pistol != null) return new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Index = pistol };
-                // One at its feet is picked up (free); the police car beside it, searched.
-                var dropped = s.Dropped?.FirstOrDefault((d) => d.Loot.Weapon == FoundWeaponIds.Pistol && Grid.SamePos(d.Pos, u.Pos));
+                var gun = PackedGun(u);
+                if (gun != null) return new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Index = gun };
+                // One at its feet is picked up (free); a police car's boot beside it, searched.
+                var dropped = s.Dropped?.FirstOrDefault((d) => IsGun(d.Loot.Weapon) && Grid.SamePos(d.Pos, u.Pos));
                 if (dropped != null && (u.Backpack?.Count ?? 0) < Looting.PackSlots(u)) return new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Id = dropped.Id };
-                var car = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault((p) => Looting.SearchSpot(s, p) == Looting.PoliceCar) : null;
-                if (car != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = car };
+                var boot = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault((p) => Looting.SearchSpot(s, p) == Looting.PoliceBoot) : null;
+                if (boot != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = boot };
             }
             if (u.Ammo <= 0 && Usable(s, u, AbilityIds.Reload)) return Ability(u, AbilityIds.Reload);
             // Only what is close is shot at: a shot is heard, and draws more of them (docs/FASE2.md).
@@ -90,12 +91,13 @@ namespace Bastion.Net
                 var close = MoveToStrike(s, u);
                 if (close != null) return close;
             }
-            var goal = (!armed && !leaving ? PistolGoal(s, u) : null) ?? Goal(s, u, leaving);
+            var goal = (!armed && !leaving ? GunGoal(s, u) : null) ?? Goal(s, u, leaving);
             if (goal != null && !(leaving && Abilities.InEvacZone(s, u.Pos)))
             {
                 // Dashing with nobody close, and always with the item: one action of moving keeps one to shoot.
                 var dash = u.Ap >= 2 && (nearest > Close || carrier);
-                var move = MoveToward(s, u, goal, dash ? Paths.MaxMoveCost(u) : Paths.CostPerAp(u), leaving);
+                var cost = dash ? Paths.MaxMoveCost(u) : Paths.CostPerAp(u);
+                var move = MoveToward(s, u, goal, cost, leaving) ?? Unblock(s, u, goal, cost, leaving);
                 if (move != null) return move;
             }
             if (shot != null && shot.Value.hit >= 15) return shot.Value.cmd;
@@ -117,29 +119,32 @@ namespace Bastion.Net
             return Enemies(s).OrderBy((e) => Grid.Distance(u.Pos, e.Pos)).ThenBy((e) => e.Id, System.StringComparer.Ordinal).Select((e) => e.Pos).FirstOrDefault() ?? bus;
         }
 
-        /// <summary>A pistol in `u`'s backpack (Loot.weapon), by its index; null with none.</summary>
-        private static int? PackedPistol(Unit u)
+        /// <summary>Whether a found weapon of `kind` fires: in the hand or at the side, not a blade.</summary>
+        private static bool IsGun(string? kind) => kind != null && Content.FoundWeapons.TryGetValue(kind, out var def) && def.Slot != FoundWeaponSlots.Melee;
+
+        /// <summary>A gun in `u`'s backpack (Loot.weapon), by its index; null with none.</summary>
+        private static int? PackedGun(Unit u)
         {
-            var i = u.Backpack?.FindIndex((l) => l.Weapon == FoundWeaponIds.Pistol) ?? -1;
+            var i = u.Backpack?.FindIndex((l) => IsGun(l.Weapon)) ?? -1;
             return i >= 0 ? i : (int?)null;
         }
 
         /// <summary>
-        /// Where a soldier without a gun finds one: the police car's halves still shut, or a pistol on the floor (with no
-        /// car, at the first soldier's feet). Only as many go as there are pistols, the nearest to them; null for the rest.
+        /// Where a soldier without a gun may find one: the boots of police cars still shut (MissionState.PoliceCar, a gun
+        /// one time in three), or a gun on the floor. Only as many go as there are, the nearest to them; null for the rest.
         /// </summary>
-        private static Pos? PistolGoal(GameState s, Unit u)
+        private static Pos? GunGoal(GameState s, Unit u)
         {
             var found = new List<Pos>();
             foreach (var i in s.Mission.PoliceCar ?? new List<int>())
             {
                 var p = new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
-                if (Looting.IsSearchable(s, p)) found.Add(p);
+                if (Looting.SearchSpot(s, p) == Looting.PoliceBoot && Looting.IsSearchable(s, p)) found.Add(p);
             }
-            found.AddRange((s.Dropped ?? new List<DroppedLoot>()).Where((d) => d.Loot.Weapon == FoundWeaponIds.Pistol).Select((d) => d.Pos));
+            found.AddRange((s.Dropped ?? new List<DroppedLoot>()).Where((d) => IsGun(d.Loot.Weapon)).Select((d) => d.Pos));
             if (found.Count == 0) return null;
             double Near(Unit x) => found.Min((p) => Grid.Distance(x.Pos, p));
-            var going = Grid.Combatants(s, Teams.Xcom).Where((x) => !x.Evacuated && !Content.HasGun(x) && PackedPistol(x) == null && s.Mission.Item?.Carrier != x.Id)
+            var going = Grid.Combatants(s, Teams.Xcom).Where((x) => !x.Evacuated && !Content.HasGun(x) && PackedGun(x) == null && s.Mission.Item?.Carrier != x.Id)
                 .OrderBy(Near).ThenBy((x) => x.Id, System.StringComparer.Ordinal).Take(found.Count);
             if (!going.Any((x) => x.Id == u.Id)) return null;
             return found.OrderBy((p) => Grid.Distance(u.Pos, p)).First();
@@ -198,6 +203,46 @@ namespace Bastion.Net
             }
             // Only a move that brings it nearer, and is no worse than staying.
             if (best == null || Far(best.Pos) >= Far(u.Pos) - 0.5 || bestScore >= Far(u.Pos) + Danger(u.Pos) - 0.5 || Paths.BuildPath(s, u, reach, best.Pos) == null) return null;
+            return new MoveCommand { Unit = u.Id, To = best.Pos };
+        }
+
+        /// <summary>
+        /// When no place within `cost` is any nearer `goal` as the crow flies (a wall in between, or a boarded door: Arturo,
+        /// 2/11): with the crowbar, the boards beside it on the goal's side off, if the way through saves a move; else a move
+        /// along the way round, to the place with the shortest walk left. Null if it isn't walled off, or there's no way.
+        /// </summary>
+        private static Command? Unblock(GameState s, Unit u, Pos goal, double cost, bool bus)
+        {
+            var reach = Paths.ComputeReach(s, u, cost);
+            var places = Paths.Destinations(s, u, reach);
+            if (places.Any((o) => Grid.Distance(o.Pos, goal) < Grid.Distance(u.Pos, goal) - 0.5)) return null;
+            // The walk from the goal to each place (the same both ways, but for the drops).
+            var back = Paths.ComputeReach(s, u, double.MaxValue, goal);
+            int? Walk(Pos p) => bus && Abilities.InEvacZone(s, p) ? 0 : back.Cost.TryGetValue(Grid.NodeOf(s, p), out var w) ? w : (int?)null;
+            var here = Walk(u.Pos);
+            if (Usable(s, u, AbilityIds.Pry))
+                foreach (var b in Abilities.BoardedBeside(s, u.Pos).Where((p) => Grid.Distance(p, goal) < Grid.Distance(u.Pos, goal)))
+                {
+                    // Through it: the walk left from beyond, two steps on.
+                    var beyond = Grid.Dirs8.Select((d) => Walk(new Pos { X = b.X + d.X, Y = b.Y + d.Y, Z = b.Z })).Where((w) => w != null).Select((w) => w!.Value + 2 * Paths.CostOrtho).DefaultIfEmpty(int.MaxValue).Min();
+                    if (beyond < int.MaxValue && (here == null || beyond + Paths.CostPerAp(u) < here)) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Pry, Tile = b };
+                }
+            if (here == null) return null;
+            var enemies = Enemies(s).ToList();
+            double Danger(Pos p) => Paths.CostOrtho * enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0);
+            Destination? best = null;
+            var bestScore = double.MaxValue;
+            foreach (var o in places)
+            {
+                if (!(Walk(o.Pos) is int w)) continue;
+                var d = w + Danger(o.Pos);
+                if (best == null || d < bestScore - 1e-9 || (System.Math.Abs(d - bestScore) < 1e-9 && o.Cost < best.Cost))
+                {
+                    best = o;
+                    bestScore = d;
+                }
+            }
+            if (best == null || Walk(best.Pos) >= here - Paths.CostOrtho || bestScore >= here + Danger(u.Pos) - Paths.CostOrtho || Paths.BuildPath(s, u, reach, best.Pos) == null) return null;
             return new MoveCommand { Unit = u.Id, To = best.Pos };
         }
 

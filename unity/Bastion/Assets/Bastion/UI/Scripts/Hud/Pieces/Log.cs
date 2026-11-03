@@ -8,7 +8,8 @@ namespace Bastion.UI.Hud
     /// The log under the objective (hud.ts log/renderLog; docs/UNITY-UI.md §2.8): what happened, a line each, the newest
     /// on top, a stroke on its left in the colour of its tone (one's own hurt, the enemy's, enemies among themselves, good
     /// news), the words in the log's own (styles.css .log-line). Folded it
-    /// shows the last two and «▾ 3 más»; open, the last thirty and «▴ Plegar». Lines come from the events, in Lore's words.
+    /// shows the last two and «▾ 3 más»; open, the last thirty and «▴ Plegar». Lines come from the events, in Lore's words;
+    /// what the partner found, with «Ver» at its end (Arturo's B2 of 2/11: no longer a notice over the bar).
     /// </summary>
     public sealed class Log
     {
@@ -21,7 +22,7 @@ namespace Bastion.UI.Hud
         readonly Triangle toggleArrow;
         readonly Label toggleText;
         /// <summary>Newest first.</summary>
-        readonly List<Label> kept = new List<Label>();
+        readonly List<VisualElement> kept = new List<VisualElement>();
         bool open;
 
         public Log(VisualElement host, System.Func<string, Sprite> icon = null)
@@ -46,9 +47,18 @@ namespace Bastion.UI.Hud
             Draw();
         }
 
-        public void Add(string text, string color = null)
+        public void Add(string text, string color = null, System.Action see = null)
         {
-            var line = Ui.Text(text, "log__line");
+            VisualElement line;
+            if (see == null) line = Ui.Text(text, "log__line");
+            else
+            {
+                line = Ui.El("log__line log__line--see");
+                Ui.Text(text, "log__text", line);
+                var button = new Button(see) { text = HudText.Log.See };
+                button.AddToClassList("log__see");
+                line.Add(button);
+            }
             if (!string.IsNullOrEmpty(color)) line.style.borderLeftColor = Ui.Hex(color, Color.white);
             kept.Insert(0, line);
             lines.Insert(0, line);

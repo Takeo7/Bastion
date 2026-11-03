@@ -29,8 +29,8 @@ namespace Bastion.Client.Units
             new DeadBody { prefab = "SM_Chr_Zombie_" + name, body = "Zombie_" + name, female = female, scale = scale };
 
         /// <summary>
-        /// The Corredores (the recently dead, still quick), the Acorazados (police and soldiers, vest and helmet still on, a
-        /// little bigger), the Chillón (Boss Zombies' Wretch, a head taller than the rest) and the Hinchados, the bosses with
+        /// The Corredores (the recently dead, still quick), the Acorazados (riot police, police and firemen, vest and helmet
+        /// still on, a little bigger; no soldier, the common dead's in uniform: Gameplay, 2/11), the Chillón (Boss Zombies' Wretch, a head taller than the rest) and the Hinchados, the bosses with
         /// their hair and nothing else (the Blobber's prefab has a tiara on, 0.10.1's had none). The Hinchados five (Ana's
         /// #13, 29/10: «siempre tiene la misma pinta»; Gameplay: not all pink): Boss Zombies' two fat bodies, the Blobber and
         /// the Slobber, with their hairs (and the Slobber's beard), in their pack's atlases, whose patterns differ.
@@ -39,7 +39,7 @@ namespace Bastion.Client.Units
         static readonly Dictionary<string, DeadBody[]> DeadBodies = new Dictionary<string, DeadBody[]>
         {
             ["xenoid"] = new[] { City("Jock_Male_01"), City("Cheerleader_Female_01", true), City("Hoodie_Male_01"), City("SchoolGirl_Female_01", true) },
-            ["mec"] = new[] { City("RiotCop_Male_01", false, 1.06f), City("Military_Male_01", false, 1.06f), City("Police_Male_01", false, 1.06f), City("Firefighter_Male_01", false, 1.06f) },
+            ["mec"] = new[] { City("RiotCop_Male_01", false, 1.06f), City("Police_Male_01", false, 1.06f), City("Firefighter_Male_01", false, 1.06f) },
             ["sectoid"] = new[] { new DeadBody { prefab = "SM_Chr_ZombieBoss_Wretch_01", body = "SM_Chr_ZombieBoss_Wretch_01", scale = 1.12f, keep = new[] { "SM_Chr_Attach_Wretch_Hair_01" } } },
             ["bloater"] = new[]
             {
@@ -82,13 +82,22 @@ namespace Bastion.Client.Units
             return copy;
         }
 
-        /// <summary>The prefabs the special dead are drawn from (FigureCatalogMake puts them in the catalog's characters).</summary>
-        public static IEnumerable<string> DeadPrefabs => DeadBodies.Values.SelectMany(b => b).Select(b => b.prefab).Distinct();
+        /// <summary>
+        /// The common dead who were soldiers (Unit.Outfit military; Arturo's A9 of 2/11): City Zombies' soldier at the common
+        /// one's size. Sidekick has none: its police and civilians are the others' (UnitViews.Bodies).
+        /// </summary>
+        static readonly DeadBody[] Soldiers = { City("Military_Male_01") };
+
+        /// <summary>The prefabs the special dead and the soldiers are drawn from (FigureCatalogMake puts them in the catalog's characters).</summary>
+        public static IEnumerable<string> DeadPrefabs => DeadBodies.Values.SelectMany(b => b).Concat(Soldiers).Select(b => b.prefab).Distinct();
 
         /// <summary>A special one's figure, dealt among its kind's (Dealt; its build and size in `view`); null if it isn't one or its prefab is missing.</summary>
-        static GameObject DeadFigureOf(Unit u, View view, FigureCatalog catalog)
+        static GameObject DeadFigureOf(Unit u, View view, FigureCatalog catalog) =>
+            DeadBodies.TryGetValue(u.Template, out var bodies) ? DeadFigureOf(bodies, view, catalog) : null;
+
+        /// <summary>One of `bodies` (POLYGON's dead), dealt (Dealt; its build and size in `view`); null if its prefab is missing.</summary>
+        static GameObject DeadFigureOf(DeadBody[] bodies, View view, FigureCatalog catalog)
         {
-            if (!DeadBodies.TryGetValue(u.Template, out var bodies)) return null;
             var b = bodies[Dealt(bodies.Length, view, i => bodies[i].prefab + "|" + bodies[i].body + "|" + bodies[i].atlas)];
             var prefab = catalog.Character(b.prefab);
             if (prefab == null) return null;

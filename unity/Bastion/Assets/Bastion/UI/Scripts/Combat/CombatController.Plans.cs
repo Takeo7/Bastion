@@ -158,13 +158,30 @@ namespace Bastion.UI.Combat
             following = false;
         }
 
-        /// <summary>G: the tile under the pointer marked for both (playtest 18/10 #7), an enemy's in red; at most a few a second.</summary>
-        void Ping()
+        /// <summary>
+        /// G: the tile under the pointer marked for both (playtest 18/10 #7), an enemy's in red; at most a few a second. From
+        /// above (the map, M: Arturo, 02/11 A3), the ground's tile under the pointer, or `at`.
+        /// </summary>
+        void Ping(Pos at = null)
         {
-            if (hover == null || Time.unscaledTime - lastPing < 0.4f) return;
+            var tile = at ?? (Overhead ? GroundUnderPointer() : hover);
+            if (tile == null || Time.unscaledTime - lastPing < 0.4f) return;
             lastPing = Time.unscaledTime;
-            var occupant = Grid.UnitAt(State, hover);
-            Send(new PingMessage { Tile = hover, Kind = occupant != null && occupant.Team == Teams.Alien && Visible(occupant) ? "enemy" : "point" });
+            var occupant = Grid.UnitAt(State, tile);
+            Send(new PingMessage { Tile = tile, Kind = occupant != null && occupant.Team == Teams.Alien && Visible(occupant) ? "enemy" : "point" });
+        }
+
+        /// <summary>The ground's tile under the pointer, from above (the map: the ground's storey, as a click there takes it).</summary>
+        Pos GroundUnderPointer()
+        {
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            return mouse != null && Rig != null && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(mouse.position.ReadValue()), 0, out var p) ? p : null;
+        }
+
+        /// <summary>A mark from above on `tile`, as Shift and a click there (the labs: PackSteps «marca-mapa=x/y»).</summary>
+        internal void MarkFromAbove(Pos tile)
+        {
+            if (Overhead) Ping(tile);
         }
 
         /// <summary>A ping heard (one's own too, which the host sends back): its beam and rings, whose it is over it, and the partner's in the log.</summary>

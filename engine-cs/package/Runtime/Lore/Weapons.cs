@@ -53,6 +53,26 @@ namespace Bastion.Engine
             ["none"] = new Reach("Cuerpo a cuerpo", "Contra quien está al lado. Casi no se oye."),
         };
 
+        /// <summary>
+        /// What a hand weapon of the Armería does that the others don't, for its card (Ana's #5 of 2/11): the long blades
+        /// strike everyone alongside (Content.Sweeps), the rake reaches two tiles (Content.ReachOf, Aim.InReachOf). Null for any
+        /// other.
+        /// </summary>
+        public static string? MeleeLine(string foundWeapon)
+        {
+            switch (foundWeapon)
+            {
+                case FoundWeaponIds.Katana:
+                case FoundWeaponIds.Longsword:
+                case FoundWeaponIds.Chainsaw:
+                    return "Con el Tajo, golpea a todos los enemigos que tenga al lado, no a uno.";
+                case FoundWeaponIds.Rake:
+                    return "Llega a dos casillas, en línea recta o en diagonal, si en medio no hay nadie.";
+                default:
+                    return null;
+            }
+        }
+
         /// <summary>A figure of the card, in words: «4 balas», «2 acciones», «12 casillas»; the blade «No gasta». `what`: "clip", "actions" or "noise".</summary>
         public static string WeaponFigure(string what, int n, bool melee = false)
         {

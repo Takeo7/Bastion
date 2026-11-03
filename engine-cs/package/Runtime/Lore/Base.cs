@@ -570,7 +570,7 @@ namespace Bastion.Engine
             /// <summary>A siege by night (one in three from the second), after `arrival`: what the dark does, not its rule.</summary>
             public const string Night = "Es de noche: no se les ve hasta que están en la valla.";
             /// <summary>The rule, for the help and the errors (not for the notice).</summary>
-            public const string Defenders = "Defienden los sanos. Los heridos y los mordidos se quedan dentro.";
+            public const string Defenders = "Defienden los sanos; si no queda ninguno, los heridos. Los mordidos se quedan dentro.";
             public const string Fallen = "El Bastión ha caído";
             public const string FallenLine = "Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la autocaravana y lo puesto, y vuelven a empezar en otro claro.";
             public const string Nobody = "No queda nadie";

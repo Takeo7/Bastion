@@ -47,16 +47,18 @@ namespace Bastion.Engine
             {
                 if (--work.DaysLeft > 0) continue;
                 var def = Progression.Crafts[work.Project!];
+                var made = Batch(work.Count);
+                var what = made > 1 ? $": {def.Name.ToLowerInvariant()} ×{made}" : $" {def.The}";
                 if (!string.IsNullOrEmpty(def.Makes))
                 {
-                    (c.FoundWeapons ??= new List<FoundWeapon>()).Add(new FoundWeapon { Id = NewId(c, "w"), Kind = def.Makes!, Holder = null });
-                    Log(c, $"El Taller ha terminado {def.The}. Ya está en la Armería.", LogTones.Good);
+                    for (var k = 0; k < made; k++) (c.FoundWeapons ??= new List<FoundWeapon>()).Add(new FoundWeapon { Id = NewId(c, "w"), Kind = def.Makes!, Holder = null });
+                    Log(c, $"El Taller ha terminado{what}. Ya {(made > 1 ? "están" : "está")} en la Armería.", LogTones.Good);
                 }
                 else if (!string.IsNullOrEmpty(def.MakesMod))
                 {
                     var mods = c.WeaponMods ??= new Dictionary<string, int>();
-                    mods[def.MakesMod!] = (mods.TryGetValue(def.MakesMod!, out var n) ? n : 0) + 1;
-                    Log(c, $"El Taller ha terminado {def.The}. Ya está en la Armería, para montar en un arma.", LogTones.Good);
+                    mods[def.MakesMod!] = (mods.TryGetValue(def.MakesMod!, out var n) ? n : 0) + made;
+                    Log(c, $"El Taller ha terminado{what}. Ya {(made > 1 ? "están" : "está")} en la Armería, para montar en un arma.", LogTones.Good);
                 }
                 else
                 {
@@ -217,7 +219,8 @@ namespace Bastion.Engine
                 stop = true;
             }
 
-            if (c.Day >= c.NextEventDay)
+            // None once the campaign is over (lost to a mission: Red, 2/11).
+            if (c.Day >= c.NextEventDay && c.Outcome == null)
             {
                 c.NextEventDay = c.Day + 2 + (rng.Int(5) >= 3 ? 1 : 0);
                 // What comes by radio, only with a Sala de radio to hear it (Ana, 23/10 #27).
@@ -239,6 +242,7 @@ namespace Bastion.Engine
             // A story chapter whose wait is over opens today.
             var offers = c.Offers.Count;
             RefreshNarrative(c, rng);
+            if (NobodyLeft(c, rng)) stop = true;
             return stop || c.Offers.Count > offers || c.Event != null;
         }
     }

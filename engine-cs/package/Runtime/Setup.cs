@@ -141,8 +141,6 @@ namespace Bastion.Engine
         public bool? Quarantine { get; set; }
         /// <summary>The campaign counts its pistols (CampaignState.Pistols; Arturo, 1/11): MissionState.Pistols.</summary>
         public bool? Pistols { get; set; }
-        /// <summary>The campaign's first mission without pistols: a police car with two to search (MissionState.PoliceCar).</summary>
-        public bool? PoliceCar { get; set; }
         /// <summary>Still winter in the campaign (campaign.ts wintry): the map under snow.</summary>
         public bool? Snow { get; set; }
         /// <summary>Rain or snow falling (Weathers; Campaign.OfferWeather); null, clear.</summary>
@@ -270,8 +268,19 @@ namespace Bastion.Engine
             };
             // The enemies look one way from the start (los.ts inViewCone): one of eight, from where they stand, no dice spent.
             if (t.Team != Teams.Xcom) u.Facing = (((pos.X * 7 + pos.Y * 13 + id.Length) % 8) * Math.PI) / 4;
+            if (template == TemplateIds.Zombie) u.Outfit = OutfitOf(id, pos);
             if (CountsMags(t.Team, t.Weapon)) u.Mags = Content.SpareMags;
             return u;
+        }
+
+        /// <summary>
+        /// The uniform a common zombie wore (Unit.Outfit): Content.Uniforms.Police in a hundred a policeman's, the next
+        /// Military a soldier's; from where it stands and its id, as its facing, no dice spent.
+        /// </summary>
+        private static string? OutfitOf(string id, Pos pos)
+        {
+            var roll = (pos.X * 31 + pos.Y * 17 + id.Sum((ch) => ch) * 7) % 100;
+            return roll < Content.Uniforms.Police ? Outfits.Police : roll < Content.Uniforms.Police + Content.Uniforms.Military ? Outfits.Military : null;
         }
 
         public static readonly IReadOnlyDictionary<string, string> MissionNames = new Dictionary<string, string>
@@ -1066,50 +1075,37 @@ namespace Bastion.Engine
                 var at = Grid.PosOf(state, f.Source);
                 state.Lights.Add(new Light { Id = f.Id, Tile = at, Radius = Content.Flames.Light, Tiles = Los.LightTiles(state, at, Content.Flames.Light, Content.Flames.LightHeight) });
             }
-            if (opts.PoliceCar == true) PlacePoliceCar(state);
+            PlacePoliceCars(state, rng);
             // Paused at the start, while the briefing is read: the space bar (or «Empezar») sets the clock going.
             if (opts.Realtime == true) state.Realtime = new Realtime { Clock = 0, Paused = true, Units = new Dictionary<string, RtUnit>() };
             return state;
         }
 
         /// <summary>
-        /// The police car of the campaign's first mission (Arturo, 1/11: nobody starts with a pistol, two in a police car):
-        /// a whole car on the ground, not burning, with a tile to search it from, the one nearest 9 tiles from the squad
-        /// (5 to 16; any other car if none). With no car at all, the two pistols lie at the feet of the first two soldiers.
+        /// The police cars (Arturo, 2/11: «en los coches de policía hay más probabilidad de que haya armas, en cualquier
+        /// misión»): one whole car in PoliceCarShare on the ground, not a wreck nor burning, its nose and boot in
+        /// MissionState.PoliceCar. Its boot holds a gun more often (Looting.PoliceBoot).
         /// </summary>
-        private static void PlacePoliceCar(GameState s)
+        private static void PlacePoliceCars(GameState s, Rng rng)
         {
-            var squad = s.Units.Where((u) => u.Team == Teams.Xcom && u.Automaton == null).ToList();
-            if (squad.Count == 0) return;
-            double cx = squad.Average((u) => u.Pos.X), cy = squad.Average((u) => u.Pos.Y);
             var burning = new HashSet<int>((s.Fires ?? new List<Fire>()).SelectMany((f) => f.Tiles.Append(f.Source)));
-            bool Searchable(int i)
-            {
-                int x = i % s.Width, y = i / s.Width;
-                return Grid.Dirs4.Any((d) => Grid.InBounds(s, x + d.X, y + d.Y) && Grid.IsWalkable(s.Tiles[(y + d.Y) * s.Width + x + d.X]));
-            }
-            // A car is its nose (CarFront) and the parts behind it (Decor.ObjectAt): the boot, the farthest of them.
-            var cars = new List<(int Front, int Rear, double Far)>();
+            var police = new List<int>();
             for (var i = 0; i < (s.Decor?.Count ?? 0); i++)
             {
                 var look = Decor.DecorOf(s.Decor![i]);
                 if (look == null || look.Kind != DecorKinds.CarFront) continue;
                 var car = Decor.ObjectAt(s.Decor, s.Width, i);
-                if (car == null || car.Tiles.Count < 2) continue;
-                var rear = car.Tiles.OrderByDescending((j) => Js.Hypot(j % s.Width - i % s.Width, j / s.Width - i / s.Width)).First();
-                if (car.Tiles.Any(burning.Contains) || !Searchable(i) || !Searchable(rear)) continue;
-                cars.Add((i, rear, Js.Hypot(i % s.Width - cx, i / s.Width - cy)));
+                if (car == null || car.Anchor != i || car.Tiles.Any(burning.Contains)) continue;
+                var boot = car.Tiles.FirstOrDefault((j) => Looting.BootOf(s, j) == i);
+                if (car.Tiles.Count < 2 || Looting.BootOf(s, boot) != i || rng.Int(PoliceCarShare) != 0) continue;
+                police.Add(i);
+                police.Add(boot);
             }
-            var near = cars.Where((c) => c.Far >= 5 && c.Far <= 16).ToList();
-            var pick = (near.Count > 0 ? near : cars).OrderBy((c) => Math.Abs(c.Far - 9)).ThenBy((c) => c.Front).Select((c) => ((int, int)?)(c.Front, c.Rear)).FirstOrDefault();
-            if (pick != null)
-            {
-                s.Mission.PoliceCar = new List<int> { pick.Value.Item1, pick.Value.Item2 };
-                return;
-            }
-            s.Dropped = Enumerable.Range(1, 2).Select((n) => new DroppedLoot { Id = $"l{n}", Pos = Engine.Events.CopyPos(squad[(n - 1) % squad.Count].Pos), Loot = new Loot { Weapon = FoundWeaponIds.Pistol } }).ToList();
-            s.DroppedCount = 2;
+            s.Mission.PoliceCar = police.Count > 0 ? police : null;
         }
+
+        /// <summary>One whole car in this many is a police car.</summary>
+        private const int PoliceCarShare = 6;
 
         private static Appearance CopyAppearance(Appearance a)
         {

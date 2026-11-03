@@ -59,7 +59,7 @@ namespace Bastion.Engine
             };
             c.Offers.Add(offer);
             c.ActiveMission = offer.Id;
-            c.Squad = c.Soldiers.Where(SoldierReady).Select((s) => s.Id).ToList();
+            c.Squad = c.Soldiers.Where((s) => Defends(c, s)).Select((s) => s.Id).ToList();
             c.SiegePosts = new Dictionary<string, Vec2>();
             c.LaunchReady = new bool[2];
             SyncPads(c);

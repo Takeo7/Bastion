@@ -283,7 +283,7 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "the base on the map (docs/FASE12.md §11) › the caravan sleeps the first eight; a barracón 2/3/4 beds")]
         public void TheCaravanSleepsTheFirstEight()
         {
-            var c = Solo();
+            var c = CampaignHelpers.FourEach(Solo());
             Assert.Equal(8, Campaign.Beds(c));
             Throws("camas", c, new RecruitCommand());
             var away = CampaignHelpers.Raise(c, PieceIds.Quarters);

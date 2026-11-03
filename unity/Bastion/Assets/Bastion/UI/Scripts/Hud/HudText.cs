@@ -85,8 +85,8 @@ namespace Bastion.UI.Hud
             public const string ToMenu = "VOLVER AL MENÚ";
             public const string ToMenuTip = "Los dos volvéis al menú principal";
             public const string Horde = "RUIDO";
-            public const string NoiseTip = "El ruido que haces y los turnos que pasan atraen a la horda. A 90 dB se oye llegar una oleada, que entra por los bordes un turno después.";
-            public const string NoiseTipQuiet = "Solo el ruido que haces atrae a la horda. A 90 dB se oye llegar una oleada, que entra por los bordes un turno después.";
+            /// <summary>The noise meter's help: only the squad's noise fills it now, in every mission (Arturo, 02/11 A4).</summary>
+            public const string NoiseTip = "Solo el ruido que haces atrae a la horda. A 90 dB se oye llegar una oleada, que entra por los bordes un turno después.";
 
             public static string Decibels(int db) => $"{db} dB";
 
@@ -148,6 +148,9 @@ namespace Bastion.UI.Hud
             public const string Fold = "Plegar";
 
             public static string More(int n) => $"{n} más";
+
+            /// <summary>At the end of a line of the partner's: the camera there.</summary>
+            public const string See = "Ver";
         }
 
         public static class Compass

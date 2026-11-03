@@ -98,10 +98,12 @@ namespace Bastion.Engine
         }
 
         /// <summary>Why the Taller can't start making `id` now, or null (docs/FASE4.md).</summary>
-        public static string? CraftBlocker(CampaignState c, string id)
+        public static string? CraftBlocker(CampaignState c, string id, int count = 1)
         {
             var def = Progression.Crafts[id];
             if (def.Makes == FoundWeaponIds.Pistol && c.Pistols != true) return "En esta campaña, todos los soldados ya llevan pistola.";
+            if (count < 1 || count > MaxBatch) return $"De 1 a {MaxBatch} de una vez.";
+            if (count > 1 && def.Kind != CraftKinds.Arms && def.Kind != CraftKinds.Mod) return "Eso se hace una sola vez.";
             // A weapon or an improvement for the Armería is made again and again (docs/FASE8.md §A).
             if (def.Kind != CraftKinds.Arms && def.Kind != CraftKinds.Mod && Progression.HasCrafted(c.Crafted, id)) return "Ya está hecho.";
             if (c.Base.Works.Any((w) => w.Project == id)) return "Ya se está haciendo.";
@@ -113,10 +115,19 @@ namespace Bastion.Engine
             if (!string.IsNullOrEmpty(def.After) && !Progression.HasCrafted(c.Crafted, def.After!)) return $"Antes hay que hacer {Progression.Crafts[def.After!].The}.";
             // «encargo» is the side quests' name (text-fixes.ts, Lore 24/10): TypeScript says «otro encargo».
             if (c.Base.Works.Any((w) => w.Kind == ConstructionKinds.Craft)) return "El Taller ya está con otro trabajo.";
-            if (!CanAfford(c, def.Cost)) return "No hay suministros suficientes.";
-            if ((c.Parts ?? 0) < def.Parts) return "No hay piezas suficientes.";
+            if (!CanAfford(c, def.Cost * count)) return "No hay suministros suficientes.";
+            if ((c.Parts ?? 0) < def.Parts * count) return "No hay piezas suficientes.";
             return null;
         }
+
+        /// <summary>The most bought or made at once (Arturo, 2/11: «4 cócteles molotov de una vez»).</summary>
+        public const int MaxBatch = 10;
+
+        /// <summary>How many a purchase or a work is for: absent, one.</summary>
+        internal static int Batch(int? count) => count ?? 1;
+
+        /// <summary>« ×4» after a name, for more than one.</summary>
+        private static string Times(int? count) => Batch(count) > 1 ? $" ×{count}" : "";
 
         /// <summary>
         /// What a soldier's card reads for the weapon in hand: a good one by its name, a plain one by its tier's; without, the

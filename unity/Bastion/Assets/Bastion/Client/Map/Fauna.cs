@@ -44,6 +44,9 @@ namespace Bastion.Client.Map
             public Transform body, left, right;
             public State state;
             public Vector3 target, velocity;
+            /// <summary>The way to its target, the next point first (Route), and how fast it goes over the ground now (m/s).</summary>
+            public List<Vector3> way = new List<Vector3>();
+            public float pace;
             public float wait, clock, flap, yaw;
             public uint rng;
             public bool gone;
@@ -98,6 +101,8 @@ namespace Bastion.Client.Map
         /// <summary>Walking and running (m/s), how near anyone scares them and how far they run (tiles), how far they wander.</summary>
         const float DogWalk = 1.1f, DogRun = 6.5f, WildWalk = 1.0f, WildRun = 7.5f;
         const float DogFear = 6, WildFear = 9, BirdFear = 4.5f, Calm = 14, Wander = 5;
+        /// <summary>How quickly it gets going and slows down (m/s²), walking and running off, and how much quicker it gets up off the ground to run.</summary>
+        const float WalkStart = 2.5f, WalkBrake = 2, FleeStart = 14, FleeBrake = 9, RiseQuick = 2.5f;
 
         /// <summary>
         /// A grazer's or a cat's walk and run (m/s), how near anyone scares it (tiles), and how tall it stands (m): the rabbit
@@ -516,63 +521,155 @@ namespace Bastion.Client.Map
             }
         }
 
-        /// <summary>A free outdoor tile some tiles from `from` (a wander's end), or `from` if none found.</summary>
+        /// <summary>A free outdoor tile some tiles from `from` that it can get to (a wander's end), its way in `a.way`; or `from` if none found.</summary>
         Vector3 Somewhere(Animal a, Vector3 from, float reach)
         {
+            var (steps, back) = Reach(from, Mathf.CeilToInt(reach * 2), false);
             for (int tries = 0; tries < 12; tries++)
             {
                 float angle = Random01(a) * Mathf.PI * 2, d = (0.4f + 0.6f * Random01(a)) * reach * MapSpace.Tile;
-                var to = from + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * d;
-                var t = MapSpace.WorldToTile(to);
-                if (Outdoors(t.x, t.y) && Clear(from, to)) return MapSpace.World(t.x, t.y) + new Vector3(Random01(a) - 0.5f, 0, Random01(a) - 0.5f) * MapSpace.Tile * 0.6f;
+                var t = MapSpace.WorldToTile(from + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * d);
+                if (t.x < 0 || t.y < 0 || t.x >= s.Width || t.y >= s.Height || steps[t.y * s.Width + t.x] <= 0) continue;
+                var end = MapSpace.World(t.x, t.y) + new Vector3(Random01(a) - 0.5f, 0, Random01(a) - 0.5f) * MapSpace.Tile * 0.6f;
+                a.way = Route(from, t.y * s.Width + t.x, back, end);
+                return end;
             }
+            a.way.Clear();
             return from;
         }
 
-        /// <summary>Whether the way from `a` to `b` stays outdoors (sampled every half tile).</summary>
-        bool Clear(Vector3 a, Vector3 b)
-        {
-            int n = Mathf.CeilToInt(Vector3.Distance(a, b) / (MapSpace.Tile * 0.5f));
-            for (int k = 1; k <= n; k++)
-            {
-                var t = MapSpace.WorldToTile(Vector3.Lerp(a, b, k / (float)n));
-                if (!Outdoors(t.x, t.y)) return false;
-            }
-            return true;
-        }
-
-        /// <summary>Where to run from `threat`: the farthest outdoor spot it can reach straight, away from it (or to the side).</summary>
+        /// <summary>
+        /// Where to run from `threat`, its way in `a.way`: of the outdoor tiles it can get to (Reach, as far as Calm and half
+        /// as far again), the one farthest from `threat`, less a little for the way there; one on the map's edge goes on off
+        /// it, a way out (there it is gone).
+        /// </summary>
         Vector3 Away(Animal a, Vector3 threat)
         {
             var from = a.root.position;
-            var away = from - threat;
-            away.y = 0;
-            if (away.sqrMagnitude < 1e-4f) away = a.root.forward;
-            away.Normalize();
-            Vector3 best = from;
-            float bestScore = -1;
-            foreach (float turn in new[] { 0f, 30, -30, 60, -60, 90, -90 })
+            var (steps, back) = Reach(from, Mathf.CeilToInt(Calm * 1.5f), true);
+            var near = MapSpace.WorldToTile(threat);
+            int best = -1;
+            float bestScore = float.MinValue;
+            for (int i = 0; i < steps.Length; i++)
             {
-                var dir = Quaternion.Euler(0, turn, 0) * away;
-                for (float d = Calm * MapSpace.Tile; d >= 2 * MapSpace.Tile; d -= MapSpace.Tile)
+                if (steps[i] <= 0) continue;
+                int x = i % s.Width, y = i / s.Width;
+                float score = Mathf.Sqrt((x - near.x) * (x - near.x) + (y - near.y) * (y - near.y)) - 0.25f * steps[i];
+                if (score > bestScore)
                 {
-                    var to = from + dir * d;
-                    var t = MapSpace.WorldToTile(to);
-                    // (Off the map's edge is a way out: there it is gone.)
-                    bool off = t.x < 1 || t.y < 1 || t.x >= s.Width - 1 || t.y >= s.Height - 1;
-                    if ((off || Outdoors(t.x, t.y)) && Clear(from, off ? from + dir * (d - 2 * MapSpace.Tile) : to))
-                    {
-                        float score = d * Mathf.Cos(turn * Mathf.Deg2Rad);
-                        if (score > bestScore)
-                        {
-                            bestScore = score;
-                            best = to;
-                        }
-                        break;
-                    }
+                    bestScore = score;
+                    best = i;
                 }
             }
-            return best;
+            if (best < 0)
+            {
+                a.way.Clear();
+                return from;
+            }
+            var end = MapSpace.World(best % s.Width, best / s.Width);
+            int bx = best % s.Width, by = best / s.Width;
+            // (On the edge: two tiles on, straight out of the map.)
+            if (bx < 1 || by < 1 || bx >= s.Width - 1 || by >= s.Height - 1)
+                end += new Vector3(bx < 1 ? -1 : bx >= s.Width - 1 ? 1 : 0, 0, by < 1 ? 1 : by >= s.Height - 1 ? -1 : 0) * 2 * MapSpace.Tile;
+            a.way = Route(from, best, back, end);
+            return end;
+        }
+
+        /// <summary>Where one can go: an outdoor tile, or, with `edge`, one on the map's edge (a way out) that would be so.</summary>
+        bool Open(int x, int y, bool edge)
+        {
+            if (x < 0 || y < 0 || x >= s.Width || y >= s.Height) return false;
+            if (Outdoors(x, y)) return true;
+            if (!edge || (x >= 1 && y >= 1 && x < s.Width - 1 && y < s.Height - 1)) return false;
+            int i = y * s.Width + x;
+            return Bastion.Engine.Grid.IsWalkable(s.Tiles[i]) && plan.Owner[i] < 0;
+        }
+
+        static readonly (int x, int y)[] Ways = { (0, -1), (1, 0), (0, 1), (-1, 0), (1, -1), (1, 1), (-1, 1), (-1, -1) };
+
+        /// <summary>
+        /// The tiles one at `from` can walk to over the open ground as a soldier does (Arturo's #2 of 2/11: the dog went
+        /// through cars and walls), at most `most` steps off: eight ways, a diagonal only past two open sides (no corner
+        /// cut). Each tile's steps (0 none, the start 1) and the one it is come to from.
+        /// </summary>
+        (int[] steps, int[] back) Reach(Vector3 from, int most, bool edge)
+        {
+            int w = s.Width, n = w * s.Height;
+            var steps = new int[n];
+            var back = new int[n];
+            var start = MapSpace.WorldToTile(from);
+            if (start.x < 0 || start.y < 0 || start.x >= w || start.y >= s.Height) return (steps, back);
+            var queue = new Queue<int>();
+            int first = start.y * w + start.x;
+            steps[first] = 1;
+            back[first] = -1;
+            queue.Enqueue(first);
+            while (queue.Count > 0)
+            {
+                int i = queue.Dequeue(), x = i % w, y = i / w;
+                if (steps[i] > most) continue;
+                foreach (var (dx, dy) in Ways)
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (!Open(nx, ny, edge) || steps[ny * w + nx] > 0) continue;
+                    if (dx != 0 && dy != 0 && (!Open(x + dx, y, edge) || !Open(x, y + dy, edge))) continue;
+                    steps[ny * w + nx] = steps[i] + 1;
+                    back[ny * w + nx] = i;
+                    queue.Enqueue(ny * w + nx);
+                }
+            }
+            return (steps, back);
+        }
+
+        /// <summary>
+        /// The way from `from` to tile `to` (Reach's `back`), ending at `end`: its tiles' middles, straightened wherever the
+        /// line keeps clear of what fills a tile (Wide).
+        /// </summary>
+        List<Vector3> Route(Vector3 from, int to, int[] back, Vector3 end)
+        {
+            var tiles = new List<Vector3>();
+            for (int i = to; i >= 0 && back[i] >= 0; i = back[i]) tiles.Add(MapSpace.World(i % s.Width, i / s.Width));
+            tiles.Reverse();
+            if (tiles.Count > 0) tiles[tiles.Count - 1] = end;
+            else tiles.Add(end);
+            var way = new List<Vector3>();
+            var at = from;
+            int k = 0;
+            while (k < tiles.Count)
+            {
+                int far = k;
+                for (int j = tiles.Count - 1; j > k; j--)
+                    if (Wide(at, tiles[j]))
+                    {
+                        far = j;
+                        break;
+                    }
+                way.Add(tiles[far]);
+                at = tiles[far];
+                k = far + 1;
+            }
+            return way;
+        }
+
+        /// <summary>Whether a body walking from `a` to `b` keeps clear of what fills a tile: its line and a third of a tile to each side stay open, sampled every quarter tile.</summary>
+        bool Wide(Vector3 a, Vector3 b)
+        {
+            var along = b - a;
+            along.y = 0;
+            float length = along.magnitude;
+            if (length < 1e-4f) return true;
+            var side = new Vector3(-along.z, 0, along.x) / length * (MapSpace.Tile / 3);
+            int n = Mathf.CeilToInt(length / (MapSpace.Tile * 0.25f));
+            for (int k = 1; k <= n; k++)
+            {
+                var p = Vector3.Lerp(a, b, k / (float)n);
+                foreach (var q in new[] { p, p + side, p - side })
+                {
+                    var t = MapSpace.WorldToTile(q);
+                    if (!Open(t.x, t.y, true)) return false;
+                }
+            }
+            return true;
         }
 
         void StepDog(Animal a, float dt)
@@ -599,15 +696,28 @@ namespace Bastion.Client.Map
                     a.state = State.Walk;
                 }
             }
-            // (Sitting or lying, or getting up: it moves once on its feet.)
-            else if (Down(a)) { }
+            // (Sitting or lying, or getting up: it moves once on its feet; up quicker with someone coming.)
+            else if (Down(a)) a.pace = 0;
             else
             {
-                var to = a.target - a.root.position;
+                // Along its way, a point at a time: on to the next once near (a corner taken round), to its end once there.
+                var aim = a.way.Count > 0 ? a.way[0] : a.target;
+                var to = aim - a.root.position;
                 to.y = 0;
                 float left = to.magnitude;
-                if (left < 0.15f)
+                if (a.way.Count > 1 && left < 0.4f * MapSpace.Tile)
                 {
+                    a.way.RemoveAt(0);
+                    aim = a.way[0];
+                    to = aim - a.root.position;
+                    to.y = 0;
+                    left = to.magnitude;
+                }
+                bool last = a.way.Count <= 1;
+                if (last && left < 0.15f)
+                {
+                    a.pace = 0;
+                    a.way.Clear();
                     // Fled past the map's edge: gone; else (calm far enough, or a wander's end) it stands a while.
                     var t = MapSpace.WorldToTile(a.root.position);
                     if (t.x < 1 || t.y < 1 || t.x >= s.Width - 1 || t.y >= s.Height - 1)
@@ -627,15 +737,25 @@ namespace Bastion.Client.Map
                     a.root.rotation = Quaternion.Euler(0, a.yaw, 0);
                     // (Turning on the spot first when it faces away.)
                     float facing = Mathf.Clamp01(Mathf.Cos(Mathf.DeltaAngle(a.yaw, want) * Mathf.Deg2Rad));
-                    a.root.position += to / left * Mathf.Min(left, speed * facing * dt);
+                    // Speeding up and slowing down, not off at once and stopped dead (Arturo's #1 of 2/11, its jerks): to
+                    // its end slowing down so as to stop there.
+                    bool flees = a.state == State.Flee;
+                    float goal = speed * facing;
+                    if (last) goal = Mathf.Min(goal, Mathf.Sqrt(2 * (flees ? FleeBrake : WalkBrake) * left));
+                    a.pace = Mathf.MoveTowards(a.pace, goal, (goal > a.pace ? (flees ? FleeStart : WalkStart) : flees ? FleeBrake : WalkBrake) * dt);
+                    a.root.position += to / left * Mathf.Min(left, a.pace * dt);
                 }
             }
             if (a.animator != null && a.animator.runtimeAnimatorController != null)
             {
-                float movement = a.state == State.Flee ? 1 : a.state == State.Walk ? 0.5f : 0;
+                // Its legs as fast as it goes (the controller's 0 standing, 0.5 walking, 1 running), and up off the ground
+                // quicker with someone coming.
+                float walk = Simple(a.kind) ? graze.walk : a.kind == Kind.Wild ? WildWalk : DogWalk, run = Simple(a.kind) ? graze.run : a.kind == Kind.Wild ? WildRun : DogRun;
+                float movement = a.pace <= walk ? 0.5f * a.pace / walk : 0.5f + 0.5f * Mathf.Clamp01((a.pace - walk) / (run - walk));
+                a.animator.speed = a.state == State.Flee && Down(a) ? RiseQuick : 1;
                 // (SIMPLE's controller: Speed_f the same way, Eat_b while it grazes, a cat's Sit_b while it sits.)
                 string pace = Simple(a.kind) ? "Speed_f" : "Movement_f";
-                a.animator.SetFloat(pace, Mathf.MoveTowards(a.animator.GetFloat(pace), movement, 3 * dt));
+                a.animator.SetFloat(pace, movement);
                 if (Simple(a.kind)) a.animator.SetBool("Eat_b", a.doing == Graze && a.state == State.Idle);
                 if (a.kind == Kind.Cat) a.animator.SetBool("Sit_b", a.doing == Sit && a.state == State.Idle);
             }

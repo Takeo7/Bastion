@@ -177,14 +177,16 @@ namespace Bastion.Client.Units
         /// saturation and 85 % of its light; a loud green (hue 70°–175°, whole from 85° to 160°, as much as its saturation
         /// and light are both over a half) to half its saturation and 90 % of its light. Olive and dark greens, as they are.
         /// Then anything loud (Ana's #6, 1/11: «ropa menos llamativa»), as much as its saturation and light are both over
-        /// 0.45 (whole from 0.6), to 60 % of its saturation and 90 % of its light: the reds, yellows and pinks too.
+        /// 0.45 (whole from 0.6), or as much as it is light (over 0.5, whole from 0.65) and some coloured (saturation over
+        /// 0.3, whole from 0.45), to 60 % of its saturation and 90 % of its light: the reds, yellows and pinks too (0.11.6's
+        /// test: skZombieCivil3's rose top and yellow skirt, at 0.47 and 0.46, went by untouched).
         /// </summary>
         static Color32 Dull(Color32 c) => Quiet(Hued(c));
 
         static Color32 Quiet(Color32 c)
         {
             Color.RGBToHSV(c, out float h, out float s, out float v);
-            float loud = Mathf.Clamp01((Mathf.Min(s, v) - 0.45f) / 0.15f);
+            float loud = Mathf.Max(Mathf.Clamp01((Mathf.Min(s, v) - 0.45f) / 0.15f), Mathf.Clamp01((s - 0.3f) / 0.15f) * Mathf.Clamp01((v - 0.5f) / 0.15f));
             return loud > 0 ? Hsv(c, h, s * (1 - 0.4f * loud), v * (1 - 0.1f * loud)) : c;
         }
 

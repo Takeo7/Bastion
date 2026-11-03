@@ -89,6 +89,12 @@ namespace Bastion.UI.Strategy
         public string SoldiersEmpty;
         /// <summary>The main button (Comprar, Hacer la culata, Ponérsela…) and its action; null, none.</summary>
         public string Button;
+        /// <summary>
+        /// How many it buys or makes, with «−» and «+» beside it (Arturo, 02/11 A7: «4 cócteles molotov de una vez»), up to
+        /// CountMax; 0, one and no choice of it.
+        /// </summary>
+        public int Count;
+        public int CountMax;
         public string Action;
         public bool Enabled = true;
         public string Why;

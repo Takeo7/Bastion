@@ -300,6 +300,17 @@ namespace Bastion.Engine
                 case HiddenEvent ev:
                     UnitOf(s, ev.Unit).Hidden = true;
                     break;
+                case BoardsRemovedEvent ev:
+                {
+                    // A window's pile leaves open floor; a doorway's planks, the door shut behind them.
+                    var i = Grid.TileIndex(s, ev.Tile.X, ev.Tile.Y);
+                    var tiles = ev.Tile.Z == 0 ? s.Tiles : Grid.LevelOf(s, ev.Tile.Z - 1)?.Tiles;
+                    var decor = ev.Tile.Z == 0 ? s.Decor : Grid.LevelOf(s, ev.Tile.Z - 1)?.Decor;
+                    var door = Abilities.Boards(s, ev.Tile) == DecorKinds.DoorBoards;
+                    if (tiles != null) tiles[i] = door ? TileKinds.Door : TileKinds.Floor;
+                    if (decor != null && i < decor.Count) decor[i] = 0;
+                    break;
+                }
                 case StoneThrownEvent ev:
                     s.Blow = new Blow { Unit = ev.Unit, Kind = BlowKinds.Blast };
                     Deed(s, ev.Unit, DeedIds.Throw);
@@ -968,6 +979,7 @@ namespace Bastion.Engine
                 Overwatch = u.Overwatch,
                 Hunkered = u.Hunkered,
                 Hidden = u.Hidden,
+                Outfit = u.Outfit,
                 Aided = u.Aided,
                 Stunned = u.Stunned,
                 Alive = u.Alive,

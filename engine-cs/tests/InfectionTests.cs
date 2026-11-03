@@ -185,7 +185,7 @@ namespace Bastion.Engine.Tests
         private static (CampaignState c, MissionReport report, List<CampaignSoldier> sick, CampaignSoldier fallen) Bitten(int count = 1, IReadOnlyList<int>? players = null)
         {
             players ??= Both;
-            var c = Campaign.CreateCampaign(players, new Rng(2));
+            var c = CampaignHelpers.FourEach(Campaign.CreateCampaign(players, new Rng(2)), true);
             // Nothing else interrupts the days.
             c.NextEventDay = 999;
             c.NextMissionDay = 999;

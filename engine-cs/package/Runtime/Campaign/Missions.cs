@@ -154,9 +154,7 @@ namespace Bastion.Engine
             if (offer.Siege == true) return $"{Lore.BaseSiegeText.Arrival}{(offer.Night == true ? $" {Lore.BaseSiegeText.Night}" : "")}";
             var q = QuestOf(c, offer);
             if (q != null && Js.At<QuestStep?>(Quests.QuestDefs[q.Id].Steps, q.Step, null) is QuestMission step) return Quests.Fill(step.Briefing, q.Names);
-            var text = Lore.MissionBriefing(offer, Progression.BastionLevel(c.Level), c.Story.Simon);
-            // The police car with the two pistols (Arturo, 1/11): the card says where the first ones are.
-            return OpeningPistols(c, offer) ? $"{text}\n\n{Lore.PoliceCarBriefing}" : text;
+            return Lore.MissionBriefing(offer, Progression.BastionLevel(c.Level), c.Story.Simon);
         }
 
         /// <summary>Who signs an operation's report.</summary>

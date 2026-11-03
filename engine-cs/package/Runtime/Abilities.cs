@@ -42,6 +42,8 @@ namespace Bastion.Engine
             {
                 // Evacuating is the squad's, by the bus (the `evac` command, docs/PRUEBA-2026-10-14.md P1), not one soldier's ability.
                 if (u.Template != TemplateIds.Vip) list.AddRange(new[] { AbilityIds.Hack, AbilityIds.Search, AbilityIds.SearchRoom, AbilityIds.OpenDoor, AbilityIds.CloseDoor });
+                // The crowbar takes the boards off a window (Arturo, 2/11).
+                if (u.Arms?.Melee == FoundWeaponIds.Crowbar) list.Add(AbilityIds.Pry);
                 // Esconderse beside Cubrirse (Ana's #1 of 1/11).
                 if (list.Contains(AbilityIds.Hunker) && !list.Contains(AbilityIds.Hide)) list.Insert(list.IndexOf(AbilityIds.Hunker) + 1, AbilityIds.Hide);
                 // Fase 10 (docs/FASE10.md §4): the blade can keep watch too. The stone is the board's since 29/10 (Piedras).
@@ -129,7 +131,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>Tile abilities done with the hands beside the soldier, not thrown: a disoriented soldier can still do them.</summary>
-        private static readonly HashSet<string> ByHand = new HashSet<string> { AbilityIds.Search, AbilityIds.SearchRoom, AbilityIds.OpenDoor, AbilityIds.CloseDoor, AbilityIds.Smash };
+        private static readonly HashSet<string> ByHand = new HashSet<string> { AbilityIds.Search, AbilityIds.SearchRoom, AbilityIds.OpenDoor, AbilityIds.CloseDoor, AbilityIds.Smash, AbilityIds.Pry };
 
         /// <summary>
         /// Doors beside `u` it can open (`door`) or close (`doorOpen`, with nobody in
@@ -141,6 +143,25 @@ namespace Bastion.Engine
             return Grid.Dirs8.Select((d) => new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z })
                 .Where((p) => Grid.KindAt(s, p) == kind && Looting.ReachesToSearch(s, u.Pos, p) && !(kind == TileKinds.DoorOpen && Grid.UnitAt(s, p) != null))
                 .ToList();
+        }
+
+        /// <summary>
+        /// What boards up a window or a door beside `from` (DecorKinds.WindowBarricade, the furniture piled against a window
+        /// from inside; DecorKinds.DoorBoards, a doorway's planks), reached with the hands as when searching: the crowbar
+        /// takes it away (Arturo, 2/11).
+        /// </summary>
+        public static List<Pos> BoardedBeside(GameState s, Pos from)
+        {
+            return Grid.Dirs8.Select((d) => new Pos { X = from.X + d.X, Y = from.Y + d.Y, Z = from.Z })
+                .Where((p) => Grid.InBounds(s, p.X, p.Y) && Grid.KindAt(s, p) == TileKinds.High && Boards(s, p) != null && Looting.ReachesToSearch(s, from, p))
+                .ToList();
+        }
+
+        /// <summary>What boards up `p`, DecorKinds.WindowBarricade or DecorKinds.DoorBoards, or null.</summary>
+        public static string? Boards(GameState s, Pos p)
+        {
+            var kind = Decor.DecorOf(Js.At(p.Z == 0 ? s.Decor : Grid.LevelOf(s, p.Z - 1)?.Decor, Grid.TileIndex(s, p.X, p.Y), 0))?.Kind;
+            return kind == DecorKinds.WindowBarricade || kind == DecorKinds.DoorBoards ? kind : null;
         }
 
         /// <summary>In a siege (docs/FASE12.md §4), a door still shut, or a barricade, a wall or a building still up, that the dead can break down.</summary>
@@ -213,7 +234,7 @@ namespace Bastion.Engine
                         {
                             var p = new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z };
                             return Looting.SearchSpot(s, p) != null && Looting.ReachesToSearch(s, u.Pos, p);
-                        });
+                        }) || Looting.SearchSpot(s, u.Pos) != null;
                         return done ? "Ya está abierta." : "No hay ninguna caja al lado.";
                     }
                     break;
@@ -232,6 +253,9 @@ namespace Bastion.Engine
                     break;
                 case AbilityIds.Smash:
                     if (BreakablesBeside(s, u.Pos).Count == 0) return "No hay ninguna puerta ni barricada a su lado.";
+                    break;
+                case AbilityIds.Pry:
+                    if (BoardedBeside(s, u.Pos).Count == 0) return "No hay ninguna ventana ni puerta tapiada a tu lado.";
                     break;
             }
             return null;
@@ -261,7 +285,7 @@ namespace Bastion.Engine
         /// </summary>
         public static List<MeleeOption> MeleeTargets(GameState s, Unit u, string ability)
         {
-            return s.Units.Where((t) => Hostile(u, t) && Aim.TeamSees(s, u.Team, t) && Aim.InMeleeReach(s, u.Pos, t.Pos))
+            return s.Units.Where((t) => Hostile(u, t) && Aim.TeamSees(s, u.Team, t) && Aim.InReachOf(s, u, u.Pos, t.Pos))
                 .Select((t) => new MeleeOption { Target = t, Tile = u.Pos, Path = new List<Pos>() })
                 .ToList();
         }
@@ -360,9 +384,10 @@ namespace Bastion.Engine
             var def = Content.Abilities[ability];
             if (def.Target != Engine.AbilityTargets.Tile || !Grid.InBounds(s, tile.X, tile.Y)) return false;
             if (Grid.Distance(u.Pos, tile) > AbilityRange(u, ability)) return false;
-            if (ability == AbilityIds.Search) return Looting.IsSearchable(s, tile) && Looting.ReachesToSearch(s, u.Pos, tile);
+            if (ability == AbilityIds.Search) return Looting.IsSearchable(s, tile) && Looting.ReachesToOpen(s, u.Pos, tile);
             if (ability == AbilityIds.OpenDoor || ability == AbilityIds.CloseDoor) return DoorTiles(s, u, ability == AbilityIds.OpenDoor ? TileKinds.Door : TileKinds.DoorOpen).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Smash) return BreakablesBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
+            if (ability == AbilityIds.Pry) return BoardedBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
             // Fire burns on the ground only (Burning): a molotov is thrown at the street or a ground floor.
             if (ability == AbilityIds.Molotov && tile.Z != 0) return false;
             return s.Units.Any((o) => Los.IsViewer(o, u.Team) && Los.CanSeeTile(s, o.Pos, tile, Los.SightTo(s, o, tile), Los.WindowReachOf(o.Team)));

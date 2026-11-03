@@ -59,11 +59,11 @@ namespace Bastion.Engine
                     return $"escuchar el rumor {(rumor != null ? Lore.OfZone(Regions[rumor.Region].Name) : "de …")}";
                 }
                 case CraftAction a:
-                    return $"hacer en el Taller: {Progression.Crafts[a.Project].Name.ToLowerInvariant()}";
+                    return $"hacer en el Taller: {Progression.Crafts[a.Project].Name.ToLowerInvariant()}{Times(a.Count)}";
                 case RecruitAction _:
                     return $"reclutar un soldado ({RecruitCost(c)} §)";
                 case BuyAction a:
-                    return $"comprar {Content.Items[a.Item].Name.ToLowerInvariant()} ({ShopPrice(c, a.Item)} §)";
+                    return $"comprar {Content.Items[a.Item].Name.ToLowerInvariant()}{Times(a.Count)} ({ShopPrice(c, a.Item) * Batch(a.Count)} §)";
                 case TreatAction a:
                     return $"tratar el mordisco de {c.Soldiers.FirstOrDefault((s) => s.Id == a.Soldier)?.Name ?? "un soldado"} ({TreatCost(c)} ✚)";
                 default:
@@ -176,7 +176,7 @@ namespace Bastion.Engine
                     if (c.Listening == a.Id) return "Ya estamos escuchando ese rumor.";
                     return null;
                 case CraftAction a:
-                    return CraftBlocker(c, a.Project);
+                    return CraftBlocker(c, a.Project, Batch(a.Count));
                 case RecruitAction a:
                 {
                     var mine = c.Soldiers.Count((s) => s.Owner == a.For && s.Alive);
@@ -194,7 +194,8 @@ namespace Bastion.Engine
                     // The special rounds are the weapons' mods now (docs/FASE9.md §4): nowhere to put them.
                     if (Content.Items[a.Item].Slot != ItemSlots.Utility) return "Eso ya no se vende: la munición especial se hace en el Taller.";
                     if (!Progression.ItemUnlocked(c, a.Item)) return Lore.NeedsLevelLine(Content.Items[a.Item].Level);
-                    return CanAfford(c, ShopPrice(c, a.Item)) ? null : "No hay suministros suficientes.";
+                    if (Batch(a.Count) < 1 || Batch(a.Count) > MaxBatch) return $"De 1 a {MaxBatch} de una vez.";
+                    return CanAfford(c, ShopPrice(c, a.Item) * Batch(a.Count)) ? null : "No hay suministros suficientes.";
                 default:
                     // The base of before's: TypeScript's switch has no case for them, and says nothing.
                     return null;
@@ -332,12 +333,14 @@ namespace Bastion.Engine
                 case CraftAction a:
                 {
                     // A work like any other: a crew at the Taller, paid in suministros and parts.
+                    // Several at once (Arturo, 2/11) take as long as one after another.
                     var def = Progression.Crafts[a.Project];
+                    var n = Batch(a.Count);
                     var shop = WorkshopPiece(c)!;
-                    var days = OldDaysToNow(WorkDays(c, def.Days));
-                    Pay(c, def.Cost);
-                    c.Parts = (c.Parts ?? 0) - def.Parts;
-                    c.Base.Works.Add(new Construction { Plot = shop.Id, Kind = ConstructionKinds.Craft, Facility = FacilityIds.Workshop, DaysLeft = days, Total = days, Project = def.Id });
+                    var days = OldDaysToNow(WorkDays(c, def.Days * n));
+                    Pay(c, def.Cost * n);
+                    c.Parts = (c.Parts ?? 0) - def.Parts * n;
+                    c.Base.Works.Add(new Construction { Plot = shop.Id, Kind = ConstructionKinds.Craft, Facility = FacilityIds.Workshop, DaysLeft = days, Total = days, Project = def.Id, Count = n > 1 ? n : (int?)null });
                     // «: N días» (text-fixes.ts, Lore 24/10): in missions, as the Armería says it.
                     Log(c, $"El Taller se pone con {def.The}: sale {Lore.InMissions(days)}.");
                     break;
@@ -361,9 +364,10 @@ namespace Bastion.Engine
                 }
                 case BuyAction a:
                 {
-                    Pay(c, ShopPrice(c, a.Item));
-                    c.Inventory[a.Item] = (c.Inventory.TryGetValue(a.Item, out var n) ? n : 0) + 1;
-                    Log(c, $"Comprado: {Content.Items[a.Item].Name}.");
+                    var count = Batch(a.Count);
+                    Pay(c, ShopPrice(c, a.Item) * count);
+                    c.Inventory[a.Item] = (c.Inventory.TryGetValue(a.Item, out var n) ? n : 0) + count;
+                    Log(c, $"Comprado: {Content.Items[a.Item].Name}{Times(a.Count)}.");
                     break;
                 }
                 case TreatAction a:
@@ -445,7 +449,7 @@ namespace Bastion.Engine
                 case InvestigateCommand m:
                     return Propose(c, new InvestigateAction { Id = m.Id }, ctx);
                 case CraftCommand m:
-                    return Propose(c, new CraftAction { Project = m.Project }, ctx);
+                    return Propose(c, new CraftAction { Project = m.Project, Count = Batch(m.Count) != 1 ? m.Count : null }, ctx);
 
                 case AssignWeaponCommand m:
                 {
@@ -681,7 +685,7 @@ namespace Bastion.Engine
                 }
 
                 case BuyCommand m:
-                    return Propose(c, new BuyAction { Item = m.Item }, ctx);
+                    return Propose(c, new BuyAction { Item = m.Item, Count = Batch(m.Count) != 1 ? m.Count : null }, ctx);
 
                 case EquipCommand m:
                 {

@@ -29,8 +29,11 @@ namespace Bastion.UI.Combat
         /// <summary>Space with nothing armed: the first of these that can be used (game.ts PRIMARY_ATTACKS).</summary>
         public static readonly string[] PrimaryAttacks = { AbilityIds.Shoot, AbilityIds.Pistol, AbilityIds.Slash };
 
-        /// <summary>Done by hand on a tile beside the soldier: Registrar, and opening or closing a door (playtest 13/10 #2).</summary>
-        public static readonly HashSet<string> Hand = new HashSet<string> { AbilityIds.Search, AbilityIds.OpenDoor, AbilityIds.CloseDoor };
+        /// <summary>
+        /// Done by hand on a tile beside the soldier: Registrar, opening or closing a door (playtest 13/10 #2), and the
+        /// crowbar's boards off a window (Quitar las tablas: Arturo, 02/11 A11).
+        /// </summary>
+        public static readonly HashSet<string> Hand = new HashSet<string> { AbilityIds.Search, AbilityIds.OpenDoor, AbilityIds.CloseDoor, AbilityIds.Pry };
 
         /// <summary>A key that folds several abilities into a menu (docs/FASE10.md §4).</summary>
         public sealed class Menu
@@ -67,6 +70,16 @@ namespace Bastion.UI.Combat
             [AbilityIds.Search] = "Caja",
         };
 
+        /// <summary>
+        /// What Registrar works on, by what it is (Looting.SearchSpot; Arturo, 02/11 A9, A13): its name in Investigar's menu
+        /// and its card's words; a marked box keeps the engine's («Caja», Abrir la caja's description).
+        /// </summary>
+        public static (string label, string effect) SearchWords(string spot) =>
+            spot == Looting.Body ? ("Cuerpo", "Registra el cuerpo de un enemigo muerto que tengas al lado o a tus pies: sale lo que llevaba encima. Hace un poco de ruido.")
+            : spot == Looting.PoliceBoot ? ("Maletero", "Abre el maletero del coche de policía que tengas al lado: a veces hay un arma. Hace un poco de ruido.")
+            : spot == Looting.CarBoot ? ("Maletero", "Abre el maletero del coche que tengas al lado. Hace un poco de ruido.")
+            : (MenuLabels[AbilityIds.Search], Content.Abilities[AbilityIds.Search].Description);
+
         /// <summary>What attack variants do besides the odds shown in the panel.</summary>
         public static readonly Dictionary<string, string> AttackNotes = new Dictionary<string, string>
         {
@@ -82,6 +95,16 @@ namespace Bastion.UI.Combat
             [AbilityIds.Revival] = "Quita el aturdimiento, la desorientación y el pánico",
             [AbilityIds.Suppression] = "−50 de puntería al objetivo hasta tu próximo turno; si se mueve, le disparas",
         };
+
+        /// <summary>A blade that reaches further than alongside (the rake: Content.ReachOf), in words.</summary>
+        public static string BladeReach(Unit u) => $"hasta {Content.ReachOf(u)} casillas, en línea o en diagonal";
+
+        /// <summary>What a soldier's Tajo does besides one blow on the one at hand (Ana's #5 of 2/11), for the aim's panel; null, nothing.</summary>
+        public static string BladeNote(Unit u, string ability) =>
+            ability != AbilityIds.Slash ? null
+            : Content.Sweeps(u) ? "Golpea a la vez a todos los enemigos que tenga al lado"
+            : Content.ReachOf(u) > 1 ? $"Llega {BladeReach(u)}"
+            : null;
 
         /// <summary>How a damage figure spreads, after «Daño 4–6»: per shot, over an area, on several enemies.</summary>
         static readonly Dictionary<string, string> DamageEach = new Dictionary<string, string>
@@ -181,14 +204,18 @@ namespace Bastion.UI.Combat
             var watch = Watch(id);
             var weapon = Content.IsAttack(id) ? Content.AttackWeapon(u, id) : watch ? Content.AttackWeapon(u, AbilityIds.Shoot) : null;
             var range = Abilities.AbilityRange(u, id);
-            // Up to as far as it sees in this weather (Los.SightIn: a storm or a blizzard cuts it).
-            var reach = weapon != null ? ReachText(weapon.Range, Los.SightIn(s, u)) : range > 0 ? $"{Number(range)} casillas" : null;
+            // Up to as far as it sees in this weather (Los.SightIn: a storm or a blizzard cuts it); the rake's Tajo two tiles
+            // off in a straight line or a diagonal (Content.ReachOf: Ana's #5 of 2/11).
+            var reach = id == AbilityIds.Slash && Content.ReachOf(u) > 1 ? BladeReach(u)
+                : weapon != null ? ReachText(weapon.Range, Los.SightIn(s, u)) : range > 0 ? $"{Number(range)} casillas" : null;
             var noise = watch ? Content.AttackWeapon(u, AbilityIds.Shoot).Noise : Abilities.NoiseOf(s, u, id);
             u.Cooldowns.TryGetValue(id, out var left);
             var stats = new List<(string, string)>
             {
                 ("Acciones", need == 0 ? "ninguna" : Abilities.EndsTurn(u, id) ? "acaba el turno" : need.ToString()),
                 ("Alcance", reach),
+                // A long blade's Tajo, every enemy alongside (Content.Sweeps: the katana, the sword, the chainsaw).
+                ("Golpea", id == AbilityIds.Slash && Content.Sweeps(u) ? "a todos los que tenga al lado" : null),
                 ("Daño", DamageValue(s, u, id)),
                 // In tiles, as on the weapons' sheet (Lore, 19/10).
                 ("Ruido", noise > 0 ? $"{Heard(s, noise)} casillas{(watch ? " al disparar" : "")}" : Content.IsAttack(id) ? "ninguno" : null),

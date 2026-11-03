@@ -141,7 +141,8 @@ namespace Bastion.UI.Strategy
         PickRowView PickRow(CampaignState c, CampaignSoldier s, bool siege)
         {
             var on = c.Squad.Contains(s.Id);
-            var ready = Campaign.SoldierReady(s);
+            // In a siege the wounded defend when nobody is fit; the bitten stay inside (Arturo, 2/11).
+            var ready = siege ? Campaign.Defends(c, s) : Campaign.SoldierReady(s);
             var row = new PickRowView
             {
                 Id = s.Id, Name = Appearances.DisplayName(s.Name, s.Nickname), Accent = PlayerColor(s.Owner), Skills = SkillsOf(s),
@@ -209,7 +210,7 @@ namespace Bastion.UI.Strategy
             var out_ = new List<Bastion.Client.Settlement.LineupEntry>();
             if (report && c.LastReport != null)
             {
-                foreach (var e in c.LastReport.Squad)
+                foreach (var e in ReportOrder(c, c.LastReport))
                     out_.Add(new Bastion.Client.Settlement.LineupEntry { SoldierId = e.Id, Colour = PlayerColor(e.Owner), Status = e.Status == ReportStatuses.Lost ? ReportStatuses.Dead : e.Status });
                 return out_;
             }
@@ -223,11 +224,33 @@ namespace Bastion.UI.Strategy
             return out_;
         }
 
-        /// <summary>The row mirrored (two commanders, this one the second: each sees their own on their left) and in halves (two of them).</summary>
-        public (bool mirror, bool halves) LineupSides()
+        /// <summary>
+        /// The row mirrored (two commanders, this one the second: each sees their own on their left) and in halves (two of
+        /// them). The debrief's (`report`) too (Arturo, 2/11 A6: it came mixed), its step in the middle only when each
+        /// brought back as many: the row splits at its middle (Settlement.SetLineup).
+        /// </summary>
+        public (bool mirror, bool halves) LineupSides(bool report = false)
         {
-            var two = State.Players.Count > 1;
-            return (two && State.Players.IndexOf(Slot) == 1, two);
+            var c = State;
+            var two = c.Players.Count > 1;
+            var mirror = two && c.Players.IndexOf(Slot) == 1;
+            if (!report || c.LastReport == null) return (mirror, two);
+            var first = c.LastReport.Squad.Count(e => e.Owner == c.Players[0]);
+            return (mirror, two && first * 2 == c.LastReport.Squad.Count);
+        }
+
+        /// <summary>
+        /// The debrief's squad as the row and its cards stand: the first commander's, then the second's, each in the
+        /// report's order (mirrored on the second's screen: LineupSides), so each has their own on their left.
+        /// </summary>
+        static List<ReportSoldier> ReportOrder(CampaignState c, MissionReport report)
+        {
+            int Side(ReportSoldier e)
+            {
+                var i = c.Players.IndexOf(e.Owner);
+                return i < 0 ? int.MaxValue : i;
+            }
+            return report.Squad.OrderBy(Side).ToList();
         }
 
         public DebriefView Debrief()
@@ -255,8 +278,24 @@ namespace Bastion.UI.Strategy
             if (damage != null) v.Lines.Add(damage);
             if (report.Night == true) v.Lines.Add(new DebriefLineView { Text = Lore.NightText.Report });
             if (report.Victory && report.Story is int chapter && chapter >= 1 && chapter <= Lore.Story.Count) v.Story = Lore.Story[chapter - 1].After;
-            foreach (var e in report.Squad) v.Cards.Add(ReportCard(c, report, e));
+            if (Joined != null) v.Lines.Add(new DebriefLineView { Text = Joined });
+            foreach (var e in ReportOrder(c, report)) v.Cards.Add(ReportCard(c, report, e));
             return v;
+        }
+
+        /// <summary>The free recruit's line while the debrief is to be read (FreeRecruit; BaseController keeps it).</summary>
+        public string Joined;
+
+        /// <summary>
+        /// The recruit a commander left with nobody alive gets for nothing (Campaign.NobodyLeft; Arturo, 2/11), who came
+        /// since `before` and is the only one of their owner's alive: the campaign's line for them, as Lore wrote it, or null.
+        /// </summary>
+        public string FreeRecruit(CampaignState before)
+        {
+            var c = State;
+            var known = new HashSet<string>(before.Soldiers.Select(s => s.Id));
+            var came = c.Soldiers.FirstOrDefault(s => s.Alive && !known.Contains(s.Id) && !c.Soldiers.Any(o => o != s && o.Owner == s.Owner && o.Alive));
+            return came == null ? null : c.Log.FirstOrDefault(e => e.Text.Contains(came.Name))?.Text;
         }
 
         /// <summary>«Desbloquea: Sala de mapas · Mina.» (unlocksText).</summary>

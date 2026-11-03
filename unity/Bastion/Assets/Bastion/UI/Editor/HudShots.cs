@@ -46,6 +46,9 @@ namespace Bastion.UI.EditorTools
         /// <summary>The partner's «¡contacto!» with Vigilancia's menu open: the notice over the menu (Ana, Arturo 31/10 #2).</summary>
         public static void ContactMenu() => Mount("llegada", "contacto", "menu");
 
+        /// <summary>Those just seen (Arturo's B2 of 2/11): the «!» and the eye on their flags, the line, the partner's contact with «Ver».</summary>
+        public static void Seen() => Mount("llegada", "vistos");
+
         /// <summary>The objective's card pressed: the mission's window again, the card where it was (#13).</summary>
         public static void GoalAgain() => Mount("llegada", "objetivo");
 

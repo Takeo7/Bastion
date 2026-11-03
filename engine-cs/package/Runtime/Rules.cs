@@ -170,7 +170,7 @@ namespace Bastion.Engine
                     foreach (var t in Abilities.BesideEnemies(S, u))
                     {
                         if (!u.Alive || Over) break;
-                        if (t.Alive) MeleeAttack(u, new MeleeOption { Target = t, Tile = u.Pos, Path = new List<Pos>() }, AbilityIds.Slash);
+                        if (t.Alive) MeleeAttack(u, new MeleeOption { Target = t, Tile = u.Pos, Path = new List<Pos>() }, AbilityIds.Slash, false);
                     }
                     break;
                 case AbilityIds.Suppression:
@@ -224,6 +224,9 @@ namespace Bastion.Engine
                     break;
                 case AbilityIds.Hide:
                     Emit(new HiddenEvent { Unit = u.Id });
+                    break;
+                case AbilityIds.Pry:
+                    Emit(new BoardsRemovedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile!) });
                     break;
                 case AbilityIds.Reload:
                     Emit(new ReloadEvent { Unit = u.Id });
@@ -414,8 +417,8 @@ namespace Bastion.Engine
 
         /// <summary>
         /// A stone (docs/FASE10.md §4): heard where it lands (perform makes the
-        /// noise), and whoever stands there takes its damage. Only a hit gives the
-        /// squad away.
+        /// noise), and whoever stands there takes its damage, if Canto afilado or the
+        /// rest give it any (Arturo, 2/11). Only a hit gives the squad away.
         /// </summary>
         private void Stone(Unit u, Pos at)
         {
@@ -423,21 +426,29 @@ namespace Bastion.Engine
             var struck = hit != null && hit.Alive && hit.Id != u.Id && !hit.Objective ? hit : null;
             Emit(new StoneThrownEvent { Unit = u.Id, Target = Engine.Events.CopyPos(at), Hit = struck?.Id });
             if (struck == null) return;
-            Damage(struck, Content.StoneDamage + u.Mods.StoneDamage, 0, u);
+            var damage = Content.StoneDamage + u.Mods.StoneDamage;
+            if (damage > 0) Damage(struck, damage, 0, u);
             if (u.Team == Teams.Xcom) BreakConcealment(ConcealReasons.Attack, u.Id, struck.Id);
             if (struck.Team == Teams.Alien) ActivatePodOf(struck, u);
             CheckOutcome();
         }
 
-        public void MeleeAttack(Unit u, MeleeOption option, string ability)
+        public void MeleeAttack(Unit u, MeleeOption option, string ability, bool sweep = true)
         {
             if (option.Path.Count > 0) MoveAlong(u, option.Path, 0);
             var target = Grid.GetUnit(S, option.Target.Id);
-            if (!u.Alive || target == null || !target.Alive || Over || !Aim.InMeleeReach(S, u.Pos, target.Pos)) return;
+            if (!u.Alive || target == null || !target.Alive || Over || !Aim.InReachOf(S, u, u.Pos, target.Pos)) return;
             var result = Attack(u, target, ability);
             if (ability == AbilityIds.StunLance && result != null && result != ShotResults.Miss && target.Alive) Emit(new StunnedEvent { Unit = target.Id });
             // Golpe al oído (board.ts): a blade that strikes leaves the enemy reeling.
             if (ability == AbilityIds.Slash && u.Mods.SlashDisorient != 0 && result != null && result != ShotResults.Miss && target.Alive && !Content.Templates[target.Template].Robotic) Emit(new DisorientedEvent { Unit = target.Id });
+            // A long blade's Tajo goes on through everyone else alongside (Ana's #5 of 2/11), as Hacerse sitio does.
+            if (!sweep || ability != AbilityIds.Slash || !Content.Sweeps(u)) return;
+            foreach (var t in Abilities.BesideEnemies(S, u).Where((t) => t.Id != target.Id))
+            {
+                if (!u.Alive || Over) break;
+                if (t.Alive) MeleeAttack(u, new MeleeOption { Target = t, Tile = u.Pos, Path = new List<Pos>() }, AbilityIds.Slash, false);
+            }
         }
 
         public void Explode(Unit source, Pos center, string ability)
@@ -650,11 +661,13 @@ namespace Bastion.Engine
             }
         }
 
-        /// <summary>Opens the loot box on `tile` (docs/FASE8.md §B): always what it is marked for.</summary>
+        /// <summary>Opens the loot box on `tile` (docs/FASE8.md §B): always what it is marked for; a car's boot, or a body (Arturo, 2/11).</summary>
         private void Search(Unit u, Pos tile)
         {
             var box = Looting.SearchSpot(S, tile);
-            var loot = box != null ? Looting.RollBox(box, Rng, u.Mags != null, S.Mission.Pistols == true) : null;
+            var pistols = S.Mission.Pistols == true;
+            var loot = box == Looting.Body ? Looting.RollBody(Looting.BodyAt(S, Grid.ToPos(tile))!, Rng, pistols)
+                : box != null ? Looting.RollBox(box, Rng, u.Mags != null, pistols, S.Mission.Difficulty ?? 2, S.Mission.Night == true) : null;
             Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Loot = loot });
         }
 
@@ -1284,7 +1297,7 @@ namespace Bastion.Engine
             }
             // And a whole wave now and then, sooner the more noise the squad makes.
             var sent = S.Mission.Reinforcements.Count((r) => r.Horde == true && r.Trickle != true);
-            var due = (int)Math.Floor((double)Rules.HordeClock(m, turn) / Content.Horde.Wave);
+            var due = (int)Math.Floor((double)Rules.HordeClock(m) / Content.Horde.Wave);
             if (due <= sent) return;
             // Heard coming: they're in by an edge at the end of the next enemy turn, and nobody knows where.
             var wave = new Reinforcement { Id = $"r{S.Mission.Reinforcements.Count + 1}", Turn = turn + 1, Pos = null, Units = new List<string>(m.Horde), Landed = false, Horde = true };
@@ -1627,15 +1640,10 @@ namespace Bastion.Engine
         public const double SquadLouder = 1.15;
 
         /// <summary>
-        /// Where the horde's clock stands on `turn` (Sim.CallHorde): the turns gone by and the noise made, a wave every
-        /// Horde.Wave. At night the dead are already on their way: the clock runs a turn ahead. In a Limpieza, the noise
-        /// alone (Arturo, 29/10).
+        /// Where the horde's clock stands (Sim.CallHorde): the noise the squad has made, a wave every Horde.Wave. The turns
+        /// gone by no longer wind it, by day or by night (Arturo, 2/11: «el nivel de ruido no debería subir por los turnos»).
         /// </summary>
-        public static int HordeClock(MissionState m, int turn)
-        {
-            if (m.Kind == MissionKinds.Elimination) return m.Noise ?? 0;
-            return (turn + (m.Night == true ? Content.Night.HordeHead : 0)) * Content.Horde.PerTurn + (m.Noise ?? 0);
-        }
+        public static int HordeClock(MissionState m) => m.Noise ?? 0;
 
         /// <summary>
         /// The noise meter (Ana's notes, 29/10): how near the next wave is, from 0 to 1 (at 1 it is called at the end of the
@@ -1646,7 +1654,7 @@ namespace Bastion.Engine
             var m = s.Mission;
             if (m.Horde == null || m.Horde.Count == 0) return null;
             var sent = m.Reinforcements.Count((r) => r.Horde == true && r.Trickle != true);
-            return Math.Max(0, Math.Min(1, (double)(HordeClock(m, s.Turn) - sent * Content.Horde.Wave) / Content.Horde.Wave));
+            return Math.Max(0, Math.Min(1, (double)(HordeClock(m) - sent * Content.Horde.Wave) / Content.Horde.Wave));
         }
 
         /// <summary>

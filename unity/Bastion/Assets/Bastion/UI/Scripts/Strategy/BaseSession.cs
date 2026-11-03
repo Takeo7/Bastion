@@ -215,7 +215,7 @@ namespace Bastion.UI.Strategy
             }
         }
 
-        /// <summary>Esc for the base (the radio, the board, the menu); Intro and Espacio move the radio on.</summary>
+        /// <summary>Esc for the base (the board, the menu); B, Construir.</summary>
         void Update()
         {
             var keys = Keyboard.current;
@@ -229,8 +229,6 @@ namespace Bastion.UI.Strategy
             // Walking about the clearing, Esc is the walk's (Arte's: it ends it in its LateUpdate, so Walking is still on here).
             var walking = Bastion.Client.Settlement.Instance != null && Bastion.Client.Settlement.Instance.Walking;
             if (keys.escapeKey.wasPressedThisFrame && !walking) control.Escape();
-            else if (keys.enterKey.wasPressedThisFrame) root.RadioKey("enter");
-            else if (keys.spaceKey.wasPressedThisFrame) root.RadioKey("space");
             // B: in and out of Construir (screen.ts onKey), not while a name is typed.
             else if (keys.bKey.wasPressedThisFrame && !walking && !root.Typing) control.ToggleBuild();
         }

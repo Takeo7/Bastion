@@ -121,6 +121,12 @@
    "fit": 1,
    "yaw": 1
   },
+  "doorPlank": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Plank_01",
+   "fit": 1.1,
+   "thick": 1.5
+  },
   "mattress": {
    "pack": "military",
    "fbx": "SM_Prop_Bed_Mattress_01",

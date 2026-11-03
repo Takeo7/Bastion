@@ -249,7 +249,7 @@ Las instalaciones de ahora, con su sitio en el mapa, su tamaño, su salud y tres
 - Cada pocas misiones (para empezar, cada 3; antes con más Marea) y cada vez más grandes.
 - Los muertos llegan **por cualquier lado** y van **a por los soldados**.
 - **Avisos:** sin Sala de radio, solo cuándo (en cuántas misiones); con ella, también por dónde y cuántos.
-- **Defienden los sanos.** Los heridos y los mordidos se quedan dentro, fuera del combate.
+- **Defienden los sanos.** Los heridos y los mordidos se quedan dentro, fuera del combate. Si no queda ningún sano, defienden también los heridos; los mordidos, nunca (Arturo, 2/11). Quien llega a la base con el asedio empezado (un recluta, unos refugiados) defiende también.
 - **Se pierde si caen todos los que defienden:** la base cae y se empieza de cero con los que queden. Se pierden los edificios, las defensas y lo del almacén; los soldados conservan sus barras y su tablero. **Si no queda nadie, se pierde la campaña** (Arturo).
 - **Se gana** aguantando hasta que se retiran o acabando con todos.
 

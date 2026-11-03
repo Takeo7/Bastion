@@ -81,6 +81,134 @@ namespace Bastion.Engine.Tests
             Assert.Null(MissionBot.Next(state, 0, both));
         }
 
+        /// <summary>
+        /// A city mission of `seed` (the opening operation's clinic has no boarded door) set for one soldier and one of the
+        /// dead with a boarded door between (Mapgen BoardDoors), the way round longer than through it by more than a move: the
+        /// first such door. The soldier has the crowbar and no gun (nothing to shoot through the planks with), and no police
+        /// car to go for; the others are still.
+        /// </summary>
+        private static (GameState state, Unit soldier, Pos door)? Walled(int seed)
+        {
+            var state = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, seed), Slots = new List<int> { 0 }, Rng = new Rng(seed) });
+            var u = state.Units.First((x) => x.Team == Teams.Xcom);
+            var e = state.Units.First((x) => x.Team == Teams.Alien);
+            for (var i = 0; i < state.Tiles.Count; i++)
+            {
+                var door = new Pos { X = i % state.Width, Y = i / state.Width, Z = 0 };
+                if (Abilities.Boards(state, door) != DecorKinds.DoorBoards) continue;
+                foreach (var d in Grid.Dirs4)
+                {
+                    var here = new Pos { X = door.X - d.X, Y = door.Y - d.Y, Z = 0 };
+                    var there = new Pos { X = door.X + d.X, Y = door.Y + d.Y, Z = 0 };
+                    if (!Grid.InBounds(state, here.X, here.Y) || !Grid.InBounds(state, there.X, there.Y)) continue;
+                    if (Grid.KindAt(state, here) != TileKinds.Floor || Grid.KindAt(state, there) != TileKinds.Floor) continue;
+                    if (state.Units.Any((x) => x.Alive && x != u && x != e && (Grid.SamePos(x.Pos, here) || Grid.SamePos(x.Pos, there)))) continue;
+                    var round = Paths.ComputeReach(state, u, double.MaxValue, there).Cost.TryGetValue(Grid.NodeOf(state, here), out var w) ? w : int.MaxValue;
+                    if (round <= 2 * Paths.CostOrtho + Paths.CostPerAp(u) + 2 * Paths.CostOrtho) continue;
+                    u.Pos = here;
+                    e.Pos = there;
+                    foreach (var x in state.Units)
+                    {
+                        if (x.Team == Teams.Xcom && x != u) x.Ap = 0;
+                        if (x.Team == Teams.Alien && x != e) x.Alive = false;
+                    }
+                    u.Ap = 2;
+                    u.Arms = new Arms { Melee = FoundWeaponIds.Crowbar, Pistol = false };
+                    u.Backpack = new List<Loot>();
+                    state.Mission.PoliceCar = null;
+                    state.Dropped = null;
+                    state.Command = null;
+                    return (state, u, door);
+                }
+            }
+            return null;
+        }
+
+        [Fact]
+        public void ABoardedDoorInTheWayIsPriedOrGoneRound()
+        {
+            // Arturo, 2/11: the crowbar takes the planks off a door. With it, the bot does when the way round is longer;
+            // with the knife alone, it starts round.
+            var found = Enumerable.Range(1, 20).Select(Walled).FirstOrDefault((w) => w != null);
+            Assert.NotNull(found);
+            var (state, u, door) = found!.Value;
+            var connected = new List<int> { 0 };
+            var slot = 0;
+            var pry = Assert.IsType<AbilityCommand>(MissionBot.Next(state, slot, connected));
+            Assert.Equal(AbilityIds.Pry, pry.Ability);
+            Assert.True(Grid.SamePos(door, pry.Tile!));
+            var after = Json.Read<GameState>(Json.Write(state));
+            Assert.True(Rules.ExecuteCommand(after, pry, slot, connected, new Rng(5)).Ok);
+            Assert.Equal(TileKinds.Door, Grid.KindAt(after, door));
+
+            u.Arms = new Arms { Pistol = false };
+            var goal = state.Units.First((x) => x.Team == Teams.Alien && x.Alive).Pos;
+            var back = Paths.ComputeReach(state, u, double.MaxValue, goal);
+            int Walk(Pos p) => back.Cost.TryGetValue(Grid.NodeOf(state, p), out var w) ? w : int.MaxValue;
+            var move = Assert.IsType<MoveCommand>(MissionBot.Next(state, slot, connected));
+            Assert.True(Walk(move.To) < Walk(u.Pos), $"a step round, nearer by the walk: {Walk(move.To)} from {Walk(u.Pos)}");
+        }
+
+        [Fact]
+        public void OnTheBaseTheRecruitGoesInAndTheWoundedAreWaitedFor()
+        {
+            // With two soldiers each (Arturo, 2/11) one may come back from a mission with nobody, and get a recruit for
+            // nothing (Campaign.NobodyLeft): the bot puts that one in the squad; with nobody fit at all, it waits a day, or
+            // in a siege recruits one.
+            var states = (JArray)JObject.Parse(File.ReadAllText(Path.Combine(Golden, "campaign", "states.json")))["states"]!;
+            var c = states.Single((s) => (string)s["name"]! == "duo-new")["campaign"]!.ToObject<CampaignState>(Json.Serializer)!;
+            var rules = new EngineCampaignRules();
+            var both = new List<int> { 0, 1 };
+            var rng = new Rng(9);
+            var heard = new HeardGame();
+            CampaignCommand? Order(int slot)
+            {
+                heard.Observe(new CampaignMessage { State = Json.Read<CampaignState>(Json.Write(c)) });
+                return heard.BaseOrder(slot, slot == 0);
+            }
+            Assert.NotNull(c.ActiveMission);
+            var pepe = c.Soldiers.Where((s) => s.Owner == 1).ToList();
+            foreach (var s in pepe.Skip(1)) s.Alive = false;
+            c.Squad = c.Squad.Where((id) => !pepe.Any((s) => s.Id == id)).ToList();
+            var into = Assert.IsType<SquadCommand>(Order(1));
+            Assert.Equal(pepe[0].Id, into.Soldier);
+            Assert.True(into.On);
+            Assert.True(rules.ExecuteCampaignCommand(c, into, 1, both, rng).Ok);
+            Assert.IsType<LaunchCommand>(Order(1));
+            Assert.IsType<LaunchCommand>(Order(0));
+
+            // Nobody fit: a day's wait, and both waiting it, it goes by.
+            foreach (var s in c.Soldiers.Where((s) => s.Alive)) s.WoundedDays = 2;
+            c.Squad = new List<string>();
+            var day = c.Day;
+            foreach (var slot in both) Assert.True(rules.ExecuteCampaignCommand(c, Assert.IsType<AdvanceCommand>(Order(slot)), slot, both, rng).Ok);
+            Assert.Equal(day + 1, c.Day);
+
+            // The convoy wants someone fit to send: the host takes the other answer.
+            c.Event = CampaignEventIds.Convoy;
+            foreach (var s in c.Soldiers.Where((s) => s.Alive)) s.WoundedDays = 2;
+            var answer = Assert.IsType<AnswerEventCommand>(Order(0));
+            Assert.Equal(1, answer.Option);
+            Assert.True(rules.ExecuteCampaignCommand(c, answer, 0, both, rng).Ok);
+            var yes = Assert.IsType<VoteCommand>(Order(1));
+            Assert.True(rules.ExecuteCampaignCommand(c, yes, 1, both, rng).Ok);
+            Assert.Null(c.Event);
+
+            // A siege with nobody fit: no waiting then, so the host calls a recruit straight into the squad.
+            var siege = new MissionOffer { Id = "asedio", Name = "Asedio", Kind = MissionKinds.Elimination, Map = MapSource.Handmade("bastion"), Siege = true };
+            c.Offers.Add(siege);
+            c.ActiveMission = siege.Id;
+            c.Squad = new List<string>();
+            foreach (var s in c.Soldiers.Where((s) => s.Alive)) s.WoundedDays = 2;
+            Assert.Null(Order(1));
+            var recruit = Assert.IsType<RecruitCommand>(Order(0));
+            Assert.True(recruit.Squad);
+            Assert.True(rules.ExecuteCampaignCommand(c, recruit, 0, both, rng).Ok);
+            Assert.True(rules.ExecuteCampaignCommand(c, Assert.IsType<VoteCommand>(Order(1)), 1, both, rng).Ok);
+            Assert.Single(c.Squad);
+            Assert.IsType<LaunchCommand>(Order(0));
+        }
+
         private static RoomMessage Room(bool pepe, bool pepeAway = false) => new RoomMessage
         {
             Phase = RoomPhases.Mission,

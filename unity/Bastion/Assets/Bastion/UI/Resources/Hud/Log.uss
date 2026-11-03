@@ -32,6 +32,24 @@
     border-left-color: rgba(42, 35, 24, 0.25);
 }
 
+/* A line of the partner's (Log.cs): its words, then «Ver» to take the camera there. */
+.log__line--see {
+    flex-direction: row;
+    align-items: center;
+}
+
+.log__text {
+    flex-shrink: 1;
+    white-space: normal;
+}
+
+.log__see {
+    margin: 0 0 0 6px;
+    padding: 0 6px;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
 .log__arrow {
     width: 8px;
     height: 6px;
