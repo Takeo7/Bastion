@@ -38,6 +38,8 @@ namespace Bastion.Net
                     foreach (var p in room.Players)
                     {
                         if (p.Connected) droppedAt.Remove(p.Slot);
+                        // The host says how long they still count (also for one never seen here: a mission opened again without them).
+                        else if (p.GraceMs != null) droppedAt[p.Slot] = clock.Now + p.GraceMs.Value - Grace(p);
                         else if (Room?.Players.FirstOrDefault((q) => q.Slot == p.Slot)?.Connected == true) droppedAt[p.Slot] = clock.Now;
                     }
                     Room = room;
@@ -75,10 +77,12 @@ namespace Bastion.Net
         {
             var now = clock.Now;
             return (Room?.Players ?? new List<PlayerInfo>())
-                .Where((p) => p.Connected || (droppedAt.TryGetValue(p.Slot, out var at) && now - at < (p.Away == true ? Bastion.Net.Room.AwayGraceMs : Bastion.Net.Room.ReconnectGraceMs)))
+                .Where((p) => p.Connected || (droppedAt.TryGetValue(p.Slot, out var at) && now - at < Grace(p)))
                 .Select((p) => p.Slot)
                 .ToList();
         }
+
+        private static long Grace(PlayerInfo p) => p.Away == true ? Bastion.Net.Room.AwayGraceMs : Bastion.Net.Room.ReconnectGraceMs;
 
         /// <summary>
         /// What `slot` does on the base before launching: the partner's proposal, yes; an event, the host's first option it

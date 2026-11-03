@@ -349,6 +349,21 @@ namespace Bastion.UI.App
             return sizes;
         }
 
+        /// <summary>
+        /// Ajustes' sizes: Sizes for the screen as it is, and the size it has now if that isn't one of them (a window
+        /// started or dragged to another), in its place by height, so the row marks what there is (Gameplay, 3/11: it
+        /// marked the first). Once another is chosen it goes.
+        /// </summary>
+        static System.Collections.Generic.List<Vector2Int> ShownSizes()
+        {
+            var sizes = Sizes(ScreenMode);
+            var now = ScreenSize;
+            if (sizes.Contains(now)) return sizes;
+            var at = sizes.FindIndex(z => z.y < now.y || (z.y == now.y && z.x < now.x));
+            sizes.Insert(at < 0 ? sizes.Count : at, now);
+            return sizes;
+        }
+
         /// <summary>What was last asked for (the screen takes it a frame later): Ajustes shows it meanwhile.</summary>
         static FullScreenMode? askedMode;
         static Vector2Int? askedSize;
@@ -475,9 +490,9 @@ namespace Bastion.UI.App
                 Id = ResolutionId,
                 Label = "Resolución",
                 About = "Cuántos puntos tiene la imagen. Con menos va más fluido y se ve menos nítido; la interfaz guarda su tamaño.",
-                Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(Sizes(ScreenMode), z => $"{z.x} × {z.y}")),
-                ChoiceTips = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(Sizes(ScreenMode), z => z == NativeSize() ? "La de la pantalla" : "")),
-                On = Math.Max(0, Sizes(ScreenMode).FindIndex(z => z == ScreenSize)),
+                Choices = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(ShownSizes(), z => $"{z.x} × {z.y}")),
+                ChoiceTips = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Select(ShownSizes(), z => z == NativeSize() ? "La de la pantalla" : Sizes(ScreenMode).Contains(z) ? "" : "La de ahora")),
+                On = Math.Max(0, ShownSizes().FindIndex(z => z == ScreenSize)),
             },
             // The level, high to low as the 0.10.1's «Efectos» (the project's quality levels, Arte's).
             new Hud.SettingView
@@ -555,7 +570,7 @@ namespace Bastion.UI.App
             }
             else if (id == ResolutionId)
             {
-                var sizes = Sizes(ScreenMode);
+                var sizes = ShownSizes();
                 SetScreen(ScreenMode, sizes[Mathf.Clamp((int)value, 0, sizes.Count - 1)]);
             }
             else if (id == GraphicsId) Level = 2 - (int)value;

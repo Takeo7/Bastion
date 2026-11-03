@@ -222,6 +222,7 @@ namespace Bastion.Net
             skirmishMap = saved.SkirmishMap;
             skirmishVeterans = saved.SkirmishVeterans;
             skirmishNight = saved.SkirmishNight ?? false;
+            AwaitAbsent();
             Summarize();
             this.say($"[room] Partida restaurada ({phase}{(campaign != null ? $", campaña día {campaign.Day}" : "")}).");
         }
@@ -919,11 +920,30 @@ namespace Bastion.Net
         {
             phase = RoomPhases.Mission;
             Unpause();
+            AwaitAbsent();
             say($"[room] Vuelta a la misión de campaña{(state?.CampaignMission != null ? $": {state.CampaignMission.Name}" : "")}.");
             BroadcastRoom();
             if (campaign != null) Broadcast(new CampaignMessage { State = campaign });
             Broadcast(new SnapshotMessage { State = state });
             Persist();
+        }
+
+        /// <summary>
+        /// A mission opened again (from the save, or «Continuar campaña») without a player: they count as dropped now, as if
+        /// their game were out of sight (AwayGraceMs), since they have to open it and join. Till then the squad's turn waits
+        /// for them and their soldiers stay theirs; past it, it goes on as after any drop (UI's test of the 0.11.7: the host
+        /// alone, with no soldiers on the field, had the turn ended at once and the dead playing without the partner).
+        /// </summary>
+        private void AwaitAbsent()
+        {
+            if (phase != RoomPhases.Mission || state == null || state.Outcome != null) return;
+            var absent = seats.Where((s) => s != null && s.Socket == null).ToList();
+            foreach (var s in absent)
+            {
+                s!.DroppedAt = clock.Now;
+                s.Away = true;
+            }
+            if (absent.Count > 0) After(AwayGraceMs + 100, ResyncTurn);
         }
 
         private void LaunchCampaignMission()
@@ -1195,7 +1215,7 @@ namespace Bastion.Net
         {
             var now = clock.Now;
             return seats
-                .Where((s) => s != null && (s.Socket != null || (s.DroppedAt != null && now - s.DroppedAt.Value < (s.Away ? AwayGraceMs : ReconnectGraceMs))))
+                .Where((s) => s != null && (s.Socket != null || GraceLeft(s, now) != null))
                 .Select((s) => s!.Slot)
                 .ToList();
         }
@@ -1229,10 +1249,19 @@ namespace Bastion.Net
 
         private List<PlayerInfo> Players()
         {
+            var now = clock.Now;
             return seats
                 .Where((s) => s != null)
-                .Select((s) => new PlayerInfo { Slot = s!.Slot, Name = s.Name, Color = PlayerColors[s.Slot], Connected = s.Socket != null, Away = s.Away ? true : (bool?)null, Paused = s.Paused ? true : (bool?)null })
+                .Select((s) => new PlayerInfo { Slot = s!.Slot, Name = s.Name, Color = PlayerColors[s.Slot], Connected = s.Socket != null, Away = s.Away ? true : (bool?)null, Paused = s.Paused ? true : (bool?)null, GraceMs = GraceLeft(s, now) })
                 .ToList();
+        }
+
+        /// <summary>How long a seat not connected still counts as here (ActiveSlots); null when connected or past it.</summary>
+        private static long? GraceLeft(Seat s, long now)
+        {
+            if (s.Socket != null || s.DroppedAt == null) return null;
+            var left = s.DroppedAt.Value + (s.Away ? AwayGraceMs : ReconnectGraceMs) - now;
+            return left > 0 ? left : (long?)null;
         }
 
         /// <summary>Whether someone has the game's menu open in the mission (the `pause` message): it waits for both.</summary>

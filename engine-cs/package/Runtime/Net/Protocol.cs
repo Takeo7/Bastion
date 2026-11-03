@@ -247,6 +247,11 @@ namespace Bastion.Net
         public bool? Away { get; set; }
         /// <summary>Their game's menu open in the mission (the `pause` message): the mission waits for both.</summary>
         public bool? Paused { get; set; }
+        /// <summary>
+        /// Not connected, but still counted as here this many ms more (Room.ActiveSlots): the grace after a drop, or after
+        /// a mission opened again without them. Null when connected or past it.
+        /// </summary>
+        public long? GraceMs { get; set; }
     }
 
     /// <summary>The campaign there is, for the lobby's «Continuar campaña»: how far it went, and the mission left half played.</summary>

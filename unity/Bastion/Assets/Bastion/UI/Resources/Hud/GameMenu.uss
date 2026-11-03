@@ -252,8 +252,10 @@
     color: var(--t-muted);
 }
 
+/* On to a second line if they don't fit (four sizes in «Resolución» in a small window, 0.11.8). */
 .setting__choices {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
 }
 

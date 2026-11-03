@@ -2068,6 +2068,8 @@ namespace Bastion.Engine
             // A holder who left hands the command to whoever is still here.
             var holder = s.Command;
             if (s.ActiveTeam == Teams.Xcom && s.Outcome == null && connected.Count > 0 && (holder == null || !connected.Contains(holder.Value))) sim.PassCommand(connected[0]);
+            // One holding it with nothing to do hands it to a partner back with soldiers to move (Red, 3/11).
+            sim.AutoPassCommand();
             return sim.Events;
         }
 

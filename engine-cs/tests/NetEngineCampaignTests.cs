@@ -279,6 +279,73 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.Contains("ilegible"));
         }
 
+        /// <summary>
+        /// A campaign mission opened again with the partner not here yet (UI's test of the 0.11.7: the host's soldiers all
+        /// down, a bad mission left and «Continuar campaña»): the squad's turn waits for them as for one whose laptop went to
+        /// sleep (AwayGraceMs), and both hear how long; past that, it ends as after any drop.
+        /// </summary>
+        [Theory]
+        [InlineData("save")]
+        [InlineData("continue")]
+        public void AMissionOpenedAgainWaitsForThePartner(string how)
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            host.Say(ana, new { t = "newCampaign" });
+            host.Say(ana, Ccmd(new { type = "launch", ready = true }));
+            host.Say(pepe, Ccmd(new { type = "launch", ready = true }));
+            Assert.Equal("mission", host.Room.Summary().phase);
+            // Ana's soldiers all down, as the save keeps it.
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            foreach (var u in save.State!.Units.Where((u) => u.Team == Teams.Xcom && u.Owner == 0))
+            {
+                u.Alive = false;
+                u.Hp = 0;
+            }
+            var turn = save.State.Turn;
+            Assert.Equal(Teams.Xcom, save.State.ActiveTeam);
+            Assert.Contains(save.State.Units, (u) => u.Team == Teams.Xcom && u.Owner == 1 && u.Alive && u.Ap > 0);
+            if (how == "save") save.Phase = RoomPhases.Mission;
+            store.Save(save);
+            host.Room = host.Make();
+            ana = host.Join("Ana");
+            if (how == "continue") host.Say(ana, new { t = "continueCampaign" });
+            Assert.Equal("mission", host.Room.Summary().phase);
+            var s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
+            Assert.Equal((turn, Teams.Xcom), (s.Turn, s.ActiveTeam));
+            var partner = Players(ana.Take("room").Last()).Single((p) => (int)p["slot"]! == 1);
+            Assert.False((bool)partner["connected"]!);
+            Assert.Equal(Room.AwayGraceMs, (long)partner["graceMs"]!);
+            host.Advance(Room.AwayGraceMs - 1000);
+            s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
+            Assert.Equal((turn, Teams.Xcom), (s.Turn, s.ActiveTeam));
+            Assert.DoesNotContain(ana.Take("events").SelectMany((m) => m["events"]!), (e) => (string?)e["type"] == "turnBegan");
+            if (how == "continue")
+            {
+                // He comes: the turn is still the squad's.
+                pepe = host.Join("Pepe");
+                host.Advance(2000);
+                s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
+                Assert.Equal((turn, Teams.Xcom), (s.Turn, s.ActiveTeam));
+                Assert.Null(Players(pepe.Take("room").Last()).Single((p) => (int)p["slot"]! == 1)["graceMs"]);
+                // And the command, from Ana with nobody to move (Rules.SyncTurn, AutoPassCommand).
+                Assert.Equal(1, s.Command);
+            }
+            else
+            {
+                // He doesn't: it ends, as after any drop.
+                host.Advance(2000);
+                s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
+                Assert.True(s.Turn > turn || s.Outcome != null);
+            }
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo"));
+        }
+
+        private static List<JObject> Players(JObject room) => ((JArray)room["players"]!).Cast<JObject>().ToList();
+
         [Fact]
         public void TheRecordingHasWhatItSaysItHas()
         {

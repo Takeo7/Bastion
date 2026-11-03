@@ -201,6 +201,12 @@ namespace Bastion.UI.Combat
             foreach (var p in players)
             {
                 if (p.Connected) droppedAt.Remove(p.Slot);
+                // The host says how long they still count (also for one never seen here: a mission opened again without them).
+                else if (p.GraceMs != null)
+                {
+                    droppedAt[p.Slot] = now + p.GraceMs.Value / 1000f - Grace(p);
+                    graceEnds = Mathf.Min(graceEnds, now + p.GraceMs.Value / 1000f + 0.2f);
+                }
                 else if (Players.FirstOrDefault(q => q.Slot == p.Slot)?.Connected == true)
                 {
                     droppedAt[p.Slot] = now;
