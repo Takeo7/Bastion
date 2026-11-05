@@ -1,5 +1,24 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-1783943546040092428
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c331a524747ec470e922190997046c8b, type: 3}
+  m_Name: "Gradaci\xF3n"
+  m_EditorClassIdentifier: Bastion.Client::Bastion.Client.Map.ScreenPass
+  m_Active: 1
+  injectionPoint: 600
+  passMaterial: {fileID: 2100000, guid: 7bc3d5db053134b3c99bd6d2fac48d35, type: 2}
+  passIndex: 0
+  requirements: 4
+  bindDepthStencilAttachment: 0
+  keepPass: -1
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -25,10 +44,10 @@ MonoBehaviour:
     probeSamplingDebugTexture: {fileID: 0}
     probeVolumeBlendStatesCS: {fileID: 0}
   m_RendererFeatures:
-  - {fileID: 4414934588541210481}
-  - {fileID: 3495422930742387929}
+  - {fileID: 3732645942626511257}
+  - {fileID: -1783943546040092428}
   - {fileID: 600630377648947515}
-  m_RendererFeatureMap: 718f95f09dff443dd9a4a7cea23c82303b01136d25de5508
+  m_RendererFeatureMap: 99698e5ab505cd33f4f8edeecb283ee73b01136d25de5508
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 0}
@@ -78,7 +97,7 @@ MonoBehaviour:
       surfaceData: 0
     screenSpaceSettings:
       normalBlend: 0
---- !u!114 &3495422930742387929
+--- !u!114 &3732645942626511257
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -87,34 +106,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b00045f12942b46c698459096c89274e, type: 3}
-  m_Name: "Gradaci\xF3n"
-  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.FullScreenPassRendererFeature
-  m_Active: 1
-  injectionPoint: 600
-  fetchColorBuffer: 1
-  requirements: 4
-  passMaterial: {fileID: 2100000, guid: 7bc3d5db053134b3c99bd6d2fac48d35, type: 2}
-  passIndex: 0
-  bindDepthStencilAttachment: 0
-  m_Version: 1
---- !u!114 &4414934588541210481
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b00045f12942b46c698459096c89274e, type: 3}
+  m_Script: {fileID: 11500000, guid: c331a524747ec470e922190997046c8b, type: 3}
   m_Name: Niebla
-  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.FullScreenPassRendererFeature
+  m_EditorClassIdentifier: Bastion.Client::Bastion.Client.Map.ScreenPass
   m_Active: 1
   injectionPoint: 550
-  fetchColorBuffer: 1
-  requirements: 7
   passMaterial: {fileID: 2100000, guid: f129fbcba78c94d58b058959e8355596, type: 2}
   passIndex: 0
+  requirements: 7
   bindDepthStencilAttachment: 1
-  m_Version: 1
+  keepPass: 1

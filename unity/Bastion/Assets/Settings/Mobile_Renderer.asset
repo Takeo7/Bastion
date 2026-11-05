@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-8285221114809477977
+--- !u!114 &-8780494680180937796
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -9,17 +9,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b00045f12942b46c698459096c89274e, type: 3}
+  m_Script: {fileID: 11500000, guid: c331a524747ec470e922190997046c8b, type: 3}
   m_Name: "Gradaci\xF3n"
-  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.FullScreenPassRendererFeature
+  m_EditorClassIdentifier: Bastion.Client::Bastion.Client.Map.ScreenPass
   m_Active: 1
   injectionPoint: 600
-  fetchColorBuffer: 1
-  requirements: 4
   passMaterial: {fileID: 2100000, guid: 7bc3d5db053134b3c99bd6d2fac48d35, type: 2}
   passIndex: 0
+  requirements: 4
   bindDepthStencilAttachment: 0
-  m_Version: 1
+  keepPass: -1
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -45,10 +44,10 @@ MonoBehaviour:
     probeSamplingDebugTexture: {fileID: 0}
     probeVolumeBlendStatesCS: {fileID: 0}
   m_RendererFeatures:
-  - {fileID: 4414934588541210481}
-  - {fileID: -8285221114809477977}
+  - {fileID: 2798433564168770320}
+  - {fileID: -8780494680180937796}
   - {fileID: 987219288412436815}
-  m_RendererFeatureMap: 718f95f09dff443da71437064bfb048d4fb93c59b64eb30d
+  m_RendererFeatureMap: 1053cff77f08d626bcab9b039c6a25864fb93c59b64eb30d
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -98,7 +97,7 @@ MonoBehaviour:
       surfaceData: 0
     screenSpaceSettings:
       normalBlend: 0
---- !u!114 &4414934588541210481
+--- !u!114 &2798433564168770320
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -107,14 +106,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b00045f12942b46c698459096c89274e, type: 3}
+  m_Script: {fileID: 11500000, guid: c331a524747ec470e922190997046c8b, type: 3}
   m_Name: Niebla
-  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.FullScreenPassRendererFeature
+  m_EditorClassIdentifier: Bastion.Client::Bastion.Client.Map.ScreenPass
   m_Active: 1
   injectionPoint: 550
-  fetchColorBuffer: 1
-  requirements: 7
   passMaterial: {fileID: 2100000, guid: f129fbcba78c94d58b058959e8355596, type: 2}
   passIndex: 0
+  requirements: 7
   bindDepthStencilAttachment: 1
-  m_Version: 1
+  keepPass: 1

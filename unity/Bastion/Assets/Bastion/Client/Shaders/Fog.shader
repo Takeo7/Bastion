@@ -3,7 +3,8 @@
 // alpha: its floor), blended between tiles; a building's wall as the street it looks onto, its roof (and a wall over a
 // lower roof beside it) as the street along it (the shells' texture: red its storeys, green the street along it in sight, blue seen). In sight, as it is; seen but out of sight, greyer and darker under a haze, with a low mist drifting over it;
 // never seen, a dark mist where only the tallest shapes show. The same numbers as 0.10.1's, in its tiles. Off (the
-// picture as it is) while no map has a fog (_FogSize.w 0). A full-screen pass of the renderers (FogFeatureMake).
+// picture as it is) while no map has a fog (_FogSize.w 0). A full-screen pass of the renderers (FogFeatureMake: ScreenPass,
+// its second pass the picture where the first leaves it, over the figures).
 Shader "Bastion/Fog"
 {
     SubShader
@@ -181,6 +182,31 @@ Shader "Bastion/Fog"
                 half3 dark = _FogUnknown.rgb * (0.55 + 1.1 * mist) * (1.0 + (0.15 + 0.35 * (1.0 - inside)) * saturate(high / 5.0));
                 c = lerp(dark, c, known);
                 return half4(c, colour.a);
+            }
+            ENDHLSL
+        }
+
+        Pass
+        {
+            Name "Kept"
+            // (Over the figures, the picture as it was: drawn into a new one (ScreenPass), what the fog leaves is this.)
+            Stencil
+            {
+                Ref 64
+                ReadMask 64
+                Comp Equal
+            }
+
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Kept
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+
+            half4 Kept(Varyings input) : SV_Target
+            {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                return LOAD_TEXTURE2D_X(_BlitTexture, uint2(input.positionCS.xy));
             }
             ENDHLSL
         }

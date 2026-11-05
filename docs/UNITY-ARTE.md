@@ -142,7 +142,7 @@ Esto se rehace en C# y en shaders de URP:
 La configuración del proyecto que es de Arte la pone `Bastion.EditorTools.ProjectSetup.Run` (se puede volver a lanzar):
 - empresa «Bastion-Unity», producto «Bastion» (sin tilde: da nombre al ejecutable del Mac, y con tilde la firma ad hoc no vale; el nombre con tilde que ve el jugador lo pone `AppBuild` en el Info.plist) e identificador `com.takeo7.bastion.unity` (el de Electron es `com.takeo7.bastion`). Los datos de la app van a `~/Library/Application Support/Bastion-Unity/Bastion` en el Mac y a `AppData/LocalLow/Bastion-Unity/Bastion` en Windows, no a la carpeta de la app de Electron (`…/Application Support/Bastion`);
 - `enableFrameTimingStats`, para que `FrameTimingManager` dé los tiempos de la CPU y de la tarjeta;
-- tres niveles de calidad, que los Ajustes de UI buscan por su nombre. El editor y las capturas usan «Alto».
+- tres niveles de calidad, que los Ajustes de UI buscan por su nombre. El editor y las capturas usan «Alto». Los tres van en las apps de Mac, Windows y Linux. Hasta la 0.11.9, «Bajo» conservaba la exclusión de Standalone del nivel «Mobile» de la plantilla, y en la app «Bajos» era «Medio». Lo encontró la prueba de UI del 5/11. Ahora `ProjectSetup` quita esa exclusión, y `RendimientoLab.Medir` apunta qué niveles hay en las apps.
 
 | Nivel | Recurso de URP | Renderizador | Sombras | SSAO | Posproceso | Escala |
 |---|---|---|---|---|---|---|
@@ -447,6 +447,68 @@ Los muros de los edificios son las piezas de Synty, como en la 0.10.1:
     - Los LOD:
       - lo que se paga es por píxel y por objeto, no por triángulo: con un cuarto de los píxeles, cada caso baja 1,6–3,5 ms;
       - los mapas tienen 0,5–1,65 M de triángulos (ciudad 1,18 M, campo 1,65 M), casi todo en el contorno y el decorado.
+  - La medida del 4/11 (Gameplay: dónde se van los ms, antes de optimizar; sin cambiar nada del juego). Informe y números en `.dev-snapshots/arte/unity/rendimiento-0411/`.
+    - Contra la tabla de arriba, nada sube; «fuego» baja de 0,5 a 0,85 ms.
+    - La cámara de `Medir` iba sin posproceso (el valor por defecto de `UniversalAdditionalCameraData`): «base» es eso, para comparar con el 1/11, y «juego» es como la del juego (+0,36 a +0,66 ms).
+    - Por partes, quitando cada una:
+      - el mapa, del 25 al 60 % del fotograma, sobre todo por píxel;
+      - en «alto», la SSAO (1,3 ms) y las sombras (1,2–2,1 ms; el suavizado, 0,6–1,3);
+      - la niebla: 0,45 ms en «alto», y en «medio» hasta 1,3 porque pide la pasada de normales;
+      - el posproceso y la gradación, 0,1–0,7 ms;
+      - la interfaz, 0,1–0,4 ms de CPU.
+    - Las figuras: en «ciudad», «fuego» y «campo» la niebla esconde a los zombis. Con la horda a la vista (`BASTION_TODOS=1`, 70), 6,7–8 ms:
+      - la piel, 3,3–4,4 ms (`horneadas`);
+      - el paso, 2,5 ms;
+      - dibujarlas, el resto.
+    - Trampa: llamando a `camera.Render` a mano, la piel sale el doble de cara que en modo de juego, donde va en la GPU (unos 25 µs de CPU por figura con el perfilador, `RendimientoLab.Interfaz` con `BASTION_LAB=PartidaTurn`).
+    - Lo que ahorra cada propuesta en «alto»:
+      - la SSAO a media resolución, −0,65 a −0,84 ms;
+      - las sombras suaves en «bajo», −0,3 a −0,6;
+      - el depth priming, −0,03 a −0,3, y −0,9 a −1,2 en «campo».
+    - STP no gana en «medio».
+  - Los cambios del 4/11 (Arturo, en el cuadro), cada uno medido por separado con `Medir` (lo menor de 3 vueltas). Tiras desde la cámara del juego, a 24 y 33,5 casillas, en `.dev-snapshots/arte/unity/rendimiento-0411/`.
+    1. Se queda, solo en «alto»: la SSAO a media resolución con su desenfoque en «bajo» (`PC_Renderer`: `Downsample`, `BlurQuality`) y las sombras suaves en calidad media (`PC_RPAsset`: `m_SoftShadowQuality` 2; Arturo, en el cuadro).
+       - La SSAO no se nota.
+       - Las sombras en calidad baja salían duras y con dientes de sierra en lo fino (barandillas, vallas). La media se ve casi como la alta.
+       - Frente a la alta, la media ahorra 0,13–0,30 ms y la baja 0,27–0,69.
+       - En ms, a 24 y 33,5 casillas (de antes de este cambio al final de los cuatro, con la media y el 2):
+         - ciudad: 9,49 → 8,46 y 10,74 → 9,66
+         - asedio: 11,58 → 10,44 y 11,70 → 10,48
+         - fuego: 10,21 → 9,16 y 11,11 → 10,12
+         - campo: 10,31 → 9,00 y 11,71 → 10,36
+       - Laboratorio: `suavesbajas`, `suavesmedias` y `suavesaltas`.
+    2. La gradación y la niebla sin copia de la imagen (`Client/Map/ScreenPass.cs`; Arturo, en el cuadro). Es la alternativa a llevar la gradación a la LUT y la viñeta de URP, que no sale.
+       - Por qué no sale lo otro: la viñeta de URP oscurece la imagen HDR antes del tono, y la nuestra oscurece lo que se ve, después de la gradación. En las esquinas el color se iría de media 13/255 de día y 18 de noche, hasta 56 y 91 en lo claro (las dos cuentas simuladas con los valores de `Mood`).
+       - Cómo va: cada una dibuja la imagen de la cámara en una textura nueva y URP la toma como la de la cámara (`resources.cameraColor`), sin la copia que hacía su pasada de pantalla completa (`FullScreenPassRendererFeature`) para leerla.
+       - La niebla no se pinta sobre las figuras (la plantilla de `FigureMask`). Esos píxeles los dibuja tal cual la segunda pasada de `Fog.shader` («Kept», la plantilla al revés).
+       - En una cámara que no sea la última de una pila, copia y dibuja encima, como URP. El juego no tiene pilas.
+       - `FogFeatureMake` y `GradeMake` ponen el `ScreenPass` donde estaba la pasada de su nombre (`ScreenPassMake.Put`), en los tres renderizadores.
+       - El color, al bit: 0 píxeles distintos de 2 073 600 en la base de día y en city-5-night, con niebla y figuras, en «medio» y «alto», a 24 y 33,5 casillas. Dos capturas de antes también daban 0 entre sí.
+       - Ahorra menos de lo que prometían `gradsincopia` y `nieblasincopia` (−0,15 a −0,4 ms), que dibujaban sin leer nada: de 0 a −0,17 ms, unos −0,1. Medido después, antes y después otra vez, en las dos calidades.
+    3. Se deja fuera: el depth priming (`m_DepthPrimingMode` Forced en los dos renderizadores).
+       - Gana solo en «campo» (−0,4 a −1,0 ms); en las ciudades da 0 y en el asedio, +0,1 a +0,2.
+       - En las copas de los árboles salen líneas de puntos oscuros por las aristas: el sombreador de las copas no da en las dos pasadas la misma profundidad al bit (`cambio3-priming-agujeros-en-las-copas.png`).
+    4. Se queda: con una horda a la vista, el cuerpo de los muertos lejanos va en fotogramas alternos (`UnitViews.Step`, `CrowdFrom`, `ThinFrom`).
+       - Cuándo: con 24 figuras vistas o más, los muertos a más de 10 casillas (15 m) del punto del suelo al que mira la cámara.
+       - Cada figura tiene su turno desde que se hace (`oddPhase`), así que en cada fotograma espera la mitad.
+       - Solo con el juego a 60 fps o más: un cuerpo nunca va a menos de 30 por segundo.
+       - Nunca el que alcanza o muerde, el caído ni los vivos.
+       - Como con los no vistos, solo espera el cuerpo (`missed`); dónde está, adónde gira y lo que espera el reproductor siguen al reloj.
+       - En modo de juego, 60 muertos lejos (`CombatLab.Horda` con `BASTION_N=60 BASTION_MIRA=13,22 BASTION_DIST=33.5`, a 60 fps): medio 6,72 → 5,85 ms y alto 6,98 → 6,08.
+       - El paso de las figuras con la horda a la vista (`Medir`, `BASTION_TODOS=1`): de −0,5 a −0,9 ms. La piel no baja: la raíz se mueve y Unity vuelve a calcularla.
+       - Los turnos enemigos duran lo mismo con la alternancia forzada (`BASTION_ALTERNAN_DESDE=4`) que sin ella: city-11 orden 12, 11,3 s; facility-8 orden 76, 1,6 s; wilds-9 orden 9, 8,4 s.
+       - Las tiras de la horda lejos, con alternancia y sin ella, se ven iguales; la mitad lejana va 1/60 s por detrás en los fotogramas impares.
+       - Variables: `BASTION_SIN_ALTERNAR=1` (todas cada fotograma), `BASTION_ALTERNAN=1` (cuántas esperan, en el registro cada 60 fotogramas) y `BASTION_ALTERNAN_DESDE=n`.
+       - Ojo: las capturas a 10 fps nunca alternan; para verlo, `-shotFps 60`.
+       - De paso, `StepFlashes` y `StepMarks` toman el paso del fotograma y no el de la última figura con lo que perdió.
+    - «Bajo» en las apps (5/11, la prueba de UI de la 0.11.9): hasta entonces no estaba, y «Bajos» era «Medio». Con las pasadas del 2, el color sale al bit (0 píxeles distintos en la base de día y en city-5-night, a 24 y 33,5 casillas). En ms, «medio» → «bajo», a 24 y 33,5 casillas (`Medir`, «juego», con el juntado):
+       - ciudad: 7,32 → 5,81 y 8,37 → 6,90
+       - asedio: 9,18 → 7,63 y 9,29 → 7,91
+       - fuego: 7,91 → 6,28 y 8,77 → 7,14
+       - campo: 7,51 → 6,21 y 8,69 → 7,35
+       - En total, de −1,3 a −1,6 ms. El paso de las figuras no cambia.
+       - Con nieve, en «bajo» la nieve del suelo salía al sol también en las sombras. `Clima.shader` busca siempre la cascada de la sombra, y con una sola URP no pone sus esferas (solo lo hace con más) y deja vacías las matrices de después de la primera. Ahora, con una sola cascada, toma la primera (`ShadowCoordOf`). En «medio» y «alto», 0 píxeles distintos.
+    - Para medir: `Shots` acepta `-shotQuality Bajo|Medio|Alto` y `MapLab`, `BASTION_DENTRO=x,y` (el primer soldado allí; con `BASTION_SELECT=1`, el edificio cortado). `CombatLab.Horda` cuenta el tiempo real con un cronómetro, porque el reloj de la captura va fijo.
   - Trampa: un renderizador juntado tiene por malla el lote entero. `GroundOcclusion` horneaba con `subMeshCount` todos los submeshes del lote, y al cambiar el mapa tardaba 47 ms en vez de 6 (city-7). Ahora un renderizador juntado cuenta sus materiales, y la oclusión sale igual casilla a casilla. Para medirlo, `MapLab` acepta `BASTION_JUNTAR=0` y el volcado de `BASTION_AO_VOLCADO` dice cuánto tarda el horneado.
 - `HomeFurnishing` es `homeFurnishing.ts` (alfombras, lámparas, sillas alrededor de las mesas, toallas…): igual que el TS en los 107 estados de golden. MapBuilder lo pone al construir y lo rehace con cada cambio.
 - `MapArt.UnityTurn`: cuánto está girado cada modelo de Unity respecto al FBX de origen con el que se ajustó la 0.10.1. Medido el 24/10 en todos los de MapArt (`SettlementLab.Boxes`, la caja de cada modelo de Unity contra la del GLB de la 0.10.1), va por su procedencia, sin una excepción entre los 160 que se distinguen: los prefabs de Apocalypse, un cuarto de vuelta; los de cualquier otro paquete y los FBX de origen importados en Extra (también los recortados con Blender), media vuelta. Antes solo se corregían los cuatro coches destrozados y la caravana, así que los demás props, también los del combate del hito 1, estaban girados un cuarto o media vuelta (en la base se notaba: la empalizada y los sacos atravesados, el barracón y la casa del revés). `MapCatalogMake` guarda el de cada modelo según su carpeta (`MapLab.UnityTurnOf`); sin catálogo, por el paquete. Lo usan `MapBuilder.Place` y el `PropParts` de UI.

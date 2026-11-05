@@ -316,12 +316,14 @@ namespace Bastion.Engine.Tests
             Assert.Equal("mission", host.Room.Summary().phase);
             var s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
             Assert.Equal((turn, Teams.Xcom), (s.Turn, s.ActiveTeam));
+            // Ana keeps the command with nobody to move: it doesn't go to Pepe till he is here (Gameplay, 3/11: as with «continuar»).
+            Assert.Equal(0, s.Command);
             var partner = Players(ana.Take("room").Last()).Single((p) => (int)p["slot"]! == 1);
             Assert.False((bool)partner["connected"]!);
             Assert.Equal(Room.AwayGraceMs, (long)partner["graceMs"]!);
             host.Advance(Room.AwayGraceMs - 1000);
             s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
-            Assert.Equal((turn, Teams.Xcom), (s.Turn, s.ActiveTeam));
+            Assert.Equal((turn, Teams.Xcom, 0), (s.Turn, s.ActiveTeam, s.Command));
             Assert.DoesNotContain(ana.Take("events").SelectMany((m) => m["events"]!), (e) => (string?)e["type"] == "turnBegan");
             if (how == "continue")
             {

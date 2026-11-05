@@ -65,7 +65,7 @@ namespace Bastion.Engine.Tests
             }
         }
 
-        public List<GameEvent> SyncTurn(GameState state, IReadOnlyList<int> connected, Rng rng)
+        public List<GameEvent> SyncTurn(GameState state, IReadOnlyList<int> connected, Rng rng, int? back = null)
         {
             Synced.Add(connected.ToList());
             if (state.Outcome != null || connected.Count == 0 || !connected.All((x) => state.Ready[x])) return new List<GameEvent>();

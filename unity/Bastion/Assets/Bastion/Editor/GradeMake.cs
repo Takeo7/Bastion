@@ -38,29 +38,8 @@ namespace Bastion.EditorTools
                     Debug.Log($"[grade] {path}: not found");
                     continue;
                 }
-                if (data.rendererFeatures.FirstOrDefault(f => f is FullScreenPassRendererFeature && f.name == "Gradación") is FullScreenPassRendererFeature there)
-                {
-                    there.passMaterial = material;
-                    there.injectionPoint = FullScreenPassRendererFeature.InjectionPoint.AfterRenderingPostProcessing;
-                    there.requirements = ScriptableRenderPassInput.Color;
-                    EditorUtility.SetDirty(there);
-                    EditorUtility.SetDirty(data);
-                    continue;
-                }
-                var feature = ScriptableObject.CreateInstance<FullScreenPassRendererFeature>();
-                feature.name = "Gradación";
-                feature.passMaterial = material;
-                feature.injectionPoint = FullScreenPassRendererFeature.InjectionPoint.AfterRenderingPostProcessing;
-                feature.requirements = ScriptableRenderPassInput.Color;
-                feature.fetchColorBuffer = true;
-                AssetDatabase.AddObjectToAsset(feature, data);
-                data.rendererFeatures.Add(feature);
-                // The renderer keeps its features' local ids alongside (what its inspector would add).
-                AssetDatabase.TryGetGUIDAndLocalFileIdentifier(feature, out _, out long id);
-                if (typeof(ScriptableRendererData).GetField("m_RendererFeatureMap", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(data) is List<long> map) map.Add(id);
-                data.SetDirty();
-                EditorUtility.SetDirty(data);
-                Debug.Log($"[grade] {path}: pass added");
+                // A ScreenPass (4/11: no copy of the picture), where URP's full-screen pass was; there already, brought up to date.
+                ScreenPassMake.Put(data, "Gradación", material, RenderPassEvent.AfterRenderingPostProcessing, ScriptableRenderPassInput.Color);
             }
             var profiles = new HashSet<VolumeProfile>();
             foreach (string path in Pipelines)

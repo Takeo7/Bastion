@@ -21,8 +21,8 @@ namespace Bastion.Net
         /// <summary>rules.ts executeCommand: the command of `slot`, or why not.</summary>
         CommandResult ExecuteCommand(GameState state, Command cmd, int slot, IReadOnlyList<int> connected, Rng rng);
 
-        /// <summary>rules.ts syncTurn: the squad's turn ends if whoever was holding it up is gone.</summary>
-        List<GameEvent> SyncTurn(GameState state, IReadOnlyList<int> connected, Rng rng);
+        /// <summary>rules.ts syncTurn: the squad's turn ends if whoever was holding it up is gone. `back`: who has just come back, if that is why.</summary>
+        List<GameEvent> SyncTurn(GameState state, IReadOnlyList<int> connected, Rng rng, int? back = null);
 
         /// <summary>rules.ts callAbandon: `slot` asks to leave the mission (alone, it ends now).</summary>
         List<GameEvent> CallAbandon(GameState state, int slot, IReadOnlyList<int> connected);
@@ -73,7 +73,7 @@ namespace Bastion.Net
 
         public CommandResult ExecuteCommand(GameState state, Command cmd, int slot, IReadOnlyList<int> connected, Rng rng) => Rules.ExecuteCommand(state, cmd, slot, connected, rng);
 
-        public List<GameEvent> SyncTurn(GameState state, IReadOnlyList<int> connected, Rng rng) => Rules.SyncTurn(state, connected, rng);
+        public List<GameEvent> SyncTurn(GameState state, IReadOnlyList<int> connected, Rng rng, int? back = null) => Rules.SyncTurn(state, connected, rng, back);
 
         public List<GameEvent> CallAbandon(GameState state, int slot, IReadOnlyList<int> connected) => Rules.CallAbandon(state, slot, connected);
 

@@ -33,6 +33,15 @@ Shader "Bastion/Clima"
             #define _MAIN_LIGHT_SHADOWS_CASCADE
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
+            // Where on the sun's shadow map a point is. With a single cascade («Bajo»'s) URP leaves the cascades' spheres as
+            // they were (it sets them only for more) and the matrices after the first as no-ops, so the cascade found was
+            // none, and the snow lit in the shadows too (5/11): then the first's, always.
+            float4 ShadowCoordOf(float3 world)
+            {
+                if (all(_MainLightWorldToShadow[1][0].xyz == 0)) return float4(mul(_MainLightWorldToShadow[0], float4(world, 1.0)).xyz, 0.0);
+                return TransformWorldToShadowCoord(world);
+            }
+
             // How wet (0–1), how much of the flat ground is puddles (0–1), drops a second on each spot of a puddle, how
             // much snow (0–1: 1 all of what faces up), the clock (s), a lightning's flash (0–1).
             float _ClimaWet;
@@ -153,7 +162,7 @@ Shader "Bastion/Clima"
                 {
                     float patchy = Noise(world.xz * 0.9) * 0.6 + Noise(world.xz * 3.1 + 3.1) * 0.4;
                     float cover = smoothstep(0.5, 0.85, normal.y) * saturate(_ClimaSnow * 1.3 - 0.25 + (patchy - 0.5) * 0.5);
-                    float shadow = MainLightRealtimeShadow(TransformWorldToShadowCoord(world));
+                    float shadow = MainLightRealtimeShadow(ShadowCoordOf(world));
                     float3 light = lerp(_LightGround.rgb, _LightSky.rgb, 0.5 * normal.y + 0.5) + _LightSun.rgb * saturate(dot(normal, _LightSunFrom.xyz)) * shadow;
                     c = lerp(c, _ClimaSnowTint.rgb * light, cover);
                 }

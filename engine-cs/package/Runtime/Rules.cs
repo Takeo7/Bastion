@@ -2058,8 +2058,8 @@ namespace Bastion.Engine
             return sim.Events;
         }
 
-        /// <summary>Re-evaluates the end of turn, e.g. after a player disconnects.</summary>
-        public static List<GameEvent> SyncTurn(GameState s, IReadOnlyList<int> connected, Rng rng)
+        /// <summary>Re-evaluates the end of turn, e.g. after a player disconnects. `back`: the player who has just come back, if that is why.</summary>
+        public static List<GameEvent> SyncTurn(GameState s, IReadOnlyList<int> connected, Rng rng, int? back = null)
         {
             var sim = new Sim(s, rng, connected);
             // A call to evacuate whose answerer has gone: the bus leaves (docs/PRUEBA-2026-10-14.md P1).
@@ -2068,8 +2068,9 @@ namespace Bastion.Engine
             // A holder who left hands the command to whoever is still here.
             var holder = s.Command;
             if (s.ActiveTeam == Teams.Xcom && s.Outcome == null && connected.Count > 0 && (holder == null || !connected.Contains(holder.Value))) sim.PassCommand(connected[0]);
-            // One holding it with nothing to do hands it to a partner back with soldiers to move (Red, 3/11).
-            sim.AutoPassCommand();
+            // One holding it with nothing to do hands it to a partner back with soldiers to move (Red, 3/11); never to one
+            // not here yet, though they still count (a mission opened again: Gameplay, 3/11).
+            if (back != null && s.Command != back) sim.AutoPassCommand();
             return sim.Events;
         }
 

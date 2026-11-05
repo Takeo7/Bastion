@@ -8,7 +8,7 @@ using UnityEngine.Rendering.Universal;
 namespace Bastion.EditorTools
 {
     /// <summary>
-    /// The fog of war's full-screen pass (Bastion/Fog) in both of the project's renderers, before the post-processing,
+    /// The fog of war's full-screen pass (Bastion/Fog; a ScreenPass) in the project's renderers, before the post-processing,
     /// with the depth and the picture it needs; and its material. Run once (again does nothing):
     /// unity/tools/unity.sh -executeMethod Bastion.EditorTools.FogFeatureMake.Run -quit
     /// </summary>
@@ -36,34 +36,10 @@ namespace Bastion.EditorTools
                     Debug.Log($"[fog] {path}: not found");
                     continue;
                 }
-                // There already: what it needs brought up to date (the normals came with the buildings' walls).
-                if (data.rendererFeatures.FirstOrDefault(f => f is FullScreenPassRendererFeature && f.name == "Niebla") is FullScreenPassRendererFeature there)
-                {
-                    there.requirements = Needs;
-                    there.passMaterial = material;
-                    // (The depth-stencil bound: the figures' stencil bit keeps the fog off them, Bastion/FigureMask.)
-                    there.bindDepthStencilAttachment = true;
-                    EditorUtility.SetDirty(there);
-                    EditorUtility.SetDirty(data);
-                    Debug.Log($"[fog] {path}: already there, its needs set");
-                    continue;
-                }
-                var feature = ScriptableObject.CreateInstance<FullScreenPassRendererFeature>();
-                feature.name = "Niebla";
-                feature.passMaterial = material;
-                feature.injectionPoint = FullScreenPassRendererFeature.InjectionPoint.BeforeRenderingPostProcessing;
-                feature.requirements = Needs;
-                feature.fetchColorBuffer = true;
-                feature.bindDepthStencilAttachment = true;
-                AssetDatabase.AddObjectToAsset(feature, data);
-                data.rendererFeatures.Add(feature);
-                // The renderer keeps its features' local ids alongside (what its inspector would add).
-                AssetDatabase.TryGetGUIDAndLocalFileIdentifier(feature, out _, out long id);
-                if (typeof(ScriptableRendererData).GetField("m_RendererFeatureMap", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(data) is List<long> map) map.Add(id);
-                else Debug.LogWarning($"[fog] {path}: no feature map to note the pass in");
-                data.SetDirty();
-                EditorUtility.SetDirty(data);
-                Debug.Log($"[fog] {path}: pass added");
+                // A ScreenPass (4/11: no copy of the picture), where URP's full-screen pass was; there already, brought up to
+                // date. The depth-stencil bound: the figures' stencil bit keeps the fog off them (Bastion/FigureMask), and its
+                // second pass draws the picture there as it was.
+                ScreenPassMake.Put(data, "Niebla", material, RenderPassEvent.BeforeRenderingPostProcessing, Needs, true, 1);
             }
             AssetDatabase.SaveAssets();
         }

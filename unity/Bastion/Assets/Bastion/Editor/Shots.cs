@@ -28,6 +28,7 @@ namespace Bastion.EditorTools
     ///   -shotFov 40
     ///   -shotFrames 20 -shotFps 10      a strip: so many frames, so many a second (f000.png, f001.png…)
     ///   -shotWarm 1                     seconds stepped before the first frame (animations settle)
+    ///   -shotQuality Medio              the quality level drawn at (none: the project's, Alto in the editor)
     ///   -shotPlay                       in play mode, for what only draws with the game running: the HUD's panels
     ///                                   (UI Toolkit) are drawn into a texture of their own and laid over the camera's;
     ///                                   time goes at -shotFps a frame (Time.captureDeltaTime), so a strip repeats
@@ -67,6 +68,8 @@ namespace Bastion.EditorTools
         static void Shoot()
         {
             string outPath = Arg("-shotOut") ?? throw new ArgumentException("-shotOut is missing");
+            if (Arg("-shotQuality") is string quality)
+                QualitySettings.SetQualityLevel(Array.IndexOf(QualitySettings.names, quality) is int level && level >= 0 ? level : throw new ArgumentException($"no quality level {quality}"), true);
             string scene = Arg("-shotScene");
             if (scene != null) EditorSceneManager.OpenScene(scene, OpenSceneMode.Single);
             else EmptyScene();

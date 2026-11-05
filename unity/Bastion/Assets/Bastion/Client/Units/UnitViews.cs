@@ -198,6 +198,8 @@ namespace Bastion.Client.Units
             public Vector3 home;
             /// <summary>Time it wasn't stepped, unseen (Step): stepped by it once seen again.</summary>
             public float missed;
+            /// <summary>Which of a crowd's two frames it waits in, far off (Step): every other one made.</summary>
+            public bool oddPhase;
             /// <summary>How many bites it has taken (Lunge): letting go after one is for that one only.</summary>
             public int bites;
             /// <summary>
@@ -293,6 +295,26 @@ namespace Bastion.Client.Units
         /// <summary>BASTION_ANIMAR_TODAS=1: every figure stepped in play too, seen or not (to weigh it against).</summary>
         static readonly bool StepAll = Environment.GetEnvironmentVariable("BASTION_ANIMAR_TODAS") == "1";
 
+        /// <summary>
+        /// A horde in sight (Arturo, 4/11, the performance pass's hordes): with CrowdFrom figures seen or more, the bodies
+        /// of the dead farther than ThinFrom (metres, 10 tiles) from where the camera looks are stepped every other frame,
+        /// half of them on each, so long as the frames come at 60 a second or more (a body never under 30). As an unseen
+        /// one's, only the body waits (Gameplay, 1/11): its skeleton and pose. Where it is and turns, and all the player
+        /// waits for, keep to the clock. Never one reaching or biting, nor one down, nor the living.
+        /// </summary>
+        /// <summary>(BASTION_ALTERNAN_DESDE=n: from n seen, for a lab to make a small turn's far ones wait.)</summary>
+        static readonly int CrowdFrom = int.TryParse(Environment.GetEnvironmentVariable("BASTION_ALTERNAN_DESDE"), out int from) ? from : 24;
+        const float ThinFrom = 15;
+        /// <summary>BASTION_SIN_ALTERNAR=1, or a lab: every body seen stepped each frame (to weigh it against).</summary>
+        public static bool ThinOff = Environment.GetEnvironmentVariable("BASTION_SIN_ALTERNAR") == "1";
+        /// <summary>How many were seen the frame before (a crowd or not), and whose turn it is to wait this frame.</summary>
+        int seenBefore;
+        bool oddFrame;
+        int made;
+        /// <summary>BASTION_ALTERNAN=1: once every 60 frames, how many are seen and how many wait (for a lab's log).</summary>
+        static readonly bool ThinLog = Environment.GetEnvironmentVariable("BASTION_ALTERNAN") == "1";
+        int thinLogged;
+
         void Step(float dt)
         {
             clock += dt;
@@ -301,6 +323,10 @@ namespace Bastion.Client.Units
             var eye = (Application.isPlaying && !StepAll) || CullOutOfPlay ? Camera.main : null;
             if (eye != null) GeometryUtility.CalculateFrustumPlanes(eye, frustum);
             float step = dt;
+            oddFrame = !oddFrame;
+            bool thin = eye != null && !ThinOff && seenBefore >= CrowdFrom && dt <= 1 / 60f + 1e-4f;
+            var look = thin ? Looked(eye) : default;
+            int seenNow = 0, waited = 0;
             foreach (var v in views.Values)
             {
                 dt = step;
@@ -333,6 +359,14 @@ namespace Bastion.Client.Units
                 {
                     v.missed = Mathf.Min(v.missed + dt, MissedMost);
                     v.recoil = false;
+                    continue;
+                }
+                seenNow++;
+                if (thin && v.deadKind && !v.dead && v.reachFor == null && v.oddPhase == oddFrame
+                    && new Vector2(v.root.position.x - look.x, v.root.position.z - look.z).sqrMagnitude > ThinFrom * ThinFrom)
+                {
+                    v.missed = Mathf.Min(v.missed + dt, MissedMost);
+                    waited++;
                     continue;
                 }
                 // Only the body is left behind: its skeleton and what is posed on it.
@@ -368,10 +402,22 @@ namespace Bastion.Client.Units
                 if (v.deadKind) DeadPose(v);
                 if (v.reachShare > 0 && v.reachFor != null && views.TryGetValue(v.reachFor, out var reached)) ReachPose(v, BodyChest(reached), v.reachShare, clock);
             }
-            StepFlashes(dt);
+            seenBefore = seenNow;
+            if (ThinLog && ++thinLogged % 60 == 0) Debug.Log($"[alternan] {Time.time:0.0} s: {seenNow} seen, {waited} waiting this frame (crowd {(thin ? "yes" : "no")}, dt {step * 1000:0.0} ms)");
+            // (The frame's own step: dt is the last figure's, with what it missed.)
+            StepFlashes(step);
             StepRims();
             StepMasks();
-            StepMarks(dt);
+            StepMarks(step);
+        }
+
+        /// <summary>Where the camera looks on the ground the figures stand on (its line of sight's foot).</summary>
+        Vector3 Looked(Camera eye)
+        {
+            var from = eye.transform.position;
+            var along = eye.transform.forward;
+            float ground = transform.position.y;
+            return Mathf.Abs(along.y) > 1e-4f ? from + along * Mathf.Max(0, (ground - from.y) / along.y) : from;
         }
 
         /// <summary>
@@ -541,7 +587,7 @@ namespace Bastion.Client.Units
             root.SetParent(transform, false);
             // 0.10.1: a soldier's campaign id picks the same body everywhere; a skirmish soldier's name; the enemy's id
             // (they share their template's name).
-            var view = new View { id = u.Id, template = u.Template, team = u.Team, root = root, seed = u.CampaignId ?? (u.Team == "xcom" ? u.Name : u.Id), armsKey = ArmsKey(u) };
+            var view = new View { id = u.Id, template = u.Template, team = u.Team, root = root, seed = u.CampaignId ?? (u.Team == "xcom" ? u.Name : u.Id), armsKey = ArmsKey(u), oddPhase = (made++ & 1) == 1 };
             view.deadKind = Gaits.MovesDead(u.Template);
             if (view.deadKind) (view.dealt, view.map) = (TurnOf(u), state?.MapId);
             var model = FigureOf(u, view);

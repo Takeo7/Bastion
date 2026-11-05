@@ -365,7 +365,7 @@ namespace Bastion.Net
             BroadcastRoom();
             idle[seat.Slot] = false;
             CheckTurnClock();
-            After((seat.Away ? AwayGraceMs : ReconnectGraceMs) + 100, ResyncTurn);
+            After((seat.Away ? AwayGraceMs : ReconnectGraceMs) + 100, () => ResyncTurn());
         }
 
         /// <summary>protocol.ts clientMessageSchema and commandSchema, past what the types already say: the hello's name trimmed, ids, places and names of things in bounds.</summary>
@@ -627,7 +627,7 @@ namespace Bastion.Net
                 if (other != null && other != seat && other.View != null) Send(socket, new PartnerBaseViewMessage { Slot = other.Slot, View = other.View });
             if (phase == RoomPhases.Mission && state != null) Send(socket, new SnapshotMessage { State = state });
             Persist();
-            ResyncTurn();
+            ResyncTurn(seat.Slot);
             // A proposal saved before the host restarted had no clock: it gets one when someone is back.
             CheckWaits();
             // Back in: how long the open decisions have left, and the turn clock.
@@ -943,7 +943,7 @@ namespace Bastion.Net
                 s!.DroppedAt = clock.Now;
                 s.Away = true;
             }
-            if (absent.Count > 0) After(AwayGraceMs + 100, ResyncTurn);
+            if (absent.Count > 0) After(AwayGraceMs + 100, () => ResyncTurn());
         }
 
         private void LaunchCampaignMission()
@@ -973,11 +973,11 @@ namespace Bastion.Net
             Persist();
         }
 
-        /// <summary>A disconnect may be the last thing blocking the end of the XCOM turn.</summary>
-        private void ResyncTurn()
+        /// <summary>A disconnect may be the last thing blocking the end of the XCOM turn; `back`, who has just come back (the command may go to them).</summary>
+        private void ResyncTurn(int? back = null)
         {
             if (phase != RoomPhases.Mission || state == null || ConnectedSlots().Count == 0) return;
-            var events = rules.SyncTurn(state, ActiveSlots(), rng);
+            var events = rules.SyncTurn(state, ActiveSlots(), rng, back);
             if (events.Count > 0)
             {
                 Broadcast(new EventsMessage { Events = events, Seq = state.Seq, By = null });

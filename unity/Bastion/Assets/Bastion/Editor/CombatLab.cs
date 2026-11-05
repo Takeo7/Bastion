@@ -1513,7 +1513,9 @@ namespace Bastion.EditorTools
         /// a Corredor, an Acorazado and a Hinchado), every other one walking back and forth; BASTION_SOLO_ZOMBIS=1, all of
         /// them common (Sidekick's), to weigh against. In play mode, three turns of 120 frames, the least of each turn's
         /// mean (real time a frame, in the editor on this machine). BASTION_QUIETOS=1: nobody walks (each waiting in its
-        /// own time, Ana 28/10; FigureAnimator's BASTION_SIN_FASE=1, all in step as before); BASTION_DIST its distance.
+        /// own time, Ana 28/10; FigureAnimator's BASTION_SIN_FASE=1, all in step as before); BASTION_DIST its distance;
+        /// BASTION_MIRA=x,y the camera on that tile instead (to have the crowd far from where it looks: UnitViews' far ones
+        /// every other frame, 4/11). The time a frame is the real one (a stopwatch: the capture's clock is fixed).
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Horda -shotPlay -shotCamera "Shot camera" -shotWarm 16 -shotFrames 1 -shotOut &lt;file&gt;
         /// </summary>
         public static void Horda()
@@ -1534,12 +1536,13 @@ namespace Bastion.EditorTools
                 u.Template = plain ? "zombie" : mix[k % mix.Length];
                 return Put(u, 6 + k % 8 * 2, 4 + k / 8 * 2, Math.PI / 2);
             }).ToList();
-            // (Still: the camera on the crowd's middle, at BASTION_DIST.)
-            if (still && GameObject.Find("Shot camera")?.GetComponent<Camera>() is Camera shot)
+            // (Still: the camera on the crowd's middle, at BASTION_DIST; or on BASTION_MIRA.)
+            var aimed = Environment.GetEnvironmentVariable("BASTION_MIRA")?.Split(',').Select(int.Parse).ToArray();
+            if ((still || aimed != null) && GameObject.Find("Shot camera")?.GetComponent<Camera>() is Camera shot)
             {
                 float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float tiles) ? tiles : 24;
                 int rows = (n + 7) / 8;
-                MapSpace.Aim(shot, (MapSpace.World(6, 4) + MapSpace.World(6 + Math.Min(n, 8) * 2 - 2, 4 + rows * 2 - 2)) / 2, off);
+                MapSpace.Aim(shot, aimed != null ? MapSpace.World(aimed[0], aimed[1]) : (MapSpace.World(6, 4) + MapSpace.World(6 + Math.Min(n, 8) * 2 - 2, 4 + rows * 2 - 2)) / 2, off);
             }
             sequence = async () =>
             {
@@ -1563,13 +1566,9 @@ namespace Bastion.EditorTools
                 double least = double.MaxValue;
                 for (int turn = 0; turn < 3; turn++)
                 {
-                    float spent = 0;
-                    for (int k = 0; k < 120; k++)
-                    {
-                        await Awaitable.NextFrameAsync();
-                        spent += Time.unscaledDeltaTime;
-                    }
-                    least = Math.Min(least, spent / 120 * 1000);
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
+                    for (int k = 0; k < 120; k++) await Awaitable.NextFrameAsync();
+                    least = Math.Min(least, watch.Elapsed.TotalMilliseconds / 120);
                 }
                 on = false;
                 var mixed = state.Units.GroupBy(u => u.Template).Select(g => $"{g.Key} ×{g.Count()}");

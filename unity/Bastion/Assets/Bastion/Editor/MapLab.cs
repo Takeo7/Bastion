@@ -560,6 +560,10 @@ namespace Bastion.EditorTools
             var state = medical != null ? Medical(medical) : made != null && made.Length >= 2 ? Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination", made.Length > 3 ? made[3] : null) : Golden(name);
             // BASTION_CLIMA=drizzle|downpour|storm|snowfall|blizzard (or ClimaLab's WeatherOverride): the mission's rain or snow.
             if ((WeatherOverride ?? Environment.GetEnvironmentVariable("BASTION_CLIMA")) is string weather) state.Weather = weather;
+            // BASTION_DENTRO=x,y: the squad's first soldier there (in a building, to see it cut away round them: BASTION_SELECT=1).
+            if (Environment.GetEnvironmentVariable("BASTION_DENTRO")?.Split(',').Select(int.Parse).ToArray() is int[] inside && inside.Length == 2
+                && state.Units.FirstOrDefault(u => u.Alive && u.Team == "xcom") is Unit first)
+                first.Pos = new Pos { X = inside[0], Y = inside[1], Z = 0 };
             // BASTION_BENGALAS=x,y,radius;…: Bengalas (radius 3 or more) and fires (less) burning there, lighting what they reach
             // as the engine's (Los.LightTiles from the lamps' height), for the night's glow and pools.
             foreach (string spec in (Environment.GetEnvironmentVariable("BASTION_BENGALAS") ?? "").Split(';').Where(v => v.Length > 0))

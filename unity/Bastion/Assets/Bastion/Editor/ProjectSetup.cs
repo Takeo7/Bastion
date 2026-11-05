@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -70,6 +71,11 @@ namespace Bastion.EditorTools
                 var level = levels.GetArrayElementAtIndex(k);
                 level.FindPropertyRelative("name").stringValue = names[k];
                 level.FindPropertyRelative("customRenderPipeline").objectReferenceValue = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(pipelines[k]);
+                // Every level in the apps (5/11, UI's test of the 0.11.9: «Bajo» kept the template's «Mobile» off Standalone
+                // since a679b18, and in the app «Bajos» was «Medio»).
+                var excluded = level.FindPropertyRelative("excludedTargetPlatforms");
+                for (int i = excluded.arraySize - 1; i >= 0; i--)
+                    if (excluded.GetArrayElementAtIndex(i).stringValue == "Standalone") excluded.DeleteArrayElementAtIndex(i);
             }
             // The editor (and the captures) as before: on PC's pipeline, now «Alto»; every platform's default «Alto»
             // (UI's Ajustes sets the player's own at start: «Medio» on the Mac).
@@ -78,7 +84,13 @@ namespace Bastion.EditorTools
             for (int k = 0; k < defaults.arraySize; k++) defaults.GetArrayElementAtIndex(k).FindPropertyRelative("second").intValue = 2;
             quality.ApplyModifiedPropertiesWithoutUndo();
             AssetDatabase.SaveAssets();
-            Debug.Log($"[project] {PlayerSettings.companyName} / {PlayerSettings.productName} ({PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Standalone)}); frame timing {PlayerSettings.enableFrameTimingStats}; levels {string.Join(", ", QualitySettings.names)}");
+            Debug.Log($"[project] {PlayerSettings.companyName} / {PlayerSettings.productName} ({PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Standalone)}); frame timing {PlayerSettings.enableFrameTimingStats}; levels {string.Join(", ", QualitySettings.names)}, in the apps {AppLevels()}");
+        }
+
+        /// <summary>The quality levels a Mac's, Windows' or Linux's app has, by name (RendimientoLab logs them too).</summary>
+        internal static string AppLevels()
+        {
+            return string.Join(", ", QualitySettings.GetActiveQualityLevelsForPlatform("Standalone").Select(i => QualitySettings.names[i]));
         }
     }
 }
