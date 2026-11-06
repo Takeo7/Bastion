@@ -30,9 +30,17 @@ namespace Bastion.UI.Combat
             var mine = HasCommand();
             var bar = new ActionBarView { Abilities = BarKeys() };
             var u = Unit();
-            if (u != null && Commands(u) && CanAct() && !mine) bar.Lock = $"Turno de {PlayerName(s.Command)}: puedes apuntar y planear";
+            if (u != null && Commands(u) && CanAct() && !mine) bar.Lock = HudText.Turn.PartnerLock(PlayerName(s.Command));
             // Why the cards rest in the enemy's turn: the bar says it over itself (hud.ts setTurn).
             else if (s.Outcome == null && (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien)) bar.Lock = HudText.Turn.EnemyLock;
+            // The picked soldier's movement left, before the keys (Arturo, 5/11 #14).
+            var shownUnit = u != null ? UnitById(Shown, u.Id) ?? u : null;
+            if (shownUnit != null && shownUnit.Team == Teams.Xcom && shownUnit.Automaton == null && Paths.FullMoves(shownUnit) > 0)
+            {
+                bar.Moves = Paths.MoveBudget(shownUnit);
+                bar.MovesMax = Paths.FullMoves(shownUnit);
+                bar.MovesTip = HudText.Moves.Tip(bar.Moves, bar.MovesMax);
+            }
             Hud.SetAbilities(bar);
             Hud.SetCall(CallView());
             Hud.SetTarget(TargetPanel());
@@ -41,7 +49,8 @@ namespace Bastion.UI.Combat
             var waiting = partner != null && busy.Contains(partner.Slot) && !s.Ready[partner.Slot] ? partner.Name : null;
             var idle = IdleSoldiers();
             var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : !mine ? "waiting" : EndArmed && idle > 0 ? "confirm" : "act";
-            var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} con acciones" : !mine && !ready ? PlayerName(s.Command) : waiting;
+            // (With actions or movement left: the turn ends by itself only when none has either, Arturo 5/11 #14; Lore's words.)
+            var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : !mine && !ready ? PlayerName(s.Command) : waiting;
             Hud.SetEndTurn(new EndTurnView { Mode = endMode, Detail = detail });
         }
 
@@ -90,6 +99,8 @@ namespace Bastion.UI.Combat
             Hud.SetSelected(shown != null && shown.Alive ? UnitPanel(shown) : null);
             RefreshFlags();
             RefreshMarks();
+            // The enemies' sight follows what is seen (the button on: who comes into sight, who moves); worked out per enemy only when it changed.
+            ShowVision();
         }
 
         // ------------------------------------------------------- the mission's marks
@@ -222,10 +233,14 @@ namespace Bastion.UI.Combat
             if (Hud == null) return;
             var v = Shown;
             var view = new FlagsView();
-            // Only those that shoot: cover means nothing against the dead, who come to bite (docs/ZOMBIS-PRIMERO.md).
-            var watchers = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && Visible(a) && AbilityTexts.ShootsFromRange(a)).ToList();
+            // Those that shoot, and the dead too now: cover hides from them (Arturo, 5/11 #4; it meant nothing against a bite).
+            var watchers = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && Visible(a)).ToList();
             var hovered = hover != null ? Grid.UnitAt(v, hover) : null;
             var tags = EnemyTags();
+            var sees = SeeingPicked();
+            // Aiming: the other targets, each with its odds (over the shoulder, their only flag; a click there aims at it: #11).
+            var options = mode == Mode.Target && modeAbility != null ? TargetOptions(modeAbility) : null;
+            var attack = modeAbility != null && Content.IsAttack(modeAbility);
             var carrier = v.Mission.Item?.Carrier;
             foreach (var u in v.Units)
             {
@@ -265,50 +280,181 @@ namespace Bastion.UI.Combat
                 {
                     f.HoverKind = t.kind;
                     f.HoverText = t.text;
+                    f.Eye = t.eye;
                 }
+                // The enemies' sight on, and no move under the pointer to say who would see the picked one there: a red
+                // eye over those that see it now (Arturo, 5/11 #6), before the odds on the one under the pointer.
+                if (f.Eye == null && !hoverDest && sees.Contains(u.Id)) f.Eye = "sees";
                 f.Target = mode == Mode.Target && targetId == u.Id && u.Team != Teams.Xcom;
+                if (options != null && !f.Target && u.Team != Teams.Xcom && options.FirstOrDefault(o => o.Unit.Id == u.Id) is TargetOption other)
+                {
+                    f.Other = true;
+                    f.HoverKind = "aim";
+                    f.HoverText = attack ? $"{other.Hit} %" : u.Name;
+                }
                 view.Flags.Add(f);
             }
             Hud.SetFlags(view);
         }
 
-        (string key, List<Pos> seen, List<Pos> noticed)? vision;
+        /// <summary>One enemy's field of view as last worked out (SightOf): its key, the tiles it sees and those where it would notice one of ours.</summary>
+        readonly Dictionary<string, (string key, List<Pos> seen, List<Pos> noticed)> sights = new Dictionary<string, (string, List<Pos>, List<Pos>)>();
+        /// <summary>What is on the ground now (ShowVision): the enemies' keys, and the legend's state.</summary>
+        string visionKey;
+        (bool shown, bool noticed, bool many) legend;
+
+        /// <summary>The enemies' sight's button on (Arturo, 5/11 #6): every one in sight's at once. It stays on, mission after mission.</summary>
+        static bool sightAll;
+
+        /// <summary>The enemies' sight's button (or V): on, off; the ground and the flags again.</summary>
+        void ToggleSight()
+        {
+            sightAll = !sightAll;
+            Debug.Log($"[vista] zombis {(sightAll ? "sí" : "no")}");
+            ShowVision();
+            RefreshFlags();
+        }
 
         /// <summary>
-        /// An enemy under the pointer: what it sees (Arturo, 17/10: the dead see in a cone; game.ts visionOf). Not the one
-        /// aimed at: its red over the ground drowned the target's own mark (Arturo, 23/10 #2). Worked out once per enemy and state.
+        /// What the enemies see on the ground: the one under the pointer's (Arturo, 17/10: the dead see in a cone; game.ts
+        /// visionOf), or, the button on and none under it, every one in sight's at once in our turn (Arturo, 5/11 #6). Not
+        /// aiming: its red over the ground drowned the target's own mark (Arturo, 23/10 #2). The legend over the button says
+        /// what the red is (#9).
         /// </summary>
         void ShowVision()
         {
             if (AimMarks == null) return;
             var v = Shown;
             var a = hover != null ? Grid.UnitAt(v, hover) : null;
-            if (a == null || a.Team != Teams.Alien || !Visible(a) || mode == Mode.Target || v.Outcome != null)
+            var who = new List<Unit>();
+            if (mode != Mode.Target && v.Outcome == null)
             {
-                AimMarks.ShowVision(null, null, null);
+                if (a != null && a.Alive && a.Team == Teams.Alien && Visible(a)) who.Add(a);
+                else if (sightAll && CanAct()) who.AddRange(v.Units.Where(e => e.Alive && e.Team == Teams.Alien && Visible(e)));
+            }
+            if (who.Count == 0)
+            {
+                if (visionKey != null) AimMarks.ShowVision(null, null, null);
+                visionKey = null;
+                legend = default;
                 return;
             }
-            var key = $"{a.Id}:{v.Seq}:{v.Concealed}:{a.Pos.X},{a.Pos.Y},{a.Pos.Z}:{a.Facing}";
-            if (vision?.key != key)
+            var world = SightWorld(v);
+            var parts = who.Select(e => SightOf(v, e, world)).ToList();
+            var key = string.Join("|", parts.Select(x => x.key));
+            if (key == visionKey) return;
+            visionKey = key;
+            // Several at once: each tile once (their red doesn't pile up), and the border round all of it.
+            var seen = new List<Pos>();
+            var noticed = new List<Pos>();
+            var inSeen = new HashSet<(int, int, int)>();
+            var inNoticed = new HashSet<(int, int, int)>();
+            foreach (var x in parts)
             {
-                // As far as it sees in this weather (Los.SightIn: a storm cuts it); SightTo below, tile by tile, at night too.
-                var range = Los.SightIn(v, a);
-                var seen = new List<Pos>();
-                var noticed = new List<Pos>();
-                for (var y = Math.Max(0, a.Pos.Y - range); y <= Math.Min(v.Height - 1, a.Pos.Y + range); y++)
-                for (var x = Math.Max(0, a.Pos.X - range); x <= Math.Min(v.Width - 1, a.Pos.X + range); x++)
-                {
-                    if (x == a.Pos.X && y == a.Pos.Y) continue;
-                    var p = new Pos { X = x, Y = y, Z = a.Pos.Z };
-                    // One of ours hiding there, at half of it (Esconderse, Ana's #1 of 1/11: Los.HiddenShare, as Los.CanSee has it).
-                    var share = Grid.UnitAt(v, p) is Unit there ? Los.HiddenShare(a, there) : 1;
-                    if (!Grid.CanStandOn(Grid.KindAt(v, p)) || !Los.InViewCone(a, p) || Los.SightOrigin(v, a.Pos, p, Los.SightTo(v, a, p) * share, Los.WindowReachOf(a.Team)) == null) continue;
-                    seen.Add(p);
-                    if (v.Concealed && Grid.Distance(a.Pos, p) <= Los.DetectionTo(v, a, p) * share) noticed.Add(p);
-                }
-                vision = (key, seen, noticed);
+                foreach (var p in x.seen)
+                    if (inSeen.Add((p.X, p.Y, p.Z))) seen.Add(p);
+                foreach (var p in x.noticed)
+                    if (inNoticed.Add((p.X, p.Y, p.Z))) noticed.Add(p);
             }
-            AimMarks.ShowVision(v, vision.Value.seen, vision.Value.noticed);
+            AimMarks.ShowVision(v, seen, noticed, who.Count > 1);
+            legend = (true, noticed.Count > 0, who.Count > 1);
+        }
+
+        /// <summary>
+        /// What a field of view hangs on besides its viewer's place and facing: the walls, doors and boards of every storey,
+        /// the lights, the dark, the weather, whether the squad is hidden, and which of ours hide where. While it stands, no
+        /// enemy's is worked out again (#6: a horde of 54 took some 50 ms).
+        /// </summary>
+        static string SightWorld(GameState v)
+        {
+            unchecked
+            {
+                var h = 17;
+                void Add(int x) => h = h * 31 + x;
+                foreach (var t in v.Tiles) Add(t?.GetHashCode() ?? 0);
+                foreach (var d in v.Decor ?? new List<int>()) Add(d);
+                foreach (var level in v.Levels ?? new List<Level>())
+                {
+                    foreach (var t in level.Tiles) Add(t?.GetHashCode() ?? 0);
+                    foreach (var d in level.Decor ?? new List<int>()) Add(d);
+                }
+                Add(v.Lights?.Count ?? 0);
+                Add(v.Weather?.GetHashCode() ?? 0);
+                Add(v.Mission.Night == true ? 1 : 0);
+                Add(v.Concealed ? 1 : 0);
+                foreach (var u in v.Units)
+                    if (u.Alive && u.Hidden == true) Add(u.Pos.X * 4096 + u.Pos.Y * 8 + u.Pos.Z);
+                return h.ToString();
+            }
+        }
+
+        /// <summary>
+        /// One enemy's field of view (`world`: SightWorld's): the tiles in its cone and its sight, and, the squad hidden, where
+        /// it would notice one of ours; worked out again only when it moves, turns or the world changes.
+        /// </summary>
+        (string key, List<Pos> seen, List<Pos> noticed) SightOf(GameState v, Unit a, string world)
+        {
+            var key = $"{a.Id}:{world}:{a.Pos.X},{a.Pos.Y},{a.Pos.Z}:{a.Facing}";
+            if (sights.TryGetValue(a.Id, out var was) && was.key == key) return was;
+            // As far as it sees in this weather (Los.SightIn: a storm cuts it); SightTo below, tile by tile, at night too.
+            var range = Los.SightIn(v, a);
+            var seen = new List<Pos>();
+            var noticed = new List<Pos>();
+            for (var y = Math.Max(0, a.Pos.Y - range); y <= Math.Min(v.Height - 1, a.Pos.Y + range); y++)
+            for (var x = Math.Max(0, a.Pos.X - range); x <= Math.Min(v.Width - 1, a.Pos.X + range); x++)
+            {
+                if (x == a.Pos.X && y == a.Pos.Y) continue;
+                var p = new Pos { X = x, Y = y, Z = a.Pos.Z };
+                // Behind cover from it, less of it (Arturo, 5/11 #4: Los.CoverShare), and one of ours hiding there, whichever
+                // hides more (Los.ConcealShare, as the rules have it).
+                var share = Grid.UnitAt(v, p) is Unit there && there.Team == Teams.Xcom ? Los.ConcealShare(v, a, there, p) : Los.CoverShare(v, a, p, Teams.Xcom);
+                if (!Grid.CanStandOn(Grid.KindAt(v, p)) || !Los.InViewCone(a, p) || Los.SightOrigin(v, a.Pos, p, Los.SightTo(v, a, p) * share, Los.WindowReachOf(a.Team)) == null) continue;
+                seen.Add(p);
+                if (v.Concealed && Grid.Distance(a.Pos, p) <= Los.DetectionTo(v, a, p) * share) noticed.Add(p);
+            }
+            var made = (key, seen, noticed);
+            sights[a.Id] = made;
+            return made;
+        }
+
+        /// <summary>The enemies' sight's button and its legend, as things stand (each frame: SightButton draws only what changed).</summary>
+        SightView SightNow()
+        {
+            var battle = State != null && Shown.Outcome == null && !Film && Rig != null && !Rig.Overhead && !Rig.CloseUp && !Rig.Away;
+            return new SightView { Button = battle, On = sightAll, Legend = battle && legend.shown, Noticed = legend.noticed, Many = legend.many };
+        }
+
+        /// <summary>
+        /// The enemies in sight that see the picked soldier now, with the enemies' sight on in our turn (Arturo, 5/11 #6: a
+        /// red eye over each).
+        /// </summary>
+        HashSet<string> SeeingPicked()
+        {
+            var ids = new HashSet<string>();
+            var v = Shown;
+            var u = UnitById(v, picked);
+            if (!sightAll || u == null || !u.Alive || u.Team != Teams.Xcom || !CanAct() || v.Outcome != null) return ids;
+            foreach (var a in v.Units)
+                if (a.Alive && a.Team == Teams.Alien && Visible(a) && Los.CanSee(v, a, u)) ids.Add(a.Id);
+            return ids;
+        }
+
+        /// <summary>Who would see whom where, worked out for the pointer's tile (WatchersAt): its key and the enemies' ids.</summary>
+        (string key, HashSet<string> ids) watchersAt;
+
+        /// <summary>
+        /// The enemies in sight that would see `u` standing on `at` (Arturo, 5/11 #5: a grey eye over each as its move is
+        /// picked): the rules' (Los.Watchers: in their cone, as far as they see there or, the squad hidden, notice it; cut
+        /// by cover and hiding, #4), of those the squad sees.
+        /// </summary>
+        HashSet<string> WatchersAt(Unit u, Pos at)
+        {
+            var s = State;
+            var key = $"{s.Seq}:{u.Id}:{at.X},{at.Y},{at.Z}";
+            if (watchersAt.key == key) return watchersAt.ids;
+            var ids = new HashSet<string>(Los.Watchers(s, u, at).Where(Visible).Select(a => a.Id));
+            watchersAt = (key, ids);
+            return ids;
         }
 
         /// <summary>
@@ -316,33 +462,43 @@ namespace Bastion.UI.Combat
         /// on a tile the picked one can move to, whom it would see from there and the odds if it could still shoot;
         /// with a throw armed, what it takes off each one caught (blastTags).
         /// </summary>
-        Dictionary<string, (string kind, string text)> EnemyTags()
+        /// <summary>The pointer on a tile the picked one can move to (EnemyTags): the eyes over the enemies are that tile's.</summary>
+        bool hoverDest;
+
+        Dictionary<string, (string kind, string text, string eye)> EnemyTags()
         {
-            var tags = new Dictionary<string, (string, string)>();
+            var tags = new Dictionary<string, (string, string, string)>();
+            hoverDest = false;
             var u = Unit();
             var tile = hover;
             if (u == null || tile == null || !CanAct() || !Commands(u) || u.Id == sent) return tags;
             if (mode == Mode.Tile && HandArmed() == null) return BlastTags(u, modeAbility, tile);
-            if (mode != Mode.Move || !Abilities.AbilitiesOf(u).Contains(AbilityIds.Shoot)) return tags;
+            if (mode != Mode.Move) return tags;
+            var shoots = Abilities.AbilitiesOf(u).Contains(AbilityIds.Shoot);
             var occupant = Grid.UnitAt(State, tile);
             if (occupant != null)
             {
-                if (occupant.Team != Teams.Alien || !Visible(occupant)) return tags;
+                if (!shoots || occupant.Team != Teams.Alien || !Visible(occupant)) return tags;
                 var shot = Aim.PreviewShot(State, u, occupant, new ShotOptions { Ability = AbilityIds.Shoot });
-                tags[occupant.Id] = shot != null ? ("aim", $"{shot.Hit} % · crít. {Math.Min(shot.Crit, shot.Hit)} %") : ("none", "Sin línea de tiro");
+                tags[occupant.Id] = shot != null ? ("aim", $"{shot.Hit} % · crít. {Math.Min(shot.Crit, shot.Hit)} %", null) : ("none", "Sin línea de tiro", null);
                 return tags;
             }
             var dest = tiles?.FirstOrDefault(t => Same(t.Pos, tile));
             if (dest == null) return tags;
-            var canShoot = !dest.Dash && u.Ap - 1 >= Abilities.ApNeeded(u, AbilityIds.Shoot);
+            hoverDest = true;
+            // Moving takes no actions now (Arturo, 5/11 #14): the odds from there while it has the shot's.
+            var canShoot = shoots && u.Ap >= Abilities.ApNeeded(u, AbilityIds.Shoot);
+            // Those that would see it there, a grey eye (Arturo, 5/11 #5), in place of «A la vista» over those it would
+            // see (#8); the odds stay while it could still shoot.
+            var watching = WatchersAt(u, tile);
             foreach (var a in State.Units)
             {
                 if (!a.Alive || a.Team != Teams.Alien || !Visible(a)) continue;
-                var shot = Aim.PreviewShot(State, u, a, new ShotOptions { Ability = AbilityIds.Shoot, From = tile });
-                if (shot == null) continue;
-                var chance = canShoot ? $"{shot.Hit} %" : "";
+                var shot = canShoot ? Aim.PreviewShot(State, u, a, new ShotOptions { Ability = AbilityIds.Shoot, From = tile }) : null;
+                var eye = watching.Contains(a.Id) ? "would" : null;
+                if (shot == null && eye == null) continue;
                 // No «Flanco» over anyone (Ana, Arturo 01/11 #2; over the dead it went on 31/10 #13): the shot's panel says it.
-                tags[a.Id] = ("sight", chance != "" ? chance : "A la vista");
+                tags[a.Id] = ("sight", shot != null ? $"{shot.Hit} %" : null, eye);
             }
             return tags;
         }
@@ -354,9 +510,9 @@ namespace Bastion.UI.Combat
         /// A grenade aimed: what it would take off everyone caught, over their flags (playtest: «no sé dónde está el daño
         /// que hago»); enemies with whether it kills them, our own in warning.
         /// </summary>
-        Dictionary<string, (string kind, string text)> BlastTags(Unit u, string ability, Pos tile)
+        Dictionary<string, (string kind, string text, string eye)> BlastTags(Unit u, string ability, Pos tile)
         {
-            var tags = new Dictionary<string, (string, string)>();
+            var tags = new Dictionary<string, (string, string, string)>();
             var centre = AbilityTexts.ThrowTile(u, ability, tile);
             if (!Abilities.CanTargetTile(State, u, ability, centre)) return tags;
             // Controlled detonation leaves the grenadier's squad out of the blast.
@@ -368,8 +524,8 @@ namespace Bastion.UI.Combat
                 var d = Rules.AbilityDamage(State, u, ability, t);
                 if (d == null) return tags;
                 var text = $"Daño {AbilityTexts.Span(d.Hit)}";
-                if (t.Team == Teams.Xcom) tags[t.Id] = ("flank", $"¡Aliado! {text}");
-                else tags[t.Id] = ("aim", string.Join(" · ", new[] { text, AbilityTexts.Lethality(d, t) }.Where(x => x != null)));
+                if (t.Team == Teams.Xcom) tags[t.Id] = ("flank", $"¡Aliado! {text}", null);
+                else tags[t.Id] = ("aim", string.Join(" · ", new[] { text, AbilityTexts.Lethality(d, t) }.Where(x => x != null)), null);
             }
             return tags;
         }
@@ -381,11 +537,12 @@ namespace Bastion.UI.Combat
         {
             var view = new PlayersView();
             var busy = AbilityTexts.BusySlots(v);
+            var acting = AbilityTexts.ActingSlots(v);
             var alone = !Players.Any(p => p.Slot != MySlot && p.Connected);
             foreach (var p in Players)
             {
                 var holds = commander == p.Slot;
-                var status = !p.Connected ? HudText.Players.Offline : p.Away == true ? HudText.Players.Away : alone || holds ? "" : v.Ready[p.Slot] ? HudText.Players.Ready : busy.Contains(p.Slot) ? HudText.Players.WithActions : HudText.Players.NoActions;
+                var status = !p.Connected ? HudText.Players.Offline : p.Away == true ? HudText.Players.Away : alone || holds ? "" : v.Ready[p.Slot] ? HudText.Players.Ready : busy.Contains(p.Slot) ? (acting.Contains(p.Slot) ? HudText.Players.WithActions : HudText.Players.WithMoves) : HudText.Players.NoActions;
                 view.Players.Add(new PlayerView { Slot = p.Slot, Name = p.Name, Color = p.Color, Me = p.Slot == MySlot, Connected = p.Connected, Ready = v.Ready[p.Slot], Command = holds, Status = status });
             }
             return view;
@@ -436,6 +593,9 @@ namespace Bastion.UI.Combat
                     Title = theirs ? HudText.Squad.TheirsCommanded : HudText.Squad.Select,
                     Ap = u.Ap,
                     ApMax = Math.Max(Content.ApPerTurnOf(u), u.Ap),
+                    // The movement left, a piece a tile (Arturo, 5/11 #14); not a turret's.
+                    Moves = u.Automaton == null && u.Alive ? Paths.MoveBudget(u) / Paths.CostOrtho : 0,
+                    MovesMax = u.Automaton == null && u.Alive ? Paths.FullMoves(u) / Paths.CostOrtho : 0,
                 };
                 void Tag(bool on, string text, string kind, string tip = null)
                 {
@@ -531,6 +691,8 @@ namespace Bastion.UI.Combat
             {
                 view.Stats.Add(new StatView { Kind = "hp", Tip = $"Salud {u.Hp}/{u.MaxHp}", Filled = u.Hp, Total = u.MaxHp });
                 view.Stats.Add(new StatView { Kind = "ap", Tip = $"Acciones {u.Ap}/{Content.ApPerTurnOf(u)}", Filled = u.Ap, Total = Math.Max(Content.ApPerTurnOf(u), u.Ap) });
+                if (u.Team == Teams.Xcom && u.Automaton == null && Paths.FullMoves(u) > 0)
+                    view.Stats.Add(new StatView { Kind = "moves", Tip = HudText.Moves.Tip(Paths.MoveBudget(u), Paths.FullMoves(u)), Filled = Paths.MoveBudget(u) / Paths.CostOrtho, Total = Paths.FullMoves(u) / Paths.CostOrtho });
             }
             // The spare magazines after the clip (docs/FASE7.md): «+3», red at none; the enemies don't count theirs.
             if (clip > 0)
@@ -810,8 +972,6 @@ namespace Bastion.UI.Combat
             if (s.Units.Any(u => u.Alive && u.Team == Teams.Alien && !u.Objective && !Content.Templates[u.Template].Undead))
             {
                 Hud.Log(Lore.LivingTip, FeudColor);
-                // Said, so the squad's cover shows from now (CoverMatters).
-                shotsSeen = true;
             }
             if (s.Mission.Night == true) Hud.Log(string.Join(" ", Lore.NightText.Rules), "#2a4a7a");
         }

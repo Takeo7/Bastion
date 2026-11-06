@@ -43,6 +43,10 @@ namespace Bastion.Engine
         public string Unit { get; set; } = "";
         public List<Pos> Path { get; set; } = new List<Pos>();
         public int Ap { get; set; }
+        /// <summary>Movement spent, in path cost (Paths.CostOrtho a tile; Arturo, 5/11 #14: movement apart from the actions); on the walk's first segment.</summary>
+        public int? Moves { get; set; }
+        /// <summary>A run: past Content.QuietTiles of the turn's movement (Paths.IsRun). It is heard, and drawn at a run.</summary>
+        public bool? Run { get; set; }
     }
 
     /// <summary>Real time (docs/TIEMPO-REAL.md): the clock, on every tick of the host's.</summary>

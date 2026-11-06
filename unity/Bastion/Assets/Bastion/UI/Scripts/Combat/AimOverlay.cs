@@ -399,9 +399,10 @@ namespace Bastion.UI.Combat
         /// One enemy's field of view (overlays.ts setVision; Arturo, 17/10): the tiles it sees in its cone and its line of
         /// sight washed faintly in sight's red, those where it would notice a hidden soldier more; bordered as a soldier's
         /// reach, with its corners rounded (Ana's #14, Arturo 29/10; the web had dropped its square edge line, 18/10 #30).
-        /// Null, none. Apart from what is armed (Clear leaves it).
+        /// Null, none. Apart from what is armed (Clear leaves it). `many`: several enemies' at once (the sight's button, Arturo
+        /// 5/11 #6), fainter, as it covers much of the ground.
         /// </summary>
-        public void ShowVision(GameState s, IList<Pos> seen, IList<Pos> noticed)
+        public void ShowVision(GameState s, IList<Pos> seen, IList<Pos> noticed, bool many = false)
         {
             build.Clear();
             if (s != null && seen != null)
@@ -415,9 +416,9 @@ namespace Bastion.UI.Combat
                         build.Flat(a.x, a.z, a.x + T, a.z - T, a.y, new Color32(red.r, red.g, red.b, alpha));
                     }
                 }
-                Wash(seen, 0x29, 0.015f);
-                Wash(noticed, 0x38, 0.016f);
-                MoveOverlay.Border(build, s, seen, red, 0.18f, 0.6f);
+                Wash(seen, (byte)(many ? 0x14 : 0x29), 0.015f);
+                Wash(noticed, (byte)(many ? 0x24 : 0x38), 0.016f);
+                MoveOverlay.Border(build, s, seen, red, many ? 0.14f : 0.18f, 0.6f);
             }
             vision.sharedMesh = build.Build(vision.sharedMesh);
         }

@@ -676,27 +676,29 @@ namespace Bastion.Engine.Tests
             Assert.True(barricades > 0);
         }
 
-        [Fact(DisplayName = "mission timers › keep the values tuned on 36-tile maps and add turns on bigger ones, more when the objective comes back")]
+        [Fact(DisplayName = "mission timers › only the sabotage has one, tuned on 36-tile maps, with turns added on bigger ones")]
         public void KeepTheValuesTunedOn36TileMaps()
         {
+            // Arturo, 5/11: a clock only where it makes sense, the sabotage's alarm; La Lata waits for the rest.
             var turns = Setup.MissionTurnsByKind;
-            Assert.Equal(turns[MissionKinds.Hack], Setup.MissionTurns(MissionKinds.Hack, 36));
-            Assert.Equal(turns[MissionKinds.Rescue], Setup.MissionTurns(MissionKinds.Rescue, 30));
-            Assert.Null(Setup.MissionTurns(MissionKinds.Elimination, 48));
-            Assert.Equal(2, Setup.MissionTurns(MissionKinds.Hack, 48)!.Value - turns[MissionKinds.Hack]);
+            Assert.Equal(new[] { MissionKinds.Sabotage }, turns.Keys.ToArray());
+            Assert.Equal(turns[MissionKinds.Sabotage], Setup.MissionTurns(MissionKinds.Sabotage, 36));
+            foreach (var kind in new[] { MissionKinds.Elimination, MissionKinds.Recovery, MissionKinds.Hack, MissionKinds.Rescue, MissionKinds.Scavenge })
+                Assert.Null(Setup.MissionTurns(kind, 48));
             Assert.Equal(2, Setup.MissionTurns(MissionKinds.Sabotage, 48)!.Value - turns[MissionKinds.Sabotage]);
-            Assert.Equal(3, Setup.MissionTurns(MissionKinds.Recovery, 48)!.Value - turns[MissionKinds.Recovery]);
-            Assert.Equal(3, Setup.MissionTurns(MissionKinds.Rescue, 48)!.Value - turns[MissionKinds.Rescue]);
-            // A generated map's, by the walk its mission takes (docs/MAPAS.md §6): a 48 map's today at its median walk, no fewer
-            // than on a 36 map.
-            Assert.Equal(Setup.MissionTurns(MissionKinds.Recovery, Mapgen.GenSize), Setup.RouteTurns(MissionKinds.Recovery, 83));
-            Assert.Equal(turns[MissionKinds.Hack], Setup.RouteTurns(MissionKinds.Hack, 40));
+            // A generated map's, by the walk its mission takes (docs/MAPAS.md §6): no fewer than on a 36 map.
+            Assert.Equal(turns[MissionKinds.Sabotage], Setup.RouteTurns(MissionKinds.Sabotage, 40));
             Assert.True(Setup.RouteTurns(MissionKinds.Sabotage, 120)!.Value > Setup.MissionTurns(MissionKinds.Sabotage, Mapgen.GenSize)!.Value);
             var s = Setup.CreateMission(Generated(Biomes.City, 5, new List<int> { 0 }, 5, MissionKinds.Recovery));
-            var route = Mapgen.GenerateLayout(new GenOptions { Biome = Biomes.City, Kind = MissionKinds.Recovery, PodSizes = new List<int> { 3 }, Seed = 5 }).Route!.Value;
-            Assert.Equal(Setup.RouteTurns(MissionKinds.Recovery, route), s.Mission.TurnsLeft);
-            var plaza = Setup.CreateMission(new MissionOptions { Map = MapSource.Handmade("plaza"), Slots = new List<int> { 0 }, Rng = new Rng(5), Kind = MissionKinds.Recovery });
-            Assert.Equal(turns[MissionKinds.Recovery], plaza.Mission.TurnsLeft);
+            Assert.Null(s.Mission.TurnsLeft);
+            // One saved half played with its clock loses it as it is loaded.
+            s.Mission.TurnsLeft = 7;
+            Setup.UpToDate(s);
+            Assert.Null(s.Mission.TurnsLeft);
+            var plaza = Setup.CreateMission(new MissionOptions { Map = MapSource.Handmade("plaza"), Slots = new List<int> { 0 }, Rng = new Rng(5), Kind = MissionKinds.Sabotage });
+            Assert.Equal(turns[MissionKinds.Sabotage], plaza.Mission.TurnsLeft);
+            Setup.UpToDate(plaza);
+            Assert.Equal(turns[MissionKinds.Sabotage], plaza.Mission.TurnsLeft);
         }
 
         // ------------------------------------------------------------ doors (playtest 23/10 #11)

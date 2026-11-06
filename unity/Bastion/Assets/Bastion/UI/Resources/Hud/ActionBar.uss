@@ -192,6 +192,32 @@
     opacity: 0.55;
 }
 
+/* The movement left before the keys (Arturo, 5/11 #14): a plate a key's size, its tiles in the reach's sky blue over
+   «de 8»; dimmed at none. */
+.bar-moves {
+    width: 52px;
+    height: 60px;
+    margin: 0 6px 0 2.5px;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--m-steel);
+}
+
+.bar-moves__value {
+    font-size: 24px;
+    color: #7fd4fa;
+}
+
+.bar-moves__of {
+    margin-top: -2px;
+    font-size: 11px;
+    color: var(--t-muted);
+}
+
+.bar-moves--none .bar-moves__value {
+    color: var(--t-muted);
+}
+
 /* ============================================================== the card */
 
 .ability-card {

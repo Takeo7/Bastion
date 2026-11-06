@@ -130,7 +130,8 @@ namespace Bastion.Engine
         {
             var enemies = Grid.Combatants(s, Teams.Xcom);
             if (enemies.Count == 0) return null;
-            var reach = Paths.ComputeReach(s, u, Paths.CostPerAp(u));
+            // A free move, whatever movement it spent last turn: its whole turn's (Arturo, 5/11 #14).
+            var reach = Paths.ComputeReach(s, u, Paths.FullMoves(u));
             var best = BestCandidate(s, u, reach, (p) => TileScore(s, u, p, enemies, 0.1));
             return best != null && !Grid.SamePos(best.Pos, u.Pos) ? best.Pos : null;
         }
@@ -252,7 +253,8 @@ namespace Bastion.Engine
         private static WalkPlan PlanWalk(GameState s, Unit u, Pos goal, double minGap = 0, int actions = 1)
         {
             var ahead = Grid.StoreysApart(s, u.Pos, goal) > 0 || s.Mission.Siege != null ? LookaheadStoreys : Lookahead;
-            Reach ReachOf(bool round) => Paths.ComputeReach(s, u, Paths.CostPerAp(u) * Math.Max(ahead, actions), u.Pos, round ? null : (Func<Unit, bool>)((o) => !Content.HostileTo(o, u)));
+            // Planned as far ahead as turns of its whole movement go; walked as far as what it has left (Arturo, 5/11 #14).
+            Reach ReachOf(bool round) => Paths.ComputeReach(s, u, Paths.FullMoves(u) * Math.Max(ahead, actions), u.Pos, round ? null : (Func<Unit, bool>)((o) => !Content.HostileTo(o, u)));
             var through = ReachOf(false);
             var dest = ClosestTo(s, u, through, goal, minGap);
             var path = dest != null ? Paths.BuildPath(s, u, through, dest) : null;
@@ -463,6 +465,11 @@ namespace Bastion.Engine
             var s = sim.S;
             var abilities = Abilities.AbilitiesOf(u);
             bool Usable(string a) => abilities.Contains(a) && Abilities.AbilityBlocker(s, u, a) == null;
+            // Moving takes no action now (Arturo, 5/11 #14), but one of the living still moves once and then acts, as when
+            // it took one: its choices go by the actions it had before moving, less one once it has (0.11.9 found it
+            // walking there and back, then firing from afar).
+            var moved = false;
+            int Acts() => u.Ap - (moved ? 1 : 0);
             for (var guard = 0; guard < 6 && u.Alive && u.Ap > 0 && !sim.Over; guard++)
             {
                 // The squad, and the dead it sees close by (18/10 #47): a zombie at hand is a threat too.
@@ -500,7 +507,11 @@ namespace Bastion.Engine
                         sim.Perform(u, melee, melee: options[0]);
                         return;
                     }
-                    if ((u.Ap >= 2 || !shoots) && MoveToward(sim, u, HeadFor(sim, u, enemies))) continue;
+                    if ((Acts() >= 2 || !shoots) && !moved && MoveToward(sim, u, HeadFor(sim, u, enemies)))
+                    {
+                        moved = true;
+                        continue;
+                    }
                 }
                 if (!shoots) return;
 
@@ -522,7 +533,7 @@ namespace Bastion.Engine
                     }
                 }
 
-                if (u.Ap >= 2)
+                if (Acts() >= 2)
                 {
                     var reach = Paths.ComputeReach(s, u, Paths.CostPerAp(u));
                     if (bestTarget != null)
@@ -535,6 +546,7 @@ namespace Bastion.Engine
                             if (path != null)
                             {
                                 sim.MoveAlong(u, path, 1);
+                                moved = true;
                                 continue;
                             }
                         }
@@ -552,9 +564,14 @@ namespace Bastion.Engine
                         if (path != null)
                         {
                             sim.MoveAlong(u, path, 1);
+                            moved = true;
                             continue;
                         }
-                        if (MoveToward(sim, u, HeadFor(sim, u, enemies))) continue;
+                        if (MoveToward(sim, u, HeadFor(sim, u, enemies)))
+                        {
+                            moved = true;
+                            continue;
+                        }
                     }
                 }
                 else if (bestTarget != null && bestHit >= 20 && Usable(AbilityIds.Shoot))
@@ -621,14 +638,15 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// One action's walk toward `goal`, round whatever is in the way; false when it gets no closer. A flight of stairs it
-        /// can't climb in one (the Hinchado's stride and a flight of 3: nobody stops on one) takes both its actions; with one
-        /// left, it waits at the foot for the next turn's rather than wander off.
+        /// A walk toward `goal` with the movement left, round whatever is in the way; false when it gets no closer. A flight
+        /// of stairs it can't climb with it (the Hinchado's 3 and a flight of 3: nobody stops on one) takes its action too
+        /// (Arturo, 5/11 #14: the movement apart; it took both actions); with none left, it waits at the foot for the next
+        /// turn rather than wander off.
         /// </summary>
         private static bool Walk(Sim sim, Unit u, Pos goal, double minGap)
         {
             var once = PlanWalk(sim.S, u, goal, minGap);
-            if (once.Short && u.Ap < 2) return false;
+            if (once.Short && u.Ap < 1) return false;
             var twice = once.Short ? PlanWalk(sim.S, u, goal, minGap, 2) : null;
             var plan = twice?.Path != null ? twice : once;
             // Waiting behind its own: it goes again once the rest have moved (Sim.runAlienTurn).
@@ -982,6 +1000,9 @@ namespace Bastion.Engine
                 }
 
                 if (backed) return;
+                // Out of movement (Arturo, 5/11 #14: its 5 tiles apart from its action), what is left is walking: on next turn.
+                // Not «no way there»: one that heard something upstairs forgot it at the foot of the stairs (0.11.9).
+                if (Paths.MoveBudget(u) < Paths.CostOrtho) return;
                 // Nobody in sight: in a siege, for the nearest soldier it can get to, beside them by the ground or by breaking
                 // in, wherever they are; with none, the nearest. Seed 9's siege (1/11) never ended: the nearest soldier was shut
                 // in by the pines but for a way past another of the squad, and the Chillón, stepping towards them as the crow
@@ -990,7 +1011,7 @@ namespace Bastion.Engine
                 {
                     var sorted = new List<Unit>(soldiers);
                     Js.Sort(sorted, ByDistance(s, u.Pos));
-                    var ways = Paths.ComputeReach(s, u, Paths.CostPerAp(u) * LookaheadStoreys, u.Pos, (o) => !Content.HostileTo(o, u));
+                    var ways = Paths.ComputeReach(s, u, Paths.FullMoves(u) * LookaheadStoreys, u.Pos, (o) => !Content.HostileTo(o, u));
                     var smash = abilities.Contains(AbilityIds.Smash);
                     var prey = sorted.Find((e) => BesideByGround(s, u, ways, e) != null || (smash && BreachPlanOf(s, u, e.Pos, sim.Ways) != null)) ?? sorted[0];
                     var beside = screamer ? BesideByGround(s, u, ways, prey) : null;
@@ -1030,7 +1051,7 @@ namespace Bastion.Engine
                     if (!Arrived(s, u.Pos, u.Heard, 1.5) && Advance(sim, u, u.Heard, 0)) continue;
                     sim.Emit(new ForgotEvent { Unit = u.Id });
                 }
-                // Both actions on it, as the soldiers walk twice (Ana's playtest 28/10: one aimless step a turn was hardly moving).
+                // All its movement on it (Ana's playtest 28/10: one aimless step a turn was hardly moving; both actions, then).
                 if (Wander(sim, u, start)) continue;
                 return;
             }

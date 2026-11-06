@@ -28,7 +28,7 @@ namespace Bastion.Engine
             ["recovery"] = new[]
             {
                 $"Allí quedó **el mapa de los pozos** de la comarca. Sin él, el agua del verano es una apuesta. ==Recuperadlo y volved {Bus.To}.==",
-                "Allí cayó **un dron** que alguien usaba para vigilar las carreteras. Lo que grabó dice por dónde pasan los muertos. ==Recuperadlo antes de que se acabe el tiempo.==",
+                "Allí cayó **un dron** que alguien usaba para vigilar las carreteras. Lo que grabó dice por dónde pasan los muertos. ==Recuperadlo.==",
                 "Los Cuervos escondieron allí su **libro de cuentas** y no volvieron a por él: los muertos llegaron antes. Dice quién les paga y por dónde pasan. ==Traedlo.==",
             },
             ["sabotage"] = new[]

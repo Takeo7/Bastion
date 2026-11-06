@@ -174,7 +174,9 @@ namespace Bastion.UI.Combat
             var first = control.State == null;
             control.State = state;
             Current = state;
-            Bastion.Client.Battlefield.Current?.Show(state);
+            // A copy for the map: it keeps what it drew to tell the next change, and Play changes this state in place, so
+            // with this very state the first change after a load (a boot searched, app 0.12.0) was already in it and drew nothing.
+            Bastion.Client.Battlefield.Current?.Show(Events.CloneState(state));
             player.Load(state);
             if (state.Outcome == null) control.Sfx.Start(state.Biome, !state.Concealed);
             control.Sfx.Siren(() => control.View);

@@ -275,8 +275,9 @@ namespace Bastion.UI.Strategy
             var v = new RecruitView
             {
                 Title = "Reclutar un soldado",
-                // Where the Armería counts the pistols (a campaign since the 0.11.5), a recruit comes with the knife alone.
-                Blurb = c.Pistols == true ? "Un recluta nuevo: sale con un cuchillo, sin pistola, y con algo de práctica en una o dos habilidades. Llega al momento."
+                // Where the Armería counts the pistols (a campaign since the 0.11.5), a recruit comes with the knife and one of the
+                // start's weapons at random (Campaign.AddSoldier, StartArms; Arturo, 5/11).
+                Blurb = c.Pistols == true ? "Un recluta nuevo: sale con el cuchillo y un arma al azar (una pistola, un machete o una palanca), y con algo de práctica en una o dos habilidades. Llega al momento."
                     : "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.",
                 Button = $"Reclutar · {Campaign.CostText(price)}",
                 Enabled = why == null,

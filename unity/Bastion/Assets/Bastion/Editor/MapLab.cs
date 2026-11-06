@@ -488,6 +488,232 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// Every car model of the street (carFront's, the open wreck and the patrol car) as MapBuilder.Prop stands it facing
+        /// north, each over its two tiles: a red disc on the tile the engine calls its nose (the CarFront, Decor.CarPartner),
+        /// a blue one on its boot's (Looting.BootOf), from the side (BASTION_GIRO degrees, 90), to tell a model turned back
+        /// to front. BASTION_COCHES_ENTEROS=a,b the models.
+        /// </summary>
+        public static void CarNoses()
+        {
+            Lighting(true);
+            var ids = Environment.GetEnvironmentVariable("BASTION_COCHES_ENTEROS")?.Split(',') ?? MapArt.Set("carFront").Concat(new[] { "carOpen", "sirenPolice" }).Distinct().ToArray();
+            var prefabs = Prefabs();
+            var root = new GameObject("Coches").transform;
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.transform.localScale = Vector3.one * 10;
+            ground.GetComponent<Renderer>().sharedMaterial = Bastion.Client.KitMaterials.New(Bastion.Client.KitMaterials.Plain, "Suelo");
+            ground.GetComponent<Renderer>().sharedMaterial.SetColor("_BaseColor", new Color(0.55f, 0.53f, 0.5f));
+            Material Disc(Color c)
+            {
+                var m = Bastion.Client.KitMaterials.New(Bastion.Client.KitMaterials.Plain, "Marca");
+                m.SetColor("_BaseColor", c);
+                return m;
+            }
+            Material nose = Disc(new Color(0.85f, 0.1f, 0.08f)), boot = Disc(new Color(0.1f, 0.3f, 0.9f));
+            int columns = 5, rows = (ids.Length + columns - 1) / columns;
+            for (int k = 0; k < ids.Length; k++)
+            {
+                var car = MapBuilder.Prop(root, ids[k], prefabs);
+                if (car == null)
+                {
+                    Debug.LogWarning($"[morros] {ids[k]}: no model");
+                    continue;
+                }
+                // Its two tiles north–south, the middle between them (MapBuilder.Thing): the nose's to the north.
+                var at = new Vector3((k % columns - (columns - 1) / 2f) * 2.6f * MapSpace.Tile, 0, -(k / columns - (rows - 1) / 2f) * 3.4f * MapSpace.Tile);
+                car.transform.position = at;
+                foreach (var (material, z) in new[] { (nose, 0.5f), (boot, -0.5f) })
+                {
+                    var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    disc.transform.position = at + new Vector3(1.1f * MapSpace.Tile, 0.02f, z * MapSpace.Tile);
+                    disc.transform.localScale = new Vector3(0.5f, 0.02f, 0.5f);
+                    disc.GetComponent<Renderer>().sharedMaterial = material;
+                }
+                var box = car.GetComponentsInChildren<Renderer>().Select(r => r.bounds).Aggregate((a, b) => { a.Encapsulate(b); return a; });
+                Debug.Log($"[morros] {ids[k]} ({MapArt.Prop(ids[k])?.pack}:{MapArt.Prop(ids[k])?.fbx}, yaw {MapArt.Prop(ids[k])?.yaw}): row {k / columns}, column {k % columns}, box {box.size.x:F2} × {box.size.z:F2} m");
+            }
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.farClipPlane = 800;
+            float distance = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : 24;
+            float turn = float.TryParse(Environment.GetEnvironmentVariable("BASTION_GIRO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float g) ? g : 90;
+            MapSpace.Aim(camera, Vector3.zero, distance, turn);
+            Lighting(true);
+        }
+
+        /// <summary>
+        /// The line Bastion/Mark draws (Kit/Mark's, the target's), its colour as it reaches the screen in linear light, and
+        /// one set to UI's bone (SearchOutline's): a sphere each drawn into a float target, the line's pixels read (the
+        /// target's must stay linear 1, 0.16, 0.08 with _LineColor's sRGB default).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.MarkColour -quit
+        /// </summary>
+        public static void MarkColour()
+        {
+            var target = new RenderTexture(256, 256, 24, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            var camera = new GameObject("Marca").AddComponent<Camera>();
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = Color.black;
+            camera.targetTexture = target;
+            camera.transform.position = new Vector3(0, 0, -4);
+            var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            ColorUtility.TryParseHtmlString("#f3ecdc", out var bone);
+            foreach (var (name, colour) in new[] { ("del objetivo", (Color?)null), ("hueso", (Color?)bone) })
+            {
+                var mark = Bastion.Client.KitMaterials.New(Bastion.Client.KitMaterials.Mark, "Prueba");
+                mark.SetFloat("_Tint", 0);
+                mark.SetFloat("_Base", 0);
+                mark.SetFloat("_Rim", 0);
+                mark.SetFloat("_Mark", 1);
+                mark.SetFloat("_Line", 4);
+                if (colour is Color c) mark.SetColor("_LineColor", c);
+                ball.GetComponent<Renderer>().sharedMaterials = new[] { mark };
+                camera.Render();
+                RenderTexture.active = target;
+                var read = new Texture2D(256, 256, TextureFormat.RGBAFloat, false, true);
+                read.ReadPixels(new Rect(0, 0, 256, 256), 0, 0);
+                RenderTexture.active = null;
+                var lit = read.GetPixels().Where(p => p.r > 0.2f).ToArray();
+                var mean = lit.Length > 0 ? new Color(lit.Average(p => p.r), lit.Average(p => p.g), lit.Average(p => p.b)) : Color.clear;
+                Debug.Log(FormattableString.Invariant($"[marca] {name}: {lit.Length} pixels of line, linear {mean.r:0.0000} {mean.g:0.0000} {mean.b:0.0000} (material {mark.GetColor("_LineColor")})"));
+            }
+        }
+
+        /// <summary>
+        /// The whole cars with their boot open as the map opens it when searched (CarBoot), each beside itself shut, at the
+        /// map's size (MapArt.FootprintOf), facing north, painted their first paint, by day, the game's camera from behind
+        /// them (BASTION_GIRO degrees, 20; BASTION_DIST tiles, 26). BASTION_COCHES_ENTEROS=a,b the models.
+        /// </summary>
+        public static void CarBoots()
+        {
+            Lighting(true);
+            var ids = Environment.GetEnvironmentVariable("BASTION_COCHES_ENTEROS")?.Split(',') ?? new[] { "carSedan", "carTaxi", "sirenPolice", "carMuscle", "carConvertible", "carSmall", "carMedium", "carHatch", "carPickup", "carVan", "carUte" };
+            var prefabs = Prefabs();
+            var materials = Materials();
+            var root = new GameObject("Coches").transform;
+            var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.transform.localScale = Vector3.one * 10;
+            ground.GetComponent<Renderer>().sharedMaterial = Bastion.Client.KitMaterials.New(Bastion.Client.KitMaterials.Plain, "Suelo");
+            ground.GetComponent<Renderer>().sharedMaterial.SetColor("_BaseColor", new Color(0.55f, 0.53f, 0.5f));
+            int columns = 4, rows = (ids.Length + columns - 1) / columns;
+            for (int k = 0; k < ids.Length; k++)
+                for (int open = 0; open < 2; open++)
+                {
+                    var car = MapBuilder.Prop(root, ids[k], prefabs);
+                    if (car == null)
+                    {
+                        Debug.LogWarning($"[maletero] {ids[k]}: no model");
+                        break;
+                    }
+                    // At the map's size (its footprint's fit against its own), as MapBuilder.Place makes it.
+                    var art = MapArt.Prop(ids[k]);
+                    var footprint = MapArt.FootprintOf(ids[k]);
+                    if (art.fit > 0 && footprint != null && footprint.fit > 0) car.transform.localScale *= footprint.fit / art.fit;
+                    car.transform.position = new Vector3(((k % columns) * 2 + open - columns + 0.5f) * 2.2f * MapSpace.Tile, 0, -(k / columns - (rows - 1) / 2f) * 5f * MapSpace.Tile);
+                    if (open == 1) Debug.Log($"[maletero] {ids[k]}: {(Bastion.Client.Map.CarBoot.Open(car, ids[k]) ? "open" : "NOT OPEN")}");
+                    var paints = MapBuilder.WholePaintsOf(ids[k]);
+                    if (paints.Length > 0) MapBuilder.PaintWhole(car, ids[k], paints[0], materials);
+                }
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.farClipPlane = 800;
+            float distance = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : 26;
+            float turn = float.TryParse(Environment.GetEnvironmentVariable("BASTION_GIRO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float g) ? g : 20;
+            MapSpace.Aim(camera, Vector3.zero, distance, turn);
+            Lighting(true);
+        }
+
+        /// <summary>
+        /// Each whole car's parts as MapBuilder.Prop stands it facing north (x across, y up, z to the nose, metres): every
+        /// renderer's name, vertices and box, and its body's and glass's profile from the back to the nose (BASTION_TROZOS
+        /// slices, 24): the highest point of each and the lowest glass, to tell where a boot lid or a hatch ends.
+        /// </summary>
+        public static void CarProfiles()
+        {
+            var ids = Environment.GetEnvironmentVariable("BASTION_COCHES_ENTEROS")?.Split(',') ?? new[] { "carSedan", "carSmall", "carMedium", "carMuscle", "carTaxi", "carVan", "carConvertible", "carPickup", "carUte", "carHatch", "sirenPolice" };
+            int slices = int.TryParse(Environment.GetEnvironmentVariable("BASTION_TROZOS"), out int n) ? n : 24;
+            var prefabs = Prefabs();
+            var root = new GameObject("Coches").transform;
+            var log = new System.Text.StringBuilder();
+            foreach (string id in ids)
+            {
+                var car = MapBuilder.Prop(root, id, prefabs);
+                if (car == null) continue;
+                var space = car.transform;
+                log.AppendLine($"== {id} ({MapArt.Prop(id)?.pack}:{MapArt.Prop(id)?.fbx})");
+                var parts = new List<(string name, Vector3[] v, int[] t)>();
+                foreach (var f in car.GetComponentsInChildren<MeshFilter>())
+                {
+                    var mesh = f.sharedMesh;
+                    if (mesh == null) continue;
+                    var v = mesh.vertices.Select(p => space.InverseTransformPoint(f.transform.TransformPoint(p))).ToArray();
+                    var b = new Bounds(v[0], Vector3.zero);
+                    foreach (var p in v) b.Encapsulate(p);
+                    var r = f.GetComponent<Renderer>();
+                    log.AppendLine(FormattableString.Invariant($"  {f.name}: {v.Length} vertices, {mesh.subMeshCount} submeshes ({string.Join(", ", r.sharedMaterials.Select(m => m == null ? "null" : m.name))}), x {b.min.x:0.00}..{b.max.x:0.00} y {b.min.y:0.00}..{b.max.y:0.00} z {b.min.z:0.00}..{b.max.z:0.00}"));
+                    parts.Add((f.name, v, mesh.triangles));
+                }
+                var body = parts.OrderByDescending(p => p.v.Length).First();
+                var glass = parts.FirstOrDefault(p => p.name.Contains("Glass") && !p.name.Contains("Door"));
+                float z0 = body.v.Min(p => p.z), z1 = body.v.Max(p => p.z);
+                for (int k = 0; k < slices; k++)
+                {
+                    float a = z0 + (z1 - z0) * k / slices, c = z0 + (z1 - z0) * (k + 1) / slices;
+                    var inBody = body.v.Where(p => p.z >= a && p.z < c).ToList();
+                    var inGlass = glass.v?.Where(p => p.z >= a && p.z < c).ToList() ?? new List<Vector3>();
+                    log.AppendLine(FormattableString.Invariant($"  z {a:0.00}..{c:0.00}: body top {(inBody.Count > 0 ? inBody.Max(p => p.y) : -1):0.00}, glass {(inGlass.Count > 0 ? $"{inGlass.Min(p => p.y):0.00}..{inGlass.Max(p => p.y):0.00}" : "-")}"));
+                }
+            }
+            Debug.Log("[perfiles]\n" + log);
+        }
+
+        /// <summary>
+        /// Each whole car from its right side (CarProfiles' frame: the nose to the right of the picture), straight on, in two
+        /// columns, each over a grid of 10 cm (the lines of 50 cm red, z = 0 and y = 0 blue): to read off where its boot or
+        /// hatch is hinged and how low it goes.
+        /// </summary>
+        public static void CarSides()
+        {
+            Lighting(true);
+            var ids = Environment.GetEnvironmentVariable("BASTION_COCHES_ENTEROS")?.Split(',') ?? new[] { "carSedan", "carSmall", "carMedium", "carMuscle", "carTaxi", "carVan", "carConvertible", "carPickup", "carUte", "carHatch", "sirenPolice", "carOpen" };
+            var prefabs = Prefabs();
+            var root = new GameObject("Coches").transform;
+            Material Flat(Color c)
+            {
+                var m = Bastion.Client.KitMaterials.New(Bastion.Client.KitMaterials.Plain, "Rejilla");
+                m.SetColor("_BaseColor", c);
+                return m;
+            }
+            Material paper = Flat(new Color(0.92f, 0.92f, 0.9f)), thin = Flat(new Color(0.55f, 0.55f, 0.55f)), half = Flat(new Color(0.8f, 0.15f, 0.1f)), zero = Flat(new Color(0.1f, 0.25f, 0.85f));
+            void Quad(Vector3 at, Vector2 size, Material m)
+            {
+                var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                q.transform.SetParent(root, false);
+                q.transform.position = at;
+                q.transform.rotation = Quaternion.Euler(0, -90, 0);
+                q.transform.localScale = new Vector3(size.x, size.y, 1);
+                q.GetComponent<Renderer>().sharedMaterial = m;
+                q.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+            }
+            const int rows = 6;
+            for (int k = 0; k < ids.Length; k++)
+            {
+                var car = MapBuilder.Prop(root, ids[k], prefabs);
+                if (car == null) continue;
+                var at = new Vector3(0, (rows - 1 - k % rows) * 1.9f, (k / rows) * 3.8f);
+                car.transform.position = at;
+                Quad(at + new Vector3(-1.5f, 0.8f, 0), new Vector2(3.4f, 1.7f), paper);
+                for (int i = -17; i <= 17; i++)
+                    Quad(at + new Vector3(-1.49f, 0.8f, i * 0.1f), new Vector2(i == 0 || i % 5 == 0 ? 0.012f : 0.005f, 1.7f), i == 0 ? zero : i % 5 == 0 ? half : thin);
+                for (int i = 0; i <= 16; i++)
+                    Quad(at + new Vector3(-1.49f, i * 0.1f, 0), new Vector2(3.4f, i == 0 || i % 5 == 0 ? 0.012f : 0.005f), i == 0 ? zero : i % 5 == 0 ? half : thin);
+            }
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.orthographic = true;
+            camera.orthographicSize = rows * 1.9f / 2;
+            camera.transform.SetPositionAndRotation(new Vector3(20, (rows - 1) * 1.9f / 2 + 0.8f, 1.9f), Quaternion.Euler(0, -90, 0));
+            camera.farClipPlane = 60;
+            Lighting(true);
+        }
+
+        /// <summary>
         /// Models side by side as they come (BASTION_MODELOS=pack:fbx,…, MapArt's keys), 2 m apart, by day, the camera on them
         /// (BASTION_DIST tiles, 6): their size and parts in the log, to pick one for a prop.
         /// </summary>
@@ -595,6 +821,15 @@ namespace Bastion.EditorTools
             // BASTION_FIGURAS=1: the game's units drawn on it too, standing (to weigh their light against 0.10.1's figures);
             // =vistas, those the squad sees alone, as in the game.
             string figures = Environment.GetEnvironmentVariable("BASTION_FIGURAS");
+            // BASTION_MUERTO=x,y: the first enemy lying dead there (a body to search: SearchOutline).
+            if (Environment.GetEnvironmentVariable("BASTION_MUERTO")?.Split(',').Select(int.Parse).ToArray() is int[] dead && dead.Length == 2
+                && state.Units.FirstOrDefault(u => u.Alive && u.Team == Teams.Alien && !u.Objective) is Unit corpse)
+            {
+                corpse.Pos = new Pos { X = dead[0], Y = dead[1], Z = 0 };
+                corpse.Alive = false;
+                corpse.Hp = 0;
+                Debug.Log($"[contorno] {corpse.Id} ({corpse.Template}) lies dead on {dead[0]},{dead[1]}");
+            }
             if (figures == "1" || figures == "vistas")
             {
                 var units = new GameObject("Unidades").AddComponent<Bastion.Client.Units.UnitViews>();
@@ -602,6 +837,23 @@ namespace Bastion.EditorTools
                 // (The dead too, seen or not: as 0.10.1's reference block draws them.)
                 if (figures == "1") foreach (var u in state.Units) units.ForceVisible(u.Id);
                 units.MasksNow();
+            }
+            // BASTION_CONTORNO=x,y,lit;…: SearchOutline's lines round what would be searched on those tiles (1 lit, 0 not), in
+            // UI's bone and grey (CombatController.SearchLit, SearchFar); in play mode (-shotPlay), once UnitViews.Current is set.
+            var outlined = (Environment.GetEnvironmentVariable("BASTION_CONTORNO") ?? "").Split(';').Where(v => v.Length > 0)
+                .Select(v => v.Split(',').Select(int.Parse).ToArray()).Select(v => (new Pos { X = v[0], Y = v[1], Z = 0 }, v.Length < 3 || v[2] != 0)).ToList();
+            if (outlined.Count > 0)
+            {
+                ColorUtility.TryParseHtmlString("#f3ecdc", out var lit);
+                ColorUtility.TryParseHtmlString("#7d868c", out var far);
+                void Outline(PlayModeStateChange change)
+                {
+                    if (change != PlayModeStateChange.EnteredPlayMode) return;
+                    EditorApplication.playModeStateChanged -= Outline;
+                    Bastion.Client.Units.SearchOutline.Show(state, outlined, lit, far);
+                    Debug.Log($"[contorno] {outlined.Count} tiles outlined");
+                }
+                EditorApplication.playModeStateChanged += Outline;
             }
             // BASTION_AO_FILA=y,x0,x1: the contact occlusion (r) and its height (g) across row y from tile x0 to x1, texel by
             // texel (6 a tile), with the row's tiles (to set against 0.10.1's: what a floor by a wall gets).
@@ -889,7 +1141,7 @@ namespace Bastion.EditorTools
         /// <summary>Packs found last by a model's name alone (Prefabs): imported after the rest, with models of the others' names.</summary>
         static readonly string[] LatePacks = { "PolygonShops", "PolygonGangWarfare", "PolygonPalmCity" };
 
-        static readonly Dictionary<string, string> PackFolders = new Dictionary<string, string>
+        internal static readonly Dictionary<string, string> PackFolders = new Dictionary<string, string>
         {
             ["apocalypse"] = "PolygonApocalypse", ["city"] = "PolygonCity", ["town"] = "PolygonTown", ["office"] = "PolygonOffice",
             ["military"] = "PolygonMilitary", ["construction"] = "PolygonConstruction", ["farm"] = "PolygonFarm", ["nature"] = "PolygonNature",

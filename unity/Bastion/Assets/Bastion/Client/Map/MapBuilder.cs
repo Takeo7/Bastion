@@ -256,6 +256,8 @@ namespace Bastion.Client.Map
         readonly List<GameObject> furnished = new List<GameObject>();
         /// <summary>The wrecks whose headlights are left on by night (mapView.ts: one in four), in Unity's metres.</summary>
         readonly Dictionary<int, NightLights.Glow> headlights = new Dictionary<int, NightLights.Glow>();
+        /// <summary>Each car drawn on the ground, by its anchor (its nose's tile), and its prop: for CarCopy.</summary>
+        readonly Dictionary<int, (GameObject car, string id)> cars = new Dictionary<int, (GameObject, string)>();
         /// <summary>The ground, its textures and marks (UI's GroundView: ground.ts).</summary>
         GroundView ground;
         /// <summary>
@@ -1658,8 +1660,8 @@ namespace Bastion.Client.Map
                     // One that crashed or burns is a wreck, never one of the whole cars; one burning, a rusted shell.
                     if ((wreck != null && wreck.Kind != WreckKinds.Abandoned || burning) && !Wrecks.Contains(id)) id = Crashed[Mathf.FloorToInt(MapArt.Hash(ax, ay, 14) * Crashed.Length)];
                     if (burning) id = "carRusted";
-                    // Searched (its boot or its glovebox), a wreck is the one with the boot lid up; a whole one (Unity's own,
-                    // Ana 28/10) has none and stays as it is.
+                    // Searched (its boot or its glovebox), a wreck is the one with the boot lid up; a whole one opens its own
+                    // (CarBoot, below).
                     if (Wrecks.Contains(id) && thing.Tiles.Any(j => SearchedAt(Mathf.RoundToInt(floor / MapSpace.Storey), j))) id = "carOpen";
                     // City's patrol car, where it stands and as it is turned (the sabotage's siren car's model).
                     if (police) id = PoliceCar;
@@ -1698,6 +1700,12 @@ namespace Bastion.Client.Map
             }
             if (placed != null && thing.Kind == "carFront")
             {
+                if (floor == 0) cars[thing.Anchor] = (placed, id);
+                // A whole car's boot searched (Looting.CarBoot): its lid up before it is painted (CarBoot; Arturo's #3 of 5/11),
+                // and what was in it on the ground behind it (his A13 of 2/11).
+                int boot = thing.Tiles.OrderByDescending(j => (j % s.Width - ax) * (j % s.Width - ax) + (j / s.Width - ay) * (j / s.Width - ay)).First();
+                bool rifled = !Wrecks.Contains(id) && floor == 0 && SearchedAt(0, boot);
+                if (rifled) CarBoot.Open(placed, id);
                 // (BASTION_COCHES=1: each car's long side against its two tiles', to tell a model turned the wrong way.)
                 if (CarsLogged)
                 {
@@ -1709,13 +1717,7 @@ namespace Bastion.Client.Map
                 if (police) PaintWhole(placed, id, null, materialOf);
                 else Repaint(placed, id, MapArt.Hash(ax, ay, 13));
                 if (wreck != null) Crash(parent, placed, thing, wreck, floor);
-                // A whole car's boot searched (Looting.CarBoot; Arturo's A13 of 2/11): its model has no lid to lift (only a
-                // wreck turns into the one with its boot open), so what was in it lies on the ground behind it.
-                if (!Wrecks.Contains(id) && floor == 0)
-                {
-                    int boot = thing.Tiles.OrderByDescending(j => (j % s.Width - ax) * (j % s.Width - ax) + (j / s.Width - ay) * (j / s.Width - ay)).First();
-                    if (SearchedAt(0, boot)) Ransack(0, boot, "boot", Bastion.Engine.Grid.Dirs4[(thing.Facing + 2) % 4], floor);
-                }
+                if (rifled) Ransack(0, boot, "boot", Bastion.Engine.Grid.Dirs4[(thing.Facing + 2) % 4], floor);
                 // Some wrecks still have a battery: their headlights on, by night, at the nose (not one crashed askew).
                 if (wreck == null && MapArt.Hash(ax, ay, 9) < 0.25f)
                 {
@@ -2022,6 +2024,29 @@ namespace Bastion.Client.Map
             if (art.shift != null && art.shift.Length >= 2) turned.localPosition = new Vector3(art.shift[0] * MapSpace.Tile, 0, -art.shift[1] * MapSpace.Tile);
             model.transform.SetParent(turned, false);
             return holder.gameObject;
+        }
+
+        /// <summary>
+        /// The car whose nose is on ground tile `anchor`, as it is drawn, again under `parent`: its model at the map's size,
+        /// standing as that one does (turned, crashed askew), casting no shadow, for one material over it all (SearchOutline's
+        /// line: the car itself is joined into the map's still batch). Null if no car is drawn there.
+        /// </summary>
+        public GameObject CarCopy(int anchor, Transform parent)
+        {
+            if (!cars.TryGetValue(anchor, out var car) || car.car == null) return null;
+            var art = MapArt.Prop(car.id);
+            var prefab = art != null && !string.IsNullOrEmpty(art.fbx) ? prefabOf?.Invoke(MapArt.ModelKey(art)) : null;
+            if (prefab == null) return null;
+            var copy = Prop(parent, car.id, art, prefab, MapArt.FootprintOf(car.id));
+            copy.name = car.id + " (contorno)";
+            copy.transform.SetPositionAndRotation(car.car.transform.position, car.car.transform.rotation);
+            copy.transform.localScale = car.car.transform.lossyScale;
+            foreach (var r in copy.GetComponentsInChildren<Renderer>())
+            {
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+            }
+            return copy;
         }
 
         static Bounds BoundsIn(GameObject model, Transform space)

@@ -1,7 +1,8 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <!--
         A soldier's card under the sheet (UI-COMBATE UI-02; SquadList.cs fills it): the bust, its states over it and its
-        name at its foot; its health in green and its actions in yellow under it. Styles: SquadList.uss, from Hud.uxml.
+        name at its foot; its health in green, its actions in yellow and its movement in sky blue under it (Arturo, 5/11
+        #14). Styles: SquadList.uss, from Hud.uxml.
     -->
     <ui:VisualElement name="card" class="squad-card">
         <ui:VisualElement name="bust" class="squad-card__bust" picking-mode="Ignore">
@@ -10,5 +11,6 @@
         </ui:VisualElement>
         <ui:VisualElement name="hp" class="pips pips--hp squad-card__hp" picking-mode="Ignore" />
         <ui:VisualElement name="ap" class="pips pips--ap squad-card__ap" picking-mode="Ignore" />
+        <ui:VisualElement name="moves" class="pips pips--moves squad-card__moves" picking-mode="Ignore" />
     </ui:VisualElement>
 </ui:UXML>

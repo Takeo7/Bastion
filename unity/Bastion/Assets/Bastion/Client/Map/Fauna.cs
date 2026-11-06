@@ -47,6 +47,8 @@ namespace Bastion.Client.Map
             /// <summary>The way to its target, the next point first (Route), and how fast it goes over the ground now (m/s).</summary>
             public List<Vector3> way = new List<Vector3>();
             public float pace;
+            /// <summary>How fast it turned this step (degrees a second), and its legs' step round for it (Movement_f, eased in and out).</summary>
+            public float turning, stepping;
             public float wait, clock, flap, yaw;
             public uint rng;
             public bool gone;
@@ -685,8 +687,11 @@ namespace Bastion.Client.Map
             }
             float speed = Simple(a.kind) ? (a.state == State.Flee ? graze.run : a.state == State.Walk ? graze.walk : 0)
                 : a.state == State.Flee ? (a.kind == Kind.Wild ? WildRun : DogRun) : a.state == State.Walk ? (a.kind == Kind.Wild ? WildWalk : DogWalk) : 0;
+            a.turning = 0;
             if (a.state == State.Idle)
             {
+                // (What pace it still had as it got there, gone in a moment: its legs stop, not at once.)
+                a.pace = Mathf.MoveTowards(a.pace, 0, FleeBrake * dt);
                 if (!a.chosen) Choose(a);
                 a.wait -= dt;
                 if (a.wait <= 0)
@@ -714,9 +719,10 @@ namespace Bastion.Client.Map
                     left = to.magnitude;
                 }
                 bool last = a.way.Count <= 1;
-                if (last && left < 0.15f)
+                // There once braked to it (Arturo's #7 of 5/11: at 15 cm it still went at 0.8 m/s, and stopped dead, its
+                // legs from mid-stride to standing in a frame); what pace is left goes as it stands (Idle).
+                if (last && left < 0.005f)
                 {
-                    a.pace = 0;
                     a.way.Clear();
                     // Fled past the map's edge: gone; else (calm far enough, or a wander's end) it stands a while.
                     var t = MapSpace.WorldToTile(a.root.position);
@@ -732,8 +738,9 @@ namespace Bastion.Client.Map
                 }
                 else
                 {
-                    float want = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg;
+                    float want = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, was = a.yaw;
                     a.yaw = Mathf.MoveTowardsAngle(a.yaw, want, (a.state == State.Flee ? 540 : 200) * dt);
+                    a.turning = Mathf.Abs(Mathf.DeltaAngle(was, a.yaw)) / dt;
                     a.root.rotation = Quaternion.Euler(0, a.yaw, 0);
                     // (Turning on the spot first when it faces away.)
                     float facing = Mathf.Clamp01(Mathf.Cos(Mathf.DeltaAngle(a.yaw, want) * Mathf.Deg2Rad));
@@ -741,8 +748,13 @@ namespace Bastion.Client.Map
                     // its end slowing down so as to stop there.
                     bool flees = a.state == State.Flee;
                     float goal = speed * facing;
-                    if (last) goal = Mathf.Min(goal, Mathf.Sqrt(2 * (flees ? FleeBrake : WalkBrake) * left));
-                    a.pace = Mathf.MoveTowards(a.pace, goal, (goal > a.pace ? (flees ? FleeStart : WalkStart) : flees ? FleeBrake : WalkBrake) * dt);
+                    // (Braking for what is left of its whole way, not only its last stretch: one short after a corner left it
+                    // no room, and it got there running.)
+                    float rest = left;
+                    for (int k = 1; k < a.way.Count; k++) rest += Vector2.Distance(new Vector2(a.way[k - 1].x, a.way[k - 1].z), new Vector2(a.way[k].x, a.way[k].z));
+                    goal = Mathf.Min(goal, Mathf.Sqrt(2 * (flees ? FleeBrake : WalkBrake) * rest));
+                    // (Slowing, up to half as hard again: a step at a time it lags the curve it brakes to, and got there at 2 m/s.)
+                    a.pace = Mathf.MoveTowards(a.pace, goal, (goal > a.pace ? (flees ? FleeStart : WalkStart) : 1.5f * (flees ? FleeBrake : WalkBrake)) * dt);
                     a.root.position += to / left * Mathf.Min(left, a.pace * dt);
                 }
             }
@@ -752,6 +764,9 @@ namespace Bastion.Client.Map
                 // quicker with someone coming.
                 float walk = Simple(a.kind) ? graze.walk : a.kind == Kind.Wild ? WildWalk : DogWalk, run = Simple(a.kind) ? graze.run : a.kind == Kind.Wild ? WildRun : DogRun;
                 float movement = a.pace <= walk ? 0.5f * a.pace / walk : 0.5f + 0.5f * Mathf.Clamp01((a.pace - walk) / (run - walk));
+                // (Turning on the spot, a slow step round, eased in and out: not a statue turned on its stand.)
+                a.stepping = Mathf.MoveTowards(a.stepping, 0.2f * Mathf.Clamp01(a.turning / 200), dt);
+                movement = Mathf.Max(movement, a.stepping);
                 a.animator.speed = a.state == State.Flee && Down(a) ? RiseQuick : 1;
                 // (SIMPLE's controller: Speed_f the same way, Eat_b while it grazes, a cat's Sit_b while it sits.)
                 string pace = Simple(a.kind) ? "Speed_f" : "Movement_f";

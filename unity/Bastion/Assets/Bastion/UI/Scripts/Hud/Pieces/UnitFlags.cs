@@ -38,6 +38,9 @@ namespace Bastion.UI.Hud
 
         readonly Func<string, Sprite> icon;
 
+        /// <summary>Another target's line clicked (FlagView.Other): aim at that one (Arturo, 5/11 #11).</summary>
+        public event Action<string> TargetPicked;
+
         public UnitFlags(VisualElement layer, Func<string, Sprite> icon = null)
         {
             this.layer = layer;
@@ -65,6 +68,19 @@ namespace Bastion.UI.Hud
                     }
                     Fill(el, f);
                     Mark(el, f.Id);
+                    // Another target's odds take a click (over the shoulder, its only way to another one besides Tab).
+                    if (f.Other && el.Q(className: "uflag__hover") is VisualElement line)
+                    {
+                        var id = f.Id;
+                        line.pickingMode = PickingMode.Position;
+                        line.name = "pick-" + id;
+                        line.AddToClassList("uflag__hover--pick");
+                        line.RegisterCallback<ClickEvent>(e =>
+                        {
+                            e.StopPropagation();
+                            TargetPicked?.Invoke(id);
+                        });
+                    }
                 }
             foreach (var id in gone)
             {
@@ -91,7 +107,7 @@ namespace Bastion.UI.Hud
             if (!spots.TryGetValue(id, out var spot) || Time.time - spot.born >= SpotSeconds) return;
             var row = el.Q(className: "uflag__row");
             if (row == null) return;
-            VisualElement mark = spot.alert ? Ui.Text("!", "uflag__spot uflag__spot--alert") : new EyeMark();
+            VisualElement mark = spot.alert ? Ui.Text("!", "uflag__spot uflag__spot--alert") : new EyeMark("uflag__spot uflag__spot--eye");
             mark.pickingMode = PickingMode.Ignore;
             row.Insert(0, mark);
         }
@@ -333,9 +349,17 @@ namespace Bastion.UI.Hud
             el.Clear();
             el.EnableInClassList("uflag--enemy", f.Enemy);
             el.EnableInClassList("uflag--target", f.Target);
+            el.EnableInClassList("uflag--other", f.Other);
             // Pointed at from the list (Arturo, 31/10 #11): an arrow over all of it, bobbing.
             if (f.Pointed) el.Add(new PointerArrow());
-            if (!string.IsNullOrEmpty(f.HoverText)) Ui.Text(f.HoverText, "uflag__hover uflag__hover--" + f.HoverKind, el);
+            // Over it, what the pointer's tile means: an eye if it would see the picked one there, or sees it now (Arturo,
+            // 5/11 #5, #6), and the odds; on a plate, kept whole near the screen's edge (KeepLinesIn).
+            if (!string.IsNullOrEmpty(f.HoverText) || f.Eye != null)
+            {
+                var line = Ui.El("uflag__hover uflag__hover--" + (f.HoverKind ?? "sight"), el);
+                if (f.Eye != null) line.Add(new EyeMark("uflag__eye uflag__eye--" + f.Eye));
+                if (!string.IsNullOrEmpty(f.HoverText)) Ui.Text(f.HoverText, "uflag__hover-text", line);
+            }
             // The name only on the one under the pointer (Ana, Arturo 31/10 #9: no longer on the picked one's).
             if (!string.IsNullOrEmpty(f.Name)) Ui.Text(f.Name, "uflag__name", el);
             var row = Ui.El("uflag__row", el);
@@ -352,15 +376,16 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>
-        /// The eye of an enemy just seen that hasn't noticed the squad (Spot), drawn as the move zone's (MoveOverlay.EyeTexture,
-        /// styles.css's mask): an almond and its pupil, in the colour of its class (Flags.uss .uflag__spot--eye).
+        /// An eye, drawn as the move zone's (MoveOverlay.EyeTexture, styles.css's mask): an almond and its pupil, in the
+        /// colour of its classes: an enemy just seen that hasn't noticed the squad (Spot: .uflag__spot--eye), one that would
+        /// see the picked one on the pointer's tile or sees it now (.uflag__eye--would, --sees).
         /// </summary>
         sealed class EyeMark : VisualElement
         {
-            public EyeMark()
+            public EyeMark(string classes)
             {
-                AddToClassList("uflag__spot");
-                AddToClassList("uflag__spot--eye");
+                foreach (var c in classes.Split(' ')) AddToClassList(c);
+                pickingMode = PickingMode.Ignore;
                 generateVisualContent += Draw;
             }
 

@@ -527,7 +527,7 @@ namespace Bastion.Engine.Tests
                 ["medicineHeal"] = Content.MedicineHeal, ["pistolClip"] = Content.PistolClip, ["modSlots"] = Content.ModSlots,
                 ["modAim"] = Content.ModAim, ["extMag"] = Content.ExtMag, ["wornBelow"] = Content.WornBelow, ["wornAim"] = Content.WornAim,
                 ["repairPerPart"] = Content.RepairPerPart, ["patchUp"] = Content.PatchUp, ["soldierMobility"] = Content.SoldierMobility,
-                ["zombiePace"] = Content.ZombiePace, ["squadSize"] = Content.SquadSize,
+                ["zombieMobility"] = Content.ZombieMobility, ["squadSize"] = Content.SquadSize,
                 ["noise"] = new { door = Content.Noise.Door, breach = Content.Noise.Breach, dash = Content.Noise.Dash, alarm = Content.Noise.Alarm },
                 ["traps"] = new { mine = Content.Traps.Mine, mineRadius = Content.Traps.MineRadius, spikes = Content.Traps.Spikes, wire = Content.Traps.Wire },
                 ["siege"] = new { door = Content.Siege.Door, barricade = Content.Siege.Barricade, smashNoise = Content.Siege.SmashNoise, mags = Content.Siege.Mags, hold = Content.Siege.Hold },

@@ -159,6 +159,8 @@ namespace Bastion.Engine
                         }
                         // A turret has no turn of its own: it keeps watch in the enemy's (docs/FASE12.md §11.4).
                         u.Ap = u.Captive || u.Objective || u.Automaton != null ? 0 : u.Stunned ? 1 : Content.ApPerTurnOf(u);
+                        // Its movement, apart from the actions (Arturo, 5/11 #14): all of it (null), none for one that can't act.
+                        u.Moves = u.Captive || u.Objective || u.Automaton != null ? 0 : (int?)null;
                         u.Stunned = false;
                         u.Overwatch = false;
                         u.KillZone = false;
@@ -173,6 +175,7 @@ namespace Bastion.Engine
                         {
                             // Cowers for the whole turn.
                             u.Ap = 0;
+                            u.Moves = 0;
                             u.Hunkered = true;
                             u.Panicked = false;
                         }
@@ -188,17 +191,23 @@ namespace Bastion.Engine
                     if (last != null) u.Facing = Los.FacingTo(before, last) ?? u.Facing;
                     if (last != null) u.Pos = CopyPos(last);
                     u.Ap = Math.Max(0, u.Ap - ev.Ap);
+                    // What it walked off its movement (Arturo, 5/11 #14); all of it, Forma física learns (below).
+                    var spentAll = ev.Moves != null && Paths.SpendsAll(u, ev.Moves.Value);
+                    if (ev.Moves != null) u.Moves = Math.Max(0, Paths.MoveBudget(u) - ev.Moves.Value);
                     // What the squad finds on the way: the buildings it walks into, and where it stops, those it looks into.
                     if (Los.IsViewer(u, Teams.Xcom)) for (var k = 0; k < ev.Path.Count; k++) Buildings.Discover(s, ev.Path[k], k == ev.Path.Count - 1);
                     EndSuppression(s, u);
-                    // Running, with both actions, teaches Forma física (docs/FASE10.md §3).
-                    if (ev.Ap >= 2) Deed(s, u.Id, DeedIds.Run);
+                    // Running teaches Forma física (docs/FASE10.md §3): the turn's movement spent, in one stretch or several
+                    // (Arturo, 5/11, in the box); it was moving with both actions.
+                    if (spentAll || ev.Ap >= 2) Deed(s, u.Id, DeedIds.Run);
                     break;
                 }
                 case AbilityUsedEvent ev:
                 {
                     var u = UnitOf(s, ev.Unit);
                     u.Ap = Math.Max(0, u.Ap - ev.Ap);
+                    // What ends the turn (Vigilancia, Cubrirse, Esconderse) takes the movement left with it (Arturo, 5/11 #14).
+                    if (s.Realtime == null && Content.Abilities.ContainsKey(ev.Ability) && Abilities.EndsTurn(u, ev.Ability)) u.Moves = 0;
                     if (ev.Cooldown > 0) u.Cooldowns[ev.Ability] = ev.Cooldown;
                     if (!string.IsNullOrEmpty(ev.Charge)) u.Charges[ev.Charge!] = Math.Max(0, (u.Charges.TryGetValue(ev.Charge!, out var n) ? n : 0) - 1);
                     if (ev.Ability != AbilityIds.Overwatch && ev.Ability != AbilityIds.KillZone && ev.Ap > 0) EndSuppression(s, u);
@@ -535,6 +544,14 @@ namespace Bastion.Engine
                     {
                         var storey = Grid.LevelOf(s, ev.Pos.Z - 1);
                         if (storey != null) storey.Tiles[i] = ev.Kind;
+                    }
+                    // A door opened: whoever of the squad stands just before it has looked in (Arturo, 5/11 #2), as before a window.
+                    if (ev.Kind == TileKinds.DoorOpen)
+                    {
+                        foreach (var u in s.Units)
+                        {
+                            if (Los.IsViewer(u, Teams.Xcom) && Grid.Distance(u.Pos, ev.Pos) <= 1 && u.Pos.Z == ev.Pos.Z) Buildings.Discover(s, u.Pos, true);
+                        }
                     }
                     // A door or barricade of a siege that is gone (a blast took it): a breach.
                     var holds = s.Breakables;
@@ -971,6 +988,7 @@ namespace Bastion.Engine
                 MaxHp = u.MaxHp,
                 Armor = u.Armor,
                 Ap = u.Ap,
+                Moves = u.Moves,
                 Ammo = u.Ammo,
                 Mags = u.Mags,
                 Arms = u.Arms != null ? new Arms { Primary = u.Arms.Primary, PrimaryId = u.Arms.PrimaryId, Condition = u.Arms.Condition, Mods = CopyStrings(u.Arms.Mods), Melee = u.Arms.Melee, MeleeId = u.Arms.MeleeId, Pistol = u.Arms.Pistol, PistolId = u.Arms.PistolId } : null,

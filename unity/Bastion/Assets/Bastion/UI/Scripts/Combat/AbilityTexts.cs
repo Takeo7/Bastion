@@ -320,13 +320,25 @@ namespace Bastion.UI.Combat
             return u.Pos;
         }
 
-        /// <summary>Players with a soldier that still has actions.</summary>
+        /// <summary>
+        /// Players with a soldier that still has actions or movement, as the room counts them (Rules.HasActions,
+        /// Paths.HasTurnLeft; Arturo, 5/11 #14): one with movement alone may still take the command (Red, app 0.12.0).
+        /// </summary>
         public static HashSet<int> BusySlots(GameState s)
         {
             var busy = new HashSet<int>();
-            foreach (var u in s.Units)
-                if (u.Alive && u.Team == Teams.Xcom && u.Ap > 0 && u.Owner is int o) busy.Add(o);
+            foreach (var u in Grid.Combatants(s, Teams.Xcom))
+                if (Paths.HasTurnLeft(u) && u.Owner is int o) busy.Add(o);
             return busy;
+        }
+
+        /// <summary>Players with a soldier that still has actions (the strip's «Con acciones»; movement alone, «Con movimiento»).</summary>
+        public static HashSet<int> ActingSlots(GameState s)
+        {
+            var acting = new HashSet<int>();
+            foreach (var u in Grid.Combatants(s, Teams.Xcom))
+                if (u.Ap > 0 && u.Owner is int o) acting.Add(o);
+            return acting;
         }
 
         /// <summary>A number as JavaScript writes it: 8, 7.5.</summary>

@@ -165,15 +165,16 @@ namespace Bastion.Engine.Tests
             // A wall between the street and the yard, open at the far end.
             var s = StateFrom(new[] { "....................", "....................", "###################.", "...................." });
             s.Concealed = true;
-            var runner = AddUnit(s, "s1", TemplateIds.Rookie, 0, 1);
+            // A run: the whole turn's movement in one go, 8 tiles (Arturo, 5/11 #14).
+            var runner = AddUnit(s, "s1", TemplateIds.Rookie, 5, 1);
             // A partner still to act: the squad's turn goes on.
-            AddUnit(s, "s2", TemplateIds.Rookie, 0, 0);
+            AddUnit(s, "s2", TemplateIds.Rookie, 5, 0);
             var z1 = AddUnit(s, "a1", TemplateIds.Zombie, 13, 3);
             var z2 = AddUnit(s, "a2", TemplateIds.Zombie, 12, 3);
             PodOf(s, "p1", false, z1, z2);
             var events = Exec(s, Move("s1", 13, 1));
             Assert.True(events.Ok);
-            Assert.Equal(0, runner.Ap);
+            Assert.Equal((2, 0), (runner.Ap, Paths.MoveBudget(runner)));
             var noise = Of<NoiseEvent>(events.Events!);
             Assert.Single(noise);
             SameNoise(noise[0], P(13, 1), Louder(Content.Noise.Dash), "s1", "a1", "a2");
@@ -273,9 +274,9 @@ namespace Bastion.Engine.Tests
             var bites = Of<ShotEvent>(turn.Events).Where((e) => e.Unit == "a1").ToList();
             Assert.Single(bites);
             Assert.Equal((AbilityIds.Claw, "s1"), (bites[0].Ability, bites[0].Target));
-            // Ten tiles off: two actions of walking (4 tiles each), straight at it, no shot.
+            // Thirteen tiles off: its 5 of movement straight at it (Arturo, 5/11 #14), no bite.
             Assert.DoesNotContain(Of<ShotEvent>(turn.Events), (e) => e.Unit == "a2");
-            Assert.True(Js.Hypot(walker.Pos.X - near.Pos.X, walker.Pos.Y - near.Pos.Y) <= 13 - 8 + 0.5);
+            Assert.True(Js.Hypot(walker.Pos.X - near.Pos.X, walker.Pos.Y - near.Pos.Y) <= 13 - Content.ZombieMobility + 0.5);
         }
 
         [Fact(DisplayName = "the dead › whoever goes for the squad acts first; then the dead with nobody in reach walk, all together (playtest 2026-10-16)")]
@@ -395,8 +396,8 @@ namespace Bastion.Engine.Tests
             var z = AddUnit(s, "a1", TemplateIds.Zombie, 14, 2, extra: (u) => u.Heard = P(2, 2));
             PodOf(s, "p1", true, z);
             NewSim(s).RunAlienTurn();
-            // 6,4 tiles an action (80 % of a soldier, 28/10): there in two.
-            SamePlace(P(2, 2), z.Pos);
+            // 5 tiles a turn (Arturo, 5/11 #14): straight on its way there.
+            SamePlace(P(9, 2), z.Pos);
         }
 
         [Fact(DisplayName = "the dead › the living keep their ways, but seeing nobody they too go where they heard something")]
@@ -442,8 +443,8 @@ namespace Bastion.Engine.Tests
             Assert.Empty(Turn(TemplateIds.Zombie));
         }
 
-        [Fact(DisplayName = "the dead › the dead have two actions (playtest 16/10 #21): two bites, or a step and a bite; a bite needs the soldier beside it")]
-        public void TheDeadHaveTwoActions()
+        [Fact(DisplayName = "the dead › the dead have one action and 5 of movement (Arturo, 5/11 #14): a bite, after walking up if need be; a bite needs the soldier beside it")]
+        public void TheDeadHaveOneAction()
         {
             var s = Field(12, 7);
             s.ActiveTeam = Teams.Alien;
@@ -454,10 +455,11 @@ namespace Bastion.Engine.Tests
             var t = NewSim(s);
             t.RunAlienTurn();
             var bites = Of<ShotEvent>(t.Events);
-            Assert.Equal(2, bites.Count((e) => e.Unit == "a1"));
+            Assert.Equal(1, bites.Count((e) => e.Unit == "a1"));
             Assert.Equal(1, bites.Count((e) => e.Unit == "a2"));
             Assert.Equal(3, Content.Templates[TemplateIds.Zombie].Hp);
-            Assert.Equal(Content.Templates[TemplateIds.Rookie].Mobility * 0.8, Content.Templates[TemplateIds.Zombie].Mobility);
+            Assert.Equal(5, Content.Templates[TemplateIds.Zombie].Mobility);
+            Assert.Equal(1, Content.ApPerTurnOf(beside));
         }
 
         /// <summary>The test of the dead that measures time, measured alone (it plays a town's whole enemy turn).</summary>

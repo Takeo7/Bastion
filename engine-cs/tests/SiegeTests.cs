@@ -375,8 +375,13 @@ namespace Bastion.Engine.Tests
             var z = AddUnit(s, "z1", TemplateIds.Zombie, 9, 0, extra: (u) => u.Heard = Ground(0, 6));
             Pod(s, "p1", new[] { z });
             AddUnit(s, "s1", TemplateIds.Rookie, 5, 4);
-            var run = RunOf(s);
-            Ai.TakeZombieTurn(run, z);
+            // Two turns of its 5 tiles (Arturo, 5/11 #14).
+            for (var turn = 0; turn < 2; turn++)
+            {
+                z.Ap = 1;
+                z.Moves = null;
+                Ai.TakeZombieTurn(RunOf(s), z);
+            }
             // Through the open door, not to the noise.
             Assert.True(z.Pos.Y > 0, $"y {z.Pos.Y}");
             Assert.True(Math.Abs(z.Pos.X - 5) + Math.Abs(z.Pos.Y - 4) < 9 + 4, $"at {z.Pos.X},{z.Pos.Y}");
@@ -414,9 +419,11 @@ namespace Bastion.Engine.Tests
             var squad = new[] { AddUnit(s, "s4", TemplateIds.Rookie, 3, 10), AddUnit(s, "s2", TemplateIds.Rookie, 3, 11), AddUnit(s, "s3", TemplateIds.Rookie, 3, 12) };
             Assert.DoesNotContain(squad, (e) => Los.CanSee(s, e, chillon));
             var turns = 0;
-            for (; turns < 6 && !squad.Any((e) => Los.CanSee(s, e, chillon)); turns++)
+            // Its 5 tiles a turn and one action (Arturo, 5/11 #14; it walked twice that, with two actions).
+            for (; turns < 12 && !squad.Any((e) => Los.CanSee(s, e, chillon)); turns++)
             {
-                chillon.Ap = 2;
+                chillon.Ap = 1;
+                chillon.Moves = null;
                 Ai.TakeZombieTurn(RunOf(s), chillon);
                 if (turns == 0) Assert.True(chillon.Pos.X > 4, $"at {chillon.Pos.X},{chillon.Pos.Y}");
             }
@@ -434,7 +441,8 @@ namespace Bastion.Engine.Tests
             for (var i = 0; i < squad.Count; i++) squad[i].Pos = barracks[i];
             var rng = new Rng(5);
             var events = new List<GameEvent>();
-            for (var turn = 0; turn < Content.Siege.Hold && s.Outcome == null; turn++)
+            // Twice as long as they took when the dead walked with both actions (Arturo, 5/11 #14: 5 tiles and a bite).
+            for (var turn = 0; turn < 2 * Content.Siege.Hold && s.Outcome == null; turn++)
             {
                 var r = Exec(s, new EndTurnCommand { Ready = true }, rng);
                 Assert.True(r.Ok, r.Error);
@@ -442,9 +450,8 @@ namespace Bastion.Engine.Tests
             }
             Assert.NotEmpty(Of<SmashedEvent>(events));
             Assert.Contains(Of<TileChangedEvent>(events), (e) => e.Kind == TileKinds.Floor);
-            // Shut in, they are hunted down: bitten, and some of them lost.
-            Assert.Contains(Of<AbilityUsedEvent>(events), (e) => e.Ability == AbilityIds.Claw);
-            Assert.Contains(Of<DiedEvent>(events), (e) => s.Units.Find((u) => u.Id == e.Unit)?.Team == Teams.Xcom);
+            // Shut in, they are hunted down and bitten (with one bite a turn each since 5/11, #14, none is lost yet by then).
+            Assert.Contains(Of<ShotEvent>(events), (e) => e.Ability == AbilityIds.Claw && s.Units.Find((u) => u.Id == e.Target)?.Team == Teams.Xcom);
         }
     }
 }

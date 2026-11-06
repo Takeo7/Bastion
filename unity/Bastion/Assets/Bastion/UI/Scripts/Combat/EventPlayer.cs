@@ -32,6 +32,13 @@ namespace Bastion.UI.Combat
     /// </summary>
     public sealed class EventPlayer
     {
+        /// <summary>
+        /// A walk's gait for the figures (Arte's UnitViews: 2 runs, else it walks): the stretch that runs, past
+        /// Content.QuietTiles of the turn's movement (MovedEvent.Run; Arturo, 5/11), now that moving takes no actions; two
+        /// actions' walk in a recording of before.
+        /// </summary>
+        static int Gait(MovedEvent m) => m.Run == true || m.Ap >= 2 ? 2 : 1;
+
         readonly CombatController control;
         readonly CancellationToken stop;
         readonly Queue<(GameEvent e, int? by, int epoch)> queue = new Queue<(GameEvent, int?, int)>();
@@ -558,7 +565,7 @@ namespace Bastion.UI.Combat
             foreach (var q in items)
             {
                 var m = (MovedEvent)q.e;
-                if (walks.TryGetValue(m.Unit, out var had)) walks[m.Unit] = new MovedEvent { Unit = m.Unit, Path = had.Path.Concat(m.Path).ToList(), Ap = had.Ap + m.Ap };
+                if (walks.TryGetValue(m.Unit, out var had)) walks[m.Unit] = new MovedEvent { Unit = m.Unit, Path = had.Path.Concat(m.Path).ToList(), Ap = had.Ap + m.Ap, Run = had.Run == true || m.Run == true ? true : (bool?)null };
                 else
                 {
                     walks[m.Unit] = m;
@@ -607,11 +614,11 @@ namespace Bastion.UI.Combat
                 var id = u.Id;
                 var from = u.Pos;
                 ids.Add(id);
-                paced.Add(pace => units.StepSeconds(id, from, e.Path, e.Ap, pace));
+                paced.Add(pace => units.StepSeconds(id, from, e.Path, Gait(e), pace));
                 walkers.Add(new WalkPlan.Walker
                 {
                     Tiles = tiles.Select(p => Grid.NodeOf(v, p)).ToArray(),
-                    Steps = units.StepSeconds(id, from, e.Path, e.Ap, WalkersPace),
+                    Steps = units.StepSeconds(id, from, e.Path, Gait(e), WalkersPace),
                     Corners = tiles.Select((p, k) =>
                     {
                         if (k + 1 >= tiles.Count) return ((int, int)?)null;
@@ -879,7 +886,7 @@ namespace Bastion.UI.Combat
             foreach (var q in w.Items.Where(doors.Contains)) await Settle(q.e, q.by, false, q.epoch);
             // Each walker's whole walk for the plan; each plays its own stretches, with what befalls it between them.
             var whole = w.Chains.Select(c => c.Where(q => q.e is MovedEvent).Select(q => (MovedEvent)q.e).ToList())
-                .Select(ms => new MovedEvent { Unit = ms[0].Unit, Path = ms.SelectMany(x => x.Path).ToList(), Ap = ms.Sum(x => x.Ap) }).ToList();
+                .Select(ms => new MovedEvent { Unit = ms[0].Unit, Path = ms.SelectMany(x => x.Path).ToList(), Ap = ms.Sum(x => x.Ap), Run = ms.Any(x => x.Run == true) ? true : (bool?)null }).ToList();
             groupPlans = PlanGroup(whole);
             walked.Clear();
             grouped = true;
@@ -923,13 +930,15 @@ namespace Bastion.UI.Combat
                 {
                     var path = new List<Pos>(m.Path);
                     var ap = m.Ap;
+                    var run = m.Run == true;
                     while (k + 1 < mine.Count && mine[k + 1].e is MovedEvent next)
                     {
                         path.AddRange(next.Path);
                         ap += next.Ap;
+                        run |= next.Run == true;
                         k++;
                     }
-                    await PlaySafe((new MovedEvent { Unit = m.Unit, Path = path, Ap = ap }, q.by, q.epoch));
+                    await PlaySafe((new MovedEvent { Unit = m.Unit, Path = path, Ap = ap, Run = run ? true : (bool?)null }, q.by, q.epoch));
                 }
                 else await PlaySafe(q);
             }
@@ -1395,7 +1404,7 @@ namespace Bastion.UI.Combat
                     var waits = plan?.Waits.Skip(offset).ToArray();
                     var passes = plan?.Passes.Skip(1 + offset).ToList();
                     var pace = grouped ? WalkersPace * (plan?.Haste ?? 1) : u.Team == Teams.Xcom ? WalkSpeed : 1;
-                    var steps = units.StepSeconds(u.Id, u.Pos, m.Path, m.Ap, pace);
+                    var steps = units.StepSeconds(u.Id, u.Pos, m.Path, Gait(m), pace);
                     var reveal = 0f;
                     for (var k = 0; k < into && k < steps.Length; k++) reveal += steps[k] + (waits != null && k < waits.Length ? waits[k] : 0);
                     // Every other tile reached, a step heard (sfx.ts step), the shade in the fog's too.
@@ -1405,8 +1414,8 @@ namespace Bastion.UI.Combat
                         if (stepped++ % 2 == 0) control.Sfx.Step(u, foot);
                     };
                     var walk = plan != null
-                        ? units.MoveAlong(u.Id, m.Path, m.Ap, pace, waits, passes, step, stop)
-                        : units.MoveAlong(u.Id, m.Path, m.Ap, pace, step, stop);
+                        ? units.MoveAlong(u.Id, m.Path, Gait(m), pace, waits, passes, step, stop)
+                        : units.MoveAlong(u.Id, m.Path, Gait(m), pace, step, stop);
                     var start = Time.time;
                     var shown = into == 0;
                     try
@@ -2264,7 +2273,7 @@ namespace Bastion.UI.Combat
                     if (control.Players.Any(p => p.Slot != control.MySlot && p.Connected))
                     {
                         if (cp.To == control.MySlot) Hud?.Banner("TU TURNO", "xcom", "Tienes el mando: das tú las órdenes", true);
-                        else Hud?.Banner($"TURNO DE {PlayerName(cp.To).ToUpperInvariant()}", "xcom", control.State.Ready[control.MySlot] ? $"Has terminado: juega {PlayerName(cp.To)}" : "Mientras, puedes apuntar y planear");
+                        else Hud?.Banner($"TURNO DE {PlayerName(cp.To).ToUpperInvariant()}", "xcom", control.State.Ready[control.MySlot] ? $"Has terminado: juega {PlayerName(cp.To)}" : "Mientras, puedes planear los movimientos");
                     }
                     // To the soldier who plays now: the one in play of whoever takes the command, or their first with actions (#47).
                     control.TurnCamera(v, cp.To);

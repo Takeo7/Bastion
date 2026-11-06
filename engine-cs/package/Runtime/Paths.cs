@@ -226,21 +226,91 @@ namespace Bastion.Engine
             return out_;
         }
 
-        /// <summary>Cost budget covered by one action point.</summary>
+        /// <summary>
+        /// A unit's movement a turn, in path cost (COST_ORTHO a tile): its template's and its perks' (Arturo, 5/11 #14:
+        /// movement apart from the actions; 8 tiles a soldier, 5 one of the dead). What a free move (a patrol, a scamper)
+        /// covers too.
+        /// </summary>
+        public static int FullMoves(Unit u)
+        {
+            return (int)Math.Round((Content.Templates[u.Template].Mobility + u.Mods.Mobility) * CostOrtho);
+        }
+
+        /// <summary>The movement `u` has left this turn, in path cost: Unit.moves, or all of it (null: none spent yet).</summary>
+        public static int MoveBudget(Unit u)
+        {
+            return u.Moves ?? FullMoves(u);
+        }
+
+        /// <summary>
+        /// Whether a move of `cost` runs: it goes past Content.QuietTiles of the turn's movement, in one stretch or several
+        /// (Arturo, 5/11, in the box: «pasar de 5 en el turno»; 7 and then 1 were 8 without a sound). It is heard, and the
+        /// client draws it at a run.
+        /// </summary>
+        public static bool IsRun(Unit u, double cost)
+        {
+            var full = FullMoves(u);
+            return full > 0 && full - MoveBudget(u) + cost > Content.QuietTiles * CostOrtho;
+        }
+
+        /// <summary>Whether a move of `cost` spends the turn's movement, less than a tile of it left: that teaches Forma física (Arturo, 5/11).</summary>
+        public static bool SpendsAll(Unit u, double cost)
+        {
+            var left = MoveBudget(u);
+            return FullMoves(u) > 0 && left >= CostOrtho && left - cost < CostOrtho;
+        }
+
+        /// <summary>Whether `u` has anything left this turn: an action, or movement (Arturo, 5/11: the movement in stretches, before and after acting).</summary>
+        public static bool HasTurnLeft(Unit u)
+        {
+            return u.Ap > 0 || (MoveBudget(u) > 0 && FullMoves(u) > 0);
+        }
+
+        /// <summary>
+        /// The cost of walking `path` from `from` (the reach's steps, the wire's and, for the enemies, the fire's): what a
+        /// walk takes of the movement (Rules.moveAlong). A step no reach would take counts as a plain one.
+        /// </summary>
+        public static int CostAlong(GameState s, Unit u, Pos from, IReadOnlyList<Pos> path)
+        {
+            var slow = s.Slow != null && s.Slow.Count > 0 ? new HashSet<int>(s.Slow) : null;
+            var fire = u.Team != Teams.Xcom ? Burning.Nodes(s) : null;
+            var total = 0;
+            var at = Grid.ToPos(from);
+            foreach (var to in path)
+            {
+                var dx = Math.Sign(to.X - at.X);
+                var dy = Math.Sign(to.Y - at.Y);
+                var step = StepsFrom(s, at, dx, dy).FirstOrDefault((o) => o.To.X == to.X && o.To.Y == to.Y && o.To.Z == to.Z);
+                var ni = Grid.NodeOf(s, to);
+                total += (step != null ? step.Cost : dx != 0 && dy != 0 ? CostDiag : CostOrtho)
+                    + (slow != null && slow.Contains(ni) ? Content.Traps.Wire : 0) + (fire != null && fire.Contains(ni) ? Content.Flames.Avoid : 0);
+                at = to;
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// The movement a move may take (MoveBudget). It was a cost budget for one action point, when moving took them; kept
+        /// by that name for the AI's walks and the client till they move on (5/11).
+        /// </summary>
         public static double CostPerAp(Unit u)
         {
-            return (Content.Templates[u.Template].Mobility + u.Mods.Mobility) * CostOrtho;
+            return MoveBudget(u);
         }
 
-        public static double MaxMoveCost(Unit u)
-        {
-            return CostPerAp(u) * Math.Min(u.Ap, 2);
-        }
-
-        /// <summary>AP needed to move with the given path cost (1 = blue move, 2 = dash).</summary>
+        /// <summary>
+        /// The actions a move of `cost` took: none now, moving has its own movement (Arturo, 5/11 #14); it was 1 for a blue
+        /// move and 2 for a dash. Kept for the client till it moves on (5/11): 1, one stretch of what it has left.
+        /// </summary>
         public static int ApForCost(Unit u, double cost)
         {
-            return cost <= CostPerAp(u) ? 1 : 2;
+            return 1;
+        }
+
+        /// <summary>The furthest a move may go now: all the movement left (Arturo, 5/11 #14; it was two actions' worth).</summary>
+        public static double MaxMoveCost(Unit u)
+        {
+            return MoveBudget(u);
         }
 
         /// <summary>path.ts MinHeap: [priority, value] pairs, the same sift up and down (equal priorities come out in its order).</summary>
@@ -419,8 +489,7 @@ namespace Bastion.Engine
 
         /// <summary>
         /// A soldier's way round ground on fire (Arturo, 1/11: «que lo rodee»): when the shortest `path` steps on a burning
-        /// tile before its end, the cheapest way that steps on none, if it takes no more actions than the shortest (a move
-        /// of one action stays one). Null to keep the shortest. The same for the preview and the order (both BuildPath).
+        /// tile before its end, the cheapest way that steps on none, if the movement left covers it. Null to keep the shortest. The same for the preview and the order (both BuildPath).
         /// </summary>
         private static List<Pos>? RoundFire(GameState s, Unit u, Reach reach, int start, int end, List<Pos> path)
         {
@@ -428,7 +497,7 @@ namespace Bastion.Engine
             if (fire == null || !path.Take(path.Count - 1).Any((p) => fire.Contains(Grid.NodeOf(s, p)))) return null;
             // The tile it was asked to go to stays allowed: whoever ends on a fire chose it.
             fire.Remove(end);
-            var budget = CostPerAp(u) * ApForCost(u, reach.Cost.Get(end, 0));
+            var budget = MoveBudget(u);
             var round = ComputeReach(s, u, budget, reach.Origin, null, fire);
             return round.Cost.Has(end) ? Trace(s, round, start, end) : null;
         }

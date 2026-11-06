@@ -348,6 +348,34 @@ namespace Bastion.Engine.Tests
 
         private static List<JObject> Players(JObject room) => ((JArray)room["players"]!).Cast<JObject>().ToList();
 
+        [Theory]
+        [InlineData(MissionKinds.Recovery, null)]
+        [InlineData(MissionKinds.Sabotage, 7)]
+        public void AMissionSavedBeforeIsBroughtUpToDate(string kind, int? clock)
+        {
+            // A mission saved half played in the 0.11.9, with a clock and no movement spent (Unit.moves null): the clock only
+            // where there is one now, the sabotage's alarm (Arturo, 5/11 #1), and the whole turn's movement (#14).
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            host.Say(ana, new { t = "newCampaign" });
+            host.Say(ana, Ccmd(new { type = "launch", ready = true }));
+            host.Say(pepe, Ccmd(new { type = "launch", ready = true }));
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            save.State!.Mission.Kind = kind;
+            save.State.Mission.TurnsLeft = 7;
+            foreach (var u in save.State.Units) u.Moves = null;
+            save.Phase = RoomPhases.Mission;
+            store.Save(save);
+            host.Room = host.Make();
+            ana = host.Join("Ana");
+            var s = ana.Take("snapshot").Last()["state"]!.ToObject<GameState>(Json.Serializer)!;
+            Assert.Equal(clock, s.Mission.TurnsLeft);
+            Assert.All(Grid.Combatants(s, Teams.Xcom), (u) => Assert.Equal(Paths.FullMoves(u), Paths.MoveBudget(u)));
+        }
+
         [Fact]
         public void TheRecordingHasWhatItSaysItHas()
         {

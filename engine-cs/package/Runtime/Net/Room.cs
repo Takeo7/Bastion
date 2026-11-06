@@ -217,6 +217,9 @@ namespace Bastion.Net
                 phase = RoomPhases.Mission;
                 state = saved.State;
             }
+            // A mission saved half played, in the mission or left for the menu: up to date with the rules before it goes on
+            // (no clock where there is none now: Arturo, 5/11 #1; the movement of before, Unit.moves null, is a whole turn's).
+            if (state != null) Setup.UpToDate(state);
             if (saved.Rng.Length == 4) this.rng = new Rng(saved.Rng);
             missionKind = saved.MissionKind;
             skirmishMap = saved.SkirmishMap;

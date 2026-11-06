@@ -108,7 +108,7 @@ namespace Bastion.Engine
                 NextId = 0,
             };
             // Everyone starts as a recruit: classes come at Capitán.
-            for (var i = 0; i < 2 * StartKit; i++) AddSoldier(c, players.Count > 1 ? players[i % 2] : players[0], rng);
+            for (var i = 0; i < 2 * StartKit; i++) AddSoldier(c, players.Count > 1 ? players[i % 2] : players[0], rng, armed: false);
             var empty = c.Soldiers.ToList();
             foreach (var kind in StartArms)
             {

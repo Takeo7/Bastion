@@ -100,6 +100,68 @@ namespace Bastion.EditorTools
             Debug.Log($"[animales] a row of {row.Length} at {MapSpace.WorldToTile(at)}");
         }
 
+        /// <summary>
+        /// Each clip of the animals' controller (Fauna.ControllerName) played on a Labrador at 60 fps, in the log: its length,
+        /// whether it loops, how far its last pose is from its first (the greatest turn of a bone, degrees, and the most a
+        /// bone's end moves, cm: what jumps as it starts again), its usual turn from one frame to the next, and the frames
+        /// where a bone turns or moves far more than that (a hitch in the clip).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.AnimalesLab.Clips -quit
+        /// </summary>
+        public static void Clips()
+        {
+            var controller = Resources.Load<RuntimeAnimatorController>(Fauna.ControllerName);
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Synty/PolygonDog/Prefabs/Dogs/SK_Dog_Labrador_01.prefab");
+            if (controller == null || prefab == null)
+            {
+                Debug.LogError("[clips] no controller or no dog");
+                return;
+            }
+            var dog = (GameObject)UnityEngine.Object.Instantiate(prefab);
+            var bones = dog.GetComponentsInChildren<Transform>().Where(t => t != dog.transform && t.GetComponent<Renderer>() == null).ToArray();
+            var log = new System.Text.StringBuilder();
+            foreach (var clip in controller.animationClips.Distinct().OrderBy(c => c.name))
+            {
+                var settings = AnimationUtility.GetAnimationClipSettings(clip);
+                int frames = Mathf.Max(2, Mathf.RoundToInt(clip.length * 60));
+                var turns = new Quaternion[frames + 1][];
+                var places = new Vector3[frames + 1][];
+                for (int f = 0; f <= frames; f++)
+                {
+                    clip.SampleAnimation(dog, clip.length * f / frames);
+                    turns[f] = bones.Select(b => b.localRotation).ToArray();
+                    places[f] = bones.Select(b => dog.transform.InverseTransformPoint(b.position)).ToArray();
+                }
+                (float turn, float move, string bone) Step(int a, int b)
+                {
+                    float turn = 0, move = 0;
+                    string which = "";
+                    for (int k = 0; k < bones.Length; k++)
+                    {
+                        float t = Quaternion.Angle(turns[a][k], turns[b][k]), m = Vector3.Distance(places[a][k], places[b][k]) * 100;
+                        if (t > turn) turn = t;
+                        if (m > move)
+                        {
+                            move = m;
+                            which = bones[k].name;
+                        }
+                    }
+                    return (turn, move, which);
+                }
+                var steps = Enumerable.Range(0, frames).Select(f => Step(f, f + 1)).ToArray();
+                var sorted = steps.Select(s => s.move).OrderBy(m => m).ToArray();
+                float usual = sorted[sorted.Length / 2], usualTurn = steps.Select(s => s.turn).OrderBy(m => m).ToArray()[sorted.Length / 2];
+                var wrap = Step(frames, 0);
+                // Across the loop: the last step into the first frame against the usual one (with its own last step, Step(frames − 1, frames)).
+                var across = Step(frames - 1, 0);
+                log.AppendLine(FormattableString.Invariant($"{clip.name}: {clip.length:0.00} s ({clip.frameRate:0} fps), loop {settings.loopTime} (pose {settings.loopBlend}); end to start {wrap.turn:0.0}° {wrap.move:0.0} cm ({wrap.bone}); usual step {usualTurn:0.00}° {usual:0.00} cm, the step across the loop {across.move:0.00} cm"));
+                for (int f = 0; f < frames; f++)
+                    if (steps[f].move > Mathf.Max(4 * usual, 0.6f))
+                        log.AppendLine(FormattableString.Invariant($"   frame {f} → {f + 1} ({clip.length * f / frames:0.000} s): {steps[f].turn:0.0}° {steps[f].move:0.00} cm ({steps[f].bone})"));
+            }
+            UnityEngine.Object.DestroyImmediate(dog);
+            Debug.Log("[clips]\n" + log);
+        }
+
         static float Number(string name, float otherwise) =>
             float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : otherwise;
 
@@ -153,6 +215,18 @@ namespace Bastion.EditorTools
             {
                 MapSpace.Aim(camera, first.position, Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
                 Debug.Log($"[animales] {kind} {first.name} alone, at {MapSpace.WorldToTile(first.position)}");
+                // (BASTION_SEGUIR=1: the camera on it wherever it wanders.)
+                if (Environment.GetEnvironmentVariable("BASTION_SEGUIR") == "1")
+                {
+                    Camera alone = null;
+                    var stepping = Fauna.Stepping;
+                    Fauna.Stepping = dt =>
+                    {
+                        stepping?.Invoke(dt);
+                        if ((alone ??= GameObject.Find("Shot camera")?.GetComponent<Camera>()) != null)
+                            MapSpace.Aim(alone, first.position, Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
+                    };
+                }
                 return;
             }
             // The stand-in: from so many tiles off (to the south-east, the camera's side) towards the animal, at 1.4 m/s.

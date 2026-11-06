@@ -103,3 +103,83 @@
     bottom: 12px;
     color: var(--t-accent);
 }
+
+/* The enemies' sight (SightButton; Arturo, 5/11 #6, #9): left of the goal's arrow, a smaller ring of its steel with an
+   eye, grey off and in sight's red on; over both, the legend of the red on the ground while it shows. */
+.sight {
+    position: absolute;
+    right: 96px;
+    bottom: var(--edge);
+    width: 0;
+    height: 0;
+    overflow: visible;
+}
+
+.sight__button {
+    position: absolute;
+    right: 0;
+    bottom: 12px;
+    width: 52px;
+    height: 52px;
+}
+
+.sight__eye {
+    position: absolute;
+    left: 13px;
+    top: 13px;
+    right: 13px;
+    bottom: 13px;
+    color: #8f999f;
+}
+
+.sight__button:hover .sight__eye {
+    color: #c9d4dc;
+}
+
+.sight__button--on .sight__eye {
+    color: #f0503c;
+}
+
+.sight__button--on:hover .sight__eye {
+    color: #ff7a66;
+}
+
+.sight__legend {
+    position: absolute;
+    right: -84px;
+    bottom: 86px;
+    width: 236px;
+    padding: 5px 8px;
+    border-radius: 2px;
+    background-color: rgba(14, 16, 17, 0.82);
+}
+
+.sight__row {
+    flex-direction: row;
+    align-items: center;
+    margin: 1px 0;
+}
+
+/* As the ground's: the faint wash with its line, and the stronger one where it would notice (AimOverlay.ShowVision). */
+.sight__swatch {
+    flex-shrink: 0;
+    width: 14px;
+    height: 10px;
+    margin-right: 6px;
+    border-width: 1px;
+    border-color: rgba(240, 80, 60, 0.8);
+}
+
+.sight__swatch--seen {
+    background-color: rgba(240, 80, 60, 0.12);
+}
+
+.sight__swatch--noticed {
+    background-color: rgba(240, 80, 60, 0.3);
+}
+
+.sight__text {
+    flex-shrink: 1;
+    font-size: 12px;
+    white-space: normal;
+}

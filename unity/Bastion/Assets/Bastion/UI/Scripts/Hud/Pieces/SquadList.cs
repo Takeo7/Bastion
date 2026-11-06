@@ -103,6 +103,10 @@ namespace Bastion.UI.Hud
             Ui.Pips(tree.Q("hp"), c.Hp, c.MaxHp);
             var ap = tree.Q("ap");
             Ui.Pips(ap, c.Ap, c.ApMax);
+            // The movement left, a piece a tile, apart from the actions (Arturo, 5/11 #14).
+            var moves = tree.Q("moves");
+            if (c.MovesMax > 0) Ui.Pips(moves, c.Moves, c.MovesMax);
+            else moves.RemoveFromHierarchy();
             if (c.Rounds)
             {
                 ap.RemoveFromClassList("pips--ap");

@@ -141,6 +141,30 @@ namespace Bastion.Engine.Tests
             Assert.Null(Abilities.AbilityBlocker(s, u, AbilityIds.OpenDoor));
         }
 
+        // Arturo, 5/11 #14 (moving apart from the actions; UI found it in the app): a door is part of moving.
+        [Fact(DisplayName = "doors and windows › with no actions but movement left a soldier still opens and shuts a door; with neither, not")]
+        public void ADoorTakesMovementLeft()
+        {
+            var rng = new Rng(1);
+            var s = StateFrom(Rows);
+            var u = AddUnit(s, "s1", TemplateIds.Assault, 3, 0);
+            AddUnit(s, "s2", TemplateIds.Assault, 0, 0);
+            AddUnit(s, "a1", TemplateIds.Trooper, 6, 5);
+            var door = P(3, 1);
+            u.Ap = 0;
+            Assert.True(Paths.HasTurnLeft(u));
+            Assert.Null(Abilities.AbilityBlocker(s, u, AbilityIds.OpenDoor));
+            Assert.Equal("Sin acciones.", Abilities.AbilityBlocker(s, u, AbilityIds.Hunker));
+            Assert.True(Exec(s, Ability("s1", AbilityIds.OpenDoor, tile: door), rng).Ok);
+            Assert.Equal(TileKinds.DoorOpen, s.Tiles[1 * 7 + 3]);
+            Assert.Equal(0, u.Ap);
+            Assert.Null(u.Moves);
+            Assert.True(Exec(s, Ability("s1", AbilityIds.CloseDoor, tile: door), rng).Ok);
+            u.Moves = 0;
+            Assert.False(Paths.HasTurnLeft(u));
+            Assert.Equal("Sin acciones.", Abilities.AbilityBlocker(s, u, AbilityIds.OpenDoor));
+        }
+
         [Fact(DisplayName = "doors and windows › only a door beside the soldier, on its level and not round a corner; nobody can be in the doorway to close it")]
         public void OnlyADoorBesideTheSoldier()
         {

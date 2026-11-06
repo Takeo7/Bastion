@@ -50,7 +50,7 @@ namespace Bastion.UI.Hud
         public bool Connected;
         public bool Ready;
         public bool Command;
-        /// <summary>«Listo», «Con acciones», «Sin acciones», «Desconectado», «Ausente», or empty.</summary>
+        /// <summary>«A punto», «Con acciones», «Con movimiento», «Sin acciones ni movimiento», «Sin conexión», «Ausente», or empty.</summary>
         public string Status;
     }
 
@@ -102,6 +102,9 @@ namespace Bastion.UI.Hud
         public int MaxHp;
         public int Ap;
         public int ApMax;
+        /// <summary>The movement left and the turn's, in tiles (Arturo, 5/11 #14: apart from the actions); MovesMax 0, none shown.</summary>
+        public int Moves;
+        public int MovesMax;
         /// <summary>A siege's turret: its rounds in place of the actions.</summary>
         public bool Rounds;
         public string Title;
@@ -356,7 +359,14 @@ namespace Bastion.UI.Hud
     public sealed class ActionBarView
     {
         public List<AbilityView> Abilities = new List<AbilityView>();
-        /// <summary>Why the keys rest (not this player's orders): «Turno de Ana: puedes apuntar y planear»; empty if they don't.</summary>
+        /// <summary>
+        /// The picked soldier's movement left, in path cost halves of a tile (Arturo, 5/11 #14): its tiles before the keys;
+        /// MovesMax 0, none shown. `MovesTip`, what it is.
+        /// </summary>
+        public int Moves;
+        public int MovesMax;
+        public string MovesTip;
+        /// <summary>Why the keys rest (not this player's orders): «Turno de Ana: puedes planear los movimientos»; empty if they don't.</summary>
         public string Lock;
     }
 
@@ -468,8 +478,18 @@ namespace Bastion.UI.Hud
         /// <summary>Over an enemy, from the tile under the pointer: aim, sight, flank or none, and its words («74 %»).</summary>
         public string HoverKind;
         public string HoverText;
+        /// <summary>
+        /// An eye over an enemy, before its hover line (Arturo, 5/11): «would» in grey, it would see the picked one on the
+        /// tile under the pointer (#5); «sees» in red, it sees the picked one now, with the enemies' sight on (#6); null, none.
+        /// </summary>
+        public string Eye;
         /// <summary>The target being picked: the only flag kept over the shoulder.</summary>
         public bool Target;
+        /// <summary>
+        /// Another target of what is aimed: over the shoulder its hover line stays, its odds, and a click on it aims at it
+        /// instead (Arturo, 5/11 #11).
+        /// </summary>
+        public bool Other;
         /// <summary>Its card in the list under the pointer: an arrow over it points it out (Arturo, 31/10 #11).</summary>
         public bool Pointed;
     }
@@ -478,6 +498,24 @@ namespace Bastion.UI.Hud
     public sealed class FlagsView
     {
         public List<FlagView> Flags = new List<FlagView>();
+    }
+
+    /// <summary>
+    /// The enemies' sight (Arturo, 5/11 #6 and #9): its button bottom right, which stays on, and the legend over it while
+    /// an enemy's sight is on the ground (one under the pointer, or all of them with the button on).
+    /// </summary>
+    [Serializable]
+    public sealed class SightView
+    {
+        /// <summary>The button there (in a battle, not over a shoulder nor from above).</summary>
+        public bool Button;
+        /// <summary>The button on: every enemy in sight's at once.</summary>
+        public bool On;
+        /// <summary>The legend: what the red on the ground is; `Noticed`, the squad hidden, where they would notice one.</summary>
+        public bool Legend;
+        public bool Noticed;
+        /// <summary>Several enemies' at once (the button on): «Lo que ven».</summary>
+        public bool Many;
     }
 
     /// <summary>
@@ -604,6 +642,11 @@ namespace Bastion.UI.Hud
         public List<ControlView> Controls = new List<ControlView>();
         public string NightLabel;
         public List<string> NightRules = new List<string>();
+        /// <summary>How cover hides from the dead (Lore.CoverText; Arturo, 5/11 #4) and how moving goes (Lore.MoveText, #14), after the night's.</summary>
+        public string CoverLabel;
+        public List<string> CoverRules = new List<string>();
+        public string MoveLabel;
+        public List<string> MoveRules = new List<string>();
     }
 
     /// <summary>

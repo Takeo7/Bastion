@@ -244,6 +244,8 @@ namespace Bastion.Engine.Tests
             var r = Exec(saved, Move("s1", 6, 3));
             Assert.True(r.Ok, r.Error);
             SamePlace(P(6, 3), u.Pos);
+            // (Its next turn's movement: 8 tiles a turn, Arturo 5/11 #14.)
+            u.Moves = null;
             var up = Exec(saved, Move("s1", 9, 3, 1));
             Assert.True(up.Ok, up.Error);
             SamePlace(P(9, 3, 1), u.Pos);

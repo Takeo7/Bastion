@@ -94,8 +94,8 @@ namespace Bastion.UI.Start
         public static readonly (string Id, string Name, string About)[] Missions =
         {
             ("elimination", "Limpieza", "Abatid a todo lo que haya en el mapa."),
-            ("recovery", "Botín", "Recuperad la carga y salid " + Lore.Bus.In + " antes de que se acabe el tiempo."),
-            ("sabotage", "Sabotaje", "Apagad la alarma antes de que llegue la horda."),
+            ("recovery", "Botín", "Recuperad la carga y salid " + Lore.Bus.In + "."),
+            ("sabotage", "Sabotaje", "Apagad la alarma antes de que acabe la cuenta atrás."),
             ("hack", "Arreglar la radio", "Arreglad la radio. Si falla, salta la alarma."),
             // Not «el VIP»: neither an English acronym nor always a man (Lore, 23/10).
             ("rescue", "Rescate", "Llegad hasta la persona retenida y sacadla con vida."),

@@ -161,6 +161,9 @@ namespace Bastion.Client.Units
                 }
         }
 
+        /// <summary>The renderers of `id`'s body and what it carries (the dead's too: SearchOutline's line over a body to search); null if it isn't drawn.</summary>
+        public List<Renderer> BodyRenderers(string id) => id != null && views.TryGetValue(id, out var v) && v.body != null ? MarkedRenderers(v) : null;
+
         /// <summary>What the mark goes over: the body and what it carries (0.10.1 reddened the blades on a Cuervo's back too).</summary>
         static List<Renderer> MarkedRenderers(View v) =>
             v.body.GetComponentsInChildren<Renderer>(true).Concat(v.carried.Values.Where(t => t != null).SelectMany(t => t.GetComponentsInChildren<Renderer>(true)))

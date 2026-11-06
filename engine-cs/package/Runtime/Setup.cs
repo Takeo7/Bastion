@@ -312,14 +312,24 @@ namespace Bastion.Engine
             [Biomes.Facility] = "Fábrica",
         };
 
-        /// <summary>XCOM turns to secure each objective, tuned on 36×36 maps (see `missionTurns`).</summary>
+        /// <summary>
+        /// XCOM turns to secure each objective, tuned on 36×36 maps (see `missionTurns`). Only where the clock makes sense
+        /// (Arturo, 5/11: «una bomba, una alarma, se está cayendo algo»): the sabotage's alarm. A recovery (Content.RecoveryTurns),
+        /// a hack and a rescue had theirs till 0.11.9; La Lata waits for them now.
+        /// </summary>
         public static readonly IReadOnlyDictionary<string, int> MissionTurnsByKind = new Dictionary<string, int>
         {
-            [MissionKinds.Recovery] = Content.RecoveryTurns,
             [MissionKinds.Sabotage] = 10,
-            [MissionKinds.Hack] = 10,
-            [MissionKinds.Rescue] = 14,
         };
+
+        /// <summary>
+        /// A mission saved half played under rules since changed, brought up to date as it is loaded (the room, before
+        /// resuming it): the clock off where there is none now (Arturo, 5/11).
+        /// </summary>
+        public static void UpToDate(GameState s)
+        {
+            if (s.Mission != null && s.Mission.TurnsLeft != null && !MissionTurnsByKind.ContainsKey(s.Mission.Kind)) s.Mission.TurnsLeft = null;
+        }
 
         /// <summary>
         /// Turns to secure the objective on a map `size` tiles across: on bigger maps

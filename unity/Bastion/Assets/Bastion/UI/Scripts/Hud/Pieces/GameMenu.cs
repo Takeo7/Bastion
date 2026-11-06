@@ -202,6 +202,13 @@ namespace Bastion.UI.Hud
                     Ui.Text(view.NightLabel, "controls__night font-title", list);
                     foreach (var line in view.NightRules) Ui.Text("· " + line, "controls__rule", list);
                 }
+                // How moving goes (Arturo 5/11 #14) and how cover hides from the dead (#4): Lore's, as the night's.
+                foreach (var (label, rules) in new[] { (view.MoveLabel, view.MoveRules), (view.CoverLabel, view.CoverRules) })
+                {
+                    if (string.IsNullOrEmpty(label)) continue;
+                    Ui.Text(label, "controls__night font-title", list);
+                    foreach (var line in rules) Ui.Text("· " + line, "controls__rule", list);
+                }
                 BackTo(card, "settings");
             }
         }

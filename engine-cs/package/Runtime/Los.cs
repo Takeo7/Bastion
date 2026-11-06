@@ -359,13 +359,54 @@ namespace Bastion.Engine
             var from = viewerPos ?? viewer.Pos;
             // Inside a building the squad has not found, nobody shows to it (Buildings; Ana, 31/10).
             if (viewer.Team == Teams.Xcom && target.Team != Teams.Xcom && Buildings.Hidden(s, target.Pos, new[] { from })) return false;
-            return InViewCone(viewer, target.Pos, from) && SightOrigin(s, from, target.Pos, SightTo(s, viewer, target.Pos) * HiddenShare(viewer, target), WindowReachOf(viewer.Team)) != null;
+            return InViewCone(viewer, target.Pos, from) && SightOrigin(s, from, target.Pos, SightTo(s, viewer, target.Pos) * ConcealShare(s, viewer, target, null, from), WindowReachOf(viewer.Team)) != null;
         }
 
         /// <summary>How much of its sight `viewer` has on `target`: HIDE_SIGHT on an enemy hiding (Esconderse; Ana's #1 of 1/11).</summary>
         public static double HiddenShare(Unit viewer, Unit target)
         {
             return target.Hidden == true && viewer.Team != target.Team ? Content.HideSight : 1;
+        }
+
+        /// <summary>
+        /// How much of its sight one of the dead has on an enemy on `at` behind cover, as seen from `from` (Arturo, 5/11 #4:
+        /// «con los zombies la cobertura… lo que hace es ocultarte»): Content.CoverSight's share behind half cover or full
+        /// cover, the cover between them as a shot counts it (Cover.CoverAgainst). The living and the squad, 1: against
+        /// them cover is for shots.
+        /// </summary>
+        public static double CoverShare(GameState s, Unit viewer, Pos at, string targetTeam, Pos? from = null)
+        {
+            if (viewer.Team == targetTeam || !Content.Templates[viewer.Template].Undead) return 1;
+            var v = from ?? viewer.Pos;
+            var cover = Cover.CoverAgainst(s, at, new Vec2 { X = v.X, Y = v.Y });
+            return cover >= 2 ? Content.CoverSight.Full : cover == 1 ? Content.CoverSight.Half : 1;
+        }
+
+        /// <summary>
+        /// How much of its sight `viewer` has on `target` standing on `at` (its own place if null), seen from `from`: hiding
+        /// (HiddenShare) or cover (CoverShare), whichever hides more; they don't add up (Arturo, 5/11).
+        /// </summary>
+        public static double ConcealShare(GameState s, Unit viewer, Unit target, Pos? at = null, Pos? from = null)
+        {
+            return Math.Min(HiddenShare(viewer, target), CoverShare(s, viewer, at ?? target.Pos, target.Team, from));
+        }
+
+        /// <summary>
+        /// The enemies that would see `u` standing on `at` (Arturo, 5/11 #5: an eye over each as a move is picked): those
+        /// that would notice it while the squad is hidden, that would see it after; in their cone, as far as their sight
+        /// or detection goes there, cut by cover and hiding (ConcealShare). As the rules' noticing (Rules.NoticeRange).
+        /// </summary>
+        public static List<Unit> Watchers(GameState s, Unit u, Pos at)
+        {
+            var out_ = new List<Unit>();
+            foreach (var a in s.Units)
+            {
+                if (!a.Alive || !Content.HostileTo(a, u) || a.Objective || a.Captive) continue;
+                if (Content.Templates[a.Template].Sight <= 0) continue;
+                var range = (s.Concealed ? DetectionTo(s, a, at) : SightTo(s, a, at)) * ConcealShare(s, a, u, at);
+                if (InViewCone(a, at) && SightOrigin(s, a.Pos, at, range, WindowReachOf(a.Team)) != null) out_.Add(a);
+            }
+            return out_;
         }
 
         /// <summary>How wide the enemies see, in degrees round where they face (Arturo, 17/10: «en cono y no en área»; the living too, 18/10 #46).</summary>

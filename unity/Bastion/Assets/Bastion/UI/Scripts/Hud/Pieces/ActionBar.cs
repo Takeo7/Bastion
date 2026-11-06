@@ -97,6 +97,15 @@ namespace Bastion.UI.Hud
             }
             host.EnableInClassList("abilities--locked", !string.IsNullOrEmpty(view.Lock));
             if (!string.IsNullOrEmpty(view.Lock)) Ui.Text(view.Lock, "abilities__lock", host).pickingMode = PickingMode.Ignore;
+            // Before the keys, the movement left in tiles, apart from the actions (Arturo, 5/11 #14): «5» over «de 8».
+            if (view.MovesMax > 0)
+            {
+                var moves = Ui.El("bar-moves", host);
+                moves.EnableInClassList("bar-moves--none", view.Moves <= 0);
+                Ui.Text(HudText.Moves.Tiles(view.Moves), "bar-moves__value font-title", moves).pickingMode = PickingMode.Ignore;
+                Ui.Text(HudText.Moves.Of(view.MovesMax), "bar-moves__of", moves).pickingMode = PickingMode.Ignore;
+                tips.Attach(moves, view.MovesTip);
+            }
             var keys = new List<AbilityView>();
             var choices = new Dictionary<string, List<AbilityView>>();
             foreach (var a in view.Abilities)

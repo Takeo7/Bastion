@@ -107,7 +107,7 @@ namespace Bastion.Engine
         public int Aim { get; set; }
         public int Crit { get; set; }
         public int Defense { get; set; }
-        /// <summary>Extra tiles per action point.</summary>
+        /// <summary>Extra movement a turn, in tiles (Velocista, Maratón, Incansable; per action till 0.11.9).</summary>
         public int Mobility { get; set; }
         /// <summary>Primary weapon damage.</summary>
         public int Damage { get; set; }
@@ -199,6 +199,11 @@ namespace Bastion.Engine
         /// <summary>Damage absorbed per hit; explosives shred it.</summary>
         public int Armor { get; set; }
         public int Ap { get; set; }
+        /// <summary>
+        /// Movement left this turn, in path cost (Paths.CostOrtho a tile), apart from the actions (Arturo, 5/11 #14); null,
+        /// none spent yet (Paths.MoveBudget: all of it), as in a mission saved before.
+        /// </summary>
+        public int? Moves { get; set; }
         public int Ammo { get; set; }
         /// <summary>Spare magazines for the primary weapon (docs/FASE7.md): only the squad counts them; without it, reloading never runs out.</summary>
         public int? Mags { get; set; }

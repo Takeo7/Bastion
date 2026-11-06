@@ -42,21 +42,57 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ actions
 
-        [Fact(DisplayName = "actions › a short move costs 1 AP, a dash costs 2")]
-        public void AShortMoveCosts1ApADashCosts2()
+        [Fact(DisplayName = "actions › moving takes no action: 8 tiles a turn, in stretches before and after acting; past 5 of them it runs (Arturo, 5/11 #14)")]
+        public void MovingTakesNoAction()
         {
             var s = Field();
             var u = AddUnit(s, "s1", TemplateIds.Specialist, 0, 0);
             AddUnit(s, "s2", TemplateIds.Specialist, 19, 19);
             AddUnit(s, "a1", TemplateIds.Trooper, 19, 0);
-            Run(s, Move("s1", 5, 0));
+            Assert.Equal(8 * Paths.CostOrtho, Paths.FullMoves(u));
+            var first = Run(s, Move("s1", 5, 0));
+            Assert.Equal((2, 3 * Paths.CostOrtho), (u.Ap, Paths.MoveBudget(u)));
+            Assert.Null(first.OfType<MovedEvent>().First().Run);
+            // An action in between, and on with what is left; no further.
+            u.Ammo = 0;
+            Run(s, Ability("s1", AbilityIds.Reload));
             Assert.Equal(1, u.Ap);
+            Assert.False(Rules.ExecuteCommand(s, Move("s1", 9, 0), Ctx()).Ok);
+            // Past 5 tiles of the turn it runs (Arturo, 5/11, in the box): heard; and all 8 spent, Forma física learns.
+            Assert.Empty(first.OfType<NoiseEvent>());
+            var rest = Run(s, Move("s1", 8, 0));
+            Assert.Equal((1, 0), (u.Ap, Paths.MoveBudget(u)));
+            Assert.True(rest.OfType<MovedEvent>().First().Run);
+            Assert.Contains(rest, (e) => e is NoiseEvent);
+            Assert.Equal(1, u.Deeds![DeedIds.Run]);
+            Assert.Equal("No le queda movimiento.", Rules.ExecuteCommand(s, Move("s1", 8, 1), Ctx()).Error);
+            // 7 and then 1 is a run as well: the 1 goes past the 5.
             var t = Field();
             var v = AddUnit(t, "s1", TemplateIds.Specialist, 0, 0);
             AddUnit(t, "s2", TemplateIds.Specialist, 19, 19);
             AddUnit(t, "a1", TemplateIds.Trooper, 19, 0);
-            Run(t, Move("s1", 12, 0));
-            Assert.Equal(0, v.Ap);
+            Assert.True(Run(t, Move("s1", 7, 0)).OfType<MovedEvent>().First().Run);
+            var one = Run(t, Move("s1", 8, 0));
+            Assert.Equal((2, 0), (v.Ap, Paths.MoveBudget(v)));
+            Assert.True(one.OfType<MovedEvent>().First().Run);
+            Assert.Contains(one, (e) => e is NoiseEvent);
+            Assert.Equal(1, v.Deeds![DeedIds.Run]);
+            // 5, and no further: not heard, and Forma física learns nothing.
+            var q = Field();
+            var quiet = AddUnit(q, "s1", TemplateIds.Specialist, 0, 0);
+            AddUnit(q, "s2", TemplateIds.Specialist, 19, 19);
+            AddUnit(q, "a1", TemplateIds.Trooper, 19, 0);
+            Assert.Empty(Run(q, Move("s1", 5, 0)).OfType<NoiseEvent>());
+            Assert.Null(quiet.Deeds);
+            // What ends the turn takes the movement left with it; the next turn brings it all back.
+            var w = Field();
+            var x = AddUnit(w, "s1", TemplateIds.Specialist, 0, 0);
+            AddUnit(w, "s2", TemplateIds.Specialist, 19, 19);
+            AddUnit(w, "a1", TemplateIds.Trooper, 19, 0);
+            Run(w, Ability("s1", AbilityIds.Hunker));
+            Assert.Equal((0, 0), (x.Ap, Paths.MoveBudget(x)));
+            Events.ApplyEvent(w, new TurnBeganEvent { Team = Teams.Xcom, Turn = 2 });
+            Assert.Equal((2, 8 * Paths.CostOrtho), (x.Ap, Paths.MoveBudget(x)));
         }
 
         [Fact(DisplayName = "actions › rejects orders for the partner soldiers")]
@@ -231,8 +267,9 @@ namespace Bastion.Engine.Tests
         {
             var s = Field(30, 20);
             s.Concealed = true;
-            AddUnit(s, "s1", TemplateIds.Specialist, 0, 10);
-            AddUnit(s, "s2", TemplateIds.Specialist, 0, 12);
+            // Within a turn's move of where they go (8 tiles: Arturo, 5/11 #14).
+            AddUnit(s, "s1", TemplateIds.Specialist, 5, 10);
+            AddUnit(s, "s2", TemplateIds.Specialist, 5, 12);
             AddUnit(s, "a1", TemplateIds.Trooper, 20, 10, extra: (u) => u.PodId = "p1");
             AddUnit(s, "a2", TemplateIds.Trooper, 20, 12, extra: (u) => u.PodId = "p1");
             s.Pods.Add(new Pod { Id = "p1", Active = false, UnitIds = new List<string> { "a1", "a2" }, Patrol = new List<Pos>(), PatrolIndex = 0 });
@@ -343,6 +380,8 @@ namespace Bastion.Engine.Tests
             b.Owner = 1;
             CommandContext BothCtx(int slot) => Ctx(slot, Both);
             Run(s, Move("s1", 4, 0), BothCtx(0));
+            // (A turn's movement more: two walks of a turn each.)
+            s.Units[0].Moves = null;
             Run(s, Move("s1", 0, 5), BothCtx(0));
             Assert.Equal("s1", s.Mission.Item?.Carrier);
             // Holding the item with no enemy left is not a win any more (docs/PRUEBA-2026-10-14.md P1).
@@ -398,6 +437,7 @@ namespace Bastion.Engine.Tests
         {
             var (s, a, b) = Recovery();
             Run(s, Move("s1", 4, 0));
+            a.Moves = null;
             Run(s, Move("s1", 0, 5));
             Assert.Equal("s1", s.Mission.Item?.Carrier);
             for (var i = 0; i < 4 && s.Outcome == null; i++) Run(s, new EndTurnCommand { Ready = true });
@@ -496,8 +536,9 @@ namespace Bastion.Engine.Tests
             SamePlace(P(1, 2, 0), UnitOf(s, "s2").Pos);
             // Alone, there's nobody to pass it to.
             Assert.False(Rules.ExecuteCommand(s, new PassCommand(), Ctx(1, new[] { 1 })).Ok);
-            // Nor to a partner with nothing left to do.
+            // Nor to a partner with nothing left to do: no action and no movement.
             UnitOf(s, "s1").Ap = 0;
+            UnitOf(s, "s1").Moves = 0;
             var idle = Rules.ExecuteCommand(s, new PassCommand(), Ctx(1, Both));
             Assert.False(idle.Ok);
             Assert.Matches("acciones", idle.Error);
@@ -523,10 +564,11 @@ namespace Bastion.Engine.Tests
         public void AHolderOutOfActionsPassesOnTheirOwn()
         {
             var s = Field();
+            // Out of actions, with movement left (Arturo, 5/11 #14): a walk, and the command goes on.
             AddUnit(s, "s1", TemplateIds.Specialist, 0, 0, extra: (u) =>
             {
                 u.Owner = 0;
-                u.Ap = 1;
+                u.Ap = 0;
             });
             AddUnit(s, "s2", TemplateIds.Specialist, 1, 0, extra: (u) => u.Owner = 1);
             AddUnit(s, "a1", TemplateIds.Trooper, 19, 19);

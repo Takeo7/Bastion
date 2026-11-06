@@ -18,8 +18,11 @@ namespace Bastion.Engine.Tests
     /// <summary>
     /// The game's port opened on the router (Net/RouterPort.cs), against routers of its own on 127.0.0.1: one with UPnP
     /// (its description and its SOAP, found by an SSDP that answers the search) and one with NAT-PMP. Never the real
-    /// router: a test must not open a port on the house's.
+    /// router: a test must not open a port on the house's. Alone, after the rest (TimeBudgets): NAT-PMP's answer is waited
+    /// for 1.75 s in all, and with every test at once it sometimes came later, so UPnP opened it (NatPmpComesBeforeUpnp,
+    /// 6/11; alone it always passed).
     /// </summary>
+    [Collection(TimeBudgets.Name)]
     public class NetRouterTests
     {
         private const int Game = 41391;

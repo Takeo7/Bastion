@@ -154,6 +154,9 @@ namespace Bastion.Client.Map
         /// settles; a door opening is a tileChanged): only the tiles that changed are made again. How many; if `state`
         /// has other storeys, it is built whole (and -1).
         /// </summary>
+        /// <summary>A copy of the car whose nose is on ground tile `anchor`, as drawn, under the map (MapBuilder.CarCopy); null if none.</summary>
+        public GameObject CarCopy(int anchor) => builder?.CarCopy(anchor, transform);
+
         public int Rebuild(GameState state)
         {
             if (builder == null) return -1;

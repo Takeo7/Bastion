@@ -53,6 +53,8 @@
         <ui:VisualElement name="shot-panel" class="shot-panel panel" />
         <!-- Where the mission's goal lies, an arrow in a ring, bottom right (UI-06). -->
         <ui:VisualElement name="goal-arrow" class="goal-arrow" picking-mode="Ignore" />
+        <!-- The enemies' sight beside it, a button that stays on, and the legend of its red over them (Arturo, 5/11 #6, #9). -->
+        <ui:VisualElement name="sight" class="sight" picking-mode="Ignore" />
         <ui:VisualElement name="side" class="side" picking-mode="Ignore">
             <ui:VisualElement name="goal" class="goal-dock panel" />
             <ui:VisualElement name="compass" class="compass panel" />

@@ -8,10 +8,11 @@ namespace Bastion.UI.Hud
     {
         public static class Turn
         {
-            public const string InPlayTip = "Un soldado cada vez: este termina sus acciones antes que otro, o se cede el turno";
+            public const string InPlayTip = "Un soldado cada vez: este termina sus acciones antes que otro, o se cede el turno. El movimiento que le quede lo puede gastar después.";
             public const string EnemyLock = "Turno enemigo";
 
-            public static string PartnerLock(string name) => $"Turno de {name}: puedes apuntar y planear";
+            /// <summary>The bar resting while the partner holds the command: the keys do nothing then (Arturo, 5/11 #15), moves are planned.</summary>
+            public static string PartnerLock(string name) => $"Turno de {name}: puedes planear los movimientos";
             public static string InPlay(string name) => $"EN JUEGO · {name.ToUpperInvariant()}";
         }
 
@@ -47,7 +48,10 @@ namespace Bastion.UI.Hud
             // Without gender (Lore, 26/10): «A punto», «Sin conexión».
             public const string Ready = "A punto";
             public const string WithActions = "Con acciones";
-            public const string NoActions = "Sin acciones";
+            /// <summary>Movement left but no actions (Arturo, 5/11 #14): the command may still go to them.</summary>
+            public const string WithMoves = "Con movimiento";
+            // Beside «Con movimiento», neither (Lore, 6/11).
+            public const string NoActions = "Sin acciones ni movimiento";
             public const string Offline = "Sin conexión";
             public const string Away = "Ausente";
         }
@@ -61,6 +65,9 @@ namespace Bastion.UI.Hud
             public const string CancelTip = "Esc";
             public const string PrevTip = "Objetivo anterior (Mayús+Tab)";
             public const string NextTip = "Siguiente objetivo (Tab)";
+
+            /// <summary>Which of how many targets, and how to change (Arturo, 5/11 #11).</summary>
+            public static string Index(int n, int of) => $"{n}/{of} · Tab";
             public const string LockedTip = "Sin el mando solo se puede apuntar: el porcentaje sirve para planear";
             public const string SelfLocked = "Sin el mando solo puedes consultarla";
             public const string SelfHint = "Otra vez, Espacio o Intro: usar · Esc: cancelar";
@@ -205,6 +212,29 @@ namespace Bastion.UI.Hud
         {
             public const string Title = "MAPA";
             public const string Hint = "Clic: bajar la cámara allí · M o Esc: volver";
+        }
+
+        /// <summary>The movement left, apart from the actions (Arturo, 5/11 #14), in points (Lore's: a tile one, a diagonal 1,5): a path's cost is two a point.</summary>
+        public static class Moves
+        {
+            /// <summary>«5», «6,5» (a diagonal step costs a tile and a half).</summary>
+            public static string Tiles(int cost) => cost % 2 == 0 ? (cost / 2).ToString() : $"{cost / 2},5";
+            public static string Of(int cost) => $"de {Tiles(cost)}";
+            public static string Tip(int left, int full) => $"Movimiento: le quedan {Tiles(left)} de {Tiles(full)} puntos. Cada casilla cuesta 1; en diagonal, 1,5. Moverse no gasta acciones, y el movimiento se reparte en tramos, antes y después de actuar. Pasar de {Bastion.Engine.Content.QuietTiles} puntos en el turno, en un tramo o en varios, es correr, y se oye.";
+            public const string Stat = "Movimiento";
+        }
+
+        /// <summary>
+        /// The enemies' sight (Arturo, 5/11 #6, #9): its button and the legend of the red on the ground, beside its swatches
+        /// (Lore, 5/11: «notar», as the night's rules and Esconderse say it).
+        /// </summary>
+        public static class Sight
+        {
+            public const string Tip = "Vista de los zombis (V): lo que ve cada uno. Ojo rojo: ya ve al soldado elegido.";
+            public const string Seen = "Lo que ve";
+            public const string SeenMany = "Lo que ven";
+            public const string Noticed = "Aquí notaría a un soldado";
+            public const string NoticedMany = "Aquí notarían a un soldado";
         }
 
         public static class Squad

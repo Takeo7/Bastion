@@ -77,7 +77,12 @@ namespace Bastion.Engine
         /// A new soldier (docs/FASE10.md): no class, a bar filled in one or two lines
         /// at random, so no two are alike, and its points still to spend.
         /// </summary>
-        private static CampaignSoldier AddSoldier(CampaignState c, int owner, Rng rng)
+        /// <remarks>
+        /// `armed`: one of StartArms at random, as those who start had (Arturo, 5/11: «los nuevos reclutas reciben un arma
+        /// inicial aleatoria como los del inicio»): a pistol half the time, a machete or a crowbar a quarter each. Only where
+        /// the campaign counts its pistols (CampaignState.Pistols); never at the start, which deals its own.
+        /// </remarks>
+        private static CampaignSoldier AddSoldier(CampaignState c, int owner, Rng rng, bool armed = true)
         {
             var (name, sex) = SoldierName(c, rng);
             var id = NewId(c, "c");
@@ -100,6 +105,7 @@ namespace Bastion.Engine
                 Traits = new List<string>(),
             };
             c.Soldiers.Add(s);
+            if (armed && c.Pistols == true) (c.FoundWeapons ??= new List<FoundWeapon>()).Add(new FoundWeapon { Id = NewId(c, "w"), Kind = rng.Pick(StartArms), Holder = s.Id });
             // In a siege every soldier fit defends (docs/FASE12.md §11.5): one who comes once it has started, too (Red, 2/11).
             if (ActiveOffer(c)?.Siege == true)
             {

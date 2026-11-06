@@ -109,7 +109,12 @@ namespace Bastion.Engine.Tests
                     e.Pos = there;
                     foreach (var x in state.Units)
                     {
-                        if (x.Team == Teams.Xcom && x != u) x.Ap = 0;
+                        if (x.Team == Teams.Xcom && x != u)
+                        {
+                            // Still: no actions and no movement either (Arturo, 5/11 #14: it is apart from them).
+                            x.Ap = 0;
+                            x.Moves = 0;
+                        }
                         if (x.Team == Teams.Alien && x != e) x.Alive = false;
                     }
                     u.Ap = 2;

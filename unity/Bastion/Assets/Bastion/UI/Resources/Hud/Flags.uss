@@ -91,24 +91,48 @@
     font-size: 9px;
 }
 
-/* The hover line over an enemy, from the tile under the pointer: its odds, sight or flank. */
+/* The hover line over an enemy, from the tile under the pointer: an eye if it would see the picked one there or sees
+   it now (Arturo, 5/11 #5, #6), and its odds, sight or flank, on one plate. */
 .uflag__hover {
+    flex-direction: row;
+    align-items: center;
     margin-bottom: 2px;
     padding: 0 5px;
-    font-size: 11px;
-    -unity-font-style: bold;
     background-color: var(--t-tag);
 }
 
-.uflag__hover--aim {
+.uflag__hover-text {
+    margin-left: 2px;
+    margin-right: 2px;
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+.uflag__hover--aim .uflag__hover-text {
     color: var(--t-accent);
 }
 
-.uflag__hover--sight {
+.uflag__hover--sight .uflag__hover-text {
     color: #7fd3ff;
 }
 
-.uflag__hover--flank {
+.uflag__hover--flank .uflag__hover-text {
+    color: var(--t-danger);
+}
+
+/* The eye: grey, it would see the picked one on the pointer's tile (as the one just seen: .uflag__spot--eye); red, it
+   sees the picked one now. */
+.uflag__eye {
+    width: 18px;
+    height: 12px;
+    margin: 2px 1px;
+}
+
+.uflag__eye--would {
+    color: #b4bec6;
+}
+
+.uflag__eye--sees {
     color: var(--t-danger);
 }
 
@@ -119,6 +143,28 @@
 
 .flags-layer--close .uflag--target {
     display: flex;
+}
+
+/* The other targets of what is aimed, over the shoulder: only their odds, which take a click to aim at them instead
+   (Arturo, 5/11 #11). */
+.flags-layer--close .uflag--other {
+    display: flex;
+}
+
+.flags-layer--close .uflag--other .uflag__row,
+.flags-layer--close .uflag--other .uflag__name {
+    display: none;
+}
+
+.uflag__hover--pick {
+    padding: 1px 7px;
+    border-width: 1px;
+    border-color: rgba(240, 192, 64, 0.45);
+}
+
+.uflag__hover--pick:hover {
+    background-color: rgba(60, 52, 30, 0.95);
+    border-color: var(--t-accent);
 }
 
 /* Floating numbers and words (fx.ts floatText: now UI's), risen and faded from C#. */

@@ -284,7 +284,7 @@ namespace Bastion.UI.Hud
 
         ActionBarView Bar(string owner)
         {
-            var bar = new ActionBarView { Lock = owner == "partner" ? "Turno de Ana: puedes apuntar y planear" : owner == "enemy" ? "Turno enemigo" : null };
+            var bar = new ActionBarView { Lock = owner == "partner" ? "Turno de Ana: puedes planear los movimientos" : owner == "enemy" ? "Turno enemigo" : null };
             AbilityView A(string id, string name, string key, string cost, string desc, bool enabled = true, string menu = null) =>
                 new AbilityView { Id = id, Name = name, Hotkey = key, Cost = cost, Description = desc, Enabled = enabled && owner == "mine", Menu = menu };
             var shoot = A("shoot", "Disparar", "1", "1 acción · Acaba el turno", "Dispara al blanco elegido.");

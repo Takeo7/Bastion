@@ -682,7 +682,8 @@
   "sirenPolice": {
    "pack": "city",
    "fbx": "SM_Veh_Car_Police_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "sirenAmbulance": {
    "pack": "apocalypse",
@@ -2598,42 +2599,50 @@
   "carSedan": {
    "pack": "city",
    "fbx": "SM_Veh_Car_Sedan_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "carSmall": {
    "pack": "city",
    "fbx": "SM_Veh_Car_Small_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "carMedium": {
    "pack": "city",
    "fbx": "SM_Veh_Car_Medium_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "carMuscle": {
    "pack": "city",
    "fbx": "SM_Veh_Car_Muscle_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "carTaxi": {
    "pack": "city",
    "fbx": "SM_Veh_Car_Taxi_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "carVan": {
    "pack": "city",
    "fbx": "SM_Veh_Car_Van_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "carConvertible": {
    "pack": "town",
    "fbx": "SM_Veh_Convertable_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "carPickup": {
    "pack": "town",
    "fbx": "SM_Veh_Pickup_01",
-   "fit": 1.95
+   "fit": 1.95,
+   "yaw": 2
   },
   "carUte": {
    "pack": "apocalypse",
@@ -2702,23 +2711,23 @@
    "carWreck",
    "carRusted",
    "carSuv",
-   "carOpen",
+   "carWreck",
    "carWreck",
    "carRusted",
    "carSuv",
-   "carOpen",
+   "carRusted",
    "carWreck",
    "carRusted",
    "carSuv",
-   "carOpen",
+   "carSuv",
    "carWreck",
    "carRusted",
    "carSuv",
-   "carOpen",
+   "carWreck",
    "carWreck",
    "carRusted",
    "carSuv",
-   "carOpen",
+   "carRusted",
    "carSedan",
    "carSmall",
    "carMedium",

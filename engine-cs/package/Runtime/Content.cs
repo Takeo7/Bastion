@@ -218,8 +218,8 @@ namespace Bastion.Engine
         public int Aim { get; set; }
         public int Defense { get; set; }
         public int Dodge { get; set; }
-        /// <summary>Tiles per action point (XCOM 2 mobility 12 m / 1.5).</summary>
-        public double Mobility { get; set; } // SOLDIER_MOBILITY * ZOMBIE_PACE for the slow dead: 6.4.
+        /// <summary>Tiles of movement a turn, apart from the actions (Arturo, 5/11 #14: 8 a soldier, 5 the dead).</summary>
+        public double Mobility { get; set; }
         /// <summary>Sight radius in tiles (27 m / 1.5).</summary>
         public int Sight { get; set; }
         /// <summary>While XCOM is concealed, this unit only notices soldiers this close (12 m / 1.5).</summary>
@@ -261,9 +261,16 @@ namespace Bastion.Engine
         /// <summary>Unit.rank from which a soldier has a third action: Veterano (skills.ts VETERANCY, docs/FASE10.md §5).</summary>
         public const int ThirdActionRank = 3;
 
-        /// <summary>Actions a unit starts its turn with: two, three for a soldier from Veterano on.</summary>
+        /// <summary>The dead's actions a turn (Arturo, 5/11 #14): one; their movement is apart (Paths.FullMoves).</summary>
+        public const int UndeadActions = 1;
+
+        /// <summary>
+        /// Actions a unit starts its turn with: two, three for a soldier from Veterano on; one for the dead (Arturo, 5/11
+        /// #14). Moving takes none: it has its movement apart (Paths.FullMoves).
+        /// </summary>
         public static int ApPerTurnOf(Unit u)
         {
+            if (Templates.TryGetValue(u.Template, out var t) && t.Undead) return UndeadActions;
             return u.Team == Teams.Xcom && u.Rank >= ThirdActionRank ? ApPerTurn + 1 : ApPerTurn;
         }
 
@@ -559,9 +566,9 @@ namespace Bastion.Engine
             // Fase 10 (docs/FASE10.md §4): the reach is the throw's (abilityRange), the noise grows with Señuelo and Reclamo.
             [AbilityIds.Stone] = new AbilityDef { Id = AbilityIds.Stone, Name = "Piedra", Description = "Lanza una piedra: suena donde cae y los zombis van a mirar. No hace daño, salvo con Canto afilado, Pedrusco, Pedrada u Honda.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 10, Noise = 8 },
             [AbilityIds.OverwatchMelee] = new AbilityDef { Id = AbilityIds.OverwatchMelee, Name = "Vigilancia cuerpo a cuerpo", Description = "Golpea al primer enemigo que se le ponga al lado.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
-            [AbilityIds.Hunker] = new AbilityDef { Id = AbilityIds.Hunker, Name = "Cubrirse", Description = "+30 de defensa y +50 de esquiva hasta tu próximo turno.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
+            [AbilityIds.Hunker] = new AbilityDef { Id = AbilityIds.Hunker, Name = "Cubrirse", Description = "+30 de defensa y +50 de esquiva hasta tu próximo turno. No oculta: para eso, Esconderse.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
             // Ana's #1 of 1/11 (Arturo: a new action, Cubrirse as it was).
-            [AbilityIds.Hide] = new AbilityDef { Id = AbilityIds.Hide, Name = "Esconderse", Description = "Se agacha y se esconde hasta tu próximo turno: los enemigos tienen que estar a la mitad de la distancia de siempre para ver al soldado. A diferencia de Cubrirse, no da defensa ni esquiva.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
+            [AbilityIds.Hide] = new AbilityDef { Id = AbilityIds.Hide, Name = "Esconderse", Description = "Se agacha y se esconde hasta tu próximo turno: los enemigos tienen que estar a la mitad de la distancia de siempre para verlo o notarlo. No se suma a la cobertura: detrás de cobertura alta, no oculta más de los zombis. A diferencia de Cubrirse, no da defensa ni esquiva.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
             [AbilityIds.Reload] = new AbilityDef { Id = AbilityIds.Reload, Name = "Recargar", Description = "Mete un cargador lleno y gasta uno de repuesto: primero en el arma principal y, si está llena, en la pistola. Los de repuesto los hace el Taller; registrando aparecen más.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = false },
             [AbilityIds.Grenade] = new AbilityDef { Id = AbilityIds.Grenade, Name = "Granada", Description = "Lanza una granada: daña a todos en el área, destruye cobertura y abre boquetes en las paredes. Arriba hunde el suelo donde cae, y quien esté encima cae.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = true, Charge = ChargeIds.Grenade, Range = 10, Radius = 2.5, Explosive = WeaponIds.FragGrenade },
             [AbilityIds.Launch] = new AbilityDef { Id = AbilityIds.Launch, Name = "Lanzagranadas", Description = "Dispara una granada más lejos y con más radio. También abre boquetes en las paredes y, arriba, hunde el suelo donde cae.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = true, Charge = ChargeIds.Grenade, Range = 14, Radius = 3.5, Explosive = WeaponIds.FragGrenade },
@@ -604,7 +611,7 @@ namespace Bastion.Engine
             [AbilityIds.Pry] = new AbilityDef { Id = AbilityIds.Pry, Name = "Quitar las tablas", Description = "Con la palanca, quita lo que tapia una ventana o una puerta que tengas al lado: las tablas y, en una ventana, también los muebles. Después, por la ventana se puede pasar y disparar, y la puerta se puede abrir. Hace un poco de ruido.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 1.5, Noise = 2 },
             [AbilityIds.OpenDoor] = new AbilityDef { Id = AbilityIds.OpenDoor, Name = "Abrir la puerta", Description = "Abre una puerta cerrada que tengas al lado.", Target = AbilityTargets.Tile, Ap = 0, EndsTurn = false, Range = 1.5, Noise = 1 },
             [AbilityIds.CloseDoor] = new AbilityDef { Id = AbilityIds.CloseDoor, Name = "Cerrar la puerta", Description = "Cierra una puerta abierta que tengas al lado, si no hay nadie en ella.", Target = AbilityTargets.Tile, Ap = 0, EndsTurn = false, Range = 1.5, Noise = 1 },
-            [AbilityIds.RunAndGun] = new AbilityDef { Id = AbilityIds.RunAndGun, Name = "Correr y disparar", Description = "Una acción más este turno.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false, Cooldown = 4 },
+            [AbilityIds.RunAndGun] = new AbilityDef { Id = AbilityIds.RunAndGun, Name = "Esfuerzo extra", Description = "Sin gastar acción: una acción más este turno.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false, Cooldown = 4 },
             [AbilityIds.RapidFire] = new AbilityDef { Id = AbilityIds.RapidFire, Name = "Ráfaga", Description = "Dos disparos seguidos, cada uno con −15 de puntería. Gasta dos balas.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Cooldown = 3, Weapon = AbilityWeapons.Primary, Aim = -15, Ammo = 2 },
             [AbilityIds.Suppression] = new AbilityDef { Id = AbilityIds.Suppression, Name = "Supresión", Description = "Inmoviliza al objetivo: −50 de puntería hasta tu próximo turno, y si se mueve, le disparas. Gasta dos balas.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = true, Ammo = 2 },
             [AbilityIds.ChainShot] = new AbilityDef { Id = AbilityIds.ChainShot, Name = "Disparo en cadena", Description = "Disparo con −15 de puntería; si acierta, vuelves a disparar.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Cooldown = 3, Weapon = AbilityWeapons.Primary, Aim = -15 },
@@ -644,6 +651,16 @@ namespace Bastion.Engine
         public const int SmokeDefense = 20;
         /// <summary>The share of their sight the enemies have on a soldier hiding (Esconderse; Arturo, 1/11: half).</summary>
         public const double HideSight = 0.5;
+
+        /// <summary>
+        /// How much of their sight and detection the dead have on an enemy behind cover (Arturo, 5/11 #4, in the box):
+        /// three quarters behind half cover, half behind full cover, as Esconderse (HideSight). Los.CoverShare.
+        /// </summary>
+        public static class CoverSight
+        {
+            public const double Half = 0.75;
+            public const double Full = 0.5;
+        }
         public const int SmokeTurns = 2;
         /// <summary>The squad's turns a molotov's fire lasts (Arturo, 1/11: «Fuego 3×3, 2 turnos»).</summary>
         public const int MolotovTurns = 2;
@@ -780,9 +797,14 @@ namespace Bastion.Engine
 
         // ---------------------------------------------------------------- templates
 
-        /// <summary>Tiles a soldier covers in an action, and how much of that the dead do (playtest 16/10 #21; 80 %, not 60, Ana's playtest 28/10).</summary>
+        /// <summary>
+        /// A soldier's movement a turn, in tiles (Arturo, 5/11 #14: 8 points, a point a tile, apart from the actions; it was
+        /// 8 tiles an action), and the dead's: 5 (it was 80 % of a soldier's an action, ZombiePace, Ana's playtest 28/10).
+        /// </summary>
         public const int SoldierMobility = 8;
-        public const double ZombiePace = 0.8;
+        public const int ZombieMobility = 5;
+        /// <summary>Tiles a turn one walks without being heard; past them it runs (Paths.IsRun; Arturo, 5/11, in the box).</summary>
+        public const int QuietTiles = 5;
 
         private static UnitTemplate Soldier(
             string id,
@@ -920,10 +942,11 @@ namespace Bastion.Engine
             [TemplateIds.Lancer] = Alien(TemplateIds.Lancer, "Cazador", "CAZ", WeaponIds.LancerRifle, meleeWeapon: WeaponIds.StunLance, hp: 4, abilities: new[] { AbilityIds.StunLance, AbilityIds.Shoot, AbilityIds.Reload }),
             // The dead (docs/FASE2.md): claws and teeth, no cover, the horde's AI (ai.ts takeZombieTurn).
             // Harder to put down (playtest 2026-10-15, #12): two more points of health each.
-            // Playtest 16/10 #19 and #21: 3 of health; they move 80 % of what a soldier does (ZOMBIE_PACE, 28/10).
-            [TemplateIds.Zombie] = Alien(TemplateIds.Zombie, "Zombi", "ZOM", WeaponIds.Claws, meleeWeapon: WeaponIds.Claws, hp: 3, aim: 60, mobility: SoldierMobility * ZombiePace, sight: 14, detection: 6, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
+            // Playtest 16/10 #19 and #21: 3 of health; 5 of movement and one action (Arturo, 5/11 #14). The special dead keep
+            // their pace, with one action: the Corredor 8, the Acorazado 5, the Chillón 5, the Hinchado 3.
+            [TemplateIds.Zombie] = Alien(TemplateIds.Zombie, "Zombi", "ZOM", WeaponIds.Claws, meleeWeapon: WeaponIds.Claws, hp: 3, aim: 60, mobility: ZombieMobility, sight: 14, detection: 6, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
             [TemplateIds.Xenoid] = Alien(TemplateIds.Xenoid, "Corredor", "COR", WeaponIds.XenoPistol, meleeWeapon: WeaponIds.XenoPistol, hp: 7, aim: 60, mobility: 8, detection: 10, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
-            [TemplateIds.Mec] = Alien(TemplateIds.Mec, "Acorazado", "ACO", WeaponIds.MecCannon, meleeWeapon: WeaponIds.MecCannon, hp: 9, armor: 1, aim: 60, mobility: SoldierMobility * ZombiePace, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
+            [TemplateIds.Mec] = Alien(TemplateIds.Mec, "Acorazado", "ACO", WeaponIds.MecCannon, meleeWeapon: WeaponIds.MecCannon, hp: 9, armor: 1, aim: 60, mobility: ZombieMobility, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: new[] { AbilityIds.Claw, AbilityIds.Smash }),
             // The Chillón doesn't bite: it screams (mindspin, noise 16) and raises the dead.
             [TemplateIds.Sectoid] = Alien(TemplateIds.Sectoid, "Chillón", "CHI", WeaponIds.SectoidPistol, hp: 7, mobility: 5, will: 100, undead: true, abilities: new[] { AbilityIds.Mindspin, AbilityIds.Reanimate }),
             // The Hinchado: slow; it bursts when it dies or reaches a soldier (rules.ts burst).

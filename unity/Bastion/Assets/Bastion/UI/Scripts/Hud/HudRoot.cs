@@ -36,6 +36,7 @@ namespace Bastion.UI.Hud
         UnitFlags flags;
         EdgeMarks edges;
         GoalArrow goalArrow;
+        SightButton sight;
         MiniMap miniMap;
         Banner banner;
         Cards cards;
@@ -95,8 +96,11 @@ namespace Bastion.UI.Hud
             goal = new GoalCard(root.Q("goal"), root.Q("compass"), tips, ReopenIntro, root.Q("edge-marks"));
             log = new Log(root.Q("log"), Icon);
             flags = new UnitFlags(root.Q("flags"), Icon);
+            flags.TargetPicked += id => TargetPicked?.Invoke(id);
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
             goalArrow = new GoalArrow(root.Q("goal-arrow"));
+            sight = new SightButton(root.Q("sight"), tips);
+            sight.Toggled += () => SightToggled?.Invoke();
             miniMap = new MiniMap(root.Q("mini-map"));
             banner = new Banner(root.Q("banner"), relay, s => Sound?.Invoke(s));
             notes = new Notes(root.Q("notes"));
@@ -207,6 +211,15 @@ namespace Bastion.UI.Hud
 
         /// <summary>Where the mission's goal lies, for the ring's arrow (UI-06); null, none.</summary>
         public void SetGoal(Vector3? world) => goalArrow.Set(world);
+
+        /// <summary>The enemies' sight's button and legend (Arturo, 5/11 #6, #9).</summary>
+        public void SetSight(SightView v) => sight?.Set(v);
+
+        /// <summary>The enemies' sight's button pressed.</summary>
+        public event Action SightToggled;
+
+        /// <summary>Another target's odds clicked over its flag (Arturo, 5/11 #11): its id.</summary>
+        public event Action<string> TargetPicked;
 
         /// <summary>An arrow at the screen's edge clicked: the camera to that point.</summary>
         public event Action<Vector3> Look;

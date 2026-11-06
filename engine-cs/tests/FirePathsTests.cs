@@ -25,7 +25,7 @@ namespace Bastion.Engine.Tests
 
         private static bool OnFire(List<Pos> path, int x) => path.Any((p) => p.X == x && p.Y == 2);
 
-        [Fact(DisplayName = "fire paths › a soldier goes round a fire when it takes no more actions, and the order walks the way the preview drew")]
+        [Fact(DisplayName = "fire paths › a soldier goes round a fire when its movement covers it, and the order walks the way the preview drew")]
         public void RoundWhenItCostsNoMoreActions()
         {
             var s = Street(3);
@@ -40,24 +40,24 @@ namespace Bastion.Engine.Tests
             var walked = result.Events!.OfType<MovedEvent>().Where((e) => e.Unit == "s1").SelectMany((e) => e.Path).ToList();
             Assert.Equal(preview.Select((p) => (p.X, p.Y, p.Z)), walked.Select((p) => (p.X, p.Y, p.Z)));
             Assert.Equal(hp, soldier.Hp);
-            Assert.Equal(1, soldier.Ap);
+            // Moving takes no action (Arturo, 5/11 #14).
+            Assert.Equal(2, soldier.Ap);
         }
 
-        [Fact(DisplayName = "fire paths › through it when going round would take a second action")]
-        public void ThroughWhenRoundTakesAnotherAction()
+        [Fact(DisplayName = "fire paths › through it when going round would take more movement than it has")]
+        public void ThroughWhenRoundTakesMoreThanItHas()
         {
             var s = Street(3);
             var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 1, 2);
-            // As far as one action goes, in a straight line: any way round costs more.
-            var far = 1 + (int)(Paths.CostPerAp(soldier) / Paths.CostOrtho);
+            // As far as its movement goes, in a straight line: any way round costs more.
+            var far = 1 + Paths.MoveBudget(soldier) / Paths.CostOrtho;
             var reach = Paths.ComputeReach(s, soldier, Paths.MaxMoveCost(soldier));
-            Assert.Equal(1, Paths.ApForCost(soldier, reach.Cost[Grid.NodeOf(s, P(far, 2))]));
             var path = Paths.BuildPath(s, soldier, reach, P(far, 2))!;
             Assert.True(OnFire(path, 3));
             var hp = soldier.Hp;
             Assert.True(Exec(s, Move("s1", far, 2)).Ok);
             Assert.Equal(hp - 1, soldier.Hp);
-            Assert.Equal(1, soldier.Ap);
+            Assert.Equal((2, 0), (soldier.Ap, Paths.MoveBudget(soldier)));
         }
 
         [Fact(DisplayName = "fire paths › the soldier's reach is the same with and without fires; one asked onto a fire goes")]

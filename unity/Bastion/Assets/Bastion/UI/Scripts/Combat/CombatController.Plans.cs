@@ -97,8 +97,8 @@ namespace Bastion.UI.Combat
                     plans.RemoveAll(p => p.unit == id);
                     continue;
                 }
-                var colour = slot == MySlot && !HasCommand() ? MoveOverlay.Hex(0x7fb2d4) : ColorUtility.TryParseHtmlString(PlayerColor(slot), out var c) ? (Color32)c : MoveOverlay.Hex(0xffffff);
-                var reach = Paths.ComputeReach(State, u, Paths.MaxMoveCost(u));
+                var colour = slot == MySlot && !HasCommand() ? MoveOverlay.PlanRing : ColorUtility.TryParseHtmlString(PlayerColor(slot), out var c) ? (Color32)c : MoveOverlay.Hex(0xffffff);
+                var reach = Paths.ComputeReach(State, u, Paths.MoveBudget(u));
                 var path = reach.Cost.Has(Grid.NodeOf(State, tile)) ? Paths.BuildPath(State, u, reach, tile) : null;
                 list.Add(path != null && path.Count > 0 ? (u.Pos, (IList<Pos>)path, colour) : (tile, new List<Pos> { tile }, colour));
             }
@@ -132,14 +132,14 @@ namespace Bastion.UI.Combat
             {
                 if (slot != MySlot) continue;
                 var u = UnitById(State, id);
-                if (u == null || !u.Alive || u.Ap <= 0) continue;
+                if (u == null || !u.Alive || Paths.MoveBudget(u) <= 0) continue;
                 var key = $"{id}:{tile.X},{tile.Y},{tile.Z}";
                 if (planSkip.Contains(key)) continue;
                 // Another of one's own still in play: this one waits, as it is, and so do those after it.
                 if (WaitingFor(u.Id) != null) return;
                 // Ordered last time and still here: the engine refused it. Passed over, as one that doesn't reach.
                 var refused = planSent == key;
-                var reach = Paths.ComputeReach(State, u, Paths.MaxMoveCost(u));
+                var reach = Paths.ComputeReach(State, u, Paths.MoveBudget(u));
                 if (refused || !reach.Cost.Has(Grid.NodeOf(State, tile)))
                 {
                     planSkip.Add(key);

@@ -107,6 +107,24 @@ namespace Bastion.UI.Combat
             }
             // «retrato=s2» a click on that soldier's card under the sheet, as the pointer's (two close together: the camera to
             // it, UI-08); «reloj=0.7» the turn's clocks shown with that much left, as a game's (the lab has none).
+            // «estado» the picked one's actions and movement left, and what is armed, in the log (#14 of 5/11).
+            if (what == "estado")
+            {
+                Debug.Log($"[lab] estado: {control.LabState()}");
+                return true;
+            }
+            // «rotulo=a3» a click on another target's odds over its flag, aiming (#11 of 5/11).
+            if (what == "rotulo")
+            {
+                var line = control.Hud?.GetComponent<UIDocument>()?.rootVisualElement.Q("pick-" + arg);
+                if (line == null) return false;
+                using (var click = ClickEvent.GetPooled())
+                {
+                    click.target = line;
+                    line.SendEvent(click);
+                }
+                return true;
+            }
             if (what == "retrato")
             {
                 var card = control.Hud?.GetComponent<UIDocument>()?.rootVisualElement.Q("card-" + arg);

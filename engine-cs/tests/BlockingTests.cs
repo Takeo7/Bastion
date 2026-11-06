@@ -63,7 +63,8 @@ namespace Bastion.Engine.Tests
         {
             // The corridor (row 1) and a loop under it (row 3), joined at both ends.
             var s = StateFrom(new[] { "#########", "#.......#", "#.#####.#", "#.......#", "#########" });
-            var u = AddUnit(s, "s1", TemplateIds.Assault, 1, 1, extra: (x) => x.Ap = 2);
+            // 11 tiles round: more movement than a soldier's 8 (Velocista and the like, Arturo 5/11 #14).
+            var u = AddUnit(s, "s1", TemplateIds.Assault, 1, 1, extra: (x) => { x.Ap = 2; x.Mods.Mobility = 3; });
             AddUnit(s, "s2", TemplateIds.Assault, 4, 1);
             var reach = Paths.ComputeReach(s, u, Paths.MaxMoveCost(u));
             var path = Paths.BuildPath(s, u, reach, P(6, 1));

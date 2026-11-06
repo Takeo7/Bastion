@@ -113,6 +113,23 @@
     margin-right: 2px;
 }
 
+/* The movement left under the actions, a piece a tile in the reach's sky blue, thinner (Arturo, 5/11 #14). */
+.squad-card__moves {
+    margin-top: 2px;
+    margin-right: -1px;
+}
+
+.squad-card__moves .pip {
+    flex-grow: 1;
+    width: 0;
+    height: 2px;
+    margin-right: 1px;
+}
+
+.pips--moves .pip--on {
+    background-color: #5cc4f5;
+}
+
 /* The picked one: lit round it. */
 .squad-card--selected {
     border-width: 1px;

@@ -4,6 +4,8 @@
 // the lab, 0.10.1's other two (synty.ts dyeMark), off: the colour taken towards red (_Tint, its 0.45: the diffuse ×
 // (1, 0.32, 0.26)), multiplied over what is drawn; and a red glow added, stronger at the edges as they turn away (_Base +
 // _Rim × (1 − n·v)^_Edge; its 0.1 + 1.2 × (1 − n·v)²). _Mark is the mark now (0 none, 1 all), set from outside.
+// _LineColor, the line's: the target's red unless said (the sRGB of linear 1, 0.16, 0.08, as it was written in); what
+// a soldier would search, UI's bone or grey (SearchOutline, Arturo's #12 of 5/11).
 Shader "Bastion/Mark"
 {
     Properties
@@ -14,6 +16,7 @@ Shader "Bastion/Mark"
         _Rim ("Glow at the edges", Range(0, 3)) = 0
         _Edge ("How close to the edge", Range(1, 8)) = 2
         _Line ("Line round it (pixels)", Range(0, 6)) = 1.5
+        _LineColor ("Line's colour", Color) = (1, 0.4366, 0.3133, 1)
     }
     SubShader
     {
@@ -29,6 +32,7 @@ Shader "Bastion/Mark"
             half _Rim;
             half _Edge;
             half _Line;
+            half4 _LineColor;
         CBUFFER_END
 
         struct Attributes
@@ -123,7 +127,7 @@ Shader "Bastion/Mark"
             half4 Fragment(Varyings input) : SV_Target
             {
                 clip(_Line - 0.01);
-                return half4(1, 0.16, 0.08, _Mark);
+                return half4(_LineColor.rgb, _LineColor.a * _Mark);
             }
             ENDHLSL
         }

@@ -123,7 +123,7 @@ namespace Bastion.UI.Hud
             if (icon?.Invoke("stat:" + s.Kind) == null && LineIcon.Has(s.Kind)) pic.Add(new LineIcon(s.Kind));
             if (s.Total > 0)
             {
-                var pips = Ui.El("pips pips--" + (s.Kind == "ap" ? "ap" : s.Kind == "ammo" || s.Kind == "sidearm" ? "ammo" : "hp"), e);
+                var pips = Ui.El("pips pips--" + (s.Kind == "ap" || s.Kind == "moves" ? s.Kind : s.Kind == "ammo" || s.Kind == "sidearm" ? "ammo" : "hp"), e);
                 Ui.Pips(pips, s.Filled, s.Total);
             }
             if (!string.IsNullOrEmpty(s.Value)) Ui.Text(s.Value, s.ValueBad ? "stat__value stat__value--bad" : "stat__value", e);

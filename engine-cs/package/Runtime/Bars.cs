@@ -142,7 +142,7 @@ namespace Bastion.Engine
             [SkillIds.Throwing] = new SkillDef { Id = SkillIds.Throwing, Name = "Lanzar", Short = "LAN", Line = "Se llena lanzando piedras y granadas, más si alcanzan a alguien.", Stat = "Alcance al lanzar" },
             [SkillIds.Medicine] = new SkillDef { Id = SkillIds.Medicine, Name = "Curar", Short = "CUR", Line = "Se llena curando con el botiquín o con medicinas; más si es a otro.", Stat = "Curación" },
             [SkillIds.Searching] = new SkillDef { Id = SkillIds.Searching, Name = "Investigar", Short = "INV", Line = "Se llena registrando habitaciones, abriendo cajas, arreglando equipos y apagando alarmas.", Stat = "Destreza al arreglar" },
-            [SkillIds.Fitness] = new SkillDef { Id = SkillIds.Fitness, Name = "Forma física", Short = "FOR", Line = "Se llena cubriéndose y corriendo (moverse con las dos acciones).", Stat = "Salud" },
+            [SkillIds.Fitness] = new SkillDef { Id = SkillIds.Fitness, Name = "Forma física", Short = "FOR", Line = "Se llena cubriéndose y gastando todo el movimiento del turno, en un tramo o en varios.", Stat = "Salud" },
         };
 
         /// <summary>The first bar takes BAR_FIRST, and every next one BAR_STEP more.</summary>

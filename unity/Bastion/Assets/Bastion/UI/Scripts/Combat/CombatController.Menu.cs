@@ -30,6 +30,7 @@ namespace Bastion.UI.Combat
             ("O", "Centrar en el objetivo"),
             ("Clic derecho", "Ficha del enemigo"),
             ("M", "Mapa"),
+            ("V", "Vista de los zombis: lo que ve cada uno"),
             ("F12", "Guardar una captura de pantalla"),
             ("Esc", "Cancelar, o abrir este menú y pausar la partida"),
         };
@@ -119,6 +120,10 @@ namespace Bastion.UI.Combat
                 Controls = Controls.Select(c => new ControlView { Keys = c.keys, What = c.what }).ToList(),
                 NightLabel = Lore.NightText.Label,
                 NightRules = Lore.NightText.Rules.ToList(),
+                CoverLabel = Lore.CoverText.Label,
+                CoverRules = Lore.CoverText.Rules.ToList(),
+                MoveLabel = Lore.MoveText.Label,
+                MoveRules = Lore.MoveText.Rules.ToList(),
             };
         }
 

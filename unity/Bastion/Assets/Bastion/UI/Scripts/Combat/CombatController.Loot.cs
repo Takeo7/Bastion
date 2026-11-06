@@ -30,6 +30,56 @@ namespace Bastion.UI.Combat
             ["lootFood"] = ("store:food", "#d9a464"),
         };
 
+        /// <summary>
+        /// The rucksack over a body or a car being searched (Arturo, 5/11 #12): in the bone of the lines where a click searches
+        /// it, greyed where it can't from here; how high over its floor (a body lies on the ground, a boot is a car's height).
+        /// </summary>
+        const string SearchLit = "#f3ecdc";
+        const string SearchFar = "#7d868c";
+        static readonly Color SearchLitColor = Ui.Hex(SearchLit, Color.white);
+        static readonly Color SearchFarColor = Ui.Hex(SearchFar, Color.grey);
+        const float SearchBodyHeight = 0.75f;
+        const float SearchBootHeight = 1.25f;
+
+        /// <summary>The bodies and boots under the pointer or within Registrar's reach, each lit or not (ShowSearchMarks).</summary>
+        List<(Pos at, bool lit)> searchMarks = new List<(Pos, bool)>();
+        string searchKey = "";
+        /// <summary>What ShowWay's pass puts there (its branches and ShowArmed), shown as it ends.</summary>
+        List<(Pos at, bool lit)> searchNext;
+
+        static bool IsBodyOrBoot(string spot) => spot == Looting.Body || spot == Looting.CarBoot || spot == Looting.PoliceBoot;
+
+        /// <summary>
+        /// A body or a car to search shown as itself (#12): a rucksack over each and, Arte's, the thing outlined; null or
+        /// empty, none. The tags over the map again only when they change.
+        /// </summary>
+        void ShowSearchMarks(List<(Pos at, bool lit)> marks)
+        {
+            marks ??= new List<(Pos, bool)>();
+            var key = string.Join("|", marks.Select(m => $"{m.at.X},{m.at.Y},{m.at.Z}:{m.lit}"));
+            if (key == searchKey) return;
+            searchKey = key;
+            searchMarks = marks;
+            if (marks.Count > 0) Debug.Log($"[registro] {key}");
+            // The body or the whole car outlined in the same colours (Arte's SearchOutline; empty, none).
+            if (State != null) Bastion.Client.Units.SearchOutline.Show(State, marks, SearchLitColor, SearchFarColor);
+            if (Hud != null && State != null) Hud.SetWorldTags(WorldTags(Shown));
+        }
+
+        /// <summary>The rucksacks of ShowSearchMarks, added to the tags over the map.</summary>
+        void SearchMarks(GameState v, List<WorldTagView> list)
+        {
+            foreach (var (at, lit) in searchMarks)
+            {
+                var high = Looting.SearchSpot(v, at) == Looting.Body ? SearchBodyHeight : SearchBootHeight;
+                list.Add(new WorldTagView
+                {
+                    Kind = "loot", Icon = AbilityIds.Search, Ring = lit ? SearchLit : SearchFar, Size = LootMarkSize * Board.Tile,
+                    World = Board.TileToWorld(v, at, high * Board.Tile),
+                });
+            }
+        }
+
         /// <summary>The marks of the boxes to show now, added to the tags over the map.</summary>
         void LootMarks(GameState v, List<WorldTagView> list)
         {

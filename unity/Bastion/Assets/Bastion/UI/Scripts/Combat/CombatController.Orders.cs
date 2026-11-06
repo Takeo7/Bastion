@@ -29,7 +29,7 @@ namespace Bastion.UI.Combat
         public bool Armed => mode == Mode.Target || HandArmed() != null;
 
         /// <summary>What is armed and open, for the lab's log.</summary>
-        public string LabState() => $"cobertura {(CoverMatters() ? "sí" : "no")} (disparan: {string.Join(" ", Shown.Units.Where(u => u.Alive && u.Team == Teams.Alien && Shoots(u)).Select(u => u.Template + (Visible(u) ? "*" : "")).Distinct())}), modo {mode} {modeAbility ?? "-"}, blanco {targetId ?? "-"}, menú de la barra {(Hud != null && Hud.AbilityMenuOpen ? "abierto" : "cerrado")}, menú {(Hud != null && Hud.MenuOpen ? "abierto" : "cerrado")}; barra: {string.Join(" ", BarKeys().Select(v => $"{v.Id}{(v.Menu != null ? "<" + v.Menu : "")}{(v.Enabled ? "" : "(off)")}"))}";
+        public string LabState() => $"{(Unit() is Unit me ? $"{me.Id} acciones {me.Ap}, movimiento {Bastion.UI.Hud.HudText.Moves.Tiles(Paths.MoveBudget(me))} de {Bastion.UI.Hud.HudText.Moves.Tiles(Paths.FullMoves(me))} en {me.Pos.X}/{me.Pos.Y}, " : "")}cobertura {(CoverMatters() ? "sí" : "no")} (disparan: {string.Join(" ", Shown.Units.Where(u => u.Alive && u.Team == Teams.Alien && Shoots(u)).Select(u => u.Template + (Visible(u) ? "*" : "")).Distinct())}), modo {mode} {modeAbility ?? "-"}, blanco {targetId ?? "-"}, menú de la barra {(Hud != null && Hud.AbilityMenuOpen ? "abierto" : "cerrado")}, menú {(Hud != null && Hud.MenuOpen ? "abierto" : "cerrado")}; barra: {string.Join(" ", BarKeys().Select(v => $"{v.Id}{(v.Menu != null ? "<" + v.Menu : "")}{(v.Enabled ? "" : "(off)")}"))}";
         string modeAbility;
         string targetId;
         /// <summary>By hand: the tile picked among those within reach (the pointer, Tab or a click).</summary>
@@ -50,7 +50,7 @@ namespace Bastion.UI.Combat
         public string PartnerLast;
 
         /// <summary>Why an order cannot go out yet: the partner holds the command.</summary>
-        string CommandLock() => $"Tiene el mando {PlayerName(State.Command)}: puedes apuntar y planear, pero no dar la orden.";
+        string CommandLock() => $"Tiene el mando {PlayerName(State.Command)}: puedes planear, pero no dar la orden.";
 
         /// <summary>The confirm button's text while planning; null with the command.</summary>
         string LockLabel() => HasCommand() ? null : $"MANDO: {PlayerName(State.Command).ToUpperInvariant()}";
@@ -58,6 +58,8 @@ namespace Bastion.UI.Combat
         /// <summary>What is armed, checked against the latest state (game.ts refreshInteractive): gone if it no longer can be.</summary>
         void CheckMode()
         {
+            // The turn or the command gone, nothing stays armed for later (Arturo, 5/11 #15).
+            if (mode != Mode.Move && (!CanAct() || !HasCommand())) CancelModeSilently();
             if (mode == Mode.Target && CurrentTarget() == null) CancelModeSilently();
             if (mode == Mode.Tile || mode == Mode.Self)
             {
@@ -140,6 +142,15 @@ namespace Bastion.UI.Combat
             Refresh();
         }
 
+        /// <summary>Another target's odds clicked over its flag (Arturo, 5/11 #11): aimed at, over the shoulder too.</summary>
+        void PickTarget(string id)
+        {
+            if (mode != Mode.Target || id == targetId || !TargetOptions(modeAbility).Any(o => o.Unit.Id == id)) return;
+            targetId = id;
+            Debug.Log($"[hombro] objetivo {id} por su rótulo");
+            Refresh();
+        }
+
         /// <summary>The camera between the soldier and its target.</summary>
         void FocusTarget()
         {
@@ -188,7 +199,8 @@ namespace Bastion.UI.Combat
                 return;
             }
             var u = Unit();
-            if (u == null || !CanAct() || AbilityTexts.IsMenu(id)) return;
+            // Only in one's own turn and with the command: out of it a key neither arms nor waits for it (Arturo, 5/11 #15).
+            if (u == null || !CanAct() || !HasCommand() || AbilityTexts.IsMenu(id)) return;
             var view = BarView(id);
             if (view == null || !view.Enabled)
             {
@@ -267,6 +279,8 @@ namespace Bastion.UI.Combat
                     else Toast("Señala con el ratón dónde lanzarla.");
                     return;
             }
+            // Nothing armed: the first attack, only with the command (#15).
+            if (!CanAct() || !HasCommand()) return;
             var views = BarKeys();
             var usable = AbilityTexts.PrimaryAttacks.Select(id => views.FirstOrDefault(v => v.Id == id)).FirstOrDefault(v => v != null && v.Enabled);
             if (usable != null) UseAbility(usable.Id);
@@ -276,6 +290,8 @@ namespace Bastion.UI.Combat
         /// <summary>A number key: a choice of the open menu, a key of the bar, or a menu opened (game.ts onKey).</summary>
         void NumberKey(int n)
         {
+            // Out of one's turn or without the command, nothing (Arturo, 5/11 #15: the 3 armed Vigilar and waited).
+            if (!CanAct() || !HasCommand()) return;
             if (Hud != null && Hud.AbilityMenuOpen)
             {
                 Hud.PickMenu(n);
@@ -443,10 +459,14 @@ namespace Bastion.UI.Combat
             var hand = HandArmed();
             if (hand != null)
             {
-                // The pointer on one of those within reach picks it.
+                // The pointer on one of those within reach picks it. A body or a car's boot gets its rucksack instead of the
+                // tile's frame (Arturo, 5/11 #12).
                 var list = HandTiles();
                 if (hover != null && list.Any(t => Same(t, hover))) handPick = hover;
-                AimMarks.ShowSpots(State, list, HandTarget());
+                var pick = HandTarget();
+                var things = hand == AbilityIds.Search ? list.Where(t => Looting.SearchSpot(State, t) is string k && IsBodyOrBoot(k)).ToList() : new List<Pos>();
+                AimMarks.ShowSpots(State, list.Where(t => !things.Any(b => Same(b, t))).ToList(), pick);
+                searchNext = things.Select(t => (t, Same(t, pick))).ToList();
                 return;
             }
             if (mode == Mode.Tile)
@@ -539,7 +559,8 @@ namespace Bastion.UI.Combat
                 endArmedUntil = Time.time + 4;
                 var partner = PartnerHere();
                 var next = partner != null && !State.Ready[partner.Slot] ? $"el mando pasa a {partner.Name}" : "juega el enemigo";
-                endQuestion = $"{(idle == 1 ? "Un soldado tiene" : $"{idle} soldados tienen")} acciones. Pulsa otra vez para terminar: {next}.";
+                // (Actions or movement left: Lore, 5/11 #14.)
+                endQuestion = $"{(idle == 1 ? "A un soldado le quedan" : $"A {idle} soldados les quedan")} acciones o movimiento. Pulsa otra vez para terminar: {next}.";
                 Toast(endQuestion);
                 RefreshHud();
                 return;
@@ -555,7 +576,8 @@ namespace Bastion.UI.Combat
         string endQuestion;
 
         /// <summary>My soldiers that still have actions this turn.</summary>
-        int IdleSoldiers() => MyUnits().Count(x => x.Ap > 0);
+        /// <summary>One's soldiers with anything left: an action or movement (Arturo, 5/11 #14: the turn ends by itself only when none has).</summary>
+        int IdleSoldiers() => MyUnits().Count(Paths.HasTurnLeft);
 
         void DisarmEndTurn()
         {
@@ -575,7 +597,7 @@ namespace Bastion.UI.Combat
             var partner = PartnerHere();
             if (partner == null) Toast("El otro jugador no está conectado.");
             else if (State.Ready[partner.Slot]) Toast($"{partner.Name} ya ha terminado el turno.");
-            else if (!AbilityTexts.BusySlots(State).Contains(partner.Slot)) Toast($"A {partner.Name} no le quedan acciones.");
+            else if (!AbilityTexts.BusySlots(State).Contains(partner.Slot)) Toast($"A {partner.Name} no le quedan acciones ni movimiento.");
             else Send(new PassCommand());
         }
 

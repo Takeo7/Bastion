@@ -11,20 +11,24 @@ namespace Bastion.UI.Combat
     {
         public Pos Pos;
         public bool Dash;
+        /// <summary>Only got to running: past Content.QuietTiles of the turn's movement, in one stretch or several (Paths.IsRun; Arturo, 5/11), and heard.</summary>
+        public bool Run;
         public bool Detected;
         public bool Fire;
     }
 
     /// <summary>
     /// The marks of a move on the map (overlays.ts, UI's, Gameplay 23/10), in the look Arturo chose (tileLooks.ts, 18/10:
-    /// «Hueso y óxido», made clean): bone for what one action reaches, rust for the dash, no grid and no wash. Inside
-    /// each side on the range's edge a strip bright at the edge and fading inwards, and on it a thin line with its
-    /// corners rounded (Ana 22/10 #52), over a dark stroke, unbroken: it goes round the outside of a thing in the way at
-    /// the edge, never stops at it nor rings one inside (Ana 21/10 #18, Arturo 01/11 #4: Outline). The way to
+    /// «Hueso y óxido», made clean), now sky blue for all the movement left, one band (Arturo, 5/11 #13, #14: no dash; the
+    /// rust kept for a recording of before), no grid and no wash. Inside
+    /// the range's edge one glow, bright at the edge and fading inwards, round the corners too (Glow; Arturo 5/11 #16),
+    /// and on it a thin line with its corners rounded (Ana 22/10 #52), in its colour alone (#16: no dark stroke), unbroken:
+    /// it goes round the outside of a thing in the way at the edge, never stops at it nor rings one inside (Ana 21/10
+    /// #18, Arturo 01/11 #4: Outline). The way to
     /// the tile under the pointer, a ring on that tile, and over it a shield on each side with cover. Where the squad
     /// would be noticed, an eye in a soft red, no frame (Arturo, 31/10 #14); where the ground burns, a flame in orange
     /// (Arturo, 01/11: it burns whoever steps on it). Round the picked one's feet a white ring in
-    /// three arcs that turn; round the partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and blue.
+    /// three arcs that turn; round the partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and grey (blue is the reach's now).
     /// Lines keep their width in pixels (Bastion/Marks). The shields are drawn over walls, as the web's; the lines over
     /// everything but the figures, soldiers and the dead (Arturo, 31/10 #3: not cars, crates or walls), behind the legs
     /// standing over them (Ana, Arturo 31/10 #6: Pull).
@@ -32,13 +36,13 @@ namespace Bastion.UI.Combat
     /// </summary>
     public sealed class MoveOverlay : MonoBehaviour
     {
-        static readonly Color32 WalkFill = Hex(0xcdb486);
+        static readonly Color32 WalkFill = Hex(0x3aa8e6);
         static readonly Color32 DashFill = Hex(0x9a4a2c);
-        static readonly Color32 WalkEdge = Hex(0xf3ecdc);
+        static readonly Color32 WalkEdge = Hex(0x7fd4fa);
         static readonly Color32 DashEdge = Hex(0xc4704a);
-        static readonly Color32 WalkPath = Hex(0xf6f0e2);
+        static readonly Color32 WalkPath = Hex(0xa6e2fc);
         static readonly Color32 DashPath = Hex(0xe2a684);
-        static readonly Color32 PlanTint = Hex(0x7fb2d4);
+        static readonly Color32 PlanTint = Hex(0xb4bec6);
         /// <summary>The brightest the ground goes under a line (overlays.ts SHADE).</summary>
         static readonly Color32 Shade = Hex(0x56606a);
         /// <summary>The eye on a tile where the squad would be noticed: a soft red (Arturo, 31/10 #14; it was 0xf0503c with a frame).</summary>
@@ -63,7 +67,7 @@ namespace Bastion.UI.Combat
         const float EdgeShadePx = 1.8f + 2.2f;
         const float PathPx = 2f;
         const float PathShadePx = 2f + 4f;
-        /// <summary>How far into the tile a strip fades (overlays.ts FADE_DEPTH).</summary>
+        /// <summary>How far in from the border its glow fades (overlays.ts FADE_DEPTH).</summary>
         const float FadeDepth = 0.55f * T;
         /// <summary>How far back from a corner of the range its border turns (overlays.ts CORNER_R).</summary>
         const float CornerR = 0.24f * T;
@@ -250,11 +254,14 @@ namespace Bastion.UI.Combat
             {
                 var walkSegs = new List<Vector3[]>();
                 var dashSegs = new List<Vector3[]>();
+                var walkFloors = new Dictionary<int, float>();
+                var dashFloors = new Dictionary<int, float>();
                 var fill = FillAlpha * (planning ? 0.5f : 1);
                 var bands = Outline(tiles, soft);
                 foreach (var (p, dash) in bands.Values)
                 {
                     var floor = Board.TileToWorld(s, p).y;
+                    (dash ? dashFloors : walkFloors)[Key(p.X, p.Y)] = floor;
                     for (var side = 0; side < 4; side++)
                     {
                         var d = Grid.Dirs4[side];
@@ -263,7 +270,6 @@ namespace Bastion.UI.Combat
                         if (!outside) continue;
                         Side(p.X, p.Y, side, floor + 0.06f * T, out var a, out var b);
                         (dash ? dashSegs : walkSegs).Add(new[] { a, b });
-                        Strip(build, p.X, p.Y, side, floor + 0.03f * T, planning ? PlanTint : dash ? DashFill : WalkFill, fill);
                     }
                 }
                 foreach (var t in tiles)
@@ -285,9 +291,16 @@ namespace Bastion.UI.Combat
                         flame.Quad(c + new Vector3(-e, 0, -e), c + new Vector3(e, 0, -e), c + new Vector3(e, 0, e), c + new Vector3(-e, 0, e), Alpha(FireMark, 0.9f));
                     }
                 }
+                // Each band's line alone in its colour, no dark stroke under it (Arturo, 5/11 #16), and inside it one glow.
                 var edge = EdgeAlpha * (planning ? 0.55f : 1);
-                foreach (var seg in RoundCorners(walkSegs, CornerR)) Stroke(lines, seg[0], seg[1], EdgePx, EdgeShadePx, Alpha(planning ? PlanTint : WalkEdge, edge));
-                foreach (var seg in RoundCorners(dashSegs, CornerR)) Stroke(lines, seg[0], seg[1], EdgePx, EdgeShadePx, Alpha(planning ? PlanTint : DashEdge, edge));
+                var walkBends = new List<Bend>();
+                var dashBends = new List<Bend>();
+                var walkLine = RoundCorners(walkSegs, CornerR, walkBends);
+                var dashLine = RoundCorners(dashSegs, CornerR, dashBends);
+                foreach (var seg in walkLine) lines.Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : WalkEdge, edge));
+                foreach (var seg in dashLine) lines.Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : DashEdge, edge));
+                Glow(build, walkFloors, walkLine, walkBends, planning ? PlanTint : WalkFill, fill);
+                Glow(build, dashFloors, dashLine, dashBends, planning ? PlanTint : DashFill, fill);
             }
             strips.sharedMesh = build.Build(strips.sharedMesh);
             rangeShade.sharedMesh = under.Build(rangeShade.sharedMesh);
@@ -387,13 +400,6 @@ namespace Bastion.UI.Combat
             return bands;
         }
 
-        /// <summary>A line and, in the `under` builder, the dark stroke beneath it.</summary>
-        void Stroke(MeshBuilder into, Vector3 a, Vector3 b, float px, float shadePx, Color32 color)
-        {
-            into.Line(a, b, px, color);
-            under.Line(a, b, shadePx, Shade);
-        }
-
         /// <summary>A tile's side (DIRS4: 0 north, 1 east, 2 south, 3 west), its ends going round the tile clockwise.</summary>
         static void Side(int x, int y, int side, float h, out Vector3 from, out Vector3 to)
         {
@@ -410,7 +416,6 @@ namespace Bastion.UI.Combat
             }
         }
 
-        /// <summary>A strip inside a tile's side, the fill's colour at the edge and gone FadeDepth in (overlays.ts fadeTexture: 1, 0.45 at a third, 0).</summary>
         static Texture2D ringTexture;
 
         /// <summary>
@@ -443,42 +448,148 @@ namespace Bastion.UI.Combat
             Square(radius, c + Vector3.up * 0.002f, color);
         }
 
-        static void Strip(MeshBuilder into, int x, int y, int side, float h, Color32 color, float alpha)
+        /// <summary>A corner RoundCorners bent: where it was, the two ways its sides go from it, and how far back they turn.</summary>
+        struct Bend
         {
-            Side(x, y, side, h, out var a, out var b);
-            var middle = Board.Corner(x, y, h) + new Vector3(T / 2, 0, -T / 2);
-            var mid = (a + b) / 2;
-            var inward = (middle - mid).normalized;
-            var k = 0.35f * FadeDepth;
-            var c0 = Alpha(color, alpha);
-            var c1 = Alpha(color, alpha * 0.45f);
-            var c2 = Alpha(color, 0);
-            into.Quad(a, b, b + inward * k, a + inward * k, c0, c0, c1, c1);
-            into.Quad(a + inward * k, b + inward * k, b + inward * FadeDepth, a + inward * FadeDepth, c1, c1, c2, c2);
+            public Vector2 At;
+            public Vector2 A;
+            public Vector2 B;
+            public float R;
+        }
+
+        /// <summary>How many steps a tile is cut into each way for the glow (Glow): enough for the fade to look smooth.</summary>
+        const int GlowSteps = 8;
+
+        static Vector2 Flat(Vector3 v) => new Vector2(v.x, v.z);
+
+        /// <summary>The tile a point of the ground (x, z) lies on, as Key's.</summary>
+        static int TileKey(Vector2 p) => Key(Mathf.FloorToInt(p.x / T), Mathf.FloorToInt(-p.y / T));
+
+        /// <summary>
+        /// The glow inside a band's border (Arturo, 5/11 #16: it went tile by tile, square at the corners and broken where
+        /// the border turned in): one glow along all of it, strongest at the line and gone FadeDepth in (overlays.ts's fade:
+        /// 0.45 at a third), round its rounded corners too. Each tile near the line is cut into GlowSteps × GlowSteps, each
+        /// point lit by how far it is from the line as drawn (`line`, RoundCorners'), if it is on the line's inside: a tile of
+        /// the band (`floors`, by Key, with its floor's height) but past a bend's curve at a corner that sticks out, or within
+        /// one at a corner that turns in (`bends`).
+        /// </summary>
+        static void Glow(MeshBuilder into, Dictionary<int, float> floors, List<Vector3[]> line, List<Bend> bends, Color32 color, float alpha)
+        {
+            if (floors.Count == 0 || line.Count == 0) return;
+            // Each tile with the pieces of the line near enough to light it.
+            var near = new Dictionary<int, List<int>>();
+            for (var i = 0; i < line.Count; i++)
+            {
+                var a = Flat(line[i][0]);
+                var b = Flat(line[i][1]);
+                int x0 = Mathf.FloorToInt((Mathf.Min(a.x, b.x) - FadeDepth) / T), x1 = Mathf.FloorToInt((Mathf.Max(a.x, b.x) + FadeDepth) / T);
+                int y0 = Mathf.FloorToInt((-Mathf.Max(a.y, b.y) - FadeDepth) / T), y1 = Mathf.FloorToInt((-Mathf.Min(a.y, b.y) + FadeDepth) / T);
+                for (var y = y0; y <= y1; y++)
+                    for (var x = x0; x <= x1; x++)
+                    {
+                        var k = Key(x, y);
+                        if (!near.TryGetValue(k, out var list)) near[k] = list = new List<int>();
+                        list.Add(i);
+                    }
+            }
+            // The bends by the tile their curve's corner lies in; a corner turning in lies on a tile out of the band, lit
+            // at the height of a tile of the band beside it.
+            var bent = new Dictionary<int, List<Bend>>();
+            var heights = new Dictionary<int, float>(floors);
+            foreach (var bend in bends)
+            {
+                var k = TileKey(bend.At + (bend.A + bend.B) * (bend.R / 2));
+                if (!bent.TryGetValue(k, out var list)) bent[k] = list = new List<Bend>();
+                list.Add(bend);
+                if (heights.ContainsKey(k)) continue;
+                int tx = Mathf.FloorToInt((bend.At + (bend.A + bend.B) * (bend.R / 2)).x / T), ty = Mathf.FloorToInt(-(bend.At + (bend.A + bend.B) * (bend.R / 2)).y / T);
+                foreach (var d in Grid.Dirs4)
+                    if (floors.TryGetValue(Key(tx + d.X, ty + d.Y), out var h))
+                    {
+                        heights[k] = h;
+                        break;
+                    }
+            }
+            var light = new float[GlowSteps + 1, GlowSteps + 1];
+            var at = new Vector3[GlowSteps + 1, GlowSteps + 1];
+            foreach (var pair in heights)
+            {
+                if (!near.TryGetValue(pair.Key, out var pieces)) continue;
+                var inBand = floors.ContainsKey(pair.Key);
+                bent.TryGetValue(pair.Key, out var curves);
+                if (!inBand && curves == null) continue;
+                int tx = pair.Key / 1024, ty = pair.Key % 1024;
+                // (Key packs x * 1024 + y; the reach never reaches a negative tile.)
+                var lit = false;
+                for (var j = 0; j <= GlowSteps; j++)
+                    for (var i = 0; i <= GlowSteps; i++)
+                    {
+                        var p = new Vector2(T * (tx + (float)i / GlowSteps), -T * (ty + (float)j / GlowSteps));
+                        at[i, j] = new Vector3(p.x, pair.Value + 0.03f * T, p.y);
+                        var inside = inBand;
+                        if (curves != null)
+                            foreach (var c in curves)
+                            {
+                                // Within the square a bend cut off (or took in) and on its corner's side of the curve
+                                // (a quadratic one with its control on the corner: √u + √w = 1).
+                                var u = Vector2.Dot(p - c.At, c.A) / c.R;
+                                var w = Vector2.Dot(p - c.At, c.B) / c.R;
+                                if (u >= 0 && w >= 0 && u <= 1 && w <= 1 && Mathf.Sqrt(u) + Mathf.Sqrt(w) < 1) inside = !inside;
+                            }
+                        var v = 0f;
+                        if (inside)
+                        {
+                            var d = float.MaxValue;
+                            foreach (var n in pieces) d = Mathf.Min(d, DistanceTo(p, Flat(line[n][0]), Flat(line[n][1])));
+                            var t = 1 - d / FadeDepth;
+                            if (t > 0) v = t * t;
+                        }
+                        light[i, j] = v;
+                        lit |= v > 0;
+                    }
+                if (!lit) continue;
+                for (var j = 0; j < GlowSteps; j++)
+                    for (var i = 0; i < GlowSteps; i++)
+                    {
+                        float a = light[i, j], b = light[i + 1, j], c = light[i + 1, j + 1], d = light[i, j + 1];
+                        if (a <= 0 && b <= 0 && c <= 0 && d <= 0) continue;
+                        into.Quad(at[i, j], at[i + 1, j], at[i + 1, j + 1], at[i, j + 1], Alpha(color, alpha * a), Alpha(color, alpha * b), Alpha(color, alpha * c), Alpha(color, alpha * d));
+                    }
+            }
+        }
+
+        static float DistanceTo(Vector2 p, Vector2 a, Vector2 b)
+        {
+            var ab = b - a;
+            var len = ab.sqrMagnitude;
+            var t = len > 0 ? Mathf.Clamp01(Vector2.Dot(p - a, ab) / len) : 0;
+            return Vector2.Distance(p, a + ab * t);
         }
 
         /// <summary>
-        /// An area of tiles bordered as the reach is: a strip fading in from each outer side, and the edge with its corners
+        /// An area of tiles bordered as the reach is: one glow fading in from its edge (Glow), and the edge with its corners
         /// rounded over a dark stroke, all into `into` in `color` (an enemy's field of view: Ana's #14, Arturo 29/10).
         /// </summary>
         internal static void Border(MeshBuilder into, GameState s, IList<Pos> tiles, Color32 color, float fill, float edge)
         {
-            var inside = new HashSet<int>();
-            foreach (var t in tiles) inside.Add(t.X * 1024 + t.Y);
+            var floors = new Dictionary<int, float>();
+            foreach (var t in tiles) floors[Key(t.X, t.Y)] = Board.TileToWorld(s, t).y;
             var segs = new List<Vector3[]>();
             foreach (var p in tiles)
             {
-                var floor = Board.TileToWorld(s, p).y;
+                var floor = floors[Key(p.X, p.Y)];
                 for (var side = 0; side < 4; side++)
                 {
                     var d = Grid.Dirs4[side];
-                    if (inside.Contains((p.X + d.X) * 1024 + p.Y + d.Y)) continue;
+                    if (floors.ContainsKey(Key(p.X + d.X, p.Y + d.Y))) continue;
                     Side(p.X, p.Y, side, floor + 0.06f * T, out var a, out var b);
                     segs.Add(new[] { a, b });
-                    Strip(into, p.X, p.Y, side, floor + 0.03f * T, color, fill);
                 }
             }
-            var rounded = RoundCorners(segs, CornerR);
+            var bends = new List<Bend>();
+            var rounded = RoundCorners(segs, CornerR, bends);
+            // The glow as the reach's, one along all the border (#16); the line over its dark stroke, as before.
+            Glow(into, floors, rounded, bends, color, fill);
             foreach (var seg in rounded) into.Line(seg[0], seg[1], EdgeShadePx, Shade);
             foreach (var seg in rounded) into.Line(seg[0], seg[1], EdgePx, Alpha(color, edge));
         }
@@ -488,7 +599,7 @@ namespace Bastion.UI.Combat
         /// square, each stops `r` short of the corner and a curve joins them (a quadratic one, its control the corner,
         /// in four steps). Straight joins, loose ends and crossings stay as they are.
         /// </summary>
-        static List<Vector3[]> RoundCorners(List<Vector3[]> segs, float r)
+        static List<Vector3[]> RoundCorners(List<Vector3[]> segs, float r, List<Bend> bends = null)
         {
             var at = new Dictionary<Vector3Int, List<(int seg, int end)>>();
             Vector3Int Key(Vector3 v) => new Vector3Int(Mathf.RoundToInt(v.x * 1000), Mathf.RoundToInt(v.y * 1000), Mathf.RoundToInt(v.z * 1000));
@@ -518,6 +629,7 @@ namespace Bastion.UI.Combat
                 var p2 = v + db / lb * r;
                 trimmed[sa][ea] = p1;
                 trimmed[sb][eb] = p2;
+                bends?.Add(new Bend { At = Flat(v), A = Flat(da / la), B = Flat(db / lb), R = r });
                 var prev = p1;
                 for (var k = 1; k <= 4; k++)
                 {

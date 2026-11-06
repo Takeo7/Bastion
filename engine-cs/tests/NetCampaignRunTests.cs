@@ -19,7 +19,10 @@ namespace Bastion.Engine.Tests
     /// for nothing for whoever is left without a soldier (Campaign.NobodyLeft) and boarded doors (Mapgen BoardDoors; Arturo,
     /// 2/11), and MissionBot taking the recruit or waiting, and prying a boarded door in the way or going round, only 54,
     /// 182 and 364 (the first mission 49 of 400, the siege 3 of 49); 364 wins both as well with whoever comes during a
-    /// siege among its defenders.
+    /// siege among its defenders. With the movement apart from the actions, only the sabotage on a clock (Arturo, 5/11 #1
+    /// and #14) and MissionBot moving in stretches along the way, 364 still does, and of seeds 1 to 12, 2, 4, 5 and 6
+    /// (the first mission 5 of 15 with 54 and 182, every siege after it won). With a run past 5 tiles in the turn (Arturo,
+    /// 5/11, in the box) and MissionBot walking quiet while the squad is hidden, 364 still does, the only one of those 15.
     /// </summary>
     public class NetCampaignRunTests
     {

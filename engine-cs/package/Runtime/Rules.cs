@@ -699,15 +699,25 @@ namespace Bastion.Engine
         /// it short of them, never in a window's frame nor on a flight of stairs
         /// (flights.ts: nobody stops there, docs/MAPAS.md phase 2).
         /// </summary>
-        public void MoveAlong(Unit u, List<Pos> path, int ap)
+        /// <remarks>
+        /// `ap`, what the walk takes (Arturo, 5/11 #14: movement apart from the actions): 0, nothing (a patrol, a scamper, a
+        /// follower, the step of a charge); 1, its movement, what the path costs (Paths.CostAlong); 2, all its movement and
+        /// an action (one of the dead before a flight of stairs its movement alone doesn't clear, Ai.walk). `run`: the
+        /// whole turn's movement in one go (Paths.IsRun). On the walk's first segment.
+        /// </remarks>
+        public void MoveAlong(Unit u, List<Pos> path, int ap, bool run = false)
         {
             var segment = new List<Pos>();
-            var pendingAp = ap;
+            var pendingAp = ap >= 2 ? 1 : 0;
+            int? pendingMoves = ap >= 2 ? Paths.MoveBudget(u) : ap == 1 ? Math.Min(Paths.CostAlong(S, u, u.Pos, path), Paths.MoveBudget(u)) : (int?)null;
+            bool? pendingRun = run ? true : (bool?)null;
             void Flush()
             {
                 if (segment.Count == 0) return;
-                Emit(new MovedEvent { Unit = u.Id, Path = segment, Ap = pendingAp });
+                Emit(new MovedEvent { Unit = u.Id, Path = segment, Ap = pendingAp, Moves = pendingMoves, Run = pendingRun });
                 pendingAp = 0;
+                pendingMoves = null;
+                pendingRun = null;
                 segment = new List<Pos>();
             }
 
@@ -799,7 +809,7 @@ namespace Bastion.Engine
                         !(o.KillZone && o.ReactedTo.Contains(u.Id)) &&
                         (o.WatchMelee == true ? Aim.InMeleeReach(S, o.Pos, step) : Loaded(o) && Watches(o, step))).ToList();
                 var suppressors = shadow ? new List<Unit>() : S.Units.Where((o) => o.Alive && Content.HostileTo(o, u) && o.Suppressing == u.Id && Loaded(o)).ToList();
-                var noticing = u.Team == Teams.Xcom ? PodsNoticing(step) : new List<string>();
+                var noticing = u.Team == Teams.Xcom ? PodsNoticing(step, u) : new List<string>();
                 if (reactors.Count == 0 && suppressors.Count == 0 && noticing.Count == 0) continue;
 
                 Flush();
@@ -896,44 +906,46 @@ namespace Bastion.Engine
         }
 
         /// <summary>How far `u` notices a soldier on `p`: its detection while the squad is hidden, its sight after (both shorter at night, unless lit).</summary>
-        private double NoticeRange(Unit u, Pos p)
+        /// <remarks>`who`: the one going to `p` (a soldier on its move, not there yet); else whoever stands there. `from`: where `u` looks from, if not its place.</remarks>
+        private double NoticeRange(Unit u, Pos p, Unit? who = null, Pos? from = null)
         {
             var range = S.Concealed ? Los.DetectionTo(S, u, p) : Los.SightTo(S, u, p);
-            // One hiding there, at half of it (Esconderse).
-            var there = Grid.UnitAt(S, p);
-            return there != null ? range * Los.HiddenShare(u, there) : range;
+            // One hiding there, at half of it (Esconderse); behind cover, less to the dead (Arturo, 5/11 #4): the one that hides more.
+            var there = who ?? Grid.UnitAt(S, p);
+            return there != null ? range * Los.ConcealShare(S, u, there, p, from) : range;
         }
 
         /// <summary>The first soldier an alien standing on `p` would spot (`facing`: the dead see ahead of them, the way they walk).</summary>
         public Unit? SpottedFrom(Unit u, Pos p, double? facing = null)
         {
             var face = facing ?? u.Facing;
-            return Grid.Combatants(S, Teams.Xcom).Find((soldier) => Los.InViewCone(u, soldier.Pos, p, face) && Los.SightOrigin(S, p, soldier.Pos, NoticeRange(u, soldier.Pos), Los.WindowReachOf(u.Team)) != null);
+            return Grid.Combatants(S, Teams.Xcom).Find((soldier) => Los.InViewCone(u, soldier.Pos, p, face) && Los.SightOrigin(S, p, soldier.Pos, NoticeRange(u, soldier.Pos, soldier, p), Los.WindowReachOf(u.Team)) != null);
         }
 
         /// <summary>The member of `pod` that would notice an XCOM soldier standing on `p`, if any.</summary>
-        private Unit? Noticer(Pod pod, Pos p)
+        private Unit? Noticer(Pod pod, Pos p, Unit? who = null)
         {
             foreach (var id in pod.UnitIds)
             {
                 var m = Grid.GetUnit(S, id);
                 if (m == null || !m.Alive) continue;
-                if (Los.InViewCone(m, p) && Los.SightOrigin(S, m.Pos, p, NoticeRange(m, p), Los.WindowReachOf(m.Team)) != null) return m;
+                if (Los.InViewCone(m, p) && Los.SightOrigin(S, m.Pos, p, NoticeRange(m, p, who), Los.WindowReachOf(m.Team)) != null) return m;
             }
             return null;
         }
 
         /// <summary>Inactive pods that would notice an XCOM soldier standing on `p`.</summary>
-        public List<string> PodsNoticing(Pos p)
+        /// <remarks>`who`: the soldier going there, if it is not there yet (on its move).</remarks>
+        public List<string> PodsNoticing(Pos p, Unit? who = null)
         {
-            return S.Pods.Where((pod) => !pod.Active && Noticer(pod, p) != null).Select((pod) => pod.Id).ToList();
+            return S.Pods.Where((pod) => !pod.Active && Noticer(pod, p, who) != null).Select((pod) => pod.Id).ToList();
         }
 
         /// <summary>`soldier`, standing on `p`, has been seen by these pods: by whom, for the players.</summary>
         private Activation Sighting(List<string> podIds, Unit soldier, Pos p)
         {
             var pod = S.Pods.Find((x) => podIds.Contains(x.Id));
-            return new Activation { Cause = PodCauses.Sighted, Unit = soldier.Id, By = pod != null ? Noticer(pod, p)?.Id : null };
+            return new Activation { Cause = PodCauses.Sighted, Unit = soldier.Id, By = pod != null ? Noticer(pod, p, soldier)?.Id : null };
         }
 
         /// <summary>What gave the squad away (an Exposure: a concealmentBroken event without its tag).</summary>
@@ -1074,7 +1086,7 @@ namespace Bastion.Engine
                 if (m == null || !m.Alive || Over || Content.Templates[m.Template].Undead) continue;
                 var dest = Ai.ChooseScamperTile(S, m);
                 if (dest == null) continue;
-                var path = Paths.BuildPath(S, m, Paths.ComputeReach(S, m, Paths.CostPerAp(m)), dest);
+                var path = Paths.BuildPath(S, m, Paths.ComputeReach(S, m, Paths.FullMoves(m)), dest);
                 if (path != null) MoveAlong(m, path, 0);
             }
         }
@@ -1412,7 +1424,8 @@ namespace Bastion.Engine
             if (Over || S.ActiveTeam != Teams.Xcom) return;
             // A Set of Slot | 'pool': null for the pool.
             var pending = new List<int?>();
-            foreach (var u in Grid.Combatants(S, Teams.Xcom)) if (u.Ap > 0 && !pending.Contains(u.Owner)) pending.Add(u.Owner);
+            // Movement left keeps a player in the turn too (Arturo, 5/11: it is spent in stretches, after acting as well).
+            foreach (var u in Grid.Combatants(S, Teams.Xcom)) if (Paths.HasTurnLeft(u) && !pending.Contains(u.Owner)) pending.Add(u.Owner);
             var allConnectedReady = Connected.All((slot) => S.Ready[slot]);
             var done = pending.All((k) => k == null ? allConnectedReady : S.Ready[k.Value] || !Connected.Contains(k.Value));
             if (done) RunAlienTurn();
@@ -1513,10 +1526,10 @@ namespace Bastion.Engine
             return first;
         }
 
-        /// <summary>Whether `slot` has a soldier (or a shared unit) that can still act.</summary>
+        /// <summary>Whether `slot` has a soldier (or a shared unit) that can still act or move.</summary>
         public bool HasActions(int slot)
         {
-            return Grid.Combatants(S, Teams.Xcom).Any((u) => u.Ap > 0 && (u.Owner == slot || u.Owner == null));
+            return Grid.Combatants(S, Teams.Xcom).Any((u) => Paths.HasTurnLeft(u) && (u.Owner == slot || u.Owner == null));
         }
 
         /// <summary>Whether turns go one soldier at a time (playtest 2026-10-15, #9): the partner is here, not done, and has someone to move.</summary>
@@ -1529,13 +1542,18 @@ namespace Bastion.Engine
         /// After a soldier's order (#9): while it has actions it is the one in play;
         /// once it has none (or is down, or gone), the partner plays one of theirs.
         /// </summary>
-        public void AfterSoldier(Unit u, int apBefore)
+        /// <remarks>
+        /// `movesBefore`: its movement before a move (Arturo, 5/11 #14): having moved, it is the one in play too. One with
+        /// only movement left is no longer in play: the command goes on, and it may use that movement later in the turn.
+        /// </remarks>
+        public void AfterSoldier(Unit u, int apBefore, int? movesBefore = null)
         {
             if (Over || S.ActiveTeam != Teams.Xcom || u.Owner == null) return;
             var live = Grid.GetUnit(S, u.Id);
             if (live != null && live.Alive && !live.Evacuated && live.Ap > 0)
             {
-                if (live.Ap < apBefore && S.ActiveUnit != live.Id) Emit(new UnitActiveEvent { Unit = live.Id });
+                var spent = live.Ap < apBefore || (movesBefore != null && Paths.MoveBudget(live) < movesBefore);
+                if (spent && S.ActiveUnit != live.Id) Emit(new UnitActiveEvent { Unit = live.Id });
                 return;
             }
             if (!string.IsNullOrEmpty(S.ActiveUnit)) Emit(new UnitActiveEvent { Unit = null });
@@ -1772,7 +1790,7 @@ namespace Bastion.Engine
             else if (u.Team != Teams.Xcom) error = "No puedes dar órdenes a esa unidad.";
             else if (u.Automaton != null) error = "Va sola: nadie le da órdenes.";
             else if (!Content.CommandsFor(slot, u.Owner, connected)) error = "Es de la escuadra del otro jugador.";
-            else if (u.Ap <= 0) error = "Ese soldado no tiene acciones.";
+            else if (!Paths.HasTurnLeft(u)) error = "Ese soldado no tiene acciones ni movimiento.";
             return error == null ? u : null;
         }
 
@@ -1928,7 +1946,7 @@ namespace Bastion.Engine
                 if (!holds) return CommandResult.Failure("No tienes el mando.");
                 if (!ctx.Connected.Contains(partner)) return CommandResult.Failure("El otro jugador no está conectado.");
                 if (s.Ready[partner]) return CommandResult.Failure("El otro jugador ya ha terminado el turno.");
-                if (!sim.HasActions(partner)) return CommandResult.Failure("Al otro jugador no le quedan acciones.");
+                if (!sim.HasActions(partner)) return CommandResult.Failure("Al otro jugador no le quedan acciones ni movimiento.");
                 sim.PassCommand(partner);
                 return CommandResult.Success(sim.Events);
             }
@@ -1968,17 +1986,18 @@ namespace Bastion.Engine
             {
                 // A place without its level is on the ground (docs/FASE6-PLAN.md).
                 var to = Grid.ToPos(move.To);
-                var reach = Paths.ComputeReach(s, unit, Paths.MaxMoveCost(unit));
+                // Within the movement it has left, apart from its actions (Arturo, 5/11 #14): in stretches, before and after acting.
+                var movesBefore = Paths.MoveBudget(unit);
+                if (movesBefore <= 0) return CommandResult.Failure("No le queda movimiento.");
+                var reach = Paths.ComputeReach(s, unit, movesBefore);
                 var path = Paths.BuildPath(s, unit, reach, to);
-                if (path == null) return CommandResult.Failure("No puede llegar ahí.");
-                var cost = reach.Cost.Get(Grid.NodeOf(s, to), 0);
-                var ap = Paths.ApForCost(unit, cost);
-                if (ap > unit.Ap) return CommandResult.Failure("No le quedan acciones para llegar ahí.");
+                if (path == null) return CommandResult.Failure("No le queda movimiento para llegar ahí.");
+                var run = Paths.IsRun(unit, reach.Cost.Get(Grid.NodeOf(s, to), 0));
                 sim.PassCommand(ctx.Slot);
-                sim.MoveAlong(unit, path, ap);
-                // Running is heard (docs/FASE2.md).
-                if (ap >= 2 && unit.Alive) sim.MakeNoise(unit.Pos, Content.Noise.Dash, unit);
-                sim.AfterSoldier(unit, apBefore);
+                sim.MoveAlong(unit, path, 1, run);
+                // Running is heard (docs/FASE2.md): past QuietTiles of the turn's movement, in one stretch or several.
+                if (run && unit.Alive) sim.MakeNoise(unit.Pos, Content.Noise.Dash, unit);
+                sim.AfterSoldier(unit, apBefore, movesBefore);
                 sim.AfterXcomAction();
                 return CommandResult.Success(sim.Events);
             }

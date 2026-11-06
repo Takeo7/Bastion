@@ -131,6 +131,9 @@ namespace Bastion.Engine
         }
 
         /// <summary>Tile abilities done with the hands beside the soldier, not thrown: a disoriented soldier can still do them.</summary>
+        /// <summary>The doors' abilities, free of actions: they only need some turn left, movement will do (AbilityBlocker).</summary>
+        private static readonly HashSet<string> Doors = new HashSet<string> { AbilityIds.OpenDoor, AbilityIds.CloseDoor };
+
         private static readonly HashSet<string> ByHand = new HashSet<string> { AbilityIds.Search, AbilityIds.SearchRoom, AbilityIds.OpenDoor, AbilityIds.CloseDoor, AbilityIds.Smash, AbilityIds.Pry };
 
         /// <summary>
@@ -192,8 +195,10 @@ namespace Bastion.Engine
             if (!AbilitiesOf(u).Contains(ability)) return "No tiene esa habilidad.";
             var def = Content.Abilities[ability];
             var need = ApNeeded(u, ability);
-            if (u.Ap <= 0) return "Sin acciones.";
-            if (u.Ap < need) return need == 2 ? "Necesita 2 acciones: no puede moverse y disparar en el mismo turno." : "Sin acciones.";
+            // A door is part of moving (docs/PRUEBA-2026-11-05-ARTURO.md #14, movement apart from the actions): with
+            // movement left and no actions, it still opens and shuts.
+            if (u.Ap <= 0 && !(Doors.Contains(ability) && Paths.HasTurnLeft(u))) return "Sin acciones.";
+            if (u.Ap < need) return need == 2 ? "Necesita 2 acciones y le queda 1." : "Sin acciones.";
             var cooldown = u.Cooldowns.TryGetValue(ability, out var cd) ? cd : 0;
             if (cooldown > 0) return $"Disponible en {cooldown} {(cooldown == 1 ? "turno" : "turnos")}.";
             if (!string.IsNullOrEmpty(def.Charge) && !((u.Charges.TryGetValue(def.Charge!, out var left) ? left : 0) > 0)) return "No quedan usos.";

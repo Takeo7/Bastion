@@ -20,7 +20,7 @@ namespace Bastion.Engine
             public int[] Of = new int[0];
             /// <summary>By building, its ground tiles.</summary>
             public List<List<int>> Tiles = new List<List<int>>();
-            /// <summary>The places just before a window (z * area + tile), with the buildings it looks into.</summary>
+            /// <summary>The places just before a window or an open door (z * area + tile), with the buildings it looks into.</summary>
             public Dictionary<int, List<int>> Peeks = new Dictionary<int, List<int>>();
         }
 
@@ -81,14 +81,15 @@ namespace Bastion.Engine
                 plan.Tiles.Add(tiles);
             }
             // On each storey, a window of a building that tall with, along a row or a column, its inside on one side (not a
-            // wall nor a window) and on the other a tile off any building that tall (the street, a yard, a lower roof).
+            // wall nor a window) and on the other a tile off any building that tall (the street, a yard, a lower roof). An
+            // open door as well (Arturo, 5/11 #2: «si abro una puerta… tengo que ver el interior, porque estoy en la puerta»).
             for (var z = 0; z < Grid.LevelCount(s); z++)
             {
                 var layout = z == 0 ? (IReadOnlyList<string?>)s.Tiles : s.Levels![z - 1].Tiles;
                 if (layout.Count != area) continue;
                 for (var w = 0; w < area; w++)
                 {
-                    if ((layout[w] != TileKinds.Window && layout[w] != TileKinds.WindowBroken) || storeys[w] <= z) continue;
+                    if ((layout[w] != TileKinds.Window && layout[w] != TileKinds.WindowBroken && layout[w] != TileKinds.DoorOpen) || storeys[w] <= z) continue;
                     int x = w % s.Width, y = w / s.Width;
                     foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                     {

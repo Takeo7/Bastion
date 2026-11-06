@@ -57,6 +57,7 @@ namespace Bastion.UI.Combat
             void Stat(string key, string value) => v.Stats.Add(new SheetRowView { Key = key, Value = value });
             Stat("Salud", $"{u.Hp} de {u.MaxHp}");
             Stat("Acciones", $"{u.Ap} de {Content.ApPerTurnOf(u)}");
+            if (Paths.FullMoves(u) > 0) Stat(HudText.Moves.Stat, $"{HudText.Moves.Tiles(Paths.MoveBudget(u))} de {HudText.Moves.Tiles(Paths.FullMoves(u))} puntos");
             Stat("Puntería con armas de fuego", (t.Aim + u.Mods.Aim + u.Mods.GunAim).ToString());
             Stat("Puntería cuerpo a cuerpo", (t.Aim + u.Mods.Aim + u.Mods.MeleeAim).ToString());
             Stat("Voluntad", u.Will.ToString());

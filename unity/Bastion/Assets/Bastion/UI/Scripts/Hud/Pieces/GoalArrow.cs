@@ -51,8 +51,8 @@ namespace Bastion.UI.Hud
             arrow.style.rotate = new Rotate(Mathf.Atan2(dy, dx) * Mathf.Rad2Deg);
         }
 
-        /// <summary>The ring: dark steel, a lit rim and a sunk well, as the plates' steel (Mixta).</summary>
-        sealed class Ring : VisualElement
+        /// <summary>The ring: dark steel, a lit rim and a sunk well, as the plates' steel (Mixta); the enemies' sight's button too.</summary>
+        internal sealed class Ring : VisualElement
         {
             public Ring()
             {

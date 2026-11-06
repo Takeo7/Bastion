@@ -35,6 +35,23 @@ namespace Bastion.Engine.Tests
             return out_;
         }
 
+        [Fact(DisplayName = "buildings › a door opened from just before it looks in, as a window (Arturo, 5/11 #2); from further off, nothing more")]
+        public void ADoorOpenedLooksIn()
+        {
+            var s = House();
+            var u = AddUnit(s, "s1", TemplateIds.Rookie, 4, 6);
+            AddUnit(s, "a1", TemplateIds.Zombie, 4, 3);
+            Assert.True(Buildings.Hidden(s, P(4, 3), new[] { u.Pos }));
+            Events.ApplyEvent(s, new TileChangedEvent { Pos = P(4, 5), Kind = TileKinds.DoorOpen });
+            Assert.False(Buildings.Hidden(s, P(4, 3)));
+            Assert.Contains(Grid.TileIndex(s, 4, 3), s.Discovered!);
+            // Two tiles off the open door: still out of sight inside.
+            var w = House();
+            var far = AddUnit(w, "s1", TemplateIds.Rookie, 4, 7);
+            Events.ApplyEvent(w, new TileChangedEvent { Pos = P(4, 5), Kind = TileKinds.DoorOpen });
+            Assert.True(Buildings.Hidden(w, P(4, 3), new[] { far.Pos }));
+        }
+
         [Fact(DisplayName = "buildings › from afar nobody inside shows, nor do they see the squad through the window; right before it, the room and whoever is in it")]
         public void RightBeforeTheWindow()
         {

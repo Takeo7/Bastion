@@ -53,7 +53,10 @@ namespace Bastion.Engine.Tests
             Assert.Equal("a", s.ActiveUnit);
             var refused = Try(s, Move("b", 3, 4), 0);
             Assert.Equal((false, $"Primero termina con {a.Name}, o cede el turno."), (refused.Ok, refused.Error));
+            // Moving takes no action (Arturo, 5/11 #14): it is done once its actions are.
             Run(s, Move("a", 4, 3), 0);
+            Assert.Equal("a", s.ActiveUnit);
+            Run(s, Ability("a", AbilityIds.Overwatch), 0);
             Assert.Equal(0, a.Ap);
             Assert.Null(s.ActiveUnit);
             Assert.Equal(1, s.Command);
@@ -71,7 +74,8 @@ namespace Bastion.Engine.Tests
             Run(s, new PassCommand(), 0);
             Assert.Equal(1, s.Command);
             Assert.Null(s.ActiveUnit);
-            Assert.Equal(1, a.Ap);
+            // Its actions and the rest of its movement, for later.
+            Assert.Equal((2, Paths.FullMoves(a) - Paths.CostOrtho), (a.Ap, Paths.MoveBudget(a)));
         }
 
         [Fact(DisplayName = "turns one soldier at a time (#9) › alone, or with a partner who has nobody left to move, it is as before")]
@@ -82,6 +86,7 @@ namespace Bastion.Engine.Tests
             Run(s, Move("b", 3, 4), 0, new[] { 0 });
             var t = Two();
             t.c.Ap = 0;
+            t.c.Moves = 0;
             Run(t.s, Move("a", 3, 2), 0);
             Run(t.s, Move("b", 3, 4), 0);
         }
@@ -94,6 +99,7 @@ namespace Bastion.Engine.Tests
             var events = new List<GameEvent>();
             events.AddRange(Run(s, Move("a", 3, 2), 0));
             events.AddRange(Run(s, Move("a", 4, 3), 0));
+            events.AddRange(Run(s, Ability("a", AbilityIds.Overwatch), 0));
             events.AddRange(Run(s, Ability("c", AbilityIds.Overwatch), 1));
             foreach (var e in events) Events.ApplyEvent(client, e);
             Assert.Null(Step2Json.StateDiff(s, client));

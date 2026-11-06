@@ -282,7 +282,7 @@ namespace Bastion.UI.Combat
                 return;
             }
             // The pointer on a tile it can end its move on, on its floor, at 70 % of its two-action reach (with a throw armed, its area there).
-            var reach = Paths.ComputeReach(mine, u, Paths.MaxMoveCost(u));
+            var reach = Paths.ComputeReach(mine, u, Paths.MoveBudget(u));
             var ends = Paths.Destinations(mine, u, reach).Where(d => d.Pos.Z == u.Pos.Z).ToList();
             if (ends.Count == 0) return;
             var max = ends.Max(d => d.Cost);
@@ -294,7 +294,7 @@ namespace Bastion.UI.Combat
         {
             foreach (var u in s.Units.Where(x => x.Team == Teams.Xcom && x.Alive && x.Ap > 0))
             {
-                var reach = Paths.ComputeReach(s, u, Paths.MaxMoveCost(u));
+                var reach = Paths.ComputeReach(s, u, Paths.MoveBudget(u));
                 foreach (var d in Paths.Destinations(s, u, reach))
                 {
                     var path = Paths.BuildPath(s, u, reach, d.Pos);
@@ -343,7 +343,7 @@ namespace Bastion.UI.Combat
             var squad = s.Units.Where(x => x.Team == Teams.Xcom && x.Alive).ToList();
             if (squad.Count < 2) return;
             var u = squad[1];
-            var reach = Paths.ComputeReach(s, u, Paths.MaxMoveCost(u));
+            var reach = Paths.ComputeReach(s, u, Paths.MoveBudget(u));
             var ends = Paths.Destinations(s, u, reach).Where(d => d.Pos.Z == u.Pos.Z).ToList();
             if (ends.Count == 0) return;
             var max = ends.Max(d => d.Cost);
