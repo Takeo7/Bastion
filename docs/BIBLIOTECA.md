@@ -62,7 +62,7 @@ usados.json (exportado de Unity) ─┘          │
 
 ### El servidor
 
-- Es Node, en `unity/tools/biblioteca/`. Escucha solo en `127.0.0.1:3420`: Synty no sale del Mac. El puerto va a la tabla de EQUIPO.md. No usa el 3000, el 3001 ni el 5173.
+- Es Node, en `unity/tools/biblioteca/`. Escucha solo en `127.0.0.1:3420`. Desde el 6/11 también se llega desde fuera, por el túnel de Cloudflare de Arturo, y solo con su usuario y contraseña (§7, «Desde fuera»). El puerto va a la tabla de EQUIPO.md. No usa el 3000, el 3001 ni el 5173.
 - Lee el inventario del disco, las listas del juego y `usados.json`.
 - Descomprime cada ZIP de fuentes la primera vez que se abre su paquete, en `assets-src/biblioteca/`, que no se sube. Sirve los FBX y las texturas a la página.
 - Solo escribe `seleccion.json`.
@@ -142,7 +142,16 @@ Cada fase se prueba en la propia página, con capturas. La biblioteca no cambia 
 node unity/tools/biblioteca/server.mjs
 ```
 
-Luego, en el navegador, `http://127.0.0.1:3420`. La primera vez, en `unity/tools/biblioteca`, `npm install` (solo three.js 0.186.1). Se arranca desde una terminal: un proceso lanzado por la app de Claude no puede leer el disco externo sin el permiso de macOS para unidades extraíbles, y se queda colgado. Para el panel del navegador de las sesiones, `.claude/launch.json` tiene «biblioteca», que se engancha al servidor ya arrancado.
+Desde el 6/11 está siempre en marcha (abajo, «Arranque»); a mano, solo para probar. Luego, en el navegador, `http://127.0.0.1:3420`. La primera vez, en `unity/tools/biblioteca`, `npm install` (solo three.js 0.186.1). Se arranca desde una terminal: un proceso lanzado por la app de Claude no puede leer el disco externo sin el permiso de macOS para unidades extraíbles, y se queda colgado. Para el panel del navegador de las sesiones, `.claude/launch.json` tiene «biblioteca», que se engancha al servidor ya arrancado.
+
+**Desde fuera (Arturo, 6/11): `https://biblioteca-bastion.yumewagener.com`.**
+- **Cómo llega.** El túnel de Cloudflare de Arturo (`~/.cloudflared/config.yml`, el mismo de `bastion.yumewagener.com`) lleva ese nombre a `127.0.0.1:3420`. El servidor no escucha en ninguna otra dirección.
+- **La contraseña.** Lo que llega por el túnel (con otro Host o con la cabecera `cf-connecting-ip` de Cloudflare) pide usuario y contraseña. Están en `~/Services/biblioteca/biblioteca.env` (600, nunca en git); sin ese archivo, desde fuera no entra nadie. Diez fallos desde una IP la bloquean 15 minutos; no hay tope para todos, para que nadie pueda dejar fuera a Arturo. Desde el Mac, en `127.0.0.1:3420`, no se pide: las capturas y las demás sesiones siguen igual.
+- **Los cambios.** Desde fuera, los cambios (POST y DELETE: proponer, borrar, miniaturas, «Volver a leer») tienen que llevar la cabecera `X-Biblioteca: 1`, que pone la página (`web/util.js`, `OWN`), y no pueden venir de otro Origin. Así otra web abierta en el navegador de Arturo no puede usar la contraseña guardada.
+- **Sin copias en Cloudflare.** Todo va con `Cache-Control: private` o `no-store`.
+- **Arranque.** Lo arranca un LaunchAgent (`~/Library/LaunchAgents/com.yume.biblioteca.plist`, que ejecuta `~/Services/biblioteca/run.sh`), también al encender el Mac, y lo vuelve a arrancar si se cae. Así se lee el disco sin colgarse. Para reiniciarlo tras cambiar el servidor: `launchctl kickstart -k gui/$UID/com.yume.biblioteca`. Para probar con otra selección (`BIBLIOTECA_SELECCION`): `launchctl bootout gui/$UID/com.yume.biblioteca`, arrancarlo a mano y, al acabar, `launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.yume.biblioteca.plist`.
+- **Si el disco no estaba montado** al arrancar, el servidor vuelve a leer todo en cuanto el disco aparece y la página pide el estado. Si no, «Volver a leer» o el `kickstart`.
+- **Lo que queda abierto.** Con la contraseña se pueden ver y bajar los FBX y las texturas de Synty, como en el repositorio privado. Solo funciona con el Mac encendido y despierto.
 
 **Hecho en la fase 1:**
 - **Los 183 paquetes**, con su icono, versión, tamaños, si están importados en Unity (36) y si tienen algo en uso (29). Fuera de estilo, en gris y con el aviso.

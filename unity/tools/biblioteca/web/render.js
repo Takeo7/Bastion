@@ -6,6 +6,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { TGALoader } from 'three/addons/loaders/TGALoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { OWN } from './util.js';
 
 const BLANK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 const fileUrl = (pack, path) => `/api/file?id=${encodeURIComponent(pack)}&path=${encodeURIComponent(path)}`;
@@ -175,7 +176,7 @@ async function drain() {
       thumbScene.remove(object);
       dispose(object);
       const blob = await new Promise((ok) => thumbRenderer.domElement.toBlob(ok, 'image/png'));
-      fetch(`/api/thumb?id=${encodeURIComponent(job.pack)}&path=${encodeURIComponent(job.key)}`, { method: 'POST', body: blob }).catch(() => {});
+      fetch(`/api/thumb?id=${encodeURIComponent(job.pack)}&path=${encodeURIComponent(job.key)}`, { method: 'POST', headers: OWN, body: blob }).catch(() => {});
       job.done(URL.createObjectURL(blob));
     } catch (e) {
       console.warn('Sin miniatura', job.path, e);

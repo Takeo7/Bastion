@@ -1,9 +1,12 @@
 // The resource library (docs/BIBLIOTECA.md): a page over every Synty pack on the external disk, the Mixamo clips and the
 // sounds, telling what the game uses and where, and where Arturo proposes what to use (seleccion.json, for Gameplay to
-// review). Only on 127.0.0.1:3420 (Synty never leaves this Mac). Writes nothing but seleccion.json and its cache,
+// review). Only on 127.0.0.1:3420; from outside, through Arturo's Cloudflare tunnel (biblioteca-bastion.yumewagener.com),
+// and only with his user and password (Arturo, 6/11). Writes nothing but seleccion.json and its cache,
 // assets-src/biblioteca/ (unzipped sources, listings, thumbnails); never Assets/ nor the game's lists.
 //   node unity/tools/biblioteca/server.mjs        (SYNTY=… for another place of the disk's packs)
+// It runs as a LaunchAgent (docs/BIBLIOTECA.md §7): launchctl kickstart -k gui/$UID/com.yume.biblioteca restarts it.
 import { createServer } from 'node:http';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, statSync, createReadStream } from 'node:fs';
 import { join, dirname, extname, resolve, sep, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -414,7 +417,8 @@ function sendFile(res, file, cache = false) {
   res.writeHead(200, {
     'Content-Type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream',
     'Content-Length': statSync(file).size,
-    'Cache-Control': cache ? 'max-age=86400' : 'no-store',
+    // (private: Cloudflare keeps no copy, which it would give without the password.)
+    'Cache-Control': cache ? 'private, max-age=86400' : 'no-store',
   });
   createReadStream(file).pipe(res);
 }
@@ -447,6 +451,8 @@ async function handle(req, res) {
   if (path.startsWith('/vendor/three/')) return sendFile(res, within(join(here, 'node_modules/three'), path.slice(14)) ?? '', true);
 
   if (path === '/api/state') {
+    // (Started with the Mac before the external disk was mounted: read it all again once it is.)
+    if (!inventory.mounted && existsSync(SYNTY)) await loadAll();
     return send(res, 200, {
       mounted: inventory.mounted, synty: SYNTY, read: inventory.read, build: uses.build, notes: uses.notes, sidekick: !!uses.sidekick,
       unplaced: uses.unplaced.map((u) => ({ name: u.name, title: u.use.title })),
@@ -531,8 +537,51 @@ async function handle(req, res) {
   return send(res, 404, { error: 'no hay nada aquí' });
 }
 
+// From outside (through the tunnel: another Host, and Cloudflare's cf-connecting-ip), Arturo's user and password,
+// BIBLIOTECA_USUARIO and BIBLIOTECA_CLAVE (in ~/Services/biblioteca/biblioteca.env, never in git); without them, nobody.
+// From this Mac, 127.0.0.1:3420, without: the captures and the other sessions go on as before.
+const LOGIN = process.env.BIBLIOTECA_USUARIO && process.env.BIBLIOTECA_CLAVE
+  ? createHash('sha256').update(`${process.env.BIBLIOTECA_USUARIO}:${process.env.BIBLIOTECA_CLAVE}`).digest() : null;
+// (Only by IP, cf-connecting-ip, which Cloudflare always sets: a cap for everyone would let anybody lock Arturo out.)
+const FAILS_PER_IP = 10, FAIL_WINDOW = 15 * 60e3;
+const PUBLIC = 'https://biblioteca-bastion.yumewagener.com';
+const fails = new Map();
+const local = (req) => !req.headers['cf-connecting-ip'] && /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.host ?? '');
+function refuse(res, status, text, extra = {}) {
+  res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...extra });
+  res.end(text);
+}
+/** Whether `req` may go on; if not, it is answered here. */
+function allowed(req, res) {
+  if (local(req)) return true;
+  if (!LOGIN) return refuse(res, 403, 'Desde fuera no se puede entrar: el servidor no tiene contraseña.'), false;
+  const now = Date.now();
+  const ip = req.headers['cf-connecting-ip'] ?? req.socket.remoteAddress;
+  const recent = (fails.get(ip) ?? []).filter((t) => now - t < FAIL_WINDOW);
+  if (recent.length >= FAILS_PER_IP) return refuse(res, 429, 'Demasiados intentos fallidos. Prueba dentro de 15 minutos.', { 'Retry-After': '900' }), false;
+  if (!recent.length) fails.delete(ip);
+  const given = /^Basic\s+(\S+)$/i.exec(req.headers.authorization ?? '')?.[1];
+  if (!given || !timingSafeEqual(createHash('sha256').update(Buffer.from(given, 'base64').toString('utf8')).digest(), LOGIN)) {
+    if (given) {
+      fails.set(ip, [...recent, now]);
+      console.log(`${new Date().toISOString()} contraseña mal · ${ip} · ${req.headers.host} · ${recent.length + 1}.º fallo`);
+    }
+    return refuse(res, 401, 'Hace falta el usuario y la contraseña.', { 'WWW-Authenticate': 'Basic realm="Biblioteca", charset="UTF-8"' }), false;
+  }
+  // A change (POST, DELETE) only from the page itself: the browser sends the password to any page that asks, but another
+  // site can neither set X-Biblioteca (web/util.js, OWN) nor pass for this Origin.
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    const origin = req.headers.origin;
+    if (req.headers['x-biblioteca'] !== '1' || (origin && origin !== PUBLIC && origin !== `https://${req.headers.host}`)) {
+      return refuse(res, 403, 'Eso solo se puede cambiar desde la biblioteca.'), false;
+    }
+  }
+  return true;
+}
+
 await loadAll();
 createServer((req, res) => {
+  if (!allowed(req, res)) return;
   handle(req, res).catch((e) => {
     console.error(e);
     if (!res.headersSent) send(res, 500, { error: e.message });

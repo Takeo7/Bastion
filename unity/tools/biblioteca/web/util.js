@@ -14,9 +14,12 @@ export const el = (tag, props = {}, ...kids) => {
   return e;
 };
 
+/** The header the server asks of every change from outside (server.mjs, `allowed`): another page cannot send it. */
+export const OWN = { 'X-Biblioteca': '1' };
+
 /** The server's JSON; its error, in Spanish, as the thrown message. */
-export const api = async (path, opts) => {
-  const r = await fetch(path, opts);
+export const api = async (path, opts = {}) => {
+  const r = await fetch(path, { ...opts, headers: { ...OWN, ...opts.headers } });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? r.statusText);
   return r.json();
 };
