@@ -64,7 +64,7 @@ namespace Bastion.EditorTools
         /// syntyManifest.ts SKY_MODELS: Generic's ring, and Alpine Mountain's thinner one (Extra: its FBX from the pack's
         /// source files, as SnowCover's mound).
         /// </summary>
-        static readonly (string id, string key)[] SkyModels =
+        internal static readonly (string id, string key)[] SkyModels =
         {
             ("cloudRing", "natureGeneric:Assets/Synty/PolygonGeneric/Models/SM_Gen_Env_Cloud_Ring_01"),
             ("cloudRingThin", "alpine:SM_Env_Cloud_Ring_01"),

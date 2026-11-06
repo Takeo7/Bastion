@@ -1,3 +1,4 @@
+// RETIRED (5/11, docs/BIBLIOTECA.md §5): Assets/Bastion/Client/Resources/MapArt.json is the source, changed by hand; this script stays as history. To compare, run a copy that writes elsewhere, never over the list.
 // The map's art for Unity (docs/UNITY-ARTE.md): 0.10.1's props (syntyManifest.ts PROPS: each one's Synty model and how
 // it is fitted to its tile), prop sets (PROP_SETS) and what an object over several tiles is fitted to (FOOTPRINT_FIT), to Assets/Bastion/Client/Resources/MapArt.json. Names and
 // numbers only, nothing of Synty's.   cd unity/tools && npx tsx map-art-json.mts

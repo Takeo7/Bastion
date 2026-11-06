@@ -1,3 +1,4 @@
+// RETIRED (5/11, docs/BIBLIOTECA.md §5): Assets/Bastion/Client/Resources/Pieces.json is the source, changed by hand; this script stays as history. To compare, run a copy that writes elsewhere, never over the list.
 // The buildings' kit pieces for Unity (docs/UNITY-ARTE.md): 0.10.1's syntyManifest.ts PIECES (each one's pack and FBX,
 // the box of it kept, how it sits in a tile: centre, run, out, unit, storey, base, its door leaf) with the source FBX
 // each comes from (assets-src/synty, as convert.ts findFbx), to Assets/Bastion/Client/Resources/Pieces.json. Names and

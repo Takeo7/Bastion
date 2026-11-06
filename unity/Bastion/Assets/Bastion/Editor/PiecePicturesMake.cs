@@ -175,7 +175,7 @@ namespace Bastion.EditorTools
         /// The camera looking along −`back` at `box`, framed tight in its own axes with `margin` a side (iconRenders.ts
         /// shoot): its extent across and up, its middle, and back from it as far as the field of view needs, plus its depth.
         /// </summary>
-        static void Frame(Camera camera, Bounds box, Vector3 back, float fov, float margin)
+        internal static void Frame(Camera camera, Bounds box, Vector3 back, float fov, float margin)
         {
             var centre = box.center;
             camera.transform.position = centre + back * 10;
@@ -198,7 +198,7 @@ namespace Bastion.EditorTools
             camera.transform.LookAt(target, Vector3.up);
         }
 
-        static Color[] Read(RenderTexture rt)
+        internal static Color[] Read(RenderTexture rt)
         {
             var was = RenderTexture.active;
             RenderTexture.active = rt;
@@ -212,7 +212,7 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>The picture cut square round what shows, `margin` a side (iconRenders.ts filled), at the pictures' side.</summary>
-        static Color[] Filled(Color[] src, int n, float margin)
+        internal static Color[] Filled(Color[] src, int n, float margin)
         {
             int x0 = n, y0 = n, x1 = -1, y1 = -1;
             for (int y = 0; y < n; y++)

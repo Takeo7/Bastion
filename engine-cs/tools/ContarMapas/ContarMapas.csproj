@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The library's map counts (docs/BIBLIOTECA.md, phase 4): generated maps, counted as Unity's MapBuilder would draw them. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Bastion.Engine.csproj" />
+  </ItemGroup>
+</Project>

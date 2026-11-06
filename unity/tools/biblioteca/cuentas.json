@@ -1,0 +1,7728 @@
+{
+  "formato": 1,
+  "hecho": "2026-11-05 18:26",
+  "version": "0.11.9",
+  "semillas": 100,
+  "_": "Mapas generados con el motor y contados con la regla de MapBuilder.Decor (engine-cs/tools/ContarMapas). «sinDibujo»: casillas de cobertura en el suelo, a ras, sin decorado, que no dibujan nada (deberían ser 0). «sinContar»: lo que Unity pone con otra regla. «coberturas»: en qué cobertura sale cada lista. «sinNombrar»: listas y objetos que no nombra el código del juego ni salen de DecorSet: no se dibujan.",
+  "mapas": {
+    "city/elimination": {
+      "nombre": "Ciudad · Limpieza",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city/recovery": {
+      "nombre": "Ciudad · Botín",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city/sabotage": {
+      "nombre": "Ciudad · Sabotaje",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city/hack": {
+      "nombre": "Ciudad · Arreglar la radio",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city/rescue": {
+      "nombre": "Ciudad · Rescate",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city/scavenge": {
+      "nombre": "Ciudad · Saqueo",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city-industrial/elimination": {
+      "nombre": "Ciudad · Polígono · Limpieza",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city-industrial/recovery": {
+      "nombre": "Ciudad · Polígono · Botín",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city-industrial/sabotage": {
+      "nombre": "Ciudad · Polígono · Sabotaje",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city-industrial/hack": {
+      "nombre": "Ciudad · Polígono · Arreglar la radio",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city-industrial/rescue": {
+      "nombre": "Ciudad · Polígono · Rescate",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "city-industrial/scavenge": {
+      "nombre": "Ciudad · Polígono · Saqueo",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds/elimination": {
+      "nombre": "Afueras · Limpieza",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds/recovery": {
+      "nombre": "Afueras · Botín",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds/sabotage": {
+      "nombre": "Afueras · Sabotaje",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds/hack": {
+      "nombre": "Afueras · Arreglar la radio",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds/rescue": {
+      "nombre": "Afueras · Rescate",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds/scavenge": {
+      "nombre": "Afueras · Saqueo",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds-roadside/elimination": {
+      "nombre": "Afueras · Área de servicio · Limpieza",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds-roadside/recovery": {
+      "nombre": "Afueras · Área de servicio · Botín",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds-roadside/sabotage": {
+      "nombre": "Afueras · Área de servicio · Sabotaje",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds-roadside/hack": {
+      "nombre": "Afueras · Área de servicio · Arreglar la radio",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds-roadside/rescue": {
+      "nombre": "Afueras · Área de servicio · Rescate",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "wilds-roadside/scavenge": {
+      "nombre": "Afueras · Área de servicio · Saqueo",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "facility/elimination": {
+      "nombre": "Fábrica · Limpieza",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "facility/recovery": {
+      "nombre": "Fábrica · Botín",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "facility/sabotage": {
+      "nombre": "Fábrica · Sabotaje",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "facility/hack": {
+      "nombre": "Fábrica · Arreglar la radio",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "facility/rescue": {
+      "nombre": "Fábrica · Rescate",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    },
+    "facility/scavenge": {
+      "nombre": "Fábrica · Saqueo",
+      "n": 100,
+      "sinDibujo": {
+        "media": 0,
+        "min": 0,
+        "max": 0,
+        "mapas": 0
+      }
+    }
+  },
+  "objetos": {
+    "barrels": {
+      "facility/elimination": {
+        "media": 14.96,
+        "min": 4,
+        "max": 25,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 14.96,
+        "min": 4,
+        "max": 25,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 14.96,
+        "min": 4,
+        "max": 25,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 14.96,
+        "min": 4,
+        "max": 25,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 14.96,
+        "min": 4,
+        "max": 25,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 14.96,
+        "min": 4,
+        "max": 25,
+        "mapas": 1
+      }
+    },
+    "barricade1": {
+      "city/elimination": {
+        "media": 0.24,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.16
+      },
+      "city/recovery": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.14
+      },
+      "city/sabotage": {
+        "media": 0.24,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.16
+      },
+      "city/hack": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.14
+      },
+      "city/rescue": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.14
+      },
+      "city/scavenge": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.14
+      },
+      "city-industrial/elimination": {
+        "media": 0.45,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.32
+      },
+      "city-industrial/recovery": {
+        "media": 0.58,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.33
+      },
+      "city-industrial/sabotage": {
+        "media": 0.45,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.32
+      },
+      "city-industrial/hack": {
+        "media": 0.58,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.33
+      },
+      "city-industrial/rescue": {
+        "media": 0.58,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.33
+      },
+      "city-industrial/scavenge": {
+        "media": 0.58,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.33
+      }
+    },
+    "barricade2": {
+      "city/elimination": {
+        "media": 0.22,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.19
+      },
+      "city/recovery": {
+        "media": 0.15,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.14
+      },
+      "city/sabotage": {
+        "media": 0.21,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.18
+      },
+      "city/hack": {
+        "media": 0.15,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.14
+      },
+      "city/rescue": {
+        "media": 0.15,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.14
+      },
+      "city/scavenge": {
+        "media": 0.15,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.14
+      },
+      "city-industrial/elimination": {
+        "media": 0.56,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.32
+      },
+      "city-industrial/recovery": {
+        "media": 0.46,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.24
+      },
+      "city-industrial/sabotage": {
+        "media": 0.56,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.32
+      },
+      "city-industrial/hack": {
+        "media": 0.46,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.24
+      },
+      "city-industrial/rescue": {
+        "media": 0.46,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.24
+      },
+      "city-industrial/scavenge": {
+        "media": 0.46,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.24
+      }
+    },
+    "barricadePallet": {
+      "city/elimination": {
+        "media": 0.19,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city/recovery": {
+        "media": 0.15,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.12
+      },
+      "city/sabotage": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.15
+      },
+      "city/hack": {
+        "media": 0.15,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.12
+      },
+      "city/rescue": {
+        "media": 0.15,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.12
+      },
+      "city/scavenge": {
+        "media": 0.15,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.12
+      },
+      "city-industrial/elimination": {
+        "media": 0.73,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.38
+      },
+      "city-industrial/recovery": {
+        "media": 0.47,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.3
+      },
+      "city-industrial/sabotage": {
+        "media": 0.73,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.38
+      },
+      "city-industrial/hack": {
+        "media": 0.47,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.3
+      },
+      "city-industrial/rescue": {
+        "media": 0.47,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.3
+      },
+      "city-industrial/scavenge": {
+        "media": 0.47,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.3
+      }
+    },
+    "bollard": {
+      "city/elimination": {
+        "media": 15.65,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city/recovery": {
+        "media": 15.23,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city/sabotage": {
+        "media": 15.44,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city/hack": {
+        "media": 15.23,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city/rescue": {
+        "media": 15.23,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city/scavenge": {
+        "media": 15.23,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city-industrial/elimination": {
+        "media": 11.78,
+        "min": 6,
+        "max": 24,
+        "mapas": 1
+      },
+      "city-industrial/recovery": {
+        "media": 11.56,
+        "min": 4,
+        "max": 24,
+        "mapas": 1
+      },
+      "city-industrial/sabotage": {
+        "media": 11.44,
+        "min": 5,
+        "max": 23,
+        "mapas": 1
+      },
+      "city-industrial/hack": {
+        "media": 11.56,
+        "min": 4,
+        "max": 24,
+        "mapas": 1
+      },
+      "city-industrial/rescue": {
+        "media": 11.56,
+        "min": 4,
+        "max": 24,
+        "mapas": 1
+      },
+      "city-industrial/scavenge": {
+        "media": 11.56,
+        "min": 4,
+        "max": 24,
+        "mapas": 1
+      }
+    },
+    "boulder": {
+      "wilds/elimination": {
+        "media": 9.02,
+        "min": 4,
+        "max": 14,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 8.98,
+        "min": 5,
+        "max": 12,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 8.93,
+        "min": 4,
+        "max": 14,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 8.93,
+        "min": 4,
+        "max": 14,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 8.98,
+        "min": 5,
+        "max": 12,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 8.98,
+        "min": 5,
+        "max": 12,
+        "mapas": 1
+      },
+      "wilds-roadside/elimination": {
+        "media": 4.48,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      }
+    },
+    "bush": {
+      "city/elimination": {
+        "media": 3.11,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.89
+      },
+      "city/recovery": {
+        "media": 2.96,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.89
+      },
+      "city/sabotage": {
+        "media": 3.11,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.89
+      },
+      "city/hack": {
+        "media": 2.96,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.89
+      },
+      "city/rescue": {
+        "media": 2.96,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.89
+      },
+      "city/scavenge": {
+        "media": 2.96,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.89
+      },
+      "city-industrial/elimination": {
+        "media": 0.05,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city-industrial/recovery": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "city-industrial/sabotage": {
+        "media": 0.05,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city-industrial/hack": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "city-industrial/rescue": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "city-industrial/scavenge": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "wilds/elimination": {
+        "media": 150.28,
+        "min": 114,
+        "max": 188,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 144.1,
+        "min": 115,
+        "max": 186,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 149.98,
+        "min": 114,
+        "max": 188,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 149.98,
+        "min": 114,
+        "max": 188,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 144.1,
+        "min": 115,
+        "max": 186,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 144.1,
+        "min": 115,
+        "max": 186,
+        "mapas": 1
+      },
+      "wilds-roadside/elimination": {
+        "media": 102.39,
+        "min": 74,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 102.26,
+        "min": 75,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 102.28,
+        "min": 73,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 102.28,
+        "min": 73,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 102.26,
+        "min": 75,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 102.26,
+        "min": 75,
+        "max": 140,
+        "mapas": 1
+      }
+    },
+    "cementBags": {
+      "city/elimination": {
+        "media": 1.74,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.77
+      },
+      "city/recovery": {
+        "media": 1.87,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.77
+      },
+      "city/sabotage": {
+        "media": 1.74,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.77
+      },
+      "city/hack": {
+        "media": 1.83,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.76
+      },
+      "city/rescue": {
+        "media": 1.87,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.77
+      },
+      "city/scavenge": {
+        "media": 1.87,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.77
+      },
+      "city-industrial/elimination": {
+        "media": 1.14,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.57
+      },
+      "city-industrial/recovery": {
+        "media": 1.15,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.63
+      },
+      "city-industrial/sabotage": {
+        "media": 1.14,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.57
+      },
+      "city-industrial/hack": {
+        "media": 1.15,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.63
+      },
+      "city-industrial/rescue": {
+        "media": 1.15,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.63
+      },
+      "city-industrial/scavenge": {
+        "media": 1.15,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.63
+      }
+    },
+    "chainFence": {
+      "wilds-roadside/elimination": {
+        "media": 4.56,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/recovery": {
+        "media": 4.59,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/sabotage": {
+        "media": 4.56,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/hack": {
+        "media": 4.56,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/rescue": {
+        "media": 4.59,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/scavenge": {
+        "media": 4.59,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "facility/elimination": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/recovery": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/sabotage": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/hack": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/rescue": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/scavenge": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      }
+    },
+    "concreteBarrier": {
+      "facility/elimination": {
+        "media": 3.13,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.96
+      },
+      "facility/recovery": {
+        "media": 3.12,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.96
+      },
+      "facility/sabotage": {
+        "media": 3.12,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.96
+      },
+      "facility/hack": {
+        "media": 3.12,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.96
+      },
+      "facility/rescue": {
+        "media": 3.12,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.96
+      },
+      "facility/scavenge": {
+        "media": 3.12,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.96
+      }
+    },
+    "crate": {
+      "city/elimination": {
+        "media": 2.66,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.95
+      },
+      "city/recovery": {
+        "media": 2.72,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.87
+      },
+      "city/sabotage": {
+        "media": 2.67,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.95
+      },
+      "city/hack": {
+        "media": 2.75,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.87
+      },
+      "city/rescue": {
+        "media": 2.72,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.87
+      },
+      "city/scavenge": {
+        "media": 2.72,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.87
+      },
+      "city-industrial/elimination": {
+        "media": 2.21,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.78
+      },
+      "city-industrial/recovery": {
+        "media": 2.23,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.84
+      },
+      "city-industrial/sabotage": {
+        "media": 2.21,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.78
+      },
+      "city-industrial/hack": {
+        "media": 2.23,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.84
+      },
+      "city-industrial/rescue": {
+        "media": 2.23,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.84
+      },
+      "city-industrial/scavenge": {
+        "media": 2.23,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.84
+      },
+      "facility/elimination": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/recovery": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/sabotage": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/hack": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/rescue": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/scavenge": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      }
+    },
+    "crates": {
+      "city/elimination": {
+        "media": 2.78,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.89
+      },
+      "city/recovery": {
+        "media": 2.91,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.87
+      },
+      "city/sabotage": {
+        "media": 2.78,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.89
+      },
+      "city/hack": {
+        "media": 2.91,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.87
+      },
+      "city/rescue": {
+        "media": 2.91,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.87
+      },
+      "city/scavenge": {
+        "media": 2.91,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.87
+      },
+      "city-industrial/elimination": {
+        "media": 2.27,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.77
+      },
+      "city-industrial/recovery": {
+        "media": 2.1,
+        "min": 0,
+        "max": 11,
+        "mapas": 0.79
+      },
+      "city-industrial/sabotage": {
+        "media": 2.27,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.77
+      },
+      "city-industrial/hack": {
+        "media": 2.1,
+        "min": 0,
+        "max": 11,
+        "mapas": 0.79
+      },
+      "city-industrial/rescue": {
+        "media": 2.1,
+        "min": 0,
+        "max": 11,
+        "mapas": 0.79
+      },
+      "city-industrial/scavenge": {
+        "media": 2.1,
+        "min": 0,
+        "max": 11,
+        "mapas": 0.79
+      },
+      "facility/elimination": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/recovery": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/sabotage": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/hack": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/rescue": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      },
+      "facility/scavenge": {
+        "media": 1.7,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.9
+      }
+    },
+    "desk": {
+      "city/elimination": {
+        "media": 2.07,
+        "min": 0,
+        "max": 19,
+        "mapas": 0.28
+      },
+      "city/recovery": {
+        "media": 5.38,
+        "min": 0,
+        "max": 27,
+        "mapas": 0.67
+      },
+      "city/sabotage": {
+        "media": 2.07,
+        "min": 0,
+        "max": 19,
+        "mapas": 0.28
+      },
+      "city/hack": {
+        "media": 6.42,
+        "min": 1,
+        "max": 27,
+        "mapas": 1
+      },
+      "city/rescue": {
+        "media": 5.38,
+        "min": 0,
+        "max": 27,
+        "mapas": 0.67
+      },
+      "city/scavenge": {
+        "media": 5.38,
+        "min": 0,
+        "max": 27,
+        "mapas": 0.67
+      },
+      "city-industrial/elimination": {
+        "media": 4.23,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.67
+      },
+      "city-industrial/recovery": {
+        "media": 4.19,
+        "min": 0,
+        "max": 22,
+        "mapas": 0.64
+      },
+      "city-industrial/sabotage": {
+        "media": 4.23,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.67
+      },
+      "city-industrial/hack": {
+        "media": 5.19,
+        "min": 1,
+        "max": 23,
+        "mapas": 1
+      },
+      "city-industrial/rescue": {
+        "media": 4.19,
+        "min": 0,
+        "max": 22,
+        "mapas": 0.64
+      },
+      "city-industrial/scavenge": {
+        "media": 4.19,
+        "min": 0,
+        "max": 22,
+        "mapas": 0.64
+      },
+      "wilds/hack": {
+        "media": 1,
+        "min": 1,
+        "max": 1,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 1,
+        "min": 1,
+        "max": 1,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 1,
+        "min": 1,
+        "max": 1,
+        "mapas": 1
+      }
+    },
+    "drums": {
+      "facility/elimination": {
+        "media": 13.8,
+        "min": 4,
+        "max": 28,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 13.8,
+        "min": 4,
+        "max": 28,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 13.79,
+        "min": 4,
+        "max": 28,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 13.8,
+        "min": 4,
+        "max": 28,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 13.8,
+        "min": 4,
+        "max": 28,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 13.8,
+        "min": 4,
+        "max": 28,
+        "mapas": 1
+      }
+    },
+    "drumsTarp": {
+      "facility/elimination": {
+        "media": 13.05,
+        "min": 6,
+        "max": 23,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 13.05,
+        "min": 6,
+        "max": 23,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 13.04,
+        "min": 6,
+        "max": 23,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 13.05,
+        "min": 6,
+        "max": 23,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 13.05,
+        "min": 6,
+        "max": 23,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 13.05,
+        "min": 6,
+        "max": 23,
+        "mapas": 1
+      }
+    },
+    "dumpster": {
+      "city/elimination": {
+        "media": 2.58,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.73
+      },
+      "city/recovery": {
+        "media": 2.26,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.67
+      },
+      "city/sabotage": {
+        "media": 2.47,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.7
+      },
+      "city/hack": {
+        "media": 2.26,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.67
+      },
+      "city/rescue": {
+        "media": 2.26,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.67
+      },
+      "city/scavenge": {
+        "media": 2.26,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.67
+      },
+      "city-industrial/elimination": {
+        "media": 2.66,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.93
+      },
+      "city-industrial/recovery": {
+        "media": 2.59,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.9
+      },
+      "city-industrial/sabotage": {
+        "media": 2.54,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.9
+      },
+      "city-industrial/hack": {
+        "media": 2.59,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.9
+      },
+      "city-industrial/rescue": {
+        "media": 2.59,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.9
+      },
+      "city-industrial/scavenge": {
+        "media": 2.59,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.9
+      }
+    },
+    "fencePost": {
+      "city/elimination": {
+        "media": 3.16,
+        "min": 0,
+        "max": 24,
+        "mapas": 0.37
+      },
+      "city/recovery": {
+        "media": 2.49,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.33
+      },
+      "city/sabotage": {
+        "media": 3.16,
+        "min": 0,
+        "max": 24,
+        "mapas": 0.37
+      },
+      "city/hack": {
+        "media": 2.49,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.33
+      },
+      "city/rescue": {
+        "media": 2.49,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.33
+      },
+      "city/scavenge": {
+        "media": 2.49,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.33
+      },
+      "city-industrial/elimination": {
+        "media": 0.13,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.01
+      },
+      "city-industrial/sabotage": {
+        "media": 0.13,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.01
+      },
+      "wilds/elimination": {
+        "media": 57.47,
+        "min": 45,
+        "max": 71,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 51.95,
+        "min": 0,
+        "max": 67,
+        "mapas": 0.99
+      },
+      "wilds/sabotage": {
+        "media": 57.29,
+        "min": 45,
+        "max": 71,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 57.29,
+        "min": 45,
+        "max": 71,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 51.95,
+        "min": 0,
+        "max": 67,
+        "mapas": 0.99
+      },
+      "wilds/scavenge": {
+        "media": 51.95,
+        "min": 0,
+        "max": 67,
+        "mapas": 0.99
+      }
+    },
+    "fridge": {
+      "city/elimination": {
+        "media": 0.57,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.45
+      },
+      "city/recovery": {
+        "media": 0.71,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.54
+      },
+      "city/sabotage": {
+        "media": 0.57,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.45
+      },
+      "city/hack": {
+        "media": 0.71,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.54
+      },
+      "city/rescue": {
+        "media": 0.71,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.54
+      },
+      "city/scavenge": {
+        "media": 0.71,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.54
+      },
+      "wilds/elimination": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/recovery": {
+        "media": 0.14,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.1
+      },
+      "wilds/sabotage": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/hack": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/rescue": {
+        "media": 0.14,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.1
+      },
+      "wilds/scavenge": {
+        "media": 0.14,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.1
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/hack": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      }
+    },
+    "gasSign": {
+      "wilds-roadside/elimination": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/recovery": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/sabotage": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/hack": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/rescue": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/scavenge": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      }
+    },
+    "gasTank": {
+      "city/elimination": {
+        "media": 0.17,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city/recovery": {
+        "media": 0.04,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city/sabotage": {
+        "media": 0.17,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city/hack": {
+        "media": 0.04,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city/rescue": {
+        "media": 0.04,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city/scavenge": {
+        "media": 0.04,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "facility/elimination": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/recovery": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/sabotage": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/hack": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/rescue": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/scavenge": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      }
+    },
+    "gatePillar": {
+      "city-industrial/elimination": {
+        "media": 15.84,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city-industrial/recovery": {
+        "media": 13.68,
+        "min": 0,
+        "max": 32,
+        "mapas": 0.96
+      },
+      "city-industrial/sabotage": {
+        "media": 15.84,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city-industrial/hack": {
+        "media": 13.68,
+        "min": 0,
+        "max": 32,
+        "mapas": 0.96
+      },
+      "city-industrial/rescue": {
+        "media": 13.68,
+        "min": 0,
+        "max": 32,
+        "mapas": 0.96
+      },
+      "city-industrial/scavenge": {
+        "media": 13.68,
+        "min": 0,
+        "max": 32,
+        "mapas": 0.96
+      },
+      "facility/elimination": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/recovery": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/sabotage": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/hack": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/rescue": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/scavenge": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      }
+    },
+    "gatePost": {
+      "city/elimination": {
+        "media": 1.57,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.37
+      },
+      "city/recovery": {
+        "media": 1.27,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.34
+      },
+      "city/sabotage": {
+        "media": 1.57,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.37
+      },
+      "city/hack": {
+        "media": 1.27,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.34
+      },
+      "city/rescue": {
+        "media": 1.27,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.34
+      },
+      "city/scavenge": {
+        "media": 1.27,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.34
+      },
+      "city-industrial/elimination": {
+        "media": 0.08,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.01
+      },
+      "city-industrial/sabotage": {
+        "media": 0.08,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.01
+      },
+      "wilds/elimination": {
+        "media": 5.96,
+        "min": 4,
+        "max": 8,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 5.38,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.99
+      },
+      "wilds/sabotage": {
+        "media": 5.96,
+        "min": 4,
+        "max": 8,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 5.96,
+        "min": 4,
+        "max": 8,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 5.38,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.99
+      },
+      "wilds/scavenge": {
+        "media": 5.38,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.99
+      }
+    },
+    "hayBale": {
+      "wilds/elimination": {
+        "media": 3.36,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.99
+      },
+      "wilds/recovery": {
+        "media": 10.84,
+        "min": 2,
+        "max": 21,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 3.36,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.99
+      },
+      "wilds/hack": {
+        "media": 3.36,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.99
+      },
+      "wilds/rescue": {
+        "media": 10.84,
+        "min": 2,
+        "max": 21,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 10.84,
+        "min": 2,
+        "max": 21,
+        "mapas": 1
+      }
+    },
+    "hayRound": {
+      "wilds/recovery": {
+        "media": 3.33,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      },
+      "wilds/rescue": {
+        "media": 3.33,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      },
+      "wilds/scavenge": {
+        "media": 3.33,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      }
+    },
+    "log": {
+      "wilds/elimination": {
+        "media": 5.17,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.9
+      },
+      "wilds/recovery": {
+        "media": 4.27,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.84
+      },
+      "wilds/sabotage": {
+        "media": 5.17,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.9
+      },
+      "wilds/hack": {
+        "media": 5.17,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.9
+      },
+      "wilds/rescue": {
+        "media": 4.27,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.84
+      },
+      "wilds/scavenge": {
+        "media": 4.27,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.84
+      },
+      "wilds-roadside/elimination": {
+        "media": 4.03,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.85
+      },
+      "wilds-roadside/recovery": {
+        "media": 3.99,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      },
+      "wilds-roadside/sabotage": {
+        "media": 4.03,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.85
+      },
+      "wilds-roadside/hack": {
+        "media": 4.03,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.85
+      },
+      "wilds-roadside/rescue": {
+        "media": 3.99,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      },
+      "wilds-roadside/scavenge": {
+        "media": 3.99,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      }
+    },
+    "machine": {
+      "facility/elimination": {
+        "media": 24.11,
+        "min": 14,
+        "max": 44,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 24.11,
+        "min": 14,
+        "max": 44,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 24.11,
+        "min": 14,
+        "max": 44,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 24.11,
+        "min": 14,
+        "max": 44,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 24.11,
+        "min": 14,
+        "max": 44,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 24.11,
+        "min": 14,
+        "max": 44,
+        "mapas": 1
+      }
+    },
+    "milBarrier": {
+      "city/elimination": {
+        "media": 0.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.21
+      },
+      "city/recovery": {
+        "media": 0.2,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.17
+      },
+      "city/sabotage": {
+        "media": 0.27,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.2
+      },
+      "city/hack": {
+        "media": 0.2,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.17
+      },
+      "city/rescue": {
+        "media": 0.2,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.17
+      },
+      "city/scavenge": {
+        "media": 0.2,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.17
+      },
+      "city-industrial/elimination": {
+        "media": 0.61,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.36
+      },
+      "city-industrial/recovery": {
+        "media": 0.44,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.28
+      },
+      "city-industrial/sabotage": {
+        "media": 0.61,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.36
+      },
+      "city-industrial/hack": {
+        "media": 0.44,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.28
+      },
+      "city-industrial/rescue": {
+        "media": 0.44,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.28
+      },
+      "city-industrial/scavenge": {
+        "media": 0.44,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.28
+      },
+      "facility/elimination": {
+        "media": 3.36,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/recovery": {
+        "media": 3.35,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/sabotage": {
+        "media": 3.35,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/hack": {
+        "media": 3.35,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/rescue": {
+        "media": 3.35,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/scavenge": {
+        "media": 3.35,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      }
+    },
+    "officeDesk": {
+      "city/elimination": {
+        "media": 2.41,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.29
+      },
+      "city/recovery": {
+        "media": 5.43,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.69
+      },
+      "city/sabotage": {
+        "media": 2.41,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.29
+      },
+      "city/hack": {
+        "media": 5.27,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.69
+      },
+      "city/rescue": {
+        "media": 5.43,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.69
+      },
+      "city/scavenge": {
+        "media": 5.43,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.69
+      },
+      "city-industrial/elimination": {
+        "media": 4.08,
+        "min": 0,
+        "max": 26,
+        "mapas": 0.7
+      },
+      "city-industrial/recovery": {
+        "media": 3.87,
+        "min": 0,
+        "max": 21,
+        "mapas": 0.67
+      },
+      "city-industrial/sabotage": {
+        "media": 4.08,
+        "min": 0,
+        "max": 26,
+        "mapas": 0.7
+      },
+      "city-industrial/hack": {
+        "media": 3.87,
+        "min": 0,
+        "max": 21,
+        "mapas": 0.67
+      },
+      "city-industrial/rescue": {
+        "media": 3.87,
+        "min": 0,
+        "max": 21,
+        "mapas": 0.67
+      },
+      "city-industrial/scavenge": {
+        "media": 3.87,
+        "min": 0,
+        "max": 21,
+        "mapas": 0.67
+      }
+    },
+    "officeDesk2": {
+      "city/elimination": {
+        "media": 2.3,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.29
+      },
+      "city/recovery": {
+        "media": 5.32,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.69
+      },
+      "city/sabotage": {
+        "media": 2.3,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.29
+      },
+      "city/hack": {
+        "media": 5.29,
+        "min": 0,
+        "max": 29,
+        "mapas": 0.69
+      },
+      "city/rescue": {
+        "media": 5.32,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.69
+      },
+      "city/scavenge": {
+        "media": 5.32,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.69
+      },
+      "city-industrial/elimination": {
+        "media": 3.85,
+        "min": 0,
+        "max": 19,
+        "mapas": 0.68
+      },
+      "city-industrial/recovery": {
+        "media": 3.84,
+        "min": 0,
+        "max": 24,
+        "mapas": 0.7
+      },
+      "city-industrial/sabotage": {
+        "media": 3.85,
+        "min": 0,
+        "max": 19,
+        "mapas": 0.68
+      },
+      "city-industrial/hack": {
+        "media": 3.84,
+        "min": 0,
+        "max": 24,
+        "mapas": 0.7
+      },
+      "city-industrial/rescue": {
+        "media": 3.84,
+        "min": 0,
+        "max": 24,
+        "mapas": 0.7
+      },
+      "city-industrial/scavenge": {
+        "media": 3.84,
+        "min": 0,
+        "max": 24,
+        "mapas": 0.7
+      },
+      "facility/elimination": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/recovery": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/sabotage": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/hack": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/rescue": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/scavenge": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      }
+    },
+    "pallet": {
+      "city/elimination": {
+        "media": 0.69,
+        "min": 0,
+        "max": 15,
+        "mapas": 0.07
+      },
+      "city/recovery": {
+        "media": 0.39,
+        "min": 0,
+        "max": 15,
+        "mapas": 0.05
+      },
+      "city/sabotage": {
+        "media": 0.6,
+        "min": 0,
+        "max": 15,
+        "mapas": 0.07
+      },
+      "city/hack": {
+        "media": 0.39,
+        "min": 0,
+        "max": 15,
+        "mapas": 0.05
+      },
+      "city/rescue": {
+        "media": 0.39,
+        "min": 0,
+        "max": 15,
+        "mapas": 0.05
+      },
+      "city/scavenge": {
+        "media": 0.39,
+        "min": 0,
+        "max": 15,
+        "mapas": 0.05
+      },
+      "facility/elimination": {
+        "media": 141.33,
+        "min": 63,
+        "max": 204,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 141.33,
+        "min": 63,
+        "max": 204,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 141.33,
+        "min": 63,
+        "max": 204,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 141.33,
+        "min": 63,
+        "max": 204,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 141.33,
+        "min": 63,
+        "max": 204,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 141.33,
+        "min": 63,
+        "max": 204,
+        "mapas": 1
+      }
+    },
+    "palletStack": {
+      "city/elimination": {
+        "media": 2.04,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.83
+      },
+      "city/recovery": {
+        "media": 2.08,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.77
+      },
+      "city/sabotage": {
+        "media": 2.03,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.83
+      },
+      "city/hack": {
+        "media": 2.07,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.77
+      },
+      "city/rescue": {
+        "media": 2.08,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.77
+      },
+      "city/scavenge": {
+        "media": 2.08,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.77
+      },
+      "city-industrial/elimination": {
+        "media": 1.01,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.5
+      },
+      "city-industrial/recovery": {
+        "media": 1.27,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.62
+      },
+      "city-industrial/sabotage": {
+        "media": 1.01,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.5
+      },
+      "city-industrial/hack": {
+        "media": 1.27,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.62
+      },
+      "city-industrial/rescue": {
+        "media": 1.27,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.62
+      },
+      "city-industrial/scavenge": {
+        "media": 1.27,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.62
+      }
+    },
+    "pineLarge": {
+      "wilds-roadside/elimination": {
+        "media": 233.46,
+        "min": 188,
+        "max": 290,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 233.53,
+        "min": 193,
+        "max": 292,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 233.17,
+        "min": 188,
+        "max": 290,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 233.17,
+        "min": 188,
+        "max": 290,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 233.53,
+        "min": 193,
+        "max": 292,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 233.53,
+        "min": 193,
+        "max": 292,
+        "mapas": 1
+      }
+    },
+    "pineLarge2": {
+      "wilds-roadside/elimination": {
+        "media": 118.62,
+        "min": 90,
+        "max": 150,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 118.71,
+        "min": 90,
+        "max": 151,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 118.46,
+        "min": 90,
+        "max": 150,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 118.46,
+        "min": 90,
+        "max": 150,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 118.71,
+        "min": 90,
+        "max": 151,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 118.71,
+        "min": 90,
+        "max": 151,
+        "mapas": 1
+      }
+    },
+    "planter": {
+      "city/elimination": {
+        "media": 4.35,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.54
+      },
+      "city/recovery": {
+        "media": 4.19,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.53
+      },
+      "city/sabotage": {
+        "media": 4.35,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.54
+      },
+      "city/hack": {
+        "media": 4.19,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.53
+      },
+      "city/rescue": {
+        "media": 4.19,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.53
+      },
+      "city/scavenge": {
+        "media": 4.19,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.53
+      },
+      "city-industrial/recovery": {
+        "media": 0.05,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.02
+      },
+      "city-industrial/hack": {
+        "media": 0.05,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.02
+      },
+      "city-industrial/rescue": {
+        "media": 0.05,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.02
+      },
+      "city-industrial/scavenge": {
+        "media": 0.05,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.02
+      }
+    },
+    "portaloo": {
+      "city/elimination": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "city/recovery": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city/sabotage": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "city/hack": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city/rescue": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city/scavenge": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city-industrial/elimination": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/recovery": {
+        "media": 0.37,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.37
+      },
+      "city-industrial/sabotage": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/hack": {
+        "media": 0.37,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.37
+      },
+      "city-industrial/rescue": {
+        "media": 0.37,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.37
+      },
+      "city-industrial/scavenge": {
+        "media": 0.37,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.37
+      }
+    },
+    "pump": {
+      "wilds-roadside/elimination": {
+        "media": 1.87,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.96
+      },
+      "wilds-roadside/recovery": {
+        "media": 1.87,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.96
+      },
+      "wilds-roadside/sabotage": {
+        "media": 1.87,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.96
+      },
+      "wilds-roadside/hack": {
+        "media": 1.87,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.96
+      },
+      "wilds-roadside/rescue": {
+        "media": 1.87,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.96
+      },
+      "wilds-roadside/scavenge": {
+        "media": 1.87,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.96
+      }
+    },
+    "pump2": {
+      "wilds-roadside/elimination": {
+        "media": 2.13,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.98
+      },
+      "wilds-roadside/recovery": {
+        "media": 2.13,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.98
+      },
+      "wilds-roadside/sabotage": {
+        "media": 2.13,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.98
+      },
+      "wilds-roadside/hack": {
+        "media": 2.13,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.98
+      },
+      "wilds-roadside/rescue": {
+        "media": 2.13,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.98
+      },
+      "wilds-roadside/scavenge": {
+        "media": 2.13,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.98
+      }
+    },
+    "razorWire": {
+      "city-industrial/elimination": {
+        "media": 33.58,
+        "min": 5,
+        "max": 77,
+        "mapas": 1
+      },
+      "city-industrial/recovery": {
+        "media": 35.09,
+        "min": 0,
+        "max": 88,
+        "mapas": 0.96
+      },
+      "city-industrial/sabotage": {
+        "media": 33.58,
+        "min": 5,
+        "max": 77,
+        "mapas": 1
+      },
+      "city-industrial/hack": {
+        "media": 35.09,
+        "min": 0,
+        "max": 88,
+        "mapas": 0.96
+      },
+      "city-industrial/rescue": {
+        "media": 35.09,
+        "min": 0,
+        "max": 88,
+        "mapas": 0.96
+      },
+      "city-industrial/scavenge": {
+        "media": 35.09,
+        "min": 0,
+        "max": 88,
+        "mapas": 0.96
+      }
+    },
+    "rock": {
+      "wilds/elimination": {
+        "media": 37.82,
+        "min": 27,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 38.23,
+        "min": 30,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 37.49,
+        "min": 26,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 37.49,
+        "min": 26,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 38.23,
+        "min": 30,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 38.23,
+        "min": 30,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds-roadside/elimination": {
+        "media": 18.54,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 18.44,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 18.42,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 18.42,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 18.44,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 18.44,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      }
+    },
+    "rubbishBin": {
+      "city/elimination": {
+        "media": 2.66,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.73
+      },
+      "city/recovery": {
+        "media": 2.48,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.69
+      },
+      "city/sabotage": {
+        "media": 2.57,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.72
+      },
+      "city/hack": {
+        "media": 2.48,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.69
+      },
+      "city/rescue": {
+        "media": 2.48,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.69
+      },
+      "city/scavenge": {
+        "media": 2.48,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.69
+      },
+      "city-industrial/elimination": {
+        "media": 3.16,
+        "min": 1,
+        "max": 8,
+        "mapas": 1
+      },
+      "city-industrial/recovery": {
+        "media": 3.09,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.98
+      },
+      "city-industrial/sabotage": {
+        "media": 3.11,
+        "min": 1,
+        "max": 8,
+        "mapas": 1
+      },
+      "city-industrial/hack": {
+        "media": 3.09,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.98
+      },
+      "city-industrial/rescue": {
+        "media": 3.09,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.98
+      },
+      "city-industrial/scavenge": {
+        "media": 3.09,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.98
+      }
+    },
+    "rubble1": {
+      "city/elimination": {
+        "media": 2.16,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.76
+      },
+      "city/recovery": {
+        "media": 1.88,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.74
+      },
+      "city/sabotage": {
+        "media": 2.16,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.76
+      },
+      "city/hack": {
+        "media": 1.88,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.74
+      },
+      "city/rescue": {
+        "media": 1.88,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.74
+      },
+      "city/scavenge": {
+        "media": 1.88,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.74
+      },
+      "city-industrial/elimination": {
+        "media": 0.61,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.36
+      },
+      "city-industrial/recovery": {
+        "media": 0.6,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.43
+      },
+      "city-industrial/sabotage": {
+        "media": 0.61,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.36
+      },
+      "city-industrial/hack": {
+        "media": 0.6,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.43
+      },
+      "city-industrial/rescue": {
+        "media": 0.6,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.43
+      },
+      "city-industrial/scavenge": {
+        "media": 0.6,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.43
+      },
+      "wilds/elimination": {
+        "media": 0.39,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.2
+      },
+      "wilds/sabotage": {
+        "media": 0.39,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.2
+      },
+      "wilds/hack": {
+        "media": 0.39,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.2
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.61,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.52
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.61,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.52
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.61,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.52
+      },
+      "wilds-roadside/hack": {
+        "media": 0.61,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.52
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.61,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.52
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.61,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.52
+      }
+    },
+    "rubble2": {
+      "city/elimination": {
+        "media": 1.9,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.71
+      },
+      "city/recovery": {
+        "media": 1.94,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.73
+      },
+      "city/sabotage": {
+        "media": 1.9,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.71
+      },
+      "city/hack": {
+        "media": 1.94,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.73
+      },
+      "city/rescue": {
+        "media": 1.94,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.73
+      },
+      "city/scavenge": {
+        "media": 1.94,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.73
+      },
+      "city-industrial/elimination": {
+        "media": 0.65,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.5
+      },
+      "city-industrial/recovery": {
+        "media": 0.54,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.38
+      },
+      "city-industrial/sabotage": {
+        "media": 0.65,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.5
+      },
+      "city-industrial/hack": {
+        "media": 0.54,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.38
+      },
+      "city-industrial/rescue": {
+        "media": 0.54,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.38
+      },
+      "city-industrial/scavenge": {
+        "media": 0.54,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.38
+      },
+      "wilds/elimination": {
+        "media": 0.27,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.17
+      },
+      "wilds/sabotage": {
+        "media": 0.27,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.17
+      },
+      "wilds/hack": {
+        "media": 0.27,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.17
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.44,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.38
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.44,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.38
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.44,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.38
+      },
+      "wilds-roadside/hack": {
+        "media": 0.44,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.38
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.44,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.38
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.44,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.38
+      }
+    },
+    "rubbleWall": {
+      "city/elimination": {
+        "media": 0.22,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.2
+      },
+      "city/recovery": {
+        "media": 0.24,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.21
+      },
+      "city/sabotage": {
+        "media": 0.22,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.2
+      },
+      "city/hack": {
+        "media": 0.24,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.21
+      },
+      "city/rescue": {
+        "media": 0.24,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.21
+      },
+      "city/scavenge": {
+        "media": 0.24,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.21
+      },
+      "wilds/elimination": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/sabotage": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/hack": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      }
+    },
+    "sandbags": {
+      "city/elimination": {
+        "media": 0.26,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.19
+      },
+      "city/recovery": {
+        "media": 0.19,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.15
+      },
+      "city/sabotage": {
+        "media": 0.25,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.18
+      },
+      "city/hack": {
+        "media": 0.19,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.15
+      },
+      "city/rescue": {
+        "media": 0.19,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.15
+      },
+      "city/scavenge": {
+        "media": 0.19,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.15
+      },
+      "city-industrial/elimination": {
+        "media": 0.68,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.33
+      },
+      "city-industrial/recovery": {
+        "media": 0.5,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.3
+      },
+      "city-industrial/sabotage": {
+        "media": 0.68,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.33
+      },
+      "city-industrial/hack": {
+        "media": 0.5,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.3
+      },
+      "city-industrial/rescue": {
+        "media": 0.5,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.3
+      },
+      "city-industrial/scavenge": {
+        "media": 0.5,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.3
+      }
+    },
+    "siteBarrier": {
+      "city/elimination": {
+        "media": 0.11,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.09
+      },
+      "city/recovery": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city/sabotage": {
+        "media": 0.09,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.08
+      },
+      "city/hack": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city/rescue": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city/scavenge": {
+        "media": 0.18,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city-industrial/elimination": {
+        "media": 0.53,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.31
+      },
+      "city-industrial/recovery": {
+        "media": 0.48,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.33
+      },
+      "city-industrial/sabotage": {
+        "media": 0.53,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.31
+      },
+      "city-industrial/hack": {
+        "media": 0.48,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.33
+      },
+      "city-industrial/rescue": {
+        "media": 0.48,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.33
+      },
+      "city-industrial/scavenge": {
+        "media": 0.48,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.33
+      }
+    },
+    "statue": {
+      "wilds-roadside/elimination": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/hack": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      }
+    },
+    "stove": {
+      "city/elimination": {
+        "media": 3.61,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.97
+      },
+      "city/recovery": {
+        "media": 3.69,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.96
+      },
+      "city/sabotage": {
+        "media": 3.61,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.97
+      },
+      "city/hack": {
+        "media": 3.69,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.96
+      },
+      "city/rescue": {
+        "media": 3.69,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.96
+      },
+      "city/scavenge": {
+        "media": 3.69,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.96
+      },
+      "wilds/elimination": {
+        "media": 0.78,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.78
+      },
+      "wilds/recovery": {
+        "media": 1.51,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.85
+      },
+      "wilds/sabotage": {
+        "media": 0.78,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.78
+      },
+      "wilds/hack": {
+        "media": 0.78,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.78
+      },
+      "wilds/rescue": {
+        "media": 1.51,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.85
+      },
+      "wilds/scavenge": {
+        "media": 1.51,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.85
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/hack": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      }
+    },
+    "streetTree": {
+      "city/elimination": {
+        "media": 1.53,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.75
+      },
+      "city/recovery": {
+        "media": 1.49,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.76
+      },
+      "city/sabotage": {
+        "media": 1.53,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.75
+      },
+      "city/hack": {
+        "media": 1.49,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.76
+      },
+      "city/rescue": {
+        "media": 1.49,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.76
+      },
+      "city/scavenge": {
+        "media": 1.49,
+        "min": 0,
+        "max": 5,
+        "mapas": 0.76
+      },
+      "city-industrial/elimination": {
+        "media": 0.06,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.06
+      },
+      "city-industrial/recovery": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city-industrial/sabotage": {
+        "media": 0.06,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.06
+      },
+      "city-industrial/hack": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city-industrial/rescue": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city-industrial/scavenge": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      }
+    },
+    "television": {
+      "city/elimination": {
+        "media": 1.25,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.57
+      },
+      "city/recovery": {
+        "media": 1.42,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.68
+      },
+      "city/sabotage": {
+        "media": 1.25,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.57
+      },
+      "city/hack": {
+        "media": 1.42,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.68
+      },
+      "city/rescue": {
+        "media": 1.42,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.68
+      },
+      "city/scavenge": {
+        "media": 1.42,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.68
+      },
+      "wilds/elimination": {
+        "media": 0.33,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.33
+      },
+      "wilds/recovery": {
+        "media": 0.65,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.45
+      },
+      "wilds/sabotage": {
+        "media": 0.33,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.33
+      },
+      "wilds/hack": {
+        "media": 0.33,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.33
+      },
+      "wilds/rescue": {
+        "media": 0.65,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.45
+      },
+      "wilds/scavenge": {
+        "media": 0.65,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.45
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/hack": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      }
+    },
+    "tree": {
+      "city/elimination": {
+        "media": 1.4,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.72
+      },
+      "city/recovery": {
+        "media": 1.26,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.62
+      },
+      "city/sabotage": {
+        "media": 1.4,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.72
+      },
+      "city/hack": {
+        "media": 1.26,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.62
+      },
+      "city/rescue": {
+        "media": 1.26,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.62
+      },
+      "city/scavenge": {
+        "media": 1.26,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.62
+      },
+      "city-industrial/elimination": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "city-industrial/recovery": {
+        "media": 0.03,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.02
+      },
+      "city-industrial/sabotage": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "city-industrial/hack": {
+        "media": 0.03,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.02
+      },
+      "city-industrial/rescue": {
+        "media": 0.03,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.02
+      },
+      "city-industrial/scavenge": {
+        "media": 0.03,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.02
+      },
+      "wilds/elimination": {
+        "media": 450.37,
+        "min": 381,
+        "max": 528,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 432.03,
+        "min": 359,
+        "max": 501,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 449.61,
+        "min": 380,
+        "max": 528,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 449.61,
+        "min": 380,
+        "max": 528,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 432.03,
+        "min": 359,
+        "max": 501,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 432.03,
+        "min": 359,
+        "max": 501,
+        "mapas": 1
+      }
+    },
+    "treePine": {
+      "wilds/elimination": {
+        "media": 234.04,
+        "min": 195,
+        "max": 281,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 220.95,
+        "min": 170,
+        "max": 284,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 233.63,
+        "min": 194,
+        "max": 281,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 233.63,
+        "min": 194,
+        "max": 281,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 220.95,
+        "min": 170,
+        "max": 284,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 220.95,
+        "min": 170,
+        "max": 284,
+        "mapas": 1
+      },
+      "wilds-roadside/elimination": {
+        "media": 119.64,
+        "min": 82,
+        "max": 161,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 119.7,
+        "min": 79,
+        "max": 166,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 119.57,
+        "min": 82,
+        "max": 161,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 119.57,
+        "min": 82,
+        "max": 161,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 119.7,
+        "min": 79,
+        "max": 166,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 119.7,
+        "min": 79,
+        "max": 166,
+        "mapas": 1
+      }
+    },
+    "tvStand": {
+      "city/elimination": {
+        "media": 1.25,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.57
+      },
+      "city/recovery": {
+        "media": 1.42,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.68
+      },
+      "city/sabotage": {
+        "media": 1.25,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.57
+      },
+      "city/hack": {
+        "media": 1.42,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.68
+      },
+      "city/rescue": {
+        "media": 1.42,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.68
+      },
+      "city/scavenge": {
+        "media": 1.42,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.68
+      },
+      "wilds/elimination": {
+        "media": 0.33,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.33
+      },
+      "wilds/recovery": {
+        "media": 0.65,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.45
+      },
+      "wilds/sabotage": {
+        "media": 0.33,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.33
+      },
+      "wilds/hack": {
+        "media": 0.33,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.33
+      },
+      "wilds/rescue": {
+        "media": 0.65,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.45
+      },
+      "wilds/scavenge": {
+        "media": 0.65,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.45
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/hack": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.31,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.31
+      }
+    },
+    "vending": {
+      "city/elimination": {
+        "media": 1.73,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.82
+      },
+      "city/recovery": {
+        "media": 0.92,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.56
+      },
+      "city/sabotage": {
+        "media": 1.73,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.82
+      },
+      "city/hack": {
+        "media": 0.92,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.56
+      },
+      "city/rescue": {
+        "media": 0.92,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.56
+      },
+      "city/scavenge": {
+        "media": 0.92,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.56
+      },
+      "city-industrial/elimination": {
+        "media": 0.52,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.51
+      },
+      "city-industrial/recovery": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/sabotage": {
+        "media": 0.52,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.51
+      },
+      "city-industrial/hack": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/rescue": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/scavenge": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/hack": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "facility/elimination": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      }
+    },
+    "wardrobe": {
+      "city/elimination": {
+        "media": 3.11,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.91
+      },
+      "city/recovery": {
+        "media": 3.51,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.93
+      },
+      "city/sabotage": {
+        "media": 3.11,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.91
+      },
+      "city/hack": {
+        "media": 3.48,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.93
+      },
+      "city/rescue": {
+        "media": 3.51,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.93
+      },
+      "city/scavenge": {
+        "media": 3.51,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.93
+      },
+      "wilds/elimination": {
+        "media": 0.47,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.47
+      },
+      "wilds/recovery": {
+        "media": 0.97,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.49
+      },
+      "wilds/sabotage": {
+        "media": 0.47,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.47
+      },
+      "wilds/hack": {
+        "media": 0.47,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.47
+      },
+      "wilds/rescue": {
+        "media": 0.97,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.49
+      },
+      "wilds/scavenge": {
+        "media": 0.97,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.49
+      },
+      "wilds-roadside/elimination": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      }
+    },
+    "washbasin": {
+      "city/elimination": {
+        "media": 0.83,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.52
+      },
+      "city/recovery": {
+        "media": 0.92,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.53
+      },
+      "city/sabotage": {
+        "media": 0.83,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.52
+      },
+      "city/hack": {
+        "media": 0.9,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.51
+      },
+      "city/rescue": {
+        "media": 0.92,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.53
+      },
+      "city/scavenge": {
+        "media": 0.92,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.53
+      },
+      "wilds/elimination": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds/recovery": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/sabotage": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds/hack": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds/rescue": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/scavenge": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/hack": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      }
+    },
+    "wc": {
+      "city/elimination": {
+        "media": 2.08,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.81
+      },
+      "city/recovery": {
+        "media": 2.34,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.85
+      },
+      "city/sabotage": {
+        "media": 2.08,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.81
+      },
+      "city/hack": {
+        "media": 2.33,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.85
+      },
+      "city/rescue": {
+        "media": 2.34,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.85
+      },
+      "city/scavenge": {
+        "media": 2.34,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.85
+      },
+      "wilds/elimination": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds/recovery": {
+        "media": 0.64,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.37
+      },
+      "wilds/sabotage": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds/hack": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds/rescue": {
+        "media": 0.64,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.37
+      },
+      "wilds/scavenge": {
+        "media": 0.64,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.37
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/hack": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      }
+    },
+    "woodFence": {
+      "wilds-roadside/elimination": {
+        "media": 3.76,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/recovery": {
+        "media": 3.78,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/sabotage": {
+        "media": 3.76,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/hack": {
+        "media": 3.76,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/rescue": {
+        "media": 3.78,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/scavenge": {
+        "media": 3.78,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      }
+    },
+    "workShelf": {
+      "city/recovery": {
+        "media": 0.03,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.01
+      },
+      "city/hack": {
+        "media": 0.03,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.01
+      },
+      "city/rescue": {
+        "media": 0.03,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.01
+      },
+      "city/scavenge": {
+        "media": 0.03,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.01
+      }
+    }
+  },
+  "listas": {
+    "barricade": {
+      "city/elimination": {
+        "media": 1.3,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.4
+      },
+      "city/recovery": {
+        "media": 1.05,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.45
+      },
+      "city/sabotage": {
+        "media": 1.24,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.38
+      },
+      "city/hack": {
+        "media": 1.05,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.45
+      },
+      "city/rescue": {
+        "media": 1.05,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.45
+      },
+      "city/scavenge": {
+        "media": 1.05,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.45
+      },
+      "city-industrial/elimination": {
+        "media": 3.56,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.56
+      },
+      "city-industrial/recovery": {
+        "media": 2.93,
+        "min": 0,
+        "max": 14,
+        "mapas": 0.48
+      },
+      "city-industrial/sabotage": {
+        "media": 3.56,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.56
+      },
+      "city-industrial/hack": {
+        "media": 2.93,
+        "min": 0,
+        "max": 14,
+        "mapas": 0.48
+      },
+      "city-industrial/rescue": {
+        "media": 2.93,
+        "min": 0,
+        "max": 14,
+        "mapas": 0.48
+      },
+      "city-industrial/scavenge": {
+        "media": 2.93,
+        "min": 0,
+        "max": 14,
+        "mapas": 0.48
+      }
+    },
+    "bin": {
+      "city/elimination": {
+        "media": 5.24,
+        "min": 0,
+        "max": 19,
+        "mapas": 0.87
+      },
+      "city/recovery": {
+        "media": 4.74,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.84
+      },
+      "city/sabotage": {
+        "media": 5.04,
+        "min": 0,
+        "max": 19,
+        "mapas": 0.86
+      },
+      "city/hack": {
+        "media": 4.74,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.84
+      },
+      "city/rescue": {
+        "media": 4.74,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.84
+      },
+      "city/scavenge": {
+        "media": 4.74,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.84
+      },
+      "city-industrial/elimination": {
+        "media": 5.82,
+        "min": 1,
+        "max": 13,
+        "mapas": 1
+      },
+      "city-industrial/recovery": {
+        "media": 5.68,
+        "min": 1,
+        "max": 13,
+        "mapas": 1
+      },
+      "city-industrial/sabotage": {
+        "media": 5.65,
+        "min": 1,
+        "max": 13,
+        "mapas": 1
+      },
+      "city-industrial/hack": {
+        "media": 5.68,
+        "min": 1,
+        "max": 13,
+        "mapas": 1
+      },
+      "city-industrial/rescue": {
+        "media": 5.68,
+        "min": 1,
+        "max": 13,
+        "mapas": 1
+      },
+      "city-industrial/scavenge": {
+        "media": 5.68,
+        "min": 1,
+        "max": 13,
+        "mapas": 1
+      }
+    },
+    "bush": {
+      "city/elimination": {
+        "media": 3.11,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.89
+      },
+      "city/recovery": {
+        "media": 2.96,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.89
+      },
+      "city/sabotage": {
+        "media": 3.11,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.89
+      },
+      "city/hack": {
+        "media": 2.96,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.89
+      },
+      "city/rescue": {
+        "media": 2.96,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.89
+      },
+      "city/scavenge": {
+        "media": 2.96,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.89
+      },
+      "city-industrial/elimination": {
+        "media": 0.05,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city-industrial/recovery": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "city-industrial/sabotage": {
+        "media": 0.05,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city-industrial/hack": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "city-industrial/rescue": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "city-industrial/scavenge": {
+        "media": 0.01,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.01
+      },
+      "wilds/elimination": {
+        "media": 150.28,
+        "min": 114,
+        "max": 188,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 144.1,
+        "min": 115,
+        "max": 186,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 149.98,
+        "min": 114,
+        "max": 188,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 149.98,
+        "min": 114,
+        "max": 188,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 144.1,
+        "min": 115,
+        "max": 186,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 144.1,
+        "min": 115,
+        "max": 186,
+        "mapas": 1
+      },
+      "wilds-roadside/elimination": {
+        "media": 102.39,
+        "min": 74,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 102.26,
+        "min": 75,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 102.28,
+        "min": 73,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 102.28,
+        "min": 73,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 102.26,
+        "min": 75,
+        "max": 140,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 102.26,
+        "min": 75,
+        "max": 140,
+        "mapas": 1
+      }
+    },
+    "chainFence": {
+      "wilds-roadside/elimination": {
+        "media": 4.56,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/recovery": {
+        "media": 4.59,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/sabotage": {
+        "media": 4.56,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/hack": {
+        "media": 4.56,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/rescue": {
+        "media": 4.59,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "wilds-roadside/scavenge": {
+        "media": 4.59,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.91
+      },
+      "facility/elimination": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/recovery": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/sabotage": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/hack": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/rescue": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      },
+      "facility/scavenge": {
+        "media": 7.83,
+        "min": 0,
+        "max": 23,
+        "mapas": 0.57
+      }
+    },
+    "console": {
+      "city/hack": {
+        "media": 1,
+        "min": 1,
+        "max": 1,
+        "mapas": 1
+      },
+      "city-industrial/hack": {
+        "media": 1,
+        "min": 1,
+        "max": 1,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 1,
+        "min": 1,
+        "max": 1,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 1,
+        "min": 1,
+        "max": 1,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 1,
+        "min": 1,
+        "max": 1,
+        "mapas": 1
+      }
+    },
+    "crates": {
+      "city/elimination": {
+        "media": 7.92,
+        "min": 1,
+        "max": 19,
+        "mapas": 1
+      },
+      "city/recovery": {
+        "media": 8.34,
+        "min": 1,
+        "max": 22,
+        "mapas": 1
+      },
+      "city/sabotage": {
+        "media": 7.92,
+        "min": 1,
+        "max": 19,
+        "mapas": 1
+      },
+      "city/hack": {
+        "media": 8.32,
+        "min": 1,
+        "max": 22,
+        "mapas": 1
+      },
+      "city/rescue": {
+        "media": 8.34,
+        "min": 1,
+        "max": 22,
+        "mapas": 1
+      },
+      "city/scavenge": {
+        "media": 8.34,
+        "min": 1,
+        "max": 22,
+        "mapas": 1
+      },
+      "city-industrial/elimination": {
+        "media": 4.59,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.87
+      },
+      "city-industrial/recovery": {
+        "media": 4.71,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.86
+      },
+      "city-industrial/sabotage": {
+        "media": 4.59,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.87
+      },
+      "city-industrial/hack": {
+        "media": 4.71,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.86
+      },
+      "city-industrial/rescue": {
+        "media": 4.71,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.86
+      },
+      "city-industrial/scavenge": {
+        "media": 4.71,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.86
+      }
+    },
+    "desk": {
+      "city/elimination": {
+        "media": 6.78,
+        "min": 0,
+        "max": 41,
+        "mapas": 0.29
+      },
+      "city/recovery": {
+        "media": 16.13,
+        "min": 0,
+        "max": 64,
+        "mapas": 0.69
+      },
+      "city/sabotage": {
+        "media": 6.78,
+        "min": 0,
+        "max": 41,
+        "mapas": 0.29
+      },
+      "city/hack": {
+        "media": 15.98,
+        "min": 0,
+        "max": 70,
+        "mapas": 0.69
+      },
+      "city/rescue": {
+        "media": 16.13,
+        "min": 0,
+        "max": 64,
+        "mapas": 0.69
+      },
+      "city/scavenge": {
+        "media": 16.13,
+        "min": 0,
+        "max": 64,
+        "mapas": 0.69
+      },
+      "city-industrial/elimination": {
+        "media": 12.16,
+        "min": 0,
+        "max": 60,
+        "mapas": 0.79
+      },
+      "city-industrial/recovery": {
+        "media": 11.9,
+        "min": 0,
+        "max": 65,
+        "mapas": 0.81
+      },
+      "city-industrial/sabotage": {
+        "media": 12.16,
+        "min": 0,
+        "max": 60,
+        "mapas": 0.79
+      },
+      "city-industrial/hack": {
+        "media": 11.9,
+        "min": 0,
+        "max": 65,
+        "mapas": 0.81
+      },
+      "city-industrial/rescue": {
+        "media": 11.9,
+        "min": 0,
+        "max": 65,
+        "mapas": 0.81
+      },
+      "city-industrial/scavenge": {
+        "media": 11.9,
+        "min": 0,
+        "max": 65,
+        "mapas": 0.81
+      }
+    },
+    "drums": {
+      "facility/elimination": {
+        "media": 41.81,
+        "min": 25,
+        "max": 60,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 41.81,
+        "min": 25,
+        "max": 60,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 41.79,
+        "min": 25,
+        "max": 60,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 41.81,
+        "min": 25,
+        "max": 60,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 41.81,
+        "min": 25,
+        "max": 60,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 41.81,
+        "min": 25,
+        "max": 60,
+        "mapas": 1
+      }
+    },
+    "fencePost": {
+      "city/elimination": {
+        "media": 3.16,
+        "min": 0,
+        "max": 24,
+        "mapas": 0.37
+      },
+      "city/recovery": {
+        "media": 2.49,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.33
+      },
+      "city/sabotage": {
+        "media": 3.16,
+        "min": 0,
+        "max": 24,
+        "mapas": 0.37
+      },
+      "city/hack": {
+        "media": 2.49,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.33
+      },
+      "city/rescue": {
+        "media": 2.49,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.33
+      },
+      "city/scavenge": {
+        "media": 2.49,
+        "min": 0,
+        "max": 20,
+        "mapas": 0.33
+      },
+      "city-industrial/elimination": {
+        "media": 0.13,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.01
+      },
+      "city-industrial/sabotage": {
+        "media": 0.13,
+        "min": 0,
+        "max": 13,
+        "mapas": 0.01
+      },
+      "wilds/elimination": {
+        "media": 57.47,
+        "min": 45,
+        "max": 71,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 51.95,
+        "min": 0,
+        "max": 67,
+        "mapas": 0.99
+      },
+      "wilds/sabotage": {
+        "media": 57.29,
+        "min": 45,
+        "max": 71,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 57.29,
+        "min": 45,
+        "max": 71,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 51.95,
+        "min": 0,
+        "max": 67,
+        "mapas": 0.99
+      },
+      "wilds/scavenge": {
+        "media": 51.95,
+        "min": 0,
+        "max": 67,
+        "mapas": 0.99
+      }
+    },
+    "forest": {
+      "wilds/elimination": {
+        "media": 684.41,
+        "min": 584,
+        "max": 791,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 652.98,
+        "min": 568,
+        "max": 776,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 683.24,
+        "min": 582,
+        "max": 790,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 683.24,
+        "min": 582,
+        "max": 790,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 652.98,
+        "min": 568,
+        "max": 776,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 652.98,
+        "min": 568,
+        "max": 776,
+        "mapas": 1
+      }
+    },
+    "fridge": {
+      "city/elimination": {
+        "media": 0.57,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.45
+      },
+      "city/recovery": {
+        "media": 0.71,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.54
+      },
+      "city/sabotage": {
+        "media": 0.57,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.45
+      },
+      "city/hack": {
+        "media": 0.71,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.54
+      },
+      "city/rescue": {
+        "media": 0.71,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.54
+      },
+      "city/scavenge": {
+        "media": 0.71,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.54
+      },
+      "wilds/elimination": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/recovery": {
+        "media": 0.14,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.1
+      },
+      "wilds/sabotage": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/hack": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/rescue": {
+        "media": 0.14,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.1
+      },
+      "wilds/scavenge": {
+        "media": 0.14,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.1
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/hack": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      }
+    },
+    "gatePillar": {
+      "city-industrial/elimination": {
+        "media": 15.84,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city-industrial/recovery": {
+        "media": 13.68,
+        "min": 0,
+        "max": 32,
+        "mapas": 0.96
+      },
+      "city-industrial/sabotage": {
+        "media": 15.84,
+        "min": 4,
+        "max": 32,
+        "mapas": 1
+      },
+      "city-industrial/hack": {
+        "media": 13.68,
+        "min": 0,
+        "max": 32,
+        "mapas": 0.96
+      },
+      "city-industrial/rescue": {
+        "media": 13.68,
+        "min": 0,
+        "max": 32,
+        "mapas": 0.96
+      },
+      "city-industrial/scavenge": {
+        "media": 13.68,
+        "min": 0,
+        "max": 32,
+        "mapas": 0.96
+      },
+      "facility/elimination": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/recovery": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/sabotage": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/hack": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/rescue": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      },
+      "facility/scavenge": {
+        "media": 2.28,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.57
+      }
+    },
+    "gatePost": {
+      "city/elimination": {
+        "media": 1.57,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.37
+      },
+      "city/recovery": {
+        "media": 1.27,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.34
+      },
+      "city/sabotage": {
+        "media": 1.57,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.37
+      },
+      "city/hack": {
+        "media": 1.27,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.34
+      },
+      "city/rescue": {
+        "media": 1.27,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.34
+      },
+      "city/scavenge": {
+        "media": 1.27,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.34
+      },
+      "city-industrial/elimination": {
+        "media": 0.08,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.01
+      },
+      "city-industrial/sabotage": {
+        "media": 0.08,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.01
+      },
+      "wilds/elimination": {
+        "media": 5.96,
+        "min": 4,
+        "max": 8,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 5.38,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.99
+      },
+      "wilds/sabotage": {
+        "media": 5.96,
+        "min": 4,
+        "max": 8,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 5.96,
+        "min": 4,
+        "max": 8,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 5.38,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.99
+      },
+      "wilds/scavenge": {
+        "media": 5.38,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.99
+      }
+    },
+    "hayBale": {
+      "wilds/elimination": {
+        "media": 3.36,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.99
+      },
+      "wilds/recovery": {
+        "media": 10.84,
+        "min": 2,
+        "max": 21,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 3.36,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.99
+      },
+      "wilds/hack": {
+        "media": 3.36,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.99
+      },
+      "wilds/rescue": {
+        "media": 10.84,
+        "min": 2,
+        "max": 21,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 10.84,
+        "min": 2,
+        "max": 21,
+        "mapas": 1
+      }
+    },
+    "hayStack": {
+      "wilds/recovery": {
+        "media": 3.33,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      },
+      "wilds/rescue": {
+        "media": 3.33,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      },
+      "wilds/scavenge": {
+        "media": 3.33,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      }
+    },
+    "kiosk": {
+      "city/elimination": {
+        "media": 1.73,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.82
+      },
+      "city/recovery": {
+        "media": 0.92,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.56
+      },
+      "city/sabotage": {
+        "media": 1.73,
+        "min": 0,
+        "max": 8,
+        "mapas": 0.82
+      },
+      "city/hack": {
+        "media": 0.92,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.56
+      },
+      "city/rescue": {
+        "media": 0.92,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.56
+      },
+      "city/scavenge": {
+        "media": 0.92,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.56
+      },
+      "city-industrial/elimination": {
+        "media": 0.52,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.51
+      },
+      "city-industrial/recovery": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/sabotage": {
+        "media": 0.52,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.51
+      },
+      "city-industrial/hack": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/rescue": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/scavenge": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/hack": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "facility/elimination": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 3.72,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      }
+    },
+    "labBench": {
+      "facility/elimination": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/recovery": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/sabotage": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/hack": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/rescue": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      },
+      "facility/scavenge": {
+        "media": 4.76,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.97
+      }
+    },
+    "logs": {
+      "wilds/elimination": {
+        "media": 5.17,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.9
+      },
+      "wilds/recovery": {
+        "media": 4.27,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.84
+      },
+      "wilds/sabotage": {
+        "media": 5.17,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.9
+      },
+      "wilds/hack": {
+        "media": 5.17,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.9
+      },
+      "wilds/rescue": {
+        "media": 4.27,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.84
+      },
+      "wilds/scavenge": {
+        "media": 4.27,
+        "min": 0,
+        "max": 12,
+        "mapas": 0.84
+      },
+      "wilds-roadside/elimination": {
+        "media": 4.03,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.85
+      },
+      "wilds-roadside/recovery": {
+        "media": 3.99,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      },
+      "wilds-roadside/sabotage": {
+        "media": 4.03,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.85
+      },
+      "wilds-roadside/hack": {
+        "media": 4.03,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.85
+      },
+      "wilds-roadside/rescue": {
+        "media": 3.99,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      },
+      "wilds-roadside/scavenge": {
+        "media": 3.99,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.84
+      }
+    },
+    "pines": {
+      "wilds-roadside/elimination": {
+        "media": 471.72,
+        "min": 388,
+        "max": 585,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 471.94,
+        "min": 394,
+        "max": 589,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 471.2,
+        "min": 388,
+        "max": 585,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 471.2,
+        "min": 388,
+        "max": 585,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 471.94,
+        "min": 394,
+        "max": 589,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 471.94,
+        "min": 394,
+        "max": 589,
+        "mapas": 1
+      }
+    },
+    "planter": {
+      "city/elimination": {
+        "media": 4.35,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.54
+      },
+      "city/recovery": {
+        "media": 4.19,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.53
+      },
+      "city/sabotage": {
+        "media": 4.35,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.54
+      },
+      "city/hack": {
+        "media": 4.19,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.53
+      },
+      "city/rescue": {
+        "media": 4.19,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.53
+      },
+      "city/scavenge": {
+        "media": 4.19,
+        "min": 0,
+        "max": 18,
+        "mapas": 0.53
+      },
+      "city-industrial/recovery": {
+        "media": 0.05,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.02
+      },
+      "city-industrial/hack": {
+        "media": 0.05,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.02
+      },
+      "city-industrial/rescue": {
+        "media": 0.05,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.02
+      },
+      "city-industrial/scavenge": {
+        "media": 0.05,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.02
+      }
+    },
+    "portaloo": {
+      "city/elimination": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "city/recovery": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city/sabotage": {
+        "media": 0.05,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.05
+      },
+      "city/hack": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city/rescue": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city/scavenge": {
+        "media": 0.02,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.02
+      },
+      "city-industrial/elimination": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/recovery": {
+        "media": 0.37,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.37
+      },
+      "city-industrial/sabotage": {
+        "media": 0.46,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.46
+      },
+      "city-industrial/hack": {
+        "media": 0.37,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.37
+      },
+      "city-industrial/rescue": {
+        "media": 0.37,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.37
+      },
+      "city-industrial/scavenge": {
+        "media": 0.37,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.37
+      }
+    },
+    "pump": {
+      "wilds-roadside/elimination": {
+        "media": 4,
+        "min": 4,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 4,
+        "min": 4,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 4,
+        "min": 4,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 4,
+        "min": 4,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 4,
+        "min": 4,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 4,
+        "min": 4,
+        "max": 4,
+        "mapas": 1
+      }
+    },
+    "rack": {
+      "city/recovery": {
+        "media": 0.03,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.01
+      },
+      "city/hack": {
+        "media": 0.03,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.01
+      },
+      "city/rescue": {
+        "media": 0.03,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.01
+      },
+      "city/scavenge": {
+        "media": 0.03,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.01
+      }
+    },
+    "razorWire": {
+      "city-industrial/elimination": {
+        "media": 33.58,
+        "min": 5,
+        "max": 77,
+        "mapas": 1
+      },
+      "city-industrial/recovery": {
+        "media": 35.09,
+        "min": 0,
+        "max": 88,
+        "mapas": 0.96
+      },
+      "city-industrial/sabotage": {
+        "media": 33.58,
+        "min": 5,
+        "max": 77,
+        "mapas": 1
+      },
+      "city-industrial/hack": {
+        "media": 35.09,
+        "min": 0,
+        "max": 88,
+        "mapas": 0.96
+      },
+      "city-industrial/rescue": {
+        "media": 35.09,
+        "min": 0,
+        "max": 88,
+        "mapas": 0.96
+      },
+      "city-industrial/scavenge": {
+        "media": 35.09,
+        "min": 0,
+        "max": 88,
+        "mapas": 0.96
+      }
+    },
+    "roadSign": {
+      "wilds-roadside/elimination": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/recovery": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/sabotage": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/hack": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/rescue": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      },
+      "wilds-roadside/scavenge": {
+        "media": 2.31,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.99
+      }
+    },
+    "rock": {
+      "wilds/elimination": {
+        "media": 37.82,
+        "min": 27,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 38.23,
+        "min": 30,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 37.49,
+        "min": 26,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 37.49,
+        "min": 26,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 38.23,
+        "min": 30,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 38.23,
+        "min": 30,
+        "max": 46,
+        "mapas": 1
+      },
+      "wilds-roadside/elimination": {
+        "media": 18.54,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 18.44,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 18.42,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 18.42,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 18.44,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 18.44,
+        "min": 12,
+        "max": 25,
+        "mapas": 1
+      }
+    },
+    "rubble": {
+      "city/elimination": {
+        "media": 4.06,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.86
+      },
+      "city/recovery": {
+        "media": 3.82,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.85
+      },
+      "city/sabotage": {
+        "media": 4.06,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.86
+      },
+      "city/hack": {
+        "media": 3.82,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.85
+      },
+      "city/rescue": {
+        "media": 3.82,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.85
+      },
+      "city/scavenge": {
+        "media": 3.82,
+        "min": 0,
+        "max": 16,
+        "mapas": 0.85
+      },
+      "city-industrial/elimination": {
+        "media": 1.26,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.63
+      },
+      "city-industrial/recovery": {
+        "media": 1.14,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.55
+      },
+      "city-industrial/sabotage": {
+        "media": 1.26,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.63
+      },
+      "city-industrial/hack": {
+        "media": 1.14,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.55
+      },
+      "city-industrial/rescue": {
+        "media": 1.14,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.55
+      },
+      "city-industrial/scavenge": {
+        "media": 1.14,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.55
+      },
+      "wilds/elimination": {
+        "media": 0.66,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.2
+      },
+      "wilds/sabotage": {
+        "media": 0.66,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.2
+      },
+      "wilds/hack": {
+        "media": 0.66,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.2
+      },
+      "wilds-roadside/elimination": {
+        "media": 1.05,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.81
+      },
+      "wilds-roadside/recovery": {
+        "media": 1.05,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.81
+      },
+      "wilds-roadside/sabotage": {
+        "media": 1.05,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.81
+      },
+      "wilds-roadside/hack": {
+        "media": 1.05,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.81
+      },
+      "wilds-roadside/rescue": {
+        "media": 1.05,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.81
+      },
+      "wilds-roadside/scavenge": {
+        "media": 1.05,
+        "min": 0,
+        "max": 3,
+        "mapas": 0.81
+      }
+    },
+    "spire": {
+      "wilds/elimination": {
+        "media": 9.02,
+        "min": 4,
+        "max": 14,
+        "mapas": 1
+      },
+      "wilds/recovery": {
+        "media": 8.98,
+        "min": 5,
+        "max": 12,
+        "mapas": 1
+      },
+      "wilds/sabotage": {
+        "media": 8.93,
+        "min": 4,
+        "max": 14,
+        "mapas": 1
+      },
+      "wilds/hack": {
+        "media": 8.93,
+        "min": 4,
+        "max": 14,
+        "mapas": 1
+      },
+      "wilds/rescue": {
+        "media": 8.98,
+        "min": 5,
+        "max": 12,
+        "mapas": 1
+      },
+      "wilds/scavenge": {
+        "media": 8.98,
+        "min": 5,
+        "max": 12,
+        "mapas": 1
+      },
+      "wilds-roadside/elimination": {
+        "media": 4.48,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 4.47,
+        "min": 1,
+        "max": 7,
+        "mapas": 1
+      }
+    },
+    "statue": {
+      "wilds-roadside/elimination": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/hack": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.98,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.98
+      }
+    },
+    "stove": {
+      "city/elimination": {
+        "media": 3.61,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.97
+      },
+      "city/recovery": {
+        "media": 3.69,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.96
+      },
+      "city/sabotage": {
+        "media": 3.61,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.97
+      },
+      "city/hack": {
+        "media": 3.69,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.96
+      },
+      "city/rescue": {
+        "media": 3.69,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.96
+      },
+      "city/scavenge": {
+        "media": 3.69,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.96
+      },
+      "wilds/elimination": {
+        "media": 0.78,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.78
+      },
+      "wilds/recovery": {
+        "media": 1.51,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.85
+      },
+      "wilds/sabotage": {
+        "media": 0.78,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.78
+      },
+      "wilds/hack": {
+        "media": 0.78,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.78
+      },
+      "wilds/rescue": {
+        "media": 1.51,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.85
+      },
+      "wilds/scavenge": {
+        "media": 1.51,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.85
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/hack": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.59,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.59
+      }
+    },
+    "tank": {
+      "city/elimination": {
+        "media": 0.17,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city/recovery": {
+        "media": 0.04,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city/sabotage": {
+        "media": 0.17,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.16
+      },
+      "city/hack": {
+        "media": 0.04,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city/rescue": {
+        "media": 0.04,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city/scavenge": {
+        "media": 0.04,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "facility/elimination": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/recovery": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/sabotage": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/hack": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/rescue": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      },
+      "facility/scavenge": {
+        "media": 0.49,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.49
+      }
+    },
+    "techBarrier": {
+      "facility/elimination": {
+        "media": 6.49,
+        "min": 2,
+        "max": 12,
+        "mapas": 1
+      },
+      "facility/recovery": {
+        "media": 6.47,
+        "min": 2,
+        "max": 12,
+        "mapas": 1
+      },
+      "facility/sabotage": {
+        "media": 6.47,
+        "min": 2,
+        "max": 12,
+        "mapas": 1
+      },
+      "facility/hack": {
+        "media": 6.47,
+        "min": 2,
+        "max": 12,
+        "mapas": 1
+      },
+      "facility/rescue": {
+        "media": 6.47,
+        "min": 2,
+        "max": 12,
+        "mapas": 1
+      },
+      "facility/scavenge": {
+        "media": 6.47,
+        "min": 2,
+        "max": 12,
+        "mapas": 1
+      }
+    },
+    "tree": {
+      "city/elimination": {
+        "media": 2.93,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.91
+      },
+      "city/recovery": {
+        "media": 2.75,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.9
+      },
+      "city/sabotage": {
+        "media": 2.93,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.91
+      },
+      "city/hack": {
+        "media": 2.75,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.9
+      },
+      "city/rescue": {
+        "media": 2.75,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.9
+      },
+      "city/scavenge": {
+        "media": 2.75,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.9
+      },
+      "city-industrial/elimination": {
+        "media": 0.07,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.06
+      },
+      "city-industrial/recovery": {
+        "media": 0.05,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city-industrial/sabotage": {
+        "media": 0.07,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.06
+      },
+      "city-industrial/hack": {
+        "media": 0.05,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city-industrial/rescue": {
+        "media": 0.05,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      },
+      "city-industrial/scavenge": {
+        "media": 0.05,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.03
+      }
+    },
+    "wallStub": {
+      "city/elimination": {
+        "media": 0.22,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.2
+      },
+      "city/recovery": {
+        "media": 0.24,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.21
+      },
+      "city/sabotage": {
+        "media": 0.22,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.2
+      },
+      "city/hack": {
+        "media": 0.24,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.21
+      },
+      "city/rescue": {
+        "media": 0.24,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.21
+      },
+      "city/scavenge": {
+        "media": 0.24,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.21
+      },
+      "wilds/elimination": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/sabotage": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/hack": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      }
+    },
+    "wardrobe": {
+      "city/elimination": {
+        "media": 3.11,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.91
+      },
+      "city/recovery": {
+        "media": 3.51,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.93
+      },
+      "city/sabotage": {
+        "media": 3.11,
+        "min": 0,
+        "max": 10,
+        "mapas": 0.91
+      },
+      "city/hack": {
+        "media": 3.48,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.93
+      },
+      "city/rescue": {
+        "media": 3.51,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.93
+      },
+      "city/scavenge": {
+        "media": 3.51,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.93
+      },
+      "wilds/elimination": {
+        "media": 0.47,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.47
+      },
+      "wilds/recovery": {
+        "media": 0.97,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.49
+      },
+      "wilds/sabotage": {
+        "media": 0.47,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.47
+      },
+      "wilds/hack": {
+        "media": 0.47,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.47
+      },
+      "wilds/rescue": {
+        "media": 0.97,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.49
+      },
+      "wilds/scavenge": {
+        "media": 0.97,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.49
+      },
+      "wilds-roadside/elimination": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/recovery": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/sabotage": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/hack": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/rescue": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      },
+      "wilds-roadside/scavenge": {
+        "media": 3.37,
+        "min": 3,
+        "max": 4,
+        "mapas": 1
+      }
+    },
+    "washbasin": {
+      "city/elimination": {
+        "media": 0.83,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.52
+      },
+      "city/recovery": {
+        "media": 0.92,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.53
+      },
+      "city/sabotage": {
+        "media": 0.83,
+        "min": 0,
+        "max": 6,
+        "mapas": 0.52
+      },
+      "city/hack": {
+        "media": 0.9,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.51
+      },
+      "city/rescue": {
+        "media": 0.92,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.53
+      },
+      "city/scavenge": {
+        "media": 0.92,
+        "min": 0,
+        "max": 4,
+        "mapas": 0.53
+      },
+      "wilds/elimination": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds/recovery": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/sabotage": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds/hack": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds/rescue": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds/scavenge": {
+        "media": 0.07,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.07
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/hack": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.04,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.04
+      }
+    },
+    "wc": {
+      "city/elimination": {
+        "media": 2.08,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.81
+      },
+      "city/recovery": {
+        "media": 2.34,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.85
+      },
+      "city/sabotage": {
+        "media": 2.08,
+        "min": 0,
+        "max": 9,
+        "mapas": 0.81
+      },
+      "city/hack": {
+        "media": 2.33,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.85
+      },
+      "city/rescue": {
+        "media": 2.34,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.85
+      },
+      "city/scavenge": {
+        "media": 2.34,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.85
+      },
+      "wilds/elimination": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds/recovery": {
+        "media": 0.64,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.37
+      },
+      "wilds/sabotage": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds/hack": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds/rescue": {
+        "media": 0.64,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.37
+      },
+      "wilds/scavenge": {
+        "media": 0.64,
+        "min": 0,
+        "max": 2,
+        "mapas": 0.37
+      },
+      "wilds-roadside/elimination": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/recovery": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/sabotage": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/hack": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/rescue": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      },
+      "wilds-roadside/scavenge": {
+        "media": 0.27,
+        "min": 0,
+        "max": 1,
+        "mapas": 0.27
+      }
+    },
+    "woodFence": {
+      "wilds-roadside/elimination": {
+        "media": 3.76,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/recovery": {
+        "media": 3.78,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/sabotage": {
+        "media": 3.76,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/hack": {
+        "media": 3.76,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/rescue": {
+        "media": 3.78,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      },
+      "wilds-roadside/scavenge": {
+        "media": 3.78,
+        "min": 0,
+        "max": 7,
+        "mapas": 0.92
+      }
+    }
+  },
+  "coberturas": {
+    "barricade": "baja",
+    "bin": "baja",
+    "bush": "baja",
+    "chainFence": "baja",
+    "crates": "baja",
+    "desk": "baja",
+    "drums": "baja",
+    "fencePost": "baja",
+    "forest": "alta",
+    "fridge": "alta",
+    "gatePillar": "alta",
+    "gatePost": "baja",
+    "hayBale": "baja",
+    "hayStack": "alta",
+    "kiosk": "alta",
+    "labBench": "baja",
+    "logs": "baja",
+    "pines": "alta",
+    "planter": "baja",
+    "portaloo": "alta",
+    "pump": "baja",
+    "rack": "alta",
+    "razorWire": "baja",
+    "roadSign": "alta",
+    "rock": "baja",
+    "rubble": "baja",
+    "spire": "alta",
+    "statue": "alta",
+    "stove": "baja",
+    "tank": "alta",
+    "techBarrier": "baja",
+    "tree": "alta",
+    "wallStub": "alta",
+    "wardrobe": "alta",
+    "washbasin": "baja",
+    "wc": "baja",
+    "woodFence": "baja"
+  },
+  "sinContar": [
+    "armAmmo556",
+    "armAmmo762",
+    "armAmmoCrate",
+    "armAmmoCrateLid",
+    "armFlashbang",
+    "armGrenade",
+    "armSmoke",
+    "armchair",
+    "armchairWorn",
+    "bAerial",
+    "bAnvil",
+    "bArmyTent",
+    "bAwning",
+    "bAwningTarp",
+    "bBalanceBeam",
+    "bBatteryTable",
+    "bBench",
+    "bBlackboard",
+    "bBottleRange",
+    "bBurntHeap",
+    "bCampChair",
+    "bClimbFrame",
+    "bCross",
+    "bDeconShower",
+    "bDish",
+    "bFieldTent",
+    "bFirePit",
+    "bFloodlights",
+    "bFuelPump",
+    "bGarageShed",
+    "bGardenBarrel",
+    "bGardenBed",
+    "bGardenPlant",
+    "bGardenPlant2",
+    "bGardenShed",
+    "bGraveStick",
+    "bIronSheet",
+    "bJerrycan",
+    "bJunkHeap",
+    "bLampPost",
+    "bLeanTo",
+    "bLongTable",
+    "bMast",
+    "bMedKit",
+    "bOilDrum",
+    "bOpenTent",
+    "bPlank",
+    "bPlankRack",
+    "bPowerBoxes",
+    "bPowerGenerator",
+    "bQuarantineTent",
+    "bRadioSet",
+    "bSandbagWall",
+    "bSawhorse",
+    "bScarecrow",
+    "bShackFrame",
+    "bShackTarp",
+    "bSolarPanel",
+    "bStoneCross",
+    "bStump",
+    "bTankTrap",
+    "bTarget",
+    "bTargetBoard",
+    "bToolbox",
+    "bTrestle",
+    "bTyreWall",
+    "bTyres",
+    "bWashingLine",
+    "bWaterTower",
+    "bWoodPile",
+    "bWorkbench",
+    "barStool",
+    "bastionHouse",
+    "bastionHouseGlass",
+    "bathRug",
+    "bathtub",
+    "bearJaw",
+    "bearJaw2",
+    "bearTrap",
+    "bed",
+    "bedDouble",
+    "bedsideTable",
+    "bench",
+    "bike",
+    "billboard",
+    "billboardSign",
+    "billboardSign2",
+    "boardsCross",
+    "boardsMany",
+    "boardsRails",
+    "bookPile",
+    "bookPile2",
+    "bookPile3",
+    "bookshelf",
+    "breadBin",
+    "brickStack",
+    "bucket",
+    "bus",
+    "cabinet",
+    "cafeChair",
+    "cafeTable",
+    "cagePanel",
+    "campBar",
+    "campCup",
+    "carConvertible",
+    "carFront",
+    "carHatch",
+    "carMedium",
+    "carMuscle",
+    "carOpen",
+    "carPickup",
+    "carRusted",
+    "carSedan",
+    "carSmall",
+    "carSuv",
+    "carTaxi",
+    "carUte",
+    "carVan",
+    "carWreck",
+    "caravan",
+    "cardboard",
+    "cardboard2",
+    "cardboard4",
+    "chimney",
+    "cliff",
+    "cliff2",
+    "clinicalKit",
+    "coatRack",
+    "coffeeMachine",
+    "coffeeTable",
+    "concreteFence",
+    "container",
+    "containerBlue",
+    "containerOrange",
+    "corpseCivilian",
+    "corpseStaff",
+    "counter",
+    "crateLid",
+    "crateOpen",
+    "crater",
+    "debrisPile",
+    "debrisPile2",
+    "diningChair",
+    "diningChair2",
+    "doorPlank",
+    "drain",
+    "drawer",
+    "drinksCooler",
+    "drinksFridge",
+    "dropBag",
+    "endDisplay",
+    "fallenPack",
+    "fenceBoards",
+    "fencePanel",
+    "fenceRails",
+    "fenceWire",
+    "floodlight",
+    "floorLamp",
+    "floorLamp2",
+    "flowers",
+    "fountainWhole",
+    "gateLeafDown",
+    "gateMetal",
+    "gateWood",
+    "gondola",
+    "gondolaBare",
+    "gondolaEmpty",
+    "gondolaGaps",
+    "grassBlob",
+    "guardTower",
+    "gunRack",
+    "gurney",
+    "holdall",
+    "hospitalBed",
+    "ivStand",
+    "laundry",
+    "leaves",
+    "logPile",
+    "lootAmmo",
+    "lootAmmoCan",
+    "lootAmmoCanOpen",
+    "lootAmmoLid",
+    "lootCan",
+    "lootCan2",
+    "lootFood",
+    "lootFoodTop",
+    "lootMedical",
+    "lootMedicalKit",
+    "lootPills",
+    "lootRice",
+    "lootWeapons",
+    "lootWeaponsLid",
+    "luggage",
+    "luggageOpen",
+    "luggageRetro",
+    "manhole",
+    "mattress",
+    "medicalShelf",
+    "milBarrierTall",
+    "milCrate",
+    "mine",
+    "mobileHome",
+    "mobileHomeGlass",
+    "mobileHomeSkirt",
+    "mobileHomeWreck",
+    "mobileHomeWreckGlass",
+    "motelSign",
+    "officeCabinet",
+    "palisade",
+    "pallets",
+    "papers",
+    "parkBench",
+    "parkBenchBroken",
+    "pebbles",
+    "pineDead",
+    "pipe",
+    "pipes",
+    "pitchfork",
+    "plywoodShed",
+    "plywoodShedRuin",
+    "pottedPlant",
+    "pottedPlant2",
+    "pottedPlant3",
+    "powerLine",
+    "powerPole",
+    "pumpCanopy",
+    "pumpCanopyBurnt",
+    "pumpIsland",
+    "pylon",
+    "radioMast",
+    "radioMastTop",
+    "rake",
+    "rollerShutter",
+    "roofAccess",
+    "roofAircon",
+    "roofAirconLong",
+    "roofDish",
+    "roofSkylight",
+    "roofVent",
+    "rug",
+    "rug2",
+    "rug3",
+    "ruinPile",
+    "sandbag",
+    "sheetFence",
+    "sheetFence2",
+    "shelfHigh",
+    "shelfLow",
+    "shopCounter",
+    "signDiner",
+    "signFood",
+    "signMarket",
+    "signShop",
+    "silo",
+    "silo2",
+    "silo3",
+    "sirenPolice",
+    "skylight",
+    "sofa",
+    "sofaDirty",
+    "spade",
+    "spikeStake",
+    "stopSign",
+    "streetLight",
+    "streetPot",
+    "table",
+    "tableLamp",
+    "tableLamp2",
+    "techCrate",
+    "tire",
+    "tirePile",
+    "towelRack",
+    "towerLadder",
+    "tractor",
+    "trailerDeck",
+    "trailerSteps",
+    "trash",
+    "trashBag",
+    "trashBag2",
+    "trashPile",
+    "treeDead",
+    "trolley",
+    "trolleyBroken",
+    "truck",
+    "truckWreck",
+    "truckWreck2",
+    "tuft",
+    "tuftLow",
+    "tuftWide",
+    "turretDrum",
+    "turretGun",
+    "turretSwivel",
+    "turretTripod",
+    "van",
+    "wallShelf",
+    "wallShelfBare",
+    "wallShelfEmpty",
+    "wallShelfGaps",
+    "wardrobeOpen",
+    "waterTower",
+    "wheelbarrow",
+    "wireCoil",
+    "woodStack"
+  ],
+  "sinNombrar": {
+    "listas": [
+      "basePines",
+      "cityHigh",
+      "cityLow",
+      "facilityHigh",
+      "facilityLow",
+      "wildsHigh",
+      "wildsLow"
+    ],
+    "objetos": [
+      "armAmmo12g",
+      "bJersey",
+      "bLookout",
+      "bPicketFence",
+      "bRubbleHeap",
+      "bRustyCar",
+      "bShipContainer",
+      "bSupplyCrate",
+      "bVice",
+      "baitSign",
+      "baitSign2",
+      "barricadeTall",
+      "brochures",
+      "canFallen1",
+      "canFallen2",
+      "canFallen3",
+      "cone",
+      "deskChair",
+      "generator",
+      "hydrant",
+      "junkPile",
+      "loudSpeaker",
+      "lumberjack",
+      "lumberjackBase",
+      "mailbox",
+      "natureSign",
+      "officeChair",
+      "signPets",
+      "sirenAmbulance",
+      "trashBag3",
+      "trashPile2",
+      "woodFence2"
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+ "_": "La selección de Arturo en la biblioteca (docs/BIBLIOTECA.md §4). La página solo añade puntos en «propuesto» y borra los suyos mientras lo sigan siendo. Gameplay pone «aprobado» o «rechazado» (con `motivo`); Arte, UI o Red, «hecho» (con `captura`, la ruta de su captura en .dev-snapshots). Se puede editar a mano: la página lo vuelve a leer sola. `siguiente` es el número del próximo id: no se repite aunque se borre un punto.",
+ "siguiente": 1,
+ "puntos": [
+ ]
+}

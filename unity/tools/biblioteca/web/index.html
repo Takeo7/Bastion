@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biblioteca de recursos · Bastión</title>
+<link rel="stylesheet" href="/web/style.css">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Biblioteca de recursos</h1>
+    <p id="summary" class="muted">Cargando…</p>
+  </div>
+  <div id="status" class="status"></div>
+  <div class="tools">
+    <input id="search" type="search" placeholder="Buscar por nombre" autocomplete="off" spellcheck="false">
+    <button id="reload" type="button" title="Vuelve a leer el disco, las listas del juego y el código">Volver a leer</button>
+  </div>
+</header>
+<main class="cols">
+  <nav id="packs" class="col packs" aria-label="Paquetes"></nav>
+  <section id="pack" class="col pack" aria-label="Paquete"></section>
+  <aside id="card" class="col card" aria-label="Ficha"></aside>
+</main>
+<audio id="player" preload="none"></audio>
+<script type="module" src="/web/app.js"></script>
+</body>
+</html>

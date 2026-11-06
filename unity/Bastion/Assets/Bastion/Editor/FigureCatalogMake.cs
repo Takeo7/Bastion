@@ -150,7 +150,7 @@ namespace Bastion.EditorTools
         const string Characters = "Assets/Synty/SidekickCharacters/Characters";
 
         /// <summary>Where each of 0.10.1's animation packs is in the project.</summary>
-        static readonly Dictionary<string, string> Packs = new Dictionary<string, string>
+        internal static readonly Dictionary<string, string> Packs = new Dictionary<string, string>
         {
             ["baseLocomotion"] = "Assets/Synty/AnimationBaseLocomotion",
             ["idles"] = "Assets/Synty/AnimationIdles",

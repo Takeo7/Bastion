@@ -1,0 +1,12 @@
+{
+  "name": "bastion-biblioteca",
+  "private": true,
+  "type": "module",
+  "description": "La biblioteca de recursos de Bastión (docs/BIBLIOTECA.md): una web local, solo en 127.0.0.1:3420",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  }
+}

@@ -1,3 +1,4 @@
+# RETIRED (5/11, docs/BIBLIOTECA.md §5): Assets/Bastion/Client/Resources/Wardrobe.json is the source, changed by hand; this script stays as history. To compare, run a copy that writes elsewhere, never over the list.
 # The soldiers' wardrobe for Unity (docs/UNITY-ARTE.md): from the 0.10.1's converted pieces (packages/client/public/
 # models/synty/sources.json), each piece's Sidekick parts, the preset each part is painted from, its fallback and its
 # own paint, to Assets/Bastion/Client/Resources/Wardrobe.json. Names and colours only, nothing of Synty's.

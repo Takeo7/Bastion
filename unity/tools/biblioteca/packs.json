@@ -1,0 +1,53 @@
+{
+ "_": "Each Synty pack the game knows, by its folder on the external disk: its folder in unity/Bastion/Assets/Synty and the names the game's lists give it (MapArt.json, Pieces.json, Anims.json; MapLab.PackFolders). Late packs are found last by a model's name alone (MapLab.LatePacks). Sidekick parts go to their pack by the start of their name. `prefabs`: Unity prefabs of a pack with no FBX of their name in its sources (characters, particles, the cats in one FBX), by the start of their name. `partial`: what of the pack importar-synty.sh brings, when not all of it. `container`: the FBX that holds the pack's characters, whose prefabs have none of their own (the dogs, the cats): each prefab shows its meshes from the MaterialList, or the one its name gives (`mesh`: what to take off its name and what to put before it); the pack's clips (FBX under Animations/) play on its `mannequin` mesh.",
+ "packs": {
+  "POLYGON - Apocalypse Pack": { "unity": "PolygonApocalypse", "keys": ["apocalypse"] },
+  "POLYGON - City Pack": { "unity": "PolygonCity", "keys": ["city"] },
+  "POLYGON - Town Pack": { "unity": "PolygonTown", "keys": ["town"] },
+  "POLYGON - Office Pack": { "unity": "PolygonOffice", "keys": ["office"] },
+  "POLYGON - Military Pack": { "unity": "PolygonMilitary", "keys": ["military"] },
+  "POLYGON - Construction Pack": { "unity": "PolygonConstruction", "keys": ["construction"] },
+  "POLYGON - Farm Pack": { "unity": "PolygonFarm", "keys": ["farm"] },
+  "POLYGON - Nature Pack": { "unity": "PolygonNature", "keys": ["nature"] },
+  "POLYGON - Alpine Mountain - Nature Biome": { "unity": "PolygonNatureBiomes", "keys": ["alpine"], "partial": "solo 2 texturas del suelo" },
+  "POLYGON - Military Warehouse Map": { "unity": "PolygonMapsMilitaryWarehouse", "keys": ["industrial"] },
+  "POLYGON - Woodland Apocalypse Map": { "unity": "PolygonMapsWoodlandApocalypse", "keys": ["woodland"] },
+  "POLYGON - City Zombies Pack": { "unity": "PolygonCityZombies", "keys": [], "prefabs": "^SM_Chr_Zombie_" },
+  "POLYGON - Boss Zombies": { "unity": "PolygonBossZombies", "keys": [], "prefabs": "^SM_Chr_(ZombieBoss|Attach)_" },
+  "POLYGON - Particle FX Pack": { "unity": "PolygonParticleFX", "keys": [], "prefabs": "^(FX_|PolygonParticles_)" },
+  "POLYGON - Dog Pack": { "unity": "PolygonDog", "keys": ["dog"], "container": { "fbx": "FBX/Unity_SK_Animals_Dog_01.fbx", "mannequin": "SK_Animal_Dog_Labrador_01" } },
+  "POLYGON - Shops Pack": { "unity": "PolygonShops", "keys": ["shops"], "late": true },
+  "POLYGON - Gang Warfare Pack": { "unity": "PolygonGangWarfare", "keys": ["gang"], "late": true },
+  "POLYGON - Palm City": { "unity": "PolygonPalmCity", "keys": [], "late": true },
+  "SIMPLE - Forest Animals": { "unity": "SimpleForestAnimal", "keys": ["simple"], "partial": "solo los ciervos, los jabalíes y los conejos" },
+  "SIMPLE - Cats": { "unity": "SimpleCats", "keys": ["cats"], "prefabs": "^SimpleCats_", "partial": "solo los gatos", "container": { "fbx": "SourceFiles/FBX/SimpleCats.fbx", "mesh": ["^SimpleCats_", "SM_"] } },
+  "ANIMATION - Base Locomotion": { "unity": "AnimationBaseLocomotion", "keys": ["baseLocomotion"] },
+  "ANIMATION - Idles": { "unity": "AnimationIdles", "keys": ["idles"] },
+  "ANIMATION - Bow Combat": { "unity": "AnimationBowCombat", "keys": ["bowCombat"] },
+  "ANIMATION - Sword Combat": { "unity": "AnimationSwordCombat", "keys": ["swordCombat"] },
+  "ANIMATION - Goblin Locomotion": { "unity": "AnimationGoblinLocomotion", "keys": ["goblinLocomotion"] },
+  "ANIMATION - Emotes and Taunts": { "unity": "AnimationEmotesAndTaunts", "keys": ["emotes"], "partial": "solo 2 gestos" },
+  "INTERFACE - Apocalypse HUD": { "unity": "InterfaceApocalypseHUD", "keys": [], "partial": "solo sprites y texturas" },
+  "INTERFACE - Dark Fantasy HUD": { "unity": "InterfaceDarkFantasyHUD", "keys": [], "partial": "solo sprites y texturas" },
+  "INTERFACE - Military Combat HUD": { "unity": "InterfaceMilitaryCombatHUD", "keys": [], "partial": "solo sprites y texturas" },
+  "INTERFACE - Modern Menus": { "unity": "InterfaceModernMenus", "keys": [], "partial": "solo sprites y texturas" },
+  "SIDEKICK - Starter": { "unity": "SidekickCharacters", "keys": [], "parts": ["HUMN_BASE", "FANT_KNGT"] },
+  "SIDEKICK - Apocalypse Survivors": { "unity": "SidekickCharacters", "keys": [], "parts": ["APOC_SURV"] },
+  "SIDEKICK - Apocalypse Zombies": { "unity": "SidekickCharacters", "keys": [], "parts": ["APOC_ZOMB"] },
+  "SIDEKICK - Apocalypse Outlaws": { "unity": "SidekickCharacters", "keys": [], "parts": ["APOC_OUTL"] },
+  "SIDEKICK - Modern Civilians": { "unity": "SidekickCharacters", "keys": [], "parts": ["MDRN_CIVL"] },
+  "SIDEKICK - Modern Police": { "unity": "SidekickCharacters", "keys": [], "parts": ["MDRN_POLC"] }
+ },
+ "composed": {
+  "_": "Names the code puts together (UnitViews.Dead.cs: City(\"Jock_Male_01\") is SM_Chr_Zombie_Jock_Male_01), found by the call.",
+  "calls": [
+   { "file": "Client/Units/UnitViews.Dead.cs", "call": "City", "prefix": "SM_Chr_Zombie_", "suffix": "" },
+   { "file": "Client/Units/UnitViews.Dead.cs", "call": "Bloater", "prefix": "SM_Chr_ZombieBoss_", "suffix": "_01" }
+  ]
+ },
+ "offStyle": {
+  "_": "CLAUDE.md: no SIMPLE nor MINI, save SIMPLE's Forest Animals and Cats (Arturo, 1/11).",
+  "lines": ["SIMPLE", "POLYGON MINI"],
+  "allowed": ["SIMPLE - Forest Animals", "SIMPLE - Cats"]
+ }
+}

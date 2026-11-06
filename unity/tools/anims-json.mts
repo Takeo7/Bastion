@@ -1,3 +1,4 @@
+// RETIRED (5/11, docs/BIBLIOTECA.md §5): Assets/Bastion/Client/Resources/Anims.json is the source, changed by hand; this script stays as history. To compare, run a copy that writes elsewhere, never over the list.
 // The figures' clips for Unity (docs/UNITY-ARTE.md): 0.10.1's animations (syntyManifest.ts ANIMATIONS: each one's pack
 // and file), which clip plays each part for each build (MOTIONS, DEAD_MOTIONS, IDLE_VARIATIONS, STANCES, GESTURES,
 // DEATHS, HITS, ACTIONS, ARMED_MOTIONS, RIFLE_RESTS, FEED_CLIPS; the camp's: CAMP_LOOPS, CAMP_VARIATIONS, CAMP_MOVES,
