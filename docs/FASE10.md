@@ -27,9 +27,9 @@ Las cifras son el punto de partida y se ajustan jugando.
 | Lanzar | alcance de lanzamiento (piedras y granadas) |
 | Curar | lo que curan el botiquín y las medicinas |
 | Investigar | arreglar (equipos, radios, alarmas) |
-| Forma física | salud |
+| Forma física | esquiva (Arturo, 6/11; antes, la salud, que ahora solo sube en el tablero) |
 
-El porcentaje se acumula sobre la estadística de base y se redondea al usarla. Una salud de 5 con un +23 % es 6.
+El porcentaje se acumula sobre la estadística de base y se redondea al usarla. Un alcance de 10 con un +23 % es 12. La esquiva de los soldados empieza en 0, así que crece sobre una base de 50 (`Bars.DodgeBase`): de +3 a +5 por barra, como la puntería de Disparo (Arturo, en el cuadro).
 
 ## 3. Lo que llena cada barra
 
@@ -42,7 +42,9 @@ El porcentaje se acumula sobre la estadística de base y se redondea al usarla. 
 | Investigar (una caja o una habitación) | Investigar | 2 |
 | Arreglar un equipo o callar una alarma | Investigar | 3 |
 | Cubrirse | Forma física | 1 |
-| Correr (moverse con las dos acciones) | Forma física | 1 |
+| Gastar todo el movimiento del turno, de golpe o en tramos (antes, moverse con las dos acciones) | Forma física | 1 |
+| Recibir daño | Forma física | 1 por golpe que hace daño |
+| Esquivar: un impacto que la esquiva deja en roce | Forma física | 1 |
 
 Se cuenta en la misión, y una barra que se llena lo hace allí mismo, al acabar la acción: su estadística sube al momento, con un aviso (Arturo, 16/10). El extra del Taller de oficios cuenta ya en la misión; el del Camposanto se sabe al volver, y si llena otra barra, se tira entonces. No hay tope por misión.
 

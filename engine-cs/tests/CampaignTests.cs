@@ -521,7 +521,8 @@ namespace Bastion.Engine.Tests
             mission.OutcomeReason = "objective";
             var report = Campaign.ApplyMissionResult(c, mission, new Rng(4));
             var bar = report.Squad.First((e) => e.Id == s.Id).Bars!;
-            Same(new List<BarFilled> { new BarFilled { Skill = "shooting", Filled = 2, Growth = new List<int> { s.Growth["shooting"] - 7 } } }, bar);
+            // With the growth it had before (Lore, 6/11: Forma física tells its dodge from it).
+            Same(new List<BarFilled> { new BarFilled { Skill = "shooting", Filled = 2, Growth = new List<int> { s.Growth["shooting"] - 7 }, From = 7 } }, bar);
             Assert.Contains(c.Log, (l) => l.Text == $"{s.Name} llena una barra de Disparo: +{s.Growth["shooting"] - 7} % de puntería con armas de fuego. Tiene un punto de habilidad para el tablero.");
             // Two points: a cell of the first ring, then one of the second beside it (Disparo has the bar it asks for).
             Assert.True(Campaign.CanSpendPoints(c, s));

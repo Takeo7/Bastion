@@ -23,6 +23,7 @@ namespace Bastion.Engine.Tests
     /// and #14) and MissionBot moving in stretches along the way, 364 still does, and of seeds 1 to 12, 2, 4, 5 and 6
     /// (the first mission 5 of 15 with 54 and 182, every siege after it won). With a run past 5 tiles in the turn (Arturo,
     /// 5/11, in the box) and MissionBot walking quiet while the squad is hidden, 364 still does, the only one of those 15.
+    /// With a run only all the movement at once (Arturo, 6/11) and MissionBot never running, 364 does, and 2, 4, 5 and 6.
     /// </summary>
     public class NetCampaignRunTests
     {

@@ -96,7 +96,7 @@ namespace Bastion.UI.EditorTools
             // The soldier's figures (UnitPanel: StatView.Kind).
             ("stat:hp", Heart), ("stat:ap", Speed), ("stat:ammo", Bullets), ("stat:sidearm", Bullets),
             ("stat:aim", Accuracy), ("stat:melee", Blades), ("stat:grenade", Explosives), ("stat:armor", Armor),
-            ("stat:worn", Armor), ("stat:weapon", Rifle),
+            ("stat:worn", Armor), ("stat:weapon", Rifle), ("stat:dodge", SpeedUp),
             // ✓, which Oswald lacks (the arrows are drawn: Triangle).
             ("ui:check", Confirm),
             // The base's top strip (mixta.css --mi-*: synty-sprites.py's mh-crate, mh-medkit, mh-repair, mh-hourglass,

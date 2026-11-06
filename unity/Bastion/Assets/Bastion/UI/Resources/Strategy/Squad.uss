@@ -464,14 +464,19 @@
 .lineup-learned {
     flex-direction: row;
     align-items: center;
+    max-width: 100%;
     margin-top: 3px;
     padding: 0 4px;
     border-left-width: 2px;
     background-color: rgba(0, 0, 0, 0.3);
 }
 
+/* Within the card, on two lines if it must («▲ FORMA FÍSICA +3 DE ESQUIVA», 0.12.1: it ran out of a narrow card). */
 .lineup-learned__text {
+    flex-shrink: 1;
     font-size: 11px;
+    white-space: normal;
+    -unity-text-align: middle-center;
 }
 
 .lineup-learned--bar .lineup-learned__text {

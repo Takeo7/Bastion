@@ -61,6 +61,8 @@ namespace Bastion.UI.Combat
             Stat("Puntería con armas de fuego", (t.Aim + u.Mods.Aim + u.Mods.GunAim).ToString());
             Stat("Puntería cuerpo a cuerpo", (t.Aim + u.Mods.Aim + u.Mods.MeleeAim).ToString());
             Stat("Voluntad", u.Will.ToString());
+            // What Forma física's bars grow (Arturo, 6/11), as the shot counts it (Aim.PreviewShot), without hunkering.
+            Stat("Esquiva", (t.Dodge + u.Mods.Dodge).ToString());
             if (u.Armor > 0) Stat("Blindaje", u.Armor.ToString());
             void Carry(string key, string value) => v.Carries.Add(new SheetRowView { Key = key, Value = value });
             var (weapon, extras) = ArmsOf(u);

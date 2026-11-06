@@ -445,7 +445,8 @@ namespace Bastion.UI.Strategy
             v.Cards.Add(Card("s4", "Chiara Rossi", Ana, "0 bajas", Skill("+3 Disparo")));
             v.Cards.Add(Card("s1", "Yuki Tanaka", Ana, "0 bajas"));
             v.Cards.Add(Card("s2", "Arjun Mehta", Ana, "2 bajas", Skill("+7 Disparo")));
-            v.Cards.Add(Card("s7", "Lucía Ortega", Ana, "0 bajas", Skill("+7 Disparo")));
+            // Forma física's bar in points of dodge (0.12.1, Lore's BarFillFloat): the longest of the bars' tags.
+            v.Cards.Add(Card("s7", "Lucía Ortega", Ana, "0 bajas", Skill("+7 Disparo"), new LearnedView { Kind = "bar", Line = 5, Text = "▲ FORMA FÍSICA +3 DE ESQUIVA" }, new LearnedView { Kind = "point", Count = 1 }));
             v.Cards.Add(Card("s6", "Rafael Costa", Ana, "2 bajas", Skill("+10 Disparo"), new LearnedView { Kind = "bar", Line = 0, Text = "▲ DISPARO +8 %" }, new LearnedView { Kind = "point", Count = 1 }));
             return v;
         }

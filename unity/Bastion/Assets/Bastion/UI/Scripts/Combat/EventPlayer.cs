@@ -33,9 +33,9 @@ namespace Bastion.UI.Combat
     public sealed class EventPlayer
     {
         /// <summary>
-        /// A walk's gait for the figures (Arte's UnitViews: 2 runs, else it walks): the stretch that runs, past
-        /// Content.QuietTiles of the turn's movement (MovedEvent.Run; Arturo, 5/11), now that moving takes no actions; two
-        /// actions' walk in a recording of before.
+        /// A walk's gait for the figures (Arte's UnitViews: 2 runs, else it walks): the stretch that runs, the whole turn's
+        /// movement at once (MovedEvent.Run; Arturo, 6/11), now that moving takes no actions; two actions' walk in a
+        /// recording of before.
         /// </summary>
         static int Gait(MovedEvent m) => m.Run == true || m.Ap >= 2 ? 2 : 1;
 
@@ -1579,10 +1579,11 @@ namespace Bastion.UI.Combat
                 case BarFilledEvent bar:
                 {
                     var u = Unit(bar.Unit);
-                    Log(Lore.BarLine(u.Name, bar.Skill, new[] { bar.Growth }), "#6dff9a");
+                    // From the line's growth before it (BarFilledEvent.From): Forma física's dodge depends on it (Lore, 6/11).
+                    Log(Lore.BarLine(u.Name, bar.Skill, new[] { bar.Growth }, bar.From ?? 0), "#6dff9a");
                     if (!ShownToSquad(u)) return;
                     Look(Feet(u.Id));
-                    Float(Chest(u.Id), Lore.BarFillFloat(bar.Skill, bar.Growth), "bar");
+                    Float(Chest(u.Id), Lore.BarFillFloat(bar.Skill, bar.Growth, bar.From ?? 0), "bar");
                     await Wait(1.1f);
                     return;
                 }

@@ -243,14 +243,14 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// Whether a move of `cost` runs: it goes past Content.QuietTiles of the turn's movement, in one stretch or several
-        /// (Arturo, 5/11, in the box: «pasar de 5 en el turno»; 7 and then 1 were 8 without a sound). It is heard, and the
-        /// client draws it at a run.
+        /// Whether a move of `cost` runs: the whole turn's movement at once, one stretch from all of it to less than a tile
+        /// left (Arturo, 6/11: «correr solo si usas todos los puntos de movimiento de golpe»; on 5/11 it was past 5 tiles of
+        /// the turn). It is heard, and the client draws it at a run. Spending it all in stretches doesn't run, but teaches
+        /// Forma física all the same (SpendsAll).
         /// </summary>
         public static bool IsRun(Unit u, double cost)
         {
-            var full = FullMoves(u);
-            return full > 0 && full - MoveBudget(u) + cost > Content.QuietTiles * CostOrtho;
+            return MoveBudget(u) >= FullMoves(u) && SpendsAll(u, cost);
         }
 
         /// <summary>Whether a move of `cost` spends the turn's movement, less than a tile of it left: that teaches Forma física (Arturo, 5/11).</summary>

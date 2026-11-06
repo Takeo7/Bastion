@@ -220,7 +220,7 @@ namespace Bastion.UI.Hud
             /// <summary>«5», «6,5» (a diagonal step costs a tile and a half).</summary>
             public static string Tiles(int cost) => cost % 2 == 0 ? (cost / 2).ToString() : $"{cost / 2},5";
             public static string Of(int cost) => $"de {Tiles(cost)}";
-            public static string Tip(int left, int full) => $"Movimiento: le quedan {Tiles(left)} de {Tiles(full)} puntos. Cada casilla cuesta 1; en diagonal, 1,5. Moverse no gasta acciones, y el movimiento se reparte en tramos, antes y después de actuar. Pasar de {Bastion.Engine.Content.QuietTiles} puntos en el turno, en un tramo o en varios, es correr, y se oye.";
+            public static string Tip(int left, int full) => $"Movimiento: le quedan {Tiles(left)} de {Tiles(full)} puntos. Cada casilla cuesta 1; en diagonal, 1,5. Moverse no gasta acciones, y el movimiento se reparte en tramos, antes y después de actuar. Gastarlo todo de una vez, en un solo tramo, es correr, y se oye.";
             public const string Stat = "Movimiento";
         }
 

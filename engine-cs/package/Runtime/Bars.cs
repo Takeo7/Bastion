@@ -45,7 +45,6 @@ namespace Bastion.Engine
     public sealed class GrowthDelta
     {
         public UnitMods Mods { get; set; } = new UnitMods();
-        public int Hp { get; set; }
     }
 
     /// <summary>Everything a soldier fights with, from its lines, its talents and what it carries.</summary>
@@ -68,6 +67,11 @@ namespace Bastion.Engine
         public string Skill { get; set; } = ""; // SkillIds
         public int Filled { get; set; }
         public List<int> Growth { get; set; } = new List<int>();
+        /// <summary>
+        /// The line's growth before these bars: what Forma física's dodge is reckoned from (Lore.BarGain; Lore, 6/11).
+        /// Null for none, as saves from before it have it.
+        /// </summary>
+        public int? From { get; set; }
     }
 
     /// <summary>pendingBars's `{ skill: SkillId; filled: number }`.</summary>
@@ -142,7 +146,7 @@ namespace Bastion.Engine
             [SkillIds.Throwing] = new SkillDef { Id = SkillIds.Throwing, Name = "Lanzar", Short = "LAN", Line = "Se llena lanzando piedras y granadas, más si alcanzan a alguien.", Stat = "Alcance al lanzar" },
             [SkillIds.Medicine] = new SkillDef { Id = SkillIds.Medicine, Name = "Curar", Short = "CUR", Line = "Se llena curando con el botiquín o con medicinas; más si es a otro.", Stat = "Curación" },
             [SkillIds.Searching] = new SkillDef { Id = SkillIds.Searching, Name = "Investigar", Short = "INV", Line = "Se llena registrando habitaciones, abriendo cajas, arreglando equipos y apagando alarmas.", Stat = "Destreza al arreglar" },
-            [SkillIds.Fitness] = new SkillDef { Id = SkillIds.Fitness, Name = "Forma física", Short = "FOR", Line = "Se llena cubriéndose y gastando todo el movimiento del turno, en un tramo o en varios.", Stat = "Salud" },
+            [SkillIds.Fitness] = new SkillDef { Id = SkillIds.Fitness, Name = "Forma física", Short = "FOR", Line = "Se llena cubriéndose, gastando todo el movimiento del turno y recibiendo daño; más si la esquiva deja el impacto en rozadura.", Stat = "Esquiva" },
         };
 
         /// <summary>The first bar takes BAR_FIRST, and every next one BAR_STEP more.</summary>
@@ -201,6 +205,11 @@ namespace Bastion.Engine
         public const int BaseAim = 55;
         /// <summary>How far a throw reaches before what Lanzar adds (the grenade's range).</summary>
         public const int ThrowRange = 10;
+        /// <summary>
+        /// What Forma física's bars grow dodge from (Arturo, 6/11: they grow dodge, not health; in the box, «+3 a +5 por
+        /// barra», as Disparo's aim). A soldier has none, so it is a base of their own: 5 to 10 % of it, +3 to +5 a bar.
+        /// </summary>
+        public const int DodgeBase = 50;
 
         /// <summary>Bars filled among the six lines: the skill points earned.</summary>
         public static int TotalBars(Skills skills)
@@ -245,13 +254,13 @@ namespace Bastion.Engine
                 case SkillIds.Searching:
                     return Content.HackBase;
                 default:
-                    return BaseHp;
+                    return DodgeBase;
             }
         }
 
         /// <summary>
-        /// What a line's growth going from `from` to `to` percent adds: to its mod, or to health. The mod each line grows
-        /// (LINE_STAT): gunAim, meleeAim, grenadeRange, heal, hack; none for Forma física, health.
+        /// What a line's growth going from `from` to `to` percent adds to its mod (LINE_STAT): gunAim, meleeAim,
+        /// grenadeRange, heal, hack, and dodge for Forma física (Arturo, 6/11; it was health, which now only the board gives).
         /// </summary>
         public static GrowthDelta GrowthDeltaOf(string skill, int from, int to)
         {
@@ -275,10 +284,11 @@ namespace Bastion.Engine
                 case SkillIds.Searching:
                     mods.Hack = more;
                     break;
-                default:
-                    return new GrowthDelta { Mods = mods, Hp = more };
+                case SkillIds.Fitness:
+                    mods.Dodge = more;
+                    break;
             }
-            return new GrowthDelta { Mods = mods, Hp = 0 };
+            return new GrowthDelta { Mods = mods };
         }
 
         /// <summary>
@@ -295,9 +305,7 @@ namespace Bastion.Engine
             var maxHp = BaseHp;
             foreach (var id in SkillIds.All)
             {
-                var delta = GrowthDeltaOf(id, 0, Of(growth, id));
-                mods = Content.AddMods(mods, delta.Mods);
-                maxHp += delta.Hp;
+                mods = Content.AddMods(mods, GrowthDeltaOf(id, 0, Of(growth, id)).Mods);
             }
             var armor = 0;
             var perks = new List<string>();
@@ -385,6 +393,8 @@ namespace Bastion.Engine
             [DeedIds.Fix] = (SkillIds.Searching, 3),
             [DeedIds.Hunker] = (SkillIds.Fitness, 1),
             [DeedIds.Run] = (SkillIds.Fitness, 1),
+            [DeedIds.Hurt] = (SkillIds.Fitness, 1),
+            [DeedIds.Dodge] = (SkillIds.Fitness, 1),
         };
 
         /// <summary>The experience a mission's deeds give, line by line; `bonus` (0.2 = 20 %) more of each, rounded up.</summary>
@@ -455,7 +465,7 @@ namespace Bastion.Engine
                 var rolls = out_.Concat(now).ToList();
                 if (rolls.Count == 0) continue;
                 points += rolls.Count;
-                bars.Add(new BarFilled { Skill = id, Filled = from + rolls.Count, Growth = rolls });
+                bars.Add(new BarFilled { Skill = id, Filled = from + rolls.Count, Growth = rolls, From = Of(growth, id) != 0 ? Of(growth, id) : (int?)null });
             }
             return new Learned { Skills = next, Growth = grew, Gained = gained, Bars = bars, Points = points };
         }

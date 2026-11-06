@@ -107,13 +107,15 @@ namespace Bastion.Engine.Tests
         public void WhatTheLinesAdd()
         {
             var st = Bars.FighterStatsOf(Bars.NoSkills(), GrowthOf((SkillIds.Shooting, 10), (SkillIds.Melee, 20), (SkillIds.Throwing, 10), (SkillIds.Medicine, 13), (SkillIds.Searching, 10), (SkillIds.Fitness, 23)), new string[0]);
-            // 55 (60 until 31/10) → 60.5 and 66; a throw of 10 → 11; the medkit's 4 → 5 (4.52); 55 → 61 (60.5); health 5 → 6 (6.15).
+            // 55 (60 until 31/10) → 60.5 and 66; a throw of 10 → 11; the medkit's 4 → 5 (4.52); 55 → 61 (60.5); dodge's 50 → 62
+            // (61.5; Arturo, 6/11: Forma física grows dodge, and health only on the board).
             Assert.Equal(6, st.Mods.GunAim);
             Assert.Equal(11, st.Mods.MeleeAim);
             Assert.Equal(1, st.Mods.GrenadeRange);
             Assert.Equal(1, st.Mods.Heal);
             Assert.Equal(6, st.Mods.Hack);
-            Assert.Equal(6, st.MaxHp);
+            Assert.Equal(12, st.Mods.Dodge);
+            Assert.Equal(5, st.MaxHp);
             Assert.Equal(5, Bars.FighterStatsOf(Bars.NoSkills(), Bars.NoGrowth(), new string[0]).MaxHp);
         }
 
@@ -428,8 +430,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal(bar.Growth, home.Growth[SkillIds.Shooting]);
         }
 
-        [Fact(DisplayName = "a bar fills out there (Arturo, 16/10) › Forma física: health grows at once, the new points full")]
-        public void FormaFisicaHealthGrowsAtOnce()
+        [Fact(DisplayName = "a bar fills out there (Arturo, 16/10) › Forma física: dodge grows at once, +3 to +5 a bar, and health doesn't (Arturo, 6/11)")]
+        public void FormaFisicaDodgeGrowsAtOnce()
         {
             var s = StateFrom(new[] { "...." });
             var u = AddUnit(s, "s1", TemplateIds.Rookie, 0, 0, extra: (x) =>
@@ -439,11 +441,60 @@ namespace Bastion.Engine.Tests
                 x.MaxHp = 5;
                 x.Lines = Bars.MissionLinesOf(Bars.NoSkills(), GrowthOf((SkillIds.Fitness, 15)));
             });
-            // 5 grown 15 % is 6 (5.75); 25 % more is 6 (6.25); 35 %, 7 (6.75).
+            var before = u.Mods.Dodge;
             Events.ApplyEvent(s, new BarFilledEvent { Unit = "s1", Skill = SkillIds.Fitness, Filled = 1, Growth = 10 });
+            Assert.Equal(Bars.Grown(Bars.DodgeBase, 25) - Bars.Grown(Bars.DodgeBase, 15), u.Mods.Dodge - before);
             Assert.Equal((5, 3), (u.MaxHp, u.Hp));
-            Events.ApplyEvent(s, new BarFilledEvent { Unit = "s1", Skill = SkillIds.Fitness, Filled = 2, Growth = 10 });
-            Assert.Equal((6, 4), (u.MaxHp, u.Hp));
+            // Every bar between 5 and 10 % of 50: 3 to 5 more, give or take the rounding of the total, as Disparo's aim.
+            for (var from = 0; from <= 60; from++)
+                foreach (var roll in Bars.BarGrowth)
+                    Assert.InRange(Bars.GrowthDeltaOf(SkillIds.Fitness, from, from + roll).Mods.Dodge, 2, 6);
+            Assert.Equal(Bars.Grown(Bars.DodgeBase, 45) - Bars.DodgeBase, Bars.GrowthDeltaOf(SkillIds.Fitness, 0, 45).Mods.Dodge);
+            Assert.Equal(5, Bars.GrowthDeltaOf(SkillIds.Fitness, 0, 10).Mods.Dodge);
+            Assert.Equal(3, Bars.GrowthDeltaOf(SkillIds.Fitness, 0, 5).Mods.Dodge);
+        }
+
+        [Fact(DisplayName = "a bar fills out there › Forma física: being hurt and a hit its dodge made a graze teach it, a miss or no harm not (Arturo, 6/11)")]
+        public void HurtAndDodgeTeachFormaFisica()
+        {
+            var s = StateFrom(new[] { "...." });
+            var u = AddUnit(s, "s1", TemplateIds.Rookie, 0, 0, extra: (x) =>
+            {
+                x.Owner = 0;
+                x.Hp = 5;
+                x.MaxHp = 5;
+            });
+            AddUnit(s, "a1", TemplateIds.Zombie, 1, 0);
+            Events.ApplyEvent(s, new ShotEvent { Unit = "a1", Target = "s1", Ability = AbilityIds.Claw, Result = ShotResults.Graze });
+            Events.ApplyEvent(s, new DamagedEvent { Unit = "s1", Amount = 1 });
+            Events.ApplyEvent(s, new ShotEvent { Unit = "a1", Target = "s1", Ability = AbilityIds.Claw, Result = ShotResults.Miss });
+            Events.ApplyEvent(s, new DamagedEvent { Unit = "s1", Amount = 0 });
+            Assert.Equal(1, u.Deeds![DeedIds.Dodge]);
+            Assert.Equal(1, u.Deeds![DeedIds.Hurt]);
+            Assert.Equal(2, Bars.LearnedFrom(u.Deeds)[SkillIds.Fitness]);
+            // The dead learn nothing.
+            Assert.Null(s.Units.Single((x) => x.Id == "a1").Deeds);
+        }
+
+        [Fact(DisplayName = "a bar fills out there › it says what the line had grown before it, for Forma física's dodge to be told right (Lore, 6/11)")]
+        public void ABarSaysWhatWasThereBefore()
+        {
+            var s = StateFrom(new[] { "...." });
+            var skills = Bars.NoSkills();
+            skills[SkillIds.Fitness] = Bars.BarsCost(2) - 1;
+            AddUnit(s, "s1", TemplateIds.Rookie, 0, 0, extra: (x) =>
+            {
+                x.Owner = 0;
+                x.Lines = Bars.MissionLinesOf(skills, GrowthOf((SkillIds.Fitness, 15)));
+                x.Deeds = new Deeds { [DeedIds.Hurt] = 1 };
+            });
+            var sim = NewSim(s);
+            sim.SettleBars();
+            var bar = Assert.Single(sim.Events.OfType<BarFilledEvent>());
+            Assert.Equal((2, 15), (bar.Filled, bar.From));
+            // At home, as the line was before the mission.
+            var taught = Bars.Learn(skills, GrowthOf((SkillIds.Fitness, 15)), new Deeds { [DeedIds.Hurt] = 1 }, new Rng(1));
+            Assert.Equal(15, Assert.Single(taught.Bars).From);
         }
 
         // ------------------------------------------------------------ the new actions (docs/FASE10.md §4)

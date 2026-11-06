@@ -400,7 +400,11 @@ namespace Bastion.UI.Strategy
                 if (gained > 0) v.Learned.Add(new LearnedView { Kind = "skill", Line = i, Text = $"+{gained} {Bars.SkillDefs[id].Name}", Tip = Lore.LearnedLine(id, gained, (IReadOnlyDictionary<string, int>)e.Deeds ?? new Dictionary<string, int>()) });
             }
             foreach (var bar in e.Bars ?? new List<BarFilled>())
-                v.Learned.Add(new LearnedView { Kind = "bar", Line = SkillIds.All.ToList().IndexOf(bar.Skill), Text = $"▲ {Bars.SkillDefs[bar.Skill].Name.ToUpperInvariant()} +{bar.Growth.Sum()} %", Tip = Lore.BarLine(e.Name, bar.Skill, bar.Growth) });
+            {
+                // From the line's growth before these bars (BarFilled.From): Forma física's dodge depends on it, by the rounding (Lore).
+                var sum = bar.Growth.Sum();
+                v.Learned.Add(new LearnedView { Kind = "bar", Line = SkillIds.All.ToList().IndexOf(bar.Skill), Text = $"▲ {Lore.BarFillFloat(bar.Skill, sum, bar.From ?? 0)}", Tip = Lore.BarLine(e.Name, bar.Skill, bar.Growth, bar.From ?? 0) });
+            }
             var points = (e.Bars ?? new List<BarFilled>()).Sum(b => b.Growth.Count);
             if (points > 0) v.Learned.Add(new LearnedView { Kind = "point", Count = points });
             return v;

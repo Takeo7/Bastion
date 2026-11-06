@@ -9,10 +9,9 @@ namespace Bastion.Net
     /// (BASTION_CAMPANA, the app's CampaignRun): never in a game of the players. Each seat plays its own soldiers while it
     /// holds the command, one at a time: it reloads, shoots or strikes what it is likely to hit or what is close, and
     /// otherwise goes for the objective (a Botín's item, the radio to fix, the one to free, the alarm to silence; with the
-    /// job done, La Lata, everyone) or the nearest enemy, in stretches (Arturo, 5/11 #14: moving apart from the actions):
-    /// first what it walks without being heard and, with the squad seen, on the way out or to strike, the rest, at a run
-    /// (past Content.QuietTiles in the turn, heard: Arturo, 5/11); in La Lata with the job done and everyone aboard who can get there, it calls the bus; the
-    /// partner's call it answers yes.
+    /// job done, La Lata, everyone) or the nearest enemy, in stretches (Arturo, 5/11 #14: moving apart from the actions),
+    /// never at a run (all the movement at once, heard: Arturo, 6/11); in La Lata with the job done and everyone aboard who
+    /// can get there, it calls the bus; the partner's call it answers yes.
     /// Without a gun (the campaign starts with two pistols for four: Arturo, 2/11) it goes for one first, in a police car's
     /// boot or on the floor, and puts it on; and with the blade it walks up to the dead and strikes. Walled off from where it
     /// goes (a boarded door: Arturo, 2/11), it takes the boards off with the crowbar or goes round. With nothing to do, it
@@ -151,7 +150,7 @@ namespace Bastion.Net
             {
                 var pry = Pry(s, u, goal, leaving);
                 if (pry != null) return pry;
-                var stride = Stride(s, u, leaving);
+                var stride = Stride(u);
                 var move = stride >= Paths.CostOrtho ? MoveToward(s, u, goal, stride, leaving, walks) : null;
                 if (move != null) return move;
             }
@@ -213,7 +212,7 @@ namespace Bastion.Net
             var outside = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos)).ToList();
             if (outside.Count == 0 || Paths.MoveBudget(u) <= 0) return null;
             double Away(Pos p) => outside.Min((o) => Grid.Distance(p, o.Pos));
-            var reach = Paths.ComputeReach(s, u, Stride(s, u, false));
+            var reach = Paths.ComputeReach(s, u, Stride(u));
             Destination? best = null;
             foreach (var o in Paths.Destinations(s, u, reach))
                 if (Abilities.InEvacZone(s, o.Pos) && (best == null || Away(o.Pos) > Away(best.Pos) + 1e-9 || (System.Math.Abs(Away(o.Pos) - Away(best.Pos)) < 1e-9 && o.Cost < best.Cost))) best = o;
@@ -222,17 +221,16 @@ namespace Bastion.Net
         }
 
         /// <summary>
-        /// The next stretch, within what is left: first as far as it is not heard (Paths.IsRun: past Content.QuietTiles of
-        /// the turn's movement, in one stretch or several, it runs; Arturo, 5/11, in the box); with none of that left, the
-        /// rest when `loud` or once the squad has been seen, and otherwise nothing. On a bench of 90 missions with bots
-        /// (6/11), 26 won against 13 with never a run, and 364's campaign won both only like this or always running.
+        /// The next stretch, within what is left, never a run (Paths.IsRun: all the turn's movement at once, heard; Arturo,
+        /// 6/11): with all of it, a tile short; with less, the rest. Seven tiles and then one are the same eight in silence:
+        /// on a bench of 90 missions with bots (6/11), 29 won so, against 25 running once the squad was seen, on the way out
+        /// or to strike.
         /// </summary>
-        private static double Stride(GameState s, Unit u, bool loud)
+        private static double Stride(Unit u)
         {
             var left = Paths.MoveBudget(u);
-            var quiet = Content.QuietTiles * Paths.CostOrtho - (Paths.FullMoves(u) - left);
-            if (quiet >= Paths.CostOrtho) return System.Math.Min(left, quiet);
-            return loud || !s.Concealed ? left : 0;
+            var full = Paths.FullMoves(u);
+            return left < full ? left : full - Paths.CostOrtho;
         }
 
         /// <summary>Whether a found weapon of `kind` fires: in the hand or at the side, not a blade.</summary>
@@ -277,7 +275,7 @@ namespace Bastion.Net
             var enemies = Enemies(s).ToList();
             var seen = enemies.Where((e) => Aim.TeamSees(s, u.Team, e)).ToList();
             if (seen.Count == 0) return null;
-            var reach = Paths.ComputeReach(s, u, Stride(s, u, true));
+            var reach = Paths.ComputeReach(s, u, Stride(u));
             Destination? best = null;
             (int hp, int crowd, double cost) bestKey = default;
             foreach (var o in Paths.Destinations(s, u, reach))

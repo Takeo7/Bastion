@@ -197,8 +197,8 @@ namespace Bastion.Engine
                     // What the squad finds on the way: the buildings it walks into, and where it stops, those it looks into.
                     if (Los.IsViewer(u, Teams.Xcom)) for (var k = 0; k < ev.Path.Count; k++) Buildings.Discover(s, ev.Path[k], k == ev.Path.Count - 1);
                     EndSuppression(s, u);
-                    // Running teaches Forma física (docs/FASE10.md §3): the turn's movement spent, in one stretch or several
-                    // (Arturo, 5/11, in the box); it was moving with both actions.
+                    // Forma física learns (docs/FASE10.md §3) from the turn's movement spent, in one stretch or several (Arturo,
+                    // 6/11, in the box), whether it ran or not; it was moving with both actions.
                     if (spentAll || ev.Ap >= 2) Deed(s, u.Id, DeedIds.Run);
                     break;
                 }
@@ -241,6 +241,8 @@ namespace Bastion.Engine
                         Deed(s, u.Id, blade ? DeedIds.Swing : DeedIds.Shot);
                         if (ev.Result != ShotResults.Miss) Deed(s, u.Id, blade ? DeedIds.Blow : DeedIds.Hit);
                     }
+                    // A hit its dodge made a graze teaches Forma física (Arturo, 6/11), whoever struck.
+                    if (ev.Result == ShotResults.Graze) Deed(s, ev.Target, DeedIds.Dodge);
                     break;
                 }
                 case DamagedEvent ev:
@@ -249,6 +251,8 @@ namespace Bastion.Engine
                     u.Hp = Math.Max(0, u.Hp - ev.Amount);
                     u.Armor = Math.Max(0, u.Armor - ev.Shred);
                     ThrowLanded(s, u);
+                    // Being hurt teaches Forma física (Arturo, 6/11).
+                    if (ev.Amount > 0) Deed(s, u.Id, DeedIds.Hurt);
                     break;
                 }
                 case DiedEvent ev:
@@ -336,11 +340,8 @@ namespace Bastion.Engine
                         u.Lines.Rolls[ev.Skill] = rolls;
                     }
                     rolls.Add(ev.Growth);
-                    // Its stat, at once: health too, the new points full.
-                    var delta = Bars.GrowthDeltaOf(ev.Skill, before, before + ev.Growth);
-                    u.Mods = Content.AddMods(u.Mods, delta.Mods);
-                    u.MaxHp += delta.Hp;
-                    u.Hp += delta.Hp;
+                    // Its stat, at once.
+                    u.Mods = Content.AddMods(u.Mods, Bars.GrowthDeltaOf(ev.Skill, before, before + ev.Growth).Mods);
                     break;
                 }
                 case ReloadEvent ev:

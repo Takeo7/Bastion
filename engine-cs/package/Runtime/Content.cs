@@ -803,8 +803,6 @@ namespace Bastion.Engine
         /// </summary>
         public const int SoldierMobility = 8;
         public const int ZombieMobility = 5;
-        /// <summary>Tiles a turn one walks without being heard; past them it runs (Paths.IsRun; Arturo, 5/11, in the box).</summary>
-        public const int QuietTiles = 5;
 
         private static UnitTemplate Soldier(
             string id,

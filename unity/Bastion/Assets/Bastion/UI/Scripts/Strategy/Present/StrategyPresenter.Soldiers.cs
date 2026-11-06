@@ -315,6 +315,9 @@ namespace Bastion.UI.Strategy
             v.Stats.Add(new SheetStatView { Icon = "stat:aim", Value = (aim + stats.Mods.Aim + stats.Mods.GunAim).ToString(), Color = "#ffffff", Tip = $"Puntería con armas de fuego: {Bars.BaseAim} de base, más lo que suman las barras de Disparo y el tablero" });
             v.Stats.Add(new SheetStatView { Icon = "stat:melee", Value = (aim + stats.Mods.Aim + stats.Mods.MeleeAim).ToString(), Color = "#ffffff", Tip = $"Puntería cuerpo a cuerpo: {Bars.BaseAim} de base, más lo que suman las barras de Cuerpo a cuerpo y el tablero" });
             v.Stats.Add(new SheetStatView { Icon = "stat:ap", Value = stats.Will.ToString(), Color = "#a678ff", Tip = "Voluntad" });
+            // Dodge (Arturo, 6/11: Forma física's bars grow it, not health): its template's and what the bars and the board add.
+            var dodge = Content.Templates[stats.Template].Dodge + stats.Mods.Dodge;
+            v.Stats.Add(new SheetStatView { Icon = "stat:dodge", Value = dodge.ToString(), Color = "#ffffff", Tip = "Esquiva: de cada 100 impactos que recibe, cuántos se quedan en rozadura. La suben las barras de Forma física y el tablero" });
             var (health, tone, tip) = Health(c, s, false);
             v.Health = health;
             v.HealthTone = tone;
@@ -617,9 +620,14 @@ namespace Bastion.UI.Strategy
                 var bars = Bars.BarsOf(s.Skills.TryGetValue(id, out var xp) ? xp : 0);
                 var grown = s.Growth != null && s.Growth.TryGetValue(id, out var g) ? g : 0;
                 var r = Lore.BarReward(id);
+                // Forma física's growth as the dodge it adds, in points (Arturo, 6/11): its percent is of a base of 50
+                // nobody sees (Bars.DodgeBase); the other lines', as a percent of their stat.
+                var dodge = id == SkillIds.Fitness ? Bars.GrowthDeltaOf(id, 0, grown).Mods.Dodge : 0;
                 v.Rows.Add(new SkillRowView
                 {
-                    Line = i, Name = skill.Name, Tip = skill.Line, Growth = grown != 0 ? $"+{grown} %" : null, GrowthTip = skill.Stat,
+                    Line = i, Name = skill.Name, Tip = skill.Line,
+                    Growth = grown == 0 ? null : id == SkillIds.Fitness ? $"+{dodge}" : $"+{grown} %",
+                    GrowthTip = id == SkillIds.Fitness ? $"{skill.Stat}: +{dodge} de sus barras" : skill.Stat,
                     Filled = bars.Into, Total = bars.Need, Reward = r.Short, RewardTip = r.Long,
                 });
             }

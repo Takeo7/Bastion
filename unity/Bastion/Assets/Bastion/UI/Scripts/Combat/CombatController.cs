@@ -488,10 +488,10 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// Where `u` can end its move (game.ts reach): all of it one band now, the movement apart from the actions (Arturo,
-        /// 5/11 #13, #14: no dash); where it only gets running, past Content.QuietTiles of the turn's movement with what it
-        /// walked already (Paths.IsRun: heard); where an enemy the squad sees would notice it while the squad is hidden,
-        /// behind cover or hiding as the rules count it (Los.ConcealShare, #4); where the ground burns (Arturo, 01/11: the
-        /// soldiers' ways don't go round it).
+        /// 5/11 #13, #14: no dash); where it only gets running, the whole turn's movement in one stretch (Paths.IsRun:
+        /// heard; Arturo, 6/11); where an enemy the squad sees would notice it while the squad is hidden, behind cover or
+        /// hiding as the rules count it (Los.ConcealShare, #4); where the ground burns (Arturo, 01/11: the soldiers' ways
+        /// don't go round it).
         /// </summary>
         List<MoveTile> Tiles(Unit u)
         {

@@ -120,7 +120,7 @@ namespace Bastion.Engine
                 Active("lightningHands", "Manos rápidas", "Sin gastar acción, un disparo de pistola. Enfriamiento 4.", PerkIds.LightningHands, AbilityIds.LightningHands),
                 Stat("apRounds", "Al hueco", "Los disparos ignoran 1 de blindaje.", mods: new UnitMods { Pierce = 1 }),
                 Stat("shredder", "Desgarro", "Cada impacto quita 1 de blindaje más.", mods: new UnitMods { Shred = 1 }),
-                Passive("serenity", "Sin roces", "Con armas de fuego, un impacto nunca se queda en roce.", perk: PerkIds.Serenity),
+                Passive("serenity", "Sin rozaduras", "Con armas de fuego, un impacto nunca se queda en rozadura.", perk: PerkIds.Serenity),
                 Passive("coveringFire", "Fuego de cobertura", "En vigilancia, dispara también a quien ataque a la vista.", perk: PerkIds.CoveringFire),
                 Stat("noEscape", "Sin escapatoria", "+10 de crítico a 4 casillas o menos.", mods: new UnitMods { CloseRangeCrit = 10 }),
                 Active("killZone", "Nadie pasa", "Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno. Enfriamiento 4.", PerkIds.KillZone, AbilityIds.KillZone),

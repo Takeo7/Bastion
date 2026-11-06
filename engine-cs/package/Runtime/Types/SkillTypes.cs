@@ -53,10 +53,13 @@ namespace Bastion.Engine
         public const string Fix = "fix";
         public const string Hunker = "hunker";
         public const string Run = "run";
+        /// <summary>Hurt by anyone, and a hit made a graze by its dodge (Arturo, 6/11: they teach Forma física).</summary>
+        public const string Hurt = "hurt";
+        public const string Dodge = "dodge";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Shot, Hit, GunKill, Swing, Blow, BladeKill, Throw, ThrowHit, HealOther, HealSelf, Search, Fix, Hunker, Run,
+            Shot, Hit, GunKill, Swing, Blow, BladeKill, Throw, ThrowHit, HealOther, HealSelf, Search, Fix, Hunker, Run, Hurt, Dodge,
         };
     }
 

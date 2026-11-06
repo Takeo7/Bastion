@@ -1632,7 +1632,8 @@ namespace Bastion.Engine
             {
                 var u = S.Units[i];
                 if (u.Lines == null || !u.Alive || u.Team != Teams.Xcom) continue;
-                foreach (var bar in Bars.PendingBars(u.Lines, u.Deeds)) Emit(new BarFilledEvent { Unit = u.Id, Skill = bar.Skill, Filled = bar.Filled, Growth = Bars.RollGrowth(Rng) });
+                foreach (var bar in Bars.PendingBars(u.Lines, u.Deeds))
+                    Emit(new BarFilledEvent { Unit = u.Id, Skill = bar.Skill, Filled = bar.Filled, Growth = Bars.RollGrowth(Rng), From = u.Lines.Growth.TryGetValue(bar.Skill, out var g) && g != 0 ? g : (int?)null });
             }
         }
 
@@ -1995,7 +1996,7 @@ namespace Bastion.Engine
                 var run = Paths.IsRun(unit, reach.Cost.Get(Grid.NodeOf(s, to), 0));
                 sim.PassCommand(ctx.Slot);
                 sim.MoveAlong(unit, path, 1, run);
-                // Running is heard (docs/FASE2.md): past QuietTiles of the turn's movement, in one stretch or several.
+                // Running is heard (docs/FASE2.md): the whole turn's movement at once (Paths.IsRun).
                 if (run && unit.Alive) sim.MakeNoise(unit.Pos, Content.Noise.Dash, unit);
                 sim.AfterSoldier(unit, apBefore, movesBefore);
                 sim.AfterXcomAction();

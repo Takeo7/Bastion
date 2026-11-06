@@ -24,7 +24,11 @@ namespace Bastion.Engine
             [DeedIds.Search] = ("registro", "registros", false),
             [DeedIds.Fix] = ("arreglo", "arreglos", false),
             [DeedIds.Hunker] = ("vez a cubierto", "veces a cubierto", true),
-            [DeedIds.Run] = ("carrera", "carreras", true),
+            // All of the turn's movement spent, at once or in stretches (Paths.SpendsAll): not always a run since 6/11.
+            [DeedIds.Run] = ("movimiento completo", "movimientos completos", false),
+            // Arturo, 6/11: a blow that hurts, and a hit the dodge left as a graze (the game's «rozadura»).
+            [DeedIds.Hurt] = ("herida", "heridas", true),
+            [DeedIds.Dodge] = ("rozadura", "rozaduras", true),
         };
 
         private static readonly string[] Numbers = { "", "un", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez" };
@@ -61,15 +65,26 @@ namespace Bastion.Engine
         /// <summary>
         /// Bars filled on coming back (docs/FASE10.md §2), one line per line: «Ana
         /// llena una barra de Disparo: +7 % de puntería con armas de fuego. Tiene un
-        /// punto para el tablero.». `growth`, what each bar added.
+        /// punto para el tablero.». `growth`, what each bar added; `from`, the line's
+        /// growth before them (Bars.Of(growth, skill)), which Forma física needs: see BarGain.
         /// </summary>
-        public static string BarLine(string who, string skill, IReadOnlyList<int> growth)
+        public static string BarLine(string who, string skill, IReadOnlyList<int> growth, int from = 0)
         {
             var n = growth.Count;
             var bars = n == 1 ? "una barra" : $"{NumberWord(n)} barras";
-            var percent = growth.Sum();
+            return $"{who} llena {bars} de {Bars.SkillDefs[skill].Name}: {BarGain(skill, growth.Sum(), from)}. {(n == 1 ? "Tiene un punto de habilidad" : $"Tiene {NumberWord(n)} puntos de habilidad")} para el tablero.";
+        }
+
+        /// <summary>
+        /// What bars adding `percent` to a line's growth give: «+7 % de puntería con armas de fuego». Forma física's in
+        /// points of dodge (Arturo, 6/11: «+3 a +5 por barra»), «+4 de esquiva»: its percent is of Bars.DodgeBase, not of
+        /// the soldier's dodge, and the rounding makes the points depend on `from`, the growth before.
+        /// </summary>
+        public static string BarGain(string skill, int percent, int from = 0)
+        {
             var stat = LowerFirst(Bars.SkillDefs[skill].Stat);
-            return $"{who} llena {bars} de {Bars.SkillDefs[skill].Name}: +{percent} % de {stat}. {(n == 1 ? "Tiene un punto de habilidad" : $"Tiene {NumberWord(n)} puntos de habilidad")} para el tablero.";
+            if (skill == SkillIds.Fitness) return $"+{Bars.GrowthDeltaOf(skill, from, from + percent).Mods.Dodge} de {stat}";
+            return $"+{percent} % de {stat}";
         }
 
         /// <summary>
@@ -262,10 +277,11 @@ namespace Bastion.Engine
             ["tireless"] = "Nunca se sienta antes que los demás.",
         };
 
-        /// <summary>Floating over a soldier whose bar fills in the field (docs/PRUEBA-2026-10-16.md #10): «DISPARO +7 %».</summary>
-        public static string BarFillFloat(string skill, int percent)
+        /// <summary>Floating over a soldier whose bar fills in the field (docs/PRUEBA-2026-10-16.md #10): «DISPARO +7 %», «FORMA FÍSICA +4 DE ESQUIVA» (BarGain, `from` as there).</summary>
+        public static string BarFillFloat(string skill, int percent, int from = 0)
         {
-            return $"{Bars.SkillDefs[skill].Name.ToUpperInvariant()} +{percent} %";
+            var gain = skill == SkillIds.Fitness ? BarGain(skill, percent, from).ToUpperInvariant() : $"+{percent} %";
+            return $"{Bars.SkillDefs[skill].Name.ToUpperInvariant()} {gain}";
         }
 
         /// <summary>What filling a bar or reaching a rank gives: `Short` beside the bar, `Long` for its tooltip.</summary>
@@ -291,6 +307,15 @@ namespace Bastion.Engine
             var low = Bars.BarGrowth[0];
             var high = Bars.BarGrowth[1];
             var stat = LowerFirst(Bars.SkillDefs[skill].Stat);
+            if (skill == SkillIds.Fitness)
+            {
+                // In points of dodge, as BarGain: a first bar's, which later ones match but for the rounding.
+                low = Bars.GrowthDeltaOf(skill, 0, low).Mods.Dodge;
+                high = Bars.GrowthDeltaOf(skill, 0, high).Mods.Dodge;
+                return new RewardText(
+                    $"+{low}–{high} de {stat} · +1 punto",
+                    $"Al llenarse: entre {low} y {high} de {stat} más, y un punto de habilidad para el tablero.");
+            }
             return new RewardText(
                 $"+{low}–{high} % · +1 punto",
                 $"Al llenarse: entre un {low} y un {high} % más de {stat}, y un punto de habilidad para el tablero.");

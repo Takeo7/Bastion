@@ -11,7 +11,7 @@ namespace Bastion.UI.Combat
     {
         public Pos Pos;
         public bool Dash;
-        /// <summary>Only got to running: past Content.QuietTiles of the turn's movement, in one stretch or several (Paths.IsRun; Arturo, 5/11), and heard.</summary>
+        /// <summary>Only got to running: the whole turn's movement at once, in one stretch (Paths.IsRun; Arturo, 6/11), and heard.</summary>
         public bool Run;
         public bool Detected;
         public bool Fire;

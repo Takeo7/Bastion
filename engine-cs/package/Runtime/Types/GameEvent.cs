@@ -45,7 +45,7 @@ namespace Bastion.Engine
         public int Ap { get; set; }
         /// <summary>Movement spent, in path cost (Paths.CostOrtho a tile; Arturo, 5/11 #14: movement apart from the actions); on the walk's first segment.</summary>
         public int? Moves { get; set; }
-        /// <summary>A run: past Content.QuietTiles of the turn's movement (Paths.IsRun). It is heard, and drawn at a run.</summary>
+        /// <summary>A run: the whole turn's movement at once (Paths.IsRun). It is heard, and drawn at a run.</summary>
         public bool? Run { get; set; }
     }
 
@@ -208,6 +208,8 @@ namespace Bastion.Engine
         public string Skill { get; set; } = ""; // SkillIds
         public int Filled { get; set; }
         public int Growth { get; set; }
+        /// <summary>The line's growth before this bar: what Forma física's dodge is reckoned from (Lore.BarGain; Lore, 6/11). Null for none.</summary>
+        public int? From { get; set; }
     }
 
     public sealed class ReloadEvent : GameEvent

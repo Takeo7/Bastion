@@ -42,7 +42,7 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ actions
 
-        [Fact(DisplayName = "actions › moving takes no action: 8 tiles a turn, in stretches before and after acting; past 5 of them it runs (Arturo, 5/11 #14)")]
+        [Fact(DisplayName = "actions › moving takes no action: 8 tiles a turn, in stretches before and after acting; all of it at once runs (Arturo, 5/11 #14)")]
         public void MovingTakesNoAction()
         {
             var s = Field();
@@ -53,37 +53,41 @@ namespace Bastion.Engine.Tests
             var first = Run(s, Move("s1", 5, 0));
             Assert.Equal((2, 3 * Paths.CostOrtho), (u.Ap, Paths.MoveBudget(u)));
             Assert.Null(first.OfType<MovedEvent>().First().Run);
+            Assert.Empty(first.OfType<NoiseEvent>());
             // An action in between, and on with what is left; no further.
             u.Ammo = 0;
             Run(s, Ability("s1", AbilityIds.Reload));
             Assert.Equal(1, u.Ap);
             Assert.False(Rules.ExecuteCommand(s, Move("s1", 9, 0), Ctx()).Ok);
-            // Past 5 tiles of the turn it runs (Arturo, 5/11, in the box): heard; and all 8 spent, Forma física learns.
-            Assert.Empty(first.OfType<NoiseEvent>());
+            // 5 and then 3 spend the 8 but not at once: no run, not heard (Arturo, 6/11); Forma física learns all the same
+            // (Arturo, 6/11, in the box: «al gastar los 8, en uno o varios»).
             var rest = Run(s, Move("s1", 8, 0));
             Assert.Equal((1, 0), (u.Ap, Paths.MoveBudget(u)));
-            Assert.True(rest.OfType<MovedEvent>().First().Run);
-            Assert.Contains(rest, (e) => e is NoiseEvent);
+            Assert.Null(rest.OfType<MovedEvent>().First().Run);
+            Assert.Empty(rest.OfType<NoiseEvent>());
             Assert.Equal(1, u.Deeds![DeedIds.Run]);
             Assert.Equal("No le queda movimiento.", Rules.ExecuteCommand(s, Move("s1", 8, 1), Ctx()).Error);
-            // 7 and then 1 is a run as well: the 1 goes past the 5.
+            // All 8 at once is a run: heard, drawn at a run, and Forma física learns.
             var t = Field();
             var v = AddUnit(t, "s1", TemplateIds.Specialist, 0, 0);
             AddUnit(t, "s2", TemplateIds.Specialist, 19, 19);
             AddUnit(t, "a1", TemplateIds.Trooper, 19, 0);
-            Assert.True(Run(t, Move("s1", 7, 0)).OfType<MovedEvent>().First().Run);
-            var one = Run(t, Move("s1", 8, 0));
+            var all = Run(t, Move("s1", 8, 0));
             Assert.Equal((2, 0), (v.Ap, Paths.MoveBudget(v)));
-            Assert.True(one.OfType<MovedEvent>().First().Run);
-            Assert.Contains(one, (e) => e is NoiseEvent);
+            Assert.True(all.OfType<MovedEvent>().First().Run);
+            Assert.Contains(all, (e) => e is NoiseEvent);
             Assert.Equal(1, v.Deeds![DeedIds.Run]);
-            // 5, and no further: not heard, and Forma física learns nothing.
+            // 7, a tile short of it, is quiet, and so is the 1 after it.
             var q = Field();
             var quiet = AddUnit(q, "s1", TemplateIds.Specialist, 0, 0);
             AddUnit(q, "s2", TemplateIds.Specialist, 19, 19);
             AddUnit(q, "a1", TemplateIds.Trooper, 19, 0);
-            Assert.Empty(Run(q, Move("s1", 5, 0)).OfType<NoiseEvent>());
+            var seven = Run(q, Move("s1", 7, 0));
+            Assert.Null(seven.OfType<MovedEvent>().First().Run);
+            Assert.Empty(seven.OfType<NoiseEvent>());
             Assert.Null(quiet.Deeds);
+            Assert.Empty(Run(q, Move("s1", 8, 0)).OfType<NoiseEvent>());
+            Assert.Equal(1, quiet.Deeds![DeedIds.Run]);
             // What ends the turn takes the movement left with it; the next turn brings it all back.
             var w = Field();
             var x = AddUnit(w, "s1", TemplateIds.Specialist, 0, 0);

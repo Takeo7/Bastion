@@ -137,6 +137,8 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 1acaa59fd8634f74b9664cdaa3b45a46, type: 3}
   - Id: stat:weapon
     Sprite: {fileID: 21300000, guid: 89ecffc93d8631b40b9dfa5c75d16116, type: 3}
+  - Id: stat:dodge
+    Sprite: {fileID: 21300000, guid: 5fbe81ff8c0aeae4288d2d56370e3186, type: 3}
   - Id: ui:check
     Sprite: {fileID: 21300000, guid: 51bc8b49758370744ad5f923d0408e44, type: 3}
   - Id: store:credits

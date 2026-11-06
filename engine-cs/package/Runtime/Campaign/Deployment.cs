@@ -170,7 +170,7 @@ namespace Bastion.Engine
                 // What it did teaches it (docs/FASE10.md §3): more with the Taller de oficios, and the Camposanto at 3 after losses.
                 // The bars filled out there keep what they rolled; the Camposanto's share, known only now, may fill more.
                 var taught = Bars.Learn(s.Skills, s.Growth, u.Deeds, rng, LearningBonus(c) + (mourning != 0 ? LearningShare : 0), u.Lines);
-                foreach (var bar in taught.Bars) Log(c, Lore.BarLine(s.Name, bar.Skill, bar.Growth), LogTones.Good);
+                foreach (var bar in taught.Bars) Log(c, Lore.BarLine(s.Name, bar.Skill, bar.Growth, bar.From ?? 0), LogTones.Good);
                 entry.Learned = taught.Gained;
                 var deeds = new Deeds();
                 foreach (var d in u.Deeds ?? new Deeds()) deeds[d.Key] = d.Value;
