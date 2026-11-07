@@ -41,6 +41,9 @@ namespace Bastion.Client.Map
             public bool chosen;
             public Transform root;
             public Animator animator;
+            /// <summary>What its clips walk it by (FaunaBody, on its animator: none on a bird), and its animator's speed for its legs to keep up with its pace (Stride).</summary>
+            public FaunaBody stride;
+            public float legs = 1;
             public Transform body, left, right;
             public State state;
             public Vector3 target, velocity;
@@ -352,17 +355,23 @@ namespace Bastion.Client.Map
                 }
             }
             var animator = made.GetComponentInChildren<Animator>();
+            FaunaBody stride = null;
             if (animator != null)
             {
                 // (The Dog Pack's prefabs name a controller that isn't there: ours; SIMPLE's their own.)
                 controller ??= Resources.Load<RuntimeAnimatorController>(ControllerName);
                 if (controller != null && !grazer) animator.runtimeAnimatorController = controller;
-                animator.applyRootMotion = false;
+                // Its clips' root (their own walk: the dog's a metre each 0.8 s) handed to FaunaBody and left there, not
+                // written onto the model: without root motion it went on ahead within each loop and back as it started
+                // again (Arturo, 7/11: «como que vuelve»). (In play only: out of it nothing calls FaunaBody, and the root
+                // motion would be the model's.)
+                animator.applyRootMotion = Application.isPlaying;
+                stride = animator.gameObject.AddComponent<FaunaBody>();
                 // (Not moved while no camera sees it, in the game; a lab's shot camera draws into a texture, unseen.)
                 animator.cullingMode = Application.isPlaying ? AnimatorCullingMode.CullUpdateTransforms : AnimatorCullingMode.AlwaysAnimate;
             }
             foreach (var r in made.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-            animals.Add(new Animal { kind = kind, breed = prefab, root = root, animator = animator, state = State.Idle, wait = 1 + Hash(p.y, p.x, 83) * 4, yaw = yaw, rng = (uint)(p.x * 7919 + p.y * 104729 + 1), renderers = made.GetComponentsInChildren<Renderer>() });
+            animals.Add(new Animal { kind = kind, breed = prefab, root = root, animator = animator, stride = stride, state = State.Idle, wait = 1 + Hash(p.y, p.x, 83) * 4, yaw = yaw, rng = (uint)(p.x * 7919 + p.y * 104729 + 1), renderers = made.GetComponentsInChildren<Renderer>() });
         }
 
         Transform AddBird(Kind kind, Vector3 at, float yaw, uint seed)
@@ -814,13 +823,26 @@ namespace Bastion.Client.Map
                 // (Turning on the spot, a slow step round, eased in and out: not a statue turned on its stand.)
                 a.stepping = Mathf.MoveTowards(a.stepping, 0.2f * Mathf.Clamp01(a.turning / 200), dt);
                 movement = Mathf.Max(movement, a.stepping);
-                a.animator.speed = a.state == State.Flee && Down(a) ? RiseQuick : 1;
+                a.animator.speed = a.state == State.Flee && Down(a) ? RiseQuick : Stride(a, dt);
                 // (SIMPLE's controller: Speed_f the same way, Eat_b while it grazes, a cat's Sit_b while it sits.)
                 string pace = Simple(a.kind) ? "Speed_f" : "Movement_f";
                 a.animator.SetFloat(pace, movement);
                 if (Simple(a.kind)) a.animator.SetBool("Eat_b", a.doing == Graze && a.state == State.Idle);
                 if (a.kind == Kind.Cat) a.animator.SetBool("Sit_b", a.doing == Sit && a.state == State.Idle);
             }
+        }
+
+        /// <summary>
+        /// The animator's speed for `a`'s legs to keep up with its pace: as fast against its clips' own walk (FaunaBody's,
+        /// the blend of standing, walking and running it plays) as it goes against it, from half to twice, eased; 1 standing
+        /// or with clips that walk it nowhere. The dog's walk went 1.29 m/s to its 1.1: its feet slid.
+        /// </summary>
+        static float Stride(Animal a, float dt)
+        {
+            float clip = a.stride != null ? a.stride.ClipPace : 0;
+            float want = a.pace > 0.05f && clip > 0.05f ? Mathf.Clamp(a.pace / clip, 0.5f, 2) : 1;
+            a.legs += (want - a.legs) * (1 - Mathf.Exp(-8 * dt));
+            return a.legs;
         }
 
         /// <summary>

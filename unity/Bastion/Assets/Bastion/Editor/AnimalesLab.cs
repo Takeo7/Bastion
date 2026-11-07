@@ -162,6 +162,93 @@ namespace Bastion.EditorTools
             Debug.Log("[clips]\n" + log);
         }
 
+        /// <summary>
+        /// Whether the animals' walking and running clips go on ahead as they play (Gameplay, 7/11: «como que vuelve»), each
+        /// played alone at 60 fps (SampleAnimation) on its own animal: the dog's on our controller, SIMPLE's stag, boar,
+        /// rabbit and cat on theirs. For each clip, how its hips, its skin's root bone and the middle of its bones move
+        /// forward and up over one loop (cm, in the animal's own space: the least and most, and from its end back to its
+        /// start), and how its model was imported (its root motion node, and the clip's root baked into its pose or not).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.AnimalesLab.ClipsAhead -quit
+        /// </summary>
+        public static void ClipsAhead()
+        {
+            var log = new System.Text.StringBuilder();
+            var animals = new (string prefab, RuntimeAnimatorController controller)[]
+            {
+                ("Assets/Synty/PolygonDog/Prefabs/Dogs/SK_Dog_Labrador_01.prefab", Resources.Load<RuntimeAnimatorController>(Fauna.ControllerName)),
+                ("Assets/Synty/SimpleForestAnimal/Prefabs/Stag_02.prefab", null),
+                ("Assets/Synty/SimpleForestAnimal/Prefabs/Boar_01.prefab", null),
+                ("Assets/Synty/SimpleForestAnimal/Prefabs/Rabbit_01.prefab", null),
+                ("Assets/Synty/SimpleCats/Prefabs/SimpleCats_Tabby_01.prefab", null),
+            };
+            foreach (var (path, own) in animals)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab == null)
+                {
+                    log.AppendLine($"{path}: none");
+                    continue;
+                }
+                var body = (GameObject)UnityEngine.Object.Instantiate(prefab);
+                body.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                var animator = body.GetComponentInChildren<Animator>();
+                var controller = own ?? animator?.runtimeAnimatorController;
+                // (SIMPLE's prefabs keep every look but one off: the one named as the prefab, or the first.)
+                var skins = body.GetComponentsInChildren<SkinnedMeshRenderer>(true).Where(r => r.sharedMesh != null).ToList();
+                var skin = skins.FirstOrDefault(r => r.gameObject.activeInHierarchy) ?? skins.FirstOrDefault(r => r.name.EndsWith(prefab.name.Split('_').Last())) ?? skins.FirstOrDefault();
+                var bones = skin != null ? skin.bones.Where(b => b != null).ToArray() : new Transform[0];
+                var hip = body.GetComponentsInChildren<Transform>().FirstOrDefault(t => t.name.IndexOf("hip", StringComparison.OrdinalIgnoreCase) >= 0 || t.name.IndexOf("pelvis", StringComparison.OrdinalIgnoreCase) >= 0) ?? skin?.rootBone;
+                log.AppendLine($"{prefab.name}: controller {controller?.name}, hip {hip?.name}, root bone {skin?.rootBone?.name}, {bones.Length} bones");
+                if (controller == null)
+                {
+                    UnityEngine.Object.DestroyImmediate(body);
+                    continue;
+                }
+                // (What it plays from: SampleAnimation on the object the animator is on, its bones' paths from there.)
+                var on = animator != null ? animator.gameObject : body;
+                foreach (var clip in controller.animationClips.Distinct().Where(c => System.Text.RegularExpressions.Regex.IsMatch(c.name, "walk|run|trot|gallop|canter|sprint|locomotion|move", System.Text.RegularExpressions.RegexOptions.IgnoreCase)).OrderBy(c => c.name))
+                {
+                    int frames = Mathf.Max(2, Mathf.RoundToInt(clip.length * 60));
+                    var points = new Vector3[frames + 1][];
+                    // (The object the animator is on moved by the clip itself: its root's curves, which an animator without
+                    // root motion writes onto it, frame by frame.)
+                    var self = new Vector3[frames + 1];
+                    var turned = new float[frames + 1];
+                    for (int f = 0; f <= frames; f++)
+                    {
+                        clip.SampleAnimation(on, clip.length * f / frames);
+                        self[f] = on.transform.localPosition;
+                        turned[f] = on.transform.localEulerAngles.y;
+                        var middle = bones.Length > 0 ? bones.Aggregate(Vector3.zero, (s, b) => s + b.position) / bones.Length : Vector3.zero;
+                        points[f] = new[] { hip != null ? hip.position : Vector3.zero, skin?.rootBone != null ? skin.rootBone.position : Vector3.zero, middle }
+                            .Select(v => body.transform.InverseTransformPoint(v)).ToArray();
+                    }
+                    string clipPath = AssetDatabase.GetAssetPath(clip);
+                    string import = "";
+                    if (AssetImporter.GetAtPath(clipPath) is ModelImporter model)
+                    {
+                        var setting = model.clipAnimations.Concat(model.defaultClipAnimations).FirstOrDefault(c => c.name == clip.name);
+                        import = $"; import: {model.animationType}, motion node «{model.motionNodeName}»" + (setting != null ? $", loop {setting.loopTime}, bake XZ {setting.lockRootPositionXZ}, bake Y {setting.lockRootHeightY}, bake turn {setting.lockRootRotation}" : "");
+                    }
+                    log.AppendLine(FormattableString.Invariant($"  {clip.name} ({clip.length:0.00} s, root motion curves {clip.hasRootCurves || clip.hasMotionCurves}{import})"));
+                    var travel = self[frames] - self[0];
+                    log.AppendLine(FormattableString.Invariant($"    the object itself: {travel.z * 100:+0.0;-0.0} cm forward, {travel.x * 100:+0.0;-0.0} cm aside, up {self.Min(v => v.y) * 100:0.0} to {self.Max(v => v.y) * 100:0.0} cm over the loop ({travel.z / clip.length:0.00} m/s), turned {turned.Min(a => Mathf.DeltaAngle(0, a)):0.0}° to {turned.Max(a => Mathf.DeltaAngle(0, a)):0.0}°"));
+                    on.transform.localPosition = Vector3.zero;
+                    on.transform.localRotation = Quaternion.identity;
+                    string[] names = { "hip", "root bone", "middle" };
+                    for (int k = 0; k < 3; k++)
+                    {
+                        var forward = points.Select(q => q[k].z * 100).ToArray();
+                        var up = points.Select(q => q[k].y * 100).ToArray();
+                        var side = points.Select(q => q[k].x * 100).ToArray();
+                        log.AppendLine(FormattableString.Invariant($"    {names[k]}: forward {forward.Min():0.0} to {forward.Max():0.0} cm, end to start {forward[0] - forward[frames]:+0.0;-0.0} cm; side {side.Min():0.0} to {side.Max():0.0} cm, end to start {side[0] - side[frames]:+0.0;-0.0}; up {up.Min():0.0} to {up.Max():0.0} cm"));
+                    }
+                }
+                UnityEngine.Object.DestroyImmediate(body);
+            }
+            Debug.Log("[avance]\n" + log);
+        }
+
         static float Number(string name, float otherwise) =>
             float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : otherwise;
 
@@ -209,6 +296,50 @@ namespace Bastion.EditorTools
                     }
                 };
             }
+            // (BASTION_SONDA_HUESOS=1: its bones as the animator leaves them, each frame it is drawn (after the animator, not
+            // as Fauna moves it): its place and turn, its hips, its skin's root bone and the middle of all its bones, in the
+            // world, and the clip it plays, how far through and its pace parameter. [hueso] t x z yaw | hip | root | middle | clip
+            // ntime param: whether its body goes on ahead within the clip and back as it starts again (Gameplay, 7/11).)
+            if (Environment.GetEnvironmentVariable("BASTION_SONDA_HUESOS") == "1")
+            {
+                var skin = first.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r => r.enabled && r.gameObject.activeInHierarchy && r.sharedMesh != null).OrderByDescending(r => r.sharedMesh.vertexCount).FirstOrDefault();
+                var bones = skin != null ? skin.bones.Where(b => b != null).ToArray() : new Transform[0];
+                var hip = first.GetComponentsInChildren<Transform>().FirstOrDefault(t => t.name.IndexOf("hip", StringComparison.OrdinalIgnoreCase) >= 0 || t.name.IndexOf("pelvis", StringComparison.OrdinalIgnoreCase) >= 0) ?? skin?.rootBone;
+                var animator = first.GetComponentInChildren<Animator>();
+                Debug.Log($"[hueso] {first.name}: skin {skin?.name}, {bones.Length} bones, hip {hip?.name}, root bone {skin?.rootBone?.name}, root motion {animator?.applyRootMotion}");
+                int drawn = -1;
+                float began = -1;
+                UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering += (context, cam) =>
+                {
+                    if (!Application.isPlaying || first == null || Time.frameCount == drawn) return;
+                    drawn = Time.frameCount;
+                    if (began < 0) began = Time.time;
+                    var p = first.position;
+                    string At(Vector3 v) => FormattableString.Invariant($"{v.x:0.0000} {v.y:0.0000} {v.z:0.0000}");
+                    // (SIMPLE's models have their bones optimised away: what the animator itself is on, and the skin's bounds.)
+                    var model = animator != null ? animator.transform.position : p;
+                    var middle = bones.Length > 0 ? bones.Aggregate(Vector3.zero, (s, b) => s + b.position) / bones.Length : model;
+                    string clip = "-";
+                    float ntime = 0, param = -1;
+                    if (animator != null && animator.isActiveAndEnabled && animator.runtimeAnimatorController != null)
+                    {
+                        var clips = animator.GetCurrentAnimatorClipInfo(0);
+                        clip = clips.Length > 0 ? clips.OrderByDescending(c => c.weight).First().clip.name.Replace(' ', '_') : "-";
+                        ntime = animator.GetCurrentAnimatorStateInfo(0).normalizedTime;
+                        string pace = animator.parameters.Any(q => q.name == "Movement_f") ? "Movement_f" : animator.parameters.Any(q => q.name == "Speed_f") ? "Speed_f" : null;
+                        if (pace != null) param = animator.GetFloat(pace);
+                    }
+                    Debug.Log(FormattableString.Invariant($"[hueso] {Time.time - began:0.0000} {p.x:0.0000} {p.z:0.0000} {first.eulerAngles.y:0.00} | {At(hip != null ? hip.position : model)} | {At(skin?.rootBone != null ? skin.rootBone.position : skin != null ? skin.bounds.center : p)} | {At(middle)} | {clip} {ntime:0.0000} {param:0.000} | {Low()}"));
+                };
+                // (Its lowest bone, a foot on the ground: which and where, to see whether it slides as it stands on it.)
+                string Low()
+                {
+                    int k = -1;
+                    for (int i = 0; i < bones.Length; i++)
+                        if (k < 0 || bones[i].position.y < bones[k].position.y) k = i;
+                    return k < 0 ? "-1 0 0 0" : FormattableString.Invariant($"{k} {bones[k].position.x:0.0000} {bones[k].position.y:0.0000} {bones[k].position.z:0.0000}");
+                }
+            }
             // (BASTION_SONDA_PERRO=1: its place, turn and animator each frame, [perro] t x z yaw speed state time param.)
             if (Environment.GetEnvironmentVariable("BASTION_SONDA_PERRO") == "1")
             {
@@ -231,7 +362,11 @@ namespace Bastion.EditorTools
             // (BASTION_SOLO=1: nobody coming, the camera on the animal: how it stands and wanders.)
             if (Environment.GetEnvironmentVariable("BASTION_SOLO") == "1")
             {
-                MapSpace.Aim(camera, first.position, Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
+                // (BASTION_MIRAR=x,y: the camera still, on that place (in tiles from the map's corner, decimals too: a tile's
+                // middle is .5), not on the animal.)
+                var look = Environment.GetEnvironmentVariable("BASTION_MIRAR")?.Split(',');
+                var at = look != null && look.Length == 2 ? new Vector3(float.Parse(look[0], System.Globalization.CultureInfo.InvariantCulture), 0, -float.Parse(look[1], System.Globalization.CultureInfo.InvariantCulture)) * MapSpace.Tile : first.position;
+                MapSpace.Aim(camera, at, Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
                 Debug.Log($"[animales] {kind} {first.name} alone, at {MapSpace.WorldToTile(first.position)}");
                 // (BASTION_SEGUIR=1: the camera on it wherever it wanders.)
                 if (Environment.GetEnvironmentVariable("BASTION_SEGUIR") == "1")
