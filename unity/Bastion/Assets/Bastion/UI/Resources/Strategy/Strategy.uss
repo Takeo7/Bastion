@@ -533,12 +533,10 @@
     background-color: rgba(0, 0, 0, 0.75);
 }
 
+/* Torn as every plate (7/11): no pale rim. */
 .strat-modal__card {
     width: 540px;
     padding: 18px 22px 16px;
-    /* The sheet's pale rim (mixta-base.css .strat-modal .x-panel). */
-    border-width: 2px;
-    border-color: rgba(200, 205, 198, 0.4);
 }
 
 .strat-modal__card--event,

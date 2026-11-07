@@ -370,12 +370,6 @@
     min-height: 54px;
     justify-content: center;
     padding: 6px 6px;
-    background-color: rgba(0, 0, 0, 0);
-    background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png");
-    -unity-background-image-tint-color: rgba(0, 0, 0, 0.75);
-    -unity-slice-scale: 0.35px;
-    border-width: 0;
-    border-radius: 0;
 }
 
 .lineup-cards--squad .lineup-card__name {
@@ -396,16 +390,17 @@
     font-size: 11px;
 }
 
+/* On a small torn plate, black at 75 % (Arturo's report of 7/11), in Escuadra and the debrief alike. */
 .lineup-card {
     position: absolute;
     align-items: center;
     padding: 18px 6px 8px;
-    background-color: rgba(24, 27, 29, 0.94);
-    background-image: url("../../Textures/steel-plate.png");
-    background-repeat: repeat repeat;
-    background-size: 256px 256px;
-    border-top-width: 3px;
-    border-radius: 2px;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.75);
+    -unity-slice-scale: 0.35px;
+    border-width: 0;
+    border-radius: 0;
 }
 
 /* mixta-base.css .lineup-card.ready: the top edge green (and a glow, which USS hasn't). */
@@ -430,8 +425,7 @@
 
 /* mixta-base.css .lineup-card.dead: darkened red, the top edge red, the bust greyed and ringed red. */
 .lineup-card--fallen {
-    background-color: rgba(70, 20, 18, 0.94);
-    border-top-color: var(--t-danger);
+    -unity-background-image-tint-color: rgba(70, 20, 18, 0.85);
 }
 
 .lineup-card--fallen .lineup-card__bust {
@@ -456,10 +450,7 @@
 /* mixta-base.css .lineup-card.empty: dark glass over the clearing (snow shows through it grey), a faint edge. */
 .lineup-card--empty {
     padding: 14px 6px;
-    background-color: rgba(14, 16, 17, 0.55);
-    background-image: none;
-    border-width: 1px;
-    border-color: rgba(255, 255, 255, 0.18);
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.55);
 }
 
 .lineup-card__free {

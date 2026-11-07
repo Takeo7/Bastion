@@ -30,7 +30,8 @@ namespace Bastion.UI.Hud
         /// <summary>`plate` framed (or only riveted), once: again after its children were cleared.</summary>
         public static void Dress(VisualElement plate, bool frame = true)
         {
-            if (plate == null) return;
+            // A torn plate has no steel round it (Arturo's report of 7/11: every plate torn, Mixta.uss .panel).
+            if (plate == null || plate.ClassListContains("panel") || plate.ClassListContains("torn")) return;
             foreach (var child in plate.Children())
                 if (child is PlateFrame) return;
             plate.Insert(0, new PlateFrame(frame));

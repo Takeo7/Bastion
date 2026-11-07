@@ -11,7 +11,7 @@
 }
 
 .goal-dock:hover {
-    border-top-color: var(--t-accent);
+    -unity-background-image-tint-color: rgba(40, 43, 46, 0.85);
 }
 
 /* Hidden while the arrival card is up: it shrinks into here. */

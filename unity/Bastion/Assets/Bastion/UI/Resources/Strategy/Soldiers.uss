@@ -822,8 +822,6 @@
     max-width: 96%;
     max-height: 96%;
     padding: 14px 18px 12px;
-    border-width: 2px;
-    border-color: rgba(200, 205, 198, 0.4);
 }
 
 .board-modal__kicker {
