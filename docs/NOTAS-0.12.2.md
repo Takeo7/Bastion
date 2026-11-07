@@ -44,7 +44,11 @@ Versión 0.12.2 (commit [commit]). Lo que Arturo encontró el 7/11 jugando solo 
 
 - **Los dos jugadores, con la 0.12.2:** con la 0.12.1 no se puede jugar juntos.
 - **En el Mac,** al copiarla a Aplicaciones sustituye a la 0.12.1.
-- **Firma:** firma ad hoc. La primera vez que se abre cada versión, Ajustes del Sistema → Privacidad y seguridad → «Abrir igualmente».
+- **Solo Mac y Windows:** no hay versión para Linux, ni para el navegador ni para el móvil.
+- **Firma:**
+  - Mac: firma ad hoc. La primera vez que se abre cada versión, Ajustes del Sistema → Privacidad y seguridad → «Abrir igualmente».
+  - Windows: sin firmar. «Más información» → «Ejecutar de todas formas».
 - **Cortafuegos del Mac:** con cada versión, el Mac vuelve a preguntar si la app puede aceptar conexiones entrantes y si puede buscar en la red local: «Permitir» en los dos.
 - **Por internet:** con algunas compañías, aunque salga la dirección de internet, desde fuera no se llega, y quien se une ve «No responde nadie…». Entonces, Tailscale.
+- **Windows:** construida desde el Mac; aún no se ha probado en un PC.
 - **Para jugar,** mejor enchufado y sin modo de bajo consumo.
