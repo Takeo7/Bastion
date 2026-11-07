@@ -60,7 +60,6 @@ namespace Bastion.UI.Combat
         bool alarmRaised;
         bool risenSeen;
         bool departedOnTime;
-        ConcealmentBrokenEvent exposure;
         /// <summary>
         /// Groups of which only some woke (PodSplitEvent; Ana's #4 of 1/11, each of the dead with its own eyes and ears): the
         /// new group's id → the one the rest stay in, asleep.
@@ -68,8 +67,6 @@ namespace Bastion.UI.Combat
         readonly Dictionary<string, string> splitFrom = new Dictionary<string, string>();
         /// <summary>The enemies already marked as seen in this mission (Arturo's B2 of 2/11): one coming back into sight isn't again.</summary>
         readonly HashSet<string> announced = new HashSet<string>();
-        /// <summary>The turn whose «¡CONTACTO!» stamp was shown: only the first of a turn has one (B2); the rest, their «!» and line.</summary>
-        (int turn, string team)? stamped;
 
         /// <summary>A partner's moment (game.ts moment): where it happened, for «Ver» (F) while its notice is up.</summary>
         Vector3? moment;
@@ -2255,11 +2252,10 @@ namespace Bastion.UI.Combat
                     return;
                 }
                 case PodActivatedEvent pod:
-                    await PlayContact(pod, by, v, Cam, Look);
+                    await PlayContact(pod, v);
                     return;
                 case ConcealmentBrokenEvent cb:
                 {
-                    exposure = cb;
                     control.Sfx.Reveal();
                     var why = ExposureText(cb);
                     Hud?.Banner("OCULTACIÓN ROTA", "warn", why);
@@ -2292,7 +2288,7 @@ namespace Bastion.UI.Combat
                     if (turn.Team == Teams.Alien && !EnemyTurnShows()) return;
                     control.Sfx.Turn(turn.Team == Teams.Alien, !v.Concealed);
                     var partner = turn.Team == Teams.Xcom && control.Players.Any(p => p.Slot != control.MySlot && p.Connected) && turn.Command != null && turn.Command != control.MySlot;
-                    Hud?.Banner(turn.Team == Teams.Alien ? "TURNO ENEMIGO" : partner ? $"TURNO DE {PlayerName(turn.Command).ToUpperInvariant()}" : "TU TURNO", turn.Team == Teams.Xcom ? "xcom" : "alien", null, turn.Team == Teams.Xcom && !partner);
+                    Hud?.Banner(turn.Team == Teams.Alien ? "TURNO ENEMIGO" : partner ? $"TURNO DE {PlayerName(turn.Command).ToUpperInvariant()}" : "TU TURNO", "turn", null, turn.Team == Teams.Xcom && !partner);
                     // The squad's turn: the camera to the soldier who plays first (#47).
                     if (turn.Team == Teams.Xcom) control.TurnCamera(v, turn.Command ?? control.MySlot, true);
                     var left = v.Mission.TurnsLeft != null && turn.Turn > 1 ? v.Mission.TurnsLeft - 1 : v.Mission.TurnsLeft;
@@ -2312,7 +2308,7 @@ namespace Bastion.UI.Combat
                     control.Sfx.Command();
                     if (control.Players.Any(p => p.Slot != control.MySlot && p.Connected))
                     {
-                        if (cp.To == control.MySlot) Hud?.Banner("TU TURNO", "xcom", "Tienes el mando: das tú las órdenes", true);
+                        if (cp.To == control.MySlot) Hud?.Banner("TU TURNO", "turn", "Tienes el mando: das tú las órdenes", true);
                         else Hud?.Banner($"TURNO DE {PlayerName(cp.To).ToUpperInvariant()}", "xcom", control.State.Ready[control.MySlot] ? $"Has terminado: juega {PlayerName(cp.To)}" : "Mientras, puedes planear los movimientos");
                     }
                     // To the soldier who plays now: the one in play of whoever takes the command, or their first with actions (#47).
@@ -2629,12 +2625,12 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// A pod woken (game.ts podActivated): its «!», the contact's stamp and line, or the living and the dead fighting. Only
-        /// those it has: of a group split by who saw (Ana's #4 of 1/11), the new one; the rest stay as they were, and the line
-        /// says how many of them the squad sees. The «!» of those in sight on their flags; the stamp only for the first of a
-        /// turn; the partner's line with «Ver», no notice (Arturo's B2 of 2/11).
+        /// A pod woken (game.ts podActivated): its «!», or the living and the dead fighting. Only those it has: of a group
+        /// split by who saw (Ana's #4 of 1/11), the new one; the rest stay as they were. The «!» of those in sight on their
+        /// flags, over the rest rising (Arturo's B2 of 2/11). No «contact» of XCOM's any more (Ana, 7/11 #11; Arturo in the
+        /// box): no «¡CONTACTO!» stamp nor its music, no line in the log, and the camera doesn't go to them.
         /// </summary>
-        async Awaitable PlayContact(PodActivatedEvent e, int? by, GameState v, Func<bool> cam, Action<Vector3> look)
+        async Awaitable PlayContact(PodActivatedEvent e, GameState v)
         {
             var pod = v.Pods.FirstOrDefault(p => p.Id == e.Pod);
             var all = pod?.UnitIds.Select(Unit).Where(m => m != null && m.Alive).ToList() ?? new List<Unit>();
@@ -2654,18 +2650,10 @@ namespace Bastion.UI.Combat
                 await Wait(0.5f);
                 return;
             }
-            var centre = members.Aggregate(Vector3.zero, (acc, m) => acc + Board.TileToWorld(v, m.Pos)) / members.Count;
-            // The camera only to those of them the squad sees: the middle of all of them could be behind or inside a tall
-            // building that nothing opens, and it showed its roof up close (0.11.5's test, Priya's shot). None seen, it stays.
             var seen = members.Where(ShownToSquad).ToList();
             var rest = splitFrom.TryGetValue(e.Pod, out var from) ? v.Pods.FirstOrDefault(p => p.Id == from) : null;
             var asleep = rest != null && !rest.Active ? rest.UnitIds.Select(Unit).Where(m => m != null && m.Alive).ToList() : new List<Unit>();
             if (Rhythm) Debug.Log($"[ritmo] contacto: {members.Count} del grupo, {seen.Count} a la vista{(rest != null ? $"; aparte de {from} ({e.Pod}), siguen sin enterarse {asleep.Count}, {asleep.Count(ShownToSquad)} a la vista" : "")}");
-            if (!grouped && seen.Count > 0)
-            {
-                look(seen.Aggregate(Vector3.zero, (acc, m) => acc + Board.TileToWorld(v, m.Pos)) / seen.Count);
-                if (cam()) await Wait(0.35f);
-            }
             foreach (var m in members)
             {
                 if (units != null)
@@ -2674,27 +2662,18 @@ namespace Bastion.UI.Combat
                     units.Face(m.Id, ClosestSoldier(m.Pos));
                     Loose(units.Alert(m.Id, stop));
                 }
-                // On its flag, those in sight; over the rest, which have none, rising.
+                // On its flag, those in sight; over the rest, which have none, rising, if its figure is drawn (not inside a
+                // building nobody has found yet: Arte's Drawn, Ana's 7/11 #14).
                 if (ShownToSquad(m))
                 {
                     announced.Add(m.Id);
                     Hud?.Spot(m.Id, true);
                 }
-                else Float(Chest(m.Id), "!", "alert");
+                else if (units == null || units.Drawn(m.Id)) Float(Chest(m.Id), "!", "alert");
             }
-            control.Sfx.Contact(centre, members.Any(m => Content.Templates[m.Template].Undead));
-            var how = ContactCause(e, members.Count == 1, seen.Count == 0);
-            if (stamped != (v.Turn, v.ActiveTeam))
-            {
-                stamped = (v.Turn, v.ActiveTeam);
-                Hud?.Banner("¡CONTACTO!", "alien", how);
-            }
-            // Those of its group the squad sees that didn't notice: they still can be ambushed (only the ones in sight: the
-            // others would give away who is out there).
-            var calm = asleep.Count(ShownToSquad);
-            var others = calm == 0 ? "" : calm == 1 ? " · otro de su grupo no se ha enterado" : $" · otros {calm} de su grupo no se han enterado";
-            Log($"Contacto: {string.Join(", ", members.Select(m => m.Name))} · {how}{others}", "#ff6b5a", Partners(by, seen.Count > 0 ? Board.TileToWorld(v, seen[0].Pos) : centre));
-            await Wait(0.9f);
+            // The music goes tense, without the contact's sting (Sfx.Contact).
+            control.Sfx.Mood("tense");
+            await Wait(seen.Count > 0 ? 0.6f : 0.3f);
         }
 
         /// <summary>
@@ -2769,32 +2748,6 @@ namespace Bastion.UI.Combat
             }
         }
 
-        /// <summary>
-        /// Who found whom in a contact: they saw the squad, the squad came upon them, they were attacked or heard it. `one`: a
-        /// single one woke, said so (with each of the dead on its own, Ana's #4 of 1/11, often only the one that saw).
-        /// `unseen`: none of them in the squad's sight, so it was they who saw (not «Tariq lo ha avistado»).
-        /// </summary>
-        string ContactCause(PodActivatedEvent e, bool one, bool unseen)
-        {
-            var soldier = Unit(e.Unit);
-            var who = soldier?.Name ?? "la escuadra";
-            switch (e.Cause)
-            {
-                case "sighted":
-                    if (unseen || exposure != null && exposure.Reason == "spotted" && exposure.By == e.By && exposure.Unit == e.Unit) return one ? $"Os ha visto: ha descubierto a {who}" : $"Os han visto: han descubierto a {who}";
-                    return $"{Capitalize(who)} {(one ? "lo" : "los")} ha avistado";
-                case "patrol":
-                    return $"Una patrulla ha dado con {who}";
-                case "attacked":
-                    return soldier != null ? $"{(one ? "Responde" : "Responden")} al ataque de {who}" : one ? "Responde al ataque" : "Responden al ataque";
-                case "noise":
-                    var blast = lastThrown == AbilityIds.Molotov ? "el cóctel molotov" : "la explosión";
-                    return one ? $"Ha oído {blast}" : $"Han oído {blast}";
-                default:
-                    return one ? "Os ha localizado" : "Os han localizado";
-            }
-        }
-
         /// <summary>Which edge of the map a tile is nearest to, as the radio says it (the map's top row is the north).</summary>
         static string EdgeName(GameState s, Vec2 p)
         {
@@ -2823,7 +2776,7 @@ namespace Bastion.UI.Combat
             string text;
             switch (e)
             {
-                // A contact: its line in the log, with «Ver» (PlayContact; Arturo's B2 of 2/11).
+                // A contact: nothing (Ana, 7/11 #11: no line in the log any more).
                 case PodActivatedEvent:
                     return;
                 case ConcealmentBrokenEvent cb:

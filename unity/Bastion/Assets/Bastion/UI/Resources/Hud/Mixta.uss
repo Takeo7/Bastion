@@ -1,6 +1,7 @@
 /*
  * «Mixta», the interface (ui/themes/mixta.css of the 0.10.1), for UI Toolkit: plates of dark steel with a bevel lit
- * from above, hazard yellow for what to press next and what is chosen, green good, red danger.
+ * from above, white for what to press next and what is chosen, green good, red danger. The purple and the orange are
+ * the players' alone (Ana, 7/11 #6: the hazard yellow and the amber, white).
  *
  * USS has no gradients, box-shadow, gap nor @keyframes (docs/UNITY-UI.md §4): the plates are flat colours with their
  * bevel in the borders until the steel and grime textures go in as 9-sliced sprites; spacing is margins; what moves
@@ -14,11 +15,11 @@
 :root {
     --t-text: #eef0ea;
     --t-muted: #a1a79d;
-    --t-accent: #f2c230;
-    --t-accent-soft: rgba(242, 194, 48, 0.14);
+    --t-accent: #ffffff;
+    --t-accent-soft: rgba(255, 255, 255, 0.12);
     --t-line: rgba(255, 255, 255, 0.1);
     --t-good: #8fd05a;
-    --t-warn: #f5a524;
+    --t-warn: #ffffff;
     --t-danger: #f0503c;
     --t-stamp: #b3261e;
 
@@ -27,9 +28,9 @@
     --t-panel-lo: rgba(12, 14, 15, 0.92);
     --t-panel-hover: rgba(60, 64, 64, 0.98);
     --t-tag: rgba(17, 19, 20, 0.94);
-    --t-primary: #f2c230;
-    --t-primary-hover: #f9cf48;
-    --t-primary-ink: #1e1706;
+    --t-primary: #ecebe6;
+    --t-primary-hover: #ffffff;
+    --t-primary-ink: #15181a;
     --t-ready: #8fd05a;
     --t-ready-ink: #0d1806;
 
@@ -161,10 +162,10 @@ Button:disabled {
     opacity: 0.45;
 }
 
-/* What to press next: hazard yellow, dark ink. */
+/* What to press next: white, dark ink (Ana, 7/11 #6). */
 .btn-primary {
     background-color: var(--t-primary);
-    border-top-color: #ffe27a;
+    border-top-color: #ffffff;
     color: var(--t-primary-ink);
 }
 
@@ -219,20 +220,20 @@ Button:disabled {
 .btn-slant.btn-primary {
     padding-left: 18px;
     padding-right: 18px;
-    --slant-hi: #ffdb62;
-    --slant-fill: #f2c230;
-    --slant-lo: #d6a01c;
-    --slant-top: rgb(255, 241, 192);
-    --slant-foot: rgb(173, 125, 15);
+    --slant-hi: #ffffff;
+    --slant-fill: #ecebe6;
+    --slant-lo: #c8c7c2;
+    --slant-top: rgb(255, 255, 255);
+    --slant-foot: rgb(132, 132, 128);
     --slant-edge: rgba(0, 0, 0, 0);
 }
 
 .btn-slant.btn-primary:hover {
-    --slant-hi: #ffe68e;
-    --slant-fill: #f9cf48;
-    --slant-lo: #e2ad25;
-    --slant-top: rgb(255, 248, 221);
-    --slant-foot: rgb(179, 132, 20);
+    --slant-hi: #ffffff;
+    --slant-fill: #ffffff;
+    --slant-lo: #d8d7d2;
+    --slant-top: rgb(255, 255, 255);
+    --slant-foot: rgb(142, 142, 138);
 }
 
 /* Off: the yellow at 45 % over the plate, as measured on the 0.10.1's captures, with dark ink (opaque: USS would
@@ -292,8 +293,9 @@ Button:disabled {
     -unity-background-image-tint-color: var(--t-good);
 }
 
+/* The actions in yellow, as in Ana's model of the panel (7/11 #13): a figure's colour, not the interface's. */
 .pips--ap .pip--on {
-    background-color: var(--t-accent);
+    background-color: #f2c230;
 }
 
 .pips--ammo .pip {
@@ -303,7 +305,7 @@ Button:disabled {
 }
 
 .pips--ammo .pip--on {
-    background-color: #d39a4a;
+    background-color: #e8e6e0;
 }
 
 /* ================================================================ tags */
@@ -334,11 +336,11 @@ Button:disabled {
 }
 
 .tag--stun {
-    color: #ffcf5a;
+    color: #ffffff;
 }
 
 .tag--psi {
-    color: #d29bff;
+    color: #ffffff;
 }
 
 .tag--bite {

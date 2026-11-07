@@ -7,11 +7,13 @@ namespace Bastion.UI.Hud
 {
     /// <summary>
     /// The squad's cards, under the picked soldier's sheet, bottom left (UI-COMBATE UI-01, UI-02; hud.ts setSquad;
-    /// docs/UNITY-UI.md §2.1): one per soldier of this player's (Arturo, 01/11: only one's own), its bust with its states
-    /// over it and its name at its foot, its health in green and its actions in yellow; the picked one bigger, all on one
-    /// foot. Four take a quarter of the screen; with more (La Lata carries eight) the row grows a little and the cards
-    /// narrow (Arturo, 01/11). A click on one picks it, a double click takes the camera to it (UI-08); the pointer over a
-    /// living one points it out on the map (Arturo, 31/10 #11). Drawn again only when the view changes.
+    /// docs/UNITY-UI.md §2.1): one per soldier, this player's first and then the partner's (Ana, 7/11 #12), its bust on a
+    /// studio backdrop in its owner's colour with its states over it, its name in a strip of its own under it (#13), its
+    /// health in green and its actions in yellow; the picked one bigger, no border round it (#13), all on one foot. Four
+    /// take a quarter of the screen; with more the cards narrow, the row no wider than the room left of the keys. A click
+    /// on one's own picks it, a double click takes the camera to it (UI-08); a click on the partner's takes the camera
+    /// there; the pointer over a living one points it out on the map (Arturo, 31/10 #11). Drawn again only when the view
+    /// changes.
     /// </summary>
     public sealed class SquadList
     {
@@ -19,9 +21,13 @@ namespace Bastion.UI.Hud
         const float CardW = 78;
         const float PickedMore = 14;
         const float Gap = 4;
-        /// <summary>What each card past the fourth adds to the row: 338 wide with four, 426 with eight.</summary>
-        const float GrowEach = 22;
-        /// <summary>The plate's padding a side (Hud.uss .squad), and its least width, for the sheet's line.</summary>
+        /// <summary>
+        /// The row's widest, with more than four: the room left of the keys at 1440 (Ana, 7/11 #12: the partner's cards too,
+        /// six and more in the row); the cards narrow to fit it, no narrower than MinW.
+        /// </summary>
+        const float MaxRow = 352;
+        const float MinW = 40;
+        /// <summary>The plate's padding a side (Hud.uss .squad-plate), and its least width.</summary>
         const float Padding = 8;
         const float Least = 354;
         /// <summary>Narrower than this a card says only the first name.</summary>
@@ -63,8 +69,8 @@ namespace Bastion.UI.Hud
             // No soldier yet (the HUD before the first view): no plate either.
             Ui.Show(plate, cards.Count > 0);
             var n = cards.Count;
-            var row = n <= 4 ? n * CardW + PickedMore + Mathf.Max(0, n - 1) * Gap : 4 * CardW + PickedMore + 3 * Gap + (n - 4) * GrowEach;
-            var width = n <= 4 ? CardW : Mathf.Floor((row - PickedMore - (n - 1) * Gap) / n);
+            var width = n <= 4 ? CardW : Mathf.Max(MinW, Mathf.Floor((MaxRow - PickedMore - (n - 1) * Gap) / n));
+            var row = n * width + PickedMore + Mathf.Max(0, n - 1) * Gap;
             plate.style.width = Mathf.Max(Least, row + 2 * Padding);
             for (var i = 0; i < n; i++)
             {
@@ -89,14 +95,21 @@ namespace Bastion.UI.Hud
             card.name = "card-" + c.Id;
             card.style.width = width;
             card.EnableInClassList("squad-card--mine", c.Mine);
+            card.EnableInClassList("squad-card--theirs", !c.Mine);
             card.EnableInClassList("squad-card--selected", c.Selected);
             card.EnableInClassList("squad-card--dead", c.Dead);
             card.EnableInClassList("squad-card--evacuated", c.Evacuated);
             card.EnableInClassList("squad-card--in-play", c.InPlay);
-            var bust = tree.Q("bust");
+            // The bust on a studio backdrop in its owner's colour (Ana, 7/11 #13): the colour dark, lit in its middle.
+            var owner = Ui.Hex(c.Color, new Color(0.5f, 0.5f, 0.5f));
+            tree.Q("bust").style.backgroundColor = new Color(owner.r * 0.3f, owner.g * 0.3f, owner.b * 0.3f, 1);
+            var studio = tree.Q("studio");
+            studio.style.backgroundImage = new StyleBackground(Studio());
+            studio.style.unityBackgroundImageTintColor = new Color(owner.r, owner.g, owner.b, 0.85f);
+            var face = tree.Q("face");
             var portrait = c.Bust ? PortraitOf?.Invoke(c.Id) : null;
-            if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
-            else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
+            if (portrait is RenderTexture rt) face.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
+            else if (portrait is Texture2D t2) face.style.backgroundImage = new StyleBackground(t2);
             var narrow = width - (c.Selected ? PickedMore : 0) < Narrow;
             card.EnableInClassList("squad-card--narrow", narrow);
             tree.Q<Label>("name").text = narrow && !string.IsNullOrEmpty(c.Short) ? c.Short : c.Name;
@@ -127,6 +140,8 @@ namespace Bastion.UI.Hud
             tips.Attach(card, string.Join("\n", help));
             var id = c.Id;
             if (c.Mine && !c.Dead) card.RegisterCallback<ClickEvent>(_ => Click(id));
+            // The partner's: the camera to it (Ana, 7/11 #12).
+            else if (!c.Dead && !c.Evacuated) card.RegisterCallback<ClickEvent>(_ => handlers.OnLookUnit(id));
             if (!c.Dead && !c.Evacuated)
             {
                 card.RegisterCallback<PointerEnterEvent>(_ => handlers.OnHoverSquad(id));
@@ -135,6 +150,32 @@ namespace Bastion.UI.Hud
             // The card out of its template's container: the row lays out cards.
             card.RemoveFromHierarchy();
             return card;
+        }
+
+        static Texture2D studio;
+
+        /// <summary>
+        /// The studio's light behind a bust (Ana, 7/11 #13; ours: a soft round glow, white for its tint), strongest a little
+        /// above the middle, where the head is, and gone at the edges.
+        /// </summary>
+        static Texture2D Studio()
+        {
+            if (studio != null) return studio;
+            const int size = 64;
+            studio = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, name = "Estudio" };
+            var pixels = new Color[size * size];
+            for (var y = 0; y < size; y++)
+                for (var x = 0; x < size; x++)
+                {
+                    // The texture's rows go up: its middle-high on the card is 0.6 of the way up.
+                    var dx = (x + 0.5f) / size - 0.5f;
+                    var dy = (y + 0.5f) / size - 0.6f;
+                    var r = Mathf.Sqrt(dx * dx + dy * dy) / 0.62f;
+                    pixels[y * size + x] = new Color(1, 1, 1, Mathf.Clamp01(1 - r * r));
+                }
+            studio.SetPixels(pixels);
+            studio.Apply();
+            return studio;
         }
 
         /// <summary>A click picks the soldier; the second on the same card soon after takes the camera to it (UI-08).</summary>

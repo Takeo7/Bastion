@@ -215,7 +215,7 @@ namespace Bastion.UI.Hud
             switch (bannerState % 4)
             {
                 case 1:
-                    hud.Banner("TU TURNO", "xcom", null, true);
+                    hud.Banner("TU TURNO", "turn", null, true);
                     break;
                 case 2:
                     hud.Banner("¡CONTACTO!", "alien", "Mateo ha visto a 3 zombis");

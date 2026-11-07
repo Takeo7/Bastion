@@ -91,8 +91,8 @@
     font-size: 9px;
 }
 
-/* The hover line over an enemy, from the tile under the pointer: an eye if it would see the picked one there or sees
-   it now (Arturo, 5/11 #5, #6), and its odds, sight or flank, on one plate. */
+/* The hover line over an enemy, from the tile under the pointer: its odds, sight or flank, on one plate (whether it would
+   see the picked one there is its gauge's eye: Ana, 7/11 #1). */
 .uflag__hover {
     flex-direction: row;
     align-items: center;
@@ -120,20 +120,65 @@
     color: var(--t-danger);
 }
 
-/* The eye: grey, it would see the picked one on the pointer's tile (as the one just seen: .uflag__spot--eye); red, it
-   sees the picked one now. */
-.uflag__eye {
-    width: 18px;
-    height: 12px;
-    margin: 2px 1px;
+/*
+   An enemy's one gauge (Ana, 7/11 #1): Synty INTERFACE Fantasy Menus' SPR_FantasyMenus_Menu_Button_08_Background in black,
+   as the torn plates, stretched whole (its sprite's 500 px slices would not fit); its health in the long part, its eye in
+   the circle, open and red if it sees the picked one, closed and grey if not.
+*/
+.uflag--enemy .uflag__row {
+    padding: 0;
+    background-color: rgba(0, 0, 0, 0);
 }
 
-.uflag__eye--would {
+.uflag__gauge {
+    width: 84px;
+    height: 21px;
+    background-image: url("/Assets/Synty/InterfaceFantasyMenus/Sprites/FantasyMenus/SPR_FantasyMenus_Menu_Button_08_Background.png");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.82);
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-slice-left: 1;
+    -unity-slice-right: 1;
+    -unity-slice-top: 1;
+    -unity-slice-bottom: 1;
+}
+
+.uflag__gauge-eye {
+    position: absolute;
+    left: 9px;
+    top: 6px;
+    width: 13px;
+    height: 9px;
+}
+
+.uflag__gauge-eye--open {
+    color: var(--t-danger);
+}
+
+.uflag__gauge-eye--closed {
     color: #b4bec6;
 }
 
-.uflag__eye--sees {
-    color: var(--t-danger);
+/* The long part's straight stretch, before its slanted end: a piece of red for each point of health. */
+.uflag__gauge-life {
+    position: absolute;
+    left: 27px;
+    right: 18px;
+    top: 7px;
+    bottom: 7px;
+    flex-direction: row;
+}
+
+.uflag__gauge-life .pip {
+    flex-grow: 1;
+    height: 100%;
+    width: auto;
+    margin-right: 1px;
+    border-radius: 0;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.uflag__gauge-life .pip--on {
+    background-color: var(--t-danger);
 }
 
 /* Over the shoulder only the target's flag stays (styles.css .labels-layer.close-shot). */
@@ -159,11 +204,11 @@
 .uflag__hover--pick {
     padding: 1px 7px;
     border-width: 1px;
-    border-color: rgba(240, 192, 64, 0.45);
+    border-color: rgba(255, 255, 255, 0.45);
 }
 
 .uflag__hover--pick:hover {
-    background-color: rgba(60, 52, 30, 0.95);
+    background-color: rgba(52, 56, 58, 0.95);
     border-color: var(--t-accent);
 }
 
@@ -233,18 +278,35 @@
     white-space: nowrap;
 }
 
-/* The line on the tile under the pointer (styles.css .tile-note): a small plate, a warning-coloured edge at its left. */
+/* The line on the tile under the pointer (styles.css .tile-note): a small plate, a white edge at its left; a move that is
+   heard, its icon at its start (Ana, 7/11 #3), alone when there are no words. */
 .tile-note {
     position: absolute;
     left: 0;
     top: 0;
+    flex-direction: row;
+    align-items: center;
     padding: 0 6px;
-    font-size: 12px;
-    -unity-font-style: bold;
-    white-space: nowrap;
     background-color: var(--t-tag);
     border-left-width: 3px;
     border-left-color: var(--t-warn);
+}
+
+.tile-note__text {
+    font-size: 12px;
+    -unity-font-style: bold;
+    white-space: nowrap;
+}
+
+.tile-note__icon {
+    width: 18px;
+    height: 18px;
+    margin: 2px 0;
+    -unity-background-image-tint-color: #ffffff;
+}
+
+.tile-note--icon .tile-note__text {
+    margin-left: 5px;
 }
 
 /* Tags that stay over the map (overlays.ts break-bar, pack-tag): under the flags, gone over the shoulder. */
@@ -328,5 +390,5 @@
     width: 26px;
     height: 26px;
     margin-bottom: 2px;
-    color: #ffe27a;
+    color: #ffffff;
 }

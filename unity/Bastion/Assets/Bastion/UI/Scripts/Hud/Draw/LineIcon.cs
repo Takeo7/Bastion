@@ -9,7 +9,8 @@ namespace Bastion.UI.Hud
     /// The icons that were our own drawings on the web, not Synty's (icons.ts: 24 × 24, a line of 2, round ends): drawn
     /// with Painter2D in the element's tint (USS `-unity-background-image-tint-color`, as the sprites are tinted), so
     /// the bar's rules for its icons (muted when off, green when free) reach them too. The doors, the base's axe, the
-    /// missions' places and their weather (new in Unity: Synty has neither), «Terminar turno», the molotov.
+    /// missions' places and their weather (new in Unity: Synty has neither), «Terminar turno», the molotov, the movement's
+    /// footprints and a move's noise (Ana, 7/11 #3, #7: Synty's INTERFACE packs have neither).
     /// </summary>
     public sealed class LineIcon : VisualElement
     {
@@ -173,6 +174,31 @@ namespace Bastion.UI.Hud
                 pen.Curve(13.8f, 6, 12.9f, 6.3f, 12, 6.2f);
                 pen.Fill();
             },
+            // The movement left (Ana, 7/11 #7): two footprints, a sole and its heel each, the left one ahead.
+            ["footprint"] = pen =>
+            {
+                Ellipse(pen, 8, 7, 3.2f, 4.6f);
+                Ellipse(pen, 8.4f, 14.6f, 2.4f, 2.2f);
+                Ellipse(pen, 16, 11.6f, 3.2f, 4.6f);
+                Ellipse(pen, 15.6f, 19.2f, 2.4f, 2.2f);
+            },
+            // A move that is heard, on its way (Ana, 7/11 #3): a loudspeaker and two waves.
+            ["noise"] = pen =>
+            {
+                pen.Begin(2.5f, 9);
+                pen.To(7, 9);
+                pen.To(12.5f, 4);
+                pen.To(12.5f, 20);
+                pen.To(7, 15);
+                pen.To(2.5f, 15);
+                pen.Fill();
+                pen.Begin(16.04f, 8.82f);
+                pen.Round(12.5f, 12, 4.5f, -45, 45);
+                pen.Stroke();
+                pen.Begin(18.21f, 6.18f);
+                pen.Round(12.5f, 12, 8.2f, -45, 45);
+                pen.Stroke();
+            },
             // «Terminar turno» on the bar (UI-COMBATE UI-04): an arrow against a bar, filled like Synty's icons beside it.
             ["endTurn"] = pen =>
             {
@@ -191,6 +217,18 @@ namespace Bastion.UI.Hud
                 pen.Fill();
             },
         };
+
+        /// <summary>A filled ellipse round (cx, cy), in four curves.</summary>
+        static void Ellipse(Pen pen, float cx, float cy, float rx, float ry)
+        {
+            const float c = 0.5523f;
+            pen.Begin(cx + rx, cy);
+            pen.Curve(cx + rx, cy + ry * c, cx + rx * c, cy + ry, cx, cy + ry);
+            pen.Curve(cx - rx * c, cy + ry, cx - rx, cy + ry * c, cx - rx, cy);
+            pen.Curve(cx - rx, cy - ry * c, cx - rx * c, cy - ry, cx, cy - ry);
+            pen.Curve(cx + rx * c, cy - ry, cx + rx, cy - ry * c, cx + rx, cy);
+            pen.Fill();
+        }
 
         /// <summary>The weather's cloud, its foot on 14.5: three bumps, the middle one highest.</summary>
         static void Cloud(Pen pen)

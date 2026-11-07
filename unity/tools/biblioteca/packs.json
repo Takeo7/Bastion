@@ -31,6 +31,7 @@
   "INTERFACE - Dark Fantasy HUD": { "unity": "InterfaceDarkFantasyHUD", "keys": [], "partial": "solo sprites y texturas" },
   "INTERFACE - Military Combat HUD": { "unity": "InterfaceMilitaryCombatHUD", "keys": [], "partial": "solo sprites y texturas" },
   "INTERFACE - Modern Menus": { "unity": "InterfaceModernMenus", "keys": [], "partial": "solo sprites y texturas" },
+  "INTERFACE - Fantasy Menus": { "unity": "InterfaceFantasyMenus", "keys": [], "partial": "un sprite" },
   "SIDEKICK - Starter": { "unity": "SidekickCharacters", "keys": [], "parts": ["HUMN_BASE", "FANT_KNGT"] },
   "SIDEKICK - Apocalypse Survivors": { "unity": "SidekickCharacters", "keys": [], "parts": ["APOC_SURV"] },
   "SIDEKICK - Apocalypse Zombies": { "unity": "SidekickCharacters", "keys": [], "parts": ["APOC_ZOMB"] },

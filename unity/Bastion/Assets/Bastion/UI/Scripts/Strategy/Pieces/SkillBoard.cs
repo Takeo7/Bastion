@@ -384,7 +384,7 @@ namespace Bastion.UI.Strategy
                 generateVisualContent += Draw;
             }
 
-            Color Line => Cell.Id == Board.Core ? new Color32(0xf2, 0xc2, 0x30, 0xff) : SkillHex.Colors[Mathf.Clamp(Cell.Sector, 0, SkillHex.Colors.Length - 1)];
+            Color Line => Cell.Id == Board.Core ? new Color32(0xff, 0xff, 0xff, 0xff) : SkillHex.Colors[Mathf.Clamp(Cell.Sector, 0, SkillHex.Colors.Length - 1)];
 
             /// <summary>Hit inside the hexagon, not its box.</summary>
             public override bool ContainsPoint(Vector2 local)
@@ -410,7 +410,7 @@ namespace Bastion.UI.Strategy
                 if (isCore)
                 {
                     face = new Color32(0x2a, 0x2f, 0x31, 0xff);
-                    edge = new Color32(0xf2, 0xc2, 0x30, 0xff);
+                    edge = new Color32(0xff, 0xff, 0xff, 0xff);
                 }
                 else if (State == "unlocked")
                 {
@@ -433,7 +433,7 @@ namespace Bastion.UI.Strategy
                 p.Fill();
                 if (isCore)
                 {
-                    p.strokeColor = new Color(0.95f, 0.76f, 0.19f, 0.45f);
+                    p.strokeColor = new Color(1, 1, 1, 0.45f);
                     p.lineWidth = 7 * unit;
                     p.Stroke();
                 }

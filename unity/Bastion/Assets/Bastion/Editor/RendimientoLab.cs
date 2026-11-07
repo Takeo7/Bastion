@@ -153,7 +153,7 @@ namespace Bastion.EditorTools
             var units = new GameObject("Unidades").AddComponent<Bastion.Client.Units.UnitViews>();
             units.Sync(state);
             // (BASTION_TODOS=1: every figure drawn, the fog's hidden too, as a horde in sight would be.)
-            if (Environment.GetEnvironmentVariable("BASTION_TODOS") == "1") foreach (var u in state.Units) units.ForceVisible(u.Id);
+            if (Environment.GetEnvironmentVariable("BASTION_TODOS") == "1") foreach (var u in state.Units) units.Reveal(u.Id);
             units.MasksNow();
             // What the figures and the map draw with: renderers, and their materials (a draw each, in each pass that draws it).
             static (int renderers, int materials, int skinned) Count(IEnumerable<Renderer> renderers)

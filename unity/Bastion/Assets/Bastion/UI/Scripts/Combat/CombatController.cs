@@ -158,10 +158,18 @@ namespace Bastion.UI.Combat
         {
             enemyFeet.Clear();
             foreach (var u in Shown.Units)
-                if (u.Alive && u.Team == Teams.Alien && !u.Evacuated && u.Pos.Z <= Level && (Visible?.Invoke(u) ?? true) && FeetOf(u.Id) is Vector3 feet)
+                if (u.Alive && u.Team == Teams.Alien && !u.Evacuated && u.Pos.Z <= Level && Marked(u) && FeetOf(u.Id) is Vector3 feet)
                     enemyFeet.Add(feet);
             return enemyFeet;
         }
+
+        /// <summary>
+        /// Whether a unit wears its marks (its flag, an enemy's red ring and eye, its field of view on the ground): in the
+        /// squad's sight and, an enemy, its figure drawn (Arte's UnitViews.Drawn: not inside a building nobody has found
+        /// yet, nor on a storey the cut hides; Ana, 7/11 #14: the model and its marks never apart). No figures (the labs),
+        /// by sight alone.
+        /// </summary>
+        bool Marked(Unit u) => (Visible?.Invoke(u) ?? true) && (u.Team == Teams.Xcom || Bastion.Client.Units.UnitViews.Current?.Drawn(u.Id) != false);
 
         void Toast(string text)
         {
@@ -500,14 +508,56 @@ namespace Bastion.UI.Combat
                 reach = moving ? Paths.ComputeReach(State, u, Paths.MoveBudget(u)) : null;
                 tiles = reach != null ? Tiles(u) : null;
             }
-            // Without the command the range is still shown, fainter: it is for planning (#35). Only the floor shown's.
-            Overlay?.ShowRange(State, tiles?.Where(t => t.Pos.Z == Level).ToList(), Planning, Soft);
+            // Without the command the range is still shown, fainter: it is for planning (#35). Only the floor shown's, and of
+            // a building's inside only with the picked one in it (InsideOf; Ana, 7/11 #15).
+            var inside = tiles != null ? InsideOf(u) : null;
+            Overlay?.ShowRange(State, tiles?.Where(t => t.Pos.Z == Level && (!Interior(State, t.Pos) || inside != null && inside.Contains(TileKey(t.Pos)))).ToList(), Planning, Soft);
             using (MRefreshWay.Auto()) ShowWay();
             DrawPlans();
             using (MRefreshHud.Auto()) RefreshHud();
         }
 
         bool Planning => !HasCommand();
+
+        /// <summary>Whether `p` is inside a building, under a storey of it (GameState.Storeys: its walls and its inside).</summary>
+        static bool Interior(GameState s, Pos p)
+        {
+            if (s.Storeys == null || !Grid.InBounds(s, p.X, p.Y)) return false;
+            var storeys = s.Storeys[Grid.TileIndex(s, p.X, p.Y)];
+            return storeys > 0 && p.Z < storeys;
+        }
+
+        static int TileKey(Pos p) => (p.Z * 4096 + p.Y) * 4096 + p.X;
+
+        /// <summary>
+        /// The inside of the building `u` is in, on its storey, if the squad has found it: the tiles under its roof one can
+        /// stand on that join its own without going out (through its inner doors, never its walls); null when it is out in
+        /// the street or the building is unfound. Only there does the reach show inside a building (Ana, 7/11 #15: from the
+        /// street its lines showed on the front of one nobody had found).
+        /// </summary>
+        HashSet<int> InsideOf(Unit u)
+        {
+            var s = State;
+            if (u == null || !Interior(s, u.Pos)) return null;
+            // Found as the rules have it (Buildings.Hidden, Los's), from where the soldier stands too: in a doorway, nothing
+            // of an unfound building shows.
+            var from = new[] { u.Pos };
+            var inside = new HashSet<int> { TileKey(u.Pos) };
+            var queue = new Queue<Pos>();
+            queue.Enqueue(u.Pos);
+            while (queue.Count > 0)
+            {
+                var p = queue.Dequeue();
+                foreach (var d in Grid.Dirs4)
+                {
+                    var q = new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = p.Z };
+                    if (!Grid.InBounds(s, q.X, q.Y) || inside.Contains(TileKey(q)) || !Interior(s, q) || !Grid.CanStandOn(Grid.KindAt(s, q)) || Buildings.Hidden(s, q, from)) continue;
+                    inside.Add(TileKey(q));
+                    queue.Enqueue(q);
+                }
+            }
+            return inside;
+        }
 
         /// <summary>
         /// Where `u` can end its move (game.ts reach): all of it one band now, the movement apart from the actions (Arturo,
@@ -529,14 +579,12 @@ namespace Bastion.UI.Combat
             }).ToList();
         }
 
-        /// <summary>A thing in the way, not a wall (a car or a crate: cover; the objective's console; someone standing): the border leaves it alone (Ana, 21/10 #18).</summary>
-        bool Soft(int x, int y, int z)
-        {
-            var p = new Pos { X = x, Y = y, Z = z };
-            var kind = Grid.KindAt(State, p);
-            if (kind == "high" || kind == "low" || kind == "console") return true;
-            return Grid.UnitAt(State, p) != null;
-        }
+        /// <summary>
+        /// Someone standing in the way: the reach's border takes them in and doesn't ring them (Ana, 21/10 #18). Not a thing
+        /// any more, a car, a crate or a console: the border goes round it and leaves it out of the ground one walks (Arturo,
+        /// 7/11, Ana's #16: a van inside the reach, the line over it).
+        /// </summary>
+        bool Soft(int x, int y, int z) => Grid.UnitAt(State, new Pos { X = x, Y = y, Z = z }) != null;
 
         /// <summary>The pointer on `place`, as if it were there (for captures; the real pointer takes over when it moves).</summary>
         public void Hover(Pos place)
@@ -796,7 +844,7 @@ namespace Bastion.UI.Combat
             if (k.vKey.wasPressedThisFrame) ToggleSight();
             if (k.oKey.wasPressedThisFrame) NextMark();
             if (k.gKey.wasPressedThisFrame) Ping();
-            if (k.backspaceKey.wasPressedThisFrame) ToggleReady();
+            if (k.backspaceKey.wasPressedThisFrame) EndKey();
             if (k.pageUpKey.wasPressedThisFrame) SetLevel(Level + 1);
             if (k.pageDownKey.wasPressedThisFrame) SetLevel(Level - 1);
             if (k.fKey.wasPressedThisFrame)
@@ -1043,9 +1091,10 @@ namespace Bastion.UI.Combat
             Overlay?.ShowPath(State, u.Pos, path, false, Planning);
             Overlay?.ShowCover(State, CoverMatters() ? hover : null);
             Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : MoveOverlay.WalkRing);
-            // Running, a door or a window is heard (docs/FASE2.md): said under the destination; the fire it goes through; and at
-            // night, whether it ends in the light.
-            Note(hover, path != null ? AbilityTexts.MoveNoise(State, path, dest.Run) : null, FireNote(path), LitNote(hover));
+            // Running, a door or a window is heard (docs/FASE2.md): an icon under the destination, no words (Ana, 7/11 #3); the
+            // fire it goes through; and at night, whether it ends in the light.
+            var heard = path != null && AbilityTexts.MoveNoise(State, path, dest.Run) != null;
+            NoteWith(hover, heard ? "noise" : null, FireNote(path), LitNote(hover));
         }
 
         /// <summary>
@@ -1075,11 +1124,15 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>The line on `tile`: its parts that say something, joined; none, no line.</summary>
-        void Note(Pos tile, params string[] parts)
+        void Note(Pos tile, params string[] parts) => NoteWith(tile, null, parts);
+
+        /// <summary>The tile's line with a drawn icon before it (`icon`: LineIcon's; null, none).</summary>
+        void NoteWith(Pos tile, string icon, params string[] parts)
         {
             if (Hud == null) return;
             var text = string.Join(" · ", parts.Where(p => !string.IsNullOrEmpty(p)));
-            Hud.SetNote(tile != null && text.Length > 0 ? Board.TileToWorld(Shown, tile, 0.15f * Board.Tile) : (Vector3?)null, text);
+            var shown = tile != null && (text.Length > 0 || icon != null);
+            Hud.SetNote(shown ? Board.TileToWorld(Shown, tile, 0.15f * Board.Tile) : (Vector3?)null, text, icon);
         }
 
         static string Capitalize(string text) => string.IsNullOrEmpty(text) ? text : char.ToUpperInvariant(text[0]) + text.Substring(1);

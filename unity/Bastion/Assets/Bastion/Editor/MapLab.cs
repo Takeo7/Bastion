@@ -786,6 +786,15 @@ namespace Bastion.EditorTools
             var state = medical != null ? Medical(medical) : made != null && made.Length >= 2 ? Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination", made.Length > 3 ? made[3] : null) : Golden(name);
             // BASTION_CLIMA=drizzle|downpour|storm|snowfall|blizzard (or ClimaLab's WeatherOverride): the mission's rain or snow.
             if ((WeatherOverride ?? Environment.GetEnvironmentVariable("BASTION_CLIMA")) is string weather) state.Weather = weather;
+            // BASTION_ABRIR=x,y;…: those doors open (a door's look open, its leaf swung).
+            foreach (string spec in (Environment.GetEnvironmentVariable("BASTION_ABRIR") ?? "").Split(';').Where(v => v.Length > 0))
+            {
+                var xy = spec.Split(',').Select(int.Parse).ToArray();
+                int door = xy[1] * state.Width + xy[0];
+                if (state.Tiles[door] == TileKinds.Door) state.Tiles[door] = TileKinds.DoorOpen;
+            }
+            // BASTION_NIEVE=1: a winter map (GameState.snow, as the campaign's winter: SnowCover), 0 not one.
+            if (Environment.GetEnvironmentVariable("BASTION_NIEVE") is string snowy) state.Snow = snowy == "1";
             // BASTION_DENTRO=x,y: the squad's first soldier there (in a building, to see it cut away round them: BASTION_SELECT=1).
             if (Environment.GetEnvironmentVariable("BASTION_DENTRO")?.Split(',').Select(int.Parse).ToArray() is int[] inside && inside.Length == 2
                 && state.Units.FirstOrDefault(u => u.Alive && u.Team == "xcom") is Unit first)
@@ -835,7 +844,7 @@ namespace Bastion.EditorTools
                 var units = new GameObject("Unidades").AddComponent<Bastion.Client.Units.UnitViews>();
                 units.Sync(state);
                 // (The dead too, seen or not: as 0.10.1's reference block draws them.)
-                if (figures == "1") foreach (var u in state.Units) units.ForceVisible(u.Id);
+                if (figures == "1") foreach (var u in state.Units) units.Reveal(u.Id);
                 units.MasksNow();
             }
             // BASTION_CONTORNO=x,y,lit;…: SearchOutline's lines round what would be searched on those tiles (1 lit, 0 not), in
@@ -957,6 +966,8 @@ namespace Bastion.EditorTools
                 var squad = state.Units.Where(u => u.Alive && u.Team == "xcom").Select(u => MapSpace.TileToWorld(state, u.Pos)).ToList();
                 if (squad.Count > 0) MapSpace.Aim(camera, squad.Aggregate(Vector3.zero, (a, b) => a + b) / squad.Count, 24);
             }
+            // BASTION_NIEVE_TEJADOS=0: the buildings without their snow (Bastion/Building's Snow), to set it against.
+            if (Environment.GetEnvironmentVariable("BASTION_NIEVE_TEJADOS") == "0") Shader.SetGlobalVector("_SnowSize", Vector4.zero);
             // BASTION_FOG=1: the fog of war as the squad sees from where it stands in the state.
             if (Environment.GetEnvironmentVariable("BASTION_FOG") == "1")
             {

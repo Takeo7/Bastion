@@ -4,11 +4,12 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// The picked soldier's sheet, one line over the squad's cards (UI-COMBATE UI-02; hud.ts setSelected; docs/UNITY-UI.md
-    /// §2.2): veterancy, its best line's hexagon, name, whose; its weapon with its wear and improvements; its figures as
-    /// icons with pips or numbers (words in the tooltips), health and actions only when it has no card (its card shows
-    /// them); at its end the backpack's mark, what the squad carries in its help, and the backpack's slots over it
-    /// (Backpack, as they were). A soldier's head opens its sheet (H). Null hides it.
+    /// The picked soldier's sheet, one row over the squad's cards (UI-COMBATE UI-02; hud.ts setSelected; docs/UNITY-UI.md
+    /// §2.2; Ana, 7/11 #13: one row, a thin line between its groups): veterancy, its best line's hexagon, name, rank or
+    /// whose; its weapon with its wear and improvements; its rounds (the spare magazines red at none); its figures as
+    /// icons with numbers (words in the tooltips), health and actions only when it has no card (its card shows them); at
+    /// its end the backpack's mark, what the squad carries in its help, which opens the pockets over it (Backpack; #13:
+    /// only then). A soldier's head opens its sheet (H). Null hides it.
     /// </summary>
     public sealed class UnitPanel
     {
@@ -37,6 +38,8 @@ namespace Bastion.UI.Hud
 
         /// <summary>The backpack's menu: open, and the swap opened for a thing on the floor (the notice's «Cambiar»).</summary>
         public bool PackMenuOpen => backpack.MenuOpen;
+        /// <summary>The pockets shown or hidden, as the backpack's mark's click does (the labs: PackSteps «pack»).</summary>
+        public void TogglePockets() => backpack.Pockets = !backpack.Pockets;
         public void OpenSwap(string unit, string id) => backpack.OpenSwap(unit, id);
         public bool ClosePackMenu() => backpack.Close();
         public void PressedAt(VisualElement target) => backpack.PressedAt(target);
@@ -89,7 +92,7 @@ namespace Bastion.UI.Hud
             // Its cover's shield in its colour, after its name (Arturo, 7/11: here, not by its health).
             if (view.Cover >= 0)
             {
-                var shield = new CoverShield { Level = view.Cover };
+                var shield = new CoverShield(icon?.Invoke("stat:armor")) { Level = view.Cover };
                 head.Add(shield);
                 var title = view.CoverTitle;
                 var words = view.CoverTip;
@@ -97,7 +100,7 @@ namespace Bastion.UI.Hud
                 {
                     var tip = new VisualElement();
                     var name = Ui.Text(title, "font-title", tip);
-                    name.style.color = (Color)new Color32(0xf2, 0xc2, 0x30, 0xff);
+                    name.style.color = Color.white;
                     name.style.fontSize = 12;
                     name.style.letterSpacing = 1;
                     var line = Ui.Text(words, "", tip);
@@ -112,7 +115,16 @@ namespace Bastion.UI.Hud
             tips.Attach(bite, view.BiteTip);
 
             var stats = tree.Q("stats");
-            foreach (var s in view.Stats) stats.Add(Stat(s));
+            // A thin line before the figures that aren't rounds (Ana, 7/11 #13: rounds, then the rest).
+            var rounds = true;
+            foreach (var s in view.Stats)
+            {
+                var e = Stat(s);
+                var round = s.Kind == "ammo" || s.Kind == "sidearm" || s.Kind == "hp" || s.Kind == "ap" || s.Kind == "moves";
+                if (rounds && !round && stats.childCount > 0) e.AddToClassList("stat--group");
+                rounds &= round;
+                stats.Add(e);
+            }
             var weaponIcon = tree.Q(className: "stat-icon--weapon");
             var weaponSprite = icon?.Invoke("stat:weapon");
             if (weaponSprite != null) weaponIcon.style.backgroundImage = new StyleBackground(weaponSprite);
@@ -129,9 +141,16 @@ namespace Bastion.UI.Hud
             Ui.Show(packMark, view.Pack != null);
             if (view.Pack != null)
             {
-                // Synty's backpack, as on the bar's key to search.
+                // Synty's backpack, as on the bar's key to search; a click opens the pockets over it, again shuts them (Ana,
+                // 7/11 #13).
                 Ui.Icon(icon, "search", "unit-pack-mark__icon", packMark);
                 tips.Attach(packMark, backpack.Haul);
+                packMark.EnableInClassList("unit-pack-mark--open", backpack.Pockets);
+                packMark.RegisterCallback<ClickEvent>(_ =>
+                {
+                    backpack.Pockets = !backpack.Pockets;
+                    packMark.EnableInClassList("unit-pack-mark--open", backpack.Pockets);
+                });
             }
         }
 

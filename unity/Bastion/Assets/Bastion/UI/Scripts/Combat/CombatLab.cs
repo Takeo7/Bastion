@@ -545,7 +545,7 @@ namespace Bastion.UI.Combat
                             break;
                         case "turnoenemigo":
                             // The enemy's stamp held up, as the event player puts it (its red plate).
-                            Hud?.Banner("TURNO ENEMIGO", "alien", null, true);
+                            Hud?.Banner("TURNO ENEMIGO", "turn", null, true);
                             break;
                         case "tuturno":
                             // The squad's turn opening, as the host's event would come (the stamp held, the camera to its soldier).

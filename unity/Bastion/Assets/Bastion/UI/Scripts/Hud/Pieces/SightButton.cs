@@ -5,19 +5,15 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// The enemies' sight, bottom right by the goal's arrow (Arturo, 5/11 #6 and #9): a ring of the arrow's steel with an
-    /// eye in it that stays on once pressed (V too): every enemy in sight's field of view on the ground at once, and a red
-    /// eye over those that see the picked soldier now. Over it, while an enemy's sight is on the ground (this, or one
-    /// under the pointer), a legend of what its red means: what it sees, and, the squad hidden, where it would notice one.
+    /// The enemies' sight, bottom right by the goal's arrow (Arturo, 5/11 #6): the arrow's black ring (Ana, 7/11 #4) with
+    /// an eye in it that stays on once pressed (V too): every enemy in sight's field of view on the ground at once, and an
+    /// open eye over those that see the picked soldier now. What the red means is in its help, no legend over it (Ana,
+    /// 7/11 #10: «Lo que ven» went).
     /// </summary>
     public sealed class SightButton
     {
         readonly VisualElement host;
         readonly VisualElement button;
-        readonly VisualElement legend;
-        readonly Label seenText;
-        readonly VisualElement noticedRow;
-        readonly Label noticedText;
         string key;
 
         /// <summary>The button pressed.</summary>
@@ -27,14 +23,6 @@ namespace Bastion.UI.Hud
         {
             this.host = host;
             host.pickingMode = PickingMode.Ignore;
-            legend = Ui.El("sight__legend", host);
-            var seen = Ui.El("sight__row", legend);
-            Ui.El("sight__swatch sight__swatch--seen", seen);
-            seenText = Ui.Text(HudText.Sight.Seen, "sight__text", seen);
-            noticedRow = Ui.El("sight__row", legend);
-            Ui.El("sight__swatch sight__swatch--noticed", noticedRow);
-            noticedText = Ui.Text(HudText.Sight.Noticed, "sight__text", noticedRow);
-            legend.Query<VisualElement>().ForEach(x => x.pickingMode = PickingMode.Ignore);
             button = Ui.El("sight__button", host);
             button.Add(new GoalArrow.Ring());
             button.Add(new Eye());
@@ -48,19 +36,14 @@ namespace Bastion.UI.Hud
             var k = Ui.Key(v);
             if (k == key) return;
             key = k;
-            Ui.Show(host, v != null && (v.Button || v.Legend));
+            Ui.Show(host, v != null && v.Button);
             if (v == null) return;
-            Ui.Show(button, v.Button);
             button.EnableInClassList("sight__button--on", v.On);
-            Ui.Show(legend, v.Legend);
-            seenText.text = v.Many ? HudText.Sight.SeenMany : HudText.Sight.Seen;
-            noticedText.text = v.Many ? HudText.Sight.NoticedMany : HudText.Sight.Noticed;
-            Ui.Show(noticedRow, v.Noticed);
             // Its colour is the class's: the eye drawn again (its own resolvedStyle).
             button.Q<Eye>()?.MarkDirtyRepaint();
         }
 
-        /// <summary>The button's eye: an almond and its pupil, grey off and in sight's red on (Flags.uss's eye, larger).</summary>
+        /// <summary>The button's eye: an almond and its pupil, grey off and white on (Flags.uss's eye, larger).</summary>
         sealed class Eye : VisualElement
         {
             public Eye()

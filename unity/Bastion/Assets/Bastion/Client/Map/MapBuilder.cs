@@ -1830,7 +1830,7 @@ namespace Bastion.Client.Map
                 {
                     var box = BoundsIn(placed, parent);
                     bool tilesAlongX = x1 - x0 > y1 - y0, modelAlongX = box.size.x > box.size.z;
-                    Debug.Log($"[coches] {id} at {ax},{ay} facing {thing.Facing}: {(tilesAlongX == modelAlongX ? "along" : "ACROSS")} ({box.size.x:F2} × {box.size.z:F2} m)");
+                    Debug.Log($"[coches] {id} (set's #{Mathf.FloorToInt(MapArt.Hash(ax, ay, 1) * MapArt.Set("carFront").Length)}) at {ax},{ay} facing {thing.Facing}: {(tilesAlongX == modelAlongX ? "along" : "ACROSS")} ({box.size.x:F2} × {box.size.z:F2} m)");
                 }
                 // (The patrol car in its own livery, worn: another's paint would make it any car.)
                 if (police) PaintWhole(placed, id, null, materialOf);

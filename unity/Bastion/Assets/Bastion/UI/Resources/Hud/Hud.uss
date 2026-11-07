@@ -79,8 +79,13 @@
     position: absolute;
     left: var(--edge);
     bottom: var(--edge);
+    align-items: flex-start;
+}
+
+/* The cards' plate: the keys keep clear of it (HudRoot.PlaceActions), not of the sheet's over it. */
+.squad-plate {
     padding: 6px 8px 7px;
-    /* Straight in its steel frame, as Mixta had it (synty-base.css: «Straight, not crooked»). */
+    /* Straight, as Mixta had it (synty-base.css: «Straight, not crooked»). */
     rotate: 0deg;
 }
 

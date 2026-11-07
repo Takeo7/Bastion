@@ -55,10 +55,16 @@ namespace Bastion.UI.Combat
             var waiting = partner != null && busy.Contains(partner.Slot) && !s.Ready[partner.Slot] ? partner.Name : null;
             var idle = IdleSoldiers();
             // Without the command too (Arturo, 7/11): the key ends one's own turn, «A punto» until the partner's is over.
-            var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : EndArmed && idle > 0 ? "confirm" : "act";
+            // One of mine in play: the key ends its turn first (Arturo, 7/11, Ana's #5).
+            var playing = InPlayMine();
+            var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : EndArmed && idle > 0 ? "confirm" : playing != null && !EndArmed ? "done" : "act";
             // (With actions or movement left: the turn ends by itself only when none has either, Arturo 5/11 #14; Lore's words.)
             var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : waiting;
-            Hud.SetEndTurn(new EndTurnView { Mode = endMode, Detail = detail, Holder = ready && !mine && s.Command != null ? PlayerName(s.Command) : null });
+            Hud.SetEndTurn(new EndTurnView
+            {
+                Mode = endMode, Detail = detail, Holder = ready && !mine && s.Command != null ? PlayerName(s.Command) : null,
+                InPlay = endMode == "done" ? playing.Name : null, GoesTo = endMode == "done" ? CommandGoesTo() : null,
+            });
         }
 
         /// <summary>What the player reads about the fight, from what has been seen (game.ts refreshStatus).</summary>
@@ -261,7 +267,7 @@ namespace Bastion.UI.Combat
             foreach (var u in v.Units)
             {
                 // Aboard La Lata (evacuated, or boarding as it is played): out of sight, and so its flag (unitViews.ts board).
-                if (!u.Alive || u.Evacuated || Aboard.Contains(u.Id) || !Visible(u)) continue;
+                if (!u.Alive || u.Evacuated || Aboard.Contains(u.Id) || !Marked(u)) continue;
                 var f = new FlagView { Id = u.Id, Enemy = u.Team != Teams.Xcom, Hp = u.Hp, MaxHp = u.MaxHp, Armor = u.Armor, Cover = -1 };
                 // Pointed at from the list (Arturo, 31/10 #11): its name too, and the arrow over it.
                 f.Pointed = u.Id == listPointed;
@@ -288,15 +294,16 @@ namespace Bastion.UI.Combat
                 Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data");
                 Tag(u.Captive, UnitWords.Agree(u, "CAUTIVO"), "data");
                 Tag(u.Objective, "OBJETIVO", "stun");
+                var would = false;
                 if (tags.TryGetValue(u.Id, out var t))
                 {
                     f.HoverKind = t.kind;
                     f.HoverText = t.text;
-                    f.Eye = t.eye;
+                    would = t.eye == "would";
                 }
-                // The enemies' sight on, and no move under the pointer to say who would see the picked one there: a red
-                // eye over those that see it now (Arturo, 5/11 #6), before the odds on the one under the pointer.
-                if (f.Eye == null && !hoverDest && sees.Contains(u.Id)) f.Eye = "sees";
+                // An enemy's eye in its gauge's circle (Ana, 7/11 #1): open if it would see the picked soldier on the move
+                // under the pointer (Arturo, 5/11 #5), or, with none, if it sees it now (#6); else closed.
+                if (f.Enemy) f.Eye = (hoverDest ? would : sees.Contains(u.Id)) ? "open" : "closed";
                 f.Target = mode == Mode.Target && targetId == u.Id && u.Team != Teams.Xcom;
                 if (options != null && !f.Target && u.Team != Teams.Xcom && options.FirstOrDefault(o => o.Unit.Id == u.Id) is TargetOption other)
                 {
@@ -311,9 +318,8 @@ namespace Bastion.UI.Combat
 
         /// <summary>One enemy's field of view as last worked out (SightOf): its key, the tiles it sees and those where it would notice one of ours.</summary>
         readonly Dictionary<string, (string key, List<Pos> seen, List<Pos> noticed)> sights = new Dictionary<string, (string, List<Pos>, List<Pos>)>();
-        /// <summary>What is on the ground now (ShowVision): the enemies' keys, and the legend's state.</summary>
+        /// <summary>What is on the ground now (ShowVision): the enemies' keys.</summary>
         string visionKey;
-        (bool shown, bool noticed, bool many) legend;
 
         /// <summary>The enemies' sight's button on (Arturo, 5/11 #6): every one in sight's at once. It stays on, mission after mission.</summary>
         static bool sightAll;
@@ -330,8 +336,8 @@ namespace Bastion.UI.Combat
         /// <summary>
         /// What the enemies see on the ground: the one under the pointer's (Arturo, 17/10: the dead see in a cone; game.ts
         /// visionOf), or, the button on and none under it, every one in sight's at once in our turn (Arturo, 5/11 #6). Not
-        /// aiming: its red over the ground drowned the target's own mark (Arturo, 23/10 #2). The legend over the button says
-        /// what the red is (#9).
+        /// aiming: its red over the ground drowned the target's own mark (Arturo, 23/10 #2). No legend over the button (Ana,
+        /// 7/11 #10: «Lo que ven» went; its help says what the red is).
         /// </summary>
         void ShowVision()
         {
@@ -341,14 +347,13 @@ namespace Bastion.UI.Combat
             var who = new List<Unit>();
             if (mode != Mode.Target && v.Outcome == null)
             {
-                if (a != null && a.Alive && a.Team == Teams.Alien && Visible(a)) who.Add(a);
-                else if (sightAll && CanAct()) who.AddRange(v.Units.Where(e => e.Alive && e.Team == Teams.Alien && Visible(e)));
+                if (a != null && a.Alive && a.Team == Teams.Alien && Marked(a)) who.Add(a);
+                else if (sightAll && CanAct()) who.AddRange(v.Units.Where(e => e.Alive && e.Team == Teams.Alien && Marked(e)));
             }
             if (who.Count == 0)
             {
                 if (visionKey != null) AimMarks.ShowVision(null, null, null);
                 visionKey = null;
-                legend = default;
                 return;
             }
             var world = SightWorld(v);
@@ -369,7 +374,6 @@ namespace Bastion.UI.Combat
                     if (inNoticed.Add((p.X, p.Y, p.Z))) noticed.Add(p);
             }
             AimMarks.ShowVision(v, seen, noticed, who.Count > 1);
-            legend = (true, noticed.Count > 0, who.Count > 1);
         }
 
         /// <summary>
@@ -429,25 +433,25 @@ namespace Bastion.UI.Combat
             return made;
         }
 
-        /// <summary>The enemies' sight's button and its legend, as things stand (each frame: SightButton draws only what changed).</summary>
+        /// <summary>The enemies' sight's button as things stand (each frame: SightButton draws only what changed).</summary>
         SightView SightNow()
         {
             var battle = State != null && Shown.Outcome == null && !Film && Rig != null && !Rig.Overhead && !Rig.CloseUp && !Rig.Away;
-            return new SightView { Button = battle, On = sightAll, Legend = battle && legend.shown, Noticed = legend.noticed, Many = legend.many };
+            return new SightView { Button = battle, On = sightAll };
         }
 
         /// <summary>
-        /// The enemies in sight that see the picked soldier now, with the enemies' sight on in our turn (Arturo, 5/11 #6: a
-        /// red eye over each).
+        /// The enemies in sight that see the picked soldier now (Arturo, 5/11 #6), whose eye is open in their gauge (Ana,
+        /// 7/11 #1); those farther than they see left out before the line is walked (SightOrigin's first test).
         /// </summary>
         HashSet<string> SeeingPicked()
         {
             var ids = new HashSet<string>();
             var v = Shown;
             var u = UnitById(v, picked);
-            if (!sightAll || u == null || !u.Alive || u.Team != Teams.Xcom || !CanAct() || v.Outcome != null) return ids;
+            if (u == null || !u.Alive || u.Team != Teams.Xcom || v.Outcome != null) return ids;
             foreach (var a in v.Units)
-                if (a.Alive && a.Team == Teams.Alien && Visible(a) && Los.CanSee(v, a, u)) ids.Add(a.Id);
+                if (a.Alive && a.Team == Teams.Alien && Visible(a) && Grid.Distance(a.Pos, u.Pos) <= Los.SightIn(v, a) && Los.CanSee(v, a, u)) ids.Add(a.Id);
             return ids;
         }
 
@@ -572,8 +576,9 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// The squad's cards (hud.ts setSquad; UI-COMBATE UI-02): this player's soldiers (Arturo, 01/11), the fallen and the
-        /// gone too, then the partner's it commands while they're away; not the partner's nor a siege's turrets (their
-        /// flags say how they are).
+        /// gone too, then the partner's (Ana, 7/11 #12: a card with their name and bust each, which takes the camera there;
+        /// picked, only while this player commands them); not a siege's turrets (their flags say how they are). Each bust
+        /// on its owner's colour.
         /// </summary>
         SquadView SquadView(GameState v, string inPlay)
         {
@@ -589,9 +594,11 @@ namespace Bastion.UI.Combat
             {
                 var mine = Commands(u);
                 var theirs = u.Owner != null && u.Owner != MySlot;
+                var owner = u.Owner ?? MySlot;
                 var card = new SquadCardView
                 {
                     Id = u.Id,
+                    Color = Players.FirstOrDefault(p => p.Slot == owner)?.Color ?? Content.PlayerColors[Math.Clamp(owner, 0, Content.PlayerColors.Count - 1)],
                     Name = (u.Template == TemplateIds.Rookie ? "" : Content.Templates[u.Template].Short + " ") + (!string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name),
                     Short = !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name.Split(' ')[0],
                     Mine = mine,
@@ -602,7 +609,7 @@ namespace Bastion.UI.Combat
                     Bust = u.Team == Teams.Xcom,
                     Hp = u.Hp,
                     MaxHp = u.MaxHp,
-                    Title = theirs ? HudText.Squad.TheirsCommanded : HudText.Squad.Select,
+                    Title = !theirs ? HudText.Squad.Select : mine ? HudText.Squad.TheirsCommanded : HudText.Squad.TheirsLook(Players.FirstOrDefault(p => p.Slot == owner)?.Name),
                     Ap = u.Ap,
                     ApMax = Math.Max(Content.ApPerTurnOf(u), u.Ap),
                     // The movement left, a piece a tile (Arturo, 5/11 #14); not a turret's.
@@ -630,10 +637,10 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// Whether `u` has a card under the sheet: one of this player's soldiers (or one with no owner, alone), or the
-        /// partner's while this player commands it; a living one or not.
+        /// Whether `u` has a card under the sheet: a soldier of the squad's, this player's (or one with no owner, alone) or
+        /// the partner's (Ana, 7/11 #12); a living one or not.
         /// </summary>
-        bool OnCard(Unit u) => u.Team == Teams.Xcom && u.Automaton == null && (u.Owner == MySlot || u.Owner == null || u.Alive && Commands(u));
+        bool OnCard(Unit u) => u.Team == Teams.Xcom && u.Automaton == null;
 
         /// <summary>What a recovery carries out: the chapter's own name for it, or the default (game.ts recoveryItem).</summary>
         string RecoveryItem() => Shown.CampaignMission?.Item ?? Lore.DefaultItem;

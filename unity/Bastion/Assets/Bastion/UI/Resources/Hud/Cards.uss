@@ -3,9 +3,9 @@
 /* ================================================================ banner */
 
 /*
-   Coming down: a little big and faint, then its size, in one quick step (the transition). As Mixta drew it
-   (mixta-hud.css .banner): a plate of dark steel between two hazard bands (Synty's, 6 px), its words straight, yellow
-   on the squad's turn and red on the enemy's. Over the snow the paper stamp it had read badly (Ana, 28/10).
+   Coming down: a little big and faint, then its size, in one quick step (the transition). As the «LEVEL UP» Ana showed
+   (7/11 #8): a black plate, its steel's grain faint, a thin white line near its top and its foot, the title white and in
+   capitals, the same on the squad's turn and the enemy's; no hazard bands, no arrow.
 */
 .banner {
     position: absolute;
@@ -27,51 +27,39 @@
 
 .banner__plate {
     align-items: center;
-    padding: 0 40px;
+    min-width: 420px;
     max-width: 640px;
-    background-color: rgba(16, 18, 19, 0.95);
+    padding: 0 56px;
+    background-color: rgba(6, 7, 8, 0.94);
     background-image: url("../../Textures/steel-plate.png");
     background-repeat: repeat repeat;
     background-size: 256px 256px;
-    -unity-background-image-tint-color: rgba(96, 100, 102, 0.95);
+    -unity-background-image-tint-color: rgba(40, 42, 44, 0.9);
 }
 
-/* The bands: the sprite's top half above, its bottom half below, 6 px high, repeated along. */
-.banner__hazard {
+/* The thin white lines, inset a little from the plate's ends. */
+.banner__line {
     align-self: stretch;
-    height: 6px;
-    margin: 0 -40px 10px -40px;
-    background-image: url("../../Textures/hazard-yellow-top.png");
-    background-repeat: repeat no-repeat;
-    background-size: 12px 6px;
+    height: 2px;
+    margin: 9px -40px 12px -40px;
+    background-color: rgba(255, 255, 255, 0.85);
 }
 
-.banner__hazard--bottom {
-    margin: 10px -40px 0 -40px;
-    background-image: url("../../Textures/hazard-yellow-bottom.png");
-}
-
-.banner--alien .banner__hazard--top {
-    background-image: url("../../Textures/hazard-red-top.png");
-}
-
-.banner--alien .banner__hazard--bottom {
-    background-image: url("../../Textures/hazard-red-bottom.png");
+.banner__line--bottom {
+    margin: 12px -40px 9px -40px;
 }
 
 .banner__text {
-    font-size: 36px;
+    font-size: 42px;
     letter-spacing: 2px;
-    color: var(--t-accent);
+    color: #ffffff;
+    -unity-text-align: middle-center;
     text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
 }
 
+/* A danger's (a soldier rises, the alarm, more coming): its title red; the turns' always white. */
 .banner--alien .banner__text {
     color: rgb(240, 80, 60);
-}
-
-.banner--warn .banner__text {
-    color: var(--t-warn);
 }
 
 .banner__detail {
@@ -82,17 +70,13 @@
     -unity-text-align: middle-center;
 }
 
-/* «Clic para seguir»: small, its stamp's colour faded (styles.css .banner-go: opacity 0.6). */
+/* «Clic para seguir»: small, white faded (styles.css .banner-go: opacity 0.6). */
 .banner__go {
     margin-top: 4px;
     font-size: 11px;
     letter-spacing: 1px;
-    color: var(--t-accent);
+    color: #ffffff;
     opacity: 0.6;
-}
-
-.banner--alien .banner__go {
-    color: rgb(240, 80, 60);
 }
 
 /* ================================================================= cards */

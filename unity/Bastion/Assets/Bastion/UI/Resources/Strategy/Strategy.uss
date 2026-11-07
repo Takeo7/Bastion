@@ -84,9 +84,9 @@
     letter-spacing: 1px;
     color: var(--t-accent);
     border-width: 1px;
-    border-color: rgba(242, 194, 48, 0.75);
+    border-color: rgba(255, 255, 255, 0.75);
     border-radius: 2px;
-    background-color: rgba(242, 194, 48, 0.06);
+    background-color: rgba(255, 255, 255, 0.06);
 }
 
 .strat-siege--near {
@@ -693,35 +693,11 @@
    What can't be pressed now reads off: the 0.10.1's yellow at 45 % over the plate (strategy.css .x-btn:disabled), a dark
    ochre with dark ink, measured on its captures; opaque, since USS would blend an opacity in linear and come out pale.
 */
-/* Take-off (strategy.css .strat.launching, .launch-banner): everything but the stamp fades away while the squad gets in. */
+/* Take-off (strategy.css .strat.launching): everything fades away while the squad gets in, with no stamp (Ana, 7/11 #21). */
 .strat--launching > * {
     opacity: 0;
     transition-property: opacity;
     transition-duration: 0.4s;
-}
-
-.strat--launching > .strat-launch {
-    opacity: 1;
-}
-
-.strat-launch {
-    position: absolute;
-    top: 22%;
-    left: 0;
-    right: 0;
-    align-items: center;
-    rotate: -6deg;
-}
-
-.strat-launch__text {
-    padding: 6px 28px;
-    font-size: 46px;
-    letter-spacing: 8px;
-    color: var(--t-accent);
-    background-color: rgba(20, 22, 23, 0.85);
-    border-top-width: 2px;
-    border-bottom-width: 2px;
-    border-color: var(--t-accent);
 }
 
 .strat .btn-primary:disabled {
@@ -755,7 +731,7 @@
     bottom: -5px;
     border-width: 3px;
     border-color: var(--t-warn);
-    background-color: rgba(245, 165, 36, 0.25);
+    background-color: rgba(255, 255, 255, 0.25);
 }
 
 /* A key waiting for this player's yes (StrategyRoot.Pulse; strategy.css .x-btn.waiting): its edge in the stamp's red, beating. */

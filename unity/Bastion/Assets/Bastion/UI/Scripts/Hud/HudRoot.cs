@@ -79,7 +79,7 @@ namespace Bastion.UI.Hud
             strip = new TurnStrip(root, tips);
             // The squad's plate, bottom left (UI-COMBATE UI-01): the sheet over the cards, the backpack over the sheet's end.
             // mixta.css: one of the big plates, in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
-            squadPlate = root.Q("squad");
+            squadPlate = root.Q("squad-plate");
             PlateFrame.Dress(squadPlate);
             squad = new SquadList(root.Q("squad-cards"), squadPlate, relay, tips);
             unit = new UnitPanel(root.Q("unit-panel"), root.Q("pack"), relay, tips, Icon);
@@ -98,7 +98,7 @@ namespace Bastion.UI.Hud
             flags = new UnitFlags(root.Q("flags"), Icon);
             flags.TargetPicked += id => TargetPicked?.Invoke(id);
             edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
-            goalArrow = new GoalArrow(root.Q("goal-arrow"));
+            goalArrow = new GoalArrow(root.Q("goal-arrow"), tips);
             sight = new SightButton(root.Q("sight"), tips);
             sight.Toggled += () => SightToggled?.Invoke();
             miniMap = new MiniMap(root.Q("mini-map"));
@@ -147,7 +147,7 @@ namespace Bastion.UI.Hud
             var cam = worldCamera != null ? worldCamera : Camera.main;
             if (HeadOf != null) flags.Follow(cam, HeadOf);
             edges.Follow(cam);
-            turnActions.TickClocks(ClockOf?.Invoke(0), ClockOf?.Invoke(1));
+            turnActions.TickClock(ClockOf?.Invoke(0));
             goalArrow.Follow(cam);
             if (cam != null) goal.TurnCompass(NorthOnScreen(cam));
         }
@@ -183,12 +183,8 @@ namespace Bastion.UI.Hud
 
         public void SetTurn(TurnView v) => strip.SetTurn(v);
 
-        /// <summary>The players at the top; with a partner, the room for their clock under this player's.</summary>
-        public void SetPlayers(PlayersView v)
-        {
-            strip.SetPlayers(v);
-            turnActions.Paired = v != null && v.Players.Count > 1;
-        }
+        /// <summary>The players at the top.</summary>
+        public void SetPlayers(PlayersView v) => strip.SetPlayers(v);
 
         public void SetSquad(SquadView v) => squad.Set(v);
 
@@ -320,7 +316,10 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>One short line on the tile under the pointer, or none (null).</summary>
-        public void SetNote(Vector3? world, string text) => flags.SetNote(world, text);
+        public void SetNote(Vector3? world, string text, string icon = null) => flags.SetNote(world, text, icon);
+
+        /// <summary>The backpack's pockets shown or hidden, as its mark's click (the labs: PackSteps «pack»).</summary>
+        public void TogglePockets() => unit.TogglePockets();
 
         /// <summary>A tag over a point for a while (whose ping it is), on a plate of `color`.</summary>
         public void Pin(Vector3 world, string text, string color, float seconds = 4) => flags.Pin(world, text, color, seconds);

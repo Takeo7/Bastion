@@ -21,12 +21,12 @@ namespace Bastion.UI.Combat
         const float LootMarkSize = 0.52f;
         const float LootMarkHeight = 1.45f;
 
-        /// <summary>Each kind's icon and ring (lootMarks.ts LOOKS): weapons the hazard yellow, medicines green, ammunition amber, food brass.</summary>
+        /// <summary>Each kind's icon and ring (lootMarks.ts LOOKS): weapons and ammunition white (Ana, 7/11 #6: no yellow, no amber), medicines green, food brass.</summary>
         static readonly Dictionary<string, (string icon, string ring)> LootLooks = new Dictionary<string, (string, string)>
         {
-            ["lootWeapons"] = ("weapon:rifle", "#f2c230"),
+            ["lootWeapons"] = ("weapon:rifle", "#ffffff"),
             ["lootMedical"] = ("firstAid", "#8fd05a"),
-            ["lootAmmo"] = ("stat:ammo", "#f5a524"),
+            ["lootAmmo"] = ("stat:ammo", "#ffffff"),
             ["lootFood"] = ("store:food", "#d9a464"),
         };
 

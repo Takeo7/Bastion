@@ -210,6 +210,29 @@ Shader "Bastion/Building"
         return lerp(paint, brick, missing);
     }
 
+    // The snow of a winter map on what faces up out of doors (Ana, 7/11 #19: the roofs and the flat tops bare), as 0.10.1's
+    // snow.ts patched the buildings' materials; the rest of the map takes it as URP's decals, which this shader doesn't
+    // (SnowCover). Alpine's snow (_SnowGround, tinted already) every 3 tiles, whole up to 37° from straight up, none past
+    // 68°, a little wavy, where no building's roof is over it (_SnowShelter: each tile's roof height less 0.12, in tiles; 0
+    // off any building). _SnowSize: the map's width and height in tiles, and 1 while a snowy map is shown. On 0.10.1's world.
+    TEXTURE2D(_SnowGround);
+    SAMPLER(sampler_SnowGround);
+    TEXTURE2D(_SnowShelter);
+    float4 _SnowSize;
+
+    half3 Snow(half3 albedo, float3 positionWS, float3 normalWS)
+    {
+        if (_SnowSize.z < 0.5) return albedo;
+        float3 p = float3(positionWS.x, positionWS.y, -positionWS.z) / 1.5;
+        float2 uv = (floor(p.xz) + 0.5) / _SnowSize.xy;
+        float roof = any(uv < 0) || any(uv >= 1) ? 0 : SAMPLE_TEXTURE2D_LOD(_SnowShelter, sampler_point_clamp, uv, 0).r;
+        float outside = step(roof, p.y + 0.03);
+        float wave = sin(p.x * 1.7 + sin(p.z * 1.3)) * sin(p.z * 1.9 + p.y * 2.1);
+        float cap = smoothstep(0.38, 0.8, normalWS.y + wave * 0.06) * outside;
+        half3 snow = SAMPLE_TEXTURE2D(_SnowGround, sampler_SnowGround, p.xz / 3.0).rgb;
+        return lerp(albedo, snow, cap * 0.96);
+    }
+
     void Clip(BuildingVaryings input)
     {
         if (input.positionWS.y > input.cut.x || CutDither(input.positionCS.xy) < input.cut.y) discard;
@@ -303,6 +326,7 @@ Shader "Bastion/Building"
                         #endif
                     }
                 }
+                if (front) albedo = Snow(albedo, input.positionWS, normalize(input.normalWS));
                 #endif
 
                 InputData inputData = (InputData)0;

@@ -25,14 +25,9 @@ namespace Bastion.UI.Combat
             var calls = AbandonActions().Concat(EvacActions(u)).ToList();
             if (u == null || !Commands(u)) return calls;
             var keys = WithMenus(SoldierAbilities(u), u);
-            // Done with it, with movement alone left (Arturo, 7/11: its turn ends when the player says so; DoneCommand).
-            if (u.Team == Teams.Xcom && u.Ap <= 0 && Paths.MoveBudget(u) > 0 && CanAct() && HasCommand())
-                keys.Add(new AbilityView { Id = DoneKey, Name = HudText.Done.Key(u.Name), Hotkey = "", Enabled = true, Cost = HudText.Done.Cost, Description = HudText.Done.Tip(u.Name, CommandGoesTo()), Free = true, Icon = "ui:check" });
+            // (A soldier's turn ends by «Terminar turno» while it is in play: one key for both, Arturo 7/11, Ana's #5.)
             return keys.Concat(calls).ToList();
         }
-
-        /// <summary>The bar's key that ends the soldier's turn (DoneCommand).</summary>
-        const string DoneKey = "done";
 
         /// <summary>Who the command passes to when a soldier of mine is done (the rules' Alternates): the partner here, not done, with something left; null, nobody.</summary>
         string CommandGoesTo()

@@ -236,5 +236,36 @@ namespace Bastion.EditorTools
             foreach (var r in renderers.Skip(1)) box.Encapsulate(r.bounds);
             return box;
         }
+
+        /// <summary>
+        /// Each piece's box in the wall's frame (tiles: x along it, z out of it), fitted and thickened as WallsView lays it
+        /// (thick 1.75 across), its leaves apart (BASTION_PIEZAS_ID=id,id…; the brick kit's unless said): what a corner's or a
+        /// door's gap is made of (Ana's #18 of 7/11).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.EdificiosLab.Grosor -quit
+        /// </summary>
+        public static void Grosor()
+        {
+            var ids = Environment.GetEnvironmentVariable("BASTION_PIEZAS_ID")?.Split(',') ?? new[] { "bunkerWall", "brickFace", "bunkerLintel", "brickLintel", "metalDoor", "sheetGrey" };
+            var thicken = Matrix4x4.Scale(new Vector3(1, 1, 1.75f));
+            foreach (string id in ids)
+                foreach (var part in Pieces.Parts(id))
+                {
+                    if (part.mesh == null) continue;
+                    var m = thicken * part.fit;
+                    var b = part.mesh.bounds;
+                    Vector3 lo = Vector3.positiveInfinity, hi = Vector3.negativeInfinity;
+                    for (int k = 0; k < 8; k++)
+                    {
+                        var c = m.MultiplyPoint3x4(new Vector3((k & 1) == 0 ? b.min.x : b.max.x, (k & 2) == 0 ? b.min.y : b.max.y, (k & 4) == 0 ? b.min.z : b.max.z));
+                        lo = Vector3.Min(lo, c);
+                        hi = Vector3.Max(hi, c);
+                    }
+                    Debug.Log(FormattableString.Invariant($"[grosor] {id} {part.name}{(part.leaf ? " (leaf)" : "")}: x {lo.x:0.000}…{hi.x:0.000}, y {lo.y:0.000}…{hi.y:0.000}, z {lo.z:0.000}…{hi.z:0.000}"));
+                    // (Its planes across: how many of its vertices stand at each depth, to the centimetre, and their reach along.)
+                    var planes = part.mesh.vertices.Select(v => m.MultiplyPoint3x4(v)).GroupBy(v => Mathf.Round(v.z * 100) / 100)
+                        .OrderBy(g => g.Key).Select(g => FormattableString.Invariant($"{g.Key:0.00} ×{g.Count()} (x {g.Min(v => v.x):0.00}…{g.Max(v => v.x):0.00})"));
+                    Debug.Log("[grosor]   " + string.Join("; ", planes));
+                }
+        }
     }
 }

@@ -870,7 +870,7 @@ namespace Bastion.UI.Strategy
         {
             // Three seconds in: the busts drawn and the row standing, for a strip that starts just before.
             await Awaitable.WaitForSecondsAsync(3f, destroyCancellationToken);
-            root.Launching(StrategyText.Launch);
+            root.Launching(true);
             await clearing.Leave(destroyCancellationToken);
             Debug.Log("[estrategia] La Lata se ha ido");
         }

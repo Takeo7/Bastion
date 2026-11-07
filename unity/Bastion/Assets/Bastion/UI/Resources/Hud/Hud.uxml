@@ -36,11 +36,16 @@
             <ui:VisualElement name="turn" class="turn" picking-mode="Ignore" />
             <ui:VisualElement name="players" class="players" picking-mode="Ignore" />
         </ui:VisualElement>
-        <!-- The squad, bottom left (UI-01, UI-02): the backpack over the sheet's end, the picked soldier's sheet, the cards. -->
-        <ui:VisualElement name="squad" class="squad panel">
+        <!--
+            The squad, bottom left (UI-01, UI-02): the backpack's slots over the sheet's end, the picked soldier's sheet in one
+            row on a plate of its own (Ana, 7/11 #13: as wide as it needs, over the keys' height), the cards on theirs.
+        -->
+        <ui:VisualElement name="squad" class="squad" picking-mode="Ignore">
             <ui:VisualElement name="pack" class="unit-pack" picking-mode="Ignore" />
-            <ui:VisualElement name="unit-panel" class="unit-panel" />
-            <ui:VisualElement name="squad-cards" class="squad-cards" picking-mode="Ignore" />
+            <ui:VisualElement name="unit-panel" class="unit-panel panel" />
+            <ui:VisualElement name="squad-plate" class="squad-plate panel">
+                <ui:VisualElement name="squad-cards" class="squad-cards" picking-mode="Ignore" />
+            </ui:VisualElement>
         </ui:VisualElement>
         <!-- The keys and «Terminar turno» in one row, the turn's clock under all of it (UI-04, UI-05). -->
         <ui:VisualElement name="actions" class="actions" picking-mode="Ignore">

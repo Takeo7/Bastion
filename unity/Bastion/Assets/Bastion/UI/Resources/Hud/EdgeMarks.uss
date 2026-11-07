@@ -54,12 +54,12 @@
 /* A soldier pointed at from the list and off the screen (Arturo, 31/10 #11): its name in the lit ring's light. */
 .edge-mark--soldier {
     border-width: 2px;
-    border-color: #ffe27a;
+    border-color: #ffffff;
 }
 
 .edge-mark--soldier .edge-mark__arrow,
 .edge-mark--soldier .edge-mark__label {
-    color: #ffe27a;
+    color: #ffffff;
 }
 
 /* The web's arrow, 20 px, 4 px from the words. */
@@ -77,8 +77,8 @@
 
 /* ============================================================ the goal */
 
-/* Where the mission's goal lies (UI-COMBATE UI-06; GoalArrow.cs): a ring of dark steel bottom right, its foot level with
-   the squad's and the keys', and the yellow arrow in it, turned from C#. */
+/* Where the mission's goal lies (UI-COMBATE UI-06; GoalArrow.cs): the map's ring bottom right, its foot level with the
+   squad's and the keys', and the white reticle arrow in it, turned from C# (Ana, 7/11 #4: Synty's ring and arrow). */
 .goal-arrow {
     position: absolute;
     right: 12px;
@@ -87,25 +87,33 @@
     height: 76px;
 }
 
-.goal-arrow__ring {
+/* The ring of the goal's arrow and of the enemies' sight: Synty INTERFACE Apocalypse HUD's map circle, black as the torn
+   plates (Mixta.uss .panel). */
+.map-ring {
     position: absolute;
     left: 0;
     top: 0;
     right: 0;
     bottom: 0;
+    background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Map_Circle_Large_02.png");
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.8);
 }
 
+/* Synty INTERFACE Dark Fantasy HUD's reticle arrow, white, pointing up before C# turns it. */
 .goal-arrow__arrow {
     position: absolute;
-    left: 12px;
-    top: 12px;
-    right: 12px;
-    bottom: 12px;
-    color: var(--t-accent);
+    left: 19px;
+    top: 19px;
+    right: 19px;
+    bottom: 19px;
+    background-image: url("/Assets/Synty/InterfaceDarkFantasyHUD/Sprites/Reticles/SPR_HUD_DarkFantasy_Reticle_Arrow_Small_08_Variant_02.png");
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: #ffffff;
 }
 
-/* The enemies' sight (SightButton; Arturo, 5/11 #6, #9): left of the goal's arrow, a smaller ring of its steel with an
-   eye, grey off and in sight's red on; over both, the legend of the red on the ground while it shows. */
+/* The enemies' sight (SightButton; Arturo, 5/11 #6): left of the goal's arrow, a smaller ring as its with an eye, grey
+   off and white on; no legend over it (Ana, 7/11 #10). */
 .sight {
     position: absolute;
     right: 96px;
@@ -137,49 +145,9 @@
 }
 
 .sight__button--on .sight__eye {
-    color: #f0503c;
+    color: #ffffff;
 }
 
 .sight__button--on:hover .sight__eye {
-    color: #ff7a66;
-}
-
-.sight__legend {
-    position: absolute;
-    right: -84px;
-    bottom: 86px;
-    width: 236px;
-    padding: 5px 8px;
-    border-radius: 2px;
-    background-color: rgba(14, 16, 17, 0.82);
-}
-
-.sight__row {
-    flex-direction: row;
-    align-items: center;
-    margin: 1px 0;
-}
-
-/* As the ground's: the faint wash with its line, and the stronger one where it would notice (AimOverlay.ShowVision). */
-.sight__swatch {
-    flex-shrink: 0;
-    width: 14px;
-    height: 10px;
-    margin-right: 6px;
-    border-width: 1px;
-    border-color: rgba(240, 80, 60, 0.8);
-}
-
-.sight__swatch--seen {
-    background-color: rgba(240, 80, 60, 0.12);
-}
-
-.sight__swatch--noticed {
-    background-color: rgba(240, 80, 60, 0.3);
-}
-
-.sight__text {
-    flex-shrink: 1;
-    font-size: 12px;
-    white-space: normal;
+    color: #ffffff;
 }

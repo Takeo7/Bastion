@@ -61,6 +61,12 @@ namespace Bastion.UI.Combat
                 control.Hud?.ReleaseBanner();
                 return true;
             }
+            // «pack»: the pockets opened or shut, as a click on the backpack's mark (Ana, 7/11 #13: only then).
+            if (what == "pack")
+            {
+                control.Hud?.TogglePockets();
+                return true;
+            }
             if (what == "confirm")
             {
                 control.OnConfirmTarget();

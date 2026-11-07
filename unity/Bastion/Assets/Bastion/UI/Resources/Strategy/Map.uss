@@ -174,12 +174,12 @@
     top: -9px;
     width: 18px;
     height: 18px;
-    -unity-background-image-tint-color: #f2c230;
+    -unity-background-image-tint-color: #ffffff;
 }
 
 .valley-name--home {
     font-size: 13px;
-    color: #f2c230;
+    color: #ffffff;
 }
 
 /* The places one knows the valley by: small capitals in Barlow bold, centred on their place, the dark edge thick
@@ -263,7 +263,7 @@
 }
 
 .map-row--on {
-    background-color: rgba(242, 194, 48, 0.07);
+    background-color: rgba(255, 255, 255, 0.07);
     border-left-width: 3px;
     border-left-color: var(--t-accent);
 }

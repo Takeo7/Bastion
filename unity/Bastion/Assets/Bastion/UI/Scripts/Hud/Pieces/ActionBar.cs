@@ -97,13 +97,17 @@ namespace Bastion.UI.Hud
             }
             host.EnableInClassList("abilities--locked", !string.IsNullOrEmpty(view.Lock));
             if (!string.IsNullOrEmpty(view.Lock)) Ui.Text(view.Lock, "abilities__lock", host).pickingMode = PickingMode.Ignore;
-            // Before the keys, the movement left in tiles, apart from the actions (Arturo, 5/11 #14): «5» over «de 8».
+            // Before the keys, the movement left in tiles, apart from the actions (Arturo, 5/11 #14), in one line (Ana, 7/11
+            // #7): «5» big, «/8» small and grey after it, and the footprints.
             if (view.MovesMax > 0)
             {
                 var moves = Ui.El("bar-moves", host);
                 moves.EnableInClassList("bar-moves--none", view.Moves <= 0);
                 Ui.Text(HudText.Moves.Tiles(view.Moves), "bar-moves__value font-title", moves).pickingMode = PickingMode.Ignore;
-                Ui.Text(HudText.Moves.Of(view.MovesMax), "bar-moves__of", moves).pickingMode = PickingMode.Ignore;
+                Ui.Text(HudText.Moves.Of(view.MovesMax), "bar-moves__of font-title", moves).pickingMode = PickingMode.Ignore;
+                var feet = Ui.El("bar-moves__feet", moves);
+                feet.pickingMode = PickingMode.Ignore;
+                feet.Add(new LineIcon("footprint"));
                 tips.Attach(moves, view.MovesTip);
             }
             var keys = new List<AbilityView>();

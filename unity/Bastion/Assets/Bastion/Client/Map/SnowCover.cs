@@ -15,6 +15,8 @@ namespace Bastion.Client.Map
     /// foot of the cover (drifts). The cap is URP's decals («Nieve», SnowFeatureMake: DBuffer, the albedo alone, before
     /// the light, as 0.10.1 mixed it into the diffuse colour), one projector over the whole map, on what carries rendering
     /// layer Layer (Mark): what stands under a building's roof doesn't. The decals are on while a snowy map is shown.
+    /// Bastion/Building takes no decals: its roofs, flat tops and what faces up out of doors take the same snow in the
+    /// shader (its Snow, as 0.10.1's snow.ts patched them; Ana, 7/11 #19), by Shelter's map of the roofs.
     /// </summary>
     [ExecuteAlways]
     public sealed class SnowCover : MonoBehaviour
@@ -28,6 +30,12 @@ namespace Bastion.Client.Map
 
         static int shown;
         bool counted;
+        /// <summary>Each tile's roof height less 0.12 (tiles; 0 off any building): what is under it is sheltered (Bastion/Building's _SnowShelter).</summary>
+        Texture2D shelter;
+        int width, height;
+        /// <summary>The cover whose snow the buildings show (the last one on).</summary>
+        static SnowCover current;
+        static readonly int SnowGround = Shader.PropertyToID("_SnowGround"), SnowShelter = Shader.PropertyToID("_SnowShelter"), SnowSize = Shader.PropertyToID("_SnowSize");
 
         /// <summary>The snow of `s` under `root` (its map's), the buildings as `plan` reads them; the banks from `prefabOf`.</summary>
         public static SnowCover Make(Transform root, GameState s, BuildingPlan plan, Func<string, GameObject> prefabOf)
@@ -62,7 +70,47 @@ namespace Bastion.Client.Map
             projector.endAngleFade = Angle(0.38f);
             projector.renderingLayerMask = Mask;
             projector.drawDistance = 1000;
+            Shelter(s, plan);
             Banks(s, plan, prefabOf);
+            if (counted) Buildings();
+        }
+
+        /// <summary>
+        /// The roofs' map for Bastion/Building's snow (snow.ts shelterBuildings): on each tile of a building that still has
+        /// its roof (not a ruin), its roof's height less 0.12 (tiles); what stands lower there is under it.
+        /// </summary>
+        void Shelter(GameState s, BuildingPlan plan)
+        {
+            (width, height) = (s.Width, s.Height);
+            var heights = new float[width * height];
+            if (plan != null)
+                for (int i = 0; i < heights.Length && i < plan.Owner.Length; i++)
+                {
+                    int b = plan.Owner[i];
+                    if (b < 0 || b >= plan.Buildings.Count || plan.Buildings[b].kind == BuildingKinds.Ruin) continue;
+                    heights[i] = plan.Buildings[b].@base + plan.Buildings[b].storeys * BuildingPlan.Storey - 0.12f;
+                }
+            shelter = new Texture2D(width, height, TextureFormat.RFloat, false, true) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp, name = "Techos de la nieve", hideFlags = HideFlags.DontSave };
+            shelter.SetPixelData(heights, 0);
+            shelter.Apply(false);
+        }
+
+        /// <summary>This cover's snow on the buildings (Bastion/Building's Snow), or none (`on` false, if it is the one shown).</summary>
+        void Buildings(bool on = true)
+        {
+            if (!on)
+            {
+                if (current != this) return;
+                current = null;
+                Shader.SetGlobalVector(SnowSize, Vector4.zero);
+                return;
+            }
+            if (shelter == null) return;
+            current = this;
+            var ground = Resources.Load<Material>("SnowDecal")?.GetTexture("Base_Map");
+            Shader.SetGlobalTexture(SnowGround, ground != null ? ground : Texture2D.whiteTexture);
+            Shader.SetGlobalTexture(SnowShelter, shelter);
+            Shader.SetGlobalVector(SnowSize, new Vector4(width, height, 1, 0));
         }
 
         /// <summary>URP's angle fade for a surface whose normal is `up` high (the cosine of its angle from straight up).</summary>
@@ -77,6 +125,8 @@ namespace Bastion.Client.Map
         {
             shown = 0;
             Decals(false);
+            current = null;
+            Shader.SetGlobalVector(SnowSize, Vector4.zero);
         }
 
         void OnEnable()
@@ -84,6 +134,7 @@ namespace Bastion.Client.Map
             if (counted) return;
             counted = true;
             if (shown++ == 0) Decals(true);
+            Buildings();
         }
 
         void OnDisable()
@@ -91,6 +142,14 @@ namespace Bastion.Client.Map
             if (!counted) return;
             counted = false;
             if (--shown == 0) Decals(false);
+            Buildings(false);
+        }
+
+        void OnDestroy()
+        {
+            if (shelter == null) return;
+            if (Application.isPlaying) Destroy(shelter);
+            else DestroyImmediate(shelter);
         }
 
         /// <summary>The decals of every quality level's renderers on or off («Nieve»: SnowFeatureMake).</summary>

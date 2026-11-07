@@ -1964,6 +1964,119 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// One of the dead inside a building not found (Ana, 7/11 #14), in the scene Partida as Partida: the door of a
+        /// building nobody has found nearest the squad, one of the dead put on the tile inside it and a soldier two tiles
+        /// out in the street, on a wall the game's camera looks over (north or east: what is inside it in sight from the
+        /// street side); the camera on the door, 24 tiles off. In play mode, from 5 s in (a strip's first frame), 1.2 s
+        /// apart: UI's contact (ForceVisible), the event's Sync after it, the dead one in the doorway (Sync), back inside
+        /// as a shade, and the building found (Discovered). Each step logged ([sin descubrir]: drawn or not). BASTION_PASO=n
+        /// stops at step n (0 the first Sync … 5 found); BASTION_ANTES=1, the contact as it was before 7/11 (shown for
+        /// good, wherever it stands: Reveal).
+        ///   unity/tools/captura.sh -shotScene Assets/Bastion/Scenes/Partida.unity -shotSetup Bastion.EditorTools.CombatLab.SinDescubrir
+        ///     -shotPlay -shotCamera Cámara -shotFrames 16 -shotFps 2 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void SinDescubrir()
+        {
+            string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
+            state = Seen(MapLab.Golden(name));
+            int last = int.TryParse(Environment.GetEnvironmentVariable("BASTION_PASO"), out int n) ? n : 5;
+            bool before = Environment.GetEnvironmentVariable("BASTION_ANTES") == "1";
+            static bool Door(string k) => k == TileKinds.Door || k == TileKinds.DoorOpen;
+            var squad = state.Units.Where(u => u.Alive && u.Team == "xcom" && !u.Objective).ToList();
+            var middle = new Pos { X = (int)squad.Average(u => u.Pos.X), Y = (int)squad.Average(u => u.Pos.Y), Z = 0 };
+            // A door on the ground with a building not found on one side (its floor) and the street on the other.
+            (Pos door, Pos inside, Pos outside)? best = null;
+            for (int y = 1; y < state.Height - 1; y++)
+                for (int x = 1; x < state.Width - 1; x++)
+                {
+                    var at = new Pos { X = x, Y = y, Z = 0 };
+                    if (!Door(Bastion.Engine.Grid.KindAt(state, at))) continue;
+                    foreach (var d in Bastion.Engine.Grid.Dirs4)
+                    {
+                        // (Inside it south or west of its door: the door on its far side, the inside in front of it.)
+                        if (!(d.Y == 1 || d.X == -1)) continue;
+                        var a = new Pos { X = x + d.X, Y = y + d.Y, Z = 0 };
+                        var b = new Pos { X = x - d.X * 3, Y = y - d.Y * 3, Z = 0 };
+                        if (!Bastion.Engine.Grid.InBounds(state, a.X, a.Y) || !Bastion.Engine.Grid.InBounds(state, b.X, b.Y)) continue;
+                        if (state.Storeys[Bastion.Engine.Grid.TileIndex(state, a.X, a.Y)] <= 0 || state.Storeys[Bastion.Engine.Grid.TileIndex(state, b.X, b.Y)] > 0) continue;
+                        if (Bastion.Engine.Grid.KindAt(state, a) != TileKinds.Floor || !Bastion.Engine.Grid.CanStandOn(Bastion.Engine.Grid.KindAt(state, b))) continue;
+                        if (Bastion.Engine.Grid.UnitAt(state, a) != null || Bastion.Engine.Grid.UnitAt(state, b) != null || !Buildings.Hidden(state, a)) continue;
+                        if (best == null || Bastion.Engine.Grid.Distance(at, middle) < Bastion.Engine.Grid.Distance(best.Value.door, middle)) best = (at, a, b);
+                    }
+                }
+            if (best == null) { Debug.LogError("[sin descubrir] no door of a building not found"); return; }
+            var (doorAt, insideAt, outsideAt) = best.Value;
+            var dead = state.Units.Where(u => u.Alive && u.Team != "xcom" && Gaits.MovesDead(u.Template)).OrderBy(u => Bastion.Engine.Grid.Distance(u.Pos, doorAt)).First();
+            dead.Pos = insideAt;
+            var looker = squad[0];
+            looker.Pos = outsideAt;
+            Debug.Log($"[sin descubrir] {name}: door {doorAt.X},{doorAt.Y}; {dead.Id} inside on {insideAt.X},{insideAt.Y}; {looker.Id} out on {outsideAt.X},{outsideAt.Y}");
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                _ = Steps();
+            };
+            async Awaitable Steps()
+            {
+                try
+                {
+                    Battlefield.Current.Show(state);
+                    var figures = UnitViews.Current;
+                    MapSpace.Aim(Camera.main, MapSpace.TileToWorld(state, doorAt), 24);
+                    void Say(int step, string what)
+                    {
+                        bool shown = figures.Shown(dead.Id);
+                        bool drawn = shown && (figures.BodyRenderers(dead.Id)?.Any(r => r.enabled) ?? false);
+                        Debug.Log($"[sin descubrir] {step} {what}: {(drawn ? "drawn" : shown ? "active, not drawn" : "not shown")}");
+                    }
+                    // (As UI's event player after each event: the figures and the fog as the state is now.)
+                    void Settle()
+                    {
+                        state.Seq++;
+                        figures.Sync(state);
+                        Fog.Current?.Show(state, true);
+                    }
+                    Settle();
+                    Say(0, "Sync");
+                    if (last <= 0) return;
+                    await Awaitable.WaitForSecondsAsync(5);
+                    if (before) figures.Reveal(dead.Id);
+                    else figures.ForceVisible(dead.Id);
+                    await Awaitable.NextFrameAsync();
+                    Say(1, "contact (ForceVisible)");
+                    if (last <= 1) return;
+                    await Awaitable.WaitForSecondsAsync(1.2f);
+                    Settle();
+                    Say(2, "the event's Sync after");
+                    if (last <= 2) return;
+                    await Awaitable.WaitForSecondsAsync(1.2f);
+                    dead.Pos = doorAt;
+                    Settle();
+                    Say(3, $"in the doorway (in the squad's sight: {Los.TeamVisibility(state, "xcom")[Bastion.Engine.Grid.NodeOf(state, doorAt)]})");
+                    if (last <= 3) return;
+                    await Awaitable.WaitForSecondsAsync(1.2f);
+                    dead.Pos = insideAt;
+                    Settle();
+                    figures.Shade(dead.Id, true);
+                    await Awaitable.NextFrameAsync();
+                    Say(4, "inside again, a shade");
+                    if (last <= 4) return;
+                    await Awaitable.WaitForSecondsAsync(1.2f);
+                    figures.Shade(dead.Id, false);
+                    Buildings.Discover(state, insideAt, true);
+                    Settle();
+                    figures.ForceVisible(dead.Id);
+                    await Awaitable.NextFrameAsync();
+                    Say(5, $"its building found ({state.Discovered?.Count ?? 0} tiles known), ForceVisible");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[sin descubrir] " + e);
+                }
+            }
+        }
+
+        /// <summary>
         /// La Lata at a mission's evacuation (mapView.ts placeBus, evacBus.ts): a recorded mission with its bay (BASTION_MAP,
         /// step2/city-11-scavenge unless said), as the campaign's vehicle BASTION_VEHICULO (0 the 4×4, 1 the van, 2 the lorry,
         /// 3 the bus, as unless said), the camera on its bay as the game puts it when it goes (16 tiles off; BASTION_DIST
@@ -2034,7 +2147,7 @@ namespace Bastion.EditorTools
                         // (Made in play mode, after its start: its clips' graphs would be lost otherwise.)
                         units = new GameObject("Unidades").AddComponent<UnitViews>();
                         units.Sync(state);
-                        foreach (var u in dead) units.ForceVisible(u.Id);
+                        foreach (var u in dead) units.Reveal(u.Id);
                         units.Sync(state);
                         units.MasksNow();
                         Debug.Log($"[combat] in La Lata's way: {string.Join(", ", dead.Select(u => $"{u.Id} {u.Template} at {u.Pos.X},{u.Pos.Y}"))}");
@@ -2103,7 +2216,7 @@ namespace Bastion.EditorTools
         /// <summary>The labs' enemies shown wherever they are put (out of the squad's sight they would hide).</summary>
         static void Reveal()
         {
-            foreach (var u in state.Units) units.ForceVisible(u.Id);
+            foreach (var u in state.Units) units.Reveal(u.Id);
         }
 
         static void Started(PlayModeStateChange change)

@@ -58,7 +58,7 @@ namespace Bastion.UI.Combat
         /// <summary>The pointer's ring on a tile where the squad would be noticed.</summary>
         public static readonly Color32 NoticedRing = Hex(0xff4a4a);
         /// <summary>The lit ring of a soldier pointed at from the list (#11), as its flag's arrow (Flags.uss .uflag__pointer).</summary>
-        static readonly Color32 PointedRing = Hex(0xffe27a);
+        static readonly Color32 PointedRing = Hex(0xffffff);
 
         const float T = Board.Tile;
         const float FillAlpha = 0.45f;
@@ -107,8 +107,8 @@ namespace Bastion.UI.Combat
         Mesh enemyRing;
         readonly Transform[] shields = new Transform[4];
         readonly Material[] shieldMaterials = new Material[4];
-        Texture2D lowShield;
-        Texture2D highShield;
+        /// <summary>The shields' picture: Synty's (HudIcons «stat:armor»); none, no shields.</summary>
+        Texture2D shieldPicture;
         MeshFilter eyes;
         MeshFilter flames;
 
@@ -177,9 +177,10 @@ namespace Bastion.UI.Combat
             Ring(build, Vector3.zero, 0.42f * T, Hex(0xff4d4d, 0xf2), false);
             enemyRing = build.Build(null);
 
-            // A shield on each side (0.62 of a tile), facing the camera, over everything.
-            lowShield = ShieldTexture(1);
-            highShield = ShieldTexture(2);
+            // A shield on each side (0.62 of a tile), facing the camera, over everything: Synty INTERFACE Apocalypse HUD's
+            // (Image_Apocalypse_Icon's sprite, ICON_Apocalpyse_Status_Armor_01: Ana, 7/11 #2) in the cover's colour, over a
+            // dark copy of itself a little larger, that keeps it apart from snow and light floors.
+            shieldPicture = Resources.Load<Bastion.UI.Hud.HudIconTable>("HudIcons")?.Get("stat:armor")?.texture;
             build.Clear();
             var h = 0.31f * T;
             build.Quad(new Vector3(-h, -h, 0), new Vector3(h, -h, 0), new Vector3(h, h, 0), new Vector3(-h, h, 0), Hex(0xffffff));
@@ -190,6 +191,13 @@ namespace Bastion.UI.Combat
                 s.sharedMesh = quad;
                 shields[i] = s.transform;
                 shieldMaterials[i] = s.GetComponent<MeshRenderer>().sharedMaterial;
+                shieldMaterials[i].mainTexture = shieldPicture;
+                var back = Layer("Sombra", 3109, true, false, s.transform);
+                back.sharedMesh = quad;
+                back.transform.localScale = Vector3.one * 1.16f;
+                var dark = back.GetComponent<MeshRenderer>().sharedMaterial;
+                dark.mainTexture = shieldPicture;
+                dark.color = new Color(0.02f, 0.03f, 0.04f, 0.72f);
                 s.gameObject.SetActive(false);
             }
         }
@@ -241,7 +249,7 @@ namespace Bastion.UI.Combat
         /// <summary>
         /// The tiles the picked one can end its move on, on the floor shown (game.ts refreshInteractive): the strips and
         /// lines round each band, a red frame where it would be noticed. `planning`: without the command, fainter and
-        /// in the planning blue. `soft(x, y, z)`: a thing in the way the border goes round the outside of (Outline).
+        /// in the planning blue. `soft(x, y, z)`: someone in the way the border goes round the outside of (Outline).
         /// </summary>
         public void ShowRange(GameState s, IList<MoveTile> tiles, bool planning = false, Func<int, int, int, bool> soft = null)
         {
@@ -312,11 +320,11 @@ namespace Bastion.UI.Combat
         static int Key(int x, int y) => x * 1024 + y;
 
         /// <summary>
-        /// What the reach's border goes round, each tile in its band (dash or not): the reach; the things in the way beside
-        /// it (`soft`: a car, a crate, a console, someone standing), in the walk's band if they touch it; and any hole left
-        /// inside of nothing but such things. So the line goes on round the outside of a thing at its edge (Arturo, 01/11
-        /// #4: it broke off at each one, 30 to 80 sides on a city's reach) and never rings one inside (Ana, 21/10 #18);
-        /// walls and holes with a wall in them it goes round as before.
+        /// What the reach's border goes round, each tile in its band (dash or not): the reach; those in the way beside it
+        /// (`soft`: someone standing), in the walk's band if they touch it; and any hole left inside of nothing but them. So
+        /// the line goes on round the outside of one at its edge (Arturo, 01/11 #4) and never rings one inside (Ana, 21/10
+        /// #18); things, walls and holes with either in them it goes round (Arturo, 7/11, Ana's #16: a car stays out of the
+        /// ground one walks).
         /// </summary>
         static Dictionary<int, (Pos pos, bool dash)> Outline(IList<MoveTile> tiles, Func<int, int, int, bool> soft)
         {
@@ -677,18 +685,21 @@ namespace Bastion.UI.Combat
             hoverMaterial.color = color;
         }
 
-        /// <summary>Over `tile`, a shield on each side with cover (Cover.CoverSides: 1 low, half full; 2 high, full); null clears them.</summary>
+        /// <summary>
+        /// Over `tile`, a shield on each side with cover (Cover.CoverSides: 1 low, in yellow; 2 high, in blue: the soldier's
+        /// panel's colours, CoverShield); null clears them.
+        /// </summary>
         public void ShowCover(GameState s, Pos tile)
         {
             var sides = s != null && tile != null ? Cover.CoverSides(s, tile) : null;
             for (var i = 0; i < 4; i++)
             {
-                var level = sides != null && i < sides.Length ? sides[i] : 0;
+                var level = sides != null && i < sides.Length && shieldPicture != null ? sides[i] : 0;
                 shields[i].gameObject.SetActive(level > 0);
                 if (level <= 0) continue;
                 var d = Grid.Dirs4[i];
                 shields[i].localPosition = Board.TileToWorld(s, tile, 1.25f * T) + new Vector3(d.X, 0, -d.Y) * (0.45f * T);
-                shieldMaterials[i].mainTexture = level >= 2 ? highShield : lowShield;
+                shieldMaterials[i].color = Bastion.UI.Hud.CoverShield.Colours[level >= 2 ? 2 : 1];
             }
         }
 
@@ -744,50 +755,6 @@ namespace Bastion.UI.Combat
             if (s == null || tile == null) return;
             partnerHover.localPosition = Board.TileToWorld(s, tile, 0.045f * T);
             partnerHoverMaterial.color = color;
-        }
-
-        /// <summary>
-        /// The shield (overlays.ts shieldTexture, 64 px): a dark shield, filled in cyan from halfway down for low cover
-        /// and whole for high, edged in pale cyan.
-        /// </summary>
-        static Texture2D ShieldTexture(int level)
-        {
-            const int size = 64;
-            // Its outline, top-down in the canvas's pixels: a point at the top, the sides, two curves to the tip.
-            var shape = new List<Vector2> { new Vector2(32, 4), new Vector2(56, 13), new Vector2(53, 38) };
-            for (var k = 1; k <= 8; k++) shape.Add(Bezier(new Vector2(53, 38), new Vector2(46, 54), new Vector2(32, 60), k / 8f));
-            for (var k = 1; k <= 8; k++) shape.Add(Bezier(new Vector2(32, 60), new Vector2(18, 54), new Vector2(11, 38), k / 8f));
-            shape.Add(new Vector2(8, 13));
-            var dark = new Color(10 / 255f, 20 / 255f, 30 / 255f, 0.75f);
-            var fill = (Color)Hex(0x54d1ff);
-            var stroke = (Color)Hex(0xbff0ff);
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
-            var pixels = new Color[size * size];
-            for (var py = 0; py < size; py++)
-            for (var px = 0; px < size; px++)
-            {
-                // Four samples a pixel, for soft edges.
-                var sum = Color.clear;
-                for (var sy = 0; sy < 2; sy++)
-                for (var sx = 0; sx < 2; sx++)
-                {
-                    var p = new Vector2(px + 0.25f + sx * 0.5f, py + 0.25f + sy * 0.5f);
-                    var inside = Inside(shape, p);
-                    var edge = Distance(shape, p) <= 2f;
-                    Color c;
-                    if (edge) c = stroke;
-                    else if (inside) c = p.y >= (level >= 2 ? 0 : 34) ? fill : dark;
-                    else c = Color.clear;
-                    sum += new Color(c.r * c.a, c.g * c.a, c.b * c.a, c.a);
-                }
-                sum /= 4;
-                var a = sum.a;
-                // The canvas's rows go down, the texture's up.
-                pixels[(size - 1 - py) * size + px] = a > 0 ? new Color(sum.r / a, sum.g / a, sum.b / a, a) : Color.clear;
-            }
-            tex.SetPixels(pixels);
-            tex.Apply();
-            return tex;
         }
 
         /// <summary>An eye (styles.css's mask, 16 × 10 in a 64 square), white: tinted by the quad's colour.</summary>
@@ -853,33 +820,6 @@ namespace Bastion.UI.Combat
             tex.SetPixels(pixels);
             tex.Apply();
             return tex;
-        }
-
-        static Vector2 Bezier(Vector2 a, Vector2 c, Vector2 b, float t) => (1 - t) * (1 - t) * a + 2 * (1 - t) * t * c + t * t * b;
-
-        static bool Inside(List<Vector2> poly, Vector2 p)
-        {
-            var inside = false;
-            for (int i = 0, j = poly.Count - 1; i < poly.Count; j = i++)
-            {
-                var a = poly[i];
-                var b = poly[j];
-                if ((a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
-            }
-            return inside;
-        }
-
-        static float Distance(List<Vector2> poly, Vector2 p)
-        {
-            var best = float.MaxValue;
-            for (int i = 0, j = poly.Count - 1; i < poly.Count; j = i++)
-            {
-                var a = poly[j];
-                var ab = poly[i] - a;
-                var t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / ab.sqrMagnitude);
-                best = Mathf.Min(best, Vector2.Distance(p, a + ab * t));
-            }
-            return best;
         }
     }
 }

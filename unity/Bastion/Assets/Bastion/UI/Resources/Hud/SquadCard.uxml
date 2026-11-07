@@ -1,14 +1,17 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <!--
-        A soldier's card under the sheet (UI-COMBATE UI-02; SquadList.cs fills it): the bust, its states over it and its
-        name at its foot; its health in green, its actions in yellow and its movement in sky blue under it (Arturo, 5/11
-        #14). Styles: SquadList.uss, from Hud.uxml.
+        A soldier's card under the sheet (UI-COMBATE UI-02; SquadList.cs fills it): the bust on a studio backdrop in its
+        owner's colour and its states over it, its name in a strip of its own under it (Ana, 7/11 #13); its health in
+        green, its actions in yellow and its movement in sky blue under that (Arturo, 5/11 #14). Styles: SquadList.uss,
+        from Hud.uxml.
     -->
     <ui:VisualElement name="card" class="squad-card">
         <ui:VisualElement name="bust" class="squad-card__bust" picking-mode="Ignore">
+            <ui:VisualElement name="studio" class="squad-card__studio" picking-mode="Ignore" />
+            <ui:VisualElement name="face" class="squad-card__face" picking-mode="Ignore" />
             <ui:VisualElement name="tags" class="squad-card__tags" picking-mode="Ignore" />
-            <ui:Label name="name" class="squad-card__name font-title" picking-mode="Ignore" />
         </ui:VisualElement>
+        <ui:Label name="name" class="squad-card__name font-title" picking-mode="Ignore" />
         <ui:VisualElement name="hp" class="pips pips--hp squad-card__hp" picking-mode="Ignore" />
         <ui:VisualElement name="ap" class="pips pips--ap squad-card__ap" picking-mode="Ignore" />
         <ui:VisualElement name="moves" class="pips pips--moves squad-card__moves" picking-mode="Ignore" />

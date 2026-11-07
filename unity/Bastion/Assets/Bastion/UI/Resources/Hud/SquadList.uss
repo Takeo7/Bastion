@@ -1,6 +1,7 @@
 /*
-   The squad's cards under the sheet (UI-COMBATE UI-02; hud.ts setSquad): the bust, the name at its foot, health and
-   actions under it filling the card's width; the picked one bigger, all on one foot. Widths from C# (SquadList).
+   The squad's cards under the sheet (UI-COMBATE UI-02; hud.ts setSquad): the bust on its owner's colour, the name in its
+   strip under it, health and actions under that filling the card's width; the picked one bigger, with no border (Ana,
+   7/11 #13), all on one foot. Widths from C# (SquadList).
 */
 
 .squad-cards {
@@ -26,11 +27,29 @@
     border-top-color: var(--t-accent);
 }
 
-/* The soldier's bust (Arte's Portraits, a square drawn in its owner's colour): cropped to the card. */
+/* The soldier's bust (Arte's Portraits, clear round the figure) on a studio backdrop in its owner's colour (Ana, 7/11 #13;
+   the colours from C#): the colour dark under a glow of it, the bust cropped to the card. */
 .squad-card__bust {
     height: 72px;
     overflow: hidden;
     background-color: var(--m-well);
+}
+
+.squad-card__studio {
+    position: absolute;
+    left: -20%;
+    right: -20%;
+    top: -10%;
+    bottom: -25%;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.squad-card__face {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
     -unity-background-scale-mode: scale-and-crop;
 }
 
@@ -38,16 +57,12 @@
     height: 86px;
 }
 
-/* The name on a dark slip along the bust's foot. */
+/* The name in a strip of its own under the bust (Ana, 7/11 #13). */
 .squad-card__name {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding: 1px 4px 0;
+    padding: 1px 4px 1px;
     font-size: 11px;
     color: #ffffff;
-    background-color: rgba(0, 0, 0, 0.55);
+    background-color: rgba(0, 0, 0, 0.6);
     -unity-text-overflow-position: end;
     text-overflow: ellipsis;
     overflow: hidden;
@@ -130,10 +145,8 @@
     background-color: #5cc4f5;
 }
 
-/* The picked one: lit round it. */
+/* The picked one: bigger, no border round it (Ana, 7/11 #13). */
 .squad-card--selected {
-    border-width: 1px;
-    border-color: var(--t-accent);
     background-color: var(--m-steel);
 }
 

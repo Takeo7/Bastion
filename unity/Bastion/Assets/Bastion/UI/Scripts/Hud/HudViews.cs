@@ -79,6 +79,9 @@ namespace Bastion.UI.Hud
         public string Detail;
         /// <summary>Ready without the command (Arturo, 7/11): who holds it, the turn over when theirs is; null, one holds it.</summary>
         public string Holder;
+        /// <summary>Mode «done»: the soldier in play whose turn the key ends first (Arturo, 7/11, Ana's #5), and who the command passes to (null, nobody).</summary>
+        public string InPlay;
+        public string GoesTo;
     }
 
     // ---------------------------------------------------------------- squad
@@ -94,6 +97,8 @@ namespace Bastion.UI.Hud
         public string Short;
         /// <summary>This player gives its orders (its own, or the partner's while away): it can be picked.</summary>
         public bool Mine;
+        /// <summary>Its owner's colour (#rrggbb): the studio's backdrop behind its bust (Ana, 7/11 #13).</summary>
+        public string Color;
         public bool Selected;
         public bool Dead;
         public bool Evacuated;
@@ -489,8 +494,8 @@ namespace Bastion.UI.Hud
         public string HoverKind;
         public string HoverText;
         /// <summary>
-        /// An eye over an enemy, before its hover line (Arturo, 5/11): «would» in grey, it would see the picked one on the
-        /// tile under the pointer (#5); «sees» in red, it sees the picked one now, with the enemies' sight on (#6); null, none.
+        /// An enemy's eye, in the circle of its gauge (Ana, 7/11 #1): «open», it sees the picked soldier, or, a move under
+        /// the pointer, would see it there (Arturo, 5/11 #5, #6); «closed», it doesn't; null, no gauge (one of ours).
         /// </summary>
         public string Eye;
         /// <summary>The target being picked: the only flag kept over the shoulder.</summary>
@@ -521,11 +526,6 @@ namespace Bastion.UI.Hud
         public bool Button;
         /// <summary>The button on: every enemy in sight's at once.</summary>
         public bool On;
-        /// <summary>The legend: what the red on the ground is; `Noticed`, the squad hidden, where they would notice one.</summary>
-        public bool Legend;
-        public bool Noticed;
-        /// <summary>Several enemies' at once (the button on): «Lo que ven».</summary>
-        public bool Many;
     }
 
     /// <summary>

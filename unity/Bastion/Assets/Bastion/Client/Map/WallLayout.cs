@@ -33,10 +33,18 @@ namespace Bastion.Client.Map
             public string top;
             /// <summary>An office's cornice along the top of its top storey, and its plinth at the foot of its ground floor (phase 3 of #3).</summary>
             public string crown, plinth;
+            /// <summary>
+            /// How far out from the wall's middle the face of its facing stands (tiles; 0, none): the facing (its wall's pieces
+            /// after the first) runs on that much round a corner's outside, and covers its door's jambs (Ana, 7/11 #18: the
+            /// brick stopped short of each corner and of the door, the concrete between showing, toothed).
+            /// </summary>
+            public float facingOut;
 
-            public Kit With(string[] wall = null, string[] window = null, string[] door = null, string[] lintel = null, bool noLeaf = false, float storey = 0, float[] glass = null)
+            public Kit With(string[] wall = null, string[] window = null, string[] door = null, string[] lintel = null, bool noLeaf = false, float storey = 0, float[] glass = null,
+                float facingOut = -1)
             {
                 var k = (Kit)MemberwiseClone();
+                if (facingOut >= 0) k.facingOut = facingOut;
                 if (wall != null) k.wall = wall;
                 if (window != null) k.window = window;
                 if (door != null) k.door = door;
@@ -53,6 +61,10 @@ namespace Bastion.Client.Map
         /// (buildings.ts THICK). Doors, windows and posts thicken with them.
         /// </summary>
         public const float Thick = 1.75f;
+        /// <summary>How far out a leaf goes in a faced wall (tiles): from its own face (0.161 m out, thickened) to the facing's (0.294).</summary>
+        const float LeafOut = (0.294f - 0.161f) / 1.5f;
+        /// <summary>Where a door's jamb's facing is centred (tiles from the door's middle): from the leaf's edge to the tile's.</summary>
+        const float JambFace = (0.604f / 1.5f + 0.5f) / 2;
         const float Storey = BuildingPlan.Storey;
         /// <summary>Tiles a metre of the kit (SYNTY_SCALE · KIT_SCALE), and a kit's module (KIT_TILE, m).</summary>
         const float KitTiles = 1.2f / 1.5f;
@@ -91,6 +103,8 @@ namespace Bastion.Client.Map
             };
             var brick = bunker.With(wall: new[] { "bunkerWall", "brickFace" }, window: new[] { "bunkerWindow", "bunkerSill", "brickSill" },
                 door: new[] { "bunkerLintel", "brickLintel" }, lintel: new[] { "bunkerLintel", "brickLintel" });
+            // (The brick's face 0.294 m out, thickened: EdificiosLab.Grosor.)
+            brick.facingOut = 0.294f / 1.5f;
             var fence = new Kit
             {
                 wall = new[] { "fenceWall" }, window = new[] { "bunkerWindow" }, door = new[] { "bunkerLintel" }, leaf = "metalDoor",
@@ -99,7 +113,7 @@ namespace Bastion.Client.Map
             };
             // A shed: sheet metal outside a bunker wall (as the warehouses' brick), steel-framed windows, a metal door.
             Kit Shed(string sheet, string lintel, string sill) => brick.With(wall: new[] { "bunkerWall", sheet }, window: new[] { "bunkerWindow", "bunkerSill", sill },
-                door: new[] { "bunkerLintel", lintel }, lintel: new[] { "bunkerLintel", lintel });
+                door: new[] { "bunkerLintel", lintel }, lintel: new[] { "bunkerLintel", lintel }, facingOut: 0);
             // A shop's facing (phase 2 of #3): POLYGON Shops' wall, its sash window, its door and lintel in that brick or
             // render; for a post, a square of the wall as thick as it, closed all round. The window's pane as the pack's
             // glass (0.72 by 1.31 m, its middle 1.3 m up, 6 cm in).
@@ -316,7 +330,7 @@ namespace Bastion.Client.Map
         /// them a tile along from one storey to the next, a checkerboard); over a wall shared with a lower neighbour, what
         /// stands above the neighbour's roof, facing it.
         /// </summary>
-        void Storeys(string ground, float x, float z, int t, Vec2 o, bool between, int b, int other, float along = 1)
+        void Storeys(string ground, float x, float z, int t, Vec2 o, bool between, int b, int other, float along = 1, Vec2 d = default, float reach = 0)
         {
             var bd = BuildingOf(b);
             // Real storeys are laid from their own tiles.
@@ -344,7 +358,12 @@ namespace Bastion.Client.Map
                 if (kit.crown != null && k == ob.storeys - 1) Put(kit.crown, x, z, y0, face, false, owner, along: along, thick: kit.thick, tint: true, roof: true);
                 if (along < 1)
                 {
-                    for (int n = 0; n < kit.wall.Length; n++) Put(kit.wall[n], x, z, y0, face, false, owner, along: along, thick: kit.thick, tint: n == 0, roof: true);
+                    // (A corner's arm: its facing round the corner's outside, as on the ground: `reach` back along `d`.)
+                    for (int n = 0; n < kit.wall.Length; n++)
+                    {
+                        float r = n > 0 && owner == b ? reach : 0;
+                        Put(kit.wall[n], x - d.X * r / 2, z - d.Y * r / 2, y0, face, false, owner, along: along + r, thick: kit.thick, tint: n == 0, roof: true);
+                    }
                     continue;
                 }
                 PutAll(glazed ? kit.window : kit.wall, x, z, y0, face, false, owner, kit, false, true);
@@ -784,9 +803,17 @@ namespace Bastion.Client.Map
                         sign(building, cx, cz, @base, o);
                     if (kit.leaf != null)
                     {
-                        Put(kit.leaf, cx, cz, @base, o, between, b, thick: kit.thick, open: open, otherHinge: otherHinge);
-                        // Jambs either side of the leaf.
-                        foreach (int side in new[] { -1, 1 }) Put(kit.post, cx + along.X * side * 0.46f, cz + along.Y * side * 0.46f, @base, o, between, b, along: 0.08f, thick: kit.thick);
+                        // (With a facing, the leaf as far out as its face, so the jambs' toothed ends don't show past it: Ana, 7/11 #18.)
+                        float lean = kit.facingOut > 0 && !between ? LeafOut : 0;
+                        Put(kit.leaf, cx + o.X * lean, cz + o.Y * lean, @base, o, between, b, thick: kit.thick, open: open, otherHinge: otherHinge);
+                        // Jambs either side of the leaf, faced as the wall up to the leaf's edge (0.604 m from the middle).
+                        foreach (int side in new[] { -1, 1 })
+                        {
+                            Put(kit.post, cx + along.X * side * 0.46f, cz + along.Y * side * 0.46f, @base, o, between, b, along: 0.08f, thick: kit.thick);
+                            if (kit.facingOut > 0 && !between)
+                                for (int n = 1; n < kit.wall.Length; n++)
+                                    Put(kit.wall[n], cx + along.X * side * JambFace, cz + along.Y * side * JambFace, @base, o, between, b, along: 1 - 2 * JambFace, thick: kit.thick);
+                        }
                     }
                 }
                 else if (kind == TileKinds.Window || kind == TileKinds.WindowBroken)
@@ -850,9 +877,16 @@ namespace Bastion.Client.Map
                 var (o, between, other) = Facing(run, d.X, d.Y, bb);
                 var kit = between && building?.kind != BuildingKinds.Medical ? Between : bb == b ? outerKit : KitOf(BuildingOf(bb));
                 float ax = cx + d.X * 0.25f, az = cz + d.Y * 0.25f;
-                for (int n = 0; n < kit.wall.Length; n++) Put(kit.wall[n], ax, az, @base, o, between, bb, along: 0.5f, thick: kit.thick, tint: n == 0, tall: broken ? BreachHeight : 1);
+                // On a corner's outside (its face away from the other arm), a facing runs on round it to meet the other's.
+                int bend = Enumerable.Range(0, 4).FirstOrDefault(j => j != k && conn[j]);
+                float reach = conn.Count(c => c) == 2 && !between && o.X == -dirs[bend].X && o.Y == -dirs[bend].Y ? kit.facingOut : 0;
+                for (int n = 0; n < kit.wall.Length; n++)
+                {
+                    float r = n > 0 ? reach : 0;
+                    Put(kit.wall[n], ax - d.X * r / 2, az - d.Y * r / 2, @base, o, between, bb, along: 0.5f + r, thick: kit.thick, tint: n == 0, tall: broken ? BreachHeight : 1);
+                }
                 if (broken) for (int n = 0; n < kit.lintel.Length; n++) Put(kit.lintel[n], ax, az, @base, o, between, bb, along: 0.5f, thick: kit.thick, tint: n == 0);
-                if (!loose) Storeys(TileKinds.Wall, ax, az, 0, o, between, bb, other, 0.5f);
+                if (!loose) Storeys(TileKinds.Wall, ax, az, 0, o, between, bb, other, 0.5f, d, reach);
                 if (kit.top != null) Put(kit.top, ax, az, @base + Storey, o, between, b, along: 0.5f / WireLength, thick: 1);
                 if (!between && kit.crown != null && TopOf(BuildingOf(bb), level)) Put(kit.crown, ax, az, @base, o, false, bb, along: 0.5f, thick: kit.thick, tint: true);
                 if (!between && kit.plinth != null && level == 0) Put(kit.plinth, ax, az, @base, o, false, bb, along: 0.5f, thick: kit.thick, tint: true);

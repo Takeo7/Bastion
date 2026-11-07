@@ -1,22 +1,21 @@
 /*
-   The picked soldier's sheet, one line over the cards (UI-COMBATE UI-02; hud.ts setSelected): who, its weapon, its
-   figures with their icons, the backpack's mark at its end; a long one goes on in a second line.
+   The picked soldier's sheet, one row over the cards (UI-COMBATE UI-02; hud.ts setSelected; Ana, 7/11 #13): who, its
+   weapon, its rounds, its figures with their icons, a thin line between the groups, the backpack's mark at its end.
 */
 
+/* On a torn plate of its own over the cards' (Hud.uxml), as wide as its row needs. */
 .unit-panel {
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    margin-bottom: 5px;
-    padding: 3px 7px;
+    margin-bottom: 4px;
+    padding: 5px 10px;
     min-height: 28px;
-    border-radius: 2px;
-    background-color: rgba(0, 0, 0, 0.32);
-    border-width: 1px;
-    border-top-color: rgba(0, 0, 0, 0.6);
-    border-left-color: rgba(0, 0, 0, 0.4);
-    border-right-color: rgba(255, 255, 255, 0.05);
-    border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Nothing in the row shrinks: the plate grows to it instead (SquadList). */
+.unit-panel > * {
+    flex-shrink: 0;
 }
 
 .unit-head {
@@ -31,25 +30,28 @@
 .unit-head__name-row {
     flex-direction: row;
     align-items: center;
-    flex-shrink: 1;
+    flex-shrink: 0;
 }
 
 .unit-name {
-    font-size: 16px;
-    margin-right: 5px;
+    font-size: 14px;
+    margin-right: 4px;
+    white-space: nowrap;
 }
 
 .unit-class {
-    font-size: 10px;
-    letter-spacing: 0.5px;
+    font-size: 9px;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
 }
 
-/* Its cover's shield (CoverShield; Arturo, 7/11): the move's shield, in the cover's colour. */
+/* Its cover's shield (CoverShield; Arturo, 7/11): Synty's shield (Ana, 7/11 #2), tinted with the cover's colour. */
 .cover-shield {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     margin-left: 7px;
     flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
 }
 
 /* «DE ANA»: in the partner's colour (set from C#). */
@@ -79,23 +81,34 @@
 .unit-weapon {
     flex-direction: row;
     align-items: center;
-    margin-left: 7px;
-    padding-left: 7px;
+    margin-left: 6px;
+    padding-left: 6px;
     border-left-width: 1px;
-    border-left-color: var(--t-line);
+    border-left-color: rgba(255, 255, 255, 0.18);
 }
 
 .unit-stats {
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    margin-left: 10px;
+    margin-left: 6px;
+    padding-left: 6px;
+    border-left-width: 1px;
+    border-left-color: rgba(255, 255, 255, 0.18);
 }
 
 .stat {
     flex-direction: row;
+    flex-shrink: 0;
     align-items: center;
-    margin-right: 8px;
+    margin-right: 6px;
+}
+
+/* The first figure past the rounds: a thin line before it (Ana, 7/11 #13). */
+.stat--group {
+    padding-left: 6px;
+    border-left-width: 1px;
+    border-left-color: rgba(255, 255, 255, 0.18);
 }
 
 /* The figure's icon (Synty INTERFACE sprites, tinted). */
@@ -107,7 +120,7 @@
 }
 
 .stat__value {
-    font-size: 13px;
+    font-size: 12px;
     -unity-font-style: bold;
     margin-left: 2px;
 }
@@ -117,16 +130,21 @@
 }
 
 .unit-weapon__name {
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--t-muted);
+    white-space: nowrap;
 }
 
-/* The backpack's mark at the line's end, under its slots; what the squad carries in its help. */
+/* The backpack's mark at the row's end, its pockets over it once pressed; what the squad carries in its help. */
 .unit-pack-mark {
     margin-left: auto;
     padding-left: 6px;
     border-left-width: 1px;
-    border-left-color: var(--t-line);
+    border-left-color: rgba(255, 255, 255, 0.18);
+}
+
+.unit-pack-mark--open .unit-pack-mark__icon {
+    -unity-background-image-tint-color: var(--t-accent);
 }
 
 .unit-pack-mark__icon {
@@ -156,7 +174,7 @@
 }
 
 .weapon-mark--worn {
-    background-color: rgba(245, 165, 36, 0.22);
+    background-color: rgba(255, 255, 255, 0.22);
     color: var(--t-warn);
 }
 
@@ -188,11 +206,12 @@
     flex-shrink: 0;
 }
 
-/* A slot: a dark well, its kind's colour as a line along its foot (--c), its number and icon in that colour. */
+/* A slot: a dark well, its kind's colour as a line along its foot (--c), its number and icon in that colour; bigger than
+   they were (Ana, 7/11 #13). */
 .pack-slot {
-    width: 28px;
-    height: 20px;
-    margin-right: 3px;
+    width: 42px;
+    height: 30px;
+    margin-right: 4px;
     flex-direction: row;
     align-items: center;
     justify-content: center;
@@ -209,36 +228,36 @@
 }
 
 .pack-slot__n {
-    font-size: 12px;
+    font-size: 16px;
     letter-spacing: 0;
 }
 
 .pack-slot__icon {
-    width: 14px;
-    height: 14px;
+    width: 20px;
+    height: 20px;
 }
 
 .pack-slot__icon--small {
-    width: 11px;
-    height: 11px;
-    margin-left: 1px;
+    width: 15px;
+    height: 15px;
+    margin-left: 2px;
 }
 
 .pack-slot__icon--weapon {
-    width: 20px;
+    width: 30px;
 }
 
 .pack-slot--supplies { border-bottom-color: rgba(255, 210, 90, 0.7); }
 .pack-slot--medicines { border-bottom-color: rgba(143, 208, 90, 0.7); }
-.pack-slot--item { border-bottom-color: rgba(242, 194, 48, 0.7); }
+.pack-slot--item { border-bottom-color: rgba(255, 255, 255, 0.7); }
 .pack-slot--food { border-bottom-color: rgba(234, 185, 108, 0.7); }
 .pack-slot--parts { border-bottom-color: rgba(178, 195, 208, 0.7); }
 
 /* A weapon found glows faintly purple: for the Armería. */
 .pack-slot--weapon {
-    background-color: rgba(197, 140, 255, 0.13);
+    background-color: rgba(255, 255, 255, 0.13);
     border-width: 1px;
-    border-color: rgba(197, 140, 255, 0.65);
+    border-color: rgba(255, 255, 255, 0.65);
 }
 
 .pack-slot--supplies .pack-slot__n, .pack-total--supplies .pack-total__n { color: #ffd25a; }
@@ -246,13 +265,13 @@
 .pack-slot--item .pack-slot__n, .pack-total--item .pack-total__n { color: var(--t-accent); }
 .pack-slot--food .pack-slot__n, .pack-total--food .pack-total__n { color: #eab96c; }
 .pack-slot--parts .pack-slot__n, .pack-total--parts .pack-total__n { color: #b2c3d0; }
-.pack-slot--weapon .pack-slot__n, .pack-total--weapon .pack-total__n { color: #c58cff; }
+.pack-slot--weapon .pack-slot__n, .pack-total--weapon .pack-total__n { color: #ffffff; }
 
 .pack-slot--medicines .pack-slot__icon, .pack-total--medicines .pack-total__icon { -unity-background-image-tint-color: var(--t-good); }
 .pack-slot--item .pack-slot__icon, .pack-total--item .pack-total__icon { -unity-background-image-tint-color: var(--t-accent); }
 .pack-slot--food .pack-slot__icon, .pack-total--food .pack-total__icon { -unity-background-image-tint-color: #eab96c; }
 .pack-slot--parts .pack-slot__icon, .pack-total--parts .pack-total__icon { -unity-background-image-tint-color: #b2c3d0; }
-.pack-slot--weapon .pack-slot__icon, .pack-total--weapon .pack-total__icon { -unity-background-image-tint-color: #c58cff; }
+.pack-slot--weapon .pack-slot__icon, .pack-total--weapon .pack-total__icon { -unity-background-image-tint-color: #ffffff; }
 
 /* One's own soldier's slot is a button: lit on hover and while its menu is open. */
 .pack-slot-btn {
@@ -391,8 +410,8 @@
     padding: 1px 7px;
     border-width: 1px;
     border-radius: 2px;
-    border-color: rgba(242, 194, 48, 0.7);
-    background-color: rgba(242, 194, 48, 0.08);
+    border-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
 .pack-floor-item:disabled {
@@ -401,7 +420,7 @@
 
 .pack-floor-item:hover,
 .pack-floor-item--open {
-    background-color: rgba(242, 194, 48, 0.18);
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 .pack-floor-item__label {
@@ -477,12 +496,12 @@
 
 .pack-act:hover {
     background-color: #3a4043;
-    border-color: rgba(242, 194, 48, 0.55);
+    border-color: rgba(255, 255, 255, 0.55);
 }
 
 .pack-act--main {
     background-color: #3f3920;
-    border-color: rgba(242, 194, 48, 0.7);
+    border-color: rgba(255, 255, 255, 0.7);
 }
 
 .pack-act--main:hover {

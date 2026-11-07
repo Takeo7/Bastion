@@ -4,10 +4,10 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// The stamp in the middle (hud.ts banner; docs/UNITY-UI.md §2.5): «TU TURNO», «TURNO ENEMIGO», «¡CONTACTO!»… with a
-    /// line under it, coming down like a rubber stamp (and its sound): as Mixta drew it (mixta-hud.css .banner), a plate of
-    /// dark steel between two hazard bands, yellow or red, its words straight; not the paper stamp under it (styles.css),
-    /// which read badly over the snow (Ana, 28/10). It goes by itself, or, `held`, stays until it is
+    /// The stamp in the middle (hud.ts banner; docs/UNITY-UI.md §2.5): «TU TURNO», «TURNO ENEMIGO»… with a line under it,
+    /// coming down like a rubber stamp (and its sound): as the «LEVEL UP» Ana showed (7/11 #8), a black plate with its
+    /// steel's grain faint, a thin white line along its top and another along its foot, the title white and in capitals
+    /// in the middle; no hazard bands, no arrow over it. It goes by itself, or, `held`, stays until it is
     /// clicked, or Intro or Esc pressed, or the player does anything else (Release); meanwhile it covers the field and
     /// the turn clock waits (Covering).
     /// </summary>
@@ -34,21 +34,21 @@ namespace Bastion.UI.Hud
         /// <summary>Held and up: it covers the field to be read.</summary>
         public bool Covering => held && host.ClassListContains("banner--show");
 
-        /// <summary>kind: xcom, alien or warn.</summary>
+        /// <summary>kind: turn (a turn's, white: Ana, 7/11 #8), xcom, alien (a danger's, its title red) or warn.</summary>
         public void Show(string text, string kind = "xcom", string detail = null, bool hold = false)
         {
             sound?.Invoke("stamp");
             timer?.Pause();
             host.Clear();
             var plate = Ui.El("banner__plate", host);
-            Ui.El("banner__hazard banner__hazard--top", plate);
-            Ui.Text(text, "banner__text font-title", plate);
+            Ui.El("banner__line banner__line--top", plate);
+            Ui.Text(text.ToUpperInvariant(), "banner__text font-title", plate);
             if (!string.IsNullOrEmpty(detail)) Ui.Text(detail, "banner__detail", plate);
             if (hold) Ui.Text(HudText.Banner.Go.ToUpperInvariant(), "banner__go", plate);
-            Ui.El("banner__hazard banner__hazard--bottom", plate);
+            Ui.El("banner__line banner__line--bottom", plate);
             // The clicks on the plate, the host's (held) or none.
             plate.Query<VisualElement>().ForEach(e => e.pickingMode = PickingMode.Ignore);
-            foreach (var k in new[] { "xcom", "alien", "warn" }) host.EnableInClassList("banner--" + k, kind == k);
+            foreach (var k in new[] { "turn", "xcom", "alien", "warn" }) host.EnableInClassList("banner--" + k, kind == k);
             held = hold;
             // Clickable only while held; otherwise the clicks go through to the map.
             host.pickingMode = hold ? PickingMode.Position : PickingMode.Ignore;

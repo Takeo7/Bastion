@@ -528,20 +528,14 @@ namespace Bastion.UI.Strategy
         public void MenuPage(string page) => menu.Go(page);
 
         /// <summary>
-        /// Take-off (screen.ts launch): every panel fades away but the stamp, «EN MARCHA» (a siege: «YA ESTÁN AQUÍ»), while
-        /// the clearing plays it; false, the screens back.
+        /// Take-off (screen.ts launch): every panel fades away while the clearing plays it, with no stamp over La Lata (Ana,
+        /// 7/11 #21: «EN MARCHA» went); false, the screens back.
         /// </summary>
-        public void Launching(string banner)
+        public void Launching(bool on)
         {
             if (root == null) return;
-            var on = !string.IsNullOrEmpty(banner);
             root.EnableInClassList("strat--launching", on);
-            root.Q(className: "strat-launch")?.RemoveFromHierarchy();
-            if (!on) return;
-            menu.Close();
-            var stamp = Ui.El("strat-launch", root);
-            stamp.pickingMode = PickingMode.Ignore;
-            Ui.Text(banner.ToUpperInvariant(), "strat-launch__text font-title", stamp);
+            if (on) menu.Close();
         }
 
         /// <summary>A short note at the bottom (the server's «rejected», a proposal's cost): gone after 2.6 s.</summary>

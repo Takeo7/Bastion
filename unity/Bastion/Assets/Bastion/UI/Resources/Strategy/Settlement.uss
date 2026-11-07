@@ -47,7 +47,7 @@
     flex-grow: 1;
     height: 1px;
     margin-left: 10px;
-    background-color: rgba(242, 194, 48, 0.35);
+    background-color: rgba(255, 255, 255, 0.35);
 }
 
 /* ============================================================== Talar */
@@ -374,7 +374,7 @@
 .settle-step--now {
     background-color: rgb(56, 52, 35);
     border-width: 1px;
-    border-color: rgba(242, 194, 48, 0.6);
+    border-color: rgba(255, 255, 255, 0.6);
 }
 
 .settle-step--now .settle-step__label,

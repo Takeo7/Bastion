@@ -418,9 +418,80 @@ namespace Bastion.UI.Combat
                 }
                 Wash(seen, (byte)(many ? 0x14 : 0x29), 0.015f);
                 Wash(noticed, (byte)(many ? 0x24 : 0x38), 0.016f);
-                MoveOverlay.Border(build, s, seen, red, many ? 0.14f : 0.18f, 0.6f);
+                // The line round its outside only (Ana, 7/11 #16): every tile it sees still washed red.
+                MoveOverlay.Border(build, s, OuterOnly(seen), red, many ? 0.14f : 0.18f, 0.6f);
             }
             vision.sharedMesh = build.Build(vision.sharedMesh);
+        }
+
+        /// <summary>A patch seen apart smaller than this has no line round it (Ana, 7/11 #16: the square between the bollards).</summary>
+        const int MinIsland = 4;
+
+        /// <summary>
+        /// What the sight's line goes round (Ana, 7/11 #16: the outside only): the tiles seen, but the patches apart of fewer
+        /// than MinIsland, and with what they ring filled in (a car, a crate, a room it doesn't see into), so no loop shows
+        /// inside it. On the first tile's floor.
+        /// </summary>
+        static List<Pos> OuterOnly(IList<Pos> seen)
+        {
+            var result = new List<Pos>();
+            if (seen == null || seen.Count == 0) return result;
+            var z = seen[0].Z;
+            var set = new HashSet<(int x, int y)>();
+            foreach (var p in seen) set.Add((p.X, p.Y));
+            // The patches, four ways round: the small ones go.
+            var kept = new HashSet<(int x, int y)>();
+            var done = new HashSet<(int x, int y)>();
+            var queue = new Queue<(int x, int y)>();
+            var patch = new List<(int x, int y)>();
+            foreach (var start in set)
+            {
+                if (!done.Add(start)) continue;
+                patch.Clear();
+                queue.Enqueue(start);
+                while (queue.Count > 0)
+                {
+                    var at = queue.Dequeue();
+                    patch.Add(at);
+                    foreach (var d in Bastion.Engine.Grid.Dirs4)
+                    {
+                        var next = (at.x + d.X, at.y + d.Y);
+                        if (set.Contains(next) && done.Add(next)) queue.Enqueue(next);
+                    }
+                }
+                if (patch.Count >= MinIsland) kept.UnionWith(patch);
+            }
+            if (kept.Count == 0) return result;
+            // The holes: what the rim of the box round it all (a tile out) doesn't reach without crossing it.
+            int x0 = int.MaxValue, y0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue;
+            foreach (var (x, y) in kept)
+            {
+                x0 = Mathf.Min(x0, x - 1);
+                y0 = Mathf.Min(y0, y - 1);
+                x1 = Mathf.Max(x1, x + 1);
+                y1 = Mathf.Max(y1, y + 1);
+            }
+            var outside = new HashSet<(int x, int y)>();
+            for (var x = x0; x <= x1; x++)
+            {
+                queue.Enqueue((x, y0));
+                queue.Enqueue((x, y1));
+            }
+            for (var y = y0; y <= y1; y++)
+            {
+                queue.Enqueue((x0, y));
+                queue.Enqueue((x1, y));
+            }
+            while (queue.Count > 0)
+            {
+                var at = queue.Dequeue();
+                if (at.x < x0 || at.x > x1 || at.y < y0 || at.y > y1 || kept.Contains(at) || !outside.Add(at)) continue;
+                foreach (var d in Bastion.Engine.Grid.Dirs4) queue.Enqueue((at.x + d.X, at.y + d.Y));
+            }
+            for (var x = x0; x <= x1; x++)
+                for (var y = y0; y <= y1; y++)
+                    if (kept.Contains((x, y)) || !outside.Contains((x, y))) result.Add(new Pos { X = x, Y = y, Z = z });
+            return result;
         }
 
         /// <summary>The furniture or doors the hand reaches: a square frame on each, white on the one it would act on (`pick`).</summary>

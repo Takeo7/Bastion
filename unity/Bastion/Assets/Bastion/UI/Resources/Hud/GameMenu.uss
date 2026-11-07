@@ -142,7 +142,7 @@
 }
 
 .game-menu__entry:hover {
-    background-color: rgba(242, 194, 48, 0.05);
+    background-color: rgba(255, 255, 255, 0.05);
     color: #ffffff;
     translate: 4px 0;
 }

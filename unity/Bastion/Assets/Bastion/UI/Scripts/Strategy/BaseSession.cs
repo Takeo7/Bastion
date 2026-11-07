@@ -149,16 +149,15 @@ namespace Bastion.UI.Strategy
         const float LeaveAtMost = 12;
 
         /// <summary>
-        /// Take-off (screen.ts launch), before the mission loads (AppFlow waits for it): the panels go but the stamp, the
-        /// squad gets into La Lata and it drives off (Arte's Settlement.Leave, ≈10 s with the bus); a siege, nobody leaves:
-        /// «Ya están aquí» a moment. What the host sends meanwhile waits for the battle (this stopped listening).
+        /// Take-off (screen.ts launch), before the mission loads (AppFlow waits for it): the panels go, the squad gets into
+        /// La Lata and it drives off (Arte's Settlement.Leave, ≈10 s with the bus); a siege, nobody leaves: a moment. What the host sends meanwhile waits for the battle (this stopped listening).
         /// </summary>
         public async Awaitable Depart()
         {
             var root = GetComponent<StrategyRoot>();
             var c = control?.State;
             var siege = c != null && Campaign.ActiveOffer(c)?.Siege == true;
-            root.Launching(siege ? Lore.BaseSiegeText.Here.TrimEnd('.') : StrategyText.Launch);
+            root.Launching(true);
             var clearing = Bastion.Client.Settlement.Instance;
             var ct = destroyCancellationToken;
             try

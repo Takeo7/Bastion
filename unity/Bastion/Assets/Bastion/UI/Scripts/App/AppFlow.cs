@@ -291,7 +291,7 @@ namespace Bastion.UI.App
             loadKicker = Ui.Text("", "font-title", loadWords);
             loadKicker.style.fontSize = 13;
             loadKicker.style.letterSpacing = 3.4f;
-            loadKicker.style.color = (Color)new Color32(0xf2, 0xc2, 0x30, 0xff);
+            loadKicker.style.color = Color.white;
             loadTitle = Ui.Text("", "font-title", loadWords);
             loadTitle.style.fontSize = 44;
             loadTitle.style.letterSpacing = 2.2f;
@@ -308,7 +308,7 @@ namespace Bastion.UI.App
             loadRun.style.top = 0;
             loadRun.style.bottom = 0;
             loadRun.style.width = Length.Percent(40);
-            loadRun.style.backgroundColor = (Color)new Color32(0xf2, 0xc2, 0x30, 0xff);
+            loadRun.style.backgroundColor = Color.white;
             loadPlace = Ui.Text("", null, loadWords);
             loadPlace.style.marginTop = 8;
             loadPlace.style.color = (Color)new Color32(0x8d, 0x91, 0x8a, 0xff);

@@ -71,7 +71,7 @@
     border-top-color: var(--t-accent);
     border-left-color: var(--t-accent);
     border-right-color: var(--t-accent);
-    background-color: rgba(242, 194, 48, 0.08);
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
 .soldier-tile--dead {
@@ -503,7 +503,7 @@
 
 .tier-marks__mark {
     font-size: 11px;
-    color: #a678ff;
+    color: #ffffff;
 }
 
 .sheet__armor-name {
@@ -595,7 +595,7 @@
     flex-grow: 1;
     height: 7px;
     margin-right: 2px;
-    background-color: rgba(242, 194, 48, 0.18);
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 .skill-rank__seg--on {
@@ -653,7 +653,7 @@
     color: #ffffff;
     background-color: var(--m-well);
     border-width: 0 0 2px 0;
-    border-bottom-color: rgba(242, 194, 48, 0.55);
+    border-bottom-color: rgba(255, 255, 255, 0.55);
     border-radius: 0;
 }
 
@@ -680,7 +680,7 @@
     border-width: 1px;
     border-color: var(--t-accent);
     color: #ffffff;
-    background-color: rgba(242, 194, 48, 0.14);
+    background-color: rgba(255, 255, 255, 0.14);
 }
 
 .custom__colors-head {
@@ -868,7 +868,7 @@
     width: 56px;
     height: 8px;
     margin-right: 3px;
-    background-color: rgba(242, 194, 48, 0.18);
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 .board-modal__rank-seg--on {
@@ -885,7 +885,7 @@
     margin-left: 16px;
     padding: 3px 10px;
     border-width: 1px;
-    border-color: rgba(242, 194, 48, 0.4);
+    border-color: rgba(255, 255, 255, 0.4);
     background-color: rgba(0, 0, 0, 0.3);
 }
 

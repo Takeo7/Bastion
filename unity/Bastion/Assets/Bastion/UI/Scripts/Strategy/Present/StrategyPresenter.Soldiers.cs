@@ -309,7 +309,7 @@ namespace Bastion.UI.Strategy
             v.Stats.Add(new SheetStatView { Icon = "stat:hp", Value = stats.MaxHp.ToString(), Color = "#8fd05a", Tip = "Salud" });
             v.Stats.Add(new SheetStatView { Icon = "stat:aim", Value = (aim + stats.Mods.Aim + stats.Mods.GunAim).ToString(), Color = "#ffffff", Tip = $"Puntería con armas de fuego: {Bars.BaseAim} de base, más lo que suman las barras de Disparo y el tablero" });
             v.Stats.Add(new SheetStatView { Icon = "stat:melee", Value = (aim + stats.Mods.Aim + stats.Mods.MeleeAim).ToString(), Color = "#ffffff", Tip = $"Puntería cuerpo a cuerpo: {Bars.BaseAim} de base, más lo que suman las barras de Cuerpo a cuerpo y el tablero" });
-            v.Stats.Add(new SheetStatView { Icon = "stat:ap", Value = stats.Will.ToString(), Color = "#a678ff", Tip = "Voluntad" });
+            v.Stats.Add(new SheetStatView { Icon = "stat:ap", Value = stats.Will.ToString(), Color = "#ffffff", Tip = "Voluntad" });
             // Dodge (Arturo, 6/11: Forma física's bars grow it, not health): its template's and what the bars and the board add.
             var dodge = Content.Templates[stats.Template].Dodge + stats.Mods.Dodge;
             v.Stats.Add(new SheetStatView { Icon = "stat:dodge", Value = dodge.ToString(), Color = "#ffffff", Tip = "Esquiva: de cada 100 impactos que recibe, cuántos se quedan en rozadura. La suben las barras de Forma física y el tablero" });

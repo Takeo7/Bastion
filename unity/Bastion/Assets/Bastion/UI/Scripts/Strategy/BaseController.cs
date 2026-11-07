@@ -147,8 +147,10 @@ namespace Bastion.UI.Strategy
             if (prev != null && c.Day > prev.Day) Bastion.Client.Audio.UiSounds.Play("tick");
             var premise = p.Premise();
             if (premise != null) alerts.Insert(0, premise);
-            // A mission chosen by either player sends both to the hangar; a finished one to the debrief.
-            if (prev?.ActiveMission == null && c.ActiveMission != null) SetView("squad");
+            // A mission chosen by either player sends both to the hangar; a finished one to the debrief. A new campaign
+            // opens there too, under its premise, with its first operation chosen (Ana, 7/11 #20: it came up on Soldados),
+            // whatever state came before it.
+            if (c.ActiveMission != null && (prev?.ActiveMission == null || premise != null)) SetView("squad");
             else if (prev?.ActiveMission != null && c.ActiveMission == null && view == "squad") SetView("geoscape");
             if (ReportPending(c) && view != "debrief") SetView("debrief");
             if (!viewSent) SetView(view);

@@ -123,8 +123,8 @@
 }
 
 .squad-row__chip--warn {
-    color: #1e1706;
-    background-color: rgba(166, 120, 255, 0.85);
+    color: #15181a;
+    background-color: rgba(255, 255, 255, 0.85);
     border-radius: 2px;
 }
 
@@ -636,7 +636,7 @@
 }
 
 .haul--better .haul__icon {
-    -unity-background-image-tint-color: #a678ff;
+    -unity-background-image-tint-color: #ffffff;
 }
 
 .haul__figure {

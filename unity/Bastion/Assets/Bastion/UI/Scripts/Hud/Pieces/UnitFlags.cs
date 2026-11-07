@@ -206,25 +206,40 @@ namespace Bastion.UI.Hud
             }
         }
 
-        /// <summary>The line on the tile under the pointer (overlays.ts setNote), and where it stands.</summary>
-        Label note;
+        /// <summary>The line on the tile under the pointer (overlays.ts setNote), what it says, and where it stands.</summary>
+        VisualElement note;
+        string noteKey;
         Vector3 noteAt;
 
-        /// <summary>One short line on a tile («Ruido 3: corre», «La caja de armas · clic: abrir»), or none (null).</summary>
-        public void SetNote(Vector3? world, string text)
+        /// <summary>
+        /// One short line on a tile («La caja de armas · clic: abrir»), or none (null); `iconId`, a drawn icon before it
+        /// (LineIcon: a move that is heard, «noise», Ana's 7/11 #3, in place of «Ruido 3: corre»), alone if there are no
+        /// words.
+        /// </summary>
+        public void SetNote(Vector3? world, string text, string iconId = null)
         {
-            if (world == null || string.IsNullOrEmpty(text))
+            if (world == null || string.IsNullOrEmpty(text) && !LineIcon.Has(iconId))
             {
                 note?.RemoveFromHierarchy();
                 note = null;
+                noteKey = null;
                 return;
             }
-            if (note == null)
+            var key = $"{iconId}|{text}";
+            if (note == null || key != noteKey)
             {
-                note = Ui.Text(text, "tile-note", layer);
-                note.pickingMode = PickingMode.Ignore;
+                note?.RemoveFromHierarchy();
+                note = Ui.El("tile-note", layer);
+                if (LineIcon.Has(iconId))
+                {
+                    note.AddToClassList("tile-note--icon");
+                    var box = Ui.El("tile-note__icon", note);
+                    box.Add(new LineIcon(iconId));
+                }
+                if (!string.IsNullOrEmpty(text)) Ui.Text(text, "tile-note__text", note);
+                note.Query<VisualElement>().ForEach(x => x.pickingMode = PickingMode.Ignore);
+                noteKey = key;
             }
-            else note.text = text;
             noteAt = world.Value;
         }
 
@@ -359,19 +374,26 @@ namespace Bastion.UI.Hud
             el.EnableInClassList("uflag--other", f.Other);
             // Pointed at from the list (Arturo, 31/10 #11): an arrow over all of it, bobbing.
             if (f.Pointed) el.Add(new PointerArrow());
-            // Over it, what the pointer's tile means: an eye if it would see the picked one there, or sees it now (Arturo,
-            // 5/11 #5, #6), and the odds; on a plate, kept whole near the screen's edge (KeepLinesIn).
-            if (!string.IsNullOrEmpty(f.HoverText) || f.Eye != null)
+            // Over it, what the pointer's tile means, the odds; on a plate, kept whole near the screen's edge (KeepLinesIn).
+            // (Whether it would see the picked one there is its gauge's eye now: Ana, 7/11 #1.)
+            if (!string.IsNullOrEmpty(f.HoverText))
             {
                 var line = Ui.El("uflag__hover uflag__hover--" + (f.HoverKind ?? "sight"), el);
-                if (f.Eye != null) line.Add(new EyeMark("uflag__eye uflag__eye--" + f.Eye));
-                if (!string.IsNullOrEmpty(f.HoverText)) Ui.Text(f.HoverText, "uflag__hover-text", line);
+                Ui.Text(f.HoverText, "uflag__hover-text", line);
             }
             // The name only on the one under the pointer (Ana, Arturo 31/10 #9: no longer on the picked one's).
             if (!string.IsNullOrEmpty(f.Name)) Ui.Text(f.Name, "uflag__name", el);
             var row = Ui.El("uflag__row", el);
             // (No cover's square by the health: the shield is on the soldier's panel now, Arturo 7/11.)
-            Ui.Pips(Ui.El("pips pips--hp", row), f.Hp, f.MaxHp);
+            if (f.Eye != null)
+            {
+                // An enemy's one gauge (Ana, 7/11 #1): Synty INTERFACE Fantasy Menus' SPR_FantasyMenus_Menu_Button_08_Background,
+                // its health in the long part, in the circle its eye, open if it sees the picked one, closed if not.
+                var gauge = Ui.El("uflag__gauge", row);
+                gauge.Add(new EyeMark("uflag__gauge-eye uflag__gauge-eye--" + f.Eye, f.Eye == "closed"));
+                Ui.Pips(Ui.El("uflag__gauge-life", gauge), f.Hp, f.MaxHp);
+            }
+            else Ui.Pips(Ui.El("pips pips--hp", row), f.Hp, f.MaxHp);
             if (f.Armor > 0)
             {
                 var armor = Ui.El("uflag__armor", row);
@@ -384,13 +406,17 @@ namespace Bastion.UI.Hud
 
         /// <summary>
         /// An eye, drawn as the move zone's (MoveOverlay.EyeTexture, styles.css's mask): an almond and its pupil, in the
-        /// colour of its classes: an enemy just seen that hasn't noticed the squad (Spot: .uflag__spot--eye), one that would
-        /// see the picked one on the pointer's tile or sees it now (.uflag__eye--would, --sees).
+        /// colour of its classes: an enemy just seen that hasn't noticed the squad (Spot: .uflag__spot--eye), an enemy's in
+        /// its gauge (.uflag__gauge-eye--open, it sees the picked one); `closed`, its lid down with three lashes
+        /// (--closed, it doesn't).
         /// </summary>
         sealed class EyeMark : VisualElement
         {
-            public EyeMark(string classes)
+            readonly bool closed;
+
+            public EyeMark(string classes, bool closed = false)
             {
+                this.closed = closed;
                 foreach (var c in classes.Split(' ')) AddToClassList(c);
                 pickingMode = PickingMode.Ignore;
                 generateVisualContent += Draw;
@@ -408,6 +434,22 @@ namespace Bastion.UI.Hud
                 p.strokeColor = p.fillColor = resolvedStyle.color;
                 p.lineWidth = 1.6f * k;
                 p.lineJoin = LineJoin.Round;
+                p.lineCap = LineCap.Round;
+                if (closed)
+                {
+                    p.BeginPath();
+                    p.MoveTo(At(0.8f, 3.6f));
+                    p.BezierCurveTo(At(4, 7.6f), At(12, 7.6f), At(15.2f, 3.6f));
+                    p.Stroke();
+                    foreach (var (x0, y0, x1, y1) in new[] { (4.2f, 6.2f, 3.2f, 8.8f), (8f, 6.9f, 8f, 9.6f), (11.8f, 6.2f, 12.8f, 8.8f) })
+                    {
+                        p.BeginPath();
+                        p.MoveTo(At(x0, y0));
+                        p.LineTo(At(x1, y1));
+                        p.Stroke();
+                    }
+                    return;
+                }
                 p.BeginPath();
                 p.MoveTo(At(0.8f, 5));
                 p.BezierCurveTo(At(4, 0.2f), At(12, 0.2f), At(15.2f, 5));

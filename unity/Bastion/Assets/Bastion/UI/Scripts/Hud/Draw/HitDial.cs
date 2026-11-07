@@ -10,7 +10,7 @@ namespace Bastion.UI.Hud
     public sealed class HitDial : VisualElement
     {
         static readonly Color Ring = new Color(0, 0, 0, 0.45f);
-        static readonly Color Arc = new Color32(0xf2, 0xc2, 0x30, 0xff);
+        static readonly Color Arc = Color.white;
 
         float odds;
 
@@ -55,7 +55,7 @@ namespace Bastion.UI.Hud
     /// <summary>The compass's needle (#34): a small triangle from the middle towards the north, in the accent.</summary>
     public sealed class CompassNeedle : VisualElement
     {
-        static readonly Color Accent = new Color32(0xf2, 0xc2, 0x30, 0xff);
+        static readonly Color Accent = Color.white;
 
         public CompassNeedle()
         {

@@ -71,7 +71,7 @@
 
 /* The picked row: an amber bar on its left over a warm wash (mixta-base.css .x-row.on). */
 .armory-row--on {
-    background-color: rgba(242, 194, 48, 0.07);
+    background-color: rgba(255, 255, 255, 0.07);
     border-left-width: 3px;
     border-left-color: var(--t-accent);
 }
@@ -104,7 +104,7 @@
 }
 
 .armory-row__tier-mark--3 {
-    color: #a678ff;
+    color: #ffffff;
 }
 
 .armory-row__words {

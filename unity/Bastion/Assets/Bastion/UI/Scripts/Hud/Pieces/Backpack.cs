@@ -37,6 +37,24 @@ namespace Bastion.UI.Hud
         /// <summary>Whether its menu is open.</summary>
         public bool MenuOpen => menu != null;
 
+        static bool pockets;
+
+        /// <summary>
+        /// The pockets' slots shown (Ana, 7/11 #13: only once the backpack's mark is pressed, and bigger); kept from soldier
+        /// to soldier and mission to mission. What lies on the floor shows either way.
+        /// </summary>
+        public bool Pockets
+        {
+            get => pockets;
+            set
+            {
+                if (pockets == value) return;
+                pockets = value;
+                if (!pockets) Shut();
+                Draw();
+            }
+        }
+
         /// <summary>`pack` of `unit` drawn into `into` (the panel's own holder, made anew with the panel); null, nothing.</summary>
         public void Set(VisualElement into, string unit, PackView pack)
         {
@@ -54,6 +72,8 @@ namespace Bastion.UI.Hud
             if (unit != this.unit) return;
             menuSlot = -1;
             menuSwap = id;
+            // What to leave for it is chosen among the pockets: they open.
+            pockets = true;
             Draw();
         }
 
@@ -142,8 +162,11 @@ namespace Bastion.UI.Hud
                 }
             }
 
-            var slots = Ui.El("pack-slots", host);
-            for (var i = 0; i < pack.Size; i++) slots.Add(Slot(i));
+            if (pockets)
+            {
+                var slots = Ui.El("pack-slots", host);
+                for (var i = 0; i < pack.Size; i++) slots.Add(Slot(i));
+            }
 
             menu = Menu();
             if (menu != null) host.Add(menu);
@@ -173,6 +196,7 @@ namespace Bastion.UI.Hud
                 }
             }
             if (!string.IsNullOrEmpty(pack.SquadTip)) Ui.Text(pack.SquadTip, "pack-haul__line pack-haul__line--muted", card);
+            Ui.Text(HudText.Pack.Pockets, "pack-haul__line pack-haul__line--muted", card);
             return card;
         }
 

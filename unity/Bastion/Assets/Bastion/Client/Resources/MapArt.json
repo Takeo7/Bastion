@@ -2737,7 +2737,7 @@
    "carConvertible",
    "carPickup",
    "carUte",
-   "carHatch",
+   "carPickup",
    "carSedan",
    "carSmall",
    "carMedium",
@@ -2747,7 +2747,7 @@
    "carConvertible",
    "carPickup",
    "carUte",
-   "carHatch"
+   "carMedium"
   ],
   "planter": [
    "planter"

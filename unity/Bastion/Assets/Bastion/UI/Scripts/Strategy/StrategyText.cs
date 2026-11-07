@@ -10,8 +10,6 @@ namespace Bastion.UI.Strategy
     public static class StrategyText
     {
         public const string Brand = "BASTIÓN";
-        /// <summary>The stamp as La Lata leaves (screen.ts launch).</summary>
-        public const string Launch = "En marcha";
         public const string Menu = "Menú";
         public const string MenuTip = "Menú (Esc)";
         /// <summary>At the bottom while walking about the clearing (walkAbout.ts).</summary>
@@ -107,14 +105,14 @@ namespace Bastion.UI.Strategy
         {
             if (string.IsNullOrEmpty(text)) return text;
             text = Regex.Replace(text, @"\*\*(.+?)\*\*", "<color=#ffffff><b>$1</b></color>");
-            return Regex.Replace(text, @"==(.+?)==", "<color=#f2c230><b>$1</b></color>");
+            return Regex.Replace(text, @"==(.+?)==", "<color=#ffffff><b>$1</b></color>");
         }
 
         /// <summary>A tooltip's sentence with its figures picked out (screen.ts figures: em.tip-num).</summary>
         public static string Figures(string sentence)
         {
             if (string.IsNullOrEmpty(sentence)) return sentence;
-            return Regex.Replace(sentence, @"([−+-]?\d+(?:[.,]\d+)?\s?(?:%|§|✚)?)", "<color=#f2c230><b>$1</b></color>");
+            return Regex.Replace(sentence, @"([−+-]?\d+(?:[.,]\d+)?\s?(?:%|§|✚)?)", "<color=#ffffff><b>$1</b></color>");
         }
     }
 }

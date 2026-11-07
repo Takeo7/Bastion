@@ -56,6 +56,13 @@ if wanted "$@"; then
     Assets/Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/Grass_Texture_01.png \
     Assets/Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/Dirt_Texture_01.png || failed=1
 fi
+# Fantasy Menus: only the button's ground under each enemy's one gauge, its health and its eye (Ana, 7/11 #1; UI).
+name=INTERFACE_Fantasy_Menus_Unity_2022_3_v1_1_1
+if wanted "$@"; then
+  echo "== $name (un sprite)"
+  python3 -I "$tools/upkg-extract.py" "$synty/INTERFACE - Fantasy Menus/Unity/$name.unitypackage" "$project" \
+    Assets/Synty/InterfaceFantasyMenus/Sprites/FantasyMenus/SPR_FantasyMenus_Menu_Button_08_Background.png || failed=1
+fi
 # Emotes and Taunts: only the two gestures the camp's talkers make (clearingLife.ts SAYS: a shrug, calming down), a
 # woman's and a man's; the rest of the pack brings older copies of Sidekick's and Generic's shaders.
 name=ANIMATION_Emotes_And_Taunts_Unity_2022_3_v1_0_0

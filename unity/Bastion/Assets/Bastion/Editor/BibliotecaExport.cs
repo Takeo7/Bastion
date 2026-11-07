@@ -40,6 +40,7 @@ namespace Bastion.EditorTools
             ["AnimationEmotesAndTaunts"] = "ANIMATION - Emotes and Taunts", ["AnimationGoblinLocomotion"] = "ANIMATION - Goblin Locomotion",
             ["AnimationIdles"] = "ANIMATION - Idles", ["AnimationSwordCombat"] = "ANIMATION - Sword Combat",
             ["InterfaceApocalypseHUD"] = "INTERFACE - Apocalypse HUD", ["InterfaceDarkFantasyHUD"] = "INTERFACE - Dark Fantasy HUD",
+            ["InterfaceFantasyMenus"] = "INTERFACE - Fantasy Menus",
             ["InterfaceMilitaryCombatHUD"] = "INTERFACE - Military Combat HUD", ["InterfaceModernMenus"] = "INTERFACE - Modern Menus",
             ["PolygonApocalypse"] = "POLYGON - Apocalypse Pack", ["PolygonBossZombies"] = "POLYGON - Boss Zombies",
             ["PolygonCity"] = "POLYGON - City Pack", ["PolygonCityZombies"] = "POLYGON - City Zombies Pack",

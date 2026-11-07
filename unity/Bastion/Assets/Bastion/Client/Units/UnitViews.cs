@@ -103,8 +103,12 @@ namespace Bastion.Client.Units
             /// <summary>Thrown by La Lata as it went (RunOver): it lies where it came down, whatever the state says.</summary>
             public bool runOver;
             public bool shaded;
-            /// <summary>On a storey its building's cutaway hides (Cutaway.Hides): its renderers off.</summary>
+            /// <summary>On a storey its building's cutaway hides (Cutaway.Hides), or inside a building not found (Unfound): its renderers off.</summary>
             public bool cut;
+            /// <summary>Inside a building the squad has not found (Unfound), worked out on this tile at this Sync.</summary>
+            public bool unfound;
+            public (int x, int y, int z) unfoundAt;
+            public int unfoundSync = -1;
             /// <summary>Drawn not at all for now (faded out, veiled: UnitViews.Fade).</summary>
             public bool gone;
             /// <summary>Its Sidekick figure's body (null: a stand-in), its build ("masc", "femn"), whether it moves as the dead.</summary>
@@ -338,18 +342,13 @@ namespace Bastion.Client.Units
                     if (Mathf.Abs(left) < 0.2f) v.yawTo = null;
                     v.root.rotation = Quaternion.Euler(0, v.yawTo == null ? yawTo : yaw + left * (1 - Mathf.Exp(-dt * v.turn)), 0);
                 }
-                // What stands on a storey the cutaway hides isn't drawn (buildings.ts Cutaway.hides).
+                // What stands on a storey the cutaway hides isn't drawn (buildings.ts Cutaway.hides), nor one of the enemy
+                // inside a building not found (Unfound; only those drawn worked out).
                 StepFade(v, dt);
                 if (v.boarded && v.fade <= 0 && v.root.gameObject.activeSelf) v.root.gameObject.SetActive(false);
-                bool cut = cutaway != null && v.place != null && cutaway.Hides(v.place);
+                bool cut = (cutaway != null && v.place != null && cutaway.Hides(v.place)) || (v.root.gameObject.activeSelf && Unfound(v));
                 bool gone = v.fade <= 0;
-                if (cut != v.cut || gone != v.gone)
-                {
-                    v.cut = cut;
-                    v.gone = gone;
-                    foreach (var r in v.root.GetComponentsInChildren<Renderer>(true)) r.enabled = !cut && !gone;
-                    if (!cut && !gone && v.fade < 1) foreach (var w in v.carried.Values) if (w != null) Show(w, v.fade >= 0.5f);
-                }
+                Cut(v, cut, gone);
                 // Where it is and how far into what it does go on seen or not (Gameplay, 1/11: what the player waits for keeps to the clock).
                 bool up = Up(v) && !v.dead;
                 v.aim = Mathf.MoveTowards(v.aim, up && !v.crouched ? 1 : 0, dt / AimBlend);
@@ -552,10 +551,15 @@ namespace Bastion.Client.Units
         {
             using var synced = SyncMarker.Auto();
             state = view;
-            // The enemy shows where the squad has it in sight (teamVisibility), or where UI shows it (ForceVisible, a shade).
+            // The enemy shows where the squad has it in sight (teamVisibility), or where UI shows it in the fog (a shade). One
+            // UI shows as it acts (ForceVisible) is so till now, as 0.10.1's (Ana, 7/11 #14: one of the dead shown once at a
+            // contact stayed drawn for good, inside a building not found too).
             bool[] inSight;
             using (SightMarker.Auto()) inSight = Los.TeamVisibility(view, "xcom");
             (sight, sightOf, sightSeq) = (inSight, view, view.Seq);
+            syncs++;
+            lookers.Clear();
+            foreach (var u in view.Units) if (Los.IsViewer(u, Teams.Xcom)) lookers.Add(u.Pos);
             var seen = new HashSet<string>();
             foreach (var u in view.Units)
             {
@@ -583,7 +587,7 @@ namespace Bastion.Client.Units
                 int node = Bastion.Engine.Grid.NodeOf(view, u.Pos);
                 // (A body that has got up as one of the dead, Reanimate, is gone: the engine keeps it, Reanimated.)
                 bool shown = !u.Alive && u.Reanimated ? false
-                    : v.boarded ? v.fade > 0 : u.Team == "xcom" || forced.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
+                    : v.boarded ? v.fade > 0 : u.Team == "xcom" || revealed.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
                 // An enemy coming into sight fades in (not on the first look at the map: what is there at the start just is).
                 if (shown && !v.root.gameObject.activeSelf && v.synced && u.Team != "xcom" && u.Alive) StartFade(v, FadeIn);
                 if (v.root.gameObject.activeSelf != shown) v.root.gameObject.SetActive(shown);
@@ -1099,25 +1103,80 @@ namespace Bastion.Client.Units
             return best;
         }
 
-        /// <summary>A shade (heard, not seen): drawn in the fog, dark, nothing of what it is (0.10.1's shade).</summary>
+        /// <summary>
+        /// A shade (heard, not seen): drawn in the fog, dark, nothing of what it is (0.10.1's shade); not inside a building
+        /// not found (Unfound).
+        /// </summary>
         public void Shade(string id, bool on)
         {
             if (!views.TryGetValue(id, out var v)) return;
             v.shaded = on;
             if (on) v.root.gameObject.SetActive(true);
+            if (on) Cut(v, CutNow(v), v.fade <= 0);
         }
 
-        /// <summary>Shown even out of sight (an enemy UI reveals as it acts) until the next Sync says it is in sight anyway.</summary>
+        /// <summary>
+        /// Shown even out of sight (an enemy UI reveals as it acts: a contact, a step into sight), till the next Sync works
+        /// out again who is in sight (0.10.1's forceVisible); not inside a building the squad has not found (Unfound: Ana,
+        /// 7/11 #14), where it shows as it steps out.
+        /// </summary>
         public void ForceVisible(string id)
         {
-            forced.Add(id);
             if (!views.TryGetValue(id, out var v)) return;
             // Out of the fog (a step into sight, a contact): faded in, as Sync does (playtest 20/10 #10).
             if (!v.root.gameObject.activeSelf && v.synced && !v.dead) StartFade(v, FadeIn);
             v.root.gameObject.SetActive(true);
+            Cut(v, CutNow(v), v.fade <= 0);
         }
 
-        readonly HashSet<string> forced = new HashSet<string>();
+        /// <summary>
+        /// Whether `id`'s figure is drawn now: shown (Shown), and neither cut away (the cutaway's storey, a building not
+        /// found: Unfound) nor faded out. What goes over a figure (a mark, a word) goes by this.
+        /// </summary>
+        public bool Drawn(string id) => id != null && views.TryGetValue(id, out var v) && v.root != null && v.root.gameObject.activeSelf && !v.cut && !v.gone;
+
+        /// <summary>For a lab: `id` drawn wherever it is put, in sight or not, through every Sync after.</summary>
+        public void Reveal(string id)
+        {
+            revealed.Add(id);
+            ForceVisible(id);
+        }
+
+        readonly HashSet<string> revealed = new HashSet<string>();
+
+        /// <summary>The squad's places that look (Los.IsViewer), as at the last Sync: what they find counts as found (Unfound).</summary>
+        readonly List<Pos> lookers = new List<Pos>();
+        int syncs;
+
+        /// <summary>
+        /// Whether `v`, one of the enemy, stands where it is drawn now inside a building the squad has not found (the engine's
+        /// Buildings.Hidden, as Los.TeamVisibility veils it; who stands in its doorway shows): not drawn there, shown in the
+        /// fog or not (Ana, 7/11 #14: «mientras esté en una zona sin descubrir, no se ve»). Worked out again as it steps
+        /// onto another tile, or the state seen changes.
+        /// </summary>
+        bool Unfound(View v)
+        {
+            if (state == null || v.team == "xcom" || v.root == null || revealed.Contains(v.id)) return false;
+            var p = v.root.position;
+            var tile = MapSpace.WorldToTile(p);
+            var at = (tile.x, tile.y, Mathf.Max(0, Mathf.FloorToInt((p.y + 0.5f) / MapSpace.Storey)));
+            if (at == v.unfoundAt && v.unfoundSync == syncs) return v.unfound;
+            (v.unfoundAt, v.unfoundSync) = (at, syncs);
+            return v.unfound = Buildings.Hidden(state, new Pos { X = at.Item1, Y = at.Item2, Z = at.Item3 }, lookers);
+        }
+
+        /// <summary>Whether `v` is cut away now (the cutaway's storey, or a building not found).</summary>
+        bool CutNow(View v) => (Map.Cutaway.Current is Map.Cutaway c && v.place != null && c.Hides(v.place)) || Unfound(v);
+
+        /// <summary>Its renderers off while it is cut away (`cut`) or faded out (`gone`), on again once neither.</summary>
+        void Cut(View v, bool cut, bool gone)
+        {
+            if (cut == v.cut && gone == v.gone) return;
+            v.cut = cut;
+            v.gone = gone;
+            foreach (var r in v.root.GetComponentsInChildren<Renderer>(true)) r.enabled = !cut && !gone;
+            if (!cut && !gone && v.fade < 1) foreach (var w in v.carried.Values) if (w != null) Show(w, v.fade >= 0.5f);
+        }
 
         /// <summary>
         /// Out of the way of the shot over a shoulder (unitViews.ts clearView, syntyFigures.ts veil): `on`, not drawn; off,

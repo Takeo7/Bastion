@@ -1,7 +1,7 @@
 /*
    «Terminar turno» and the turn's clock (hud.ts setEndTurn, tickClocks; UI-COMBATE UI-04, UI-05): the bar's seventh key,
-   its steel and grey like the others' (ActionBar.uss .ability), and under the whole row this player's clock, the
-   partner's thin under it.
+   its steel and grey like the others' (ActionBar.uss .ability), and under the whole row this player's clock alone (Ana,
+   7/11 #9).
 */
 
 /* Right after the bar's keys, the same 5 px apart (2.5 a side). */
@@ -25,7 +25,7 @@
     border-color: rgba(143, 208, 90, 0.7);
 }
 
-/* The clocks: this player's a bar in their colour as wide as the row of keys, the partner's a thin one under it. */
+/* The clock: this player's, a bar in their colour as wide as the row of keys (the partner's thin one no longer shows). */
 .end-clock {
     margin: 6px 2.5px 0;
 }
@@ -34,11 +34,6 @@
     height: 9px;
     border-radius: 2px;
     overflow: hidden;
-}
-
-.turn-clock--theirs {
-    height: 4px;
-    margin-top: 2px;
 }
 
 .turn-clock__fill {

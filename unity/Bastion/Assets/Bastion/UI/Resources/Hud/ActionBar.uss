@@ -47,11 +47,11 @@
 }
 
 .ability:hover .ability__well {
-    border-color: rgba(242, 194, 48, 0.15);
+    border-color: rgba(255, 255, 255, 0.15);
 }
 
 .ability--active .ability__well {
-    border-color: rgba(242, 194, 48, 0.41);
+    border-color: rgba(255, 255, 255, 0.41);
     background-color: rgba(0, 0, 0, 0.52);
 }
 
@@ -196,26 +196,34 @@
     opacity: 0.55;
 }
 
-/* The movement left before the keys (Arturo, 5/11 #14): a plate a key's size, its tiles in the reach's sky blue over
-   «de 8»; dimmed at none. */
+/* The movement left before the keys (Arturo, 5/11 #14), in one line (Ana, 7/11 #7): a plate a key's height, its tiles
+   big in the reach's sky blue, «/8» small and grey, and the footprints; dimmed at none. */
 .bar-moves {
-    width: 52px;
     height: 60px;
     margin: 0 6px 0 2.5px;
+    padding: 0 9px 0 10px;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
     background-color: var(--m-steel);
 }
 
 .bar-moves__value {
-    font-size: 24px;
+    font-size: 28px;
     color: #7fd4fa;
 }
 
 .bar-moves__of {
-    margin-top: -2px;
-    font-size: 11px;
+    margin: 9px 0 0 1px;
+    font-size: 14px;
     color: var(--t-muted);
+}
+
+.bar-moves__feet {
+    width: 18px;
+    height: 18px;
+    margin: 6px 0 0 6px;
+    -unity-background-image-tint-color: var(--t-muted);
 }
 
 .bar-moves--none .bar-moves__value {

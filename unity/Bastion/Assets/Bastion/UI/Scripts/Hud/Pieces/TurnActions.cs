@@ -7,9 +7,9 @@ namespace Bastion.UI.Hud
     /// «Terminar turno» as the bar's last key, and the turn's clock under the whole row (UI-COMBATE UI-04, UI-05; hud.ts
     /// setEndTurn, tickClocks; docs/UNITY-UI.md §2.6): a square key like the others with →| alone on it, in their grey; its
     /// state by its border and its icon (armed for the second press, the accent round it as a key armed; ready, the check;
-    /// off while the turn isn't this player's to end), its words in its help. Under the row, this player's clock, a bar
-    /// in their colour as wide as the row, and the partner's, thin, under it. «Ceder el mando», «Ver a Ana», «Ir a Mateo»
-    /// and the camera switch are in the game's menu now (UI-07).
+    /// off while the turn isn't this player's to end), its words in its help. Under the row, this player's clock alone, a
+    /// bar in their colour as wide as the row (Ana, 7/11 #9: each sees their own; the partner's thin one is gone).
+    /// «Ceder el mando», «Ver a Ana», «Ir a Mateo» and the camera switch are in the game's menu now (UI-07).
     /// </summary>
     public sealed class TurnActions
     {
@@ -20,10 +20,9 @@ namespace Bastion.UI.Hud
         readonly VisualElement endIcon;
         readonly LineIcon endMark;
         readonly Sprite check;
-        readonly VisualElement[] clockBars = new VisualElement[2];
-        readonly VisualElement[] clockFills = new VisualElement[2];
+        readonly VisualElement clockBar;
+        readonly VisualElement clockFill;
         string endKey;
-        bool paired;
 
         /// <param name="slot">Where the key goes, beside the bar's.</param>
         /// <param name="clocks">Under the row, as wide as it.</param>
@@ -47,14 +46,10 @@ namespace Bastion.UI.Hud
             slot.Add(end);
             end.clicked += () => handlers.OnEndTurn();
 
-            for (var i = 0; i < 2; i++)
-            {
-                clockBars[i] = Ui.El("turn-clock well " + (i == 0 ? "turn-clock--mine" : "turn-clock--theirs"), clocks);
-                clockFills[i] = Ui.El("turn-clock__fill", clockBars[i]);
-                clockBars[i].pickingMode = PickingMode.Ignore;
-                clockFills[i].pickingMode = PickingMode.Ignore;
-            }
-            Ui.Show(clockBars[1], false);
+            clockBar = Ui.El("turn-clock well turn-clock--mine", clocks);
+            clockFill = Ui.El("turn-clock__fill", clockBar);
+            clockBar.pickingMode = PickingMode.Ignore;
+            clockFill.pickingMode = PickingMode.Ignore;
             SetEndTurn(null);
         }
 
@@ -66,16 +61,6 @@ namespace Bastion.UI.Hud
         {
             get => PlayerPrefs.GetInt(FollowKey, 1) != 0;
             set => PlayerPrefs.SetInt(FollowKey, value ? 1 : 0);
-        }
-
-        /// <summary>With a partner, the room for their clock under this player's, so the row doesn't move as it comes and goes.</summary>
-        public bool Paired
-        {
-            set
-            {
-                paired = value;
-                Ui.Show(clockBars[1], paired);
-            }
         }
 
         public void SetEndTurn(EndTurnView v)
@@ -100,35 +85,31 @@ namespace Bastion.UI.Hud
                 "waiting" => HudText.EndTurn.Command(detail ?? ""),
                 // The enemy turn plays (docs/UX-RITMO.md): the space bar held shows it faster.
                 "enemy" => HudText.EndTurn.EnemyTurn,
+                // A soldier in play: its turn first, the whole turn on a second press (Arturo, 7/11, Ana's #5).
+                "done" => HudText.EndTurn.Done(v.InPlay, v.GoesTo),
                 "act" => HudText.EndTurn.Act,
                 _ => HudText.EndTurn.Off,
             });
         }
 
         /// <summary>
-        /// The clocks, every frame (game.ts frame): this player's [0] and the partner's [1], as the bars' width; amber
-        /// when little is left, red at the end. Outside the squad's turn the bars go but keep their room: the row stays
-        /// where it is. Only styles change: no layout is rebuilt.
+        /// This player's clock, every frame (game.ts frame), as the bar's width; white when little is left, red at the end
+        /// (the partner's no longer shows: Ana, 7/11 #9). Outside the squad's turn the bar goes but keeps its room: the row
+        /// stays where it is. Only styles change: no layout is rebuilt.
         /// </summary>
-        public void TickClocks(ClockView mine, ClockView theirs)
-        {
-            Tick(0, mine);
-            Tick(1, paired ? theirs : null);
-        }
-
-        void Tick(int i, ClockView c)
+        public void TickClock(ClockView c)
         {
             var shown = c != null && c.Shown;
-            clockBars[i].style.visibility = shown ? Visibility.Visible : Visibility.Hidden;
+            clockBar.style.visibility = shown ? Visibility.Visible : Visibility.Hidden;
             if (!shown) return;
             var left = Mathf.Clamp01(c.Left);
-            clockFills[i].style.width = Length.Percent(left * 100);
-            // In the player's colour; amber and red (USS) when little is left.
-            if (left < 0.25f) clockFills[i].style.backgroundColor = StyleKeyword.Null;
-            else clockFills[i].style.backgroundColor = Ui.Hex(c.Color, new Color32(0xf2, 0xc2, 0x30, 0xff));
-            clockBars[i].EnableInClassList("turn-clock--running", c.Running);
-            clockBars[i].EnableInClassList("turn-clock--low", left < 0.25f);
-            clockBars[i].EnableInClassList("turn-clock--out", left < 0.1f);
+            clockFill.style.width = Length.Percent(left * 100);
+            // In the player's colour; white and red (USS) when little is left.
+            if (left < 0.25f) clockFill.style.backgroundColor = StyleKeyword.Null;
+            else clockFill.style.backgroundColor = Ui.Hex(c.Color, Color.white);
+            clockBar.EnableInClassList("turn-clock--running", c.Running);
+            clockBar.EnableInClassList("turn-clock--low", left < 0.25f);
+            clockBar.EnableInClassList("turn-clock--out", left < 0.1f);
         }
     }
 }

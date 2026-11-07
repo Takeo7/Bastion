@@ -28,6 +28,11 @@ namespace Bastion.UI.Hud
             public static string Waiting(string name) => $"A punto. Esperando a {name}. Pulsa para cancelar.";
             /// <summary>Ready without the command (Arturo, 7/11): the turn is over when the holder's is.</summary>
             public static string ReadyHolder(string name) => $"A punto. {name} sigue con el mando: el turno acaba cuando termine. Pulsa para cancelar.";
+            /// <summary>
+            /// With a soldier in play (Arturo, 7/11, Ana's #5: one key): «Terminar el turno de Yuki», what that does, and that
+            /// a second press ends one's own turn (Lore: not «everyone's», with a partner whose soldiers go on).
+            /// </summary>
+            public static string Done(string name, string to) => $"{HudText.Done.Key(name)} (Retroceso). {HudText.Done.Tip(name, to)} Pulsa otra vez para terminar tu turno.";
             public static string Command(string name) => $"Tiene el mando {name}. Puedes planear: clic en una casilla.";
         }
 
@@ -39,13 +44,13 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>
-        /// A soldier's turn ended by hand (Arturo, 7/11; DoneCommand; Lore's words, TEXTOS-0124.md): the bar's key and the
-        /// question on the call's card when another is picked with one in play.
+        /// A soldier's turn ended by hand (Arturo, 7/11; DoneCommand; Lore's words, TEXTOS-0124.md): «Terminar turno» while
+        /// it is in play (EndTurn.Done; its own key on the bar went, Ana's #5) and the question on the call's card when
+        /// another is picked with one in play.
         /// </summary>
         public static class Done
         {
             public static string Key(string name) => $"Terminar el turno de {name}";
-            public const string Cost = "Sin acción";
             /// <summary>`to`: who the command passes to; null, it doesn't.</summary>
             public static string Tip(string name, string to) => $"{name} no hace nada más este turno: pierde las acciones y el movimiento que le queden.{(to != null ? $" El mando pasa a {to}." : "")}";
             /// <summary>«le quedan 3 puntos de movimiento», «le queda 1 acción», «le quedan 2 acciones y 5 puntos de movimiento».</summary>
@@ -255,22 +260,25 @@ namespace Bastion.UI.Hud
         {
             /// <summary>«5», «6,5» (a diagonal step costs a tile and a half).</summary>
             public static string Tiles(int cost) => cost % 2 == 0 ? (cost / 2).ToString() : $"{cost / 2},5";
-            public static string Of(int cost) => $"de {Tiles(cost)}";
+            /// <summary>«/8», after the movement left on the bar (Ana, 7/11 #7).</summary>
+            public static string Of(int cost) => $"/{Tiles(cost)}";
             public static string Tip(int left, int full) => $"Movimiento: le quedan {Tiles(left)} de {Tiles(full)} puntos. Cada casilla cuesta 1. Moverse no gasta acciones, y el movimiento se reparte en tramos, antes y después de actuar. Gastarlo todo de una vez, en un solo tramo, es correr, y se oye.";
             public const string Stat = "Movimiento";
         }
 
         /// <summary>
-        /// The enemies' sight (Arturo, 5/11 #6, #9): its button and the legend of the red on the ground, beside its swatches
-        /// (Lore, 5/11: «notar», as the night's rules and Esconderse say it).
+        /// The enemies' sight (Arturo, 5/11 #6, #9): its button, whose help says what the red on the ground is (Ana, 7/11
+        /// #10: no legend over it; Lore, 5/11: «notar», as the night's rules and Esconderse say it).
         /// </summary>
         public static class Sight
         {
-            public const string Tip = "Vista de los zombis (V): lo que ve cada uno. Ojo rojo: ya ve al soldado elegido.";
-            public const string Seen = "Lo que ve";
-            public const string SeenMany = "Lo que ven";
-            public const string Noticed = "Aquí notaría a un soldado";
-            public const string NoticedMany = "Aquí notarían a un soldado";
+            public const string Tip = "Vista de los zombis (V): lo que ve cada uno. El rojo más fuerte, donde notarían a un soldado escondido. En la placa de un zombi, el ojo se abre cuando ve al soldado elegido.";
+        }
+
+        /// <summary>The goal's arrow, bottom right (Ana, 7/11 #5: it was taken for a key): only its help.</summary>
+        public static class Goal
+        {
+            public const string Tip = "Hacia el objetivo (O): la flecha señala dónde está; la tecla lleva la cámara allí.";
         }
 
         public static class Squad
@@ -278,6 +286,8 @@ namespace Bastion.UI.Hud
             public const string Select = "Seleccionar · Doble clic: cámara al soldado";
             public const string Theirs = "Soldado del otro jugador";
             public const string TheirsCommanded = "Soldado del otro jugador: lo mandas tú mientras no está";
+            /// <summary>A partner's soldier's card (Ana, 7/11 #12): whose, and that a click takes the camera there.</summary>
+            public static string TheirsLook(string name) => $"{(string.IsNullOrEmpty(name) ? Theirs : $"Soldado de {name}")} · Clic: cámara al soldado";
             public const string Automaton = "Va sola: nadie le da órdenes.";
             public const string SheetTip = " · La hoja del soldado: tablero, estadísticas y lo que lleva (H)";
             public const string InPlay = "EN JUEGO";
@@ -302,6 +312,8 @@ namespace Bastion.UI.Hud
         /// <summary>The backpack on the soldier's panel (hud.ts backpack, packMenuEl, packOffer; docs/FASE8.md §C).</summary>
         public static class Pack
         {
+            /// <summary>The backpack's mark shows and hides its slots (Ana, 7/11 #13; Lore: «huecos», as «Hueco libre»).</summary>
+            public const string Pockets = "Clic: mostrar u ocultar los huecos";
             public const string Floor = "EN EL SUELO";
             public const string Squad = "ESCUADRA";
             public const string Nothing = "—";

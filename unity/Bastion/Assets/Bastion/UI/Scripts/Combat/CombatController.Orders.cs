@@ -242,12 +242,6 @@ namespace Bastion.UI.Combat
             var u = Unit();
             // Only in one's own turn and with the command: out of it a key neither arms nor waits for it (Arturo, 5/11 #15).
             if (u == null || !CanAct() || !HasCommand() || AbilityTexts.IsMenu(id)) return;
-            // Its turn ended by hand (DoneCommand): what it has left goes, and another can play.
-            if (id == DoneKey)
-            {
-                Send(new DoneCommand { Unit = u.Id });
-                return;
-            }
             var view = BarView(id);
             if (view == null || !view.Enabled)
             {
@@ -742,7 +736,34 @@ namespace Bastion.UI.Combat
         // ------------------------------------------------------- the HUD's buttons (IHudHandlers)
 
         public void OnAbility(string id) => UseAbility(id);
-        public void OnEndTurn() => ToggleReady();
+        public void OnEndTurn() => EndKey();
+
+        /// <summary>
+        /// «Terminar turno», one key (Arturo, 7/11, Ana's #5: there were two, this and the soldier's ✓): with one of one's
+        /// own in play, it ends that soldier's turn (DoneCommand: what it has left goes, and the command passes if turns
+        /// alternate) and stays armed, so a second press ends the whole turn; with none in play, the turn as it was
+        /// (ToggleReady, asking first with soldiers that can still act).
+        /// </summary>
+        void EndKey()
+        {
+            var playing = InPlayMine();
+            Debug.Log($"[fin] {(playing != null && !EndArmed ? $"el turno de {playing.Name}" : "el turno")}");
+            if (playing != null && !EndArmed)
+            {
+                Send(new DoneCommand { Unit = playing.Id });
+                endArmedUntil = Time.time + 4;
+                RefreshHud();
+                return;
+            }
+            ToggleReady();
+        }
+
+        /// <summary>One's own soldier in play (the rules' ActiveUnit, while it has anything left), with the command and in one's turn; none, null.</summary>
+        Unit InPlayMine()
+        {
+            var u = UnitById(State, State.ActiveUnit);
+            return u != null && u.Alive && Commands(u) && Paths.HasTurnLeft(u) && CanAct() && HasCommand() && !State.Ready[MySlot] ? u : null;
+        }
 
         /// <summary>A card clicked (UI-COMBATE UI-02, UI-08): the soldier picked where the camera is; twice, the camera goes to it.</summary>
         public void OnSelectUnit(string id)
