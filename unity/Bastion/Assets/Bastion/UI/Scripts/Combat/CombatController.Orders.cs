@@ -465,14 +465,12 @@ namespace Bastion.UI.Combat
             var hand = HandArmed();
             if (hand != null)
             {
-                // The pointer on one of those within reach picks it. A body or a car's boot gets its rucksack instead of the
-                // tile's frame (Arturo, 5/11 #12).
+                // The pointer on one of those within reach picks it. Each thing is outlined with its action's icon over it,
+                // the one picked lit, no frame on its tile (Arturo, 5/11 #12 for bodies and boots; 7/11 for the rest).
                 var list = HandTiles();
                 if (hover != null && list.Any(t => Same(t, hover))) handPick = hover;
                 var pick = HandTarget();
-                var things = hand == AbilityIds.Search ? list.Where(t => Looting.SearchSpot(State, t) is string k && IsBodyOrBoot(k)).ToList() : new List<Pos>();
-                AimMarks.ShowSpots(State, list.Where(t => !things.Any(b => Same(b, t))).ToList(), pick);
-                searchNext = things.Select(t => (t, Same(t, pick))).ToList();
+                searchNext = list.Select(t => (t, Same(t, pick))).ToList();
                 return;
             }
             if (mode == Mode.Tile)

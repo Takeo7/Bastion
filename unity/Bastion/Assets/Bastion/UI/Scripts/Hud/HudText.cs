@@ -312,6 +312,8 @@ namespace Bastion.UI.Hud
             public const string Swap = "Cambiar";
             public const string OneAction = "1 acción";
             public const string Gratis = "gratis";
+            /// <summary>A medicine with Manos de enfermero: no action spent, the medicine yes (Lore: not «gratis»).</summary>
+            public const string NoAction = "sin acción";
             public const string Equip = "Equipar";
             public const string PutOn = "Ponerse";
             public const string Use = "Usar";

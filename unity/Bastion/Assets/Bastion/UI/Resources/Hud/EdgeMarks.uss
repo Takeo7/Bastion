@@ -19,7 +19,7 @@
 }
 
 .edge-mark:hover {
-    -unity-background-image-tint-color: rgba(40, 43, 46, 0.85);
+    -unity-background-image-tint-color: rgba(40, 43, 46, 0.95);
 }
 
 /* On the arrow and the words themselves: Mixta's Label sets its own colour. */

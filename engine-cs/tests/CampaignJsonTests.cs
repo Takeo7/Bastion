@@ -118,7 +118,9 @@ namespace Bastion.Engine.Tests
             foreach (var s in states)
             {
                 var c = SameThrough<CampaignState>(s["campaign"]!, (string)s["name"]!);
-                Assert.Equal(Campaign.CampaignVersion, c.Version);
+                // (Recorded at 26, with their fevers and sieges: what the other goldens start from, they stay. Loaded, version 27
+                // cures the fevers and drops an announced siege, Arturo 7/11: Prueba15Tests.)
+                Assert.Equal(26, c.Version);
             }
         }
 

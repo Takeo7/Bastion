@@ -446,6 +446,97 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// Where the battle's hitches come from (Gameplay, 7/11: 6 to 15 frames of 50 ms or more each 10 s in the app's city
+        /// battle at some 130 fps, none on the base): UI's play lab in «Partida» (BASTION_LAB, PartidaTurn unless said), and
+        /// from BASTION_ESPERA frames on (60), each frame's main-thread loop timed; every frame of BASTION_PARON ms or more
+        /// (30) in the log with its costliest markers, the collections the GC made and what was allocated in it; at the
+        /// end, how many frames there were of each length. BASTION_CUADROS frames (900).
+        ///   unity/tools/captura.sh -shotScene Assets/Bastion/Scenes/Partida.unity -shotSetup Bastion.EditorTools.RendimientoLab.Parones
+        ///     -shotPlay -shotFps 60 -shotWarm 25 -shotFrames 1 -shotOut &lt;file&gt;
+        /// </summary>
+        /// <summary>The loop's own parents, left out of Parones' list (what is under them shows where the time went).</summary>
+        static readonly string[] Generic = { "Internal/Idle", "Semaphore.WaitForSignal", "UpdateScene", "Main Thread", "Application.Tick", "PlayerLoop/PlayerLoop", "UpdateSceneIfNeeded", "BehaviourUpdate", "CoroutinesDelayedCalls", "ScriptRunDelayedDynamicFrameRate", "ScriptRunBehaviourUpdate", "CPU Total Frame Time", "CPU Main Thread Frame Time", "GfxResource.Register" };
+
+        public static void Parones()
+        {
+            Type.GetType("Bastion.UI.EditorTools.HudShots, Bastion.UI.Editor")?.GetMethod(Environment.GetEnvironmentVariable("BASTION_LAB") ?? "PartidaTurn")?.Invoke(null, null);
+            int wait = int.TryParse(Environment.GetEnvironmentVariable("BASTION_ESPERA"), out int w) ? w : 60;
+            int count = int.TryParse(Environment.GetEnvironmentVariable("BASTION_CUADROS"), out int c) ? c : 900;
+            double stall = double.TryParse(Environment.GetEnvironmentVariable("BASTION_PARON"), out double h) ? h : 30;
+            // (BASTION_LAB=app: the app's own way from «Inicio», with BASTION_MEDIR and the rest, its scenes changing: Shots
+            // shoots a camera of its own that outlives them, «Cámara de la medida» (-shotCamera), drawing nothing.)
+            GameObject own = null;
+            if (Environment.GetEnvironmentVariable("BASTION_LAB") == "app")
+            {
+                own = new GameObject("Cámara de la medida");
+                var camera = own.AddComponent<Camera>();
+                camera.cullingMask = 0;
+                camera.clearFlags = CameraClearFlags.SolidColor;
+            }
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                if (own != null) UnityEngine.Object.DontDestroyOnLoad(own);
+                // (The profiler on, so that each script's Update and each coroutine has a marker of its own; the markers
+                // taken again now and then, for those made as they first run.)
+                UnityEditorInternal.ProfilerDriver.enabled = true;
+                UnityEngine.Profiling.Profiler.enabled = true;
+                var recorders = new List<(string name, Unity.Profiling.ProfilerRecorder recorder)>();
+                Unity.Profiling.ProfilerRecorder loop = default, allocated = default;
+                int from = -1, frame = -1, frames = 0, collections = GC.CollectionCount(0);
+                var lengths = new SortedDictionary<int, int>();
+                void Step()
+                {
+                    if (from < 0) from = Time.frameCount + wait;
+                    if (Time.frameCount < from || Time.frameCount == frame) return;
+                    frame = Time.frameCount;
+                    if (recorders.Count == 0 || (frames % 60 == 0 && frames > 0))
+                    {
+                        bool first = recorders.Count == 0;
+                        var known = new HashSet<string>(recorders.Select(r => r.name));
+                        var handles = new List<Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle>();
+                        Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle.GetAvailable(handles);
+                        foreach (var handle in handles)
+                        {
+                            var d = Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle.GetDescription(handle);
+                            if (d.UnitType != Unity.Profiling.ProfilerMarkerDataUnit.TimeNanoseconds || known.Contains($"{d.Category.Name}/{d.Name}")) continue;
+                            // (With the editor's -deepprofiling every method has one: only ours, past the first.)
+                            if (!first && d.Category.Name == "Scripts" && !d.Name.Contains("Bastion")) continue;
+                            recorders.Add(($"{d.Category.Name}/{d.Name}", Unity.Profiling.ProfilerRecorder.StartNew(d.Category, d.Name, 1)));
+                        }
+                        if (!first) goto measure;
+                        loop = Unity.Profiling.ProfilerRecorder.StartNew(Unity.Profiling.ProfilerCategory.Internal, "PlayerLoop", 1);
+                        allocated = Unity.Profiling.ProfilerRecorder.StartNew(Unity.Profiling.ProfilerCategory.Memory, "GC Allocated In Frame", 1);
+                        Debug.Log($"[parones] {recorders.Count} markers, from frame {frame}; the loop's recorder {loop.Valid}, the allocations' {allocated.Valid}");
+                        return;
+                    }
+                    measure:
+                    frames++;
+                    double ms = loop.Valid ? loop.LastValue / 1e6 : 0;
+                    int now = GC.CollectionCount(0), collected = now - collections;
+                    collections = now;
+                    int bin = ms < 10 ? (int)ms : ms < 50 ? (int)(ms / 5) * 5 : (int)(ms / 25) * 25;
+                    lengths[bin] = lengths.TryGetValue(bin, out int n) ? n + 1 : 1;
+                    if (ms >= stall)
+                    {
+                        // (Its costliest markers, leaves and all: the loop's own parts show where it went.)
+                        var top = recorders.Where(r => r.recorder.Valid && r.recorder.LastValue > 2e6 && !Generic.Any(g => r.name.Contains(g))).OrderByDescending(r => r.recorder.LastValue).Take(18)
+                            .Select(r => FormattableString.Invariant($"{r.name} {r.recorder.LastValue / 1e6:0.0}"));
+                        Debug.Log(FormattableString.Invariant($"[parones] frame {frame} at {Time.time:0.00} s: the loop {ms:0.0} ms, {collected} collections, {(allocated.Valid ? allocated.LastValue / 1024 : -1)} KB allocated · ") + string.Join(" · ", top));
+                    }
+                    if (frames < count) return;
+                    Debug.Log($"[parones] {frames} frames; how long the loop took (ms: frames): " + string.Join(", ", lengths.Select(p => $"{p.Key}: {p.Value}")));
+                    foreach (var (_, recorder) in recorders) recorder.Dispose();
+                    loop.Dispose();
+                    allocated.Dispose();
+                    recorders.Clear();
+                    EditorApplication.update -= Step;
+                }
+                EditorApplication.update += Step;
+            };
+        }
+
+        /// <summary>
         /// What the interface costs (Gameplay, 4/11): UI's play lab in «Partida» (HudShots.PartidaShot, or BASTION_LAB another
         /// of its labs; by name, from its own assembly), and once it has settled (BASTION_ESPERA frames, 150), the main
         /// thread's profiler markers over 300 frames, averaged per frame: those of the UI (UI Toolkit's panels, their layout,

@@ -89,10 +89,13 @@ namespace Bastion.Engine.Tests
             var u = s.Units.First((x) => x.CampaignId == c.Squad[0]);
             u.Arms!.Pistol = true;
             s.Outcome = Outcomes.Victory;
+            // (Who carried it, kept: the squad is cleared once the mission is folded in; it used to be filled again by a
+            // siege starting, before sieges were off, Arturo 7/11.)
+            var bearer = c.Squad[0];
             Campaign.ApplyMissionResult(c, s, new Rng(1));
             var pistol = Assert.Single(c.FoundWeapons!);
-            Assert.Equal((FoundWeaponIds.Pistol, c.Squad[0]), (pistol.Kind, pistol.Holder));
-            Assert.Equal((true, pistol.Id), (Campaign.SoldierArms(c, c.Soldiers.First((x) => x.Id == c.Squad[0])).Pistol, Campaign.SoldierArms(c, c.Soldiers.First((x) => x.Id == c.Squad[0])).PistolId));
+            Assert.Equal((FoundWeaponIds.Pistol, bearer), (pistol.Kind, pistol.Holder));
+            Assert.Equal((true, pistol.Id), (Campaign.SoldierArms(c, c.Soldiers.First((x) => x.Id == bearer)).Pistol, Campaign.SoldierArms(c, c.Soldiers.First((x) => x.Id == bearer)).PistolId));
             Assert.Equal("En esta campaña, todos los soldados ya llevan pistola.", Campaign.CraftBlocker(new CampaignState { Pistols = null, Base = c.Base, Crafted = new List<string>() }, CraftIds.MakePistol));
         }
 

@@ -42,7 +42,7 @@ namespace Bastion.UI.Strategy
             {
                 var g = new PaletteGroupView { Title = title };
                 // Only what the Bastion's level allows (playtest 20/10 #13); the caravan is never built.
-                foreach (var id in Base.PieceOrder.Where(id => id != PieceIds.Caravan && Base.Pieces[id].Level <= level && kinds.Contains(Base.Pieces[id].Kind)))
+                foreach (var id in Base.PieceOrder.Where(id => id != PieceIds.Caravan && !Base.Retired.Contains(id) && Base.Pieces[id].Level <= level && kinds.Contains(Base.Pieces[id].Kind)))
                 {
                     var def = Base.Pieces[id];
                     var built = def.Unique == true && c.Bastion.Pieces.Any(p => p.Piece == id);

@@ -131,9 +131,7 @@ namespace Bastion.UI.Strategy
             // does the plate when the partner just said «a punto» for the mission or the siege (renderWaiting).
             var partnerSlot = 1 - p.Slot;
             if (c.Proposal != null && c.Proposal.By != p.Slot && prev?.Proposal?.Text != c.Proposal.Text) root.Blink("strat-proposal");
-            // So does a treatment the partner just proposed (#8).
-            if (c.Proposal == null && c.Treatment != null && !c.Treatment.Ready[p.Slot] && (prev?.Treatment == null || prev.Treatment.Soldier != c.Treatment.Soldier)) root.Blink("strat-proposal");
-            else if (prev != null && c.Players.Count > 1 && c.LaunchReady[partnerSlot] && !prev.LaunchReady[partnerSlot] && !c.LaunchReady[p.Slot]) root.Blink("strat-proposal");
+            if (prev != null && c.Players.Count > 1 && c.LaunchReady[partnerSlot] && !prev.LaunchReady[partnerSlot] && !c.LaunchReady[p.Slot]) root.Blink("strat-proposal");
             // The partner's «a punto», heard even with a proposal blinking (screen.ts).
             if (prev != null && c.Players.Count > 1 && c.LaunchReady[partnerSlot] && !prev.LaunchReady[partnerSlot] && !c.LaunchReady[p.Slot]) Bastion.Client.Audio.UiSounds.Play("bell");
             if (settlement.Piece != null && !c.Bastion.Pieces.Any(x => x.Id == settlement.Piece)) settlement.Piece = null;

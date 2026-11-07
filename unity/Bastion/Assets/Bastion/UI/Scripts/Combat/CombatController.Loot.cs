@@ -31,8 +31,9 @@ namespace Bastion.UI.Combat
         };
 
         /// <summary>
-        /// The rucksack over a body or a car being searched (Arturo, 5/11 #12): in the bone of the lines where a click searches
-        /// it, greyed where it can't from here; how high over its floor (a body lies on the ground, a boot is a car's height).
+        /// The icon over a thing to act on (Arturo, 5/11 #12, and 7/11 for the rest): in the bone of the lines where a click
+        /// does it, greyed where it can't from here; how high over its floor (a body lies on the ground, a boot is a car's
+        /// height, a box, a door or the boards LootMarkHeight).
         /// </summary>
         const string SearchLit = "#f3ecdc";
         const string SearchFar = "#7d868c";
@@ -40,6 +41,8 @@ namespace Bastion.UI.Combat
         static readonly Color SearchFarColor = Ui.Hex(SearchFar, Color.grey);
         const float SearchBodyHeight = 0.75f;
         const float SearchBootHeight = 1.25f;
+        /// <summary>How far over the thing's top its icon hangs (metres; SearchOutline.TopOf).</summary>
+        const float SearchOverTop = 0.45f;
 
         /// <summary>The bodies and boots under the pointer or within Registrar's reach, each lit or not (ShowSearchMarks).</summary>
         List<(Pos at, bool lit)> searchMarks = new List<(Pos, bool)>();
@@ -50,8 +53,21 @@ namespace Bastion.UI.Combat
         static bool IsBodyOrBoot(string spot) => spot == Looting.Body || spot == Looting.CarBoot || spot == Looting.PoliceBoot;
 
         /// <summary>
-        /// A body or a car to search shown as itself (#12): a rucksack over each and, Arte's, the thing outlined; null or
-        /// empty, none. The tags over the map again only when they change.
+        /// What a click on a thing does, as its icon (Arturo, 7/11): the boards off (the crowbar), a door opened or shut
+        /// (LineIcon's), else searched (the rucksack).
+        /// </summary>
+        static string MarkIcon(GameState v, Pos at)
+        {
+            if (Abilities.Boards(v, at) != null) return AbilityIds.Pry;
+            var kind = Bastion.Engine.Grid.KindAt(v, at);
+            if (kind == TileKinds.Door) return AbilityIds.OpenDoor;
+            if (kind == TileKinds.DoorOpen) return AbilityIds.CloseDoor;
+            return AbilityIds.Search;
+        }
+
+        /// <summary>
+        /// A thing to act on shown as itself (#12 of 5/11; boxes, doors, boards and furniture since 7/11): its action's icon
+        /// over each and, Arte's, the thing outlined; null or empty, none. The tags over the map again only when they change.
         /// </summary>
         void ShowSearchMarks(List<(Pos at, bool lit)> marks)
         {
@@ -71,11 +87,16 @@ namespace Bastion.UI.Combat
         {
             foreach (var (at, lit) in searchMarks)
             {
-                var high = Looting.SearchSpot(v, at) == Looting.Body ? SearchBodyHeight : SearchBootHeight;
+                // Over the thing's top (Arte's SearchOutline.TopOf: a box's lid, a door's leaf, the furniture against a
+                // window), else at the height each kind had.
+                var spot = Looting.SearchSpot(v, at);
+                var high = spot == Looting.Body ? SearchBodyHeight : spot == Looting.CarBoot || spot == Looting.PoliceBoot ? SearchBootHeight : LootMarkHeight;
+                var world = Board.TileToWorld(v, at, high * Board.Tile);
+                if (Bastion.Client.Units.SearchOutline.TopOf(v, at) is float top) world.y = top + SearchOverTop;
                 list.Add(new WorldTagView
                 {
-                    Kind = "loot", Icon = AbilityIds.Search, Ring = lit ? SearchLit : SearchFar, Size = LootMarkSize * Board.Tile,
-                    World = Board.TileToWorld(v, at, high * Board.Tile),
+                    Kind = "loot", Icon = MarkIcon(v, at), Ring = lit ? SearchLit : SearchFar, Size = LootMarkSize * Board.Tile,
+                    World = world,
                 });
             }
         }

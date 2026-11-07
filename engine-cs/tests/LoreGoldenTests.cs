@@ -58,19 +58,19 @@ namespace Bastion.Engine.Tests
 
             // enemy files
             Assert.Equal("El muerto corriente.", Lore.EnemyFiles["zombie"].What);
-            Assert.Equal("Lento. No se cubre ni tiene miedo. Va a por el vivo más cercano que vea; si no ve a nadie, hacia el último ruido. Muerde cuerpo a cuerpo: uno de cada cuatro mordiscos contagia.", Lore.EnemyFiles["zombie"].Does);
+            Assert.Equal("Lento. No se cubre ni tiene miedo. Va a por el vivo más cercano que vea; si no ve a nadie, hacia el último ruido. Muerde cuerpo a cuerpo.", Lore.EnemyFiles["zombie"].Does);
             Assert.Equal("Peligroso en grupo. El ruido los atrae.", Lore.EnemyFiles["zombie"].Tip);
             Assert.Equal("Zombi reciente y rápido.", Lore.EnemyFiles["xenoid"].What);
-            Assert.Equal("Corre más que los demás y ve de lejos. Ataca cuerpo a cuerpo y también contagia, algo menos que un zombi.", Lore.EnemyFiles["xenoid"].Does);
+            Assert.Equal("Corre más que los demás y ve de lejos. Ataca cuerpo a cuerpo.", Lore.EnemyFiles["xenoid"].Does);
             Assert.Equal("Llega antes de lo que parece: pon vigilancia en su camino.", Lore.EnemyFiles["xenoid"].Tip);
             Assert.Equal("Zombi con chaleco y casco.", Lore.EnemyFiles["mec"].What);
-            Assert.Equal("Blindaje 1: resta 1 de daño a cada golpe. Aguanta mucho. Es el que más contagia.", Lore.EnemyFiles["mec"].Does);
+            Assert.Equal("Blindaje 1: resta 1 de daño a cada golpe. Aguanta mucho.", Lore.EnemyFiles["mec"].Does);
             Assert.Equal("Los explosivos le quitan el blindaje, y la munición perforante lo atraviesa.", Lore.EnemyFiles["mec"].Tip);
             Assert.Equal("Zombi que grita.", Lore.EnemyFiles["sectoid"].What);
             Assert.Equal("No muerde. Su grito desorienta o asusta a los soldados cercanos y se oye a 16 casillas: atrae a todos los zombis que lo oyen. Levanta a los muertos que tiene cerca.", Lore.EnemyFiles["sectoid"].Does);
             Assert.Equal("Mátalo primero.", Lore.EnemyFiles["sectoid"].Tip);
             Assert.Equal("Zombi lleno de gases.", Lore.EnemyFiles["bloater"].What);
-            Assert.Equal("Lento. Revienta al morir o al llegar a un soldado: 3 de daño a quien tenga al lado, y contagia a uno de cada dos.", Lore.EnemyFiles["bloater"].Does);
+            Assert.Equal("Lento. Revienta al morir o al llegar a un soldado: 3 de daño a quien tenga al lado.", Lore.EnemyFiles["bloater"].Does);
             Assert.Equal("Mátalo de lejos, y lejos de tus soldados.", Lore.EnemyFiles["bloater"].Tip);
             Assert.Equal("Saqueador de los Cuervos.", Lore.EnemyFiles["trooper"].What);
             Assert.Equal("Escopeta o fusil de caza, y alguna granada. Se cubre y dispara.", Lore.EnemyFiles["trooper"].Does);
@@ -536,7 +536,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Ya están aquí.", Lore.BaseSiegeText.Here);
             Assert.Equal("Salen del pinar y no dejan de salir. Coged las armas.", Lore.BaseSiegeText.Arrival);
             Assert.Equal("Es de noche: no se les ve hasta que están en la valla.", Lore.BaseSiegeText.Night);
-            Assert.Equal("Defienden los sanos; si no queda ninguno, los heridos. Los mordidos se quedan dentro.", Lore.BaseSiegeText.Defenders);
+            Assert.Equal("Defienden los sanos; si no queda ninguno, los heridos.", Lore.BaseSiegeText.Defenders);
             Assert.Equal("El Bastión ha caído", Lore.BaseSiegeText.Fallen);
             Assert.Equal("Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la autocaravana y lo puesto, y vuelven a empezar en otro claro.", Lore.BaseSiegeText.FallenLine);
             Assert.Equal("No queda nadie", Lore.BaseSiegeText.Nobody);
@@ -611,7 +611,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Sala de radio", Lore.PieceTexts.All["radio"].Name);
             Assert.Equal("la Sala de radio", Lore.PieceTexts.All["radio"].The);
             Assert.Equal("una Sala de radio", Lore.PieceTexts.All["radio"].A);
-            Assert.Equal("Avisa de los asedios, por dónde y cuántos, y trae misiones y zonas que contactar.", Lore.PieceTexts.All["radio"].Line);
+            Assert.Equal("Trae misiones y zonas que contactar.", Lore.PieceTexts.All["radio"].Line);
             Assert.Equal(new string[] { "Una radio de coche, una batería y Morse con los cascos.", "Una antena en el pino más alto.", "La antena llega hasta el mar: Morse oye antes lo que viene." }, Lore.PieceTexts.All["radio"].Levels);
             Assert.Equal("+2 contactos", Lore.PieceFigure("radio", 1));
             Assert.Equal("+2", Lore.PieceFigureShort("radio", 1));
@@ -1260,7 +1260,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Talar 2 árboles · Cuesta 6 §", Lore.FellHint(2));
             Assert.Equal("Talar 12 árboles · Cuesta 36 §", Lore.FellHint(12));
             Assert.Equal("Camas y almacén", Lore.NewBrief["piece:caravan"]);
-            Assert.Equal("Avisa de los asedios y trae misiones", Lore.NewBrief["piece:radio"]);
+            Assert.Equal("Trae misiones y zonas que contactar", Lore.NewBrief["piece:radio"]);
             Assert.Equal("Camas para soldados", Lore.NewBrief["piece:quarters"]);
             Assert.Equal("Las heridas curan antes", Lore.NewBrief["piece:infirmary"]);
             Assert.Equal("Armas y accesorios más baratos", Lore.NewBrief["piece:workshop"]);
@@ -1637,7 +1637,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Cuando le rodean, hay que abrir hueco a golpes.", Lore.BoardAbout["elbowRoom"]);
             Assert.Equal("A la sien, a la nuca. Donde acaba.", Lore.BoardAbout["bladeCrit"]);
             Assert.Equal("Juntos, no se cuela nadie.", Lore.BoardAbout["closeRanks"]);
-            Assert.Equal("La anilla, el brazo, y a lo siguiente.", Lore.BoardAbout["salvo"]);
+            Assert.Equal("Una botella de más, y el mechero siempre a mano.", Lore.BoardAbout["salvo"]);
             Assert.Equal("Teo pone algo más de lo que dice el manual.", Lore.BoardAbout["bigCharge"]);
             Assert.Equal("Un golpe contra una chapa lejos de aquí, y todos miran allí.", Lore.BoardAbout["decoy"]);
             Assert.Equal("Los del otro también son de los nuestros.", Lore.BoardAbout["bridge"]);
@@ -1661,7 +1661,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Tornillos y clavos dentro de la carga.", Lore.BoardAbout["shrapnel"]);
             Assert.Equal("Un destello de más en el bolsillo.", Lore.BoardAbout["dazzle"]);
             Assert.Equal("Por encima del hombro, llega más lejos.", Lore.BoardAbout["overhand"]);
-            Assert.Equal("Nwosu le enseñó qué dar, cuánto y cuándo.", Lore.BoardAbout["lightHands"]);
+            Assert.Equal("Nwosu le enseñó a curar sin pararse.", Lore.BoardAbout["lightHands"]);
             Assert.Equal("Aguja, hilo y pulso.", Lore.BoardAbout["suture"]);
             Assert.Equal("Alguien que se sienta al lado y no se va.", Lore.BoardAbout["bedside"]);
             Assert.Equal("Las heridas pequeñas ya ni las nota.", Lore.BoardAbout["toughSkin"]);
@@ -1827,11 +1827,11 @@ namespace Bastion.Engine.Tests
             Assert.Equal("4 balas", Lore.WeaponFigure("clip", 4));
             Assert.Equal("Atalaya", Lore.Expediente[0].Title);
             Assert.Equal("La Pandemia lo vació todo. Atalaya cayó en otoño; los que quedan empiezan de cero en un claro del pinar.", Lore.Expediente[0].Summary);
-            Assert.Equal(new string[] { "Hace dos inviernos llegó la Pandemia. Quien se contagia muere en un día y se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.", "Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en una autocaravana, con el todoterreno de Teo detrás. El autobús se quedó en la cochera de Atalaya, y el nombre de La Lata ha pasado al todoterreno.", "Hemos parado en un claro del pinar, sobre Metsovo. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida." }, Lore.Expediente[0].Paragraphs);
+            Assert.Equal(new string[] { "Hace dos inviernos llegó la Pandemia. Desde entonces, quien muere se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.", "Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en una autocaravana, con el todoterreno de Teo detrás. El autobús se quedó en la cochera de Atalaya, y el nombre de La Lata ha pasado al todoterreno.", "Hemos parado en un claro del pinar, sobre Metsovo. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida." }, Lore.Expediente[0].Paragraphs);
             Assert.Equal("Lo que entra por la puerta se apunta aquí. — N. A.", Lore.Expediente[0].Note);
             Assert.Equal("Notas de la doctora", Lore.Expediente[1].Title);
-            Assert.Equal("De noche ven igual que de día. Una puerta no los para. No todos los mordiscos contagian.", Lore.Expediente[1].Summary);
-            Assert.Equal(new string[] { "Notas de la Dra. Nwosu. La oscuridad no les quita nada: de noche ven igual que de día. Los que perdemos vista somos nosotros.", "Una puerta cerrada no los para: la empujan y pasan. Solo les tapa la vista. Para frenarlos sirve un paso estrecho, no una puerta.", "No todos los mordiscos contagian. El de un muerto corriente, uno de cada cuatro; el de un Acorazado, uno de cada tres. Los gases de un Hinchado, uno de cada dos." }, Lore.Expediente[1].Paragraphs);
+            Assert.Equal("De noche ven igual que de día. Una puerta no los para. Un mordisco no contagia.", Lore.Expediente[1].Summary);
+            Assert.Equal(new string[] { "Notas de la Dra. Nwosu. La oscuridad no les quita nada: de noche ven igual que de día. Los que perdemos vista somos nosotros.", "Una puerta cerrada no los para: la empujan y pasan. Solo les tapa la vista. Para frenarlos sirve un paso estrecho, no una puerta.", "Un mordisco hace daño, pero no contagia. Lo que levanta a un muerto es morir, sea de lo que sea: un mordisco, un tiro o el frío." }, Lore.Expediente[1].Paragraphs);
             Assert.Null(Lore.Expediente[1].Note);
             Assert.Equal("Los Cuervos", Lore.Expediente[2].Title);
             Assert.Equal("Los Cuervos atraen hordas con sirenas contra quien no les paga. Sin sirena, la zona respira.", Lore.Expediente[2].Summary);
@@ -3075,12 +3075,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal("El botín: +5 §, 4 piezas, un fusil de asalto y una escopeta.", Lore.LootSummary(5, new string[] {  }, 0, 0, 4, new string[] { "assaultRifle", "pumpShotgun" }));
             Assert.Equal("El botín: un fusil de precisión.", Lore.LootSummary(0, new string[] {  }, 0, 0, 0, new string[] { "precisionRifle" }));
             Assert.Equal("El botín: +34 § y 2 medicinas.", Lore.LootSummary(34, new string[] { }, 2));
-            Assert.Equal("Empezó hace dos inviernos en el Instituto Koper. Quien se contagia muere en un día y se levanta como zombi.", Lore.Glossary["Pandemia"]);
+            Assert.Equal("Empezó hace dos inviernos en el Instituto Koper. Desde entonces, quien muere, sea de lo que sea, se levanta como zombi.", Lore.Glossary["Pandemia"]);
             Assert.Equal("Va a por el vivo que ve. Si no ve a nadie, va hacia el último ruido que oyó.", Lore.Glossary["Zombi"]);
             Assert.Equal("Zombi rápido que ve de lejos.", Lore.Glossary["Corredor"]);
             Assert.Equal("Zombi con chaleco y casco: tiene blindaje.", Lore.Glossary["Acorazado"]);
             Assert.Equal("Zombi que no muerde: grita. El grito asusta a los soldados cercanos, atrae a los zombis que lo oyen y levanta a los muertos.", Lore.Glossary["Chillón"]);
-            Assert.Equal("Zombi lento. Revienta al morir o al llegar a un soldado: hace daño a quien tenga al lado y puede contagiarlo.", Lore.Glossary["Hinchado"]);
+            Assert.Equal("Zombi lento. Revienta al morir o al llegar a un soldado: hace daño a quien tenga al lado.", Lore.Glossary["Hinchado"]);
             Assert.Equal("Bandas de saqueadores armados. Atacan a otros vivos y atraen hordas con sirenas. Los zombis también van a por ellos.", Lore.Glossary["Cuervos"]);
             Assert.Equal("Secta que cree que los zombis están salvados. Los guía con campanas y por radio.", Lore.Glossary["Congregación"]);
             Assert.Equal("Horda enorme que sube desde los Llanos de Ceniza. Si llega al Bastión, se pierde la campaña.", Lore.Glossary["Marea"]);
@@ -3094,9 +3094,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Las armas del Bastión. Cada una es de quien la lleva.", Lore.Glossary["Armería"]);
             Assert.Equal("Los hace el Taller: cada soldado sale con uno por tanda, hasta tres. Valen para todas las armas; recargar llena primero la principal.", Lore.Glossary["Cargadores"]);
             Assert.Equal("Para construir, reparar, subir de nivel, reclutar, equipar y contactar zonas.", Lore.Glossary["Suministros"]);
-            Assert.Equal("Tratar a un mordido cuesta 2 ✚ (1 con la Enfermería a nivel 2). Una dosis quita una misión de baja a un herido. En la misión, curan 3 con una acción.", Lore.Glossary["Medicinas"]);
-            Assert.Equal("El de un zombi puede contagiar. En la misión, el contagiado pierde 1 de salud cada turno y, sin Cuarentena, no puede subir a La Lata. Al volver tiene fiebre: si no se le trata, se convierte. La Enfermería y la Cuarentena dan más tiempo. Si muere contagiado, se levanta.", Lore.Glossary["Mordisco"]);
-            Assert.Equal("Sin ella, un mordido no puede subir a La Lata y se queda en la misión.", Lore.Glossary["Cuarentena"]);
+            Assert.Equal("Una dosis quita una misión de baja a un herido. En la misión, curan 3 con una acción; con Manos de enfermero, sin gastarla.", Lore.Glossary["Medicinas"]);
+            Assert.Equal("Solo hace daño: no contagia. Un soldado que muere en una misión, lo mate quien lo mate, se levanta como zombi.", Lore.Glossary["Mordisco"]);
             Assert.Equal("Cada soldado come una ración al día; una misión es un día. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad.", Lore.Glossary["Comida"]);
             Assert.Equal("Cada Huerto da 5 raciones por misión a nivel 1, 10 a nivel 2 y 15 a nivel 3.", Lore.Glossary["Huerto"]);
             Assert.Equal("Para que el Taller haga armas y armaduras mejores, y para reponer trampas.", Lore.Glossary["Piezas"]);
@@ -3112,7 +3111,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.", Lore.Glossary["Tablero"]);
             Assert.Equal("Cuenta los puntos gastados en el tablero: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.", Lore.Glossary["Veteranía"]);
             Assert.Equal("Los muertos que entran por los bordes. El ruido llena el medidor, en dB: a 90 se oye llegar una oleada, que entra un turno después. Salvo en la Limpieza, además, llegan unos pocos cada turno, el doble mientras suena la alarma de un Sabotaje.", Lore.Glossary["Horda"]);
-            Assert.Equal(37, Lore.Glossary.Count);
+            Assert.Equal(36, Lore.Glossary.Count);
             Assert.Equal("De noche", Lore.NightText.Label);
             Assert.Equal("De noche: a oscuras, tus soldados ven 10 casillas en vez de 18. Hay más zombis, y el botín vale la mitad más.", Lore.NightText.Briefing);
             Assert.Equal("Misión de noche: el botín y la recompensa valen la mitad más.", Lore.NightText.Report);

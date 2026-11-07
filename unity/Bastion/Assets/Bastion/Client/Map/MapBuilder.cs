@@ -379,6 +379,9 @@ namespace Bastion.Client.Map
                 if (inGroup && !isApart) join.Add(r.gameObject);
             }
             if (join.Count == 0) return;
+            // (Each one's own mesh, before the batch takes its place: what Outline draws again.)
+            foreach (var gone in unjoined.Keys.Where(r => r == null).ToList()) unjoined.Remove(gone);
+            foreach (var o in join) unjoined[o.GetComponent<MeshRenderer>()] = o.GetComponent<MeshFilter>().sharedMesh;
             long before = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
             StaticBatchingUtility.Combine(join.ToArray(), root.gameObject);
             // (What it costs in memory: the joined meshes are copies, each map its own.)
@@ -911,11 +914,64 @@ namespace Bastion.Client.Map
             return redo.Count;
         }
 
-        /// <summary>`o` noted as standing on those tiles of storey k.</summary>
         /// <summary>What is drawn on `tile` (its storey's props and things), as it is now.</summary>
         public IReadOnlyList<GameObject> On(Pos tile) =>
             tile != null && onTile.TryGetValue(Key(tile.Z, tile.Y * s.Width + tile.X), out var list) ? list.Where(o => o != null).ToList() : new List<GameObject>();
 
+        /// <summary>The meshes of what Still joined, as they were before (a joined one's MeshFilter has the whole batch): for Outline.</summary>
+        readonly Dictionary<Renderer, Mesh> unjoined = new Dictionary<Renderer, Mesh>();
+
+        /// <summary>
+        /// What a soldier opens, searches or pries on `tile` drawn again round itself (SearchOutline; Arturo's #3 of 7/11:
+        /// «que se resalten con el símbolo de la acción, igual que los cuerpos y los coches»): a door's leaves, shut or open
+        /// (WallsView.LeavesAt), or what stands on it (On: a loot box with its lid, a car, the furniture piled against a
+        /// window, a doorway's boards). Each mesh again with `material` alone, a child of what it copies, so it goes with a
+        /// leaf as it swings; a joined one (Still) from its own mesh as it was. None if nothing is drawn there.
+        /// </summary>
+        public List<GameObject> Outline(Pos tile, Material material)
+        {
+            var copies = new List<GameObject>();
+            foreach (var r in ThingsAt(tile))
+            {
+                if (!(r is MeshRenderer)) continue;
+                var filter = r.GetComponent<MeshFilter>();
+                var mesh = unjoined.TryGetValue(r, out var own) ? own : filter != null && !r.isPartOfStaticBatch ? filter.sharedMesh : null;
+                if (mesh == null) continue;
+                var copy = new GameObject(r.name + " (contorno)");
+                copy.transform.SetParent(r.transform, false);
+                copy.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var drawn = copy.AddComponent<MeshRenderer>();
+                drawn.sharedMaterials = Enumerable.Repeat(material, Mathf.Max(1, mesh.subMeshCount)).ToArray();
+                drawn.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                drawn.receiveShadows = false;
+                copies.Add(copy);
+            }
+            return copies;
+        }
+
+        /// <summary>How high the top of what Outline would draw on `tile` stands (m, the world's), or null if nothing: where UI hangs its action's icon.</summary>
+        public float? TopOf(Pos tile)
+        {
+            var drawn = ThingsAt(tile);
+            return drawn.Count > 0 ? drawn.Max(r => r.bounds.max.y) : (float?)null;
+        }
+
+        /// <summary>What is drawn on `tile` and seen: a door's leaves on a door's tile, else what stands on it (On).</summary>
+        List<Renderer> ThingsAt(Pos tile)
+        {
+            var found = new List<Renderer>();
+            if (tile == null || s == null || tile.X < 0 || tile.Y < 0 || tile.X >= s.Width || tile.Y >= s.Height) return found;
+            string kind = Bastion.Engine.Grid.KindAt(s, tile);
+            if (kind == TileKinds.Door || kind == TileKinds.DoorOpen)
+            {
+                if (wallsView != null)
+                    foreach (var leaf in wallsView.LeavesAt(tile.Z, tile.Y * s.Width + tile.X)) found.AddRange(leaf.GetComponentsInChildren<Renderer>());
+            }
+            else foreach (var o in On(tile)) found.AddRange(o.GetComponentsInChildren<Renderer>());
+            return found.Where(r => r != null && r.enabled && r.gameObject.activeInHierarchy && !r.name.EndsWith(" (contorno)")).ToList();
+        }
+
+        /// <summary>`o` noted as standing on those tiles of storey k.</summary>
         void Own(GameObject o, int k, IEnumerable<int> tiles)
         {
             if (o == null) return;

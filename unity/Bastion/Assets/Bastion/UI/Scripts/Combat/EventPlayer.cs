@@ -1755,23 +1755,15 @@ namespace Bastion.UI.Combat
                     if (units != null) await units.Reanimate(corpse.Id, rise.Zombie.Id, stop);
                     else await Wait(0.6f);
                     Float(Board.TileToWorld(v, rise.Zombie.Pos, 0.75f), "SE LEVANTA", "crit");
-                    Log(u != null ? $"El grito de un Chillón levanta el cuerpo de {corpse.Name}" : $"Mordieron a {corpse.Name}: se levanta", "#e8d8c0");
+                    // Whoever of the squad falls rises, bitten or not (Arturo, 7/11; Lore's words).
+                    Log(u != null ? $"El grito de un Chillón levanta el cuerpo de {corpse.Name}" : $"{corpse.Name} se levanta", "#e8d8c0");
                     // The first of the squad to rise gets the stamp.
                     if (u == null && !risenSeen)
                     {
                         risenSeen = true;
-                        Hud?.Banner("¡SE LEVANTA!", "alien", $"Mordieron a {corpse.Name}: ya no es de los vuestros");
+                        Hud?.Banner("¡SE LEVANTA!", "alien", $"{corpse.Name} ya no es de los vuestros");
                     }
                     await Wait(u != null ? 0.6f : 1f);
-                    return;
-                }
-                case InfectedEvent inf:
-                {
-                    var u = Unit(inf.Unit);
-                    Log($"Han mordido a {u.Name}", "#ff6b5a");
-                    if (!ShownToSquad(u)) return;
-                    Float(Chest(u.Id) + Vector3.up * 0.5f, "¡MORDISCO!", "alert");
-                    await Wait(0.5f);
                     return;
                 }
                 case ReloadEvent rl:

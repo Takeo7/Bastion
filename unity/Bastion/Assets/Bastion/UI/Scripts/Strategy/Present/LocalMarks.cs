@@ -78,7 +78,7 @@ namespace Bastion.UI.Strategy
             foreach (var id in Base.PieceOrder)
             {
                 var def = Base.Pieces[id];
-                if (id == PieceIds.Caravan) continue;
+                if (id == PieceIds.Caravan || Base.Retired.Contains(id)) continue;
                 if (def.Level == level) out_.Add(new Thing { Key = $"piece:{id}", View = "facilities" });
                 if (def.Kind == PieceKinds.Building)
                     foreach (var to in new[] { 2, 3 })

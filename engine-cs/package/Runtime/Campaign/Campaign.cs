@@ -258,7 +258,7 @@ namespace Bastion.Engine
         public const int FreshCampaignVersion = 20;
 
         /// <summary>Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`.</summary>
-        public const int CampaignVersion = 26;
+        public const int CampaignVersion = 27;
 
         // ------------------------------------------------------------ infection
 
@@ -311,6 +311,13 @@ namespace Bastion.Engine
         /// </summary>
         public const int SiegeFirstIn = 1;
         public const int SiegeEvery = 3;
+
+        /// <summary>
+        /// Whether sieges come in the campaign (docs/FASE12.md §11.5): not for now (Arturo, 7/11: «quitamos el asedio de
+        /// momento, ya lo retomaremos más adelante»). Off, none is announced nor comes, its clock stands still, and one
+        /// announced in a saved campaign goes (MigrateCampaign, version 27); the code stays, for when it comes back.
+        /// </summary>
+        public static readonly bool SiegesOn = false;
         /// <summary>
         /// The dead in that first siege: a small one, with the base hardly built yet (Arturo, 22/10); since they come every
         /// turn (Arturo, 1/11), eight plain zombies, one a turn, without the specials (Setup.SiegeWaves; before 6).

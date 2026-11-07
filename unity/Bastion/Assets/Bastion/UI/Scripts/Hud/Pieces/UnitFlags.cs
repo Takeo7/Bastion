@@ -183,6 +183,13 @@ namespace Bastion.UI.Hud
                     var mark = Ui.El("wtag__icon", el);
                     mark.pickingMode = PickingMode.Ignore;
                     if (icon?.Invoke(v.Icon) is Sprite sprite) mark.style.backgroundImage = new StyleBackground(sprite);
+                    // A door's, drawn (LineIcon: opened, shut), tinted as the sprites are (Arturo, 7/11).
+                    else if (LineIcon.Has(v.Icon))
+                    {
+                        var drawn = new LineIcon(v.Icon) { pickingMode = PickingMode.Ignore };
+                        drawn.style.flexGrow = 1;
+                        mark.Add(drawn);
+                    }
                     layer.Insert(0, el);
                     tags.Add((el, v.World, v.Size));
                     continue;

@@ -119,51 +119,36 @@ namespace Bastion.Engine.Tests
             return (s, bitten, fine);
         }
 
-        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › without a Cuarentena a bitten soldier does not board La Lata, nor asks to")]
-        public void WithoutACuarentenaABittenSoldierDoesNotBoard()
+        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › no more: one marked bitten in a save boards La Lata with no Cuarentena, and loses no health (Arturo, 7/11)")]
+        public void OneMarkedBittenBoardsAndLosesNoHealth()
         {
             var (s, bitten, fine) = Bus(false);
-            var refused = Try(s, new EvacCommand { Unit = "s1" }, 0, new[] { 0 });
-            Assert.Equal((false, "Con un mordisco no se sube a La Lata sin una Cuarentena en el Bastión."), (refused.Ok, refused.Error));
-            Run(s, new EvacCommand { Unit = "s2" }, 0, new[] { 0 });
-            Assert.True(fine.Evacuated);
-            Assert.True(bitten.Lost);
-        }
-
-        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › with one, or out of the campaign, they board")]
-        public void WithOneOrOutOfTheCampaignTheyBoard()
-        {
-            foreach (var q in new bool?[] { true, null })
-            {
-                var (s, bitten, _) = Bus(q);
-                Run(s, new EvacCommand { Unit = "s1" }, 0, new[] { 0 });
-                Assert.True(bitten.Evacuated);
-            }
-        }
-
-        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › a bitten soldier loses a point of health at every turn of the squad, armour or not")]
-        public void ABittenSoldierLosesAPointOfHealth()
-        {
-            var (s, bitten, fine) = Bus(true);
             bitten.Armor = 2;
             var hp = bitten.Hp;
-            var sim = NewSim(s);
-            sim.RunAlienTurn();
-            Assert.Equal(hp - 1, bitten.Hp);
-            Assert.Equal(fine.MaxHp, fine.Hp);
+            NewSim(s).RunAlienTurn();
+            Assert.Equal(hp, bitten.Hp);
+            Run(s, new EvacCommand { Unit = "s1" }, 0, new[] { 0 });
+            Assert.True(bitten.Evacuated);
+            Assert.True(fine.Evacuated);
         }
 
-        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › the Cuarentena is built like any facility, and its levels hold the fever off a day each")]
-        public void TheCuarentenaIsBuiltLikeAnyFacility()
+        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › the Cuarentena is built no more; one built goes as a save loads, paid back whole, and a fever is gone (Arturo, 7/11)")]
+        public void TheCuarentenaIsBuiltNoMore()
         {
             var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
-            var quarantine = Campaign.Facilities[FacilityIds.Quarantine];
-            Assert.Equal(("Cuarentena", true, 1), (quarantine.Name, quarantine.Unique, quarantine.Level));
-            var soldier = c.Soldiers[0];
-            soldier.Infection = new SoldierInfection { Since = c.Day };
-            var before = Campaign.TurnDay(c, soldier)!.Value;
-            CampaignHelpers.Raise(c, PieceIds.Quarantine, 3);
-            Assert.Equal(before + 2, Campaign.TurnDay(c, soldier));
+            // (Raised as a save of before has it, where a Camposanto would go: the same 4 × 4, and nothing places it now.)
+            var spot = CampaignHelpers.FreeSpot(c, PieceIds.Memorial);
+            foreach (var cell in Base.PieceCells(PieceIds.Quarantine, spot.X, spot.Y, 0)) Base.FellTree(c.Bastion!, cell.X, cell.Y);
+            Base.PlacePiece(c.Bastion!, PieceIds.Quarantine, spot.X, spot.Y, 0);
+            Assert.Contains(c.Bastion!.Pieces, (p) => p.Piece == PieceIds.Quarantine);
+            Assert.Equal("Ya no se construye.", Base.PlaceBlocker(c.Bastion, PieceIds.Quarantine, 10, 10, 0));
+            c.Soldiers[0].Infection = new SoldierInfection { Since = c.Day };
+            c.Version = 26;
+            var credits = c.Credits;
+            var m = Campaign.MigrateCampaign(c);
+            Assert.DoesNotContain(m.Bastion!.Pieces, (p) => p.Piece == PieceIds.Quarantine);
+            Assert.Equal(credits + Base.Pieces[PieceIds.Quarantine].Cost.Supplies, m.Credits);
+            Assert.Null(m.Soldiers[0].Infection);
         }
 
         // ------------------------------------------------------------ operations say who and what (#14, #20)

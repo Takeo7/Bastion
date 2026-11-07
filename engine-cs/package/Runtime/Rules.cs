@@ -310,8 +310,8 @@ namespace Bastion.Engine
                 var dm = Aim.ShotDamageModsOf(attacker, ability, preview.Flanked, preview.Distance);
                 var before = target.Hp;
                 Damage(target, Aim.RollDamage(weapon, result, Rng, dm.Bonus, dm.Mult, dm.CritBonus), dm.Shred, attacker, dm.Pierce);
-                // A zombie's bite that draws blood may infect.
-                if (weapon.Melee && Content.Templates[attacker.Template].Undead && target.Hp < before) Infect(target, attacker, Content.Infection.Bite.TryGetValue(attacker.Template, out var bite) ? bite : 0);
+                // (A bite is only its damage now: it doesn't infect. Arturo, 7/11: «quitamos el efecto de mordisco en general,
+                // solo daño»; whoever of the squad falls rises, RiseFallen.)
                 if (ability == AbilityIds.Rupture && target.Alive) Emit(new RupturedEvent { Unit = target.Id, Amount = Content.RuptureDamage });
                 if (!target.Alive && !reaction) AfterKill(attacker, target, ability, preview.Origin);
                 // Segundo aliento: a blade kill heals 1.
@@ -469,7 +469,6 @@ namespace Bastion.Engine
             {
                 var before = v.Hp;
                 Damage(v, Aim.RollDamage(weapon, ShotResults.Hit, Rng, mods.Bonus), mods.Shred, source);
-                if (bursting && v.Hp < before) Infect(v, source, Content.Infection.Burst);
             }
             // The Hinchado's burst is only gas: it leaves the scenery alone.
             if (!bursting)
@@ -630,26 +629,20 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// A bite (or a Hinchado's burst) that drew blood infects with `chance` out
-        /// of 100, a Chaleco antibalas takes INFECTION.vest off (docs/FASE3.md). Only
-        /// the squad's flesh and blood; once infected, it stays so.
+        /// The squad's fallen rise as the zombies' turn begins, as the Chillón's corpses do but by themselves: each a group
+        /// of its own, alert. Every soldier who falls, whoever killed them (Arturo, 7/11: no more bites that infect, «se
+        /// transforman cuando se mueren»; in the box, «cualquier soldado que muera»; it used to be the infected only,
+        /// docs/FASE3.md). Not a turret, the VIP nor one held captive. One whose tile is taken rises beside it (riseSpot),
+        /// or waits for a free one.
         /// </summary>
-        private void Infect(Unit u, Unit by, int chance)
+        private void RiseFallen()
         {
-            var t = Content.Templates[u.Template];
-            if (u.Infected == true || chance <= 0 || t.Team != Teams.Xcom || t.Robotic || t.Undead || u.Objective) return;
-            var vest = u.Gear.Contains(ItemIds.NanoVest) ? Content.Infection.Vest : 0;
-            if (Rng.Int(100) < chance - vest) Emit(new InfectedEvent { Unit = u.Id, By = by.Id });
-        }
-
-        /// <summary>
-        /// The infected fallen rise as the zombies' turn begins (docs/FASE3.md), as
-        /// the Chillón's corpses do but by themselves: each a group of its own, alert.
-        /// One whose tile is taken rises beside it (riseSpot), or waits for a free one.
-        /// </summary>
-        private void RiseInfected()
-        {
-            foreach (var corpse in S.Units.Where((x) => !x.Alive && !x.Evacuated && x.Infected == true && !x.Reanimated).ToList())
+            bool Rises(Unit x)
+            {
+                var t = Content.Templates[x.Template];
+                return !x.Alive && !x.Evacuated && !x.Reanimated && x.Team == Teams.Xcom && !t.Robotic && !t.Undead && x.Automaton == null && !x.Objective && !x.Captive && x.Template != TemplateIds.Vip;
+            }
+            foreach (var corpse in S.Units.Where(Rises).ToList())
             {
                 if (Over) return;
                 var at = Abilities.RiseSpot(S, corpse);
@@ -1408,8 +1401,7 @@ namespace Bastion.Engine
         {
             Emit(new EvacDepartedEvent());
             var squad = S.Units.Where((o) => o.Alive && o.Team == Teams.Xcom).ToList();
-            // The bitten board only with a Cuarentena at home (playtest 2026-10-15, #13).
-            bool Boards(Unit o) => Abilities.InEvacZone(S, o.Pos) && !(o.Infected == true && S.Mission.Quarantine == false);
+            bool Boards(Unit o) => Abilities.InEvacZone(S, o.Pos);
             foreach (var u in squad.Where(Boards).ToList()) Emit(new EvacuatedEvent { Unit = u.Id });
             foreach (var u in squad.Where((o) => !Boards(o)).ToList()) Emit(new LeftBehindEvent { Unit = u.Id });
             var m = S.Mission;
@@ -1453,7 +1445,7 @@ namespace Bastion.Engine
             // The base's turrets keep watch through the enemy's turn: each of the dead that moves in sight, once (docs/FASE12.md §11.4).
             foreach (var t in S.Units.Where((x) => x.Alive && x.Automaton != null && Content.LoadedFor(x, AbilityIds.Shoot)).ToList()) Emit(new OverwatchEvent { Unit = t.Id, KillZone = true });
             // They rise now, but only act from the next turn on (they had no turn to begin).
-            RiseInfected();
+            RiseFallen();
             var active = S.Units.Where((u) => u.Alive && u.Team == Teams.Alien && !u.Objective && (S.Pods.Find((p) => p.Id == u.PodId)?.Active ?? false)).ToList();
             // Whoever is going for the squad acts first, one by one; then the dead with nobody to reach, all together (playtest 2026-10-16),
             // the nearest to the living first: those behind follow them, instead of finding the way taken (nobody walks through anyone, 19/10).
@@ -1517,8 +1509,6 @@ namespace Bastion.Engine
             foreach (var l in (S.Lights ?? new List<Light>()).ToList()) if (l.Turns != null && l.Turns <= 1) Emit(new LightOffEvent { Id = l.Id });
             foreach (var f in (S.Fires ?? new List<Fire>()).ToList()) if (f.Turns != null && f.Turns <= 1) Emit(new FireOutEvent { Id = f.Id });
             Emit(new TurnBeganEvent { Team = Teams.Xcom, Turn = turn + 1, Command = OpeningCommander(turn + 1) });
-            // The bitten weaken: one point of health at every turn of the squad (playtest 2026-10-15, #13), armour or not.
-            foreach (var u in S.Units.Where((x) => x.Alive && x.Team == Teams.Xcom && x.Infected == true).ToList()) Damage(u, 1, 0, null, 99);
             CheckOutcome();
         }
 
@@ -1611,10 +1601,9 @@ namespace Bastion.Engine
                 case ItemActions.Use:
                 {
                     var target = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(S, cmd.To!)! : u;
-                    Emit(new MedicineUsedEvent { Unit = u.Id, Target = target.Id, Index = cmd.Index!.Value });
+                    Emit(new MedicineUsedEvent { Unit = u.Id, Target = target.Id, Index = cmd.Index!.Value, Free = Rules.FreeMedicine(u) ? true : (bool?)null });
                     var amount = Math.Min(Content.MedicineHeal + u.Mods.Heal, target.MaxHp - target.Hp);
                     if (amount > 0) Emit(new HealedEvent { Unit = u.Id, Target = target.Id, Amount = amount });
-                    if (target.Infected == true && Rules.MedicineStopsBite(S, u)) Emit(new CuredEvent { Unit = target.Id, By = u.Id });
                     break;
                 }
                 case ItemActions.Equip:
@@ -1814,7 +1803,7 @@ namespace Bastion.Engine
             if (u.Team != Teams.Xcom || u.Captive || u.Objective || u.Automaton != null) return "No puedes dar órdenes a esa unidad.";
             if (!Content.CommandsFor(slot, u.Owner, connected)) return "Es de la escuadra del otro jugador.";
             if (!string.IsNullOrEmpty(u.ControlledBy) || u.Panicked) return "Ese soldado no responde.";
-            var free = cmd.Action == ItemActions.Drop || cmd.Action == ItemActions.Take;
+            var free = cmd.Action == ItemActions.Drop || cmd.Action == ItemActions.Take || (cmd.Action == ItemActions.Use && FreeMedicine(u));
             if (!free && u.Ap <= 0) return "Ese soldado no tiene acciones.";
             if (cmd.Action == ItemActions.Take)
             {
@@ -1843,7 +1832,7 @@ namespace Bastion.Engine
                     var to = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(s, cmd.To!) : u;
                     if (to == null || !to.Alive || to.Team != Teams.Xcom || to.Objective) return "Solo en ti o en un compañero.";
                     if (to != u && !Aim.InMeleeReach(s, u.Pos, to.Pos)) return "Tiene que estar a tu lado.";
-                    if (to.Hp >= to.MaxHp && !(to.Infected == true && MedicineStopsBite(s, u))) return to == u ? "No tienes heridas." : "No tiene heridas.";
+                    if (to.Hp >= to.MaxHp) return to == u ? "No tienes heridas." : "No tiene heridas.";
                     return null;
                 }
                 case ItemActions.Equip:
@@ -1874,9 +1863,16 @@ namespace Bastion.Engine
         }
 
         /// <summary>Whether `u`'s medicines also stop a bite's contagion (docs/FASE8.md §C): the Enfermería for everyone, or the support talent.</summary>
+        /// <summary>No bite infects any more (Arturo, 7/11): nothing for a medicine to stop. Kept for the client till it lets go of it.</summary>
         public static bool MedicineStopsBite(GameState s, Unit u)
         {
-            return s.Mission?.MedicineCures == true || Content.HasPerk(u, PerkIds.LightHands);
+            return false;
+        }
+
+        /// <summary>Whether `u` uses a medicine without spending an action: Manos de enfermero (Arturo, 7/11, in the box; it stopped a bite's contagion).</summary>
+        public static bool FreeMedicine(Unit u)
+        {
+            return Content.HasPerk(u, PerkIds.LightHands);
         }
 
         /// <summary>Why a support ability can't go to that ally: the reason, not just "no".</summary>
@@ -1945,7 +1941,6 @@ namespace Bastion.Engine
                 if (!Content.CommandsFor(ctx.Slot, u.Owner, ctx.Connected)) return CommandResult.Failure("Es de la escuadra del otro jugador.");
                 if (!Abilities.InEvacZone(s, u.Pos)) return CommandResult.Failure("Solo desde el autobús, en la zona de evacuación.");
                 if (s.EvacCall?.By == ctx.Slot) return CommandResult.Failure("Ya has pedido evacuar: falta que conteste el otro jugador.");
-                if (u.Infected == true && s.Mission.Quarantine == false) return CommandResult.Failure("Con un mordisco no se sube a La Lata sin una Cuarentena en el Bastión.");
                 sim.CallEvac(ctx.Slot, u);
                 return CommandResult.Success(sim.Events);
             }
@@ -1971,7 +1966,7 @@ namespace Bastion.Engine
             {
                 var refusal = BackpackRefusal(s, item, ctx.Slot, ctx.Connected);
                 if (refusal != null) return CommandResult.Failure(refusal);
-                var free = item.Action == ItemActions.Drop || item.Action == ItemActions.Take;
+                var free = item.Action == ItemActions.Drop || item.Action == ItemActions.Take || (item.Action == ItemActions.Use && Grid.GetUnit(s, item.Unit) is Unit medic && FreeMedicine(medic));
                 var busyItem = free ? null : InPlay(item.Unit);
                 if (busyItem != null) return CommandResult.Failure(busyItem);
                 var holder = Grid.GetUnit(s, item.Unit)!;

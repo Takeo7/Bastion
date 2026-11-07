@@ -227,7 +227,7 @@ namespace Bastion.UI.Strategy
                 Points = s.Owner == Slot && s.Alive && Campaign.CanSpendPoints(c, s), PointsTip = "Puntos por gastar en el tablero",
                 FullName = Appearances.DisplayName(s.Name, s.Nickname),
             };
-            if (!s.Alive || s.Infection != null || s.WoundedDays > 0)
+            if (!s.Alive || s.WoundedDays > 0)
             {
                 var (text, tone, tip) = Health(c, s, true);
                 t.Tag = text;
@@ -246,17 +246,12 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>
-        /// How a soldier is (healthTag): fallen, with a fever from a bite (and when it turns), wounded, or ready; `brief`
-        /// for the tile. In the feminine for a woman (Lore, C2).
+        /// How a soldier is (healthTag): fallen, wounded, or ready (no fever since 7/11: Arturo took the bite's contagion
+        /// out); `brief` for the tile. In the feminine for a woman (Lore, C2).
         /// </summary>
         (string text, string tone, string tip) Health(CampaignState c, CampaignSoldier s, bool brief)
         {
             if (!s.Alive) return (s.FellCause == "turned" ? Campaign.TurnedCause : Female(s) ? "Caída" : "Caído", "bad", null);
-            if (s.Infection != null)
-            {
-                var day = Campaign.TurnDay(c, s) ?? c.Day;
-                return (brief ? $"Fiebre · {AheadChip(c, day)}" : $"Mordisco · se convierte {AheadText(c, day)}", "bad", "Un mordisco: tiene fiebre. Sin el tratamiento, se convierte.");
-            }
             if (s.WoundedDays > 0) return (brief ? MissionsText(MissionsFor(s.WoundedDays)) : $"Heridas · {MissionsText(MissionsFor(s.WoundedDays))}", "warn", null);
             return (Female(s) ? "Lista" : "Listo", brief ? null : "good", null);
         }
@@ -353,40 +348,6 @@ namespace Bastion.UI.Strategy
         {
             if (!s.Alive) return null;
             var have = c.Medicines ?? 0;
-            if (s.Infection != null)
-            {
-                var cost = Campaign.TreatCost(c);
-                var partner = Partner;
-                var shared = partner != null && partner.Connected;
-                var (mine, theirs, other) = Treating(c, s);
-                var tooFew = have < cost;
-                var v = new CareView
-                {
-                    Title = "Mordisco",
-                    Line = shared ? $"Las medicinas no llegan para todos: el tratamiento lo decidís los dos. Tenéis {have} ✚." : $"El tratamiento le quita la fiebre. Tenéis {have} ✚.",
-                };
-                if (theirs && !mine)
-                {
-                    v.Buttons.Add($"Confirmar el tratamiento ({cost} ✚)");
-                    v.Enabled.Add(!tooFew);
-                    v.Pulse = true;
-                    v.Buttons.Add("Rechazar");
-                    v.Enabled.Add(true);
-                }
-                else if (mine)
-                {
-                    v.Buttons.Add("Retirar la propuesta");
-                    v.Enabled.Add(true);
-                    v.Waiting = $"Esperando a {partner?.Name ?? "el otro jugador"}";
-                }
-                else
-                {
-                    v.Buttons.Add(shared ? $"Proponer el tratamiento ({cost} ✚)" : $"Tratar ({cost} ✚)");
-                    v.Enabled.Add(!tooFew && other == null);
-                    v.Why = tooFew ? $"Hacen falta {cost} ✚ y tenéis {have}." : other;
-                }
-                return v;
-            }
             if (s.WoundedDays > 0)
             {
                 var v = new CareView();
@@ -399,47 +360,15 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>
-        /// The order behind the care card's button `index`, as Care lays them out (screen.ts careBlock): the bite's
-        /// treatment proposed, confirmed, rejected or withdrawn (treat, ready or not), or a wound's medicine; null, none.
+        /// The order behind the care card's button `index`, as Care lays them out (screen.ts careBlock): a wound's medicine
+        /// (no bite's treatment since 7/11); null, none.
         /// </summary>
         public CampaignCommand CareOrder(string soldier, int index)
         {
             var c = State;
             var s = c.Soldiers.FirstOrDefault(x => x.Id == soldier);
             if (s == null) return null;
-            if (s.Infection != null)
-            {
-                var (mine, theirs, _) = Treating(c, s);
-                // A proposal of the room's (since the 0.11.5): Confirmar or Rechazar, a vote; Retirar, withdrawn. Tratar (or
-                // Proponer): the engine proposes it, or does it alone. One saved halfway (c.Treatment): its two keys.
-                var voted = c.Proposal?.Action is TreatAction t && t.Soldier == s.Id;
-                if (voted && theirs) return new VoteCommand { Accept = index == 0 };
-                if (voted && mine) return new WithdrawCommand();
-                return new TreatCommand { Soldier = s.Id, Ready = theirs && !mine ? index == 0 : !mine };
-            }
             return s.WoundedDays > 0 && index == 0 ? new MedicateCommand { Soldier = s.Id } : null;
-        }
-
-        /// <summary>
-        /// A bite's treatment for `s`: proposed by this player, by the partner, and what keeps it from being proposed now
-        /// (another proposal waits: the room takes one at a time), or null. The proposal of the room's (TreatAction, since
-        /// Arturo's #8 of 01/11) or one of before saved halfway (c.Treatment, two keys).
-        /// </summary>
-        (bool mine, bool theirs, string other) Treating(CampaignState c, CampaignSoldier s)
-        {
-            var p = c.Proposal;
-            if (p?.Action is TreatAction t && t.Soldier == s.Id) return (p.By == Slot, p.By != Slot, null);
-            var old = c.Treatment;
-            if (old != null && old.Soldier == s.Id)
-            {
-                var partner = Partner;
-                var mine = old.Ready[Slot];
-                return (mine, !mine && partner != null && old.Ready[partner.Slot], null);
-            }
-            // (Alone the engine does it at once, whatever waits for the partner.)
-            if (p != null && Partner?.Connected == true) return (false, false, $"Hay otra propuesta esperando ({p.Text}): que se decida antes.");
-            var other = old != null ? c.Soldiers.FirstOrDefault(x => x.Id == old.Soldier) : null;
-            return (false, false, other != null ? $"Ya hay un tratamiento propuesto para {other.Name}: confirmadlo o rechazadlo antes." : null);
         }
 
         // --------------------------------------------------------------- the arms

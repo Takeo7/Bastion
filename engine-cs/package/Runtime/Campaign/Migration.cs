@@ -120,6 +120,23 @@ namespace Bastion.Engine
                 // One track, to the south (Ana's playtest 28/10): the other three grow over, as the wood either side of them.
                 Base.PlantOldTracks(c.Bastion, c.SiegePosts?.Values ?? Enumerable.Empty<Vec2>());
             }
+            if (version < 27)
+            {
+                // No bites that infect any more (Arturo, 7/11): whoever had a fever is well; the Cuarentena goes from the base,
+                // what it cost given back (in the box, «fuera, y se devuelve lo gastado»).
+                foreach (var s in c.Soldiers) s.Infection = null;
+                if (c.Bastion != null)
+                {
+                    foreach (var p in c.Bastion.Pieces.Where((x) => Base.Retired.Contains(x.Piece)).ToList())
+                    {
+                        c.Bastion.Pieces.Remove(p);
+                        c.Credits += Base.Pieces[p.Piece].Cost.Supplies;
+                        Log(c, $"Desmontado: {Lore.PieceTexts.All[p.Piece].Name}, +{Base.Pieces[p.Piece].Cost.Supplies} §. Ya no hace falta.");
+                    }
+                }
+                // No sieges for now (Arturo, 7/11): one announced goes; one under way is played out.
+                if (!SiegesOn) c.Offers = c.Offers.Where((o) => o.Siege != true || o.Id == c.ActiveMission).ToList();
+            }
 
             // `??=` in TypeScript: a soldier read without them (C# reads them as empty) gets them.
             foreach (var s in c.Soldiers)

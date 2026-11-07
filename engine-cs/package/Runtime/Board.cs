@@ -169,7 +169,9 @@ namespace Bastion.Engine
                 Active("looseArm", "Piedras", "Lanza piedras: suenan donde caen y los zombis van a mirar. No hacen daño. +1 casilla de alcance al lanzar.", PerkIds.Stones, AbilityIds.Stone, mods: new UnitMods { GrenadeRange = 1 }),
                 Stat("sharpStone", "Canto afilado", "La piedra hace +1 de daño.", mods: new UnitMods { StoneDamage = 1 }),
                 Stat("curtain", "Cortina", "Un humo más, si lleva humo.", spare: Uses(ChargeIds.Smoke, 1)),
-                Passive("salvo", "Sin pausa", "Lanzar una granada no acaba el turno.", perk: PerkIds.Salvo),
+                // «Sin pausa» (a grenade not ending the turn) had nothing left to do once nothing thrown ends it (Arturo, 7/11):
+                // a molotov more, as Cortina, Deslumbrar and Bandolera for the rest (in the box, «Mechero»). Its id kept.
+                Stat("salvo", "Mechero", "Un cóctel molotov más, si lleva cócteles molotov.", spare: Uses(ChargeIds.Molotov, 1)),
                 Stat("bigCharge", "Carga gorda", "Los explosivos hacen +1 de daño.", mods: new UnitMods { GrenadeDamage = 1 }),
                 Stat("decoy", "Señuelo", "La piedra se oye 4 casillas más lejos.", mods: new UnitMods { StoneNoise = 4 }),
                 Passive("goodArm", "Buen brazo", "+3 casillas de alcance al lanzar, y una granada más en cada accesorio de granadas.", perk: PerkIds.GoodArm, mods: new UnitMods { GrenadeRange = 3 }),
@@ -203,7 +205,8 @@ namespace Bastion.Engine
                 Passive("bridge", "Entre los dos", "El botiquín cura 2 más a los soldados del otro jugador.", perk: PerkIds.Bridge),
                 Stat("bigKit", "Botiquín grande", "Un uso más del botiquín, si lo lleva.", spare: Uses(ChargeIds.FirstAid, 1)),
                 Stat("firstAid", "Arrastrar a cubierto", "Quien recibe su botiquín tiene +10 de defensa hasta su próximo turno.", mods: new UnitMods { Aid = 10 }),
-                Passive("lightHands", "Manos de enfermero", "Las medicinas también paran el contagio de un mordido.", perk: PerkIds.LightHands),
+                // Its medicines stopped a bite's contagion, till bites stopped infecting (Arturo, 7/11; in the box, an action saved).
+                Passive("lightHands", "Manos de enfermero", "Usar una medicina no gasta acción.", perk: PerkIds.LightHands),
                 Stat("suture", "Sutura", "El botiquín y las medicinas curan +1.", mods: new UnitMods { Heal = 1 }),
                 Stat("bedside", "A la cabecera", "+10 de voluntad.", mods: new UnitMods { Will = 10 }),
                 Stat("toughSkin", "Piel curtida", "+1 de salud.", hp: 1),

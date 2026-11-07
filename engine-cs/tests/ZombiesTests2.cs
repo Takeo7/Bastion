@@ -574,7 +574,7 @@ namespace Bastion.Engine.Tests
             SameJson(Pack(Parts(6)), Grid.GetUnit(s, "s2")!.Backpack);
         }
 
-        [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › a medicine heals 3 on you or a partner next to you, for an action; the contagion only stops once unlocked")]
+        [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › a medicine heals 3 on you or a partner next to you, for an action; no bite to stop (Arturo, 7/11)")]
         public void AMedicineHeals3()
         {
             var s = BackpackField();
@@ -582,29 +582,33 @@ namespace Bastion.Engine.Tests
             var b = AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => { u.Hp = 1; u.Infected = true; });
             Refused("Solo se usan las medicinas.", Item(s, "s1", ItemActions.Use, index: 1));
             Refused("No tienes heridas.", Item(s, "s1", ItemActions.Use, index: 0));
+            var ap = a.Ap;
             var r = Item(s, "s1", ItemActions.Use, index: 0, to: "s2");
             Assert.True(r.Ok);
-            Assert.Equal(4, b.Hp);
-            Assert.Equal(true, b.Infected);
+            Assert.Equal((4, ap - 1), (b.Hp, a.Ap));
             Assert.Empty(Of<CuredEvent>(r.Events!));
             SameJson(Pack(Medicines(1), Food(1)), a.Backpack);
-            // Healthy but bitten: with the Enfermería at level 2, the medicine is worth it again, and it stops the bite.
+            // Healthy, even marked bitten in a save and with the Enfermería at level 2: nothing for a medicine to do.
             b.Hp = b.MaxHp;
-            Refused("No tiene heridas.", Item(s, "s1", ItemActions.Use, index: 0, to: "s2"));
             s.Mission.MedicineCures = true;
-            Assert.True(Item(s, "s1", ItemActions.Use, index: 0, to: "s2").Ok);
-            Assert.Equal(false, b.Infected);
-            SameJson(Pack(Food(1)), a.Backpack);
+            Refused("No tiene heridas.", Item(s, "s1", ItemActions.Use, index: 0, to: "s2"));
         }
 
-        [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › the support talent stops the bite for its own soldier only")]
-        public void TheSupportTalentStopsTheBite()
+        [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › Manos de enfermero: a medicine used without spending an action, with none left too (Arturo, 7/11)")]
+        public void ManosDeEnfermeroSaveTheAction()
         {
             var s = BackpackField();
-            AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => { u.Perks = new List<string> { PerkIds.LightHands }; u.Backpack = Pack(Medicines(1)); });
-            var b = AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => { u.Hp = 2; u.Infected = true; });
+            var a = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => { u.Perks = new List<string> { PerkIds.LightHands }; u.Backpack = Pack(Medicines(2)); });
+            var b = AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => u.Hp = 2);
+            var ap = a.Ap;
+            var r = Item(s, "s1", ItemActions.Use, index: 0, to: "s2");
+            Assert.True(r.Ok);
+            Assert.Equal((5, ap), (b.Hp, a.Ap));
+            Assert.Equal(true, Of<MedicineUsedEvent>(r.Events!).Single().Free);
+            a.Ap = 0;
+            b.Hp = 2;
             Assert.True(Item(s, "s1", ItemActions.Use, index: 0, to: "s2").Ok);
-            Assert.Equal(false, b.Infected);
+            Assert.Equal(0, a.Ap);
         }
 
         [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › the Chapistería gives one more slot, and the Enfermería at level 2 makes medicines stop the bite")]

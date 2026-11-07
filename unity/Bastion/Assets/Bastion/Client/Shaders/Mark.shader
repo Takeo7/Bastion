@@ -5,7 +5,10 @@
 // (1, 0.32, 0.26)), multiplied over what is drawn; and a red glow added, stronger at the edges as they turn away (_Base +
 // _Rim × (1 − n·v)^_Edge; its 0.1 + 1.2 × (1 − n·v)²). _Mark is the mark now (0 none, 1 all), set from outside.
 // _LineColor, the line's: the target's red unless said (the sRGB of linear 1, 0.16, 0.08, as it was written in); what
-// a soldier would search, UI's bone or grey (SearchOutline, Arturo's #12 of 5/11).
+// a soldier would search, UI's bone or grey (SearchOutline, Arturo's #12 of 5/11). Seen through (a door to open, its
+// leaf cut low by the cutaway or in an unfound building's dark: Arturo's #3 of 7/11), the line round all of it whatever
+// is before it: the Tint pass, which colours nothing then, marks the stencil where the mesh is, with no depth test, and
+// the line goes round that, with none either (_InsideTest, _InsideMark, _LineTest, _LineStencil; as before unless set).
 Shader "Bastion/Mark"
 {
     Properties
@@ -17,6 +20,10 @@ Shader "Bastion/Mark"
         _Edge ("How close to the edge", Range(1, 8)) = 2
         _Line ("Line round it (pixels)", Range(0, 6)) = 1.5
         _LineColor ("Line's colour", Color) = (1, 0.4366, 0.3133, 1)
+        [HideInInspector] _InsideTest ("Its inside's depth test (CompareFunction)", Float) = 4
+        [HideInInspector] _InsideMark ("Its inside marked on the stencil (StencilOp: 0 not, 2 so)", Float) = 0
+        [HideInInspector] _LineTest ("The line's depth test (CompareFunction)", Float) = 4
+        [HideInInspector] _LineStencil ("The line's stencil test (CompareFunction: 8 any, 6 off its inside)", Float) = 8
     }
     SubShader
     {
@@ -64,8 +71,9 @@ Shader "Bastion/Mark"
             Tags { "LightMode" = "SRPDefaultUnlit" }
             Blend DstColor Zero
             ZWrite Off
-            ZTest LEqual
+            ZTest [_InsideTest]
             Cull Back
+            Stencil { Ref 128 ReadMask 128 WriteMask 128 Comp Always Pass [_InsideMark] }
 
             HLSLPROGRAM
             #pragma vertex Vertex
@@ -107,8 +115,9 @@ Shader "Bastion/Mark"
             Tags { "LightMode" = "UniversalForwardOnly" }
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
-            ZTest LEqual
+            ZTest [_LineTest]
             Cull Front
+            Stencil { Ref 128 ReadMask 128 WriteMask 128 Comp [_LineStencil] Pass Keep }
 
             HLSLPROGRAM
             #pragma vertex LineVertex

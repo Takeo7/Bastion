@@ -41,7 +41,10 @@ namespace Bastion.Engine
             public static readonly IReadOnlyDictionary<string, PieceText> All = new Dictionary<string, PieceText>
             {
                 ["caravan"] = new PieceText("Autocaravana", "la autocaravana", "una autocaravana", "Camas para los primeros soldados y el almacén. No se desmonta."),
-                ["radio"] = new PieceText("Sala de radio", "la Sala de radio", "una Sala de radio", "Avisa de los asedios, por dónde y cuántos, y trae misiones y zonas que contactar.", new[] { "Una radio de coche, una batería y Morse con los cascos.", "Una antena en el pino más alto.", "La antena llega hasta el mar: Morse oye antes lo que viene." }),
+                // Without the sieges for now (Arturo, 7/11: «quitamos el asedio de momento»); with them, its line was «Avisa de los
+                // asedios, por dónde y cuántos, y trae misiones y zonas que contactar.», and its short one «Avisa de los asedios y
+                // trae misiones».
+                ["radio"] = new PieceText("Sala de radio", "la Sala de radio", "una Sala de radio", "Trae misiones y zonas que contactar.", new[] { "Una radio de coche, una batería y Morse con los cascos.", "Una antena en el pino más alto.", "La antena llega hasta el mar: Morse oye antes lo que viene." }),
                 ["quarters"] = new PieceText("Barracón", "el Barracón", "un Barracón", "Camas para soldados.", new[] { "Literas de madera y una estufa que solo se enciende de noche.", "Un segundo piso de literas.", "Mantas de verdad." }),
                 ["infirmary"] = new PieceText("Enfermería", "la Enfermería", "una Enfermería", "Las heridas curan antes.", new[] { "Una camilla y un hornillo para hervir el agua.", "Agua caliente en la sala de curas.", "Un quirófano de verdad, con lámpara y generador propio." }),
                 ["workshop"] = new PieceText("Taller", "el Taller", "un Taller", "Accesorios y armas más baratos.", new[] { "Un banco de trabajo y las herramientas de Teo.", "Un torno de verdad.", "Teo deja de quejarse." }),
@@ -134,7 +137,7 @@ namespace Bastion.Engine
         public static readonly IReadOnlyDictionary<string, string> NewBrief = new Dictionary<string, string>
         {
             ["piece:caravan"] = "Camas y almacén",
-            ["piece:radio"] = "Avisa de los asedios y trae misiones",
+            ["piece:radio"] = "Trae misiones y zonas que contactar",
             ["piece:quarters"] = "Camas para soldados",
             ["piece:infirmary"] = "Las heridas curan antes",
             ["piece:workshop"] = "Armas y accesorios más baratos",
@@ -570,7 +573,7 @@ namespace Bastion.Engine
             /// <summary>A siege by night (one in three from the second), after `arrival`: what the dark does, not its rule.</summary>
             public const string Night = "Es de noche: no se les ve hasta que están en la valla.";
             /// <summary>The rule, for the help and the errors (not for the notice).</summary>
-            public const string Defenders = "Defienden los sanos; si no queda ninguno, los heridos. Los mordidos se quedan dentro.";
+            public const string Defenders = "Defienden los sanos; si no queda ninguno, los heridos.";
             public const string Fallen = "El Bastión ha caído";
             public const string FallenLine = "Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la autocaravana y lo puesto, y vuelven a empezar en otro claro.";
             public const string Nobody = "No queda nadie";

@@ -852,6 +852,13 @@ namespace Bastion.EditorTools
                     EditorApplication.playModeStateChanged -= Outline;
                     Bastion.Client.Units.SearchOutline.Show(state, outlined, lit, far);
                     Debug.Log($"[contorno] {outlined.Count} tiles outlined");
+                    // (What each tile has drawn, outlined: its things, their lines' copies, and how high its top is.)
+                    foreach (var (at, _) in outlined)
+                    {
+                        var things = MapView.Current?.Builder?.On(at) ?? new List<GameObject>();
+                        int copies = things.Sum(o => o.GetComponentsInChildren<Transform>(true).Count(t => t.name.EndsWith(" (contorno)")));
+                        Debug.Log($"[contorno] {at.X},{at.Y}: {Bastion.Engine.Grid.KindAt(state, at)}, {string.Join(" ", things.Select(o => o.name))}; {copies} copies; top {Bastion.Client.Units.SearchOutline.TopOf(state, at)?.ToString("0.00") ?? "none"}");
+                    }
                 }
                 EditorApplication.playModeStateChanged += Outline;
             }

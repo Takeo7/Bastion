@@ -85,7 +85,7 @@ namespace Bastion.Engine
             var pieces = c.Bastion?.Pieces ?? new List<BasePiece>();
             var broken = pieces.FirstOrDefault((p) => p.Hp < Base.Pieces[p.Piece].Hp && CanAfford(c, Base.RepairCost(p).Supplies));
             var spent = pieces.FirstOrDefault((p) => p.Hp > 0 && Base.RearmCost(p) > 0 && (c.Parts ?? 0) >= Base.RearmCost(p));
-            if (c.Bastion != null && c.Siege.In <= 1 && ActiveOffer(c)?.Siege != true) steps.Add(Step(BaseViews.Facilities, "Prepara la base: el asedio está cerca", NextStepTones.Urgent));
+            if (SiegesOn && c.Bastion != null && c.Siege.In <= 1 && ActiveOffer(c)?.Siege != true) steps.Add(Step(BaseViews.Facilities, "Prepara la base: el asedio está cerca", NextStepTones.Urgent));
             if (broken != null) steps.Add(Step(BaseViews.Facilities, $"Repara {Lore.PieceTexts.All[broken.Piece].The}", NextStepTones.Info, null, new NextStepGo { Piece = broken.Id }));
             if (spent != null) steps.Add(Step(BaseViews.Facilities, $"Repón {Lore.PieceTexts.All[spent.Piece].The}", NextStepTones.Info, null, new NextStepGo { Piece = spent.Id }));
             if (broken == null && spent == null && c.Bastion != null && !c.Bastion.Pieces.Any((p) => p.Piece == PieceIds.Radio) && CanAfford(c, Base.Pieces[PieceIds.Radio].Cost.Supplies))

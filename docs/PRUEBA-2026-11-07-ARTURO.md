@@ -82,3 +82,34 @@ Hecho en el motor (7/11):
 - **Pruebas:** `ZombiesTests2.TheSamePilesInOneSlot`, y las de la mochila, el mando y el disparo, al día.
 - **Terminar el turno sin el mando** (UI, en el cliente; el motor ya lo aceptaba): queda «A punto», y el turno acaba cuando acabe el compañero.
 - **Pendiente de Red:** `NetCampaignRunTests`, porque la 364 ya no gana las dos con el bot.
+
+## Para la 0.12.6 (notas de Arturo del 7/11, tras la 0.12.4)
+
+| # | Nota | Quién | Cómo queda |
+|---|---|---|---|
+| 1 | «Que la opacidad de la UI sea más opaca, se ve poco el contenido» | UI | Arturo, en el cuadro: las placas rasgadas al 90 % (eran al 75 % desde la 0.12.3) |
+| 2 | «No quiero que haya acciones que acaben el turno» | Gameplay, UI, Lore | Arturo, en el cuadro: Vigilancia, Hoja en alto, Zona letal (Nadie pasa), Cubrirse y Esconderse siguen acabando el turno; el resto de las de los soldados no (las granadas, el humo, la aturdidora, el molotov, el lanzagranadas, la granada del chaleco, Arreglar, Supresión, Cara a cara, Pasar visita, Hacerse sitio). Las de los muertos y los vivos, como estaban. La celda «Sin pausa» de Lanzar pasa a «Mechero»: un cóctel molotov más, si lleva (en el cuadro) |
+| 3 | «Las cajas, puertas, etc., que no sean una casilla en el suelo: que se resalten con el símbolo de la acción, igual que los cuerpos y los coches» | UI, Arte | El contorno sobre el objeto (`SearchOutline`) y el icono de su acción (registrar, abrir, quitar las tablas…), sin resaltar la casilla, como desde la 0.12.0 (#12 del 5/11) con los cuerpos y los coches |
+| 4 | «Quitamos el efecto del mordisco en general: solo daño; se transforman cuando se mueren» | Gameplay, UI, Lore | Arturo, en el cuadro: un mordisco o un reventón solo quitan salud; sin contagio, sin fiebre, sin perder salud cada turno, sin «con un mordisco no se sube a La Lata». Se levanta como zombi cualquier soldado que muera en la misión, lo mate quien lo mate. La Cuarentena sale de la base y se devuelve lo que costó; los soldados con fiebre de una partida guardada se curan al cargarla; fuera el tratamiento |
+| 5 | «Molaría que cuando el coche salga, si hay algún zombi, lo atropelle y salga volando» | Arte | Al salir La Lata, los zombis en su camino salen volando. Es solo lo que se ve |
+| 6 | «Quitamos el asedio de momento, ya lo retomaremos más adelante» | Gameplay, UI, Lore, Red | En la campaña no hay asedios hasta que Arturo lo diga: no se anuncian ni llegan, y uno anunciado en una partida guardada se quita. El código se queda, apagado |
+
+Decidido después en el cuadro (7/11):
+- **«Manos de enfermero»** (`lightHands`) paraba el contagio y se quedaba sin efecto: «Usar una medicina no gasta acción.» (`Rules.FreeMedicine`, `MedicineUsedEvent.Free`).
+
+Hecho en el motor (7/11):
+- **#2:** `Content` con `EndsTurn` solo en Vigilancia, Hoja en alto, Nadie pasa, Cubrirse y Esconderse (y en las de los enemigos: Red y porra del Cazador, Grito, Despertar a un muerto, Reventón). «Mechero» en la celda `salvo`.
+- **#4:**
+  - sin `Infect`: un mordisco o un reventón solo quitan salud;
+  - `RiseFallen` levanta a cualquier soldado caído (no a una torreta, al VIP ni a un cautivo);
+  - fuera la salud perdida cada turno y el «con un mordisco no se sube a La Lata»;
+  - nadie vuelve con fiebre;
+  - `Base.Retired` (la Cuarentena) y `PlaceBlocker`;
+  - `CampaignVersion` 27 cura la fiebre, desmonta la Cuarentena y devuelve lo que costó.
+  - Pruebas: las de la fiebre en la base, fuera; las del combate, la Cuarentena y las medicinas, reescritas.
+  - La Enfermería de nivel 2 hacía que las medicinas pararan el mordisco: se queda sin ese efecto.
+- **#6:**
+  - `Campaign.SiegesOn` en false: el reloj no corre, no se anuncia ni empieza, y `NextSteps` calla;
+  - la versión 27 quita la oferta de un asedio anunciado, no la del que se juega;
+  - las pruebas de los asedios de campaña, saltadas hasta que vuelvan.
+- **Pendiente de Red:** `NetCampaignRunTests` (esperaba «Asedio» de segunda misión).

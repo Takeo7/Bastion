@@ -102,7 +102,8 @@ namespace Bastion.UI.Strategy
         /// <summary>The next siege (siegeEl): when, and with the Sala de radio how many and by where; red the mission before, and while it is on.</summary>
         void Siege(CampaignState c, TopView v)
         {
-            if (c.Siege == null) return;
+            // No sieges for now (Arturo, 7/11): the clock may be there, it doesn't run, and nothing says it.
+            if (c.Siege == null || !Campaign.SiegesOn) return;
             var now = c.Offers.FirstOrDefault(o => o.Siege == true);
             if (now != null)
             {

@@ -246,25 +246,25 @@
 /* «Menú» on a torn plate too (7/11: «el contorno desgastado»), by the FPS counter. */
 .strat-menu.torn {
     background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_02.png");
-    -unity-background-image-tint-color: rgba(0, 0, 0, 0.75);
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.9);
     -unity-slice-scale: 0.3px;
     background-color: rgba(0, 0, 0, 0);
     border-width: 0;
 }
 
 .strat-menu.torn:hover {
-    -unity-background-image-tint-color: rgba(40, 42, 46, 0.85);
+    -unity-background-image-tint-color: rgba(40, 42, 46, 0.95);
 }
 
 /* =============================================================== torn plates */
 
 /* A torn plate (Arturo's report of 7/11, the maqueta v39): Synty Apocalypse HUD's box, white with its edges torn, tinted
-   black at 75 %, and what it holds over it at its own opacity. Its slices at a third of the sprite's, so the tears are as
+   black at 90 % (75 % in the 0.12.3: «se ve poco el contenido», Arturo, 7/11), and what it holds over it at its own opacity. Its slices at a third of the sprite's, so the tears are as
    small as the maqueta's. */
 .torn {
     background-color: rgba(0, 0, 0, 0);
     background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Large_01.png");
-    -unity-background-image-tint-color: rgba(0, 0, 0, 0.75);
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.9);
     -unity-slice-scale: 0.3px;
     border-width: 0;
     border-radius: 0;

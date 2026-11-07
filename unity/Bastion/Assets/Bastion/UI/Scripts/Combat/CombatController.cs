@@ -977,11 +977,11 @@ namespace Bastion.UI.Combat
             var u = Unit();
             if (u != null && hover != null && CanAct() && Commands(u))
             {
-                // A closed door beside the soldier: the click opens it, for free.
+                // A closed door beside the soldier: the click opens it, for free. The door outlined and its icon over it, as
+                // a body (Arturo, 7/11).
                 if (HandTiles(AbilityIds.OpenDoor).Any(t => Same(t, hover)))
                 {
-                    AimMarks?.ShowSpots(State, new List<Pos> { hover }, hover);
-                    Note(hover, "Puerta · clic: abrir (no gasta acciones)");
+                    searchNext = new List<(Pos, bool)> { (hover, true) };
                     return;
                 }
                 // A boarded window or door beside one with the crowbar (02/11 A11): a click takes the boards off.
@@ -989,8 +989,9 @@ namespace Bastion.UI.Combat
                 {
                     var stop = Abilities.AbilityBlocker(State, u, AbilityIds.Pry);
                     var what = Abilities.Boards(State, hover) == DecorKinds.DoorBoards ? "Puerta tapiada" : "Ventana tapiada";
-                    AimMarks?.ShowSpots(State, new List<Pos> { hover }, stop == null ? hover : null);
-                    Note(hover, stop != null ? $"{what} · {stop.TrimEnd('.').ToLowerInvariant()}" : $"{what} · clic: quitar las tablas");
+                    // The boards outlined and the crowbar over them, greyed if it can't now (Arturo, 7/11); why, in words.
+                    searchNext = new List<(Pos, bool)> { (hover, stop == null) };
+                    if (stop != null) Note(hover, $"{what} · {stop.TrimEnd('.').ToLowerInvariant()}");
                     return;
                 }
                 // A box the squad has seen: its name, and whether it can be opened from here (docs/FASE8.md §B).
@@ -1017,9 +1018,10 @@ namespace Bastion.UI.Combat
                     }
                     var near = HandTiles(AbilityIds.Search).Any(t => Same(t, hover));
                     var blocked = near ? Abilities.AbilityBlocker(State, u, AbilityIds.Search) : null;
-                    var verb = body ? "registrar" : "abrir";
-                    AimMarks?.ShowSpots(State, new List<Pos> { hover }, near && blocked == null ? hover : null);
-                    Note(hover, !near ? $"{name} · se puede {verb}" : blocked != null ? $"{name} · {blocked.TrimEnd('.').ToLowerInvariant()}" : $"{name} · clic: {verb}");
+                    // The box or the furniture outlined and the rucksack over it, lit where a click opens it (Arturo, 7/11:
+                    // not a tile on the floor); words only for why not.
+                    searchNext = new List<(Pos, bool)> { (hover, near && blocked == null) };
+                    if (blocked != null) Note(hover, $"{name} · {blocked.TrimEnd('.').ToLowerInvariant()}");
                     return;
                 }
             }

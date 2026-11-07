@@ -160,7 +160,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal(31 + 6, m.NextSupplyDay);
             Assert.Equal(6, Campaign.ConvoyIn(m));
             Assert.Equal(2, m.Soldiers[0].WoundedDays);
-            Same(new SoldierInfection { Since = 30 }, m.Soldiers[1].Infection);
+            // (Its fever came over a day later; since bites don't infect, Arturo 7/11, it is gone: MigrateCampaign version 27.)
+            Assert.Null(m.Soldiers[1].Infection);
             Assert.True(Campaign.ConvoyIncome(m) > 0);
         }
 

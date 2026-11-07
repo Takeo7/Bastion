@@ -32,19 +32,19 @@ namespace Bastion.Engine
                 "La Pandemia lo vació todo. Atalaya cayó en otoño; los que quedan empiezan de cero en un claro del pinar.",
                 new[]
                 {
-                    "Hace dos inviernos llegó la Pandemia. Quien se contagia muere en un día y se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.",
+                    "Hace dos inviernos llegó la Pandemia. Desde entonces, quien muere se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.",
                     "Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en una autocaravana, con el todoterreno de Teo detrás. El autobús se quedó en la cochera de Atalaya, y el nombre de La Lata ha pasado al todoterreno.",
                     "Hemos parado en un claro del pinar, sobre Metsovo. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.",
                 },
                 "Lo que entra por la puerta se apunta aquí. — N. A."),
             new ExpedientePage(
                 "Notas de la doctora",
-                "De noche ven igual que de día. Una puerta no los para. No todos los mordiscos contagian.",
+                "De noche ven igual que de día. Una puerta no los para. Un mordisco no contagia.",
                 new[]
                 {
                     "Notas de la Dra. Nwosu. La oscuridad no les quita nada: de noche ven igual que de día. Los que perdemos vista somos nosotros.",
                     "Una puerta cerrada no los para: la empujan y pasan. Solo les tapa la vista. Para frenarlos sirve un paso estrecho, no una puerta.",
-                    "No todos los mordiscos contagian. El de un muerto corriente, uno de cada cuatro; el de un Acorazado, uno de cada tres. Los gases de un Hinchado, uno de cada dos.",
+                    "Un mordisco hace daño, pero no contagia. Lo que levanta a un muerto es morir, sea de lo que sea: un mordisco, un tiro o el frío.",
                 }),
             new ExpedientePage(
                 "Los Cuervos",

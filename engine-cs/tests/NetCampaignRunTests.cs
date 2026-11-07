@@ -5,9 +5,9 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// The campaign the two test apps play by themselves (CampaignAutoRun, the app's CampaignRun), through a room with the
-    /// engine's rules. Seed 364 is the one the apps are tested with (BASTION_SEMILLA=364): its opening operation is done, its
-    /// debrief comes, and its second mission, the siege, is won. If the engine changes it, CampaignAutoRun finds another:
-    /// MissionBot doesn't win every one. It was seed 2 till the dead went faster (28/10), and 4 till Arturo's rules of 31/10
+    /// engine's rules. Seed 157 is the one the apps are tested with (BASTION_SEMILLA=157): its opening operation is done, its
+    /// debrief comes, and its second operation, chosen on the base, is won. If the engine changes it, CampaignAutoRun finds
+    /// another: MissionBot doesn't win every one. It was seed 2 till the dead went faster (28/10), and 4 till Arturo's rules of 31/10
     /// (recruits' aim, fewer dead out of town, no seeing through windows); with the base aim at 55 and the dead of a siege
     /// after whoever they can walk to (1/11), of seeds 1 to 50 only 8, 12, 22, 27 and 43 won both, and 27 won both with
     /// the aim at 60 as well. With the campaign starting with the blade only (the police car's two pistols in the first
@@ -26,16 +26,18 @@ namespace Bastion.Engine.Tests
     /// With a run only all the movement at once (Arturo, 6/11) and MissionBot never running, 364 does, and 2, 4, 5 and 6.
     /// With a soldier in play till it has nothing left or is left (Arturo, 7/11) and MissionBot ceding the command once its
     /// actions are spent, its movement kept, 364 does, as before (of seeds 1 to 120, 18 win both; leaving it instead, 20,
-    /// but not 364: its siege is lost).
+    /// but not 364: its siege is lost). With no sieges (Arturo, 7/11, Campaign.SiegesOn) the second mission is the easiest
+    /// operation, chosen once the wounded are fit (HeardGame.BaseOrder); of seeds 1 to 200, 47 win the first and only 31,
+    /// 58, 87, 98 and 157 both, 364 not: 157, which wins both without the wait as well.
     /// </summary>
     public class NetCampaignRunTests
     {
         [Fact]
         public void TheTestAppsCampaignIsPlayedThrough()
         {
-            var played = CampaignAutoRun.Run(364, 2);
+            var played = CampaignAutoRun.Run(157, 2);
             Assert.Null(CampaignAutoRun.Stuck);
-            Assert.Equal(new[] { "El consultorio de Metsovo", "Asedio" }, played.Select((m) => m.Name));
+            Assert.Equal(new[] { "El consultorio de Metsovo", "Los juzgados de Metsovo" }, played.Select((m) => m.Name));
             Assert.All(played, (m) => Assert.Equal(Outcomes.Victory, m.Outcome));
         }
     }

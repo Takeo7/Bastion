@@ -172,9 +172,11 @@ namespace Bastion.UI.Combat
             }
             if (slot.Kind == "medicines")
             {
-                bool Whole(Unit t) => t.Hp >= t.MaxHp && !(t.Infected == true && Rules.MedicineStopsBite(v, u));
-                Act(HudText.Pack.Use, one, Order(ItemActions.Use), true, Whole(u) ? HudText.Pack.NoWoundsSelf : null);
-                foreach (var n in near) Act(HudText.Pack.Heal(n.Name), one, Order(ItemActions.Use, n.Id), false, Whole(n) ? HudText.Pack.NoWounds : null);
+                bool Whole(Unit t) => t.Hp >= t.MaxHp;
+                // Manos de enfermero: a medicine with no action (Rules.FreeMedicine; Arturo, 7/11).
+                var cure = Rules.FreeMedicine(u) ? HudText.Pack.NoAction : one;
+                Act(HudText.Pack.Use, cure, Order(ItemActions.Use), true, Whole(u) ? HudText.Pack.NoWoundsSelf : null);
+                foreach (var n in near) Act(HudText.Pack.Heal(n.Name), cure, Order(ItemActions.Use, n.Id), false, Whole(n) ? HudText.Pack.NoWounds : null);
             }
             // (Onto a pile of the same it fits however full the backpack: Looting.Fits.)
             foreach (var n in near) Act(HudText.Pack.Give(n.Name), one, Order(ItemActions.Give, n.Id), false, !Looting.Fits(n, l) ? HudText.Pack.NoRoom : null);

@@ -23,7 +23,7 @@ namespace Bastion.Engine
                 $"Moverse no gasta acciones, y el movimiento se reparte en tramos, antes y después de actuar: mover 3, disparar y mover los {Content.SoldierMobility - 3} que quedan.",
                 "Correr es gastar todo el movimiento de una vez, en un solo tramo, y se oye. Repartido en tramos, no se corre.",
                 "Forma física se llena con el tramo que gasta todo el movimiento, de una vez o tras otros tramos.",
-                "Lo que acaba el turno, como Vigilancia, Cubrirse, Esconderse o lanzar una granada, gasta también el movimiento que quede.",
+                "Solo Vigilancia (también la de cuerpo a cuerpo), Nadie pasa, Cubrirse y Esconderse acaban el turno, y gastan también el movimiento que quede.",
                 "Un soldado sigue en juego mientras le queden acciones o movimiento. Para dejarlo antes, termina su turno: pierde lo que le quede.",
                 "Con el compañero, se juega un soldado cada vez: el mando pasa al otro cuando el tuyo ya no tiene nada o terminas su turno.",
                 "El turno acaba solo cuando nadie tiene acciones ni movimiento. Si no, pulsa «Terminar turno».",

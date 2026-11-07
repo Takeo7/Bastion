@@ -644,6 +644,8 @@ namespace Bastion.Engine
         public string Unit { get; set; } = "";
         public string Target { get; set; } = "";
         public int Index { get; set; }
+        /// <summary>Without spending an action: Manos de enfermero (Arturo, 7/11). Absent, it takes one.</summary>
+        public bool? Free { get; set; }
     }
 
     /// <summary>A weapon from the backpack taken in hand (or at the belt), for an action: the one it replaces goes into the backpack, or to the floor.</summary>

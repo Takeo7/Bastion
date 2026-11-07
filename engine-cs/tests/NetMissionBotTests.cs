@@ -235,6 +235,41 @@ namespace Bastion.Engine.Tests
             Assert.IsType<LaunchCommand>(Order(0));
         }
 
+        [Fact]
+        public void OnTheBaseWithNoOperationChosenTheWoundedAreWaitedForAndTheEasiestIsProposed()
+        {
+            // No siege comes to choose the next operation now (Arturo, 7/11, Campaign.SiegesOn): with someone wounded, a
+            // day's wait; all fit, the host proposes the easiest there is, and the partner says yes.
+            var states = (JArray)JObject.Parse(File.ReadAllText(Path.Combine(Golden, "campaign", "states.json")))["states"]!;
+            var c = states.Single((s) => (string)s["name"]! == "duo-new")["campaign"]!.ToObject<CampaignState>(Json.Serializer)!;
+            var rules = new EngineCampaignRules();
+            var both = new List<int> { 0, 1 };
+            var rng = new Rng(9);
+            var heard = new HeardGame();
+            CampaignCommand? Order(int slot)
+            {
+                heard.Observe(new CampaignMessage { State = Json.Read<CampaignState>(Json.Write(c)) });
+                return heard.BaseOrder(slot, slot == 0);
+            }
+            c.ActiveMission = null;
+            c.Squad = new List<string>();
+            c.Soldiers[0].WoundedDays = 2;
+            var day = c.Day;
+            foreach (var slot in both) Assert.True(rules.ExecuteCampaignCommand(c, Assert.IsType<AdvanceCommand>(Order(slot)), slot, both, rng).Ok);
+            Assert.Equal(day + 1, c.Day);
+
+            foreach (var s in c.Soldiers) s.WoundedDays = 0;
+            c.Event = null;
+            var easiest = c.Offers.Where((o) => !o.Final && o.Facility == null && o.Siege != true).OrderBy((o) => o.Difficulty).ThenBy((o) => o.Id, StringComparer.Ordinal).First();
+            Assert.Null(Order(1));
+            var choose = Assert.IsType<ChooseMissionCommand>(Order(0));
+            Assert.Equal(easiest.Id, choose.Id);
+            Assert.True(rules.ExecuteCampaignCommand(c, choose, 0, both, rng).Ok);
+            Assert.True(rules.ExecuteCampaignCommand(c, Assert.IsType<VoteCommand>(Order(1)), 1, both, rng).Ok);
+            Assert.Equal(easiest.Id, c.ActiveMission);
+            Assert.NotEmpty(c.Squad);
+        }
+
         private static RoomMessage Room(bool pepe, bool pepeAway = false) => new RoomMessage
         {
             Phase = RoomPhases.Mission,

@@ -117,7 +117,9 @@ namespace Bastion.Engine
         /// <summary>Whether using the ability spends every action left (perks can lift that).</summary>
         public static bool EndsTurn(Unit u, string ability)
         {
-            if ((ability == AbilityIds.Grenade || ability == AbilityIds.Launch) && Content.HasPerk(u, PerkIds.Salvo)) return false;
+            // Only keeping watch, taking cover and hiding end a soldier's turn now (Arturo, 7/11: «no quiero que haya acciones
+            // que acaben el turno»; in the box, those five do): a grenade, a fix, a smoke… cost their action, and the rest is
+            // left. The dead's and the living's keep theirs.
             return Content.Abilities[ability].EndsTurn;
         }
 

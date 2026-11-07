@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Bastion.Engine;
 using UnityEngine;
@@ -144,19 +145,88 @@ namespace Bastion.Client.Map
         public Awaitable LataDeparts(System.Threading.CancellationToken ct = default)
         {
             if (Lata == null || lataWay == null) return Done();
-            return Lata.DepartAsync(lataWay.Value, false, ct);
+            var going = Lata.DepartAsync(lataWay.Value, false, ct);
+            _ = RunOver(ct);
+            return going;
+        }
+
+        /// <summary>
+        /// How far to its sides beyond its width it hits one of the dead (m), and how far before its nose gets to one's middle
+        /// (m): their bodies' breadth.
+        /// </summary>
+        const float RunOverSide = 0.25f, RunOverReach = 0.3f;
+        /// <summary>
+        /// One of the dead thrown by it: on ahead and off to its side (m/s, so much for each m/s of the bus and so much more,
+        /// at least `ThrowLeast`), off the way it goes, or the bus going on faster would drive through it in the air.
+        /// </summary>
+        const float ThrowOn = 0.8f, ThrowOnMore = 1, ThrowAside = 0.35f, ThrowAsideMore = 2, ThrowLeast = 3;
+
+        /// <summary>
+        /// La Lata going over the dead in its way as it pulls away (Arturo's #5 of 7/11: «que lo atropelle y salga volando»;
+        /// only what is seen, the mission over as it goes): each of the dead standing and seen within its width ahead of it,
+        /// thrown as its nose gets there at the speed it has then (UnitViews.RunOver).
+        /// </summary>
+        async Awaitable RunOver(System.Threading.CancellationToken ct)
+        {
+            var units = Bastion.Client.Units.UnitViews.Current;
+            if (Lata == null || units == null || lataWay == null) return;
+            var start = Lata.transform.position;
+            var ahead = new Vector3(Mathf.Sin(Lata.Heading), 0, Mathf.Cos(Lata.Heading));
+            var aside = new Vector3(ahead.z, 0, -ahead.x);
+            float half = Lata.Width / 2 * MapSpace.Tile + RunOverSide, nose = Lata.Length / 2 * MapSpace.Tile, way = lataWay.Value * MapSpace.Tile + nose;
+            var waiting = units.DeadStanding()
+                .Select(d => (d.id, along: Vector3.Dot(d.at - start, ahead), side: Vector3.Dot(d.at - start, aside)))
+                .Where(d => d.along > nose - RunOverReach && d.along < way && Mathf.Abs(d.side) < half)
+                .OrderBy(d => d.along).ToList();
+            if (waiting.Count == 0) return;
+            Debug.Log($"[lata] in its way: {string.Join(", ", waiting.Select(d => $"{d.id} {d.along:0.0} m ahead"))}");
+            var was = start;
+            float went = 0;
+            int thrown = 0;
+            try
+            {
+                while (waiting.Count > 0)
+                {
+                    await Awaitable.NextFrameAsync(ct);
+                    if (Lata == null || !Lata.Shown) return;
+                    var now = Lata.transform.position;
+                    float speed = Vector3.Distance(now, was) / Mathf.Max(Time.deltaTime, 1e-4f), front = Vector3.Dot(now - start, ahead);
+                    was = now;
+                    // (Gone, it is put back where it parks: done.)
+                    if (front < went - 1) return;
+                    went = front;
+                    while (waiting.Count > 0 && waiting[0].along - RunOverReach <= front + nose)
+                    {
+                        // (Off to the side it stood on; one right in the middle, to either side in turn.)
+                        float side = Mathf.Abs(waiting[0].side) > 0.05f ? Mathf.Sign(waiting[0].side) : thrown++ % 2 == 0 ? 1 : -1;
+                        var push = ahead * Mathf.Max(ThrowLeast, speed * ThrowOn + ThrowOnMore) + aside * side * Mathf.Max(ThrowLeast, speed * ThrowAside + ThrowAsideMore);
+                        _ = units.RunOver(waiting[0].id, push);
+                        waiting.RemoveAt(0);
+                    }
+                }
+            }
+            catch (System.OperationCanceledException) { }
         }
 
         static async Awaitable Done() => await Awaitable.NextFrameAsync();
+
+        /// <summary>What built the map as it is (for the labs: what is drawn on a tile, MapBuilder.On).</summary>
+        public MapBuilder Builder => builder;
+
+        /// <summary>A copy of the car whose nose is on ground tile `anchor`, as drawn, under the map (MapBuilder.CarCopy); null if none.</summary>
+        public GameObject CarCopy(int anchor) => builder?.CarCopy(anchor, transform);
+
+        /// <summary>What is drawn on `tile` that a soldier opens, searches or pries, each mesh again with `material` alone, going with it (MapBuilder.Outline); none if nothing.</summary>
+        public List<GameObject> Outline(Pos tile, Material material) => builder?.Outline(tile, material) ?? new List<GameObject>();
+
+        /// <summary>How high the top of what is drawn on `tile` stands (m, the world's), or null if nothing (MapBuilder.TopOf).</summary>
+        public float? TopOf(Pos tile) => builder?.TopOf(tile);
 
         /// <summary>
         /// The map brought to `state`, the same map changed (UI's event player calls it as a tileChanged or a floorBroken
         /// settles; a door opening is a tileChanged): only the tiles that changed are made again. How many; if `state`
         /// has other storeys, it is built whole (and -1).
         /// </summary>
-        /// <summary>A copy of the car whose nose is on ground tile `anchor`, as drawn, under the map (MapBuilder.CarCopy); null if none.</summary>
-        public GameObject CarCopy(int anchor) => builder?.CarCopy(anchor, transform);
-
         public int Rebuild(GameState state)
         {
             if (builder == null) return -1;
@@ -321,6 +391,9 @@ namespace Bastion.Client.Map
             }
             builder?.Walls?.Step(Time.deltaTime);
         }
+
+        /// <summary>What is outlined to be searched or opened outlined again if the map made it again since (SearchOutline.KeepUp).</summary>
+        void LateUpdate() => Units.SearchOutline.KeepUp();
 
         /// <summary>
         /// The storey in view (0 the ground): the cutaway's chosen storey (Cutaway.Focus.level), the buildings with storeys

@@ -100,6 +100,8 @@ namespace Bastion.Client.Units
             public Transform body;
             public Pos place;
             public bool dead;
+            /// <summary>Thrown by La Lata as it went (RunOver): it lies where it came down, whatever the state says.</summary>
+            public bool runOver;
             public bool shaded;
             /// <summary>On a storey its building's cutaway hides (Cutaway.Hides): its renderers off.</summary>
             public bool cut;
@@ -554,6 +556,8 @@ namespace Bastion.Client.Units
                 if (u.Evacuated) continue;
                 seen.Add(u.Id);
                 if (!views.TryGetValue(u.Id, out var v)) views[u.Id] = v = Make(u);
+                // (One La Lata threw stays as it came down: alive to the rules, the mission over.)
+                if (v.runOver) continue;
                 var was = v.place;
                 v.place = new Pos { X = u.Pos.X, Y = u.Pos.Y, Z = u.Pos.Z };
                 // A weapon from the backpack taken in hand (the engine's weaponEquipped): Equip.

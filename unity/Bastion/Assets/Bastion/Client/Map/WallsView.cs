@@ -359,6 +359,14 @@ namespace Bastion.Client.Map
                 batch.Add(part.mesh, k, world, outer, inner, cut, more);
                 Draw(o, part.materials[k].name, batch.Make($"hoja {piece.tile}"), part.materials[k], true);
             }
+            // (Every leaf by its storey and tile, for what outlines a door to open or shut: LeavesAt.)
+            if (piece.tile >= 0)
+            {
+                long key = ((long)piece.level << 32) | (uint)piece.tile;
+                if (!leaves.TryGetValue(key, out var all)) leaves[key] = all = new List<Transform>();
+                all.RemoveAll(t => t == null);
+                all.Add(o);
+            }
             // (A siege's door on the ground wears and shakes: Wear, Knock.)
             if (piece.level != 0 || piece.tile < 0) return;
             var leaf = new Hung { o = o, place = place, rest = thicken * part.fit, hinge = hinge, far = far, open = piece.open, baked = world.inverse };
@@ -389,6 +397,11 @@ namespace Bastion.Client.Map
         }
 
         readonly Dictionary<int, List<Hung>> hung = new Dictionary<int, List<Hung>>();
+        readonly Dictionary<long, List<Transform>> leaves = new Dictionary<long, List<Transform>>();
+
+        /// <summary>The leaves of the door on tile `tile` (y × width + x) of storey `level`, as hung now (none if there is no door).</summary>
+        public IReadOnlyList<Transform> LeavesAt(int level, int tile) =>
+            leaves.TryGetValue(((long)level << 32) | (uint)tile, out var all) ? all.Where(t => t != null).ToList() : new List<Transform>();
         Dictionary<int, int> wear = new Dictionary<int, int>();
         readonly Dictionary<int, float> knocks = new Dictionary<int, float>();
         bool worn;

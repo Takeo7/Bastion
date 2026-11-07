@@ -725,7 +725,7 @@ namespace Bastion.Engine
                 case MedicineUsedEvent ev:
                 {
                     var u = UnitOf(s, ev.Unit);
-                    u.Ap = Math.Max(0, u.Ap - 1);
+                    if (ev.Free != true) u.Ap = Math.Max(0, u.Ap - 1);
                     var loot = u.Backpack![ev.Index];
                     loot.Medicines = (loot.Medicines ?? 1) - 1;
                     if (loot.Medicines <= 0)

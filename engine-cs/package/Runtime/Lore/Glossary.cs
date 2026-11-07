@@ -9,12 +9,12 @@ namespace Bastion.Engine
         /// <summary>One line for each word of the world, for tooltips.</summary>
         public static readonly IReadOnlyDictionary<string, string> Glossary = new Dictionary<string, string>
         {
-            ["Pandemia"] = "Empezó hace dos inviernos en el Instituto Koper. Quien se contagia muere en un día y se levanta como zombi.",
+            ["Pandemia"] = "Empezó hace dos inviernos en el Instituto Koper. Desde entonces, quien muere, sea de lo que sea, se levanta como zombi.",
             ["Zombi"] = "Va a por el vivo que ve. Si no ve a nadie, va hacia el último ruido que oyó.",
             ["Corredor"] = "Zombi rápido que ve de lejos.",
             ["Acorazado"] = "Zombi con chaleco y casco: tiene blindaje.",
             ["Chillón"] = "Zombi que no muerde: grita. El grito asusta a los soldados cercanos, atrae a los zombis que lo oyen y levanta a los muertos.",
-            ["Hinchado"] = "Zombi lento. Revienta al morir o al llegar a un soldado: hace daño a quien tenga al lado y puede contagiarlo.",
+            ["Hinchado"] = "Zombi lento. Revienta al morir o al llegar a un soldado: hace daño a quien tenga al lado.",
             ["Cuervos"] = "Bandas de saqueadores armados. Atacan a otros vivos y atraen hordas con sirenas. Los zombis también van a por ellos.",
             ["Congregación"] = "Secta que cree que los zombis están salvados. Los guía con campanas y por radio.",
             ["Marea"] = "Horda enorme que sube desde los Llanos de Ceniza. Si llega al Bastión, se pierde la campaña.",
@@ -29,9 +29,8 @@ namespace Bastion.Engine
             ["Armería"] = "Las armas del Bastión. Cada una es de quien la lleva.",
             ["Cargadores"] = "Los hace el Taller: cada soldado sale con uno por tanda, hasta tres. Valen para todas las armas; recargar llena primero la principal.",
             ["Suministros"] = "Para construir, reparar, subir de nivel, reclutar, equipar y contactar zonas.",
-            ["Medicinas"] = "Tratar a un mordido cuesta 2 ✚ (1 con la Enfermería a nivel 2). Una dosis quita una misión de baja a un herido. En la misión, curan 3 con una acción.",
-            ["Mordisco"] = "El de un zombi puede contagiar. En la misión, el contagiado pierde 1 de salud cada turno y, sin Cuarentena, no puede subir a La Lata. Al volver tiene fiebre: si no se le trata, se convierte. La Enfermería y la Cuarentena dan más tiempo. Si muere contagiado, se levanta.",
-            ["Cuarentena"] = "Sin ella, un mordido no puede subir a La Lata y se queda en la misión.",
+            ["Medicinas"] = "Una dosis quita una misión de baja a un herido. En la misión, curan 3 con una acción; con Manos de enfermero, sin gastarla.",
+            ["Mordisco"] = "Solo hace daño: no contagia. Un soldado que muere en una misión, lo mate quien lo mate, se levanta como zombi.",
             ["Comida"] = "Cada soldado come una ración al día; una misión es un día. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad.",
             ["Huerto"] = "Cada Huerto da 5 raciones por misión a nivel 1, 10 a nivel 2 y 15 a nivel 3.",
             ["Piezas"] = "Para que el Taller haga armas y armaduras mejores, y para reponer trampas.",

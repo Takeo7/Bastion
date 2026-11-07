@@ -268,7 +268,6 @@ namespace Bastion.UI.Combat
                 Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun");
                 Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi");
                 Tag(u.Panicked, "PÁNICO", "psi");
-                Tag(u.Infected == true, Lore.BiteTag, "bite");
                 Tag(u.SuppressedBy != null, UnitWords.Agree(u, "SUPRIMIDO"), "stun");
                 Tag(u.Marked > 0, "MARCADO", "aid");
                 Tag(u.Ruptured > 0, "VULNERABLE", "stun");
@@ -605,8 +604,6 @@ namespace Bastion.UI.Combat
                 Tag(u.Captive, UnitWords.Agree(u, "CAUTIVO"), "data");
                 Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi");
                 Tag(u.Panicked, "PÁNICO", "psi");
-                // Bitten (docs/FASE3.md): if it falls it rises, and back at the base it turns unless treated.
-                Tag(u.Infected == true && u.Alive, Lore.BiteTag, "bite", BiteNote());
                 Tag(u.Evacuated, UnitWords.Agree(u, "EVACUADO"), "evac");
                 Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data");
                 Tag(u.Overwatch, u.KillZone ? "ZONA LETAL" : u.WatchMelee == true ? "HOJA EN ALTO" : "VIGILANCIA", "ow");
@@ -623,9 +620,6 @@ namespace Bastion.UI.Combat
         /// partner's while this player commands it; a living one or not.
         /// </summary>
         bool OnCard(Unit u) => u.Team == Teams.Xcom && u.Automaton == null && (u.Owner == MySlot || u.Owner == null || u.Alive && Commands(u));
-
-        /// <summary>What a bite does in this mission (playtest 15/10 #13), for the bite tags' tooltip.</summary>
-        string BiteNote() => Lore.BiteNote(Shown.Mission.Quarantine != false);
 
         /// <summary>What a recovery carries out: the chapter's own name for it, or the default (game.ts recoveryItem).</summary>
         string RecoveryItem() => Shown.CampaignMission?.Item ?? Lore.DefaultItem;
@@ -699,11 +693,6 @@ namespace Bastion.UI.Combat
             {
                 view.Whose = Players.FirstOrDefault(p => p.Slot == u.Owner)?.Name ?? "";
                 view.WhoseColor = PlayerColor(u.Owner.Value);
-            }
-            if (u.Infected == true && u.Alive)
-            {
-                view.Bite = Lore.BiteTag;
-                view.BiteTip = BiteNote();
             }
             var aim = t.Aim + u.Mods.Aim;
             // Health and actions are on its card (UI-COMBATE UI-02); one with none (the partner's, a turret) has them here.

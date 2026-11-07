@@ -2007,6 +2007,9 @@ namespace Bastion.EditorTools
                 return;
             }
             if (Environment.GetEnvironmentVariable("BASTION_IR") != "1") return;
+            // BASTION_ATROPELLO=n: n of the map's dead standing in its way, 2, 4.5, 7… m past its nose, a little to either
+            // side, seen; it goes a second in and goes over them (MapView.RunOver, Arturo's #5 of 7/11).
+            int.TryParse(Environment.GetEnvironmentVariable("BASTION_ATROPELLO"), out int thrown);
             void Go(PlayModeStateChange change)
             {
                 if (change != PlayModeStateChange.EnteredPlayMode) return;
@@ -2015,6 +2018,32 @@ namespace Bastion.EditorTools
                 Wait();
                 async void Wait()
                 {
+                    var lata = MapView.Current.Lata;
+                    if (thrown > 0 && lata != null)
+                    {
+                        var ahead = new Vector3(Mathf.Sin(lata.Heading), 0, Mathf.Cos(lata.Heading));
+                        var aside = new Vector3(ahead.z, 0, -ahead.x);
+                        float nose = lata.Length / 2 * MapSpace.Tile;
+                        var dead = state.Units.Where(u => u.Team == "alien" && Gaits.MovesDead(u.Template)).Take(thrown).ToList();
+                        for (int k = 0; k < dead.Count; k++)
+                        {
+                            var at = MapSpace.WorldToTile(lata.transform.position + ahead * (nose + 2 + k * 2.5f) + aside * (k % 2 == 0 ? 0.3f : -0.3f));
+                            dead[k].Pos = new Pos { X = at.x, Y = at.y, Z = 0 };
+                            dead[k].Alive = true;
+                        }
+                        // (Made in play mode, after its start: its clips' graphs would be lost otherwise.)
+                        units = new GameObject("Unidades").AddComponent<UnitViews>();
+                        units.Sync(state);
+                        foreach (var u in dead) units.ForceVisible(u.Id);
+                        units.Sync(state);
+                        units.MasksNow();
+                        Debug.Log($"[combat] in La Lata's way: {string.Join(", ", dead.Select(u => $"{u.Id} {u.Template} at {u.Pos.X},{u.Pos.Y}"))}");
+                        // (The camera on its way, between its nose and the last of them, as the game's follows it: EventPlayer.LataLeaves.)
+                        var shot = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).FirstOrDefault(c => c.name == "Shot camera");
+                        float far = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f) ? f : 16;
+                        if (shot != null) MapSpace.Aim(shot, lata.transform.position + ahead * (nose + 1 + dead.Count * 1.25f), far);
+                        await Awaitable.WaitForSecondsAsync(1);
+                    }
                     await MapView.Current.LataDeparts();
                     Debug.Log($"[combat] La Lata gone after {Time.time - started:0.00} s of game time");
                 }

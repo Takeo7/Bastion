@@ -154,8 +154,7 @@ namespace Bastion.UI.Strategy
             // In it: a worn white frame round the row (Arturo's report of 7/11), no green ✓; its words on the row.
             if (on) row.Tip = StrategyText.Squad.InTip;
             else if (ready) { }
-            // Lore, C2: «Mordisco», «Heridas».
-            else if (s.Infection != null) (row.Chip, row.ChipTone, row.ChipTip) = ("Fiebre", "bad", "Mordisco: necesita el tratamiento antes de salir.");
+            // Lore, C2: «Heridas» (no fever since 7/11: Arturo took the bite's contagion out).
             else (row.Chip, row.ChipTone, row.ChipTip) = (MissionsText(MissionsFor(s.WoundedDays)), "warn", "Heridas");
             return row;
         }
@@ -383,7 +382,6 @@ namespace Bastion.UI.Strategy
         {
             var s = c.Soldiers.FirstOrDefault(x => x.Id == e.Id);
             var female = s != null && Female(s);
-            var bitten = report.Infected != null && report.Infected.Contains(e.Id) ? $" · {Lore.BiteTag}" : "";
             var status = e.Status == "dead" ? (female ? "CAÍDA EN COMBATE" : "CAÍDO EN COMBATE")
                 : e.Status == "lost" ? "SE QUEDÓ FUERA"
                 : e.Status == "wounded" ? $"HERIDAS · {MissionsText(MissionsFor(e.WoundedDays)).ToUpperInvariant()}"
@@ -391,7 +389,7 @@ namespace Bastion.UI.Strategy
             var v = new LineupCardView
             {
                 Id = e.Id, Name = Appearances.DisplayName(e.Name, s?.Nickname), Accent = PlayerColor(e.Owner), Fallen = e.Status == "dead",
-                Lines = { status + bitten, $"{e.Kills} baja{(e.Kills == 1 ? "" : "s")}" },
+                Lines = { status, $"{e.Kills} baja{(e.Kills == 1 ? "" : "s")}" },
             };
             if (e.Status == "dead" || e.Status == "lost") return v;
             for (var i = 0; i < SkillIds.All.Count; i++)

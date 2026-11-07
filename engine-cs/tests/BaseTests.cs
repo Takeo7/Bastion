@@ -352,7 +352,7 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------ the sieges in the campaign (docs/FASE12.md §11.5)
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › the clock counts missions; at 0 the siege is the next thing the base does, by every soldier fit to fight")]
+        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › the clock counts missions; at 0 the siege is the next thing the base does, by every soldier fit to fight", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void TheClockCountsMissions()
         {
             var c = Solo();
@@ -390,7 +390,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(c.Siege.Sides, plan.Sides);
         }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › held: what broke stays broken, the traps spent, and the next one comes bigger")]
+        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › held: what broke stays broken, the traps spent, and the next one comes bigger", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void HeldWhatBrokeStaysBroken()
         {
             var c = Solo();
@@ -420,7 +420,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Repón la mina", labels.ElementAtOrDefault(at + 1));
         }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › the Bastion's building keeps the hits on all of it, past the caravan's own tiles")]
+        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › the Bastion's building keeps the hits on all of it, past the caravan's own tiles", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void TheBastionsBuildingKeepsTheHitsOnAllOfIt()
         {
             var c = Solo();
@@ -438,7 +438,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(5, caravan.Hp);
         }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › nobody starts a siege on a turret, a trap or the wire, posted there before it was built or not")]
+        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › nobody starts a siege on a turret, a trap or the wire, posted there before it was built or not", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void NobodyStartsASiegeOnATurretATrapOrTheWire()
         {
             var c = Solo();
@@ -459,7 +459,7 @@ namespace Bastion.Engine.Tests
             foreach (var u in defenders) Assert.False(armed.Has(u.Pos.Y * s.Width + u.Pos.X));
         }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › fallen with someone left: another clearing, the stores lost, the soldiers keep what they carry")]
+        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › fallen with someone left: another clearing, the stores lost, the soldiers keep what they carry", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void FallenWithSomeoneLeft()
         {
             var c = Solo();
@@ -503,7 +503,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(now + 1, c.Day);
         }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › one siege in three by night, never the first")]
+        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › one siege in three by night, never the first", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void OneSiegeInThreeByNight()
         {
             var nights = new[] { 0, 1 }.Select((held) =>
@@ -532,7 +532,7 @@ namespace Bastion.Engine.Tests
             Assert.True(nights[1] < 30, $"{nights[1]}");
         }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › each places their own defenders anywhere free on the clearing, and the siege begins with them there (18/10 #58)")]
+        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › each places their own defenders anywhere free on the clearing, and the siege begins with them there (18/10 #58)", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void EachPlacesTheirOwnDefenders()
         {
             var c = Campaign.CreateCampaign(Both, new Rng(3));
@@ -565,7 +565,7 @@ namespace Bastion.Engine.Tests
             Assert.Null(c.SiegePosts);
         }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › fallen with nobody left: the campaign is lost")]
+        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › fallen with nobody left: the campaign is lost", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void FallenWithNobodyLeft()
         {
             var c = Solo();

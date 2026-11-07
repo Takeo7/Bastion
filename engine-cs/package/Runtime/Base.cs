@@ -423,6 +423,12 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Pieces no longer built (their definitions stay, for what a save names): the Cuarentena, with no bites that infect
+        /// (Arturo, 7/11; one already built is taken down and paid back, MigrateCampaign version 27).
+        /// </summary>
+        public static readonly ISet<string> Retired = new HashSet<string> { PieceIds.Quarantine };
+
+        /// <summary>
         /// Why `id` can't go at (x, y) turned `rot`, or null if it can: on the map but
         /// off the edge band where the dead come in, on cleared ground (no tree) and
         /// free, and only once if it is unique. Costs and the Bastion's level are the
@@ -431,6 +437,7 @@ namespace Bastion.Engine
         public static string? PlaceBlocker(BaseState @base, string id, int x, int y, int rot)
         {
             var def = Pieces[id];
+            if (Retired.Contains(id)) return "Ya no se construye.";
             if (def.Unique == true && @base.Pieces.Any((p) => p.Piece == id)) return "Ya está en la base.";
             foreach (var c in PieceCells(id, x, y, rot))
             {

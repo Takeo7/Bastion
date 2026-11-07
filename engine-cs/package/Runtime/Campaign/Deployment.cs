@@ -111,7 +111,7 @@ namespace Bastion.Engine
                     s.Alive = false;
                     s.FellDay = report.Day;
                     entry.Status = u.Lost == true ? ReportStatuses.Lost : ReportStatuses.Dead;
-                    if (u.Lost == true) Log(c, u.Infected == true && !HasQuarantine(c) ? $"{s.Name} se quedó fuera: llevaba un mordisco, y sin Cuarentena no se sube a La Lata." : $"{s.Name} se quedó fuera cuando salió La Lata.", LogTones.Bad);
+                    if (u.Lost == true) Log(c, $"{s.Name} se quedó fuera cuando salió La Lata.", LogTones.Bad);
                     else if (FacilityCount(c, FacilityIds.Memorial) != 0) Log(c, $"{s.Name} descansa en el Camposanto.");
                     // Equipment is lost with its bearer, the Armería's weapons too.
                     foreach (var item in new[] { s.Loadout.Utility, s.Loadout.Ammo })
@@ -331,7 +331,7 @@ namespace Bastion.Engine
                 if (victory) c.Siege.Held++;
                 c.Siege = NextSiege(c, rng);
             }
-            else c.Siege.In = Math.Max(0, c.Siege.In - 1);
+            else if (SiegesOn) c.Siege.In = Math.Max(0, c.Siege.In - 1);
 
             // Ordinary offers are gone either way; facility assaults, story chapters and the final mission stay until won.
             if (offer != null && ((!offer.Final && offer.Facility == null && (offer.Story ?? 0) == 0) || victory)) c.Offers = c.Offers.Where((o) => o.Id != offer.Id).ToList();
@@ -340,23 +340,15 @@ namespace Bastion.Engine
             c.LaunchReady = new bool[2];
             c.LastReport = report;
             MaybeFaces(c, report, rng);
-            // The bitten come home with a fever: their days count from their arrival (docs/FASE3.md).
+            // Nobody comes home bitten any more: a bite is only its damage (Arturo, 7/11; it brought a fever, docs/FASE3.md).
             report.Infected = new List<string>();
-            foreach (var u in mission.Units)
-            {
-                var s = u.Infected == true && !Fell(u) ? c.Soldiers.FirstOrDefault((x) => x.Id == u.CampaignId && x.Alive) : null;
-                if (s == null) continue;
-                s.Infection = new SoldierInfection { Since = c.Day };
-                report.Infected.Add(s.Id);
-                Log(c, $"{s.Name} vuelve con un mordisco: tiene fiebre.", LogTones.Bad);
-            }
             SyncMarea(c);
             if (c.Outcome == null)
             {
                 // Always something to fly (time only goes by with missions), and the next siege announced, or here.
                 TopUpOffers(c, rng);
-                if (c.Siege.In == 0 && !siege) StartSiege(c, rng);
-                else Log(c, HasRadio(c) ? Lore.SiegeWarning(c.Siege.In, c.Siege.Count, c.Siege.Sides) : Lore.SiegeWarning(c.Siege.In), c.Siege.In <= 1 ? LogTones.Bad : LogTones.Info);
+                if (SiegesOn && c.Siege.In == 0 && !siege) StartSiege(c, rng);
+                else if (SiegesOn) Log(c, HasRadio(c) ? Lore.SiegeWarning(c.Siege.In, c.Siege.Count, c.Siege.Sides) : Lore.SiegeWarning(c.Siege.In), c.Siege.In <= 1 ? LogTones.Bad : LogTones.Info);
                 NobodyLeft(c, rng);
             }
             return report;

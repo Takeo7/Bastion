@@ -101,7 +101,7 @@ namespace Bastion.Engine.Tests
             return c;
         }
 
-        [Fact(DisplayName = "the siege › one who comes once it has started defends too (Red, 2/11: the recruit was left out)")]
+        [Fact(DisplayName = "the siege › one who comes once it has started defends too (Red, 2/11: the recruit was left out)", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void ComesToTheSiege()
         {
             var c = SiegeAfter();
@@ -115,7 +115,7 @@ namespace Bastion.Engine.Tests
             Assert.Single(c.Squad);
         }
 
-        [Fact(DisplayName = "the siege › with nobody fit, the wounded defend; the bitten stay in (Arturo, 2/11)")]
+        [Fact(DisplayName = "the siege › with nobody fit, the wounded defend; the bitten stay in (Arturo, 2/11)", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void TheWoundedDefend()
         {
             var c = SiegeAfter((s) => { foreach (var u in s.Units.Where((x) => x.CampaignId != null)) u.Hp = 1; });

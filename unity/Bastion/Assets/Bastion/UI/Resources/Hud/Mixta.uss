@@ -90,13 +90,13 @@ Label {
 /* ============================================================== plates */
 
 /* A plate (Arturo's report of 7/11, the maqueta v39; it was steel): torn, Synty Apocalypse HUD's white box tinted black
-   at 75 %, with what it holds over it at its own opacity. The box by the plate's size (App/TornPlates.cs): the maqueta's
+   at 90 % (75 % in the 0.12.3: «se ve poco el contenido», Arturo, 7/11), with what it holds over it at its own opacity. The box by the plate's size (App/TornPlates.cs): the maqueta's
    large one; a wide one; a low one, torn along its top and foot; a small one, torn all round. The slices scaled so the
    tears are as small as the maqueta's (-unity-slice-scale goes in px). */
 .panel {
     background-color: rgba(0, 0, 0, 0);
     background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Large_01.png");
-    -unity-background-image-tint-color: rgba(0, 0, 0, 0.75);
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.9);
     -unity-slice-scale: 0.3px;
     border-width: 0;
     border-radius: 0;

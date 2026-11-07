@@ -314,7 +314,9 @@ namespace Bastion.Engine.Tests
             session.Message += heard.Add;
             session.Unreadable += unread.Add;
             session.Connect("Ana");
-            await Wait.Until(() => !hosts.IsEmpty, session.Pump);
+            // Open once its hello is heard: the session listens from Pump on (Opened), and what the host said before the
+            // connection was only made went unheard (under load, 7/11: none of the three read).
+            await Wait.Until(() => hosts.TryPeek(out var h) && !h.Heard.IsEmpty, session.Pump);
             var hostEnd = hosts.Single();
             // The host speaks from a thread of its own, as TCP's reading does.
             var network = new Thread(() =>

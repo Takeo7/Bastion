@@ -86,10 +86,12 @@ namespace Bastion.Net
 
         /// <summary>
         /// What `slot` does on the base before launching: the partner's proposal, yes; an event, the host's first option it
-        /// can take (the convoy's wants someone fit to send); with none of its soldiers in the squad and one fit to go (the
-        /// recruit who comes when nobody is left: Arturo, 2/11), that one in; with nobody in the squad at all, a day's wait
-        /// till someone heals or comes, or in a siege (it takes everyone fit by itself, and nobody can wait) the host's
-        /// recruit straight into it; else its key to launch. Null: wait (one's own proposal, the partner's event).
+        /// can take (the convoy's wants someone fit to send); with no operation chosen, a day's wait while someone is
+        /// wounded, then the host's proposal of the easiest (a day's wait with none); with none of its soldiers in the squad
+        /// and one fit to go (the recruit who comes when nobody is left: Arturo, 2/11), that one in; with nobody in the squad
+        /// at all, a day's wait till someone heals or comes, or in a siege (it takes everyone fit by itself, and nobody can
+        /// wait) the host's recruit straight into it; else its key to launch. Null: wait (one's own proposal, the partner's
+        /// event or choice).
         /// </summary>
         public CampaignCommand? BaseOrder(int slot, bool hosting)
         {
@@ -97,6 +99,18 @@ namespace Bastion.Net
             if (c == null) return null;
             if (c.Proposal != null) return c.Proposal.By != slot ? new VoteCommand { Accept = true } : null;
             if (c.Event != null) return hosting ? new AnswerEventCommand { Option = Engine.Campaign.EventOptionAvailable(c, 0) || !Engine.Campaign.EventOptionAvailable(c, 1) ? 0 : 1 } : null;
+            // No operation chosen (no siege comes to choose it now: Arturo, 7/11, Campaign.SiegesOn): with someone wounded, a
+            // day's wait till all are fit, since the wounded don't go (of seeds 1 to 200, 47 won the opening operation; the
+            // operation after it was won once going without them, with one to three soldiers, and 5 times waiting); then the
+            // host proposes the easiest one there is, and the partner says yes; with none, a day's wait for more.
+            if (c.ActiveMission == null)
+            {
+                if (c.Soldiers.Any((s) => s.Alive && s.Infection == null && s.WoundedDays > 0)) return new AdvanceCommand { Ready = true };
+                var easiest = c.Offers.Where((o) => !o.Final && o.Facility == null && o.Siege != true && (o.ExpiresDay == null || o.ExpiresDay >= c.Day))
+                    .OrderBy((o) => o.Difficulty).ThenBy((o) => o.Id, System.StringComparer.Ordinal).FirstOrDefault();
+                if (easiest == null) return new AdvanceCommand { Ready = true };
+                return hosting ? new ChooseMissionCommand { Id = easiest.Id } : null;
+            }
             var siege = c.Offers.FirstOrDefault((o) => o.Id == c.ActiveMission)?.Siege == true;
             if (c.ActiveMission != null && !siege && c.Squad.Count < Engine.Campaign.SquadMax(c))
             {
