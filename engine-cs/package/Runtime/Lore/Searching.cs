@@ -83,7 +83,51 @@ namespace Bastion.Engine
             ["mindShield"] = "unos tapones",
             ["apRounds"] = "munición perforante",
             ["tracerRounds"] = "munición trazadora",
+            // Two bottles, as the frag grenades are two (Content.Items; Arturo, 1/11). It had no find, and a molotov found in
+            // a shop or a boot had no words (Lore, 7/11).
+            ["molotov"] = "dos cócteles molotov",
         };
+
+        /// <summary>
+        /// Accessories piled in one slot (Loot.Count; Arturo, 7/11: «lo que es igual, sin límite»), counted as they are
+        /// held: how many each find is, and the word for one and for several. Two finds of «dos granadas» are «4 granadas».
+        /// </summary>
+        private static readonly IReadOnlyDictionary<string, (int Each, string One, string Many)> ItemPiles = new Dictionary<string, (int Each, string One, string Many)>
+        {
+            ["fragGrenade"] = (2, "granada", "granadas"),
+            ["molotov"] = (2, "cóctel molotov", "cócteles molotov"),
+            ["smokeGrenade"] = (1, "granada de humo", "granadas de humo"),
+            ["flashbang"] = (1, "granada aturdidora", "granadas aturdidoras"),
+            ["firstAid"] = (1, "botiquín", "botiquines"),
+            ["nanoVest"] = (1, "chaleco antibalas", "chalecos antibalas"),
+            ["mindShield"] = (1, "par de tapones", "pares de tapones"),
+            ["apRounds"] = (1, "caja de munición perforante", "cajas de munición perforante"),
+            ["tracerRounds"] = (1, "caja de munición trazadora", "cajas de munición trazadora"),
+        };
+
+        /// <summary>«un botiquín», «3 botiquines», «dos granadas», «4 granadas»: `count` finds of the accessory `item`.</summary>
+        public static string ItemsCount(string item, int count)
+        {
+            if (count <= 1) return ItemFinds[item];
+            var pile = ItemPiles[item];
+            var n = pile.Each * count;
+            return $"{n} {(n == 1 ? pile.One : pile.Many)}";
+        }
+
+        /// <summary>A weapon's improvement found loose (Loot.Mod; Looting.FoundMod), with its article, and several of it.</summary>
+        private static readonly IReadOnlyDictionary<string, (string One, string Many)> ModFinds = new Dictionary<string, (string One, string Many)>
+        {
+            ["scope"] = ("una mira", "miras"),
+            ["stock"] = ("una culata", "culatas"),
+            ["extMag"] = ("un cargador ampliado", "cargadores ampliados"),
+            ["silencer"] = ("un silenciador", "silenciadores"),
+        };
+
+        /// <summary>«una mira», «2 miras»: `count` of the improvement `mod`. It had no words, and a search that found one said «Está vacía» (Lore, 7/11).</summary>
+        public static string ModsCount(string mod, int count)
+        {
+            return count <= 1 ? ModFinds[mod].One : $"{count} {ModFinds[mod].Many}";
+        }
 
         /// <summary>What the rations found were.</summary>
         public static readonly IReadOnlyList<string> FoodFinds = new[]
@@ -145,7 +189,8 @@ namespace Bastion.Engine
             var parts = new List<string>();
             if (find == null) return parts;
             if (find.Supplies.GetValueOrDefault() != 0) parts.Add($"{(supplies.Count > 0 ? supplies[seed % supplies.Count] : "suministros")} (+{find.Supplies} §)");
-            if (!string.IsNullOrEmpty(find.Item)) parts.Add(ItemFinds[find.Item!]);
+            if (!string.IsNullOrEmpty(find.Item)) parts.Add(ItemsCount(find.Item!, Looting.CountOf(find)));
+            if (!string.IsNullOrEmpty(find.Mod)) parts.Add(ModsCount(find.Mod!, Looting.CountOf(find)));
             if (find.Medicines.GetValueOrDefault() != 0) parts.Add(find.Medicines == 1 ? MedicineFinds[seed % MedicineFinds.Count] : $"{MedicineFinds[seed % MedicineFinds.Count]} ({find.Medicines} ✚)");
             if (find.Food.GetValueOrDefault() != 0) parts.Add($"{FoodFinds[seed % FoodFinds.Count]} ({Rations(find.Food!.Value)})");
             if (find.Parts.GetValueOrDefault() != 0) parts.Add($"{PartsFinds[seed % PartsFinds.Count]} ({PartsCount(find.Parts!.Value)})");
@@ -200,14 +245,15 @@ namespace Bastion.Engine
             return $"{(decor == Looting.Body ? "Registrar" : "Abrir")} {(SearchSpots.TryGetValue(decor, out var spot) ? spot.Name : "la caja")}";
         }
 
-        /// <summary>What a search turned up, short, to float over the furniture: «+12 §», «Botiquín», «Medicinas», «+2 raciones», «+1 pieza», a weapon's name, «+1 cargador» or «Nada».</summary>
+        /// <summary>What a search turned up, short, to float over the furniture: «+12 §», «Botiquín», «Mira», «Medicinas», «+2 raciones», «+1 pieza», a weapon's name, «+1 cargador» or «Nada».</summary>
         public static string FindLabel(Loot? find)
         {
             var parts = new List<string>();
             if (find != null)
             {
                 if (find.Supplies.GetValueOrDefault() != 0) parts.Add($"+{find.Supplies} §");
-                if (!string.IsNullOrEmpty(find.Item)) parts.Add(Capital(Regex.Replace(ItemFinds[find.Item!], "^(una?|unos|unas) ", "")));
+                if (!string.IsNullOrEmpty(find.Item)) parts.Add(Capital(Regex.Replace(ItemsCount(find.Item!, Looting.CountOf(find)), "^(una?|unos|unas) ", "")));
+                if (!string.IsNullOrEmpty(find.Mod)) parts.Add(Capital(Regex.Replace(ModsCount(find.Mod!, Looting.CountOf(find)), "^(una?|unos|unas) ", "")));
                 if (find.Medicines.GetValueOrDefault() != 0) parts.Add("Medicinas");
                 if (find.Food.GetValueOrDefault() != 0) parts.Add($"+{Rations(find.Food!.Value)}");
                 if (find.Parts.GetValueOrDefault() != 0) parts.Add($"+{PartsCount(find.Parts!.Value)}");

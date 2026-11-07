@@ -72,6 +72,13 @@
     color: var(--t-muted);
 }
 
+/* «MANDO» beside the holder's name, in their colour (Arturo, 7/11: whose turn it is, plainly). */
+.player__command {
+    margin-left: 5px;
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
 .player--ready .player__status {
     color: var(--t-good);
 }

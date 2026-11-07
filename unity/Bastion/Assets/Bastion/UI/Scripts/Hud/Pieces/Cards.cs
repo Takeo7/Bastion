@@ -70,7 +70,8 @@ namespace Bastion.UI.Hud
             actions.Add(accept);
             PlateFrame.Dress(call);
             Slant.Dress(accept);
-            if (!sounded) sound?.Invoke("bell");
+            // (Not for one's own question about the soldier in play: that one asks, nobody calls.)
+            if (!sounded && v.Kind != "leave") sound?.Invoke("bell");
             // The time left, counted down on this computer's clock from when it came (the server's deadline).
             Ui.Show(clock, v.Ms >= 0);
             if (v.Ms < 0) return;

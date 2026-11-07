@@ -23,6 +23,13 @@ namespace Bastion.Engine
         public int? Command { get; set; } // Slot
     }
 
+    /// <summary>A soldier left for this turn (DoneCommand): no actions nor movement left.</summary>
+    public sealed class UnitDoneEvent : GameEvent
+    {
+        public override string T => "unitDone";
+        public string Unit { get; set; } = "";
+    }
+
     /// <summary>The command (el mando) changes hands.</summary>
     public sealed class CommandPassedEvent : GameEvent
     {

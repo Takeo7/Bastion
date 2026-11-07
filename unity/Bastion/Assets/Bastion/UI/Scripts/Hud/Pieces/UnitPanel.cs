@@ -86,6 +86,26 @@ namespace Bastion.UI.Hud
                 whose.style.color = Ui.Hex(view.WhoseColor, Color.white);
             }
             else cls.text = view.RankName;
+            // Its cover's shield in its colour, after its name (Arturo, 7/11: here, not by its health).
+            if (view.Cover >= 0)
+            {
+                var shield = new CoverShield { Level = view.Cover };
+                head.Add(shield);
+                var title = view.CoverTitle;
+                var words = view.CoverTip;
+                tips.Attach(shield, () =>
+                {
+                    var tip = new VisualElement();
+                    var name = Ui.Text(title, "font-title", tip);
+                    name.style.color = (Color)new Color32(0xf2, 0xc2, 0x30, 0xff);
+                    name.style.fontSize = 12;
+                    name.style.letterSpacing = 1;
+                    var line = Ui.Text(words, "", tip);
+                    line.style.whiteSpace = WhiteSpace.Normal;
+                    line.style.maxWidth = 300;
+                    return tip;
+                });
+            }
             var bite = tree.Q<Label>("bite");
             Ui.Show(bite, !string.IsNullOrEmpty(view.Bite));
             bite.text = view.Bite ?? "";

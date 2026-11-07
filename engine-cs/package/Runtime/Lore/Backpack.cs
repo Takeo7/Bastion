@@ -9,13 +9,15 @@ namespace Bastion.Engine
         /// <summary>
         /// What a backpack's thing is, in a sentence (docs/FASE8.md §C): «un
         /// botiquín», «2 raciones», «12 suministros», «un fusil de asalto», «un
-        /// cargador».
+        /// cargador»; a pile, with its count (Loot.Count; Arturo, 7/11): «3 botiquines»,
+        /// «4 granadas», «2 miras».
         /// </summary>
         public static string LootName(Loot loot)
         {
             var parts = new List<string>();
             if (loot.Supplies.GetValueOrDefault() != 0) parts.Add(loot.Supplies == 1 ? "1 suministro" : $"{loot.Supplies} suministros");
-            if (!string.IsNullOrEmpty(loot.Item)) parts.Add(ItemFinds[loot.Item!]);
+            if (!string.IsNullOrEmpty(loot.Item)) parts.Add(ItemsCount(loot.Item!, Looting.CountOf(loot)));
+            if (!string.IsNullOrEmpty(loot.Mod)) parts.Add(ModsCount(loot.Mod!, Looting.CountOf(loot)));
             if (loot.Medicines.GetValueOrDefault() != 0) parts.Add(loot.Medicines == 1 ? "una medicina" : $"{loot.Medicines} medicinas");
             if (loot.Food.GetValueOrDefault() != 0) parts.Add(Rations(loot.Food!.Value));
             if (loot.Parts.GetValueOrDefault() != 0) parts.Add(PartsCount(loot.Parts!.Value));
@@ -86,18 +88,35 @@ namespace Bastion.Engine
 
         /// <summary>
         /// The debrief's loot line: «El botín: +34 §, un botiquín, 2 medicinas, 3 raciones
-        /// y una escopeta recortada.», or null with nothing brought back.
+        /// y una escopeta recortada.», or null with nothing brought back. The same accessory
+        /// or improvement, counted once: «3 botiquines», «2 miras» (Lore, 7/11).
         /// </summary>
-        public static string? LootSummary(int supplies, IReadOnlyList<string> items, int medicines, int food = 0, int parts = 0, IReadOnlyList<string>? weapons = null)
+        public static string? LootSummary(int supplies, IReadOnlyList<string> items, int medicines, int food = 0, int parts = 0, IReadOnlyList<string>? weapons = null, IReadOnlyList<string>? mods = null)
         {
             var list = new List<string>();
             if (supplies != 0) list.Add($"+{supplies} §");
-            foreach (var id in items) list.Add(ItemFinds[id]);
+            foreach (var id in EachOnce(items)) list.Add(ItemsCount(id, TimesIn(items, id)));
+            foreach (var id in EachOnce(mods ?? new string[0])) list.Add(ModsCount(id, TimesIn(mods!, id)));
             if (medicines != 0) list.Add(medicines == 1 ? "1 medicina" : $"{medicines} medicinas");
             if (food != 0) list.Add(Rations(food));
             if (parts != 0) list.Add(PartsCount(parts));
             foreach (var w in weapons ?? new string[0]) list.Add(Content.FoundWeapons[w].Find);
             return list.Count > 0 ? $"El botín: {JoinAnd(list)}." : null;
+        }
+
+        /// <summary>`ids` once each, in their first order.</summary>
+        private static List<string> EachOnce(IReadOnlyList<string> ids)
+        {
+            var out_ = new List<string>();
+            foreach (var id in ids) if (!out_.Contains(id)) out_.Add(id);
+            return out_;
+        }
+
+        private static int TimesIn(IReadOnlyList<string> ids, string id)
+        {
+            var n = 0;
+            foreach (var x in ids) if (x == id) n++;
+            return n;
         }
     }
 }

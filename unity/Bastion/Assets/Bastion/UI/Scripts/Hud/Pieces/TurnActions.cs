@@ -96,7 +96,7 @@ namespace Bastion.UI.Hud
             tips.Attach(end, mode switch
             {
                 "confirm" => HudText.EndTurn.Confirm(detail),
-                "ready" => string.IsNullOrEmpty(detail) ? HudText.EndTurn.Ready : HudText.EndTurn.Waiting(detail),
+                "ready" => !string.IsNullOrEmpty(v?.Holder) ? HudText.EndTurn.ReadyHolder(v.Holder) : string.IsNullOrEmpty(detail) ? HudText.EndTurn.Ready : HudText.EndTurn.Waiting(detail),
                 "waiting" => HudText.EndTurn.Command(detail ?? ""),
                 // The enemy turn plays (docs/UX-RITMO.md): the space bar held shows it faster.
                 "enemy" => HudText.EndTurn.EnemyTurn,

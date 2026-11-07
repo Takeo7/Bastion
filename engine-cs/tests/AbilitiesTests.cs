@@ -72,7 +72,10 @@ namespace Bastion.Engine.Tests
             Assert.Equal(1, rifle.Ap);
             Run(s, Use("s1", AbilityIds.Shoot, "a1"));
             Assert.Equal(0, rifle.Ap);
-            // Done with s1, the partner plays one of theirs (playtest 2026-10-15, #9), and hands the turn back.
+            // With its movement left s1 is still in play (Arturo, 7/11); done with it, the partner plays one of theirs
+            // (playtest 2026-10-15, #9), and hands the turn back.
+            Assert.Equal(0, s.Command);
+            Assert.True(Ctx(s, new DoneCommand { Unit = "s1" }, 0, 0).Ok);
             Assert.Equal(1, s.Command);
             Assert.True(Ctx(s, new PassCommand(), 1, 1).Ok);
             Run(s, Use("s2", AbilityIds.Shoot, "a1"));

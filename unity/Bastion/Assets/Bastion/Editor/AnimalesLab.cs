@@ -191,6 +191,24 @@ namespace Bastion.EditorTools
             if (Environment.GetEnvironmentVariable("BASTION_EN")?.Split(',') is string[] en && en.Length == 2)
                 first.position = MapSpace.World(int.Parse(en[0]), int.Parse(en[1]));
             var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            // (BASTION_SONDA_TODOS=1: every animal's place and turn each frame, [animal] k kind name t x z yaw: where the
+            // way a cluttered street gives them is seen, not only the first one's in the open.)
+            if (Environment.GetEnvironmentVariable("BASTION_SONDA_TODOS") == "1")
+            {
+                var all = fauna.Animals.Where(a => a.kind != "Crow" && a.kind != "Pigeon").Select(a => a.root).ToList();
+                float clock = 0;
+                var before = Fauna.Stepping;
+                Fauna.Stepping = dt =>
+                {
+                    before?.Invoke(dt);
+                    clock += dt;
+                    for (int k = 0; k < all.Count; k++)
+                    {
+                        var p = all[k].position;
+                        if (all[k].gameObject.activeInHierarchy) Debug.Log(FormattableString.Invariant($"[animal] {k} {all[k].name} {clock:0.000} {p.x:0.0000} {p.z:0.0000} {all[k].eulerAngles.y:0.00}"));
+                    }
+                };
+            }
             // (BASTION_SONDA_PERRO=1: its place, turn and animator each frame, [perro] t x z yaw speed state time param.)
             if (Environment.GetEnvironmentVariable("BASTION_SONDA_PERRO") == "1")
             {

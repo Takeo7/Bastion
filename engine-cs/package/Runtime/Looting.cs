@@ -405,6 +405,57 @@ namespace Bastion.Engine
             return u.PackSlots ?? Content.BackpackSlots;
         }
 
+        /// <summary>
+        /// What `l` piles by, or null when it takes a slot of its own: parts, supplies, medicines or food alone, by their
+        /// count; an accessory or an improvement alone, by its id. A weapon never (each has its condition and what is on
+        /// it), nor a find of several things at once.
+        /// </summary>
+        private static string? PileKey(Loot l)
+        {
+            if (!string.IsNullOrEmpty(l.Weapon) || !string.IsNullOrEmpty(l.WeaponId) || l.Condition != null || l.Mods != null || l.Mags.GetValueOrDefault() != 0) return null;
+            var keys = new List<string>();
+            if (l.Supplies.GetValueOrDefault() != 0) keys.Add("supplies");
+            if (l.Medicines.GetValueOrDefault() != 0) keys.Add("medicines");
+            if (l.Food.GetValueOrDefault() != 0) keys.Add("food");
+            if (l.Parts.GetValueOrDefault() != 0) keys.Add("parts");
+            if (!string.IsNullOrEmpty(l.Item)) keys.Add("item:" + l.Item);
+            if (!string.IsNullOrEmpty(l.Mod)) keys.Add("mod:" + l.Mod);
+            return keys.Count == 1 ? keys[0] : null;
+        }
+
+        /// <summary>
+        /// The slot of `u`'s backpack that `loot` piles onto, or -1 (Arturo, 7/11: «si ya tengo piezas y salen más, se
+        /// acumulan, no ocupan otro hueco»; in the box, «lo que es igual, sin límite»).
+        /// </summary>
+        public static int PileFor(Unit u, Loot loot)
+        {
+            var key = PileKey(loot);
+            if (key == null || u.Backpack == null) return -1;
+            return u.Backpack.FindIndex((l) => PileKey(l) == key);
+        }
+
+        /// <summary>Whether `loot` fits in `u`'s backpack: onto a pile of the same, or in a free slot (magazines go to the spares).</summary>
+        public static bool Fits(Unit u, Loot loot)
+        {
+            return loot.Mags.GetValueOrDefault() != 0 || PileFor(u, loot) >= 0 || (u.Backpack?.Count ?? 0) < PackSlots(u);
+        }
+
+        /// <summary>How many there are of `l`'s accessory or improvement (Loot.Count; absent, one).</summary>
+        public static int CountOf(Loot l)
+        {
+            return l.Count ?? 1;
+        }
+
+        /// <summary>`loot` added onto `pile` (PileFor): the counts summed.</summary>
+        public static void Pile(Loot pile, Loot loot)
+        {
+            if (loot.Supplies.GetValueOrDefault() != 0) pile.Supplies = (pile.Supplies ?? 0) + loot.Supplies;
+            if (loot.Medicines.GetValueOrDefault() != 0) pile.Medicines = (pile.Medicines ?? 0) + loot.Medicines;
+            if (loot.Food.GetValueOrDefault() != 0) pile.Food = (pile.Food ?? 0) + loot.Food;
+            if (loot.Parts.GetValueOrDefault() != 0) pile.Parts = (pile.Parts ?? 0) + loot.Parts;
+            if (!string.IsNullOrEmpty(loot.Item) || !string.IsNullOrEmpty(loot.Mod)) pile.Count = CountOf(pile) + CountOf(loot);
+        }
+
         public static bool WasSearched(GameState s, Pos p)
         {
             return (s.Searched ?? new List<int>()).Contains(Grid.NodeOf(s, Grid.ToPos(p)));
@@ -454,7 +505,7 @@ namespace Bastion.Engine
             foreach (var l in loot)
             {
                 out_.Supplies += l.Supplies ?? 0;
-                if (!string.IsNullOrEmpty(l.Item)) out_.Items.Add(l.Item!);
+                if (!string.IsNullOrEmpty(l.Item)) for (var k = 0; k < CountOf(l); k++) out_.Items.Add(l.Item!);
                 out_.Medicines += l.Medicines ?? 0;
                 out_.Food += l.Food ?? 0;
                 out_.Parts += l.Parts ?? 0;
@@ -475,7 +526,7 @@ namespace Bastion.Engine
                     out_.Weapons.Add(carried.Kind);
                     (out_.Arms ??= new List<CarriedWeapon>()).Add(carried);
                 }
-                if (!string.IsNullOrEmpty(l.Mod)) (out_.Mods ??= new List<string>()).Add(l.Mod!);
+                if (!string.IsNullOrEmpty(l.Mod)) for (var k = 0; k < CountOf(l); k++) (out_.Mods ??= new List<string>()).Add(l.Mod!);
             }
             return out_;
         }

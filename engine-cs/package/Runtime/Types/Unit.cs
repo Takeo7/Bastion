@@ -70,6 +70,11 @@ namespace Bastion.Engine
         public string? Mod { get; set; } // WeaponModIds
         /// <summary>Magazines (docs/FASE7.md): straight to the searcher's spares, not into the backpack.</summary>
         public int? Mags { get; set; }
+        /// <summary>
+        /// How many of its accessory or its improvement (Item, Mod), piled in one slot (Arturo, 7/11: «lo que es igual, sin
+        /// límite»; Looting.PileFor); absent, one. The counted ones (Supplies, Medicines, Food, Parts) pile by their own count.
+        /// </summary>
+        public int? Count { get; set; }
     }
 
     /// <summary>

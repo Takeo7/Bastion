@@ -603,9 +603,13 @@ namespace Bastion.Engine.Tests
             AddUnit(s, "a1", TemplateIds.Trooper, 19, 19);
             s.Command = 0;
             Run(s, Move("s1", 0, 2), Ctx(0, Both));
-            Assert.Equal(1, s.Command);
+            // Still in play with movement left (Arturo, 7/11): the command stays till it has nothing, or is left.
+            Assert.Equal((0, "s1"), (s.Command, s.ActiveUnit));
+            Run(s, new DoneCommand { Unit = "s1" }, Ctx(0, Both));
+            Assert.Equal((1, (int?)0, 0), (s.Command, UnitOf(s, "s1").Moves, UnitOf(s, "s1").Ap));
             // Player 1 drops out: player 0 can act and takes the command.
             UnitOf(s, "s1").Ap = 2;
+            UnitOf(s, "s1").Moves = null;
             Run(s, Move("s1", 0, 3), Ctx(0, new[] { 0 }));
             Assert.Equal(0, s.Command);
         }

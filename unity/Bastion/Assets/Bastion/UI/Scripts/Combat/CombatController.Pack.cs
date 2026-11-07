@@ -80,7 +80,7 @@ namespace Bastion.UI.Combat
             Total("weapon", q.Weapons.Count, $"×{q.Weapons.Count}", "stat:weapon");
             Total("item", q.Items.Count, $"×{q.Items.Count}", "search");
             Total("medicines", q.Medicines, $"×{q.Medicines}", "store:medicines");
-            pack.SquadTip = Lore.LootSummary(q.Supplies, q.Items, q.Medicines, q.Food, q.Parts, q.Weapons) ?? HudText.Pack.NothingTip;
+            pack.SquadTip = Lore.LootSummary(q.Supplies, q.Items, q.Medicines, q.Food, q.Parts, q.Weapons, q.Mods) ?? HudText.Pack.NothingTip;
             return pack;
         }
 
@@ -94,6 +94,8 @@ namespace Bastion.UI.Combat
                 slot.Kind = "item";
                 slot.Icon = ItemIcon(l.Item);
                 slot.Tip = $"{def.Name}: {def.Description}";
+                // A pile of the same (Arturo, 7/11): how many.
+                if (Looting.CountOf(l) > 1) slot.Text = $"×{Looting.CountOf(l)}";
             }
             else if (!string.IsNullOrEmpty(l.Weapon))
             {
@@ -106,6 +108,8 @@ namespace Bastion.UI.Combat
                 slot.Kind = "medicines";
                 slot.Icon = "store:medicines";
                 slot.Tip = HudText.Pack.Medicines(l.Medicines.Value);
+                // Piled (Arturo, 7/11): how many, as the food and the parts say theirs.
+                if (l.Medicines.Value > 1) slot.Text = l.Medicines.Value.ToString();
             }
             else if (l.Food.GetValueOrDefault() != 0)
             {
@@ -172,7 +176,8 @@ namespace Bastion.UI.Combat
                 Act(HudText.Pack.Use, one, Order(ItemActions.Use), true, Whole(u) ? HudText.Pack.NoWoundsSelf : null);
                 foreach (var n in near) Act(HudText.Pack.Heal(n.Name), one, Order(ItemActions.Use, n.Id), false, Whole(n) ? HudText.Pack.NoWounds : null);
             }
-            foreach (var n in near) Act(HudText.Pack.Give(n.Name), one, Order(ItemActions.Give, n.Id), false, (n.Backpack?.Count ?? 0) >= (n.PackSlots ?? Content.BackpackSlots) ? HudText.Pack.NoRoom : null);
+            // (Onto a pile of the same it fits however full the backpack: Looting.Fits.)
+            foreach (var n in near) Act(HudText.Pack.Give(n.Name), one, Order(ItemActions.Give, n.Id), false, !Looting.Fits(n, l) ? HudText.Pack.NoRoom : null);
             Act(HudText.Pack.Drop, HudText.Pack.Gratis, Order(ItemActions.Drop));
             return acts;
         }
@@ -231,7 +236,8 @@ namespace Bastion.UI.Combat
                 var u = UnitById(v, taken.Unit);
                 var next = packQueue.FirstOrDefault(id => v.Dropped?.Any(d => d.Id == id) == true);
                 packQueue.Remove(next);
-                if (u != null && next != null && (u.Backpack?.Count ?? 0) < (u.PackSlots ?? Content.BackpackSlots)) Send(new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Id = next });
+                var loot = next != null ? v.Dropped?.FirstOrDefault(d => d.Id == next)?.Loot : null;
+                if (u != null && loot != null && Looting.Fits(u, loot)) Send(new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Id = next });
                 else packQueue = null;
             }
             if (e is LootDroppedEvent dropped && by == MySlot && dropped.Unit == swapUnit && swapTake != null)

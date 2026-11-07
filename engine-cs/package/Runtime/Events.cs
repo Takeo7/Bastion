@@ -614,6 +614,13 @@ namespace Bastion.Engine
                     s.Command = ev.To;
                     s.ActiveUnit = null;
                     break;
+                case UnitDoneEvent ev:
+                {
+                    var u = UnitOf(s, ev.Unit);
+                    u.Ap = 0;
+                    u.Moves = 0;
+                    break;
+                }
                 case UnitActiveEvent ev:
                     s.ActiveUnit = !string.IsNullOrEmpty(ev.Unit) ? ev.Unit : null;
                     break;
@@ -751,8 +758,7 @@ namespace Bastion.Engine
                 {
                     var u = UnitOf(s, ev.Unit);
                     u.Ap = Math.Max(0, u.Ap - 1);
-                    var loot = u.Backpack![ev.Index];
-                    u.Backpack.RemoveAt(ev.Index);
+                    var loot = TakeOne(u, ev.Index);
                     var hp = Content.Items[loot.Item!].Hp ?? 0;
                     u.MaxHp += hp;
                     u.Hp += hp;
@@ -763,8 +769,7 @@ namespace Bastion.Engine
                 {
                     var u = UnitOf(s, ev.Unit);
                     u.Ap = Math.Max(0, u.Ap - 1);
-                    var loot = u.Backpack![ev.Index];
-                    u.Backpack.RemoveAt(ev.Index);
+                    var loot = TakeOne(u, ev.Index);
                     var def = Content.Items[loot.Item!];
                     u.Gear.Add(def.Id);
                     if (def.Charges != null) foreach (var c in def.Charges) u.Charges[c.Key] = (u.Charges.TryGetValue(c.Key, out var n) ? n : 0) + c.Value;
@@ -798,6 +803,21 @@ namespace Bastion.Engine
         private static bool IsEmpty(Loot l)
         {
             return l.Supplies == null && l.Item == null && l.Medicines == null && l.Food == null && l.Parts == null && l.Weapon == null && l.WeaponId == null && l.Condition == null && l.Mods == null && l.Mod == null && l.Mags == null;
+        }
+
+        /// <summary>One of the backpack's slot `index`: off its pile (Loot.Count), or the slot itself when it is the last.</summary>
+        private static Loot TakeOne(Unit u, int index)
+        {
+            var loot = u.Backpack![index];
+            if (Looting.CountOf(loot) <= 1)
+            {
+                u.Backpack.RemoveAt(index);
+                return loot;
+            }
+            loot.Count = Looting.CountOf(loot) - 1 > 1 ? Looting.CountOf(loot) - 1 : (int?)null;
+            var one = CopyLoot(loot);
+            one.Count = null;
+            return one;
         }
 
         /// <summary>
@@ -882,7 +902,10 @@ namespace Bastion.Engine
                 u.Mags = (u.Mags ?? 0) + loot.Mags.Value;
                 return;
             }
-            if ((u.Backpack?.Count ?? 0) < Looting.PackSlots(u)) (u.Backpack ??= new List<Loot>()).Add(CopyLoot(loot));
+            // The same as a pile already there goes onto it, full or not (Arturo, 7/11; Looting.PileFor).
+            var pile = Looting.PileFor(u, loot);
+            if (pile >= 0) Looting.Pile(u.Backpack![pile], loot);
+            else if ((u.Backpack?.Count ?? 0) < Looting.PackSlots(u)) (u.Backpack ??= new List<Loot>()).Add(CopyLoot(loot));
             else LeaveOnFloor(s, u.Pos, loot);
         }
 
@@ -938,7 +961,7 @@ namespace Bastion.Engine
         /// <summary>`{ ...loot }`: a shallow copy (its `mods` the same list).</summary>
         public static Loot CopyLoot(Loot l)
         {
-            return new Loot { Supplies = l.Supplies, Item = l.Item, Medicines = l.Medicines, Food = l.Food, Parts = l.Parts, Weapon = l.Weapon, WeaponId = l.WeaponId, Condition = l.Condition, Mods = l.Mods, Mod = l.Mod, Mags = l.Mags };
+            return new Loot { Supplies = l.Supplies, Item = l.Item, Medicines = l.Medicines, Food = l.Food, Parts = l.Parts, Weapon = l.Weapon, WeaponId = l.WeaponId, Condition = l.Condition, Mods = l.Mods, Mod = l.Mod, Mags = l.Mags, Count = l.Count };
         }
 
         private static Loot CloneLoot(Loot l)

@@ -1546,18 +1546,19 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// After a soldier's order (#9): while it has actions it is the one in play;
-        /// once it has none (or is down, or gone), the partner plays one of theirs.
+        /// After a soldier's order (#9): while it has actions or movement left it is the one in play; once it has neither
+        /// (or is down, or gone, or left: DoneCommand), the partner plays one of theirs.
         /// </summary>
         /// <remarks>
         /// `movesBefore`: its movement before a move (Arturo, 5/11 #14): having moved, it is the one in play too. One with
-        /// only movement left is no longer in play: the command goes on, and it may use that movement later in the turn.
+        /// only movement left stays in play (Arturo, 7/11: «que acabe el turno del soldado cuando acaba los PM y las
+        /// acciones o cuando pase el turno manualmente»; it used to let the command go on with that movement waiting).
         /// </remarks>
         public void AfterSoldier(Unit u, int apBefore, int? movesBefore = null)
         {
             if (Over || S.ActiveTeam != Teams.Xcom || u.Owner == null) return;
             var live = Grid.GetUnit(S, u.Id);
-            if (live != null && live.Alive && !live.Evacuated && live.Ap > 0)
+            if (live != null && live.Alive && !live.Evacuated && Paths.HasTurnLeft(live))
             {
                 var spent = live.Ap < apBefore || (movesBefore != null && Paths.MoveBudget(live) < movesBefore);
                 if (spent && S.ActiveUnit != live.Id) Emit(new UnitActiveEvent { Unit = live.Id });
@@ -1819,7 +1820,7 @@ namespace Bastion.Engine
             {
                 var left = s.Dropped?.Find((d) => d.Id == cmd.Id);
                 if (left == null || !Grid.SamePos(left.Pos, u.Pos)) return "Aquí no hay nada que coger.";
-                if ((left.Loot.Mags ?? 0) == 0 && (u.Backpack?.Count ?? 0) >= Looting.PackSlots(u)) return "La mochila está llena: suelta algo antes.";
+                if (!Looting.Fits(u, left.Loot)) return "La mochila está llena: suelta algo antes.";
                 return null;
             }
             var loot = cmd.Index == null || u.Backpack == null || cmd.Index.Value < 0 || cmd.Index.Value >= u.Backpack.Count ? null : u.Backpack[cmd.Index.Value];
@@ -1833,7 +1834,7 @@ namespace Bastion.Engine
                     var to = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(s, cmd.To!) : null;
                     if (to == null || !to.Alive || to.Team != Teams.Xcom || to.Captive || to.Objective || to.Id == u.Id) return "Solo a un compañero.";
                     if (!Aim.InMeleeReach(s, u.Pos, to.Pos)) return "Tiene que estar a tu lado.";
-                    if ((to.Backpack?.Count ?? 0) >= Looting.PackSlots(to)) return "No le cabe: lleva la mochila llena.";
+                    if (!Looting.Fits(to, loot)) return "No le cabe: lleva la mochila llena.";
                     return null;
                 }
                 case ItemActions.Use:
@@ -1964,7 +1965,7 @@ namespace Bastion.Engine
             string? InPlay(string id)
             {
                 var busy = !string.IsNullOrEmpty(s.ActiveUnit) && s.ActiveUnit != id ? Grid.GetUnit(s, s.ActiveUnit!) : null;
-                return busy != null && busy.Alive && busy.Ap > 0 && busy.Owner == ctx.Slot && sim.Alternates(partner) ? $"Primero termina con {busy.Name}, o cede el turno." : null;
+                return busy != null && busy.Alive && Paths.HasTurnLeft(busy) && busy.Owner == ctx.Slot && sim.Alternates(partner) ? $"Primero termina el turno de {busy.Name}, o cede el mando." : null;
             }
             if (cmd is ItemCommand item)
             {
@@ -1981,7 +1982,7 @@ namespace Bastion.Engine
                 sim.AfterXcomAction();
                 return CommandResult.Success(sim.Events);
             }
-            var unitId = cmd is MoveCommand mc ? mc.Unit : cmd is AbilityCommand ac ? ac.Unit : "";
+            var unitId = cmd is MoveCommand mc ? mc.Unit : cmd is AbilityCommand ac ? ac.Unit : cmd is DoneCommand dc ? dc.Unit : "";
             var unit = CommandUnit(s, unitId, ctx.Slot, ctx.Connected, out var why);
             if (unit == null) return CommandResult.Failure(why!);
             var busyUnit = InPlay(unit.Id);
@@ -1989,6 +1990,16 @@ namespace Bastion.Engine
             var apBefore = unit.Ap;
             // The command changes hands only once the order is sure to go through: a refused one changes nothing
             // (it used to pass first, and the host kept a holder the partner never heard of).
+
+            if (cmd is DoneCommand)
+            {
+                if (!Paths.HasTurnLeft(unit)) return CommandResult.Failure("Ya no le queda nada este turno.");
+                sim.PassCommand(ctx.Slot);
+                sim.Emit(new UnitDoneEvent { Unit = unit.Id });
+                sim.AfterSoldier(unit, apBefore);
+                sim.AfterXcomAction();
+                return CommandResult.Success(sim.Events);
+            }
 
             if (cmd is MoveCommand move)
             {

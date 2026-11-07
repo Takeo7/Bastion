@@ -123,7 +123,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("unos tapones", Lore.ItemFinds["mindShield"]);
             Assert.Equal("munición perforante", Lore.ItemFinds["apRounds"]);
             Assert.Equal("munición trazadora", Lore.ItemFinds["tracerRounds"]);
-            Assert.Equal(8, Lore.ItemFinds.Count);
+            Assert.Equal("dos cócteles molotov", Lore.ItemFinds["molotov"]);
+            Assert.Equal(9, Lore.ItemFinds.Count);
             Assert.Equal("1 ración", Lore.Rations(1));
             Assert.Equal("1 pieza", Lore.PartsCount(1));
             Assert.Equal("1 cargador", Lore.MagsCount(1));
@@ -3089,7 +3090,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Misión de registrar y volver con el botín. Entran zombis por los bordes, y antes cuanto más ruido hagas.", Lore.Glossary["Saqueo"]);
             Assert.Equal("Una acción, dentro de una habitación; cada una se registra una vez. Casas: comida y medicinas. Oficinas: piezas. Tiendas: comida. Almacenes: de todo.", Lore.Glossary["Registrar"]);
             Assert.Equal("Hasta tres por mapa: armas, medicinas, munición o comida. Se abren con una acción, desde al lado.", Lore.Glossary["Cajas"]);
-            Assert.Equal("Tres huecos, cuatro con la Chapistería. Soltar no cuesta; pasar algo al de al lado, una acción. El botín cuenta si vuelve. Lo de un caído queda en el suelo.", Lore.Glossary["Mochila"]);
+            Assert.Equal("Tres huecos, cuatro con la Chapistería. Lo que es igual va en el mismo hueco, sin límite, y cabe aunque esté llena; cada arma, en el suyo. Soltar no cuesta; pasar algo al de al lado, una acción. El botín cuenta si vuelve. Lo de un caído queda en el suelo.", Lore.Glossary["Mochila"]);
             Assert.Equal("Las armas del Bastión. Cada una es de quien la lleva.", Lore.Glossary["Armería"]);
             Assert.Equal("Los hace el Taller: cada soldado sale con uno por tanda, hasta tres. Valen para todas las armas; recargar llena primero la principal.", Lore.Glossary["Cargadores"]);
             Assert.Equal("Para construir, reparar, subir de nivel, reclutar, equipar y contactar zonas.", Lore.Glossary["Suministros"]);
@@ -6387,6 +6388,26 @@ namespace Bastion.Engine.Tests
             Assert.Equal("{}", Quests.Fill("{}", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("{niño} y {a_1}", Quests.Fill("{niño} y {a_1}", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
             Assert.Equal("sin nada", Quests.Fill("sin nada", new System.Collections.Generic.Dictionary<string, string> { ["a"] = "Pavel Lanz, el electricista", ["b"] = "Rosa Alves, la cocinera", ["clue"] = "Vigilamos a Rosa.", ["name"] = "Rosa", ["culprit"] = "Rosa Alves" }));
+            // Piles in one slot (Loot.Count; Arturo, 7/11), the molotov and the loose improvements (Lore, 7/11).
+            Assert.Equal("dos cócteles molotov", Lore.LootName(new Loot { Item = "molotov" }));
+            Assert.Equal("Ana se cuelga dos cócteles molotov al cinturón.", Lore.BeltLine("Ana", "molotov"));
+            Assert.Equal("Dos cócteles molotov", Lore.FindLabel(new Loot { Item = "molotov" }));
+            Assert.Equal("3 botiquines", Lore.LootName(new Loot { Item = "firstAid", Count = 3 }));
+            Assert.Equal("un botiquín", Lore.LootName(new Loot { Item = "firstAid", Count = 1 }));
+            Assert.Equal("4 granadas", Lore.LootName(new Loot { Item = "fragGrenade", Count = 2 }));
+            Assert.Equal("4 cócteles molotov", Lore.LootName(new Loot { Item = "molotov", Count = 2 }));
+            Assert.Equal("2 granadas de humo", Lore.LootName(new Loot { Item = "smokeGrenade", Count = 2 }));
+            Assert.Equal("2 pares de tapones", Lore.LootName(new Loot { Item = "mindShield", Count = 2 }));
+            Assert.Equal("3 cajas de munición perforante", Lore.LootName(new Loot { Item = "apRounds", Count = 3 }));
+            Assert.Equal("Ana le da a Kofi 3 botiquines.", Lore.LootGivenLine("Ana", "Kofi", new Loot { Item = "firstAid", Count = 3 }));
+            Assert.Equal("3 botiquines", Lore.FindLabel(new Loot { Item = "firstAid", Count = 3 }));
+            Assert.Equal("una mira", Lore.LootName(new Loot { Mod = "scope" }));
+            Assert.Equal("2 cargadores ampliados", Lore.LootName(new Loot { Mod = "extMag", Count = 2 }));
+            Assert.Equal("Ana recoge un silenciador.", Lore.LootTakenLine("Ana", new Loot { Mod = "silencer" }));
+            Assert.Equal("Mira", Lore.FindLabel(new Loot { Mod = "scope" }));
+            Assert.Equal("Cargador ampliado", Lore.FindLabel(new Loot { Mod = "extMag" }));
+            Assert.Equal("Ana abre la caja de armas: una culata.", Lore.SearchLine("Ana", "lootWeapons", new Loot { Mod = "stock" }, 0));
+            Assert.Equal("El botín: +34 §, 2 botiquines, una granada de humo y 2 miras.", Lore.LootSummary(34, new[] { "firstAid", "smokeGrenade", "firstAid" }, 0, mods: new[] { "scope", "scope" }));
         }
     }
 }

@@ -64,6 +64,8 @@ namespace Bastion.UI.Hud
                 if (p.Command) row.style.borderBottomColor = colour;
                 Ui.El("player__dot", row).style.backgroundColor = colour;
                 Ui.Text(p.Name, "player__name", row);
+                // Who holds the command, in words beside the name, in their colour (Arturo, 7/11: «no queda claro»).
+                if (p.Command) Ui.Text(HudText.Players.Command, "player__command font-title", row).style.color = colour;
                 if (!string.IsNullOrEmpty(p.Status)) Ui.Text(p.Status, "player__status", row);
             }
         }

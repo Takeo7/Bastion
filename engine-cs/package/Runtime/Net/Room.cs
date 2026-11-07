@@ -413,6 +413,8 @@ namespace Bastion.Net
                     return UnitId(c.Unit) && AbilityIds.All.Contains(c.Ability) && (c.Target == null || UnitId(c.Target)) && (c.Tile == null || Spot(c.Tile));
                 case EvacCommand c:
                     return UnitId(c.Unit);
+                case DoneCommand c:
+                    return UnitId(c.Unit);
                 case ItemCommand c:
                     return UnitId(c.Unit) && ItemActions.All.Contains(c.Action) && (c.Index == null || (c.Index >= 0 && c.Index <= 7)) && (c.Id == null || UnitId(c.Id)) && (c.To == null || UnitId(c.To));
                 case RtOrderCommand c:

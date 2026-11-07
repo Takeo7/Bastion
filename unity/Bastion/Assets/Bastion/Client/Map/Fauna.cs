@@ -49,6 +49,14 @@ namespace Bastion.Client.Map
             public float pace;
             /// <summary>How fast it turned this step (degrees a second), and its legs' step round for it (Movement_f, eased in and out).</summary>
             public float turning, stepping;
+            /// <summary>
+            /// The curve it is going round a corner of its way on (RoundCorner): from where it began it, by the corner
+            /// (way[0], of `bendWay`), to where it leaves it; how far along (0 to 1) and how long it is (m).
+            /// </summary>
+            public bool bending;
+            public Vector3 bendFrom, bendAt, bendTo;
+            public float bendDone, bendLength;
+            public List<Vector3> bendWay;
             public float wait, clock, flap, yaw;
             public uint rng;
             public bool gone;
@@ -105,6 +113,12 @@ namespace Bastion.Client.Map
         const float DogFear = 6, WildFear = 9, BirdFear = 4.5f, Calm = 14, Wander = 5;
         /// <summary>How quickly it gets going and slows down (m/s²), walking and running off, and how much quicker it gets up off the ground to run.</summary>
         const float WalkStart = 2.5f, WalkBrake = 2, FleeStart = 14, FleeBrake = 9, RiseQuick = 2.5f;
+        /// <summary>
+        /// How far before a corner of its way it starts round it (tiles; as far after it, or half the next stretch), and
+        /// the sharpest corner it goes round so (degrees; past it, it turns on the spot): Arturo's of 7/11, its jerks from
+        /// tile to tile, were its way's corners taken at once, its body sliding sideways till it had turned.
+        /// </summary>
+        const float RoundCorner = 0.4f, RoundMost = 120;
 
         /// <summary>
         /// A grazer's or a cat's walk and run (m/s), how near anyone scares it (tiles), and how tall it stands (m): the rabbit
@@ -705,12 +719,15 @@ namespace Bastion.Client.Map
             else if (Down(a)) a.pace = 0;
             else
             {
-                // Along its way, a point at a time: on to the next once near (a corner taken round), to its end once there.
+                // Along its way: straight at its next corner, round it on a curve (Bend), to its end once there.
+                if (a.bending && (a.bendWay != a.way || a.way.Count < 2 || a.way[0] != a.bendAt)) a.bending = false;
                 var aim = a.way.Count > 0 ? a.way[0] : a.target;
                 var to = aim - a.root.position;
                 to.y = 0;
                 float left = to.magnitude;
-                if (a.way.Count > 1 && left < 0.4f * MapSpace.Tile)
+                if (!a.bending && a.way.Count > 1 && left <= RoundCorner * MapSpace.Tile) Bend(a, left);
+                // (A corner too sharp to go round, or it is on it: on to the next stretch, turning on the spot.)
+                if (!a.bending && a.way.Count > 1 && left < 0.005f)
                 {
                     a.way.RemoveAt(0);
                     aim = a.way[0];
@@ -738,24 +755,54 @@ namespace Bastion.Client.Map
                 }
                 else
                 {
-                    float want = Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, was = a.yaw;
+                    // The way it goes now: along the curve, or at its next corner.
+                    var ahead = a.bending ? BendTangent(a, a.bendDone) : to;
+                    float want = Mathf.Atan2(ahead.x, ahead.z) * Mathf.Rad2Deg, was = a.yaw;
                     a.yaw = Mathf.MoveTowardsAngle(a.yaw, want, (a.state == State.Flee ? 540 : 200) * dt);
                     a.turning = Mathf.Abs(Mathf.DeltaAngle(was, a.yaw)) / dt;
                     a.root.rotation = Quaternion.Euler(0, a.yaw, 0);
-                    // (Turning on the spot first when it faces away.)
-                    float facing = Mathf.Clamp01(Mathf.Cos(Mathf.DeltaAngle(a.yaw, want) * Mathf.Deg2Rad));
+                    // (Turning on the spot first when it faces away: off only once it faces within 60° of its way, and
+                    // full on facing it, not sliding sideways as it turns.)
+                    float facing = Mathf.Clamp01((Mathf.Cos(Mathf.DeltaAngle(a.yaw, want) * Mathf.Deg2Rad) - 0.5f) / 0.5f);
                     // Speeding up and slowing down, not off at once and stopped dead (Arturo's #1 of 2/11, its jerks): to
                     // its end slowing down so as to stop there.
                     bool flees = a.state == State.Flee;
                     float goal = speed * facing;
                     // (Braking for what is left of its whole way, not only its last stretch: one short after a corner left it
                     // no room, and it got there running.)
-                    float rest = left;
-                    for (int k = 1; k < a.way.Count; k++) rest += Vector2.Distance(new Vector2(a.way[k - 1].x, a.way[k - 1].z), new Vector2(a.way[k].x, a.way[k].z));
+                    // (To a stop at a corner too sharp to go round: it turns there on the spot.)
+                    bool sharp = !a.bending && a.way.Count > 1 && Vector3.Angle(to, Vector3.Scale(a.way[1] - a.way[0], new Vector3(1, 0, 1))) > RoundMost;
+                    float rest = a.bending ? (1 - a.bendDone) * a.bendLength + Flat(a.bendTo, a.way[1]) : left;
+                    for (int k = a.bending ? 2 : 1; k < a.way.Count && !sharp; k++) rest += Flat(a.way[k - 1], a.way[k]);
                     goal = Mathf.Min(goal, Mathf.Sqrt(2 * (flees ? FleeBrake : WalkBrake) * rest));
                     // (Slowing, up to half as hard again: a step at a time it lags the curve it brakes to, and got there at 2 m/s.)
                     a.pace = Mathf.MoveTowards(a.pace, goal, (goal > a.pace ? (flees ? FleeStart : WalkStart) : 1.5f * (flees ? FleeBrake : WalkBrake)) * dt);
-                    a.root.position += to / left * Mathf.Min(left, a.pace * dt);
+                    if (!a.bending) a.root.position += to / left * Mathf.Min(left, a.pace * dt);
+                    else
+                    {
+                        // Along the curve by as much ground as its pace covers (its parameter by the curve's own speed).
+                        float u = a.bendDone, go = a.pace * dt, part = go / 4;
+                        for (int k = 0; k < 4 && go > 1e-6f && u < 1; k++)
+                        {
+                            float rate = Mathf.Max(BendTangent(a, u).magnitude, 1e-3f), du = Mathf.Min(1 - u, Mathf.Min(part, go) / rate);
+                            u += du;
+                            go -= du * rate;
+                        }
+                        a.bendDone = u >= 0.9999f ? 1 : u;
+                        var on = BendAt(a, a.bendDone);
+                        a.root.position = new Vector3(on.x, a.root.position.y, on.z);
+                        // Round it: on along the next stretch, with what is left of the step (not a step short in the frame
+                        // it gets round, a hitch at every corner).
+                        if (a.bendDone >= 1)
+                        {
+                            a.bending = false;
+                            a.way.RemoveAt(0);
+                            var next = a.way[0] - a.root.position;
+                            next.y = 0;
+                            float far = next.magnitude;
+                            if (far > 1e-4f) a.root.position += next / far * Mathf.Min(far, go);
+                        }
+                    }
                 }
             }
             if (a.animator != null && a.animator.runtimeAnimatorController != null)
@@ -775,6 +822,48 @@ namespace Bastion.Client.Map
                 if (a.kind == Kind.Cat) a.animator.SetBool("Sit_b", a.doing == Sit && a.state == State.Idle);
             }
         }
+
+        /// <summary>
+        /// Round the corner `a` is `left` from (its way's first point, the next stretch from it to the second): a curve from
+        /// where it is to as far along the next stretch (half of it at most), the corner its middle (a quadratic Bézier),
+        /// within the corner's own triangle, so no nearer what fills a tile than the way's straight stretches (Wide). None
+        /// for a corner sharper than RoundMost.
+        /// </summary>
+        static void Bend(Animal a, float left)
+        {
+            var at = a.way[0];
+            var on = a.way[1] - at;
+            on.y = 0;
+            var from = a.root.position;
+            var into = at - from;
+            into.y = 0;
+            if (left < 1e-3f || on.magnitude < 1e-3f || Vector3.Angle(into, on) > RoundMost) return;
+            a.bending = true;
+            a.bendWay = a.way;
+            a.bendFrom = new Vector3(from.x, 0, from.z);
+            a.bendAt = at;
+            a.bendTo = new Vector3(at.x, 0, at.z) + on.normalized * Mathf.Min(left, on.magnitude / 2);
+            a.bendDone = 0;
+            a.bendLength = 0;
+            for (int k = 1; k <= 8; k++) a.bendLength += Flat(BendAt(a, (k - 1) / 8f), BendAt(a, k / 8f));
+        }
+
+        /// <summary>The point `u` (0 to 1) of `a`'s curve round a corner (on the ground: y 0).</summary>
+        static Vector3 BendAt(Animal a, float u)
+        {
+            var corner = new Vector3(a.bendAt.x, 0, a.bendAt.z);
+            return (1 - u) * (1 - u) * a.bendFrom + 2 * u * (1 - u) * corner + u * u * a.bendTo;
+        }
+
+        /// <summary>Its curve's way and speed at `u` (m per unit of `u`, on the ground).</summary>
+        static Vector3 BendTangent(Animal a, float u)
+        {
+            var corner = new Vector3(a.bendAt.x, 0, a.bendAt.z);
+            return 2 * (1 - u) * (corner - a.bendFrom) + 2 * u * (a.bendTo - corner);
+        }
+
+        /// <summary>How far apart two points are on the ground (m).</summary>
+        static float Flat(Vector3 p, Vector3 q) => Vector2.Distance(new Vector2(p.x, p.z), new Vector2(q.x, q.z));
 
         /// <summary>
         /// What animal `a` does as it stops (once): nothing, a gesture (a dog wags its tail, a wolf howls, a fox

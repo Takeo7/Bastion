@@ -201,6 +201,12 @@ namespace Bastion.UI.Combat
             var u = Unit();
             // Only in one's own turn and with the command: out of it a key neither arms nor waits for it (Arturo, 5/11 #15).
             if (u == null || !CanAct() || !HasCommand() || AbilityTexts.IsMenu(id)) return;
+            // Its turn ended by hand (DoneCommand): what it has left goes, and another can play.
+            if (id == DoneKey)
+            {
+                Send(new DoneCommand { Unit = u.Id });
+                return;
+            }
             var view = BarView(id);
             if (view == null || !view.Enabled)
             {
@@ -547,18 +553,15 @@ namespace Bastion.UI.Combat
         {
             if (!CanAct()) return;
             var ready = State.Ready[MySlot];
-            if (!HasCommand() && !ready)
-            {
-                Toast($"Tiene el mando {PlayerName(State.Command)}.");
-                return;
-            }
+            // Without the command too (Arturo, 7/11: «no deja pasar turno»; the rules take it): «A punto», and the turn is
+            // over when the partner's is.
             // Ending the turn with soldiers that can still act asks first (Backspace is easy to hit by mistake).
             var idle = IdleSoldiers();
             if (!ready && idle > 0 && !EndArmed)
             {
                 endArmedUntil = Time.time + 4;
                 var partner = PartnerHere();
-                var next = partner != null && !State.Ready[partner.Slot] ? $"el mando pasa a {partner.Name}" : "juega el enemigo";
+                var next = partner == null || State.Ready[partner.Slot] ? "juega el enemigo" : HasCommand() ? $"el mando pasa a {partner.Name}" : $"{partner.Name} sigue con el mando";
                 // (Actions or movement left: Lore, 5/11 #14.)
                 endQuestion = $"{(idle == 1 ? "A un soldado le quedan" : $"A {idle} soldados les quedan")} acciones o movimiento. Pulsa otra vez para terminar: {next}.";
                 Toast(endQuestion);
@@ -610,8 +613,8 @@ namespace Bastion.UI.Combat
             var inPlay = UnitById(v, v.ActiveUnit);
             if (inPlay != null && inPlay.Alive && inPlay.Owner == slot) return inPlay;
             var mine = slot == MySlot ? Unit() : null;
-            if (mine != null && mine.Team == Teams.Xcom && (opening || mine.Ap > 0)) return mine;
-            return v.Units.FirstOrDefault(x => x.Alive && x.Team == Teams.Xcom && x.Owner == slot && !x.Evacuated && (opening || x.Ap > 0));
+            if (mine != null && mine.Team == Teams.Xcom && (opening || Paths.HasTurnLeft(mine))) return mine;
+            return v.Units.FirstOrDefault(x => x.Alive && x.Team == Teams.Xcom && x.Owner == slot && !x.Evacuated && (opening || Paths.HasTurnLeft(x)));
         }
 
         /// <summary>The camera to the soldier whose turn it is, and it picked (F, «Ir a…»: playtest 19/10 #15).</summary>
@@ -745,6 +748,16 @@ namespace Bastion.UI.Combat
 
         public void OnCallAnswer(bool accept)
         {
+            // The question about the one in play (LeaveCall): its turn ended, or back to it.
+            if (LeaveCall() != null && !(State.EvacCall != null && State.EvacCall.By != MySlot) && !(State.AbandonCall != null && State.AbandonCall.By != MySlot))
+            {
+                var busy = leaveAsked;
+                leaveAsked = null;
+                if (accept) Send(new DoneCommand { Unit = busy });
+                else Pick(busy);
+                RefreshHud();
+                return;
+            }
             if (State.EvacCall != null && State.EvacCall.By != MySlot) Send(new EvacAnswerCommand { Accept = accept });
             else if (State.AbandonCall != null && State.AbandonCall.By != MySlot) Send(new AbandonAnswerMessage { Accept = accept });
         }

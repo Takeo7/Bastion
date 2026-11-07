@@ -315,9 +315,16 @@ namespace Bastion.UI.Combat
             var u = Unit();
             looking = u != null && !Paths.HasTurnLeft(u) && CanAct() ? u.Id : null;
             if (u != null && look && Rig != null) Rig.Focus(Board.TileToWorld(State, u.Pos));
-            // Picking another of one's own while one is in play is allowed, to look: it says why it can't act yet.
+            // Picking another of one's own while one is in play is allowed, to look. It asks to leave the one in play
+            // (Arturo, 7/11: its turn ends when the player says so), saying what it still has; picked again, it is left.
             var waiting = u != null && Commands(u) && Paths.HasTurnLeft(u) ? WaitingFor(u.Id) : null;
-            if (waiting != null) Toast(waiting);
+            var busy = waiting != null ? UnitById(State, State.ActiveUnit) : null;
+            if (busy != null && HasCommand() && CanAct())
+            {
+                leaveAsked = busy.Id;
+                RefreshHud();
+            }
+            else if (waiting != null) Toast(waiting);
             Refresh();
             Picked?.Invoke(id);
         }
@@ -330,25 +337,28 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// Turns go one soldier at a time (playtest 15/10 #9; rules.ts `inPlay`): while one of mine is in play with actions
-        /// and the partner can still play, another of mine waits. Why, or null.
+        /// Turns go one soldier at a time (playtest 15/10 #9; rules.ts `inPlay`): while one of mine is in play with anything
+        /// left (actions or movement: Arturo, 7/11) and the partner can still play, another of mine waits. Why, or null.
         /// </summary>
         string WaitingFor(string id)
         {
             var s = State;
             var busy = s.ActiveUnit != null && s.ActiveUnit != id ? UnitById(s, s.ActiveUnit) : null;
-            if (busy == null || !busy.Alive || busy.Ap <= 0 || busy.Owner != MySlot || !HasCommand()) return null;
+            if (busy == null || !busy.Alive || !Paths.HasTurnLeft(busy) || busy.Owner != MySlot || !HasCommand()) return null;
             var partner = PartnerHere();
             if (partner == null || s.Ready[partner.Slot] || !AbilityTexts.BusySlots(s).Contains(partner.Slot)) return null;
             return $"Primero termina con {busy.Name}, o cede el turno.";
         }
 
-        /// <summary>Keeps a valid pick (game.ts autoSelect): the one in play if it is mine, else the current one if it can still act, else the next that can.</summary>
+        /// <summary>
+        /// Keeps a valid pick (game.ts autoSelect): the one in play if it is mine, else the current one while it has anything
+        /// left, movement too (Arturo, 7/11: it never jumps to another while it can still move), else the next that can.
+        /// </summary>
         void AutoSelect()
         {
             var current = Unit();
             var playing = UnitById(State, State.ActiveUnit);
-            var mineInPlay = playing != null && playing.Alive && playing.Ap > 0 && Commands(playing) ? playing : null;
+            var mineInPlay = playing != null && playing.Alive && Paths.HasTurnLeft(playing) && Commands(playing) ? playing : null;
             var turned = State.ActiveUnit != lastInPlay || State.Command != lastCommand;
             lastInPlay = State.ActiveUnit;
             lastCommand = State.Command;
@@ -395,6 +405,9 @@ namespace Bastion.UI.Combat
 
         string lastInPlay;
         int? lastCommand;
+
+        /// <summary>The one in play whose turn the call's card asks to end (another of one's own picked meanwhile); null, none.</summary>
+        string leaveAsked;
 
         /// <summary>One picked with no actions left, to look at its sheet (playtest 18/10 #2): it stays until another is picked.</summary>
         string looking;

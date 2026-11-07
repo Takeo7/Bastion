@@ -80,6 +80,16 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> All = new[] { Drop, Take, Give, Use, Equip };
     }
 
+    /// <summary>
+    /// Done with a soldier for this turn (Arturo, 7/11: its turn ends when its movement and actions are spent, or when
+    /// the player says so): what it has left goes, and the one in play is free for another.
+    /// </summary>
+    public sealed class DoneCommand : Command
+    {
+        public override string Type => "done";
+        public string Unit { get; set; } = "";
+    }
+
     /// <summary>Hand the command (el mando) to the partner.</summary>
     public sealed class PassCommand : Command
     {

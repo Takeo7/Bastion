@@ -10,8 +10,9 @@ namespace Bastion.Net
     /// holds the command, one at a time: it reloads, shoots or strikes what it is likely to hit or what is close, and
     /// otherwise goes for the objective (a Botín's item, the radio to fix, the one to free, the alarm to silence; with the
     /// job done, La Lata, everyone) or the nearest enemy, in stretches (Arturo, 5/11 #14: moving apart from the actions),
-    /// never at a run (all the movement at once, heard: Arturo, 6/11); in La Lata with the job done and everyone aboard who
-    /// can get there, it calls the bus; the partner's call it answers yes.
+    /// never at a run (all the movement at once, heard: Arturo, 6/11); with its actions spent, while the partner plays, it
+    /// cedes the command and keeps its movement for later; in La Lata with the job done and everyone aboard who can get
+    /// there, it calls the bus; the partner's call it answers yes.
     /// Without a gun (the campaign starts with two pistols for four: Arturo, 2/11) it goes for one first, in a police car's
     /// boot or on the floor, and puts it on; and with the blade it walks up to the dead and strikes. Walled off from where it
     /// goes (a boarded door: Arturo, 2/11), it takes the boards off with the crowbar or goes round. With nothing to do, it
@@ -51,11 +52,16 @@ namespace Bastion.Net
                 .ThenBy((x) => x.Id, System.StringComparer.Ordinal);
             foreach (var u in order)
             {
+                // In play with its actions spent (Arturo, 7/11: in play till it has nothing, or is left), while the partner
+                // plays: the partner's go, its movement kept for later in the turn, as the command went on by itself before.
+                // Left (DoneCommand), that movement was lost: of seeds 1 to 120 of the test apps' campaign, the first
+                // mission was won as often either way (23), and both 18 times so against 20, but 364 lost its siege.
+                if (u.Id == s.ActiveUnit && u.Ap <= 0 && PartnerPlays(s, slot, connected)) return new PassCommand();
                 var cmd = Choose(s, u, leaving, goals[u.Id], WalksOf(u));
                 if (cmd != null) return cmd;
-                // In play with nothing to do (its actions kept, having moved), it holds the others back while the partner
-                // plays (Rules InPlay): the partner's go.
-                if (u.Id == s.ActiveUnit && u.Ap > 0 && PartnerPlays(s, slot, connected)) return new PassCommand();
+                // In play with nothing to do, its actions kept, it holds the others back while the partner plays (Rules
+                // InPlay): the partner's go.
+                if (u.Id == s.ActiveUnit && PartnerPlays(s, slot, connected)) return new PassCommand();
             }
             return new EndTurnCommand { Ready = true };
         }
@@ -125,7 +131,7 @@ namespace Bastion.Net
                 if (gun != null && u.Ap > 0) return new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Index = gun };
                 // One at its feet is picked up (free); a police car's boot beside it, searched.
                 var dropped = s.Dropped?.FirstOrDefault((d) => IsGun(d.Loot.Weapon) && Grid.SamePos(d.Pos, u.Pos));
-                if (dropped != null && (u.Backpack?.Count ?? 0) < Looting.PackSlots(u)) return new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Id = dropped.Id };
+                if (dropped != null && Looting.Fits(u, dropped.Loot)) return new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Id = dropped.Id };
                 var boot = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault((p) => Looting.SearchSpot(s, p) == Looting.PoliceBoot) : null;
                 if (boot != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = boot };
             }

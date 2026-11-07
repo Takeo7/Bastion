@@ -36,7 +36,7 @@ namespace Bastion.Engine
         /// <summary>The debrief's loot line (lore.ts lootSummary), or null when nothing came back.</summary>
         private static string? LootLine(LootTotals h)
         {
-            return Lore.LootSummary(h.Supplies, h.Items, h.Medicines, h.Food, h.Parts, h.Weapons);
+            return Lore.LootSummary(h.Supplies, h.Items, h.Medicines, h.Food, h.Parts, h.Weapons, h.Mods);
         }
 
         /// <summary>Folds a finished tactical mission back into the campaign.</summary>

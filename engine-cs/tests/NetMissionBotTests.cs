@@ -81,6 +81,27 @@ namespace Bastion.Engine.Tests
             Assert.Null(MissionBot.Next(state, 0, both));
         }
 
+        [Fact]
+        public void HavingActedItCedesTheCommandAndKeepsItsMovement()
+        {
+            // In play with its actions spent and its movement left (Arturo, 7/11: in play till it has nothing, or is left),
+            // while the partner plays: the partner's go, the movement kept for later in the turn. Alone, it plays on.
+            var state = Launch(3);
+            var both = new List<int> { 0, 1 };
+            var u = state.Units.First((x) => x.Team == Teams.Xcom && x.Owner == 0);
+            u.Ap = 0;
+            state.Command = 0;
+            state.ActiveUnit = u.Id;
+            var moves = Paths.MoveBudget(u);
+            Assert.True(moves > 0);
+            Assert.IsNotType<PassCommand>(MissionBot.Next(state, 0, new List<int> { 0 }));
+            Assert.IsType<PassCommand>(MissionBot.Next(state, 0, both));
+            Assert.True(Rules.ExecuteCommand(state, new PassCommand(), 0, both, new Rng(1)).Ok);
+            Assert.Equal(1, state.Command);
+            Assert.Null(state.ActiveUnit);
+            Assert.Equal(moves, Paths.MoveBudget(Grid.GetUnit(state, u.Id)!));
+        }
+
         /// <summary>
         /// A city mission of `seed` (the opening operation's clinic has no boarded door) set for one soldier and one of the
         /// dead with a boarded door between (Mapgen BoardDoors), the way round longer than through it by more than a move: the

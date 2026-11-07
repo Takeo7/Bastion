@@ -178,14 +178,18 @@
 }
 
 /* Why the keys rest: over the bar. */
+/* Why the keys rest, over the bar (Arturo, 7/11: «no queda claro cuando no es tu turno»): readable, on a dark plate. */
 .abilities__lock {
     position: absolute;
     bottom: 68px;
-    left: 0;
-    right: 0;
+    left: 50%;
+    translate: -50% 0;
+    padding: 3px 12px;
+    background-color: rgba(0, 0, 0, 0.75);
     -unity-text-align: middle-center;
-    font-size: 12px;
-    color: var(--t-muted);
+    white-space: nowrap;
+    font-size: 15px;
+    color: #e8ebe6;
 }
 
 .abilities--locked .ability {

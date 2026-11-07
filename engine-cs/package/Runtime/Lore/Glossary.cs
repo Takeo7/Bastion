@@ -25,7 +25,7 @@ namespace Bastion.Engine
             ["Saqueo"] = "Misión de registrar y volver con el botín. Entran zombis por los bordes, y antes cuanto más ruido hagas.",
             ["Registrar"] = "Una acción, dentro de una habitación; cada una se registra una vez. Casas: comida y medicinas. Oficinas: piezas. Tiendas: comida. Almacenes: de todo.",
             ["Cajas"] = "Hasta tres por mapa: armas, medicinas, munición o comida. Se abren con una acción, desde al lado.",
-            ["Mochila"] = "Tres huecos, cuatro con la Chapistería. Soltar no cuesta; pasar algo al de al lado, una acción. El botín cuenta si vuelve. Lo de un caído queda en el suelo.",
+            ["Mochila"] = "Tres huecos, cuatro con la Chapistería. Lo que es igual va en el mismo hueco, sin límite, y cabe aunque esté llena; cada arma, en el suyo. Soltar no cuesta; pasar algo al de al lado, una acción. El botín cuenta si vuelve. Lo de un caído queda en el suelo.",
             ["Armería"] = "Las armas del Bastión. Cada una es de quien la lleva.",
             ["Cargadores"] = "Los hace el Taller: cada soldado sale con uno por tanda, hasta tres. Valen para todas las armas; recargar llena primero la principal.",
             ["Suministros"] = "Para construir, reparar, subir de nivel, reclutar, equipar y contactar zonas.",

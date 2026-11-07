@@ -24,7 +24,46 @@ namespace Bastion.UI.Combat
             var u = Unit();
             var calls = AbandonActions().Concat(EvacActions(u)).ToList();
             if (u == null || !Commands(u)) return calls;
-            return WithMenus(SoldierAbilities(u), u).Concat(calls).ToList();
+            var keys = WithMenus(SoldierAbilities(u), u);
+            // Done with it, with movement alone left (Arturo, 7/11: its turn ends when the player says so; DoneCommand).
+            if (u.Team == Teams.Xcom && u.Ap <= 0 && Paths.MoveBudget(u) > 0 && CanAct() && HasCommand())
+                keys.Add(new AbilityView { Id = DoneKey, Name = HudText.Done.Key(u.Name), Hotkey = "", Enabled = true, Cost = HudText.Done.Cost, Description = HudText.Done.Tip(u.Name, CommandGoesTo()), Free = true, Icon = "ui:check" });
+            return keys.Concat(calls).ToList();
+        }
+
+        /// <summary>The bar's key that ends the soldier's turn (DoneCommand).</summary>
+        const string DoneKey = "done";
+
+        /// <summary>Who the command passes to when a soldier of mine is done (the rules' Alternates): the partner here, not done, with something left; null, nobody.</summary>
+        string CommandGoesTo()
+        {
+            var partner = PartnerHere();
+            return partner != null && !State.Ready[partner.Slot] && AbilityTexts.BusySlots(State).Contains(partner.Slot) ? partner.Name : null;
+        }
+
+        /// <summary>
+        /// The question when another of one's own is picked with one in play (Lore, TEXTOS-0124.md): what it still has,
+        /// what ending its turn costs, «Terminar su turno» and «Seguir con …». Only while it is still in play and mine.
+        /// </summary>
+        CallView LeaveCall()
+        {
+            if (leaveAsked == null) return null;
+            var busy = UnitById(State, leaveAsked);
+            if (busy == null || !busy.Alive || State.ActiveUnit != busy.Id || !Paths.HasTurnLeft(busy) || !HasCommand() || !CanAct())
+            {
+                leaveAsked = null;
+                return null;
+            }
+            var to = CommandGoesTo();
+            return new CallView
+            {
+                Kind = "leave",
+                Kicker = "",
+                Title = busy.Name,
+                Text = HudText.Done.State(busy.Name, busy.Ap, Paths.MoveBudget(busy)) + " " + HudText.Done.Stakes(to),
+                Accept = HudText.Done.Yes,
+                Refuse = HudText.Done.No(busy.Name),
+            };
         }
 
         /// <summary>A view of the bar by its id, inside a menu too.</summary>

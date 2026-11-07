@@ -77,6 +77,8 @@ namespace Bastion.UI.Hud
         public string Mode = "act";
         /// <summary>Who is waited for, or how many soldiers still have actions.</summary>
         public string Detail;
+        /// <summary>Ready without the command (Arturo, 7/11): who holds it, the turn over when theirs is; null, one holds it.</summary>
+        public string Holder;
     }
 
     // ---------------------------------------------------------------- squad
@@ -159,6 +161,14 @@ namespace Bastion.UI.Hud
         public List<TagView> WeaponMarks = new List<TagView>();
         /// <summary>Its backpack, where there is anything to search or it carries something (game.ts packView); null, none.</summary>
         public PackView Pack;
+        /// <summary>
+        /// Its cover as a shield (Arturo, 7/11: on this panel, not by its health): 2 full, 1 half, 0 flanked; -1, none (no
+        /// cover, or cover doesn't count). The worst against whoever sees it, else the best round it.
+        /// </summary>
+        public int Cover = -1;
+        /// <summary>Its help's title and words (Lore).</summary>
+        public string CoverTitle;
+        public string CoverTip;
     }
 
     // --------------------------------------------------- over the battle

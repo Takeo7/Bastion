@@ -69,7 +69,7 @@ namespace Bastion.Engine.Tests
         public void AFullBackpackLeavesTheFindOnTheFloor()
         {
             var s = House();
-            var u = AddUnit(s, "s1", TemplateIds.Rookie, 2, 1, extra: (x) => x.Backpack = Pack(Supplies(5), Medicines(1), ItemLoot(ItemIds.FirstAid)));
+            var u = AddUnit(s, "s1", TemplateIds.Rookie, 2, 1, extra: (x) => x.Backpack = Pack(Supplies(5), Food(2), ItemLoot(ItemIds.FirstAid)));
             Assert.Null(Abilities.AbilityBlocker(s, u, AbilityIds.Search));
             var r = Exec(s, Ability("s1", AbilityIds.Search, tile: P(3, 1)), seed: 3);
             Assert.True(r.Ok);
@@ -510,7 +510,7 @@ namespace Bastion.Engine.Tests
         {
             var s = BackpackField();
             var a = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => { u.Ap = 0; u.Backpack = Pack(Food(3), Medicines(1)); });
-            var b = AddUnit(s, "s2", TemplateIds.Rookie, 9, 9, extra: (u) => u.Backpack = Pack(Supplies(4), Parts(2), Food(1)));
+            var b = AddUnit(s, "s2", TemplateIds.Rookie, 9, 9, extra: (u) => u.Backpack = Pack(Supplies(4), Parts(2), Medicines(1)));
             Assert.True(Item(s, "s1", ItemActions.Drop, index: 0).Ok);
             SameJson(Pack(Medicines(1)), a.Backpack);
             SameJson(new[] { new DroppedLoot { Id = "l1", Pos = P(5, 5), Loot = Food(3) } }, s.Dropped);
@@ -525,7 +525,7 @@ namespace Bastion.Engine.Tests
             // The Chapistería's one more slot.
             b.PackSlots = 4;
             a.Backpack!.RemoveAt(a.Backpack.Count - 1);
-            s.Dropped = new List<DroppedLoot> { new DroppedLoot { Id = "l9", Pos = P(5, 5), Loot = Supplies(9) } };
+            s.Dropped = new List<DroppedLoot> { new DroppedLoot { Id = "l9", Pos = P(5, 5), Loot = Food(9) } };
             Assert.True(Item(s, "s2", ItemActions.Take, id: "l9").Ok);
             Assert.Equal(4, b.Backpack!.Count);
         }
@@ -535,7 +535,7 @@ namespace Bastion.Engine.Tests
         {
             var s = BackpackField();
             var a = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => u.Backpack = Pack(Parts(2)));
-            var b = AddUnit(s, "s2", TemplateIds.Rookie, 7, 5, extra: (u) => u.Backpack = Pack(Supplies(4), Parts(2), Food(1)));
+            var b = AddUnit(s, "s2", TemplateIds.Rookie, 7, 5, extra: (u) => u.Backpack = Pack(Supplies(4), Medicines(1), Food(1)));
             Refused("Tiene que estar a tu lado.", Item(s, "s1", ItemActions.Give, index: 0, to: "s2"));
             b.Pos = P(6, 6);
             Refused("No le cabe: lleva la mochila llena.", Item(s, "s1", ItemActions.Give, index: 0, to: "s2"));
@@ -543,9 +543,35 @@ namespace Bastion.Engine.Tests
             var ap = a.Ap;
             Assert.True(Item(s, "s1", ItemActions.Give, index: 0, to: "s2").Ok);
             SameJson(Pack(), a.Backpack);
-            SameJson(Pack(Supplies(4), Parts(2), Parts(2)), b.Backpack);
+            SameJson(Pack(Supplies(4), Medicines(1), Parts(2)), b.Backpack);
             Assert.Equal(ap - 1, a.Ap);
             Refused("No lleva eso en la mochila.", Item(s, "s1", ItemActions.Give, index: 0, to: "s2"));
+        }
+
+        [Fact(DisplayName = "the backpack › the same piles in one slot, full or not, without a limit; a weapon never; one comes off a pile (Arturo, 7/11)")]
+        public void TheSamePilesInOneSlot()
+        {
+            var s = BackpackField();
+            var a = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => u.Backpack = Pack(Parts(2), ItemLoot(ItemIds.Molotov), Supplies(3)));
+            AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => u.Backpack = Pack(Parts(1)));
+            s.Dropped = new List<DroppedLoot>
+            {
+                new DroppedLoot { Id = "l1", Pos = P(5, 5), Loot = Parts(3) },
+                new DroppedLoot { Id = "l2", Pos = P(5, 5), Loot = ItemLoot(ItemIds.Molotov) },
+                new DroppedLoot { Id = "l3", Pos = P(5, 5), Loot = new Loot { Weapon = FoundWeaponIds.Pistol } },
+            };
+            // Full (3 of 3), but what is the same goes onto its pile.
+            Assert.True(Item(s, "s1", ItemActions.Take, id: "l1").Ok);
+            Assert.True(Item(s, "s1", ItemActions.Take, id: "l2").Ok);
+            SameJson(Pack(Parts(5), new Loot { Item = ItemIds.Molotov, Count = 2 }, Supplies(3)), a.Backpack);
+            Refused("La mochila está llena: suelta algo antes.", Item(s, "s1", ItemActions.Take, id: "l3"));
+            Assert.Equal(new[] { ItemIds.Molotov, ItemIds.Molotov }, Looting.LootTotalsOf(a.Backpack!).Items);
+            // Onto the belt, one of the pile; the last one, the slot.
+            Assert.True(Item(s, "s1", ItemActions.Equip, index: 1).Ok);
+            SameJson(Pack(Parts(5), ItemLoot(ItemIds.Molotov), Supplies(3)), a.Backpack);
+            // Given, the whole pile, onto the partner's.
+            Assert.True(Item(s, "s1", ItemActions.Give, index: 0, to: "s2").Ok);
+            SameJson(Pack(Parts(6)), Grid.GetUnit(s, "s2")!.Backpack);
         }
 
         [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › a medicine heals 3 on you or a partner next to you, for an action; the contagion only stops once unlocked")]

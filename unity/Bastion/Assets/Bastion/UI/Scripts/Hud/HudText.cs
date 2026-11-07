@@ -8,7 +8,7 @@ namespace Bastion.UI.Hud
     {
         public static class Turn
         {
-            public const string InPlayTip = "Un soldado cada vez: este termina sus acciones antes que otro, o se cede el turno. El movimiento que le quede lo puede gastar después.";
+            public const string InPlayTip = "Un soldado cada vez: sigue en juego hasta que no le quede nada, termines su turno o cedas el mando.";
             public const string EnemyLock = "Turno enemigo";
 
             /// <summary>The bar resting while the partner holds the command: the keys do nothing then (Arturo, 5/11 #15), moves are planned.</summary>
@@ -26,7 +26,41 @@ namespace Bastion.UI.Hud
 
             public static string Confirm(string detail) => string.IsNullOrEmpty(detail) ? "¿Terminar? Pulsa otra vez." : $"¿Terminar? {detail}. Pulsa otra vez.";
             public static string Waiting(string name) => $"A punto. Esperando a {name}. Pulsa para cancelar.";
+            /// <summary>Ready without the command (Arturo, 7/11): the turn is over when the holder's is.</summary>
+            public static string ReadyHolder(string name) => $"A punto. {name} sigue con el mando: el turno acaba cuando termine. Pulsa para cancelar.";
             public static string Command(string name) => $"Tiene el mando {name}. Puedes planear: clic en una casilla.";
+        }
+
+        /// <summary>The cover's shield on the soldier's panel (Arturo, 7/11; Lore's words): its title and what it says.</summary>
+        public static class CoverShield
+        {
+            public const string Title = "Cobertura";
+            public static string Tip(string name) => $"La cobertura de {name} frente a los enemigos a la vista. Azul: completa. Amarillo: media. Rojo: le falta cobertura ante alguno. Sin enemigos a la vista, el rojo no sale.";
+        }
+
+        /// <summary>
+        /// A soldier's turn ended by hand (Arturo, 7/11; DoneCommand; Lore's words, TEXTOS-0124.md): the bar's key and the
+        /// question on the call's card when another is picked with one in play.
+        /// </summary>
+        public static class Done
+        {
+            public static string Key(string name) => $"Terminar el turno de {name}";
+            public const string Cost = "Sin acción";
+            /// <summary>`to`: who the command passes to; null, it doesn't.</summary>
+            public static string Tip(string name, string to) => $"{name} no hace nada más este turno: pierde las acciones y el movimiento que le queden.{(to != null ? $" El mando pasa a {to}." : "")}";
+            /// <summary>«le quedan 3 puntos de movimiento», «le queda 1 acción», «le quedan 2 acciones y 5 puntos de movimiento».</summary>
+            static string Left(int ap, int moves)
+            {
+                var parts = new System.Collections.Generic.List<string>();
+                if (ap > 0) parts.Add(ap == 1 ? "1 acción" : $"{ap} acciones");
+                var points = Moves.Tiles(moves);
+                if (moves > 0) parts.Add(points == "1" ? "1 punto de movimiento" : $"{points} puntos de movimiento");
+                return (parts.Count == 1 && (ap == 1 && moves == 0 || ap == 0 && points == "1") ? "le queda " : "le quedan ") + string.Join(" y ", parts);
+            }
+            public static string State(string name, int ap, int moves) => ap > 0 ? $"{name} aún puede actuar: {Left(ap, moves)}." : $"{name} aún puede moverse: {Left(0, moves)}.";
+            public static string Stakes(string to) => to != null ? $"Si terminas su turno, pierde lo que le queda y el mando pasa a {to}." : "Si terminas su turno, pierde lo que le queda.";
+            public const string Yes = "Terminar su turno";
+            public static string No(string name) => $"Seguir con {name}";
         }
 
         /// <summary>The command and the camera, in the game's menu now (UI-COMBATE UI-07): they were keys over «Terminar turno».</summary>
@@ -48,6 +82,8 @@ namespace Bastion.UI.Hud
             // Without gender (Lore, 26/10): «A punto», «Sin conexión».
             public const string Ready = "A punto";
             public const string WithActions = "Con acciones";
+            /// <summary>Beside the name of who holds the command (Arturo, 7/11).</summary>
+            public const string Command = "MANDO";
             /// <summary>Movement left but no actions (Arturo, 5/11 #14): the command may still go to them.</summary>
             public const string WithMoves = "Con movimiento";
             // Beside «Con movimiento», neither (Lore, 6/11).

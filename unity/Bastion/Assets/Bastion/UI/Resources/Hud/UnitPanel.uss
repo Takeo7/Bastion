@@ -44,6 +44,14 @@
     letter-spacing: 0.5px;
 }
 
+/* Its cover's shield (CoverShield; Arturo, 7/11): the move's shield, in the cover's colour. */
+.cover-shield {
+    width: 14px;
+    height: 14px;
+    margin-left: 7px;
+    flex-shrink: 0;
+}
+
 /* «DE ANA»: in the partner's colour (set from C#). */
 .whose {
     margin-left: 0;

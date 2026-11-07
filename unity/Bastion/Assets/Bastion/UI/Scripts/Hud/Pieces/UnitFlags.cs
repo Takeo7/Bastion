@@ -363,7 +363,7 @@ namespace Bastion.UI.Hud
             // The name only on the one under the pointer (Ana, Arturo 31/10 #9: no longer on the picked one's).
             if (!string.IsNullOrEmpty(f.Name)) Ui.Text(f.Name, "uflag__name", el);
             var row = Ui.El("uflag__row", el);
-            if (f.Cover >= 0) Ui.El("uflag__cover uflag__cover--" + f.Cover, row);
+            // (No cover's square by the health: the shield is on the soldier's panel now, Arturo 7/11.)
             Ui.Pips(Ui.El("pips pips--hp", row), f.Hp, f.MaxHp);
             if (f.Armor > 0)
             {

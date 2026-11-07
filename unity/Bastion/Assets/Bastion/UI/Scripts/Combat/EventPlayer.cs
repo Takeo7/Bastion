@@ -2854,7 +2854,7 @@ namespace Bastion.UI.Combat
             var killed = s.Units.Count(u => u.Team == Teams.Alien && !u.Alive);
             var vip = s.Mission.Kind == MissionKinds.Rescue && s.Mission.ObjectiveUnit != null ? s.Units.FirstOrDefault(u => u.Id == s.Mission.ObjectiveUnit)?.Name : null;
             var haul = Looting.BroughtBack(s);
-            var loot = Lore.LootSummary(haul.Supplies, haul.Items, haul.Medicines, haul.Food, haul.Parts, haul.Weapons);
+            var loot = Lore.LootSummary(haul.Supplies, haul.Items, haul.Medicines, haul.Food, haul.Parts, haul.Weapons, haul.Mods);
             string success;
             switch (s.Mission.Kind)
             {

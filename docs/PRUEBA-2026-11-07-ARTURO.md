@@ -65,3 +65,20 @@ El informe de Arturo «Cambios de interfaz · Informe para desarrollo», del 7/1
 **En los dos:**
 - los porcentajes van en la capa de fondo o en el relleno; los textos, los retratos, los iconos, los marcos y los botones, en capas aparte;
 - los sprites: `SPR_HUD_Apocalypse_Box_Large_01` (el de la maqueta), `_Large_02`, `_Medium_01` a `_04`, `_Small_01` a `_03` y `SPR_HUD_Apocalypse_Frame_Large_03_Underlay`, de INTERFACE - Apocalypse HUD, que ya está en el proyecto (`Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/`).
+
+## Para la 0.12.4 (notas de Arturo del 7/11, tras la 0.12.2)
+
+| # | Nota | Quién | Cómo queda |
+|---|---|---|---|
+| 1 | «Que acabe el turno del soldado cuando acaba los PM y las acciones, o cuando pase el turno manualmente» | Gameplay, UI | Hoy, con un compañero, un soldado sin acciones deja de estar en juego aunque le quede movimiento, y el mando pasa al otro (`Rules.AfterSoldier`). Ahora sigue en juego mientras le quede algo (`Paths.HasTurnLeft`): el mando solo pasa cuando no le queda nada, o cuando el jugador lo cede o termina el turno. UI: el soldado sigue elegido mientras le quede movimiento |
+| 2 | «Los animales al andar siguen dando tirones de casilla a casilla» | Arte | Tira de fotogramas desde la cámara del juego, como en la #7 del 5/11 |
+| 3 | «Si ya tengo en la mochila, por ejemplo, piezas, y salen más al registrar, se acumulan, no ocupan otro hueco» | Gameplay, UI, Lore | Arturo, en el cuadro: «Lo que es igual, sin límite». Se juntan las piezas, los suministros, las medicinas y la comida, y los objetos y las mejoras iguales (con su cantidad); las armas no, que cada una tiene su estado. Aunque la mochila esté llena, lo que se junta cabe |
+| 4 | «Lo de los turnos sigue bugueándose» (en el cuadro: «como que no deja usar puntos de movimiento, pasar turno, igual no queda claro cuando no es tu turno, no lo sé») | UI, Gameplay | La #1 arregla lo del movimiento. UI: reproducirlo jugando solo y con el compañero, y que la pantalla diga claro de quién es el turno y el mando y por qué no se puede hacer algo |
+| 5 | «Los cuadrados de la cobertura, con el escudito correspondiente del color correspondiente, pero en el panel del soldado de abajo a la izquierda, no en la vida» | UI, Lore | Fuera el cuadrado de la bandera de los soldados (`uflag__cover`, provisional «hasta el sprite de un escudo»). En la ficha del soldado elegido, el escudo de su cobertura, con el mismo color y la misma regla: azul completa, amarillo media, rojo flanqueado |
+
+Hecho en el motor (7/11):
+- **#1:** un soldado sigue en juego mientras le queden acciones o movimiento (`Rules.AfterSoldier` e `InPlay` con `Paths.HasTurnLeft`). Se le deja a mano con `DoneCommand` («done»): `UnitDoneEvent` le quita lo que le queda, y el mando pasa si se alterna. `MissionBot` deja así al que solo tiene movimiento y nada que hacer.
+- **#3:** `Loot.Count` para los objetos y las mejoras, y `Looting.PileFor`, `Fits`, `CountOf` y `Pile`. Al cinturón o al chaleco sale uno del montón (`Events.TakeOne`). `LootTotalsOf` cuenta cada uno.
+- **Pruebas:** `ZombiesTests2.TheSamePilesInOneSlot`, y las de la mochila, el mando y el disparo, al día.
+- **Terminar el turno sin el mando** (UI, en el cliente; el motor ya lo aceptaba): queda «A punto», y el turno acaba cuando acabe el compañero.
+- **Pendiente de Red:** `NetCampaignRunTests`, porque la 364 ya no gana las dos con el bot.

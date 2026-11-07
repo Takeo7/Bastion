@@ -124,10 +124,11 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void EveryEventClassHasItsOwnTag()
         {
-            // 82 variants of GameEvent (engine-cs Types/GameEvent.cs), each told by its `t` (`burned` since 1/11, the
-            // molotov's `fireLit` and `fireOut`, Ana's `hidden` and `podSplit`, and the crowbar's `boardsRemoved`).
+            // 83 variants of GameEvent (engine-cs Types/GameEvent.cs), each told by its `t` (`burned` since 1/11, the
+            // molotov's `fireLit` and `fireOut`, Ana's `hidden` and `podSplit`, the crowbar's `boardsRemoved`, and
+            // `unitDone` since 7/11).
             var converter = new TagConverter<GameEvent>("t", (e) => e.T);
-            Assert.Equal(82, converter.Tags.Count);
+            Assert.Equal(83, converter.Tags.Count);
         }
 
         [Fact]

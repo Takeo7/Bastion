@@ -48,10 +48,11 @@ namespace Bastion.UI.Combat
             var ready = s.Ready[MySlot];
             var waiting = partner != null && busy.Contains(partner.Slot) && !s.Ready[partner.Slot] ? partner.Name : null;
             var idle = IdleSoldiers();
-            var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : !mine ? "waiting" : EndArmed && idle > 0 ? "confirm" : "act";
+            // Without the command too (Arturo, 7/11): the key ends one's own turn, «A punto» until the partner's is over.
+            var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : EndArmed && idle > 0 ? "confirm" : "act";
             // (With actions or movement left: the turn ends by itself only when none has either, Arturo 5/11 #14; Lore's words.)
-            var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : !mine && !ready ? PlayerName(s.Command) : waiting;
-            Hud.SetEndTurn(new EndTurnView { Mode = endMode, Detail = detail });
+            var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : waiting;
+            Hud.SetEndTurn(new EndTurnView { Mode = endMode, Detail = detail, Holder = ready && !mine && s.Command != null ? PlayerName(s.Command) : null });
         }
 
         /// <summary>What the player reads about the fight, from what has been seen (game.ts refreshStatus).</summary>
@@ -88,7 +89,8 @@ namespace Bastion.UI.Combat
             }
             // One soldier at a time with a partner (playtest 15/10 #9): the one in play, by the label and on its card.
             var playing = sharing ? UnitById(v, v.ActiveUnit) : null;
-            var inPlay = playing != null && playing.Alive && playing.Ap > 0 ? playing : null;
+            // In play while it has anything left, its movement too (Arturo, 7/11).
+            var inPlay = playing != null && playing.Alive && Paths.HasTurnLeft(playing) ? playing : null;
             turn.InPlay = inPlay?.Name;
             Hud.SetTurn(turn);
             Hud.SetMission(MissionView());
@@ -252,10 +254,7 @@ namespace Bastion.UI.Combat
                 if (u.Id == hovered?.Id || f.Pointed) f.Name = u.Team == Teams.Xcom && u.Template != TemplateIds.Vip && !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name;
                 if (u.Team == Teams.Xcom)
                 {
-                    // With no shooter in sight nobody flanks anyone: the shield only shows cover, never the red «flanked».
-                    if (!CoverMatters()) f.Cover = -1;
-                    else if (watchers.Count == 0) f.Cover = Cover.HasAnyCover(v, u.Pos) ? Cover.CoverSides(v, u.Pos).Max() : -1;
-                    else f.Cover = watchers.Min(a => Cover.CoverAgainst(v, u.Pos, a.Pos));
+                    // (Its cover is on the picked one's panel now, as a shield: Arturo, 7/11. CoverOf.)
                 }
                 void Tag(bool on, string text, string kind)
                 {
@@ -648,6 +647,19 @@ namespace Bastion.UI.Combat
         /// The soldier's panel (hud.ts setSelected): symbols, pips and numbers, readable at a glance (full words in the
         /// tooltips); a partner's soldier says whose.
         /// </summary>
+        /// <summary>
+        /// A soldier's cover as its shield shows it (Arturo, 7/11; the flag's square before): the worst against whoever sees
+        /// it (0, flanked), else the best round it; -1, no cover, or cover doesn't count. With no shooter in sight nobody
+        /// flanks anyone: the shield only shows cover, never the red «flanked».
+        /// </summary>
+        int CoverOf(GameState v, Unit u)
+        {
+            if (!CoverMatters() || u.Team != Teams.Xcom) return -1;
+            var watchers = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && Visible(a)).ToList();
+            if (watchers.Count == 0) return Cover.HasAnyCover(v, u.Pos) ? Cover.CoverSides(v, u.Pos).Max() : -1;
+            return watchers.Min(a => Cover.CoverAgainst(v, u.Pos, a.Pos));
+        }
+
         UnitPanelView UnitPanel(Unit u)
         {
             var t = Content.Templates[u.Template];
@@ -674,6 +686,14 @@ namespace Bastion.UI.Combat
                 Weapon = weapon,
                 WeaponTip = string.Join(" · ", new[] { weapon }.Concat(extras)),
             };
+            // Its cover, a shield in its colour (Arturo, 7/11).
+            var shown = UnitById(Shown, u.Id) ?? u;
+            view.Cover = CoverOf(Shown, shown);
+            if (view.Cover >= 0)
+            {
+                view.CoverTitle = HudText.CoverShield.Title;
+                view.CoverTip = HudText.CoverShield.Tip(u.Name);
+            }
             // A partner's soldier says whose, in the partner's colour (Arturo, 17/10).
             if (u.Team == Teams.Xcom && u.Owner != null && u.Owner != MySlot)
             {
@@ -1055,6 +1075,10 @@ namespace Bastion.UI.Combat
         {
             var s = State;
             if (s.Outcome != null) return null;
+            // The question about the one in play (LeaveCall), unless the partner's call is waiting for an answer.
+            var leave = LeaveCall();
+            var partnerCall = (s.EvacCall != null && s.EvacCall.By != MySlot) || (s.AbandonCall != null && s.AbandonCall.By != MySlot);
+            if (leave != null && !partnerCall) return leave;
             var evac = s.EvacCall;
             if (evac != null && evac.By != MySlot)
             {

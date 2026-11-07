@@ -52,7 +52,7 @@ namespace Bastion.Engine.Tests
             Run(s, Move("a", 3, 2), 0);
             Assert.Equal("a", s.ActiveUnit);
             var refused = Try(s, Move("b", 3, 4), 0);
-            Assert.Equal((false, $"Primero termina con {a.Name}, o cede el turno."), (refused.Ok, refused.Error));
+            Assert.Equal((false, $"Primero termina el turno de {a.Name}, o cede el mando."), (refused.Ok, refused.Error));
             // Moving takes no action (Arturo, 5/11 #14): it is done once its actions are.
             Run(s, Move("a", 4, 3), 0);
             Assert.Equal("a", s.ActiveUnit);
