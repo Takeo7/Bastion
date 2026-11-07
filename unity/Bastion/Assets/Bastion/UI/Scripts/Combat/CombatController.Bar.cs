@@ -120,6 +120,11 @@ namespace Bastion.UI.Combat
         /// <summary>A weapon found in the field that has a picture of its own on the Tajo's key (the knife and the machete keep the blade).</summary>
         static bool Found(string weapon) => weapon == WeaponIds.Pan || weapon == WeaponIds.Bat || weapon == WeaponIds.Crowbar || weapon == WeaponIds.Chainsaw;
 
+        // Where the bar's time goes (the stalls: Red and Arte, 7/11; RendimientoLab.Parones).
+        static readonly Unity.Profiling.ProfilerMarker MBlocker = new Unity.Profiling.ProfilerMarker("Bastion.UI.Bar.Blocker");
+        static readonly Unity.Profiling.ProfilerMarker MTargets = new Unity.Profiling.ProfilerMarker("Bastion.UI.Bar.Targets");
+        static readonly Unity.Profiling.ProfilerMarker MTexts = new Unity.Profiling.ProfilerMarker("Bastion.UI.Bar.Texts");
+
         List<AbilityView> SoldierAbilities(Unit u)
         {
             var list = AbilityList(u);
@@ -130,9 +135,12 @@ namespace Bastion.UI.Combat
                 var def = Content.Abilities[id];
                 // The chainsaw's blows are its fuel's (Content.RunsChainsaw): shown as the grenades' are.
                 int? charge = def.Charge != null ? AbilityTexts.Charge(u, def.Charge) : Content.RunsChainsaw(u, id) ? AbilityTexts.Charge(u, ChargeIds.Fuel) : (int?)null;
-                var reason = !CanAct() ? "No es vuestro turno." : WaitingFor(u.Id) ?? Abilities.AbilityBlocker(State, u, id);
-                if (reason == null && (def.Target == AbilityTargets.Enemy || def.Target == AbilityTargets.Melee || def.Target == AbilityTargets.Ally) && TargetOptions(id).Count == 0)
-                    reason = def.Target == AbilityTargets.Ally ? "No hay aliados válidos." : def.Target == AbilityTargets.Melee ? "Ningún enemigo a su alcance." : "Sin enemigos a la vista.";
+                string reason;
+                using (MBlocker.Auto()) reason = !CanAct() ? "No es vuestro turno." : WaitingFor(u.Id) ?? Abilities.AbilityBlocker(State, u, id);
+                bool none;
+                using (MTargets.Auto()) none = reason == null && (def.Target == AbilityTargets.Enemy || def.Target == AbilityTargets.Melee || def.Target == AbilityTargets.Ally) && !HasTargets(id);
+                if (none) reason = def.Target == AbilityTargets.Ally ? "No hay aliados válidos." : def.Target == AbilityTargets.Melee ? "Ningún enemigo a su alcance." : "Sin enemigos a la vista.";
+                using var textsMark = MTexts.Auto();
                 u.Cooldowns.TryGetValue(id, out var cooldown);
                 var attack = Content.IsAttack(id);
                 views.Add(new AbilityView

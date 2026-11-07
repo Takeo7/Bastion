@@ -109,15 +109,24 @@ namespace Bastion.UI.Combat
             var fog = Bastion.Client.Map.Fog.Current;
             var all = fog == null;
             var area = v.Width * v.Height;
+            // Only the tiles within reach of one of them, the same as each tile's test was (SearchSpot looks for a body
+            // among all the units: tile by tile over the whole map, 12 ms a refresh in a city with eighty of the dead; Red
+            // and Arte, 7/11).
+            var near = new bool[area];
+            var r = Mathf.CeilToInt(LootMarkReach);
+            foreach (var u in squad)
+                for (var y = Mathf.Max(0, u.Pos.Y - r); y <= Mathf.Min(v.Height - 1, u.Pos.Y + r); y++)
+                    for (var x = Mathf.Max(0, u.Pos.X - r); x <= Mathf.Min(v.Width - 1, u.Pos.X + r); x++)
+                        if (Mathf.Sqrt((u.Pos.X - x) * (u.Pos.X - x) + (u.Pos.Y - y) * (u.Pos.Y - y)) <= LootMarkReach) near[y * v.Width + x] = true;
             var top = Mathf.Min(Level, v.Levels?.Count ?? 0);
             for (var z = 0; z <= top; z++)
                 for (var i = 0; i < area; i++)
                 {
+                    if (!near[i]) continue;
                     var p = new Pos { X = i % v.Width, Y = i / v.Width, Z = z };
                     var kind = Looting.SearchSpot(v, p);
                     if (kind == null || !LootLooks.TryGetValue(kind, out var look) || Looting.WasSearched(v, p)) continue;
                     if (!all && !fog.Explored(z * area + i)) continue;
-                    if (!squad.Any(u => Mathf.Sqrt((u.Pos.X - p.X) * (u.Pos.X - p.X) + (u.Pos.Y - p.Y) * (u.Pos.Y - p.Y)) <= LootMarkReach)) continue;
                     list.Add(new WorldTagView
                     {
                         Kind = "loot", Icon = look.icon, Ring = look.ring, Size = LootMarkSize * Board.Tile,

@@ -97,13 +97,54 @@ namespace Bastion.UI.Combat
                     .Select(o => new TargetOption { Unit = o.Target, Tile = o.Tile, Hit = Aim.PreviewShot(s, u, o.Target, new ShotOptions { Ability = ability, From = o.Tile })?.Hit ?? 0 })
                     .OrderByDescending(o => o.Hit).ToList();
             if (def.Target == AbilityTargets.Enemy && Content.IsAttack(ability))
-                return Abilities.RangedTargets(s, u, ability).Where(Visible)
-                    .Select(t => new TargetOption { Unit = t, Hit = Aim.PreviewShot(s, u, t, new ShotOptions { Ability = ability })?.Hit ?? 0 })
-                    .OrderByDescending(o => o.Hit).ToList();
+                return VisibleShots(u, ability).Select(x => new TargetOption { Unit = x.t, Hit = x.shot.Hit }).OrderByDescending(o => o.Hit).ToList();
             if (def.Target == AbilityTargets.Enemy) return Abilities.AbilityTargets(s, u, ability).Where(Visible).Select(t => new TargetOption { Unit = t }).ToList();
             if (def.Target == AbilityTargets.Ally)
                 return Abilities.AbilityTargets(s, u, ability).OrderBy(a => (double)a.Hp / a.MaxHp).Select(t => new TargetOption { Unit = t }).ToList();
             return new List<TargetOption>();
+        }
+
+        /// <summary>
+        /// Whether `ability` has a target now: TargetOptions' list, not made (the bar: it only asks whether there is one, and
+        /// the list works out the odds of a shot at each, 7/11).
+        /// </summary>
+        bool HasTargets(string ability)
+        {
+            var u = Unit();
+            if (u == null || ability == null) return false;
+            var s = State;
+            var def = Content.Abilities[ability];
+            // Abilities.MeleeTargets with the reach before the sight: it walks every soldier's line to every enemy on the map
+            // first, and only those beside count (7/11).
+            if (def.Target == AbilityTargets.Melee && Content.IsAttack(ability))
+                return s.Units.Any(t => t.Alive && Content.HostileTo(u, t) && !t.Captive && Aim.InReachOf(s, u, u.Pos, t.Pos) && Aim.TeamSees(s, u.Team, t));
+            if (def.Target == AbilityTargets.Enemy && Content.IsAttack(ability)) return VisibleShots(u, ability, true).Count > 0;
+            // Supresión aims as Disparar (Abilities.AbilityTargets).
+            if (def.Target == AbilityTargets.Enemy && ability == AbilityIds.Suppression) return VisibleShots(u, AbilityIds.Shoot, true).Count > 0;
+            if (def.Target == AbilityTargets.Enemy) return Abilities.AbilityTargets(s, u, ability).Any(Visible);
+            if (def.Target == AbilityTargets.Ally) return Abilities.AbilityTargets(s, u, ability).Count > 0;
+            return false;
+        }
+
+        /// <summary>
+        /// Abilities.RangedTargets(State, u, ability) among those in sight (Visible), in its order, with the shot at each: the
+        /// shot worked out only for those. The engine's works one out for every enemy on the map, in sight or not, and the
+        /// bar asks for each key: 13–47 ms a refresh with eighty of the dead in a city (Red and Arte, 7/11). `first`: the
+        /// first one only (whether there is any).
+        /// </summary>
+        List<(Unit t, ShotPreview shot)> VisibleShots(Unit u, string ability, bool first = false)
+        {
+            var s = State;
+            var list = new List<(Unit, ShotPreview)>();
+            foreach (var t in s.Units)
+            {
+                if (!t.Alive || !Content.HostileTo(u, t) || t.Captive || !Visible(t)) continue;
+                var shot = Aim.PreviewShot(s, u, t, new ShotOptions { Ability = ability });
+                if (shot == null) continue;
+                list.Add((t, shot));
+                if (first) break;
+            }
+            return list;
         }
 
         TargetOption CurrentTarget() => mode == Mode.Target ? TargetOptions(modeAbility).FirstOrDefault(o => o.Unit.Id == targetId) : null;

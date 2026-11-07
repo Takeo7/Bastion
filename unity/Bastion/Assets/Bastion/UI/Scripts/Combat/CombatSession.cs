@@ -225,8 +225,11 @@ namespace Bastion.UI.Combat
         /// The host's events (game.ts onEvents): on this player's state at once, then to the event player. A gap in them is
         /// NetLink's to mend (ServerFeed asks for the whole state and drops the events till it comes): here only a guard.
         /// </summary>
+        static readonly Unity.Profiling.ProfilerMarker MPlay = new Unity.Profiling.ProfilerMarker("Bastion.UI.Session.Play");
+
         void Play(EventsMessage m)
         {
+            using var mark = MPlay.Auto();
             var s = control.State;
             if (s == null) return;
             foreach (var e in m.Events) Events.ApplyEvent(s, e);

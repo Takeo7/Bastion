@@ -689,6 +689,36 @@ namespace Bastion.Client.Map
         }
 
         readonly List<GameObject> dressed = new List<GameObject>();
+        long dressedKey;
+
+        /// <summary>
+        /// What the dressing is drawn from, hashed: each piece's place, its tile, what stands there and the tile it hangs on
+        /// or leans against (Dressing's tests). The same, the dressing is as it was.
+        /// </summary>
+        long DressingKey()
+        {
+            long h = 17;
+            var sites = (s.Medical ?? new List<MedicalSite>()).Select(m => m.Dressing).Concat((s.Homes ?? new List<HomeSite>()).Select(m => m.Dressing));
+            foreach (var d in sites.Where(l => l != null).SelectMany(l => l))
+            {
+                int i = d.Y * s.Width + d.X;
+                if (d.Z < 0 || d.Z >= Storeys.Length || i < 0 || i >= s.Width * s.Height) continue;
+                var tiles = TilesOf(d.Z);
+                var decor = DecorOf(d.Z);
+                var normal = Bastion.Engine.Grid.Dirs4[d.Facing];
+                int wi = (d.Y - normal.Y) * s.Width + d.X - normal.X;
+                unchecked
+                {
+                    h = h * 31 + d.Z * 7919 + i;
+                    h = h * 31 + (i < tiles.Count ? tiles[i]?.GetHashCode() ?? 1 : 0);
+                    h = h * 31 + (i < decor.Count ? decor[i] : -1);
+                    // (The wall behind, only for what hangs on it: Dressing's `wall`.)
+                    if (d.Kind == "wallCross" || d.Kind == "cautionSign" || d.Kind == "safeSign" || d.Kind == "wallBlood")
+                        h = h * 31 + (wi >= 0 && wi < tiles.Count ? tiles[wi]?.GetHashCode() ?? 1 : 0);
+                }
+            }
+            return h;
+        }
         /// <summary>The clinics' scenery that lies flat (mapView.ts MEDICAL_FLAT: no shadow), and what lies about at all (MEDICAL_SCATTER).</summary>
         static readonly HashSet<string> MedicalFlat = new HashSet<string> { "bloodPool", "bloodDrops", "floorGrime", "scatteredPapers" };
         static readonly HashSet<string> MedicalScatter = new HashSet<string> { "bloodPool", "bloodDrops", "floorGrime", "scatteredPapers", "medicalWaste", "overturnedChair", "fallenIV", "spilledSupplies", "rumpledLinen" };
@@ -703,6 +733,10 @@ namespace Bastion.Client.Map
 
         void Dressing()
         {
+            // (Made again only when what it is drawn from changed: 11 ms in the editor at every change of the map, UI's 7/11.)
+            long drawnFrom = DressingKey();
+            if (drawnFrom == dressedKey && dressed.All(o => o != null)) return;
+            dressedKey = drawnFrom;
             foreach (var o in dressed) DestroyNow(o);
             dressed.Clear();
             var faces = new Dictionary<(int k, int b, bool cast, bool dirt), List<(MedicalDetails.Face face, Matrix4x4 at)>>();
@@ -846,6 +880,8 @@ namespace Bastion.Client.Map
             int levels = 1 + (next.Levels?.Count ?? 0);
             if (levels != Storeys.Length || next.Width != s.Width || next.Height != s.Height) return -1;
             var changed = new HashSet<long>();
+            // (Whether a wall, a window or a door changed: else the walls are as they were, and aren't laid again.)
+            bool walled = false;
             for (int k = 0; k < levels; k++)
             {
                 IList<string> before = TilesOf(k), after = TilesOf(next, k);
@@ -856,6 +892,7 @@ namespace Bastion.Client.Map
                     string a = i < before.Count ? before[i] : null, b = i < after.Count ? after[i] : null;
                     int d = i < was.Count ? was[i] : -1, e = i < now.Count ? now[i] : -1;
                     if (a != b || d != e) changed.Add(Key(k, i));
+                    if (a != b && (Walling.Contains(a ?? "") || Walling.Contains(b ?? ""))) walled = true;
                 }
             }
             // Searched since (mapView.ts searchedSeen): the furniture opened, its contents before it, a car's boot up; a
@@ -869,16 +906,28 @@ namespace Bastion.Client.Map
                         for (int x = m.X; x < m.X + m.W; x++)
                             if (x >= 0 && y >= 0 && x < next.Width && y < next.Height) changed.Add(Key(0, y * next.Width + x));
             s = next;
-            Terrain();
-            plan?.Follow(terrain);
+            using (Marks[0].Auto())
+            {
+                Terrain();
+                plan?.Follow(terrain);
+            }
             // (A piece or a barricade worn a stage further changes no tile: the 'smashed' event.)
-            DrawPieces();
-            DrawSiege();
-            DrawDropped();
+            using (Marks[1].Auto())
+            {
+                DrawPieces();
+                DrawSiege();
+                DrawDropped();
+            }
             if (changed.Count == 0) return 0;
-            ground?.Rebuild(terrain, changed.Where(key => key >> 32 == 0).Select(key => (int)(uint)key).ToList());
+            using (Marks[2].Auto()) ground?.Rebuild(terrain, changed.Where(key => key >> 32 == 0).Select(key => (int)(uint)key).ToList());
             // The walls laid again whole; only the chunks whose pieces changed are made again.
-            wallsView?.Lay(WallLayout.Of(terrain, plan));
+            // (Only when a wall, a window or a door changed: 25 ms in the editor for a cover blown away, UI's 7/11.)
+            if (walled)
+            {
+                WallLayout layout;
+                using (Marks[3].Auto()) layout = WallLayout.Of(terrain, plan);
+                using (Marks[4].Auto()) wallsView?.Lay(layout);
+            }
             // What stood on a changed tile goes, and every tile it stood on is made again.
             var redo = new HashSet<long>(changed);
             foreach (long key in changed)
@@ -891,28 +940,42 @@ namespace Bastion.Client.Map
                 }
             }
             // A slab blown through since: the storeys' floors and decks again, with its hole; the parapets as they are.
-            int holes = Holes();
-            if (holes != holesMade)
+            using (Marks[5].Auto())
             {
-                holesMade = holes;
-                var (storeys, decks) = BuildingSurfaces.Upper(terrain, plan);
-                Upper(storeys, decks);
+                int holes = Holes();
+                if (holes != holesMade)
+                {
+                    holesMade = holes;
+                    var (storeys, decks) = BuildingSurfaces.Upper(terrain, plan);
+                    Upper(storeys, decks);
+                }
             }
-            Parapets();
-            Furnish();
-            Dressing();
-            Night();
-            var done = new Dictionary<int, HashSet<int>>();
-            foreach (int k in redo.Select(key => (int)(key >> 32)).Distinct()) done[k] = new HashSet<int>();
-            foreach (long key in redo)
+            using (Marks[6].Auto()) Parapets();
+            using (Marks[9].Auto()) Furnish();
+            using (Marks[10].Auto()) Dressing();
+            using (Marks[11].Auto()) Night();
+            using (Marks[7].Auto())
             {
-                int k = (int)(key >> 32), i = (int)(uint)key;
-                Decor(k, i, done[k]);
+                var done = new Dictionary<int, HashSet<int>>();
+                foreach (int k in redo.Select(key => (int)(key >> 32)).Distinct()) done[k] = new HashSet<int>();
+                foreach (long key in redo)
+                {
+                    int k = (int)(key >> 32), i = (int)(uint)key;
+                    Decor(k, i, done[k]);
+                }
+                Woods(redo);
             }
-            Woods(redo);
-            if (snow != null) SnowCover.Mark(root, plan, s, GroundPlane());
+            using (Marks[8].Auto())
+                if (snow != null) SnowCover.Mark(root, plan, s, GroundPlane());
             return redo.Count;
         }
+
+        /// <summary>What a tile is when the walls draw it (WallLayout): its changing lays them again.</summary>
+        static readonly HashSet<string> Walling = new HashSet<string> { TileKinds.Wall, TileKinds.Window, TileKinds.WindowBroken, TileKinds.Door, TileKinds.DoorOpen };
+
+        /// <summary>Update's parts for the profiler (RendimientoLab.Parones; UI, 7/11: MapRebuild 47 ms).</summary>
+        static readonly Unity.Profiling.ProfilerMarker[] Marks = new[] { "Terrain", "Pieces", "Ground", "Layout", "Walls", "Upper", "Parapets", "Decor", "Snow", "Furnish", "Dressing", "Night" }
+            .Select(n => new Unity.Profiling.ProfilerMarker("Bastion.Art.Rebuild." + n)).ToArray();
 
         /// <summary>What is drawn on `tile` (its storey's props and things), as it is now.</summary>
         public IReadOnlyList<GameObject> On(Pos tile) =>

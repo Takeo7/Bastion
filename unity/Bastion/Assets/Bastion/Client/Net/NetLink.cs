@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bastion.Engine;
 using Bastion.Net;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Bastion.Client.Net
@@ -101,6 +102,26 @@ namespace Bastion.Client.Net
         private int errorsThisMinute;
         private DateTime errorMinute;
         private readonly ServerFeed feed = new ServerFeed();
+
+        /// <summary>
+        /// The profiler's names for what this does on the main thread (Gameplay and Arte, 7/11: where the battle's long frames
+        /// go, RendimientoLab.Parones): the session's pump, each message handed on by its kind, and within it what the test
+        /// players and the screens (ServerFeed's listeners, UI's) do with it; and the test players' turns. The room is on a
+        /// thread of its own (RoomHost), not here.
+        /// </summary>
+        private static readonly ProfilerMarker PumpMarker = new ProfilerMarker("Bastion.Net.Pump");
+        private static readonly ProfilerMarker CampaignRunMarker = new ProfilerMarker("Bastion.Net.CampaignRun");
+        private static readonly ProfilerMarker MeasureMarker = new ProfilerMarker("Bastion.Net.Measure");
+        private static readonly ProfilerMarker TestPlayersMarker = new ProfilerMarker("Bastion.Net.Heard.TestPlayers");
+        private static readonly ProfilerMarker ScreensMarker = new ProfilerMarker("Bastion.Net.Heard.Screens");
+        private static readonly Dictionary<Type, ProfilerMarker> HeardMarkers = new Dictionary<Type, ProfilerMarker>();
+
+        private static ProfilerMarker HeardMarker(ServerMessage msg)
+        {
+            var kind = msg.GetType();
+            if (!HeardMarkers.TryGetValue(kind, out var marker)) HeardMarkers[kind] = marker = new ProfilerMarker("Bastion.Net.Heard." + kind.Name);
+            return marker;
+        }
 
         /// <summary>
         /// A message from the host (Net/Protocol.cs ServerMessage), the welcome among them. What comes while nobody
@@ -396,10 +417,17 @@ namespace Bastion.Client.Net
                 startWhenBoth = false;
                 Send(new StartMessage());
             }
-            // BASTION_CAMPANA's player reads it too, before it goes on as it is.
-            campaignRun?.Observe(msg);
-            measure?.Observe(msg);
-            feed.Take(msg);
+            using (HeardMarker(msg).Auto())
+            {
+                // BASTION_CAMPANA's player reads it too, before it goes on as it is.
+                if (campaignRun != null || measure != null)
+                    using (TestPlayersMarker.Auto())
+                    {
+                        campaignRun?.Observe(msg);
+                        measure?.Observe(msg);
+                    }
+                using (ScreensMarker.Auto()) feed.Take(msg);
+            }
         }
 
         /// <summary>Listens for games on the network while the start screen shows; LanGamesChanged says what it hears.</summary>
@@ -519,9 +547,9 @@ namespace Bastion.Client.Net
             }
             while (errors.TryDequeue(out var line))
                 if (errorsThisMinute++ < ErrorsPerMinute) Report(line);
-            session?.Pump();
-            campaignRun?.Tick(this, Time.realtimeSinceStartup);
-            measure?.Tick(this, Time.realtimeSinceStartup);
+            using (PumpMarker.Auto()) session?.Pump();
+            if (campaignRun != null) using (CampaignRunMarker.Auto()) campaignRun.Tick(this, Time.realtimeSinceStartup);
+            if (measure != null) using (MeasureMarker.Auto()) measure.Tick(this, Time.realtimeSinceStartup);
         }
 
         /// <summary>The window lost or got the focus: the game out of sight, or back (the `away` message).</summary>

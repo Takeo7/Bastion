@@ -471,9 +471,28 @@ namespace Bastion.Engine
         {
             // Across the whole map it costs some 10 ms, and it changes only as the viewers move or the map does (a door, a
             // wall blown through): the last one is kept for whatever else changes (the dead on their turn).
-            var viewers = s.Units.Where((u) => IsViewer(u, team)).Select((u) => $"{u.Id}@{u.Pos.X},{u.Pos.Y},{u.Pos.Z}");
-            var key = $"{team}|{s.Width}x{s.Height}|{MapStamp(s)}|{s.Discovered?.Count ?? 0}|{string.Join(";", viewers)}";
-            if (lastView?.Key != key) lastView = new LastView(key, TeamVisibility(s, team, ViewReach(s)));
+            var map = $"{team}|{s.Width}x{s.Height}|{MapStamp(s)}|{s.Discovered?.Count ?? 0}";
+            var viewers = s.Units.Where((u) => IsViewer(u, team)).ToList();
+            var key = $"{map}|{string.Join(";", viewers.Select((u) => $"{u.Id}@{u.Pos.X},{u.Pos.Y},{u.Pos.Z}"))}";
+            if (lastView?.Key == key) return (bool[])lastView.Mask.Clone();
+            // Each viewer's own, kept by where it stands while the map stays (Arte, 7/11: some 30 ms in the editor, two
+            // frames of 35 ms in a turn): one who moves works out only its own. The team's is their union, the same to the
+            // bit as all of them at once (nobody stands in another's line; the veil over what the squad hasn't found is
+            // put on the union, as it was on the whole).
+            if (eachView?.Map != map) eachView = new EachView(map);
+            var reach = ViewReach(s);
+            var union = new bool[s.Width * s.Height * Grid.LevelCount(s)];
+            var kept = new Dictionary<string, bool[]>();
+            foreach (var u in viewers)
+            {
+                var at = $"{u.Pos.X},{u.Pos.Y},{u.Pos.Z}";
+                if (!eachView.Masks.TryGetValue(at, out var own)) own = Visibility(s, team, reach, u, false);
+                kept[at] = own;
+                for (var i = 0; i < union.Length; i++) if (own[i]) union[i] = true;
+            }
+            eachView.Masks = kept;
+            if (team == Teams.Xcom) Buildings.Veil(s, union);
+            lastView = new LastView(key, union);
             return (bool[])lastView.Mask.Clone();
         }
 
@@ -483,6 +502,21 @@ namespace Bastion.Engine
         /// </summary>
         [System.ThreadStatic]
         private static LastView? lastView;
+
+        /// <summary>Each viewer's own sight on the map they were worked out on, by where it stands (teamView). One per thread too.</summary>
+        [System.ThreadStatic]
+        private static EachView? eachView;
+
+        private sealed class EachView
+        {
+            public EachView(string map)
+            {
+                Map = map;
+            }
+
+            public string Map { get; }
+            public Dictionary<string, bool[]> Masks { get; set; } = new Dictionary<string, bool[]>();
+        }
 
         private sealed class LastView
         {
@@ -548,6 +582,12 @@ namespace Bastion.Engine
         /// </summary>
         public static bool[] TeamVisibility(GameState s, string team, double? reach = null)
         {
+            return Visibility(s, team, reach, null, true);
+        }
+
+        /// <summary>TeamVisibility of `only` (one viewer; null, all of the team's), with the veil over the buildings not found or without it.</summary>
+        private static bool[] Visibility(GameState s, string team, double? reach, Unit? only, bool veil)
+        {
             var area = s.Width * s.Height;
             var levels = Grid.LevelCount(s);
             var mask = new bool[area * levels];
@@ -562,7 +602,7 @@ namespace Bastion.Engine
             var tried = new Dictionary<(int, int, int, double), Tried>();
             foreach (var u in s.Units)
             {
-                if (!IsViewer(u, team)) continue;
+                if (!IsViewer(u, team) || (only != null && u != only)) continue;
                 var range = reach ?? SightIn(s, u);
                 var origins = PeekOrigins(s, u.Pos);
                 var eyes = origins.Select((o) => Grid.HeightAt(s, o) + Grid.EyeHeight).ToArray();
@@ -636,7 +676,7 @@ namespace Bastion.Engine
                 }
             }
             // What is inside a building the squad has not found, it does not see (Buildings; Ana, 31/10).
-            if (team == Teams.Xcom) Buildings.Veil(s, mask);
+            if (veil && team == Teams.Xcom) Buildings.Veil(s, mask);
             return mask;
         }
 

@@ -539,6 +539,10 @@ namespace Bastion.Client.Units
         /// </summary>
         public bool[] SightOf(GameState s) => s != null && s == sightOf && s.Seq == sightSeq ? sight : null;
 
+        /// <summary>Sync's parts for the profiler (RendimientoLab.Parones; UI, 7/11: ShowSeen 6 to 35 ms).</summary>
+        static readonly Unity.Profiling.ProfilerMarker SyncMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Sync"),
+            SightMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Sync.Sight"), MakeMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Sync.Make");
+
         bool[] sight;
         GameState sightOf;
         int sightSeq;
@@ -546,16 +550,19 @@ namespace Bastion.Client.Units
         /// <summary>The figures as the state seen says: those that come in made, those gone taken away, each on its tile.</summary>
         public void Sync(GameState view)
         {
+            using var synced = SyncMarker.Auto();
             state = view;
             // The enemy shows where the squad has it in sight (teamVisibility), or where UI shows it (ForceVisible, a shade).
-            var inSight = Los.TeamVisibility(view, "xcom");
+            bool[] inSight;
+            using (SightMarker.Auto()) inSight = Los.TeamVisibility(view, "xcom");
             (sight, sightOf, sightSeq) = (inSight, view, view.Seq);
             var seen = new HashSet<string>();
             foreach (var u in view.Units)
             {
                 if (u.Evacuated) continue;
                 seen.Add(u.Id);
-                if (!views.TryGetValue(u.Id, out var v)) views[u.Id] = v = Make(u);
+                if (!views.TryGetValue(u.Id, out var v))
+                    using (MakeMarker.Auto()) views[u.Id] = v = Make(u);
                 // (One La Lata threw stays as it came down: alive to the rules, the mission over.)
                 if (v.runOver) continue;
                 var was = v.place;

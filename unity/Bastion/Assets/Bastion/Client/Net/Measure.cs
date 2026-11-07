@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using Bastion.Engine;
 using Bastion.Net;
 using UnityEngine;
@@ -38,6 +39,16 @@ namespace Bastion.Client.Net
         private int sentAt = -1;
         private bool screenIdle;
         private bool lastWasEnd;
+        /// <summary>
+        /// The bot's next order, worked out on a copy of the state off the main thread (Arte, 7/11: MissionBot.Next took
+        /// 50–78 ms of a frame in the editor every ~2 s, its walks past the dead for every soldier, and the measure counted
+        /// them); null while it isn't thinking. `thinkingOn`, the state it was asked about, and its Seq.
+        /// </summary>
+        private Task<Command?>? thinking;
+        private GameState? thinkingOn;
+        private int thinkingSeq;
+        /// <summary>After it had nothing to say, when it is asked again.</summary>
+        private float idleUntil;
         private bool done;
         private bool named;
         private bool booted;
@@ -185,16 +196,38 @@ namespace Bastion.Client.Net
         /// <summary>The seat's next order, as CampaignRun gives them: once the screen has played the last one, or a few seconds on.</summary>
         private void Play(NetLink link, RoomMessage room, GameState s, float now)
         {
+            if (thinking != null)
+            {
+                if (!thinking.IsCompleted) return;
+                var thought = thinking;
+                thinking = null;
+                if (thought.IsFaulted) log($"[prueba] medir: el bot falla: {thought.Exception?.GetBaseException().Message}");
+                // The state moved on while it thought (the partner, the dead, a snapshot): asked again.
+                var cmd = thought.Status == TaskStatus.RanToCompletion && s == thinkingOn && s.Seq == thinkingSeq ? thought.Result : null;
+                thinkingOn = null;
+                if (cmd == null)
+                {
+                    idleUntil = now + 0.5f;
+                    return;
+                }
+                lastWasEnd = cmd is EndTurnCommand;
+                link.Send(cmd);
+                sentAt = s.Seq;
+                sentWhen = now;
+                return;
+            }
             if (sentAt >= 0 && s.Seq == sentAt && now - sentWhen < 6) return;
             if (!screenIdle && now - sentWhen < (lastWasEnd ? 8 : 3)) return;
-            if (now - sentWhen < 0.6f) return;
+            if (now - sentWhen < 0.6f || now < idleUntil) return;
+            // Nothing for it (the dead's turn, the mission over, its turn ended): no copy made, as MissionBot.Next says first.
+            if (s.Outcome != null || s.ActiveTeam != Teams.Xcom || s.Ready[link.Slot]) return;
             // Who counts as here for the host: a dropped partner too, through its grace (their soldiers and command stay theirs).
-            var cmd = MissionBot.Next(s, link.Slot, heard.Active());
-            if (cmd == null) return;
-            lastWasEnd = cmd is EndTurnCommand;
-            link.Send(cmd);
-            sentAt = s.Seq;
-            sentWhen = now;
+            var copy = Events.CloneState(s);
+            var slot = link.Slot;
+            var active = heard.Active();
+            thinkingOn = s;
+            thinkingSeq = s.Seq;
+            thinking = Task.Run(() => MissionBot.Next(copy, slot, active));
         }
 
         /// <summary>A button of the screen pressed, and the turn's stamp let go, once a second at most.</summary>

@@ -86,13 +86,20 @@ namespace Bastion.Client.Map
         {
             if (plane == null) return;
             s = next;
-            plan?.Follow(next);
-            map = Mapped(next);
-            texture = map.Texture(texture);
+            using (Marks[0].Auto()) plan?.Follow(next);
+            using (Marks[1].Auto()) map = Mapped(next);
+            using (Marks[2].Auto()) texture = map.Texture(texture);
             material.SetTexture("_GroundMap", texture);
-            cover?.Rebuild(next, map, changed);
+            using (Marks[3].Auto()) cover?.Rebuild(next, map, changed);
             occlusion?.MarkDirty();
         }
+
+        /// <summary>Rebuild's parts for the profiler (RendimientoLab.Parones; UI, 7/11: Ground 8 to 9 ms).</summary>
+        static readonly Unity.Profiling.ProfilerMarker[] Marks =
+        {
+            new Unity.Profiling.ProfilerMarker("Bastion.Art.Ground.Follow"), new Unity.Profiling.ProfilerMarker("Bastion.Art.Ground.Map"),
+            new Unity.Profiling.ProfilerMarker("Bastion.Art.Ground.Texture"), new Unity.Profiling.ProfilerMarker("Bastion.Art.Ground.Cover"),
+        };
 
         /// <summary>
         /// What each tile is, with a wall tile's outer half the street's (the building's floor covers the rest: mapView.ts

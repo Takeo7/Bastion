@@ -313,13 +313,16 @@ namespace Bastion.Client.Map
         /// </summary>
         public void Show(GameState seen, bool instant = false)
         {
+            using var shown = ShowMarker.Auto();
             if (map == null || seen.Width != width || seen.Height != height) Reset(seen);
             last = seen;
-            visible = Los.TeamVisibility(seen, "xcom");
+            // (What the figures worked out for this same state just before, when they did: UnitViews.Sync, as UI's
+            // ShowSeen calls them; UI, 7/11: worked out again, 2.5 ms a Settle.)
+            using (SightMarker.Auto()) visible = Units.UnitViews.Current?.SightOf(seen) ?? Los.TeamVisibility(seen, "xcom");
             // Lit at night (the engine's lit mask: street lights, a Bengala, a fire, as far as their light reaches).
             lights = Night ? Los.LitMask(seen) : null;
-            view = Los.TeamView(seen, "xcom");
-            Close(seen);
+            using (ViewMarker.Auto()) view = Los.TeamView(seen, "xcom");
+            using (CloseMarker.Auto()) Close(seen);
             spotted.Clear();
             foreach (var u in seen.Units)
             {
@@ -333,13 +336,20 @@ namespace Bastion.Client.Map
             // A siege's base and clearing by day, on every storey (its towers' decks): seen, whoever looks.
             if (home != null)
                 for (int k = 0; k < explored.Length; k++) explored[k] |= home[k % area];
-            Refog(instant);
+            using (RefogMarker.Auto()) Refog(instant);
         }
+
+        /// <summary>Show's parts for the profiler (RendimientoLab.Parones; UI, 7/11: ShowSeen 6 to 35 ms).</summary>
+        static readonly Unity.Profiling.ProfilerMarker ShowMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Fog.Show"),
+            SightMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Fog.Sight"), ViewMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Fog.View"),
+            CloseMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Fog.Close"), RefogMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Fog.Refog");
 
         /// <summary>Everything in sight (a lab's look at the whole map, as 0.10.1's reference block), at once.</summary>
         public void SeeAll()
         {
             if (visible == null) return;
+            // (A copy: the one Show took may be the figures' own, UnitViews.SightOf.)
+            visible = (bool[])visible.Clone();
             for (int k = 0; k < visible.Length; k++) visible[k] = true;
             all = true;
             if (last != null) Close(last);

@@ -797,9 +797,13 @@ namespace Bastion.UI.Combat
         /// An order to the rules, as the host would take it; its events to this player's copy, and then either to the event
         /// player (in the scene) or straight to the capsules.
         /// </summary>
+        /// <summary>The rules' time in the lab (the host's, not this player's: the enemy's turn is worked out in it), apart in RendimientoLab.Parones.</summary>
+        static readonly Unity.Profiling.ProfilerMarker MRules = new Unity.Profiling.ProfilerMarker("Bastion.Lab.Rules");
+
         void Answer(Command cmd)
         {
-            var result = Rules.ExecuteCommand(host, cmd, 0, new[] { 0 }, rng);
+            CommandResult result;
+            using (MRules.Auto()) result = Rules.ExecuteCommand(host, cmd, 0, new[] { 0 }, rng);
             if (!result.Ok)
             {
                 Debug.Log($"[lab] orden rechazada ({cmd.Type}): {result.Error}");

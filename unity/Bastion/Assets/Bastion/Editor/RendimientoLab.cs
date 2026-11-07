@@ -520,7 +520,10 @@ namespace Bastion.EditorTools
                     if (ms >= stall)
                     {
                         // (Its costliest markers, leaves and all: the loop's own parts show where it went.)
-                        var top = recorders.Where(r => r.recorder.Valid && r.recorder.LastValue > 2e6 && !Generic.Any(g => r.name.Contains(g))).OrderByDescending(r => r.recorder.LastValue).Take(18)
+                        // (The costliest 18, and ours past 1 ms whatever crowds them out.)
+                        var costly = recorders.Where(r => r.recorder.Valid && r.recorder.LastValue > 2e6 && !Generic.Any(g => r.name.Contains(g))).OrderByDescending(r => r.recorder.LastValue).Take(18);
+                        var ours = recorders.Where(r => r.recorder.Valid && r.recorder.LastValue > 1e6 && r.name.Contains("Bastion."));
+                        var top = costly.Concat(ours).Distinct().OrderByDescending(r => r.recorder.LastValue)
                             .Select(r => FormattableString.Invariant($"{r.name} {r.recorder.LastValue / 1e6:0.0}"));
                         Debug.Log(FormattableString.Invariant($"[parones] frame {frame} at {Time.time:0.00} s: the loop {ms:0.0} ms, {collected} collections, {(allocated.Valid ? allocated.LastValue / 1024 : -1)} KB allocated · ") + string.Join(" · ", top));
                     }

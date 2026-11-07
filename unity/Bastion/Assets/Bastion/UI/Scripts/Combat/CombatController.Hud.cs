@@ -20,15 +20,21 @@ namespace Bastion.UI.Combat
         const string Enemy = "#d64545";
 
         /// <summary>Everything on the HUD again (game.ts refreshHud): each piece draws only what changed (Ui.Key).</summary>
+        static readonly Unity.Profiling.ProfilerMarker MStatus = new Unity.Profiling.ProfilerMarker("Bastion.UI.Hud.Status");
+        static readonly Unity.Profiling.ProfilerMarker MBar = new Unity.Profiling.ProfilerMarker("Bastion.UI.Hud.Bar");
+        static readonly Unity.Profiling.ProfilerMarker MFlags = new Unity.Profiling.ProfilerMarker("Bastion.UI.Hud.Flags");
+        static readonly Unity.Profiling.ProfilerMarker MMarks = new Unity.Profiling.ProfilerMarker("Bastion.UI.Hud.Marks");
+
         void RefreshHud()
         {
             if (Hud == null || State == null) return;
-            RefreshStatus();
+            using (MStatus.Auto()) RefreshStatus();
             var s = State;
             var busy = AbilityTexts.BusySlots(s);
             var partner = PartnerHere();
             var mine = HasCommand();
-            var bar = new ActionBarView { Abilities = BarKeys() };
+            ActionBarView bar;
+            using (MBar.Auto()) bar = new ActionBarView { Abilities = BarKeys() };
             var u = Unit();
             if (u != null && Commands(u) && CanAct() && !mine) bar.Lock = HudText.Turn.PartnerLock(PlayerName(s.Command));
             // Why the cards rest in the enemy's turn: the bar says it over itself (hud.ts setTurn).
@@ -130,6 +136,7 @@ namespace Bastion.UI.Combat
         /// </summary>
         void RefreshMarks()
         {
+            using var marksMark = MMarks.Auto();
             var v = Shown;
             var m = v.Mission;
             var beacons = new List<(Pos, int)>();
@@ -219,7 +226,13 @@ namespace Bastion.UI.Combat
             var v = Shown;
             seen.Clear();
             // A siege too, by day as by night: only those the squad sees (Arturo, 31/10 #5; it was all of them, 18/10 #18).
-            foreach (var u in Los.VisibleEnemies(v, Teams.Xcom)) seen.Add(u.Id);
+            // Los.VisibleEnemies, with each viewer's farther than its sight left out before CanSee (its line would be
+            // refused for that, SightOrigin's first test: sight at night and behind cover is less, never more), and the
+            // buildings' and the cone's tests and the lines walked only for the rest: 15 ms a refresh with eighty of the
+            // dead in a city (Red and Arte, 7/11).
+            var viewers = v.Units.Where(u => Los.IsViewer(u, Teams.Xcom)).Select(u => (u, sight: (double)Los.SightIn(v, u))).ToList();
+            foreach (var t in v.Units)
+                if (t.Alive && t.Team != Teams.Xcom && viewers.Any(w => Grid.Distance(w.u.Pos, t.Pos) <= w.sight && Los.CanSee(v, w.u, t))) seen.Add(t.Id);
         }
 
         /// <summary>
@@ -232,6 +245,7 @@ namespace Bastion.UI.Combat
 
         void RefreshFlags()
         {
+            using var flagsMark = MFlags.Auto();
             if (Hud == null) return;
             var v = Shown;
             var view = new FlagsView();
@@ -952,7 +966,7 @@ namespace Bastion.UI.Combat
             {
                 case AbilityIds.Faceoff:
                 {
-                    var n = Abilities.RangedTargets(State, u, AbilityIds.Faceoff).Count(Visible);
+                    var n = VisibleShots(u, AbilityIds.Faceoff).Count;
                     return n > 0 ? $"{n} {(n == 1 ? "enemigo" : "enemigos")} a su alcance" : "Ningún enemigo a su alcance";
                 }
                 case AbilityIds.Hack:

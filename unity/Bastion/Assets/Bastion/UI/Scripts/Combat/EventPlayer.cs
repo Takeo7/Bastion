@@ -281,13 +281,14 @@ namespace Bastion.UI.Combat
             queue.Clear();
             control.Aboard.Clear();
             control.View = Events.CloneState(state);
-            See();
             ShowSeen(true);
+            See();
         }
 
         /// <summary>The figures and the fog of war (Arte's) as `View` is now; `instant`, the fog at once (a snapshot), else fading.</summary>
         void ShowSeen(bool instant = false)
         {
+            using var mark = MShowSeen.Auto();
             Units?.Sync(V);
             Bastion.Client.Map.Fog.Current?.Show(V, instant);
         }
@@ -558,7 +559,7 @@ namespace Bastion.UI.Combat
                 await ShowEnemy(points);
             }
             else if (hold > 0) await Wait(hold);
-            foreach (var q in doors) await Settle(q.e, q.by, false, q.epoch);
+            await SettleAll(doors.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
             // Each one's walks as one: its two actions a single stretch, no stop between.
             var walks = new Dictionary<string, MovedEvent>();
             var order = new List<string>();
@@ -589,7 +590,7 @@ namespace Bastion.UI.Combat
             // All of them where they stopped before the view syncs (playtest 21/10 #21: they walked in, vanished, and came
             // back all at once).
             foreach (var q in items) Events.ApplyEvent(V, q.e);
-            foreach (var q in items) await Settle(q.e, q.by, true, q.epoch);
+            await SettleAll(items.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
         }
 
         /// <summary>
@@ -883,11 +884,11 @@ namespace Bastion.UI.Combat
             // The doors they open on their way, first and at once (playtest 17/10 #46): a door and the noise it makes.
             var doorTiles = w.Items.Where(q => q.e is TileChangedEvent).Select(q => ((TileChangedEvent)q.e).Pos).ToList();
             var doors = new HashSet<(GameEvent, int?, int)>(w.Items.Where(q => q.e is TileChangedEvent || q.e is NoiseEvent n && doorTiles.Any(t => Grid.SamePos(t, n.Tile))));
-            foreach (var q in w.Items.Where(doors.Contains)) await Settle(q.e, q.by, false, q.epoch);
+            await SettleAll(w.Items.Where(doors.Contains).Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
             // Each walker's whole walk for the plan; each plays its own stretches, with what befalls it between them.
             var whole = w.Chains.Select(c => c.Where(q => q.e is MovedEvent).Select(q => (MovedEvent)q.e).ToList())
                 .Select(ms => new MovedEvent { Unit = ms[0].Unit, Path = ms.SelectMany(x => x.Path).ToList(), Ap = ms.Sum(x => x.Ap), Run = ms.Any(x => x.Run == true) ? true : (bool?)null }).ToList();
-            groupPlans = PlanGroup(whole);
+            using (MPlan.Auto()) groupPlans = PlanGroup(whole);
             walked.Clear();
             grouped = true;
             walking = true;
@@ -911,7 +912,7 @@ namespace Bastion.UI.Combat
             var settleFrom = Time.time;
             var rest = w.Items.Where(q => !doors.Contains(q)).ToList();
             foreach (var q in rest) Events.ApplyEvent(V, q.e);
-            foreach (var q in rest) await Settle(q.e, q.by, true, q.epoch);
+            await SettleAll(rest.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
             await AnnounceSighted(rest.FirstOrDefault(q => q.e is MovedEvent).e ?? w, by, before, epoch);
             Debug.Log($"[ritmo] paseos: encuadre {walkFrom - from:0.0} s, andar {settleFrom - walkFrom:0.0} s, después {Time.time - settleFrom:0.0} s");
             // The attacks next, one by one, the camera on each (BeforeActing): out of this framing, and nearer again.
@@ -1118,11 +1119,51 @@ namespace Bastion.UI.Combat
 
         /// <summary>What a played event leaves behind (game.ts settle): View has it, the figures, the sight and the HUD follow.</summary>
         /// <remarks>`epoch`: the camera's as the event began to play (none: now); the player who moved it since keeps it.</remarks>
-        async Awaitable Settle(GameEvent e, int? by, bool applied = false, int? epoch = null)
+        Awaitable Settle(GameEvent e, int? by, bool applied = false, int? epoch = null)
+        {
+            return SettleAll(new List<(GameEvent, int?, int?)> { (e, by, epoch) }, applied);
+        }
+
+        /// <summary>
+        /// Settle for events seen together (the walks' rest, a group's walkers, the doors on their way): what each one leaves
+        /// behind, one by one, and the map, the sight and the HUD once for all of them. One by one, each did them all again:
+        /// eighty of the dead walking were 3 s in one frame (Red and Arte, 7/11: RendimientoLab.Parones). Already applied
+        /// (`applied`), the state is the same from one to the next, and so is what was seen: the newcomers' callout comes with
+        /// the first, as it did. Otherwise each is applied in turn, and the callout says all that they showed.
+        /// </summary>
+        async Awaitable SettleAll(List<(GameEvent e, int? by, int? epoch)> items, bool applied)
+        {
+            if (items.Count == 0) return;
+            // Who was in sight until these events, for the newcomers' callouts (AnnounceSighted).
+            var before = new HashSet<string>(V.Units.Where(a => a.Alive && a.Team == Teams.Alien && control.Visible(a)).Select(a => a.Id));
+            var rebuild = false;
+            foreach (var (e, by, _) in items) rebuild |= Leave(e, by, applied);
+            // A door, a wall, a floor changed: the map rebuilds those tiles and what stood on them (Arte's MapView.Rebuild);
+            // a siege's door or barricade struck, its wear (the bags knocked off, MapBuilder.DrawSiege); a search, what was
+            // searched as it stays (mapView.ts searchedSeen: the furniture open, the crate, the boot, the shop's shelves).
+            // A copy: the map keeps the state it drew to tell the next change, and the events change View in place (with
+            // View itself, from the second change on it compared View with View and drew nothing). Once for all of them:
+            // it tells every change since the last.
+            if (rebuild)
+                using (MRebuild.Auto()) Bastion.Client.Map.MapView.Current?.Rebuild(Events.CloneState(V));
+            using (MSettle.Auto())
+            {
+                ShowSeen();
+                See();
+                control.Refresh();
+            }
+            var (first, firstBy, firstEpoch) = items[0];
+            await AnnounceSighted(first, firstBy, before, firstEpoch ?? (control.Rig != null ? control.Rig.Epoch : 0));
+            foreach (var (e, by, _) in items) await After(e, by);
+        }
+
+        /// <summary>
+        /// What one event leaves behind but the map, the sight and the HUD (SettleAll): View has it (unless `applied`), and
+        /// what it says, the plans, the backpack. Whether the map has to be drawn again.
+        /// </summary>
+        bool Leave(GameEvent e, int? by, bool applied)
         {
             var call = V.EvacCall;
-            // Who was in sight until this event, for the newcomers' callouts (AnnounceSighted).
-            var before = new HashSet<string>(V.Units.Where(a => a.Alive && a.Team == Teams.Alien && control.Visible(a)).Select(a => a.Id));
             var floorBefore = new HashSet<string>((V.Dropped ?? new List<DroppedLoot>()).Select(d => d.Id));
             if (!applied) Events.ApplyEvent(V, e);
             if (e is PodSplitEvent split) splitFrom[split.Into] = split.Pod;
@@ -1149,16 +1190,12 @@ namespace Bastion.UI.Combat
             }
             else if (e is CommandPassedEvent cp && cp.To == control.MySlot) planDue = true;
             else if (e is MovedEvent || e is DiedEvent || e is EvacuatedEvent) control.DropPlan(UnitOf(e));
-            // A door, a wall, a floor changed: the map rebuilds those tiles and what stood on them (Arte's MapView.Rebuild);
-            // a siege's door or barricade struck, its wear (the bags knocked off, MapBuilder.DrawSiege); a search, what was
-            // searched as it stays (mapView.ts searchedSeen: the furniture open, the crate, the boot, the shop's shelves).
-            // A copy: the map keeps the state it drew to tell the next change, and the events change View in place (with
-            // View itself, from the second change on it compared View with View and drew nothing).
-            if (e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent || e is SearchedEvent || e is RoomSearchedEvent || e is BoardsRemovedEvent) Bastion.Client.Map.MapView.Current?.Rebuild(Events.CloneState(V));
-            See();
-            ShowSeen();
-            control.Refresh();
-            await AnnounceSighted(e, by, before, epoch ?? (control.Rig != null ? control.Rig.Epoch : 0));
+            return e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent || e is SearchedEvent || e is RoomSearchedEvent || e is BoardsRemovedEvent;
+        }
+
+        /// <summary>After an event is settled (SettleAll): the hold after one's own, and a turn's beginning.</summary>
+        async Awaitable After(GameEvent e, int? by)
+        {
             // Let the player see the outcome of their own action before the pick moves on.
             if (by == control.MySlot && !(e is NoiseEvent)) holdAfter = HoldAfter(e);
             if (by == control.MySlot && myPending > 0 && --myPending == 0)
@@ -1221,11 +1258,21 @@ namespace Bastion.UI.Combat
             else if (by == control.MySlot) await Wait(0.5f);
         }
 
-        /// <summary>The squad's sight of the ground, again (game.ts refreshView).</summary>
+        /// <summary>
+        /// The squad's sight of the ground, again (game.ts refreshView): the figures' (Arte's UnitViews.SightOf), when they
+        /// have just worked it out for View as it is (ShowSeen, first), else worked out here (7/11: it was done twice).
+        /// </summary>
         void See()
         {
-            sight = Los.TeamVisibility(V, Teams.Xcom);
+            using (MSee.Auto()) sight = Units?.SightOf(V) ?? Los.TeamVisibility(V, Teams.Xcom);
         }
+
+        // The stalls' markers (Red and Arte, 7/11: RendimientoLab.Parones picks up those with «Bastion» in the name).
+        static readonly Unity.Profiling.ProfilerMarker MSee = new Unity.Profiling.ProfilerMarker("Bastion.UI.Player.See");
+        static readonly Unity.Profiling.ProfilerMarker MShowSeen = new Unity.Profiling.ProfilerMarker("Bastion.UI.Player.ShowSeen");
+        static readonly Unity.Profiling.ProfilerMarker MSettle = new Unity.Profiling.ProfilerMarker("Bastion.UI.Player.Settle");
+        static readonly Unity.Profiling.ProfilerMarker MRebuild = new Unity.Profiling.ProfilerMarker("Bastion.UI.Player.MapRebuild");
+        static readonly Unity.Profiling.ProfilerMarker MPlan = new Unity.Profiling.ProfilerMarker("Bastion.UI.Player.PlanGroup");
 
         // ------------------------------------------------------- helpers
 

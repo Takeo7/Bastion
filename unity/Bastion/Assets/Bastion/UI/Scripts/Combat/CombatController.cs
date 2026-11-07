@@ -476,10 +476,17 @@ namespace Bastion.UI.Combat
         /// Everything that hangs on the state and the pick (game.ts refreshInteractive): the pick kept valid, the floor,
         /// what is armed checked, the reach and the pointer's marks again, the HUD.
         /// </summary>
+        static readonly Unity.Profiling.ProfilerMarker MRefresh = new Unity.Profiling.ProfilerMarker("Bastion.UI.Refresh");
+        static readonly Unity.Profiling.ProfilerMarker MRefreshSee = new Unity.Profiling.ProfilerMarker("Bastion.UI.Refresh.See");
+        static readonly Unity.Profiling.ProfilerMarker MRefreshReach = new Unity.Profiling.ProfilerMarker("Bastion.UI.Refresh.Reach");
+        static readonly Unity.Profiling.ProfilerMarker MRefreshWay = new Unity.Profiling.ProfilerMarker("Bastion.UI.Refresh.Way");
+        static readonly Unity.Profiling.ProfilerMarker MRefreshHud = new Unity.Profiling.ProfilerMarker("Bastion.UI.Refresh.Hud");
+
         public void Refresh()
         {
             if (State == null) return;
-            See();
+            using var mark = MRefresh.Auto();
+            using (MRefreshSee.Auto()) See();
             AutoSelect();
             FollowLevel();
             CheckMode();
@@ -488,13 +495,16 @@ namespace Bastion.UI.Combat
             var u = Unit();
             // The movement it has left, apart from its actions (Arturo, 5/11 #14): one reach, in sky blue (#13).
             var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && Paths.MoveBudget(u) > 0 && WaitingFor(u.Id) == null && !Busy(u.Id) && u.Id != sent;
-            reach = moving ? Paths.ComputeReach(State, u, Paths.MoveBudget(u)) : null;
-            tiles = reach != null ? Tiles(u) : null;
+            using (MRefreshReach.Auto())
+            {
+                reach = moving ? Paths.ComputeReach(State, u, Paths.MoveBudget(u)) : null;
+                tiles = reach != null ? Tiles(u) : null;
+            }
             // Without the command the range is still shown, fainter: it is for planning (#35). Only the floor shown's.
             Overlay?.ShowRange(State, tiles?.Where(t => t.Pos.Z == Level).ToList(), Planning, Soft);
-            ShowWay();
+            using (MRefreshWay.Auto()) ShowWay();
             DrawPlans();
-            RefreshHud();
+            using (MRefreshHud.Auto()) RefreshHud();
         }
 
         bool Planning => !HasCommand();
