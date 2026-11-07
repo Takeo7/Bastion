@@ -13,6 +13,12 @@ namespace Bastion.UI.Strategy
     {
         /// <summary>The Marea's activity (the campaign's doom).</summary>
         public float Level;
+        /// <summary>The Marea at the top of the left column (Arturo, 7/11: off the top strip, here): its name («INFESTACIÓN», «LA MAREA»), its marks filled up to `DoomFilled` of `DoomMax`, the figure («5/12», «7 km»), its help.</summary>
+        public string Doom;
+        public int DoomFilled;
+        public int DoomMax;
+        public string DoomFigure;
+        public TipView DoomTip;
         public List<ZoneMarkView> Zones = new List<ZoneMarkView>();
         /// <summary>La Lata's zone (the active mission's, else the Bastion's).</summary>
         public string Lata;

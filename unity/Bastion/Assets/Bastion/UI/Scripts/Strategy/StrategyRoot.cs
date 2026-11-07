@@ -400,7 +400,8 @@ namespace Bastion.UI.Strategy
         void Dress()
         {
             if (root == null) return;
-            foreach (var cls in FramedPlates) root.Query(className: cls).ForEach(e => PlateFrame.Dress(e));
+            // (Not a torn one: Arturo's report of 7/11 has no steel round them.)
+            foreach (var cls in FramedPlates) root.Query(className: cls).Where(e => !e.ClassListContains("torn")).ForEach(e => PlateFrame.Dress(e));
             root.Query(className: "strat-proposal").ForEach(e => PlateFrame.Dress(e, false));
             root.Query<Button>(className: "btn-primary").ForEach(Slant.Dress);
             root.Query(className: "recruit-card").ForEach(DashedEdge.Dress);

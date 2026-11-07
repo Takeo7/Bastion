@@ -32,6 +32,15 @@ namespace Bastion.UI.Strategy
         public bool Busts = true;
         /// <summary>The lowest a card's bottom may go (the top of the panels at the bottom), in panel pixels.</summary>
         public Func<float> Floor;
+        /// <summary>All the cards at one height, the lowest pad's and a little under it, clear of the boots (Arturo's report of 7/11).</summary>
+        public bool Level;
+        /// <summary>Every card this wide, whatever the pads' spacing (the report's 200 px at 2560 × 1440); null, by the spacing.</summary>
+        public float? Width;
+        /// <summary>Under the boots, how far a level card goes (Level): the maqueta's 45 px at 1440 high (Arte: PadWorld is where the boots stand).</summary>
+        const float BelowBoots = 27;
+
+        /// <summary>The cards' layer, for a screen's own class.</summary>
+        public VisualElement Layer => layer;
 
         public LineupCards(VisualElement parent, TooltipLayer tips, IStrategyHandlers handlers)
         {
@@ -139,8 +148,12 @@ namespace Bastion.UI.Strategy
             var spacing = MaxWidth + Gap;
             for (var i = 1; i < n; i++)
                 if (at[i].HasValue && at[i - 1].HasValue) spacing = Mathf.Min(spacing, Mathf.Abs(at[i].Value.x - at[i - 1].Value.x));
-            var width = Mathf.Clamp(spacing - Gap, MinWidth, MaxWidth);
+            var width = Width ?? Mathf.Clamp(spacing - Gap, MinWidth, MaxWidth);
             var floor = Floor?.Invoke() ?? float.MaxValue;
+            var level = float.MinValue;
+            if (Level)
+                for (var i = 0; i < n; i++)
+                    if (at[i].HasValue) level = Mathf.Max(level, at[i].Value.y + BelowBoots);
             for (var i = 0; i < n; i++)
             {
                 var card = cards[i];
@@ -148,7 +161,7 @@ namespace Bastion.UI.Strategy
                 if (!at[i].HasValue) continue;
                 var p = at[i].Value;
                 var height = card.resolvedStyle.height;
-                var top = Mathf.Min(p.y, floor - (float.IsNaN(height) ? 0 : height) - 8);
+                var top = Mathf.Min(Level ? level : p.y, floor - (float.IsNaN(height) ? 0 : height) - 8);
                 card.style.left = p.x - width / 2;
                 card.style.top = top;
                 card.style.width = width;

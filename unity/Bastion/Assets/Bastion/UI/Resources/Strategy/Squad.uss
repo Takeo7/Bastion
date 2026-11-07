@@ -5,9 +5,27 @@
 
 /* =============================================================== lists */
 
+/* Arturo's report of 7/11 (the maqueta v39, at 2560 × 1440, a HUD pixel 1.687 there): «Tus soldados» 350 × 320 on a
+   torn plate (Strategy.uss .torn) under the band at the left; its head white, level with the rows; four rows of
+   313 × 57 with 3 between them. */
 .squad-list {
-    width: 214px;
-    padding: 8px 10px 10px;
+    width: 207px;
+    min-height: 190px;
+    padding: 10px 10px 10px 11px;
+}
+
+.squad-list.strat-side--left {
+    left: 8px;
+}
+
+.squad-list .strat-head {
+    margin: 2px 0 8px 3px;
+    padding-left: 0;
+    border-left-width: 0;
+}
+
+.squad-list .strat-head__text {
+    color: #ffffff;
 }
 
 .squad-row {
@@ -15,30 +33,40 @@
     align-items: center;
     height: 34px;
     margin: 0 0 2px;
-    padding: 0 8px 0 4px;
-    background-color: rgba(255, 255, 255, 0.03);
+    padding: 0 8px 0 5px;
+    background-color: rgba(0, 0, 0, 0);
     background-image: none;
-    border-width: 0 0 0 3px;
+    border-width: 0;
     border-radius: 0;
 }
 
-.squad-row:hover {
-    background-color: rgba(255, 255, 255, 0.07);
+/* Each row's fill: torn, #535458 at 30 %, 4 px (2.4 here) inside where the picked one's frame goes. */
+.squad-row__fill {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    right: 2px;
+    bottom: 2px;
+    background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_03.png");
+    -unity-background-image-tint-color: rgba(83, 84, 88, 0.3);
+    -unity-slice-scale: 0.25px;
 }
 
+.squad-row:hover .squad-row__fill {
+    -unity-background-image-tint-color: rgba(83, 84, 88, 0.5);
+}
+
+/* In the squad: a worn white frame of 1 px round the row (7/11: no green ✓). */
 .squad-row--in {
-    background-color: rgba(242, 194, 48, 0.07);
+    background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Frame_Large_03_Underlay.png");
+    -unity-background-image-tint-color: #ffffff;
+    -unity-slice-scale: 0.2px;
 }
 
 /* The siege's defender in hand (#58): ringed in the picked yellow, as on the clearing. */
 .squad-row--picked {
-    background-color: rgba(255, 224, 138, 0.1);
-    border-top-width: 1px;
-    border-right-width: 1px;
-    border-bottom-width: 1px;
-    border-top-color: #ffe08a;
-    border-right-color: #ffe08a;
-    border-bottom-color: #ffe08a;
+    border-width: 1px;
+    border-color: #ffe08a;
 }
 
 /* How to post one's defenders for the siege, under the head. */
@@ -173,12 +201,13 @@
 
 /* =============================================================== bottom */
 
+/* The mission's plate as wide as the maqueta's (937 px at 2560 × 1440), as low (47 px off the screen's foot). */
 .squad-bottom {
     position: absolute;
     left: 50%;
-    bottom: 0;
+    bottom: -20px;
     translate: -50% 0;
-    width: 942px;
+    width: 555px;
     align-items: center;
 }
 
@@ -223,16 +252,18 @@
     color: #8fd05a;
 }
 
+/* On a torn plate (7/11): the title centred over the words' column, the words to the left, the goal in yellow (==…==). */
 .squad-mission {
     width: 100%;
     flex-direction: row;
-    padding: 18px 20px 16px;
+    align-items: center;
+    padding: 14px 18px 14px;
 }
 
 .squad-mission__words {
     flex-grow: 1;
     flex-shrink: 1;
-    padding-right: 24px;
+    padding-right: 18px;
 }
 
 .squad-mission__title-row {
@@ -242,7 +273,7 @@
 }
 
 .squad-mission__title {
-    font-size: 26px;
+    font-size: 20px;
     letter-spacing: 1px;
     color: #ffffff;
 }
@@ -255,8 +286,8 @@
 }
 
 .squad-mission__briefing {
-    margin-top: 6px;
-    font-size: 14px;
+    margin-top: 4px;
+    font-size: 13px;
     white-space: normal;
 }
 
@@ -267,18 +298,19 @@
     white-space: normal;
 }
 
-/* As wide as its longest button (mixta-base.css .x-btn.big: inline, 18 px each side), and never narrower than 200. */
+/* «LANZAR MISIÓN» on the right: the maqueta's notched rectangle, 201 × 50 (Slant: btn-notched), the yellow as it was. */
 .squad-mission__actions {
-    min-width: 200px;
     flex-shrink: 0;
     justify-content: center;
 }
 
 .squad-launch {
-    height: 50px;
-    padding: 0 18px;
-    font-size: 20px;
-    letter-spacing: 2px;
+    width: 119px;
+    height: 30px;
+    padding: 0;
+    font-size: 14px;
+    letter-spacing: 1px;
+    -unity-text-align: middle-center;
 }
 
 .squad-launch--ready {
@@ -297,6 +329,13 @@
     height: 28px;
     font-size: 13px;
     letter-spacing: 1px;
+}
+
+.squad-mission .squad-back {
+    width: 119px;
+    height: 24px;
+    padding: 0;
+    font-size: 11px;
 }
 
 .squad-empty {
@@ -320,8 +359,41 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: -46px;
+    top: -49px;
     bottom: -48px;
+}
+
+/* Escuadra's cards (7/11): 200 × 91 at 2560 × 1440, all at one height (LineupCards.Level), on a small torn plate; the
+   name centred, white and bigger, the rank under it light grey and smaller, the × small at the top right; no edge in
+   the player's colour (the purple line). */
+.lineup-cards--squad .lineup-card {
+    min-height: 54px;
+    justify-content: center;
+    padding: 6px 6px;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.75);
+    -unity-slice-scale: 0.35px;
+    border-width: 0;
+    border-radius: 0;
+}
+
+.lineup-cards--squad .lineup-card__name {
+    font-size: 17px;
+    white-space: nowrap;
+}
+
+.lineup-cards--squad .lineup-card__line {
+    font-size: 11px;
+    color: rgba(206, 211, 215, 0.85);
+}
+
+.lineup-cards--squad .lineup-card__remove {
+    right: 4px;
+    top: 3px;
+    width: 12px;
+    height: 12px;
+    font-size: 11px;
 }
 
 .lineup-card {

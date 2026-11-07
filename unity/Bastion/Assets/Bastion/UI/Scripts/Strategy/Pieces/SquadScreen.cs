@@ -40,9 +40,12 @@ namespace Bastion.UI.Strategy
             this.icon = icon;
             this.handlers = handlers;
             this.view = view;
-            cards = new LineupCards(view, tips, handlers) { Floor = () => bottom.worldBound.yMin, Busts = false };
-            left = Ui.El("strat-side strat-side--left strat-side--fit squad-list panel", view);
-            right = Ui.El("strat-side strat-side--right strat-side--fit squad-list panel", view);
+            // Arturo's report of 7/11 (the maqueta v39): the cards all at one height, as wide as the maqueta's (200 px at
+            // 2560 × 1440), on torn plates; the lists and the mission's plate torn too, no steel.
+            cards = new LineupCards(view, tips, handlers) { Floor = () => bottom.worldBound.yMin, Busts = false, Level = true, Width = 119 };
+            cards.Layer.AddToClassList("lineup-cards--squad");
+            left = Ui.El("strat-side strat-side--left strat-side--fit squad-list torn", view);
+            right = Ui.El("strat-side strat-side--right strat-side--fit squad-list torn", view);
             bottom = Ui.El("squad-bottom", view);
             empty = Ui.El("squad-empty panel", view);
             peek = Ui.El("squad-peek panel", view);
@@ -107,7 +110,7 @@ namespace Bastion.UI.Strategy
                     if (!string.IsNullOrEmpty(r.Tip)) tips.Attach(mark, r.Tip);
                 }
             }
-            var plate = Ui.El("squad-mission panel", bottom);
+            var plate = Ui.El("squad-mission torn torn--low", bottom);
             var words = Ui.El("squad-mission__words", plate);
             var title = Ui.El("squad-mission__title-row", words);
             Ui.Text(v.Title.ToUpperInvariant(), "squad-mission__title font-title", title);
@@ -116,7 +119,7 @@ namespace Bastion.UI.Strategy
             if (!string.IsNullOrEmpty(v.Warning)) Ui.Text(v.Warning, "squad-mission__warning", words);
             var actions = Ui.El("squad-mission__actions", plate);
             var launch = new Button(handlers.OnLaunch) { text = v.Launch.ToUpperInvariant() };
-            Ui.AddClasses(launch, "squad-launch btn-primary font-title");
+            Ui.AddClasses(launch, "squad-launch btn-primary btn-notched font-title");
             launch.EnableInClassList("squad-launch--ready", v.LaunchReady);
             launch.EnableInClassList("squad-launch--waiting", v.LaunchWaiting);
             launch.SetEnabled(v.LaunchEnabled);
@@ -148,7 +151,8 @@ namespace Bastion.UI.Strategy
                 row.EnableInClassList("squad-row--in", r.In);
                 row.EnableInClassList("squad-row--picked", r.Picked);
                 row.SetEnabled(r.Enabled);
-                row.style.borderLeftColor = Ui.Hex(r.Accent, new Color(0.95f, 0.65f, 0.2f));
+                // Its torn fill under all of it, inside the frame a picked one has (Arturo's report of 7/11); no accent.
+                Ui.El("squad-row__fill", row).pickingMode = PickingMode.Ignore;
                 // Every row its bust, picked or not (Ana, Arturo 31/10 #11).
                 var bust = Ui.El("squad-row__bust", row);
                 var portrait = PortraitOf?.Invoke(id);

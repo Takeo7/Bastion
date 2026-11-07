@@ -48,9 +48,6 @@ namespace Bastion.Client
                     await Board(ct);
                     Debug.Log($"[settlement] {standers.Count} aboard La Lata ({Lata.Vehicle}) in {Time.time - began:0.00} s");
                 }
-                if (lineupRoot != null)
-                    foreach (Transform t in lineupRoot)
-                        if (t.name == "sitio") t.gameObject.SetActive(false);
                 // Given again (the debrief, the next mission's), the row is made again.
                 lineupKey = "";
                 away = true;

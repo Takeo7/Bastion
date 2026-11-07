@@ -83,14 +83,20 @@ namespace Bastion.UI.Strategy
                 v.LevelTip = new TipView { Name = Lore.BastionLevelName(level), Lines = { $"Para {Lore.BastionLevelThe(next.Level)}: {next.Cost} § y {next.Missions} misiones hechas (llevas {next.Flown}).", Lore.LevelText.About } };
             }
             else v.LevelTip = new TipView { Name = Lore.BastionLevelName(level), Lines = { Lore.LevelText.Top } };
-            // The doom by the name it has at this level: no Marea before the Partitura (Lore).
-            var known = level >= Lore.PartituraLevel;
-            v.Doom = Lore.DoomName(level).ToUpperInvariant();
-            v.DoomFilled = c.Doom;
-            v.DoomMax = Campaign.DoomMax;
-            v.DoomFigure = known ? $"{System.Math.Max(0, Campaign.DoomMax - c.Doom)} km" : $"{c.Doom}/{Campaign.DoomMax}";
-            v.DoomTip = Tip(Lore.DoomName(level), $"{Lore.DoomStatus(level, c.Doom)}. {(known ? Lore.Glossary["Marea"] : "Si se llena, la campaña está perdida.")} Quemar Nidos la hace retroceder.");
+            (v.Doom, v.DoomFilled, v.DoomMax, v.DoomFigure, v.DoomTip) = DoomOf(c, level);
             return v;
+        }
+
+        /// <summary>
+        /// The doom by the name it has at this level (no Marea before the Partitura, Lore): its marks filled, the figure,
+        /// its help. On the Mapa now, off the top strip (Arturo, 7/11).
+        /// </summary>
+        static (string name, int filled, int max, string figure, TipView tip) DoomOf(CampaignState c, int level)
+        {
+            var known = level >= Lore.PartituraLevel;
+            var figure = known ? $"{System.Math.Max(0, Campaign.DoomMax - c.Doom)} km" : $"{c.Doom}/{Campaign.DoomMax}";
+            var tip = Tip(Lore.DoomName(level), $"{Lore.DoomStatus(level, c.Doom)}. {(known ? Lore.Glossary["Marea"] : "Si se llena, la campaña está perdida.")} Quemar Nidos la hace retroceder.");
+            return (Lore.DoomName(level).ToUpperInvariant(), c.Doom, Campaign.DoomMax, figure, tip);
         }
 
         /// <summary>The next siege (siegeEl): when, and with the Sala de radio how many and by where; red the mission before, and while it is on.</summary>

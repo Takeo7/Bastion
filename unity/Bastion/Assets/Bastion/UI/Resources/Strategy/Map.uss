@@ -8,7 +8,7 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: -46px;
+    top: -49px;
     bottom: -48px;
 }
 
@@ -446,4 +446,11 @@
 /* A mission's or a zone's name on two lines when it must («Los muelles de carga de Metsovo» was cut at the edge). */
 .map-detail__title {
     white-space: normal;
+}
+
+/* The Marea at the top of the left column (Arturo, 7/11: off the top strip, here), as the strip had it but to the left. */
+.map-doom {
+    flex-grow: 0;
+    justify-content: flex-start;
+    margin: 0 0 10px;
 }

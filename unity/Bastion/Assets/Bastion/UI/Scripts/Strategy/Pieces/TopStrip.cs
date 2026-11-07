@@ -6,9 +6,10 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Strategy
 {
     /// <summary>
-    /// The steel band across the top of the base (screen.ts renderTop, mixta-base.css .strat-top): the Bastión's plate
-    /// with the outings, the siege's badge, the day and the stores each in its well (with what a proposal would spend),
-    /// the level with its bar, the Marea's marks, «Menú». Every part has its tooltip, its figures picked out.
+    /// The band across the top of the base (screen.ts renderTop; Arturo's report of 7/11, the maqueta v39: dark glass,
+    /// no steel): the Bastión's plate with the outings, the siege's badge, the day and the stores each in its well (with
+    /// what a proposal would spend), the level with its bar, «Menú» on a torn plate. The Marea's marks are off it (7/11).
+    /// Every part has its tooltip, its figures picked out.
     /// </summary>
     public sealed class TopStrip
     {
@@ -71,14 +72,9 @@ namespace Bastion.UI.Strategy
                 for (var i = 0; i < v.LevelTotal; i++) Ui.El(i < v.LevelFilled ? "strat-level-bar__mark strat-level-bar__mark--on" : "strat-level-bar__mark", bar);
                 Named(level, v.LevelTip);
             }
-            var doom = Ui.El("strat-doom", host);
-            Ui.Icon(icon, "base:doom", "strat-doom__icon", doom);
-            var marks = Ui.El("strat-doom__marks", doom);
-            for (var i = 0; i < v.DoomMax; i++) Ui.El(i < v.DoomFilled ? "strat-doom__mark strat-doom__mark--on" : "strat-doom__mark", marks);
-            Ui.Text(v.DoomFigure, "strat-doom__figure font-title", doom);
-            Named(doom, v.DoomTip);
+            Ui.El("strat-gap", host).pickingMode = PickingMode.Ignore;
             var menu = new Button(handlers.OnMenu);
-            menu.AddToClassList("strat-menu");
+            Ui.AddClasses(menu, "strat-menu torn torn--small");
             Ui.Icon(icon, "base:menu", "strat-menu__icon", menu);
             Ui.Text(StrategyText.Menu.ToUpperInvariant(), "font-title", menu);
             host.Add(menu);
@@ -101,8 +97,8 @@ namespace Bastion.UI.Strategy
             tips.Attach(el, () => Tip(t.Name, t.Lines));
         }
 
-        /// <summary>A rich tooltip: the name, then each sentence with its figures picked out (withTip, sentences, figures).</summary>
-        static VisualElement Tip(string name, System.Collections.Generic.List<string> sentences)
+        /// <summary>A rich tooltip: the name, then each sentence with its figures picked out (withTip, sentences, figures); the Mapa's Marea's too.</summary>
+        internal static VisualElement Tip(string name, System.Collections.Generic.List<string> sentences)
         {
             var body = Ui.El("strat-tip");
             if (!string.IsNullOrEmpty(name)) Ui.Text(name, "strat-tip__name font-title", body);

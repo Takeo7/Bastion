@@ -76,6 +76,7 @@ namespace Bastion.UI.Strategy
                 RumorsTip = $"{Lore.Glossary["Rumor"]} {(c.Listening != null ? "Solo se escucha uno a la vez." : "Se enfría si nadie lo escucha.")}",
                 MissionsEmpty = offers.Count == 0 ? "Ninguna a la vista." : null,
             };
+            (v.Doom, v.DoomFilled, v.DoomMax, v.DoomFigure, v.DoomTip) = DoomOf(c, level);
             foreach (var r in c.Regions) v.Zones.Add(Zone(c, r, offers, region));
             foreach (var o in offers) v.Missions.Add(MissionRow(c, o, pick.Offer == o.Id));
             v.Wait = WaitDay(c);

@@ -137,7 +137,7 @@ namespace Bastion.UI.Strategy
             }
         }
 
-        /// <summary>A soldier's row in a squad list (pickRow): in it ✓, out with what keeps it in, the partner's off.</summary>
+        /// <summary>A soldier's row in a squad list (pickRow): in it framed, out with what keeps it in, the partner's off.</summary>
         PickRowView PickRow(CampaignState c, CampaignSoldier s, bool siege)
         {
             var on = c.Squad.Contains(s.Id);
@@ -151,7 +151,8 @@ namespace Bastion.UI.Strategy
                 // The belt, once a tip over the row, is on the sheet in short by the list now (Arturo, 1/11 #2).
                 Peek = Peek(c, s),
             };
-            if (on) (row.Chip, row.ChipTone, row.ChipTip) = ("✓", "good", StrategyText.Squad.InTip);
+            // In it: a worn white frame round the row (Arturo's report of 7/11), no green ✓; its words on the row.
+            if (on) row.Tip = StrategyText.Squad.InTip;
             else if (ready) { }
             // Lore, C2: «Mordisco», «Heridas».
             else if (s.Infection != null) (row.Chip, row.ChipTone, row.ChipTip) = ("Fiebre", "bad", "Mordisco: necesita el tratamiento antes de salir.");

@@ -144,6 +144,7 @@ namespace Bastion.UI.Strategy
             valley?.DriveTo(v.Lata);
             Vehicle(v.Vehicle);
             Zones(v);
+            Doom(v, leftBody);
             Head("Misiones", null, leftBody);
             if (v.Missions.Count == 0 && !string.IsNullOrEmpty(v.MissionsEmpty)) Ui.Text(v.MissionsEmpty, "map-empty muted", leftBody);
             foreach (var m in v.Missions) Mission(m, leftBody);
@@ -166,6 +167,22 @@ namespace Bastion.UI.Strategy
             Head("Red de enclaves", StrategyText.Map.NetworkTip, leftBody);
             Meter(v.Contacts, v.ContactsMax, v.ContactsTip, leftBody);
             if (v.Detail != null) Detail(v.Detail, rightBody);
+        }
+
+        /// <summary>
+        /// The Marea at the top of the column (Arturo, 7/11: off the top strip, on the Mapa): its name, its marks, red where
+        /// it has come, the figure, and its help (if it fills up the campaign is lost), as the strip had them.
+        /// </summary>
+        void Doom(MapView v, VisualElement parent)
+        {
+            if (string.IsNullOrEmpty(v.Doom)) return;
+            Head(v.Doom, null, parent);
+            var doom = Ui.El("strat-doom map-doom", parent);
+            Ui.Icon(icon, "base:doom", "strat-doom__icon", doom);
+            var marks = Ui.El("strat-doom__marks", doom);
+            for (var i = 0; i < v.DoomMax; i++) Ui.El(i < v.DoomFilled ? "strat-doom__mark strat-doom__mark--on" : "strat-doom__mark", marks);
+            Ui.Text(v.DoomFigure, "strat-doom__figure font-title", doom);
+            if (v.DoomTip != null) tips.Attach(doom, () => TopStrip.Tip(v.DoomTip.Name, v.DoomTip.Lines));
         }
 
         void Head(string text, string tip, VisualElement parent)
@@ -364,7 +381,7 @@ namespace Bastion.UI.Strategy
             if (!shown || valley?.Data == null) return;
             var panel = marks.panel?.visualTree.layout.size ?? Vector2.zero;
             if (panel.x <= 0) return;
-            var top = 46f;
+            var top = 49f;
             var bottom = panel.y - 48f;
             var leftEdge = left.resolvedStyle.display == DisplayStyle.None ? 0 : left.worldBound.xMax;
             var free = new Rect(leftEdge, top, panel.x - leftEdge, bottom - top);

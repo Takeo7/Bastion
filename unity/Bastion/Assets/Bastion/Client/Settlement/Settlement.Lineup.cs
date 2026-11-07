@@ -10,9 +10,10 @@ namespace Bastion.Client
     /// <summary>
     /// The squad standing by La Lata (0.10.1's clearingArt.ts setLineup, placeLineup, padPosition, lineupShot; the
     /// Escuadra and the debrief): in a row along the bus's side or across the track at its tail, whichever its camera sees
-    /// most clearly; one commander's half and then the other's, two rows past eight; each on a ring of their player's
-    /// colour (an empty place's grey), with their weapon, each waiting another way; the wounded slumped, the fallen a
-    /// cross and a candle. La Lata's doors turned to them.
+    /// most clearly; one commander's half and then the other's, two rows past eight; each with their weapon, each waiting
+    /// another way; the wounded slumped, the fallen a cross and a candle. La Lata's doors turned to them. No ring under
+    /// them (Arturo, 7/11: 0.10.1's, in their player's colour, went; UI's cards under them say whose each is, and an empty
+    /// place is its card alone).
     /// </summary>
     public sealed partial class Settlement
     {
@@ -97,7 +98,7 @@ namespace Bastion.Client
             if (mirror != lineupMirror || halves != lineupHalves) place = null;
             lineupMirror = mirror;
             lineupHalves = halves;
-            // The pads and graves go; each soldier standing stays by who they are (clearingArt.ts lineupByWho, playtest 21/10 #2:
+            // The graves go; each soldier standing stays by who they are (clearingArt.ts lineupByWho, playtest 21/10 #2:
             // made again, the whole row hopped back into its idle at every change), unless the row starts afresh.
             var before = new Dictionary<string, Stander>(lineupByWho);
             lineupByWho.Clear();
@@ -130,7 +131,6 @@ namespace Bastion.Client
                 var entry = entries[i];
                 var at = row.spots[i];
                 float facing = Mathf.Atan2(row.cam.x - at.x, row.cam.z - at.y);
-                Pad(at, entry != null ? entry.Colour : null);
                 if (entry == null) continue;
                 var s = campaign?.Soldiers?.FirstOrDefault(x => x.Id == entry.SoldierId);
                 if (entry.Status == "dead" || s == null)
@@ -173,56 +173,6 @@ namespace Bastion.Client
 
         /// <summary>The row's figures by who each is (Who), kept from one row to the next.</summary>
         readonly Dictionary<string, Stander> lineupByWho = new Dictionary<string, Stander>();
-
-        /// <summary>A place's ring on the ground (0.36 to 0.42 tiles), in its player's colour or an empty place's grey.</summary>
-        void Pad(Vector2 at, string colour)
-        {
-            var ring = new GameObject("sitio");
-            ring.transform.SetParent(lineupRoot, false);
-            ring.transform.position = World(new Vector3(at.x, 0.03f, at.y));
-            ring.AddComponent<MeshFilter>().sharedMesh = RingMesh();
-            var r = ring.AddComponent<MeshRenderer>();
-            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            r.receiveShadows = false;
-            var c = colour != null && ColorUtility.TryParseHtmlString(colour, out var parsed) ? parsed : new Color(0x3a / 255f, 0x46 / 255f, 0x52 / 255f);
-            r.sharedMaterial = RingMaterial(c);
-        }
-
-        static Mesh ring;
-
-        static Mesh RingMesh()
-        {
-            if (ring != null) return ring;
-            const int n = 28;
-            float inner = 0.36f * MapSpace.Tile, outer = 0.42f * MapSpace.Tile;
-            var v = new List<Vector3>();
-            var t = new List<int>();
-            for (int k = 0; k <= n; k++)
-            {
-                float a = k * Mathf.PI * 2 / n;
-                v.Add(new Vector3(Mathf.Cos(a) * inner, 0, Mathf.Sin(a) * inner));
-                v.Add(new Vector3(Mathf.Cos(a) * outer, 0, Mathf.Sin(a) * outer));
-                if (k == n) continue;
-                int b = k * 2;
-                t.AddRange(new[] { b, b + 2, b + 1, b + 1, b + 2, b + 3 });
-            }
-            ring = new Mesh { name = "Sitio de la fila", vertices = v.ToArray(), triangles = t.ToArray() };
-            ring.RecalculateNormals();
-            ring.RecalculateBounds();
-            return ring;
-        }
-
-        static readonly Dictionary<Color, Material> ringMaterials = new Dictionary<Color, Material>();
-
-        /// <summary>clearingArt.ts: a basic material of the colour, see-through at 0.75, both sides (KitMaterials.SeeThrough).</summary>
-        static Material RingMaterial(Color c)
-        {
-            if (ringMaterials.TryGetValue(c, out var m) && m != null) return m;
-            m = KitMaterials.New(KitMaterials.SeeThrough, "Sitio");
-            if (m == null) return null;
-            m.SetColor("_BaseColor", new Color(c.r, c.g, c.b, 0.75f));
-            return ringMaterials[c] = m;
-        }
 
         /// <summary>
         /// How far down a wounded soldier stands in the row (clearingArt.ts tick: crouch 0.4 over the idle; Synty's
