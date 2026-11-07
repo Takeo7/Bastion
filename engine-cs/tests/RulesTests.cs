@@ -384,7 +384,9 @@ namespace Bastion.Engine.Tests
             b.Owner = 1;
             CommandContext BothCtx(int slot) => Ctx(slot, Both);
             Run(s, Move("s1", 4, 0), BothCtx(0));
-            // (A turn's movement more: two walks of a turn each.)
+            // (A turn's movement more each time: walks of a turn each, in cross since the 7/11.)
+            s.Units[0].Moves = null;
+            Run(s, Move("s1", 0, 4), BothCtx(0));
             s.Units[0].Moves = null;
             Run(s, Move("s1", 0, 5), BothCtx(0));
             Assert.Equal("s1", s.Mission.Item?.Carrier);
@@ -441,6 +443,8 @@ namespace Bastion.Engine.Tests
         {
             var (s, a, b) = Recovery();
             Run(s, Move("s1", 4, 0));
+            a.Moves = null;
+            Run(s, Move("s1", 0, 4));
             a.Moves = null;
             Run(s, Move("s1", 0, 5));
             Assert.Equal("s1", s.Mission.Item?.Carrier);
@@ -519,6 +523,27 @@ namespace Bastion.Engine.Tests
             AddUnit(s, "s2", TemplateIds.Specialist, 1, 0, extra: (u) => u.Owner = 1);
             AddUnit(s, "a1", TemplateIds.Trooper, 19, 19);
             Run(s, new EndTurnCommand { Ready = true }, Ctx(0, new[] { 0 }));
+            Assert.Equal(2, s.Turn);
+        }
+
+        [Fact(DisplayName = "turn flow › a partner who isn't here leaves their soldiers to the one who is, and the turn waits for them (Arturo, 7/11)")]
+        public void AnAbsentPartnersSoldiersWaitForTheOneHere()
+        {
+            // Alone in a mission with the partner's soldiers (Arturo, 7/11: Arturo's two in «Hoja en alto», Ana never there): the
+            // turn used to end with the partner's still to move.
+            var s = Field();
+            AddUnit(s, "s1", TemplateIds.Specialist, 0, 0, extra: (u) => u.Owner = 0);
+            AddUnit(s, "s2", TemplateIds.Specialist, 1, 0, extra: (u) => u.Owner = 1);
+            AddUnit(s, "a1", TemplateIds.Trooper, 19, 19);
+            var alone = new[] { 0 };
+            // The own ones done (as after «Hoja en alto»): the partner's are this player's to move, and the turn stays the squad's.
+            UnitOf(s, "s1").Ap = 0;
+            UnitOf(s, "s1").Moves = 0;
+            Run(s, Move("s2", 1, 3), Ctx(0, alone));
+            SamePlace(P(1, 3, 0), UnitOf(s, "s2").Pos);
+            Assert.Equal((1, Teams.Xcom), (s.Turn, s.ActiveTeam));
+            // It ends when this player says so, or when the partner's have nothing left either.
+            Run(s, new EndTurnCommand { Ready = true }, Ctx(0, alone));
             Assert.Equal(2, s.Turn);
         }
 

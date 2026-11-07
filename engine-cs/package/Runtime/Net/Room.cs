@@ -225,7 +225,6 @@ namespace Bastion.Net
             skirmishMap = saved.SkirmishMap;
             skirmishVeterans = saved.SkirmishVeterans;
             skirmishNight = saved.SkirmishNight ?? false;
-            AwaitAbsent();
             Summarize();
             this.say($"[room] Partida restaurada ({phase}{(campaign != null ? $", campaña día {campaign.Day}" : "")}).");
         }
@@ -923,7 +922,6 @@ namespace Bastion.Net
         {
             phase = RoomPhases.Mission;
             Unpause();
-            AwaitAbsent();
             say($"[room] Vuelta a la misión de campaña{(state?.CampaignMission != null ? $": {state.CampaignMission.Name}" : "")}.");
             BroadcastRoom();
             if (campaign != null) Broadcast(new CampaignMessage { State = campaign });
@@ -931,23 +929,9 @@ namespace Bastion.Net
             Persist();
         }
 
-        /// <summary>
-        /// A mission opened again (from the save, or «Continuar campaña») without a player: they count as dropped now, as if
-        /// their game were out of sight (AwayGraceMs), since they have to open it and join. Till then the squad's turn waits
-        /// for them and their soldiers stay theirs; past it, it goes on as after any drop (UI's test of the 0.11.7: the host
-        /// alone, with no soldiers on the field, had the turn ended at once and the dead playing without the partner).
-        /// </summary>
-        private void AwaitAbsent()
-        {
-            if (phase != RoomPhases.Mission || state == null || state.Outcome != null) return;
-            var absent = seats.Where((s) => s != null && s.Socket == null).ToList();
-            foreach (var s in absent)
-            {
-                s!.DroppedAt = clock.Now;
-                s.Away = true;
-            }
-            if (absent.Count > 0) After(AwayGraceMs + 100, () => ResyncTurn());
-        }
+        // A mission opened again (from the save, or «Continuar campaña») without a player doesn't wait for them (Arturo,
+        // 7/11: «no esperar nunca»; it waited AwayGraceMs since the 0.11.8): their soldiers are the one here's at once, and the
+        // squad's turn waits for them as for that player's own (Rules.MaybeEndXcomTurn). Back, each commands their own again.
 
         private void LaunchCampaignMission()
         {

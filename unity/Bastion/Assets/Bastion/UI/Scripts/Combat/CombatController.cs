@@ -884,27 +884,52 @@ namespace Bastion.UI.Combat
             Send(new MoveCommand { Unit = u.Id, To = tile });
         }
 
-        /// <summary>The unit whose body is nearest the pointer, within a little of it (BodyOf), or on the pointer's tile.</summary>
+        /// <summary>
+        /// The unit whose figure is under the pointer (BodyOf: upright, BodyLow to BodyHigh over its feet and BodyReach
+        /// round), the nearest the camera if two are; else the one on the pointer's tile. Measured in the
+        /// world, so the same at any distance: 28 pixels round the chest went past the figure onto the tile behind it
+        /// (straight up the screen, at the camera's first distance) and, further away, onto more of its neighbours, and a
+        /// click there picked that one again instead of moving there (7/11, looking into Arturo's «no se puede mover en diagonal»).
+        /// </summary>
         Unit BodyUnder(Vector2 screen)
         {
             Unit best = null;
-            var bestD = 28f;
+            var bestAlong = float.MaxValue;
+            var ray = Rig.Camera.ScreenPointToRay(screen);
             foreach (var u in State.Units)
             {
                 if (!u.Alive || (u.Team != Teams.Xcom && !Visible(u))) continue;
                 var w = FeetOf(u.Id);
                 if (w == null) continue;
-                var sp = Rig.Camera.WorldToScreenPoint(w.Value + Vector3.up * 0.9f);
-                if (sp.z <= 0) continue;
-                var d = Vector2.Distance(screen, sp);
-                if (d < bestD)
-                {
-                    bestD = d;
-                    best = u;
-                }
+                if (RayToSegment(ray, w.Value + Vector3.up * BodyLow, w.Value + Vector3.up * BodyHigh, out var along) > BodyReach || along >= bestAlong) continue;
+                bestAlong = along;
+                best = u;
             }
             if (best != null || hover == null) return best;
             return State.Units.FirstOrDefault(u => u.Alive && Same(u.Pos, hover) && (u.Team == Teams.Xcom || Visible(u)));
+        }
+
+        /// <summary>A figure for the pointer, metres over its feet: from its shins to its neck, and BodyReach round (head and shoulders in).</summary>
+        const float BodyLow = 0.2f;
+        const float BodyHigh = 1.5f;
+        const float BodyReach = 0.3f;
+
+        /// <summary>How near a ray passes to a segment, metres, and how far along the ray that is.</summary>
+        static float RayToSegment(Ray ray, Vector3 a, Vector3 b, out float along)
+        {
+            var u = ray.direction;
+            var v = b - a;
+            var w = ray.origin - a;
+            var uv = Vector3.Dot(u, v);
+            var vv = Vector3.Dot(v, v);
+            var uw = Vector3.Dot(u, w);
+            var vw = Vector3.Dot(v, w);
+            var den = vv - uv * uv;
+            var s = den > 1e-6f ? Mathf.Clamp01((vw - uv * uw) / den) : 0;
+            along = Mathf.Max(0, Vector3.Dot(a + v * s - ray.origin, u));
+            var near = ray.origin + u * along;
+            s = Mathf.Clamp01(Vector3.Dot(near - a, v) / vv);
+            return Vector3.Distance(near, a + v * s);
         }
 
         /// <summary>

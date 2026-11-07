@@ -287,7 +287,7 @@ namespace Bastion.Engine.Tests
         [Theory]
         [InlineData("save")]
         [InlineData("continue")]
-        public void AMissionOpenedAgainWaitsForThePartner(string how)
+        public void AMissionOpenedAgainLeavesThePartnersSoldiersToTheOneHere(string how)
         {
             using var host = new Host();
             var ana = host.Join("Ana");
@@ -316,29 +316,30 @@ namespace Bastion.Engine.Tests
             Assert.Equal("mission", host.Room.Summary().phase);
             var s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
             Assert.Equal((turn, Teams.Xcom), (s.Turn, s.ActiveTeam));
-            // Ana keeps the command with nobody to move: it doesn't go to Pepe till he is here (Gameplay, 3/11: as with «continuar»).
+            // Nobody waited for (Arturo, 7/11: «no esperar nunca»; since the 0.11.8 it was AwayGraceMs): Pepe's soldiers are
+            // Ana's at once, and the squad's turn waits for them as for her own (Rules.MaybeEndXcomTurn), however long.
             Assert.Equal(0, s.Command);
             var partner = Players(ana.Take("room").Last()).Single((p) => (int)p["slot"]! == 1);
             Assert.False((bool)partner["connected"]!);
-            Assert.Equal(Room.AwayGraceMs, (long)partner["graceMs"]!);
-            host.Advance(Room.AwayGraceMs - 1000);
+            Assert.Null(partner["graceMs"]);
+            host.Advance(Room.AwayGraceMs + 2000);
             s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
             Assert.Equal((turn, Teams.Xcom, 0), (s.Turn, s.ActiveTeam, s.Command));
             Assert.DoesNotContain(ana.Take("events").SelectMany((m) => m["events"]!), (e) => (string?)e["type"] == "turnBegan");
             if (how == "continue")
             {
-                // He comes: the turn is still the squad's.
+                // Pepe comes: the turn is still the squad's, and the command goes to Pepe, from Ana with nobody of Ana's own to move
+                // (Rules.SyncTurn, AutoPassCommand).
                 pepe = host.Join("Pepe");
                 host.Advance(2000);
                 s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
                 Assert.Equal((turn, Teams.Xcom), (s.Turn, s.ActiveTeam));
-                Assert.Null(Players(pepe.Take("room").Last()).Single((p) => (int)p["slot"]! == 1)["graceMs"]);
-                // And the command, from Ana with nobody to move (Rules.SyncTurn, AutoPassCommand).
                 Assert.Equal(1, s.Command);
             }
             else
             {
-                // He doesn't: it ends, as after any drop.
+                // Pepe doesn't: it ends when Ana says so.
+                host.Say(ana, new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
                 host.Advance(2000);
                 s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
                 Assert.True(s.Turn > turn || s.Outcome != null);

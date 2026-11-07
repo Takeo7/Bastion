@@ -1,0 +1,67 @@
+# Notas de Arturo del 7/11 (0.12.1, Mac)
+
+Arturo, jugando solo con la 0.12.1 en el Mac, en una campaña de dos sin Ana. Van en una 0.12.2 solo con esto, compilada en una copia limpia, aparte de lo de iOS. La captura, en `.dev-snapshots/gameplay/notas-arturo-07-11-bloqueo.png`.
+
+| # | Nota | Quién | Cómo queda |
+|---|---|---|---|
+| 1 | «No se puede mover en diagonal»: no era un fallo, sino lo que quiere («lo que quiero es que no se puedan mover en diagonal») | Gameplay, UI, Lore | Abajo |
+| 2 | «Se me ha bugueado y no aparecen los botones, no me deja moverlos… ni pasar turno ni nada» | Gameplay, Red | Abajo |
+
+## 2 · Solo, sin Ana
+
+Lo que pasó:
+- **La espera:** al seguir una misión guardada sin el compañero, la sala lo esperaba 5 minutos (`Room.AwaitAbsent`, desde la 0.11.8), con sus soldados como suyos. Ana Rios y Jonas no se podían mover, y la pantalla no decía que esperaba ni cuánto.
+- **Los de Arturo:** sus dos estaban en «Hoja en alto», así que no tenía nada que hacer.
+- **El fondo:** pasados los 5 minutos, los soldados de Ana pasaban a Arturo, pero el fin de turno no los esperaba. `MaybeEndXcomTurn` soltaba a los de un dueño que no está, y el turno acababa con ellos sin mover. Era el fallo que la espera de la 0.11.8 tapaba.
+
+Arturo, en el cuadro: «no esperar nunca».
+- **`Room`:** fuera `AwaitAbsent`. Al seguir una misión sin el compañero, sus soldados son de quien está desde el principio. Si el compañero entra luego, cada uno manda en lo suyo, y el mando pasa a él si quien lo tiene no tiene nada suyo que mover (`SyncTurn`, `AutoPassCommand`).
+- **`Rules.MaybeEndXcomTurn`:** los soldados de quien no está cuentan como los compartidos. El turno los espera hasta que quien está pulse «Terminar turno» o no les quede nada.
+- **Lo que no cambia:** las esperas de quien se desconecta a media partida (30 s, o 5 min con el juego fuera de la vista).
+- **Pruebas:** `RulesTests.AnAbsentPartnersSoldiersWaitForTheOneHere` y `NetEngineCampaignTests.AMissionOpenedAgainLeavesThePartnersSoldiersToTheOneHere`, que sustituye a la de la 0.11.8.
+
+## 1 · Nadie se mueve en diagonal
+
+Arturo, en el cuadro:
+- a todos: soldados, zombis y vivos. Solo en cruz, así que 8 puntos son 8 casillas en cruz;
+- el cuerpo a cuerpo y el mordisco siguen valiendo en la casilla de la esquina (`Aim.InMeleeReach`).
+
+Hecho:
+- **`Paths.ComputeReach`** anda solo las 4 direcciones de la cuadrícula. `StepCost` y `StepBetween` siguen dando su coste a la diagonal para las cuentas de los mapas (Mapgen, Furnishing, StairAccess), así que los mapas generados no cambian.
+- **Las partidas grabadas**, de nuevo (23).
+- **La IA, al pie de una escalera:** el Hinchado se quedaba al pie con el movimiento justo para no subir, gastaba la acción en ir a la casilla de al lado, «más cerca» en línea recta, y al turno siguiente volvía. Sin diagonales se repetía sin fin. Ahora, si ni con la acción le llega, espera al pie y sube al turno siguiente con las dos (`Ai.Walk`; `FlightsStep2Tests.TheHinchadoWaitsAtItsFoot`).
+- **Las pruebas de la recuperación,** con los caminos en cruz.
+- **Textos:** la ayuda del movimiento ya no dice «en diagonal, 1,5» (Lore, `Lore/Moving.cs`; UI, `HudText.Moves.Tip`).
+- **De paso, un fallo del clic** que encontró UI al buscarlo: con la cámara lejos, la casilla de detrás de un soldado volvía a elegirlo en vez de mover (`CombatController.BodyUnder`, 28 px fijos). Ahora la figura se mide en el mundo.
+
+## Para la 0.12.3: cambios de interfaz (informe del 7/11)
+
+El informe de Arturo «Cambios de interfaz · Informe para desarrollo», del 7/11. Las dos páginas, en texto y en imagen, están en `.dev-snapshots/gameplay/notas-ui-2026-11-07/`. La maqueta final es la v39, a 2560 × 1440 px, y las medidas del informe son a esa resolución. Es de UI (con Arte en lo que se dibuja en la escena), y va en dos commits, en este orden:
+
+**Commit 01 · La pantalla de preparación de la misión**
+- **La barra de arriba:**
+  - 83 px de alto, con los controles centrados en vertical; el fondo de toda la barra, #141618 al 75 %, y encima los textos, los iconos y los controles;
+  - fuera la textura, el ribete naranja de abajo y el indicador de infestación entero (el icono, la barra segmentada y el valor). La barra es la misma en todas las pantallas de la base y era el único sitio con el valor de la Marea: Arturo, en el cuadro, «Llevarla al Mapa», en la columna de la izquierda, con su valor y su ayuda (UI);
+  - el mismo orden: Bastión, aviso de asedio, día, recursos y Autocaravana;
+  - la placa de «Menú», junto a los FPS, con el contorno desgastado.
+- **«Tus soldados»:**
+  - 350 × 320 px, debajo de la barra a la izquierda, con contorno rasgado y fondo negro al 75 % en vez del marco metálico;
+  - el encabezado blanco, alineado con el borde izquierdo de las filas, sin la raya naranja ni los acentos morados;
+  - cuatro filas de 313 × 57 px con 3 px entre ellas: el retrato, el hexágono gris y el nombre en blanco;
+  - relleno irregular #535458 al 30 % en todas, a 4 px del marco;
+  - en vez de los checks verdes, un marco blanco desgastado de 1 px solo en los elegidos. En la maqueta van marcados Liam, Freya y Elena, Hiro no, y el encabezado dice 4/4.
+- **Los carteles bajo los personajes:**
+  - fuera los círculos morados del suelo (Arte, `Settlement.Lineup`) y la línea morada de los carteles (UI, `LineupCards`);
+  - de 150 × 68 a 200 × 91 px, todos a la misma altura, cada uno centrado bajo su personaje, con espacio entre las botas y el cartel;
+  - fondo negro al 75 % con contorno rasgado: el nombre centrado en blanco y más grande, el rango debajo en gris claro y más pequeño, y la × pequeña arriba a la derecha.
+- **El panel de la misión y el botón:**
+  - el panel de abajo («El consultorio de Metsovo»), con fondo negro al 75 % y contorno rasgado; el título centrado sobre la columna de texto, los párrafos a la izquierda y el objetivo en amarillo;
+  - «LANZAR MISIÓN» sigue a la derecha, en el rectángulo con muescas de 201 × 50 px de la maqueta en vez del contorno inclinado, con el mismo degradado amarillo y el texto oscuro centrado.
+
+**Commit 02 · Las tarjetas del resto del juego**, en un commit aparte, cuando el 01 esté hecho y comprobado contra la maqueta:
+- todas las tarjetas del juego, con el mismo contorno rasgado, eligiendo el sprite por las proporciones de cada una;
+- el fondo, negro al 75 %; el contenido, los iconos y los controles encima, cada uno con su opacidad.
+
+**En los dos:**
+- los porcentajes van en la capa de fondo o en el relleno; los textos, los retratos, los iconos, los marcos y los botones, en capas aparte;
+- los sprites: `SPR_HUD_Apocalypse_Box_Large_01` (el de la maqueta), `_Large_02`, `_Medium_01` a `_04`, `_Small_01` a `_03` y `SPR_HUD_Apocalypse_Frame_Large_03_Underlay`, de INTERFACE - Apocalypse HUD, que ya está en el proyecto (`Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/`).

@@ -648,6 +648,9 @@ namespace Bastion.Engine
             var once = PlanWalk(sim.S, u, goal, minGap);
             if (once.Short && u.Ap < 1) return false;
             var twice = once.Short ? PlanWalk(sim.S, u, goal, minGap, 2) : null;
+            // Short even with its action too: it waits at the foot. Its way round instead stepped off to a tile nearer as the
+            // crow flies, and back the next turn, forever, once nobody walked a diagonal (Arturo, 7/11).
+            if (twice != null && twice.Short) return false;
             var plan = twice?.Path != null ? twice : once;
             // Waiting behind its own: it goes again once the rest have moved (Sim.runAlienTurn).
             if (plan.Jammed) sim.Jammed.Add(u.Id);

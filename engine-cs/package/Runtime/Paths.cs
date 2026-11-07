@@ -371,11 +371,15 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// Dijkstra over 8 directions, on every level (docs/FASE6-PLAN.md: up and down
-        /// ladders and stairs, off edges). Every living unit but the walker blocks its
+        /// Dijkstra over the 4 directions of the grid, on every level (docs/FASE6-PLAN.md:
+        /// up and down ladders and stairs, off edges): nobody walks a diagonal, the dead
+        /// neither (Arturo, 7/11; a melee blow or a bite still reaches the corner tile,
+        /// Aim.InMeleeReach). StepCost and StepBetween still give a diagonal its cost
+        /// for the maps' own reckonings (Mapgen, Furnishing, StairAccess): those don't
+        /// change. Every living unit but the walker blocks its
         /// place, whoever's side (Arturo, 19/10: «los compañeros se bloquean», as in
         /// XCOM): a soldier, one of the dead, a turret, the VIP; not the floor above or
-        /// below. Diagonals may not cut the corners of blocked tiles. A pod on patrol
+        /// below. A pod on patrol
         /// keeps to doors and open ground (playtest: undiscovered aliens went into a
         /// building through a window): vaulting in is for aliens in the fight. In a
         /// siege the dead don't open doors: they break them down (docs/FASE12.md §4).
@@ -397,7 +401,6 @@ namespace Bastion.Engine
             {
                 if (o.Alive && o != u && !(ignore?.Invoke(o) ?? false)) taken.Add(Grid.NodeOf(s, o.Pos));
             }
-            bool Blocked(Pos? p) => p != null && taken.Contains(Grid.NodeOf(s, p));
             var start = Grid.NodeOf(s, origin);
             var cost = new JsMap<int, int>();
             cost.Set(start, 0);
@@ -412,18 +415,13 @@ namespace Bastion.Engine
                 var i = popped.Value;
                 if (cost.TryGetValue(i, out var known) && c > known) continue;
                 var p = Grid.PosOf(s, i);
-                foreach (var d in Grid.Dirs8)
+                foreach (var d in Grid.Dirs4)
                 {
                     foreach (var step in StepsFrom(s, p, d.X, d.Y))
                     {
                         var to = step.To;
                         var ni = Grid.NodeOf(s, to);
                         if (taken.Contains(ni) || (avoid != null && avoid.Contains(ni)) || (!windows && Grid.IsWindow(Grid.KindAt(s, to))) || (shut && Grid.KindAt(s, to) == TileKinds.Door)) continue;
-                        if (d.X != 0 && d.Y != 0)
-                        {
-                            var h = Grid.HeightAt(s, p);
-                            if (Blocked(Grid.SurfaceAt(s, to.X, p.Y, h)) || Blocked(Grid.SurfaceAt(s, p.X, to.Y, h))) continue;
-                        }
                         var nc = c + step.Cost + (slow != null && slow.Contains(ni) ? Content.Traps.Wire : 0) + (fire != null && fire.Contains(ni) ? Content.Flames.Avoid : 0);
                         if (nc > maxCost) continue;
                         if (!cost.TryGetValue(ni, out var old) || nc < old)

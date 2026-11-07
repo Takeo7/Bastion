@@ -1424,10 +1424,17 @@ namespace Bastion.Engine
             if (Over || S.ActiveTeam != Teams.Xcom) return;
             // A Set of Slot | 'pool': null for the pool.
             var pending = new List<int?>();
-            // Movement left keeps a player in the turn too (Arturo, 5/11: it is spent in stretches, after acting as well).
-            foreach (var u in Grid.Combatants(S, Teams.Xcom)) if (Paths.HasTurnLeft(u) && !pending.Contains(u.Owner)) pending.Add(u.Owner);
+            // Movement left keeps a player in the turn too (Arturo, 5/11: it is spent in stretches, after acting as well). A
+            // partner's who isn't here are whoever is here's to move (CommandsFor), so they wait as the shared ones do, for all
+            // of those here: they used to be let go, and the turn ended under the one left with them still to move (Arturo,
+            // 7/11, alone in a mission opened again: «no esperar nunca» for the partner, whose soldiers are the one here's at once).
+            foreach (var u in Grid.Combatants(S, Teams.Xcom))
+            {
+                var k = u.Owner != null && !Connected.Contains(u.Owner.Value) ? null : u.Owner;
+                if (Paths.HasTurnLeft(u) && !pending.Contains(k)) pending.Add(k);
+            }
             var allConnectedReady = Connected.All((slot) => S.Ready[slot]);
-            var done = pending.All((k) => k == null ? allConnectedReady : S.Ready[k.Value] || !Connected.Contains(k.Value));
+            var done = pending.All((k) => k == null ? allConnectedReady : S.Ready[k.Value]);
             if (done) RunAlienTurn();
         }
 
