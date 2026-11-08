@@ -38,25 +38,20 @@ namespace Bastion.Engine
             [Furnishes.Clinic] = Furnishes.Clinic,
         };
 
-        /// <summary>From one window to the next on an upper storey: shops and offices glazed, houses less.</summary>
-        private static int UpstairsWindows(Building b) => b.Furnish == Furnishes.Home ? 3 : 2;
-
         /// <summary>
-        /// Windows along the outer walls of storey `lc` of building `b`, like windows()
-        /// on the ground: never at a corner, beside another opening or where a wall
-        /// meets it from inside, and never onto another building's storey (`occupied`).
+        /// Windows along the outer walls of storey `lc` of a building, in the same columns as on its ground floor (`g`;
+        /// playtest note 17): never beside another opening or where a wall meets it from inside, and never onto another
+        /// building's storey (`occupied`).
         /// </summary>
-        private static void UpperWindows(Canvas lc, Rect b, int every, bool[] occupied)
+        private static void UpperWindows(Canvas lc, Glazing g, bool[] occupied)
         {
+            var b = g.Outer;
             for (var s = 0; s < 4; s++)
             {
-                var n = SideLen(b, s);
-                var anchor = (int)Math.Floor((n - 1) / 2.0);
                 var back = Grid.Dirs4[Opposite(s)];
                 var lateral = Grid.Dirs4[(s + 1) % 4];
-                for (var u = 2; u <= n - 3; u++)
+                foreach (var u in g.Along(s))
                 {
-                    if (Math.Abs(u - anchor) % every != 0) continue;
                     var p = LocalPt(b, s, u, 0);
                     var q = Add(p, Grid.Dirs4[s]);
                     if (lc.Get(p.X, p.Y) != TileKinds.Wall || lc.Get(p.X + back.X, p.Y + back.Y) != TileKinds.Floor) continue;
@@ -189,7 +184,9 @@ namespace Bastion.Engine
         /// `slab`: a storey above the ground) that was joined to another still is,
         /// with `closed` taken out of the way (the tiles of a flight: nobody steps on
         /// or off them sideways) and `cleared` furniture gone. Through doors, not
-        /// windows.
+        /// windows. A tile cleared counts as floor before too: one cut off once the
+        /// flight is in (a foot between the flight and a window's barricade) is no
+        /// place for it.
         /// </summary>
         private static bool JoinedStill(Canvas c, bool[]? slab, Rect r, List<Vec2> closed, JsSet<int> cleared)
         {
@@ -201,7 +198,7 @@ namespace Bastion.Engine
                     if (!InRect(r, p)) return false;
                     var i = c.I(p.X, p.Y);
                     if ((slab != null && !Js.At(slab, i, false)) || (after && shut.Has(i))) return false;
-                    var kind = after && cleared.Has(i) ? TileKinds.Floor : c.Get(p.X, p.Y);
+                    var kind = cleared.Has(i) ? TileKinds.Floor : c.Get(p.X, p.Y);
                     return Grid.IsWalkable(kind) && kind != TileKinds.Window && kind != TileKinds.WindowBroken;
                 }
                 var piece = new JsMap<int, int>();
@@ -575,6 +572,8 @@ namespace Bastion.Engine
                 {
                     e.Rooms = new List<Rect>();
                     e.MedicalRooms = new List<MedicalRoom>();
+                    // The same columns as below (playtest note 17): its walls keep off them.
+                    var glazing = new Glazing(c, e.B.Outer, e.B.Furnish);
                     if (!string.IsNullOrEmpty(e.B.MedicalKind))
                     {
                         e.MedicalRooms = MedicalPlan(lc, e.B.Outer, e.B.Front!.Value, rng, k, e.B.MedicalKind == MedicalSiteKinds.Hospital, e.B.MedicalKind == MedicalSiteKinds.Ward, new List<int?> { null, null, null, null });
@@ -582,7 +581,7 @@ namespace Bastion.Engine
                     else if (e.B.FlatsCore != null)
                     {
                         // A block of flats: the same core and two flats on every storey.
-                        var (core, flats) = FlatsPlan(lc, e.B.Outer, e.B.Front!.Value, rng, true);
+                        var (core, flats) = FlatsPlan(lc, e.B.Outer, e.B.Front!.Value, rng, true, glazing);
                         e.Rooms = new List<Rect> { core };
                         e.Rooms.AddRange(flats.SelectMany((f) => f));
                         e.Flats = flats;
@@ -590,17 +589,18 @@ namespace Bastion.Engine
                     else if (e.B.HouseHall != null)
                     {
                         // A house's storey round its hall, the stairs in it (the hall itself no room of the home up here).
-                        HallPlan2(lc, e.B.Outer, e.B.Front!.Value, rng, e.Rooms, true);
+                        HallPlan2(lc, e.B.Outer, e.B.Front!.Value, rng, e.Rooms, true, glazing);
                     }
-                    else SplitRooms(lc, Inset(e.B.Outer, 1), rng, e.Rooms, e.B.Furnish == Furnishes.Home ? 6 : 8, e.B.Furnish != Furnishes.Home, true);
+                    else SplitRooms(lc, Inset(e.B.Outer, 1), rng, e.Rooms, e.B.Furnish == Furnishes.Home ? 6 : 8, e.B.Furnish != Furnishes.Home, true, glazing);
                     var outer = e.B.Outer;
                     var others = new bool[area];
                     for (var i = 0; i < area; i++) others[i] = occupied[i] && !InRect(outer, V(i % c.Width, i / c.Width));
-                    UpperWindows(lc, e.B.Outer, UpstairsWindows(e.B), others);
+                    UpperWindows(lc, glazing, others);
                 }
                 foreach (var e in going)
                 {
                     if (e.Landing == null) continue;
+                    var glazing = new Glazing(c, e.B.Outer, e.B.Furnish);
                     if (!string.IsNullOrEmpty(e.B.MedicalKind))
                     {
                         foreach (var room in e.MedicalRooms) FurnishMedical(lc, room, rng, e.B.MedicalKind == MedicalSiteKinds.Clinic ? null : e.B.MedicalKind);
@@ -612,7 +612,7 @@ namespace Bastion.Engine
                         // under the stairwell of the storey above: no room of a home.)
                         foreach (var flat in e.Flats)
                         {
-                            var (own, uses, strip) = FlatUses(lc, flat);
+                            var (own, uses, strip) = FlatUses(lc, flat, glazing);
                             for (var j = 0; j < own.Count; j++)
                             {
                                 var room = own[j];
@@ -630,7 +630,7 @@ namespace Bastion.Engine
                             // reduce from rooms[0]: undefined for none.
                             Rect? big = e.Rooms.Count > 0 ? e.Rooms[0] : null;
                             foreach (var r in e.Rooms) if (r.W * r.H > big!.W * big.H) big = r;
-                            var cut = big != null ? SplitOff(lc, big, 2) : null;
+                            var cut = big != null ? SplitOff(lc, big, 2, glazing) : null;
                             if (cut != null)
                             {
                                 // indexOf: by reference.

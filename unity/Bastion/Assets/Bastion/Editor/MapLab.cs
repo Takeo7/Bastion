@@ -428,6 +428,78 @@ namespace Bastion.EditorTools
             }
         }
 
+        /// <summary>
+        /// The window columns (WindowColumns; Ana's note 17, Arturo, 7/11) against the windows: in each map of BASTION_MAP
+        /// (step1's and step2's goldens and step3's towns and cities if not said; a saved game's file by its path too), for each building of the plan, the
+        /// windows of its ground floor and of its real storeys out of their columns as WallLayout counts them (its bounds,
+        /// WallLayout.ColumnsEvery), and how many windows a storey its façade storeys get (WallLayout.Storeys).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.Columnas -quit
+        /// </summary>
+        public static void Columnas()
+        {
+            string golden = Path.Combine(Application.dataPath, "../../../engine-cs/golden");
+            var names = Environment.GetEnvironmentVariable("BASTION_MAP")?.Split(',')
+                ?? Directory.GetFiles(Path.Combine(golden, "step1"), "*.json").Concat(Directory.GetFiles(Path.Combine(golden, "step2"), "*.json"))
+                    .Concat(new[] { "town", "city" }.Select(n => Path.Combine(golden, "step3", n + ".json")))
+                    .Where(f => !new[] { "content", "math" }.Contains(Path.GetFileNameWithoutExtension(f))).ToArray();
+            // (step3's are cases, each a state: town.json's towns.)
+            var states = new List<(string name, Func<GameState> state)>();
+            foreach (string name in names)
+            {
+                var file = File.Exists(name) ? Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(name)) : null;
+                if (file?["cases"] is Newtonsoft.Json.Linq.JArray cases)
+                    foreach (var c in cases) states.Add(($"{Path.GetFileNameWithoutExtension(name)}:{c["name"]}", () => Bastion.Net.Json.Read<GameState>(c["state"].ToString(Newtonsoft.Json.Formatting.None))));
+                else states.Add((Path.GetFileNameWithoutExtension(name), () => Golden(name)));
+            }
+            foreach (var (name, read) in states)
+            {
+                GameState state;
+                try { state = read(); }
+                catch (Exception e) { Debug.Log($"[columnas] {name}: not read ({e.GetType().Name})"); continue; }
+                var plan = new BuildingPlan(state);
+                int w = state.Width, windows = 0, off = 0, upper = 0, upperOff = 0, facades = 0;
+                var lines = new List<string>();
+                foreach (var bd in plan.Buildings)
+                {
+                    if (bd.kind == BuildingKinds.Ruin) continue;
+                    int every = WallLayout.ColumnsEvery(state, bd);
+                    // Each side's tiles (DIRS4: 0 north, the row y0), and the windows on them of the ground and of each real storey.
+                    var sides = new List<string>();
+                    for (int side = 0; side < 4; side++)
+                    {
+                        int n = side % 2 == 0 ? bd.x1 - bd.x0 + 1 : bd.y1 - bd.y0 + 1;
+                        var columns = WindowColumns.Along(n, every);
+                        (int x, int y) At(int u) => side == 0 ? (bd.x0 + u, bd.y0) : side == 1 ? (bd.x1, bd.y0 + u) : side == 2 ? (bd.x0 + u, bd.y1) : (bd.x0, bd.y0 + u);
+                        var floors = new List<IList<string>> { state.Tiles };
+                        if (bd.leveled && state.Levels != null) floors.AddRange(state.Levels.Take(bd.storeys - 1).Select(l => (IList<string>)l.Tiles));
+                        var found = new List<string>();
+                        for (int k = 0; k < floors.Count; k++)
+                        {
+                            var us = Enumerable.Range(0, n).Where(u => { var (x, y) = At(u); string tk = floors[k][y * w + x]; return tk == TileKinds.Window || tk == TileKinds.WindowBroken; }).ToList();
+                            int outOf = us.Count(u => !columns.Contains(u));
+                            if (k == 0) { windows += us.Count; off += outOf; } else { upper += us.Count; upperOff += outOf; }
+                            if (outOf > 0) found.Add($"storey {k}: {string.Join(" ", us)}");
+                        }
+                        if (found.Count > 0) sides.Add($"side {side} (n {n}, columns {string.Join(" ", columns)}): {string.Join("; ", found)}");
+                    }
+                    if (!bd.leveled && bd.storeys > 1)
+                    {
+                        facades++;
+                        // A façade over a ground floor with openings in it: the ones whose columns line up to be seen.
+                        int open = 0;
+                        for (int y = bd.y0; y <= bd.y1; y++) for (int x = bd.x0; x <= bd.x1; x++)
+                            if ((x == bd.x0 || x == bd.x1 || y == bd.y0 || y == bd.y1) && state.Tiles[y * w + x] is string tk && tk != TileKinds.Wall && BuildingPlan.IsWallLike(tk)) open++;
+                        if (open > 0) lines.Add($"  façade {bd.index} {bd.kind} ({bd.x0},{bd.y0})–({bd.x1},{bd.y1}) storeys {bd.storeys} every {every}: {open} openings below");
+                    }
+                    // (BASTION_COLUMNAS_TODOS=1: every building, its columns or not.)
+                    if (sides.Count == 0 && Environment.GetEnvironmentVariable("BASTION_COLUMNAS_TODOS") == "1")
+                        lines.Add($"  building {bd.index} {bd.kind} ({bd.x0},{bd.y0})–({bd.x1},{bd.y1}){(bd.leveled ? " leveled" : "")} storeys {bd.storeys} every {every}: in their columns");
+                    if (sides.Count > 0) lines.Add($"  building {bd.index} {bd.kind} ({bd.x0},{bd.y0})–({bd.x1},{bd.y1}){(bd.leveled ? " leveled" : "")} storeys {bd.storeys} every {every}: {string.Join(" | ", sides)}");
+                }
+                Debug.Log($"[columnas] {name}: {plan.Buildings.Count} buildings ({facades} with façade storeys); ground windows {windows}, {off} out of their columns; real storeys' {upper}, {upperOff} out" + (lines.Count > 0 ? "\n" + string.Join("\n", lines) : ""));
+            }
+        }
+
         internal static GameState Golden(string name)
         {
             // (Or a saved game's file by its path: a lab's, UI's lab-asedio.json.)

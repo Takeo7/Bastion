@@ -358,7 +358,8 @@ namespace Bastion.Engine
         /// <summary>
         /// The town's ground out of doors that nobody walks to from the squad's (through doors, round what stands about) but
         /// through a window, or not at all: shut with the outline as lots (sealPockets' rule, before the ways are cut and the
-        /// stairs laid: a flight put before that window later would leave it shut).
+        /// stairs laid: a flight put before that window later would leave it shut). A window onto it is wall now, as where a
+        /// building's wall faces one (playtest note 17).
         /// </summary>
         private static void SealTown(Canvas c, Vec2 from)
         {
@@ -410,6 +411,7 @@ namespace Bastion.Engine
                     c.Ground[j] = Out;
                     c.Decor[j] = 0;
                     c.Keep[j] = true;
+                    foreach (var d in Grid.Dirs4) if (c.Get(p.X + d.X, p.Y + d.Y) == TileKinds.Window) c.Force(p.X + d.X, p.Y + d.Y, TileKinds.Wall);
                 }
             }
             if (any) foreach (var r in TownPlans.RectsOf(mask, c.Width, c.Height, 1)) c.Frame.Add(new FramePiece { Kind = FrameKinds.Lot, X = r.X, Y = r.Y, W = r.W, H = r.H });

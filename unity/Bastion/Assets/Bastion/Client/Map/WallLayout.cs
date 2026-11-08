@@ -324,13 +324,15 @@ namespace Bastion.Client.Map
         void Prop(string id, Matrix4x4 matrix, int b) => Props.Add(new WallProp { id = id, matrix = matrix, building = b, level = level, tile = tile });
 
         /// <summary>
-        /// The storeys above the ground floor of a stretch of wall (`along` its length, centred on (x, z)): the building's
-        /// own outer walls up to its roof, windows over doors and windows (and on shops and offices every other tile, the
-        /// same on every storey, in columns: Arturo, 2/11, Ana's #3, missing rows of windows; 0.10.1's buildings.ts moved
-        /// them a tile along from one storey to the next, a checkerboard); over a wall shared with a lower neighbour, what
-        /// stands above the neighbour's roof, facing it.
+        /// The storeys above the ground floor of a stretch of wall (`along` its length, centred on (x, z), on tile (tx, ty)):
+        /// the building's own outer walls up to its roof, windows in its window columns (WindowColumns, the engine's: Ana's
+        /// note 17, Arturo, 7/11, «En columnas»; the same as its ground floor's and on every storey, over a door's column
+        /// too), but where another building stands outside; over a wall shared with a lower neighbour, what stands above
+        /// the neighbour's roof, facing it. (Before, windows over the ground's doors and windows and, on shops and offices,
+        /// every other tile: Arturo, 2/11, Ana's #3; 0.10.1's buildings.ts moved them a tile along from one storey to the
+        /// next, a checkerboard.)
         /// </summary>
-        void Storeys(string ground, float x, float z, int t, Vec2 o, bool between, int b, int other, float along = 1, Vec2 d = default, float reach = 0)
+        void Storeys(float x, float z, int tx, int ty, Vec2 o, bool between, int b, int other, float along = 1, Vec2 d = default, float reach = 0)
         {
             var bd = BuildingOf(b);
             // Real storeys are laid from their own tiles.
@@ -352,8 +354,7 @@ namespace Bastion.Client.Map
             for (int k = from; k < to; k++)
             {
                 float y0 = ob.@base + k * Storey;
-                bool glazed = other < 0 && (ground != TileKinds.Wall || (ob.kind != BuildingKinds.House && ob.kind != BuildingKinds.Motel
-                    && t % 2 == 0));
+                bool glazed = other < 0 && along == 1 && Column(ob, face, tx, ty) && !Fronted(ob, face, tx, ty, y0);
                 // (An office's cornice along its top storey: phase 3.)
                 if (kit.crown != null && k == ob.storeys - 1) Put(kit.crown, x, z, y0, face, false, owner, along: along, thick: kit.thick, tint: true, roof: true);
                 if (along < 1)
@@ -370,6 +371,41 @@ namespace Bastion.Client.Map
                 if (glazed && shutters) Put("houseShutters", x, z, y0, face, false, owner, thick: kit.thick, roof: true);
                 if (glazed && kit.top == null) Pane(KitIdOf(ob), x, z, y0, face, owner, true);
             }
+        }
+
+        /// <summary>Building bd's window columns' spacing (ColumnsEvery), by building.</summary>
+        readonly Dictionary<int, int> columnsEvery = new Dictionary<int, int>();
+
+        /// <summary>
+        /// How far apart building bd's window columns are (WindowColumns.Every): wider on a home, as the engine's (Mapgen's
+        /// Glazing: Furnishes.Home), which are GameState.homes, as BuildingPlan finds them. (Not a house or a motel by its
+        /// kind where a map has none: a generated one has none where none of its buildings is a home, and its kind says house
+        /// of any building it can't tell: city-5-night's.)
+        /// </summary>
+        public static int ColumnsEvery(GameState s, Building bd) =>
+            WindowColumns.Every(s.Homes != null && s.Homes.Any((h) => bd.x0 >= h.X && bd.y0 >= h.Y && bd.x1 < h.X + h.W && bd.y1 < h.Y + h.H));
+
+        /// <summary>
+        /// Whether wall tile (x, y) of building bd, its face `o` out, is in one of bd's window columns (WindowColumns: the
+        /// engine lays its windows on every storey it plays in them, and the ground's of this one).
+        /// </summary>
+        bool Column(Building bd, Vec2 o, int x, int y)
+        {
+            if (!columnsEvery.TryGetValue(bd.index, out int every)) columnsEvery[bd.index] = every = ColumnsEvery(s, bd);
+            // The side, as a DIRS4 index (0 north: y grows southwards).
+            int side = o.Y < 0 ? 0 : o.X > 0 ? 1 : o.Y > 0 ? 2 : 3;
+            return WindowColumns.IsColumn(bd.x0, bd.y0, bd.x1, bd.y1, side, x, y, every);
+        }
+
+        /// <summary>
+        /// Whether, outside wall tile (x, y) of building bd (its face `o` out), another building stands up to the storey from
+        /// height y0: no window onto it (as Upstairs.UpperWindows' `occupied`).
+        /// </summary>
+        bool Fronted(Building bd, Vec2 o, int x, int y, float y0)
+        {
+            int qx = x + o.X, qy = y + o.Y;
+            var them = InMap(qx, qy) ? BuildingOf(plan.Owner[qy * w + qx]) : null;
+            return them != null && them != bd && them.kind != BuildingKinds.Ruin && them.@base + them.storeys * Storey > y0 + Storey / 2;
         }
 
         /// <summary>Whether tile (x, y) of building `bd`'s outline is on its side `side` (DIRS4).</summary>
@@ -751,7 +787,7 @@ namespace Bastion.Client.Map
                 bool shuttered = false;
                 if (kit == outerKit) (kit, shuttered) = LookOf(building, kit);
                 var along = run == 0 ? new Vec2 { X = 1, Y = 0 } : new Vec2 { X = 0, Y = 1 };
-                if (!loose) Storeys(broken ? TileKinds.Wall : kind, cx, cz, run == 0 ? x : y, o, between, b, other);
+                if (!loose) Storeys(cx, cz, x, y, o, between, b, other);
                 if (IsDoor(kind) && loose && plan.Siege)
                 {
                     // A siege's gate: a sheet-metal leaf to a tile under the open sky, each hinged at its end of the gate
@@ -886,7 +922,7 @@ namespace Bastion.Client.Map
                     Put(kit.wall[n], ax - d.X * r / 2, az - d.Y * r / 2, @base, o, between, bb, along: 0.5f + r, thick: kit.thick, tint: n == 0, tall: broken ? BreachHeight : 1);
                 }
                 if (broken) for (int n = 0; n < kit.lintel.Length; n++) Put(kit.lintel[n], ax, az, @base, o, between, bb, along: 0.5f, thick: kit.thick, tint: n == 0);
-                if (!loose) Storeys(TileKinds.Wall, ax, az, 0, o, between, bb, other, 0.5f, d, reach);
+                if (!loose) Storeys(ax, az, x, y, o, between, bb, other, 0.5f, d, reach);
                 if (kit.top != null) Put(kit.top, ax, az, @base + Storey, o, between, b, along: 0.5f / WireLength, thick: 1);
                 if (!between && kit.crown != null && TopOf(BuildingOf(bb), level)) Put(kit.crown, ax, az, @base, o, false, bb, along: 0.5f, thick: kit.thick, tint: true);
                 if (!between && kit.plinth != null && level == 0) Put(kit.plinth, ax, az, @base, o, false, bb, along: 0.5f, thick: kit.thick, tint: true);

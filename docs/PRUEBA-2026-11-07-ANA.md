@@ -37,7 +37,7 @@ Informe de Ana, «Bastion-informe-desarrollo-consolidado-2026-11-07.pdf», 22 pu
 
 | # | Pág. | Qué pide | Quién |
 |---|---|---|---|
-| 17 | p8 | Las ventanas que faltan en la primera planta; las del lateral del patio de la fuente, repartidas con separaciones regulares. | Arte |
+| 17 | p8 | Las ventanas que faltan en la primera planta; las del lateral del patio de la fuente, repartidas con separaciones regulares. Arturo (cuadro, 7/11): «En columnas». En cada lado, las mismas columnas en todas las plantas, cada 3 en una vivienda y cada 2 en lo demás, centradas y con márgenes iguales; en la planta baja también, salvo en la puerta y a su lado, o donde fuera hay pared. Los tabiques se apartan de las columnas. Cambian los mapas nuevos. Para la 0.12.9. | Gameplay (motor: `WindowColumns`, Mapgen) y Arte (`WallLayout.Storeys` con la misma función) |
 | 18 | p8 | La esquina de ladrillo continua (sin la franja gris) y la puerta encajada en su hueco. | Arte |
 | 19 | p9 | Nieve en tejados y azoteas, como la de las calles y los coches. | Arte |
 | 20 | p9 | Al empezar una partida nueva, «Escuadra» es la pestaña de inicio, ya con el mensaje de introducción. | UI |

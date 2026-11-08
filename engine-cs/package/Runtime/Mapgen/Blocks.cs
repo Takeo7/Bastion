@@ -31,6 +31,8 @@ namespace Bastion.Engine
             }
             var rooms = new List<Rect>();
             var doors = new List<int?> { null, null, null, null };
+            // Its window columns, on this floor and on any above (playtest note 17): the walls between rooms keep off them.
+            var glazing = new Glazing(c, b, furnish);
             Rect? office = null;
             (Rect R, int U, Rect Stairs)? houseHall = null;
             List<MedicalRoom>? medicalRooms = furnish == Furnishes.Clinic ? MedicalPlan(c, b, front, rng, 0, medicalKind == MedicalSiteKinds.Hospital, medicalKind == MedicalSiteKinds.Ward, doors) : null;
@@ -39,17 +41,17 @@ namespace Bastion.Engine
                 // A MedicalRoom is a Rect in TypeScript (its x, y, w, h): here a rect of its own, as nothing compares them.
                 rooms.AddRange(medicalRooms.Select((m) => Rect(m.X, m.Y, m.W, m.H)));
             }
-            else if (plan == Plans.Corridor && CorridorPlan(c, b, front, rng, rooms, doors))
+            else if (plan == Plans.Corridor && CorridorPlan(c, b, front, rng, rooms, doors, glazing))
             {
                 // Rooms and doors are in place.
             }
             else if (plan == Plans.Shop)
             {
-                ShopPlan(c, b, front, rng, rooms);
+                ShopPlan(c, b, front, rng, rooms, glazing);
             }
             else if (plan == Plans.Hall)
             {
-                office = HallPlan(c, b, front, rng, rooms);
+                office = HallPlan(c, b, front, rng, rooms, glazing);
             }
             else if (plan == Plans.Market)
             {
@@ -59,7 +61,7 @@ namespace Bastion.Engine
             {
                 // A house's hall, its front door in it (docs/MAPAS.md §4.3); or open at both ends, two wide, through to what is
                 // behind the house under its storey above (`through`: a zaguán, §5.4).
-                houseHall = HallPlan2(c, b, front, rng, rooms, false);
+                houseHall = HallPlan2(c, b, front, rng, rooms, false, glazing);
                 var u = 1 + houseHall.Value.U;
                 if (through)
                 {
@@ -86,7 +88,7 @@ namespace Bastion.Engine
             }
             else
             {
-                SplitRooms(c, Inset(b, 1), rng, rooms, plan == Plans.Open ? 8 : 6, plan == Plans.Open);
+                SplitRooms(c, Inset(b, 1), rng, rooms, plan == Plans.Open ? 8 : 6, plan == Plans.Open, false, glazing);
             }
             // A hall's loading bay is 3 wide; a supermarket's way in, a double door.
             var width = plan == Plans.Hall ? 3 : plan == Plans.Market ? 2 : 1;
@@ -127,7 +129,7 @@ namespace Bastion.Engine
                         foreach (var u in from)
                         {
                             var k = uses.IndexOf(u);
-                            var cut = k >= 0 ? SplitOff(c, rooms[k], 2) : null;
+                            var cut = k >= 0 ? SplitOff(c, rooms[k], 2, glazing) : null;
                             if (cut == null) continue;
                             rooms.RemoveAt(k);
                             rooms.InsertRange(k, new[] { cut.Value.Item1, cut.Value.Item2 });
@@ -145,7 +147,7 @@ namespace Bastion.Engine
                 {
                     // `back` in TypeScript (the room behind; the name is the back side's here).
                     var backRoom = rooms.Find((r) => r != living);
-                    var cut = backRoom != null ? SplitOff(c, backRoom, 2) : SplitOff(c, living);
+                    var cut = backRoom != null ? SplitOff(c, backRoom, 2, glazing) : SplitOff(c, living, 3, glazing);
                     if (cut != null && backRoom != null)
                     {
                         var at = rooms.IndexOf(backRoom);
@@ -165,7 +167,7 @@ namespace Bastion.Engine
                     var uses = HomeUses(rooms, entry, 0);
                     // A pantry off the kitchen, 2 deep (docs/MAPAS.md §10), where the kitchen keeps 3 a side.
                     var kitchen = uses.IndexOf(HomeUse.Kitchen);
-                    var cut = kitchen >= 0 ? SplitOff(c, rooms[kitchen], 2) : null;
+                    var cut = kitchen >= 0 ? SplitOff(c, rooms[kitchen], 2, glazing) : null;
                     if (cut != null)
                     {
                         rooms.RemoveAt(kitchen);
@@ -176,9 +178,9 @@ namespace Bastion.Engine
                     home = (uses, !uses.Contains(HomeUse.Kitchen), cut?.Item2);
                 }
             }
-            // Shops show their goods: a window every other tile; a supermarket, its whole front.
+            // Shops show their goods: a window every other tile (WindowColumns); a supermarket, its whole front.
             if (plan == Plans.Market && way >= 0) ShopFront(c, b, way);
-            else Windows(c, b, plan == Plans.Shop ? 2 : style.WindowEvery, doors);
+            else Windows(c, glazing);
             // No window on the wall beside a hall's stairs: a flight before it would leave it no way in or out.
             if (houseHall != null)
             {
@@ -265,15 +267,19 @@ namespace Bastion.Engine
         /// <summary>
         /// A house's storey round its hall (docs/MAPAS.md §4.3: the stairwell is the hall, 2 wide): the hall down one side
         /// from the front to the back (the same side on every storey, by where the house stands), a wall along it, the rest
-        /// cut into rooms (splitRooms), each with a door onto the hall. `kept` (upstairs): the stairwell's tiles kept clear.
-        /// Returns the hall, where along the front its door goes (inside the walls), and the rooms, the nearest the street first.
+        /// cut into rooms (splitRooms), each with a door onto the hall. `kept` (upstairs): the stairwell's tiles kept clear;
+        /// `glazing`: the windows the rooms' walls keep off. Returns the hall, where along the front its door goes (inside the
+        /// walls), and the rooms, the nearest the street first.
         /// </summary>
-        private static (Rect R, int U, Rect Stairs) HallPlan2(Canvas c, Rect b, int front, Rng rng, List<Rect> rooms, bool kept)
+        private static (Rect R, int U, Rect Stairs) HallPlan2(Canvas c, Rect b, int front, Rng rng, List<Rect> rooms, bool kept, Glazing? glazing = null)
         {
             var inner = Inset(b, 1);
             var across = SideLen(inner, front);
             var deep = DepthOf(inner, front);
             var left = Mix(b.X * 7 + 3, b.Y * 11 + 5) % 2 == 0;
+            // Down the other side where only there its wall keeps off the windows (playtest note 17): the same on every storey.
+            bool Shuts(bool l) => glazing != null && glazing.Shuts(Enumerable.Range(0, deep).Select((v) => LocalPt(inner, front, l ? 2 : across - 3, v)));
+            if (Shuts(left) && !Shuts(!left)) left = !left;
             var hu = left ? 0 : across - 2;
             var wu = left ? 2 : across - 3;
             var hall = Local(inner, front, hu, 0, 2, deep);
@@ -284,7 +290,7 @@ namespace Bastion.Engine
             }
             var rest = Local(inner, front, left ? 3 : 0, 0, across - 3, deep);
             var own = new List<Rect>();
-            SplitRooms(c, rest, rng, own, 6, false, kept);
+            SplitRooms(c, rest, rng, own, 6, false, kept, glazing);
             // How far in from the front a room starts and ends.
             int DepthAt(Vec2 p) => front == 0 ? p.Y - inner.Y : front == 2 ? inner.Y + inner.H - 1 - p.Y : front == 3 ? p.X - inner.X : inner.X + inner.W - 1 - p.X;
             (int, int) Span(Rect r)
@@ -312,14 +318,14 @@ namespace Bastion.Engine
         /// One storey of a block of flats on `c` (docs/MAPAS.md §4.2: 16–18 × 9–11 here, two flats a landing; §4.3: the
         /// stairwell is a hall): down its middle from the front, the stair core, three wide and as deep as the block; either
         /// side of it a flat, its door onto the core near the front, cut into a room in front and one behind. Returns the core
-        /// and each flat's rooms, the one its door opens into first.
+        /// and each flat's rooms, the one its door opens into first. `glazing`: the windows the rooms' walls keep off.
         /// </summary>
-        private static (Rect Core, List<List<Rect>> Flats) FlatsPlan(Canvas c, Rect b, int front, Rng rng, bool kept)
+        private static (Rect Core, List<List<Rect>> Flats) FlatsPlan(Canvas c, Rect b, int front, Rng rng, bool kept, Glazing? glazing = null)
         {
             var inner = Inset(b, 1);
             var across = SideLen(inner, front);
             var deep = DepthOf(inner, front);
-            var u0 = (int)Math.Floor((across - 3) / 2.0);
+            var u0 = FlatsCoreAt(b, front, glazing);
             var core = Local(inner, front, u0, 0, 3, deep);
             var flats = new List<List<Rect>>();
             foreach (var side in new[] { -1, 1 })
@@ -339,7 +345,7 @@ namespace Bastion.Engine
                 }
                 var area = side < 0 ? Local(inner, front, 0, 0, u0 - 1, deep) : Local(inner, front, u0 + 4, 0, across - u0 - 4, deep);
                 var rooms = new List<Rect>();
-                SplitRooms(c, area, rng, rooms, 5, false, kept);
+                SplitRooms(c, area, rng, rooms, 5, false, kept, glazing);
                 // The room the door opens into first.
                 var by = LocalPt(inner, front, side < 0 ? u0 - 2 : u0 + 4, 1);
                 Js.Sort(rooms, (a, r) => (InRect(r, by) ? 1 : 0) - (InRect(a, by) ? 1 : 0));
@@ -349,15 +355,32 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Where along the front (inside the walls) a block of flats' stair core starts: in the middle, or a tile to one side
+        /// where only there its walls keep off the windows of the front and the back (playtest note 17), both flats 3 wide or
+        /// more. The same on every storey.
+        /// </summary>
+        private static int FlatsCoreAt(Rect b, int front, Glazing? glazing)
+        {
+            var inner = Inset(b, 1);
+            var across = SideLen(inner, front);
+            var deep = DepthOf(inner, front);
+            var u0 = (int)Math.Floor((across - 3) / 2.0);
+            bool Shuts(int u) => glazing != null && new[] { u - 1, u + 3 }.Any((w) => glazing.Shuts(Enumerable.Range(0, deep).Select((v) => LocalPt(inner, front, w, v))));
+            if (!Shuts(u0)) return u0;
+            foreach (var u in new[] { u0 - 1, u0 + 1 }) if (u - 1 >= 3 && across - u - 4 >= 3 && !Shuts(u)) return u;
+            return u0;
+        }
+
+        /// <summary>
         /// What each room of a flat is (as a small house's ground floor): the one its door opens into the living room, a
         /// kitchenette in it; the one behind the bedroom, a bathroom cut off it (or off the living room). Returns the rooms,
-        /// their uses, and the bathroom's strip (furnished on a roll of its own).
+        /// their uses, and the bathroom's strip (furnished on a roll of its own). `glazing`: the windows its wall keeps off.
         /// </summary>
-        private static (List<Rect> Rooms, List<string> Uses, Rect? Strip) FlatUses(Canvas c, List<Rect> rooms)
+        private static (List<Rect> Rooms, List<string> Uses, Rect? Strip) FlatUses(Canvas c, List<Rect> rooms, Glazing? glazing = null)
         {
             var living = rooms[0];
             var back = rooms.Find((r) => r != living);
-            var cut = back != null ? SplitOff(c, back, 2) : SplitOff(c, living, 2);
+            var cut = back != null ? SplitOff(c, back, 2, glazing) : SplitOff(c, living, 2, glazing);
             var out_ = new List<Rect>(rooms);
             if (cut != null)
             {
@@ -381,21 +404,20 @@ namespace Bastion.Engine
                 c.Force(p.X, p.Y, edge ? TileKinds.Wall : TileKinds.Floor, 0);
                 c.Ground[c.I(p.X, p.Y)] = Indoor;
             }
-            var (core, flats) = FlatsPlan(c, b, front, rng, false);
+            var glazing = new Glazing(c, b, Furnishes.Home);
+            var (core, flats) = FlatsPlan(c, b, front, rng, false, glazing);
             // The street door, in the middle of the core's front.
-            var doors = new List<int?> { null, null, null, null };
-            var u = 1 + (int)Math.Floor((SideLen(Inset(b, 1), front) - 3) / 2.0) + 1;
+            var u = 1 + FlatsCoreAt(b, front, glazing) + 1;
             var door = LocalPt(b, front, u, 0);
             c.Force(door.X, door.Y, TileKinds.Door);
             foreach (var q in new[] { door, Add(door, Grid.Dirs4[front]), LocalPt(b, front, u, 1) }) c.Reserve(q.X, q.Y);
-            doors[front] = u;
-            Windows(c, b, style.WindowEvery, doors);
+            Windows(c, glazing);
             var wear = HomeWear(b, style);
             var homeRooms = new List<HomeRoom> { new HomeRoom { X = core.X, Y = core.Y, W = core.W, H = core.H, Z = 0, Use = HomeUse.Hall } };
             var rooms = new List<Rect> { core };
             foreach (var flat in flats)
             {
-                var (own, uses, strip) = FlatUses(c, flat);
+                var (own, uses, strip) = FlatUses(c, flat, glazing);
                 for (var k = 0; k < own.Count; k++)
                 {
                     var room = own[k];

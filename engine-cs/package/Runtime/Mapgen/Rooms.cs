@@ -38,9 +38,10 @@ namespace Bastion.Engine
         /// Splits an interior into rooms of at most `maxSide` tiles a side (never under
         /// 3), a wall with a door between each two. A new wall never ends against an
         /// existing door, and with `kept` never crosses a tile kept clear (upstairs,
-        /// the stairwell: placeStairs).
+        /// the stairwell: placeStairs). With `glazing`, it keeps off the building's
+        /// window columns where another place fits (playtest note 17).
         /// </summary>
-        private static void SplitRooms(Canvas c, Rect r, Rng rng, List<Rect> out_, int maxSide, bool open, bool kept = false)
+        private static void SplitRooms(Canvas c, Rect r, Rng rng, List<Rect> out_, int maxSide, bool open, bool kept = false, Glazing? glazing = null)
         {
             var vertical = r.W > r.H || (r.W == r.H && rng.Int(2) == 0);
             var span = vertical ? r.W : r.H;
@@ -57,7 +58,8 @@ namespace Bastion.Engine
                 if (kept && TilesIn(vertical ? Rect(r.X + o, r.Y, 1, r.H) : Rect(r.X, r.Y + o, r.W, 1)).Any((p) => Js.At(c.Keep, c.I(p.X, p.Y), false))) continue;
                 if (ends.All((e) => c.Get(e.X, e.Y) == TileKinds.Wall)) options.Add(o);
             }
-            var pick = BestOf(options, (o) => Math.Abs(o - (span - 1) / 2.0) + rng.Next() * 1.5);
+            // (The same rng drawn for every option as before: one that would shut a window only weighs more.)
+            var pick = BestOf(options, (o) => Math.Abs(o - (span - 1) / 2.0) + rng.Next() * 1.5 + (glazing != null && glazing.Shuts(vertical ? TilesIn(Rect(r.X + o, r.Y, 1, r.H)) : TilesIn(Rect(r.X, r.Y + o, r.W, 1))) ? ShutsWindow : 0));
             if (pick == null)
             {
                 out_.Add(r);
@@ -66,8 +68,8 @@ namespace Bastion.Engine
             var k = pick.Value;
             var line = vertical ? TilesIn(Rect(r.X + k, r.Y, 1, r.H)) : TilesIn(Rect(r.X, r.Y + k, r.W, 1));
             Partition(c, line, vertical ? Grid.Dirs4[1] : Grid.Dirs4[2], rng, open ? 2 : 1);
-            SplitRooms(c, vertical ? Rect(r.X, r.Y, k, r.H) : Rect(r.X, r.Y, r.W, k), rng, out_, maxSide, open, kept);
-            SplitRooms(c, vertical ? Rect(r.X + k + 1, r.Y, r.W - k - 1, r.H) : Rect(r.X, r.Y + k + 1, r.W, r.H - k - 1), rng, out_, maxSide, open, kept);
+            SplitRooms(c, vertical ? Rect(r.X, r.Y, k, r.H) : Rect(r.X, r.Y, r.W, k), rng, out_, maxSide, open, kept, glazing);
+            SplitRooms(c, vertical ? Rect(r.X + k + 1, r.Y, r.W - k - 1, r.H) : Rect(r.X, r.Y + k + 1, r.W, r.H - k - 1), rng, out_, maxSide, open, kept, glazing);
         }
 
         /// <summary>Splits `length` tiles into rooms of 3–6 with a 1-tile wall between each two, as evenly as possible.</summary>
@@ -79,6 +81,61 @@ namespace Bastion.Engine
             // slice(0, total - sizes[0] * n): the remainder, 0 to n - 1 (total is never negative here).
             foreach (var k in Shuffle(Enumerable.Range(0, n).ToList(), rng).Take(total - sizes[0] * n)) sizes[k]++;
             return sizes;
+        }
+
+        /// <summary>
+        /// Rooms of `sizes` in a row, a wall between each two (the first after the first room, at its size), moved off the
+        /// window columns of the walls they meet (playtest note 17; `shuts`, whether a wall at a place along the row would
+        /// shut a window): of the rows of as many rooms, as long in all, each from the shortest of `sizes` to the longest,
+        /// the one whose walls shut the fewest windows, and of those the nearest to `sizes`, which is `sizes` itself where
+        /// it shuts none. No room comes out bigger or smaller than one there was. By position: no rng drawn.
+        /// </summary>
+        private static List<int> OffWindows(List<int> sizes, Func<int, bool> shuts)
+        {
+            var n = sizes.Count;
+            if (n < 2) return sizes;
+            var total = sizes.Sum() + n - 1;
+            var shut = Enumerable.Range(0, total).Select(shuts).ToArray();
+            int Shut(IReadOnlyList<int> row)
+            {
+                var count = 0;
+                var at = -1;
+                for (var k = 0; k < row.Count - 1; k++)
+                {
+                    at += row[k] + 1;
+                    if (shut[at]) count++;
+                }
+                return count;
+            }
+            var best = sizes;
+            var bestShut = Shut(sizes);
+            var bestOff = 0;
+            if (bestShut == 0) return sizes;
+            var lo = sizes.Min();
+            var hi = sizes.Max();
+            var row = new int[n];
+            void Try(int k, int left, int off)
+            {
+                if (k == n)
+                {
+                    if (left != 0) return;
+                    var count = Shut(row);
+                    if (count < bestShut || (count == bestShut && off < bestOff))
+                    {
+                        best = row.ToList();
+                        bestShut = count;
+                        bestOff = off;
+                    }
+                    return;
+                }
+                for (var size = lo; size <= hi && size <= left; size++)
+                {
+                    row[k] = size;
+                    Try(k + 1, left - size, off + Math.Abs(size - sizes[k]));
+                }
+            }
+            Try(0, sizes.Sum(), 0);
+            return best;
         }
 
         /// <summary>Outside the wall tile `p` (out of side `s`) there is open ground to step on.</summary>
@@ -103,12 +160,16 @@ namespace Bastion.Engine
         /// back one, with rooms off it on one or both sides. Every room has a door onto
         /// the corridor, and the corridor a double door onto the street.
         /// </summary>
-        private static bool CorridorPlan(Canvas c, Rect b, int front, Rng rng, List<Rect> rooms, List<int?> doors)
+        private static bool CorridorPlan(Canvas c, Rect b, int front, Rng rng, List<Rect> rooms, List<int?> doors, Glazing? glazing = null)
         {
             var inner = Inset(b, 1);
             var across = SideLen(inner, front);
             var length = DepthOf(inner, front);
             if (across < 6 || length < 7) return false;
+            Vec2 At(int u, int v) => LocalPt(inner, front, u, v);
+            // Whether a wall down the building at `u`, or across a strip of rooms at `v`, would shut a window (playtest note 17).
+            bool Down(int u) => glazing != null && glazing.Shuts(Enumerable.Range(0, length).Select((v) => At(u, v)));
+            bool Across(int su, int sw, int v) => glazing != null && glazing.Shuts(Enumerable.Range(su, sw).Select((u) => At(u, v)));
             var strips = new List<(int, int)>();
             var walls = new List<int>();
             int cu;
@@ -125,11 +186,12 @@ namespace Bastion.Engine
             {
                 var d = across - 3;
                 var left = rng.Int(2) == 0;
+                // The corridor on the other side where only there its wall keeps off the windows.
+                if (Down(left ? d : 2) && !Down(left ? 2 : d)) left = !left;
                 strips.Add(left ? (0, d) : (3, d));
                 walls.Add(left ? d : 2);
                 cu = left ? d + 1 : 0;
             }
-            Vec2 At(int u, int v) => LocalPt(inner, front, u, v);
             foreach (var u in walls)
             {
                 for (var v = 0; v < length; v++)
@@ -151,7 +213,7 @@ namespace Bastion.Engine
                 var toCorridor = su < cu ? 1 : -1;
                 var wallU = su < cu ? su + sw : su - 1;
                 var v0 = 0;
-                var sizes = Segments(length, rng);
+                var sizes = OffWindows(Segments(length, rng), (v) => Across(su, sw, v));
                 for (var k = 0; k < sizes.Count; k++)
                 {
                     var n = sizes[k];
@@ -188,7 +250,11 @@ namespace Bastion.Engine
             return true;
         }
 
-        /// <summary>Clinical rooms have a purpose, doors and a shared circulation space.</summary>
+        /// <summary>
+        /// Clinical rooms have a purpose, doors and a shared circulation space. (Their walls stay where they are, window
+        /// columns or not (playtest note 17): each room is as big as its equipment needs, and a hospital's line up storey
+        /// over storey round its stairwells. A window whose column one meets is left out.)
+        /// </summary>
         private static List<MedicalRoom> MedicalPlan(Canvas c, Rect b, int front, Rng rng, int z, bool hospital, bool ward, List<int?> doors)
         {
             var inner = Inset(b, 1);
@@ -544,8 +610,11 @@ namespace Bastion.Engine
             }
         }
 
-        /// <summary>Shops: the shop floor on the street, with a stockroom behind it when deep enough.</summary>
-        private static void ShopPlan(Canvas c, Rect b, int front, Rng rng, List<Rect> rooms)
+        /// <summary>
+        /// Shops: the shop floor on the street, with a stockroom behind it when deep enough: 3 deep, or 4 where its wall
+        /// would shut a window at 3 and not at 4 and the shop floor keeps 3 (playtest note 17).
+        /// </summary>
+        private static void ShopPlan(Canvas c, Rect b, int front, Rng rng, List<Rect> rooms, Glazing? glazing = null)
         {
             var inner = Inset(b, 1);
             var across = SideLen(inner, front);
@@ -556,14 +625,15 @@ namespace Bastion.Engine
                 return;
             }
             // Array.from({ length }) takes a negative length as 0.
-            var line = Enumerable.Range(0, Math.Max(0, across)).Select((u) => LocalPt(inner, front, u, depth - 4)).ToList();
-            Partition(c, line, Grid.Dirs4[front], rng);
-            rooms.Add(Local(inner, front, 0, 0, across, depth - 4));
-            rooms.Add(Local(inner, front, 0, depth - 3, across, 3));
+            List<Vec2> Line(int v) => Enumerable.Range(0, Math.Max(0, across)).Select((u) => LocalPt(inner, front, u, v)).ToList();
+            var store = glazing != null && depth >= 8 && glazing.Shuts(Line(depth - 4)) && !glazing.Shuts(Line(depth - 5)) ? 4 : 3;
+            Partition(c, Line(depth - store - 1), Grid.Dirs4[front], rng);
+            rooms.Add(Local(inner, front, 0, 0, across, depth - store - 1));
+            rooms.Add(Local(inner, front, 0, depth - store, across, store));
         }
 
         /// <summary>Warehouses, barns and hangars: one open hall, sometimes with a small office in a back corner.</summary>
-        private static Rect? HallPlan(Canvas c, Rect b, int front, Rng rng, List<Rect> rooms)
+        private static Rect? HallPlan(Canvas c, Rect b, int front, Rng rng, List<Rect> rooms, Glazing? glazing = null)
         {
             var inner = Inset(b, 1);
             var across = SideLen(inner, front);
@@ -571,6 +641,11 @@ namespace Bastion.Engine
             rooms.Add(inner);
             if (across < 10 || depth < 10 || rng.Next() < 0.4) return null;
             var right = rng.Int(2) == 0;
+            // The office's walls: down from its front one to the back, and its front one to the side wall.
+            bool Shuts(bool r) => glazing != null && glazing.Shuts(Enumerable.Range(depth - 4, 4).Select((v) => LocalPt(inner, front, r ? across - 5 : 4, v))
+                .Concat(Enumerable.Range(r ? across - 5 : 0, 5).Select((u) => LocalPt(inner, front, u, depth - 5))));
+            // In the other back corner where only there they keep off the windows (playtest note 17).
+            if (Shuts(right) && !Shuts(!right)) right = !right;
             var u0 = right ? across - 4 : 0;
             var wallU = right ? across - 5 : 4;
             for (var v = depth - 4; v < depth; v++)
@@ -615,29 +690,64 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// Windows every `every` tiles along each outer wall, counted from the door of
-        /// that side (or its middle), never at a corner, beside an opening or where a
-        /// partition meets the wall. The floor just inside each stays clear of the
-        /// furniture (playtest 21/10, #20: a shelf or a wardrobe that happens to stand
-        /// there reads as a window blocked by chance); barricadeRooms blocks a room's
-        /// windows on purpose.
+        /// A building's window columns (WindowColumns; playtest note 17, Arturo, 7/11): the same on the ground and on every
+        /// storey above, as far apart for all of them, and counted the way the map is played (Canvas.Backwards).
         /// </summary>
-        private static void Windows(Canvas c, Rect b, int every, List<int?> doors)
+        private sealed class Glazing
         {
+            public readonly Rect Outer;
+            public readonly int Every;
+            private readonly bool[] backwards;
+
+            public Glazing(Canvas c, Rect outer, string furnish)
+            {
+                Outer = outer;
+                Every = WindowColumns.Every(furnish == Furnishes.Home);
+                backwards = (bool[])c.Backwards.Clone();
+            }
+
+            /// <summary>The columns of side `s`: their place along it.</summary>
+            public List<int> Along(int s) => WindowColumns.Along(SideLen(Outer, s), Every, backwards[s % 2]);
+
+            /// <summary>
+            /// Whether `p` is the floor just inside a column of the outer wall: a wall between rooms there would shut its
+            /// window (partitions keep off them).
+            /// </summary>
+            public bool Behind(Vec2 p)
+            {
+                var r = Outer;
+                if (!InRect(Inset(r, 1), p)) return false;
+                bool At(int s, int u) => WindowColumns.IsColumn(SideLen(r, s), u, Every, backwards[s % 2]);
+                return (p.Y == r.Y + 1 && At(0, p.X - r.X)) || (p.Y == r.Y + r.H - 2 && At(2, p.X - r.X))
+                    || (p.X == r.X + 1 && At(3, p.Y - r.Y)) || (p.X == r.X + r.W - 2 && At(1, p.Y - r.Y));
+            }
+
+            /// <summary>Whether a wall along `line` would shut a window (Behind).</summary>
+            public bool Shuts(IEnumerable<Vec2> line) => line.Any(Behind);
+        }
+
+        /// <summary>How much worse a partition is that would shut a window (Glazing.Shuts): taken only where no other fits.</summary>
+        private const double ShutsWindow = 1000;
+
+        /// <summary>
+        /// The ground floor's windows, in the building's columns (Glazing), never at a door or beside an opening
+        /// (WindowColumns.ByOpening), where outside is a wall, nor where a partition meets the wall (where the building had no
+        /// room to keep it off: Glazing.Behind). The floor just inside each stays clear of the furniture (playtest 21/10, #20:
+        /// a shelf or a wardrobe that happens to stand there reads as a window blocked by chance); barricadeRooms blocks a
+        /// room's windows on purpose.
+        /// </summary>
+        private static void Windows(Canvas c, Glazing g)
+        {
+            var b = g.Outer;
             for (var s = 0; s < 4; s++)
             {
-                var n = SideLen(b, s);
-                var anchor = doors[s] ?? (int)Math.Floor((n - 1) / 2.0);
                 var back = Grid.Dirs4[Opposite(s)];
                 var lateral = Grid.Dirs4[(s + 1) % 4];
-                for (var u = 2; u <= n - 3; u++)
+                foreach (var u in g.Along(s))
                 {
-                    var off = Math.Abs(u - anchor);
-                    if (off % every != 0 || (off == 0 && doors[s] != null)) continue;
                     var p = LocalPt(b, s, u, 0);
-                    var sides = new[] { Add(p, lateral), V(p.X - lateral.X, p.Y - lateral.Y) };
                     if (c.Get(p.X, p.Y) != TileKinds.Wall || c.Get(p.X + back.X, p.Y + back.Y) != TileKinds.Floor) continue;
-                    if (!sides.All((q) => c.Get(q.X, q.Y) == TileKinds.Wall || c.Get(q.X, q.Y) == TileKinds.Window)) continue;
+                    if (WindowColumns.ByOpening(c.Get(p.X, p.Y), c.Get(p.X + lateral.X, p.Y + lateral.Y), c.Get(p.X - lateral.X, p.Y - lateral.Y))) continue;
                     var q = Add(p, Grid.Dirs4[s]);
                     if (!c.In(q.X, q.Y) || c.Get(q.X, q.Y) == TileKinds.Wall) continue;
                     c.Force(p.X, p.Y, TileKinds.Window);
@@ -681,7 +791,9 @@ namespace Bastion.Engine
         /// every window of the room at once, furniture piled against each
         /// ('windowBarricade', a `high` tile, facing the window). Not a room of fewer
         /// than 3 a side, nor one where a window's inside tile is beside a door, a
-        /// ladder or the stairs: then none of its windows.
+        /// ladder or the stairs, nor one whose floor the piles would cut in two (two
+        /// windows by a corner, one on each wall: playtest note 17 puts them there):
+        /// then none of its windows.
         /// </summary>
         private static void BarricadeRooms(Canvas c, Rect b, List<Rect> rooms)
         {
@@ -709,6 +821,19 @@ namespace Bastion.Engine
                     }
                 }
                 if (!ok || piles.Count == 0) continue;
+                // What is left of its floor, all one.
+                var piled = new HashSet<int>(piles.Select((q) => c.I(q.P.X, q.P.Y)));
+                var rest = TilesIn(room).Where((q) => c.Get(q.X, q.Y) == TileKinds.Floor && !piled.Contains(c.I(q.X, q.Y))).ToList();
+                var joined = new HashSet<int>();
+                var queue = rest.Take(1).ToList();
+                while (queue.Count > 0)
+                {
+                    var q = queue[queue.Count - 1];
+                    queue.RemoveAt(queue.Count - 1);
+                    if (!InRect(room, q) || c.Get(q.X, q.Y) != TileKinds.Floor || piled.Contains(c.I(q.X, q.Y)) || !joined.Add(c.I(q.X, q.Y))) continue;
+                    foreach (var d in Grid.Dirs4) queue.Add(Add(q, d));
+                }
+                if (joined.Count < rest.Count) continue;
                 foreach (var (p, facing) in piles)
                 {
                     c.Force(p.X, p.Y, TileKinds.High);
@@ -735,21 +860,26 @@ namespace Bastion.Engine
         /// bedroom 3; a bathroom 2, the one room of 2 × 3: docs/MAPAS.md §10) and the
         /// rest, at least 3 a side; [the rest, the strip]. Null if it is too short, or
         /// if the wall would end on a doorway or cross the way through one. By
-        /// position (mix): no rng drawn.
+        /// position (mix): no rng drawn. With `glazing`, the end whose wall keeps off
+        /// the building's window columns first (playtest note 17); where neither does,
+        /// upstairs (its windows are in before its rooms are cut: upperFloors) the
+        /// wall takes a window's place rather than leave the room whole.
         /// </summary>
-        private static (Rect, Rect)? SplitOff(Canvas c, Rect r, int small = 3)
+        private static (Rect, Rect)? SplitOff(Canvas c, Rect r, int small = 3, Glazing? glazing = null)
         {
             var alongX = r.W >= r.H;
             var long_ = alongX ? r.W : r.H;
             var short_ = alongX ? r.H : r.W;
             if (long_ < small + 1 + 3 || short_ < 3) return null;
             var m = Mix(r.X * 13 + 7, r.Y * 17 + 3);
-            foreach (var atEnd in m % 2 != 0 ? new[] { true, false } : new[] { false, true })
+            // Off the windows at either end, else as it comes.
+            foreach (var (atEnd, dodge) in (glazing != null ? new[] { true, false } : new[] { false }).SelectMany((d) => (m % 2 != 0 ? new[] { true, false } : new[] { false, true }).Select((e) => (e, d))))
             {
                 var k = atEnd ? long_ - small - 1 : small;
                 var line = alongX ? TilesIn(Rect(r.X + k, r.Y, 1, r.H)) : TilesIn(Rect(r.X, r.Y + k, r.W, 1));
                 var ends = alongX ? new[] { V(r.X + k, r.Y - 1), V(r.X + k, r.Y + r.H) } : new[] { V(r.X - 1, r.Y + k), V(r.X + r.W, r.Y + k) };
-                if (!ends.All((e) => c.Get(e.X, e.Y) == TileKinds.Wall) || !line.All((p) => c.Free(p.X, p.Y))) continue;
+                if (!ends.All((e) => c.Get(e.X, e.Y) == TileKinds.Wall || (!dodge && glazing != null && c.Get(e.X, e.Y) == TileKinds.Window)) || !line.All((p) => c.Free(p.X, p.Y))) continue;
+                if (dodge && glazing!.Shuts(line)) continue;
                 // The strip a room off the rest, its door the new one: none of the room's own doors opens into it.
                 var strip = atEnd ? (alongX ? Rect(r.X + k + 1, r.Y, r.W - k - 1, r.H) : Rect(r.X, r.Y + k + 1, r.W, r.H - k - 1)) : alongX ? Rect(r.X, r.Y, k, r.H) : Rect(r.X, r.Y, r.W, k);
                 if (TilesIn(strip).Any((p) => Grid.Dirs4.Any((d) =>
@@ -758,6 +888,7 @@ namespace Bastion.Engine
                     var t = c.Get(q.X, q.Y);
                     return !InRect(r, q) && (t == TileKinds.Door || t == TileKinds.DoorOpen);
                 }))) continue;
+                foreach (var e in ends) if (c.Get(e.X, e.Y) == TileKinds.Window) c.Force(e.X, e.Y, TileKinds.Wall);
                 // The door off the ends of the wall where there is room.
                 var at = short_ > 2 ? 1 + (m % (short_ - 2)) : m % short_;
                 var normal = alongX ? Grid.Dirs4[1] : Grid.Dirs4[2];

@@ -246,6 +246,11 @@ namespace Bastion.Engine
             public List<PlanRoad> Lines = new List<PlanRoad>();
             /// <summary>The country's ways in and out through its trees (countryWays), wider than the road: kept open by shutCountry.</summary>
             public List<Rect> Mouths = new List<Rect>();
+            /// <summary>
+            /// Whether x (0) and y (1) on the canvas run backwards in the map as played, once it is mirrored and turned: where a
+            /// side's window columns leave a tile over (WindowColumns), it goes to the same end the client counts it at.
+            /// </summary>
+            public readonly bool[] Backwards = new bool[2];
 
             public Canvas(int width, int height)
             {
@@ -617,7 +622,10 @@ namespace Bastion.Engine
             public int OfficeDepth;
             /// <summary>Warehouses, barns and hangars (12–16).</summary>
             public int Hall;
-            /// <summary>From one window to the next along a wall.</summary>
+            /// <summary>
+            /// From one window to the next along a wall, as it was. Still drawn, so the rest of the map stays as it was, but
+            /// no longer used: each building's windows are as far apart as WindowColumns.Every says (playtest note 17).
+            /// </summary>
             public int WindowEvery;
             /// <summary>From one planter (bin, bollard) to the next along a sidewalk.</summary>
             public int Furniture;

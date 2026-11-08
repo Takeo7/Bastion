@@ -5,7 +5,7 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// The campaign the two test apps play by themselves (CampaignAutoRun, the app's CampaignRun), through a room with the
-    /// engine's rules. Seed 157 is the one the apps are tested with (BASTION_SEMILLA=157): its opening operation is done, its
+    /// engine's rules. Seed 47 is the one the apps are tested with (BASTION_SEMILLA=47): its opening operation is done, its
     /// debrief comes, and its second operation, chosen on the base, is won. If the engine changes it, CampaignAutoRun finds
     /// another: MissionBot doesn't win every one. It was seed 2 till the dead went faster (28/10), and 4 till Arturo's rules of 31/10
     /// (recruits' aim, fewer dead out of town, no seeing through windows); with the base aim at 55 and the dead of a siege
@@ -28,16 +28,18 @@ namespace Bastion.Engine.Tests
     /// actions are spent, its movement kept, 364 does, as before (of seeds 1 to 120, 18 win both; leaving it instead, 20,
     /// but not 364: its siege is lost). With no sieges (Arturo, 7/11, Campaign.SiegesOn) the second mission is the easiest
     /// operation, chosen once the wounded are fit (HeardGame.BaseOrder); of seeds 1 to 200, 47 win the first and only 31,
-    /// 58, 87, 98 and 157 both, 364 not: 157, which wins both without the wait as well.
+    /// 58, 87, 98 and 157 both, 364 not: 157, which wins both without the wait as well. With the windows in columns and the
+    /// walls between rooms kept off them (playtest note 17, Arturo, 7/11: the maps change), 157 loses its second mission;
+    /// of seeds 1 to 200, 44 win the first and only 47 and 91 both: 47.
     /// </summary>
     public class NetCampaignRunTests
     {
         [Fact]
         public void TheTestAppsCampaignIsPlayedThrough()
         {
-            var played = CampaignAutoRun.Run(157, 2);
+            var played = CampaignAutoRun.Run(47, 2);
             Assert.Null(CampaignAutoRun.Stuck);
-            Assert.Equal(new[] { "El consultorio de Metsovo", "Los juzgados de Metsovo" }, played.Select((m) => m.Name));
+            Assert.Equal(new[] { "El consultorio de Metsovo", "El colegio de La Vega" }, played.Select((m) => m.Name));
             Assert.All(played, (m) => Assert.Equal(Outcomes.Victory, m.Outcome));
         }
     }

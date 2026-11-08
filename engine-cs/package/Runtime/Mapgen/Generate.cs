@@ -108,6 +108,9 @@ namespace Bastion.Engine
             var flipX = rng.Int(2) == 1;
             var flipY = rng.Int(2) == 1;
             var swap = rng.Int(2) == 1;
+            // Which way the canvas's x and y run in the final frame (T below): x becomes y when it is transposed.
+            c.Backwards[0] = swap ? flipY : flipX;
+            c.Backwards[1] = swap ? flipX : flipY;
             var needsEvac = kind != MissionKinds.Elimination;
             var ward = opts.Medical == MedicalSiteKinds.Ward;
             var outdoorItem = kind == MissionKinds.Recovery && opts.ItemOutdoors == true && !clinic;
@@ -700,8 +703,9 @@ namespace Bastion.Engine
 
         /// <summary>
         /// A town's ground out of doors that nobody can get to (a strip left between the outline and the back of a building):
-        /// shut with the outline, as what is next to it (a lot if nothing is), in pieces of its own. A building nobody can get
-        /// into any more (its door onto ground the outline took) goes with it, whole: a block shut up, its storeys.
+        /// shut with the outline, as what is next to it (a lot if nothing is), in pieces of its own; a window that looked onto
+        /// it is wall now, as where a building's wall faces one (playtest note 17). A building nobody can get into any more
+        /// (its door onto ground the outline took) goes with it, whole: a block shut up, its storeys.
         /// </summary>
         private static void SealPockets(Canvas c, JsSet<int> reach)
         {
@@ -762,6 +766,7 @@ namespace Bastion.Engine
                 c.Ground[i] = Out;
                 c.Decor[i] = 0;
                 c.Keep[i] = true;
+                foreach (var d in Grid.Dirs4) if (c.Get(x + d.X, y + d.Y) == TileKinds.Window) c.Force(x + d.X, y + d.Y, TileKinds.Wall);
             }
             foreach (var entry in masks)
             {
