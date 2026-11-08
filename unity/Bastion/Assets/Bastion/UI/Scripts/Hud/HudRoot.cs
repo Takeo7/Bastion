@@ -160,8 +160,17 @@ namespace Bastion.UI.Hud
             if (float.IsNaN(width) || float.IsNaN(row)) return;
             // The plate's frame stands 8 px out of it (PlateFrame).
             var plate = squadPlate.resolvedStyle.display == DisplayStyle.None ? 0 : squadPlate.layout.xMax + 8 + 12;
-            actions.style.left = Mathf.Max(width / 2, plate + row / 2);
+            var left = Mathf.Round(Mathf.Max(width / 2, plate + row / 2));
+            // The row's width changes by a pixel with where it stands (its keys snapped to whole pixels): moved for that,
+            // it was laid out again and again, the left and the width taking turns (the 0.12.9: «Layout update is
+            // struggling», hundreds a second, with the partner's cards widening the plate). Less than two pixels, it stays.
+            if (!float.IsNaN(actionsLeft) && Mathf.Abs(left - actionsLeft) < 2) return;
+            actionsLeft = left;
+            actions.style.left = left;
         }
+
+        /// <summary>Where PlaceActions last put the keys' row (panel pixels); NaN, not yet.</summary>
+        float actionsLeft = float.NaN;
 
         /// <summary>
         /// Where the map's north is on the screen, clockwise from up, as seen (game.ts frame: the ground in perspective;
