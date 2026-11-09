@@ -958,6 +958,16 @@ namespace Bastion.Engine
                     pods.Add(pod);
                 }
             }
+            // The dead in plain clothes that start inside a clinic or a hospital wear its patients' gowns (Arturo, 9/11: the patients
+            // of Horror Asylum); a uniform stays a uniform.
+            foreach (var site in layout.Medical ?? new List<MedicalSite>())
+            {
+                foreach (var u in units)
+                {
+                    if (u.Template != TemplateIds.Zombie || u.Outfit != null) continue;
+                    if (u.Pos.X >= site.X && u.Pos.X < site.X + site.W && u.Pos.Y >= site.Y && u.Pos.Y < site.Y + site.H) u.Outfit = Outfits.Patient;
+                }
+            }
             var leader = opts.Leader != null ? units.FirstOrDefault((u) => u.Team == Teams.Alien && u.Template == opts.Leader.Template) : null;
             if (leader != null) leader.Name = opts.Leader!.Name;
 

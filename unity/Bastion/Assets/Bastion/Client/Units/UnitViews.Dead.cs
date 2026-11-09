@@ -9,11 +9,16 @@ namespace Bastion.Client.Units
     /// <summary>
     /// The special dead's figures (syntyManifest.ts UNIT_BODIES, CHARACTERS): POLYGON's City Zombies and Boss Zombies, not
     /// Sidekick's, each the body its pack's prefab has on (the prefab holds every body of its rig) and what it keeps on;
-    /// how every one of the dead leans and sways over its clips, and the Chillón's scream on its body.
+    /// the common dead's that are POLYGON's too (City Zombies' in the crowd, Horror Asylum's patients); how every one of
+    /// the dead leans and sways over its clips, and the Chillón's scream on its body.
     /// </summary>
     public sealed partial class UnitViews
     {
-        /// <summary>One of them: its pack's prefab, the body in it, its build, its size over the figures', the attachments it keeps, the atlas it wears instead of its own (none: its own).</summary>
+        /// <summary>
+        /// One of them: its pack's prefab, the body in it, its build, its size over the figures', the attachments it keeps,
+        /// the atlas it wears instead of its own (none: its own), and where in its atlas a living one's skin is (u0, v0, u1,
+        /// v1; none: it was dead already), made the dead's.
+        /// </summary>
         sealed class DeadBody
         {
             public string prefab;
@@ -22,11 +27,15 @@ namespace Bastion.Client.Units
             public float scale = 1;
             public string[] keep;
             public string atlas;
+            public Vector4 living;
         }
 
-        /// <summary>A City Zombies character by its name (Jock_Male_01: SM_Chr_Zombie_Jock_Male_01 and its body Zombie_Jock_Male_01).</summary>
-        static DeadBody City(string name, bool female = false, float scale = 1) =>
-            new DeadBody { prefab = "SM_Chr_Zombie_" + name, body = "Zombie_" + name, female = female, scale = scale };
+        /// <summary>
+        /// A City Zombies character by its name (Jock_Male_01: SM_Chr_Zombie_Jock_Male_01 and its body Zombie_Jock_Male_01; or
+        /// `body`, the prisoner's, Zombie_Prisinor_Male_01 in the pack).
+        /// </summary>
+        static DeadBody City(string name, bool female = false, float scale = 1, string body = null) =>
+            new DeadBody { prefab = "SM_Chr_Zombie_" + name, body = body ?? "Zombie_" + name, female = female, scale = scale };
 
         /// <summary>
         /// The Corredores (the recently dead, still quick), the Acorazados (riot police, police and firemen, vest and helmet
@@ -51,6 +60,60 @@ namespace Bastion.Client.Units
             },
         };
 
+        /// <summary>
+        /// The City Zombies among the common dead in their own clothes (Arturo, 9/11: the twenty Biblioteca proposed, «sueltos
+        /// en la multitud»; but their policewoman, who is the police's, CrowdCops): one in CityShare of them, by its id
+        /// (FromCity), dealt as Sidekick's are among the rest. Their 4–7 thousand vertices to a Sidekick dead's 21 thousand.
+        /// </summary>
+        static readonly DeadBody[] Crowd =
+        {
+            City("BioHazardSuit_Male_01"), City("Prisoner_Male_01", body: "Zombie_Prisinor_Male_01"), City("Paramedic_Female_01", true), City("Biker_Male_01"), City("Roadworker_Male_01"),
+            City("Hobo_Male_01"), City("Businessman_Male_01"), City("Jacket_Male_01"), City("Jacket_Female_01", true), City("Coat_Female_01", true),
+            City("Grandpa_Male_01"), City("Grandma_Female_01", true), City("ShopKeeper_Male_01"), City("Patient_Female_01", true), City("Punk_Male_01"),
+            City("Bride_Female_01", true), City("Footballer_Male_01"), City("Mother_Female_01", true), City("Father_Male_01"),
+        };
+
+        /// <summary>City Zombies' policewoman, dealt with Sidekick's policemen to the common dead in a policeman's uniform.</summary>
+        static readonly DeadBody[] CrowdCops = { City("Police_Female_01", true) };
+
+        /// <summary>One in this many of the common dead in their own clothes is City Zombies' (Crowd), by its id.</summary>
+        const int CityShare = 3;
+
+        /// <summary>Whether one of the common dead in their own clothes is drawn as City Zombies' (Crowd), by its id: on every screen the same.</summary>
+        public static bool FromCity(string id) => !NewDeadOff && Fnv("city|" + id) % CityShare == 0;
+
+        /// <summary>
+        /// Labs: the common dead as 0.12.14 found them (BASTION_SIN_MUERTOS_NUEVOS=1: no City Zombies in the crowd nor among the
+        /// police, no patients, none of UndeadFigure.Ragged), the strips' before.
+        /// </summary>
+        public static bool NewDeadOff = System.Environment.GetEnvironmentVariable("BASTION_SIN_MUERTOS_NUEVOS") == "1";
+
+        /// <summary>
+        /// Where Horror Asylum's atlases have a living one's skin (the swatches its people's faces and hands paint from, with
+        /// their lips: 0–170 × 3206–3454 px of 4096), made the dead's (SoldierPalette.DullAtlas).
+        /// </summary>
+        static readonly Vector4 AsylumSkin = new Vector4(0, 0.1567f, 0.0415f, 0.2173f);
+
+        /// <summary>
+        /// A Horror Asylum character by its name (Patient_Male_01: PolygonHorrorAsylum/SM_Chr_Patient_Male_01, by its pack's
+        /// folder, Apocalypse has a SM_Chr_Patient_Female_01 of its own; its body of the same name), with what it keeps on.
+        /// </summary>
+        static DeadBody Asylum(string name, bool female, params string[] keep) =>
+            new DeadBody { prefab = "PolygonHorrorAsylum/SM_Chr_" + name, body = "SM_Chr_" + name, female = female, keep = keep, living = AsylumSkin };
+
+        /// <summary>
+        /// The common dead in a patient's gown (Unit.Outfit patient: who started in a clinic's or a hospital's rooms; Arturo,
+        /// 9/11): Horror Asylum's four patients, its orderly and its nurse, their skin made the dead's, and City Zombies'
+        /// patient and paramedic.
+        /// </summary>
+        static readonly DeadBody[] Patients =
+        {
+            Asylum("Patient_Male_01", false, "SM_Chr_Attach_Hair_03", "SM_Chr_Attach_Mask_03"), Asylum("Patient_Male_02", false), Asylum("Patient_Male_03", false, "SM_Chr_Attach_Hair_05"),
+            Asylum("Patient_Female_01", true, "SM_Chr_Attach_Hair_04"), Asylum("Orderly_01", false, "SM_Chr_Attach_Hair_08", "SM_Chr_Attach_Glasses_03"),
+            Asylum("Nurse_01", true, "SM_Chr_Attach_Hat_01", "SM_Chr_Attach_Earrings_01", "SM_Chr_Attach_Mask_02"),
+            City("Patient_Female_01", true), City("Paramedic_Female_01", true),
+        };
+
         /// <summary>The atlases the special dead wear instead of their own (FigureCatalogMake puts them in the catalog).</summary>
         public static IEnumerable<string> DeadAtlases => DeadBodies.Values.SelectMany(b => b).Select(b => b.atlas).Where(a => a != null).Distinct();
 
@@ -60,24 +123,25 @@ namespace Bastion.Client.Units
         /// atlas's colours dulled as the common dead's are (SoldierPalette.DullAtlas; Ana's #20, 29/10: their blue, purple
         /// and green skins). A copy each.
         /// </summary>
-        static readonly Dictionary<(Material, Texture), Material> bloodless = new Dictionary<(Material, Texture), Material>();
+        static readonly Dictionary<(Material, Texture, Vector4), Material> bloodless = new Dictionary<(Material, Texture, Vector4), Material>();
 
         static readonly string[] BloodMasks = { "_Blood_Mask", "_Blood_Map" };
 
         /// <summary>
-        /// `m` without its blood, its atlas dulled (`flesh`: Boss Zombies', their skin's swatch as skin); in `atlas` instead of its
-        /// own if given (a Hinchado's other).
+        /// `m` without its blood, its atlas dulled (`flesh`: Boss Zombies', their skin's swatch as skin; `living`, a living
+        /// one's skin swatch made the dead's: Horror Asylum's, whose material has no blood); in `atlas` instead of its own if
+        /// given (a Hinchado's other).
         /// </summary>
-        static Material Bloodless(Material m, Texture atlas = null, bool flesh = false)
+        static Material Bloodless(Material m, Texture atlas = null, bool flesh = false, Vector4 living = default)
         {
-            if (m == null || !BloodMasks.Any(m.HasProperty)) return m;
-            if (!bloodless.TryGetValue((m, atlas), out var copy) || copy == null)
+            if (m == null || !BloodMasks.Any(m.HasProperty) && (living == default || !m.HasProperty("_Albedo_Map"))) return m;
+            if (!bloodless.TryGetValue((m, atlas, living), out var copy) || copy == null)
             {
                 copy = new Material(m) { name = m.name + " (sin sangre)" };
                 foreach (string mask in BloodMasks)
                     if (copy.HasProperty(mask)) copy.SetTexture(mask, Texture2D.blackTexture);
-                if (copy.HasProperty("_Albedo_Map")) copy.SetTexture("_Albedo_Map", SoldierPalette.DullAtlas(atlas != null ? atlas : copy.GetTexture("_Albedo_Map"), flesh));
-                bloodless[(m, atlas)] = copy;
+                if (copy.HasProperty("_Albedo_Map")) copy.SetTexture("_Albedo_Map", SoldierPalette.DullAtlas(atlas != null ? atlas : copy.GetTexture("_Albedo_Map"), flesh, living));
+                bloodless[(m, atlas, living)] = copy;
             }
             return copy;
         }
@@ -88,17 +152,23 @@ namespace Bastion.Client.Units
         /// </summary>
         static readonly DeadBody[] Soldiers = { City("Military_Male_01") };
 
-        /// <summary>The prefabs the special dead and the soldiers are drawn from (FigureCatalogMake puts them in the catalog's characters).</summary>
-        public static IEnumerable<string> DeadPrefabs => DeadBodies.Values.SelectMany(b => b).Concat(Soldiers).Select(b => b.prefab).Distinct();
+        /// <summary>The prefabs the special dead, the soldiers, the crowd's and the patients are drawn from (FigureCatalogMake puts them in the catalog's characters).</summary>
+        public static IEnumerable<string> DeadPrefabs => DeadBodies.Values.SelectMany(b => b).Concat(Soldiers).Concat(Crowd).Concat(CrowdCops).Concat(Patients).Select(b => b.prefab).Distinct();
 
         /// <summary>A special one's figure, dealt among its kind's (Dealt; its build and size in `view`); null if it isn't one or its prefab is missing.</summary>
         static GameObject DeadFigureOf(Unit u, View view, FigureCatalog catalog) =>
             DeadBodies.TryGetValue(u.Template, out var bodies) ? DeadFigureOf(bodies, view, catalog) : null;
 
         /// <summary>One of `bodies` (POLYGON's dead), dealt (Dealt; its build and size in `view`); null if its prefab is missing.</summary>
-        static GameObject DeadFigureOf(DeadBody[] bodies, View view, FigureCatalog catalog)
+        static GameObject DeadFigureOf(DeadBody[] bodies, View view, FigureCatalog catalog) =>
+            DeadFigure(bodies[Dealt(bodies.Length, view, i => DealtId(bodies[i]))], view, catalog);
+
+        /// <summary>Which it is, in a deck (Dealt).</summary>
+        static string DealtId(DeadBody b) => b.prefab + "|" + b.body + "|" + b.atlas;
+
+        /// <summary>That one of POLYGON's dead (its build and size in `view`); null if its prefab is missing.</summary>
+        static GameObject DeadFigure(DeadBody b, View view, FigureCatalog catalog)
         {
-            var b = bodies[Dealt(bodies.Length, view, i => bodies[i].prefab + "|" + bodies[i].body + "|" + bodies[i].atlas)];
             var prefab = catalog.Character(b.prefab);
             if (prefab == null) return null;
             var figure = Instantiate(prefab);
@@ -110,7 +180,7 @@ namespace Bastion.Client.Units
                 bool kept = r.gameObject.name == b.body || b.keep != null && b.keep.Contains(r.gameObject.name);
                 r.gameObject.SetActive(kept);
                 if (!kept && r.gameObject != figure) DestroyNow(r.gameObject);
-                else r.sharedMaterials = r.sharedMaterials.Select(m => Bloodless(m, atlas, b.prefab.StartsWith("SM_Chr_ZombieBoss_"))).ToArray();
+                else r.sharedMaterials = r.sharedMaterials.Select(m => Bloodless(m, atlas, b.prefab.StartsWith("SM_Chr_ZombieBoss_"), b.living)).ToArray();
             }
             view.build = b.female ? "femn" : "masc";
             view.size = b.scale;

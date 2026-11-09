@@ -80,6 +80,17 @@ if wanted "$@"; then
   echo "== $name (su carpeta)"
   python3 -I "$tools/upkg-extract.py" --under Assets/Synty/PolygonMapsWoodlandApocalypse "$synty/POLYGON - Woodland Apocalypse Map/Unity/$name.unitypackage" "$project" || failed=1
 fi
+# Horror Asylum (Arturo, 9/11): its four patients, the orderly and the nurse alone, the dead of clinics and hospitals
+# (Unit.Outfit patient: UnitViews.Patients), with the meshes, materials and textures they use (--refs), not the rest
+# of the pack (its rooms, props and other people).
+name=POLYGON_Horror_Asylum_Unity_2022_3_v1_1_2
+if wanted "$@"; then
+  echo "== $name (pacientes, celador y enfermera)"
+  a=Assets/Synty/PolygonHorrorAsylum/Prefabs/Characters
+  python3 -I "$tools/upkg-extract.py" --refs "$synty/POLYGON - Horror Asylum/Unity/$name.unitypackage" "$project" \
+    $a/SM_Chr_Patient_Male_01.prefab $a/SM_Chr_Patient_Male_02.prefab $a/SM_Chr_Patient_Male_03.prefab \
+    $a/SM_Chr_Patient_Female_01.prefab $a/SM_Chr_Orderly_01.prefab $a/SM_Chr_Nurse_01.prefab || failed=1
+fi
 # The city's buildings beyond Town, City and Office (Ana's #3, 1/11; Arturo: houses first, then shops, offices and
 # industry): Shops, Gang Warfare and Palm City, each its own folder alone. Not the copy of PolygonGeneric each brings,
 # nor Palm City's PNB_Core (its palms' foliage shader, with editor scripts), nor Palm City's one script (a sign's eye).

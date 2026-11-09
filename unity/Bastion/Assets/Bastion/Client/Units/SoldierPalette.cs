@@ -217,20 +217,21 @@ namespace Bastion.Client.Units
             return Color32.Lerp(c, Hsv(c, hue / 360, sat, Mathf.Min(1, v * light)), w);
         }
 
-        static readonly Dictionary<(Texture, bool), RenderTexture> dulledAtlases = new Dictionary<(Texture, bool), RenderTexture>();
+        static readonly Dictionary<(Texture, bool, Vector4), RenderTexture> dulledAtlases = new Dictionary<(Texture, bool, Vector4), RenderTexture>();
         static Material dullAtlas;
 
         /// <summary>
         /// A POLYGON atlas (the special dead's, UnitViews.Dead) with its colours dulled (skin and clothes are one texture
         /// there): City Zombies' blues to purples and its loud colours, as the clothes' (Dull); with `flesh`, Boss Zombies',
-        /// so and their skin's swatch as a common dead's skin (DullFlesh), pink, teal and olive made grey, pale or sickly.
-        /// Drawn once on the GPU (Resources/Shaders/DullAtlas) into a texture of its own at half its size, with its mips, kept.
-        /// The atlas as it is if the shader is missing.
+        /// so and their skin's swatch as a common dead's skin (DullFlesh), pink, teal and olive made grey, pale or sickly;
+        /// with `living` (u0, v0, u1, v1 of a living one's skin swatch: Horror Asylum's patients), that swatch a dead man's,
+        /// a sallow grey, whatever its colour. Drawn once on the GPU (Resources/Shaders/DullAtlas) into a texture of its own
+        /// at half its size, with its mips, kept. The atlas as it is if the shader is missing.
         /// </summary>
-        public static Texture DullAtlas(Texture atlas, bool flesh = false)
+        public static Texture DullAtlas(Texture atlas, bool flesh = false, Vector4 living = default)
         {
             if (atlas == null) return null;
-            if (dulledAtlases.TryGetValue((atlas, flesh), out var made) && made != null && made.IsCreated()) return made;
+            if (dulledAtlases.TryGetValue((atlas, flesh, living), out var made) && made != null && made.IsCreated()) return made;
             if (dullAtlas == null)
             {
                 var shader = Resources.Load<Shader>("Shaders/DullAtlas");
@@ -239,7 +240,7 @@ namespace Bastion.Client.Units
             }
             var rt = new RenderTexture(Mathf.Max(1, atlas.width / 2), Mathf.Max(1, atlas.height / 2), 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
             {
-                name = atlas.name + (flesh ? " (piel apagada)" : " (apagada)"),
+                name = atlas.name + (flesh || living != default ? " (piel apagada)" : " (apagada)"),
                 useMipMap = true,
                 autoGenerateMips = true,
                 filterMode = atlas.filterMode,
@@ -248,8 +249,9 @@ namespace Bastion.Client.Units
             };
             rt.Create();
             dullAtlas.SetFloat("_Flesh", flesh ? 1 : 0);
+            dullAtlas.SetVector("_Living", living);
             Graphics.Blit(atlas, rt, dullAtlas);
-            return dulledAtlases[(atlas, flesh)] = rt;
+            return dulledAtlases[(atlas, flesh, living)] = rt;
         }
 
         static Color32 Hsv(Color32 c, float h, float s, float v)
@@ -276,7 +278,8 @@ namespace Bastion.Client.Units
             return texture;
         }
 
-        static bool Unused(Color32 c) => c.r > 252 && c.g < 3 && c.b < 3;
+        /// <summary>Whether a palette's cell is one its preset has no use for (pure red).</summary>
+        public static bool Unused(Color32 c) => c.r > 252 && c.g < 3 && c.b < 3;
 
         static Color32 Hex(string hex) => new Color32(Convert.ToByte(hex.Substring(0, 2), 16), Convert.ToByte(hex.Substring(2, 2), 16), Convert.ToByte(hex.Substring(4, 2), 16), 255);
 

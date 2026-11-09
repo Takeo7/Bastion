@@ -134,9 +134,13 @@ namespace Bastion.EditorTools
             Debug.Log($"[figures] {UndeadFile}: {all.Count} presets");
         }
 
-        /// <summary>A POLYGON character's prefab (one of the special dead's), by its name, in the packs' Characters folders.</summary>
+        /// <summary>
+        /// A POLYGON character's prefab (one of the special dead's), by its name, in the packs' Characters folders; or, as
+        /// pack/name (PolygonHorrorAsylum/SM_Chr_Nurse_01), in that pack's.
+        /// </summary>
         static GameObject CharacterPrefab(string name)
         {
+            if (name.Contains('/')) return AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Synty/{Path.GetDirectoryName(name)}/Prefabs/Characters/{Path.GetFileName(name)}.prefab");
             foreach (string folder in new[] { "Assets/Synty/PolygonOffice/Prefabs/Characters", "Assets/Synty/PolygonCity/Prefabs/Characters", "Assets/Synty/PolygonApocalypse/Prefabs/Characters",
                 "Assets/Synty/PolygonCityZombies/Prefabs/Characters", "Assets/Synty/PolygonBossZombies/Prefabs" })
             {

@@ -68,6 +68,8 @@ namespace Bastion.Engine
     {
         public const string Police = "police";
         public const string Military = "military";
+        /// <summary>A hospital gown: the dead in plain clothes that start inside a clinic or a hospital (Setup; Arturo, 9/11).</summary>
+        public const string Patient = "patient";
     }
 
     public static class TemplateIds

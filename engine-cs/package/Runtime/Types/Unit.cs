@@ -223,7 +223,8 @@ namespace Bastion.Engine
         public bool? Hidden { get; set; }
         /// <summary>
         /// What a zombie wore (Arturo, 2/11): Outfits.Police or Outfits.Military, a gun more likely on the body
-        /// (Looting.RollBody); absent, a civilian's clothes. The client dresses it so.
+        /// (Looting.RollBody); Outfits.Patient inside a clinic or a hospital (9/11), nothing more; absent, a civilian's
+        /// clothes. The client dresses it so.
         /// </summary>
         public string? Outfit { get; set; } // Outfits
         /// <summary>Aid Protocol: defense bonus until the start of the squad's next turn (0 = none).</summary>

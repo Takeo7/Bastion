@@ -26,6 +26,38 @@ namespace Bastion.Client.Units
             ("skZombieCivil4", "ModernCivilian_04", false), ("skZombieCivil5", "ModernCivilian_05", true), ("skZombieCivil6", "ModernCivilian_06", false),
             ("skZombieCop1", "ModernPolice_01", false), ("skZombieCop2", "ModernPolice_05", false), ("skZombieCop3", "ModernPolice_07", false),
             ("skZombieCop4", "ModernPolice_04", true), ("skZombieSurv1", "ApocalypseSurvivor_04", false), ("skZombieSurv2", "ApocalypseSurvivor_01", true),
+            // (Sidekick's zombies in Apocalypse Zombies' parts no preset wears: Ragged.)
+            ("skZombieRag1", "ApocalypseZombie_01", true), ("skZombieRag2", "ApocalypseZombie_02", false), ("skZombieRag3", "ApocalypseZombie_03", false),
+            ("skZombieRag4", "ApocalypseZombie_04", false), ("skZombieRag5", "ApocalypseZombie_05", false), ("skZombieRag6", "ApocalypseZombie_01", true),
+        };
+
+        /// <summary>
+        /// Apocalypse Zombies' sixteen parts no preset wears (Arturo, 9/11, of Biblioteca's list: torn shirts and trousers, a
+        /// skirt, two hairs, an axe in the head and one in the shoulder, knives in the back, a torn rucksack, a muzzle and
+        /// a gas mask), on Sidekick's five zombies: by part type, what each wears instead of its preset's (null: nothing of
+        /// that type). Their cells the preset's, or another zombie's where it paints none (RagCells).
+        /// </summary>
+        static readonly Dictionary<string, (string type, string part)[]> Ragged = new Dictionary<string, (string, string)[]>
+        {
+            ["skZombieRag1"] = new[] { ("Torso", "SK_ZOMB_BASE_08_10TORS_ZB01"), ("Hips", "SK_ZOMB_BASE_06_17HIPS_ZB01"), ("Hair", "SK_ZOMB_BASE_05_02HAIR_ZB01"), ("AttachmentHead", null) },
+            ["skZombieRag2"] = new[] { ("Torso", "SK_ZOMB_BASE_02_10TORS_ZB01"), ("Hips", "SK_ZOMB_BASE_01_17HIPS_ZB01"), ("AttachmentBack", "SK_APOC_ZOMB_11_24ABAC_ZB01"), ("AttachmentShoulderLeft", "SK_APOC_ZOMB_01_29ASHL_ZB01") },
+            ["skZombieRag3"] = new[] { ("Torso", "SK_ZOMB_BASE_04_10TORS_ZB01"), ("Hips", "SK_ZOMB_BASE_03_17HIPS_ZB01"), ("Hair", "SK_ZOMB_BASE_02_02HAIR_ZB01"), ("AttachmentHead", null), ("AttachmentFace", "SK_APOC_ZOMB_05_23AFAC_ZB01") },
+            ["skZombieRag4"] = new[] { ("Torso", "SK_ZOMB_BASE_05_10TORS_ZB01"), ("Hips", "SK_ZOMB_BASE_01_17HIPS_ZB01"), ("AttachmentHead", "SK_APOC_ZOMB_02_22AHED_ZB01"), ("AttachmentBack", "SK_APOC_ZOMB_02_24ABAC_ZB01") },
+            ["skZombieRag5"] = new[] { ("Torso", "SK_ZOMB_BASE_09_10TORS_ZB01"), ("Hips", "SK_ZOMB_BASE_03_17HIPS_ZB01"), ("AttachmentHead", null), ("AttachmentFace", "SK_APOC_ZOMB_03_23AFAC_ZB01") },
+            ["skZombieRag6"] = new[] { ("Torso", "SK_ZOMB_BASE_04_10TORS_ZB01"), ("Hips", "SK_ZOMB_BASE_01_17HIPS_ZB01"), ("Hair", "SK_ZOMB_BASE_02_02HAIR_ZB01"), ("AttachmentHead", null), ("AttachmentBack", null), ("AttachmentShoulderLeft", null) },
+        };
+
+        /// <summary>Whether a body is one of Ragged's.</summary>
+        public static bool IsRagged(string id) => id != null && Ragged.ContainsKey(id);
+
+        /// <summary>
+        /// The cells of Ragged's parts no zombie's colour map paints ('x,y' of 16 × 16, from the top left, as hex): the torn
+        /// rucksack's canvas and strap, the gas mask's filter and its glass; and the rucksack's cloth, a dull olive, which the
+        /// first zombie's paints a loud green.
+        /// </summary>
+        static readonly Dictionary<int, string> RagCells = new Dictionary<int, string>
+        {
+            [7 * 16 + 8] = "5b5446", [8 * 16 + 10] = "3b3631", [6 * 16 + 6] = "45463f", [7 * 16 + 6] = "8b8d80", [6 * 16 + 7] = "5d5b48",
         };
 
         /// <summary>convert.ts SIDEKICK_NEVER: the teeth and the tongue never show.</summary>
@@ -106,11 +138,20 @@ namespace Bastion.Client.Units
             }
             uint n = IdNumber(id);
             var parts = new List<SkinnedMeshRenderer>();
-            foreach (var row in preset["parts"])
+            // (One of Ragged's: its own parts in place of its preset's, and those of a type its preset hasn't.)
+            Ragged.TryGetValue(id, out var swaps);
+            var rows = preset["parts"].Select(row => ((string)row[0], (string)row[1])).ToList();
+            if (swaps != null) rows.AddRange(swaps.Where(s => s.part != null && !rows.Any(r => r.Item2 == s.type)).Select(s => (s.part, s.type)));
+            foreach (var (name, partType) in rows)
             {
-                string partName = (string)row[0], partType = (string)row[1];
+                string partName = name;
                 if (string.IsNullOrEmpty(partName) || Never.Contains(partType)) continue;
-                if (Undead.TryGetValue(partType ?? "", out var dead)) partName = dead(n);
+                if (swaps != null && swaps.Any(s => s.type == partType))
+                {
+                    partName = swaps.First(s => s.type == partType).part;
+                    if (partName == null) continue;
+                }
+                else if (Undead.TryGetValue(partType ?? "", out var dead)) partName = dead(n);
                 // A bare arm, hand or leg the zombies' bare one, where there is one.
                 else if (partName.StartsWith("SK_HUMN_BASE_"))
                 {
@@ -136,6 +177,15 @@ namespace Bastion.Client.Units
                 var cells = SoldierPalette.Cells(own);
                 var dead = SoldierPalette.Cells(zombie);
                 for (int c = 0; c < 256; c++) if (SoldierPalette.IsBody(c)) cells[c] = dead[c];
+                // The zombies' parts paint from cells the living preset may not use (pure red: skZombieCop2's beard showed it
+                // until 0.12.14), and Ragged's from cells their zombie may not: RagCells', else the zombie's, else another's.
+                var others = new[] { dead }.Concat(Enumerable.Range(1, 5).Select(k => catalog.ColourMap($"ApocalypseZombie_0{k}")).Where(m => m != null).Select(SoldierPalette.Cells)).ToList();
+                for (int c = 0; c < 256; c++)
+                {
+                    if (!SoldierPalette.Unused(cells[c])) continue;
+                    if (RagCells.TryGetValue(c, out string hex) && ColorUtility.TryParseHtmlString("#" + hex, out var paint)) cells[c] = paint;
+                    else if (others.FirstOrDefault(m => !SoldierPalette.Unused(m[c])) is Color32[] other) cells[c] = other[c];
+                }
                 palette = SoldierPalette.Texture(cells);
                 palette.name = id + " palette";
             }

@@ -1158,14 +1158,22 @@ namespace Bastion.Client.Units
             if (DeadFigureOf(u, view, catalog) is GameObject special) return special;
             // One of the common dead in a soldier's uniform (Unit.Outfit; Arturo's A9 of 2/11): City Zombies' soldier.
             if (view.deadKind && u.Outfit == Outfits.Military && DeadFigureOf(Soldiers, view, catalog) is GameObject uniformed) return uniformed;
+            // In a patient's gown (who started in a clinic or a hospital; Arturo, 9/11): Horror Asylum's and City Zombies' patients.
+            if (view.deadKind && u.Outfit == Outfits.Patient && !NewDeadOff && DeadFigureOf(Patients, view, catalog) is GameObject patient) return patient;
+            // In their own clothes, one in CityShare by their id: City Zombies' (Arturo, 9/11: «sueltos en la multitud»).
+            if (view.deadKind && u.Template == TemplateIds.Zombie && u.Outfit == null && FromCity(u.Id) && DeadFigureOf(Crowd, view, catalog) is GameObject city) return city;
             string kind = view.deadKind ? "dead" : u.Template;
             if (Bodies.TryGetValue(kind, out var all))
             {
-                // (The common dead in a policeman's uniform from Sidekick's police, the others never one of them: a deck of
-                // their own each, TurnOf.)
-                var bodies = view.deadKind && u.Template == TemplateIds.Zombie ? all.Where(b => IsCop(b.preset) == (u.Outfit == Outfits.Police)).ToArray() : all;
+                // (The common dead in a policeman's uniform from Sidekick's police and City Zombies' policewoman, the others
+                // never one of them: a deck of their own each, TurnOf.)
+                bool cop = view.deadKind && u.Template == TemplateIds.Zombie && u.Outfit == Outfits.Police;
+                var bodies = view.deadKind && u.Template == TemplateIds.Zombie ? all.Where(b => IsCop(b.preset) == cop).ToArray() : all;
+                if (NewDeadOff) bodies = bodies.Where(b => !UndeadFigure.IsRagged(b.preset)).ToArray();
                 if (bodies.Length == 0) bodies = all;
-                var (preset, female) = bodies[view.deadKind ? Dealt(bodies.Length, view, i => bodies[i].preset) : PickIndex(bodies.Length, view.seed)];
+                int dealt = view.deadKind ? Dealt(bodies.Length + (cop && !NewDeadOff ? CrowdCops.Length : 0), view, i => i < bodies.Length ? bodies[i].preset : DealtId(CrowdCops[i - bodies.Length])) : PickIndex(bodies.Length, view.seed);
+                if (dealt >= bodies.Length && DeadFigure(CrowdCops[dealt - bodies.Length], view, catalog) is GameObject policewoman) return policewoman;
+                var (preset, female) = bodies[Mathf.Min(dealt, bodies.Length - 1)];
                 view.build = female ? "femn" : "masc";
                 var prefab = catalog.Preset(preset);
                 if (prefab == null)
@@ -1241,8 +1249,12 @@ namespace Bastion.Client.Units
             return -1;
         }
 
-        /// <summary>Which deck one of the dead is dealt from: its special kind's, or the common dead's by what they wore (Unit.Outfit).</summary>
-        static string DeckOf(Unit u) => DeadBodies.ContainsKey(u.Template) ? u.Template : "dead" + (u.Template == TemplateIds.Zombie ? u.Outfit : null);
+        /// <summary>
+        /// Which deck one of the dead is dealt from: its special kind's, or the common dead's by what they wore (Unit.Outfit),
+        /// in their own clothes City Zombies' or Sidekick's by their id (FromCity).
+        /// </summary>
+        static string DeckOf(Unit u) => DeadBodies.ContainsKey(u.Template) ? u.Template
+            : "dead" + (u.Template == TemplateIds.Zombie ? u.Outfit ?? (FromCity(u.Id) ? "city" : null) : null);
 
         /// <summary>Whether a body of the common dead's (Bodies' dead) is one of Sidekick's policemen made dead.</summary>
         static bool IsCop(string preset) => preset.StartsWith("skZombieCop");

@@ -33,6 +33,12 @@ MonoBehaviour:
   - skZombieCop2
   - skZombieCop3
   - skZombieCop4
+  - skZombieRag1
+  - skZombieRag2
+  - skZombieRag3
+  - skZombieRag4
+  - skZombieRag5
+  - skZombieRag6
   - skZombieSurv1
   - skZombieSurv2
   presets:
@@ -56,6 +62,12 @@ MonoBehaviour:
   - {fileID: 4066088738522538111, guid: 48b2fade934524e49bfb74d49b3a1060, type: 3}
   - {fileID: 7681002080660577565, guid: 0ab3802d6764245ecaae75c41a5e646c, type: 3}
   - {fileID: 756400865167456358, guid: c5fa9b28d63f3496496b7172edeccc6e, type: 3}
+  - {fileID: 4896378839183788862, guid: 426a5373f62b9476391add74f5ab29e6, type: 3}
+  - {fileID: 5945236828940937138, guid: 7e3b9c3f0784e4b7e91e44832f962774, type: 3}
+  - {fileID: 1298829515083518484, guid: 6b8ac290aee9e4e3a94e1d5c88acddd8, type: 3}
+  - {fileID: 797057491147910889, guid: dc3a5f02e2a6647fea0090529b7a0d09, type: 3}
+  - {fileID: 2729571896755999501, guid: 537118d6edc7c44f5a3a6aa25f69597e, type: 3}
+  - {fileID: 1122231523480266872, guid: a4821bcb1b046456c858fad56bb811a3, type: 3}
   - {fileID: 4549568503672818902, guid: 8e70b8e4cab4243c693158904b7f551f, type: 3}
   - {fileID: 3609503106352992037, guid: 6217efef12d13429fa01925638df35cc, type: 3}
   colourMapNames:
@@ -582,6 +594,32 @@ MonoBehaviour:
   - SM_Chr_ZombieBoss_Blobber_01
   - SM_Chr_ZombieBoss_Slobber_01
   - SM_Chr_Zombie_Military_Male_01
+  - SM_Chr_Zombie_BioHazardSuit_Male_01
+  - SM_Chr_Zombie_Prisoner_Male_01
+  - SM_Chr_Zombie_Paramedic_Female_01
+  - SM_Chr_Zombie_Biker_Male_01
+  - SM_Chr_Zombie_Roadworker_Male_01
+  - SM_Chr_Zombie_Hobo_Male_01
+  - SM_Chr_Zombie_Businessman_Male_01
+  - SM_Chr_Zombie_Jacket_Male_01
+  - SM_Chr_Zombie_Jacket_Female_01
+  - SM_Chr_Zombie_Coat_Female_01
+  - SM_Chr_Zombie_Grandpa_Male_01
+  - SM_Chr_Zombie_Grandma_Female_01
+  - SM_Chr_Zombie_ShopKeeper_Male_01
+  - SM_Chr_Zombie_Patient_Female_01
+  - SM_Chr_Zombie_Punk_Male_01
+  - SM_Chr_Zombie_Bride_Female_01
+  - SM_Chr_Zombie_Footballer_Male_01
+  - SM_Chr_Zombie_Mother_Female_01
+  - SM_Chr_Zombie_Father_Male_01
+  - SM_Chr_Zombie_Police_Female_01
+  - PolygonHorrorAsylum/SM_Chr_Patient_Male_01
+  - PolygonHorrorAsylum/SM_Chr_Patient_Male_02
+  - PolygonHorrorAsylum/SM_Chr_Patient_Male_03
+  - PolygonHorrorAsylum/SM_Chr_Patient_Female_01
+  - PolygonHorrorAsylum/SM_Chr_Orderly_01
+  - PolygonHorrorAsylum/SM_Chr_Nurse_01
   characters:
   - {fileID: 1562126803887444, guid: e05321c6e6ad7b845942de92aafc2395, type: 3}
   - {fileID: 1343261146546640, guid: 4003093fe4a231c4d9c155a6540ec590, type: 3}
@@ -594,6 +632,32 @@ MonoBehaviour:
   - {fileID: 1658146812600542, guid: 574d3bbe7d1c8684f9101c2b823c5770, type: 3}
   - {fileID: 1389694247779218, guid: 6e6f4b3417a0abb45b1cce8fdf021eb5, type: 3}
   - {fileID: 1160577204630336, guid: 7c521770c9e780444b9b27cb7183739f, type: 3}
+  - {fileID: 1379516714727752, guid: cecba8cbb65991c42a1e7219f8210b9a, type: 3}
+  - {fileID: 1448682853809946, guid: fd7713efca146e545aafa284b89a051e, type: 3}
+  - {fileID: 1456145000865774, guid: 8d862076c59fabf43b7ca2084f63226f, type: 3}
+  - {fileID: 1164828658887116, guid: 6cb63163261c5a84a8a7410cf0775135, type: 3}
+  - {fileID: 1849257013590008, guid: 478b9cfcbcdb7284bbea515d7f42ea18, type: 3}
+  - {fileID: 1820573889300922, guid: af43738424059df46a83c566c110013d, type: 3}
+  - {fileID: 1767653040776728, guid: 0e2c74548f9e2284aa68e9dc8544219c, type: 3}
+  - {fileID: 1535602455685992, guid: ff2cafa10adeb4b43ab64ebe754ad3d7, type: 3}
+  - {fileID: 1581986130515946, guid: 3c17e5f77af5ac54d991cf6c5d87082b, type: 3}
+  - {fileID: 1967962345597456, guid: 5c839ac340cbdb44983d2d5b689eb849, type: 3}
+  - {fileID: 1785411793677078, guid: 4bcf20765be80ca43a7cfa0cc4f61d82, type: 3}
+  - {fileID: 1134484993998496, guid: da241a1c1c2f4b344926c84ef25128ac, type: 3}
+  - {fileID: 1775642029970670, guid: 99ea6e59b7824a449888100eea3984a3, type: 3}
+  - {fileID: 1172417875531008, guid: 046d682af511f1843bac35bbeb55eecc, type: 3}
+  - {fileID: 1841375738481322, guid: 0439985487c8b4342909dcf09068091b, type: 3}
+  - {fileID: 1017123011376438, guid: 720442d4dd381894b83efa1d1068d5e7, type: 3}
+  - {fileID: 1916796579201672, guid: 5de68a7f859a40a47bf17802c25007c3, type: 3}
+  - {fileID: 1124521317761058, guid: 4b114aae8ad29e34cb3c0117ad7edbd2, type: 3}
+  - {fileID: 1686375517816074, guid: 08eb0c5855619374381691dec1799669, type: 3}
+  - {fileID: 1922703142909278, guid: 3ba6740ea34059446b2030cb1cee74bc, type: 3}
+  - {fileID: 6166985253259686361, guid: 4e22d839028495c4a99d34d6aff5c80a, type: 3}
+  - {fileID: 2042277066873036541, guid: 442cf0ea8d4101d41801a5023e445d8f, type: 3}
+  - {fileID: 4759887161336184401, guid: 3b384f25c861f884eb89aeb46781af72, type: 3}
+  - {fileID: 5129136544824211903, guid: 434f651681573c348876231c36fcc10c, type: 3}
+  - {fileID: 3515931687270668373, guid: 2dfe02e797dc41a49afe13edfc859736, type: 3}
+  - {fileID: 9024756785769870577, guid: 2f8b2626967eb7e438ff581e6f4e727f, type: 3}
   atlasNames:
   - PolygonZombieBoss_03_B
   - PolygonZombieBoss_02_C
