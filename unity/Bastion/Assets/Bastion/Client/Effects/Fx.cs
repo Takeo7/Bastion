@@ -670,17 +670,29 @@ namespace Bastion.Client.Effects
 
         // ------------------------------------------------------------ explosives
 
-        public async Awaitable GrenadeArc(Vector3 from, Vector3 to, CancellationToken ct = default)
+        public async Awaitable GrenadeArc(Vector3 from, Vector3 to, CancellationToken ct = default) => await GrenadeArc(from, to, ct, null);
+
+        /// <summary>
+        /// The same with `kind`'s grenade flying (Thrown: "grenade", "smoke", "flash"; none, the frag), POLYGON Military's
+        /// at the figures' size, tumbling, with the glow round it; the green ball of before without FxArt's.
+        /// </summary>
+        public async Awaitable GrenadeArc(Vector3 from, Vector3 to, CancellationToken ct, string kind)
         {
             Load();
-            var shell = Make("granada", sphere, solid, false, true, out var r);
-            // A hand grenade's size, 14 cm (0.10.1's was a tile-unit 0.18 across: 27 cm, a head's; Gameplay 24/10), and a
-            // faint glow round it so that it shows from the game's camera.
-            shell.localScale = Vector3.one * 0.14f;
-            Paint(r, null, Hex(0x3b4a3a));
+            var model = Thrown(kind ?? "grenade", null);
+            Transform shell;
+            if (model != null) shell = model;
+            else
+            {
+                shell = Make("granada", sphere, solid, false, true, out var r);
+                // A hand grenade's size, 14 cm (0.10.1's was a tile-unit 0.18 across: 27 cm, a head's; Gameplay 24/10).
+                shell.localScale = Vector3.one * 0.14f;
+                Paint(r, null, Hex(0x3b4a3a));
+            }
+            // (A faint glow round it so that it shows from the game's camera.)
             var halo = Make("brillo", quad, added, false, false, out var hr);
             halo.SetParent(shell, false);
-            halo.localScale = Vector3.one * 0.35f / 0.14f;
+            halo.localScale = Vector3.one * 0.35f / Mathf.Max(shell.lossyScale.x, 1e-4f);
             Paint(hr, glow, WithAlpha(Hex(0xfff2d8), 0.45f));
             float d = Vector3.Distance(from, to) / T;
             float height = (1.5f + d * 0.3f) * T;
@@ -697,6 +709,27 @@ namespace Bastion.Client.Effects
             {
                 DestroyNow(shell.gameObject);
             }
+        }
+
+        /// <summary>
+        /// A grenade to throw (the review of 9/11: Arturo, POLYGON Military's): `kind` "grenade" (the frag), "smoke" or
+        /// "flash", at the figures' size, under `parent` (none: loose) with its middle where the parent is; null without
+        /// FxArt's model or for another kind.
+        /// </summary>
+        public static Transform Thrown(string kind, Transform parent)
+        {
+            var art = Resources.Load<FxArt>("FxArt");
+            var prefab = art == null ? null : kind == "grenade" ? art.grenade : kind == "smoke" ? art.grenadeSmoke : kind == "flash" ? art.grenadeFlash : kind == "syringe" ? art.syringe : null;
+            if (prefab == null) return null;
+            var model = Instantiate(prefab, parent, false).transform;
+            model.name = kind;
+            foreach (var c in model.GetComponentsInChildren<Collider>()) DestroyNow(c);
+            float lossy = parent != null ? Mathf.Max(parent.lossyScale.x, 1e-4f) : 1;
+            model.localScale = Vector3.one * Bastion.Client.Units.Figures.CharacterScale / lossy;
+            // (By its middle.)
+            var r = model.GetComponentInChildren<Renderer>();
+            if (r != null) model.position -= r.bounds.center - model.position;
+            return model;
         }
 
         /// <summary>

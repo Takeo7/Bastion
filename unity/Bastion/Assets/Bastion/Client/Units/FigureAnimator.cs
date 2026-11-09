@@ -49,7 +49,7 @@ namespace Bastion.Client.Units
         /// <summary>The motions whose clip holds the gun its own way (Mixamo's armed walk, run and sprint): the held clip off during them.</summary>
         readonly bool[] ownHold = new bool[Anims.MotionOrder.Length];
         /// <summary>The layers that play once (Upper, Free, Whole), by their index (the motions, the gun arm and the held rest have none).</summary>
-        readonly Slot[] slots = { null, null, null, new Slot(), new Slot(), new Slot() };
+        readonly Slot[] slots = { null, null, null, new Slot(), new Slot(), new Slot(), new Slot() };
         int motion;
         float speed = 1;
         // The weapon held standing: two clips, the one going and the one coming, crossfaded.
@@ -96,7 +96,13 @@ namespace Bastion.Client.Units
         const int Upper = 3;
         /// <summary>The upper body but the gun arm (syntyAnims.ts 'free': a throw by the free hand, the gun kept as it was held).</summary>
         const int Free = 4;
-        const int Whole = 5;
+        /// <summary>
+        /// The upper body but the left arm: a blade's stroke (Scrub's `strike`; the review of 9/11). Mixamo's strokes wind up
+        /// with both arms out and the hips turned: over the upper body alone the hips' turn was lost and the arms opened into
+        /// a cross for 0.1–0.25 s.
+        /// </summary>
+        const int Strike = 5;
+        const int Whole = 6;
 
         /// <summary>
         /// `clipOf` gives each of MOTION_ORDER's clips (idle, crouchIdle, walk, run, crouchWalk, sprint), or null; `paceOf`
@@ -111,7 +117,7 @@ namespace Bastion.Client.Units
             graph = PlayableGraph.Create(animator.gameObject.name);
             graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
             var output = AnimationPlayableOutput.Create(graph, "figura", animator);
-            layers = AnimationLayerMixerPlayable.Create(graph, 6);
+            layers = AnimationLayerMixerPlayable.Create(graph, 7);
             // (And after the motions, the camp's: two loops, the one going and the one coming, and a variation: CampLoop, Vary.)
             motions = AnimationMixerPlayable.Create(graph, Anims.MotionOrder.Length + 3);
             graph.Connect(motions, 0, layers, 0);
@@ -122,6 +128,7 @@ namespace Bastion.Client.Units
             layers.SetLayerMaskFromAvatarMask(Held, upper);
             layers.SetLayerMaskFromAvatarMask(Upper, upper);
             layers.SetLayerMaskFromAvatarMask(Free, UpperBody(false));
+            layers.SetLayerMaskFromAvatarMask(Strike, StrikeBody());
             layers.SetLayerMaskFromAvatarMask(ArmLayer, GunArm());
             for (int k = 0; k < Anims.MotionOrder.Length; k++)
             {
@@ -260,18 +267,30 @@ namespace Bastion.Client.Units
             return mask;
         }
 
+        /// <summary>The trunk, head and right arm (Strike's: a stroke without its left arm thrown out).</summary>
+        static AvatarMask StrikeBody()
+        {
+            var mask = new AvatarMask();
+            for (var part = AvatarMaskBodyPart.Root; part < AvatarMaskBodyPart.LastBodyPart; part++)
+                mask.SetHumanoidBodyPartActive(part, part == AvatarMaskBodyPart.Body || part == AvatarMaskBodyPart.Head || part == AvatarMaskBodyPart.RightArm
+                    || part == AvatarMaskBodyPart.RightFingers || part == AvatarMaskBodyPart.RightHandIK);
+            return mask;
+        }
+
         /// <summary>
         /// A clip over the upper body at `time` seconds into it, weighing `weight`, both set every frame from outside (a
         /// reload scrubbed, a blade's stroke on its own clock: syntyFigures.ts direct's spin, strike); `clip` null lets go.
+        /// `strike`: over the upper body but the left arm (Strike: a blade's stroke).
         /// </summary>
-        public void Scrub(AnimationClip clip, float time, float weight)
+        public void Scrub(AnimationClip clip, float time, float weight, bool strike = false)
         {
-            var slot = slots[Upper];
+            int layer = strike ? Strike : Upper;
+            var slot = slots[layer];
             if (clip == null)
             {
                 if (slot.manual && slot.clip.IsValid())
                 {
-                    Unplug(layers, Upper);
+                    Unplug(layers, layer);
                     slot.clip.Destroy();
                 }
                 slot.manual = false;
@@ -279,13 +298,13 @@ namespace Bastion.Client.Units
             }
             if (!slot.manual || !slot.clip.IsValid() || slot.clip.GetAnimationClip() != clip)
             {
-                Play(Upper, clip, 0, 0, true, 0, 0);
+                Play(layer, clip, 0, 0, true, 0, 0);
                 slot.manual = true;
             }
             slot.time = Mathf.Clamp(time, 0, slot.length);
             slot.weight = Mathf.Clamp01(weight);
             slot.clip.SetTime(slot.time);
-            layers.SetInputWeight(Upper, slot.weight);
+            layers.SetInputWeight(layer, slot.weight);
         }
 
         /// <summary>A clip over the upper body, once (from `at` seconds into it), fading in and out; its seconds from there.</summary>

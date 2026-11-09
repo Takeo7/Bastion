@@ -43,7 +43,8 @@ namespace Bastion.Client.Units
         /// soldier's from its arms: the Armería's gun at its tier (else the pistol as its main gun, and then no sidearm), its
         /// blade (else the knife); without a pistol (Arms.Pistol false: Arturo, 1/11, nobody starts with one) none in the
         /// holster, and with no gun at all its blade in the hand, nothing at the belt. Anyone else's from its template:
-        /// UNIT_WEAPONS at its tier, the pistol as a second gun, a squad soldier's machete for a sword.
+        /// UNIT_WEAPONS at its tier, the pistol as a second gun, a squad soldier's machete for a sword, the Cazador's baton
+        /// for its stun lance.
         /// </summary>
         static (string weapon, string sidearm, string belt) ArmamentOf(Unit u)
         {
@@ -60,7 +61,10 @@ namespace Bastion.Client.Units
             Content.Templates.TryGetValue(u.Template ?? "", out var t);
             return (Anims.UnitWeapon(u.Template, tier),
                 t != null && t.Secondary == "pistol" && t.Weapon != "pistol" ? "pistol" : null,
-                t != null && SquadTemplates.Contains(u.Template) && t.MeleeWeapon == "sword" ? "machete" : null);
+                t != null && SquadTemplates.Contains(u.Template) && t.MeleeWeapon == "sword" ? "machete"
+                // The Cazador's stun lance at its belt, its carbine in its hands (the review of 9/11: the baton was its main
+                // weapon, and it fired the carbine from its tip, unaimed; 0.10.1 the same).
+                : t != null && t.MeleeWeapon == WeaponIds.StunLance ? "baton" : null);
         }
 
         /// <summary>The pistol's model under `parent`, at the figures' scale (the Settlement's soldiers whose only gun it is).</summary>
@@ -331,7 +335,30 @@ namespace Bastion.Client.Units
             var catalog = FigureCatalog.Load();
             if (v.anim == null || catalog == null) return;
             v.anim.ArmRest(null, 0, fade);
-            v.anim.Rest(catalog.Clip(KnifeStroke.clip), fade, GuardAt);
+            // A guard by kind (the review of 9/11, Gameplay): a sword at Sword Combat's guard, the long two-handed tools low
+            // across the body as a lowered rifle (HoldBlade puts them between the hands); the rest the knife's, drawn back.
+            switch (GuardOf(v))
+            {
+                case "sword":
+                    v.anim.Rest(catalog.Clip("bladeIdle"), fade);
+                    break;
+                case "low":
+                    v.anim.Rest(catalog.Clip("rifleLowered"), fade);
+                    break;
+                default:
+                    v.anim.Rest(catalog.Clip(KnifeStroke.clip), fade, GuardAt);
+                    break;
+            }
+        }
+
+        /// <summary>The guard of the blade in its hands: "sword" (the katana, the long sword), "low" (one taken in both hands: the rake, the chainsaw), else the knife's.</summary>
+        static string GuardOf(View v)
+        {
+            var art = v.arts.TryGetValue(v.drawn, out var a) ? a : null;
+            if (art == null) return null;
+            if (art.two != null && art.two.Length >= 3) return "low";
+            string fbx = art.fbx ?? "";
+            return fbx.IndexOf("Katana", StringComparison.OrdinalIgnoreCase) >= 0 || fbx.IndexOf("Sword", StringComparison.OrdinalIgnoreCase) >= 0 ? "sword" : null;
         }
 
         /// <summary>
@@ -489,15 +516,109 @@ namespace Bastion.Client.Units
             Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal),
                 little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
             if (hand == null || index == null || little == null || middle == null) return;
+            Fist(a);
             var palm = Vector3.Lerp(hand.position, middle.position, 0.6f);
             var fingers = (middle.position - hand.position).normalized;
             var across = Vector3.ProjectOnPlane(index.position - little.position, fingers);
             var art = v.arts.TryGetValue(v.drawn, out var a2) ? a2 : null;
-            Seat(v.weapon, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
+            // On guard low across the body (the rake, the chainsaw: GuardOf "low"), held as a rifle between the hands: its
+            // grip in the right palm, its second grip towards the left (the left hand reached onto it below).
+            var leftHand = a.GetBoneTransform(HumanBodyBones.LeftHand);
+            var leftKnuckle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
+            if (Guarding(v) && GuardOf(v) == "low" && leftHand != null && leftKnuckle != null && art?.grip != null && art.grip.Length >= 3)
+            {
+                // (The right hand LowAhead further out, the weapon turned on to the left one: at «Rifle Lowered»'s hands the
+                // chainsaw's body was 12–14 cm into the belly, CombatLab.Cuerpo. The left hand onto its other grip below.)
+                var push = v.root.forward * LowAhead * (v.body != null ? v.body.lossyScale.x : 1);
+                Reach(a, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, hand.position + push,
+                    v.root.TransformDirection(new Vector3(1, -0.7f, 0)), 0.02f);
+                palm = Vector3.Lerp(hand.position, middle.position, 0.6f);
+                var leftPalm = Vector3.Lerp(leftHand.position, leftKnuckle.position, 0.6f);
+                var grip = new Vector3(art.grip[0], art.grip[1], art.grip[2]);
+                var two = new Vector3(art.two[0], art.two[1], art.two[2]);
+                var dirModel = (two - grip).normalized;
+                var upModel = Mathf.Abs(dirModel.z) < 0.9f ? Vector3.forward : Vector3.up;
+                var dirWorld = leftPalm - palm;
+                if (dirWorld.sqrMagnitude > 1e-6f && dirModel.sqrMagnitude > 1e-6f)
+                {
+                    var turn = Quaternion.LookRotation(dirWorld.normalized, Vector3.ProjectOnPlane(v.root.forward, dirWorld)) * Quaternion.Inverse(Quaternion.LookRotation(dirModel, upModel));
+                    v.weapon.rotation = turn;
+                    v.weapon.position = palm - (v.weapon.TransformPoint(grip) - v.weapon.position);
+                }
+            }
+            else Seat(v.weapon, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
             // Two-handed (the chainsaw): the left hand on its other grip, the elbow out to the left and down.
             if (art?.two != null && art.two.Length >= 3)
                 Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, v.weapon.TransformPoint(new Vector3(art.two[0], art.two[1], art.two[2])),
                     v.root.TransformDirection(new Vector3(-1, -0.7f, 0)), 0.02f);
+        }
+
+        /// <summary>How far out a low guard holds its weapon's grip past «Rifle Lowered»'s right hand (metres, of a figure's scale 1).</summary>
+        const float LowAhead = 0.13f;
+
+        /// <summary>
+        /// The right hand closed round what it holds (the review of 9/11: Mixamo's strokes are a bare hand's, open, and the
+        /// blade lay under the palm): each finger bent at its first two joints to FistBend at least towards the palm,
+        /// never opened where the clip closes it further; the thumb over them (its last two bones towards the index's middle
+        /// joint, ThumbMost at most: the strokes held it up).
+        /// </summary>
+        static void Fist(Animator a)
+        {
+            Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal),
+                little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (hand == null || index == null || little == null || middle == null) return;
+            // (The palm's side: the fingers' line crossed with the knuckles' from the little finger to the index.)
+            var palmward = Vector3.Cross(middle.position - hand.position, index.position - little.position).normalized;
+            foreach (var (p, m, d) in new[]
+            {
+                (HumanBodyBones.RightIndexProximal, HumanBodyBones.RightIndexIntermediate, HumanBodyBones.RightIndexDistal),
+                (HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightMiddleIntermediate, HumanBodyBones.RightMiddleDistal),
+                (HumanBodyBones.RightRingProximal, HumanBodyBones.RightRingIntermediate, HumanBodyBones.RightRingDistal),
+                (HumanBodyBones.RightLittleProximal, HumanBodyBones.RightLittleIntermediate, HumanBodyBones.RightLittleDistal),
+            })
+            {
+                Transform prox = a.GetBoneTransform(p), mid = a.GetBoneTransform(m), dist = a.GetBoneTransform(d);
+                if (prox == null || mid == null) continue;
+                Bend(prox, mid, (prox.position - hand.position).normalized, palmward, FistBend.x);
+                if (dist != null) Bend(mid, dist, (mid.position - prox.position).normalized, palmward, FistBend.y);
+            }
+            Transform thumb = a.GetBoneTransform(HumanBodyBones.RightThumbIntermediate), thumbTip = a.GetBoneTransform(HumanBodyBones.RightThumbDistal),
+                over = a.GetBoneTransform(HumanBodyBones.RightIndexIntermediate);
+            if (thumb != null && thumbTip != null && over != null) Aim(thumb, thumbTip, over.position, ThumbMost);
+        }
+
+        /// <summary>How far Fist turns the thumb at most (degrees).</summary>
+        const float ThumbMost = 60;
+
+        /// <summary>`bone` turned so that the line to `child` points at `at`, by `most` degrees at most.</summary>
+        static void Aim(Transform bone, Transform child, Vector3 at, float most)
+        {
+            Vector3 d = child.position - bone.position, want = at - bone.position;
+            if (d.sqrMagnitude < 1e-8f || want.sqrMagnitude < 1e-8f) return;
+            var turn = Quaternion.FromToRotation(d, want);
+            turn.ToAngleAxis(out float angle, out var axis);
+            if (angle > 180) angle -= 360;
+            bone.rotation = Quaternion.AngleAxis(Mathf.Clamp(angle, -most, most), axis) * bone.rotation;
+        }
+
+        /// <summary>How far a fist bends each finger at its first joint and its second (degrees).</summary>
+        static readonly Vector2 FistBend = new Vector2(75, 85);
+
+        /// <summary>`bone` turned so that the line to `child` bends from `before` towards `palmward` by `want` degrees, if it bends less.</summary>
+        static void Bend(Transform bone, Transform child, Vector3 before, Vector3 palmward, float want)
+        {
+            var d = child.position - bone.position;
+            if (d.sqrMagnitude < 1e-8f) return;
+            d.Normalize();
+            var axis = Vector3.Cross(before, palmward);
+            if (axis.sqrMagnitude < 1e-8f) return;
+            axis.Normalize();
+            float now = Vector3.SignedAngle(before, d, axis);
+            // (Which way round the axis takes the line towards the palm.)
+            float toward = Vector3.Dot(Quaternion.AngleAxis(10, axis) * before, palmward) > Vector3.Dot(before, palmward) ? 1 : -1;
+            float bent = now * toward;
+            if (bent >= want) return;
+            bone.rotation = Quaternion.AngleAxis((want - bent) * toward, axis) * bone.rotation;
         }
 
         /// <summary>
@@ -649,12 +770,14 @@ namespace Bastion.Client.Units
         sealed class Stroke
         {
             public string clip;
+            /// <summary>How much further in it steps for the blow (tiles: the knife's short reach; the review of 9/11, Gameplay).</summary>
+            public float closer;
             /// <summary>The clip's time of the blow, how long after the stroke begins it lands (game seconds), the clip's speed till then, when it is over; and from the blow, the clip from `after` at `afterRate`.</summary>
             public float release, lets, rate, end, after, afterRate;
             public float ClipTime(float t) => t >= lets ? after + (t - lets) * afterRate : release + (t - lets) * rate;
         }
 
-        static readonly Stroke KnifeStroke = new Stroke { clip = "knifeStab", release = 0.42f, lets = 0.34f, rate = 1.3f, end = 0.75f, after = 1.0f, afterRate = 0.75f };
+        static readonly Stroke KnifeStroke = new Stroke { clip = "knifeStab", release = 0.42f, lets = 0.34f, rate = 1.3f, end = 0.75f, after = 1.0f, afterRate = 0.75f, closer = 0.2f };
         static readonly Stroke MacheteStroke = new Stroke { clip = "macheteSwing", release = 1.0f, lets = 0.34f, rate = 2.0f, end = 0.75f, after = 1.0f, afterRate = 1.7f };
         /// <summary>
         /// From above (Gameplay 29/10, Ana's #10: the pan and the crowbar), Mixamo's axe brought down: its right hand up and
@@ -768,7 +891,8 @@ namespace Bastion.Client.Units
             {
                 var gap = target.root.position - home;
                 gap.y = 0;
-                float tiles = Mathf.Clamp(gap.magnitude / MapSpace.Tile - LungeShort, 0, LungeMost);
+                // (The knife 0.2 tiles further in: its middle stopped 42 cm short of the chest, CombatLab.Cuerpo.)
+                float tiles = Mathf.Clamp(gap.magnitude / MapSpace.Tile - LungeShort + stroke.closer, 0, LungeMost + stroke.closer);
                 toward = gap.normalized * tiles * MapSpace.Tile;
             }
             bool hit = false;
@@ -778,7 +902,7 @@ namespace Bastion.Client.Units
                 if (clip != null && v.anim != null)
                 {
                     float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (stroke.end - t) / 0.15f));
-                    v.anim.Scrub(t < stroke.end ? clip : null, Mathf.Clamp(stroke.ClipTime(t), 0, clip.length), share);
+                    v.anim.Scrub(t < stroke.end ? clip : null, Mathf.Clamp(stroke.ClipTime(t), 0, clip.length), share, true);
                 }
                 if (t < WindUp) v.root.position = home;
                 else if (t < WindUp + StrokeTime) v.root.position = home + toward * ((t - WindUp) / StrokeTime);
@@ -792,7 +916,7 @@ namespace Bastion.Client.Units
                 await Awaitable.NextFrameAsync(ct);
             }
             if (!hit) onHit?.Invoke();
-            v.anim?.Scrub(null, 0, 0);
+            v.anim?.Scrub(null, 0, 0, true);
             if (v.root == null) return;
             v.root.position = home;
             // (On watch with the blade, back on guard.)
@@ -828,7 +952,7 @@ namespace Bastion.Client.Units
                     if (clip != null)
                     {
                         float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (ChopStroke.end - t) / 0.15f));
-                        v.anim.Scrub(t < ChopStroke.end ? clip : null, Mathf.Clamp(ChopStroke.ClipTime(t), 0, clip.length), share);
+                        v.anim.Scrub(t < ChopStroke.end ? clip : null, Mathf.Clamp(ChopStroke.ClipTime(t), 0, clip.length), share, true);
                     }
                     if (!toppled && t >= ChopStroke.lets)
                     {
@@ -837,7 +961,7 @@ namespace Bastion.Client.Units
                     }
                     await Awaitable.NextFrameAsync(ct);
                 }
-                v.anim.Scrub(null, 0, 0);
+                v.anim.Scrub(null, 0, 0, true);
             }
             finally
             {

@@ -18,6 +18,11 @@ namespace Bastion.EditorTools
 
         /// <summary>A molotov's bottle (FxArt.molotov): Apocalypse's.</summary>
         const string Molotov = "Assets/Synty/PolygonApocalypse/Prefabs/Weapons/Misc/SM_Wep_Molotov_01.prefab";
+        /// <summary>The grenades thrown (FxArt.grenade, grenadeSmoke, grenadeFlash): POLYGON Military's.</summary>
+        const string Grenade = "Assets/Synty/PolygonMilitary/Prefabs/Weapons/SM_Wep_Grenade_01.prefab",
+            GrenadeSmoke = "Assets/Synty/PolygonMilitary/Prefabs/Weapons/SM_Wep_Grenade_Smoke_01.prefab",
+            GrenadeFlash = "Assets/Synty/PolygonMilitary/Prefabs/Characters/Attachments/SM_Chr_Attach_Grenade_Flash_01.prefab",
+            Syringe = "Assets/Synty/PolygonGangWarfare/Prefabs/Props/SM_Prop_Syringe_01.prefab";
 
         public static void Run()
         {
@@ -90,6 +95,16 @@ namespace Bastion.EditorTools
             art.smoke = Effect("FX_Smoke_Black_01");
             art.molotov = AssetDatabase.LoadAssetAtPath<GameObject>(Molotov);
             if (art.molotov == null) missing.Add(Molotov);
+            GameObject Military(string path)
+            {
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab == null) missing.Add(path);
+                return prefab;
+            }
+            art.grenade = Military(Grenade);
+            art.grenadeSmoke = Military(GrenadeSmoke);
+            art.grenadeFlash = Military(GrenadeFlash);
+            art.syringe = Military(Syringe);
 
             EditorUtility.SetDirty(art);
             AssetDatabase.SaveAssets();

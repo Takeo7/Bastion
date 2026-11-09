@@ -272,15 +272,26 @@ namespace Bastion.EditorTools
                 System.IO.Directory.CreateDirectory(folder);
             }
             System.IO.File.AppendAllText(System.IO.Path.Combine(folder, "estados.txt"), FormattableString.Invariant($"{frame:000} {Time.time:0.00} {what}\n"));
+            // (Filmed in the frame's Update, the bodies skinned once a frame showed an earlier pose than their bones and what
+            // they hold: through a stroke the hand open and a hand's length off the blade. Skinned again for each render.)
+            foreach (var skin in units.GetComponentsInChildren<SkinnedMeshRenderer>()) skin.forceMatrixRecalculationPerRender = true;
             string side = Environment.GetEnvironmentVariable("BASTION_LADO");
             float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), NumberStyles.Float, CultureInfo.InvariantCulture, out float d) ? d : 9;
             foreach (var (u, art) in row)
             {
                 var feet = units.Feet(u.Id);
                 var turn = Quaternion.Euler(0, units.FacingNow(u.Id) ?? 0, 0);
-                var from = side == "izq" ? new Vector3(-1.5f, 1.45f, 2.1f) : side == "detras" ? new Vector3(0.6f, 1.6f, -2.5f) : new Vector3(1.5f, 1.45f, 2.1f);
+                // (BASTION_LADO=der: square from its right, on a point 0.7 m ahead of it.)
+                var from = side == "izq" ? new Vector3(-1.5f, 1.45f, 2.1f) : side == "detras" ? new Vector3(0.6f, 1.6f, -2.5f) : side == "der" ? new Vector3(2.8f, 1.3f, 0.7f) : new Vector3(1.5f, 1.45f, 2.1f);
                 near.transform.position = feet + turn * from;
-                near.transform.LookAt(feet + Vector3.up * 1.15f);
+                near.transform.LookAt(feet + Vector3.up * 1.15f + (side == "der" ? turn * new Vector3(0, 0, 0.7f) : Vector3.zero));
+                // (BASTION_LADO=mano: 0.7 m off the right hand, from its right and a little in front, on it.)
+                if (side == "mano")
+                {
+                    var hand = units.Hand(u.Id);
+                    near.transform.position = hand + turn * new Vector3(0.55f, 0.15f, 0.4f);
+                    near.transform.LookAt(hand);
+                }
                 string a = System.IO.Path.Combine(folder, art + "-cerca"), b = System.IO.Path.Combine(folder, art + "-juego");
                 System.IO.Directory.CreateDirectory(a);
                 System.IO.Directory.CreateDirectory(b);
@@ -807,6 +818,70 @@ namespace Bastion.EditorTools
             };
         }
 
+        /// <summary>
+        /// Medicine (the review of 9/11, Gameplay: «agacharse con las manos al herido»): a soldier for each of BASTION_ARMAS
+        /// (the rifle and the pistol unless said) in the row; the first treats a wounded one a tile ahead of it (under half
+        /// its health, slumped), the others themselves, as EventPlayer plays a medicine (UnitViews.Treat), twice.
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Curar -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 200 -shotFps 30 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Curar()
+        {
+            if (Environment.GetEnvironmentVariable("BASTION_ARMAS") == null) Environment.SetEnvironmentVariable("BASTION_ARMAS", "rifle,pistol");
+            if (Resources.Load<Bastion.Client.Effects.FxArt>("FxArt") == null) FxArtMake.Run();
+            var row = Row();
+            var (first, _) = row[0];
+            var wounded = Bastion.Net.Json.Read<Unit>(Bastion.Net.Json.Write(first));
+            wounded.Id = "lab-herido";
+            wounded.Hp = Math.Max(1, wounded.MaxHp / 3);
+            UnitViews.ArtsForLab.Remove(wounded.Id);
+            Put(wounded, first.Pos.X, first.Pos.Y - 1, Math.PI / 2);
+            state.Units.Add(wounded);
+            Focus(row);
+            int every = int.TryParse(Environment.GetEnvironmentVariable("BASTION_CADA"), out int n) && n > 0 ? n : 1;
+            string now = "inicio";
+            bool done = false;
+            async Awaitable Watch()
+            {
+                int frame = 0;
+                while (!done)
+                {
+                    await Awaitable.NextFrameAsync();
+                    frame++;
+                    if (frame % every == 0) Film(row, frame / every, now);
+                }
+            }
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    _ = Watch();
+                    await Awaitable.WaitForSecondsAsync(1.0f);
+                    for (int time = 1; time <= 2; time++)
+                    {
+                        now = "cura-" + time;
+                        var cures = new List<Awaitable>();
+                        for (int k = 0; k < row.Count; k++) cures.Add(units.Treat(row[k].u.Id, k == 0 ? wounded.Id : row[k].u.Id));
+                        foreach (var c in cures) await c;
+                        now = "tras-" + time;
+                        await Awaitable.WaitForSecondsAsync(0.8f);
+                    }
+                    now = "fin";
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[combat] " + e);
+                }
+                finally
+                {
+                    done = true;
+                }
+            };
+        }
+
         /// <summary>Where `id` and what it holds are against `target`'s chest: its root's heading and the held model's middle (degrees round the upright, from its chest), and that middle's distance from the target's chest (cm).</summary>
         static string Blow(string id, string target)
         {
@@ -822,7 +897,27 @@ namespace Bastion.EditorTools
                 foreach (var r in model.GetComponentsInChildren<Renderer>()) if (!r.name.StartsWith("marca")) box.Encapsulate(r.bounds);
                 blade = FormattableString.Invariant($"bladeYaw={Yaw(box.center - chest):0.0} gap={(box.center - units.Chest(target)).magnitude * 100:0}");
             }
-            return FormattableString.Invariant($"rootYaw={Yaw(facing):0.0} {blade}");
+            // (How far out each upper arm is from the trunk's line down: a cross is both over 70°.)
+            string arms = "";
+            var animator = units.transform.Find(id)?.GetComponentInChildren<Animator>();
+            if (animator != null && animator.isHuman && animator.GetBoneTransform(HumanBodyBones.Hips) is Transform hips && animator.GetBoneTransform(HumanBodyBones.Neck) is Transform neck)
+            {
+                var down = (hips.position - neck.position).normalized;
+                float Out(HumanBodyBones upper, HumanBodyBones lower) => animator.GetBoneTransform(upper) is Transform u && animator.GetBoneTransform(lower) is Transform l ? Vector3.Angle(l.position - u.position, down) : 0;
+                arms = FormattableString.Invariant($" armL={Out(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm):0} armR={Out(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm):0}");
+            }
+            // (The right palm from where the held model's grip is, and what is held.)
+            string grip = "";
+            if (model != null && animator != null && animator.GetBoneTransform(HumanBodyBones.RightHand) is Transform rh && animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal) is Transform rk)
+            {
+                var palm = Vector3.Lerp(rh.position, rk.position, 0.6f);
+                // (How far the middle finger is curled at its first two joints, degrees: straight is 0.)
+                string curl = "-";
+                if (animator.GetBoneTransform(HumanBodyBones.RightMiddleIntermediate) is Transform mi && animator.GetBoneTransform(HumanBodyBones.RightMiddleDistal) is Transform md)
+                    curl = FormattableString.Invariant($"{Vector3.Angle(rk.position - rh.position, mi.position - rk.position):0}/{Vector3.Angle(mi.position - rk.position, md.position - mi.position):0}");
+                grip = FormattableString.Invariant($" palmToModel={(palm - model.position).magnitude * 100:0} curl={curl} hand={rh.position.x:0.000},{rh.position.y:0.000},{rh.position.z:0.000}");
+            }
+            return FormattableString.Invariant($"rootYaw={Yaw(facing):0.0} {blade}{arms}{grip}");
         }
 
         /// <summary>
@@ -836,9 +931,9 @@ namespace Bastion.EditorTools
         /// </summary>
         public static void Lanzar()
         {
-            Environment.SetEnvironmentVariable("BASTION_ARMAS", "rifle,rifle2,rifle3");
+            Environment.SetEnvironmentVariable("BASTION_ARMAS", "rifle,rifle2,rifle3,shotgun,smg");
             var row = Row();
-            string[] kinds = { "granada", "molotov", "piedra" };
+            string[] kinds = { "granada", "molotov", "piedra", "humo", "aturdidora" };
             foreach (var (u, _) in row)
             {
                 UnitViews.ArtsForLab.Remove(u.Id);
@@ -925,12 +1020,52 @@ namespace Bastion.EditorTools
                     return;
                 }
                 Awaitable arc = null;
+                // (As EventPlayer: what is held, and the same in the air.)
+                string held = kind == "molotov" ? "molotov" : kind == "humo" ? "smoke" : kind == "aturdidora" ? "flash" : "grenade";
                 await units.ThrowMotion(id, () =>
                 {
                     Debug.Log($"[lanzar] {Time.time:0.000} {where} {kind} {Release(id, to)}");
-                    arc = kind == "molotov" ? fx.MolotovArc(units.ThrowHand(id), to) : fx.GrenadeArc(units.ThrowHand(id), to);
-                }, default, kind == "molotov" ? "molotov" : null);
+                    arc = kind == "molotov" ? fx.MolotovArc(units.ThrowHand(id), to) : fx.GrenadeArc(units.ThrowHand(id), to, default, held);
+                }, default, held);
                 if (arc != null) await arc;
+            }
+        }
+
+        /// <summary>
+        /// Where each blade's model runs along the way it is held (WeaponArt along, from its grip, in its own units at its
+        /// size): its far end, its back end (the pommel), and how wide it is across there; for the grips (the review of 9/11).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.CombatLab.Mangos
+        /// </summary>
+        public static void Mangos()
+        {
+            var catalog = FigureCatalog.Load();
+            foreach (var id in Blades)
+            {
+                var art = Anims.Weapon(id);
+                var prefab = art != null ? catalog.Weapon(art.fbx) : null;
+                if (prefab == null)
+                {
+                    Debug.Log($"[mangos] {id}: no model");
+                    continue;
+                }
+                var model = UnityEngine.Object.Instantiate(prefab);
+                var along = art.along != null && art.along.Length >= 3 ? new Vector3(art.along[0], art.along[1], art.along[2]).normalized : Vector3.forward;
+                var grip = art.grip != null && art.grip.Length >= 3 ? new Vector3(art.grip[0], art.grip[1], art.grip[2]) : Vector3.zero;
+                float lo = float.MaxValue, hi = float.MinValue;
+                foreach (var mf in model.GetComponentsInChildren<MeshFilter>())
+                {
+                    if (mf.sharedMesh == null) continue;
+                    foreach (var v in mf.sharedMesh.vertices)
+                    {
+                        var p = model.transform.InverseTransformPoint(mf.transform.TransformPoint(v));
+                        float t = Vector3.Dot(p - grip, along);
+                        lo = Mathf.Min(lo, t);
+                        hi = Mathf.Max(hi, t);
+                    }
+                }
+                float size = art.size > 0 ? art.size : 1;
+                Debug.Log(FormattableString.Invariant($"[mangos] {id} ({art.fbx}): along {along}, grip {grip}; from the grip, back {lo:0.000} to front {hi:0.000} (model units; ×{size} × {Figures.CharacterScale})"));
+                UnityEngine.Object.DestroyImmediate(model);
             }
         }
 

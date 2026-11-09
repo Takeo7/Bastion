@@ -38,5 +38,12 @@ namespace Bastion.Client.Effects
         public GameObject smoke;
         /// <summary>A molotov's bottle (Arturo, 1/11: thrown as a grenade, its pool of petrol burning): Apocalypse's, its rag lit by a small fire (Fx.Molotov).</summary>
         public GameObject molotov;
+        /// <summary>
+        /// The grenades thrown (the review of 9/11, Arturo in the box: POLYGON Military's, in the hand and in the air; till
+        /// then nothing in the hand and a green ball flying): the frag, the smoke, the flash (Fx.Thrown).
+        /// </summary>
+        public GameObject grenade, grenadeSmoke, grenadeFlash;
+        /// <summary>The medicine given (the review of 9/11, Gameplay: «la venda o la jeringa»): Gang Warfare's syringe, in the hand that treats (UnitViews.Treat).</summary>
+        public GameObject syringe;
     }
 }

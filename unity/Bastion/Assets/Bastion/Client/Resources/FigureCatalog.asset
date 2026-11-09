@@ -252,6 +252,7 @@ MonoBehaviour:
   - pistolAim
   - pistolFire
   - pistolKneelDown
+  - pistolKneelUp
   - pistolReload
   - pistolRest
   - pointFemn
@@ -265,6 +266,7 @@ MonoBehaviour:
   - rifleKneel
   - rifleKneelAim
   - rifleKneelDown
+  - rifleKneelUp
   - rifleLowered
   - rifleReload
   - rifleReloadWalk
@@ -441,6 +443,7 @@ MonoBehaviour:
   - {fileID: -203655887218126122, guid: af435674623704f61b6ff770b06cf8b3, type: 3}
   - {fileID: -203655887218126122, guid: 3315356935b7640d18001f5cfc95faa1, type: 3}
   - {fileID: -203655887218126122, guid: d599d74c46afa4034a4e436ddda9db54, type: 3}
+  - {fileID: -203655887218126122, guid: b8ae76512a353489193b817b34a0384e, type: 3}
   - {fileID: -203655887218126122, guid: e131766504185423590081acd26082ba, type: 3}
   - {fileID: -203655887218126122, guid: 85fed6392549b49e3b35db97d82b38fc, type: 3}
   - {fileID: 3079626718596155391, guid: 47e9482dbca8b0f49a614547db509418, type: 3}
@@ -454,6 +457,7 @@ MonoBehaviour:
   - {fileID: -203655887218126122, guid: 472d4819c728040778a2802e33b2fab0, type: 3}
   - {fileID: -203655887218126122, guid: 5e2160635f8594313981c6f1f9f014ee, type: 3}
   - {fileID: -203655887218126122, guid: 33ba4bc56709f44f98c562254b080c8a, type: 3}
+  - {fileID: -203655887218126122, guid: 59a768a43785142a898d3428721701b5, type: 3}
   - {fileID: -203655887218126122, guid: a246acd47f41d4a17a7d7e80ddd8cec4, type: 3}
   - {fileID: -203655887218126122, guid: b00565a62cdac418bacfc2c12c4349ec, type: 3}
   - {fileID: -203655887218126122, guid: 9cc83e261cc0f477a84dade077074996, type: 3}
@@ -714,6 +718,7 @@ MonoBehaviour:
   - 0.12
   - 0.12
   - 0.7866668
+  - 1.0200003
   - 3.65
   - 6.6866617
   - 1.6533332
@@ -727,6 +732,7 @@ MonoBehaviour:
   - 0.12
   - 0.12
   - 0.9333334
+  - 1.2333333
   - 0.12
   - 2.619999
   - 4.0833335

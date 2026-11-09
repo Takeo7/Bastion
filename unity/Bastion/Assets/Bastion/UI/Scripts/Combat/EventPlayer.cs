@@ -1931,7 +1931,9 @@ namespace Bastion.UI.Combat
                     Log(Lore.MedicineLine(u.Name, target.Id == u.Id ? null : target.Name, healed, cured), "#6dff9a");
                     medicineHeal = true;
                     medicineCure = cured;
-                    await Wait(0.3f);
+                    // (Arte, 9/11: down by the one it treats, its hand with the syringe on them.)
+                    if (units != null) await units.Treat(u.Id, target.Id, stop);
+                    else await Wait(0.3f);
                     return;
                 }
                 case CuredEvent cure:
@@ -2541,7 +2543,9 @@ namespace Bastion.UI.Combat
                     control.Sfx.Throw(Chest(u.Id));
                     // A molotov is Arte's bottle, its rag lit, in the hand and along the arc (not the grenade's ball).
                     var molotov = e.Ability == AbilityIds.Molotov;
-                    await units.ThrowMotion(u.Id, () => Loose(Then(molotov ? fx.MolotovArc(units.ThrowHand(u.Id), to, stop) : fx.GrenadeArc(units.ThrowHand(u.Id), to, stop), () => landed = true)), stop, molotov ? "molotov" : null);
+                    // (Arte, 9/11: the grenade in the hand and in the air, POLYGON Military's frag, smoke or flash.)
+                    var held = molotov ? "molotov" : e.Ability == AbilityIds.Smoke ? "smoke" : e.Ability == AbilityIds.Flashbang ? "flash" : "grenade";
+                    await units.ThrowMotion(u.Id, () => Loose(Then(molotov ? fx.MolotovArc(units.ThrowHand(u.Id), to, stop) : fx.GrenadeArc(units.ThrowHand(u.Id), to, stop, held), () => landed = true)), stop, held);
                     while (!landed && !stop.IsCancellationRequested) await Awaitable.NextFrameAsync(stop);
                     control.Sfx.Land(to);
                 }

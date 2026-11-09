@@ -705,6 +705,14 @@
    "pack": "mixamo",
    "fbx": "Reloading 2"
   },
+  "rifleKneelUp": {
+   "pack": "mixamo",
+   "fbx": "Rifle Kneel To Stand"
+  },
+  "pistolKneelUp": {
+   "pack": "mixamo",
+   "fbx": "Pistol Kneel To Stand"
+  },
   "rifleReloadWalk": {
    "pack": "mixamo",
    "fbx": "Reload 3"
@@ -1339,7 +1347,12 @@
   },
   "baton": {
    "fbx": "SM_Wep_Baton_01",
-   "melee": true
+   "melee": true,
+   "grip": [
+    0.0,
+    0.0,
+    -0.062
+   ]
   },
   "pistol": {
    "fbx": "SM_Wep_Pistol_01",
@@ -1348,12 +1361,22 @@
   "knife": {
    "fbx": "SM_Wep_Melee_HuntingKnife_01",
    "melee": true,
-   "size": 0.8
+   "size": 0.8,
+   "grip": [
+    0.0,
+    0.0,
+    -0.031
+   ]
   },
   "machete": {
    "fbx": "SM_Wep_Melee_Machete_01",
    "melee": true,
-   "size": 0.72
+   "size": 0.72,
+   "grip": [
+    0.0,
+    0.0,
+    -0.075
+   ]
   },
   "boltRifle": {
    "fbx": "SM_Wep_HuntingRifle_Clean_01",
@@ -1393,9 +1416,9 @@
    "melee": true,
    "size": 0.8,
    "grip": [
-    0,
-    0,
-    0.1
+    0.0,
+    0.0,
+    0.044
    ]
   },
   "crowbar": {
@@ -1429,16 +1452,21 @@
    "fbx": "apocalypse:SM_Wep_Katana_01",
    "melee": true,
    "size": 1.3,
-   "slung": true
+   "slung": true,
+   "grip": [
+    0.0,
+    0.0,
+    -0.116
+   ]
   },
   "longsword": {
    "fbx": "gang:SM_Wep_Sword_02",
    "melee": true,
    "size": 1.15,
    "grip": [
-    0,
-    0,
-    0
+    0.0,
+    -0.128,
+    0.0
    ],
    "along": [
     0,
@@ -1474,9 +1502,9 @@
    "melee": true,
    "size": 1.4,
    "grip": [
-    0,
-    -0.22,
-    0
+    0.0,
+    -0.273,
+    0.0
    ],
    "along": [
     0,
@@ -1522,9 +1550,9 @@
    "smg"
   ],
   "lancer": [
-   "baton",
-   "baton",
-   "baton"
+   "boltRifle",
+   "boltRifle",
+   "boltRifle"
   ]
  }
 }

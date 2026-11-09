@@ -228,6 +228,9 @@ namespace Bastion.Client.Units
             public float reachAim, reachGrab;
             /// <summary>How far into a search's pose it is (Rummage: 0 none, 1 down and rummaging).</summary>
             public float search;
+            /// <summary>Treating (Treat): the one it treats, stepped in to, or itself (its left hand on its thigh).</summary>
+            public View tended;
+            public bool treatSelf;
             /// <summary>The gun in its right hand's frame as a search began, and its upper chest's turn then in the root's frame.</summary>
             public Vector3 searchGunAt;
             public Quaternion searchGun = Quaternion.identity, searchChest = Quaternion.identity;
@@ -905,9 +908,44 @@ namespace Bastion.Client.Units
                 }
             }
             if (crouched == v.crouched || v.hiding || v.risen) return;
+            // Up from the knee where it stands, with a gun in its hands: Mixamo's way up (the review of 9/11, Gameplay).
+            if (!crouched && !KneelUpOff && v.synced && !v.walking && !v.feeding && !v.dead && (v.inHand == Held.Rifle || v.inHand == Held.Pistol))
+            {
+                _ = KneelUp(v);
+                return;
+            }
             v.crouched = crouched;
             if (!v.walking && !v.feeding) v.anim.Motion(IdleOf(v));
             if (v.weapon != null) Settle(v, 0.3f);
+        }
+
+        /// <summary>
+        /// Up from the knee to standing with the gun in its hands (the review of 9/11, Gameplay: «levantarse con Rifle/Pistol
+        /// Kneel To Stand»; till then a blend of the motions, the legs sliding from the knee to standing): the clip whole,
+        /// the standing idle under it, let go as it ends. As GoIntoHiding, it holds `hiding` meanwhile.
+        /// </summary>
+        /// <summary>BASTION_SIN_LEVANTAR=1: up from the knee as the motions blend, for the labs' «before».</summary>
+        static readonly bool KneelUpOff = Environment.GetEnvironmentVariable("BASTION_SIN_LEVANTAR") == "1";
+
+        async Awaitable KneelUp(View v, CancellationToken ct = default)
+        {
+            v.hiding = true;
+            try
+            {
+                v.crouched = false;
+                var clip = FigureCatalog.Load()?.Clip(v.inHand == Held.Rifle ? "rifleKneelUp" : "pistolKneelUp");
+                float seconds = clip != null ? v.anim.PlayWholePart(clip, 0, clip.length, 0.15f, false) : 0;
+                v.anim.Motion(IdleOf(v));
+                if (v.weapon != null) Settle(v, HideFade);
+                if (clip == null) return;
+                await Awaitable.WaitForSecondsAsync(Mathf.Max(0.3f, seconds - HideFade), ct);
+                v.anim.StopWhole(HideFade);
+                await Awaitable.WaitForSecondsAsync(HideFade, ct);
+            }
+            finally
+            {
+                v.hiding = false;
+            }
         }
 
         /// <summary>The Sidekick presets each kind of the enemy is drawn as (syntyManifest.ts UNIT_BODIES, of what Unity has so far).</summary>
@@ -2007,10 +2045,11 @@ namespace Bastion.Client.Units
         /// The places round a body (Ana's #6, 1/11): 0 by its chest on the killer's side, 1 by its chest on the other, 2 past
         /// its head, 3 by its knees (on the side the one there came from); how far out from the body those who join kneel
         /// (tiles: further than the killer, so three down eating don't pile up on the chest, UI 1/11), how far past the
-        /// head, and how far back from the hips the knees are.
+        /// head (0.8 till the review of 9/11: the one there bit the air half a metre short of it), and how far back from
+        /// the hips the knees are.
         /// </summary>
         const int Places = 4;
-        const float JoinSide = 0.62f, PastHead = 0.8f, Knees = 0.7f;
+        const float JoinSide = 0.62f, PastHead = 0.5f, Knees = 0.7f;
         /// <summary>How fast one eating keeps up with the body as it settles (tiles a second), and turns to it.</summary>
         const float KeepUp = 0.8f;
         /// <summary>
@@ -2276,33 +2315,67 @@ namespace Bastion.Client.Units
         public async Awaitable<Vector3> TossStone(string id, Vector3 to, CancellationToken ct = default)
         {
             Face(id, to);
-            if (views.TryGetValue(id, out var v)) v.anim?.PlayFree(FigureCatalog.Load()?.Clip("throwStone"), 0.1f, 1, StoneRelease - StoneLead);
+            if (views.TryGetValue(id, out var v))
+            {
+                v.anim?.PlayFree(FigureCatalog.Load()?.Clip("throwStone"), 0.1f, 1, StoneRelease - StoneLead);
+                ThrowTurn(v, StoneTurn);
+            }
             await Awaitable.WaitForSecondsAsync(StoneLead, ct);
+            if (v != null) ThrowTurn(v, -StoneTurn);
             return LeftHand(id);
         }
+
+        /// <summary>
+        /// How far to its left one throwing turns as it throws, and back once it lets go (degrees; the review of 9/11,
+        /// Gameplay): the throws are Mixamo's thrown with the right hand, mirrored to the left, and the left hand let go
+        /// going 55° to the right of where the thing lands (the stone 30°; CombatLab.Lanzar), its arm across the body.
+        /// </summary>
+        const float GrenadeTurn = 45, StoneTurn = 30;
+
+        /// <summary>`v` turned `degrees` to its left of where it is turning to (or faces), at the throw's pace.</summary>
+        static void ThrowTurn(View v, float degrees)
+        {
+            float yaw = v.yawTo ?? v.root.eulerAngles.y;
+            TurnTo(v, yaw - degrees, ThrowTurnRate);
+        }
+
+        const float ThrowTurnRate = 10;
 
         Vector3 LeftHand(string id) => Bone(id, HumanBodyBones.LeftHand) ?? Hand(id);
 
         /// <summary>
         /// A grenade's throw, by the free left hand (Mixamo's, mirrored); `onHit` as it leaves it (where the arc starts:
         /// ThrowHand(id)). `held` "molotov": the bottle in that hand, its rag lit, till it lets it go (Fx.Molotov; its arc
-        /// is Fx.MolotovArc).
+        /// is Fx.MolotovArc); "grenade", "smoke", "flash": that grenade (Fx.Thrown; its arc, Fx.GrenadeArc with the same).
+        /// Turned GrenadeTurn to its left as it throws, and back as it lets go.
         /// </summary>
         public async Awaitable ThrowMotion(string id, Action onHit = null, CancellationToken ct = default, string held = null)
         {
             float rest = 0.2f;
             if (views.TryGetValue(id, out var v) && v.anim != null && FigureCatalog.Load()?.Clip("tossGrenade") is AnimationClip toss)
                 rest = Mathf.Max(0.1f, v.anim.PlayFree(toss, 0.1f, 1, GrenadeRelease - GrenadeLead) - GrenadeLead - 0.2f);
+            if (v != null) ThrowTurn(v, GrenadeTurn);
             Transform bottle = null;
-            if (held == "molotov" && v?.animator != null && v.animator.isHuman && v.animator.GetBoneTransform(HumanBodyBones.LeftHand) is Transform hand)
+            if (held != null && v?.animator != null && v.animator.isHuman && v.animator.GetBoneTransform(HumanBodyBones.LeftHand) is Transform hand)
             {
-                bottle = Effects.Fx.Molotov(hand);
+                // The molotov's bottle, or the grenade (the review of 9/11: POLYGON Military's frag, smoke or flash), in the left palm.
+                bottle = held == "molotov" ? Effects.Fx.Molotov(hand) : Effects.Fx.Thrown(held, hand);
                 // (In the palm, the neck up the way the fingers run: the middle finger's first bone from the hand's.)
                 if (bottle != null && v.animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal) is Transform finger)
                 {
                     var along = finger.position - hand.position;
-                    bottle.position = hand.position + along * 0.9f;
-                    bottle.rotation = Quaternion.FromToRotation(Vector3.up, along.normalized);
+                    if (held == "molotov")
+                    {
+                        bottle.position = hand.position + along * 0.9f;
+                        bottle.rotation = Quaternion.FromToRotation(Vector3.up, along.normalized);
+                    }
+                    else
+                    {
+                        // (A grenade by its middle, in the cup of the hand.)
+                        var r = bottle.GetComponentInChildren<Renderer>();
+                        var middle = r != null ? r.bounds.center : bottle.position;
+                        bottle.position += hand.position + along * 0.75f - middle;
+                    }
                 }
             }
             try
@@ -2314,6 +2387,7 @@ namespace Bastion.Client.Units
                 if (bottle != null) DestroyNow(bottle.gameObject);
             }
             onHit?.Invoke();
+            if (v != null) ThrowTurn(v, -GrenadeTurn);
             await Awaitable.WaitForSecondsAsync(rest, ct);
         }
 
