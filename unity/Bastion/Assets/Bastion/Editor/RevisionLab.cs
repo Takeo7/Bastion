@@ -22,7 +22,9 @@ namespace Bastion.EditorTools
         static List<(Unit u, string art)> Row(int y = 12)
         {
             var first = MapLab.Golden("city-7");
-            var model = first.Units.First(u => u.Alive && u.Team == "xcom");
+            // (BASTION_SOLDADO=n: the n-th of its soldiers instead of the first.)
+            var squad = first.Units.Where(u => u.Alive && u.Team == "xcom").ToList();
+            var model = squad[int.TryParse(Environment.GetEnvironmentVariable("BASTION_SOLDADO"), out int pick) ? Math.Clamp(pick, 0, squad.Count - 1) : 0];
             var arts = (Environment.GetEnvironmentVariable("BASTION_ARMAS") ?? string.Join(",", Firearms)).Split(',', StringSplitOptions.RemoveEmptyEntries);
             Plain(u => false, 1, 2 * arts.Length - 1);
             // (The same body for all, so that only the weapon changes; BASTION_COMPLEXION=heavy, slim…: another build.)
@@ -296,6 +298,24 @@ namespace Bastion.EditorTools
                 System.IO.Directory.CreateDirectory(a);
                 System.IO.Directory.CreateDirectory(b);
                 Shots.Render(near, 480, 600, System.IO.Path.Combine(a, $"f{frame:000}.png"));
+                // (BASTION_HOMBROS=1: the shoulder and the face close, into folder/<art>-perfil, square from its right, and
+                // folder/<art>-frente, from ahead and to its right, folder/<art>-izq, from its left and ahead, and
+                // folder/<art>-detras, from behind its right shoulder; on a point between its head and chest, 0.25 m ahead;
+                // and folder/<art>-cuerpo, the whole of it square from its right, on its middle.)
+                if (Environment.GetEnvironmentVariable("BASTION_HOMBROS") == "1")
+                {
+                    var on = Vector3.Lerp(units.Chest(u.Id), units.Head(u.Id), 0.5f) + turn * new Vector3(0, 0, 0.25f);
+                    var middle = feet + Vector3.up * 0.85f + turn * new Vector3(0, 0, 0.3f);
+                    foreach (var (name, at, centre) in new[] { ("perfil", new Vector3(1.5f, 0.05f, 0.25f), on), ("frente", new Vector3(0.75f, 0.2f, 1.4f), on), ("izq", new Vector3(-1.2f, 0.1f, 0.6f), on),
+                        ("detras", new Vector3(0.75f, 0.25f, -1.1f), on), ("cuerpo", new Vector3(3.1f, 0.15f, 0), middle) })
+                    {
+                        string c = System.IO.Path.Combine(folder, art + "-" + name);
+                        System.IO.Directory.CreateDirectory(c);
+                        near.transform.position = centre + turn * at;
+                        near.transform.LookAt(centre);
+                        Shots.Render(near, 480, 480, System.IO.Path.Combine(c, $"f{frame:000}.png"));
+                    }
+                }
                 // (The game's frame cropped to its middle: the same camera with the field of view of that crop.)
                 far.fieldOfView = 40;
                 MapSpace.Aim(far, feet + Vector3.up * 0.9f, off);
@@ -651,6 +671,7 @@ namespace Bastion.EditorTools
                                 async Awaitable Raise(Unit u, Vector3 p) => aims[u.Id] = await units.RaiseWeapon(u.Id, p);
                                 await Awaitable.WaitForSecondsAsync(1.1f);
                                 foreach (var (u, art) in row) Debug.Log($"[punteria] {Time.time:0.000} {what} up {art} {units.AimReport(u.Id, Point(u))}");
+                                foreach (var (u, art) in row) Debug.Log($"[hombro] {what} {art} {units.ShoulderReport(u.Id)} {units.GripReport(u.Id)} {IntoReport(u.Id)}");
                                 if (Environment.GetEnvironmentVariable("BASTION_STANCE") == "1")
                                     foreach (var (u, art) in row) Debug.Log($"[punteria] stance {art}: {units.Stance(u.Id)}");
                                 foreach (var (u, _) in row)

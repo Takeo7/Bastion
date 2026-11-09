@@ -6,13 +6,14 @@ Lo lleva Red (hito 3, docs/UNITY.md §5). El objetivo es que suene igual que la 
 
 Todo se genera a partir del sonido de la 0.10.1, que está en git:
 - `packages/client/src/audio/`: las recetas sintetizadas (`sounds.ts`, `synth.ts`, `bank.ts`), la partitura (`music.ts`) y las camas de ambiente (`ambience.ts`);
-- `packages/client/public/audio/`: los grabados (Opus, con su `index.json`) y los WAV de la interfaz.
+- `packages/client/public/audio/`: los grabados (Opus, con su `index.json`) y los WAV de la interfaz;
+- `unity/tools/sonido/recetas.ts`: las recetas hechas para Unity, con el `Synth` de `sounds.ts`, cuando un sonido de la 0.10.1 no cuadra con las figuras de Unity. Van con un nombre propio, porque `packages/` está congelado. La primera, `reload.rifle` (9/11).
 
 Lo generado va a `unity/Bastion/Assets/Bastion/Client/Audio/Resources/Generado/`, que **no está en git**: son unos 580 MB de WAV. Unity los comprime al compilar la app.
 
 | Carpeta | Qué | Cómo |
 |---|---|---|
-| `sintetizados/` | las 110 recetas de `sounds.ts`, con todas sus variantes, y los bucles de las que lo son (la sirena) | renderizadas como `bank.ts`: misma semilla por variante, misma normalización; mono, 44,1 kHz |
+| `sintetizados/` | las 110 recetas de `sounds.ts` y la de `recetas.ts`, con todas sus variantes, y los bucles de las que lo son (la sirena) | renderizadas como `bank.ts`: misma semilla por variante, misma normalización; mono, 44,1 kHz |
 | `vivos/` | la partitura de la base y los menús (`musica.base`) y del Mapa (`musica.geo`), 8 min cada una; las cinco camas de ambiente (ciudad, campo, nave, base, globo), 4 min cada una | `music.ts` y `ambience.ts` tal cual, en un OfflineAudioContext con su reloj y sus temporizadores simulados y `Math.random` con semilla. Se quita el fundido de entrada y el final se funde en el principio (6 s, igual potencia): bucles sin costura. Estéreo, 44,1 kHz |
 | `grabados/` | los 12 grupos grabados de la 0.10.1, y los 12 hechos para Unity desde el 29/10 (el Hinchado y las armas cuerpo a cuerpo: `unity/tools/sonido/grabados/`, docs/SONIDO.md; el molotov, 1/11: `fire.ignite` y el bucle `fire.crackle`, hechos por nosotros), con su nivel por toma | de Opus a WAV con ffmpeg, sin tocar nada más; 48 kHz, las dos camas de combate en estéreo |
 | `interfaz/` | los 8 sonidos de interfaz | copiados |
@@ -34,6 +35,13 @@ unity/tools/sonido.sh
   - Unity no vuelve a importar los cientos de MB;
   - el manifiesto conserva los hashes de lo que renderizó Chromium, que en otra pasada saldría un bit distinto.
   Antes, `node unity/tools/sonido/grabados.mjs` recorta los originales de `assets-src/sonido/`.
+- **`--efectos <receta,…>`** hace lo mismo con unas recetas sintetizadas (9/11): una nueva de `recetas.ts`, o una cambiada. El resto, ni se renderiza ni cambia en el manifiesto.
+- **La recarga del fusil** (9/11; la pidió UI, con los tiempos de Arte). Desde la 0.12.11 la recarga dura 1,3 s, con «Reload 3» en el fusil y «Reloading 2» en la pistola:
+  - `reload`, la de la 0.10.1, tiene golpes en 0, 0,36, 0,66 y 0,74 s. Cuadra con la pistola: el cargador sale a 0,42, entra a 0,72 y la corredera va a 0,78.
+  - El fusil coge el cargador a 0,15 s. Por eso tiene `reload.rifle`: los mismos golpes, con el cargador fuera a 0,15, la bolsa a 0,30, el cargador dentro a 0,72 y la mano en el arma a 0,80.
+  - `CombatSound.Reload(at, rifle)` elige la del fusil salvo con la pistola en la mano (`UnitViews.PistolInHand`). Si la carpeta aún no la tiene, usa `reload`. Cambiar de arma desde la mochila sigue con `reload`.
+  - `SoundCheck.Combate` toca las dos y falla si falta `reload.rifle`.
+  - Para añadirla a una carpeta ya generada: `node unity/tools/sonido/generar.mjs --efectos reload.rifle`.
 - **Los propios** (Arte, 1/11, el molotov de la #10 de Arturo): ni el banco de la 0.10.1 ni los paquetes que tenemos traen fuego, así que `node unity/tools/sonido/propios.mjs` los sintetiza, con su propio azar fijo, como originales WAV en `assets-src/sonido/` (`propio-…`):
   - el golpe de llama: un golpe a 60 Hz, un soplo de ruido que sube de 250 a 900 Hz y baja, rumor y algún chasquido;
   - el crepitar: chasquidos sueltos sobre un rumor suave desde 70 Hz, 8 s con el final fundido en el principio.

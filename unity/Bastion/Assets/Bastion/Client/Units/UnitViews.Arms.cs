@@ -764,6 +764,46 @@ namespace Bastion.Client.Units
             return string.Join(" ", parts);
         }
 
+        /// <summary>
+        /// For the labs (0.12.13, the rifle shouldered): in the trunk's frame (x out to the right, from the left shoulder's
+        /// joint to the right's; y up the spine; z ahead), centimetres, the butt from the right shoulder's joint; the right
+        /// eye against the bore (its line through the muzzle along the barrel): how far over it and to its right, and how
+        /// far behind the butt along it; the sights' height over the bore (WeaponArt.sight, scaled); the face's look against
+        /// the barrel (degrees: round the upright and up, Gaze); and the hips' drop from where the legs stand straight.
+        /// </summary>
+        public string ShoulderReport(string id)
+        {
+            if (!views.TryGetValue(id, out var v) || v.animator == null || v.weapon == null || v.inHand != Held.Rifle) return "-";
+            string F(float f) => f.ToString("0.0", CultureInfo.InvariantCulture);
+            var a = v.animator;
+            Transform rs = a.GetBoneTransform(HumanBodyBones.RightUpperArm), ls = a.GetBoneTransform(HumanBodyBones.LeftUpperArm), hips = a.GetBoneTransform(HumanBodyBones.Hips),
+                neck = a.GetBoneTransform(HumanBodyBones.Neck), eye = a.GetBoneTransform(HumanBodyBones.RightEye), head = a.GetBoneTransform(HumanBodyBones.Head);
+            if (rs == null || ls == null || hips == null || neck == null || eye == null || head == null) return "-";
+            var x = (rs.position - ls.position).normalized;
+            var y = Vector3.ProjectOnPlane(neck.position - hips.position, x).normalized;
+            var z = Vector3.Cross(x, y);
+            Vector3 Trunk(Vector3 d) => new Vector3(Vector3.Dot(d, x), Vector3.Dot(d, y), Vector3.Dot(d, z)) * 100;
+            var w = v.weapon;
+            float scale = w.lossyScale.z;
+            var butt = w.TransformPoint(v.butt);
+            var b = Trunk(butt - rs.position);
+            var e = w.InverseTransformPoint(eye.position);
+            float over = (e.y - v.muzzle.y) * scale, side = (e.x - v.muzzle.x) * scale, behind = (v.butt.z - e.z) * scale;
+            var art = v.arts.TryGetValue(v.drawn, out var aa) ? aa : null;
+            var parts = new List<string> { $"butt=({F(b.x)},{F(b.y)},{F(b.z)})", $"eyeOver={F(over * 100)} eyeSide={F(side * 100)} eyeBehind={F(behind * 100)}", $"sight={F((art?.sight ?? 0) * scale * 100)}" };
+            if (v.gaze == Vector3.zero) v.gaze = Gaze(v, head);
+            if (v.gaze != Vector3.zero)
+            {
+                var look = head.rotation * v.gaze;
+                var barrel = w.forward;
+                float yaw = Vector3.SignedAngle(new Vector3(barrel.x, 0, barrel.z), new Vector3(look.x, 0, look.z), Vector3.up);
+                float pitch = (Mathf.Atan2(look.y, new Vector2(look.x, look.z).magnitude) - Mathf.Atan2(barrel.y, new Vector2(barrel.x, barrel.z).magnitude)) * Mathf.Rad2Deg;
+                parts.Add($"lookYaw={F(yaw)} lookPitch={F(pitch)}");
+            }
+            parts.Add($"hips={F(hips.position.y * 100 - v.root.position.y * 100)}");
+            return string.Join(" ", parts);
+        }
+
         // ------------------------------------------------------------ the acts' weapons
 
         /// <summary>unitViews.ts THROWS (syntyFigures.ts): a blade's stroke, its clip and its clock (strike's throwClipTime).</summary>

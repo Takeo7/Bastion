@@ -1816,9 +1816,10 @@ namespace Bastion.UI.Combat
                     if (!ShownToSquad(u)) return;
                     Look(Feet(u.Id));
                     Float(Chest(u.Id), "RECARGANDO", "info");
-                    control.Sfx.Reload(Chest(u.Id));
+                    control.Sfx.Reload(Chest(u.Id), rifle: units == null || !units.PistolInHand(u.Id));
                     if (units != null) await units.Reload(u.Id, stop);
-                    else await Wait(0.8f);
+                    // Without figures, as long as theirs (UnitViews.ReloadSeconds, 1.3 s since Arturo's pick of 9/11).
+                    else await Wait(1.3f);
                     return;
                 }
                 case ExplosiveEvent ex:

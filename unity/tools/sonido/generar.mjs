@@ -3,11 +3,12 @@
 // interface's WAVs as they are, and manifiesto.json with every file's hash. Out of git: Unity's AppBuild checks the
 // folder against the manifest.
 //
-//   node unity/tools/sonido/generar.mjs [--salida <dir>] [--comprobar | --grabados]
+//   node unity/tools/sonido/generar.mjs [--salida <dir>] [--comprobar | --grabados | --efectos <receta,…>]
 //
 // --comprobar generates again into a temporary folder and compares: the recordings and the interface byte for byte;
 // what Chromium renders, sample by sample, one bit apart at most (its offline render varies that much between runs).
-// --grabados redoes only the recordings (and their part of the manifest) in a folder already generated.
+// --grabados redoes only the recordings (and their part of the manifest) in a folder already generated; --efectos, only
+// those synthesised recipes (a new one of recetas.ts, a change to one).
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -216,7 +217,40 @@ function recordingsOnly(out) {
   }
 }
 
+/**
+ * Only the recipes `names`, into a folder already generated (recetas.ts's reload.rifle, 9/11): as recordingsOnly, the
+ * rest not rendered again, its files and hashes as they are.
+ */
+function effectsOnly(out, names) {
+  const file = join(out, 'manifiesto.json');
+  if (!existsSync(file)) throw new Error(`No hay ${file}: genera primero todo.`);
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  const page = bundle();
+  try {
+    const dir = join(out, 'sintetizados');
+    const made = electron(page, 'renderEffects', [dir, names]);
+    for (const [name, s] of Object.entries(made)) {
+      s.files = s.files.map((f) => join('sintetizados', f));
+      if (s.loopFile) s.loopFile = join('sintetizados', s.loopFile);
+      for (const f of Object.keys(manifest.archivos).filter((f) => (manifest.sintetizados[name]?.files ?? []).includes(f) && !s.files.includes(f))) {
+        rmSync(join(out, f), { force: true });
+        delete manifest.archivos[f];
+      }
+      for (const f of [...s.files, ...(s.loopFile ? [s.loopFile] : [])]) {
+        manifest.archivos[f] = { sha256: createHash('sha256').update(readFileSync(join(out, f))).digest('hex'), exacto: false };
+      }
+      manifest.sintetizados[name] = s;
+    }
+    manifest.archivos = Object.fromEntries(Object.keys(manifest.archivos).sort().map((f) => [f, manifest.archivos[f]]));
+    writeFileSync(file, JSON.stringify(manifest, null, 1) + '\n');
+    console.log(`efectos: ${Object.keys(made).join(', ')} → ${dir}`);
+  } finally {
+    rmSync(page, { recursive: true, force: true });
+  }
+}
+
 const out = resolve(option('--salida') ?? DEFAULT_OUT);
 if (flag('--comprobar')) compare(out);
 else if (flag('--grabados')) recordingsOnly(out);
+else if (flag('--efectos')) effectsOnly(out, (option('--efectos') ?? '').split(',').filter(Boolean));
 else generate(out);

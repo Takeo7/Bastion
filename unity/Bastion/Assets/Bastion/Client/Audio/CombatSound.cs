@@ -242,7 +242,11 @@ namespace Bastion.Client.Audio
             if (bitten || !Recorded($"soldier.pain.{sex}", at, spread: 0.02f)) Recorded($"soldier.scream.{sex}", at, bitten ? 1 : 0.7f, spread: 0.02f);
         }
 
-        public void Reload(Vector3? at) => At("reload", at);
+        /// <summary>
+        /// A reload, or a weapon taken from the backpack. The rifle's (Mixamo's «Reload 3», 1.3 s since 9/11) has a recipe
+        /// of its own (recetas.ts: the magazine out at 0.15 s); the pistol's and the swap keep the 0.10.1's.
+        /// </summary>
+        public void Reload(Vector3? at, bool rifle = false) => At(rifle ? Pick("reload.rifle", "reload") : "reload", at);
 
         /// <summary>Registrar: rummaging through a piece of furniture, a boot or crates.</summary>
         public void Search(Vector3? at) => At("search", at);

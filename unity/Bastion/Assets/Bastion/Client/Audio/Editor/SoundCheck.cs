@@ -11,7 +11,8 @@ namespace Bastion.Client.Audio.EditorTools
     /// in batchmode, with the game's mixer and manifest. With BASTION_SONIDO_TRAZA=1 each sound goes to the log
     /// («[sonido] … melee.pan grabados/…»). It plays a blow with each melee weapon, by the id Content.AttackWeapon gives for
     /// a soldier carrying it at the belt (the knife and the machete too, to compare). Then the Hinchado: its steps (its
-    /// growl is now and then), its death and its burst. It fails if any of their groups has no takes, and quits Unity:
+    /// growl is now and then), its death and its burst; and the reloads, the rifle's and the pistol's. It fails if any of
+    /// their groups has no takes, or the rifle's reload no recipe, and quits Unity:
     ///   QUIT=0 BASTION_SONIDO_TRAZA=1 unity/tools/unity.sh -executeMethod Bastion.Client.Audio.EditorTools.SoundCheck.Combate
     /// </summary>
     public static class SoundCheck
@@ -80,7 +81,14 @@ namespace Bastion.Client.Audio.EditorTools
                 await Seconds(0.15);
                 sfx.Burst(at);
                 await Seconds(2.5);
-                code = missing.Count == 0 ? 0 : 1;
+                // The rifle's reload, with its recipe of its own (recetas.ts, 9/11), and the pistol's, the 0.10.1's.
+                var rifle = Sound.Exists("reload.rifle");
+                Debug.Log(rifle ? "[prueba] recarga del fusil y de la pistola" : "[prueba] sin la receta de la recarga del fusil (reload.rifle)");
+                sfx.Reload(at, rifle: true);
+                await Seconds(1.5);
+                sfx.Reload(at);
+                await Seconds(1.5);
+                code = missing.Count == 0 && rifle ? 0 : 1;
             }
             catch (Exception e)
             {

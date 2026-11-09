@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Bastion.Client.Map;
@@ -159,12 +160,17 @@ namespace Bastion.Client.Units
             /// <summary>The trunk's last turn bringing the barrel onto aimAt (Converge), and how long it is kept so through a shot's kick.</summary>
             public Quaternion converge = Quaternion.identity, convergeArms = Quaternion.identity;
             public float kickLeft;
+            /// <summary>How far a shouldered rifle aimed down bends at the hips and knees for it (Bend, degrees), and about what (across the barrel).</summary>
+            public float bend;
+            public Vector3 bendAxis;
             /// <summary>How far into the pistol's kick (PistolKick); below 0, none.</summary>
             public float pistolKick = -1;
             /// <summary>The back of what it holds (its butt), in the model's own frame, as `muzzle` the front: where a rifle turns in the shoulder (Swing).</summary>
             public Vector3 butt;
             /// <summary>Where its eyes look in its head's frame (from its skeleton's bind pose, which faces ahead: Gaze); zero until found.</summary>
             public Vector3 gaze;
+            /// <summary>How far a rifle is brought into the shoulder (Shoulder: 0–1, eased as the gun comes up; off through a reload).</summary>
+            public float shouldered;
             /// <summary>On watch (Unit.Overwatch: the gun up), with the blade on guard (Unit.WatchMelee), as last shown.</summary>
             public bool watch, guard;
             /// <summary>How many aims it has taken (RaiseWeapon, AimAt): a lowering meant for an earlier one leaves a later one be.</summary>
@@ -423,7 +429,9 @@ namespace Bastion.Client.Units
                     Sight(v, v.up);
                 }
                 HoldNow(v, dt);
+                Shoulder(v, dt);
                 Converge(v, dt);
+                Cheek(v);
                 Look(v);
                 Support(v);
                 SearchPose(v);
@@ -546,6 +554,7 @@ namespace Bastion.Client.Units
             {
                 v.converge = v.convergeArms = Quaternion.identity;
                 v.kickLeft = 0;
+                v.bend = 0;
                 return;
             }
             Transform spine = v.animator.GetBoneTransform(HumanBodyBones.Spine), chest = v.animator.GetBoneTransform(HumanBodyBones.Chest);
@@ -570,6 +579,11 @@ namespace Bastion.Client.Units
             if (v.kickLeft > 0)
             {
                 v.kickLeft -= dt;
+                if (rifle && v.bend > 0)
+                {
+                    Bend(v, v.bend * v.up, v.bendAxis);
+                    Place();
+                }
                 Turn(Quaternion.Slerp(Quaternion.identity, v.converge, v.up));
                 if (rifle) Swing(v, Quaternion.Slerp(Quaternion.identity, v.convergeArms, v.up));
                 return;
@@ -604,14 +618,23 @@ namespace Bastion.Client.Units
             }
             else if (Off() is var (yaw0, pitch0, right0))
             {
-                // The trunk for what the arms can't swing; then the arms, twice (the first swing moves the muzzle).
+                // The trunk for what the arms can't swing; then the arms, ArmPasses times (each swing moves the muzzle).
                 float trunkYaw = yaw0 - Mathf.Clamp(yaw0, -ArmYaw, ArmYaw), trunkPitch = pitch0 - Mathf.Clamp(pitch0, -ArmPitch, ArmPitch);
+                // (Down, HipShare of it at the hips, the knees bent under them: Bend.)
+                v.bend = BendOff ? 0 : Mathf.Max(0, -trunkPitch) * HipShare;
+                v.bendAxis = right0;
+                if (v.bend > 0)
+                {
+                    Bend(v, v.bend * v.up, right0);
+                    Place();
+                    trunkPitch += v.bend;
+                }
                 if (trunkYaw != 0 || trunkPitch != 0)
                 {
                     trunk = Of(trunkYaw, trunkPitch, right0);
                     Turn(Quaternion.Slerp(Quaternion.identity, trunk, v.up));
                 }
-                for (int pass = 0; pass < 2; pass++)
+                for (int pass = 0; pass < ArmPasses; pass++)
                 {
                     if (!(Off() is var (yaw, pitch, right))) break;
                     var q = Of(Mathf.Clamp(yaw, -ArmYaw, ArmYaw), Mathf.Clamp(pitch, -ArmPitch, ArmPitch), right);
@@ -625,6 +648,48 @@ namespace Bastion.Client.Units
 
         /// <summary>How far Converge turns at most: the trunk round the upright and up or down, and a rifle's arms round its butt (degrees).</summary>
         const float ConvergeYaw = 30, ConvergePitch = 60, ArmYaw = 12, ArmPitch = 20;
+        static readonly int ArmPasses = (int)LabFloat("BASTION_PASOS_BRAZOS", 3);
+
+        /// <summary>
+        /// A shouldered rifle aimed down further than the arms swing it (Arturo, 9/11, in the box: a target a storey below
+        /// bowed the back over the gun, its legs straight, some 23° at the trunk): `degrees` of it taken at the hips, about
+        /// `axis` (across the barrel), standing the hips let down and back as much as it bends (BendDrop at BendFull), the legs
+        /// reaching their feet where they stood, the knees bent the way they were, the feet turned as they were.
+        /// </summary>
+        void Bend(View v, float degrees, Vector3 axis)
+        {
+            var a = v.animator;
+            var hips = a.GetBoneTransform(HumanBodyBones.Hips);
+            if (hips == null || degrees <= 0) return;
+            var legs = new[] { (HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot), (HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot) };
+            var feet = new (Vector3 at, Quaternion turn, Vector3 knee)[2];
+            for (int k = 0; k < 2; k++)
+            {
+                Transform thigh = a.GetBoneTransform(legs[k].Item1), shin = a.GetBoneTransform(legs[k].Item2), foot = a.GetBoneTransform(legs[k].Item3);
+                if (thigh == null || shin == null || foot == null) return;
+                // (The knee's way: as the clip has it, ahead where the leg is near straight.)
+                var knee = Vector3.ProjectOnPlane(shin.position - thigh.position, foot.position - thigh.position) + v.root.forward * 0.05f;
+                feet[k] = (foot.position, foot.rotation, knee);
+            }
+            float scale = v.body != null ? v.body.lossyScale.x : 1, share = Mathf.Clamp01(degrees / BendFull);
+            var back = Vector3.ProjectOnPlane(Vector3.Cross(Vector3.up, axis), Vector3.up).normalized;
+            hips.rotation = Quaternion.AngleAxis(degrees, axis) * hips.rotation;
+            // (Knelt, only the hips' turn: let down, the knee on the floor went into it.)
+            if (!v.crouched) hips.position += (Vector3.down + back * BendBack) * (BendDrop * share * scale);
+            for (int k = 0; k < 2; k++)
+            {
+                var foot = a.GetBoneTransform(legs[k].Item3);
+                Reach(a, legs[k].Item1, legs[k].Item2, legs[k].Item3, feet[k].at, feet[k].knee, 0.005f);
+                foot.rotation = feet[k].turn;
+            }
+        }
+
+        /// <summary>
+        /// Bend's: how much of the trunk's turn down the hips take, how far they come down at most (metres at a Sidekick's
+        /// scale) and back for each metre down, and at how many degrees bent that is reached; BASTION_SIN_RODILLAS=1, none.
+        /// </summary>
+        static readonly float HipShare = LabFloat("BASTION_CADERA", 0.5f), BendDrop = LabFloat("BASTION_RODILLAS", 0.15f), BendBack = LabFloat("BASTION_ATRAS", 0.4f), BendFull = 12;
+        public static bool BendOff = Environment.GetEnvironmentVariable("BASTION_SIN_RODILLAS") == "1";
 
         /// <summary>
         /// The rifle in the hands turned by `q` round its butt (WeaponArt's model, the back of its box: in the shoulder),
@@ -657,6 +722,123 @@ namespace Bastion.Client.Units
             }
             Hold(v.animator, v.weapon, v.root, false, ref v.grip);
         }
+
+        /// <summary>
+        /// A rifle brought into the shoulder (Arturo, 9/11, in the box: «la culata en el hueco del hombro, las miras a la
+        /// altura del ojo, la mejilla en la culata»): «Rifle Aiming Idle» over Sidekick's shorter arms held it at the chest,
+        /// its butt 16 cm under the right shoulder's joint and 26 ahead of it, the right eye 37 cm over the bore
+        /// (CombatLab.Punteria, [hombro]). Both hands moved as one, as far as the gun is up, till the butt is in the
+        /// shoulder's pocket (Pocket, from the joint in the trunk's frame), the gun turned as it was; Converge then aims it
+        /// round there and Cheek brings the face down onto the stock. Through a shot's kick too: the butt stays in the
+        /// shoulder and the kick shows at the muzzle (the move kept as it was, the standing kick's clip over a kneel swung
+        /// the gun 13° instead of 4–7°).
+        /// </summary>
+        void Shoulder(View v, float dt)
+        {
+            bool on = v.inHand == Held.Rifle && v.weapon != null && v.animator != null && v.animator.isHuman && !v.dead && v.reload <= 0 && !v.striking && !ConvergeOff && !ShoulderOff;
+            v.shouldered = Mathf.MoveTowards(v.shouldered, on ? 1 : 0, dt / AimBlend);
+            float k = v.shouldered * v.up;
+            if (k <= 0 || v.inHand != Held.Rifle || v.weapon == null || !(TrunkOf(v) is var (x, y, z, joint))) return;
+            float scale = v.body != null ? v.body.lossyScale.x : 1;
+            var pocket = joint + (x * Pocket.x + y * Pocket.y + z * Pocket.z) * scale;
+            Lift(v, (pocket - v.weapon.TransformPoint(v.butt)) * k);
+        }
+
+        /// <summary>
+        /// Where the butt goes, from the right shoulder's joint in the trunk's frame (metres at a Sidekick's scale: in, up,
+        /// ahead): the pocket between the chest and the shoulder, at the front of it. BASTION_HUECO=x,y,z for the labs.
+        /// </summary>
+        static readonly Vector3 Pocket = LabVector("BASTION_HUECO", new Vector3(-0.05f, -0.03f, 0.07f));
+
+        /// <summary>BASTION_SIN_HOMBRO=1: the rifle where Converge leaves it, not brought into the shoulder (the labs' «before»).</summary>
+        public static bool ShoulderOff = Environment.GetEnvironmentVariable("BASTION_SIN_HOMBRO") == "1";
+
+        /// <summary>A vector from the environment (x,y,z), for the labs to try; `or` without it.</summary>
+        static Vector3 LabVector(string name, Vector3 or)
+        {
+            var parts = (Environment.GetEnvironmentVariable(name) ?? "").Split(',');
+            return parts.Length == 3 && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
+                && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y)
+                && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z) ? new Vector3(x, y, z) : or;
+        }
+
+        /// <summary>A number from the environment, for the labs to try; `or` without it.</summary>
+        static float LabFloat(string name, float or) =>
+            float.TryParse(Environment.GetEnvironmentVariable(name), NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? f : or;
+
+        /// <summary>
+        /// The trunk's frame as it stands now: x out to the right (from the left shoulder's joint to the right's), y up the
+        /// spine (from the hips to the neck, square to x), z ahead; and the right shoulder's joint. Null without the bones.
+        /// </summary>
+        static (Vector3 x, Vector3 y, Vector3 z, Vector3 joint)? TrunkOf(View v)
+        {
+            var a = v.animator;
+            Transform rs = a.GetBoneTransform(HumanBodyBones.RightUpperArm), ls = a.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            Transform hips = a.GetBoneTransform(HumanBodyBones.Hips), neck = a.GetBoneTransform(HumanBodyBones.Neck);
+            if (rs == null || ls == null || hips == null || neck == null) return null;
+            var x = (rs.position - ls.position).normalized;
+            var y = Vector3.ProjectOnPlane(neck.position - hips.position, x).normalized;
+            if (x.sqrMagnitude < 0.5f || y.sqrMagnitude < 0.5f) return null;
+            return (x, y, Vector3.Cross(x, y), rs.position);
+        }
+
+        /// <summary>The rifle in the hands moved by `d` as it is turned: each hand moved as much (its arm reaching it, the elbow bent the way it was) and kept as it was turned; the gun placed again between them (Hold).</summary>
+        void Lift(View v, Vector3 d)
+        {
+            if (d.sqrMagnitude < 1e-8f) return;
+            var a = v.animator;
+            foreach (var (upper, lower, handBone) in new[] { (HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand), (HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand) })
+            {
+                Transform shoulder = a.GetBoneTransform(upper), elbow = a.GetBoneTransform(lower), hand = a.GetBoneTransform(handBone);
+                if (shoulder == null || elbow == null || hand == null) continue;
+                var turn = hand.rotation;
+                Reach(a, upper, lower, handBone, hand.position + d, elbow.position - shoulder.position, 0.005f);
+                hand.rotation = turn;
+            }
+            Hold(v.animator, v.weapon, v.root, false, ref v.grip);
+        }
+
+        /// <summary>
+        /// The cheek on the stock (with Shoulder): the face turned at the head onto the barrel's line, CheekBow under it, no
+        /// further than CheekTurn; the right eye brought at the neck over the bore at the sights' height (WeaponArt.sight;
+        /// CheekOver above it), where it is along the gun, no further than NeckMost; CheekPasses times, each moving the other. As far as
+        /// the rifle is shouldered and up. Before: the face 25° to the left of the barrel and 38° under it.
+        /// </summary>
+        void Cheek(View v)
+        {
+            float k = v.shouldered * v.up;
+            if (k <= 0 || v.inHand != Held.Rifle || v.weapon == null || v.animator == null) return;
+            var a = v.animator;
+            Transform neck = a.GetBoneTransform(HumanBodyBones.Neck), head = a.GetBoneTransform(HumanBodyBones.Head), eye = a.GetBoneTransform(HumanBodyBones.RightEye);
+            if (neck == null || head == null || eye == null) return;
+            if (v.gaze == Vector3.zero) v.gaze = Gaze(v, head);
+            var w = v.weapon;
+            float sight = v.arts.TryGetValue(v.drawn, out var art) && art.sight > 0 ? art.sight : 0.08f;
+            Quaternion Most(Quaternion q, float most)
+            {
+                q.ToAngleAxis(out float degrees, out var axis);
+                if (degrees > 180) degrees -= 360;
+                if (Mathf.Abs(degrees) < 1e-3f) return Quaternion.identity;
+                return Quaternion.AngleAxis(Mathf.Clamp(degrees, -most, most) * k, axis);
+            }
+            for (int pass = 0; pass < CheekPasses; pass++)
+            {
+                if (v.gaze != Vector3.zero)
+                {
+                    var along = w.forward;
+                    var right = Vector3.Cross(Vector3.up, along);
+                    var want = right.sqrMagnitude > 1e-6f ? Quaternion.AngleAxis(CheekBow, right.normalized) * along : along;
+                    head.rotation = Most(Quaternion.FromToRotation(head.rotation * v.gaze, want), CheekTurn) * head.rotation;
+                }
+                var e = w.InverseTransformPoint(eye.position);
+                var at = w.TransformPoint(new Vector3(v.muzzle.x, v.muzzle.y + sight + CheekOver / Mathf.Max(w.lossyScale.z, 1e-4f), e.z));
+                neck.rotation = Most(Quaternion.FromToRotation(eye.position - neck.position, at - neck.position), NeckMost) * neck.rotation;
+            }
+        }
+
+        /// <summary>Cheek's: how far under the barrel the face looks and how far the head turns for it, how far the neck bows (degrees), and the eye over the sights (metres).</summary>
+        static readonly float CheekBow = LabFloat("BASTION_MEJILLA_BAJA", 8), CheekTurn = LabFloat("BASTION_MEJILLA_GIRO", 50), NeckMost = LabFloat("BASTION_CUELLO", 35), CheekOver = LabFloat("BASTION_MEJILLA_SOBRE", 0.01f);
+        static readonly int CheekPasses = (int)LabFloat("BASTION_MEJILLA_PASOS", 3);
 
         /// <summary>
         /// The face onto what it aims at with the pistol (the review of 9/11; CombatLab.Punteria, along Gaze): the rest of
@@ -1242,6 +1424,9 @@ namespace Bastion.Client.Units
             v.yawTo = yaw;
             v.turn = turn;
         }
+
+        /// <summary>Whether `id` has its pistol in hand: its reload is the pistol's (ReloadNow), and so is its sound (Red, 9/11).</summary>
+        public bool PistolInHand(string id) => id != null && views.TryGetValue(id, out var v) && v.inHand == Held.Pistol;
 
         /// <summary>
         /// The shot's kick: Mixamo's fire clip once over the aim, as its next step begins (begun here, the clip's first look

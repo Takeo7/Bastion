@@ -1,13 +1,22 @@
 // The 0.10.1's sound, rendered offline to WAV for Unity (Red; docs/UNITY-SONIDO.md): the synthesised effects of
-// sounds.ts as bank.ts renders them, and the score of music.ts and the beds of ambience.ts as they play live, on a
+// sounds.ts as bank.ts renders them (and recetas.ts's, made for Unity), and the score of music.ts and the beds of ambience.ts as they play live, on a
 // clock of their own. Runs in a hidden Electron page with Node (main.js), which writes the files.
-import { SOUNDS, LOOP_SEAM } from '../../../packages/client/src/audio/sounds';
+import { SOUNDS, LOOP_SEAM, type SoundDef } from '../../../packages/client/src/audio/sounds';
 import { Synth } from '../../../packages/client/src/audio/synth';
 import { audio } from '../../../packages/client/src/audio/engine';
 import { music } from '../../../packages/client/src/audio/music';
 import { ambience } from '../../../packages/client/src/audio/ambience';
+import { UNITY_SOUNDS } from './recetas';
 
 const RATE = 44100;
+
+/** The 0.10.1's recipes and those made for Unity (recetas.ts), each under its own name. */
+const ALL: Record<string, SoundDef> = { ...SOUNDS };
+for (const [name, def] of Object.entries(UNITY_SOUNDS)) {
+  if (ALL[name]) throw new Error(`${name} está en sounds.ts y en recetas.ts`);
+  ALL[name] = def;
+}
+
 const fs = (window as any).require('fs');
 const path = (window as any).require('path');
 
@@ -53,7 +62,7 @@ function normalise(buf: AudioBuffer): void {
 }
 
 async function renderOne(name: string, variant: number): Promise<AudioBuffer> {
-  const def = SOUNDS[name]!;
+  const def = ALL[name]!;
   const ctx = new OfflineAudioContext(1, Math.ceil(def.dur * RATE), RATE);
   def.build(new Synth(ctx, rng(seedOf(name, variant))));
   const buf = await ctx.startRendering();
@@ -63,7 +72,7 @@ async function renderOne(name: string, variant: number): Promise<AudioBuffer> {
 
 /** bank.ts loopBuffer: the first variant cut to the period, what ran past it faded into the head (equal power). */
 function loopOf(name: string, first: AudioBuffer): Float32Array[] {
-  const period = SOUNDS[name]!.loop!;
+  const period = ALL[name]!.loop!;
   const a = first.getChannelData(0);
   const n = Math.floor(period * RATE);
   const seam = Math.min(a.length - n, Math.floor(LOOP_SEAM * RATE));
@@ -102,10 +111,13 @@ function wav(channels: Float32Array[], rate = RATE): Uint8Array {
   return new Uint8Array(out.buffer);
 }
 
-async function effects(dir: string): Promise<Record<string, unknown>> {
+/** Every recipe, or only those `only` names (generar.mjs --efectos). */
+async function effects(dir: string, only?: string[]): Promise<Record<string, unknown>> {
   fs.mkdirSync(dir, { recursive: true });
   const list: Record<string, unknown> = {};
-  for (const [name, def] of Object.entries(SOUNDS)) {
+  for (const name of only ?? []) if (!ALL[name]) throw new Error(`${name} no es ninguna receta`);
+  for (const [name, def] of Object.entries(ALL)) {
+    if (only && !only.includes(name)) continue;
     const files: string[] = [];
     let first: AudioBuffer | null = null;
     for (let v = 0; v < (def.variants ?? 3); v++) {
