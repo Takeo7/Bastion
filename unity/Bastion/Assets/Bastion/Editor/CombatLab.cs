@@ -18,7 +18,7 @@ namespace Bastion.EditorTools
     ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Shoot -shotPlay -shotCamera "Shot camera"
     ///     -shotFrames 90 -shotFps 10 -shotOut &lt;folder&gt;
     /// </summary>
-    public static class CombatLab
+    public static partial class CombatLab
     {
         static UnitViews units;
         static Fx fx;

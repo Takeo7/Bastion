@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Bastion.Client.Map;
@@ -47,6 +48,7 @@ namespace Bastion.Client.Units
         static (string weapon, string sidearm, string belt) ArmamentOf(Unit u)
         {
             int tier = Mathf.Clamp(u.WeaponTier ?? 1, 1, 3);
+            if (u.Id != null && ArtsForLab.TryGetValue(u.Id, out var lab)) return (lab, null, null);
             if (u.Arms != null && SquadTemplates.Contains(u.Template))
             {
                 string primary = u.Arms.Primary;
@@ -116,6 +118,22 @@ namespace Bastion.Client.Units
             return any ? box.center : Vector3.zero;
         }
 
+        /// <summary>The back of a model in its own frame, unscaled (its butt: the middle of its box across, the least along +z).</summary>
+        static Vector3 ButtOf(Transform model)
+        {
+            var box = new Bounds(Vector3.zero, Vector3.zero);
+            bool any = false;
+            foreach (var r in model.GetComponentsInChildren<Renderer>())
+                foreach (var corner in Corners(r.bounds))
+                {
+                    var p = model.InverseTransformPoint(corner);
+                    if (!any) box = new Bounds(p, Vector3.zero);
+                    else box.Encapsulate(p);
+                    any = true;
+                }
+            return any ? new Vector3(box.center.x, box.center.y, box.min.z) : Vector3.zero;
+        }
+
         /// <summary>A model's middle along its barrel or blade (syntyFigures.ts equip's userData.middle), in its own frame scaled: a slung gun hangs by it.</summary>
         static float MiddleOf(Transform model)
         {
@@ -150,6 +168,7 @@ namespace Bastion.Client.Units
                 v.arts[carry] = art;
                 v.muzzles[carry] = muzzle;
                 v.middles[carry] = MiddleOf(model);
+                v.butts[carry] = ButtOf(model);
             }
             if (v.carried.Count == 0) return false;
             Stows(v);
@@ -257,6 +276,7 @@ namespace Bastion.Client.Units
             v.weapon = v.carried.TryGetValue(which, out var held) ? held : null;
             if (v.weapon != null) v.weapon.gameObject.SetActive(true);
             v.muzzle = v.muzzles.TryGetValue(which, out var m) ? m : Vector3.zero;
+            v.butt = v.butts.TryGetValue(which, out var b) ? b : Vector3.zero;
             v.inHand = v.arts.TryGetValue(which, out var art) ? art.pistol ? Held.Pistol : art.melee ? Held.Blade : Held.Rifle : Held.None;
             // (The rifle's turn in the hand kept: drawn again, it is held as it was, not level at the waist for a frame.)
             v.pistolGrip = null;
@@ -377,10 +397,36 @@ namespace Bastion.Client.Units
         /// The pistol in the right palm, its barrel along the forearm (syntyFigures.ts clipGrip for a pistol: hand − elbow),
         /// that turn learnt in the hand's frame little by little, levelled as it is aimed (forward.y by 1 − aim).
         /// </summary>
-        static void HoldPistol(View v) => HoldPistol(v.animator, v.weapon, v.root, v.aim, ref v.pistolGrip);
+        static void HoldPistol(View v)
+        {
+            if (ConvergeOff) HoldPistol(v.animator, v.weapon, v.root, v.aim, ref v.pistolGrip);
+            else HoldPistol(v.animator, v.weapon, v.root, Mathf.Max(v.aim, v.up), ref v.pistolGrip, v.aimAt);
+            // A shot's kick: the wrist and the pistol in it flipped up at the muzzle (PistolKick's clip moves the arms; laid on
+            // the line to the target, the pistol itself never showed it).
+            if (v.pistolKick >= 0 && v.animator.GetBoneTransform(HumanBodyBones.RightHand) is Transform hand)
+            {
+                float k = v.pistolKick, flip = k < FlipRise ? k / FlipRise : Mathf.Max(0, 1 - (k - FlipRise) / FlipFall);
+                if (flip <= 0) return;
+                var right = Vector3.Cross(Vector3.up, v.weapon.forward);
+                if (right.sqrMagnitude < 1e-6f) return;
+                var q = Quaternion.AngleAxis(-FlipDegrees * Mathf.SmoothStep(0, 1, flip), right.normalized);
+                var wrist = hand.position;
+                hand.rotation = q * hand.rotation;
+                v.weapon.SetPositionAndRotation(wrist + q * (v.weapon.position - wrist), q * v.weapon.rotation);
+            }
+        }
+
+        /// <summary>The pistol's kick at the muzzle (HoldPistol): this far up (degrees), there in FlipRise and back over FlipFall (seconds).</summary>
+        const float FlipDegrees = 10, FlipRise = 0.06f, FlipFall = 0.3f;
 
         /// <summary>HoldPistol(View) for any figure: `a`'s right hand on `pistol`, `root` its upright, aimed `aim` (0–1), `grip` its turn learnt in the hand.</summary>
-        public static void HoldPistol(Animator a, Transform pistol, Transform root, float aim, ref Quaternion? grip)
+        public static void HoldPistol(Animator a, Transform pistol, Transform root, float aim, ref Quaternion? grip) => HoldPistol(a, pistol, root, aim, ref grip, null);
+
+        /// <summary>
+        /// The same, aimed at `at` (the review of 9/11): laid on the line from the palm to it as it is aimed, not level
+        /// (a target on another storey; knelt, its forearm had it 23° over the line).
+        /// </summary>
+        static void HoldPistol(Animator a, Transform pistol, Transform root, float aim, ref Quaternion? grip, Vector3? at)
         {
             if (a == null || pistol == null) return;
             Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), elbow = a.GetBoneTransform(HumanBodyBones.RightLowerArm), knuckle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
@@ -395,11 +441,42 @@ namespace Bastion.Client.Units
             if (aim > 0)
             {
                 var ahead = turn * Vector3.forward;
-                var level = new Vector3(ahead.x, ahead.y * (1 - aim), ahead.z);
+                var level = at is Vector3 p && (p - palm).sqrMagnitude > 1e-4f ? Vector3.Slerp(ahead, (p - palm).normalized, aim) : new Vector3(ahead.x, ahead.y * (1 - aim), ahead.z);
                 if (level.sqrMagnitude > 1e-6f) turn = Quaternion.LookRotation(level, Vector3.ProjectOnPlane(Vector3.up, level));
             }
             pistol.SetPositionAndRotation(palm, turn);
         }
+
+        /// <summary>
+        /// The support hand on the handguard (the review of 9/11): the gun lies along the line from the right palm to the
+        /// left (Hold), wherever the clips put the left one, so on a short gun the left hand held the muzzle (the
+        /// submachine gun's 20 cm past its handguard) and on most a hand's breadth ahead of it (CombatLab.Agarres). The left
+        /// arm reaches its palm to the gun's `fore` (WeaponArt), the elbow where the clip has it, once the gun is placed
+        /// and aimed; only with both hands on it, not reloading, and not from further than SupportMost.
+        /// </summary>
+        static void Support(View v)
+        {
+            if (SupportOff || v.inHand != Held.Rifle || v.weapon == null || v.animator == null || !v.animator.isHuman || v.dead || v.reload > 0) return;
+            var art = v.arts.TryGetValue(v.drawn, out var x) ? x : null;
+            if (art?.fore == null || art.fore.Length < 2) return;
+            var a = v.animator;
+            Transform shoulder = a.GetBoneTransform(HumanBodyBones.LeftUpperArm), elbow = a.GetBoneTransform(HumanBodyBones.LeftLowerArm), hand = a.GetBoneTransform(HumanBodyBones.LeftHand);
+            Transform knuckle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal), right = a.GetBoneTransform(HumanBodyBones.RightHand), rightKnuckle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (shoulder == null || elbow == null || hand == null || knuckle == null || right == null) return;
+            Vector3 Palm() => Vector3.Lerp(hand.position, knuckle.position, 0.6f);
+            var rightPalm = rightKnuckle != null ? Vector3.Lerp(right.position, rightKnuckle.position, 0.6f) : right.position;
+            float apart = Vector3.Distance(rightPalm, Palm()) / Figures.CharacterScale;
+            if (apart <= 0.12f || apart >= 0.8f) return;
+            var fore = v.weapon.TransformPoint(new Vector3(0, art.fore[0], art.fore[1]));
+            if ((fore - Palm()).sqrMagnitude > SupportMost * SupportMost) return;
+            // (Twice: the palm is ahead of the wrist, and it turns with the forearm.)
+            for (int pass = 0; pass < 2; pass++)
+                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, hand.position + (fore - Palm()), elbow.position - shoulder.position, 0.005f);
+        }
+
+        /// <summary>How far Support moves the left palm at most (metres), and BASTION_SIN_MANO=1, none at all (the labs' «before»).</summary>
+        const float SupportMost = 0.35f;
+        public static bool SupportOff = Environment.GetEnvironmentVariable("BASTION_SIN_MANO") == "1";
 
         /// <summary>
         /// A blade in the right fist as the hand holds it (syntyFigures.ts clipHold with no clipGrip, 0.10.1's weaponLab
@@ -453,6 +530,117 @@ namespace Bastion.Client.Units
             var stroke = StrokeOf(v);
             v.anim.ArmRest(null, 0, 0);
             v.anim.Rest(FigureCatalog.Load()?.Clip(stroke.clip), 0, at);
+        }
+
+        /// <summary>For the labs (CombatLab.Agarres, the review of 9/11): the weapon each unit holds as its main one whatever its arms (Anims.json's weapons by id), nothing else carried.</summary>
+        public static readonly Dictionary<string, string> ArtsForLab = new Dictionary<string, string>();
+
+        /// <summary>For the labs: `id` waiting at rest as `rest` (one of RIFLE_RESTS), whatever its seed gave.</summary>
+        public void RestForLab(string id, string rest)
+        {
+            if (!views.TryGetValue(id, out var v)) return;
+            v.rest = rest;
+            Settle(v, 0.2f);
+        }
+
+        /// <summary>For the labs: where the muzzle of what `id` holds is in the model's own frame.</summary>
+        public Vector3 MuzzleLocalForLab(string id) => views.TryGetValue(id, out var v) ? v.muzzle : Vector3.zero;
+
+        /// <summary>For the labs: what `id` carries and shows, each model with whether it is the one in its hands.</summary>
+        public List<(Transform model, bool drawn)> CarriedForLab(string id) =>
+            views.TryGetValue(id, out var v) ? v.carried.Where(kv => kv.Value != null && kv.Value.gameObject.activeInHierarchy).Select(kv => (kv.Value, kv.Key == v.drawn)).ToList() : new List<(Transform, bool)>();
+
+        /// <summary>
+        /// For the labs (the review of 9/11): how the hands hold what is drawn, in centimetres in the world: the left palm
+        /// along the barrel from the grip (Lz) and off its line (Loff), the muzzle's place along it, the left palm from the
+        /// handguard (WeaponArt.fore: [height, length] in the gun's frame) and from a blade's second grip (two), and how
+        /// far apart the palms are at the model's scale (Hold takes both hands on it from 12 to 80).
+        /// </summary>
+        public string GripReport(string id)
+        {
+            if (!views.TryGetValue(id, out var v) || v.weapon == null || v.animator == null) return "-";
+            var a = v.animator;
+            Vector3? Palm(HumanBodyBones hand, HumanBodyBones knuckle) =>
+                a.GetBoneTransform(hand) is Transform h ? a.GetBoneTransform(knuckle) is Transform k ? Vector3.Lerp(h.position, k.position, 0.6f) : h.position : (Vector3?)null;
+            var right = Palm(HumanBodyBones.RightHand, HumanBodyBones.RightMiddleProximal);
+            var left = Palm(HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal);
+            var art = v.arts.TryGetValue(v.drawn, out var x) ? x : null;
+            var w = v.weapon;
+            string Cm(float m) => (m * 100).ToString("0.0", CultureInfo.InvariantCulture);
+            var parts = new List<string> { $"held={v.inHand}" };
+            if (left is Vector3 l)
+            {
+                var local = w.InverseTransformPoint(l);
+                float scale = w.lossyScale.z;
+                parts.Add($"Lz={Cm(local.z * scale)}");
+                parts.Add($"Loff={Cm(new Vector2(local.x, local.y).magnitude * scale)}");
+                parts.Add($"muzzleZ={Cm(v.muzzle.z * scale)}");
+                if (art?.fore != null && art.fore.Length >= 2) parts.Add($"Lfore={Cm(Vector3.Distance(l, w.TransformPoint(new Vector3(0, art.fore[0], art.fore[1]))))}");
+                if (art?.two != null && art.two.Length >= 3) parts.Add($"Ltwo={Cm(Vector3.Distance(l, w.TransformPoint(new Vector3(art.two[0], art.two[1], art.two[2]))))}");
+                if (right is Vector3 r) parts.Add($"apart={Cm(Vector3.Distance(r, l) / Figures.CharacterScale)}");
+            }
+            return string.Join(" ", parts);
+        }
+
+        /// <summary>For the labs: where each one's eyes look in its head's frame, taken at rest looking straight ahead (CalibrateGazeForLab).</summary>
+        static readonly Dictionary<string, Vector3> GazeForLab = new Dictionary<string, Vector3>();
+
+        /// <summary>For the labs: `id`'s eyes taken to look along its root's forward as it stands now (at rest, level), for AimReport.</summary>
+        public string CalibrateGazeForLab(string id)
+        {
+            if (!views.TryGetValue(id, out var v) || v.animator == null || !(v.animator.GetBoneTransform(HumanBodyBones.Head) is Transform head)) return "-";
+            GazeForLab[id] = Quaternion.Inverse(head.rotation) * v.root.forward;
+            // (Against the bind pose's, Look's: how far apart, looked at from the head as it stands now.)
+            var bind = Gaze(v, head);
+            return bind == Vector3.zero ? "no bind pose" : $"the bind pose's {Vector3.Angle(head.rotation * bind, v.root.forward):0.0}° off ahead (yaw {Vector3.SignedAngle(new Vector3(v.root.forward.x, 0, v.root.forward.z), new Vector3((head.rotation * bind).x, 0, (head.rotation * bind).z), Vector3.up):0.0})";
+        }
+
+        /// <summary>
+        /// For the labs (the review of 9/11): where `id`'s weapon points against `at` (degrees: its barrel's line, +z, from
+        /// the line from its muzzle to `at`, round the upright and up and down; and how far that line passes from `at`, in
+        /// centimetres), and its eyes' (from between them, along the head's own line of sight as its bind pose has it:
+        /// Gaze) against the line from them to `at`.
+        /// </summary>
+        public string AimReport(string id, Vector3 at)
+        {
+            if (!views.TryGetValue(id, out var v) || v.animator == null) return "-";
+            string F(float f) => f.ToString("0.0", CultureInfo.InvariantCulture);
+            float Pitch(Vector3 d) => Mathf.Atan2(d.y, new Vector2(d.x, d.z).magnitude) * Mathf.Rad2Deg;
+            float Yaw(Vector3 from, Vector3 to) => Vector3.SignedAngle(new Vector3(from.x, 0, from.z), new Vector3(to.x, 0, to.z), Vector3.up);
+            var parts = new List<string>();
+            if (v.weapon != null)
+            {
+                var muzzle = v.weapon.TransformPoint(v.muzzle);
+                var barrel = v.weapon.forward;
+                var want = at - muzzle;
+                float miss = Vector3.Cross(barrel, want).magnitude;
+                if (Vector3.Dot(barrel, want) < 0) miss = want.magnitude;
+                parts.Add($"barrelYaw={F(Yaw(want, barrel))} barrelPitch={F(Pitch(barrel) - Pitch(want))} miss={F(miss * 100)}");
+                // (A rifle's butt against the right shoulder's joint: how far, and how far under it; the eyes over the bore's
+                // line where they are along it, and to its side: a cheek on the stock.)
+                if (v.inHand == Held.Rifle && v.animator.GetBoneTransform(HumanBodyBones.RightUpperArm) is Transform shoulder)
+                {
+                    var butt = v.weapon.TransformPoint(v.butt);
+                    parts.Add($"butt={F((butt - shoulder.position).magnitude * 100)} buttDown={F((shoulder.position.y - butt.y) * 100)}");
+                    Transform l = v.animator.GetBoneTransform(HumanBodyBones.LeftEye), r = v.animator.GetBoneTransform(HumanBodyBones.RightEye);
+                    if (l != null && r != null)
+                    {
+                        var local = v.weapon.InverseTransformPoint((l.position + r.position) / 2) * v.weapon.lossyScale.z;
+                        parts.Add($"eyesOver={F(local.y * 100)} eyesSide={F(local.x * 100)}");
+                    }
+                }
+            }
+            var a = v.animator;
+            Transform le = a.GetBoneTransform(HumanBodyBones.LeftEye), re = a.GetBoneTransform(HumanBodyBones.RightEye), head = a.GetBoneTransform(HumanBodyBones.Head);
+            if (le != null && re != null && head != null && Gaze(v, head) is Vector3 gaze && gaze != Vector3.zero)
+            {
+                var mid = (le.position + re.position) / 2;
+                var eyes = head.rotation * gaze;
+                var want = at - mid;
+                parts.Add($"eyesYaw={F(Yaw(want, eyes))} eyesPitch={F(Pitch(eyes) - Pitch(want))}");
+            }
+            parts.Add($"rootYaw={F(Yaw(at - v.root.position, v.root.forward))}");
+            return string.Join(" ", parts);
         }
 
         // ------------------------------------------------------------ the acts' weapons
@@ -662,24 +850,37 @@ namespace Bastion.Client.Units
             }
         }
 
-        /// <summary>unitViews.ts reload: this long, the clip scrubbed through on an ease (spin), coming in and going over its ends.</summary>
-        const float ReloadSeconds = 0.6f, ReloadEnds = 0.12f;
+        /// <summary>
+        /// A reload this long, its clip's reload scrubbed through on an ease (spin), coming in and going over its ends
+        /// (ReloadEnds of it). 0.6 s in 0.10.1 (unitViews.ts reload), the whole of «Reloading» (3.3 s) in it: the rifle
+        /// flicked up over the shoulder. Arturo, 9/11 (the review, in the box): 1.2 to 1.5 s, the magazine out and in seen.
+        /// </summary>
+        const float ReloadSeconds = 1.3f, ReloadEnds = 0.12f;
+        /// <summary>
+        /// The rifle's reload (the review of 9/11), standing and knelt: Mixamo's «Reload 3» («Walk While Reloading Rifle»)
+        /// from the left hand going down for the magazine to it back on the handguard. «Reloading», 0.10.1's, holds the
+        /// rifle 45–50° up all through its reload, upright over the shoulder at 1.3 s; «Reload 2» («Reload Rifle While In
+        /// Crouch Position») bows the trunk down to the knees, standing or knelt (CombatLab.Agarres, compared at 1.3 s).
+        /// </summary>
+        static (string clip, float from, float to) RifleReload(View v) => ("rifleReloadWalk", 1.0f, 3.0f);
 
         /// <summary>
         /// A rifle's reload (unitViews.ts reload, syntyFigures.ts direct): «Reloading» over the upper body scrubbed through
         /// in 0.6 s on an ease, coming in and going over its ends (0.12 of it), the gun held fast in the right hand
-        /// meanwhile. The pistol has none (0.10.1: its rest or its aim as they were).
+        /// meanwhile. The pistol's, «Reloading 2»'s reload the same way (PistolReloadFrom; 0.10.1 had none).
         /// </summary>
         static string ArmsKey(Unit u) => u.Arms != null ? $"{u.Arms.Primary}|{u.Arms.Melee}" : "";
 
         /// <summary>
         /// A weapon taken in hand from the backpack (unitViews.ts equip): the one it held turned over and down as a reload's
-        /// (the reload's clip over the eased 0.7 s), and halfway the new ones in its hands and where they ride (Arm).
+        /// (the reload's stretch of its clip, RifleReload, over the eased 0.7 s), and halfway the new ones in its hands and
+        /// where they ride (Arm).
         /// </summary>
         async Awaitable Equip(View v, Unit u)
         {
             const float seconds = 0.7f;
-            var clip = Rifled(v) ? FigureCatalog.Load()?.Clip("rifleReload") : null;
+            var (id, from, to) = RifleReload(v);
+            var clip = Rifled(v) ? FigureCatalog.Load()?.Clip(id) : null;
             bool swapped = false;
             for (float t = 0; t < seconds && v.root != null; t += Time.deltaTime)
             {
@@ -688,7 +889,7 @@ namespace Bastion.Client.Units
                 {
                     v.reload = spin > 0 && spin < 1 ? Mathf.Min(1, spin / ReloadEnds, (1 - spin) / ReloadEnds) : 0;
                     // (None of it, none at all: a clip plugged in at nothing showed whole for a frame.)
-                    v.anim.Scrub(v.reload > 0 ? clip : null, spin * clip.length, v.reload);
+                    v.anim.Scrub(v.reload > 0 ? clip : null, from + spin * (Mathf.Min(to, clip.length) - from), v.reload);
                 }
                 if (k >= 0.5f && !swapped)
                 {
@@ -723,24 +924,97 @@ namespace Bastion.Client.Units
             }
         }
 
+        /// <summary>
+        /// The pistol's reload (the review of 9/11, Gameplay: «Reload» or «Reloading 2», whichever fits): «Reloading 2»
+        /// («Gun Reload While Walking») over the upper body, its reload alone, from PistolReloadFrom to PistolReloadTo (the
+        /// gun up by the right shoulder from 0.6 s, the magazine in at 1.4–1.8, the slide at 2.0–2.4, back to the aim by
+        /// 3.0: ClipProbe.Alone BASTION_MANOS=1), on the rifle's clock (ReloadSeconds).
+        /// </summary>
+        const float PistolReloadFrom = 0.6f, PistolReloadTo = 3.0f;
+
         async Awaitable ReloadNow(View v, CancellationToken ct)
         {
-            var clip = FigureCatalog.Load()?.Clip("rifleReload");
-            if (v.anim == null || clip == null || v.inHand != Held.Rifle)
+            bool pistol = v.inHand == Held.Pistol;
+            var (id, from, to) = pistol ? ("pistolReload", PistolReloadFrom, PistolReloadTo) : RifleReload(v);
+            var clip = FigureCatalog.Load()?.Clip(id);
+            if (v.anim == null || clip == null || (v.inHand != Held.Rifle && !pistol))
             {
                 await Awaitable.WaitForSecondsAsync(ReloadSeconds, ct);
                 return;
             }
-            for (float t = 0; t < ReloadSeconds; t += Time.deltaTime)
+            to = Mathf.Min(to, clip.length);
+            // The magazine out in the left hand and back in (Arturo, 9/11: «se ve sacar y meter el cargador»): the gun's own
+            // (Apocalypse's guns carry it apart), taken by the hand as the clip's hand leaves the gun and put back as it
+            // comes to it again, eased home over MagHome of the clip.
+            var gun = v.weapon;
+            var mag = gun != null ? gun.GetComponentsInChildren<Transform>().FirstOrDefault(m => m != gun && m.name.Contains("Magazine")) : null;
+            var hand = v.animator != null ? v.animator.GetBoneTransform(HumanBodyBones.LeftHand) : null;
+            var knuckle = v.animator != null ? v.animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal) : null;
+            // (Its middle in its own frame: what goes into the palm.)
+            var middle = mag != null && mag.GetComponent<Renderer>() is Renderer mr ? mag.InverseTransformPoint(mr.bounds.center) : Vector3.zero;
+            Vector3 grabbedAt = default;
+            Vector3 homeAt = mag != null ? mag.localPosition : default;
+            Quaternion homeTurn = mag != null ? mag.localRotation : default;
+            Vector3 backAt = default;
+            Quaternion backTurn = default;
+            var (outAt, inAt) = pistol ? PistolMag : RifleMag;
+            try
             {
-                float k = t / ReloadSeconds;
-                float spin = k < 0.5f ? 2 * k * k : 1 - (-2 * k + 2) * (-2 * k + 2) / 2;
-                v.reload = spin > 0 && spin < 1 ? Mathf.Min(1, spin / ReloadEnds, (1 - spin) / ReloadEnds) : 0;
-                v.anim.Scrub(clip, spin * clip.length, v.reload);
-                await Awaitable.NextFrameAsync(ct);
+                for (float t = 0; t < ReloadSeconds; t += Time.deltaTime)
+                {
+                    float k = t / ReloadSeconds;
+                    float spin = k < 0.5f ? 2 * k * k : 1 - (-2 * k + 2) * (-2 * k + 2) / 2;
+                    v.reload = spin > 0 && spin < 1 ? Mathf.Min(1, spin / ReloadEnds, (1 - spin) / ReloadEnds) : 0;
+                    float at = from + spin * (to - from);
+                    v.anim.Scrub(clip, at, v.reload);
+                    if (mag != null && hand != null && v.weapon == gun)
+                    {
+                        if (at >= outAt && at < inAt && mag.parent != hand)
+                        {
+                            mag.SetParent(hand, true);
+                            grabbedAt = mag.localPosition;
+                        }
+                        else if (at >= inAt && mag.parent == hand)
+                        {
+                            mag.SetParent(gun, true);
+                            (backAt, backTurn) = (mag.localPosition, mag.localRotation);
+                        }
+                        // (Out: into the palm over MagGrab of the clip, its middle there, as it was turned.)
+                        if (mag.parent == hand && knuckle != null)
+                        {
+                            var palm = Vector3.Lerp(hand.position, knuckle.position, 0.6f);
+                            var inPalm = hand.InverseTransformPoint(palm - (mag.TransformPoint(middle) - mag.position));
+                            mag.localPosition = Vector3.Lerp(grabbedAt, inPalm, Mathf.SmoothStep(0, 1, Mathf.Clamp01((at - outAt) / MagGrab)));
+                        }
+                        if (at >= inAt && mag.parent == gun)
+                        {
+                            float home = Mathf.SmoothStep(0, 1, Mathf.Clamp01((at - inAt) / MagHome));
+                            mag.localPosition = Vector3.Lerp(backAt, homeAt, home);
+                            mag.localRotation = Quaternion.Slerp(backTurn, homeTurn, home);
+                        }
+                    }
+                    await Awaitable.NextFrameAsync(ct);
+                }
+            }
+            finally
+            {
+                if (mag != null && gun != null)
+                {
+                    mag.SetParent(gun, false);
+                    mag.localPosition = homeAt;
+                    mag.localRotation = homeTurn;
+                }
             }
             v.reload = 0;
             v.anim.Scrub(null, 0, 0);
         }
+
+        /// <summary>
+        /// When the magazine leaves the gun in the left hand and comes back (seconds into the reload's clip: the left hand
+        /// at the magazine, down at the hip, and up to the gun again; ClipProbe.Alone BASTION_MANOS=1), and over how much
+        /// of the clip it eases home.
+        /// </summary>
+        static readonly (float, float) RifleMag = (1.05f, 2.2f), PistolMag = (1.1f, 2.05f);
+        const float MagHome = 0.2f, MagGrab = 0.15f;
     }
 }

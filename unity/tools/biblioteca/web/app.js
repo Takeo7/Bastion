@@ -7,6 +7,7 @@ import { loadSelection, badgeOf, keyOf, proposeBlock, selectionView, countOpen, 
 
 const LINES = ['POLYGON', 'SIDEKICK', 'ANIMATION', 'INTERFACE', 'SIMPLE', 'POLYGON MINI'];
 const GAME = [
+  { id: ':candidatos', title: 'Candidatos 9/11', sub: 'Soldados, zombis, armas y objetos que podrían entrar en el juego' },
   { id: ':sonidos', title: 'Sonidos del juego', sub: 'Efectos, música, ambiente y botones' },
   { id: ':mixamo', title: 'Mixamo', sub: 'Animaciones que Synty no tiene' },
 ];
@@ -22,6 +23,7 @@ const state = {
   group: null,
   picked: null,     // the resource's name
   selFilter: 'todos', // «Tu selección»'s filter
+  candFilter: 'todos', // the candidates' filter, by role
   viewer: null,
 };
 
@@ -123,6 +125,7 @@ async function openPack(id, picked = null) {
     if (id === ':seleccion') state.detail = { special: 'selection' };
     else if (id === ':sonidos') state.detail = { special: 'sounds', ...(await api('/api/sounds')) };
     else if (id === ':mixamo') state.detail = { special: 'mixamo', clips: await api('/api/mixamo') };
+    else if (id === ':candidatos') state.detail = { special: 'candidates', ...(await api('/api/candidatos')) };
     else state.detail = await api(`/api/pack?${q({ id })}`);
   } catch (e) {
     main.replaceChildren(el('div', { class: 'empty', text: `No se puede abrir: ${e.message}` }));
@@ -165,6 +168,7 @@ function renderPack() {
   }
   if (d.special === 'sounds') return main.replaceChildren(...soundsView(d));
   if (d.special === 'mixamo') return main.replaceChildren(...mixamoView(d));
+  if (d.special === 'candidates') return main.replaceChildren(...candidatesView(d));
   const kids = [packHead(d)];
   if (d.offStyle) kids.push(el('div', { class: 'note warn', text: 'Fuera de estilo: se puede mirar, pero no proponer. CLAUDE.md: nada de SIMPLE ni de POLYGON MINI, salvo los animales de Forest Animals y los gatos de Cats.' }));
   if (d.kind === 'sidekick') kids.push(...sidekickView(d));
@@ -249,6 +253,12 @@ function tile(d, m, look) {
     box.textContent = 'Animación: elígela para verla en movimiento';
     return t;
   }
+  watchThumb(t, box, d.id, m, look);
+  return t;
+}
+
+/** The thumbnail of `m` in `box` once `t` comes into view: the one kept, or one drawn now (render.js) and kept. */
+function watchThumb(t, box, pack, m, look) {
   let asked = false;
   t.addEventListener('visible', () => {
     if (asked) return;
@@ -262,12 +272,11 @@ function tile(d, m, look) {
         if (url) { img.src = url; box.replaceChildren(img); } else box.textContent = 'No se abre';
       };
       done.wanted = () => t.isConnected && t.dataset.visible === '1';
-      thumb(d.id, m.path, look, done, m.thumbKey ?? m.path, m.contained ? m.name : null);
+      thumb(pack, m.path, look, done, m.thumbKey ?? m.path, m.contained ? m.name : null);
     }, { once: true });
-    img.src = `/api/thumb?${q({ id: d.id, path: m.thumbKey ?? m.path })}`;
+    img.src = `/api/thumb?${q({ id: pack, path: m.thumbKey ?? m.path })}`;
   });
   seen.observe(t);
-  return t;
 }
 
 function animsView(d) {
@@ -363,6 +372,83 @@ function row(name, uses, sub, onclick, paquete = state.open) {
     badge(paquete, name));
 }
 
+// ---- Candidates: what Gameplay asks the library to look for (candidatos/09-11.json) ----
+
+const ROLES = { soldado: 'Soldados', muerto: 'Zombis', arma: 'Armas', objeto: 'Objetos' };
+const ROLE_ONE = { soldado: 'Para los soldados', muerto: 'Para los zombis', arma: 'Como arma', objeto: 'Como objeto de mano' };
+const num = (x) => x.toLocaleString('es-ES');
+const candKey = (it) => `${it.paquete}|${it.nombre}`;
+const candidatesOf = (d) => d.grupos.flatMap((g) => g.items.map((it) => ({ ...it, grupo: g })));
+/** Its picture: Arte's (the Sidekick parts, from Unity) or the library's (presets drawn here). */
+const pictureOf = (it) => (it.imagen.de === 'arte' ? `/api/unity?${q({ file: it.imagen.file })}` : `/api/candidato-imagen?${q({ file: it.imagen.file })}`);
+
+function candidatesView(d) {
+  const all = candidatesOf(d);
+  const count = (role) => all.filter((it) => role === 'todos' || it.grupo.papel === role).length;
+  const chip = (id, label) => el('button', {
+    class: 'chip', 'aria-pressed': String(state.candFilter === id),
+    onclick: () => { state.candFilter = id; renderPack(); },
+  }, label, el('span', { class: 'n', text: count(id) }));
+  const ref = d.referencia;
+  const kids = [
+    el('div', { class: 'pack-head' }, el('div', {}, el('h2', { text: d.titulo }), el('div', { class: 'facts' },
+      el('span', { text: d.encargo }),
+      el('span', { text: `Para comparar los vértices: un zombi común de Sidekick (${ref.muertoComun.nombre.split(' ')[0]}) tiene ${num(ref.muertoComun.vertices)}; uno especial de City Zombies (${ref.muertoEspecial.corto}), ${num(ref.muertoEspecial.vertices)}.` }),
+      el('span', { text: 'Elige uno para verlo y proponerlo.' })))),
+    el('div', { class: 'bar' }, chip('todos', 'Todos'), Object.entries(ROLES).map(([k, v]) => chip(k, v))),
+  ];
+  for (const g of d.grupos) {
+    if (state.candFilter !== 'todos' && g.papel !== state.candFilter) continue;
+    const items = g.items.filter((it) => nameMatches(it.nombre) || nameMatches(it.nota ?? ''));
+    if (!items.length) continue;
+    kids.push(el('h3', { class: 'section', text: `${g.titulo.toUpperCase()} · ${items.length}` }), el('p', { class: 'hint pad', text: g.porque }));
+    const grid = el('div', { class: 'grid' });
+    for (const it of items) grid.append(candidateTile({ ...it, grupo: g }));
+    kids.push(grid);
+  }
+  return kids;
+}
+
+function candidateTile(it) {
+  const box = el('div', { class: 'thumb' });
+  const used = it.uses?.length > 0;
+  const t = el('button', {
+    class: `tile${used ? ' used' : ''}`, 'aria-current': String(state.picked === candKey(it)), title: `${it.nombre} (${it.paquete})`,
+    'data-key': keyOf(it.paquete, it.nombre), 'data-pick': candKey(it), onclick: () => pick(candKey(it)),
+  }, box, el('div', { class: 'name', text: it.nota }),
+  el('div', { class: 'meta', text: [it.paquete.replace(/^(POLYGON|SIDEKICK) - /, ''), it.vertices ? `${num(it.vertices)} vért.` : null].filter(Boolean).join(' · ') }),
+  used ? el('span', { class: 'dot', text: 'en uso' }) : null, badge(it.paquete, it.nombre));
+  if (it.imagen) box.append(el('img', { alt: '', loading: 'lazy', src: pictureOf(it) }));
+  else if (it.ruta) watchThumb(t, box, it.paquete, { path: it.ruta, thumbKey: it.clave, contained: it.contenido, name: it.nombre }, { atlas: null });
+  else box.textContent = 'Sin imagen';
+  return t;
+}
+
+async function candidateCard(card, d, key) {
+  const it = candidatesOf(d).find((x) => candKey(x) === key);
+  if (!it) return card.replaceChildren(el('div', { class: 'empty', text: 'Ese candidato ya no está en la lista.' }));
+  const ref = d.referencia;
+  const what = [it.tipo, it.sitio ?? null, it.vertices ? `${num(it.vertices)} vértices y ${num(it.triangulos)} triángulos` : null].filter(Boolean).join(' · ');
+  const clase = it.tipo === 'Pieza de Sidekick' ? 'pieza' : it.tipo.startsWith('Personaje de Sidekick') ? 'personaje' : 'modelo';
+  const body = el('div', { class: 'card-body' },
+    el('h2', { text: it.nota }),
+    el('div', { class: 'path', text: `${it.paquete} · ${it.nombre}` }),
+    el('div', {}, el('h3', { text: 'PARA QUÉ' }), el('p', { text: `${ROLE_ONE[it.grupo.papel]}. ${it.grupo.porque}` })),
+    el('div', {}, el('h3', { text: 'QUÉ ES' }), el('p', { text: what }),
+      it.vertices && it.grupo.papel === 'muerto' ? el('p', { class: 'hint', text: `Un zombi común de hoy (${ref.muertoComun.nombre.split(' ')[0]}) tiene ${num(ref.muertoComun.vertices)} vértices; uno especial (${ref.muertoEspecial.corto}), ${num(ref.muertoEspecial.vertices)}.` }) : null),
+    el('div', {}, el('h3', { text: 'SE USA EN' }), usesBlock(it.uses ?? [])),
+    propose({ clase, paquete: it.paquete, nombre: it.nombre, ...(it.ruta ? { fbx: it.ruta } : {}) }, it.uses ?? [], false));
+  if (it.imagen) return card.replaceChildren(el('img', { class: 'picture', alt: '', src: pictureOf(it) }), body);
+  if (!it.ruta) return card.replaceChildren(body);
+  const canvas = el('canvas', { class: 'viewer' });
+  card.replaceChildren(canvas, body);
+  state.viewer = new Viewer(canvas);
+  const info = await api(`/api/model?${q({ id: it.paquete, path: it.ruta, name: it.nombre })}`).catch(() => null);
+  if (state.picked !== key) return;
+  const ok = await state.viewer.show(it.paquete, it.ruta, info?.look ?? { atlas: null });
+  if (state.picked === key && !ok) body.prepend(el('div', { class: 'warning', text: 'Este FBX no se abre aquí (puede ser de una versión antigua de FBX).' }));
+}
+
 function mixamoView(d) {
   const all = d.clips.map((c) => ({ ...c, uses: c.uses })).filter((c) => nameMatches(c.name));
   const shown = all.filter(useMatches).sort((a, b) => (b.uses.length > 0) - (a.uses.length > 0) || a.name.localeCompare(b.name));
@@ -411,7 +497,7 @@ function pick(name) {
   state.picked = name;
   location.hash = q({ p: state.open, m: name });
   for (const t of document.querySelectorAll('.tile[aria-current], .row[aria-current]')) {
-    t.setAttribute('aria-current', String(t.title === name || t.querySelector('.title')?.textContent === name));
+    t.setAttribute('aria-current', String((t.dataset.pick ?? t.title) === name || t.querySelector('.title')?.textContent === name));
   }
   renderCard();
 }
@@ -441,6 +527,7 @@ async function renderCard() {
   }
   const name = state.picked;
   if (d.special === 'selection') return card.replaceChildren(el('div', { class: 'empty' }, el('p', { text: 'Pulsa «Ver» en una propuesta para abrir su modelo o su clip.' })));
+  if (d.special === 'candidates') return candidateCard(card, d, name);
   if (d.special === 'mixamo') {
     const c = d.clips.find((x) => x.name === name);
     if (!c) return;
@@ -488,7 +575,7 @@ async function renderCard() {
     el('h2', { text: m.name }),
     el('div', { class: 'path', text: m.path ? `${d.title} · ${m.path}` : `${d.title} · ${m.missing ? 'sin FBX con su nombre' : 'prefab de Unity, sin FBX con su nombre'}` }),
     m.fbx ? el('div', { class: 'hint', text: `Prefab de Unity hecho con el FBX ${m.fbx}.` }) : null,
-    m.contained ? el('div', { class: 'hint', text: `Prefab de Unity: sale de un FBX con todos los animales del paquete (${d.container}).` }) : null,
+    m.contained ? el('div', { class: 'hint', text: `Prefab de Unity: sale de un FBX con todos los modelos del paquete (${m.path.split('/').pop()}).` }) : null,
     el('div', {}, el('h3', { text: 'SE USA EN' }), usesBlock(m.uses)),
     deadBlock(m.dead),
     countsBlock(m.uses),

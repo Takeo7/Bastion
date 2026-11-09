@@ -252,6 +252,7 @@ MonoBehaviour:
   - pistolAim
   - pistolFire
   - pistolKneelDown
+  - pistolReload
   - pistolRest
   - pointFemn
   - pointMasc
@@ -266,6 +267,7 @@ MonoBehaviour:
   - rifleKneelDown
   - rifleLowered
   - rifleReload
+  - rifleReloadWalk
   - rifleRun
   - rifleSprint
   - rifleTurnL180
@@ -439,6 +441,7 @@ MonoBehaviour:
   - {fileID: -203655887218126122, guid: af435674623704f61b6ff770b06cf8b3, type: 3}
   - {fileID: -203655887218126122, guid: 3315356935b7640d18001f5cfc95faa1, type: 3}
   - {fileID: -203655887218126122, guid: d599d74c46afa4034a4e436ddda9db54, type: 3}
+  - {fileID: -203655887218126122, guid: e131766504185423590081acd26082ba, type: 3}
   - {fileID: -203655887218126122, guid: 85fed6392549b49e3b35db97d82b38fc, type: 3}
   - {fileID: 3079626718596155391, guid: 47e9482dbca8b0f49a614547db509418, type: 3}
   - {fileID: 7144553416464728477, guid: 46cfee11323708b41aef8dc7a6c06010, type: 3}
@@ -453,6 +456,7 @@ MonoBehaviour:
   - {fileID: -203655887218126122, guid: 33ba4bc56709f44f98c562254b080c8a, type: 3}
   - {fileID: -203655887218126122, guid: a246acd47f41d4a17a7d7e80ddd8cec4, type: 3}
   - {fileID: -203655887218126122, guid: b00565a62cdac418bacfc2c12c4349ec, type: 3}
+  - {fileID: -203655887218126122, guid: 9cc83e261cc0f477a84dade077074996, type: 3}
   - {fileID: -203655887218126122, guid: de411cd5dbb2241e280f15503af5cad6, type: 3}
   - {fileID: -203655887218126122, guid: 3cdb1e82a2e8940d0a792b401105cdbf, type: 3}
   - {fileID: -203655887218126122, guid: 6afab29a6261041ddb980522d7d3f5d8, type: 3}
@@ -568,24 +572,24 @@ MonoBehaviour:
   - SM_Chr_Zombie_Hoodie_Male_01
   - SM_Chr_Zombie_SchoolGirl_Female_01
   - SM_Chr_Zombie_RiotCop_Male_01
-  - SM_Chr_Zombie_Military_Male_01
   - SM_Chr_Zombie_Police_Male_01
   - SM_Chr_Zombie_Firefighter_Male_01
   - SM_Chr_ZombieBoss_Wretch_01
   - SM_Chr_ZombieBoss_Blobber_01
   - SM_Chr_ZombieBoss_Slobber_01
+  - SM_Chr_Zombie_Military_Male_01
   characters:
   - {fileID: 1562126803887444, guid: e05321c6e6ad7b845942de92aafc2395, type: 3}
   - {fileID: 1343261146546640, guid: 4003093fe4a231c4d9c155a6540ec590, type: 3}
   - {fileID: 1115666180268534, guid: 15fa57f984877cc4f9acd0e63babc93e, type: 3}
   - {fileID: 1877525456610922, guid: b7a521fe7dabb734a87b288a49e9b68b, type: 3}
   - {fileID: 1069217425750644, guid: 83620e573d3f2254199cd946a8601720, type: 3}
-  - {fileID: 1160577204630336, guid: 7c521770c9e780444b9b27cb7183739f, type: 3}
   - {fileID: 1075024190843592, guid: ea757c1578e17134b85ac65be02c4b19, type: 3}
   - {fileID: 1616105819863738, guid: 7cb0205c5f7aeba45b91883f9425fcab, type: 3}
   - {fileID: 1960997148460282, guid: a3029e28af10f4f458f5d25d6118a906, type: 3}
   - {fileID: 1658146812600542, guid: 574d3bbe7d1c8684f9101c2b823c5770, type: 3}
   - {fileID: 1389694247779218, guid: 6e6f4b3417a0abb45b1cce8fdf021eb5, type: 3}
+  - {fileID: 1160577204630336, guid: 7c521770c9e780444b9b27cb7183739f, type: 3}
   atlasNames:
   - PolygonZombieBoss_03_B
   - PolygonZombieBoss_02_C
@@ -710,6 +714,7 @@ MonoBehaviour:
   - 0.12
   - 0.12
   - 0.7866668
+  - 3.65
   - 6.6866617
   - 1.6533332
   - 1.6199999
@@ -724,6 +729,7 @@ MonoBehaviour:
   - 0.9333334
   - 0.12
   - 2.619999
+  - 4.0833335
   - 0.6666667
   - 0.5
   - 1.4533334

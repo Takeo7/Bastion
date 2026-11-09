@@ -134,6 +134,7 @@ namespace Bastion.Client.Units
             public readonly Dictionary<string, Transform> carried = new Dictionary<string, Transform>();
             public readonly Dictionary<string, WeaponArt> arts = new Dictionary<string, WeaponArt>();
             public readonly Dictionary<string, Vector3> muzzles = new Dictionary<string, Vector3>();
+            public readonly Dictionary<string, Vector3> butts = new Dictionary<string, Vector3>();
             public readonly Dictionary<string, float> middles = new Dictionary<string, float>();
             public readonly Dictionary<string, Transform> stows = new Dictionary<string, Transform>();
             /// <summary>Which of them is in its hands, and what that is.</summary>
@@ -153,6 +154,17 @@ namespace Bastion.Client.Units
             public float up;
             /// <summary>Aimed at a target being picked (unitViews.ts aimAt, 23/10 #3): where, with the blade on guard, with the pistol; null none.</summary>
             public (Vector3 at, bool melee, bool sidearm)? picking;
+            /// <summary>Where its gun is aimed (RaiseWeapon's point, or the target being picked); none: straight ahead and level (the watch).</summary>
+            public Vector3? aimAt;
+            /// <summary>The trunk's last turn bringing the barrel onto aimAt (Converge), and how long it is kept so through a shot's kick.</summary>
+            public Quaternion converge = Quaternion.identity, convergeArms = Quaternion.identity;
+            public float kickLeft;
+            /// <summary>How far into the pistol's kick (PistolKick); below 0, none.</summary>
+            public float pistolKick = -1;
+            /// <summary>The back of what it holds (its butt), in the model's own frame, as `muzzle` the front: where a rifle turns in the shoulder (Swing).</summary>
+            public Vector3 butt;
+            /// <summary>Where its eyes look in its head's frame (from its skeleton's bind pose, which faces ahead: Gaze); zero until found.</summary>
+            public Vector3 gaze;
             /// <summary>On watch (Unit.Overwatch: the gun up), with the blade on guard (Unit.WatchMelee), as last shown.</summary>
             public bool watch, guard;
             /// <summary>How many aims it has taken (RaiseWeapon, AimAt): a lowering meant for an earlier one leaves a later one be.</summary>
@@ -377,8 +389,19 @@ namespace Bastion.Client.Units
                 if (v.recoil)
                 {
                     v.recoil = false;
-                    v.anim?.PlayUpper(FireClip, 0.03f);
+                    if (v.inHand == Held.Pistol)
+                    {
+                        // (Converge goes on through it: the kick shows at the wrist, HoldPistol's flip; kept as it was, the turn
+                        // for «Pistol Idle 2»'s arms took «Shooting»'s down to the waist.)
+                        v.pistolKick = 0;
+                    }
+                    else
+                    {
+                        v.anim?.PlayUpper(FireClip, 0.03f);
+                        v.kickLeft = FireClip != null ? FireClip.length : 0;
+                    }
                 }
+                PistolKick(v, dt);
                 v.anim?.Step(dt);
                 if (v.aim > 0 && v.inHand == Held.Rifle)
                 {
@@ -397,6 +420,9 @@ namespace Bastion.Client.Units
                     Sight(v, v.up);
                 }
                 HoldNow(v, dt);
+                Converge(v, dt);
+                Look(v);
+                Support(v);
                 SearchPose(v);
                 ClimbPose(v);
                 Reach(v);
@@ -496,6 +522,196 @@ namespace Bastion.Client.Units
             var neck = a.GetBoneTransform(HumanBodyBones.Neck);
             if (neck != null) neck.rotation = Quaternion.AngleAxis(degrees * 0.7f, right) * neck.rotation;
         }
+
+        /// <summary>
+        /// The barrel onto what it aims at (the review of 9/11, Arturo: «si apuntan bien y el arma y el personaje apuntan a
+        /// donde deberían»): after the clips and the trunk's turns (Blade, Straighten, Square) a rifle ran beside the body's
+        /// line, not onto the target (5° off at four tiles standing, 11° knelt), some 13° over it shouldered, and never up or
+        /// down to another storey (21° under a target a storey up, 47° over one below; CombatLab.Punteria); a pistol the
+        /// same. The rest of the way, as far as the gun is up (`up`), twice over:
+        /// - a rifle swung round its butt in the shoulder by both arms (Swing), as far as ArmYaw and ArmPitch, and the trunk
+        ///   turned only for what is left beyond (a target on another storey): turned at the trunk, the shouldered rifle came
+        ///   down to the chest and the back bowed over it (Gameplay, 9/11);
+        /// - a pistol by the trunk, half at the spine and half at the chest (its arms are out before it).
+        /// Without a point (the watch), straight ahead and level. Through a shot's kick the turns are kept as they were, so
+        /// the kick shows.
+        /// </summary>
+        void Converge(View v, float dt)
+        {
+            if (v.weapon == null || v.animator == null || !v.animator.isHuman || v.dead || v.reload > 0 || v.striking || v.up <= 0 || SightOff || ConvergeOff
+                || (v.inHand != Held.Rifle && v.inHand != Held.Pistol))
+            {
+                v.converge = v.convergeArms = Quaternion.identity;
+                v.kickLeft = 0;
+                return;
+            }
+            Transform spine = v.animator.GetBoneTransform(HumanBodyBones.Spine), chest = v.animator.GetBoneTransform(HumanBodyBones.Chest);
+            if (spine == null || chest == null) return;
+            bool rifle = v.inHand == Held.Rifle;
+            void Place()
+            {
+                // (Placed again in the hands, without the pistol's spread from the thigh: that one is stepped once a frame.)
+                if (rifle) Hold(v.animator, v.weapon, v.root, false, ref v.grip);
+                else HoldPistol(v);
+            }
+            void Turn(Quaternion q)
+            {
+                q.ToAngleAxis(out float degrees, out var axis);
+                if (degrees > 180) degrees -= 360;
+                if (Mathf.Abs(degrees) < 1e-3f) return;
+                var half = Quaternion.AngleAxis(degrees / 2, axis);
+                spine.rotation = half * spine.rotation;
+                chest.rotation = half * chest.rotation;
+                Place();
+            }
+            if (v.kickLeft > 0)
+            {
+                v.kickLeft -= dt;
+                Turn(Quaternion.Slerp(Quaternion.identity, v.converge, v.up));
+                if (rifle) Swing(v, Quaternion.Slerp(Quaternion.identity, v.convergeArms, v.up));
+                return;
+            }
+            // What is still off: round the upright and up (degrees), and the axis across the barrel to tip it about.
+            (float yaw, float pitch, Vector3 right)? Off()
+            {
+                var muzzle = v.weapon.TransformPoint(v.muzzle);
+                // (The pistol's barrel as the forearm runs, before HoldPistol lays it on the line.)
+                Transform hand = v.animator.GetBoneTransform(HumanBodyBones.RightHand), elbow = v.animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
+                var barrel = !rifle && hand != null && elbow != null ? (hand.position - elbow.position).normalized : v.weapon.forward;
+                var want = v.aimAt is Vector3 at ? at - muzzle : new Vector3(v.root.forward.x, 0, v.root.forward.z);
+                var flatBarrel = new Vector3(barrel.x, 0, barrel.z);
+                var flatWant = new Vector3(want.x, 0, want.z);
+                if (flatBarrel.sqrMagnitude < 1e-6f || flatWant.sqrMagnitude < 1e-6f) return null;
+                float yaw = Mathf.Clamp(Vector3.SignedAngle(flatBarrel, flatWant, Vector3.up), -ConvergeYaw, ConvergeYaw);
+                float pitch = Mathf.Clamp((Mathf.Atan2(want.y, flatWant.magnitude) - Mathf.Atan2(barrel.y, flatBarrel.magnitude)) * Mathf.Rad2Deg, -ConvergePitch, ConvergePitch);
+                return (yaw, pitch, Vector3.Cross(Vector3.up, flatBarrel).normalized);
+            }
+            Quaternion Of(float yaw, float pitch, Vector3 right) => Quaternion.AngleAxis(yaw, Vector3.up) * Quaternion.AngleAxis(-pitch, right);
+            var trunk = Quaternion.identity;
+            var arms = Quaternion.identity;
+            if (!rifle)
+            {
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    if (!(Off() is var (yaw, pitch, right))) break;
+                    var q = Of(yaw, pitch, right);
+                    trunk = q * trunk;
+                    Turn(Quaternion.Slerp(Quaternion.identity, q, v.up));
+                }
+            }
+            else if (Off() is var (yaw0, pitch0, right0))
+            {
+                // The trunk for what the arms can't swing; then the arms, twice (the first swing moves the muzzle).
+                float trunkYaw = yaw0 - Mathf.Clamp(yaw0, -ArmYaw, ArmYaw), trunkPitch = pitch0 - Mathf.Clamp(pitch0, -ArmPitch, ArmPitch);
+                if (trunkYaw != 0 || trunkPitch != 0)
+                {
+                    trunk = Of(trunkYaw, trunkPitch, right0);
+                    Turn(Quaternion.Slerp(Quaternion.identity, trunk, v.up));
+                }
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    if (!(Off() is var (yaw, pitch, right))) break;
+                    var q = Of(Mathf.Clamp(yaw, -ArmYaw, ArmYaw), Mathf.Clamp(pitch, -ArmPitch, ArmPitch), right);
+                    arms = q * arms;
+                    Swing(v, Quaternion.Slerp(Quaternion.identity, q, v.up));
+                }
+            }
+            v.converge = trunk;
+            v.convergeArms = arms;
+        }
+
+        /// <summary>How far Converge turns at most: the trunk round the upright and up or down, and a rifle's arms round its butt (degrees).</summary>
+        const float ConvergeYaw = 30, ConvergePitch = 60, ArmYaw = 12, ArmPitch = 20;
+
+        /// <summary>
+        /// The rifle in the hands turned by `q` round its butt (WeaponArt's model, the back of its box: in the shoulder),
+        /// by both arms: each hand where the turn takes it (the arm reaching it, its elbow turned as much) and turned as
+        /// much, the head as much (the cheek on the stock); the gun placed again between them (Hold).
+        /// </summary>
+        void Swing(View v, Quaternion q)
+        {
+            q.ToAngleAxis(out float degrees, out _);
+            if (Mathf.Abs(degrees > 180 ? degrees - 360 : degrees) < 1e-3f) return;
+            var a = v.animator;
+            var pivot = v.weapon.TransformPoint(v.butt);
+            foreach (var (upper, lower, handBone) in new[] { (HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand), (HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand) })
+            {
+                Transform shoulder = a.GetBoneTransform(upper), elbow = a.GetBoneTransform(lower), hand = a.GetBoneTransform(handBone);
+                if (shoulder == null || elbow == null || hand == null) continue;
+                var turned = q * hand.rotation;
+                Reach(a, upper, lower, handBone, pivot + q * (hand.position - pivot), q * (elbow.position - shoulder.position), 0.005f);
+                hand.rotation = turned;
+            }
+            // (The head with it, half at the neck and half at the head: the cheek kept on the stock.)
+            Transform neck = a.GetBoneTransform(HumanBodyBones.Neck), head = a.GetBoneTransform(HumanBodyBones.Head);
+            if (neck != null && head != null)
+            {
+                q.ToAngleAxis(out float d, out var axis);
+                if (d > 180) d -= 360;
+                var half = Quaternion.AngleAxis(d / 2, axis);
+                neck.rotation = half * neck.rotation;
+                head.rotation = half * head.rotation;
+            }
+            Hold(v.animator, v.weapon, v.root, false, ref v.grip);
+        }
+
+        /// <summary>
+        /// The face onto what it aims at with the pistol (the review of 9/11; CombatLab.Punteria, along Gaze): the rest of
+        /// the way turned at the neck and the head, half each, as far as the gun is up, to LookBow under the line, no
+        /// further than LookMost either way. A rifle's head is left as the clip and Sight have it, its cheek on the stock
+        /// (Gameplay, 9/11: the face stays over the butt).
+        /// </summary>
+        void Look(View v)
+        {
+            if (v.animator == null || !v.animator.isHuman || v.dead || v.reload > 0 || v.striking || v.up <= 0 || SightOff || ConvergeOff || v.inHand != Held.Pistol)
+                return;
+            Transform le = v.animator.GetBoneTransform(HumanBodyBones.LeftEye), re = v.animator.GetBoneTransform(HumanBodyBones.RightEye);
+            Transform neck = v.animator.GetBoneTransform(HumanBodyBones.Neck), head = v.animator.GetBoneTransform(HumanBodyBones.Head);
+            if (head == null || neck == null) return;
+            if (v.gaze == Vector3.zero) v.gaze = Gaze(v, head);
+            if (v.gaze == Vector3.zero) return;
+            var eyes = le != null && re != null ? (le.position + re.position) / 2 : head.position;
+            var look = head.rotation * v.gaze;
+            var want = v.aimAt is Vector3 at ? at - eyes : new Vector3(v.root.forward.x, 0, v.root.forward.z);
+            var flatLook = new Vector3(look.x, 0, look.z);
+            var flatWant = new Vector3(want.x, 0, want.z);
+            if (flatLook.sqrMagnitude < 1e-6f || flatWant.sqrMagnitude < 1e-6f) return;
+            float yaw = Mathf.Clamp(Vector3.SignedAngle(flatLook, flatWant, Vector3.up), -LookMost, LookMost);
+            float pitch = Mathf.Clamp((Mathf.Atan2(want.y, flatWant.magnitude) - Mathf.Atan2(look.y, flatLook.magnitude)) * Mathf.Rad2Deg - LookBow, -LookMost, LookMost);
+            var right = Vector3.Cross(Vector3.up, flatLook).normalized;
+            var q = Quaternion.Slerp(Quaternion.identity, Quaternion.AngleAxis(yaw, Vector3.up) * Quaternion.AngleAxis(-pitch, right), v.up);
+            q.ToAngleAxis(out float degrees, out var axis);
+            if (degrees > 180) degrees -= 360;
+            if (Mathf.Abs(degrees) < 1e-3f) return;
+            var half = Quaternion.AngleAxis(degrees / 2, axis);
+            neck.rotation = half * neck.rotation;
+            head.rotation = half * head.rotation;
+        }
+
+        /// <summary>How far under the line to its target the face stays (degrees: a cheek on the stock), and how far Look turns it at most.</summary>
+        const float LookBow = 8, LookMost = 45;
+
+        /// <summary>
+        /// Where the eyes look in the head's frame: ahead of the body as its skeleton was bound (the bind pose stands
+        /// facing the figure's forward, the head level), from the body's skinned mesh; zero without one.
+        /// </summary>
+        static Vector3 Gaze(View v, Transform head)
+        {
+            foreach (var r in v.body != null ? v.body.GetComponentsInChildren<SkinnedMeshRenderer>() : Array.Empty<SkinnedMeshRenderer>())
+            {
+                if (r.sharedMesh == null) continue;
+                int k = Array.IndexOf(r.bones, head);
+                var binds = r.sharedMesh.bindposes;
+                if (k < 0 || k >= binds.Length) continue;
+                // (The head's turn at the bind in the world as the mesh stands now; the figure faces its root's forward.)
+                var bound = r.transform.rotation * Quaternion.Inverse(binds[k].rotation);
+                return Quaternion.Inverse(bound) * v.root.forward;
+            }
+            return Vector3.zero;
+        }
+
+        /// <summary>BASTION_SIN_CONVERGER=1: the barrel as the clips and the trunk's turns leave it, for the labs' «before».</summary>
+        public static bool ConvergeOff = Environment.GetEnvironmentVariable("BASTION_SIN_CONVERGER") == "1";
 
         // ------------------------------------------------------------ where things are (no waiting)
 
@@ -995,9 +1211,39 @@ namespace Bastion.Client.Units
         /// </summary>
         public void Recoil(string id)
         {
-            // (The pistol's own clip goes unplayed, as in 0.10.1: its aim held.)
-            if (views.TryGetValue(id, out var v) && v.weapon != null && v.inHand == Held.Rifle) v.recoil = true;
+            if (views.TryGetValue(id, out var v) && v.weapon != null && (v.inHand == Held.Rifle || v.inHand == Held.Pistol)) v.recoil = true;
         }
+
+        /// <summary>
+        /// The pistol's kick (the review of 9/11, Gameplay: «el retroceso con pistolFire»; 0.10.1 had none, its aim held):
+        /// its clock, PistolKickSeconds, for HoldPistol's flip at the wrist; and Mixamo's «Shooting» («Firing A Gun») from
+        /// PistolKickFrom over the upper body as much as PistolKickShare, in over 0.03 s and out over 0.12: its one shot,
+        /// the forearm 4–5° up and back (ClipProbe.Alone BASTION_MANOS=1: 15° to 19° at 0.33 s, 14° by 0.7 s).
+        /// </summary>
+        static void PistolKick(View v, float dt)
+        {
+            if (v.pistolKick < 0 || v.anim == null) return;
+            var clip = PistolFireClip;
+            v.pistolKick += dt;
+            if (clip == null || v.pistolKick >= PistolKickSeconds || v.inHand != Held.Pistol || v.dead)
+            {
+                v.pistolKick = -1;
+                v.anim.Scrub(null, 0, 0);
+                return;
+            }
+            float k = v.pistolKick;
+            if (PistolKickShare > 0) v.anim.Scrub(clip, PistolKickFrom + k, PistolKickShare * Mathf.Clamp01(Mathf.Min(k / 0.03f, (PistolKickSeconds - k) / 0.12f)));
+        }
+
+        /// <summary>
+        /// How much of «Shooting» PistolKick lays over the aim: none (9/11). Its own aim is lower than «Pistol Idle 2»'s: all
+        /// of it took the pistol down to the waist and back up over 0.4 s; the kick is HoldPistol's flip at the wrist.
+        /// </summary>
+        const float PistolKickFrom = 0.25f, PistolKickSeconds = 0.45f, PistolKickShare = 0;
+
+        /// <summary>Mixamo's «Shooting» (PistolKick's), once loaded.</summary>
+        static AnimationClip PistolFireClip => pistolFireClip != null ? pistolFireClip : pistolFireClip = FigureCatalog.Load()?.Clip("pistolFire");
+        static AnimationClip pistolFireClip;
 
         /// <summary>Seconds one boarding La Lata takes to fade out by its door (Board; Arturo, 31/10, his #1).</summary>
         public const float BoardSeconds = 0.5f;
@@ -1311,11 +1557,13 @@ namespace Bastion.Client.Units
             {
                 if (was == null) return;
                 v.picking = null;
+                if (!v.aiming) v.aimAt = null;
                 _ = Lowered(v, ++v.aims);
                 return;
             }
             if (was is { } w && w.melee == melee && w.sidearm == sidearm && (w.at - p).sqrMagnitude < 1e-4f) return;
             v.picking = (p, melee, sidearm);
+            v.aimAt = melee ? (Vector3?)null : p;
             ++v.aims;
             Face(id, p);
             if (v.weapon == null) return;
@@ -1545,6 +1793,7 @@ namespace Bastion.Client.Units
             if (!views.TryGetValue(id, out var v)) return 0;
             int aim = ++v.aims;
             v.picking = null;
+            v.aimAt = at;
             Face(id, at);
             // Whoever stands where it aims takes the blow from here (unitViews.ts raiseWeapon: struck).
             Struck(at, v.root.position, false);
@@ -1573,6 +1822,7 @@ namespace Bastion.Client.Units
         {
             if (!views.TryGetValue(id, out var v) || aim != v.aims) return;
             v.aiming = false;
+            if (v.picking == null) v.aimAt = null;
             await Lowered(v, aim, ct);
         }
 

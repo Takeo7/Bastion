@@ -157,7 +157,8 @@ namespace Bastion.EditorTools
                     if (Time.frameCount == lastFrame) return;
                     lastFrame = Time.frameCount;
                     frame++;
-                    if (frame > PlayLimit) throw new TimeoutException($"{PlayLimit} frames in play mode and no shot");
+                    // (Only while none is taken: a long strip runs past it, 9/11.)
+                    if (shot == 0 && frame > PlayLimit) throw new TimeoutException($"{PlayLimit} frames in play mode and no shot");
                     if (frame == 1) panels = PanelsInto(width, height);
                     // The cameras drawn into a texture of their own while the game runs, not into the batch's screen, which
                     // has none: drawn there each frame, Synty materials came out red, pink or black at random in the shots,

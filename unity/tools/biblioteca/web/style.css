@@ -188,6 +188,15 @@ button:hover { border-color: var(--faint); }
   white-space: nowrap;
   color: var(--muted);
 }
+.tile .meta {
+  font-size: 10.5px;
+  padding: 0 7px 6px;
+  margin-top: -3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+}
 .tile.used { border-color: rgba(111, 191, 115, 0.45); }
 .tile.used .name { color: var(--text); }
 .tile .dot {

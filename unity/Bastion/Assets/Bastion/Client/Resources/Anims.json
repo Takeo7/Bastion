@@ -701,6 +701,14 @@
    "pack": "mixamo",
    "fbx": "Shooting"
   },
+  "pistolReload": {
+   "pack": "mixamo",
+   "fbx": "Reloading 2"
+  },
+  "rifleReloadWalk": {
+   "pack": "mixamo",
+   "fbx": "Reload 3"
+  },
   "tossGrenade": {
    "pack": "mixamo",
    "fbx": "Toss Grenade",

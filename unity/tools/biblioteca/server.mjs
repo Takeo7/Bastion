@@ -39,6 +39,9 @@ let inventory, sources, uses, targets, usedTextures;
 // (BIBLIOTECA_SELECCION: another file, to try the page without touching Arturo's.)
 const selection = new Selection(process.env.BIBLIOTECA_SELECCION ?? join(here, 'seleccion.json'));
 const SNAPSHOTS = join(ROOT, '.dev-snapshots');
+// (Candidates for the game that Gameplay asks for, a list a day: candidatos/<día-mes>.json; their own pictures, in the cache.)
+const CANDIDATES = join(here, 'candidatos');
+const CANDIDATE_PICTURES = join(CACHE, 'candidatos');
 
 function offStyle(pack) {
   return config.offStyle.lines.includes(pack.line) && !config.offStyle.allowed.includes(pack.id);
@@ -233,11 +236,14 @@ async function packDetail(id) {
   // (Characters all in one FBX, the pack's `container`: each prefab drawn from it, with its own meshes alone.)
   const holder = await containerOf(id);
   if (holder) {
+    const names = containerConf(id).names ? new RegExp(containerConf(id).names, 'i') : null;
+    const big = await bigContainerOf(id);
     for (const m of listed) {
-      if (m.path || !(m.prefab || m.missing)) continue;
-      m.path = holder;
+      // (Not the particles: prefabs with no FBX either, but no meshes in the container.)
+      if (m.path || !(m.prefab || m.missing) || /^FX_|_FX$/i.test(m.name) || (names && !names.test(m.name))) continue;
+      m.path = big?.names.test(m.name) ? big.file : holder;
       m.contained = true;
-      m.thumbKey = `${holder}@${m.name}`;
+      m.thumbKey = `${m.path}@${m.name}`;
       m.missing = false;
       m.group = groupOf(m, summary.kind);
     }
@@ -255,7 +261,7 @@ async function packDetail(id) {
  * (Sidekick's for a clip under Sidekick/ or named A_MOD_…), else Base Locomotion's or Goblin Locomotion's; null if none.
  */
 async function mannequinFor(id, clipPath) {
-  const own = config.packs[id]?.container;
+  const own = containerConf(id);
   if (own?.mannequin) {
     const holder = await containerOf(id);
     if (holder) return { pack: id, path: holder, only: [own.mannequin] };
@@ -292,18 +298,32 @@ function countsFor(ids) {
 }
 
 /** The FBX in a pack's sources that holds its characters (packs.json's `container`), or null. */
+/** A pack's `container`: from its entry, or from `containers` for the packs the game does not know (only for its characters). */
+const CHARACTERS = '^(SM_Chr_(?!Attach)|SK_Chr_|Character_)';
+const containerConf = (id) => config.packs[id]?.container ?? (config.containers?.[id] ? { names: CHARACTERS, ...config.containers[id] } : null);
+
 async function containerOf(id) {
-  const c = config.packs[id]?.container;
+  const c = containerConf(id);
   const s = sourcesOf(id);
   if (!c || !s?.available) return null;
   return (await s.files()).find((f) => f.endsWith(`/${c.fbx}`)) ?? null;
 }
+/** The second container of a pack, for its big characters (`big`: the FBX and their names), or null. */
+async function bigContainerOf(id) {
+  const c = containerConf(id)?.big;
+  const s = sourcesOf(id);
+  if (!c || !s?.available) return null;
+  const file = (await s.files()).find((f) => f.endsWith(`/${c.fbx}`));
+  return file ? { file, names: new RegExp(c.names, 'i') } : null;
+}
 
 /** The meshes of a prefab drawn from its pack's container: the MaterialList's (no attachments), or the one its name gives. */
 function containedMeshes(id, name, prefab) {
+  // (In the packs the game does not know, Synty's list gives each character every mesh of the FBX: its own is its name.)
+  if (containerConf(id)?.names) return [name];
   const fromList = (prefab ?? []).map((m) => m.mesh).filter((m) => !/_attach_/i.test(m));
   if (fromList.length) return fromList;
-  const rule = config.packs[id]?.container?.mesh;
+  const rule = containerConf(id)?.mesh;
   return rule ? [name.replace(new RegExp(rule[0]), rule[1])] : [name];
 }
 
@@ -326,7 +346,7 @@ async function modelInfo(id, path, asked) {
     meshes[mesh.mesh.toLowerCase().replace(/^sk_/, 'sm_')] = await Promise.all(mesh.slots.map((sl) => s.texture(sl.albedo)));
   }
   const look = { atlas: atlasFile, meshes, byKey: await s.slotFiles() };
-  if (path === (await containerOf(id)) && name !== fbx) look.only = containedMeshes(id, name, prefab);
+  if ((path === (await containerOf(id)) || path === (await bigContainerOf(id))?.file) && name !== fbx) look.only = containedMeshes(id, name, prefab);
   // (Only what makes the page show it otherwise than Unity: in Unity each prefab has its own materials.)
   const warnings = [];
   if (!prefab) {
@@ -512,6 +532,15 @@ async function handle(req, res) {
     }
     try { return send(res, 200, selection.read()); } catch (e) { return send(res, 500, { error: `seleccion.json no se puede leer: ${e.message}` }); }
   }
+  if (path === '/api/candidatos') {
+    const file = within(CANDIDATES, `${q('lista') ?? '09-11'}.json`);
+    if (!file || !existsSync(file)) return send(res, 404, { error: 'No hay esa lista de candidatos.' });
+    const list = JSON.parse(readFileSync(file, 'utf8'));
+    // (Whether the game uses it now: the list is as it was the day it was made.)
+    for (const g of list.grupos) for (const it of g.items) Object.assign(it, uses.live(uses.forModel(it.paquete, it.nombre)), it.hueco ? { sitio: slotOf(it.hueco) } : {});
+    return send(res, 200, list);
+  }
+  if (path === '/api/candidato-imagen') return sendFile(res, within(CANDIDATE_PICTURES, q('file') ?? '') ?? '', true);
   if (path === '/api/maniqui') return send(res, 200, await mannequinFor(q('id'), q('path')));
   if (path === '/api/cuentas') return send(res, 200, countsFor((q('ids') ?? '').split(',').filter(Boolean)));
   if (path === '/api/destinos') return send(res, 200, targets.forClass(q('clase')));

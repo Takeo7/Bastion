@@ -46,6 +46,16 @@
    { "file": "Client/Units/UnitViews.Dead.cs", "call": "Bloater", "prefix": "SM_Chr_ZombieBoss_", "suffix": "_01" }
   ]
  },
+ "containers": {
+  "_": "The `container` of packs the game does not know: the FBX with all their characters, whose prefabs have none of their own (the candidates of 9/11); each draws the mesh of its name. `big`: the FBX of their big characters, by their names.",
+  "POLYGON - Apocalypse Wasteland": { "fbx": "FBX/Characters/Characters.fbx", "big": { "fbx": "FBX/Characters/charactersBR.fbx", "names": "Giant|No_Face|Jar_Head|Beserker_Male" } },
+  "POLYGON - Battle Royale Pack": { "fbx": "FBX/Characters/Characters.fbx" },
+  "POLYGON - City Characters Pack": { "fbx": "FBX/Character.fbx" },
+  "POLYGON - Horror Asylum": { "fbx": "FBX/Characters/Characters.fbx" },
+  "POLYGON - Horror Movie Set": { "fbx": "FBX/Characters/PolygonHorrorMovieSet_Characters.fbx", "big": { "fbx": "FBX/Characters/PolygonHorrorMovieSet_BR_Characters.fbx", "names": "Brute" } },
+  "POLYGON - Police Station": { "fbx": "SourceFiles/FBX/Characters.fbx" },
+  "POLYGON - Western Pack": { "fbx": "SourceFiles/FBX/Characters.fbx" }
+ },
  "offStyle": {
   "_": "CLAUDE.md: no SIMPLE nor MINI, save SIMPLE's Forest Animals and Cats (Arturo, 1/11).",
   "lines": ["SIMPLE", "POLYGON MINI"],

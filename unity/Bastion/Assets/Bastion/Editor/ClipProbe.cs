@@ -69,6 +69,15 @@ namespace Bastion.EditorTools
                         next++;
                     }
                     anim.Step(dt);
+                    // (BASTION_MANOS=1: both hands and the right forearm's pitch each frame, in the figure's frame: a shot's kick, a reload's hands.)
+                    if (Environment.GetEnvironmentVariable("BASTION_MANOS") == "1")
+                    {
+                        var root = figure.transform;
+                        Vector3 H(HumanBodyBones b) => root.InverseTransformPoint(animator.GetBoneTransform(b).position) * root.lossyScale.x;
+                        var fore = animator.GetBoneTransform(HumanBodyBones.RightHand).position - animator.GetBoneTransform(HumanBodyBones.RightLowerArm).position;
+                        float pitch = Mathf.Atan2(fore.y, new Vector2(fore.x, fore.z).magnitude) * Mathf.Rad2Deg;
+                        Debug.Log(FormattableString.Invariant($"[manos] {(next > 0 ? ids[next - 1] : "-")} {at:0.000} R {H(HumanBodyBones.RightHand):F3} L {H(HumanBodyBones.LeftHand):F3} forearmPitch {pitch:0.0}"));
+                    }
                     if (widths && at >= nextWidth)
                     {
                         nextWidth = at + 0.5f;

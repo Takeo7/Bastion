@@ -222,6 +222,15 @@ Capturas: `.dev-snapshots/biblioteca/fase3/`.
 
 Capturas: `.dev-snapshots/biblioteca/fase4/`.
 
+### Candidatos (9/11, encargo de Gameplay)
+
+Gameplay pide a la biblioteca que busque en el disco lo que podría entrar en el juego. Arturo lo elige en el cuadro.
+- **«Candidatos 9/11»**, en «Del juego»: la lista `unity/tools/biblioteca/candidatos/09-11.json`, por grupos (soldados, zombis, armas y objetos). Cada candidato lleva por qué encaja, si es pieza de Sidekick o personaje entero de POLYGON, y sus vértices, junto a los de un zombi de hoy. Su ficha lo enseña en 3D, o en foto si es de Sidekick, y se propone desde ella como cualquier otro recurso. Si una lista nueva sale otro día, irá en otro archivo (`candidatos/<día-mes>.json`).
+- **Las fotos que no saca Unity** (presets de Sidekick sin importar, como Modern Thugs) están en `assets-src/biblioteca/candidatos/`.
+- **`containers` en `packs.json`:** el FBX con todos los personajes de los paquetes que el juego no usa (Horror Asylum, Apocalypse Wasteland, Police Station…). En ellos, la MaterialList de Synty da a cada personaje todas las mallas del FBX, así que se dibuja la malla con su nombre. `big` es el FBX de los personajes grandes (el gigante de Wasteland, el bruto de Movie Set). Antes salían como «Prefab de Unity: sin FBX con su nombre».
+
+Las hojas, el LEEME y los clips sin usar están en `.dev-snapshots/biblioteca/candidatos-09-11/`.
+
 ## 8. Decidido por Gameplay (5/11, encargo de Arturo)
 
 - **La web la programa la sesión «Biblioteca de assets Unity»** (Arturo, 5/11; antes se había dado a Arte): el servidor y la página en `unity/tools/biblioteca/`, en las fases 1 a 4, con las imágenes de INTERFACE.

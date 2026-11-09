@@ -42,6 +42,11 @@ namespace Bastion.EditorTools
             ("pistolRest", "mixamo/Pistol Aim.fbx", false),
             ("pistolAim", "mixamo/Pistol Idle 2.fbx", false),
             ("pistolFire", "mixamo/Shooting.fbx", false),
+            // The pistol's reload (the review of 9/11, Gameplay: «Reload» or «Reloading 2», whichever fits it better; «Reload»
+            // runs with a rifle, its arms wide).
+            ("pistolReload", "mixamo/Reloading 2.fbx", false),
+            // The rifle's (Arturo, 9/11: 1.2–1.5 s, the magazine out and in seen; «Reloading» holds it over the shoulder).
+            ("rifleReloadWalk", "mixamo/Reload 3.fbx", false),
             ("tossGrenade", "mixamo/Toss Grenade.fbx", true),
             ("throwStone", "mixamo/Throw Object.fbx", true),
             ("knifeStab", "mixamo/Stabbing 3.fbx", false),

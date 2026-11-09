@@ -1,0 +1,1848 @@
+{
+ "titulo": "Candidatos 9/11",
+ "encargo": "Gameplay, 9/11 (Arturo): modelos que casen con los soldados y los zombis, y armas y objetos de mano. Lo que entre, lo elige Arturo en el cuadro.",
+ "referencia": {
+  "muertoComun": {
+   "nombre": "ApocalypseZombie_01 (Sidekick, zombi común)",
+   "vertices": 21228
+  },
+  "muertoEspecial": {
+   "nombre": "SM_Chr_Zombie_Jock_Male_01 (City Zombies, especial)",
+   "corto": "Jock",
+   "vertices": 5048
+  }
+ },
+ "grupos": [
+  {
+   "papel": "soldado",
+   "titulo": "Mochilas y bultos de Apocalypse Survivors",
+   "porque": "Del mismo paquete que la ropa que ya llevan los soldados: casan con su paleta y su esqueleto. Hoy ningún soldado lleva nada a la espalda de este paquete.",
+   "items": [
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_02_24ABAC_HU01",
+     "nota": "Mochila con un palo atado",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_02_24ABAC_HU01.png"
+     },
+     "vertices": 3116,
+     "triangulos": 2941
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_07_24ABAC_HU01",
+     "nota": "Mochila con esterilla y termo",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_07_24ABAC_HU01.png"
+     },
+     "vertices": 3132,
+     "triangulos": 3277
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_08_24ABAC_HU01",
+     "nota": "Mochila con pala",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_08_24ABAC_HU01.png"
+     },
+     "vertices": 3771,
+     "triangulos": 3529
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_09_24ABAC_HU01",
+     "nota": "Mochila con una vara larga",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_09_24ABAC_HU01.png"
+     },
+     "vertices": 5244,
+     "triangulos": 4517
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_04_24ABAC_HU01",
+     "nota": "Bombonas atadas",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_04_24ABAC_HU01.png"
+     },
+     "vertices": 4074,
+     "triangulos": 3868
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_06_24ABAC_HU01",
+     "nota": "Saco de dormir y bultos",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_06_24ABAC_HU01.png"
+     },
+     "vertices": 3877,
+     "triangulos": 3622
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_03_24ABAC_HU01",
+     "nota": "Mochila con un bate con clavos",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_03_24ABAC_HU01.png"
+     },
+     "vertices": 2550,
+     "triangulos": 2546
+    }
+   ]
+  },
+  {
+   "papel": "soldado",
+   "titulo": "Gorros, casco y pantalón de Apocalypse Survivors",
+   "porque": "Lo que queda sin usar del paquete de los soldados: tres cosas para la cabeza y un pantalón.",
+   "items": [
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_07_22AHED_HU01",
+     "nota": "Gorro con orejeras",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_07_22AHED_HU01.png"
+     },
+     "vertices": 1566,
+     "triangulos": 1494
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_08_22AHED_HU01",
+     "nota": "Gorra de dos colores",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_08_22AHED_HU01.png"
+     },
+     "vertices": 670,
+     "triangulos": 784
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_09_22AHED_HU01",
+     "nota": "Casco con visera",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_09_22AHED_HU01.png"
+     },
+     "vertices": 1117,
+     "triangulos": 997
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Survivors",
+     "nombre": "SK_APOC_SURV_03_17HIPS_HU01",
+     "nota": "Pantalón corto de faena",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hips",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_SURV_03_17HIPS_HU01.png"
+     },
+     "vertices": 2224,
+     "triangulos": 1960
+    }
+   ]
+  },
+  {
+   "papel": "soldado",
+   "titulo": "Equipo de Modern Police",
+   "porque": "Chalecos, cascos y cosas al cinto: más pinta de tropa, con el mismo estilo que la ropa de hoy. El paquete ya está en Unity: es el de los zombis policía.",
+   "items": [
+    {
+     "paquete": "SIDEKICK - Modern Police",
+     "nombre": "SK_MDRN_POLC_04_10TORS_HU01",
+     "nota": "Chaleco antibalas con placa",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_POLC_04_10TORS_HU01.png"
+     },
+     "vertices": 1205,
+     "triangulos": 1198
+    },
+    {
+     "paquete": "SIDEKICK - Modern Police",
+     "nombre": "SK_MDRN_POLC_06_10TORS_HU01",
+     "nota": "Chaleco táctico con hombreras",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_POLC_06_10TORS_HU01.png"
+     },
+     "vertices": 1163,
+     "triangulos": 1158
+    },
+    {
+     "paquete": "SIDEKICK - Modern Police",
+     "nombre": "SK_MDRN_POLC_08_22AHED_HU01",
+     "nota": "Casco táctico con gafas",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_POLC_08_22AHED_HU01.png"
+     },
+     "vertices": 1811,
+     "triangulos": 1824
+    },
+    {
+     "paquete": "SIDEKICK - Modern Police",
+     "nombre": "SK_MDRN_POLC_09_22AHED_HU01",
+     "nota": "Casco antidisturbios",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_POLC_09_22AHED_HU01.png"
+     },
+     "vertices": 757,
+     "triangulos": 766
+    },
+    {
+     "paquete": "SIDEKICK - Modern Police",
+     "nombre": "SK_MDRN_POLC_01_24ABAC_HU01",
+     "nota": "Escudo a la espalda",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_POLC_01_24ABAC_HU01.png"
+     },
+     "vertices": 890,
+     "triangulos": 786
+    },
+    {
+     "paquete": "SIDEKICK - Modern Police",
+     "nombre": "SK_MDRN_POLC_05_27AHPL_HU01",
+     "nota": "Botes de gas al cinto",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHipsLeft",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_POLC_05_27AHPL_HU01.png"
+     },
+     "vertices": 957,
+     "triangulos": 900
+    },
+    {
+     "paquete": "SIDEKICK - Modern Police",
+     "nombre": "SK_MDRN_POLC_04_27AHPL_HU01",
+     "nota": "Porra al cinto",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHipsLeft",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_POLC_04_27AHPL_HU01.png"
+     },
+     "vertices": 1093,
+     "triangulos": 758
+    },
+    {
+     "paquete": "SIDEKICK - Modern Police",
+     "nombre": "SK_MDRN_POLC_01_26AHPB_HU01",
+     "nota": "Linterna al cinto, por detrás",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHipsBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_POLC_01_26AHPB_HU01.png"
+     },
+     "vertices": 267,
+     "triangulos": 270
+    }
+   ]
+  },
+  {
+   "papel": "soldado",
+   "titulo": "Ropa de calle de Modern Civilians",
+   "porque": "Ropa normal, de antes de la Pandemia, para que la escuadra no parezca uniformada. En la foto, con la paleta por defecto: en el juego llevaría la de los soldados.",
+   "items": [
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_08_10TORS_HU01",
+     "nota": "Camisa abierta sobre camiseta",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_08_10TORS_HU01.png"
+     },
+     "vertices": 1352,
+     "triangulos": 1454
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_15_10TORS_HU01",
+     "nota": "Sudadera con bolsillo",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_15_10TORS_HU01.png"
+     },
+     "vertices": 1364,
+     "triangulos": 1368
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_18_10TORS_HU01",
+     "nota": "Camiseta de tirantes",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_18_10TORS_HU01.png"
+     },
+     "vertices": 741,
+     "triangulos": 850
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_01_10TORS_HU01",
+     "nota": "Camiseta",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_01_10TORS_HU01.png"
+     },
+     "vertices": 637,
+     "triangulos": 812
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_02_17HIPS_HU01",
+     "nota": "Pantalón largo",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hips",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_02_17HIPS_HU01.png"
+     },
+     "vertices": 1295,
+     "triangulos": 1324
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_10_17HIPS_HU01",
+     "nota": "Pantalón corto con correas",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hips",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_10_17HIPS_HU01.png"
+     },
+     "vertices": 1738,
+     "triangulos": 1626
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_11_17HIPS_HU01",
+     "nota": "Pantalón con cinturón",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hips",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_11_17HIPS_HU01.png"
+     },
+     "vertices": 1253,
+     "triangulos": 1284
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_01_22AHED_HU01",
+     "nota": "Gorra lisa",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_01_22AHED_HU01.png"
+     },
+     "vertices": 426,
+     "triangulos": 388
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_13_22AHED_HU01",
+     "nota": "Pañuelo que tapa la cara",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_13_22AHED_HU01.png"
+     },
+     "vertices": 579,
+     "triangulos": 574
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_15_22AHED_HU01",
+     "nota": "Capucha con bufanda",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_15_22AHED_HU01.png"
+     },
+     "vertices": 515,
+     "triangulos": 540
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_12_22AHED_HU01",
+     "nota": "Sombrero de pesca",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_12_22AHED_HU01.png"
+     },
+     "vertices": 363,
+     "triangulos": 402
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_08_24ABAC_HU01",
+     "nota": "Mochila con termo",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_08_24ABAC_HU01.png"
+     },
+     "vertices": 873,
+     "triangulos": 794
+    },
+    {
+     "paquete": "SIDEKICK - Modern Civilians",
+     "nombre": "SK_MDRN_CIVL_03_23AFAC_HU01",
+     "nota": "Gafas de protección",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentFace",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_MDRN_CIVL_03_23AFAC_HU01.png"
+     },
+     "vertices": 392,
+     "triangulos": 372
+    }
+   ]
+  },
+  {
+   "papel": "soldado",
+   "titulo": "Máscaras y chalecos de Apocalypse Outlaws",
+   "porque": "Encajan con supervivientes, pero es la ropa de los vivos enemigos (sus presets ya salen en el juego). Mejor solo piezas sueltas, para que los soldados no se confundan con ellos.",
+   "items": [
+    {
+     "paquete": "SIDEKICK - Apocalypse Outlaws",
+     "nombre": "SK_APOC_OUTL_03_22AHED_HU01",
+     "nota": "Capucha con máscara de gas",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_OUTL_03_22AHED_HU01.png"
+     },
+     "vertices": 1823,
+     "triangulos": 1482
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Outlaws",
+     "nombre": "SK_APOC_OUTL_01_23AFAC_HU01",
+     "nota": "Gafas y respirador",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentFace",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_OUTL_01_23AFAC_HU01.png"
+     },
+     "vertices": 826,
+     "triangulos": 620
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Outlaws",
+     "nombre": "SK_APOC_OUTL_10_23AFAC_HU01",
+     "nota": "Respirador",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentFace",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_OUTL_10_23AFAC_HU01.png"
+     },
+     "vertices": 385,
+     "triangulos": 588
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Outlaws",
+     "nombre": "SK_APOC_OUTL_09_10TORS_HU01",
+     "nota": "Chaleco con placas",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_OUTL_09_10TORS_HU01.png"
+     },
+     "vertices": 2272,
+     "triangulos": 1968
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Outlaws",
+     "nombre": "SK_APOC_OUTL_10_10TORS_HU01",
+     "nota": "Chaleco de cinchas",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_OUTL_10_10TORS_HU01.png"
+     },
+     "vertices": 2734,
+     "triangulos": 2240
+    }
+   ]
+  },
+  {
+   "papel": "soldado",
+   "titulo": "Personajes de Modern Thugs (sin importar)",
+   "porque": "Paquete de Sidekick en el disco y no en Unity: gente de la calle con mochilas y armas a la espalda. Valdrían de soldados o de vivos. Para usarlo, Arte tiene que importarlo.",
+   "items": [
+    {
+     "paquete": "SIDEKICK - Modern Thugs",
+     "nombre": "ModernThugs_04",
+     "nota": "Gafas, chaqueta y fusil a la espalda",
+     "tipo": "Personaje de Sidekick (preset, sin importar)",
+     "imagen": {
+      "de": "biblioteca",
+      "file": "ModernThugs_04.png"
+     },
+     "vertices": 15135,
+     "triangulos": 15056
+    },
+    {
+     "paquete": "SIDEKICK - Modern Thugs",
+     "nombre": "ModernThugs_06",
+     "nota": "Gorra, gafas y camiseta de tirantes",
+     "tipo": "Personaje de Sidekick (preset, sin importar)",
+     "imagen": {
+      "de": "biblioteca",
+      "file": "ModernThugs_06.png"
+     },
+     "vertices": 15059,
+     "triangulos": 14259
+    },
+    {
+     "paquete": "SIDEKICK - Modern Thugs",
+     "nombre": "ModernThugs_07",
+     "nota": "Gorro naranja y chaqueta",
+     "tipo": "Personaje de Sidekick (preset, sin importar)",
+     "imagen": {
+      "de": "biblioteca",
+      "file": "ModernThugs_07.png"
+     },
+     "vertices": 16557,
+     "triangulos": 15587
+    },
+    {
+     "paquete": "SIDEKICK - Modern Thugs",
+     "nombre": "ModernThugs_08",
+     "nota": "Barba y chaleco",
+     "tipo": "Personaje de Sidekick (preset, sin importar)",
+     "imagen": {
+      "de": "biblioteca",
+      "file": "ModernThugs_08.png"
+     },
+     "vertices": 17806,
+     "triangulos": 16566
+    },
+    {
+     "paquete": "SIDEKICK - Modern Thugs",
+     "nombre": "ModernThugs_02",
+     "nota": "Punk con cazadora",
+     "tipo": "Personaje de Sidekick (preset, sin importar)",
+     "imagen": {
+      "de": "biblioteca",
+      "file": "ModernThugs_02.png"
+     },
+     "vertices": 15895,
+     "triangulos": 14324
+    }
+   ]
+  },
+  {
+   "papel": "muerto",
+   "titulo": "Piezas de zombi de Apocalypse Zombies",
+   "porque": "Piezas del paquete de los zombis comunes que ningún preset del juego usa: más variedad en la multitud sin vértices de más.",
+   "items": [
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_02_10TORS_ZB01",
+     "nota": "Torso con herida abierta",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_02_10TORS_ZB01.png"
+     },
+     "vertices": 2190,
+     "triangulos": 1898
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_04_10TORS_ZB01",
+     "nota": "Torso mordido",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_04_10TORS_ZB01.png"
+     },
+     "vertices": 2013,
+     "triangulos": 1826
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_05_10TORS_ZB01",
+     "nota": "Camisa rota",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_05_10TORS_ZB01.png"
+     },
+     "vertices": 2330,
+     "triangulos": 2076
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_08_10TORS_ZB01",
+     "nota": "Camisa hecha jirones",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_08_10TORS_ZB01.png"
+     },
+     "vertices": 2416,
+     "triangulos": 2200
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_09_10TORS_ZB01",
+     "nota": "Camiseta rota",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Torso",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_09_10TORS_ZB01.png"
+     },
+     "vertices": 1697,
+     "triangulos": 1602
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_01_17HIPS_ZB01",
+     "nota": "Pantalón roto",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hips",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_01_17HIPS_ZB01.png"
+     },
+     "vertices": 1571,
+     "triangulos": 1498
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_03_17HIPS_ZB01",
+     "nota": "Pantalón con cinturón, roto",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hips",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_03_17HIPS_ZB01.png"
+     },
+     "vertices": 1562,
+     "triangulos": 1388
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_06_17HIPS_ZB01",
+     "nota": "Falda rota",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hips",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_06_17HIPS_ZB01.png"
+     },
+     "vertices": 2073,
+     "triangulos": 1956
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_02_02HAIR_ZB01",
+     "nota": "Pelo sucio",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hair",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_02_02HAIR_ZB01.png"
+     },
+     "vertices": 2167,
+     "triangulos": 1966
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_ZOMB_BASE_05_02HAIR_ZB01",
+     "nota": "Pelo largo enredado",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "Hair",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_ZOMB_BASE_05_02HAIR_ZB01.png"
+     },
+     "vertices": 2073,
+     "triangulos": 1448
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_APOC_ZOMB_02_22AHED_ZB01",
+     "nota": "Hacha clavada en la cabeza",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentHead",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_ZOMB_02_22AHED_ZB01.png"
+     },
+     "vertices": 556,
+     "triangulos": 536
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_APOC_ZOMB_02_24ABAC_ZB01",
+     "nota": "Cuchillos clavados en la espalda",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_ZOMB_02_24ABAC_ZB01.png"
+     },
+     "vertices": 580,
+     "triangulos": 478
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_APOC_ZOMB_11_24ABAC_ZB01",
+     "nota": "Mochila rota",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentBack",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_ZOMB_11_24ABAC_ZB01.png"
+     },
+     "vertices": 3469,
+     "triangulos": 2988
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_APOC_ZOMB_03_23AFAC_ZB01",
+     "nota": "Bozal",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentFace",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_ZOMB_03_23AFAC_ZB01.png"
+     },
+     "vertices": 1673,
+     "triangulos": 1386
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_APOC_ZOMB_05_23AFAC_ZB01",
+     "nota": "Máscara de gas",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentFace",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_ZOMB_05_23AFAC_ZB01.png"
+     },
+     "vertices": 829,
+     "triangulos": 726
+    },
+    {
+     "paquete": "SIDEKICK - Apocalypse Zombies",
+     "nombre": "SK_APOC_ZOMB_01_29ASHL_ZB01",
+     "nota": "Hacha clavada en el hombro",
+     "tipo": "Pieza de Sidekick",
+     "hueco": "AttachmentShoulderLeft",
+     "imagen": {
+      "de": "arte",
+      "file": "piezas/SK_APOC_ZOMB_01_29ASHL_ZB01.png"
+     },
+     "vertices": 276,
+     "triangulos": 262
+    }
+   ]
+  },
+  {
+   "papel": "muerto",
+   "titulo": "Zombis sin usar de City Zombies",
+   "porque": "Del paquete de los zombis especiales de hoy: mismo estilo, mismo esqueleto y ya en Unity. Son personajes enteros: valen para especiales o para zombis sueltos, no para la multitud.",
+   "items": [
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_BioHazardSuit_Male_01",
+     "nota": "Traje de riesgo biológico",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_BioHazardSuit_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_BioHazardSuit_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4533,
+     "triangulos": 2177
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Prisoner_Male_01",
+     "nota": "Preso",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Prisoner_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Prisoner_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4142,
+     "triangulos": 1882
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Paramedic_Female_01",
+     "nota": "Sanitaria",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Paramedic_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Paramedic_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5238,
+     "triangulos": 2269
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Police_Female_01",
+     "nota": "Policía",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Police_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Police_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6759,
+     "triangulos": 3034
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Biker_Male_01",
+     "nota": "Motero",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Biker_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Biker_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5499,
+     "triangulos": 2480
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Roadworker_Male_01",
+     "nota": "Obrero de carreteras",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Roadworker_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Roadworker_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5633,
+     "triangulos": 2356
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Hobo_Male_01",
+     "nota": "Vagabundo",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Hobo_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Hobo_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6164,
+     "triangulos": 2755
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Businessman_Male_01",
+     "nota": "Hombre de traje",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Businessman_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Businessman_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4568,
+     "triangulos": 2062
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Jacket_Male_01",
+     "nota": "Hombre con chaqueta",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Jacket_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Jacket_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5871,
+     "triangulos": 2687
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Jacket_Female_01",
+     "nota": "Mujer con chaqueta",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Jacket_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Jacket_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5857,
+     "triangulos": 2717
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Coat_Female_01",
+     "nota": "Mujer con abrigo",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Coat_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Coat_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5460,
+     "triangulos": 2362
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Grandpa_Male_01",
+     "nota": "Anciano",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Grandpa_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Grandpa_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4870,
+     "triangulos": 2226
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Grandma_Female_01",
+     "nota": "Anciana",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Grandma_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Grandma_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5052,
+     "triangulos": 2337
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_ShopKeeper_Male_01",
+     "nota": "Tendero",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_ShopKeeper_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_ShopKeeper_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4588,
+     "triangulos": 2076
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Patient_Female_01",
+     "nota": "Paciente de hospital",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Patient_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Patient_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4293,
+     "triangulos": 1983
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Punk_Male_01",
+     "nota": "Punk",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Punk_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Punk_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5102,
+     "triangulos": 2190
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Bride_Female_01",
+     "nota": "Novia",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Bride_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Bride_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4871,
+     "triangulos": 2261
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Footballer_Male_01",
+     "nota": "Jugador de fútbol americano",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Footballer_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Footballer_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6187,
+     "triangulos": 2940
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Mother_Female_01",
+     "nota": "Madre",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Mother_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Mother_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5854,
+     "triangulos": 2788
+    },
+    {
+     "paquete": "POLYGON - City Zombies Pack",
+     "nombre": "SM_Chr_Zombie_Father_Male_01",
+     "nota": "Padre",
+     "ruta": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Father_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_CityZombies_SourceFiles_v4.zip/FBX/Characters/SK_Zombie_Father_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5576,
+     "triangulos": 2564
+    }
+   ]
+  },
+  {
+   "papel": "muerto",
+   "titulo": "Zombis de Apocalypse",
+   "porque": "Los cuatro zombis del paquete del que salen las armas y el mapa. Personajes enteros.",
+   "items": [
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Chr_Zombie_Male_01",
+     "nota": "Zombi, hombre 1",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/Characters/SK_Chr_Zombie_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/Characters/SK_Chr_Zombie_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4134,
+     "triangulos": 1862
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Chr_Zombie_Male_02",
+     "nota": "Zombi, hombre 2",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/Characters/SK_Chr_Zombie_Male_02.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/Characters/SK_Chr_Zombie_Male_02.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4920,
+     "triangulos": 2220
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Chr_Zombie_Female_01",
+     "nota": "Zombi, mujer 1",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/Characters/SK_Chr_Zombie_Female_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/Characters/SK_Chr_Zombie_Female_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4936,
+     "triangulos": 2226
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Chr_Zombie_Female_02",
+     "nota": "Zombi, mujer 2",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/Characters/SK_Chr_Zombie_Female_02.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/Characters/SK_Chr_Zombie_Female_02.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4785,
+     "triangulos": 2138
+    }
+   ]
+  },
+  {
+   "papel": "muerto",
+   "titulo": "Mutantes de Apocalypse Wasteland",
+   "porque": "Deformes y grandes: valdrían para zombis especiales nuevos. El gigante, para un jefe.",
+   "items": [
+    {
+     "paquete": "POLYGON - Apocalypse Wasteland",
+     "nombre": "SM_Chr_Mutant_01",
+     "nota": "Mutante con ropa rota",
+     "ruta": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/Characters.fbx@SM_Chr_Mutant_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6811,
+     "triangulos": 3095
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Wasteland",
+     "nombre": "SM_Chr_Mutant_02",
+     "nota": "Mutante con bultos verdes",
+     "ruta": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/Characters.fbx@SM_Chr_Mutant_02",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 7117,
+     "triangulos": 3395
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Wasteland",
+     "nombre": "SM_Chr_Mutant_03",
+     "nota": "Mutante con la cabeza llena de bultos",
+     "ruta": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/Characters.fbx@SM_Chr_Mutant_03",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 7280,
+     "triangulos": 2933
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Wasteland",
+     "nombre": "SM_Chr_Mutant_04",
+     "nota": "Mutante calvo, con bultos en el pecho",
+     "ruta": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/Characters.fbx@SM_Chr_Mutant_04",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6991,
+     "triangulos": 2936
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Wasteland",
+     "nombre": "SM_Chr_Mutant_No_Face_01",
+     "nota": "Mutante sin cara",
+     "ruta": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/charactersBR.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/charactersBR.fbx@SM_Chr_Mutant_No_Face_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 12272,
+     "triangulos": 5290
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Wasteland",
+     "nombre": "SM_Chr_Mutant_Giant_01",
+     "nota": "Mutante gigante",
+     "ruta": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/charactersBR.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Apocalypse_Wasteland_SourceFiles_v4.zip/FBX/Characters/charactersBR.fbx@SM_Chr_Mutant_Giant_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 13156,
+     "triangulos": 6194
+    }
+   ]
+  },
+  {
+   "papel": "muerto",
+   "titulo": "Pacientes y personal de Horror Asylum",
+   "porque": "Batas de hospital y uniformes sucios: zombis de un hospital o un manicomio sin cambiarles la textura.",
+   "items": [
+    {
+     "paquete": "POLYGON - Horror Asylum",
+     "nombre": "SM_Chr_Patient_Male_01",
+     "nota": "Paciente con mono naranja",
+     "ruta": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx@SM_Chr_Patient_Male_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6324,
+     "triangulos": 3136
+    },
+    {
+     "paquete": "POLYGON - Horror Asylum",
+     "nombre": "SM_Chr_Patient_Male_02",
+     "nota": "Paciente sin camisa, con pantalón corto",
+     "ruta": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx@SM_Chr_Patient_Male_02",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6327,
+     "triangulos": 3079
+    },
+    {
+     "paquete": "POLYGON - Horror Asylum",
+     "nombre": "SM_Chr_Patient_Male_03",
+     "nota": "Paciente en pijama, con sangre",
+     "ruta": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx@SM_Chr_Patient_Male_03",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 3326,
+     "triangulos": 1590
+    },
+    {
+     "paquete": "POLYGON - Horror Asylum",
+     "nombre": "SM_Chr_Patient_Female_01",
+     "nota": "Paciente con bata",
+     "ruta": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx@SM_Chr_Patient_Female_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4129,
+     "triangulos": 1964
+    },
+    {
+     "paquete": "POLYGON - Horror Asylum",
+     "nombre": "SM_Chr_Orderly_01",
+     "nota": "Celador",
+     "ruta": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx@SM_Chr_Orderly_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 3972,
+     "triangulos": 1860
+    },
+    {
+     "paquete": "POLYGON - Horror Asylum",
+     "nombre": "SM_Chr_Nurse_01",
+     "nota": "Enfermera",
+     "ruta": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Asylum_SourceFiles_v3.zip/FBX/Characters/Characters.fbx@SM_Chr_Nurse_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6159,
+     "triangulos": 2902
+    }
+   ]
+  },
+  {
+   "papel": "muerto",
+   "titulo": "Horror: Mansion y Movie Set",
+   "porque": "Figuras de terror que pasarían por zombis comunes o especiales: el necrófago, el carnicero y el bruto. Los de Movie Set salen aquí con la piel muy pálida. Puede ser la textura que elige la web: Arte lo mirará en Unity.",
+   "items": [
+    {
+     "paquete": "POLYGON - Horror Mansion",
+     "nombre": "SM_Chr_Ghoul_01",
+     "nota": "Necrófago",
+     "ruta": "POLYGON_Horror_Mansion_SourceFiles_v6.zip/FBX/Characters/SM_Chr_Ghoul_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Horror_Mansion_SourceFiles_v6.zip/FBX/Characters/SM_Chr_Ghoul_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 3156,
+     "triangulos": 1392
+    },
+    {
+     "paquete": "POLYGON - Horror Mansion",
+     "nombre": "SM_Chr_Butcher_01",
+     "nota": "Carnicero",
+     "ruta": "POLYGON_Horror_Mansion_SourceFiles_v6.zip/FBX/Characters/SM_Chr_Butcher_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Horror_Mansion_SourceFiles_v6.zip/FBX/Characters/SM_Chr_Butcher_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 8055,
+     "triangulos": 3651
+    },
+    {
+     "paquete": "POLYGON - Horror Movie Set",
+     "nombre": "SM_Chr_Brute_01",
+     "nota": "Bruto",
+     "ruta": "POLYGON_Horror_Movie_Set_SourceFiles_v1.zip/FBX/Characters/PolygonHorrorMovieSet_BR_Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Movie_Set_SourceFiles_v1.zip/FBX/Characters/PolygonHorrorMovieSet_BR_Characters.fbx@SM_Chr_Brute_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 5052,
+     "triangulos": 2328
+    },
+    {
+     "paquete": "POLYGON - Horror Movie Set",
+     "nombre": "SM_Chr_Hillbilly_Male_01",
+     "nota": "Paleto",
+     "ruta": "POLYGON_Horror_Movie_Set_SourceFiles_v1.zip/FBX/Characters/PolygonHorrorMovieSet_Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Movie_Set_SourceFiles_v1.zip/FBX/Characters/PolygonHorrorMovieSet_Characters.fbx@SM_Chr_Hillbilly_Male_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4435,
+     "triangulos": 2026
+    },
+    {
+     "paquete": "POLYGON - Horror Movie Set",
+     "nombre": "SM_Chr_Hillbilly_Female_01",
+     "nota": "Paleta",
+     "ruta": "POLYGON_Horror_Movie_Set_SourceFiles_v1.zip/FBX/Characters/PolygonHorrorMovieSet_Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Horror_Movie_Set_SourceFiles_v1.zip/FBX/Characters/PolygonHorrorMovieSet_Characters.fbx@SM_Chr_Hillbilly_Female_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4772,
+     "triangulos": 2166
+    }
+   ]
+  },
+  {
+   "papel": "muerto",
+   "titulo": "Gente de POLYGON para hacer zombis",
+   "porque": "Personajes vivos de los sitios del juego (comisaría, cuartel, obra, granja). Para hacerlos zombis hay que darles piel de zombi: Arte dirá si se puede con su atlas.",
+   "items": [
+    {
+     "paquete": "POLYGON - Police Station",
+     "nombre": "SM_Chr_Officer_Male_01",
+     "nota": "Agente de policía, hombre",
+     "ruta": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/Characters.fbx@SM_Chr_Officer_Male_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4354,
+     "triangulos": 2126
+    },
+    {
+     "paquete": "POLYGON - Police Station",
+     "nombre": "SM_Chr_Officer_Female_01",
+     "nota": "Agente de policía, mujer",
+     "ruta": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/Characters.fbx",
+     "contenido": true,
+     "clave": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/Characters.fbx@SM_Chr_Officer_Female_01",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4366,
+     "triangulos": 2104
+    },
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Chr_Soldier_Male_01",
+     "nota": "Soldado",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Chr_Soldier_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Chr_Soldier_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 6336,
+     "triangulos": 2996
+    },
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Chr_Insurgent_Male_01",
+     "nota": "Insurgente",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Chr_Insurgent_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Chr_Insurgent_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4206,
+     "triangulos": 1978
+    },
+    {
+     "paquete": "POLYGON - Construction Pack",
+     "nombre": "SM_Chr_Builder_HighVis_01",
+     "nota": "Obrero con chaleco reflectante",
+     "ruta": "POLYGON_Construction_SourceFiles_v5.zip/FBX/Chr/SK_Chr_Builder_HighVis_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Construction_SourceFiles_v5.zip/FBX/Chr/SK_Chr_Builder_HighVis_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 3665,
+     "triangulos": 1727
+    },
+    {
+     "paquete": "POLYGON - Construction Pack",
+     "nombre": "SM_Chr_Builder_Overalls_01",
+     "nota": "Obrero con peto",
+     "ruta": "POLYGON_Construction_SourceFiles_v5.zip/FBX/Chr/SK_Chr_Builder_Overalls_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Construction_SourceFiles_v5.zip/FBX/Chr/SK_Chr_Builder_Overalls_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 4504,
+     "triangulos": 2106
+    },
+    {
+     "paquete": "POLYGON - Gang Warfare Pack",
+     "nombre": "SM_Chr_Hazmat_Suit_Male_01",
+     "nota": "Traje de protección",
+     "ruta": "POLYGON_Gang_Warfare_SourceFiles_v5.zip/FBX/Characters/SK_Chr_Hazmat_Suit_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Gang_Warfare_SourceFiles_v5.zip/FBX/Characters/SK_Chr_Hazmat_Suit_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 3360,
+     "triangulos": 1564
+    },
+    {
+     "paquete": "POLYGON - Farm Pack",
+     "nombre": "SM_Chr_Farmer_Male_01",
+     "nota": "Granjero",
+     "ruta": "POLYGON_Farm_SourceFiles_v6.zip/FBX/Characters/SK_Chr_Farmer_Male_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Farm_SourceFiles_v6.zip/FBX/Characters/SK_Chr_Farmer_Male_01.fbx",
+     "tipo": "Personaje entero de POLYGON",
+     "vertices": 3160,
+     "triangulos": 1474
+    }
+   ]
+  },
+  {
+   "papel": "muerto",
+   "titulo": "Cadáveres para el mapa (War Pack)",
+   "porque": "Cuerpos tirados, sin esqueleto: decorado de muertos en el suelo, no unidades. Llevan uniforme de la Segunda Guerra Mundial.",
+   "items": [
+    {
+     "paquete": "POLYGON - War Pack",
+     "nombre": "SM_Char_DeadBody_01",
+     "nota": "Cadáver boca arriba",
+     "ruta": "POLYGON_War_SourceFiles_v4.zip/Source Files/FBX/SM_Char_DeadBody_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_War_SourceFiles_v4.zip/Source Files/FBX/SM_Char_DeadBody_01.fbx",
+     "tipo": "Modelo de POLYGON (sin esqueleto)",
+     "vertices": 4573,
+     "triangulos": 2269
+    },
+    {
+     "paquete": "POLYGON - War Pack",
+     "nombre": "SM_Char_DeadBody_02",
+     "nota": "Cadáver de lado",
+     "ruta": "POLYGON_War_SourceFiles_v4.zip/Source Files/FBX/SM_Char_DeadBody_02.fbx",
+     "contenido": false,
+     "clave": "POLYGON_War_SourceFiles_v4.zip/Source Files/FBX/SM_Char_DeadBody_02.fbx",
+     "tipo": "Modelo de POLYGON (sin esqueleto)",
+     "vertices": 4673,
+     "triangulos": 2328
+    },
+    {
+     "paquete": "POLYGON - War Pack",
+     "nombre": "SM_Char_DeadBody_03",
+     "nota": "Cadáver boca abajo, con sangre",
+     "ruta": "POLYGON_War_SourceFiles_v4.zip/Source Files/FBX/SM_Char_DeadBody_03.fbx",
+     "contenido": false,
+     "clave": "POLYGON_War_SourceFiles_v4.zip/Source Files/FBX/SM_Char_DeadBody_03.fbx",
+     "tipo": "Modelo de POLYGON (sin esqueleto)",
+     "vertices": 3716,
+     "triangulos": 1928
+    }
+   ]
+  },
+  {
+   "papel": "arma",
+   "titulo": "Pistolas",
+   "porque": "Hoy solo hay una pistola (la de Military). Estas darían variedad, y una es del mismo paquete que los fusiles del juego.",
+   "items": [
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_Pistol_01",
+     "nota": "Pistola del paquete de los fusiles del juego (la corredera va aparte)",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Pistol_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Pistol_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 817,
+     "triangulos": 464
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_Revolver_01",
+     "nota": "Revólver",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Revolver_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Revolver_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1515,
+     "triangulos": 914
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_Revolver_02",
+     "nota": "Carabina de tambor",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Revolver_02.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Revolver_02.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 3544,
+     "triangulos": 2046
+    },
+    {
+     "paquete": "POLYGON - Police Station",
+     "nombre": "SM_Wep_Pistol_01",
+     "nota": "Pistola de policía",
+     "ruta": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Wep_Pistol_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Wep_Pistol_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1545,
+     "triangulos": 862
+    },
+    {
+     "paquete": "POLYGON - Heist Pack",
+     "nombre": "SM_Wep_PistolSwat_01",
+     "nota": "Pistola con linterna",
+     "ruta": "POLYGON_Heist_SourceFiles_v5.zip/FBX/SM_Wep_PistolSwat_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Heist_SourceFiles_v5.zip/FBX/SM_Wep_PistolSwat_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1081,
+     "triangulos": 660
+    },
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Wep_Pistol_Small_01",
+     "nota": "Pistola pequeña",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Pistol_Small_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Pistol_Small_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 918,
+     "triangulos": 532
+    }
+   ]
+  },
+  {
+   "papel": "arma",
+   "titulo": "Escopetas",
+   "porque": "Hoy solo hay una escopeta (la de Military).",
+   "items": [
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_Shotgun_01",
+     "nota": "Escopeta con cinta",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Shotgun_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Shotgun_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1921,
+     "triangulos": 1004
+    },
+    {
+     "paquete": "POLYGON - Farm Pack",
+     "nombre": "SM_Wep_Shotgun_01",
+     "nota": "Escopeta de granja",
+     "ruta": "POLYGON_Farm_SourceFiles_v6.zip/FBX/SM_Wep_Shotgun_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Farm_SourceFiles_v6.zip/FBX/SM_Wep_Shotgun_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1696,
+     "triangulos": 968
+    },
+    {
+     "paquete": "POLYGON - Police Station",
+     "nombre": "SM_Wep_Shotgun_01",
+     "nota": "Escopeta de policía",
+     "ruta": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Wep_Shotgun_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Wep_Shotgun_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 4108,
+     "triangulos": 2350
+    },
+    {
+     "paquete": "POLYGON - Heist Pack",
+     "nombre": "SM_Wep_Shotgun_01",
+     "nota": "Escopeta de corredera",
+     "ruta": "POLYGON_Heist_SourceFiles_v5.zip/FBX/SM_Wep_Shotgun_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Heist_SourceFiles_v5.zip/FBX/SM_Wep_Shotgun_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1012,
+     "triangulos": 584
+    }
+   ]
+  },
+  {
+   "papel": "arma",
+   "titulo": "Fusiles y subfusiles",
+   "porque": "Fusiles de otros paquetes para dar variedad a los de Apocalypse.",
+   "items": [
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Wep_Preset_A_Rifle_01",
+     "nota": "Fusil de asalto con mira",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Preset_A_Rifle_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Preset_A_Rifle_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 5003,
+     "triangulos": 3164
+    },
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Wep_Rifle_01",
+     "nota": "Fusil de madera",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Rifle_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Rifle_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1525,
+     "triangulos": 794
+    },
+    {
+     "paquete": "POLYGON - Police Station",
+     "nombre": "SM_Wep_Rifle_01",
+     "nota": "Fusil de policía",
+     "ruta": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Wep_Rifle_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Wep_Rifle_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 8281,
+     "triangulos": 5226
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_Rifle_01",
+     "nota": "Fusil con cinta azul",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Rifle_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Rifle_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 4045,
+     "triangulos": 2306
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_SubMGun_02",
+     "nota": "Subfusil corto, con dos empuñaduras",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_SubMGun_02.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_SubMGun_02.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1912,
+     "triangulos": 1136
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_SubMGun_03",
+     "nota": "Subfusil con mira",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_SubMGun_03.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_SubMGun_03.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 3811,
+     "triangulos": 2258
+    }
+   ]
+  },
+  {
+   "papel": "objeto",
+   "titulo": "Granadas y bengalas",
+   "porque": "Hoy, la granada que se ve en la mano es la del cinto de Military. Estas son granadas sueltas, hechas para lanzar.",
+   "items": [
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_Grenade_01",
+     "nota": "Granada con cinta",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Grenade_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_Grenade_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 446,
+     "triangulos": 234
+    },
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Wep_Grenade_01",
+     "nota": "Granada de mano",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Grenade_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Grenade_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 286,
+     "triangulos": 148
+    },
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Wep_Grenade_Smoke_01",
+     "nota": "Granada de humo",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Grenade_Smoke_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Wep_Grenade_Smoke_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 158,
+     "triangulos": 90
+    },
+    {
+     "paquete": "POLYGON - Police Station",
+     "nombre": "SM_Wep_Grenade_Flash_01",
+     "nota": "Granada aturdidora",
+     "ruta": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Wep_Grenade_Flash_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Wep_Grenade_Flash_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 444,
+     "triangulos": 248
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Wep_FlareGun_01",
+     "nota": "Pistola de bengalas",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_FlareGun_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Wep_FlareGun_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1044,
+     "triangulos": 596
+    }
+   ]
+  },
+  {
+   "papel": "objeto",
+   "titulo": "Botiquines y curas",
+   "porque": "Para las medicinas y los botiquines: hoy no se ve ninguno en la mano.",
+   "items": [
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Prop_MedicalBox_01",
+     "nota": "Botiquín militar",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Prop_MedicalBox_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Prop_MedicalBox_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 332,
+     "triangulos": 180
+    },
+    {
+     "paquete": "POLYGON - Battle Royale Pack",
+     "nombre": "SM_Prop_MedicalBox_01",
+     "nota": "Botiquín",
+     "ruta": "POLYGON_BattleRoyale_Source_Files_v5.zip/FBX/SM_Prop_MedicalBox_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_BattleRoyale_Source_Files_v5.zip/FBX/SM_Prop_MedicalBox_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 262,
+     "triangulos": 154
+    },
+    {
+     "paquete": "POLYGON - Battle Royale Pack",
+     "nombre": "SM_Prop_Bandage_01",
+     "nota": "Venda",
+     "ruta": "POLYGON_BattleRoyale_Source_Files_v5.zip/FBX/SM_Prop_Bandage_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_BattleRoyale_Source_Files_v5.zip/FBX/SM_Prop_Bandage_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 268,
+     "triangulos": 152
+    },
+    {
+     "paquete": "POLYGON - Gang Warfare Pack",
+     "nombre": "SM_Prop_Syringe_01",
+     "nota": "Jeringa",
+     "ruta": "POLYGON_Gang_Warfare_SourceFiles_v5.zip/FBX/Props/SM_Prop_Syringe_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Gang_Warfare_SourceFiles_v5.zip/FBX/Props/SM_Prop_Syringe_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 209,
+     "triangulos": 120
+    }
+   ]
+  },
+  {
+   "papel": "objeto",
+   "titulo": "Linternas",
+   "porque": "No hay ninguna en el juego.",
+   "items": [
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Prop_Flashlight_01",
+     "nota": "Linterna con cinta",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Prop_Flashlight_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Prop_Flashlight_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 449,
+     "triangulos": 226
+    },
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Prop_Flashlight_03",
+     "nota": "Linterna grande",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Prop_Flashlight_03.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Prop_Flashlight_03.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 225,
+     "triangulos": 130
+    },
+    {
+     "paquete": "POLYGON - Construction Pack",
+     "nombre": "SM_Tool_Torch_01",
+     "nota": "Linterna de obra",
+     "ruta": "POLYGON_Construction_SourceFiles_v5.zip/FBX/SM_Tool_Torch_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Construction_SourceFiles_v5.zip/FBX/SM_Tool_Torch_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 1098,
+     "triangulos": 578
+    },
+    {
+     "paquete": "POLYGON - Police Station",
+     "nombre": "SM_Prop_Flashlight_01",
+     "nota": "Linterna de policía",
+     "ruta": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Prop_Flashlight_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Prop_Flashlight_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 494,
+     "triangulos": 260
+    }
+   ]
+  },
+  {
+   "papel": "objeto",
+   "titulo": "Radios",
+   "porque": "No hay ninguna de mano en el juego.",
+   "items": [
+    {
+     "paquete": "POLYGON - Apocalypse Pack",
+     "nombre": "SM_Item_WalkieTalkie_01",
+     "nota": "Walkie-talkie",
+     "ruta": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Item_WalkieTalkie_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Apocalypse_SourceFiles_v4.zip/FBX/SM_Item_WalkieTalkie_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 398,
+     "triangulos": 202
+    },
+    {
+     "paquete": "POLYGON - Military Pack",
+     "nombre": "SM_Item_WalkieTalkie_01",
+     "nota": "Walkie-talkie militar",
+     "ruta": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Item_WalkieTalkie_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Military_SourceFiles_v5.zip/Fbx/SM_Item_WalkieTalkie_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 446,
+     "triangulos": 234
+    },
+    {
+     "paquete": "POLYGON - Police Station",
+     "nombre": "SM_Prop_WalkieTalkie_01",
+     "nota": "Walkie-talkie de policía",
+     "ruta": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Prop_WalkieTalkie_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Police_Station_SourceFiles_v4.zip/POLYGON_Police_Station_SourceFiles_v4/SourceFiles/FBX/SM_Prop_WalkieTalkie_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 507,
+     "triangulos": 288
+    },
+    {
+     "paquete": "POLYGON - Construction Pack",
+     "nombre": "SM_Item_Radio_01",
+     "nota": "Radio",
+     "ruta": "POLYGON_Construction_SourceFiles_v5.zip/FBX/SM_Item_Radio_01.fbx",
+     "contenido": false,
+     "clave": "POLYGON_Construction_SourceFiles_v5.zip/FBX/SM_Item_Radio_01.fbx",
+     "tipo": "Modelo de POLYGON",
+     "vertices": 358,
+     "triangulos": 214
+    }
+   ]
+  }
+ ]
+}
