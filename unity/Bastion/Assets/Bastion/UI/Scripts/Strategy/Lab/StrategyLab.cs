@@ -257,7 +257,8 @@ namespace Bastion.UI.Strategy
                 return g;
             }
             c.Groups.Add(Group("outfit", "Ropa", "Al azar", "Al azar", "Chaleco de cuero", "Chaleco verde", "Camuflaje y cartuchos", "Chaqueta marrón", "Mangas remendadas", "Cazadora de borrego", "Chaqueta oscura", "Verde oliva", "Jersey amarillo", "Chaleco acolchado", "Ropa de calle", "Chaleco vaquero", "Equipo de asalto", "Chaleco azul", "Chaqueta de policía"));
-            c.Groups.Add(Group("head", "Cabeza", "A cara descubierta", "Casco táctico", "Capucha", "Boina", "Gorra", "Máscara", "A cara descubierta"));
+            // The engine's heads and names (15 since the 0.12.15; «Gorra» became «Gorra con linterna», Lore).
+            c.Groups.Add(Group("head", "Cabeza", "A cara descubierta", Bastion.Engine.HeadIds.All.Select(id => Bastion.Engine.Appearances.Heads[id].Name).ToArray()));
             c.Groups.Add(Group("build", "Complexión", "Normal", "Delgada", "Normal", "Robusta"));
             var swatches = new List<string> { "#5d5a7a", "#6b6b4a", "#7a6a4a", "#4a4f4a", "#4f5f4a", "#6f6f6f", "#2f3236", "#5a3a3a", "#3f4f3a", "#4a5a7a", "#59606a" };
             void Row(string id, string label, string note, bool locked = false) => c.Colors.Add(new ColorRowView { Id = id, Label = label, Note = note, Color = "#5d5a7a", Swatches = new List<string>(swatches), Locked = locked });
@@ -266,7 +267,7 @@ namespace Bastion.UI.Strategy
             Row("torso", "Torso", "como la armadura");
             Row("arms", "Brazos", "como la armadura");
             Row("legs", "Piernas", "como la armadura");
-            Row("trim", "Detalles", "capucha, boina y gorra");
+            Row("trim", "Detalles", "gorras, gorros, capuchas, boina y pañuelo");
             return c;
         }
 

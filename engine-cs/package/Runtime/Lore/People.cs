@@ -42,13 +42,23 @@ namespace Bastion.Engine
             ["survivor6"] = "Cazadora de borrego",
             ["survivor7"] = "Chaqueta oscura",
             ["survivor8"] = "Verde oliva",
+            // The new soldiers' clothes (0.12.15, Arturo, 9/11): survivor1, 3 and 6 with a pack on the back.
+            ["survivor9"] = "Cuero y esterilla",
+            ["survivor10"] = "Camuflaje y fardo",
+            ["survivor11"] = "Borrego y bombonas",
             ["civilian1"] = "Jersey amarillo",
             ["civilian2"] = "Chaleco acolchado",
             ["civilian3"] = "Ropa de calle",
             ["civilian4"] = "Chaleco vaquero",
+            ["civilian5"] = "Vaqueros y mochila",
+            ["civilian6"] = "Sudadera",
+            ["civilian7"] = "Camisa abierta",
+            ["civilian8"] = "Camiseta de tirantes",
             ["police1"] = "Equipo de asalto",
             ["police2"] = "Chaleco azul",
             ["police3"] = "Chaqueta de policía",
+            ["police4"] = "Chaleco antibalas",
+            ["police5"] = "Chaleco táctico",
         };
     }
 }

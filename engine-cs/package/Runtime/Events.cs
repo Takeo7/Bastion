@@ -1033,7 +1033,7 @@ namespace Bastion.Engine
                 Mods = Content.AddMods(u.Mods, new UnitMods()),
                 Kills = u.Kills,
                 CampaignId = u.CampaignId,
-                Appearance = u.Appearance != null ? new Appearance { Primary = u.Appearance.Primary, Secondary = u.Appearance.Secondary, Visor = u.Appearance.Visor, Head = u.Appearance.Head, Build = u.Appearance.Build, Sex = u.Appearance.Sex, Helmet = u.Appearance.Helmet, Torso = u.Appearance.Torso, Arms = u.Appearance.Arms, Legs = u.Appearance.Legs, Character = u.Appearance.Character } : null,
+                Appearance = u.Appearance != null ? new Appearance { Primary = u.Appearance.Primary, Secondary = u.Appearance.Secondary, Visor = u.Appearance.Visor, Head = u.Appearance.Head, Build = u.Appearance.Build, Sex = u.Appearance.Sex, Helmet = u.Appearance.Helmet, Torso = u.Appearance.Torso, Arms = u.Appearance.Arms, Legs = u.Appearance.Legs, Character = u.Appearance.Character, Wardrobe = u.Appearance.Wardrobe } : null,
                 Nickname = u.Nickname,
                 WeaponTier = u.WeaponTier,
                 ArmorTier = u.ArmorTier,

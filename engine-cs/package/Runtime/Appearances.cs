@@ -44,9 +44,18 @@ namespace Bastion.Engine
             [HeadIds.Helmet] = new HeadDef { Id = HeadIds.Helmet, Name = "Casco táctico", Paint = "armour" },
             [HeadIds.Hood] = new HeadDef { Id = HeadIds.Hood, Name = "Capucha", Paint = "trim" },
             [HeadIds.Beret] = new HeadDef { Id = HeadIds.Beret, Name = "Boina", Paint = "trim" },
-            [HeadIds.Cap] = new HeadDef { Id = HeadIds.Cap, Name = "Gorra", Paint = "trim" },
+            [HeadIds.Cap] = new HeadDef { Id = HeadIds.Cap, Name = "Gorra con linterna", Paint = "trim" },
             [HeadIds.Mask] = new HeadDef { Id = HeadIds.Mask, Name = "Máscara", Paint = null },
             [HeadIds.Bare] = new HeadDef { Id = HeadIds.Bare, Name = "A cara descubierta", Paint = null },
+            [HeadIds.VisorHelmet] = new HeadDef { Id = HeadIds.VisorHelmet, Name = "Casco con visera", Paint = "armour" },
+            [HeadIds.EarflapHat] = new HeadDef { Id = HeadIds.EarflapHat, Name = "Gorro con orejeras", Paint = "trim" },
+            [HeadIds.TwoToneCap] = new HeadDef { Id = HeadIds.TwoToneCap, Name = "Gorra de camionero", Paint = "trim" },
+            [HeadIds.GoggleHelmet] = new HeadDef { Id = HeadIds.GoggleHelmet, Name = "Casco con gafas y máscara", Paint = "armour" },
+            [HeadIds.RiotHelmet] = new HeadDef { Id = HeadIds.RiotHelmet, Name = "Casco antidisturbios", Paint = "armour" },
+            [HeadIds.PlainCap] = new HeadDef { Id = HeadIds.PlainCap, Name = "Gorra lisa", Paint = "trim" },
+            [HeadIds.Bandana] = new HeadDef { Id = HeadIds.Bandana, Name = "Pañuelo", Paint = "trim" },
+            [HeadIds.ScarfHood] = new HeadDef { Id = HeadIds.ScarfHood, Name = "Capucha con bufanda", Paint = "trim" },
+            [HeadIds.BucketHat] = new HeadDef { Id = HeadIds.BucketHat, Name = "Gorro de pescador", Paint = "trim" },
         };
 
         /// <summary>Armour pieces with a colour of their own (barracks), head to feet.</summary>
@@ -128,7 +137,8 @@ namespace Bastion.Engine
                 BuildIds.All.Contains(a.Build) &&
                 (a.Sex == null || a.Sex == Sexes.F || a.Sex == Sexes.M) &&
                 ArmorParts.All.All((part) => PartOf(a, part) == null || IsHex(PartOf(a, part))) &&
-                (a.Character == null || CharacterId.IsMatch(a.Character))
+                (a.Character == null || CharacterId.IsMatch(a.Character)) &&
+                (a.Wardrobe == null || (a.Wardrobe >= 1 && a.Wardrobe <= Wardrobe))
             );
         }
 
@@ -158,6 +168,7 @@ namespace Bastion.Engine
                 if (own != null && own.ToLowerInvariant() != PartColor(@out, part).ToLowerInvariant()) SetPart(@out, part, own);
             }
             if (!string.IsNullOrEmpty(a.Character)) @out.Character = a.Character;
+            @out.Wardrobe = a.Wardrobe;
             return @out;
         }
 
@@ -231,6 +242,20 @@ namespace Bastion.Engine
             HeadIds.Bare, HeadIds.Bare, HeadIds.Bare, HeadIds.Cap, HeadIds.Cap, HeadIds.Hood, HeadIds.Beret, HeadIds.Helmet, HeadIds.Mask,
         };
 
+        /// <summary>
+        /// What a soldier of the latest wardrobe starts with on the head (0.12.15): the same share bare and in a cap, and the
+        /// new headgear now and then; the riot helmet only from the barracks.
+        /// </summary>
+        private static readonly IReadOnlyList<string> StartHeadsNow = new[]
+        {
+            HeadIds.Bare, HeadIds.Bare, HeadIds.Bare, HeadIds.Bare, HeadIds.Bare, HeadIds.Cap, HeadIds.Cap, HeadIds.PlainCap,
+            HeadIds.TwoToneCap, HeadIds.Hood, HeadIds.ScarfHood, HeadIds.Beret, HeadIds.Bandana, HeadIds.EarflapHat, HeadIds.BucketHat,
+            HeadIds.Helmet, HeadIds.VisorHelmet, HeadIds.GoggleHelmet, HeadIds.Mask,
+        };
+
+        /// <summary>The wardrobe a soldier born now gets (Appearance.wardrobe): the client's latest list of clothes.</summary>
+        public const int Wardrobe = 1;
+
         /// <summary>FNV-1a: the same number for the same soldier, everywhere.</summary>
         private static uint HashOf(string s)
         {
@@ -244,11 +269,14 @@ namespace Bastion.Engine
         /// The look soldiers have before customization: their player's colour (and their sex, when known). No classes any
         /// more (docs/FASE9.md). With `seed` (the soldier's id), its own head and build, so that a squad of Sidekick figures
         /// isn't eight helmets alike (docs/SIDEKICK.md); without, the look of before, all helmets of a normal build, which
-        /// migrateCampaign recognises.
+        /// migrateCampaign recognises. With `wardrobe` (a soldier born now: Appearances.Wardrobe), it is kept in the look, and
+        /// the head comes from the latest headgear; without, the heads of before, so the look of a soldier already there
+        /// comes out as it was.
         /// </summary>
         /// <remarks>`accent = PLAYER_COLORS[owner]`: a null accent is the player's colour.</remarks>
-        public static Appearance DefaultAppearance(int owner, string? accent = null, string? sex = null, string? seed = null)
+        public static Appearance DefaultAppearance(int owner, string? accent = null, string? sex = null, string? seed = null, int? wardrobe = null)
         {
+            var heads = wardrobe == null ? StartHeads : StartHeadsNow;
             var color = accent ?? Content.PlayerColors[owner];
             uint? h = seed == null ? (uint?)null : HashOf(seed);
             var @out = new Appearance
@@ -256,10 +284,11 @@ namespace Bastion.Engine
                 Primary = Mix(color, "#56605a", 0.55),
                 Secondary = color,
                 Visor = "#9fe3ff",
-                Head = h == null ? HeadIds.Helmet : StartHeads[(int)(h.Value % (uint)StartHeads.Count)],
+                Head = h == null ? HeadIds.Helmet : heads[(int)(h.Value % (uint)heads.Count)],
                 Build = h == null ? BuildIds.Normal : BuildIds.All[(int)((h.Value >> 8) % (uint)BuildIds.All.Count)],
             };
             if (!string.IsNullOrEmpty(sex)) @out.Sex = sex;
+            @out.Wardrobe = wardrobe;
             return @out;
         }
 

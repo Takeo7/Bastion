@@ -157,7 +157,8 @@ namespace Bastion.Engine
         private static bool SameLook(Appearance a, Appearance b)
         {
             return a.Primary == b.Primary && a.Secondary == b.Secondary && a.Visor == b.Visor && a.Head == b.Head && a.Build == b.Build && a.Sex == b.Sex
-                && a.Helmet == b.Helmet && a.Torso == b.Torso && a.Arms == b.Arms && a.Legs == b.Legs && a.Character == b.Character;
+                && a.Helmet == b.Helmet && a.Torso == b.Torso && a.Arms == b.Arms && a.Legs == b.Legs && a.Character == b.Character
+                && a.Wardrobe == b.Wardrobe;
         }
 
         /// <summary>
@@ -188,9 +189,10 @@ namespace Bastion.Engine
             foreach (var s in rookies)
             {
                 var sex = s.Appearance.Sex;
-                var wasDefault = SameLook(s.Appearance, Appearances.DefaultAppearance(s.Owner, null, sex, s.Id));
+                var wardrobe = s.Appearance.Wardrobe;
+                var wasDefault = SameLook(s.Appearance, Appearances.DefaultAppearance(s.Owner, null, sex, s.Id, wardrobe));
                 s.Owner = slot;
-                if (wasDefault) s.Appearance = Appearances.DefaultAppearance(slot, null, sex, s.Id);
+                if (wasDefault) s.Appearance = Appearances.DefaultAppearance(slot, null, sex, s.Id, wardrobe);
                 s.Loadout = new Loadout();
             }
             var recruits = new List<CampaignSoldier>();

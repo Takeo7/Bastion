@@ -168,7 +168,7 @@ namespace Bastion.Engine
                 if (!string.IsNullOrEmpty(r.Name))
                 {
                     s.Name = Quests.Fill(r.Name!, q.Names);
-                    s.Appearance = Appearances.DefaultAppearance(s.Owner, null, SexOfPerson(s.Name), s.Id);
+                    s.Appearance = Appearances.DefaultAppearance(s.Owner, null, SexOfPerson(s.Name), s.Id, s.Appearance.Wardrobe);
                 }
                 if ((r.Rank ?? 0) != 0) Seasoned(s, r.Rank!.Value, rng);
                 if (!string.IsNullOrEmpty(r.Trait)) s.Traits.Add(r.Trait!);

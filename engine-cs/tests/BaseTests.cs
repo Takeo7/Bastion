@@ -861,7 +861,7 @@ namespace Bastion.Engine.Tests
             Run(c, new RecruitCommand());
             var s = c.Soldiers.Last();
             Assert.Empty(s.Board);
-            Assert.Equal(CampaignJsonTests.Write(Appearances.DefaultAppearance(0, null, Content.SexOfName(s.Name), s.Id)), CampaignJsonTests.Write(s.Appearance));
+            Assert.Equal(CampaignJsonTests.Write(Appearances.DefaultAppearance(0, null, Content.SexOfName(s.Name), s.Id, Appearances.Wardrobe)), CampaignJsonTests.Write(s.Appearance));
         }
     }
 }

@@ -111,8 +111,22 @@ namespace Bastion.Engine
         public const string Cap = "cap";
         public const string Mask = "mask";
         public const string Bare = "bare";
+        // 0.12.15 (Arturo, 9/11: «Mochilas y cascos»).
+        public const string VisorHelmet = "visorHelmet";
+        public const string EarflapHat = "earflapHat";
+        public const string TwoToneCap = "twoToneCap";
+        public const string GoggleHelmet = "goggleHelmet";
+        public const string RiotHelmet = "riotHelmet";
+        public const string PlainCap = "plainCap";
+        public const string Bandana = "bandana";
+        public const string ScarfHood = "scarfHood";
+        public const string BucketHat = "bucketHat";
 
-        public static readonly IReadOnlyList<string> All = new[] { Helmet, Hood, Beret, Cap, Mask, Bare };
+        public static readonly IReadOnlyList<string> All = new[]
+        {
+            Helmet, Hood, Beret, Cap, Mask, Bare, VisorHelmet, EarflapHat, TwoToneCap, GoggleHelmet, RiotHelmet, PlainCap, Bandana,
+            ScarfHood, BucketHat,
+        };
     }
 
     /// <summary>Body builds.</summary>

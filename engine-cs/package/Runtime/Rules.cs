@@ -1729,7 +1729,7 @@ namespace Bastion.Engine
             if (Content.Templates[corpse.Template].Team != Teams.Xcom || corpse.Appearance == null) return zombie;
             zombie.RisenFrom = corpse.Id;
             var a = corpse.Appearance;
-            zombie.Appearance = new Appearance { Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex, Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character };
+            zombie.Appearance = new Appearance { Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex, Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character, Wardrobe = a.Wardrobe };
             return zombie;
         }
 

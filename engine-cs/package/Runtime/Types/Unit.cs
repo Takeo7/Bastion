@@ -32,6 +32,12 @@ namespace Bastion.Engine
         public string? Legs { get; set; }
         /// <summary>Which survivor model the soldier is (the client's Synty list, e.g. 'hunter'); unset = picked from the soldier's id.</summary>
         public string? Character { get; set; }
+        /// <summary>
+        /// Which list of clothes the client dresses a soldier from when `character` is unset: unset is the one of 0.12.14
+        /// and before, 1 the one of 0.12.15 (backpacks, police kit, street clothes; Arturo, 9/11). A soldier gets the latest
+        /// when born (Appearances.Wardrobe) and keeps it for good, so the clothes of those already there never change.
+        /// </summary>
+        public int? Wardrobe { get; set; }
     }
 
     /// <summary>Appearance.sex: `'f' | 'm'`.</summary>

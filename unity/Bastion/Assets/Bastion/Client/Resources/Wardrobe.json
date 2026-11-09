@@ -569,6 +569,19 @@
   },
   {
    "piece": "headwear",
+   "id": "bandana",
+   "parts": [
+    "SK_MDRN_CIVL_13_22AHED_HU01"
+   ],
+   "palettes": [
+    "ModernCivilian_06"
+   ],
+   "base": "ModernCivilian_06",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "headwear",
    "id": "beret",
    "parts": [
     "SK_MDRN_CIVL_14_22AHED_HU01"
@@ -582,6 +595,22 @@
   },
   {
    "piece": "headwear",
+   "id": "bucketHat",
+   "parts": [
+    "SK_MDRN_CIVL_12_22AHED_HU01"
+   ],
+   "palettes": [
+    "ModernCivilian_02"
+   ],
+   "base": "ModernCivilian_02",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {
+    "5,5": "616047",
+    "5,6": "a28d6c"
+   }
+  },
+  {
+   "piece": "headwear",
    "id": "cap",
    "parts": [
     "SK_APOC_SURV_02_22AHED_HU01"
@@ -592,6 +621,34 @@
    "base": "ApocalypseSurvivor_02",
    "fallback": "ApocalypseSurvivor_02",
    "paint": {}
+  },
+  {
+   "piece": "headwear",
+   "id": "earflapHat",
+   "parts": [
+    "SK_APOC_SURV_07_22AHED_HU01"
+   ],
+   "palettes": [
+    "ApocalypseSurvivor_03"
+   ],
+   "base": "ApocalypseSurvivor_03",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "headwear",
+   "id": "goggleHelmet",
+   "parts": [
+    "SK_MDRN_POLC_08_22AHED_HU01"
+   ],
+   "palettes": [
+    "ModernPolice_03"
+   ],
+   "base": "ModernPolice_03",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {
+    "8,12": "beaa87"
+   }
   },
   {
    "piece": "headwear",
@@ -629,6 +686,76 @@
     "ApocalypseSurvivor_03"
    ],
    "base": "ApocalypseSurvivor_03",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "headwear",
+   "id": "plainCap",
+   "parts": [
+    "SK_MDRN_CIVL_01_22AHED_HU01"
+   ],
+   "palettes": [
+    "ModernCivilian_01"
+   ],
+   "base": "ModernCivilian_01",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "headwear",
+   "id": "riotHelmet",
+   "parts": [
+    "SK_MDRN_POLC_09_22AHED_HU01"
+   ],
+   "palettes": [
+    "ModernPolice_01"
+   ],
+   "base": "ModernPolice_01",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {
+    "5,5": "4b5d71"
+   }
+  },
+  {
+   "piece": "headwear",
+   "id": "scarfHood",
+   "parts": [
+    "SK_MDRN_CIVL_15_22AHED_HU01"
+   ],
+   "palettes": [
+    "ModernCivilian_06"
+   ],
+   "base": "ModernCivilian_06",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "headwear",
+   "id": "twoToneCap",
+   "parts": [
+    "SK_APOC_SURV_08_22AHED_HU01"
+   ],
+   "palettes": [
+    "ApocalypseSurvivor_05"
+   ],
+   "base": "ApocalypseSurvivor_05",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {
+    "5,5": "5f5645",
+    "5,6": "5e4747"
+   }
+  },
+  {
+   "piece": "headwear",
+   "id": "visorHelmet",
+   "parts": [
+    "SK_APOC_SURV_09_22AHED_HU01"
+   ],
+   "palettes": [
+    "ApocalypseSurvivor_01"
+   ],
+   "base": "ApocalypseSurvivor_02",
    "fallback": "ApocalypseSurvivor_02",
    "paint": {}
   },
@@ -774,6 +901,201 @@
   },
   {
    "piece": "outfit",
+   "id": "civilian5",
+   "parts": [
+    "SK_MDRN_CIVL_01_10TORS_HU01",
+    "SK_MDRN_CIVL_01_11AUPL_HU01",
+    "SK_MDRN_CIVL_01_12AUPR_HU01",
+    "SK_MDRN_CIVL_01_13ALWL_HU01",
+    "SK_MDRN_CIVL_01_14ALWR_HU01",
+    "SK_MDRN_CIVL_01_15HNDL_HU01",
+    "SK_MDRN_CIVL_01_16HNDR_HU01",
+    "SK_MDRN_CIVL_02_17HIPS_HU01",
+    "SK_MDRN_CIVL_02_18LEGL_HU01",
+    "SK_MDRN_CIVL_02_19LEGR_HU01",
+    "SK_MDRN_CIVL_01_20FOTL_HU01",
+    "SK_MDRN_CIVL_01_21FOTR_HU01",
+    "SK_MDRN_CIVL_08_24ABAC_HU01"
+   ],
+   "palettes": [
+    "ModernCivilian_01",
+    "ModernCivilian_01",
+    "ModernCivilian_01",
+    "ModernCivilian_01",
+    "ModernCivilian_01",
+    "ModernCivilian_01",
+    "ModernCivilian_01",
+    "ModernCivilian_02",
+    "ModernCivilian_02",
+    "ModernCivilian_02",
+    "ModernCivilian_01",
+    "ModernCivilian_01",
+    "ModernCivilian_04"
+   ],
+   "base": "ModernCivilian_01",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {
+    "0,0": "a39466",
+    "1,0": "a39466",
+    "2,0": "a39466",
+    "3,0": "a39466",
+    "4,0": "a39466",
+    "5,0": "a39466",
+    "7,0": "85745b",
+    "8,0": "63564a",
+    "12,0": "425850",
+    "13,0": "425850",
+    "2,1": "907b68",
+    "1,2": "78735a",
+    "2,2": "78735a",
+    "1,3": "644a6a",
+    "0,5": "4b5563",
+    "0,6": "85745b",
+    "3,6": "425850",
+    "4,6": "425850",
+    "10,9": "63564a"
+   }
+  },
+  {
+   "piece": "outfit",
+   "id": "civilian6",
+   "parts": [
+    "SK_MDRN_CIVL_15_10TORS_HU01",
+    "SK_MDRN_CIVL_09_11AUPL_HU01",
+    "SK_MDRN_CIVL_09_12AUPR_HU01",
+    "SK_MDRN_CIVL_06_13ALWL_HU01",
+    "SK_MDRN_CIVL_02_14ALWR_HU01",
+    "SK_HUMN_BASE_01_15HNDL_HU01",
+    "SK_MDRN_CIVL_01_16HNDR_HU01",
+    "SK_MDRN_CIVL_11_17HIPS_HU01",
+    "SK_MDRN_CIVL_07_18LEGL_HU01",
+    "SK_MDRN_CIVL_07_19LEGR_HU01",
+    "SK_MDRN_CIVL_11_20FOTL_HU01",
+    "SK_MDRN_CIVL_11_21FOTR_HU01"
+   ],
+   "palettes": [
+    "ModernCivilian_06",
+    "ModernCivilian_06",
+    "ModernCivilian_06",
+    "ModernCivilian_06",
+    "ModernCivilian_06",
+    "ModernCivilian_04",
+    "ModernCivilian_02",
+    "ModernCivilian_03",
+    "ModernCivilian_06",
+    "ModernCivilian_06",
+    "ModernCivilian_03",
+    "ModernCivilian_03"
+   ],
+   "base": "ModernCivilian_06",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {
+    "0,0": "58583b",
+    "1,0": "58583b",
+    "2,0": "58583b",
+    "3,0": "58583b",
+    "4,0": "58583b",
+    "5,0": "58583b",
+    "8,0": "bcb18c",
+    "9,0": "546a7d",
+    "10,0": "546a7d",
+    "11,0": "546a7d",
+    "12,0": "546a7d",
+    "0,1": "a28d6c",
+    "0,5": "bcb18c",
+    "3,5": "546a7d",
+    "4,5": "546a7d",
+    "3,6": "546a7d",
+    "4,6": "546a7d",
+    "3,8": "7a6c5d",
+    "4,8": "7a6c5d"
+   }
+  },
+  {
+   "piece": "outfit",
+   "id": "civilian7",
+   "parts": [
+    "SK_MDRN_CIVL_08_10TORS_HU01",
+    "SK_MDRN_CIVL_08_11AUPL_HU01",
+    "SK_MDRN_CIVL_08_12AUPR_HU01",
+    "SK_MDRN_CIVL_08_13ALWL_HU01",
+    "SK_MDRN_CIVL_08_14ALWR_HU01",
+    "SK_MDRN_CIVL_01_15HNDL_HU01",
+    "SK_MDRN_CIVL_01_16HNDR_HU01",
+    "SK_MDRN_CIVL_10_17HIPS_HU01",
+    "SK_HUMN_BASE_01_18LEGL_HU01",
+    "SK_HUMN_BASE_01_19LEGR_HU01",
+    "SK_MDRN_CIVL_10_20FOTL_HU01",
+    "SK_MDRN_CIVL_10_21FOTR_HU01"
+   ],
+   "palettes": [
+    "ModernCivilian_05",
+    "ModernCivilian_05",
+    "ModernCivilian_05",
+    "ModernCivilian_05",
+    "ModernCivilian_05",
+    "ModernCivilian_01",
+    "ModernCivilian_01",
+    "ModernCivilian_02",
+    "ModernCivilian_02",
+    "ModernCivilian_02",
+    "ModernCivilian_02",
+    "ModernCivilian_02"
+   ],
+   "base": "ModernCivilian_05",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {
+    "0,0": "455b48",
+    "3,0": "455b48",
+    "4,0": "8c6d8a",
+    "9,0": "455b48",
+    "0,1": "8c6d8a",
+    "0,6": "85745b",
+    "3,6": "546a7d",
+    "4,6": "546a7d"
+   }
+  },
+  {
+   "piece": "outfit",
+   "id": "civilian8",
+   "parts": [
+    "SK_MDRN_CIVL_18_10TORS_HU01",
+    "SK_HUMN_BASE_01_11AUPL_HU01",
+    "SK_HUMN_BASE_01_12AUPR_HU01",
+    "SK_HUMN_BASE_01_13ALWL_HU01",
+    "SK_HUMN_BASE_01_14ALWR_HU01",
+    "SK_HUMN_BASE_01_15HNDL_HU01",
+    "SK_HUMN_BASE_01_16HNDR_HU01",
+    "SK_MDRN_CIVL_02_17HIPS_HU01",
+    "SK_MDRN_CIVL_02_18LEGL_HU01",
+    "SK_MDRN_CIVL_02_19LEGR_HU01",
+    "SK_MDRN_CIVL_08_20FOTL_HU01",
+    "SK_MDRN_CIVL_08_21FOTR_HU01"
+   ],
+   "palettes": [
+    "ModernCivilian_03",
+    "ModernCivilian_03",
+    "ModernCivilian_03",
+    "ModernCivilian_03",
+    "ModernCivilian_03",
+    "ModernCivilian_03",
+    "ModernCivilian_03",
+    "ModernCivilian_06",
+    "ModernCivilian_06",
+    "ModernCivilian_06",
+    "ModernCivilian_06",
+    "ModernCivilian_06"
+   ],
+   "base": "ModernCivilian_03",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {
+    "0,0": "936d6f",
+    "1,0": "85745b",
+    "0,1": "85745b"
+   }
+  },
+  {
+   "piece": "outfit",
    "id": "police1",
    "parts": [
     "SK_MDRN_POLC_09_10TORS_HU01",
@@ -907,6 +1229,102 @@
   },
   {
    "piece": "outfit",
+   "id": "police4",
+   "parts": [
+    "SK_MDRN_POLC_04_10TORS_HU01",
+    "SK_MDRN_POLC_02_11AUPL_HU01",
+    "SK_MDRN_POLC_02_12AUPR_HU01",
+    "SK_MDRN_POLC_03_13ALWL_HU01",
+    "SK_MDRN_POLC_03_14ALWR_HU01",
+    "SK_MDRN_POLC_01_15HNDL_HU01",
+    "SK_MDRN_POLC_01_16HNDR_HU01",
+    "SK_MDRN_POLC_03_17HIPS_HU01",
+    "SK_MDRN_POLC_03_18LEGL_HU01",
+    "SK_MDRN_POLC_03_19LEGR_HU01",
+    "SK_MDRN_POLC_02_20FOTL_HU01",
+    "SK_MDRN_POLC_02_21FOTR_HU01",
+    "SK_MDRN_POLC_01_26AHPB_HU01",
+    "SK_MDRN_POLC_01_30ASHR_HU01",
+    "SK_MDRN_POLC_01_31AEBL_HU01",
+    "SK_MDRN_POLC_01_34AKNR_HU01",
+    "SK_MDRN_POLC_01_29ASHL_HU01",
+    "SK_MDRN_POLC_01_33AKNL_HU01",
+    "SK_MDRN_POLC_01_32AEBR_HU01"
+   ],
+   "palettes": [
+    "ModernPolice_09",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_02",
+    "ModernPolice_02",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_01",
+    "ModernPolice_01",
+    "ModernPolice_01",
+    "ModernPolice_03",
+    "ModernPolice_01",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_01"
+   ],
+   "base": "ModernPolice_03",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "outfit",
+   "id": "police5",
+   "parts": [
+    "SK_MDRN_POLC_06_10TORS_HU01",
+    "SK_MDRN_POLC_02_11AUPL_HU01",
+    "SK_MDRN_POLC_02_12AUPR_HU01",
+    "SK_MDRN_POLC_03_13ALWL_HU01",
+    "SK_MDRN_POLC_03_14ALWR_HU01",
+    "SK_MDRN_POLC_01_15HNDL_HU01",
+    "SK_MDRN_POLC_01_16HNDR_HU01",
+    "SK_MDRN_POLC_03_17HIPS_HU01",
+    "SK_MDRN_POLC_02_18LEGL_HU01",
+    "SK_MDRN_POLC_02_19LEGR_HU01",
+    "SK_MDRN_POLC_02_20FOTL_HU01",
+    "SK_MDRN_POLC_02_21FOTR_HU01",
+    "SK_MDRN_POLC_01_29ASHL_HU01",
+    "SK_MDRN_POLC_01_31AEBL_HU01",
+    "SK_MDRN_POLC_01_30ASHR_HU01",
+    "SK_MDRN_POLC_02_26AHPB_HU01",
+    "SK_MDRN_POLC_01_32AEBR_HU01",
+    "SK_MDRN_POLC_05_27AHPL_HU01"
+   ],
+   "palettes": [
+    "ModernPolice_02",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_02",
+    "ModernPolice_02",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_03",
+    "ModernPolice_02",
+    "ModernPolice_02",
+    "ModernPolice_01",
+    "ModernPolice_01",
+    "ModernPolice_03",
+    "ModernPolice_01",
+    "ModernPolice_03",
+    "ModernPolice_01",
+    "ModernPolice_01",
+    "ModernPolice_05"
+   ],
+   "base": "ModernPolice_08",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "outfit",
    "id": "survivor1",
    "parts": [
     "SK_APOC_SURV_01_10TORS_HU01",
@@ -937,6 +1355,80 @@
     "ApocalypseSurvivor_01"
    ],
    "base": "ApocalypseSurvivor_01",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "outfit",
+   "id": "survivor10",
+   "parts": [
+    "SK_APOC_SURV_05_10TORS_HU01",
+    "SK_APOC_SURV_05_11AUPL_HU01",
+    "SK_APOC_SURV_05_12AUPR_HU01",
+    "SK_APOC_SURV_02_13ALWL_HU01",
+    "SK_APOC_SURV_02_14ALWR_HU01",
+    "SK_APOC_SURV_01_15HNDL_HU01",
+    "SK_APOC_SURV_01_16HNDR_HU01",
+    "SK_APOC_SURV_03_17HIPS_HU01",
+    "SK_APOC_SURV_03_18LEGL_HU01",
+    "SK_APOC_SURV_03_19LEGR_HU01",
+    "SK_APOC_SURV_01_20FOTL_HU01",
+    "SK_APOC_SURV_01_21FOTR_HU01",
+    "SK_APOC_SURV_06_24ABAC_HU01"
+   ],
+   "palettes": [
+    "ApocalypseSurvivor_03",
+    "ApocalypseSurvivor_03",
+    "ApocalypseSurvivor_03",
+    "ApocalypseSurvivor_02",
+    "ApocalypseSurvivor_02",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_03",
+    "ApocalypseSurvivor_03",
+    "ApocalypseSurvivor_03",
+    "ApocalypseSurvivor_03",
+    "ApocalypseSurvivor_03",
+    "ApocalypseSurvivor_03"
+   ],
+   "base": "ApocalypseSurvivor_03",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "outfit",
+   "id": "survivor11",
+   "parts": [
+    "SK_APOC_SURV_03_10TORS_HU01",
+    "SK_APOC_SURV_02_11AUPL_HU01",
+    "SK_APOC_SURV_02_12AUPR_HU01",
+    "SK_APOC_SURV_03_13ALWL_HU01",
+    "SK_APOC_SURV_03_14ALWR_HU01",
+    "SK_APOC_SURV_02_15HNDL_HU01",
+    "SK_APOC_SURV_02_16HNDR_HU01",
+    "SK_APOC_SURV_06_17HIPS_HU01",
+    "SK_APOC_SURV_01_18LEGL_HU01",
+    "SK_APOC_SURV_01_19LEGR_HU01",
+    "SK_APOC_SURV_02_20FOTL_HU01",
+    "SK_APOC_SURV_02_21FOTR_HU01",
+    "SK_APOC_SURV_04_24ABAC_HU01"
+   ],
+   "palettes": [
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_04",
+    "ApocalypseSurvivor_04",
+    "ApocalypseSurvivor_04",
+    "ApocalypseSurvivor_04",
+    "ApocalypseSurvivor_02",
+    "ApocalypseSurvivor_02",
+    "ApocalypseSurvivor_02",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_02",
+    "ApocalypseSurvivor_02",
+    "ApocalypseSurvivor_05"
+   ],
+   "base": "ApocalypseSurvivor_04",
    "fallback": "ApocalypseSurvivor_02",
    "paint": {}
   },
@@ -1189,6 +1681,43 @@
     "ApocalypseSurvivor_02",
     "ApocalypseSurvivor_03",
     "ApocalypseSurvivor_02",
+    "ApocalypseSurvivor_02"
+   ],
+   "base": "ApocalypseSurvivor_01",
+   "fallback": "ApocalypseSurvivor_02",
+   "paint": {}
+  },
+  {
+   "piece": "outfit",
+   "id": "survivor9",
+   "parts": [
+    "SK_APOC_SURV_01_10TORS_HU01",
+    "SK_APOC_SURV_03_11AUPL_HU01",
+    "SK_APOC_SURV_03_12AUPR_HU01",
+    "SK_APOC_SURV_03_13ALWL_HU01",
+    "SK_APOC_SURV_03_14ALWR_HU01",
+    "SK_APOC_SURV_01_15HNDL_HU01",
+    "SK_APOC_SURV_01_16HNDR_HU01",
+    "SK_APOC_SURV_01_17HIPS_HU01",
+    "SK_APOC_SURV_01_18LEGL_HU01",
+    "SK_APOC_SURV_01_19LEGR_HU01",
+    "SK_APOC_SURV_03_20FOTL_HU01",
+    "SK_APOC_SURV_03_21FOTR_HU01",
+    "SK_APOC_SURV_07_24ABAC_HU01"
+   ],
+   "palettes": [
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_05",
+    "ApocalypseSurvivor_04",
+    "ApocalypseSurvivor_04",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
+    "ApocalypseSurvivor_01",
     "ApocalypseSurvivor_02"
    ],
    "base": "ApocalypseSurvivor_01",

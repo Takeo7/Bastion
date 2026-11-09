@@ -101,7 +101,7 @@ namespace Bastion.Engine
                 Alive = true,
                 Loadout = new Loadout(),
                 Nickname = "",
-                Appearance = Appearances.DefaultAppearance(owner, null, sex, id),
+                Appearance = Appearances.DefaultAppearance(owner, null, sex, id, Appearances.Wardrobe),
                 Traits = new List<string>(),
             };
             c.Soldiers.Add(s);

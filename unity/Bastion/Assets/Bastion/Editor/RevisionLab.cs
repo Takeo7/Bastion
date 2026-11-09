@@ -284,11 +284,12 @@ namespace Bastion.EditorTools
                 var feet = units.Feet(u.Id);
                 var turn = Quaternion.Euler(0, units.FacingNow(u.Id) ?? 0, 0);
                 // (BASTION_LADO=der: square from its right, on a point 0.7 m ahead of it; =entero, the whole of it from ahead and
-                // to its right, 3.4 m off, on its middle: the dead, who lean.)
+                // to its right, 3.4 m off, on its middle: the dead, who lean; =espalda, from behind and to its right, its back's
+                // depth: a rucksack and the gun over it.)
                 var from = side == "izq" ? new Vector3(-1.5f, 1.45f, 2.1f) : side == "detras" ? new Vector3(0.6f, 1.6f, -2.5f) : side == "der" ? new Vector3(2.8f, 1.3f, 0.7f)
-                    : side == "entero" ? new Vector3(1.3f, 1.1f, 3.1f) : new Vector3(1.5f, 1.45f, 2.1f);
+                    : side == "entero" ? new Vector3(1.3f, 1.1f, 3.1f) : side == "espalda" ? new Vector3(1.9f, 1.35f, -1.5f) : new Vector3(1.5f, 1.45f, 2.1f);
                 near.transform.position = feet + turn * from;
-                near.transform.LookAt(feet + Vector3.up * (side == "entero" ? 0.9f : 1.15f) + (side == "der" ? turn * new Vector3(0, 0, 0.7f) : Vector3.zero));
+                near.transform.LookAt(feet + Vector3.up * (side == "entero" ? 0.9f : 1.15f) + (side == "der" ? turn * new Vector3(0, 0, 0.7f) : side == "espalda" ? turn * new Vector3(0, 0, -0.2f) : Vector3.zero));
                 // (BASTION_LADO=mano: 0.7 m off the right hand, from its right and a little in front, on it.)
                 if (side == "mano")
                 {

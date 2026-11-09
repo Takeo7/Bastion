@@ -27,7 +27,7 @@ namespace Bastion.UI.Strategy
         public static Appearance Copy(Appearance a) => a == null ? null : new Appearance
         {
             Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex,
-            Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character,
+            Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character, Wardrobe = a.Wardrobe,
         };
     }
 
@@ -195,7 +195,7 @@ namespace Bastion.UI.Strategy
             v.Colors.Add(Piece(ArmorParts.Torso, "Torso"));
             v.Colors.Add(Piece(ArmorParts.Arms, "Brazos"));
             v.Colors.Add(Piece(ArmorParts.Legs, "Piernas"));
-            v.Colors.Add(new ColorRowView { Id = "trim", Label = "Detalles", Color = look.Secondary, Swatches = swatches, Note = "capucha, boina y gorra" });
+            v.Colors.Add(new ColorRowView { Id = "trim", Label = "Detalles", Color = look.Secondary, Swatches = swatches, Note = "gorras, gorros, capuchas, boina y pañuelo" });
             v.Colors.Add(new ColorRowView { Id = "mark", Label = "Marca de jugador", Color = PlayerColor(s.Owner), Note = "siempre en tu color", Locked = true, Tip = "La marca brilla siempre en el color de su jugador, para que se sepa de quién es cada soldado." });
             return v;
         }

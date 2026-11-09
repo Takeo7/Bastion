@@ -221,15 +221,26 @@ namespace Bastion.Client.Units
             }
             var chest = a.GetBoneTransform(HumanBodyBones.UpperChest) != null ? HumanBodyBones.UpperChest : HumanBodyBones.Chest;
             var s3 = In(chest);
-            Hang(MainCarry, chest, new Vector3(0, s3.y + 0.02f, s3.z - 0.11f), new Vector3(0.45f, 0.9f, 0), new Vector3(0, 0, -1));
+            // (Over a rucksack, out behind it: SoldierMarks.pack; Arturo, 9/11, the 0.12.15's rucksacks: never through it.)
+            float pack = body.GetComponent<SoldierMarks>() is SoldierMarks marks ? marks.pack : 0;
+            float back = Mathf.Max(0.11f, pack + PackGap);
+            Hang(MainCarry, chest, new Vector3(0, s3.y + 0.02f, s3.z - back), new Vector3(0.45f, 0.9f, 0), new Vector3(0, 0, -1));
             var hipR = In(HumanBodyBones.RightUpperLeg);
             Hang(SidearmCarry, HumanBodyBones.RightUpperLeg, new Vector3(hipR.x + 0.075f, hipR.y - HolsterDrop, hipR.z + 0.01f), new Vector3(0, -1, 0.1f), new Vector3(0, 0, 1));
             var hips = In(HumanBodyBones.Hips);
             var hipL = In(HumanBodyBones.LeftUpperLeg);
             Hang(BeltCarry, HumanBodyBones.Hips, new Vector3(hips.x, hipL.y + 0.03f, hips.z) + BeltOut * BeltOutBy, BeltAlong, Vector3.Cross(BeltOut, BeltAlong));
             // (A blade too big for the belt, the chainsaw: across the back the other way, over the left shoulder, behind the gun.)
-            Hang(SlungCarry, chest, new Vector3(0, s3.y - 0.02f, s3.z - 0.2f), new Vector3(-0.45f, 0.9f, 0), new Vector3(0, 0, -1));
+            Hang(SlungCarry, chest, new Vector3(0, s3.y - 0.02f, s3.z - back - 0.09f), new Vector3(-0.45f, 0.9f, 0), new Vector3(0, 0, -1));
         }
+
+        /// <summary>
+        /// Where the slung gun's middle rides against a rucksack's farthest point along its line (model units): within it, as
+        /// the gun lies across the back slanting, and that point is off its middle (a flask, a rolled mat), as the bare back's
+        /// 0.19 to the gun's 0.11. Looked at from behind and from the side over the four rucksacks (9/11): further out it hung
+        /// in the air, at −0.1 it lies on them and goes through none.
+        /// </summary>
+        static readonly float PackGap = LabFloat("BASTION_HOLGURA_MOCHILA", -0.1f);
 
         /// <summary>
         /// syntyFigures.ts draw and hold: `which` in the hands (one it doesn't carry: the main one), the others where they

@@ -226,7 +226,7 @@ namespace Bastion.Engine
         /// <summary>`{ ...a }`.</summary>
         private static Appearance CopyAppearance(Appearance a)
         {
-            return new Appearance { Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex, Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character };
+            return new Appearance { Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex, Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character, Wardrobe = a.Wardrobe };
         }
 
         /// <summary>Medicines also stop a bite's contagion in the missions (docs/FASE8.md §C): the Enfermería from level 2.</summary>

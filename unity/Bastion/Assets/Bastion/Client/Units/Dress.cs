@@ -24,13 +24,23 @@ namespace Bastion.Client.Units
         public int skin;
         public int hairColor;
 
-        // 0.10.1's tables (syntyManifest.ts OUTFITS, HAIRS, FACES, BEARDS), in their order: `pick` goes by it.
+        // 0.10.1's tables (syntyManifest.ts OUTFITS, HAIRS, FACES, BEARDS), in their order: `pick` goes by it. The 0.12.15's
+        // outfits after them (Arturo, 9/11: Apocalypse Survivors' rucksacks, Modern Police's gear, Modern Civilians' street
+        // clothes), for whoever is born with a wardrobe (Appearance.Wardrobe; Personalizar lists them to all).
         static readonly (string id, string sexes)[] Outfits =
         {
             ("survivor1", "fm"), ("survivor2", "mf"), ("survivor3", "fm"), ("survivor4", "mf"), ("survivor5", "mf"), ("survivor6", "mf"),
             ("survivor7", "mf"), ("survivor8", "fm"), ("civilian1", "fm"), ("civilian2", "mf"), ("civilian3", "mf"), ("civilian4", "fm"),
             ("police1", "mf"), ("police2", "fm"), ("police3", "mf"),
+            ("survivor9", "fm"), ("survivor10", "mf"), ("survivor11", "mf"), ("police4", "mf"), ("police5", "fm"), ("civilian5", "fm"),
+            ("civilian6", "mf"), ("civilian7", "mf"), ("civilian8", "fm"),
         };
+
+        /// <summary>How many of Outfits there were before the 0.12.15: who has no wardrobe (Appearance.Wardrobe) is dressed among them alone, as ever.</summary>
+        const int Before = 15;
+
+        /// <summary>The outfits someone is dressed among when they haven't chosen: with a wardrobe all, without the 0.12.14's.</summary>
+        static IEnumerable<(string id, string sexes)> Dressable(Appearance look) => look?.Wardrobe >= 1 ? Outfits : Outfits.Take(Before);
         static readonly (string id, string sex)[] Hairs =
         {
             ("hairBun", "f"), ("hairBangs", "f"), ("hairSidePony", "f"), ("hairCurls", "f"), ("hairPony", "f"), ("hairLong", "f"), ("hairTopBun", "f"),
@@ -40,7 +50,13 @@ namespace Bastion.Client.Units
         static readonly string[] Faces = { "face1", "face2", "face3", "face4", "face5", "face6", "face7", "face8" };
         static readonly string[] Beards = { "beard1", "beard2", "beard3", "beard4", "beard5", "beard6", "beard7", "beard8" };
         /// <summary>The hair under each headwear (HEADWEAR.hair): HAIR_UNDER's, none (a hood) or the soldier's own (a mask).</summary>
-        static readonly Dictionary<string, string> HairUnder = new Dictionary<string, string> { ["helmet"] = "under", ["hood"] = "none", ["beret"] = "under", ["cap"] = "under", ["mask"] = "own" };
+        static readonly Dictionary<string, string> HairUnder = new Dictionary<string, string>
+        {
+            ["helmet"] = "under", ["hood"] = "none", ["beret"] = "under", ["cap"] = "under", ["mask"] = "own",
+            // (The 0.12.15's, HeadIds.)
+            ["visorHelmet"] = "under", ["earflapHat"] = "under", ["twoToneCap"] = "under", ["goggleHelmet"] = "under", ["riotHelmet"] = "under",
+            ["plainCap"] = "under", ["bandana"] = "under", ["scarfHood"] = "none", ["bucketHat"] = "under",
+        };
         /// <summary>How likely each hair colour is (wardrobe.ts HAIR_ODDS): the dark ones most.</summary>
         static readonly int[] HairOdds = new[] { 4, 4, 3, 1, 1, 1, 1 }.SelectMany((n, i) => Enumerable.Repeat(i, n)).ToArray();
 
@@ -53,7 +69,7 @@ namespace Bastion.Client.Units
             string s = SexOf(look, seed, sex);
             string outfit = Outfits.Any(o => o.id == look?.Character) ? look.Character
                 : seed != null && rostered.TryGetValue(seed, out var worn) ? worn
-                : Pick(Outfits.Where(o => o.sexes.Contains(s)).Select(o => o.id).ToArray(), seed + "|outfit");
+                : Pick(Dressable(look).Where(o => o.sexes.Contains(s)).Select(o => o.id).ToArray(), seed + "|outfit");
             string head = !string.IsNullOrEmpty(look?.Head) ? look.Head : "helmet";
             string headwear = head == "bare" ? null : head;
             string own = Pick(Hairs.Where(h => h.sex == s && h.id != Under(s)).Select(h => h.id).ToArray(), seed + "|hair");
@@ -83,6 +99,18 @@ namespace Bastion.Client.Units
             ["m"] = new[] { "survivor2", "survivor4", "survivor8", "survivor5", "civilian3", "survivor6", "police1", "survivor3", "survivor7", "civilian2", "survivor1", "civilian4", "police3", "civilian1", "police2" },
         };
 
+        /// <summary>
+        /// The order for who is born with a wardrobe (Appearance.Wardrobe 1, the 0.12.15's): the new outfits first, among the
+        /// survivors', then the rest as WearOrder; counted apart from the others, so theirs never change.
+        /// </summary>
+        static readonly Dictionary<string, string[]> NewWearOrder = new Dictionary<string, string[]>
+        {
+            ["f"] = new[] { "survivor9", "civilian5", "police4", "survivor10", "civilian8", "police5", "survivor11", "civilian6", "civilian7",
+                "survivor1", "survivor3", "survivor7", "survivor4", "civilian1", "survivor6", "police2", "survivor2", "civilian4", "survivor8", "survivor5", "civilian2", "police1", "civilian3", "police3" },
+            ["m"] = new[] { "survivor10", "civilian6", "police4", "survivor9", "civilian7", "survivor11", "police5", "civilian5", "civilian8",
+                "survivor2", "survivor4", "survivor8", "survivor5", "civilian3", "survivor6", "police1", "survivor3", "survivor7", "civilian2", "survivor1", "civilian4", "police3", "civilian1", "police2" },
+        };
+
         /// <summary>The campaign's soldiers' outfits when they haven't chosen one (Roster), by campaign id.</summary>
         static readonly Dictionary<string, string> rostered = new Dictionary<string, string>();
 
@@ -100,12 +128,13 @@ namespace Bastion.Client.Units
                 var digits = new string((id ?? "").Where(char.IsDigit).ToArray());
                 return digits.Length > 0 && long.TryParse(digits, out long n) && n <= int.MaxValue ? (int)n : 0;
             }
-            var next = new Dictionary<string, int> { ["f"] = 0, ["m"] = 0 };
+            var next = new Dictionary<string, int> { ["f"] = 0, ["m"] = 0, ["fw"] = 0, ["mw"] = 0 };
             foreach (var s in (soldiers ?? Enumerable.Empty<CampaignSoldier>()).OrderBy(x => Joined(x.Id)))
             {
                 string sex = SexOf(s.Appearance, s.Id);
-                var order = WearOrder[sex == "f" ? "f" : "m"];
-                string key = sex == "f" ? "f" : "m";
+                bool born = s.Appearance?.Wardrobe >= 1;
+                var order = (born ? NewWearOrder : WearOrder)[sex == "f" ? "f" : "m"];
+                string key = (sex == "f" ? "f" : "m") + (born ? "w" : "");
                 rostered[s.Id] = order[next[key]++ % order.Length];
             }
             return before.Count != rostered.Count || rostered.Any(kv => !before.TryGetValue(kv.Key, out var o) || o != kv.Value);

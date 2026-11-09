@@ -140,7 +140,8 @@ namespace Bastion.Client.Units
                 database.GetDbConnection();
             }
             var budget = System.Diagnostics.Stopwatch.StartNew();
-            var pieces = dress.Pieces().Select(p => (p.piece, art: Wardrobe.Piece(p.piece, p.id))).Where(p => p.art != null).ToList();
+            // (What on the head the wardrobe hasn't, as the engine's newer heads before their pieces, left off: bare-headed.)
+            var pieces = dress.Pieces().Select(p => (p.piece, art: p.piece == "headwear" ? Wardrobe.Find(p.piece, p.id) : Wardrobe.Piece(p.piece, p.id))).Where(p => p.art != null).ToList();
             var parts = new Dictionary<string, SkinnedMeshRenderer>();
             foreach (string name in pieces.SelectMany(p => p.art.parts).Distinct())
             {
@@ -157,6 +158,25 @@ namespace Bastion.Client.Units
                 {
                     yield return null;
                     budget.Restart();
+                }
+            }
+            // How far a rucksack (a part on the back, Sidekick's AttachmentBack) stands out behind the upper chest, at rest, where
+            // the slung gun lies across it (Stows: from the upper chest, 2 cm up, along (0.45, 0.9); within PackReach of that
+            // line): the gun goes over it (SoldierMarks.pack). Its farthest point (a flask, a rolled mat) would leave the gun in
+            // the air.
+            float pack = 0;
+            var line = new Vector2(0.45f, 0.9f).normalized;
+            foreach (var kv in parts)
+            {
+                if (!kv.Key.Contains("_24ABAC_") || kv.Value.sharedMesh == null) continue;
+                var chest = kv.Value.bones.FirstOrDefault(b => b != null && b.name == "spine_03");
+                if (chest == null) continue;
+                var at = chest.position + Vector3.up * 0.02f;
+                foreach (var p in kv.Value.sharedMesh.vertices)
+                {
+                    var w = kv.Value.transform.TransformPoint(p);
+                    float off = Mathf.Abs((w.x - at.x) * line.y - (w.y - at.y) * line.x);
+                    if (off <= PackReach) pack = Mathf.Max(pack, PackBehind * (chest.position.z - w.z));
                 }
             }
             yield return null;
@@ -211,6 +231,7 @@ namespace Bastion.Client.Units
             kept.palette = cells;
             kept.bandLeft = marks.left;
             kept.bandRight = marks.right;
+            kept.pack = pack;
             if (shelf == null)
             {
                 shelf = new GameObject("Soldados hechos").transform;
@@ -372,6 +393,12 @@ namespace Bastion.Client.Units
             }
             return moved;
         }
+
+        /// <summary>Which way is behind a Sidekick part at rest, along its z (its figures face +z).</summary>
+        const float PackBehind = 1;
+
+        /// <summary>How far to either side of the slung gun's line a rucksack is measured (model units): the gun's width and some.</summary>
+        const float PackReach = 0.08f;
 
         /// <summary>Whether a Sidekick bone is one of the game's skeleton (convert.py BONES), not one folded into its parent.</summary>
         static bool Kept(string bone) => kept.IsMatch(bone);

@@ -45,6 +45,7 @@ namespace Bastion.Engine.Tests
                 Arms = a.Arms,
                 Legs = a.Legs,
                 Character = a.Character,
+                Wardrobe = a.Wardrobe,
             };
             edit?.Invoke(copy);
             return copy;
@@ -228,7 +229,12 @@ namespace Bastion.Engine.Tests
                 a.Legs = "#6b7d5a";
             });
             Run(c, Customize(s, s.Name, look));
-            Same(With(look, (a) => a.Sex = sex), s.Appearance);
+            // The wardrobe stays the soldier's: the look sent has none.
+            Same(With(look, (a) =>
+            {
+                a.Sex = sex;
+                a.Wardrobe = Appearances.Wardrobe;
+            }), s.Appearance);
 
             // Reset to the default with the pieces sent along unchanged (and no sex, like the barracks' button): what is
             // stored compares equal to the default look, so a promotion or a change of owner still restyles the soldier
@@ -242,7 +248,7 @@ namespace Bastion.Engine.Tests
                 a.Legs = Appearances.PartColor(plain, ArmorParts.Legs);
             });
             Run(c, Customize(s, s.Name, parts));
-            Assert.Equal(JsonOf(Appearances.DefaultAppearance(0, null, sex)), JsonOf(s.Appearance));
+            Assert.Equal(JsonOf(Appearances.DefaultAppearance(0, null, sex, null, Appearances.Wardrobe)), JsonOf(s.Appearance));
 
             Assert.Matches("aspecto", Assert.Throws<InvalidOperationException>(() => Run(c, Customize(s, s.Name, With(plain, (a) => a.Arms = "blue")))).Message);
         }
@@ -296,11 +302,11 @@ namespace Bastion.Engine.Tests
             foreach (var s in solo.Soldiers.Skip(2)) s.Alive = false;
             Run(solo, new RecruitCommand());
             var recruit = solo.Soldiers[solo.Soldiers.Count - 1];
-            Same(Appearances.DefaultAppearance(0, null, SexOf(recruit.Name), recruit.Id), recruit.Appearance);
+            Same(Appearances.DefaultAppearance(0, null, SexOf(recruit.Name), recruit.Id, Appearances.Wardrobe), recruit.Appearance);
             // Written right after the build, like normalizeAppearance stores it, so default looks still compare equal.
-            Assert.Equal(new[] { "primary", "secondary", "visor", "head", "build", "sex" }, Keys(recruit.Appearance));
+            Assert.Equal(new[] { "primary", "secondary", "visor", "head", "build", "sex", "wardrobe" }, Keys(recruit.Appearance));
             Assert.Equal(
-                new[] { "primary", "secondary", "visor", "head", "build", "sex", "legs", "character" },
+                new[] { "primary", "secondary", "visor", "head", "build", "sex", "legs", "character", "wardrobe" },
                 Keys(Appearances.NormalizeAppearance(With(recruit.Appearance, (a) =>
                 {
                     a.Character = "hunter";
@@ -317,7 +323,7 @@ namespace Bastion.Engine.Tests
             foreach (var u in squad)
             {
                 Assert.Equal(SexOf(u.Name), u.Appearance?.Sex);
-                Same(Appearances.DefaultAppearance(u.Owner!.Value, null, SexOf(u.Name), u.Name), u.Appearance);
+                Same(Appearances.DefaultAppearance(u.Owner!.Value, null, SexOf(u.Name), u.Name, Appearances.Wardrobe), u.Appearance);
             }
         }
 
@@ -365,7 +371,7 @@ namespace Bastion.Engine.Tests
             Campaign.AddPlayer(d, 1, new Rng(1));
             var moved = d.Soldiers.Where((x) => x.Owner == 1).ToList();
             Assert.True(moved.Count > 0);
-            foreach (var m in moved) Same(Appearances.DefaultAppearance(1, null, Content.SexOfName(m.Name), m.Id), m.Appearance);
+            foreach (var m in moved) Same(Appearances.DefaultAppearance(1, null, Content.SexOfName(m.Name), m.Id, Appearances.Wardrobe), m.Appearance);
         }
 
         [Fact(DisplayName = "the soldier's sex (playtest 2026-10-13) › every soldier starts with a head and a build of its own, and a campaign of before gets them for the untouched ones (docs/SIDEKICK.md)")]

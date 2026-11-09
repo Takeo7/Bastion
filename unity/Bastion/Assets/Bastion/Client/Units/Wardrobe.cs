@@ -30,10 +30,13 @@ namespace Bastion.Client.Units
         static Dictionary<string, WardrobePiece> pieces;
 
         /// <summary>A piece by its kind and id (outfit survivor4, face face1…).</summary>
-        public static WardrobePiece Piece(string piece, string id)
+        public static WardrobePiece Piece(string piece, string id) => Find(piece, id) ?? throw new ArgumentException($"no {piece} {id} in the wardrobe");
+
+        /// <summary>A piece by its kind and id, or null if the wardrobe has none (a head the engine knows and the client not yet).</summary>
+        public static WardrobePiece Find(string piece, string id)
         {
             if (pieces == null) Load();
-            return pieces.TryGetValue($"{piece}:{id}", out var p) ? p : throw new ArgumentException($"no {piece} {id} in the wardrobe");
+            return pieces.TryGetValue($"{piece}:{id}", out var p) ? p : null;
         }
 
         static void Load()

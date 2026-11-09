@@ -661,7 +661,7 @@ namespace Bastion.UI.Strategy
                     break;
                 case "reset":
                     // Its own look by its id (the engine's): not everyone back in a helmet.
-                    d.Look = Appearances.DefaultAppearance(s.Owner, null, s.Appearance?.Sex, s.Id);
+                    d.Look = Appearances.DefaultAppearance(s.Owner, null, s.Appearance?.Sex, s.Id, s.Appearance?.Wardrobe);
                     DraftChanged();
                     break;
                 case "copy":
@@ -672,11 +672,11 @@ namespace Bastion.UI.Strategy
                         break;
                     }
                     Save(d);
-                    // The same colours on every soldier of this player, each keeping their name, head and build.
+                    // The same colours on every soldier of this player, each keeping their name, head, build and wardrobe.
                     var hat = Appearances.Heads.TryGetValue(d.Look.Head ?? "", out var head) ? head.Paint : null;
                     foreach (var x in c.Soldiers.Where(x => x.Owner == s.Owner && x.Alive && x.Id != s.Id))
                     {
-                        var a = new Appearance { Primary = d.Look.Primary, Secondary = d.Look.Secondary, Visor = d.Look.Visor, Head = x.Appearance?.Head ?? d.Look.Head, Build = x.Appearance?.Build ?? d.Look.Build };
+                        var a = new Appearance { Primary = d.Look.Primary, Secondary = d.Look.Secondary, Visor = d.Look.Visor, Head = x.Appearance?.Head ?? d.Look.Head, Build = x.Appearance?.Build ?? d.Look.Build, Wardrobe = x.Appearance?.Wardrobe };
                         foreach (var piece in ArmorParts.All)
                         {
                             var color = piece == ArmorParts.Helmet && hat != null ? Appearances.PartColor(d.Look, piece) : Appearances.PartOf(d.Look, piece);

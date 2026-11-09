@@ -10,13 +10,15 @@ namespace Bastion.Client.Units
     /// What a soldier's figure is made of, for its paint (SquadTint): which pieces of the body each cell of its palette is
     /// worn on (bits: 1 the headgear, 2 the torso, 3 the arms, 4 the legs; convert.py write_parts, by each vertex's main
     /// bone), the palette as made, and the owner's band's radius round each upper arm (model units). Kept on the figure
-    /// SoldierFigure makes, and so on every copy of it.
+    /// SoldierFigure makes, and so on every copy of it. And how far its rucksack stands out behind its upper chest (model
+    /// units; 0, none): the gun slung across the back goes over it (UnitViews.Stows; Arturo, 9/11: never through it).
     /// </summary>
     public sealed class SoldierMarks : MonoBehaviour
     {
         public int[] cells = new int[256];
         public Color32[] palette = new Color32[256];
         public float bandLeft, bandRight;
+        public float pack;
     }
 
     /// <summary>

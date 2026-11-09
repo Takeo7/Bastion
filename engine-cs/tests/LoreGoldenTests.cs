@@ -168,7 +168,16 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Equipo de asalto", Lore.OutfitNames["police1"]);
             Assert.Equal("Chaleco azul", Lore.OutfitNames["police2"]);
             Assert.Equal("Chaqueta de policía", Lore.OutfitNames["police3"]);
-            Assert.Equal(15, Lore.OutfitNames.Count);
+            Assert.Equal("Cuero y esterilla", Lore.OutfitNames["survivor9"]);
+            Assert.Equal("Camuflaje y fardo", Lore.OutfitNames["survivor10"]);
+            Assert.Equal("Borrego y bombonas", Lore.OutfitNames["survivor11"]);
+            Assert.Equal("Vaqueros y mochila", Lore.OutfitNames["civilian5"]);
+            Assert.Equal("Sudadera", Lore.OutfitNames["civilian6"]);
+            Assert.Equal("Camisa abierta", Lore.OutfitNames["civilian7"]);
+            Assert.Equal("Camiseta de tirantes", Lore.OutfitNames["civilian8"]);
+            Assert.Equal("Chaleco antibalas", Lore.OutfitNames["police4"]);
+            Assert.Equal("Chaleco táctico", Lore.OutfitNames["police5"]);
+            Assert.Equal(24, Lore.OutfitNames.Count);
 
             // objective
             Assert.Equal("la carga", Lore.DefaultItem);

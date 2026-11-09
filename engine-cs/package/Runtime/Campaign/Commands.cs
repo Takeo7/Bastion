@@ -668,6 +668,8 @@ namespace Bastion.Engine
                     // The sex comes with the name: a look sent without it keeps the soldier's.
                     var look = CopyAppearance(m.Appearance);
                     look.Sex = m.Appearance.Sex ?? s.Appearance.Sex;
+                    // The wardrobe is the engine's: whatever the look sent says, the soldier keeps theirs.
+                    look.Wardrobe = s.Appearance.Wardrobe;
                     s.Appearance = Appearances.NormalizeAppearance(look);
                     return CampaignResult.Success();
                 }

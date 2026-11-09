@@ -894,7 +894,7 @@ namespace Bastion.Engine
                     u.Will = stats.Will;
                     u.Armor = stats.Armor;
                     u.Gear = gear;
-                    u.Appearance = Appearances.DefaultAppearance(owner, null, sex, name);
+                    u.Appearance = Appearances.DefaultAppearance(owner, null, sex, name, Appearances.Wardrobe);
                     u.Lines = lines;
                     Armed(u, arms, Content.SpareMags)(u);
                     units.Add(u);
@@ -1129,7 +1129,7 @@ namespace Bastion.Engine
 
         private static Appearance CopyAppearance(Appearance a)
         {
-            return new Appearance { Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex, Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character };
+            return new Appearance { Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex, Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character, Wardrobe = a.Wardrobe };
         }
 
         private static MedicalDetail CopyDetail(MedicalDetail d)

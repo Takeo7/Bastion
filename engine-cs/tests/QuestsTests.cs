@@ -169,7 +169,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(new[] { TraitIds.Scarred }, ibarra.Traits);
             Assert.True(Bars.TotalBars(ibarra.Skills) >= 4);
             // Her model is a woman's, whatever name the recruit drew first.
-            Assert.Equal(CampaignJsonTests.Write(Appearances.DefaultAppearance(ibarra.Owner, null, "f", ibarra.Id)), CampaignJsonTests.Write(ibarra.Appearance));
+            Assert.Equal(CampaignJsonTests.Write(Appearances.DefaultAppearance(ibarra.Owner, null, "f", ibarra.Id, Appearances.Wardrobe)), CampaignJsonTests.Write(ibarra.Appearance));
             // `{ ...ibarra, traits: [] }`
             var plain = JObject.Parse(CampaignJsonTests.Write(ibarra)).ToObject<CampaignSoldier>(CampaignJsonTests.Serializer)!;
             plain.Traits = new List<string>();
