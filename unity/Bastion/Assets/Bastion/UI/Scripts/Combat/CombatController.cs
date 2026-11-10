@@ -143,6 +143,12 @@ namespace Bastion.UI.Combat
         }
         void Send(ClientMessage m) => Message?.Invoke(m);
 
+        /// <summary>
+        /// The host asked for the mission's whole state, as NetLink does on a gap (EventPlayer.Recover, when what is seen
+        /// can't be trusted): its snapshot comes back as a resync (CombatSession.Load). Nothing in the labs.
+        /// </summary>
+        public void AskWhole() => Send(new SyncMessage());
+
         /// <summary>The host turned the last order down: what waited for its events comes back.</summary>
         public void TurnedDown()
         {

@@ -323,14 +323,35 @@ namespace Bastion.Client.Effects
                 due.Add(later[k].what);
                 later.RemoveAt(k);
             }
-            foreach (var what in due) what();
+            // (What fails is over, the error in red.log: a tween whose step fails ends there, and whoever waits for it (a shot,
+            // a throw) goes on; else it failed each frame, the frame stopped there and nothing waited for ended. The review
+            // of 10/11, row 3.)
+            foreach (var what in due)
+            {
+                try
+                {
+                    what();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            }
             finished.Clear();
             for (int k = tweens.Count - 1; k >= 0; k--)
             {
                 var w = tweens[k];
                 w.age += dt;
                 float t = Mathf.Min(1, w.age / w.seconds);
-                w.step(t);
+                try
+                {
+                    w.step(t);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                    t = 1;
+                }
                 if (t < 1) continue;
                 tweens.RemoveAt(k);
                 finished.Add(w);
@@ -339,36 +360,45 @@ namespace Bastion.Client.Effects
             for (int k = 0; k < particles.Count; k++)
             {
                 var p = particles[k];
-                p.age += dt;
-                float t = p.age / p.life;
-                if (t >= 1)
+                // (A particle that fails, its shape gone, is dropped.)
+                try
                 {
-                    DestroyNow(p.obj.gameObject);
-                    continue;
+                    p.age += dt;
+                    float t = p.age / p.life;
+                    if (t >= 1)
+                    {
+                        DestroyNow(p.obj.gameObject);
+                        continue;
+                    }
+                    p.velocity.y -= p.gravity * dt;
+                    if (p.drag > 0) p.velocity *= Mathf.Exp(-p.drag * dt);
+                    var at = p.obj.position + p.velocity * dt;
+                    if (p.gravity > 0 && at.y < p.floor)
+                    {
+                        at.y = p.floor;
+                        p.velocity = new Vector3(p.velocity.x * 0.55f, -p.velocity.y * 0.35f, p.velocity.z * 0.55f);
+                    }
+                    p.obj.position = at;
+                    if (p.sprite) Face(p);
+                    else if (p.spin != Vector3.zero) p.obj.rotation *= Quaternion.Euler(p.spin * dt);
+                    float size = 1 + p.grow * t;
+                    if (p.fades)
+                    {
+                        p.obj.localScale = p.scale * size;
+                        Paint(p.renderer, p.texture, WithAlpha(p.colour, p.opacity * (1 - t * t)));
+                    }
+                    // Pops in, then shrinks away (no fading: Synty's shapes are opaque).
+                    else
+                    {
+                        p.obj.localScale = p.scale * (size * Mathf.Min(1, 0.3f + t * 7) * (1 - t * t * t));
+                        if (p.colourTo is Color to) Paint(p.renderer, null, Color.Lerp(p.colour, to, Mathf.SmoothStep(0, 1, t)));
+                    }
+                    particles[kept++] = p;
                 }
-                particles[kept++] = p;
-                p.velocity.y -= p.gravity * dt;
-                if (p.drag > 0) p.velocity *= Mathf.Exp(-p.drag * dt);
-                var at = p.obj.position + p.velocity * dt;
-                if (p.gravity > 0 && at.y < p.floor)
+                catch (Exception e)
                 {
-                    at.y = p.floor;
-                    p.velocity = new Vector3(p.velocity.x * 0.55f, -p.velocity.y * 0.35f, p.velocity.z * 0.55f);
-                }
-                p.obj.position = at;
-                if (p.sprite) Face(p);
-                else if (p.spin != Vector3.zero) p.obj.rotation *= Quaternion.Euler(p.spin * dt);
-                float size = 1 + p.grow * t;
-                if (p.fades)
-                {
-                    p.obj.localScale = p.scale * size;
-                    Paint(p.renderer, p.texture, WithAlpha(p.colour, p.opacity * (1 - t * t)));
-                }
-                // Pops in, then shrinks away (no fading: Synty's shapes are opaque).
-                else
-                {
-                    p.obj.localScale = p.scale * (size * Mathf.Min(1, 0.3f + t * 7) * (1 - t * t * t));
-                    if (p.colourTo is Color to) Paint(p.renderer, null, Color.Lerp(p.colour, to, Mathf.SmoothStep(0, 1, t)));
+                    Debug.LogException(e);
+                    if (p.obj != null) DestroyNow(p.obj.gameObject);
                 }
             }
             particles.RemoveRange(kept, particles.Count - kept);

@@ -81,6 +81,8 @@ namespace Bastion.Engine
                     {
                         var s = rng.Pick(c.Soldiers.Where(SoldierReady).ToList());
                         s.WoundedDays = 4;
+                        // Out of the chosen squad too: it would leave without them, or with nobody (review of 10/11, #13).
+                        c.Squad = c.Squad.Where((id) => id != s.Id).ToList();
                         Credit(c, 60);
                         Log(c, $"{s.Name} vuelve con heridas del rescate del convoy.", LogTones.Bad);
                     }, (c) => c.Soldiers.Any(SoldierReady)),

@@ -170,6 +170,58 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public async Task AConnectionLostAsItComesLeavesThePortTakingOthers()
+        {
+            // The first connection fails as it comes (here its listener throws; in the game, a socket reset before its
+            // address could be read): it alone goes, noted, and the next is taken (once the port took nobody else).
+            using var host = new TcpHost(0, IPAddress.Loopback);
+            var failed = new TaskCompletionSource<string>();
+            var taken = new TaskCompletionSource<TcpConnection>();
+            int seen = 0;
+            host.Failed += (line) => failed.TrySetResult(line);
+            host.Connected += (c) =>
+            {
+                if (Interlocked.Increment(ref seen) == 1) throw new InvalidOperationException("prueba");
+                taken.TrySetResult(c);
+            };
+            host.Start();
+            var first = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, CancellationToken.None);
+            var firstClosed = ClosedOf(first);
+            first.Start();
+            Assert.StartsWith("conexión perdida al llegar (127.0.0.1:", await Within(failed.Task));
+            await Within(firstClosed);
+            var second = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, CancellationToken.None);
+            second.Start();
+            var server = await Within(taken.Task);
+            var fromSecond = Next(server);
+            second.Send("{\"t\":\"hola\"}");
+            Assert.Equal("{\"t\":\"hola\"}", await Within(fromSecond));
+            second.Close("fin");
+        }
+
+        [Fact]
+        public async Task AConnectionResetAsItComesLeavesThePortTakingOthers()
+        {
+            // A connection reset at once (linger 0: a RST, not a FIN), maybe before the port took it: the next is taken.
+            var (host, _) = Host();
+            using var __ = host;
+            var taken = new TaskCompletionSource<TcpConnection>();
+            host.Connected += (c) => c.Message += (m) => taken.TrySetResult(c);
+            for (int i = 0; i < 5; i++)
+            {
+                using var reset = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                reset.LingerState = new LingerOption(true, 0);
+                reset.Connect(IPAddress.Loopback, host.Port);
+                reset.Close();
+            }
+            var client = await TcpConnection.ConnectAsync("127.0.0.1", host.Port, 5000, CancellationToken.None);
+            client.Start();
+            client.Send("{\"t\":\"hola\"}");
+            await Within(taken.Task);
+            client.Close("fin");
+        }
+
+        [Fact]
         public void APortInUseSaysSo()
         {
             using var first = new TcpHost(0, IPAddress.Loopback);

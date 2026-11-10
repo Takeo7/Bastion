@@ -31,10 +31,11 @@ namespace Bastion.Client.Net.EditorTools
         private const string Shown = "Bastión";
 
         /// <summary>
-        /// Builds/Mac/Bastion.app, signed ad hoc and checked, and Builds/Bastion-Mac.zip to hand it on. Its executable is
-        /// «Bastion»: with the accent, codesign can't seal it («a sealed resource is missing or invalid»). The Finder and the
-        /// menu bar show «Bastión» (CFBundleName, CFBundleDisplayName). Its icon carries the version (AppIcon), put in
-        /// before signing and checked after. A signature or an icon that doesn't check fails the build.
+        /// Builds/Mac/Bastion.app, signed (ad hoc unless BASTION_FIRMA says an identity: Signer) and checked, and
+        /// Builds/Bastion-Mac.zip to hand it on. Its executable is «Bastion»: with the accent, codesign can't seal it («a
+        /// sealed resource is missing or invalid»). The Finder and the menu bar show «Bastión» (CFBundleName,
+        /// CFBundleDisplayName). Its icon carries the version (AppIcon), put in before signing and checked after. A
+        /// signature or an icon that doesn't check fails the build.
         /// </summary>
         public static void Mac()
         {
@@ -45,11 +46,12 @@ namespace Bastion.Client.Net.EditorTools
             if (icon == null) return;
             var plist = Path.Combine(app, "Contents", "Info.plist");
             var zip = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(app)!)!, "Bastion-Mac.zip");
+            var signer = Signer();
             var steps = new[]
             {
                 ("plutil", $"-replace CFBundleName -string {Shown} \"{plist}\""),
                 ("plutil", $"-replace CFBundleDisplayName -string {Shown} \"{plist}\""),
-                ("codesign", $"--force --deep --sign - \"{app}\""),
+                ("codesign", signer == null ? $"--force --deep --sign - \"{app}\"" : $"--force --deep --timestamp --sign \"{signer}\" \"{app}\""),
                 ("codesign", $"--verify --deep --strict --verbose=2 \"{app}\""),
             };
             foreach (var (tool, arguments) in steps)
@@ -57,7 +59,22 @@ namespace Bastion.Client.Net.EditorTools
             if (!AppIcon.Checked(app, icon)) return;
             if (File.Exists(zip)) File.Delete(zip);
             if (!Ran("ditto", $"-c -k --sequesterRsrc --keepParent \"{app}\" \"{zip}\"")) return;
-            Debug.Log($"[red] firma ad hoc comprobada (codesign --verify --deep --strict) · {new FileInfo(zip).Length / (1024 * 1024)} MB → {zip}");
+            Debug.Log($"[red] firma {(signer == null ? "ad hoc" : $"de {signer}")} comprobada (codesign --verify --deep --strict) · {new FileInfo(zip).Length / (1024 * 1024)} MB → {zip}");
+        }
+
+        /// <summary>
+        /// The Mac app's signer (Gameplay, 10/11, to be tried in the 0.12.16): BASTION_FIRMA=&lt;identity&gt;, one of the
+        /// keychain's (`security find-identity -v -p codesigning`: its hash, or its name, «Apple Development: Arturo Wagener
+        /// (SWRT945VV4)»), signs it with that one and Apple's timestamp (still valid once the certificate expires, 5/11/2027);
+        /// unset, empty or «-», ad hoc as before (null). With an identity, what macOS keeps of the app (the signature's
+        /// requirement: the identifier, Apple's chain and the certificate's name) is the same from one version to the next,
+        /// not the hash of its code, which ad hoc it is: so the firewall and the local network may stop asking at each one.
+        /// Gatekeeper takes it as it took the ad hoc one: neither is Developer ID nor notarized («Abrir igualmente»).
+        /// </summary>
+        private static string? Signer()
+        {
+            var id = (Environment.GetEnvironmentVariable("BASTION_FIRMA") ?? "").Trim();
+            return id.Length == 0 || id == "-" ? null : id;
         }
 
         /// <summary>

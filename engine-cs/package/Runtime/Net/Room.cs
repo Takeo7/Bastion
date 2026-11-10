@@ -303,6 +303,9 @@ namespace Bastion.Net
 
         // ---------------------------------------------------------- connections
 
+        /// <summary>A line for red.log from the host's port (from any thread): a connection that failed as it came.</summary>
+        public void Note(string line) => Post(() => store.Log(line));
+
         /// <summary>A player's app connected (from any thread): before it says anything.</summary>
         public void Connect(IConnection socket)
         {
@@ -340,6 +343,13 @@ namespace Bastion.Net
             }
             if (msg is HelloMessage hello)
             {
+                // One seat per connection: a second hello on it (our app never sends one once welcomed) would move it to
+                // another seat and leave the first held by nobody. A hello refused (a name in use) can be followed by another.
+                if (link.Seat != null)
+                {
+                    Send(link.Socket, new ErrorMessage { Message = "Ya tienes un puesto en esta partida." });
+                    return;
+                }
                 link.Seat = Join(link.Socket, hello);
                 return;
             }

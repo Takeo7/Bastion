@@ -38,6 +38,23 @@ spctl -a -vv -t exec packages/desktop/dist/release/mac-arm64/Bastion.app
 
 `spctl` tiene que decir `accepted` y `source=Notarized Developer ID`. A partir de ahí, macOS recuerda los permisos de una versión a la siguiente.
 
+## La app de Unity en el Mac (0.12.16, a prueba)
+
+`AppBuild.Mac` firma *ad hoc*, como la de Electron, salvo que `BASTION_FIRMA` nombre una identidad del llavero (`security find-identity -v -p codesigning`), por su hash o por su nombre:
+
+```bash
+BASTION_FIRMA="Apple Development: Arturo Wagener (SWRT945VV4)" unity/tools/unity.sh -executeMethod Bastion.Client.Net.EditorTools.AppBuild.Mac
+```
+
+- Con identidad, firma con el sello de tiempo de Apple (`--timestamp`, hace falta red), así que la firma sigue valiendo cuando caduque el certificado (5/11/2027). Sin la variable, o con `-`, *ad hoc*.
+- Lo que macOS guarda de la app ya no es el hash del código, que cambia en cada versión, sino el identificador, la cadena de Apple y el nombre del certificado:
+  ```
+  identifier "com.takeo7.bastion.unity" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: Arturo Wagener (SWRT945VV4)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */
+  ```
+  Al renovar el certificado, el nombre no cambia. Por eso el cortafuegos y la red local deberían dejar de preguntar en cada versión. Falta probarlo.
+- Gatekeeper la trata igual que a la *ad hoc*: `spctl` → `rejected`, `origin=Apple Development: …`. No es Developer ID ni está notarizada, así que en otro Mac se abre igual que hoy: la primera vez que se abre cada versión descargada, «Abrir igualmente».
+- Comprobado el 10/11 sobre una copia de la 0.12.15: la firma tarda 9 s y no pide nada (el llavero deja a `codesign` usar la clave, como al firmar la de iOS); `codesign --verify --deep --strict` pasa.
+
 ## Linux (desde la 0.2.7)
 
 Se construye desde el Mac: `npx electron-builder --config electron-builder.json --linux`, en `packages/desktop`. Salen tres formatos x64 (el `.deb` desde la 0.2.8):

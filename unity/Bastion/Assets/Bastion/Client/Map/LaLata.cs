@@ -679,10 +679,27 @@ namespace Bastion.Client.Map
                 float used = Mathf.Min(dt, left);
                 m.t += used;
                 dt -= used;
-                m.step(m.seconds > 0 ? Mathf.Clamp01(m.t / m.seconds) : 1);
+                // (A motion that fails is over, the error in red.log, its `done` given all the same: DepartAsync waits for
+                // it, and failing each frame it never came; the review of 10/11, row 3.)
+                try
+                {
+                    m.step(m.seconds > 0 ? Mathf.Clamp01(m.t / m.seconds) : 1);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                    m.t = m.seconds;
+                }
                 if (m.t < m.seconds) return;
                 motions.Dequeue();
-                m.done?.Invoke();
+                try
+                {
+                    m.done?.Invoke();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
                 if (dt <= 0 && motions.Count > 0 && motions.Peek().seconds > 0) return;
             }
         }

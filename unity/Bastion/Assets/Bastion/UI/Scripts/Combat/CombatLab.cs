@@ -489,6 +489,12 @@ namespace Bastion.UI.Combat
                         case "intro":
                             control.Intro();
                             break;
+                        case "recarga":
+                            // The whole state again, as a reconnection's or a resync's (CombatSession.Load), with what plays
+                            // half way: it must end without applying anything on it (Gameplay's review of 10/11, row 2).
+                            Debug.Log($"[lab] recarga: el estado entero otra vez, con {(player != null && player.Busy ? "sucesos a medias" : "nada a medias")}");
+                            player?.Load(control.State);
+                            break;
                         case "lejos":
                             // The camera off to a corner of the map, as a player who looked elsewhere (no TakeControl: not the player's).
                             control.Rig.Focus(Board.TileToWorld(control.State, new Pos { X = 4, Y = 4 }), true);

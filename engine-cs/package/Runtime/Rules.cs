@@ -1785,7 +1785,8 @@ namespace Bastion.Engine
             error = null;
             var u = Grid.GetUnit(s, id);
             if (u == null || !u.Alive) error = "Esa unidad no existe o está fuera de combate.";
-            else if (u.Team != Teams.Xcom) error = "No puedes dar órdenes a esa unidad.";
+            // A captive, or an objective, is nobody's to order: the VIP has no owner, so it would be everyone's (review of 10/11, #12).
+            else if (u.Team != Teams.Xcom || u.Captive || u.Objective) error = "No puedes dar órdenes a esa unidad.";
             else if (u.Automaton != null) error = "Va sola: nadie le da órdenes.";
             else if (!Content.CommandsFor(slot, u.Owner, connected)) error = "Es de la escuadra del otro jugador.";
             else if (!Paths.HasTurnLeft(u)) error = "Ese soldado no tiene acciones ni movimiento.";

@@ -909,22 +909,44 @@ namespace Bastion.Client.Units
             bool landed = false;
             _ = StrokeOn(v, target, () =>
             {
+                if (landed) return;
                 landed = true;
                 onHit?.Invoke();
             }, ct);
             while (!landed && !ct.IsCancellationRequested) await Awaitable.NextFrameAsync(ct);
         }
 
-        async Awaitable StrokeOn(View v, View target, Action onHit, CancellationToken ct)
+        /// <summary>
+        /// The stroke, on by itself (Strike). One that fails (a bone missing, a clip not loaded, its figure gone) lands all
+        /// the same, the error in red.log: Strike waits for `land`, and the blow's damage shows with it (the review of
+        /// 10/11, row 3: else the combat waited for it for ever).
+        /// </summary>
+        async Awaitable StrokeOn(View v, View target, Action land, CancellationToken ct)
         {
             v.striking = true;
             try
             {
-                await Swing(v, target, onHit, ct);
+                await Swing(v, target, land, ct);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
             }
             finally
             {
                 v.striking = false;
+                if (!ct.IsCancellationRequested)
+                {
+                    try
+                    {
+                        land();
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
+                }
             }
         }
 

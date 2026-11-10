@@ -39,6 +39,7 @@ namespace Bastion.Net
                 c.Ended.ContinueWith((t) => open.TryRemove(c, out _));
                 room.Connect(c);
             };
+            tcp.Failed += room.Note;
         }
 
         /// <summary>The port it listens on.</summary>

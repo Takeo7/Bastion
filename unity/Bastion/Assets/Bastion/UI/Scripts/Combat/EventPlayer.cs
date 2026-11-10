@@ -272,14 +272,58 @@ namespace Bastion.UI.Combat
         static UnitViews Units => UnitViews.Current;
         static Fx Effects => Fx.Current;
 
-        /// <summary>A whole state (a snapshot): what is seen starts from it, the figures with it, and whatever was waiting goes.</summary>
+        /// <summary>
+        /// A whole state (a snapshot: the mission's start, a return, a resync): what is seen starts from it, the figures with
+        /// it, and whatever was waiting goes. What was playing from before (an animation half way) ends on its own and then
+        /// applies and touches nothing (Round.Load; Gameplay's review of 10/11, row 2: it applied its event on this state,
+        /// which had it already); and what earlier events left for later ones is forgotten.
+        /// </summary>
         public void Load(GameState state)
         {
+            loads++;
             queue.Clear();
+            playing = false;
+            current = null;
+            Forget();
             control.Aboard.Clear();
             control.View = Events.CloneState(state);
             ShowSeen(true);
             See();
+            Pace();
+        }
+
+        /// <summary>Which whole state what is seen comes from: each Load moves it on.</summary>
+        int loads;
+
+        /// <summary>What events leave for the ones after them (a whole state came, Load): nothing owed, no shot over a shoulder, no group.</summary>
+        void Forget()
+        {
+            if (killCam != null)
+            {
+                killCam = null;
+                control.Rig?.EndCloseShot();
+            }
+            killHold = null;
+            biting = false;
+            myPending = 0;
+            holdAfter = 0;
+            lastActor = null;
+            resultHold = 0;
+            groupFrame = null;
+            grouped = false;
+            walking = false;
+            groupPlans = null;
+            walked.Clear();
+            lastShot = null;
+            lastAttacker = null;
+            lastUsed = null;
+            biteTick = false;
+            burnt.Clear();
+            medicineHeal = false;
+            medicineCure = false;
+            itemFell = false;
+            enemyFrom = null;
+            failed = 0;
         }
 
         /// <summary>The figures and the fog of war (Arte's) as `View` is now; `instant`, the fog at once (a snapshot), else fading.</summary>
@@ -299,66 +343,46 @@ namespace Bastion.UI.Combat
             if (!playing) _ = Pump();
         }
 
+        /// <summary>
+        /// The events in the queue, one go round after another (Step), till none is left. A go round that goes wrong is said
+        /// and mended (Recover), and the next one plays: before (Gameplay's review of 10/11, row 1), only the event's own play
+        /// was guarded (PlaySafe), and anything else that threw ended the pump without a word, the events left in the queue
+        /// and the enemy's turn on screen for good, so nobody could give orders till they reconnected. A whole state coming
+        /// (Load) ends it where it is: a new pump plays what comes after.
+        /// </summary>
         async Awaitable Pump()
         {
             playing = true;
+            var load = loads;
             try
             {
-                while (queue.Count > 0 && !stop.IsCancellationRequested)
+                while (queue.Count > 0 && !stop.IsCancellationRequested && load == loads)
                 {
                     Pace();
-                    var item = queue.Dequeue();
-                    // (The next blow of any of the dead on the same soldier stays over a shoulder, from one to the next: one way in at
-                    // the first and one out after the last; Ana, Arturo 01/11 #5.)
-                    if (killCam != null && NewAction(item.e) && !(biting && BlowOnKillCam(item.e))) EndKillCam();
-                    // The enemy's turn's walks, all at once (Choreograph).
-                    if (item.e is WalksEvent walks)
+                    var r = new Round(load);
+                    var item = Take(r);
+                    try
                     {
-                        await PlayWalks(walks, item.by, item.epoch);
-                        continue;
+                        await Step(r, item);
+                        failed = 0;
                     }
-                    // The dead that only walk this turn come last (ai.ts), and walk all at once, under one framing.
-                    var walkers = WalkingWith(item);
-                    if (walkers.Count > 0)
+                    catch (OperationCanceledException)
                     {
-                        walkers.Insert(0, item);
-                        await PlayGroup(walkers);
-                        continue;
+                        throw;
                     }
-                    // Arrivals, or contacts, of the same moment play together too (playtest 18/10 #6).
-                    var moment = SameMoment(item);
-                    if (moment.Count > 0)
+                    catch (Exception err)
                     {
-                        moment.Insert(0, item);
-                        await PlayTogether(moment);
-                        continue;
-                    }
-                    var took = Time.time;
-                    await BeforeActing(item.e);
-                    var epoch = control.Rig != null ? control.Rig.Epoch : 0;
-                    current = item.e;
-                    await PlaySafe(item);
-                    current = null;
-                    NoteResult(item.e);
-                    await Settle(item.e, item.by, false, epoch);
-                    if (Rhythm && Time.time - took > 0.3f) Debug.Log($"[ritmo] {item.e.T} {UnitOf(item.e)}: {Time.time - took:0.0} s");
-                    // The enemy's turn begins: what follows it, in the order it is to be seen.
-                    if (item.e is TurnBeganEvent began && began.Team == Teams.Alien) Choreograph();
-                    // The one it killed has fallen: a moment more over the shoulder (on one of ours, longer), then back.
-                    if (killCam != null && item.e is DiedEvent fell && fell.Unit == killCam)
-                    {
-                        await Wait(killHold ?? (Unit(fell.Unit)?.Team == Teams.Xcom ? DeathHold : KillHold));
-                        killHold = null;
-                        EndKillCam();
-                    }
-                    // What a blast does to everyone in it plays at once (playtest 15/10 #16).
-                    if (item.e is ExplosiveEvent)
-                    {
-                        var blast = BlastResults();
-                        if (blast.Count > 0) await PlayBlast(blast);
+                        // (A whole state came since it began: nothing of it is mended on that one.)
+                        if (r.Load != loads)
+                        {
+                            Debug.LogException(err);
+                            break;
+                        }
+                        Recover(r, item, err);
                     }
                 }
-                EndKillCam();
+                if (load != loads) return;
+                Guarded(EndKillCam);
                 // The last enemy attack of the turn is read too, before the turn changes hands.
                 if (resultHold > 0)
                 {
@@ -373,20 +397,209 @@ namespace Bastion.UI.Combat
             }
             finally
             {
-                playing = false;
-                current = null;
-                grouped = false;
-                Pace();
+                // (After a Load, the pump that plays is the new state's.)
+                if (load == loads)
+                {
+                    playing = false;
+                    current = null;
+                    grouped = false;
+                    Pace();
+                }
             }
-            if (stop.IsCancellationRequested) return;
-            control.Refresh();
-            // The routes planned without the command, walked one by one now that everything has been seen (18/10 #3).
-            if (planDue)
+            if (stop.IsCancellationRequested || load != loads) return;
+            Guarded(() =>
             {
-                planDue = false;
-                control.StartFollowing();
+                control.Refresh();
+                // The routes planned without the command, walked one by one now that everything has been seen (18/10 #3).
+                if (planDue)
+                {
+                    planDue = false;
+                    control.StartFollowing();
+                }
+                control.FollowPlans();
+            });
+        }
+
+        /// <summary>One go round the pump: `item` and whatever plays with it (a walk of the dead, a moment's arrivals, a blast's results), seen and settled.</summary>
+        async Awaitable Step(Round r, (GameEvent e, int? by, int epoch) item)
+        {
+            // (The next blow of any of the dead on the same soldier stays over a shoulder, from one to the next: one way in at
+            // the first and one out after the last; Ana, Arturo 01/11 #5.)
+            if (killCam != null && NewAction(item.e) && !(biting && BlowOnKillCam(item.e))) EndKillCam();
+            // The enemy's turn's walks, all at once (Choreograph).
+            if (item.e is WalksEvent walks)
+            {
+                await PlayWalks(r, walks, item.by, item.epoch);
+                return;
             }
-            control.FollowPlans();
+            // The dead that only walk this turn come last (ai.ts), and walk all at once, under one framing.
+            var walkers = WalkingWith(r, item);
+            if (walkers.Count > 0)
+            {
+                walkers.Insert(0, item);
+                await PlayGroup(r, walkers);
+                return;
+            }
+            // Arrivals, or contacts, of the same moment play together too (playtest 18/10 #6).
+            var moment = SameMoment(r, item);
+            if (moment.Count > 0)
+            {
+                moment.Insert(0, item);
+                await PlayTogether(r, moment);
+                return;
+            }
+            var took = Time.time;
+            await BeforeActing(item.e);
+            Fresh(r);
+            var epoch = control.Rig != null ? control.Rig.Epoch : 0;
+            current = item.e;
+            await PlaySafe(item);
+            Fresh(r);
+            current = null;
+            NoteResult(item.e);
+            await Settle(r, item.e, item.by, epoch);
+            if (Rhythm && Time.time - took > 0.3f) Debug.Log($"[ritmo] {item.e.T} {UnitOf(item.e)}: {Time.time - took:0.0} s");
+            // The enemy's turn begins: what follows it, in the order it is to be seen.
+            if (item.e is TurnBeganEvent began && began.Team == Teams.Alien) Choreograph();
+            // The one it killed has fallen: a moment more over the shoulder (on one of ours, longer), then back.
+            if (killCam != null && item.e is DiedEvent fell && fell.Unit == killCam)
+            {
+                await Wait(killHold ?? (Unit(fell.Unit)?.Team == Teams.Xcom ? DeathHold : KillHold));
+                Fresh(r);
+                killHold = null;
+                EndKillCam();
+            }
+            // What a blast does to everyone in it plays at once (playtest 15/10 #16).
+            if (item.e is ExplosiveEvent)
+            {
+                var blast = BlastResults(r);
+                if (blast.Count > 0) await PlayBlast(r, blast);
+            }
+        }
+
+        /// <summary>
+        /// One go round the pump (Step): what it took off the queue, what of it View has already, what has been left behind
+        /// (Leave) and settled whole (After), and the whole state it began on (Load: if another has come since, it stops at
+        /// the next Fresh and touches nothing more).
+        /// </summary>
+        sealed class Round
+        {
+            public readonly int Load;
+            public readonly List<(GameEvent e, int? by, int epoch)> Taken = new List<(GameEvent, int?, int)>();
+            public readonly List<GameEvent> Applied = new List<GameEvent>();
+            public readonly List<GameEvent> Left = new List<GameEvent>();
+            public readonly List<GameEvent> Done = new List<GameEvent>();
+            public Round(int load) => Load = load;
+        }
+
+        /// <summary>A whole state came while a go round was half way (Load): it ends there, as a cancel does.</summary>
+        sealed class Reloaded : OperationCanceledException
+        {
+        }
+
+        /// <summary>After something awaited in a go round: on, unless a whole state has come since.</summary>
+        void Fresh(Round r)
+        {
+            if (r.Load != loads) throw new Reloaded();
+        }
+
+        /// <summary>The next event off the queue, for the go round `r`.</summary>
+        (GameEvent e, int? by, int epoch) Take(Round r)
+        {
+            var q = queue.Dequeue();
+            r.Taken.Add(q);
+            return q;
+        }
+
+        /// <summary>An event on View, for the go round `r`.</summary>
+        void Apply(Round r, GameEvent e)
+        {
+            Events.ApplyEvent(V, e);
+            r.Applied.Add(e);
+        }
+
+        /// <summary>Go rounds gone wrong in a row (Recover); the second asks the host for the whole state.</summary>
+        int failed;
+        /// <summary>When the host was last asked for the whole state (AskWhole), on this machine's clock; at most once every AskEvery seconds.</summary>
+        float askedAt = float.NegativeInfinity;
+        const float AskEvery = 30;
+
+        /// <summary>
+        /// A go round went wrong outside the event's own play (the camera, the sight, the dead walking together, a blast, the
+        /// enemy's turn's order): said, here and in red.log (the app's errors go to the host's), with the event; what of its
+        /// events View hasn't got applied and left behind as it would have been, the figures, the map and the HUD with them;
+        /// and the pump goes on. The second go round in a row that goes wrong, or a failure mending this one, asks the host
+        /// for the whole state (its snapshot comes back as a Load).
+        /// </summary>
+        void Recover(Round r, (GameEvent e, int? by, int epoch) item, Exception err)
+        {
+            Debug.LogException(err);
+            failed++;
+            grouped = false;
+            walking = false;
+            groupPlans = null;
+            walked.Clear();
+            current = null;
+            resultHold = 0;
+            var all = r.Taken.SelectMany(q => q.e is WalksEvent w ? w.Items : new List<(GameEvent e, int? by, int epoch)> { q }).ToList();
+            var left = all.Where(q => !r.Left.Contains(q.e)).ToList();
+            var whole = failed >= 2;
+            var rebuild = false;
+            foreach (var (e, by, _) in left)
+            {
+                try
+                {
+                    rebuild |= Leave(r, e, by, r.Applied.Contains(e));
+                    if (e is TurnBeganEvent began) Began(began);
+                }
+                catch (Exception again)
+                {
+                    // View lacks it, or has it half: only the host's whole state mends that.
+                    Debug.LogException(again);
+                    whole = true;
+                }
+            }
+            // One's own events that weren't settled whole: nothing is owed for them any more.
+            myPending = Math.Max(0, myPending - all.Count(q => q.by == control.MySlot && !r.Done.Contains(q.e)));
+            try
+            {
+                EndKillCam();
+                if (rebuild) Bastion.Client.Map.MapView.Current?.Rebuild(Events.CloneState(V));
+                ShowSeen();
+                See();
+                control.Refresh();
+            }
+            catch (Exception again)
+            {
+                Debug.LogException(again);
+                whole = true;
+            }
+            var ask = whole && Time.realtimeSinceStartup - askedAt >= AskEvery;
+            Debug.LogError($"[sucesos] Falló al enseñar {item.e.T} ({err.GetType().Name}; {failed} seguidas): {left.Count} de sus {all.Count} sucesos a la vista sin enseñar, y se sigue{(ask ? "; se pide al anfitrión el estado entero" : "")}");
+            if (!ask) return;
+            askedAt = Time.realtimeSinceStartup;
+            control.AskWhole();
+        }
+
+        /// <summary>`act` with whatever it throws said, not lost (the pump's ends, outside its go rounds).</summary>
+        static void Guarded(Action act)
+        {
+            try
+            {
+                act();
+            }
+            catch (Exception err)
+            {
+                Debug.LogException(err);
+            }
+        }
+
+        /// <summary>BASTION_FALLO_SUCESOS=Settle (the labs): that step of the pump throws, every time, to see the turn come back (Recover).</summary>
+        static readonly string FailAt = System.Environment.GetEnvironmentVariable("BASTION_FALLO_SUCESOS");
+
+        static void Fail(string step)
+        {
+            if (FailAt == step) throw new InvalidOperationException($"fallo de prueba en {step} (BASTION_FALLO_SUCESOS)");
         }
 
         /// <summary>One event played, whatever goes wrong in it.</summary>
@@ -415,6 +628,7 @@ namespace Bastion.UI.Combat
         /// </summary>
         async Awaitable BeforeActing(GameEvent e)
         {
+            Fail("BeforeActing");
             if (FollowUp(e)) return;
             var hold = resultHold;
             resultHold = 0;
@@ -484,6 +698,7 @@ namespace Bastion.UI.Combat
         /// <summary>An enemy attack just played: its result is to be read before the next thing starts.</summary>
         void NoteResult(GameEvent e)
         {
+            Fail("NoteResult");
             if (V.ActiveTeam != Teams.Alien) return;
             if (e is ShotEvent s)
             {
@@ -507,7 +722,7 @@ namespace Bastion.UI.Combat
         /// dead with nobody in reach after those going for the squad, so theirs come in one run at the end of the turn. A
         /// door one of them opens on its way (its tileChanged and its noise) stays in the run (playtest 17/10 #46).
         /// </summary>
-        List<(GameEvent e, int? by, int epoch)> WalkingWith((GameEvent e, int? by, int epoch) item)
+        List<(GameEvent e, int? by, int epoch)> WalkingWith(Round r, (GameEvent e, int? by, int epoch) item)
         {
             var run = new List<(GameEvent, int?, int)>();
             if (!DeadWalker(item.e)) return run;
@@ -521,7 +736,7 @@ namespace Bastion.UI.Combat
                 else if (e is TileChangedEvent || e is NoiseEvent) n++;
                 else break;
             }
-            for (var i = 0; i < last; i++) run.Add(queue.Dequeue());
+            for (var i = 0; i < last; i++) run.Add(Take(r));
             return run;
         }
 
@@ -530,8 +745,9 @@ namespace Bastion.UI.Combat
         /// go, a still moment, and they all walk at once, each one's actions as one stretch, a little quicker. The doors they
         /// open go first, at once.
         /// </summary>
-        async Awaitable PlayGroup(List<(GameEvent e, int? by, int epoch)> all)
+        async Awaitable PlayGroup(Round r, List<(GameEvent e, int? by, int epoch)> all)
         {
+            Fail("PlayGroup");
             var v = V;
             var doors = all.Where(q => !(q.e is MovedEvent)).ToList();
             var items = all.Where(q => q.e is MovedEvent).ToList();
@@ -543,6 +759,7 @@ namespace Bastion.UI.Combat
                 var first = lastActor == null;
                 lastActor = "walkers";
                 await Wait(Math.Max(first ? 0 : Between, hold));
+                Fresh(r);
                 var points = new List<Vector3>();
                 foreach (var q in shown)
                 {
@@ -556,7 +773,7 @@ namespace Bastion.UI.Combat
                 await ShowEnemy(points);
             }
             else if (hold > 0) await Wait(hold);
-            await SettleAll(doors.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
+            await SettleAll(r, doors.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
             // Each one's walks as one: its two actions a single stretch, no stop between.
             var walks = new Dictionary<string, MovedEvent>();
             var order = new List<string>();
@@ -580,14 +797,18 @@ namespace Bastion.UI.Combat
             }
             finally
             {
-                grouped = false;
-                groupPlans = null;
-                current = null;
+                if (r.Load == loads)
+                {
+                    grouped = false;
+                    groupPlans = null;
+                    current = null;
+                }
             }
+            Fresh(r);
             // All of them where they stopped before the view syncs (playtest 21/10 #21: they walked in, vanished, and came
             // back all at once).
-            foreach (var q in items) Events.ApplyEvent(V, q.e);
-            await SettleAll(items.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
+            foreach (var q in items) Apply(r, q.e);
+            await SettleAll(r, items.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
         }
 
         /// <summary>
@@ -653,6 +874,7 @@ namespace Bastion.UI.Combat
         /// </summary>
         void Choreograph()
         {
+            Fail("Choreograph");
             var v = V;
             var all = queue.ToList();
             var end = all.FindIndex(q => q.e is TurnBeganEvent || q.e is MissionEndedEvent);
@@ -856,8 +1078,9 @@ namespace Bastion.UI.Combat
         /// on the way, all at the same time, planned so nobody walks through anybody. All of them stand where they stopped
         /// before the view takes it; the newcomers are called out once; and the camera comes back for the attacks.
         /// </summary>
-        async Awaitable PlayWalks(WalksEvent w, int? by, int epoch)
+        async Awaitable PlayWalks(Round r, WalksEvent w, int? by, int epoch)
         {
+            Fail("PlayWalks");
             var v = V;
             var points = new List<Vector3>();
             foreach (var q in w.Items)
@@ -878,10 +1101,11 @@ namespace Bastion.UI.Combat
                 framed = await FrameAll(points);
             }
             else if (hold > 0) await Wait(hold);
+            Fresh(r);
             // The doors they open on their way, first and at once (playtest 17/10 #46): a door and the noise it makes.
             var doorTiles = w.Items.Where(q => q.e is TileChangedEvent).Select(q => ((TileChangedEvent)q.e).Pos).ToList();
             var doors = new HashSet<(GameEvent, int?, int)>(w.Items.Where(q => q.e is TileChangedEvent || q.e is NoiseEvent n && doorTiles.Any(t => Grid.SamePos(t, n.Tile))));
-            await SettleAll(w.Items.Where(doors.Contains).Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
+            await SettleAll(r, w.Items.Where(doors.Contains).Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
             // Each walker's whole walk for the plan; each plays its own stretches, with what befalls it between them.
             var whole = w.Chains.Select(c => c.Where(q => q.e is MovedEvent).Select(q => (MovedEvent)q.e).ToList())
                 .Select(ms => new MovedEvent { Unit = ms[0].Unit, Path = ms.SelectMany(x => x.Path).ToList(), Ap = ms.Sum(x => x.Ap), Run = ms.Any(x => x.Run == true) ? true : (bool?)null }).ToList();
@@ -899,18 +1123,23 @@ namespace Bastion.UI.Combat
             }
             finally
             {
-                grouped = false;
-                walking = false;
-                groupPlans = null;
-                walked.Clear();
-                current = null;
+                if (r.Load == loads)
+                {
+                    grouped = false;
+                    walking = false;
+                    groupPlans = null;
+                    walked.Clear();
+                    current = null;
+                }
             }
+            Fresh(r);
             // All of them where they stopped before the view syncs (playtest 21/10 #21).
             var settleFrom = Time.time;
             var rest = w.Items.Where(q => !doors.Contains(q)).ToList();
-            foreach (var q in rest) Events.ApplyEvent(V, q.e);
-            await SettleAll(rest.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
+            foreach (var q in rest) Apply(r, q.e);
+            await SettleAll(r, rest.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
             await AnnounceSighted(rest.FirstOrDefault(q => q.e is MovedEvent).e ?? w, by, before, epoch);
+            Fresh(r);
             Debug.Log($"[ritmo] paseos: encuadre {walkFrom - from:0.0} s, andar {settleFrom - walkFrom:0.0} s, después {Time.time - settleFrom:0.0} s");
             // The attacks next, one by one, the camera on each (BeforeActing): out of this framing, and nearer again.
             groupFrame = null;
@@ -968,18 +1197,19 @@ namespace Bastion.UI.Combat
         /// The arrivals (`spawned`) or the contacts (`podActivated`) that follow `item`, of its kind: seen at once (playtest
         /// 18/10 #6); and those boarding La Lata, gone by its door at once (Arturo, 31/10 #1).
         /// </summary>
-        List<(GameEvent e, int? by, int epoch)> SameMoment((GameEvent e, int? by, int epoch) item)
+        List<(GameEvent e, int? by, int epoch)> SameMoment(Round r, (GameEvent e, int? by, int epoch) item)
         {
             var run = new List<(GameEvent, int?, int)>();
             var kind = item.e.GetType();
             if (!(item.e is SpawnedEvent) && !(item.e is PodActivatedEvent) && !(item.e is EvacuatedEvent)) return run;
-            while (queue.Count > 0 && queue.Peek().e.GetType() == kind) run.Add(queue.Dequeue());
+            while (queue.Count > 0 && queue.Peek().e.GetType() == kind) run.Add(Take(r));
             return run;
         }
 
         /// <summary>A moment's arrivals or contacts at once: one framing over all of them in sight, then each plays at the same time.</summary>
-        async Awaitable PlayTogether(List<(GameEvent e, int? by, int epoch)> all)
+        async Awaitable PlayTogether(Round r, List<(GameEvent e, int? by, int epoch)> all)
         {
+            Fail("PlayTogether");
             var v = V;
             var points = new List<Vector3>();
             foreach (var q in all)
@@ -993,6 +1223,7 @@ namespace Bastion.UI.Combat
                 }
             }
             if (points.Count > 0 && (v.ActiveTeam == Teams.Alien || all.Any(q => q.by == control.MySlot))) await ShowEnemy(points);
+            Fresh(r);
             grouped = true;
             current = all[0].e;
             var plays = all.Select(PlaySafe).ToList();
@@ -1002,15 +1233,23 @@ namespace Bastion.UI.Combat
             }
             finally
             {
-                grouped = false;
-                current = null;
+                if (r.Load == loads)
+                {
+                    grouped = false;
+                    current = null;
+                }
             }
+            Fresh(r);
             // All of them aboard: La Lata goes, before the boarding is on the view (as one alone does: EvacuatedEvent).
-            if (all[0].e is EvacuatedEvent && !NextBoards()) await LataLeaves();
+            if (all[0].e is EvacuatedEvent && !NextBoards())
+            {
+                await LataLeaves();
+                Fresh(r);
+            }
             foreach (var q in all)
             {
                 NoteResult(q.e);
-                await Settle(q.e, q.by, false, q.epoch);
+                await Settle(r, q.e, q.by, q.epoch);
             }
         }
 
@@ -1076,20 +1315,21 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>What a blast leaves on everyone it caught, right after its `explosive`, taken off the queue; none unless at least two.</summary>
-        List<(GameEvent e, int? by, int epoch)> BlastResults()
+        List<(GameEvent e, int? by, int epoch)> BlastResults(Round r)
         {
             var all = queue.ToList();
             var n = 0;
             while (n < all.Count && (all[n].e is DamagedEvent || all[n].e is DiedEvent || all[n].e is InfectedEvent || all[n].e is StunnedEvent)) n++;
             var run = new List<(GameEvent, int?, int)>();
             if (n < 2) return run;
-            for (var i = 0; i < n; i++) run.Add(queue.Dequeue());
+            for (var i = 0; i < n; i++) run.Add(Take(r));
             return run;
         }
 
         /// <summary>A blast's results at once (playtest 15/10 #16): everyone it caught is hit together, then all who die fall together.</summary>
-        async Awaitable PlayBlast(List<(GameEvent e, int? by, int epoch)> items)
+        async Awaitable PlayBlast(Round r, List<(GameEvent e, int? by, int epoch)> items)
         {
+            Fail("PlayBlast");
             grouped = true;
             try
             {
@@ -1104,21 +1344,25 @@ namespace Bastion.UI.Combat
             }
             finally
             {
-                grouped = false;
-                current = null;
+                if (r.Load == loads)
+                {
+                    grouped = false;
+                    current = null;
+                }
             }
+            Fresh(r);
             foreach (var q in items)
             {
                 NoteResult(q.e);
-                await Settle(q.e, q.by, false, q.epoch);
+                await Settle(r, q.e, q.by, q.epoch);
             }
         }
 
         /// <summary>What a played event leaves behind (game.ts settle): View has it, the figures, the sight and the HUD follow.</summary>
         /// <remarks>`epoch`: the camera's as the event began to play (none: now); the player who moved it since keeps it.</remarks>
-        Awaitable Settle(GameEvent e, int? by, bool applied = false, int? epoch = null)
+        Awaitable Settle(Round r, GameEvent e, int? by, int? epoch = null)
         {
-            return SettleAll(new List<(GameEvent, int?, int?)> { (e, by, epoch) }, applied);
+            return SettleAll(r, new List<(GameEvent, int?, int?)> { (e, by, epoch) }, false);
         }
 
         /// <summary>
@@ -1128,13 +1372,15 @@ namespace Bastion.UI.Combat
         /// (`applied`), the state is the same from one to the next, and so is what was seen: the newcomers' callout comes with
         /// the first, as it did. Otherwise each is applied in turn, and the callout says all that they showed.
         /// </summary>
-        async Awaitable SettleAll(List<(GameEvent e, int? by, int? epoch)> items, bool applied)
+        async Awaitable SettleAll(Round r, List<(GameEvent e, int? by, int? epoch)> items, bool applied)
         {
+            Fresh(r);
+            Fail("Settle");
             if (items.Count == 0) return;
             // Who was in sight until these events, for the newcomers' callouts (AnnounceSighted).
             var before = new HashSet<string>(V.Units.Where(a => a.Alive && a.Team == Teams.Alien && control.Visible(a)).Select(a => a.Id));
             var rebuild = false;
-            foreach (var (e, by, _) in items) rebuild |= Leave(e, by, applied);
+            foreach (var (e, by, _) in items) rebuild |= Leave(r, e, by, applied);
             // A door, a wall, a floor changed: the map rebuilds those tiles and what stood on them (Arte's MapView.Rebuild);
             // a siege's door or barricade struck, its wear (the bags knocked off, MapBuilder.DrawSiege); a search, what was
             // searched as it stays (mapView.ts searchedSeen: the furniture open, the crate, the boot, the shop's shelves).
@@ -1151,18 +1397,24 @@ namespace Bastion.UI.Combat
             }
             var (first, firstBy, firstEpoch) = items[0];
             await AnnounceSighted(first, firstBy, before, firstEpoch ?? (control.Rig != null ? control.Rig.Epoch : 0));
-            foreach (var (e, by, _) in items) await After(e, by);
+            foreach (var (e, by, _) in items)
+            {
+                Fresh(r);
+                await After(e, by);
+                r.Done.Add(e);
+            }
+            Fresh(r);
         }
 
         /// <summary>
         /// What one event leaves behind but the map, the sight and the HUD (SettleAll): View has it (unless `applied`), and
         /// what it says, the plans, the backpack. Whether the map has to be drawn again.
         /// </summary>
-        bool Leave(GameEvent e, int? by, bool applied)
+        bool Leave(Round r, GameEvent e, int? by, bool applied)
         {
             var call = V.EvacCall;
             var floorBefore = new HashSet<string>((V.Dropped ?? new List<DroppedLoot>()).Select(d => d.Id));
-            if (!applied) Events.ApplyEvent(V, e);
+            if (!applied) Apply(r, e);
             if (e is PodSplitEvent split) splitFrom[split.Into] = split.Pod;
             // A soldier falls and their rucksack stays on the floor (#49), said once.
             if (e is DiedEvent died && (V.Dropped ?? new List<DroppedLoot>()).Any(d => d.From == died.Unit && !floorBefore.Contains(d.Id)) && Unit(died.Unit) is Unit fallen) Log(Lore.FallenPackLine(fallen.Name), "#ff8a78");
@@ -1187,6 +1439,7 @@ namespace Bastion.UI.Combat
             }
             else if (e is CommandPassedEvent cp && cp.To == control.MySlot) planDue = true;
             else if (e is MovedEvent || e is DiedEvent || e is EvacuatedEvent) control.DropPlan(UnitOf(e));
+            r.Left.Add(e);
             return e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent || e is SearchedEvent || e is RoomSearchedEvent || e is BoardsRemovedEvent;
         }
 
@@ -1201,19 +1454,22 @@ namespace Bastion.UI.Combat
                 control.Rig?.RestoreZoom();
                 control.Refresh();
             }
-            if (e is TurnBeganEvent began)
+            if (e is TurnBeganEvent began) Began(began);
+        }
+
+        /// <summary>A turn's beginning settled (After; or mended, Recover): nobody acting last, no framing, the space bar let go for ours.</summary>
+        void Began(TurnBeganEvent began)
+        {
+            lastActor = null;
+            groupFrame = null;
+            // The space bar hurries the enemy's turn only.
+            if (began.Team == Teams.Xcom) hurry = false;
+            // How long the enemy's turn took on screen, in the battle's time (as at normal speed, «Rápida» or not), for the log.
+            if (began.Team == Teams.Alien) enemyFrom = Time.time;
+            else if (enemyFrom != null)
             {
-                lastActor = null;
-                groupFrame = null;
-                // The space bar hurries the enemy's turn only.
-                if (began.Team == Teams.Xcom) hurry = false;
-                // How long the enemy's turn took on screen, in the battle's time (as at normal speed, «Rápida» or not), for the log.
-                if (began.Team == Teams.Alien) enemyFrom = Time.time;
-                else if (enemyFrom != null)
-                {
-                    Debug.Log($"[ritmo] turno enemigo en pantalla: {Time.time - enemyFrom.Value:0.0} s");
-                    enemyFrom = null;
-                }
+                Debug.Log($"[ritmo] turno enemigo en pantalla: {Time.time - enemyFrom.Value:0.0} s");
+                enemyFrom = null;
             }
         }
 

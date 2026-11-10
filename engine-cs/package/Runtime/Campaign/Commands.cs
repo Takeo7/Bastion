@@ -617,7 +617,8 @@ namespace Bastion.Engine
                 case LaunchCommand m:
                 {
                     if (c.ActiveMission == null) return CampaignResult.Failure("Primero elegid una misión.");
-                    if (m.Ready && c.Squad.Count == 0) return CampaignResult.Failure("La escuadra está vacía.");
+                    // Those who can go, not those chosen: one chosen and no longer fit stays behind (BuildSquad).
+                    if (m.Ready && BuildSquad(c).Count == 0) return CampaignResult.Failure("La escuadra está vacía.");
                     if (m.Ready && c.Event != null) return CampaignResult.Failure("Antes hay que decidir qué hacer con el acontecimiento.");
                     c.LaunchReady[slot] = m.Ready;
                     if (m.Ready && EveryoneReady(c.LaunchReady, ctx.Connected))

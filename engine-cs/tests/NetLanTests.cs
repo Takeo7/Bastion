@@ -67,9 +67,35 @@ namespace Bastion.Engine.Tests
         [InlineData("{\"game\":\"bastion-tcp\",\"port\":\"3000\"}")]
         [InlineData("{\"game\":\"bastion-tcp\",\"port\":70000}")]
         [InlineData("{\"game\":\"bastion-tcp\",\"port\":0}")]
+        // Once these threw, and listening stopped until the app was opened again.
+        [InlineData("{\"game\":{\"a\":1},\"port\":3000}")]
+        [InlineData("{\"game\":[\"bastion-tcp\"],\"port\":3000}")]
+        [InlineData("{\"game\":\"bastion-tcp\",\"port\":123456789012345678901234567890}")]
+        [InlineData("[1,2,3]")]
         public void AnythingElseOnThePortIsIgnored(string text)
         {
             Assert.Null(LanBeacon.Read(Encoding.UTF8.GetBytes(text), IPAddress.Loopback));
+        }
+
+        [Fact]
+        public async Task AStrangePacketDoesNotStopTheListening()
+        {
+            // A packet of another program, or one made by hand, then a game: the game is heard.
+            int udp = FreeUdpPort();
+            var heard = new TaskCompletionSource<IReadOnlyList<LanGame>>();
+            using var listen = LanBeacon.Listen((games) => { if (games.Count > 0) heard.TrySetResult(games); }, null, udp);
+            using (var other = new UdpClient(AddressFamily.InterNetwork))
+            {
+                foreach (var text in new[] { "{\"game\":{\"a\":1},\"port\":3000}", "{\"game\":\"bastion-tcp\",\"port\":123456789012345678901234567890}" })
+                {
+                    var data = Encoding.UTF8.GetBytes(text);
+                    await other.SendAsync(data, data.Length, new IPEndPoint(IPAddress.Loopback, udp));
+                }
+            }
+            using var announce = LanBeacon.Announce(3999, "mac-de-arturo", "1.0.0", () => (new[] { "Arturo" }, "lobby"), udp);
+            var done = await Task.WhenAny(heard.Task, Task.Delay(5000));
+            Assert.True(done == heard.Task, "nothing heard in 5 s");
+            Assert.EndsWith(":3999", (await heard.Task).Single().Address);
         }
 
         [Fact]

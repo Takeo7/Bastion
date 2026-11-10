@@ -116,7 +116,7 @@ namespace Bastion.UI.Combat
             // «estado» the picked one's actions and movement left, and what is armed, in the log (#14 of 5/11).
             if (what == "estado")
             {
-                Debug.Log($"[lab] estado: {control.LabState()}");
+                Debug.Log($"[lab] estado: {control.LabState()}; turno {control.State.Turn} de {control.State.ActiveTeam}, en pantalla de {control.Shown.ActiveTeam}, {(control.CanAct() ? "se puede dar órdenes" : "sin órdenes")}, listos {string.Join("/", control.State.Ready)}, lo que se ve {(Bastion.Net.Json.Write(control.Shown) == Bastion.Net.Json.Write(control.State) ? "igual" : "distinto")} que el estado");
                 return true;
             }
             // «rotulo=a3» a click on another target's odds over its flag, aiming (#11 of 5/11).

@@ -260,10 +260,15 @@ namespace Bastion.Engine
             return FullMoves(u) > 0 && left >= CostOrtho && left - cost < CostOrtho;
         }
 
-        /// <summary>Whether `u` has anything left this turn: an action, or movement (Arturo, 5/11: the movement in stretches, before and after acting).</summary>
+        /// <summary>
+        /// Whether `u` has anything left this turn: an action, or movement for a step (Arturo, 5/11: the movement in
+        /// stretches, before and after acting). Less than a tile of it is none, as in SpendsAll: a step over barbed wire
+        /// (Content.Traps.Wire, 3) leaves an odd point, and that point kept the soldier in play and the turn open until
+        /// «Hecho» (review of 10/11, #14).
+        /// </summary>
         public static bool HasTurnLeft(Unit u)
         {
-            return u.Ap > 0 || (MoveBudget(u) > 0 && FullMoves(u) > 0);
+            return u.Ap > 0 || (MoveBudget(u) >= CostOrtho && FullMoves(u) > 0);
         }
 
         /// <summary>

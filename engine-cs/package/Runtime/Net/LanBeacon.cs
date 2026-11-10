@@ -137,39 +137,64 @@ namespace Bastion.Net
                     {
                         got = await udp.ReceiveAsync().ConfigureAwait(false);
                     }
+                    catch (Exception e)
+                    {
+                        // Stopped (Dispose). Anything else (Windows reports an earlier packet's ICMP as a reset here) is
+                        // that one's: after a breath, the next.
+                        if (cancel.IsCancellationRequested || e is ObjectDisposedException) return;
+                        try
+                        {
+                            await Task.Delay(100, cancel.Token).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            return;
+                        }
+                        continue;
+                    }
+                    // One packet, whatever it brings (another program's, one made by hand) or whatever the list's listener
+                    // does with it: it alone is dropped, and listening goes on (once a strange one stopped it until the
+                    // app was opened again, and «Unirse» found nothing).
+                    try
+                    {
+                        var game = Read(got.Buffer, got.RemoteEndPoint.Address);
+                        if (game == null) continue;
+                        string from = got.RemoteEndPoint.Address.ToString();
+                        // A game of this machine arrives twice (broadcast and loopback): one entry, with its network address if there is one.
+                        bool local = own.Contains(from);
+                        int gamePort = int.Parse(game.Address.Substring(game.Address.LastIndexOf(':') + 1));
+                        if (local && skip != null && skip(gamePort)) continue;
+                        string key = local ? $"local:{gamePort}" : game.Address;
+                        lock (gate)
+                        {
+                            if (from == "127.0.0.1" && games.TryGetValue(key, out var before)) game.Address = before.game.Address;
+                            games[key] = (game, DateTime.UtcNow);
+                        }
+                        Emit();
+                    }
                     catch (Exception)
                     {
-                        return;
+                        /* that packet only */
                     }
-                    var game = Read(got.Buffer, got.RemoteEndPoint.Address);
-                    if (game == null) continue;
-                    string from = got.RemoteEndPoint.Address.ToString();
-                    // A game of this machine arrives twice (broadcast and loopback): one entry, with its network address if there is one.
-                    bool local = own.Contains(from);
-                    int gamePort = int.Parse(game.Address.Substring(game.Address.LastIndexOf(':') + 1));
-                    if (local && skip != null && skip(gamePort)) continue;
-                    string key = local ? $"local:{gamePort}" : game.Address;
-                    lock (gate)
-                    {
-                        if (from == "127.0.0.1" && games.TryGetValue(key, out var before)) game.Address = before.game.Address;
-                        games[key] = (game, DateTime.UtcNow);
-                    }
-                    Emit();
                 }
             });
             _ = Task.Run(async () =>
             {
-                try
+                while (!cancel.IsCancellationRequested)
                 {
-                    while (!cancel.IsCancellationRequested)
+                    try
                     {
                         await Task.Delay(1000, cancel.Token).ConfigureAwait(false);
                         Emit();
                     }
-                }
-                catch (OperationCanceledException)
-                {
-                    /* stopped */
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                    catch (Exception)
+                    {
+                        /* a listener that threw: the list still loses the games gone */
+                    }
                 }
             });
             return new Stop(() =>
@@ -179,25 +204,27 @@ namespace Bastion.Net
             });
         }
 
-        /// <summary>An announcement, or null if it is not one of ours (anything else arriving on the port is ignored).</summary>
+        /// <summary>
+        /// An announcement, or null if it is not one of ours: anything else arriving on the port is ignored, and nothing in
+        /// it throws (a `game` that is an object, a port past a long's).
+        /// </summary>
         public static LanGame? Read(byte[] data, IPAddress from)
         {
-            JObject b;
             try
             {
-                b = JObject.Parse(Encoding.UTF8.GetString(data));
+                var b = JObject.Parse(Encoding.UTF8.GetString(data));
+                if (b["game"]?.Type != JTokenType.String || (string?)b["game"] != Game || b["port"]?.Type != JTokenType.Integer) return null;
+                long port = (long)b["port"]!;
+                if (port <= 0 || port > 65535) return null;
+                static string Text(JToken? v, int max) => v?.Type == JTokenType.String ? Cut((string)v!, max) : "";
+                var players = b["players"] is JArray list ? list.Take(2).Select((p) => Text(p, 32)).ToList() : new List<string>();
+                string name = Text(b["name"], 32);
+                return new LanGame { Name = name.Length > 0 ? name : from.ToString(), Address = $"{from}:{port}", Players = players, Phase = Text(b["phase"], 16), Version = Text(b["version"], 16) };
             }
             catch (Exception)
             {
                 return null;
             }
-            if ((string?)b["game"] != Game || b["port"]?.Type != JTokenType.Integer) return null;
-            long port = (long)b["port"]!;
-            if (port <= 0 || port > 65535) return null;
-            static string Text(JToken? v, int max) => v?.Type == JTokenType.String ? Cut((string)v!, max) : "";
-            var players = b["players"] is JArray list ? list.Take(2).Select((p) => Text(p, 32)).ToList() : new List<string>();
-            string name = Text(b["name"], 32);
-            return new LanGame { Name = name.Length > 0 ? name : from.ToString(), Address = $"{from}:{port}", Players = players, Phase = Text(b["phase"], 16), Version = Text(b["version"], 16) };
         }
 
         private static string Cut(string s, int max)

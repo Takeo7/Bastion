@@ -222,6 +222,26 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void ASecondHelloOnASeatedConnectionIsRefused()
+        {
+            // Our app never sends one once welcomed; a client made by hand could, and would move to the other seat leaving
+            // the first held by nobody. It keeps its seat and the connection, and no seat is made.
+            using var rig = new Rig();
+            var ana = rig.Join("Ana");
+            Assert.Equal(0, (int)ana.Take("welcome").Single()["slot"]!);
+            rig.Say(ana, new { t = "hello", name = "Pepe", version = "1.0.0" });
+            Assert.Equal("Ya tienes un puesto en esta partida.", (string?)ana.Take("error").Single()["message"]);
+            Assert.Empty(ana.Take("welcome"));
+            Assert.False(ana.IsClosed);
+            Assert.Equal(new[] { "Ana" }, rig.Room.Summary().players);
+            // Her seat is still hers, and the other is still free.
+            Assert.Equal(1, (int)rig.Join("Pepe").Take("welcome").Single()["slot"]!);
+            Assert.Equal(new[] { "Ana", "Pepe" }, rig.Room.Summary().players);
+            rig.Say(ana, new { t = "start" });
+            Assert.Single(rig.Rules.Created);
+        }
+
+        [Fact]
         public void AThirdPlayerIsTurnedAway()
         {
             using var rig = new Rig();

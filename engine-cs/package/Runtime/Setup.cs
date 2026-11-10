@@ -918,6 +918,8 @@ namespace Bastion.Engine
                 var vip = MakeUnit("vip", TemplateIds.Vip, opts.VipName ?? rng.Pick(VipNames), null, Grid.Ground(layout.ObjectiveSpot), null);
                 vip.Captive = true;
                 vip.Ap = 0;
+                // Nor movement: on the first turn there is no TurnBegan to take it away (review of 10/11, #12).
+                vip.Moves = 0;
                 units.Add(vip);
                 objectiveUnit = "vip";
             }
