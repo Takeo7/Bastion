@@ -19,6 +19,12 @@ namespace Bastion.Client.Map
         public int? level;
         public bool roofs;
         public string closeAttacker, closeTarget;
+        /// <summary>
+        /// Who acts in the event being played, and on whom (UI's EventPlayer.Acting, the 3D review's E-08, 10/11): while
+        /// it lasts, the storey the actor stands on is the one its building shows, over the selected soldier's and the one
+        /// picked by hand, so that each action is seen whole.
+        /// </summary>
+        public string acting, actingTarget;
         /// <summary>The camera over a shoulder (rig.closeUp), aiming too, whoever is in the shot: game.ts passes `close` then even with neither.</summary>
         public bool close;
 
@@ -266,12 +272,14 @@ namespace Bastion.Client.Map
                 bool ours = u.Team == "xcom";
                 int node = (u.Pos.Z * s.Height + u.Pos.Y) * s.Width + u.Pos.X;
                 if (!ours && !(visible != null && node >= 0 && node < visible.Length && visible[node])) continue;
-                bool keen = close ? u.Id == focus.closeAttacker || u.Id == focus.closeTarget : u.Id == focus.selected || u.Id == focus.target;
+                bool acting = focus.acting != null;
+                bool keen = close ? u.Id == focus.closeAttacker || u.Id == focus.closeTarget
+                    : acting ? u.Id == focus.acting || u.Id == focus.actingTarget : u.Id == focus.selected || u.Id == focus.target;
                 if (close && !keen) continue;
                 var (tx, ty, point) = Locate(u);
-                if (!close) Within(tx, ty, u.Pos.Z, u.Id == focus.selected && !chosen);
+                if (!close) Within(tx, ty, u.Pos.Z, acting ? u.Id == focus.acting : u.Id == focus.selected && !chosen);
                 Behind(point, plan.At(new Vec2 { X = tx, Y = ty }), keen);
-                if (u.Id != focus.selected || close) continue;
+                if (u.Id != focus.selected || close || acting) continue;
                 // The selected soldier by a building's wall (about to go in, or in cover against it).
                 foreach (var b in plan.Buildings)
                 {

@@ -251,7 +251,8 @@ namespace Bastion.Client.Units
         {
             var a = v.animator;
             if (a == null || !a.isHuman || v.anim == null) return;
-            float live = v.dead ? 0 : 1, k = v.scream;
+            // (Eased off as its death comes in, life, not gone in its first frame: the 3D review's A-04, 10/11.)
+            float live = v.life, k = v.scream;
             if (live <= 0 && k <= 0) return;
             var style = DeadStyles.TryGetValue(v.template, out var s) ? s : DeadStyles["sectoid"];
             float lean = (style.lean + style.moving * v.anim.Moving) * live - k * 0.5f;
@@ -298,6 +299,8 @@ namespace Bastion.Client.Units
 
         /// <summary>syntyFigures.ts SOFT_REACH: the last of an arm's reach eased, so the elbow bends in smoothly (m, the model's).</summary>
         const float SoftReach = 0.025f;
+        /// <summary>Seconds the dead's own pose (its lean, its arms out) takes to go as its death comes in (View.life; the 3D review's A-04).</summary>
+        const float DeathEase = 0.3f;
         /// <summary>The least of an arm's length a dead one's hand reaches out to (DeadArms).</summary>
         const float StraightArm = 0.985f;
 
@@ -313,7 +316,9 @@ namespace Bastion.Client.Units
         static void DeadArms(View v)
         {
             var a = v.animator;
-            if (DeadArmsOff || v.dead || v.feeding || v.chestRest is not Quaternion rest || v.anim.WholeShare > 0.01f) return;
+            // (Dying, let down over DeathEase as its death comes in, life: not cut in the first frame, the death's clip over
+            // the whole body from then on; the 3D review's A-04, 10/11.)
+            if (DeadArmsOff || v.feeding || v.chestRest is not Quaternion rest || (!v.dead && v.anim.WholeShare > 0.01f) || v.life <= 0) return;
             var chest = ChestOf(a);
             if (chest == null) return;
             float scale = v.body != null ? v.body.lossyScale.x : 1;
@@ -326,7 +331,16 @@ namespace Bastion.Client.Units
                 var offset = new Vector3(-s * 0.12f * (1 - 0.7f * grab), -0.02f + aim * 0.12f + sway + grab * 0.05f, 0.4f + aim * 0.08f + grab * 0.12f) * scale;
                 var target = chest.position + turn * (v.root.rotation * offset);
                 var pole = v.root.rotation * new Vector3(-s * 0.8f, -0.7f, -0.3f);
+                Transform s0 = a.GetBoneTransform(upper), s1 = a.GetBoneTransform(lower), s2 = a.GetBoneTransform(hand);
+                if (s0 == null || s1 == null || s2 == null) continue;
+                var was = (s0.rotation, s1.rotation, s2.rotation);
                 Reach(a, upper, lower, hand, target, pole, SoftReach * scale, true);
+                if (v.life >= 1) continue;
+                // As much of the reach as is left of its life, from the shoulder down (each turn in the world, the parent's first).
+                var now = (s0.rotation, s1.rotation, s2.rotation);
+                s0.rotation = Quaternion.Slerp(was.Item1, now.Item1, v.life);
+                s1.rotation = Quaternion.Slerp(was.Item2, now.Item2, v.life);
+                s2.rotation = Quaternion.Slerp(was.Item3, now.Item3, v.life);
             }
         }
 

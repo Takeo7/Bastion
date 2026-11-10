@@ -660,7 +660,9 @@ namespace Bastion.Client.Map
             // Those whose car has gone (its tile changed) go with it.
             foreach (int anchor in headlights.Keys.ToList())
                 if (s.Decor == null || anchor >= s.Decor.Count || Bastion.Engine.Decor.DecorOf(s.Decor[anchor])?.Kind != "carFront") headlights.Remove(anchor);
-            (root.GetComponent<NightLights>() ?? root.gameObject.AddComponent<NightLights>()).Show(ground?.Lamps, headlights.Values.ToList());
+            var night = root.GetComponent<NightLights>() ?? root.gameObject.AddComponent<NightLights>();
+            night.LampsDown = s.Biome != "city";
+            night.Show(ground?.Lamps, headlights.Values.ToList());
         }
 
         /// <summary>

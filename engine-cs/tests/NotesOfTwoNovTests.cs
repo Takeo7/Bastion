@@ -101,30 +101,35 @@ namespace Bastion.Engine.Tests
             return c;
         }
 
-        [Fact(DisplayName = "the siege › one who comes once it has started defends too (Red, 2/11: the recruit was left out)", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void ComesToTheSiege()
+        /// <summary>They switch the sieges on for themselves (Arturo took them out of the game the 7/11: Campaign.SiegesOn).</summary>
+        [Collection(SiegesSwitch.Name)]
+        public class Sieges : WithSieges
         {
-            var c = SiegeAfter();
-            var squad = c.Squad.Count;
-            Assert.True(CampaignHelpers.Run(c, new RecruitCommand()).Ok);
-            Assert.Equal(squad + 1, c.Squad.Count);
-            Assert.Equal(squad + 1, Campaign.BuildSquad(c).Count);
-            // Asked for the squad (nobody else in it, as when nobody was fit), and not twice in it.
-            c.Squad = new List<string>();
-            Assert.True(CampaignHelpers.Run(c, new RecruitCommand { Squad = true }).Ok);
-            Assert.Single(c.Squad);
-        }
+            [Fact(DisplayName = "the siege › one who comes once it has started defends too (Red, 2/11: the recruit was left out)")]
+            public void ComesToTheSiege()
+            {
+                var c = SiegeAfter();
+                var squad = c.Squad.Count;
+                Assert.True(CampaignHelpers.Run(c, new RecruitCommand()).Ok);
+                Assert.Equal(squad + 1, c.Squad.Count);
+                Assert.Equal(squad + 1, Campaign.BuildSquad(c).Count);
+                // Asked for the squad (nobody else in it, as when nobody was fit), and not twice in it.
+                c.Squad = new List<string>();
+                Assert.True(CampaignHelpers.Run(c, new RecruitCommand { Squad = true }).Ok);
+                Assert.Single(c.Squad);
+            }
 
-        [Fact(DisplayName = "the siege › with nobody fit, the wounded defend (Arturo, 2/11)", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void TheWoundedDefend()
-        {
-            var c = SiegeAfter((s) => { foreach (var u in s.Units.Where((x) => x.CampaignId != null)) u.Hp = 1; });
-            Assert.True(c.Soldiers.Where((s) => s.Alive).All((s) => s.WoundedDays > 0));
-            Assert.Equal(c.Soldiers.Where((s) => s.Alive).Select((s) => s.Id), c.Squad);
-            Assert.Equal(c.Squad.Count, Campaign.BuildSquad(c).Count);
-            // One fit among them, and the wounded go back in.
-            Assert.True(CampaignHelpers.Run(c, new RecruitCommand()).Ok);
-            Assert.Single(Campaign.BuildSquad(c));
+            [Fact(DisplayName = "the siege › with nobody fit, the wounded defend (Arturo, 2/11)")]
+            public void TheWoundedDefend()
+            {
+                var c = SiegeAfter((s) => { foreach (var u in s.Units.Where((x) => x.CampaignId != null)) u.Hp = 1; });
+                Assert.True(c.Soldiers.Where((s) => s.Alive).All((s) => s.WoundedDays > 0));
+                Assert.Equal(c.Soldiers.Where((s) => s.Alive).Select((s) => s.Id), c.Squad);
+                Assert.Equal(c.Squad.Count, Campaign.BuildSquad(c).Count);
+                // One fit among them, and the wounded go back in.
+                Assert.True(CampaignHelpers.Run(c, new RecruitCommand()).Ok);
+                Assert.Single(Campaign.BuildSquad(c));
+            }
         }
 
         // ------------------------------------------------------------ the stone

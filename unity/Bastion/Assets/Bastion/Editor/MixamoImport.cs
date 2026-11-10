@@ -51,6 +51,9 @@ namespace Bastion.EditorTools
             // The rifle's (Arturo, 9/11: 1.2–1.5 s, the magazine out and in seen; «Reloading» holds it over the shoulder).
             ("rifleReloadWalk", "mixamo/Reload 3.fbx", false),
             ("tossGrenade", "mixamo/Toss Grenade.fbx", true),
+            // A throw from standing with the arm back over the shoulder (the 3D review's A-16, 10/11: «Throwing An Object
+            // From A Standard Pose», downloaded 10/11).
+            ("throwGrenade", "mixamo/Throw.fbx", true),
             ("throwStone", "mixamo/Throw Object.fbx", true),
             ("knifeStab", "mixamo/Stabbing 3.fbx", false),
             ("macheteSwing", "mixamo/Standing Melee Attack Horizontal.fbx", false),

@@ -1205,17 +1205,6 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// The first chapter's title and briefing (lore.ts STORY[0]), for normalizeMission.
-        /// TODO(port): lore.STORY (the chapters' mission setup, which the campaign reads) is not in Lore yet; these two
-        /// texts are copied from it as they are, and go when it comes.
-        /// </summary>
-        private static class FirstChapter
-        {
-            public const string Title = "El consultorio de Metsovo";
-            public const string Briefing = "El consultorio de Metsovo, el pueblo de abajo, sigue cerrado. En su nevera quedaba **insulina**, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. ==Buscad una entrada y traed la insulina.==";
-        }
-
-        /// <summary>
         /// A mission saved before buildings had storeys (docs/FASE6-PLAN.md): every
         /// place in it gets its level, the ground. Harmless on a mission that has them.
         /// </summary>
@@ -1228,8 +1217,8 @@ namespace Bastion.Engine
             // An opening mission already in progress keeps its state, with the approved presentation.
             if (s.CampaignMission?.Story == 1)
             {
-                s.CampaignMission.Name = FirstChapter.Title;
-                s.CampaignMission.Briefing = FirstChapter.Briefing;
+                s.CampaignMission.Name = Lore.Story[0].Title;
+                s.CampaignMission.Briefing = Lore.Story[0].Briefing;
                 s.CampaignMission.Kicker = null;
             }
             foreach (var u in s.Units)

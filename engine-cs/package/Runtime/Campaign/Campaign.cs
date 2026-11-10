@@ -314,8 +314,10 @@ namespace Bastion.Engine
         /// Whether sieges come in the campaign (docs/FASE12.md §11.5): not for now (Arturo, 7/11: «quitamos el asedio de
         /// momento, ya lo retomaremos más adelante»). Off, none is announced nor comes, its clock stands still, and one
         /// announced in a saved campaign goes (MigrateCampaign, version 27); the code stays, for when it comes back.
+        /// Nothing in the game writes it. Only the sieges' own tests do, to go on running meanwhile: each one switches
+        /// them on for itself and off again, alone, after every other test (tests/WithSieges.cs).
         /// </summary>
-        public static readonly bool SiegesOn = false;
+        public static bool SiegesOn = false;
         /// <summary>
         /// The dead in that first siege: a small one, with the base hardly built yet (Arturo, 22/10); since they come every
         /// turn (Arturo, 1/11), eight plain zombies, one a turn, without the specials (Setup.SiegeWaves; before 6).

@@ -80,6 +80,7 @@ namespace Bastion.EditorTools
             art.groundCrack = Sprite("PolygonParticles_GroundBreak_01");
             art.lightning = Sprite("PolygonParticles_Lightning_01");
             art.semiCircle = Sprite("PolygonParticles_SemiCircle_01");
+            art.smokeSprite = Sprite("PolygonParticles_Smoke_01");
 
             GameObject Effect(string name)
             {

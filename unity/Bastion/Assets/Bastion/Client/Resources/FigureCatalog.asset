@@ -327,6 +327,7 @@ MonoBehaviour:
   - thoughtfulLFemn
   - thoughtfulLMasc
   - thoughtfulMasc
+  - throwGrenade
   - throwStone
   - tossGrenade
   - tpose
@@ -518,6 +519,7 @@ MonoBehaviour:
   - {fileID: 7570127044761214616, guid: 9aa48da9f3452d545b413056ff572716, type: 3}
   - {fileID: -137062656967768163, guid: 0328796399b375d4d8af43dde6ae3633, type: 3}
   - {fileID: 3315450768540492980, guid: 26716534750f99d49962a69f19cff37b, type: 3}
+  - {fileID: -203655887218126122, guid: 6d6e7ae28891e41669925d6ed686064f, type: 3}
   - {fileID: -203655887218126122, guid: e58387fea02a34e27800c17941f442e5, type: 3}
   - {fileID: -203655887218126122, guid: 5b08ab9dd1ba24e1f831fd5b2d3272e5, type: 3}
   - {fileID: 5266567437635197735, guid: 1cc781fc801c4394e94f716656aee162, type: 3}
@@ -845,6 +847,7 @@ MonoBehaviour:
   - 0.12
   - 0.12
   - 0.12
+  - 1.853333
   - 4.6866636
   - 2.7533321
   - 0.033333335

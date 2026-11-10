@@ -70,9 +70,10 @@ namespace Bastion.Engine.Tests
         [Fact]
         public async Task ASmallDeflatedFrameMayNotSwellPastTheLimit()
         {
-            // Two megabytes of the same letter deflate to a few kilobytes: inflated, over the limit.
+            // Two megabytes of the same letter deflate to a few kilobytes (under 16 on the Mac, 20 on Linux, whose zlib
+            // packs less at «Fastest»): inflated, over the limit.
             var wire = Frame.Encode(new string('a', 2 * 1024 * 1024));
-            Assert.True(wire.Length < 16 * 1024);
+            Assert.True(wire.Length < 64 * 1024, $"{wire.Length} bytes");
             var packet = (await ReadOne(wire))!.Value;
             Assert.Throws<InvalidDataException>(() => Frame.Decode(packet, 256 * 1024));
         }

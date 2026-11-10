@@ -491,7 +491,7 @@ namespace Bastion.Engine.Tests
                     turn.RunAlienTurn();
                     foreach (var u in s.Units) if (u.Team == Teams.Xcom) u.Ap = 2;
                 }
-                Assert.True(t0.ElapsedMilliseconds < 3000, $"{t0.ElapsedMilliseconds} ms");
+                Assert.True(t0.ElapsedMilliseconds < TimeBudgets.Ms(3000), $"{t0.ElapsedMilliseconds} ms");
             }
         }
 

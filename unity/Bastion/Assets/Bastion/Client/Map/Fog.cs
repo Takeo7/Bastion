@@ -129,7 +129,7 @@ namespace Bastion.Client.Map
             Shader.SetGlobalFloat(FogMist, mist);
         }
 
-        static bool Night => Mood.Current != null && Mood.Current.Now == Mood.Night;
+        static bool Night => Mood.IsNight;
 
         /// <summary>The fog's colours by day or by night (in the pass's linear colour: a global colour is passed as it is).</summary>
         static void Tints()

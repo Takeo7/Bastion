@@ -1,5 +1,7 @@
 # Primera prueba de Unity con dos ventanas
 
+> **Histórico.** Esta prueba se hizo (hito 1, 24–26/10). Para probar hoy, las descargas de cada versión y sus notas (`NOTAS-<versión>.md`).
+
 Guía para Arturo. La preparó UI el 2026-10-24. Se hará cuando Arte tenga los edificios enteros (piezas, muros, tejados y el corte para ver dentro).
 
 El objetivo es jugar una misión de ciudad de día entre dos apps de Unity y apuntar lo que se vea mal o vaya distinto de la 0.10.1. Si ya están los gráficos en Ajustes y la telemetría, también se mide el rendimiento en el Mac.

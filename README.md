@@ -1,232 +1,68 @@
-# Bastión (nombre provisional)
+# Bastión
 
-Táctica por turnos **cooperativa para dos jugadores**, inspirada en XCOM 2. Cada jugador usa su propio PC y controla sus propios soldados. En el turno de la escuadra juega uno cada vez: quien tiene **el mando** da las órdenes y se lo **cede** al compañero cuando quiere, aunque le queden acciones.
+Táctica por turnos cooperativa para dos jugadores, cada uno en su ordenador, con zombis. Tras la Pandemia, los dos lleváis juntos un campamento en el pinar, el Bastión, y una escuadra de supervivientes. Cada uno manda a sus soldados en las misiones, y entre misión y misión decidís juntos qué se construye y adónde se va. También se juegan escaramuzas sueltas, y se puede jugar solo.
 
-Estado: **versión 0.2.1**. Supervivencia zombi con arte de Synty: combate por turnos con plantas, noche, ruido y saqueo, y una campaña cooperativa con base, el valle de Kessra, contagio, comida y la Marea. Estado completo y decisiones en [docs/TRASPASO.md](docs/TRASPASO.md); diseño en [docs/DESIGN.md](docs/DESIGN.md).
+Es una app de Unity para Mac y Windows. Las reglas se explican en la ayuda del juego.
 
-## Requisitos
+## Descargar y jugar
 
-- [Node.js](https://nodejs.org) 22 o superior, solo en el PC del host.
-- Un navegador moderno (Chrome, Edge, Firefox o Safari) en ambos PCs.
+La última versión está en las [releases de GitHub](https://github.com/Takeo7/Bastion/releases). El repositorio es privado: hace falta una cuenta con acceso.
 
-## Jugar
+| Archivo | Para |
+|---|---|
+| `Bastion-<versión>-mac.zip` | Mac con Apple Silicon o con Intel: se descomprime y se copia a Aplicaciones |
+| `Bastion-<versión>-win-x64.zip` | Windows: se descomprime y se abre `Bastion.exe` |
 
-En el PC del **host**, la primera vez:
+- **Mac, la primera vez que se abre cada versión:** Ajustes del Sistema → Privacidad y seguridad → «Abrir igualmente». La app no está notarizada ([docs/FIRMA.md](docs/FIRMA.md)). Con cada versión, el Mac vuelve a preguntar si la app puede aceptar conexiones entrantes y buscar en la red local: «Permitir» en los dos.
+- **Windows:** sin firmar: «Más información» → «Ejecutar de todas formas». Se construye desde el Mac y aún no se ha probado en un PC.
+- **Los dos, con la misma versión.**
+
+Para jugar juntos, uno pulsa «Alojar la partida» y el otro entra desde su app:
+- **En la misma red:** la partida sale en «Partidas en tu red». Si no sale, «Unirse por dirección», con la dirección que se ve en el menú principal de quien aloja.
+- **Por internet:** con «Abrir el puerto del router» en Ajustes (viene en «Sí»), quien aloja ve su dirección «Por internet» y la clave de la partida. El otro las escribe juntas en «Unirse por dirección». Si el router no deja abrir el puerto, Tailscale en los dos ordenadores, con la dirección «Con Tailscale».
+
+La partida guardada, `red.log` y los ajustes de red están en la carpeta de datos de la app:
+- Mac: `~/Library/Application Support/Bastion-Unity/Bastion/`
+- Windows: `%USERPROFILE%\AppData\LocalLow\Bastion-Unity\Bastion\`
+
+Si algo falla, `red.log` dice qué ha pasado.
+
+## Compilar
+
+Hace falta el SDK de .NET 10 y Unity 6.3 (`6000.3.27f1`).
 
 ```bash
-npm install
-npm run build
+dotnet test engine-cs/tests
 ```
 
-Para arrancar una sesión:
+Las pruebas de las reglas.
 
 ```bash
-npm start
+unity/tools/unity.sh
 ```
 
-El servidor muestra varias direcciones:
+Abre el proyecto de Unity sin ventana, lo compila y dice si hay errores.
 
-```
-Bastión — servidor listo en el puerto 3000
-  Tú:              http://localhost:3000
-  Tu compañero:    https://192.168.1.42:3001
-  Tu compañero:    https://100.101.140.9:3001  (Tailscale)
-```
+Una versión se publica con `unity/tools/publicar.sh` en tres pasos (probar, publicar y llevarla al árbol principal); los tres están en [docs/UNITY.md](docs/UNITY.md), «Cómo se publica».
 
-- **El host** abre `http://localhost:3000`.
-- **El compañero** abre una de las direcciones "Tu compañero" (https, en el puerto siguiente):
-  - En la misma red: la dirección `192.168.x.x`.
-  - Por internet: lo más sencillo es [Tailscale](https://tailscale.com). Ambos lo instaláis, entráis con vuestras cuentas en la misma red de Tailscale y el compañero usa la dirección `100.x.x.x`. No hace falta abrir puertos en el router.
-  - Si escribe la dirección antigua (`http://…:3000`), el servidor le lleva solo a la de https (`?http` al final de la dirección lo evita).
-  - La primera vez su navegador avisa de que la conexión no es privada: el certificado lo crea el servidor con `openssl` (en `data/tls`) y es el de tu ordenador, así que puede aceptarlo (en Safari, "Mostrar detalles" → "visitar este sitio web"). Va por https porque Safari ejecuta las páginas http de otro ordenador sin su compilador de JavaScript y el juego va unas 50 veces más lento.
-  - En macOS, Chrome necesita permiso de **Red local** (Ajustes del Sistema → Privacidad y seguridad → Red local) para abrir direcciones de tu red.
-- Cada uno escribe su nombre y elegís en el menú principal (con la Tierra de fondo):
-  - **Continuar** retoma la campaña guardada; **Nueva campaña** empieza otra: la base compartida, con soldados que suben de rango y mueren de verdad (ver más abajo).
-  - **Escaramuza**: una misión suelta, sin consecuencias. Eliges el tipo de misión, el mapa (ciudad, afueras o Imprenta generados al azar, o el Distrito Comercial hecho a mano) y si la escuadra es veterana (sargentos a capitanes con habilidades al azar) o novata.
-- El menú muestra las direcciones que tu compañero puede abrir (tu red y Tailscale). Si empiezas una campaña sin él, te lo avisa: cuando entre, tomará el mando de 4 soldados (tus novatos sin estrenar, o reclutas nuevos).
-- Si solo hay un jugador, controla a todos los soldados. Al acabar una escaramuza podéis jugar otra o **volver al menú**.
+Lo que no está en git, y hay que poner en cada máquina antes de compilar:
+- **Los modelos de Synty:** `unity/tools/importar-synty.sh`, desde los paquetes originales. Sin ellos el proyecto no se ve.
+- **Las animaciones de Mixamo:** `unity/tools/unity.sh -executeMethod Bastion.EditorTools.MixamoImport.Run`, desde `assets-src/mixamo` ([docs/UNITY-ARTE.md](docs/UNITY-ARTE.md)).
+- **El sonido:** `unity/tools/sonido.sh`, que lo genera a partir del de la 0.10.1. Necesita Node, con `npm install` en la raíz, y ffmpeg ([docs/UNITY-SONIDO.md](docs/UNITY-SONIDO.md)).
 
-### Misiones
+## Dónde está cada cosa
 
-| Tipo | Objetivo |
+| Carpeta | Qué |
 |---|---|
-| **Eliminación** | Abatir a todos los hostiles |
-| **Recuperación** | Recoger los datos (basta con pasar por encima) y sacarlos por la zona de evacuación verde antes de que se agoten los 12 turnos. Si cae el portador, los datos quedan en el suelo |
-| **Sabotaje** | Destruir el retransmisor (tiene salud y blindaje) en 10 turnos |
-| **Pirateo** | Hackear el terminal en 10 turnos: desde una casilla contigua, o con el Grillo, el dron del especialista, a 10 casillas. Si falla, salta la alarma y llegan refuerzos |
-| **Rescate** | Llegar hasta el VIP (se une a la escuadra de quien lo alcance) y sacarlo vivo por la evacuación en 14 turnos. Si muere, la misión fracasa |
+| `engine-cs/` | Las reglas, en C#: el motor, la campaña, la red y los textos (`package/Runtime/Lore`), con sus pruebas ([engine-cs/README.md](engine-cs/README.md)) |
+| `unity/Bastion/` | El proyecto de Unity 6.3 (URP): el cliente |
+| `unity/tools/` | Compilar, capturar, publicar, importar y generar el sonido |
+| `packages/` | La versión de TypeScript (Three.js y Electron), congelada en la 0.10.1. Solo para arreglos graves y como referencia |
+| `docs/` | El estado del paso a Unity ([UNITY.md](docs/UNITY.md)), las decisiones del juego ([TRASPASO.md](docs/TRASPASO.md)), los roles y las normas ([EQUIPO.md](docs/EQUIPO.md)) y las notas de cada versión (`NOTAS-<versión>.md`) |
 
-Con el objetivo cumplido, la misión se gana al abatir a los hostiles o al evacuar al resto de la escuadra. El temporizador se detiene al cumplir el objetivo.
+## Arte, sonido y licencias
 
-**Patrullas y refuerzos.** Los grupos enemigos patrullan el mapa mientras no os detectan; si una patrulla os ve, se pone a cubierto. Las misiones con objetivo traen refuerzos: una **bengala roja** marca dónde caerán al final del siguiente turno enemigo.
-
-### Terreno
-
-Los mapas generados miden 48 × 48 casillas. La ciudad son manzanas de tamaños distintos entre calles que se tuercen o acaban (casas, tiendas, oficinas, bloques de pisos, naves, plazas y aparcamientos); las afueras, un camino de tierra entre bosquecillos, colinas, campos vallados y una granja o unas ruinas; la imprenta, un recinto vallado con laboratorios, hangares, plataformas y almacenes, en el que la escuadra entra por una puerta o, la mitad de las veces, aterriza ya dentro. Los edificios tienen habitaciones de verdad, puertas a la calle y ventanas a intervalos regulares.
-
-- **Alturas:** azoteas, colinas y plataformas. Solo se sube por **escaleras**; se puede saltar hacia abajo desde cualquier borde. Disparar desde más altura da **+20 de puntería**. Desde arriba se ve por encima de los muros; el borde de una azotea no protege a quien está encima, pero la pared de un bloque sí protege a quien está al pie.
-- **Puertas:** tapan la vista hasta que alguien las cruza (se quedan abiertas).
-- **Ventanas:** se ve y se dispara a través de ellas, y quien está al lado tiene cobertura alta. Saltarlas cuesta una casilla extra y rompe el cristal.
-
-### Escuadra
-
-En escaramuza cada jugador lleva tres soldados: uno manda asalto, francotirador y especialista; el otro, granadero, asalto y especialista.
-
-| Clase | Arma | Habilidades propias |
-|---|---|---|
-| **Asalto** | Escopeta (mucho daño de cerca) | **Tajo**: corre hasta un enemigo a su alcance y le ataca con la espada, ignorando la cobertura |
-| **Granadero** | Cañón | **Lanzagranadas**: más alcance (14) y más radio; lleva 2 granadas |
-| **Francotirador** | Fusil de precisión (necesita las 2 acciones) | **Visión de escuadra**: dispara a lo que vean sus compañeros; **Pistola** para moverse y disparar |
-| **Especialista** | Fusil | **Protocolo médico** (cura 4, 2 usos) y **Protocolo de ayuda** (+20 de defensa) con su dron, el Grillo |
-
-Enemigos ([la historia](docs/LORE.md)): **Impreso** (con granada), **Afinado**, **Heraldo**, **Recolector** (cuerpo a cuerpo que aturde: el soldado empieza su siguiente turno con una sola acción), **Gólem** (blindaje 1 y micromisiles), **Cantor** y **Hueco**. Los explosivos rompen el blindaje. Entre todos los enemigos solo pueden usar un explosivo y un ataque psiónico por turno.
-
-**Psiónicos.** El Cantor usa el **Canto** contra la voluntad del soldado (que sube con el rango). Si acierta, el soldado queda **desorientado** (−20 de puntería y sin explosivos), entra en **pánico** (pierde su siguiente turno) o cae bajo **control mental** durante 2 turnos: luchará contra vosotros hasta que pase el efecto o matéis al Cantor. El Cantor también levanta **cadáveres como Huecos** lentos que atacan cuerpo a cuerpo. El Zumbador protege de todo esto.
-
-### Habilidades por rango
-
-Cada clase tiene un árbol de 5 niveles con 2 opciones por nivel; se elige una al subir a Soldado, Cabo, Sargento, Teniente y Capitán. Las marcadas con ◆ son activas y tienen enfriamiento o usos limitados (aparecen en la barra; el número grande es el enfriamiento que queda).
-
-| Clase | Algunas habilidades |
-|---|---|
-| **Asalto** | Quemarropa, Paso sombrío (sin fuego de reacción), ◆ Correr y disparar, Implacable (matar con el tajo devuelve una acción), ◆ Fuego rápido, Maestro de la espada, Cazador |
-| **Granadero** | Destrozador, Gran calibre, ◆ Supresión, Holo-objetivo (+15 para los aliados), Salva (granadas sin terminar el turno), ◆ Disparo en cadena, ◆ Ruptura |
-| **Francotirador** | Vigía lejano (vigilancia con visión de escuadra), Desenfunde, ◆ Ojo letal, ◆ Manos rápidas, Muerte desde arriba, ◆ Cara a cara, ◆ Zona letal |
-| **Especialista** | Fuego de cobertura, ◆ Protocolo de combate, Evaluación de amenazas, ◆ Protocolo de reanimación, ◆ Restauración, ◆ Descarga de condensador |
-
-## Campaña
-
-Base, créditos y nivel del Bastión son **compartidos**; los soldados son **de cada jugador**: cada uno empieza con cuatro, los asciende, les elige habilidades y los equipa. Los dos usáis la base a la vez, cada uno en su pantalla; veis dónde está el compañero (arriba a la derecha, con un punto de su color en la barra de abajo y una etiqueta sobre su sala).
-
-La campaña va **por fases, como XCOM 2**:
-
-1. **El Bastión.** La base vista desde arriba, en ángulo, a pantalla completa: el búnker de mando en el centro, sus tres edificios (Cuartel, Expediente, Armería) y alrededor una cuadrícula de 7 × 7 parcelas donde crece. Fuera, al sur, el hangar con la nave y la pista. Pulsa un edificio para entrar (la cámara se acerca) o usa la barra de abajo.
-2. **Geoesfera** (desde Mando). El globo a pantalla completa con regiones, misiones y Órganos. **ESCANEAR** corre los días hasta que pasa algo, y entonces salta un **aviso**: misión nueva, obra terminada, hoja nueva del Expediente (al subir de nivel el Bastión), Órgano nuevo, carta del Consejo a fin de mes o avance de la Partitura. Pulsa una misión para ver su **informe** y **Desplegar**.
-3. **Selección de escuadra** en el hangar: los soldados formados en 3D delante de la nave, cada uno con su ficha.
-4. **Despegue.** Con los dos listos, la escuadra embarca, se abre el techo del hangar y la nave sale. La misión empieza con su presentación (operación, zona y objetivo).
-5. **Informe.** Al volver, la escuadra formada en el hangar: heridos, caídos (un memorial en su sitio), ascensos, recompensas y cuerpos recuperados.
-
-Las salas:
-
-- **Mando:** abre la geoesfera.
-- **Instalaciones:** las parcelas del Bastión. Se **construye** en una parcela despejada pegada a otro edificio (una pasarela los une sola) y se **despeja** terreno (roca, bosque o ruinas, que dan chatarra) junto a lo ya despejado; más lejos del búnker cuesta más. Algunas instalaciones rinden más **pared con pared** con un edificio concreto: enfermería con el cuartel, taller con la armería, simulación con el Expediente, comunicaciones con el búnker, entrenamiento con el cuartel (reclutar cuesta 20), barracón con el cuartel (+1 cama), campo de tiro con el entrenamiento (+2 de puntería) y estación de escucha con comunicaciones (el enemigo, 2 días más tarde). Hay **dos cuadrillas**: dos obras a la vez (tres con la brigada de obras), nunca dos en la misma parcela.
-  - **Camas:** el búnker aloja a los 8 soldados del principio; para reclutar más hace falta cama libre, y cada **barracón** suma 2 (3 y 4 mejorado). Puede haber varios.
-  - **Edificios:** taller (accesorios más baratos), enfermería (heridas más rápidas), barracón, centro de entrenamiento (+1 soldado por jugador; mejorado, reclutas con rango), campo de tiro (puntería para todos), brigada de obras (obras más cortas), sala de simulación (más experiencia), taller de La Mula (misiones más cortas y heridas más leves), estación de escucha (frena el reloj enemigo y da una misión más) y centro de comunicaciones (más regiones).
-  - **Mejoras:** cada edificio sube a **nivel 2 y 3** (pulsa el edificio: «Mejorar»), con el nivel del Bastión. Cuesta lo mismo que construirlo y la mitad más para el nivel 3.
-- **Cuartel:** el soldado elegido en un pedestal, con sus datos, su equipo su arma y armadura, sus accesorios y reclutamiento (30 créditos; máximo 6 soldados por jugador, 12 si juegas solo). Los ascensos abren la **cuadrícula de habilidades**: una columna por rama y una fila por rango. **Personalizar** cambia el nombre, el apodo (sale en su etiqueta en combate), los colores de armadura, detalles y visor, la cabeza (casco, capucha, boina, gorra, máscara o a cara descubierta) y la complexión, viéndolo en el pedestal mientras eliges. El anillo y la etiqueta siguen con el color de su jugador.
-- **Expediente:** el nivel del Bastión, la experiencia que falta, las hojas del Expediente CORO y lo que desbloquea cada nivel.
-- **Armería:** los niveles de arma y armadura, y la tienda de **accesorios**.
-
-**Expediente: nivel del Bastión.** No hay investigación: el Bastión gana **experiencia en combate** (+2 por cada misión, +3 y su dificultad si se gana, +1 por cada baja; un 25 % más con la sala de simulación) y sube de nivel. Cada nivel añade una hoja al **Expediente CORO**, con lo que el Bastión ha descubierto del enemigo, y desbloquea tecnología, accesorios e instalaciones:
-
-| Nivel | Experiencia | Desbloquea |
-|---|---|---|
-| 1 | 0 | Granada extra, granada de humo, botiquín · Taller, enfermería |
-| 2 | 12 | Granada aturdidora, munición trazadora · Centro de entrenamiento |
-| 3 | 30 | **Armas de bobina** · Sala de simulación |
-| 4 | 55 | **Armadura de placas** · Nanochaleco, munición perforante |
-| 5 | 85 | Granadas de tesela, Oído (+20 a hackear, +1 región) · Centro de comunicaciones |
-| 6 | 120 | **Armas de plasma**, teselas médicas · Zumbador |
-| 7 | 160 | **Armadura de tesela** |
-| 8 | 205 | Las cintas de 1989: la **misión final** |
-
-**Armas y armadura.** No se compran. Cada soldado lleva el mejor nivel que permitan a la vez el Bastión y su rango: el nivel 2 (magnético, placas) desde **Cabo**, el nivel 3 (plasma, depredadora) desde **Teniente**. Así, un ascenso se nota en el arma y en la armadura, que también cambian de aspecto. Armas magnéticas: +2 de daño; plasma: +4. Placas: +2 de salud; depredadora: +4 de salud y +1 de blindaje.
-
-**Decisiones conjuntas.** Construir, despejar terreno, contactar regiones, elegir misión y responder a los acontecimientos son *propuestas*: aparecen en una franja para el compañero, que las acepta o las rechaza. Si juegas solo (o tu compañero no está conectado) se aplican directamente. Reclutar, ascender, comprar accesorios y equipar a tus propios soldados no necesita permiso.
-
-**Instalaciones.**
-
-| Instalación | Efecto | Nivel |
-|---|---|---|
-| Taller | Accesorios un 25 % más baratos | 1 |
-| Enfermería | Las heridas se curan el doble de rápido | 1 |
-| Centro de entrenamiento | Cada jugador lleva un soldado más (escuadra de hasta 8) | 2 |
-| Sala de simulación | Las misiones dan un 25 % más de experiencia al Bastión | 3 |
-| Centro de comunicaciones | +2 regiones contactables | 5 |
-
-Todo se paga con **créditos**, la única moneda: construir y despejar terreno, comprar accesorios, reclutar y contactar regiones. Llegan con las recompensas de misión, con el pago mensual del Consejo y con la venta de los **cuerpos enemigos** que se recuperan al ganar una misión (la morgue del Consejo paga por sus teselas, poco: de 2 a 6 créditos cada uno).
-
-**El mundo.** Empezáis con Europa Occidental. Contactar otras regiones cuesta créditos, y cada región contactada aumenta el **pago del Consejo a fin de mes**. El Coro levanta **Órganos** en distintas regiones: cada uno hace avanzar la Partitura cada 14 días. Para asaltarlo (una misión de sabotaje que no caduca y que hace retroceder la Partitura) necesitáis contacto en esa región. Cada región tiene su situación y un aliado que firma los informes de sus misiones.
-
-**Historia.** Hay siete **misiones de historia**, marcadas en azul en la geoesfera.
-- La primera está desde el primer día. Cada una de las siguientes se abre cuando el Bastión llega a su nivel y la anterior está ganada.
-- No caducan y dan recompensas propias: la Dra. Nwosu, que hace que los cuerpos valgan más, compases menos o reclutas.
-- Antes de la quinta llega Simón, un Afinado desertor, y decidís si os fiáis de él.
-- La misión final pide el nivel 8 y las siete misiones de historia ganadas. Al ganarla, los dos decidís qué hacer con el Coro, y cada decisión tiene su final ([la historia](docs/LORE.md)).
-
-**Rumores y encargos.** Al escanear aparecen **rumores** en el globo (una luz con «?»).
-- Si decidís **escucharlo**, en unos días de escaneo sabréis qué era: una operación mejor pagada, un alijo, información o un bulo. A veces es el **encargo** de esa región.
-- Los **encargos** son misiones secundarias en cadena, en verde: varias operaciones y decisiones con un desenlace que se queda en la campaña (un recluta, ingresos, una tecnología antes de tiempo, un rasgo en un soldado…).
-- Algunos llegan solos: Ibarra, la otra Amara, la estación de números, el topo, o un soldado que reconoce a un familiar entre los Impresos.
-- Si una operación de encargo se pierde o caduca, el encargo se pierde con sus consecuencias.
-
-**Acontecimientos.** De vez en cuando pasa algo (contrabandistas, refugiados, un desertor, un sabotaje…) con dos respuestas posibles. Ni el tiempo avanza ni la nave despega hasta que decidís.
-
-**Accesorios.** Cada soldado lleva un objeto de **utilidad** (granada extra, de humo, aturdidora, botiquín, nanochaleco, Zumbador) y un tipo de **munición** (perforante, trazadora). Se compran en la Armería cuando el nivel del Bastión los desbloquea. Si el soldado cae, se pierden.
-
-**Tiempo.** **Escanear** corre los días hasta el siguiente acontecimiento (obra terminada, misión nueva, avance enemigo, fin de mes…), pero solo cuando los dos estáis listos. El botón avisa si tu compañero ya lo ha pulsado. Cada misión también gasta tiempo: entre la ida, la vuelta y la recuperación pasan 3 o 4 días, con sus heridas curándose, sus obras avanzando y el enemigo moviendo ficha. Y tras ganar un capítulo de la historia, el siguiente tarda al menos 8 días en abrirse.
-
-**Misiones.** Cada misión ocurre en una región y en un mapa generado para ella. Elegida una misión, la escuadra viene **ya montada** con los mejores soldados listos de cada uno (una de cada clase primero) y cada jugador cambia a quien quiera, **hasta 3 de sus soldados** (4 con el centro de entrenamiento; los heridos no pueden ir) y se despega cuando los dos estáis listos. Al volver veis el informe: bajas, experiencia de cada soldado y del Bastión, heridas, ascensos, recompensa y cuerpos vendidos.
-
-- Experiencia: +1 por ir, +1 si se gana, +1 por cada baja. Rangos: Novato → Soldado (2) → Cabo (5) → Sargento (9) → Teniente (14) → Capitán (20) → Comandante (27) → Coronel (35). Cada rango da +5 de puntería y más voluntad.
-- Heridas: 2 días + 2 por punto de salud perdido. Los caídos no vuelven.
-- Abandonar una misión cuenta como fracaso, pero los supervivientes regresan.
-
-**La Partitura.** El reloj del enemigo (arriba; se llama «Actividad enemiga» hasta que el Bastión llega al nivel 4): sube 1 cada 12 días, con cada Órgano, con cada misión fracasada y con cada misión que dejáis caducar. Si llega a 12, se pierde la campaña. Destruir Órganos, sabotajes y algunos pirateos lo hacen bajar. Para ganar hay que llevar el Bastión al **nivel 8**, ganar las siete misiones de historia, superar el **Asalto al Diapasón** y decidir juntos el final.
-
-La partida se guarda sola en `data/save.json`. Si cierras el servidor o se cae la conexión, al volver a entrar retomáis la misión donde estaba. Al actualizar el juego a una versión con otro formato de guardado, la campaña se conserva, pero una misión a medias se pierde (volvéis a la base).
-
-Para usar otro puerto: `npm start -- --port 8080` (el https va en el siguiente, 8081; `--https-port` lo cambia y `--https-port 0` lo apaga).
-
-Si tu compañero no consigue entrar, `data/red.log` dice quién se ha conectado, cómo (ws o wss), si su navegador ha rechazado el certificado y los errores que ha tenido.
-
-## Controles
-
-| Acción | Control |
-|---|---|
-| Seleccionar soldado | Clic sobre él, en la lista de la izquierda o **Tab** / **Mayús+Tab** |
-| Mover | Clic en una casilla: azul = 1 acción, amarillo = carrera de 2 acciones. Un borde rojo = ahí os descubrirían estando ocultos: el primer clic avisa y el segundo mueve |
-| Disparar | **Espacio** apunta al mejor objetivo y **Espacio** otra vez dispara. **Tab** cambia de objetivo. También puedes hacer clic sobre el enemigo y pulsar **Espacio** |
-| Habilidades | **1-9** y **0** según la barra de cada soldado (los números aparecen en cada botón). Las de casilla (granadas, humo, descarga) se lanzan con clic; las de objetivo se confirman con **Espacio**. Los botones con borde discontinuo son acciones gratuitas |
-| Marcar para el compañero | **G** o **clic central**: posición o enemigo |
-| Evacuar | Habilidad **Evacuar** estando en la zona verde |
-| Cancelar | **Esc** o clic derecho |
-| Menú | **Esc** (si no estás apuntando) o el botón **Menú**: controles, ajustes y abandonar la misión (termina para los dos) |
-| Ceder el mando | **C** o el botón junto a Terminar turno: tu compañero pasa a dar las órdenes |
-| Planear sin el mando | Mientras tu compañero tiene el mando, eliges a tus soldados, ves su alcance (más tenue) y apuntas para ver el porcentaje. Un clic en una casilla deja un **plan**: una línea discontinua de tu color que tu compañero también ve. Otro clic en la misma casilla lo quita; desaparece cuando el soldado se mueve o al empezar el turno siguiente |
-| Terminar turno | **Retroceso**. Si a tus soldados les quedan acciones, el botón pregunta «¿Terminar?» y hay que pulsar otra vez (**Esc** lo cancela). Si tu compañero no ha terminado, el mando pasa a él; cuando los dos habéis terminado, juega el enemigo |
-| Cámara | **WASD** o arrastrar con clic derecho · **Q/E** girar · rueda para zoom · **F** centrar en el soldado |
-| Sonido | **M** activa o desactiva los efectos |
-| Ajustes gráficos | En **Ajustes** (menú de Esc o menú principal): límite de FPS (sin límite, 60, 30), efectos (altos, medios, bajos), sombras, resolución (automática, 100, 75 o 50 %) y contador de FPS. La automática dibuja la escena a la densidad de la pantalla salvo en ventanas muy grandes, donde baja un poco para ir fluida; la interfaz siempre se ve nítida. Se guardan en tu navegador y se aplican al momento |
-
-**El mando.** En el turno de la escuadra solo da órdenes quien tiene el mando (arriba se ve quién). Lo cede cuando quiere, aunque a sus soldados les queden acciones, y pasa solo cuando ya no puede hacer nada más o termina su turno. Un turno lo abre cada jugador por turnos. Si tu compañero se desconecta, el mando es tuyo.
-
-La cámara sigue tus acciones y el turno alien, nunca las de tu compañero. En cuanto mueves la cámara o eliges otro soldado, deja de seguir la acción en curso.
-
-## Desarrollo
-
-```bash
-npm run dev        # servidor (puerto 3000) + cliente con recarga en caliente (http://localhost:5173)
-npm test           # tests del motor de reglas
-npm run typecheck  # comprobación de tipos de los tres paquetes
-```
-
-Para probar los dos jugadores en un mismo navegador, abre dos pestañas con `?perfil=a` y `?perfil=b`, por ejemplo `http://localhost:5173/?perfil=b`.
-
-Herramientas de depuración: en desarrollo, o con `?debug` en la URL, la consola tiene `window.__bastion` con `step()`, `hover(x, y)`, `click(x, y)` y `snap(nombre)`. Para usar `snap` contra un servidor de producción, arráncalo con `--snapshots <carpeta>`; con `--save <archivo>` usa otro archivo de guardado y no toca tu partida.
-
-## Estructura
-
-```
-packages/
-  engine/   Reglas puras en TypeScript: mapa, visión, cobertura, puntería, movimiento,
-            eventos, IA, generador de mapas (mapgen.ts) y campaña. Lo comparten
-            el servidor y el cliente.
-  server/   Node + WebSocket. Sala de 2 jugadores, autoridad del estado, guardado.
-  client/   Vite + Three.js. game/ es el combate (escena 3D, animaciones, HUD);
-            strategy/ es la capa estratégica (el Bastión, la geoesfera y sus
-            pantallas); ui/ el menú principal.
-docs/
-  DESIGN.md                     Decisiones de diseño y hoja de ruta.
-  archive/mod-xcom2/            Informe del enfoque anterior (mod de XCOM 2), descartado.
-```
+- **Modelos:** Synty POLYGON y Sidekick, y los animales de Synty SIMPLE - Forest Animals y SIMPLE - Cats. La licencia de Synty no deja publicarlos, así que el repositorio es siempre privado: `packages/` lleva modelos de Synty convertidos, y `unity/Bastion/Assets/Synty` se queda fuera de git.
+- **Animaciones:** Synty y Mixamo. Los archivos de Mixamo no se comparten: `unity/Bastion/Assets/Mixamo` se queda fuera de git.
+- **Sonido:** hecho en código, con grabaciones CC0 de Freesound y OpenGameArt, y los sonidos de interfaz de Kenney (CC0). El origen de cada uno está en [docs/SONIDO.md](docs/SONIDO.md).
+- **Tipografías:** Oswald y Barlow (OFL; las licencias, junto a las fuentes, en `unity/Bastion/Assets/Bastion/UI/Fonts/`), y una hecha por nosotros para el «§».

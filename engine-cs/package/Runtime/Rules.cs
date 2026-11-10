@@ -1897,8 +1897,9 @@ namespace Bastion.Engine
         {
             if (s.Outcome != null) return CommandResult.Failure("La misión ha terminado.");
             // In real time the clock runs the mission, and the players give standing orders (docs/TIEMPO-REAL.md).
-            // TODO(port): realtime.ts executeRealtimeCommand (after milestone 1, README): refused until then.
-            if (s.Realtime != null) return CommandResult.Failure("El modo en tiempo real todavía no está en esta versión.");
+            // Real time (realtime.ts, executeRealtimeCommand) was not brought to C# (Arturo, 29/10: docs/UNITY.md): a mission
+            // of the 0.8.3 started with it is refused.
+            if (s.Realtime != null) return CommandResult.Failure("El modo en tiempo real no está en esta versión.");
             if (cmd is RtOrderCommand || cmd is RtPauseCommand || cmd is RtSlowCommand) return CommandResult.Failure("Eso es del modo en tiempo real.");
             if (s.ActiveTeam != Teams.Xcom) return CommandResult.Failure("Espera a que termine el turno enemigo.");
 

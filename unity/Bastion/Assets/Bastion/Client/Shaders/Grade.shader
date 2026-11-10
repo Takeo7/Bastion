@@ -25,6 +25,7 @@ Shader "Bastion/Grade"
             #pragma fragment Fragment
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Random.hlsl"
 
             float _GradeOn;
             float _GradeExposure;
@@ -78,6 +79,9 @@ Shader "Bastion/Grade"
                 float2 d = uv - 0.5;
                 c *= 1.0 - _GradeLook.z * dot(d, d) * 2.0;
                 c *= saturate(1.0 - _StageFade);
+                // A dither of half a step of 255 where the picture is written out in 8 bits (on the display values): the
+                // fog of war's dark, smooth mist came out in rings of one step each. The review of 10/11, L-16.
+                c += (InterleavedGradientNoise(input.positionCS.xy, 0) - 0.5) / 255.0;
                 return half4(SRGBToLinear(saturate(c)), source.a);
             }
             ENDHLSL

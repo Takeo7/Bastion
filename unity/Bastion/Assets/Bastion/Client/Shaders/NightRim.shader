@@ -1,7 +1,9 @@
 // By night a figure's cool moonlit rim (synty.ts dyeRim, under unitNight): one more material over the body's meshes,
-// added. (0.42, 0.62, 0.8) × (1 − n·v)³ × 0.5, and a breath of its own colour, 0.07 of its colour map, both × _Rim (1 the
+// added. (0.42, 0.62, 0.8) × (1 − n·v)² × 0.3, and a breath of its own colour, 0.07 of its colour map, both × _Rim (1 the
 // squad, 0.22 the enemy and the dead: syntyFigures.ts ENEMY_RIM), set per renderer from outside (UnitViews.Rim). The
-// colour map is the copy's, or the renderer's own block's (a soldier's palette: SidekickLab.OwnColours).
+// colour map is the copy's, or the renderer's own block's (a soldier's palette: SidekickLab.OwnColours). (0.10.1's was
+// (1 − n·v)³ × 0.5: as much light over a round figure, in a band twice as wide and a less white edge; the cube's band
+// was thinner than a pixel at the game's distance, motes on a black figure, or white wire close. The review of 10/11, L-03.)
 Shader "Bastion/NightRim"
 {
     Properties
@@ -65,7 +67,7 @@ Shader "Bastion/NightRim"
                 float3 v = normalize(GetWorldSpaceViewDir(input.world));
                 half edge = 1 - saturate(dot(n, v));
                 half3 own = SAMPLE_TEXTURE2D(_ColorMap, sampler_ColorMap, input.uv).rgb;
-                return half4((half3(0.42, 0.62, 0.8) * edge * edge * edge * 0.5 + own * 0.07) * _Rim, 0);
+                return half4((half3(0.42, 0.62, 0.8) * edge * edge * 0.3 + own * 0.07) * _Rim, 0);
             }
             ENDHLSL
         }

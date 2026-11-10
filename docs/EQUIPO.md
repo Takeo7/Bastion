@@ -2,7 +2,23 @@
 
 Quién hace qué en Bastión, qué archivos toca cada uno y en qué está ahora. Lo mantiene **Gameplay**, que coordina. Antes de tocar un archivo de otro rol, se le pregunta por mensaje.
 
-## Roles
+## Roles hoy (Unity, desde el 23/10; puesto al día el 10/11)
+
+| Rol | Sesión | Hace | Sus archivos |
+|---|---|---|---|
+| **Gameplay** (coordina) | Gameplay | Las reglas y la campaña, el reparto del trabajo, la revisión, las versiones y estos documentos | `engine-cs/package/Runtime/` (menos `Lore/` y `Net/`), `engine-cs/tests/` (menos las de red y las de textos), `engine-cs/golden/`, `unity/tools/publicar.sh`, `copia.sh`, `.github/`, `CLAUDE.md`, `docs/UNITY.md`, `TRASPASO.md`, `EQUIPO.md` |
+| **Lore** | Lore | El mundo y todos los textos que se ven, las notas de cada versión | `engine-cs/package/Runtime/Lore/`, los textos (no la lógica) del resto del motor y de la interfaz, `docs/LORE.md`, `docs/NOTAS-*.md`, `README.md` |
+| **Arte** | Arte | Lo que se ve en 3D: figuras, animaciones, armas, mapas, la base, luz, efectos y el rendimiento | `unity/Bastion/Assets/Bastion/Client/` (menos `Net/`, `Audio/` e `Input/`), `Assets/Bastion/Editor/` (los laboratorios), `unity/tools/unity.sh`, `captura.sh`, `importar-synty.sh`, `docs/UNITY-ARTE.md` |
+| **UI** | UI | El HUD, el control y la cámara del combate, las pantallas de estrategia, el inicio y los Ajustes, lo táctil | `unity/Bastion/Assets/Bastion/UI/`, `Client/Input/`, `docs/UNITY-UI.md`, `docs/UNITY-ESTRATEGIA.md` |
+| **Red** | Networking | La sala, la conexión, el guardado, las apps (Mac, Windows, iOS), la firma y el sonido | `engine-cs/package/Runtime/Net/`, sus pruebas (`Net*Tests.cs`), `Assets/Bastion/Client/Net/` (con `Editor/AppBuild.cs`), `Client/Audio/`, `unity/tools/ios.sh`, `sonido.sh`, `docs/FIRMA.md`, `docs/IOS.md`, `docs/UNITY-SONIDO.md` |
+| **Biblioteca** | Biblioteca de assets | La web local de recursos de Arturo ([BIBLIOTECA.md](BIBLIOTECA.md)) | `unity/tools/biblioteca/` |
+
+- **Escenas:** un solo dueño por archivo `.unity`. Partida es de Arte; Inicio, de UI.
+- **Unity, de uno en uno:** `unity.sh` y `captura.sh` llevan un cerrojo; quien llega espera.
+- **Cada versión** se compila en la copia limpia (`../Bastion-0122`), con los parches de cada rol (`.dev-snapshots/<rol>/…`), no en el árbol donde todos trabajan ([UNITY.md](UNITY.md), «Cómo se publica»).
+- **`packages/`** (TypeScript, 0.10.1) está congelado: lo de abajo vale solo para arreglos graves y como referencia.
+
+## Roles en la versión de TypeScript (histórico)
 
 | Rol | Quién | Hace | Sus archivos |
 |---|---|---|---|

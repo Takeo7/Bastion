@@ -409,7 +409,7 @@ namespace Bastion.Engine.Tests
                     Los.TeamVisibility(s, team);
                     best = Math.Min(best, t0.Elapsed.TotalMilliseconds);
                 }
-                Assert.True(best < 12, $"{team}: {best} ms");
+                Assert.True(best < TimeBudgets.Ms(12), $"{team}: {best} ms");
             }
         }
 

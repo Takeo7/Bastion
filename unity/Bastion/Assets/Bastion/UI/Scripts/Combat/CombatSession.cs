@@ -80,6 +80,7 @@ namespace Bastion.UI.Combat
             player = new EventPlayer(control, destroyCancellationToken);
             control.SeeMoment = player.SeeMoment;
             control.CloseFocus = () => player.CloseFocus;
+            control.ActingFocus = () => player.Acting;
             control.Busy = player.IsBusy;
             control.EnemyTurnPlaying = () => player.EnemyTurnPlaying;
             control.Hurry = player.SetHurry;

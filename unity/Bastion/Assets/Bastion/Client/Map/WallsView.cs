@@ -156,6 +156,9 @@ namespace Bastion.Client.Map
                     var cut = CutOf(pane.building, pane.roof, pane.between, pane.outward, pane.floor);
                     // Lit by night, one in three or so (buildings.ts: by the pane's place).
                     float lit = BuildingPlan.Hash(Mathf.RoundToInt(pane.matrix.m03 * 2), Mathf.RoundToInt(pane.matrix.m23 * 2), 90) < 0.35 ? 1 : 0;
+                    // (None in the halls, barns and sheds, whose glass is a band a tile wide: lit, a flat yellow square, and
+                    // nobody lives in them. The review of 10/11, L-14.)
+                    if (pane.kit.StartsWith("hall") || pane.kit.StartsWith("shed")) lit = 0;
                     BatchOf(clear).Add(mesh, 0, MapSpace.FromGame(InMetres(pane.matrix)), Vector4.one, Vector4.one, cut, new Vector4(StoreyOf(pane.building, pane.floor), 0, lit, 0));
                 }
             foreach (var (material, batch) in byMaterial) Draw(holder.transform, material.name, batch.Make($"{holder.name} {material.name}"), material, material != clear);

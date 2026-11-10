@@ -43,6 +43,21 @@ namespace Bastion.UI.Combat
             ? Mathf.Clamp(tiles * 1.5f, MinDistance, MaxDistance)
             : (float?)null;
 
+        /// <summary>
+        /// For measuring only (the review of 10/11, A-01): BASTION_CAMARA_LOG=1 says each frame how far the camera is from
+        /// what it looks at, where it looks and how far into the shot over a shoulder it is («[camara] …»).
+        /// </summary>
+        public static readonly bool Logging = System.Environment.GetEnvironmentVariable("BASTION_CAMARA_LOG") == "1";
+
+        /// <summary>How far into the shot over a shoulder it is (0 its own view, 1 there): for the measure.</summary>
+        public float Closeness => closeness;
+
+        /// <summary>
+        /// The seconds the shot over a shoulder still needs to be there (into it, or from one to the next); 0 when it is, or
+        /// when there is none (the review of 10/11, A-01: the blow went before the camera got there).
+        /// </summary>
+        public float CloseLeft => closeOn && close != null ? Mathf.Max((1 - closeness) * CloseIn, swap < 1 ? (1 - swap) * CloseSwap : 0) : 0;
+
         /// <summary>The map's floor plan (metres, x and z), which the point looked at stays in.</summary>
         public Rect Bounds = new Rect(0, -96, 96, 96);
 
@@ -57,6 +72,15 @@ namespace Bastion.UI.Combat
         (float yaw, float distance, Vector3 target) beforeOverhead;
         float distance = 24f * 1.5f;
         float desiredDistance = 24f * 1.5f;
+        /// <summary>
+        /// The game's zooms (an action's, the enemy's turn framed, back after them) go on the point's spring, from rest and to
+        /// rest (the review of 10/11, A-01: back from an action, half the way went in a frame); the player's, as before.
+        /// </summary>
+        bool zoomSpring;
+        float distanceVel;
+        /// <summary>The distance's spring: the point's, a little livelier framing the enemy's turn (FrameZoom), which waits for it (A-01).</summary>
+        float zoomStiffness = Spring;
+        const float FrameSpring = 8f;
         Vector2 dragFrom;
         bool dragging;
         Camera cam;
@@ -106,6 +130,7 @@ namespace Bastion.UI.Combat
             Overhead = true;
             closeOn = false;
             savedDistance = null;
+            zoomSpring = false;
             desiredYaw = Mathf.Round(desiredYaw / 360f) * 360f;
             desiredTarget = centre;
             desiredDistance = metres;
@@ -119,6 +144,7 @@ namespace Bastion.UI.Combat
             Overhead = false;
             Epoch++;
             TakenAt = Time.unscaledTime;
+            zoomSpring = false;
             desiredYaw = beforeOverhead.yaw;
             desiredDistance = beforeOverhead.distance;
             desiredTarget = at is Vector3 p ? Clamp(new Vector3(p.x, Mathf.Max(0, p.y), p.z)) : beforeOverhead.target;
@@ -154,6 +180,8 @@ namespace Bastion.UI.Combat
             var back = from - target;
             yaw = desiredYaw = Mathf.Atan2(back.x, -back.z) * Mathf.Rad2Deg;
             distance = desiredDistance = Mathf.Clamp(back.magnitude, MinDistance, MaxDistance);
+            distanceVel = 0;
+            zoomSpring = false;
             savedDistance = null;
             closeOn = false;
             close = null;
@@ -181,6 +209,8 @@ namespace Bastion.UI.Combat
             savedDistance = null;
             closeOn = false;
             springing = false;
+            zoomSpring = false;
+            distanceVel = 0;
         }
 
         /// <summary>The game's menu is up: the keys and the pointer are its own, the camera only finishes its moves.</summary>
@@ -260,6 +290,8 @@ namespace Bastion.UI.Combat
             if (Overhead) return;
             if (savedDistance == null) savedDistance = desiredDistance;
             desiredDistance = Mathf.Clamp(Mathf.Min(metres, savedDistance.Value), MinDistance, MaxDistance);
+            zoomSpring = true;
+            zoomStiffness = Spring;
         }
 
         /// <summary>
@@ -289,6 +321,8 @@ namespace Bastion.UI.Combat
                 need = Mathf.Max(need, Mathf.Abs(Vector3.Dot(r, right)) / tanH - depth, Mathf.Abs(Vector3.Dot(r, up)) / tanV - depth);
             }
             desiredDistance = Mathf.Clamp(Mathf.Max(savedDistance.Value, need), MinDistance, MaxDistance);
+            zoomSpring = true;
+            zoomStiffness = FrameSpring;
         }
 
         public void RestoreZoom()
@@ -296,6 +330,8 @@ namespace Bastion.UI.Combat
             if (Overhead || savedDistance == null) return;
             desiredDistance = savedDistance.Value;
             savedDistance = null;
+            zoomSpring = true;
+            zoomStiffness = Spring;
         }
 
         /// <summary>A shake of `strength` metres for `seconds` (an explosion, a heavy gun).</summary>
@@ -376,17 +412,43 @@ namespace Bastion.UI.Combat
             else target = Vector3.Lerp(target, desiredTarget, k);
             yaw += (desiredYaw - yaw) * k;
             pitch += ((Overhead ? OverheadPitch : Pitch) - pitch) * k;
-            distance += (desiredDistance - distance) * k;
+            if (zoomSpring)
+            {
+                // The point's spring (critically damped, in small steps), on the distance.
+                var steps = Mathf.Max(1, Mathf.CeilToInt(dt / (1f / 120f)));
+                var h = dt / steps;
+                for (var i = 0; i < steps; i++)
+                {
+                    distanceVel += ((desiredDistance - distance) * (zoomStiffness * zoomStiffness) - distanceVel * (2 * zoomStiffness)) * h;
+                    distance += distanceVel * h;
+                }
+                if (Mathf.Abs(desiredDistance - distance) < 0.02f && Mathf.Abs(distanceVel) < 0.05f)
+                {
+                    distance = desiredDistance;
+                    distanceVel = 0;
+                    zoomSpring = false;
+                }
+            }
+            else distance += (desiredDistance - distance) * k;
             Place();
             // Into the shot over a shoulder, or back out of it: between the two views, eased at both ends.
             closeness = closeOn ? Mathf.Min(1, closeness + dt / CloseIn) : Mathf.Max(0, closeness - dt / CloseOut);
             if (swap < 1) swap = Mathf.Min(1, swap + dt / CloseSwap);
+            var looked = target;
             if (close != null && (closeOn || closeness > 0))
             {
+                // (The review of 10/11, A-01: in a straight line, the first tenth of the way out already took the view two or
+                // three times as far and 30–40° round, and the rest hardly changed it: a jump, then a halt. Now the view turns
+                // round what it looks at, and its distance to it changes by the same share each frame.)
                 var w = Smoother(closeness);
                 var shot = ShownClose();
-                transform.position = Vector3.Lerp(transform.position, shot.pos, w);
-                transform.LookAt(Vector3.Lerp(target, shot.look, w));
+                looked = Vector3.Lerp(target, shot.look, w);
+                var own = transform.position - target;
+                var over = shot.pos - shot.look;
+                var dir = Vector3.Slerp(own.normalized, over.normalized, w);
+                var reach = Mathf.Exp(Mathf.Lerp(Mathf.Log(Mathf.Max(own.magnitude, 0.01f)), Mathf.Log(Mathf.Max(over.magnitude, 0.01f)), w));
+                transform.position = looked + dir * reach;
+                transform.LookAt(looked);
             }
             else
             {
@@ -400,6 +462,11 @@ namespace Bastion.UI.Combat
                 var s = shakeStrength * Mathf.Min(1, shakeTime * 4);
                 transform.position += new Vector3(Random.value - 0.5f, Random.value - 0.5f, Random.value - 0.5f) * s;
                 if (shakeTime == 0) shakeStrength = 0;
+            }
+            if (Logging)
+            {
+                var f = transform.forward;
+                Debug.Log($"[camara] {Time.time:0.000} d={Vector3.Distance(transform.position, looked):0.00} fwd=({f.x:0.000},{f.y:0.000},{f.z:0.000}) close={closeness:0.00}");
             }
         }
 

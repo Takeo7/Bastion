@@ -148,6 +148,13 @@ namespace Bastion.Client.Units
             public float reload;
             /// <summary>The gun's turn in the right hand's frame, learnt while both hands are on it (syntyFigures.ts clipGrip).</summary>
             public Quaternion? grip;
+            /// <summary>
+            /// How far the gun lies between both hands (1) or rigid in the right one at `grip` (0): off while the left hand is
+            /// busy (LeftBusy) and back after it, eased (TwoHandsOff, TwoHandsBack). The 3D review's G-1, 10/11.
+            /// </summary>
+            public float twoHands = 1;
+            /// <summary>How far Support has the left palm onto the handguard (0–1): eased in as it comes within reach (G-1).</summary>
+            public float supportShare = 1;
             /// <summary>How far it is aimed (0 at rest, 1 aimed), going there over AimBlend.</summary>
             public float aim;
             public bool aiming;
@@ -193,6 +200,12 @@ namespace Bastion.Client.Units
             public bool striking;
             /// <summary>The yaw it turns to (degrees; null, none: where it is) and how fast (unitViews.ts pose.yawTarget, turn).</summary>
             public float? yawTo;
+            /// <summary>
+            /// How fast it turns now (degrees a second: under TurnMost, got up to at TurnRise), and whether its weapon waits
+            /// for the turn to be nearly done before it comes up (RaiseWeapon, AimAt). The 3D review's A-03, 10/11.
+            /// </summary>
+            public float yawRate;
+            public bool turning;
             /// <summary>Out of the way of the shot over a shoulder (Veil).</summary>
             public bool veiled;
             /// <summary>Gone into La Lata (Board): fading out, then out of sight for good.</summary>
@@ -232,8 +245,15 @@ namespace Bastion.Client.Units
             /// </summary>
             public Quaternion? chestRest;
             public float reachAim, reachGrab;
+            /// <summary>
+            /// How much of the dead's own pose is laid over its clips (DeadPose, DeadArms): 1 alive, down to 0 over DeathEase as
+            /// its death comes in (the 3D review's A-04, 10/11: its arms had dropped from out in front to its sides in a frame).
+            /// </summary>
+            public float life = 1;
             /// <summary>How far into a search's pose it is (Rummage: 0 none, 1 down and rummaging).</summary>
             public float search;
+            /// <summary>What it searches (Rummage's point): where its hands go (SearchPose; the 3D review's A-18, 10/11).</summary>
+            public Vector3? searchAt;
             /// <summary>Treating (Treat): the one it treats, stepped in to, or itself (its left hand on its thigh).</summary>
             public View tended;
             public bool treatSelf;
@@ -308,6 +328,13 @@ namespace Bastion.Client.Units
         const float Turn = 14;
 
         /// <summary>
+        /// The 3D review's A-03 (10/11): one turning on the spot no faster than TurnMost (degrees a second; walking,
+        /// TurnMostWalking), got up to at TurnRise (degrees a second each second: TurnMost in 0.15 s), so a quarter turn takes
+        /// some 0.45 s and a half one 0.7 s, not 0.1 s; and its weapon raised once it is within AimTurnLeft of its target (degrees).
+        /// </summary>
+        const float TurnMost = 360, TurnMostWalking = 720, TurnRise = 2400, AimTurnLeft = 25;
+
+        /// <summary>
         /// A figure not seen isn't animated (Arturo, 1/11, the performance pass: stepping them is 0.6 to 1.5 ms a frame with
         /// 40 to 66 of them): off the game camera's view (its box this wide, its shadow with it), hidden (the fog's, the
         /// cutaway's) or faded out. Only its body waits (Gameplay, 1/11): where it goes and turns, how far up its gun is,
@@ -361,7 +388,23 @@ namespace Bastion.Client.Units
                 {
                     float yaw = v.root.eulerAngles.y, left = Mathf.DeltaAngle(yaw, yawTo);
                     if (Mathf.Abs(left) < 0.2f) v.yawTo = null;
-                    v.root.rotation = Quaternion.Euler(0, v.yawTo == null ? yawTo : yaw + left * (1 - Mathf.Exp(-dt * v.turn)), 0);
+                    // (As fast as the ease asks, `turn`, as before at its end; but got up to over TurnRise and no faster than
+                    // TurnMost: a quarter turn had gone three quarters of the way in its first tenth of a second. Walking, as
+                    // the walk's corners ask, at once.)
+                    v.yawRate = Mathf.Min(Mathf.Abs(left) * v.turn, Mathf.Min(v.walking ? float.MaxValue : v.yawRate + TurnRise * dt, v.walking ? TurnMostWalking : TurnMost));
+                    v.root.rotation = Quaternion.Euler(0, v.yawTo == null ? yawTo : yaw + Mathf.Sign(left) * Mathf.Min(Mathf.Abs(left), v.yawRate * dt), 0);
+                    if (v.yawTo == null) v.yawRate = 0;
+                    // The weapon up once the turn is nearly done (RaiseWeapon, AimAt).
+                    if (v.turning && (v.yawTo == null || Mathf.Abs(left) < AimTurnLeft))
+                    {
+                        v.turning = false;
+                        Settle(v, AimBlend);
+                    }
+                }
+                else if (v.turning)
+                {
+                    v.turning = false;
+                    Settle(v, AimBlend);
                 }
                 // What stands on a storey the cutaway hides isn't drawn (buildings.ts Cutaway.hides), nor one of the enemy
                 // inside a building not found (Unfound; only those drawn worked out).
@@ -375,12 +418,14 @@ namespace Bastion.Client.Units
                 v.aim = Mathf.MoveTowards(v.aim, up && !v.crouched ? 1 : 0, dt / AimBlend);
                 v.up = Mathf.MoveTowards(v.up, up ? 1 : 0, dt / AimBlend);
                 v.reachShare = Mathf.MoveTowards(v.reachShare, v.reachFor != null && !v.dead ? 1 : 0, dt / ReachBlend);
+                v.life = Mathf.MoveTowards(v.life, v.dead ? 0 : 1, dt / DeathEase);
                 KeepToBody(v, dt);
                 bool seen = eye == null || (v.root.gameObject.activeInHierarchy && !cut && !gone && GeometryUtility.TestPlanesAABB(frustum, new Bounds(v.root.position + Vector3.up * SeenBox.y / 2, SeenBox)));
                 if (!seen)
                 {
                     v.missed = Mathf.Min(v.missed + dt, MissedMost);
                     v.recoil = false;
+                    LogFigureNow(v, false);
                     continue;
                 }
                 seenNow++;
@@ -433,12 +478,13 @@ namespace Bastion.Client.Units
                 Converge(v, dt);
                 Cheek(v);
                 Look(v);
-                Support(v);
+                Support(v, dt);
                 SearchPose(v);
                 ClimbPose(v);
                 Reach(v);
                 if (v.deadKind) DeadPose(v);
                 if (v.reachShare > 0 && v.reachFor != null && views.TryGetValue(v.reachFor, out var reached)) ReachPose(v, BodyChest(reached), v.reachShare, clock);
+                LogFigureNow(v, true);
             }
             seenBefore = seenNow;
             if (ThinLog && ++thinLogged % 60 == 0) Debug.Log($"[alternan] {Time.time:0.0} s: {seenNow} seen, {waited} waiting this frame (crowd {(thin ? "yes" : "no")}, dt {step * 1000:0.0} ms)");
@@ -456,6 +502,35 @@ namespace Bastion.Client.Units
             var along = eye.transform.forward;
             float ground = transform.position.y;
             return Mathf.Abs(along.y) > 1e-4f ? from + along * Mathf.Max(0, (ground - from.y) / along.y) : from;
+        }
+
+        /// <summary>
+        /// BASTION_LOG_FIGURA=&lt;id&gt; (the labs; the 3D review of 10/11, A-22, A-05, A-14, A-04): that figure each frame as it
+        /// is drawn, a line [figura]: what it holds, whether it aims and how far its weapon is up, how far it moves, how
+        /// much the whole body's clip and the free hand's take, its fade, its yaw; its head over its feet, each arm's angle
+        /// from the trunk's line down and the left palm in its root's frame (cm); where its weapon and eyes point (AimReport,
+        /// at its aim or ahead). Unseen (not stepped), the same as it was left.
+        /// </summary>
+        static readonly string LogFigure = Environment.GetEnvironmentVariable("BASTION_LOG_FIGURA");
+
+        void LogFigureNow(View v, bool seen)
+        {
+            if (LogFigure == null || v.id != LogFigure || v.root == null) return;
+            string F(float f) => f.ToString("0.00", CultureInfo.InvariantCulture);
+            string pose = "";
+            var a = v.animator;
+            if (a != null && a.isHuman && a.GetBoneTransform(HumanBodyBones.Head) is Transform head && a.GetBoneTransform(HumanBodyBones.Hips) is Transform hips
+                && a.GetBoneTransform(HumanBodyBones.Neck) is Transform neck)
+            {
+                var down = hips.position - neck.position;
+                string Arm(HumanBodyBones upper, HumanBodyBones hand) => a.GetBoneTransform(upper) is Transform u && a.GetBoneTransform(hand) is Transform h ? F(Vector3.Angle(h.position - u.position, down)) : "-";
+                var left = a.GetBoneTransform(HumanBodyBones.LeftHand) is Transform lh ? v.root.InverseTransformPoint(lh.position) * 100 : Vector3.zero;
+                pose = $" head={F((head.position.y - v.root.position.y) * 100)} armL={Arm(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftHand)} armR={Arm(HumanBodyBones.RightUpperArm, HumanBodyBones.RightHand)}"
+                    + $" L=({F(left.x)},{F(left.y)},{F(left.z)})";
+            }
+            var ahead = v.root.position + v.root.forward * 6 + Vector3.up * 1.2f;
+            Debug.Log($"[figura] {Time.time.ToString("0.000", CultureInfo.InvariantCulture)} {v.id} seen={seen} held={v.inHand} aiming={v.aiming} up={F(v.up)} picking={v.picking != null} aims={v.aims} moving={F(v.anim?.Moving ?? 0)}"
+                + $" whole={F(v.anim?.WholeShare ?? 0)} free={F(v.anim?.FreeShare ?? 0)} fade={F(v.fade)} gone={v.gone} life={F(v.life)} hands={F(v.twoHands)} yaw={F(v.root.eulerAngles.y)}{pose} {AimReport(v.id, v.aimAt ?? ahead)}");
         }
 
         /// <summary>
@@ -1028,6 +1103,11 @@ namespace Bastion.Client.Units
                 string IdOf(string m) => ArmedId(m) ?? (m == "idle" ? Anims.Stance(view.build, stance) : null) ?? Anims.Motion(view.build, m, view.deadKind);
                 if (view.animator != null && catalog != null)
                 {
+                    // Its bones written whenever its graph is stepped, seen or not (POLYGON's prefabs cull their bones'
+                    // updates when unseen, as the Settlement and Portraits found): what Step does here is its own culling. Back
+                    // from a veil or a cutaway, the first step's pose had been dropped and the dead's lean laid twice over the
+                    // last one, its arms down and its trunk turned for a frame (the 3D review's A-14, 10/11).
+                    view.animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                     view.anim = new FigureAnimator(view.animator, m => catalog.Clip(IdOf(m)), m => Gaits.ArmedPace(m, ArmedId(m)), m => m != "crouchIdle" && ArmedId(m) != null);
                     if (armed) AtRest(view, 0);
                 }
@@ -1387,6 +1467,7 @@ namespace Bastion.Client.Units
         static void Lie(View v)
         {
             v.dead = true;
+            v.life = 0;
             if (v.anim != null)
             {
                 v.deathId = DeathIdOf(v, false);
@@ -1671,7 +1752,7 @@ namespace Bastion.Client.Units
             // Dithered out over VeilSeconds, or back in (syntyFigures.ts veil); one gone into La Lata stays out.
             if (v.boarded) return;
             v.fadeGoal = on ? 0 : 1;
-            v.fadeRate = 1 / VeilSeconds;
+            v.fadeRate = 1 / (on ? VeilSeconds : VeilBack);
         }
 
         /// <summary>
@@ -1805,6 +1886,9 @@ namespace Bastion.Client.Units
             string carry = melee ? BeltCarry : sidearm ? SidearmCarry : MainCarry;
             if (v.drawn != carry) Draw(v, carry);
             v.close = melee ? 0 : Flat(p - v.root.position) / MapSpace.Tile;
+            // (Picked with the gun down and well off the line: turned first, then up; another picked after, it turns with
+            // the gun up, 23/10 #3. The 3D review's A-03, 10/11.)
+            if (was == null && v.up < 0.99f && TurnLeft(v) > AimTurnLeft) v.turning = true;
             Settle(v, 0.3f);
         }
 
@@ -1861,6 +1945,13 @@ namespace Bastion.Client.Units
         /// </summary>
         const float WalkRound = 0.38f, Swerve = 0.24f;
         const int WalkRoundSteps = 8;
+        /// <summary>
+        /// Seconds a walk slows to a stop over at its end (Walk), of its last stretch at most StopShare, its clip down to
+        /// StopLegs of its speed (then the idle). The 3D review's A-06, 10/11.
+        /// </summary>
+        const float StopSeconds = 0.3f, StopShare = 0.35f, StopLegs = 0.25f;
+        /// <summary>BASTION_SIN_FRENAR=1: stopped at once at the end, for the labs' «before».</summary>
+        public static bool StopOff = Environment.GetEnvironmentVariable("BASTION_SIN_FRENAR") == "1";
 
         async Awaitable Walk(string id, IReadOnlyList<Pos> path, int ap, float pace, IReadOnlyList<float> waits, IReadOnlyList<bool> passes, Action<Vector3> onStep,
             CancellationToken ct)
@@ -1935,13 +2026,20 @@ namespace Bastion.Client.Units
                         passed++;
                     }
                 }
-                // At the gait's one speed all along (a diagonal as fast as a straight step), facing where it heads.
+                // At the gait's one speed all along (a diagonal as fast as a straight step), facing where it heads; on the
+                // last stretch, slowed to a stop over StopSeconds at its end (a third of a short dash's at most), the rest a
+                // little quicker, in the same time all told, its clip as quick as its root to keep its feet (the 3D review's
+                // A-06, 10/11: from 6 m/s to still in a frame).
                 float seconds = way.length / MapSpace.Tile * tile;
+                float e = !StopOff && m == path.Count && seconds > 0 ? Mathf.Clamp(StopSeconds / seconds, 0, StopShare) : 0, v0 = 1 / (1 - e / 2);
                 for (float t = 0; t < seconds;)
                 {
                     await Awaitable.NextFrameAsync(ct);
                     t = Mathf.Min(seconds, t + Time.deltaTime);
-                    float d = seconds > 0 ? t / seconds * way.length : way.length;
+                    float u = seconds > 0 ? t / seconds : 1, past = u - (1 - e);
+                    float done = e <= 0 ? u : past <= 0 ? v0 * u : v0 * (1 - e) + v0 * past - v0 * past * past / (2 * e);
+                    if (e > 0) v.anim?.Motion(gait.motion, clip * Mathf.Max(StopLegs, past <= 0 ? v0 : v0 * (1 - past / e)));
+                    float d = seconds > 0 ? Mathf.Min(1, done) * way.length : way.length;
                     var (at, heading) = OnWay(way, d);
                     v.root.position = at;
                     if (heading.x * heading.x + heading.z * heading.z > 1e-8f) TurnTo(v, Mathf.Atan2(heading.x, heading.z) * Mathf.Rad2Deg);
@@ -2044,10 +2142,17 @@ namespace Bastion.Client.Units
             v.close = Flat(at - v.root.position) / MapSpace.Tile;
             v.aiming = true;
             float from = drawn ? 0 : v.up;
+            // Down and well off the line: turned first, then up (the 3D review's A-03, 10/11: turned and raised in the same
+            // frame). Up already (picked, on watch: 23/10 #3), it turns with the gun up.
+            if (from < 0.99f && TurnLeft(v) > AimTurnLeft) v.turning = true;
             Settle(v, AimBlend * (1 - from));
+            for (float t = 0; v.turning && t < 0.8f; t += Time.deltaTime) await Awaitable.NextFrameAsync(ct);
             if (from < 0.99f) await Awaitable.WaitForSecondsAsync(0.35f * (1 - from), ct);
             return aim;
         }
+
+        /// <summary>How far `v` has still to turn (degrees; 0 none).</summary>
+        static float TurnLeft(View v) => v.yawTo is float y && v.root != null ? Mathf.Abs(Mathf.DeltaAngle(v.root.eulerAngles.y, y)) : 0;
 
         /// <summary>
         /// Down from aiming (unitViews.ts lowerWeapon): `aim` (RaiseWeapon's) only, not one taken since; to the watch's aim
@@ -2121,7 +2226,8 @@ namespace Bastion.Client.Units
             }
             if (views.TryGetValue(id, out var v) && v.deadKind && v.anim != null && FigureCatalog.Load()?.Clip("zombieHeadbutt") is AnimationClip butt)
             {
-                v.anim.PlayUpper(butt, 0.1f, 1, HeadbuttLead);
+                // (In over its wind-up, not 0.1 s: the head came up 46 cm in a frame at 30 fps; the 3D review's A-05, 10/11.)
+                v.anim.PlayUpper(butt, WindUp, 1, HeadbuttLead);
                 // A step in as the blow lands and back (unitViews.ts lunge: LUNGE_SHORT short of its middle, LUNGE at most):
                 // still while it winds up, in over the 0.14 s before the clip's blow, back over 0.35 s.
                 var home = v.root.position;
@@ -2504,30 +2610,99 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// Where in Mixamo's throws the hand lets go, and how long before that the game starts them (docs/MIXAMO.md;
-        /// 0.10.1's syntyFigures.ts throwMotion, tossStone): the wind-up cut short, the throw whole.
+        /// 0.10.1's syntyFigures.ts throwMotion, tossStone): the wind-up cut short, the throw whole. The grenade's, «Throw»
+        /// («Throwing An Object From A Standard Pose», throwGrenade; the 3D review's A-16, 10/11): «Toss Grenade» was an
+        /// underhand toss, its hand back by the hip at most (ClipProbe.Alone BASTION_MANOS=1: 0.73–0.85 m up), and from the
+        /// game's camera it read as two arms opened. «Throw»'s left hand is furthest back over the shoulder at 0.55 s (40 cm
+        /// behind, 1.48 m up) and lets go over the head at 0.78 s going forward at 6.4 m/s: begun 0.1 s before the hand is
+        /// back.
         /// </summary>
-        const float GrenadeRelease = 1.8f, GrenadeLead = 0.49f, StoneRelease = 2.4f, StoneLead = 0.24f;
+        const float GrenadeRelease = 0.78f, GrenadeLead = 0.78f - 0.55f + 0.1f, StoneRelease = 2.4f, StoneLead = 0.24f;
 
         /// <summary>A stone thrown at `to` (its throw by the free hand: Mixamo's, mirrored); the hand it leaves, for the stone's flight.</summary>
         public async Awaitable<Vector3> TossStone(string id, Vector3 to, CancellationToken ct = default)
         {
             Face(id, to);
+            Transform stone = null;
             if (views.TryGetValue(id, out var v))
             {
+                await FacedFirst(v, ct);
                 v.anim?.PlayFree(FigureCatalog.Load()?.Clip("throwStone"), 0.1f, 1, StoneRelease - StoneLead);
                 ThrowTurn(v, StoneTurn);
+                stone = HeldStone(v);
             }
-            await Awaitable.WaitForSecondsAsync(StoneLead, ct);
+            try
+            {
+                await Awaitable.WaitForSecondsAsync(StoneLead, ct);
+            }
+            finally
+            {
+                if (stone != null) DestroyNow(stone.gameObject);
+            }
             if (v != null) ThrowTurn(v, -StoneTurn);
-            return LeftHand(id);
+            var at = LeftHand(id);
+            if (v != null) _ = StoneDone(v, ct);
+            return at;
         }
+
+        /// <summary>ThrowDone for the stone, on by itself (TossStone returns as it lets go, for the stone's flight).</summary>
+        static async Awaitable StoneDone(View v, CancellationToken ct)
+        {
+            try
+            {
+                await ThrowDone(v, ct);
+            }
+            catch (OperationCanceledException) { }
+        }
+
+        /// <summary>
+        /// A stone in the left palm till it lets it go (the 3D review's A-16, 10/11: it left an open, empty hand): as Fx.Stone's
+        /// in the air (StoneSize tiles, its grey), by its middle in the cup of the hand, as the grenade is (ThrowMotion).
+        /// </summary>
+        static Transform HeldStone(View v)
+        {
+            if (v.animator == null || !v.animator.isHuman || !(v.animator.GetBoneTransform(HumanBodyBones.LeftHand) is Transform hand)) return null;
+            var stone = GameObject.CreatePrimitive(PrimitiveType.Sphere).transform;
+            stone.name = "piedra";
+            DestroyNow(stone.GetComponent<Collider>());
+            if (stoneMaterial == null)
+            {
+                stoneMaterial = KitMaterials.New(KitMaterials.Plain, "Piedra en la mano");
+                if (stoneMaterial != null) stoneMaterial.color = new Color32(0x77, 0x73, 0x6b, 0xff);
+            }
+            if (stoneMaterial != null) stone.GetComponent<Renderer>().sharedMaterial = stoneMaterial;
+            stone.SetParent(hand, false);
+            stone.localScale = StoneSize * MapSpace.Tile / Mathf.Max(hand.lossyScale.x, 1e-4f);
+            var along = v.animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal) is Transform finger ? finger.position - hand.position : Vector3.zero;
+            stone.position = hand.position + along * 0.75f;
+            return stone;
+        }
+
+        /// <summary>Fx.Stone's size (tiles, along its three axes).</summary>
+        static readonly Vector3 StoneSize = new Vector3(0.12f, 0.086f, 0.106f);
+        static Material stoneMaterial;
 
         /// <summary>
         /// How far to its left one throwing turns as it throws, and back once it lets go (degrees; the review of 9/11,
         /// Gameplay): the throws are Mixamo's thrown with the right hand, mirrored to the left, and the left hand let go
         /// going 55° to the right of where the thing lands (the stone 30°; CombatLab.Lanzar), its arm across the body.
+        /// «Throw» (the grenade's since the 3D review's A-16, 10/11) throws nearly straight ahead over the head: unturned,
+        /// its left hand let go going 11–20° to the right of the line (CombatLab.Lanzar), so it turns 15° (BASTION_GIRO_GRANADA
+        /// for the labs).
         /// </summary>
-        const float GrenadeTurn = 45, StoneTurn = 30;
+        static readonly float GrenadeTurn = LabFloat("BASTION_GIRO_GRANADA", 15);
+        const float StoneTurn = 30;
+
+        /// <summary>
+        /// Before a throw (the 3D review's A-03, 10/11): its turn to the target nearly done (within AimTurnLeft), ThrowFace
+        /// at most; it had begun the throw half way round, 67° to 134° off in the first frame.
+        /// </summary>
+        static async Awaitable FacedFirst(View v, CancellationToken ct)
+        {
+            for (float t = 0; t < ThrowFace && TurnLeft(v) > AimTurnLeft; t += Time.deltaTime) await Awaitable.NextFrameAsync(ct);
+        }
+
+        const float ThrowFace = 0.6f;
 
         /// <summary>`v` turned `degrees` to its left of where it is turning to (or faces), at the throw's pace.</summary>
         static void ThrowTurn(View v, float degrees)
@@ -2548,9 +2723,8 @@ namespace Bastion.Client.Units
         /// </summary>
         public async Awaitable ThrowMotion(string id, Action onHit = null, CancellationToken ct = default, string held = null)
         {
-            float rest = 0.2f;
-            if (views.TryGetValue(id, out var v) && v.anim != null && FigureCatalog.Load()?.Clip("tossGrenade") is AnimationClip toss)
-                rest = Mathf.Max(0.1f, v.anim.PlayFree(toss, 0.1f, 1, GrenadeRelease - GrenadeLead) - GrenadeLead - 0.2f);
+            if (views.TryGetValue(id, out var v)) await FacedFirst(v, ct);
+            if (v != null && v.anim != null && FigureCatalog.Load()?.Clip("throwGrenade") is AnimationClip toss) v.anim.PlayFree(toss, 0.1f, 1, GrenadeRelease - GrenadeLead);
             if (v != null) ThrowTurn(v, GrenadeTurn);
             Transform bottle = null;
             if (held != null && v?.animator != null && v.animator.isHuman && v.animator.GetBoneTransform(HumanBodyBones.LeftHand) is Transform hand)
@@ -2585,8 +2759,23 @@ namespace Bastion.Client.Units
             }
             onHit?.Invoke();
             if (v != null) ThrowTurn(v, -GrenadeTurn);
-            await Awaitable.WaitForSecondsAsync(rest, ct);
+            if (v != null) await ThrowDone(v, ct);
+            else await Awaitable.WaitForSecondsAsync(ThrowAfter + ThrowBack, ct);
         }
+
+        /// <summary>
+        /// After the hand lets go, its follow-through for ThrowAfter, then the throw let go of over ThrowBack: the left hand
+        /// back on the gun (the 3D review's A-16 and G-1, 10/11: the throws' clips went on to their ends, «Throw»'s arm hanging
+        /// by the side and «Throw Object»'s 2.4 s more, the gun rigid in the right hand all that while).
+        /// </summary>
+        static async Awaitable ThrowDone(View v, CancellationToken ct)
+        {
+            await Awaitable.WaitForSecondsAsync(ThrowAfter, ct);
+            v.anim?.StopFree(ThrowBack);
+            await Awaitable.WaitForSecondsAsync(ThrowBack, ct);
+        }
+
+        const float ThrowAfter = 0.3f, ThrowBack = 0.25f;
 
         /// <summary>The hand a grenade or a stone leaves: the left (the gun stays in the right).</summary>
         public Vector3 ThrowHand(string id) => LeftHand(id);
@@ -2600,7 +2789,7 @@ namespace Bastion.Client.Units
             {
                 var at = MapSpace.StandAt(state, tile);
                 Face(id, at);
-                v.anim.PlayUpper(butt, 0.1f, 1, HeadbuttLead);
+                v.anim.PlayUpper(butt, WindUp, 1, HeadbuttLead);
                 var home = v.root.position;
                 var reach = Reach(home, at, LungeShort, LungeMost);
                 _ = LungeArms(v, ct);

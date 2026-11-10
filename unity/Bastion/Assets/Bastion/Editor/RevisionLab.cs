@@ -865,6 +865,7 @@ namespace Bastion.EditorTools
             int every = int.TryParse(Environment.GetEnvironmentVariable("BASTION_CADA"), out int n) && n > 0 ? n : 1;
             string now = "inicio";
             bool done = false;
+            Vector3? home = null;
             async Awaitable Watch()
             {
                 int frame = 0;
@@ -872,6 +873,16 @@ namespace Bastion.EditorTools
                 {
                     await Awaitable.NextFrameAsync();
                     frame++;
+                    // (The one treating another, each frame: how far its root has gone from its tile, and its muzzle over its
+                    // right shoulder, cm; the 3D review's A-19, 10/11. And how the gun sits in its hand, G-1.)
+                    var id = first.Id;
+                    var rig = units.transform.Find(id)?.GetComponentInChildren<Animator>();
+                    if (home is Vector3 h && rig != null && rig.isHuman && rig.GetBoneTransform(HumanBodyBones.RightUpperArm) is Transform shoulder)
+                    {
+                        var feet = units.Feet(id);
+                        Debug.Log(FormattableString.Invariant($"[curar] {Time.time:0.000} {now} root={new Vector2(feet.x - h.x, feet.z - h.z).magnitude * 100:0.0} muzzleUp={(units.Muzzle(id).y - shoulder.position.y) * 100:0.0}"));
+                        Debug.Log(FormattableString.Invariant($"[mano-fusil] {id} {Time.time:0.000} {now} {units.GripReport(id)}"));
+                    }
                     if (frame % every == 0) Film(row, frame / every, now);
                 }
             }
@@ -881,6 +892,7 @@ namespace Bastion.EditorTools
                 {
                     units.Sync(state);
                     Reveal();
+                    home = units.Feet(first.Id);
                     _ = Watch();
                     await Awaitable.WaitForSecondsAsync(1.0f);
                     for (int time = 1; time <= 2; time++)
@@ -904,6 +916,14 @@ namespace Bastion.EditorTools
                     done = true;
                 }
             };
+        }
+
+        /// <summary>The turn of what `id` holds in its right hand's frame (the 3D review's G-1: how far the gun turns in the hand); null without.</summary>
+        static Quaternion? InHand(string id)
+        {
+            var rig = units.transform.Find(id)?.GetComponentInChildren<Animator>();
+            var model = units.CarriedForLab(id).FirstOrDefault(c => c.drawn).model;
+            return rig != null && rig.isHuman && model != null && rig.GetBoneTransform(HumanBodyBones.RightHand) is Transform hand ? Quaternion.Inverse(hand.rotation) * model.rotation : (Quaternion?)null;
         }
 
         /// <summary>Where `id` and what it holds are against `target`'s chest: its root's heading and the held model's middle (degrees round the upright, from its chest), and that middle's distance from the target's chest (cm).</summary>
@@ -968,6 +988,7 @@ namespace Bastion.EditorTools
             bool done = false;
             var trail = new Dictionary<string, Queue<(float t, Vector3 p)>>();
             var aims = new Dictionary<string, Vector3>();
+            var inHandAt = new Dictionary<string, Quaternion>();
             async Awaitable Watch()
             {
                 int frame = 0;
@@ -981,6 +1002,10 @@ namespace Bastion.EditorTools
                         q.Enqueue((Time.time, units.ThrowHand(u.Id)));
                         while (q.Count > 0 && q.Peek().t < Time.time - 0.1f) q.Dequeue();
                         if (aims.TryGetValue(u.Id, out var to)) Debug.Log($"[mano] {Time.time:0.000} {u.Id} {Release(u.Id, to)}");
+                        // (The rifle in the right hand as the left throws: the 3D review's G-1, 10/11, its «rigid», and how far
+                        // it has turned in that hand since the throw began, «turn», degrees.)
+                        string turned = inHandAt.TryGetValue(u.Id, out var was) && InHand(u.Id) is Quaternion rel ? FormattableString.Invariant($" turn={Quaternion.Angle(rel, was):0.0}") : "";
+                        Debug.Log(FormattableString.Invariant($"[mano-fusil] {u.Id} {Time.time:0.000} {now} {units.GripReport(u.Id)}{turned}"));
                     }
                     Film(row, frame, now);
                 }
@@ -1034,6 +1059,7 @@ namespace Bastion.EditorTools
             async Awaitable Throw(string id, string kind, Vector3 to, string where)
             {
                 aims[id] = to;
+                if (InHand(id) is Quaternion rel) inHandAt[id] = rel;
                 units.Face(id, to);
                 await Awaitable.WaitForSecondsAsync(0.25f);
                 if (kind == "piedra")

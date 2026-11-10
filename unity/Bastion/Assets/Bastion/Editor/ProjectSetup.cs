@@ -57,6 +57,7 @@ namespace Bastion.EditorTools
             low.FindProperty("m_RenderScale").floatValue = 0.8f;
             low.FindProperty("m_ShadowCascadeCount").intValue = 1;
             low.FindProperty("m_SoftShadowsSupported").boolValue = false;
+            low.FindProperty("m_CascadeBorder").floatValue = 0.107758604f; // the far shadows fade as Medio's and Alto's do (the review of 10/11, L-10)
             low.ApplyModifiedPropertiesWithoutUndo();
 
             // The levels, in order: Bajo, Medio, Alto (UI's Ajustes finds them by name).

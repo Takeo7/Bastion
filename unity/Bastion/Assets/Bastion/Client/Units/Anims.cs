@@ -51,6 +51,12 @@ namespace Bastion.Client.Units
         public bool slung;
         /// <summary>Its blow: "chop", from above (macheteChop: the pan, the crowbar); none, the knife's stab or the machete's swing across.</summary>
         public string stroke;
+        /// <summary>
+        /// A long gun's: how far ahead of the feet its muzzle comes shouldered (tiles; CombatLab.Agarres with
+        /// BASTION_LOG_ALCANCE=1, aimed ahead), for the step back at point blank before its own is measured (UnitViews
+        /// StepBack; the 3D review's A-15, 10/11). 0: none, it waits for the measure as before.
+        /// </summary>
+        public float reach;
     }
 
     /// <summary>

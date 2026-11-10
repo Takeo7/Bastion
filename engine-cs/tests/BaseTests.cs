@@ -352,235 +352,240 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------ the sieges in the campaign (docs/FASE12.md §11.5)
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › the clock counts missions; at 0 the siege is the next thing the base does, by every soldier fit to fight", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void TheClockCountsMissions()
+        /// <summary>They switch the sieges on for themselves (Arturo took them out of the game the 7/11: Campaign.SiegesOn).</summary>
+        [Collection(SiegesSwitch.Name)]
+        public class Sieges : WithSieges
         {
-            var c = Solo();
-            var lines = new List<string>();
-            for (var i = 0; i < Campaign.SiegeFirstIn; i++)
+            [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › the clock counts missions; at 0 the siege is the next thing the base does, by every soldier fit to fight")]
+            public void TheClockCountsMissions()
             {
-                Assert.Null(Campaign.ActiveOffer(c)?.Siege);
-                Fly(c);
-                lines.Add(c.Log[0].Text);
+                var c = Solo();
+                var lines = new List<string>();
+                for (var i = 0; i < Campaign.SiegeFirstIn; i++)
+                {
+                    Assert.Null(Campaign.ActiveOffer(c)?.Siege);
+                    Fly(c);
+                    lines.Add(c.Log[0].Text);
+                }
+                var siege = Campaign.ActiveOffer(c)!;
+                Assert.True(siege.Siege);
+                Assert.Equal("Asedio", siege.Name);
+                Assert.Null(siege.ExpiresDay);
+                // c.squad.sort(): in place, as JavaScript sorts strings (by UTF-16 code units).
+                Js.Sort(c.Squad, string.CompareOrdinal);
+                var fit = c.Soldiers.Where((s) => s.Alive && s.WoundedDays == 0).Select((s) => s.Id).ToList();
+                Js.Sort(fit, string.CompareOrdinal);
+                Assert.Equal(fit, c.Squad);
+                // Nothing else to choose, nobody to leave out, no calling it off.
+                Throws("asedio", c, new ChooseMissionCommand { Id = c.Offers.First((o) => o.Siege != true).Id });
+                Throws("asedio", c, new CancelMissionCommand());
+                Throws("sanos", c, new SquadCommand { Soldier = c.Squad[0], On = false });
+                // Fought on the base as it stands, with the clock's count.
+                var map = Campaign.OfferMap(c, siege);
+                Assert.Equal(MapSourceKinds.Base, map.Kind);
+                Assert.Same(c.Bastion, map.Base);
+                Assert.Null(map.Id);
+                Assert.Null(map.Biome);
+                Assert.Null(map.Seed);
+                Assert.Null(map.Site);
+                Assert.Null(map.Medical);
+                var plan = Campaign.SiegePlan(c, siege)!;
+                Assert.Equal(c.Siege.Count, plan.Count);
+                Assert.Equal(c.Siege.Sides, plan.Sides);
             }
-            var siege = Campaign.ActiveOffer(c)!;
-            Assert.True(siege.Siege);
-            Assert.Equal("Asedio", siege.Name);
-            Assert.Null(siege.ExpiresDay);
-            // c.squad.sort(): in place, as JavaScript sorts strings (by UTF-16 code units).
-            Js.Sort(c.Squad, string.CompareOrdinal);
-            var fit = c.Soldiers.Where((s) => s.Alive && s.WoundedDays == 0).Select((s) => s.Id).ToList();
-            Js.Sort(fit, string.CompareOrdinal);
-            Assert.Equal(fit, c.Squad);
-            // Nothing else to choose, nobody to leave out, no calling it off.
-            Throws("asedio", c, new ChooseMissionCommand { Id = c.Offers.First((o) => o.Siege != true).Id });
-            Throws("asedio", c, new CancelMissionCommand());
-            Throws("sanos", c, new SquadCommand { Soldier = c.Squad[0], On = false });
-            // Fought on the base as it stands, with the clock's count.
-            var map = Campaign.OfferMap(c, siege);
-            Assert.Equal(MapSourceKinds.Base, map.Kind);
-            Assert.Same(c.Bastion, map.Base);
-            Assert.Null(map.Id);
-            Assert.Null(map.Biome);
-            Assert.Null(map.Seed);
-            Assert.Null(map.Site);
-            Assert.Null(map.Medical);
-            var plan = Campaign.SiegePlan(c, siege)!;
-            Assert.Equal(c.Siege.Count, plan.Count);
-            Assert.Equal(c.Siege.Sides, plan.Sides);
-        }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › held: what broke stays broken, the traps spent, and the next one comes bigger", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void HeldWhatBrokeStaysBroken()
-        {
-            var c = Solo();
-            c.Siege.In = 0;
-            Fly(c);
-            Assert.True(Campaign.ActiveOffer(c)?.Siege);
-            var palisade = CampaignHelpers.Raise(c, PieceIds.Palisade);
-            var mine = CampaignHelpers.Raise(c, PieceIds.Mine);
-            var report = Fly(c, Outcomes.Victory, (s) =>
+            [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › held: what broke stays broken, the traps spent, and the next one comes bigger")]
+            public void HeldWhatBrokeStaysBroken()
             {
-                var cell = Base.PieceCells(PieceIds.Palisade, palisade.X, palisade.Y, palisade.Rot)[0];
-                s.Breakables![cell.Y * s.Width + cell.X] = 4;
-                s.Traps!.First((t) => t.Piece == mine.Id).Charges = 0;
-            });
-            Assert.True(report.Siege);
-            Assert.Equal(new int?[] { 4, 0 }, new int?[] { palisade.Hp, mine.Charges });
-            Assert.Equal("{\"broken\":0,\"hurt\":1,\"spent\":1}", CampaignJsonTests.Write(report.Damage!));
-            Assert.Equal(Campaign.SiegeEvery, c.Siege.In);
-            Assert.Equal(1, c.Siege.Held);
-            Assert.Equal(Campaign.SiegeFirst + Campaign.SiegeGrowth + c.Doom, c.Siege.Count);
-            // What to mend and rearm, right after the operations (18/10 test: it fell off the end of the agenda).
-            c.Parts = 10;
-            var labels = Campaign.NextSteps(c, 0).Where((x) => x.Tone == NextStepTones.Info).Select((x) => x.Label).ToList();
-            var at = labels.IndexOf("Repara la empalizada");
-            Assert.True(at >= 0);
-            Assert.True(at <= 1);
-            Assert.Equal("Repón la mina", labels.ElementAtOrDefault(at + 1));
-        }
-
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › the Bastion's building keeps the hits on all of it, past the caravan's own tiles", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void TheBastionsBuildingKeepsTheHitsOnAllOfIt()
-        {
-            var c = Solo();
-            c.Level = 5;
-            c.Bastion.Level = 5;
-            c.Siege.In = 0;
-            Fly(c);
-            var caravan = c.Bastion.Pieces.First((p) => p.Piece == PieceIds.Caravan);
-            var own = Base.PieceCells(PieceIds.Caravan, caravan.X, caravan.Y, caravan.Rot);
-            var outer = Base.BastionFootprint(c.Bastion).First((t) => !own.Any((o) => o.X == t.X && o.Y == t.Y));
-            Fly(c, Outcomes.Victory, (s) =>
-            {
-                s.Breakables![outer.Y * s.Width + outer.X] = 5;
-            });
-            Assert.Equal(5, caravan.Hp);
-        }
-
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › nobody starts a siege on a turret, a trap or the wire, posted there before it was built or not", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void NobodyStartsASiegeOnATurretATrapOrTheWire()
-        {
-            var c = Solo();
-            c.Siege.In = 0;
-            Fly(c);
-            CampaignHelpers.Raise(c, PieceIds.Turret);
-            var spot = CampaignHelpers.FreeSpot(c, PieceIds.Mine);
-            Base.FellTree(c.Bastion, spot.X, spot.Y);
-            Run(c, new PostCommand { Soldier = c.Squad[0], At = spot });
-            var mine = CampaignHelpers.Raise(c, PieceIds.Mine);
-            Assert.Equal((spot.X, spot.Y), (mine.X, mine.Y));
-            var armed = Base.ArmedTiles(c.Bastion);
-            Assert.Equal(2, armed.Count);
-            var offer = Campaign.ActiveOffer(c)!;
-            var s = Setup.CreateMission(SiegeMission(c, offer));
-            var defenders = s.Units.Where((u) => u.Team == Teams.Xcom && u.Automaton == null).ToList();
-            Assert.Equal(c.Squad.Count, defenders.Count);
-            foreach (var u in defenders) Assert.False(armed.Has(u.Pos.Y * s.Width + u.Pos.X));
-        }
-
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › fallen with someone left: another clearing, the stores lost, the soldiers keep what they carry", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void FallenWithSomeoneLeft()
-        {
-            var c = Solo();
-            c.Siege.In = 0;
-            Fly(c);
-            // One soldier stayed in, wounded: the rest defend and fall.
-            var home = c.Soldiers[0];
-            home.WoundedDays = 20;
-            c.Squad = c.Squad.Where((id) => id != home.Id).ToList();
-            CampaignHelpers.Raise(c, PieceIds.Radio);
-            var credits = c.Credits;
-            Assert.True(credits > 0);
-            var report = Fly(c, Outcomes.Defeat, (s) =>
-            {
-                foreach (var u in s.Units.Where((x) => x.Team == Teams.Xcom && x.Automaton == null))
+                var c = Solo();
+                c.Siege.In = 0;
+                Fly(c);
+                Assert.True(Campaign.ActiveOffer(c)?.Siege);
+                var palisade = CampaignHelpers.Raise(c, PieceIds.Palisade);
+                var mine = CampaignHelpers.Raise(c, PieceIds.Mine);
+                var report = Fly(c, Outcomes.Victory, (s) =>
                 {
-                    u.Alive = false;
-                    u.Hp = 0;
-                }
-            });
-            Assert.True(report.Fallen);
-            Assert.Null(c.Outcome);
-            Assert.Equal(new[] { PieceIds.Caravan }, c.Bastion.Pieces.Select((p) => p.Piece));
-            Assert.Equal(new int?[] { 0, 0 }, new int?[] { c.Credits, c.Parts });
-            Assert.True(home.Alive);
-            Assert.Contains(c.Log, (l) => l.Alert?.Title == "El Bastión ha caído");
-            // Only the wounded left and nothing to recruit with: time would stand still, so one waits for them to heal.
-            Assert.True(Campaign.MustWait(c));
-            Assert.Contains(Campaign.NextSteps(c, 0), (x) => x.View == BaseViews.Barracks && x.Label == "Nadie puede salir: esperad a que se curen" && x.Tone == NextStepTones.Urgent && x.Count == null && x.Go == null);
-            var day = c.Day;
-            // (The Marea, which goes on meanwhile, held back: it is not what is tested here.)
-            c.NextDoomDay = 999;
-            Run(c, new AdvanceCommand { Ready = true });
-            // Until someone has healed, or enough suministros have come in to recruit.
-            Assert.True(home.WoundedDays == 0 || c.Credits >= Campaign.RecruitCost(c));
-            Assert.True(c.Day > day);
-            // Once someone can go out, waiting is a day at a time (Ana and Arturo, 22/10).
-            Assert.False(Campaign.MustWait(c));
-            var now = c.Day;
-            Run(c, new AdvanceCommand { Ready = true });
-            Assert.Equal(now + 1, c.Day);
-        }
+                    var cell = Base.PieceCells(PieceIds.Palisade, palisade.X, palisade.Y, palisade.Rot)[0];
+                    s.Breakables![cell.Y * s.Width + cell.X] = 4;
+                    s.Traps!.First((t) => t.Piece == mine.Id).Charges = 0;
+                });
+                Assert.True(report.Siege);
+                Assert.Equal(new int?[] { 4, 0 }, new int?[] { palisade.Hp, mine.Charges });
+                Assert.Equal("{\"broken\":0,\"hurt\":1,\"spent\":1}", CampaignJsonTests.Write(report.Damage!));
+                Assert.Equal(Campaign.SiegeEvery, c.Siege.In);
+                Assert.Equal(1, c.Siege.Held);
+                Assert.Equal(Campaign.SiegeFirst + Campaign.SiegeGrowth + c.Doom, c.Siege.Count);
+                // What to mend and rearm, right after the operations (18/10 test: it fell off the end of the agenda).
+                c.Parts = 10;
+                var labels = Campaign.NextSteps(c, 0).Where((x) => x.Tone == NextStepTones.Info).Select((x) => x.Label).ToList();
+                var at = labels.IndexOf("Repara la empalizada");
+                Assert.True(at >= 0);
+                Assert.True(at <= 1);
+                Assert.Equal("Repón la mina", labels.ElementAtOrDefault(at + 1));
+            }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › one siege in three by night, never the first", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void OneSiegeInThreeByNight()
-        {
-            var nights = new[] { 0, 1 }.Select((held) =>
+            [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › the Bastion's building keeps the hits on all of it, past the caravan's own tiles")]
+            public void TheBastionsBuildingKeepsTheHitsOnAllOfIt()
             {
-                var n = 0;
-                for (var seed = 1; seed <= 60; seed++)
+                var c = Solo();
+                c.Level = 5;
+                c.Bastion.Level = 5;
+                c.Siege.In = 0;
+                Fly(c);
+                var caravan = c.Bastion.Pieces.First((p) => p.Piece == PieceIds.Caravan);
+                var own = Base.PieceCells(PieceIds.Caravan, caravan.X, caravan.Y, caravan.Rot);
+                var outer = Base.BastionFootprint(c.Bastion).First((t) => !own.Any((o) => o.X == t.X && o.Y == t.Y));
+                Fly(c, Outcomes.Victory, (s) =>
                 {
-                    var c = Solo();
-                    c.Siege.In = 1;
-                    c.Siege.Held = held;
-                    Run(c, new ChooseMissionCommand { Id = c.Offers.First((o) => (o.Story ?? 0) == 0).Id });
-                    var s = Setup.CreateMission(new MissionOptions { Map = Campaign.OfferMap(c, Campaign.ActiveOffer(c)!), Slots = c.Players, Rng = new Rng(2), Squad = Campaign.BuildSquad(c), Pods = Campaign.ActiveOffer(c)!.Pods });
-                    s.Outcome = Outcomes.Victory;
-                    s.OutcomeReason = EndReasons.Objective;
-                    Campaign.ApplyMissionResult(c, s, new Rng(seed));
-                    var siege = Campaign.ActiveOffer(c)!;
-                    Assert.True(siege.Siege);
-                    // Lore's line for the dark, after the rest.
-                    Assert.Equal(siege.Night == true, Campaign.OfferBriefing(c, siege).EndsWith(Lore.BaseSiegeText.Night, StringComparison.Ordinal));
-                    if (siege.Night == true) n++;
-                }
-                return n;
-            }).ToList();
-            Assert.Equal(0, nights[0]);
-            Assert.True(nights[1] > 10, $"{nights[1]}");
-            Assert.True(nights[1] < 30, $"{nights[1]}");
-        }
+                    s.Breakables![outer.Y * s.Width + outer.X] = 5;
+                });
+                Assert.Equal(5, caravan.Hp);
+            }
 
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › each places their own defenders anywhere free on the clearing, and the siege begins with them there (18/10 #58)", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void EachPlacesTheirOwnDefenders()
-        {
-            var c = Campaign.CreateCampaign(Both, new Rng(3));
-            c.NextEventDay = 999;
-            c.Siege.In = 0;
-            Fly(c);
-            Assert.True(Campaign.ActiveOffer(c)?.Siege);
-            var mine = c.Soldiers.First((s) => s.Owner == 0 && c.Squad.Contains(s.Id));
-            var theirs = c.Soldiers.First((s) => s.Owner == 1 && c.Squad.Contains(s.Id));
-            var lot = Base.BastionLot(c.Bastion)!;
-            var spot = new Vec2 { X = lot.X - 3, Y = lot.Y - 3 };
-            for (var x = spot.X - 1; x <= spot.X + 1; x++) Base.FellTree(c.Bastion, x, spot.Y);
-            ThrowsText("Solo puedes colocar a tus soldados.", c, new PostCommand { Soldier = theirs.Id, At = spot }, 0, Both);
-            Throws("borde", c, new PostCommand { Soldier = mine.Id, At = new Vec2 { X = 0, Y = 5 } }, 0, Both);
-            var wall = Base.BastionFootprint(c.Bastion)[0];
-            ThrowsText("Ahí no se puede estar.", c, new PostCommand { Soldier = mine.Id, At = wall }, 0, Both);
-            Run(c, new PostCommand { Soldier = mine.Id, At = spot }, 0, Both);
-            ThrowsText("Ahí ya hay alguien.", c, new PostCommand { Soldier = theirs.Id, At = spot }, 1, Both);
-            var post = Assert.Single(c.SiegePosts!);
-            Assert.Equal(mine.Id, post.Key);
-            Assert.Equal((spot.X, spot.Y), (post.Value.X, post.Value.Y));
-            var offer = Campaign.ActiveOffer(c)!;
-            var s = Setup.CreateMission(SiegeMission(c, offer));
-            var pos = s.Units.First((u) => u.CampaignId == mine.Id).Pos;
-            Assert.Equal((spot.X, spot.Y), (pos.X, pos.Y));
-            // The rest, by the Bastion, none on the posted tile.
-            Assert.Single(s.Units, (u) => u.Team == Teams.Xcom && u.Pos.X == spot.X && u.Pos.Y == spot.Y);
-            // Once the siege is over, the posts go.
-            Fly(c);
-            Assert.Null(c.SiegePosts);
-        }
-
-        [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › fallen with nobody left: the campaign is lost", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
-        public void FallenWithNobodyLeft()
-        {
-            var c = Solo();
-            c.Siege.In = 0;
-            Fly(c);
-            Fly(c, Outcomes.Defeat, (s) =>
+            [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › nobody starts a siege on a turret, a trap or the wire, posted there before it was built or not")]
+            public void NobodyStartsASiegeOnATurretATrapOrTheWire()
             {
-                foreach (var u in s.Units.Where((x) => x.Team == Teams.Xcom))
+                var c = Solo();
+                c.Siege.In = 0;
+                Fly(c);
+                CampaignHelpers.Raise(c, PieceIds.Turret);
+                var spot = CampaignHelpers.FreeSpot(c, PieceIds.Mine);
+                Base.FellTree(c.Bastion, spot.X, spot.Y);
+                Run(c, new PostCommand { Soldier = c.Squad[0], At = spot });
+                var mine = CampaignHelpers.Raise(c, PieceIds.Mine);
+                Assert.Equal((spot.X, spot.Y), (mine.X, mine.Y));
+                var armed = Base.ArmedTiles(c.Bastion);
+                Assert.Equal(2, armed.Count);
+                var offer = Campaign.ActiveOffer(c)!;
+                var s = Setup.CreateMission(SiegeMission(c, offer));
+                var defenders = s.Units.Where((u) => u.Team == Teams.Xcom && u.Automaton == null).ToList();
+                Assert.Equal(c.Squad.Count, defenders.Count);
+                foreach (var u in defenders) Assert.False(armed.Has(u.Pos.Y * s.Width + u.Pos.X));
+            }
+
+            [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › fallen with someone left: another clearing, the stores lost, the soldiers keep what they carry")]
+            public void FallenWithSomeoneLeft()
+            {
+                var c = Solo();
+                c.Siege.In = 0;
+                Fly(c);
+                // One soldier stayed in, wounded: the rest defend and fall.
+                var home = c.Soldiers[0];
+                home.WoundedDays = 20;
+                c.Squad = c.Squad.Where((id) => id != home.Id).ToList();
+                CampaignHelpers.Raise(c, PieceIds.Radio);
+                var credits = c.Credits;
+                Assert.True(credits > 0);
+                var report = Fly(c, Outcomes.Defeat, (s) =>
                 {
-                    u.Alive = false;
-                    u.Hp = 0;
-                }
-            });
-            Assert.DoesNotContain(c.Soldiers, (s) => s.Alive);
-            Assert.Equal(Outcomes.Defeat, c.Outcome);
+                    foreach (var u in s.Units.Where((x) => x.Team == Teams.Xcom && x.Automaton == null))
+                    {
+                        u.Alive = false;
+                        u.Hp = 0;
+                    }
+                });
+                Assert.True(report.Fallen);
+                Assert.Null(c.Outcome);
+                Assert.Equal(new[] { PieceIds.Caravan }, c.Bastion.Pieces.Select((p) => p.Piece));
+                Assert.Equal(new int?[] { 0, 0 }, new int?[] { c.Credits, c.Parts });
+                Assert.True(home.Alive);
+                Assert.Contains(c.Log, (l) => l.Alert?.Title == "El Bastión ha caído");
+                // Only the wounded left and nothing to recruit with: time would stand still, so one waits for them to heal.
+                Assert.True(Campaign.MustWait(c));
+                Assert.Contains(Campaign.NextSteps(c, 0), (x) => x.View == BaseViews.Barracks && x.Label == "Nadie puede salir: esperad a que se curen" && x.Tone == NextStepTones.Urgent && x.Count == null && x.Go == null);
+                var day = c.Day;
+                // (The Marea, which goes on meanwhile, held back: it is not what is tested here.)
+                c.NextDoomDay = 999;
+                Run(c, new AdvanceCommand { Ready = true });
+                // Until someone has healed, or enough suministros have come in to recruit.
+                Assert.True(home.WoundedDays == 0 || c.Credits >= Campaign.RecruitCost(c));
+                Assert.True(c.Day > day);
+                // Once someone can go out, waiting is a day at a time (Ana and Arturo, 22/10).
+                Assert.False(Campaign.MustWait(c));
+                var now = c.Day;
+                Run(c, new AdvanceCommand { Ready = true });
+                Assert.Equal(now + 1, c.Day);
+            }
+
+            [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › one siege in three by night, never the first")]
+            public void OneSiegeInThreeByNight()
+            {
+                var nights = new[] { 0, 1 }.Select((held) =>
+                {
+                    var n = 0;
+                    for (var seed = 1; seed <= 60; seed++)
+                    {
+                        var c = Solo();
+                        c.Siege.In = 1;
+                        c.Siege.Held = held;
+                        Run(c, new ChooseMissionCommand { Id = c.Offers.First((o) => (o.Story ?? 0) == 0).Id });
+                        var s = Setup.CreateMission(new MissionOptions { Map = Campaign.OfferMap(c, Campaign.ActiveOffer(c)!), Slots = c.Players, Rng = new Rng(2), Squad = Campaign.BuildSquad(c), Pods = Campaign.ActiveOffer(c)!.Pods });
+                        s.Outcome = Outcomes.Victory;
+                        s.OutcomeReason = EndReasons.Objective;
+                        Campaign.ApplyMissionResult(c, s, new Rng(seed));
+                        var siege = Campaign.ActiveOffer(c)!;
+                        Assert.True(siege.Siege);
+                        // Lore's line for the dark, after the rest.
+                        Assert.Equal(siege.Night == true, Campaign.OfferBriefing(c, siege).EndsWith(Lore.BaseSiegeText.Night, StringComparison.Ordinal));
+                        if (siege.Night == true) n++;
+                    }
+                    return n;
+                }).ToList();
+                Assert.Equal(0, nights[0]);
+                Assert.True(nights[1] > 10, $"{nights[1]}");
+                Assert.True(nights[1] < 30, $"{nights[1]}");
+            }
+
+            [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › each places their own defenders anywhere free on the clearing, and the siege begins with them there (18/10 #58)")]
+            public void EachPlacesTheirOwnDefenders()
+            {
+                var c = Campaign.CreateCampaign(Both, new Rng(3));
+                c.NextEventDay = 999;
+                c.Siege.In = 0;
+                Fly(c);
+                Assert.True(Campaign.ActiveOffer(c)?.Siege);
+                var mine = c.Soldiers.First((s) => s.Owner == 0 && c.Squad.Contains(s.Id));
+                var theirs = c.Soldiers.First((s) => s.Owner == 1 && c.Squad.Contains(s.Id));
+                var lot = Base.BastionLot(c.Bastion)!;
+                var spot = new Vec2 { X = lot.X - 3, Y = lot.Y - 3 };
+                for (var x = spot.X - 1; x <= spot.X + 1; x++) Base.FellTree(c.Bastion, x, spot.Y);
+                ThrowsText("Solo puedes colocar a tus soldados.", c, new PostCommand { Soldier = theirs.Id, At = spot }, 0, Both);
+                Throws("borde", c, new PostCommand { Soldier = mine.Id, At = new Vec2 { X = 0, Y = 5 } }, 0, Both);
+                var wall = Base.BastionFootprint(c.Bastion)[0];
+                ThrowsText("Ahí no se puede estar.", c, new PostCommand { Soldier = mine.Id, At = wall }, 0, Both);
+                Run(c, new PostCommand { Soldier = mine.Id, At = spot }, 0, Both);
+                ThrowsText("Ahí ya hay alguien.", c, new PostCommand { Soldier = theirs.Id, At = spot }, 1, Both);
+                var post = Assert.Single(c.SiegePosts!);
+                Assert.Equal(mine.Id, post.Key);
+                Assert.Equal((spot.X, spot.Y), (post.Value.X, post.Value.Y));
+                var offer = Campaign.ActiveOffer(c)!;
+                var s = Setup.CreateMission(SiegeMission(c, offer));
+                var pos = s.Units.First((u) => u.CampaignId == mine.Id).Pos;
+                Assert.Equal((spot.X, spot.Y), (pos.X, pos.Y));
+                // The rest, by the Bastion, none on the posted tile.
+                Assert.Single(s.Units, (u) => u.Team == Teams.Xcom && u.Pos.X == spot.X && u.Pos.Y == spot.Y);
+                // Once the siege is over, the posts go.
+                Fly(c);
+                Assert.Null(c.SiegePosts);
+            }
+
+            [Fact(DisplayName = "the sieges in the campaign (docs/FASE12.md §11.5) › fallen with nobody left: the campaign is lost")]
+            public void FallenWithNobodyLeft()
+            {
+                var c = Solo();
+                c.Siege.In = 0;
+                Fly(c);
+                Fly(c, Outcomes.Defeat, (s) =>
+                {
+                    foreach (var u in s.Units.Where((x) => x.Team == Teams.Xcom))
+                    {
+                        u.Alive = false;
+                        u.Hp = 0;
+                    }
+                });
+                Assert.DoesNotContain(c.Soldiers, (s) => s.Alive);
+                Assert.Equal(Outcomes.Defeat, c.Outcome);
+            }
         }
 
         // ------------------------------------------------------------ the Camposanto

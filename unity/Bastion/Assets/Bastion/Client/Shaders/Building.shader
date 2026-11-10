@@ -272,6 +272,9 @@ Shader "Bastion/Building"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             // 1 by night (Mood): the lit windows glow.
             float _Night;
+            // A pane not lit by night: its colour and its own glow so much (the review of 10/11, L-14).
+            #define GlassNightAlbedo 0.5
+            #define GlassNightGlow 0.3
             // The baked contact occlusion over the map (UI's GroundOcclusion, global): r how much sky, g the height it was
             // worked out for (m); where it lies (x and z of its corner, its size, m).
             TEXTURE2D(_GroundAO);
@@ -372,6 +375,11 @@ Shader "Bastion/Building"
                     float lit = input.cut.w * _Night;
                     surface.emission += half3(1.0, 0.6, 0.26) * 2.4 * lit;
                     surface.alpha = lerp(surface.alpha, 0.92, lit);
+                    // The dark ones by night, darker: the pale blue under the moon came out twice as light as the wall
+                    // round it. The review of 10/11, L-14.
+                    float dark = _Night * (1.0 - lit);
+                    surface.albedo *= lerp(1.0, GlassNightAlbedo, dark);
+                    surface.emission *= lerp(1.0, GlassNightGlow, dark);
                 #endif
 
                 half4 colour = UniversalFragmentPBR(inputData, surface);

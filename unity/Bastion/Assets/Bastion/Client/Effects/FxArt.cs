@@ -29,6 +29,11 @@ namespace Bastion.Client.Effects
         public Texture2D lightning;
         /// <summary>The blade's arc.</summary>
         public Texture2D semiCircle;
+        /// <summary>
+        /// The smoke, the dust and the gas (Fx.Puffs; the 3D review of 10/11, F-01 and «Puffs», Arturo's choice C: see-through,
+        /// as Particle FX's own smoke draws). Not `smoke`: that is the black smoke's prefab.
+        /// </summary>
+        public Texture2D smokeSprite;
 
         /// <summary>A map's fires (Map.FireView, Arturo 1/11): Particle FX's flames, small, middling and big; its embers; its black smoke.</summary>
         public GameObject fireSmall;

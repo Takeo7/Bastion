@@ -974,7 +974,8 @@ namespace Bastion.EditorTools
             var hide = (Environment.GetEnvironmentVariable("BASTION_HIDE") ?? "").Split(',');
             foreach (var r in root.GetComponentsInChildren<Renderer>(true))
             {
-                bool glass = r.sharedMaterial != null && r.sharedMaterial.name == "Cristal";
+                // (The panes' material is «Glass», Glass.mat: «Cristal» hid nothing. The review of 10/11, L-14.)
+                bool glass = r.sharedMaterial != null && (r.sharedMaterial.name == "Cristal" || r.sharedMaterial.name == "Glass");
                 bool sign = r.GetComponentsInParent<Transform>().Any(t => t.name.StartsWith("sign") || t.name == "motelSign");
                 bool shutter = r.GetComponentsInParent<Transform>().Any(t => t.name == "rollerShutter");
                 bool crown = hide.Contains("crowns") && r.GetComponentsInParent<Transform>().Any(t => TreeFade.Crowns.Contains(t.name));

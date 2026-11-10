@@ -173,6 +173,12 @@ namespace Bastion.Client
         public static bool Dark { get; private set; }
 
         /// <summary>
+        /// Whether the light up now is a night's: Night, or Hazier's copy of it under rain or snow; false with no mood up.
+        /// Not Dark, which nobody puts back when the light goes. The review of 10/11, L-04.
+        /// </summary>
+        public static bool IsNight => Current != null && Current.Now != null && Current.Now.night;
+
+        /// <summary>
         /// The fill fixed opposite the sun, lower (clearingArt.ts aim: from the far side at 0.6 of its height, at the
         /// middle), not following the camera: the base's; each Show puts it back on the camera (the battle's).
         /// </summary>
@@ -230,7 +236,6 @@ namespace Bastion.Client
             }
             fill.color = Hex(m.fill);
             fill.intensity = m.fillIntensity / Mathf.PI;
-            Follow();
             // The sky's hemisphere light as the ambient: sky above, ground below, their mean round the horizon.
             float k = m.skyIntensity / Mathf.PI;
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -263,6 +268,8 @@ namespace Bastion.Client
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogColor = Hex(m.haze);
             RenderSettings.fogDensity = m.hazeDensity / Map.MapSpace.Tile;
+            // (After the haze: Follow thins it for a camera far off the ground.)
+            Follow();
             foreach (var camera in FindObjectsByType<Camera>(FindObjectsSortMode.None))
             {
                 camera.clearFlags = CameraClearFlags.SolidColor;
@@ -288,10 +295,27 @@ namespace Bastion.Client
             Shader.SetGlobalFloat("_GradeGain", v[4]);
         }
 
-        /// <summary>The fill shines from the camera, the way it looks (renderer.ts: from the camera's place along its view).</summary>
+        /// <summary>
+        /// A camera far off the ground sees through the haze it would at HazeNear (metres to the ground it looks at), from
+        /// HazeFrom fully at HazeFull: the battle's «Mapa» (CameraRig.EnterOverhead, 150 m up and more) came out washed by day
+        /// and nearly all haze by night. Nearer than HazeFrom (the battle's camera reaches 50 m, the base's about as much),
+        /// the mood's own haze. The review of 10/11, L-11.
+        /// </summary>
+        const float HazeNear = 36, HazeFrom = 60, HazeFull = 100;
+
+        /// <summary>
+        /// The fill shines from the camera, the way it looks (renderer.ts: from the camera's place along its view); and the
+        /// haze thinned for a camera far off the ground (HazeNear).
+        /// </summary>
         void Follow()
         {
             var camera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+            if (Now != null)
+            {
+                float far = camera != null && camera.transform.forward.y < -0.05f ? -camera.transform.position.y / camera.transform.forward.y : 0;
+                float k = Mathf.Lerp(1, HazeNear / Mathf.Max(far, HazeNear), Mathf.InverseLerp(HazeFrom, HazeFull, far));
+                RenderSettings.fogDensity = Now.hazeDensity / Map.MapSpace.Tile * k;
+            }
             if (fill == null) return;
             if (FillOpposite && Now != null)
             {

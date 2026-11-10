@@ -189,7 +189,7 @@ namespace Bastion.Client.Units
             if (!tint || string.IsNullOrEmpty(band)) return;
             var animator = GetComponentInChildren<Animator>();
             if (animator == null || !animator.isHuman) return;
-            bool night = Mood.Current != null && Mood.Current.Now == Mood.Night;
+            bool night = Mood.IsNight;
             foreach (var (upper, lower, radius) in new[] { (HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, marks.bandLeft), (HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, marks.bandRight) })
             {
                 var a = animator.GetBoneTransform(upper);

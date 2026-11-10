@@ -1,7 +1,8 @@
 // A figure coming into sight or going out of the camera's way (Bastion.Client.Units.UnitViews.Fade; 0.10.1's dyeFade in
 // synty.ts): its body drawn with this in its materials' place while it fades, an ordered 4 × 4 pattern deciding which
 // fragments show yet (_Fade, 0 none to 1 all), lit plainly from its own colour map (the sun with its shadows, the sky).
-// No shadow of its own meanwhile, as 0.10.1 cast none until it was all there. _Fade comes per renderer.
+// Its shadow from halfway (ShadowCaster: the 3D review's A-14, 10/11; 0.10.1 cast none until it was all there, and the
+// shadow came on whole as it was). _Fade comes per renderer.
 Shader "Bastion/FigureFade"
 {
     Properties
@@ -81,6 +82,47 @@ Shader "Bastion/FigureFade"
                 Light sun = GetMainLight(TransformWorldToShadowCoord(input.world));
                 half3 light = sun.color * saturate(dot(n, sun.direction)) * sun.shadowAttenuation + SampleSH(n);
                 return half4(albedo * light, 1);
+            }
+            ENDHLSL
+        }
+
+        // Its shadow while it fades, from halfway in (the 3D review's A-14, 10/11: none, and then whole as it was all there):
+        // URP's ShadowCasterPass's bias and clamping, the fragments let through from _Fade 0.5 on (not dithered: the
+        // shadow map's own pixels would make a pattern of their own on the ground).
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex Vertex
+            #pragma fragment Fragment
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+            float3 _LightDirection;
+            float3 _LightPosition;
+
+            float4 Vertex(float4 position : POSITION, float3 normal : NORMAL) : SV_POSITION
+            {
+                float3 world = TransformObjectToWorld(position.xyz);
+                float3 n = TransformObjectToWorldNormal(normal);
+            #if _CASTING_PUNCTUAL_LIGHT_SHADOW
+                float3 toLight = normalize(_LightPosition - world);
+            #else
+                float3 toLight = _LightDirection;
+            #endif
+                return ApplyShadowClamping(TransformWorldToHClip(ApplyShadowBias(world, n, toLight)));
+            }
+
+            half4 Fragment(float4 position : SV_POSITION) : SV_Target
+            {
+                clip(_Fade - 0.5);
+                return 0;
             }
             ENDHLSL
         }

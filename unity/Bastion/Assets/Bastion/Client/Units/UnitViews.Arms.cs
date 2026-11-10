@@ -250,6 +250,7 @@ namespace Bastion.Client.Units
         {
             if (!v.carried.ContainsKey(which)) which = MainCarry;
             if (!v.carried.ContainsKey(which)) which = v.carried.Keys.FirstOrDefault();
+            var was = v.drawn;
             v.drawn = which;
             bool pistolOnly = PistolMain(v) && !v.carried.ContainsKey(SidearmCarry);
             foreach (var kv in v.carried)
@@ -295,6 +296,10 @@ namespace Bastion.Client.Units
             v.inHand = v.arts.TryGetValue(which, out var art) ? art.pistol ? Held.Pistol : art.melee ? Held.Blade : Held.Rifle : Held.None;
             // (The rifle's turn in the hand kept: drawn again, it is held as it was, not level at the waist for a frame.)
             v.pistolGrip = null;
+            // A long gun back in the hands from somewhere else: rigid in the right one as it was held, and onto the left over
+            // TwoHandsBack while the rest comes back (Settle), not towards the left hand still where the blade left it (the
+            // 3D review's G-1, 10/11: the gun went into the belly).
+            if (which != was && v.inHand == Held.Rifle) v.twoHands = 0;
             // In the hand at once (else, for the frame, where the root is: at the feet).
             HoldNow(v);
         }
@@ -319,8 +324,8 @@ namespace Bastion.Client.Units
             v.anim.Rest(v.inHand == Held.Rifle ? catalog.Clip(RestOf(v)) : null, fade);
         }
 
-        /// <summary>Whether its weapon is up: aimed for a shot, at a target being picked, or on watch.</summary>
-        static bool Up(View v) => v.aiming || v.picking != null || v.watch;
+        /// <summary>Whether its weapon is up: aimed for a shot, at a target being picked, or on watch; not while it turns to it first (A-03).</summary>
+        static bool Up(View v) => !v.turning && (v.aiming || v.picking != null || v.watch);
 
         /// <summary>On guard with the blade: at a target being picked with it, or on watch with it (Unit.WatchMelee).</summary>
         static bool Guarding(View v) => v.inHand == Held.Blade && (v.picking?.melee == true || v.watch && v.guard && !v.aiming);
@@ -386,13 +391,19 @@ namespace Bastion.Client.Units
         {
             if (v.body == null || v.dead) return;
             float want = 0;
-            if (v.close > 0 && v.inHand == Held.Rifle && v.reachOf == v.drawn && v.reach > 0)
-                want = Mathf.Min(CloseBack, Mathf.Max(0, v.reach - (v.close - CloseGap))) * v.up;
+            // (Before its reach is measured, all the way up, its weapon's own (WeaponArt.reach): stepped back as the gun comes
+            // up from the first shot, not after it is up, its muzzle a frame in the target. The 3D review's A-15, 10/11.)
+            float reach = v.reachOf == v.drawn && v.reach > 0 ? v.reach : !ReachOff && v.arts.TryGetValue(v.drawn, out var art) ? art.reach : 0;
+            if (v.close > 0 && v.inHand == Held.Rifle && reach > 0)
+                want = Mathf.Min(CloseBack, Mathf.Max(0, reach - (v.close - CloseGap))) * v.up;
             if (want == v.back) return;
             // (Eased as the gun comes up; the reach is only measured once it is all the way up.)
             v.back = Mathf.MoveTowards(v.back, want, dt * CloseBack / AimBlend);
             v.body.localPosition = new Vector3(0, 0, -v.back * MapSpace.Tile);
         }
+
+        /// <summary>BASTION_SIN_ALCANCE=1: no WeaponArt.reach before the measure (the labs' «before» of the 3D review's A-15).</summary>
+        public static bool ReachOff = Environment.GetEnvironmentVariable("BASTION_SIN_ALCANCE") == "1";
 
         /// <summary>syntyFigures.ts aimReach: how far ahead of its feet the muzzle of the long gun in its hands comes, measured while it is all the way up.</summary>
         static void Reach(View v)
@@ -401,7 +412,11 @@ namespace Bastion.Client.Units
             var muzzle = v.weapon.TransformPoint(v.muzzle) - v.root.position;
             v.reach = Vector3.Dot(muzzle, v.root.forward) / MapSpace.Tile + v.back;
             v.reachOf = v.drawn;
+            if (ReachLog) Debug.Log(FormattableString.Invariant($"[apuntar] reach={v.reach:0.000} {v.id} {(v.arts.TryGetValue(v.drawn, out var art) ? art.fbx : "-")}"));
         }
+
+        /// <summary>BASTION_LOG_ALCANCE=1 (the labs: CombatLab.Apuntar): each reach measured, a line [apuntar] (WeaponArt.reach's numbers; the 3D review's A-15).</summary>
+        static readonly bool ReachLog = Environment.GetEnvironmentVariable("BASTION_LOG_ALCANCE") == "1";
 
         /// <summary>Aimed with what it holds: a rifle's aim (knelt, the kneeling one), the pistol in both hands (pistolAim, syntyFigures.ts direct).</summary>
         static void Aimed(View v, float fade)
@@ -426,10 +441,51 @@ namespace Bastion.Client.Units
                     HoldBlade(v);
                     break;
                 default:
-                    Hold(v.animator, v.weapon, v.root, v.dead || v.reload > 0, ref v.grip);
+                    // Between the hands as far as the left is on it (twoHands), else rigid in the right as it was last held
+                    // there; that turn learnt only with both hands all the way on it (the 3D review's G-1, 10/11). Eased
+                    // here, after the frame's clips: a throw's clip comes in at its first step, and a frame late the gun
+                    // had learnt its turn from the left hand already gone.
+                    bool busy = LeftBusy(v);
+                    v.twoHands = Mathf.MoveTowards(v.twoHands, busy ? 0 : 1, dt / (busy ? TwoHandsOff : TwoHandsBack));
+                    var before = v.grip;
+                    Hold(v.animator, v.weapon, v.root, v.dead || v.twoHands <= 0, ref v.grip);
+                    if (v.twoHands < 1 && before is Quaternion g && v.animator.GetBoneTransform(HumanBodyBones.RightHand) is Transform hand)
+                    {
+                        v.weapon.rotation = Quaternion.Slerp(hand.rotation * g, v.weapon.rotation, v.twoHands);
+                        v.grip = g;
+                    }
+                    if (v.inHand == Held.Rifle && v.reload > 0) ReloadTilt(v);
                     break;
             }
         }
+
+        /// <summary>
+        /// A long gun reloading no steeper than ReloadTiltMost (the 3D review's F-19, 10/11): «Reload 3» over the rest's turn in
+        /// the hand had it upright before the face, half a metre over the head from the game's camera, while the magazine was
+        /// out. Turned down ahead about the palm by what is over (the hand stays), the limit coming in and going with the
+        /// reload's own ends (ReloadEnds).
+        /// </summary>
+        static void ReloadTilt(View v)
+        {
+            var w = v.weapon;
+            float up = Mathf.Asin(Mathf.Clamp(w.forward.y, -1, 1)) * Mathf.Rad2Deg, most = Mathf.Lerp(90, ReloadTiltMost, v.reload);
+            if (up <= most) return;
+            var axis = Vector3.Cross(Vector3.up, w.forward);
+            if (axis.sqrMagnitude < 1e-6f) axis = v.root.right;
+            w.rotation = Quaternion.AngleAxis(up - most, axis.normalized) * w.rotation;
+        }
+
+        /// <summary>
+        /// Whether its left hand is off the gun (the 3D review's G-1, 10/11): dead, reloading, searching or treating (from
+        /// the frame they begin: their rests change the arms before the pose comes in), or throwing by it
+        /// (FigureAnimator.FreeShare: the free hand's clip, which leaves the gun arm be). The decision written in
+        /// docs/UNITY-ARTE.md: «se mantiene rígida cuando la izquierda suelta» (0.10.1's clipGrip); the gun had gone after
+        /// the left hand wherever its palms were 12–80 cm apart.
+        /// </summary>
+        static bool LeftBusy(View v) => v.dead || v.reload > 0 || v.search > 0 || v.tended != null || v.searchAt != null || (v.anim != null && v.anim.FreeShare > 0.01f);
+
+        /// <summary>Seconds for the gun to go rigid in the right hand as the left lets go, and back between both as it comes back (twoHands).</summary>
+        const float TwoHandsOff = 0.1f, TwoHandsBack = 0.2f;
 
         /// <summary>
         /// The pistol in the right palm, its barrel along the forearm (syntyFigures.ts clipGrip for a pistol: hand − elbow),
@@ -492,9 +548,12 @@ namespace Bastion.Client.Units
         /// arm reaches its palm to the gun's `fore` (WeaponArt), the elbow where the clip has it, once the gun is placed
         /// and aimed; only with both hands on it, not reloading, and not from further than SupportMost.
         /// </summary>
-        static void Support(View v)
+        static void Support(View v, float dt = 0)
         {
-            if (SupportOff || v.inHand != Held.Rifle || v.weapon == null || v.animator == null || !v.animator.isHuman || v.dead || v.reload > 0) return;
+            // (Out of reach, or the left hand busy, it begins again from nothing as it comes back within SupportMost.)
+            float share = v.supportShare;
+            v.supportShare = 0;
+            if (SupportOff || v.inHand != Held.Rifle || v.weapon == null || v.animator == null || !v.animator.isHuman || v.dead || v.twoHands <= 0) return;
             var art = v.arts.TryGetValue(v.drawn, out var x) ? x : null;
             if (art?.fore == null || art.fore.Length < 2) return;
             var a = v.animator;
@@ -507,9 +566,14 @@ namespace Bastion.Client.Units
             if (apart <= 0.12f || apart >= 0.8f) return;
             var fore = v.weapon.TransformPoint(new Vector3(0, art.fore[0], art.fore[1]));
             if ((fore - Palm()).sqrMagnitude > SupportMost * SupportMost) return;
+            // (As far as the gun is back between both hands, twoHands, and over TwoHandsBack from when the palm comes within
+            // SupportMost: the left palm eased onto the handguard, not there in a frame as a reload, a throw or a blow ends;
+            // the 3D review's G-1, 10/11. Held steadily, all of it, as before.)
+            v.supportShare = Mathf.MoveTowards(share, 1, dt / TwoHandsBack);
+            var goal = Vector3.Lerp(Palm(), fore, v.twoHands * v.supportShare);
             // (Twice: the palm is ahead of the wrist, and it turns with the forearm.)
             for (int pass = 0; pass < 2; pass++)
-                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, hand.position + (fore - Palm()), elbow.position - shoulder.position, 0.005f);
+                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, hand.position + (goal - Palm()), elbow.position - shoulder.position, 0.005f);
         }
 
         /// <summary>How far Support moves the left palm at most (metres), and BASTION_SIN_MANO=1, none at all (the labs' «before»).</summary>
@@ -699,7 +763,16 @@ namespace Bastion.Client.Units
             var art = v.arts.TryGetValue(v.drawn, out var x) ? x : null;
             var w = v.weapon;
             string Cm(float m) => (m * 100).ToString("0.0", CultureInfo.InvariantCulture);
+            string Deg(float d) => d.ToString("0.0", CultureInfo.InvariantCulture);
             var parts = new List<string> { $"held={v.inHand}" };
+            // (The 3D review of 10/11: a long gun's turn in the right hand against the one learnt there, G-1's «rigid»; its
+            // barrel's rise over the level, F-19's «up»; the muzzle's height over the feet, A-07's «muzzleY».)
+            if (v.inHand == Held.Rifle)
+            {
+                if (v.grip is Quaternion g && a.GetBoneTransform(HumanBodyBones.RightHand) is Transform rh) parts.Add($"rigid={Deg(Quaternion.Angle(Quaternion.Inverse(rh.rotation) * w.rotation, g))}");
+                parts.Add($"up={Deg(Mathf.Asin(Mathf.Clamp(w.forward.y, -1, 1)) * Mathf.Rad2Deg)}");
+            }
+            parts.Add($"muzzleY={Cm(w.TransformPoint(v.muzzle).y - v.root.position.y)}");
             if (left is Vector3 l)
             {
                 var local = w.InverseTransformPoint(l);
@@ -772,6 +845,8 @@ namespace Bastion.Client.Units
                 parts.Add($"eyesYaw={F(Yaw(want, eyes))} eyesPitch={F(Pitch(eyes) - Pitch(want))}");
             }
             parts.Add($"rootYaw={F(Yaw(at - v.root.position, v.root.forward))}");
+            // (How far its weapon is up: the 3D review's A-03, the gun raised once the turn is done.)
+            parts.Add($"up={v.up.ToString("0.00", CultureInfo.InvariantCulture)}");
             return string.Join(" ", parts);
         }
 
@@ -847,6 +922,8 @@ namespace Bastion.Client.Units
 
         /// <summary>unitViews.ts lunge: how far it steps in (tiles: the gap less LUNGE_SHORT, LUNGE at most), wound up and striking (seconds), back.</summary>
         const float LungeShort = 0.72f, LungeMost = 0.45f, WindUp = 0.2f, StrokeTime = 0.14f, Back = 0.35f;
+        /// <summary>Seconds a blade's stroke takes to let go of the body after its follow-through (Swing, Pry; the 3D review's A-08: 0.15 s, a frame and a half at 10 fps).</summary>
+        const float StrokeOut = 0.35f;
         /// <summary>How far into «Zombie Headbutt» the dead's lunge starts it: its blow, 0.45 s in, on lunge's (WindUp + StrokeTime).</summary>
         const float HeadbuttLead = 0.45f - WindUp - StrokeTime;
         /// <summary>unitViews.ts BITE_GAP: a bite that kills ends this far from its victim's middle (tiles); it lets go this long after if nothing eats (seconds).</summary>
@@ -954,8 +1031,12 @@ namespace Bastion.Client.Units
         {
             // A blow at arm's length (unitViews.ts rtStrike: struck).
             StruckBy(target, v.root.position, true);
+            // (From the guard if it was on guard with the blade: the stroke had begun from the blade hanging, the guard
+            // undone in 0.1 s; the 3D review's A-08, 10/11.)
+            bool guarded = Guarding(v);
             Draw(v, BeltCarry);
-            AtRest(v, 0.1f);
+            if (guarded) Guard(v, 0.1f);
+            else AtRest(v, 0.1f);
             var stroke = StrokeOf(v);
             var clip = FigureCatalog.Load()?.Clip(stroke.clip);
             var home = v.root.position;
@@ -970,12 +1051,15 @@ namespace Bastion.Client.Units
             }
             bool hit = false;
             float total = WindUp + StrokeTime + Back;
-            for (float t = 0; t < Mathf.Max(total, stroke.end); t += Time.deltaTime)
+            // (Out of the stroke over StrokeOut, from where it began going out before, not in 0.15 s from the most bent of
+            // its follow-through: the 3D review's A-08, 10/11.)
+            float over = stroke.end + StrokeOut - 0.15f;
+            for (float t = 0; t < Mathf.Max(total, over); t += Time.deltaTime)
             {
                 if (clip != null && v.anim != null)
                 {
-                    float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (stroke.end - t) / 0.15f));
-                    v.anim.Scrub(t < stroke.end ? clip : null, Mathf.Clamp(stroke.ClipTime(t), 0, clip.length), share, true);
+                    float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (over - t) / StrokeOut));
+                    v.anim.Scrub(t < over ? clip : null, Mathf.Clamp(stroke.ClipTime(t), 0, clip.length), share, true);
                 }
                 if (t < WindUp) v.root.position = home;
                 else if (t < WindUp + StrokeTime) v.root.position = home + toward * ((t - WindUp) / StrokeTime);
@@ -1020,12 +1104,14 @@ namespace Bastion.Client.Units
                 AtRest(v, 0.1f);
                 var clip = FigureCatalog.Load()?.Clip(ChopStroke.clip);
                 bool toppled = false;
-                for (float t = 0; t < ChopStroke.end + 0.45f; t += Time.deltaTime)
+                // (Out over StrokeOut, as a blow: the 3D review's A-08, 10/11.)
+                float over = ChopStroke.end + StrokeOut - 0.15f;
+                for (float t = 0; t < Mathf.Max(ChopStroke.end + 0.45f, over); t += Time.deltaTime)
                 {
                     if (clip != null)
                     {
-                        float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (ChopStroke.end - t) / 0.15f));
-                        v.anim.Scrub(t < ChopStroke.end ? clip : null, Mathf.Clamp(ChopStroke.ClipTime(t), 0, clip.length), share, true);
+                        float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (over - t) / StrokeOut));
+                        v.anim.Scrub(t < over ? clip : null, Mathf.Clamp(ChopStroke.ClipTime(t), 0, clip.length), share, true);
                     }
                     if (!toppled && t >= ChopStroke.lets)
                     {
@@ -1053,6 +1139,12 @@ namespace Bastion.Client.Units
         /// flicked up over the shoulder. Arturo, 9/11 (the review, in the box): 1.2 to 1.5 s, the magazine out and in seen.
         /// </summary>
         const float ReloadSeconds = 1.3f, ReloadEnds = 0.12f;
+        /// <summary>
+        /// How steep a long gun goes at most as it reloads (degrees over the level; ReloadTilt; BASTION_RECARGA_TOPE for the
+        /// labs). The card asked 45, the 9/11 diagonal by the face, but measured (CombatLab.Agarres, up=) the reload went to
+        /// 34–35° standing and 45° knelt, not the 70–90° it was thought: 45 changed nothing. Tried 30 and 20: 30.
+        /// </summary>
+        static readonly float ReloadTiltMost = LabFloat("BASTION_RECARGA_TOPE", 30);
         /// <summary>
         /// The rifle's reload (the review of 9/11), standing and knelt: Mixamo's «Reload 3» («Walk While Reloading Rifle»)
         /// from the left hand going down for the magazine to it back on the handguard. «Reloading», 0.10.1's, holds the

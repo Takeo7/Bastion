@@ -8,12 +8,14 @@ namespace Bastion.Client.Units
     /// A figure drawn in part (0.10.1's syntyFigures.ts fadeIn and veil, synty.ts dyeFade): an enemy coming into sight
     /// fades in over FadeIn seconds (not on the first look at the map: what is there at the start just is), and one in the
     /// way of the shot over a shoulder goes out over VeilSeconds and back (Veil). Meanwhile its body is drawn with
-    /// Bastion/FigureFade in its materials' place, dithered, casting no shadow; what it carries goes, and comes back, halfway.
+    /// Bastion/FigureFade in its materials' place, dithered, its shadow from halfway (A-14); what it carries goes, and comes back, halfway.
     /// </summary>
     public sealed partial class UnitViews
     {
         /// <summary>unitViews.ts FADE_IN, syntyFigures.ts VEIL_SECONDS: seconds to come into sight, to go out of the camera's way.</summary>
         const float FadeIn = 0.28f, VeilSeconds = 0.2f;
+        /// <summary>Seconds to come back out of the veil (the 3D review's A-14, 10/11: in a frame and a half at 10 fps; out still in VeilSeconds, the shot cleared at once).</summary>
+        const float VeilBack = 0.35f;
 
         sealed class Fading
         {
@@ -75,8 +77,9 @@ namespace Bastion.Client.Units
                     r.GetPropertyBlock(f.block);
                     f.saved.Add((r, own, f.block.HasTexture(ColourMap) ? f.block.GetTexture(ColourMap) : null));
                     // (The flash's and the mark's passes, over it, left as they are.)
+                    // (Its shadow kept: Bastion/FigureFade casts it from halfway, the 3D review's A-14, 10/11; it had come
+                    // on whole as the figure was all there.)
                     r.sharedMaterials = own.Select(m => m == null || IsPass(m) ? m : FadeCopy(m)).ToArray();
-                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 }
                 foreach (var w in v.carried.Values) if (w != null) Show(w, false);
             }

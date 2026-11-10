@@ -57,6 +57,8 @@ Shader "Bastion/Fog"
             // light a surface gets: else what a Bengala lights reads as white and its pool drowns the red in orange.
             float4 _NightLightAt[6];
             float4 _NightLightColour[6];
+            // The most a channel of a lit surface's hue goes over its grey (a red barrier red, not a glare: L-07).
+            #define PoolHueMost 2.5
 
             float Hash(float2 p)
             {
@@ -163,10 +165,27 @@ Shader "Bastion/Fog"
                         float fade = saturate(1.0 - Sq(d2 * _NightLightAt[k].w));
                         light += _NightLightColour[k].rgb * (fade * fade / d2) * saturate(dot(normal, to * rsqrt(d2)));
                     }
-                    // As a grey: the night's teal haze is in the picture, and would tint the pool green.
-                    float hot = dot(colour.rgb, float3(0.2126, 0.7152, 0.0722));
-                    float own = saturate(hot / max(dot(light, float3(0.2126, 0.7152, 0.0722)), 0.02));
-                    colour.rgb += own * _FogLamp.rgb * tile.b * inside * near / (1.0 + 2.5 * hot);
+                    // How light it is, as a grey (as 27/10 set it against 0.10.1: the pool's strength), and the surface's own
+                    // hue (0.10.1's albedo × LAMP): the picture with the night's teal haze taken out (URP's exp², as each
+                    // material put it in), over the light it gets, channel by channel, its brightness taken out. Trusted as
+                    // far as the picture is the surface's and not the haze's (a dark one far off is mostly haze: grey, as
+                    // before). With the grey alone the lamp's amber turned red to orange and blue to pink. A wall takes the
+                    // pool of the tile it looks onto (else a lit tile's wall was a column of light cut square). The review of
+                    // 10/11, L-07 (the card's albedo × clear, tried first, left the pool a third as strong: at night the
+                    // surface's red is mostly lost under the haze).
+                    float3 luma = float3(0.2126, 0.7152, 0.0722);
+                    float hot = dot(colour.rgb, luma);
+                    float own = saturate(hot / max(dot(light, luma), 0.02));
+                    float depthV = -TransformWorldToView(world).z;
+                    float fz = unity_FogParams.x * depthV;
+                    float clear = saturate(exp2(-fz * fz));
+                    float hazed = dot(unity_FogColor.rgb, luma) * (1.0 - clear);
+                    float3 bare = max(colour.rgb - unity_FogColor.rgb * (1.0 - clear), 0.0) / max(clear, 0.05);
+                    float3 albedo = bare / max(light, 0.02);
+                    float3 hue = min(albedo / max(dot(albedo, luma), 1e-4), PoolHueMost);
+                    float trust = saturate((hot - hazed) / max(hot, 1e-4) * 2.0);
+                    float litHere = lerp(tile.b, ahead.b, step(abs(normal.y), 0.7));
+                    colour.rgb += own * lerp(1.0, hue, trust) * _FogLamp.rgb * litHere * inside * near / (1.0 + 2.5 * hot);
                 }
                 // Seen, out of sight: greyer, darker, under a haze that drifts with the mist (FOG_GREY, FOG_DARK, FOG_HAZE, FOG_DRIFT).
                 half3 grey = dot(colour.rgb, half3(0.2126, 0.7152, 0.0722));

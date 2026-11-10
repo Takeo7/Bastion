@@ -57,6 +57,8 @@ Shader "Bastion/Clima"
             // sky), the map's width and height (tiles), a tile (m), on.
             TEXTURE2D(_ClimaRoofs);
             float4 _ClimaSize;
+            // Where a puddle can lie (Weather.Paved: 1 paved or trodden, 0 grass and water), smooth across a tile.
+            TEXTURE2D(_ClimaPaved);
             // The light a surface gets (Mood).
             float4 _LightSky;
             float4 _LightGround;
@@ -125,9 +127,9 @@ Shader "Bastion/Clima"
                 float up = smoothstep(0.25, 0.9, normal.y);
                 float3 c = colour.rgb;
                 // Indoors (on a tile under a roof, lower than it) it stays dry, only the flash comes in.
+                float2 cell = float2(world.x, -world.z) / _ClimaSize.z;
                 if (_ClimaSize.w > 0.5)
                 {
-                    float2 cell = float2(world.x, -world.z) / _ClimaSize.z;
                     float roof = SAMPLE_TEXTURE2D_LOD(_ClimaRoofs, sampler_PointClamp, cell / _ClimaSize.xy, 0).r;
                     if (roof > 0 && world.y / _ClimaSize.z < roof - 0.2) return half4(c * (1.0 + _ClimaFlash * 0.25), colour.a);
                 }
@@ -144,7 +146,9 @@ Shader "Bastion/Clima"
                     float patch = Noise(p * 0.32) * 0.65 + Noise(p * 0.9 + 7.3) * 0.35;
                     float flat = smoothstep(0.96, 0.995, normal.y) * (1.0 - smoothstep(0.25, 0.6, world.y));
                     float edge = 1.0 - _ClimaPuddles * 0.35;
-                    float puddle = smoothstep(edge, edge + 0.04, patch) * flat;
+                    // (Not on grass: the review of 10/11, L-12.)
+                    float firm = _ClimaSize.w > 0.5 ? SAMPLE_TEXTURE2D_LOD(_ClimaPaved, sampler_LinearClamp, cell / _ClimaSize.xy, 0).r : 1.0;
+                    float puddle = smoothstep(edge, edge + 0.04, patch) * flat * firm;
                     if (puddle > 0)
                     {
                         float3 r = reflect(-view, normal);

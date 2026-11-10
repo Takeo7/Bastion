@@ -298,7 +298,10 @@ namespace Bastion.Client.Units
             }
             if (!slot.manual || !slot.clip.IsValid() || slot.clip.GetAnimationClip() != clip)
             {
-                Play(layer, clip, 0, 0, true, 0, 0);
+                // (Not looked at here: at weight 1 for this frame it took the body whole over what the code had laid on it,
+                // the left arm 35–40 cm out as a reload began; its time and weight are set just below, for the next step.
+                // The 3D review's A-10, 10/11.)
+                Play(layer, clip, 0, 0, true, 0, 0, false);
                 slot.manual = true;
             }
             slot.time = Mathf.Clamp(time, 0, slot.length);
@@ -431,6 +434,16 @@ namespace Bastion.Client.Units
             slot.clip.SetTime(slot.time);
         }
 
+        /// <summary>The free hand's clip let go (a throw done, its arm back to what it held: the 3D review's A-16), over `fade` seconds.</summary>
+        public void StopFree(float fade)
+        {
+            var slot = slots[Free];
+            if (!slot.clip.IsValid()) return;
+            slot.hold = false;
+            slot.stopping = true;
+            slot.fadeOut = Mathf.Max(fade, 1e-3f);
+        }
+
         public void StopWhole(float fade)
         {
             var slot = slots[Whole];
@@ -439,7 +452,13 @@ namespace Bastion.Client.Units
             slot.fadeOut = Mathf.Max(fade, 1e-3f);
         }
 
-        float Play(int layer, AnimationClip clip, float fadeIn, float fadeOut, bool hold, float at, float speed)
+        /// <summary>
+        /// `clip` into `layer`'s slot. Looked at once at once (Step(0)) only when it comes in whole (`fadeIn` 0: a death lain
+        /// in as the map comes, UnitViews.Lie) and `evaluate`: one fading in comes in at its slot's weight on the next step,
+        /// and looked at here it took the body over what the code had laid on it this frame (the hands, the gun) for the
+        /// frame drawn (the 3D review's A-10, 10/11).
+        /// </summary>
+        float Play(int layer, AnimationClip clip, float fadeIn, float fadeOut, bool hold, float at, float speed, bool evaluate = true)
         {
             if (clip == null) return 0;
             var slot = slots[layer];
@@ -463,7 +482,7 @@ namespace Bastion.Client.Units
             slot.manual = false;
             slot.most = 1;
             if (fadeIn <= 0) slot.weight = 1;
-            Step(0);
+            if (evaluate && fadeIn <= 0) Step(0);
             return (slot.length - slot.time) / Mathf.Max(speed, 1e-3f);
         }
 
@@ -471,6 +490,12 @@ namespace Bastion.Client.Units
         /// <summary>How far it moves rather than stands (syntyFigures.ts pose.run: the motions' share but the two idles'), 0 to 1.</summary>
         /// <summary>How much a clip over the whole body takes of it now (a bite, eating, getting up), 0 none.</summary>
         public float WholeShare => slots[Whole].clip.IsValid() ? slots[Whole].weight : 0;
+
+        /// <summary>
+        /// How much a clip over the upper body but the gun arm takes of it now (a throw by the free hand: PlayFree), 0 none:
+        /// the left hand busy, the gun rigid in the right (the 3D review's G-1, 10/11).
+        /// </summary>
+        public float FreeShare => slots[Free].clip.IsValid() ? slots[Free].weight : 0;
 
         public float Moving
         {
@@ -579,7 +604,8 @@ namespace Bastion.Client.Units
                 float w = shares[k];
                 if (k == 0) w = w * (1 - stood) - varied;
                 motions.SetInputWeight(k, Mathf.Max(0, w));
-                motionClips[k].SetTime(times[k] % lengths[k]);
+                // (Repeat, not %: a motion played backwards, a step back, has its time below 0; the 3D review's A-19.)
+                motionClips[k].SetTime(Mathf.Repeat(times[k], lengths[k]));
             }
             // The weapon held as long as it stands, or moves in a clip that doesn't hold it (crouched: Synty's legs, the gun
             // at rest over them): as much as those weigh, the crouch's share in (syntyFigures.ts: stand × (1 − crouch), the

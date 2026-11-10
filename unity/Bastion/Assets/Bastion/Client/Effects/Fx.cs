@@ -385,7 +385,9 @@ namespace Bastion.Client.Effects
                     if (p.fades)
                     {
                         p.obj.localScale = p.scale * size;
-                        Paint(p.renderer, p.texture, WithAlpha(p.colour, p.opacity * (1 - t * t)));
+                        // (A sprite turns its colour too: the smoke clearing to grey, Puffs.)
+                        var c = p.colourTo is Color to ? Color.Lerp(p.colour, to, Mathf.SmoothStep(0, 1, t)) : p.colour;
+                        Paint(p.renderer, p.texture, WithAlpha(c, p.opacity * (1 - t * t)));
                     }
                     // Pops in, then shrinks away (no fading: Synty's shapes are opaque).
                     else
@@ -474,23 +476,33 @@ namespace Bastion.Client.Effects
         // ------------------------------------------------------------ the toolkit
 
         /// <summary>
-        /// Faceted puffs (smoke, dust, gas): lit, they swell and shrink away. `spread` scatters them round `at`, `rise`
-        /// lifts them, `away` pushes them out from the middle (tiles, tiles a second).
+        /// Puffs (smoke, dust, gas): Particle FX's smoke sprite, see-through (`opacity`), swelling and fading away; turning
+        /// to `clears` over their life if given. `spread` scatters them round `at`, `rise` lifts them, `away` pushes them out
+        /// from the middle (tiles, tiles a second). Till the 3D review of 10/11 (F-01 and its «Puffs» card, Arturo's choice
+        /// C) they were Particle FX's faceted puff, lit and opaque, as 0.10.1's: grey rocks floating.
         /// </summary>
-        public void Puffs(Vector3 at, Color colour, int count, float size = 0.4f, float spread = 0.3f, float rise = 0.5f, float away = 0.3f, float life = 1.2f, float grow = 0.8f, Color? clears = null)
+        public void Puffs(Vector3 at, Color colour, int count, float size = 0.4f, float spread = 0.3f, float rise = 0.5f, float away = 0.3f, float life = 1.2f, float grow = 0.8f, Color? clears = null, float opacity = 0.6f)
         {
             Load();
+            var texture = TextureOf(f => f.smokeSprite);
+            // (Unlit: by night a grey as by day would glow.)
+            float dim = Mood.IsNight ? NightPuff : 1;
             for (int i = 0; i < count; i++)
             {
                 float a = Rand(0, Mathf.PI * 2);
                 float d = Rand(0, spread);
-                var p = Solid(at + new Vector3(Mathf.Cos(a) * d, Rand(0, 0.15f), Mathf.Sin(a) * d) * T, Shape(f => f.smokePuff), colour, size * Rand(0.7f, 1.3f), false);
-                p.colourTo = clears;
+                var p = Sprite(at + new Vector3(Mathf.Cos(a) * d, Rand(0, 0.15f), Mathf.Sin(a) * d) * T, texture, colour * dim, size * Rand(0.7f, 1.3f) * PuffSprite, opacity);
+                p.colourTo = clears is Color c ? c * dim : (Color?)null;
                 Spawn(p, life * Rand(0.75f, 1.25f), grow, drag: 1.2f,
-                    velocity: new Vector3(Mathf.Cos(a) * away * Rand(0.5f, 1), rise * Rand(0.6f, 1.2f), Mathf.Sin(a) * away * Rand(0.5f, 1)),
-                    spin: new Vector3(Rand(-0.6f, 0.6f), Rand(-0.6f, 0.6f), 0));
+                    velocity: new Vector3(Mathf.Cos(a) * away * Rand(0.5f, 1), rise * Rand(0.6f, 1.2f), Mathf.Sin(a) * away * Rand(0.5f, 1)));
             }
         }
+
+        /// <summary>
+        /// A puff's sprite against the size asked (the faceted ball's across), and how dark it is drawn by night (F-01 and
+        /// «Puffs», the 3D review of 10/11).
+        /// </summary>
+        const float PuffSprite = 1.4f, NightPuff = 0.45f;
 
         /// <summary>Licks of flame rising from round `at` (within `radius` tiles), with a few embers.</summary>
         void Flames(Vector3 at, int count, float radius = 0.3f, float size = 0.45f, float life = 0.7f)
@@ -584,11 +596,14 @@ namespace Bastion.Client.Effects
 
         // ------------------------------------------------------------ weapons
 
-        /// <summary>A star at the muzzle, its light, and a wisp of smoke off the barrel.</summary>
+        /// <summary>
+        /// A star at the muzzle, its light, and a wisp of smoke off the barrel: see-through, a third, some 30 cm swelling to
+        /// 75 as it rises and fades in 0.6 s (the 3D review of 10/11, F-01, Arturo's choice C: it was an opaque grey lump).
+        /// </summary>
         public void MuzzleFlash(Vector3 at, Color colour)
         {
             Flash(at, colour, 0.75f);
-            Puffs(at, Hex(0x8a8a86), 1, size: 0.12f, spread: 0.02f, rise: 0.4f, away: 0.1f, life: 0.6f, grow: 1.2f);
+            Puffs(at, Hex(0x8a8a86), 1, size: 0.14f, spread: 0.02f, rise: 0.4f, away: 0.1f, life: 0.6f, grow: 1.5f, opacity: 0.35f);
         }
 
         /// <summary>A bright streak from `from` to `to` at `speed` tiles a second; `heavy` for sniper rounds. Ends as it lands.</summary>
@@ -622,12 +637,15 @@ namespace Bastion.Client.Effects
             Spawn(GlowSprite(at, colour, 0.5f, 0.8f), 0.15f, 1);
         }
 
-        /// <summary>A blade's arc flashing across the target.</summary>
-        public void Slash(Vector3 at, Color colour)
+        /// <summary>
+        /// A blade's arc flashing across the target, and its sparks unless said (the 3D review's L-02, 10/11: only the stun
+        /// lance's, which is electric; a blade or a claw in flesh has none).
+        /// </summary>
+        public void Slash(Vector3 at, Color colour, bool sparks = true)
         {
             var arc = Sprite(at, TextureOf(f => f.semiCircle), colour, 1.2f, 1, true);
             Spawn(arc, 0.28f, 0.6f);
-            Sparks(at, colour, 10);
+            if (sparks) Sparks(at, colour, 10);
         }
 
         /// <summary>A medkit: green motes rising and a first-aid cross.</summary>

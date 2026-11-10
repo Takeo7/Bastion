@@ -63,13 +63,13 @@ namespace Bastion.Client.Net.EditorTools
         }
 
         /// <summary>
-        /// The Mac app's signer (Gameplay, 10/11, to be tried in the 0.12.16): BASTION_FIRMA=&lt;identity&gt;, one of the
-        /// keychain's (`security find-identity -v -p codesigning`: its hash, or its name, «Apple Development: Arturo Wagener
-        /// (SWRT945VV4)»), signs it with that one and Apple's timestamp (still valid once the certificate expires, 5/11/2027);
-        /// unset, empty or «-», ad hoc as before (null). With an identity, what macOS keeps of the app (the signature's
-        /// requirement: the identifier, Apple's chain and the certificate's name) is the same from one version to the next,
-        /// not the hash of its code, which ad hoc it is: so the firewall and the local network may stop asking at each one.
-        /// Gatekeeper takes it as it took the ad hoc one: neither is Developer ID nor notarized («Abrir igualmente»).
+        /// The Mac app's signer: BASTION_FIRMA=&lt;identity&gt;, one of the keychain's (`security find-identity -v -p
+        /// codesigning`: its hash, or its name, «Apple Development: Arturo Wagener (SWRT945VV4)»), signs it with that one and
+        /// Apple's timestamp (still valid once the certificate expires, 5/11/2027); unset, empty or «-», ad hoc (null), as
+        /// the releases go. The 0.12.16 to 0.12.18 went out signed with that certificate (Gameplay, 10/11), so that what
+        /// macOS keeps of the app would be the signature's requirement, the same at each version, and not its code's hash:
+        /// the Mac still asked about the firewall or the local network (Arturo, 10/11), and Gatekeeper took it as the ad hoc
+        /// one. What was seen, and why it may have asked, in docs/FIRMA.md.
         /// </summary>
         private static string? Signer()
         {

@@ -36,6 +36,18 @@ namespace Bastion.Client
         static readonly Color Flare = new Color(1.0f, 0.1f, 0.08f), Fire = new Color(1.0f, 0.5f, 0.15f);
         /// <summary>How strong each light is (Arturo 17/10: «la luz deslumbra mucho de noche»), and how far a street light reaches (tiles).</summary>
         const float LampLight = 9, BurningLight = 16, LampReach = 7;
+        /// <summary>
+        /// A street light's cone (degrees across), pointing down: what is level with the lamp or above it (a pine's crown
+        /// beside it) is left dark, while the ground it lights reaches 5.18 × tan 70° ≈ 14 m, past LampReach. The Bengalas and
+        /// fires shine all round. The review of 10/11, L-08 (the crowns of the pines by a field's street light came out yellow).
+        /// </summary>
+        const float LampCone = 140;
+        /// <summary>
+        /// Whether the street lights point down (LampCone) or shine all round: down where pines stand by the lamps (the
+        /// fields and the facilities), all round in town, where a lamp lights the house front beside it as before (Arte's
+        /// review of L-08, 10/11: down in town left the fronts and the posts dark). MapBuilder sets it with the map.
+        /// </summary>
+        public bool LampsDown = true;
         /// <summary>Seconds a Bengala's or a fire's light takes to come up or die down.</summary>
         const float Fade = 0.5f;
         /// <summary>three's point light (candela, 1/d² in tiles, over π) as URP's (in metres): times 1.5² over π.</summary>
@@ -231,7 +243,7 @@ namespace Bastion.Client
         /// <summary>Fades and flicker, and the real lights put where they count.</summary>
         void Step(float dt)
         {
-            bool night = Mood.Current != null && Mood.Current.Now == Mood.Night;
+            bool night = Mood.IsNight;
             foreach (var o in glows) if (o != null && o.activeSelf != night) o.SetActive(night);
             foreach (var b in burning.Values) if (b.glow != null && b.glow.activeSelf != night) b.glow.SetActive(night);
             // (Gone with the map made again, till Show makes them anew.)
@@ -289,6 +301,8 @@ namespace Bastion.Client
                 var light = pool[n++];
                 float flicker = b.flare ? 0.9f + 0.1f * Mathf.Sin(time * 23) : 0.75f + 0.25f * Mathf.Sin(time * 11) * Mathf.Sin(time * 7.3f);
                 light.enabled = true;
+                // (Only when it changes: a light's type set again every frame may not be drawn that frame.)
+                if (light.type != LightType.Point) light.type = LightType.Point;
                 light.color = b.colour.gamma;
                 light.intensity = BurningLight * b.level * flicker * Unity;
                 light.range = b.radius * 2.6f * MapTile;
@@ -310,11 +324,19 @@ namespace Bastion.Client
                 var light = pool[n++];
                 var l = lamps[i];
                 light.enabled = true;
+                if (LampsDown && light.type != LightType.Spot)
+                {
+                    light.type = LightType.Spot;
+                    light.spotAngle = LampCone;
+                    light.innerSpotAngle = LampCone * 0.6f;
+                }
+                else if (!LampsDown && light.type != LightType.Point) light.type = LightType.Point;
                 light.color = Lamp.gamma;
                 light.intensity = LampLight * l.power * Unity;
                 light.range = LampReach * Mathf.Sqrt(l.power) * MapTile;
                 // Well under the lamp's own head: a point light right at a surface burnt it white.
                 light.transform.position = l.at - Vector3.up * 0.6f * MapTile;
+                light.transform.rotation = Quaternion.LookRotation(Vector3.down, Vector3.forward);
             }
             for (; n < pool.Length; n++) pool[n].enabled = false;
             if (Unlit) foreach (var l in pool) l.enabled = false;

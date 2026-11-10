@@ -313,6 +313,8 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 
 ## 5. Pendiente
 
+> **Esta lista es de la 0.10.1 (23/10), la última de TypeScript.** Lo pendiente de hoy está en [UNITY.md](UNITY.md), §5. De aquí siguen vivos: medir en el PC de la 3090 (ahora con `medir.bat` de la app de Unity), La Lata como base móvil y el tráiler (aparcados). El tiempo real no se trajo a Unity (Arturo, 29/10), el móvil volvió como iOS táctil ([IOS.md](IOS.md)), la firma del Mac se probó en la 0.12.16 y los textos pendientes de Lore están hechos.
+
 - **Medir la 0.9.2 en el PC con la 3090** (Arturo): las líneas «combate» de red.log, en alto, frente a las de antes, y si el primer disparo ya no congela.
 
 - **De Arturo y Ana:**

@@ -91,6 +91,11 @@ namespace Bastion.UI.Combat
         const float KillHold = 0.5f;
         const float DeathHold = 1.2f;
         const float FeedHold = 0.2f;
+        /// <summary>
+        /// A blow that kills: the death goes on this long after it, its reaction playing on under it (the review of 10/11,
+        /// A-04: the body went back to its stand between the two, and fell 1.5 s after the blow).
+        /// </summary>
+        const float LethalBeat = 0.1f;
         /// <summary>A shooter stepping out onto a tile something takes leans this far towards it instead.</summary>
         const float LeanOut = 0.35f * Board.Tile;
 
@@ -100,6 +105,13 @@ namespace Bastion.UI.Combat
 
         /// <summary>What starts something new: the shot over the shoulder of the last one ends before it.</summary>
         static bool NewAction(GameEvent e) => e is ShotEvent || e is MovedEvent || e is AbilityUsedEvent || e is ExplosiveEvent || e is StoneThrownEvent || e is TurnBeganEvent || e is MissionEndedEvent || e is WalksEvent;
+
+        /// <summary>
+        /// Who acts in the event being played, and on whom (the review of 10/11, E-08): the cutaway shows their storey while it
+        /// plays, not the picked soldier's; null between actions. Not for the groups walking at once, which go as before.
+        /// </summary>
+        public (string actor, string target)? Acting => acting;
+        (string actor, string target)? acting;
 
         /// <summary>The shot over a shoulder on now, and who is in it (the attacker, the target): the buildings' cutaway leaves its room whole.</summary>
         public (string attacker, string target)? CloseFocus => control.Rig != null && control.Rig.CloseUp ? (lastAttacker, killCam) : ((string, string)?)null;
@@ -125,6 +137,22 @@ namespace Bastion.UI.Combat
             killCam = id;
             biting = bite;
             control.Rig?.CloseShot(shot.pos, shot.look);
+        }
+
+        /// <summary>
+        /// Till the shot over a shoulder is there (CameraRig.CloseLeft), at most a second, so the blow or the shot is seen from
+        /// it whole (the review of 10/11, A-01: the blow went at 0.2 s of the camera's 0.8). Not if the player takes the camera.
+        /// </summary>
+        async Awaitable ShotIn(Func<bool> cam)
+        {
+            // On the camera's clock (unscaled, as it moves), a frame at a time, the pause not counted (the camera waits in it).
+            var waited = 0f;
+            while (waited < 1f && cam() && control.Rig != null && control.Rig.CloseLeft > 0.05f)
+            {
+                await Awaitable.NextFrameAsync(stop);
+                if (Time.timeScale > 0) waited += Time.unscaledDeltaTime;
+            }
+            if (CameraRig.Logging) Debug.Log($"[camara] espera {waited:0.00} s, close={(control.Rig != null ? control.Rig.Closeness : 0):0.00}");
         }
 
         /// <summary>Back from the shot over the shoulder to where the camera was.</summary>
@@ -281,6 +309,7 @@ namespace Bastion.UI.Combat
             queue.Clear();
             playing = false;
             current = null;
+            acting = null;
             Forget();
             control.Aboard.Clear();
             control.View = Events.CloneState(state);
@@ -349,6 +378,9 @@ namespace Bastion.UI.Combat
         {
             playing = true;
             var load = loads;
+            // (BASTION_RITMO: how long what came was on screen, in the battle's time, for the review of 10/11's timings.)
+            var from = Time.time;
+            var rounds = 0;
             try
             {
                 while (queue.Count > 0 && !stop.IsCancellationRequested && load == loads)
@@ -356,6 +388,7 @@ namespace Bastion.UI.Combat
                     Pace();
                     var r = new Round(load);
                     var item = Take(r);
+                    rounds++;
                     try
                     {
                         await Step(r, item);
@@ -402,6 +435,7 @@ namespace Bastion.UI.Combat
                 }
             }
             if (stop.IsCancellationRequested || load != loads) return;
+            if (Rhythm) Debug.Log($"[ritmo] en pantalla: {rounds} vueltas en {Time.time - from:0.00} s");
             Guarded(() =>
             {
                 control.Refresh();
@@ -444,6 +478,9 @@ namespace Bastion.UI.Combat
                 return;
             }
             var took = Time.time;
+            // (Set before the camera goes to them, so their storey is open as it gets there; cleared once the result is read.)
+            var actor = UnitOf(item.e);
+            acting = actor != null ? (actor, item.e is ShotEvent aimed ? aimed.Target : null) : ((string, string)?)null;
             await BeforeActing(item.e);
             Fresh(r);
             var epoch = control.Rig != null ? control.Rig.Epoch : 0;
@@ -453,6 +490,7 @@ namespace Bastion.UI.Combat
             current = null;
             NoteResult(item.e);
             await Settle(r, item.e, item.by, epoch);
+            acting = null;
             if (Rhythm && Time.time - took > 0.3f) Debug.Log($"[ritmo] {item.e.T} {UnitOf(item.e)}: {Time.time - took:0.0} s");
             // The enemy's turn begins: what follows it, in the order it is to be seen.
             if (item.e is TurnBeganEvent began && began.Team == Teams.Alien) Choreograph();
@@ -535,6 +573,7 @@ namespace Bastion.UI.Combat
             groupPlans = null;
             walked.Clear();
             current = null;
+            acting = null;
             resultHold = 0;
             var all = r.Taken.SelectMany(q => q.e is WalksEvent w ? w.Items : new List<(GameEvent e, int? by, int epoch)> { q }).ToList();
             var left = all.Where(q => !r.Left.Contains(q.e)).ToList();
@@ -1647,6 +1686,21 @@ namespace Bastion.UI.Combat
             return p;
         }
 
+        /// <summary>
+        /// A missed round's end, short of the wall beyond the target when there is one (the review of 10/11, L-09: its sparks
+        /// came out on the far side of a building's wall): half a tile past it, in its room. In the open, MissPoint's.
+        /// </summary>
+        Vector3 MissPointIn(Vector3 from, Vector3 chest, Unit target, int i, float spread = 1)
+        {
+            var p = MissPoint(from, chest, i, spread);
+            var t = Board.TileOf(p);
+            if (target == null || t.x < 0 || t.y < 0 || t.x >= V.Width || t.y >= V.Height) return p;
+            if (Los.LineClear(V, target.Pos, new Pos { X = t.x, Y = t.y, Z = target.Pos.Z })) return p;
+            var past = p - chest;
+            past.y = 0;
+            return chest + past.normalized * (0.45f * Board.Tile) + Vector3.up * (p.y - chest.y);
+        }
+
         static Vector3 Jitter(float amount) => new Vector3((float)(dice.NextDouble() - 0.5), (float)(dice.NextDouble() - 0.5), (float)(dice.NextDouble() - 0.5)) * (amount * Board.Tile);
 
         /// <summary>The soldier of ours nearest a tile, where a woken enemy turns to look.</summary>
@@ -1820,7 +1874,12 @@ namespace Bastion.UI.Combat
                     }
                     if (d.Shred > 0) Float(chest + Vector3.up * 0.45f, "BLINDAJE DAÑADO", "warn");
                     if (crit && Cam()) rig.Shake(0.18f * Board.Tile, 0.3f);
-                    if (units != null) await units.HitReact(target.Id, crit ? 1.5f : d.Amount > 0 ? 1 : 0.4f, stop);
+                    if (units != null && Dies(target.Id))
+                    {
+                        Loose(units.HitReact(target.Id, crit ? 1.5f : 1, stop));
+                        await Wait(LethalBeat);
+                    }
+                    else if (units != null) await units.HitReact(target.Id, crit ? 1.5f : d.Amount > 0 ? 1 : 0.4f, stop);
                     else await Wait(0.4f);
                     return;
                 }
@@ -1839,7 +1898,7 @@ namespace Bastion.UI.Combat
                     if (u.Team == Teams.Xcom && killCam == null && Cam() && DeathShot(u, killer) is (Vector3, Vector3) close)
                     {
                         StartKillCam(u.Id, close);
-                        await Wait(0.35f);
+                        await ShotIn(Cam);
                     }
                     control.Sfx.Death(u, Chest(u.Id), killer);
                     if (units == null)
@@ -1989,7 +2048,7 @@ namespace Bastion.UI.Combat
                             units.Recoil(u.Id);
                             fx.MuzzleFlash(from, blue);
                             control.Sfx.Shot(u, Content.AttackWeapon(u).Id, from);
-                            Loose(BulletThen(from, MissPoint(from, chest, i, 1.2f), blue, 60, false, Fx.Hex(0xffd28a), 3));
+                            Loose(BulletThen(from, MissPointIn(from, chest, target, i, 1.2f), blue, 60, false, Fx.Hex(0xffd28a), 3));
                             await Wait(0.07f);
                         }
                         Loose(Later(0.8f, () => Loose(units.LowerWeapon(u.Id, aim, stop))));
@@ -2582,6 +2641,17 @@ namespace Bastion.UI.Combat
         /// Whether this attack fells its target: its `died` comes in the same batch, behind the shot, before anyone does
         /// anything else (game.ts fells).
         /// </summary>
+        /// <summary>Whether `id` dies next, before anyone does anything else (as Fells, for its `damaged`: A-04).</summary>
+        bool Dies(string id)
+        {
+            foreach (var (next, _, _) in queue)
+            {
+                if (next is DiedEvent d && d.Unit == id) return true;
+                if (NewAction(next)) return false;
+            }
+            return false;
+        }
+
         bool Fells(ShotEvent e)
         {
             foreach (var (next, _, _) in queue)
@@ -2628,6 +2698,7 @@ namespace Bastion.UI.Combat
                 look(Vector3.Lerp(Feet(shooter.Id), Feet(target.Id), 0.5f));
                 control.Rig.CinematicZoom(Mathf.Clamp(Vector3.Distance(Feet(shooter.Id), Feet(target.Id)) * 1.1f + 9 * Board.Tile, 13 * Board.Tile, 24 * Board.Tile));
             }
+            if (close != null) await ShotIn(cam);
             if (e.Reaction)
             {
                 Float(Chest(shooter.Id), weapon.Melee ? "TAJO DE REACCIÓN" : "FUEGO DE REACCIÓN", "warn");
@@ -2644,18 +2715,21 @@ namespace Bastion.UI.Combat
             if (weapon.Melee)
             {
                 await Wait(cam() ? 0.2f : 0.05f);
+                if (CameraRig.Logging) Debug.Log($"[camara] accion close={(control.Rig != null ? control.Rig.Closeness : 0):0.00}");
                 control.Sfx.Melee("swing", Chest(shooter.Id), Content.AttackWeapon(shooter, e.Ability).Id);
                 var stun = e.Ability == AbilityIds.StunLance;
                 await units.Lunge(shooter.Id, target.Id, Fells(e) && units.CanFeed(shooter.Id, target.Id), () =>
                 {
                     if (!hit) return;
-                    fx.Slash(chest, stun ? Fx.Hex(0x6ad8ff) : Fx.Hex(0xe8f6ff));
+                    // (Sparks only from the stun lance, which is electric: a blade's or a claw's are its arc alone; L-02.)
+                    fx.Slash(chest, stun ? Fx.Hex(0x6ad8ff) : Fx.Hex(0xe8f6ff), stun);
                     control.Sfx.Melee(stun ? "stun" : e.Ability == AbilityIds.Claw ? "claw" : "sword", chest, Content.AttackWeapon(shooter, e.Ability).Id);
                     control.Sfx.Impact(Bastion.Client.Audio.CombatSound.Body(target), chest, e.Result == "crit");
                     if (e.Ability == AbilityIds.Claw) fx.Bite(chest, Feet(shooter.Id));
                 }, stop);
                 if (!hit) ShowMiss(e, shooter, target);
-                await Wait(0.25f);
+                // A blow that lands: the reaction straight after the arc (A-08); a miss, «FALLO» read as before.
+                await Wait(hit ? 0.05f : 0.25f);
                 return;
             }
 
@@ -2668,7 +2742,9 @@ namespace Bastion.UI.Combat
                 lean.y = 0;
                 await units.Slide(shooter.Id, units.ClearFor(e.From, shooter.Id) ? beside : feet + lean.normalized * LeanOut, 0.22f, stop);
             }
-            var aim = await units.RaiseWeapon(shooter.Id, Feet(target.Id), Content.FiresSidearm(shooter, e.Ability), stop);
+            // At the chest, where it aimed as the target was picked (CombatController's AimAt): at the feet, the gun dropped
+            // to fire, and point-blank the shooter squatted low (the review of 10/11, A-15).
+            var aim = await units.RaiseWeapon(shooter.Id, Chest(target.Id), Content.FiresSidearm(shooter, e.Ability), stop);
             await Wait(cam() ? 0.25f : 0.08f);
             var heavy = weapon.ApCost > 1;
             var pellets = weapon.Range == RangeTableIds.Short ? 6 : 0;
@@ -2676,6 +2752,7 @@ namespace Bastion.UI.Combat
             for (var i = 0; i < rounds; i++)
             {
                 var muzzle = units.Muzzle(shooter.Id);
+                if (i == 0 && CameraRig.Logging) Debug.Log($"[camara] accion close={(control.Rig != null ? control.Rig.Closeness : 0):0.00}");
                 units.Recoil(shooter.Id);
                 fx.MuzzleFlash(muzzle, colour);
                 control.Sfx.Shot(shooter, weapon.Id, muzzle);
@@ -2683,7 +2760,7 @@ namespace Bastion.UI.Combat
                 var shots = pellets > 0 ? pellets : 1;
                 for (var p = 0; p < shots; p++)
                 {
-                    var dest = hit ? chest + Jitter(pellets > 0 ? 0.6f : 0.25f) : MissPoint(muzzle, chest, i + p, pellets > 0 ? 1.6f : 1);
+                    var dest = hit ? chest + Jitter(pellets > 0 ? 0.6f : 0.25f) : MissPointIn(muzzle, chest, target, i + p, pellets > 0 ? 1.6f : 1);
                     var bullet = BulletThen(muzzle, dest, colour, heavy ? 45 : 60, heavy, hit ? Fx.Hex(0xff7a5a) : Fx.Hex(0xffd28a), pellets > 0 ? 3 : hit ? 8 : 5);
                     // Where the last round lands, heard (its first pellet): flesh, metal or a miss.
                     if (i == rounds - 1 && p == 0) bullet = Then(bullet, () => { if (!stop.IsCancellationRequested) control.Sfx.Impact(hit ? Bastion.Client.Audio.CombatSound.Body(target) : "miss", dest, e.Result == "crit"); });
@@ -2804,7 +2881,8 @@ namespace Bastion.UI.Combat
                 if (e.Ability == AbilityIds.Smoke)
                 {
                     control.Sfx.Explosion(to, "smoke");
-                    fx.Puffs(to, Fx.Hex(0xd8d6d0), 12, 0.6f, 1.2f, 0.4f, 0.8f, 3, 1.6f);
+                    // Thicker than the rest of the smoke, now see-through (Arturo's choice, Arte's F-01 and Puffs): it is there to hide.
+                    fx.Puffs(to, Fx.Hex(0xd8d6d0), 12, 0.6f, 1.2f, 0.4f, 0.8f, 3, 1.6f, opacity: 0.85f);
                     await Wait(0.3f);
                     return;
                 }

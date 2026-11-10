@@ -74,7 +74,7 @@ namespace Bastion.Client.Units
         /// <summary>Each view's rim on by night (while it is drawn whole), off by day.</summary>
         void StepRims()
         {
-            bool night = Mood.Current != null && Mood.Current.Now == Mood.Night;
+            bool night = Mood.IsNight;
             foreach (var v in views.Values)
             {
                 bool want = night && v.body != null && RimOf(v) > 0 && v.fade >= 1;

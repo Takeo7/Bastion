@@ -125,12 +125,18 @@ namespace Bastion.Client
             [Weathers.Drizzle] = 1.2f, [Weathers.Downpour] = 1.3f, [Weathers.Storm] = 1.5f, [Weathers.Snowfall] = 1.2f, [Weathers.Blizzard] = 1.7f,
         };
         const float NightGain = 0.35f;
+        /// <summary>
+        /// The lying snow's white by night: with the night's lights back on under a snowfall (L-04), the night came out a
+        /// quarter brighter than a winter's night without it (60.9 against 75.0 of 255, the same camera); so much less
+        /// white, as the winter's snow cover is. The review of 10/11, L-04 (point 6).
+        /// </summary>
+        const float NightSnow = 0.6f;
         /// <summary>The most ground the particles cover (m², a square 60 m a side): drawn back further, they thin out.</summary>
         const float MostArea = 3600;
 
         Kind kind;
         readonly List<(Fall fall, ParticleSystem system, Material material)> falling = new List<(Fall, ParticleSystem, Material)>();
-        Texture2D roofs;
+        Texture2D roofs, paved;
         WeatherPass pass;
         float clock, nextFlash, span;
         System.Random random;
@@ -146,6 +152,7 @@ namespace Bastion.Client
             weather.random = new System.Random(s.Width * 7919 + s.Height * 104729 + (s.Tiles.Count > 0 ? s.Tiles[s.Tiles.Count / 2]?.Length ?? 0 : 0));
             weather.nextFlash = kind.lightning > 0 ? 2 + (float)weather.random.NextDouble() * kind.lightning : float.MaxValue;
             weather.Roofs(s, plan);
+            weather.Paved(s);
             var dot = Dot();
             foreach (var fall in kind.falls)
             {
@@ -182,6 +189,8 @@ namespace Bastion.Client
             Shader.SetGlobalFloat("_ClimaFlash", 0);
             foreach (var (_, _, material) in falling) if (material != null) Destroy(material);
             if (roofs != null) Destroy(roofs);
+            if (paved != null) Destroy(paved);
+            Shader.SetGlobalTexture("_ClimaPaved", Texture2D.whiteTexture);
         }
 
         /// <summary>
@@ -202,6 +211,29 @@ namespace Bastion.Client
             roofs.Apply(false);
             Shader.SetGlobalTexture("_ClimaRoofs", roofs);
             Shader.SetGlobalVector("_ClimaSize", new Vector4(s.Width, s.Height, MapSpace.Tile, 1));
+        }
+
+        /// <summary>
+        /// Where a puddle can lie (Clima.shader's puddles): 1 on what is paved or trodden (streets, yards, a dirt track), 0 on
+        /// grass (a town's lawns, the wilds' open ground and hills, a ploughed field) and in a canal's water, as the ground
+        /// (GroundMap, Ground.shader) has them; read smooth across a tile. Over the lawns they came out as pale rings, like
+        /// ice. The review of 10/11, L-12.
+        /// </summary>
+        void Paved(GameState s)
+        {
+            var ground = new GroundMap(s);
+            paved = new Texture2D(s.Width, s.Height, TextureFormat.R8, false, true) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, name = "Firme", hideFlags = HideFlags.DontSave };
+            var firm = new byte[s.Width * s.Height];
+            bool wilds = s.Biome == Biomes.Wilds;
+            for (int i = 0; i < firm.Length; i++)
+            {
+                byte k = ground.Kinds[i];
+                bool grass = k == GroundMap.Hill || k == GroundMap.Furrow || (k == GroundMap.Open && (wilds || ground.IsLawn(i)));
+                firm[i] = grass || k == GroundMap.Water ? (byte)0 : (byte)255;
+            }
+            paved.SetPixelData(firm, 0);
+            paved.Apply(false);
+            Shader.SetGlobalTexture("_ClimaPaved", paved);
         }
 
         /// <summary>A soft round spot (white, its alpha falling off to the edge), the particles' texture.</summary>
@@ -371,7 +403,7 @@ namespace Bastion.Client
             Shader.SetGlobalFloat("_ClimaRipples", kind.ripples);
             Shader.SetGlobalFloat("_ClimaSnow", kind.snow);
             Shader.SetGlobalVector("_ClimaSky", Hex(kind.sky).linear * (night ? 0.25f : 1));
-            Shader.SetGlobalVector("_ClimaSnowTint", new Color(0.86f, 0.9f, 0.96f).linear);
+            Shader.SetGlobalVector("_ClimaSnowTint", new Color(0.86f, 0.9f, 0.96f).linear * (night ? NightSnow : 1));
             Shader.SetGlobalFloat("_ClimaFlash", Flash() * (night ? 1.6f : 1));
             foreach (var (fall, _, material) in falling) if (material != null) material.SetFloat("_Gain", fall.gain * (night ? NightGain : 1));
             camera.GetUniversalAdditionalCameraData().scriptableRenderer.EnqueuePass(pass);

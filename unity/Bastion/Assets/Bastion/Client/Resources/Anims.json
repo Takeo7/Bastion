@@ -722,6 +722,11 @@
    "fbx": "Toss Grenade",
    "mirror": true
   },
+  "throwGrenade": {
+   "pack": "mixamo",
+   "fbx": "Throw",
+   "mirror": true
+  },
   "throwStone": {
    "pack": "mixamo",
    "fbx": "Throw Object",
@@ -1073,6 +1078,7 @@
   "pistolAim",
   "pistolFire",
   "tossGrenade",
+  "throwGrenade",
   "throwStone",
   "knifeStab",
   "macheteSwing"
@@ -1267,6 +1273,7 @@
  "weapons": {
   "rifle": {
    "fbx": "SM_Wep_AssaultRifle_01",
+   "reach": 0.69,
    "fore": [
     0.002,
     0.2
@@ -1275,6 +1282,7 @@
   },
   "rifle2": {
    "fbx": "SM_Wep_AssaultRifle_02",
+   "reach": 0.72,
    "fore": [
     0.012,
     0.21
@@ -1283,6 +1291,7 @@
   },
   "rifle3": {
    "fbx": "SM_Wep_AssaultRifle_03",
+   "reach": 0.7,
    "fore": [
     0.03,
     0.27
@@ -1291,6 +1300,7 @@
   },
   "shotgun": {
    "fbx": "SM_Wep_Shotgun_01",
+   "reach": 0.86,
    "fore": [
     -0.014,
     0.2
@@ -1300,6 +1310,7 @@
   },
   "sniper": {
    "fbx": "SM_Wep_SniperRifle_01",
+   "reach": 0.7,
    "fore": [
     -0.02,
     0.14
@@ -1308,6 +1319,7 @@
   },
   "sniper2": {
    "fbx": "SM_Wep_SniperRifle_02",
+   "reach": 0.69,
    "fore": [
     -0.022,
     0.18
@@ -1316,11 +1328,12 @@
    "muzzle": [
     0,
     0.026,
-    0.49
+    0.754
    ]
   },
   "machineGun": {
    "fbx": "SM_Wep_MachineGun_01",
+   "reach": 0.97,
    "fore": [
     0.018,
     0.3
@@ -1330,6 +1343,7 @@
   },
   "huntingRifle": {
    "fbx": "SM_Wep_HuntingRifle_01",
+   "reach": 0.91,
    "fore": [
     -0.04,
     0.22
@@ -1338,6 +1352,7 @@
   },
   "smg": {
    "fbx": "SM_Wep_SubMGun_01",
+   "reach": 0.4,
    "fore": [
     -0.008,
     0.12
@@ -1380,6 +1395,7 @@
   },
   "boltRifle": {
    "fbx": "SM_Wep_HuntingRifle_Clean_01",
+   "reach": 0.9,
    "fore": [
     -0.04,
     0.22
@@ -1388,6 +1404,7 @@
   },
   "machineGun2": {
    "fbx": "SM_Wep_MachineGun_02",
+   "reach": 0.69,
    "fore": [
     0.018,
     0.3

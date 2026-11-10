@@ -136,7 +136,7 @@ namespace Bastion.Client
         /// <summary>The mood's colours (sky.ts setMood), as globals the parts read, in linear.</summary>
         void Colours(Mood.Values m)
         {
-            var night = ReferenceEquals(m, Mood.Night);
+            var night = m.night;
             snow = ReferenceEquals(m, Mood.SnowDay);
             var stops = night ? NightSky : snow ? SnowSky : DaySky;
             var haze = Linear(m.haze);

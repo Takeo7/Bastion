@@ -251,6 +251,7 @@ namespace Bastion.UI.Combat
                 control.Halt = player.SetHalted;
                 control.Busy = player.IsBusy;
                 control.CloseFocus = () => player.CloseFocus;
+                control.ActingFocus = () => player.Acting;
             }
 
             if (Touches != "") TouchesSoon();

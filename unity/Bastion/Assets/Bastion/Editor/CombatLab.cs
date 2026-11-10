@@ -441,7 +441,7 @@ namespace Bastion.EditorTools
                 fog.Reset(state);
                 fog.Show(state, true);
                 if (Environment.GetEnvironmentVariable("BASTION_FOG_ALL") == "1") fog.SeeAll();
-                Debug.Log($"[pasos] fog: night {Bastion.Client.Mood.Current != null && Bastion.Client.Mood.Current.Now == Bastion.Client.Mood.Night}, {state.Lights?.Count ?? 0} lights, {Los.LitMask(state).Count(b => b)} lit");
+                Debug.Log($"[pasos] fog: night {Bastion.Client.Mood.IsNight}, {state.Lights?.Count ?? 0} lights, {Los.LitMask(state).Count(b => b)} lit");
             }
             units = new GameObject("Unidades").AddComponent<UnitViews>();
             fx = new GameObject("Efectos").AddComponent<Fx>();
@@ -617,11 +617,27 @@ namespace Bastion.EditorTools
             soldier = Put(state.Units.First(u => u.Id == soldierId), 11, 10, 0);
             soldier.Template = "rookie";
             soldier.Arms = new Arms { Primary = "assaultRifle" };
+            // (Each frame, [registrar]: the barrel's rise over the level, degrees, and the left palm over the feet, m; the 3D
+            // review's A-18, 10/11.)
+            bool done = false;
+            async Awaitable Watch()
+            {
+                while (!done)
+                {
+                    await Awaitable.NextFrameAsync();
+                    var rig = units.transform.Find(soldier.Id)?.GetComponentInChildren<Animator>();
+                    var gun = units.CarriedForLab(soldier.Id).FirstOrDefault(c => c.drawn).model;
+                    if (rig == null || !rig.isHuman || gun == null || !(rig.GetBoneTransform(HumanBodyBones.LeftHand) is Transform hand)) continue;
+                    float up = Mathf.Asin(Mathf.Clamp(gun.forward.y, -1, 1)) * Mathf.Rad2Deg;
+                    Debug.Log(FormattableString.Invariant($"[registrar] {Time.time:0.000} up {up:0.0} L {hand.position.y - units.Feet(soldier.Id).y:0.000}"));
+                }
+            }
             sequence = async () =>
             {
                 try
                 {
                     units.Sync(state);
+                    _ = Watch();
                     await Awaitable.WaitForSecondsAsync(1);
                     for (int k = 0; k < 2; k++)
                     {
@@ -634,6 +650,10 @@ namespace Bastion.EditorTools
                 catch (Exception e)
                 {
                     Debug.LogError("[combat] " + e);
+                }
+                finally
+                {
+                    done = true;
                 }
             };
         }
@@ -943,21 +963,47 @@ namespace Bastion.EditorTools
             string soldierId = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
             string deadId = first.Units.First(u => u.Alive && u.Template == "zombie").Id;
             Plain(u => u.Id == soldierId || u.Id == deadId, 10, 13);
+            // (BASTION_SOLO_CERCA=1: the target beside it from the start, the point-blank round alone, its gun's reach not yet
+            // measured: the 3D review's A-15.)
+            bool onlyClose = Environment.GetEnvironmentVariable("BASTION_SOLO_CERCA") == "1";
             soldier = Put(state.Units.First(u => u.Id == soldierId), 10, 10, 0);
-            target = Put(state.Units.First(u => u.Id == deadId), 14, 10, Math.PI);
+            target = Put(state.Units.First(u => u.Id == deadId), onlyClose ? 11 : 14, 10, Math.PI);
             soldier.Template = "rookie";
             soldier.Arms = new Arms { Primary = Environment.GetEnvironmentVariable("BASTION_ARMA") ?? "machineGun" };
             // (BASTION_TEMPLATE: the target another kind, a Cuervo with its weapons: trooper, lancer.)
             if (Environment.GetEnvironmentVariable("BASTION_TEMPLATE") is string kind) target.Template = kind;
+            // (At point blank, each frame, [quemarropa]: how far the muzzle is from the box round the target's body, cm, less
+            // than 0 inside it; and how far the body is stepped back, cm. The 3D review's A-15, 10/11.)
+            bool done = false, blank = false;
+            async Awaitable Watch()
+            {
+                while (!done)
+                {
+                    await Awaitable.NextFrameAsync();
+                    if (!blank) continue;
+                    var body = units.BodyRenderers(target.Id);
+                    if (body == null || body.Count == 0) continue;
+                    var box = body[0].bounds;
+                    foreach (var r in body) box.Encapsulate(r.bounds);
+                    var muzzle = units.Muzzle(soldier.Id);
+                    float into = box.Contains(muzzle) ? -Mathf.Min(Mathf.Min(muzzle.x - box.min.x, box.max.x - muzzle.x), Mathf.Min(Mathf.Min(muzzle.y - box.min.y, box.max.y - muzzle.y), Mathf.Min(muzzle.z - box.min.z, box.max.z - muzzle.z)))
+                        : Mathf.Sqrt(box.SqrDistance(muzzle));
+                    var rig = units.transform.Find(soldier.Id);
+                    var stepped = rig != null && rig.childCount > 0 ? -rig.GetChild(0).localPosition.z : 0;
+                    Debug.Log(FormattableString.Invariant($"[quemarropa] {Time.time:0.000} muzzleIn={into * 100:0.0} back={stepped * 100:0.0}"));
+                }
+            }
             sequence = async () =>
             {
                 try
                 {
                     units.Sync(state);
                     Reveal();
+                    _ = Watch();
                     await Awaitable.WaitForSecondsAsync(1);
-                    for (int round = 0; round < 2; round++)
+                    for (int round = onlyClose ? 1 : 0; round < 2; round++)
                     {
+                        blank = round == 1;
                         var at = units.Chest(target.Id);
                         Debug.Log($"[combat] {Time.time:0.00} s: picked ({Vector3.Distance(units.Feet(soldier.Id), units.Feet(target.Id)) / MapSpace.Tile:0.00} tiles)");
                         units.AimAt(soldier.Id, at);
@@ -985,6 +1031,10 @@ namespace Bastion.EditorTools
                 catch (Exception e)
                 {
                     Debug.LogError("[combat] " + e);
+                }
+                finally
+                {
+                    done = true;
                 }
             };
         }
@@ -1015,12 +1065,26 @@ namespace Bastion.EditorTools
             UnitViews.SightOff = Environment.GetEnvironmentVariable("BASTION_SIN_MIRA") == "1";
             string close = Environment.GetEnvironmentVariable("BASTION_VIEW");
             var angles = (Environment.GetEnvironmentVariable("BASTION_ANGULOS") ?? "0,90,180,270").Split(',').Select(a => double.Parse(a, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+            // (Each frame from the aim till it is lowered, [giro]: where the root, the barrel and the eyes point and how far
+            // the gun is up; the 3D review's A-03, 10/11, the turn and the gun raised after it.)
+            bool done = false;
+            Vector3? turning = null;
+            double turningAt = 0;
+            async Awaitable Watch()
+            {
+                while (!done)
+                {
+                    await Awaitable.NextFrameAsync();
+                    if (turning is Vector3 p) Debug.Log(FormattableString.Invariant($"[giro] {Time.time:0.000} {turningAt:0} {units.AimReport(soldier.Id, p)}"));
+                }
+            }
             sequence = async () =>
             {
                 try
                 {
                     units.Sync(state);
                     Reveal();
+                    _ = Watch();
                     var fire = FigureCatalog.Load()?.Clip("rifleFire");
                     Debug.Log($"[angulos] rifleFire: {(fire != null ? $"{fire.length:0.000} s, {fire.frameRate} fps" : "none")}");
                     await Awaitable.WaitForSecondsAsync(0.8f);
@@ -1034,6 +1098,7 @@ namespace Bastion.EditorTools
                         Reveal();
                         var at = units.Chest(target.Id);
                         var to = units.Feet(target.Id) - units.Feet(soldier.Id);
+                        (turning, turningAt) = (at, angle);
                         units.AimAt(soldier.Id, at);
                         if ((close == "hombro" || close == "cara") && Camera.main is Camera eye)
                         {
@@ -1059,6 +1124,7 @@ namespace Bastion.EditorTools
                         await flying;
                         await Awaitable.WaitForSecondsAsync(0.4f);
                         await units.LowerWeapon(soldier.Id, aim);
+                        turning = null;
                         await Awaitable.WaitForSecondsAsync(0.4f);
                     }
                     Debug.Log($"[combat] {Time.time:0.00} s: done");
@@ -1066,6 +1132,10 @@ namespace Bastion.EditorTools
                 catch (Exception e)
                 {
                     Debug.LogError("[combat] " + e);
+                }
+                finally
+                {
+                    done = true;
                 }
             };
         }

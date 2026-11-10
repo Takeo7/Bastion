@@ -646,7 +646,11 @@ namespace Bastion.UI.Combat
             // till the camera is back (Gameplay, 01/11: the item one of ours dropped as they fell, its core and its ring,
             // filled half the picture); from above, they stay.
             var away = Rig != null && (Rig.Away || Rig.Overhead) || Film;
-            Overlay?.Cinematic(away);
+            // Another one acting on another storey (the review of 10/11, E-08: the cutaway shows theirs while it plays): the
+            // picked one's range, on its own storey, would float over theirs; back as it ends.
+            var acting = ActingFocus?.Invoke();
+            var elsewhere = acting != null && acting.Value.actor != picked && UnitById(Shown, acting.Value.actor) is Unit actor && actor.Pos.Z != Level;
+            Overlay?.Cinematic(away || elsewhere);
             AimMarks?.Cinematic(away);
             Hud?.SetSight(SightNow());
             Marks?.Cinematic(Film || Rig != null && Rig.Away);
@@ -757,6 +761,9 @@ namespace Bastion.UI.Combat
         /// <summary>The shot over a shoulder on now, and who is in it (the event player's).</summary>
         public System.Func<(string attacker, string target)?> CloseFocus;
 
+        /// <summary>Who acts in the event being played, and on whom (the event player's Acting; the review of 10/11, E-08).</summary>
+        public System.Func<(string actor, string target)?> ActingFocus;
+
         /// <summary>
         /// What the buildings' cutaway opens for (Arte's Cutaway; game.ts mapView.watch): the picked soldier, the tile
         /// under the pointer, the target, and in the shot over a shoulder who is in it. Field by field: its level is
@@ -772,6 +779,10 @@ namespace Bastion.UI.Combat
             var close = CloseFocus?.Invoke();
             cut.Focus.closeAttacker = close?.attacker;
             cut.Focus.closeTarget = close?.target;
+            // Who acts now: their storey while it plays (E-08), over the picked soldier's.
+            var acting = ActingFocus?.Invoke();
+            cut.Focus.acting = acting?.actor;
+            cut.Focus.actingTarget = acting?.target;
             // Over a shoulder, aiming too (game.ts: `close` while rig.closeUp): the buildings stay whole round the shot.
             cut.Focus.close = Rig != null && Rig.CloseUp;
         }
