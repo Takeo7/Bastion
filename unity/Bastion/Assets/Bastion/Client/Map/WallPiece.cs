@@ -65,5 +65,7 @@ namespace Bastion.Client.Map
         public int building;
         public int level;
         public int tile;
+        /// <summary>The way it faces out (0.10.1's frame: x east, y south), a shop's sign's; zero for the rest (E-14).</summary>
+        public Vector2 outward;
     }
 }

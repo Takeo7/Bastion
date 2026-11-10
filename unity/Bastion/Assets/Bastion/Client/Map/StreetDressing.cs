@@ -36,17 +36,26 @@ namespace Bastion.Client.Map
             int w = s.Width, h = s.Height;
             // On a map with a base, none: its lights are its floodlights (BasePieces; mapView.ts `fixed`).
             var lamps = s.Base != null ? new List<Pos>() : s.Lights?.Where(l => l.Turns == null).Select(l => l.Tile).ToList();
-            // The engine's lights: a street light on each, near the kerb, its arm over the road.
+            // The engine's lights: a street light on each, near the kerb, its arm over the road; by a facility's yard (no
+            // street beside it), over the yard. One with neither beside it isn't drawn, and is logged (the 3D review's E-09,
+            // 10/11: by the furrows of a ploughed field it stood in the middle of it, facing north; the engine no longer
+            // puts one there).
             foreach (var p in lamps ?? new List<Pos>())
             {
                 int k = -1;
-                for (int j = 0; j < 4 && k < 0; j++)
+                foreach (byte kind in new[] { GroundMap.Street, GroundMap.Yard })
+                    for (int j = 0; j < 4 && k < 0; j++)
+                    {
+                        var dd = Grid.Dirs4[j];
+                        int x = p.X + dd.X, y = p.Y + dd.Y;
+                        if (x >= 0 && y >= 0 && x < w && y < h && ground.Kinds[y * w + x] == kind) k = j;
+                    }
+                if (k < 0)
                 {
-                    var dd = Grid.Dirs4[j];
-                    int x = p.X + dd.X, y = p.Y + dd.Y;
-                    if (x >= 0 && y >= 0 && x < w && y < h && ground.Kinds[y * w + x] == GroundMap.Street) k = j;
+                    Debug.Log($"[map] street light at {p.X},{p.Y} with no street beside it");
+                    continue;
                 }
-                var d = Grid.Dirs4[k < 0 ? 0 : k];
+                var d = Grid.Dirs4[k];
                 int alongX = -d.Y, alongY = d.X;
                 int e = p.Y * w + p.X < s.Elev.Count ? s.Elev[p.Y * w + p.X] : 0;
                 output.Add(FrameArt.Placed("streetLight", p.X + 0.5 + d.X * KerbOut + alongX * KerbAlong, e * BuildingPlan.Storey, p.Y + 0.5 + d.Y * KerbOut + alongY * KerbAlong, d.X, d.Y, true));

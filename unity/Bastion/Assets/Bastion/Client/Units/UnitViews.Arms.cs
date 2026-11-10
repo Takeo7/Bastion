@@ -177,6 +177,8 @@ namespace Bastion.Client.Units
             if (v.carried.Count == 0) return false;
             Stows(v);
             v.rest = RestFor(v.seed);
+            if (SheathOn) Sheathe(v, catalog);
+            KeepOff(v);
             Draw(v, MainCarry);
             return true;
         }
@@ -262,32 +264,16 @@ namespace Bastion.Client.Units
                     model.localScale = Vector3.one * Figures.CharacterScale * Size(v.arts[kv.Key]);
                     continue;
                 }
-                string ride = kv.Key == MainCarry && pistolOnly ? SidearmCarry : kv.Key == BeltCarry && v.arts[kv.Key].slung ? SlungCarry : kv.Key;
+                string ride = RideOf(v, kv.Key, pistolOnly);
                 if (!v.stows.TryGetValue(ride, out var mount))
                 {
                     model.gameObject.SetActive(false);
                     continue;
                 }
-                model.gameObject.SetActive(true);
-                model.SetParent(mount, false);
-                model.localRotation = Quaternion.identity;
-                float lossy = Mathf.Max(mount.lossyScale.x, 1e-4f);
-                model.localScale = Vector3.one * Figures.CharacterScale * Size(v.arts[kv.Key]) / lossy;
-                // (The gun by its middle; the chainsaw nearer its motor, so that the motor sits in the middle of the back, not
-                // at the waist: Gameplay 29/10.)
-                model.localPosition = new Vector3(0, 0, ride == MainCarry ? -v.middles[kv.Key] / lossy : ride == SlungCarry ? -v.middles[kv.Key] * SlungBy / lossy : 0);
-                // A blade at the belt by its grip, along the way it runs (the pan by its handle, hanging).
-                if (ride == BeltCarry) Seat(model, v.arts[kv.Key], mount.position, mount.rotation);
-                // One across the back whose length runs another way than +z (the rake's, the sword's): turned so, and by a
-                // point SlungBy of the way from its grip to its middle along it, as the others by their middle.
-                else if (ride == SlungCarry && v.arts[kv.Key].along != null)
-                {
-                    var slung = v.arts[kv.Key];
-                    Seat(model, slung, mount.position, mount.rotation);
-                    var along = new Vector3(slung.along[0], slung.along[1], slung.along[2]).normalized;
-                    var grip = slung.grip != null && slung.grip.Length >= 3 ? new Vector3(slung.grip[0], slung.grip[1], slung.grip[2]) : Vector3.zero;
-                    model.position -= mount.forward * (Vector3.Dot(CentreOf(model) - grip, along) * model.lossyScale.x * SlungBy);
-                }
+                // (In a holster the outfit has with its own pistol in it, ours not drawn: F-08, Arturo's A. The knife at the
+                // belt in its sheath: F-07, Arturo's A.)
+                model.gameObject.SetActive(!(ride == SidearmCarry && OwnHolster(v)) && !(ride == BeltCarry && v.sheath != null));
+                Ride(v, kv.Key, model, ride, mount);
             }
             v.weapon = v.carried.TryGetValue(which, out var held) ? held : null;
             if (v.weapon != null) v.weapon.gameObject.SetActive(true);
@@ -305,6 +291,200 @@ namespace Bastion.Client.Units
         }
 
         static float Size(WeaponArt art) => art != null && art.size > 0 ? art.size : 1;
+
+        /// <summary>Where `key`'s weapon rides when not in the hands: the pistol as the only gun in the holster, a long blade across the back.</summary>
+        static string RideOf(View v, string key, bool pistolOnly) =>
+            key == MainCarry && pistolOnly ? SidearmCarry : key == BeltCarry && v.arts[key].slung ? SlungCarry : key;
+
+        /// <summary>`key`'s weapon (`model`) put on its place `mount` on the body as it rides there (`ride`).</summary>
+        static void Ride(View v, string key, Transform model, string ride, Transform mount)
+        {
+            model.SetParent(mount, false);
+            model.localRotation = Quaternion.identity;
+            float lossy = Mathf.Max(mount.lossyScale.x, 1e-4f);
+            model.localScale = Vector3.one * Figures.CharacterScale * Size(v.arts[key]) / lossy;
+            // (The gun by its middle, or as far out and down as its art says (WeaponArt.back, F-18); the chainsaw nearer its
+            // motor, so that the motor sits in the middle of the back, not at the waist: Gameplay 29/10.)
+            var back = ride == MainCarry && v.arts[key].back is float[] b && b.Length >= 2 ? new Vector2(b[0], b[1]) : Vector2.zero;
+            model.localPosition = new Vector3(0, back.x / lossy, ride == MainCarry ? (-v.middles[key] - back.y) / lossy : ride == SlungCarry ? -v.middles[key] * SlungBy / lossy : 0);
+            // A blade at the belt by its grip, along the way it runs (the pan by its handle, hanging).
+            if (ride == BeltCarry) Seat(model, v.arts[key], mount.position, mount.rotation);
+            // One across the back whose length runs another way than +z (the rake's, the sword's): turned so, and by a
+            // point SlungBy of the way from its grip to its middle along it, as the others by their middle.
+            else if (ride == SlungCarry && v.arts[key].along != null)
+            {
+                var slung = v.arts[key];
+                Seat(model, slung, mount.position, mount.rotation);
+                var along = new Vector3(slung.along[0], slung.along[1], slung.along[2]).normalized;
+                var grip = slung.grip != null && slung.grip.Length >= 3 ? new Vector3(slung.grip[0], slung.grip[1], slung.grip[2]) : Vector3.zero;
+                model.position -= mount.forward * (Vector3.Dot(CentreOf(model) - grip, along) * model.lossyScale.x * SlungBy);
+            }
+        }
+
+        /// <summary>Whether its outfit has a holster of its own with a pistol in it (SoldierMarks.holster: F-08).</summary>
+        static bool OwnHolster(View v) => v.body != null && v.body.GetComponent<SoldierMarks>() is SoldierMarks marks && marks.holster;
+
+        /// <summary>
+        /// What rides by the hips kept off the body, as it is made (the 3D review's F-07 and F-08, 10/11; 0.10.1's outOfBody
+        /// and BELT_ROOM, measured on the body with its build: BodyBulk): the holster pushed out to its right till the pistol
+        /// is in it HolsterTouch at most (HolsterStep at a time, HolsterMost in all); the belt out its way (BeltOut) till its
+        /// blade is BeltRoom clear (BeltStep, BeltMost). Fixed, they went 10–16 cm into a heavy build, a sweater tied at the
+        /// waist, a coat, a bag. The most each goes, less than 0.10.1's (0.2 and 0.3 m): the bulk is the most of each sector
+        /// (a bag, a buttock all round), and with those the pistol hung 5–8 cm off the thigh; the belt only out of the bulk,
+        /// not BELT_ROOM (2.5 cm) clear of it: with that the knife hung 10 cm off the hip (CombatLab.Trajes). BASTION_SIN_HOLGURA=1,
+        /// none (the labs' «before»).
+        /// </summary>
+        static void KeepOff(View v)
+        {
+            if (KeepOffOff || v.body == null) return;
+            var bulk = BodyBulk.Of(v.animator);
+            if (bulk.Empty) return;
+            bool pistolOnly = PistolMain(v) && !v.carried.ContainsKey(SidearmCarry);
+            foreach (var kv in v.carried)
+            {
+                string ride = RideOf(v, kv.Key, pistolOnly);
+                if ((ride != SidearmCarry && ride != BeltCarry) || !v.stows.TryGetValue(ride, out var mount)) continue;
+                Ride(v, kv.Key, kv.Value, ride, mount);
+                if (ride == SidearmCarry) bulk.Clear(mount, kv.Value, v.body.right, HolsterStep, HolsterMost, HolsterTouch);
+                // (The knife's sheath, if it has one, is what is at the belt: the wider of the two.)
+                else bulk.Clear(mount, v.sheath != null ? v.sheath : kv.Value, v.body.TransformDirection(BeltOut), BeltStep, BeltMost, -BeltRoom);
+            }
+        }
+
+        /// <summary>
+        /// The knife's sheath (the 3D review's F-07, 10/11, Arturo's A): POLYGON Military's, put by FigureCatalogMake among
+        /// the weapons. At the belt its knife isn't drawn; drawn, the sheath stays there, empty.
+        /// </summary>
+        public const string KnifeSheath = "military:SM_Chr_Attach_Knife_Sheath_01";
+
+        /// <summary>
+        /// BASTION_VAINA=1: the sheath on (the labs) till Arte has looked at it: in CombatLab.Trajes it showed a few
+        /// centimetres long off the hip, not the 26 cm hanging down it should (its turn or its size is wrong; not found).
+        /// </summary>
+        static readonly bool SheathOn = Environment.GetEnvironmentVariable("BASTION_VAINA") == "1";
+
+        /// <summary>The sheath's size against the figures' (its model 38.6 cm long: the knife's 35), and the way it hangs in the body's frame.</summary>
+        const float SheathSize = 0.6f;
+        static readonly Vector3 SheathAlong = new Vector3(-0.08f, -1, -0.15f).normalized;
+
+        /// <summary>
+        /// The knife at its belt in a sheath (F-07): the sheath on the belt's place, its length (its model's longest side)
+        /// down the way the blade hung (BeltAlong), its mouth (that side's upper end, as it hangs on a body in its model) where
+        /// the knife's grip was, its flat against the hip.
+        /// </summary>
+        static void Sheathe(View v, FigureCatalog catalog)
+        {
+            if (!v.arts.TryGetValue(BeltCarry, out var art) || art.slung || art.fbx == null || art.fbx.IndexOf("Knife", StringComparison.OrdinalIgnoreCase) < 0
+                || !v.stows.TryGetValue(BeltCarry, out var mount) || catalog?.Weapon(KnifeSheath) is not GameObject prefab) return;
+            var sheath = Instantiate(prefab, mount, false).transform;
+            sheath.name = "vaina";
+            foreach (var c in sheath.GetComponentsInChildren<Collider>()) DestroyNow(c);
+            var box = new Bounds();
+            bool any = false;
+            foreach (var r in sheath.GetComponentsInChildren<Renderer>())
+                foreach (var corner in Corners(r.bounds))
+                {
+                    var p = sheath.InverseTransformPoint(corner);
+                    if (!any) box = new Bounds(p, Vector3.zero);
+                    else box.Encapsulate(p);
+                    any = true;
+                }
+            if (!any)
+            {
+                DestroyNow(sheath.gameObject);
+                return;
+            }
+            var size = box.size;
+            int longest = size.x >= size.y && size.x >= size.z ? 0 : size.y >= size.z ? 1 : 2;
+            int thin = longest == 0 ? (size.y <= size.z ? 1 : 2) : longest == 1 ? (size.x <= size.z ? 0 : 2) : (size.x <= size.y ? 0 : 1);
+            Vector3 Axis(int k) => k == 0 ? Vector3.right : k == 1 ? Vector3.up : Vector3.forward;
+            // (Its mouth up: down its length is towards its lower end, by its model's y where its length is upright.)
+            var down = longest == 1 ? Vector3.down : -Axis(longest);
+            var mouth = box.center - down * size[longest] / 2;
+            float lossy = Mathf.Max(mount.lossyScale.x, 1e-4f);
+            sheath.localScale = Vector3.one * Figures.CharacterScale * SheathSize / lossy;
+            var outward = v.body.TransformDirection(BeltOut);
+            // (Down the hip nearly upright, SheathAlong, not back along the blade's BeltAlong: into the buttock that way.)
+            sheath.rotation = Quaternion.LookRotation(v.body.TransformDirection(SheathAlong), outward) * Quaternion.Inverse(Quaternion.LookRotation(down, Axis(thin)));
+            sheath.position = mount.position - (sheath.TransformPoint(mouth) - sheath.position);
+            v.sheath = sheath;
+        }
+
+        /// <summary>syntyFigures.ts outOfBody's (the holster) and BELT_OUT's (the belt): steps, the most, how deep or how clear (metres).</summary>
+        const float HolsterStep = 0.01f, HolsterMost = 0.06f, HolsterTouch = 0.012f, BeltStep = 0.005f, BeltMost = 0.05f, BeltRoom = 0;
+        public static bool KeepOffOff = Environment.GetEnvironmentVariable("BASTION_SIN_HOLGURA") == "1";
+
+        /// <summary>
+        /// Dying (the 3D review's F-02 and F-11, 10/11; 0.10.1's syntyFigures.ts dropWeapon): what it carries but the one in
+        /// its hands put away (the engine leaves its gear on the floor, MapBuilder.Dropped: the gun on its back went under
+        /// the floor and into the nape, the blade out of the hip), and that one let go `after` seconds on (LetGoShare of its
+        /// fall). It had stood up out of the dead hand, a pistol pointing at the sky.
+        /// </summary>
+        static void LetGo(View v, float after)
+        {
+            if (v.carried.Count == 0) return;
+            foreach (var kv in v.carried) if (kv.Key != v.drawn && kv.Value != null) kv.Value.gameObject.SetActive(false);
+            if (v.sheath != null) v.sheath.gameObject.SetActive(false);
+            v.letGo = Mathf.Max(0, after);
+            v.fallen = -1;
+        }
+
+        /// <summary>0.10.1's LET_GO (of the fall's seconds) and DROP_SECONDS.</summary>
+        const float LetGoShare = 0.3f, DropSeconds = 0.4f;
+
+        /// <summary>
+        /// The weapon let go (LetGo) to the floor over DropSeconds (dropWeapon): from where the hand had it, down with u² to
+        /// the feet's height and turned onto its side along where it pointed, then lifted out of the floor if any of it is
+        /// under. True while it isn't held (HoldNow not to put it back).
+        /// </summary>
+        bool Drop(View v, float dt)
+        {
+            if (v.letGo < 0 || v.weapon == null) return false;
+            if (v.letGo > 0)
+            {
+                v.letGo = Mathf.Max(0, v.letGo - dt);
+                if (v.letGo > 0) return false;
+            }
+            if (v.fallen < 0)
+            {
+                v.weapon.SetParent(v.root, true);
+                v.fallFrom = v.weapon.position;
+                v.fallTurn = v.weapon.rotation;
+                var ahead = Vector3.ProjectOnPlane(v.weapon.forward, Vector3.up);
+                if (ahead.sqrMagnitude < 1e-4f) ahead = v.root.forward;
+                v.fallTo = Quaternion.LookRotation(ahead.normalized, Vector3.up) * Quaternion.Euler(0, 0, 90);
+                v.fallen = 0;
+            }
+            if (v.fallen > DropSeconds) return true;
+            v.fallen = v.fallNow ? DropSeconds : Mathf.Min(DropSeconds, v.fallen + dt);
+            float u = v.fallen / DropSeconds;
+            var at = v.fallFrom;
+            at.y = Mathf.Lerp(v.fallFrom.y, v.root.position.y, u * u);
+            v.weapon.SetPositionAndRotation(at, Quaternion.Slerp(v.fallTurn, v.fallTo, u));
+            if (u < 1) return true;
+            // (Lying: as much of it as is under the floor lifted out, and left there.)
+            float low = float.MaxValue;
+            foreach (var r in v.weapon.GetComponentsInChildren<Renderer>()) low = Mathf.Min(low, r.bounds.min.y);
+            if (low < v.root.position.y + 0.005f && low < float.MaxValue) v.weapon.position += Vector3.up * (v.root.position.y + 0.005f - low);
+            v.fallen = DropSeconds + 1;
+            HideDropped(v);
+            return true;
+        }
+
+        /// <summary>
+        /// One of the squad's, fallen, whose gear the state has on the floor (GameState.Dropped from it: MapBuilder.Dropped
+        /// draws its rucksack with its weapon by it): the weapon it let go goes once it lies, one weapon on the floor (F-02).
+        /// </summary>
+        void HideDropped(View v)
+        {
+            if (v.weapon == null || v.fallen <= DropSeconds || state?.Dropped == null) return;
+            foreach (var d in state.Dropped)
+                if (d.From == v.id)
+                {
+                    v.weapon.gameObject.SetActive(false);
+                    return;
+                }
+        }
 
         /// <summary>What it holds now, for how it holds it and which clips: a two-handed gun, the pistol, a blade.</summary>
         enum Held { None, Rifle, Pistol, Blade }
@@ -438,7 +618,7 @@ namespace Bastion.Client.Units
                     v.spread.Apply(v.animator, v.anim, v.weapon, dt);
                     break;
                 case Held.Blade:
-                    HoldBlade(v);
+                    HoldBlade(v, dt);
                     break;
                 default:
                     // Between the hands as far as the left is on it (twoHands), else rigid in the right as it was last held
@@ -448,7 +628,7 @@ namespace Bastion.Client.Units
                     bool busy = LeftBusy(v);
                     v.twoHands = Mathf.MoveTowards(v.twoHands, busy ? 0 : 1, dt / (busy ? TwoHandsOff : TwoHandsBack));
                     var before = v.grip;
-                    Hold(v.animator, v.weapon, v.root, v.dead || v.twoHands <= 0, ref v.grip);
+                    Hold(v.animator, v.weapon, v.root, v.dead || v.twoHands <= 0, ref v.grip, PalmAt(v));
                     if (v.twoHands < 1 && before is Quaternion g && v.animator.GetBoneTransform(HumanBodyBones.RightHand) is Transform hand)
                     {
                         v.weapon.rotation = Quaternion.Slerp(hand.rotation * g, v.weapon.rotation, v.twoHands);
@@ -483,6 +663,21 @@ namespace Bastion.Client.Units
         /// the left hand wherever its palms were 12–80 cm apart.
         /// </summary>
         static bool LeftBusy(View v) => v.dead || v.reload > 0 || v.search > 0 || v.tended != null || v.searchAt != null || (v.anim != null && v.anim.FreeShare > 0.01f);
+
+        /// <summary>
+        /// The point of the long gun in its hands put in the right palm (WeaponArt.palm, its model's frame unscaled; a lab's
+        /// own, PalmForLab), as far as the gun isn't up: at rest all of it, aimed none (the 3D review's F-12, 10/11).
+        /// </summary>
+        static Vector3 PalmAt(View v)
+        {
+            if (v.inHand != Held.Rifle) return Vector3.zero;
+            var at = PalmForLab.TryGetValue(v.id, out var lab) ? lab
+                : v.arts.TryGetValue(v.drawn, out var art) && art.palm != null && art.palm.Length >= 3 ? new Vector3(art.palm[0], art.palm[1], art.palm[2]) : Vector3.zero;
+            return at * (1 - v.up);
+        }
+
+        /// <summary>For the labs (F-12's search): a unit's palm point instead of its weapon's (WeaponArt.palm).</summary>
+        public static readonly Dictionary<string, Vector3> PalmForLab = new Dictionary<string, Vector3>();
 
         /// <summary>Seconds for the gun to go rigid in the right hand as the left lets go, and back between both as it comes back (twoHands).</summary>
         const float TwoHandsOff = 0.1f, TwoHandsBack = 0.2f;
@@ -525,6 +720,9 @@ namespace Bastion.Client.Units
             if (a == null || pistol == null) return;
             Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), elbow = a.GetBoneTransform(HumanBodyBones.RightLowerArm), knuckle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
             if (hand == null || elbow == null) return;
+            // (The hand closed on its grip, the index along the trigger guard: 0.10.1's `trigger` pose. «Pistol Aim» held at
+            // rest and Synty's runs left it open, the fingers hanging 5–8 cm off the grip: the 3D review's P-3, 10/11.)
+            Fist(a, TriggerIndex, TriggerOthers);
             var palm = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.6f) : hand.position;
             var forearm = (hand.position - elbow.position).normalized;
             var up = Vector3.ProjectOnPlane(root.up, forearm);
@@ -585,7 +783,7 @@ namespace Bastion.Client.Units
         /// knife and machete): its blade on along the fingers (down by the leg with the arm hanging, out along the arm as it
         /// swings), its back towards the index's side.
         /// </summary>
-        static void HoldBlade(View v)
+        static void HoldBlade(View v, float dt = 0)
         {
             var a = v.animator;
             Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal),
@@ -600,7 +798,13 @@ namespace Bastion.Client.Units
             // grip in the right palm, its second grip towards the left (the left hand reached onto it below).
             var leftHand = a.GetBoneTransform(HumanBodyBones.LeftHand);
             var leftKnuckle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
-            if (Guarding(v) && GuardOf(v) == "low" && leftHand != null && leftKnuckle != null && art?.grip != null && art.grip.Length >= 3)
+            // (The chainsaw on guard ahead of it, not across: its back handle in the right palm, its bar on along the way it
+            // faces, ChainsawDown under the level; the left hand onto its front handle below. Across the body as a lowered
+            // rifle, from one handle to the other, its bar stood out to a side or behind: the 3D review's A-24 b2, 10/11, with
+            // Gameplay's yes if it reads better than that.)
+            if (Guarding(v) && GuardOf(v) == "low" && art?.fbx != null && art.fbx.IndexOf("ChainSaw", StringComparison.OrdinalIgnoreCase) >= 0)
+                Seat(v.weapon, art, palm, Quaternion.LookRotation(Quaternion.AngleAxis(ChainsawDown, v.root.right) * v.root.forward, v.root.up));
+            else if (Guarding(v) && GuardOf(v) == "low" && leftHand != null && leftKnuckle != null && art?.grip != null && art.grip.Length >= 3)
             {
                 // (The right hand LowAhead further out, the weapon turned on to the left one: at «Rifle Lowered»'s hands the
                 // chainsaw's body was 12–14 cm into the belly, CombatLab.Cuerpo. The left hand onto its other grip below.)
@@ -621,7 +825,20 @@ namespace Bastion.Client.Units
                     v.weapon.position = palm - (v.weapon.TransformPoint(grip) - v.weapon.position);
                 }
             }
-            else Seat(v.weapon, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
+            else
+            {
+                // (Moving, neither on guard nor striking: carried out past the leg and no steeper than CarryUpMost, eased in
+                // and out over CarryEase. The 3D review's H-1, 10/11: sprinting, the bat hung straight from the fist into the
+                // shin, and swung up it stood before the face.)
+                // (One-handed only: the rake, between both hands, went 10 cm into the trunk turned so.)
+                v.carry = Mathf.MoveTowards(v.carry, v.walking && !v.striking && !Guarding(v) && art?.two == null ? 1 : 0, dt / CarryEase);
+                if (v.carry > 0) fingers = Carried(v, fingers);
+                // (On a sword's guard, out of the fist on the thumb's side, up and ahead as Sword Combat's guard holds it, its
+                // edge towards the knuckles: along the fingers, with the hand hanging back, its point was on the floor behind.
+                // The 3D review's A-24 b1, 10/11.)
+                if (Guarding(v) && GuardOf(v) == "sword" && across.sqrMagnitude > 1e-6f) Seat(v.weapon, art, palm, Quaternion.LookRotation(across, -fingers));
+                else Seat(v.weapon, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
+            }
             // Two-handed (the chainsaw): the left hand on its other grip, the elbow out to the left and down.
             if (art?.two != null && art.two.Length >= 3)
                 Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, v.weapon.TransformPoint(new Vector3(art.two[0], art.two[1], art.two[2])),
@@ -630,6 +847,30 @@ namespace Bastion.Client.Units
 
         /// <summary>How far out a low guard holds its weapon's grip past «Rifle Lowered»'s right hand (metres, of a figure's scale 1).</summary>
         const float LowAhead = 0.13f;
+        /// <summary>How far under the level the chainsaw's bar points on guard (degrees; A-24 b2).</summary>
+        const float ChainsawDown = 25;
+
+        /// <summary>
+        /// H-1: a blade carried moving turned out to its right by CarryOut (degrees, round its forward) and down to CarryUpMost
+        /// over the level at most, as far as it is carried (View.carry, eased over CarryEase seconds).
+        /// </summary>
+        const float CarryOut = 25, CarryUpMost = 30, CarryEase = 0.2f;
+
+        static Vector3 Carried(View v, Vector3 fingers)
+        {
+            // (Out: of the two ways round its forward, the one that takes it to its right.)
+            var outA = Quaternion.AngleAxis(CarryOut * v.carry, v.root.forward) * fingers;
+            var outB = Quaternion.AngleAxis(-CarryOut * v.carry, v.root.forward) * fingers;
+            var turned = Vector3.Dot(outA - outB, v.root.right) >= 0 ? outA : outB;
+            float up = Mathf.Asin(Mathf.Clamp(turned.y, -1, 1)) * Mathf.Rad2Deg, most = Mathf.Lerp(90, CarryUpMost, v.carry);
+            if (up > most)
+            {
+                // (Down ahead, as ReloadTilt turns a gun.)
+                var axis = Vector3.Cross(Vector3.up, turned);
+                if (axis.sqrMagnitude > 1e-6f) turned = Quaternion.AngleAxis(up - most, axis.normalized) * turned;
+            }
+            return turned;
+        }
 
         /// <summary>
         /// The right hand closed round what it holds (the review of 9/11: Mixamo's strokes are a bare hand's, open, and the
@@ -637,28 +878,40 @@ namespace Bastion.Client.Units
         /// never opened where the clip closes it further; the thumb over them (its last two bones towards the index's middle
         /// joint, ThumbMost at most: the strokes held it up).
         /// </summary>
-        static void Fist(Animator a)
+        static void Fist(Animator a) => Fist(a, FistBend, FistBend);
+
+        /// <summary>
+        /// The left hand closed as a fist (the camp's folded arms and leaning stances, Settlement's CampFigure: the 3D review's
+        /// A-31, point 3, 10/11, its fingers open and stiff tucked under the arm), or the right one.
+        /// </summary>
+        internal static void Fist(Animator a, bool left) => Fist(a, FistBend, FistBend, left);
+
+        /// <summary>The same, the index bent `forefinger` (its first joint and its second, degrees) and the other three `others`; `left`, the left hand.</summary>
+        static void Fist(Animator a, Vector2 forefinger, Vector2 others, bool left = false)
         {
-            Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal),
-                little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            HumanBodyBones B(HumanBodyBones right, HumanBodyBones leftOne) => left ? leftOne : right;
+            Transform hand = a.GetBoneTransform(B(HumanBodyBones.RightHand, HumanBodyBones.LeftHand)), index = a.GetBoneTransform(B(HumanBodyBones.RightIndexProximal, HumanBodyBones.LeftIndexProximal)),
+                little = a.GetBoneTransform(B(HumanBodyBones.RightLittleProximal, HumanBodyBones.LeftLittleProximal)), middle = a.GetBoneTransform(B(HumanBodyBones.RightMiddleProximal, HumanBodyBones.LeftMiddleProximal));
             if (hand == null || index == null || little == null || middle == null) return;
-            // (The palm's side: the fingers' line crossed with the knuckles' from the little finger to the index.)
-            var palmward = Vector3.Cross(middle.position - hand.position, index.position - little.position).normalized;
+            // (The palm's side: the fingers' line crossed with the knuckles' from the little finger to the index; the other
+            // way round on the left, a mirror's.)
+            var palmward = Vector3.Cross(middle.position - hand.position, index.position - little.position).normalized * (left ? -1 : 1);
             foreach (var (p, m, d) in new[]
             {
-                (HumanBodyBones.RightIndexProximal, HumanBodyBones.RightIndexIntermediate, HumanBodyBones.RightIndexDistal),
-                (HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightMiddleIntermediate, HumanBodyBones.RightMiddleDistal),
-                (HumanBodyBones.RightRingProximal, HumanBodyBones.RightRingIntermediate, HumanBodyBones.RightRingDistal),
-                (HumanBodyBones.RightLittleProximal, HumanBodyBones.RightLittleIntermediate, HumanBodyBones.RightLittleDistal),
+                (B(HumanBodyBones.RightIndexProximal, HumanBodyBones.LeftIndexProximal), B(HumanBodyBones.RightIndexIntermediate, HumanBodyBones.LeftIndexIntermediate), B(HumanBodyBones.RightIndexDistal, HumanBodyBones.LeftIndexDistal)),
+                (B(HumanBodyBones.RightMiddleProximal, HumanBodyBones.LeftMiddleProximal), B(HumanBodyBones.RightMiddleIntermediate, HumanBodyBones.LeftMiddleIntermediate), B(HumanBodyBones.RightMiddleDistal, HumanBodyBones.LeftMiddleDistal)),
+                (B(HumanBodyBones.RightRingProximal, HumanBodyBones.LeftRingProximal), B(HumanBodyBones.RightRingIntermediate, HumanBodyBones.LeftRingIntermediate), B(HumanBodyBones.RightRingDistal, HumanBodyBones.LeftRingDistal)),
+                (B(HumanBodyBones.RightLittleProximal, HumanBodyBones.LeftLittleProximal), B(HumanBodyBones.RightLittleIntermediate, HumanBodyBones.LeftLittleIntermediate), B(HumanBodyBones.RightLittleDistal, HumanBodyBones.LeftLittleDistal)),
             })
             {
                 Transform prox = a.GetBoneTransform(p), mid = a.GetBoneTransform(m), dist = a.GetBoneTransform(d);
                 if (prox == null || mid == null) continue;
-                Bend(prox, mid, (prox.position - hand.position).normalized, palmward, FistBend.x);
-                if (dist != null) Bend(mid, dist, (mid.position - prox.position).normalized, palmward, FistBend.y);
+                var bend = p == B(HumanBodyBones.RightIndexProximal, HumanBodyBones.LeftIndexProximal) ? forefinger : others;
+                Bend(prox, mid, (prox.position - hand.position).normalized, palmward, bend.x);
+                if (dist != null) Bend(mid, dist, (mid.position - prox.position).normalized, palmward, bend.y);
             }
-            Transform thumb = a.GetBoneTransform(HumanBodyBones.RightThumbIntermediate), thumbTip = a.GetBoneTransform(HumanBodyBones.RightThumbDistal),
-                over = a.GetBoneTransform(HumanBodyBones.RightIndexIntermediate);
+            Transform thumb = a.GetBoneTransform(B(HumanBodyBones.RightThumbIntermediate, HumanBodyBones.LeftThumbIntermediate)), thumbTip = a.GetBoneTransform(B(HumanBodyBones.RightThumbDistal, HumanBodyBones.LeftThumbDistal)),
+                over = a.GetBoneTransform(B(HumanBodyBones.RightIndexIntermediate, HumanBodyBones.LeftIndexIntermediate));
             if (thumb != null && thumbTip != null && over != null) Aim(thumb, thumbTip, over.position, ThumbMost);
         }
 
@@ -678,6 +931,11 @@ namespace Bastion.Client.Units
 
         /// <summary>How far a fist bends each finger at its first joint and its second (degrees).</summary>
         static readonly Vector2 FistBend = new Vector2(75, 85);
+        /// <summary>
+        /// A hand on a pistol's grip (P-3): 0.10.1's `trigger` pose (syntyFigures.ts), the index 0.45 and 0.35 rad, the other
+        /// three 1.2 and 1.35, in degrees.
+        /// </summary>
+        static readonly Vector2 TriggerIndex = new Vector2(26, 20), TriggerOthers = new Vector2(69, 77);
 
         /// <summary>`bone` turned so that the line to `child` bends from `before` towards `palmward` by `want` degrees, if it bends less.</summary>
         static void Bend(Transform bone, Transform child, Vector3 before, Vector3 palmward, float want)
@@ -744,7 +1002,8 @@ namespace Bastion.Client.Units
 
         /// <summary>For the labs: what `id` carries and shows, each model with whether it is the one in its hands.</summary>
         public List<(Transform model, bool drawn)> CarriedForLab(string id) =>
-            views.TryGetValue(id, out var v) ? v.carried.Where(kv => kv.Value != null && kv.Value.gameObject.activeInHierarchy).Select(kv => (kv.Value, kv.Key == v.drawn)).ToList() : new List<(Transform, bool)>();
+            views.TryGetValue(id, out var v) ? v.carried.Where(kv => kv.Value != null && kv.Value.gameObject.activeInHierarchy).Select(kv => (kv.Value, kv.Key == v.drawn))
+                .Concat(v.sheath != null && v.sheath.gameObject.activeInHierarchy ? new[] { (v.sheath, false) } : Array.Empty<(Transform, bool)>()).ToList() : new List<(Transform, bool)>();
 
         /// <summary>
         /// For the labs (the review of 9/11): how the hands hold what is drawn, in centimetres in the world: the left palm
@@ -773,8 +1032,16 @@ namespace Bastion.Client.Units
                 parts.Add($"up={Deg(Mathf.Asin(Mathf.Clamp(w.forward.y, -1, 1)) * Mathf.Rad2Deg)}");
             }
             parts.Add($"muzzleY={Cm(w.TransformPoint(v.muzzle).y - v.root.position.y)}");
+            // (A blade's tip from the hips in the root's frame, ahead and up: the 3D review's A-24, 10/11.)
+            if (v.inHand == Held.Blade && BladeLine(v) is var (_, tip) && a.GetBoneTransform(HumanBodyBones.Hips) is Transform hips)
+            {
+                var d = tip - hips.position;
+                parts.Add(FormattableString.Invariant($"tip={Vector3.Dot(d, v.root.forward):0.00},{d.y:0.00}"));
+            }
             if (left is Vector3 l)
             {
+                // (The left palm from the middle of the magazine of what it holds: the 3D review's P-1, 10/11.)
+                if (MagazineOf(w) is Transform mag && mag.GetComponent<Renderer>() is Renderer mr) parts.Add($"Lmag={Cm(Vector3.Distance(l, mr.bounds.center))}");
                 var local = w.InverseTransformPoint(l);
                 float scale = w.lossyScale.z;
                 parts.Add($"Lz={Cm(local.z * scale)}");
@@ -786,6 +1053,31 @@ namespace Bastion.Client.Units
             }
             return string.Join(" ", parts);
         }
+
+        /// <summary>
+        /// The magazine of a gun (a part of its own, Apocalypse's «…_Magazine_01», Military's pistol's «SM_Wep_Pistol_Mag_01»),
+        /// or null.
+        /// </summary>
+        static Transform MagazineOf(Transform gun) =>
+            gun != null ? gun.GetComponentsInChildren<Transform>().FirstOrDefault(m => m != gun && (m.name.Contains("Magazine") || m.name.Contains("_Mag_"))) : null;
+
+        /// <summary>
+        /// The blade in its hand as a line: from its grip (WeaponArt.grip) to its tip (the farthest of its box along the way it
+        /// runs, WeaponArt.along), in the world; null for anything else.
+        /// </summary>
+        static (Vector3 grip, Vector3 tip)? BladeLine(View v)
+        {
+            if (v.inHand != Held.Blade || v.weapon == null || !v.arts.TryGetValue(v.drawn, out var art)) return null;
+            var along = art.along != null && art.along.Length >= 3 ? new Vector3(art.along[0], art.along[1], art.along[2]).normalized : Vector3.forward;
+            var grip = art.grip != null && art.grip.Length >= 3 ? new Vector3(art.grip[0], art.grip[1], art.grip[2]) : Vector3.zero;
+            float far = 0;
+            foreach (var r in v.weapon.GetComponentsInChildren<Renderer>())
+                foreach (var corner in Corners(r.bounds)) far = Mathf.Max(far, Vector3.Dot(v.weapon.InverseTransformPoint(corner) - grip, along));
+            return (v.weapon.TransformPoint(grip), v.weapon.TransformPoint(grip + along * far));
+        }
+
+        /// <summary>For the labs: the blade in `id`'s hand as a line, grip to tip, in the world (BladeLine), or null.</summary>
+        public (Vector3 grip, Vector3 tip)? BladeForLab(string id) => views.TryGetValue(id, out var v) ? BladeLine(v) : null;
 
         /// <summary>For the labs: where each one's eyes look in its head's frame, taken at rest looking straight ahead (CalibrateGazeForLab).</summary>
         static readonly Dictionary<string, Vector3> GazeForLab = new Dictionary<string, Vector3>();
@@ -926,8 +1218,14 @@ namespace Bastion.Client.Units
         const float StrokeOut = 0.35f;
         /// <summary>How far into «Zombie Headbutt» the dead's lunge starts it: its blow, 0.45 s in, on lunge's (WindUp + StrokeTime).</summary>
         const float HeadbuttLead = 0.45f - WindUp - StrokeTime;
-        /// <summary>unitViews.ts BITE_GAP: a bite that kills ends this far from its victim's middle (tiles); it lets go this long after if nothing eats (seconds).</summary>
-        const float BiteGap = 0.42f, BiteHold = 2;
+        /// <summary>
+        /// unitViews.ts BITE_GAP: a bite that kills ends this far from its victim's middle (tiles); it lets go this long after if
+        /// nothing eats (seconds). 0.42 till the 3D review's A-13 (10/11): holding on, the dead one was inside the soldier, its
+        /// head 44 cm out of her back (CombatLab.Mordisco, along the bite from where it stood, tiles: its chest 1.09 and head
+        /// 1.23 against her chest 0.99 and head 0.94; 1.03 and 1.14 with M-2's lean off). Now its head at her neck, the chests
+        /// a trunk apart: 0.42 + max(1.14 − 0.84, 1.03 − 0.74), to 0.05.
+        /// </summary>
+        const float BiteGap = 0.7f, BiteHold = 2;
 
         /// <summary>The way from `home` towards `at` on the ground: the gap less `short` tiles, `most` tiles at most (none if nearer).</summary>
         static Vector3 Reach(Vector3 home, Vector3 at, float @short, float most)
@@ -1098,6 +1396,7 @@ namespace Bastion.Client.Units
             }
             Face(id, place);
             v.striking = true;
+            var home = v.root.position;
             try
             {
                 Draw(v, BeltCarry);
@@ -1106,14 +1405,26 @@ namespace Bastion.Client.Units
                 bool toppled = false;
                 // (Out over StrokeOut, as a blow: the 3D review's A-08, 10/11.)
                 float over = ChopStroke.end + StrokeOut - 0.15f;
-                for (float t = 0; t < Mathf.Max(ChopStroke.end + 0.45f, over); t += Time.deltaTime)
+                // A step in to the boards as a blow's (the 3D review's A-20, 10/11: from the tile beside them, 1.5 m off, the bar
+                // came down half a metre short of them), in as it winds up, kept till they fall, back over Back.
+                var toward = Reach(home, place, PryShort, PryMost);
+                float stay = PryLets + 0.1f;
+                for (float t = 0; t < Mathf.Max(ChopStroke.end + 0.45f, over, stay + Back); t += Time.deltaTime)
                 {
+                    float share = 0;
                     if (clip != null)
                     {
-                        float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (over - t) / StrokeOut));
+                        share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (over - t) / StrokeOut));
                         v.anim.Scrub(t < over ? clip : null, Mathf.Clamp(ChopStroke.ClipTime(t), 0, clip.length), share, true);
                     }
-                    if (!toppled && t >= ChopStroke.lets)
+                    // (Its left hand on the bar as the stroke has the body: «Downward Attack With Axe» is one-handed, its
+                    // left 0.8 to 1.45 m from the right, ClipProbe.Alone BASTION_MANOS=1; on the stroke's layer the left arm
+                    // stayed in the hip of its rest.)
+                    v.pryHand = share;
+                    v.root.position = t < WindUp ? home : t < WindUp + StrokeTime ? home + toward * ((t - WindUp) / StrokeTime)
+                        : t < stay ? home + toward : t < stay + Back ? home + toward * (1 - (t - stay) / Back) : home;
+                    // (The boards fall as the bar is at its lowest before them, PryLets, not as the stroke begins to come down.)
+                    if (!toppled && t >= PryLets)
                     {
                         toppled = true;
                         Map.MapView.Current?.Topple(tile);
@@ -1125,12 +1436,37 @@ namespace Bastion.Client.Units
             finally
             {
                 v.striking = false;
+                v.pryHand = 0;
+                if (v.root != null) v.root.position = home;
                 if (v.root != null)
                 {
                     Draw(v, MainCarry);
                     Settle(v, 0.2f);
                 }
             }
+        }
+
+        /// <summary>
+        /// The crowbar at the boards (Pry; the 3D review's A-20, 10/11): how far short of the boards' place it steps in to
+        /// (tiles, as a blow's LungeShort; PryMost at most), and when they fall (seconds into the stroke: the bar at its
+        /// lowest before them, «Downward Attack With Axe» at 1.2 s, CombatLab.Palanca's [palanca]; ChopStroke.lets, 0.34, had
+        /// them fall with the bar still over the head). How far down the bar from the right hand the left takes it (m).
+        /// </summary>
+        const float PryShort = 0.83f, PryMost = 0.45f, PryLets = 0.68f, PryLeft = 0.25f;
+
+        /// <summary>The left hand onto the crowbar PryLeft down it from the right as far as View.pryHand (A-20), by two-bone IK as Support's.</summary>
+        static void PryHand(View v)
+        {
+            if (v.pryHand <= 0 || v.animator == null || !(BladeLine(v) is var (grip, tip))) return;
+            var a = v.animator;
+            Transform shoulder = a.GetBoneTransform(HumanBodyBones.LeftUpperArm), elbow = a.GetBoneTransform(HumanBodyBones.LeftLowerArm), hand = a.GetBoneTransform(HumanBodyBones.LeftHand),
+                knuckle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
+            if (shoulder == null || elbow == null || hand == null || knuckle == null || (tip - grip).sqrMagnitude < 1e-6f) return;
+            Vector3 Palm() => Vector3.Lerp(hand.position, knuckle.position, 0.6f);
+            var on = grip + (tip - grip).normalized * PryLeft * (v.body != null ? v.body.lossyScale.x / Figures.CharacterScale : 1);
+            var goal = Vector3.Lerp(Palm(), on, v.pryHand);
+            for (int pass = 0; pass < 2; pass++)
+                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, hand.position + (goal - Palm()), elbow.position - shoulder.position, 0.005f);
         }
 
         /// <summary>
@@ -1203,6 +1539,7 @@ namespace Bastion.Client.Units
             v.middles.Clear();
             v.stows.Clear();
             v.weapon = null;
+            v.sheath = null;
             if (Arm(v, u, FigureCatalog.Load())) Settle(v, 0.15f);
             // (Its way of waiting with what it has now: a pistol found, or its gun gone and the blade in the hand.)
             string stance = StanceOf(v, u, v.carried.Count > 0);
@@ -1236,7 +1573,8 @@ namespace Bastion.Client.Units
             // (Apocalypse's guns carry it apart), taken by the hand as the clip's hand leaves the gun and put back as it
             // comes to it again, eased home over MagHome of the clip.
             var gun = v.weapon;
-            var mag = gun != null ? gun.GetComponentsInChildren<Transform>().FirstOrDefault(m => m != gun && m.name.Contains("Magazine")) : null;
+            // (Military's pistol's is «SM_Wep_Pistol_Mag_01»: it never came out. The 3D review's P-1, 10/11.)
+            var mag = MagazineOf(gun);
             var hand = v.animator != null ? v.animator.GetBoneTransform(HumanBodyBones.LeftHand) : null;
             var knuckle = v.animator != null ? v.animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal) : null;
             // (Its middle in its own frame: what goes into the palm.)
@@ -1255,13 +1593,23 @@ namespace Bastion.Client.Units
                     float spin = k < 0.5f ? 2 * k * k : 1 - (-2 * k + 2) * (-2 * k + 2) / 2;
                     v.reload = spin > 0 && spin < 1 ? Mathf.Min(1, spin / ReloadEnds, (1 - spin) / ReloadEnds) : 0;
                     float at = from + spin * (to - from);
+                    v.reloadAt = at;
                     v.anim.Scrub(clip, at, v.reload);
                     if (mag != null && hand != null && v.weapon == gun)
                     {
+                        // (The pistol's: the old one dropped out of sight as the left hand leaves it, PistolEject, and the new one
+                        // in that hand from its pouch at the hip, at outAt: P-1. A rifle's comes out in the hand.)
+                        if (pistol && at >= PistolEject && at < outAt && mag.parent == gun && mag.gameObject.activeSelf) mag.gameObject.SetActive(false);
                         if (at >= outAt && at < inAt && mag.parent != hand)
                         {
                             mag.SetParent(hand, true);
                             grabbedAt = mag.localPosition;
+                            if (pistol && knuckle != null)
+                            {
+                                var palm = Vector3.Lerp(hand.position, knuckle.position, 0.6f);
+                                grabbedAt = hand.InverseTransformPoint(palm - (mag.TransformPoint(middle) - mag.position));
+                                mag.gameObject.SetActive(true);
+                            }
                         }
                         else if (at >= inAt && mag.parent == hand)
                         {
@@ -1289,21 +1637,77 @@ namespace Bastion.Client.Units
             {
                 if (mag != null && gun != null)
                 {
+                    mag.gameObject.SetActive(true);
                     mag.SetParent(gun, false);
                     mag.localPosition = homeAt;
                     mag.localRotation = homeTurn;
                 }
             }
             v.reload = 0;
+            v.reloadAt = 0;
             v.anim.Scrub(null, 0, 0);
         }
 
         /// <summary>
         /// When the magazine leaves the gun in the left hand and comes back (seconds into the reload's clip: the left hand
         /// at the magazine, down at the hip, and up to the gun again; ClipProbe.Alone BASTION_MANOS=1), and over how much
-        /// of the clip it eases home.
+        /// of the clip it eases home. The pistol's (the 3D review's P-1, 10/11): «Reloading 2» on a Sidekick body never brings
+        /// the hands within 28 cm; the left leaves the gun's side by 0.7 s, is down at the hip from 0.8 to 1.85, nearest the
+        /// pistol at 2.27 (the magazine in) and 2.79 (the slide), 28 cm off: PistolSupport takes it the rest of the way. So the
+        /// old magazine drops out of sight as the hand goes to the hip (PistolEject), the new one is in it from its pouch there
+        /// (1.3), and it goes in at 2.27.
         /// </summary>
-        static readonly (float, float) RifleMag = (1.05f, 2.2f), PistolMag = (1.1f, 2.05f);
+        static readonly (float, float) RifleMag = (1.05f, 2.2f), PistolMag = (1.3f, 2.27f);
+        /// <summary>When the pistol's old magazine goes (seconds into «Reloading 2»: the left hand away from it to the hip; P-1).</summary>
+        const float PistolEject = 0.75f;
+
+        /// <summary>
+        /// The pistol's reload (P-1): the left palm onto it by two-bone IK about the clip's moments (seconds of «Reloading
+        /// 2», each a bell PistolBell wide, whole within PistolBellTop of it): the magazine in at the grip's foot, the slide
+        /// as it is racked; as far as the reload is in, and no more than SupportMost from where the clip has the hand.
+        /// </summary>
+        static readonly float[] PistolGrabs = { 2.27f, 2.79f };
+        const float PistolBell = 0.25f, PistolBellTop = 0.08f;
+        /// <summary>How far under the pistol's grip (its origin, in the right palm) the magazine goes in (metres).</summary>
+        const float MagWell = 0.06f;
+
+        static void PistolSupport(View v)
+        {
+            if (v.inHand != Held.Pistol || v.reload <= 0 || v.weapon == null || v.animator == null || !v.animator.isHuman || v.dead) return;
+            float share = 0;
+            int which = -1;
+            for (int k = 0; k < PistolGrabs.Length; k++)
+            {
+                float off = Mathf.Abs(v.reloadAt - PistolGrabs[k]);
+                float w = off <= PistolBellTop ? 1 : 1 - Mathf.SmoothStep(0, 1, (off - PistolBellTop) / (PistolBell - PistolBellTop));
+                if (w > share)
+                {
+                    share = w;
+                    which = k;
+                }
+            }
+            share *= v.reload;
+            if (share <= 0.001f) return;
+            var gun = v.weapon;
+            // (The magazine where it rides in the gun, out or in; the slide, racked.)
+            Vector3 goal;
+            var slide = which == 1 ? gun.GetComponentsInChildren<Transform>().FirstOrDefault(t => t != gun && t.name.Contains("Slide")) : null;
+            var mag = MagazineOf(gun);
+            if (slide != null && slide.GetComponent<Renderer>() is Renderer sr) goal = sr.bounds.center;
+            else if (mag != null && mag.GetComponent<Renderer>() is Renderer mr && mag.parent == gun) goal = mr.bounds.center;
+            // (Out of it, in the hand: to the grip's foot, where it goes in.)
+            else goal = gun.position + gun.rotation * Vector3.down * MagWell;
+            var a = v.animator;
+            Transform shoulder = a.GetBoneTransform(HumanBodyBones.LeftUpperArm), elbow = a.GetBoneTransform(HumanBodyBones.LeftLowerArm), hand = a.GetBoneTransform(HumanBodyBones.LeftHand),
+                knuckle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
+            if (shoulder == null || elbow == null || hand == null || knuckle == null) return;
+            Vector3 Palm() => Vector3.Lerp(hand.position, knuckle.position, 0.6f);
+            var want = goal - Palm();
+            if (want.magnitude > SupportMost) want = want.normalized * SupportMost;
+            var to = Palm() + want * share;
+            for (int pass = 0; pass < 2; pass++)
+                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, hand.position + (to - Palm()), elbow.position - shoulder.position, 0.005f);
+        }
         const float MagHome = 0.2f, MagGrab = 0.15f;
     }
 }

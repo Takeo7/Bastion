@@ -94,6 +94,8 @@ namespace Bastion.EditorTools
                         int vertices = figure != null ? figure.GetComponentsInChildren<SkinnedMeshRenderer>().Sum(r => r.sharedMesh != null ? r.sharedMesh.vertexCount : 0) : 0;
                         return $"{u.Id} {figure?.name} {vertices} v";
                     })));
+                    Reds();
+                    var sticks = Sticks();
                     int frame = 0;
                     for (float t = 0; t < 1; t += Time.deltaTime)
                     {
@@ -110,6 +112,7 @@ namespace Bastion.EditorTools
                     for (int k = 0; k < 40 && walking > 0; k++)
                     {
                         Film(row, frame++, "andan");
+                        foreach (var s in sticks) s();
                         await Awaitable.NextFrameAsync();
                     }
                     Debug.Log($"[zombis] done, {frame} frames");
@@ -119,6 +122,78 @@ namespace Bastion.EditorTools
                     Debug.LogException(e);
                 }
             };
+            // (BASTION_ROJO=1, the 3D review's Z-1 b, 10/11: for each of the row, the cells its meshes paint from that are
+            // drawn pure red (a cell its preset doesn't use: SoldierPalette.Unused) and those loud (saturation and light both
+            // over 0.5), as drawn.)
+            void Reds()
+            {
+                if (Environment.GetEnvironmentVariable("BASTION_ROJO") != "1") return;
+                foreach (var u in state.Units)
+                {
+                    var feet = Figures.FeetOf(u.Id);
+                    if (feet == null) continue;
+                    var red = new List<string>();
+                    var loud = new List<string>();
+                    foreach (var r in feet.GetComponentsInChildren<SkinnedMeshRenderer>())
+                    {
+                        var block = new MaterialPropertyBlock();
+                        r.GetPropertyBlock(block);
+                        // (The block's only if it has one: without, it gives a white one.)
+                        var drawn = (block.HasTexture("_ColorMap") ? block.GetTexture("_ColorMap") : r.sharedMaterial != null && r.sharedMaterial.HasTexture("_ColorMap") ? r.sharedMaterial.GetTexture("_ColorMap") : null) as Texture2D;
+                        if (drawn == null || r.sharedMesh == null) continue;
+                        var cells = SoldierPalette.Cells(drawn);
+                        foreach (int c in r.sharedMesh.uv.Select(SoldierPalette.CellOf).Distinct().OrderBy(c => c))
+                        {
+                            Color.RGBToHSV(cells[c], out float h, out float sat, out float v);
+                            string cell = $"{c % 16},{c / 16}={ColorUtility.ToHtmlStringRGB(cells[c])}";
+                            if (SoldierPalette.Unused(cells[c])) red.Add(cell);
+                            else if (sat > 0.5f && v > 0.5f) loud.Add(cell);
+                        }
+                    }
+                    Debug.Log($"[rojo] {u.Id} {feet.GetComponentInChildren<Animator>()?.name}: red {red.Count} ({string.Join(" ", red)}); loud {string.Join(" ", loud)}");
+                }
+            }
+            // (BASTION_PALO=1, Z-1 c: for ApocalypseZombie_02, the points of its body standing more than 0.25 m behind its
+            // chest and over its shoulders (the stick on its back) taken; then each frame of the walk, [palo]: the nearest of
+            // them to its head's bone, m. Under 0.12, it goes through the head.)
+            System.Collections.Generic.List<Action> Sticks()
+            {
+                var found = new System.Collections.Generic.List<Action>();
+                if (Environment.GetEnvironmentVariable("BASTION_PALO") != "1") return found;
+                foreach (var u in state.Units)
+                {
+                    var feet = Figures.FeetOf(u.Id);
+                    var rig = feet != null ? feet.GetComponentInChildren<Animator>() : null;
+                    if (rig == null || !rig.isHuman || !rig.name.Contains("ApocalypseZombie_02")) continue;
+                    var skin = rig.GetComponentsInChildren<SkinnedMeshRenderer>().OrderByDescending(r => r.sharedMesh != null ? r.sharedMesh.vertexCount : 0).FirstOrDefault();
+                    var head = rig.GetBoneTransform(HumanBodyBones.Head);
+                    var chest = rig.GetBoneTransform(HumanBodyBones.UpperChest) ?? rig.GetBoneTransform(HumanBodyBones.Chest);
+                    var shoulder = rig.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                    if (skin == null || head == null || chest == null || shoulder == null) continue;
+                    var baked = new Mesh();
+                    skin.BakeMesh(baked, true);
+                    // (Baked with its scale: into the world by its place and turn alone.)
+                    Matrix4x4 World() => Matrix4x4.TRS(skin.transform.position, skin.transform.rotation, Vector3.one);
+                    var m = World();
+                    var points = baked.vertices;
+                    var stick = Enumerable.Range(0, points.Length).Where(k =>
+                    {
+                        var w = m.MultiplyPoint3x4(points[k]);
+                        return Vector3.Dot(w - chest.position, feet.forward) < -0.25f && w.y > shoulder.position.y;
+                    }).ToArray();
+                    Debug.Log($"[palo] {u.Id} {rig.name}: {stick.Length} points of {points.Length}");
+                    if (stick.Length == 0) continue;
+                    found.Add(() =>
+                    {
+                        skin.BakeMesh(baked, true);
+                        var now = baked.vertices;
+                        var mm = World();
+                        float least = stick.Min(k => Vector3.Distance(mm.MultiplyPoint3x4(now[k]), head.position));
+                        Debug.Log(FormattableString.Invariant($"[palo] {Time.time:0.000} {u.Id} nearest {least:0.000}"));
+                    });
+                }
+                return found;
+            }
         }
     }
 }

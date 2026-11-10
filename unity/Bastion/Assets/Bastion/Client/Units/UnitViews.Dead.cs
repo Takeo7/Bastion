@@ -38,6 +38,12 @@ namespace Bastion.Client.Units
             new DeadBody { prefab = "SM_Chr_Zombie_" + name, body = body ?? "Zombie_" + name, female = female, scale = scale };
 
         /// <summary>
+        /// The Chillón's hair (the 3D review's A-28, 10/11: the first of its prefab's two over its face in every pose but one
+        /// thrown far back); BASTION_PELO_CHILLON=2, the other, for the labs to set them side by side.
+        /// </summary>
+        static readonly string WretchHair = System.Environment.GetEnvironmentVariable("BASTION_PELO_CHILLON") == "2" ? "SM_Chr_Attach_Wretch_Hair_02" : "SM_Chr_Attach_Wretch_Hair_01";
+
+        /// <summary>
         /// The Corredores (the recently dead, still quick), the Acorazados (riot police, police and firemen, vest and helmet
         /// still on, a little bigger; no soldier, the common dead's in uniform: Gameplay, 2/11), the Chillón (Boss Zombies' Wretch, a head taller than the rest) and the Hinchados, the bosses with
         /// their hair and nothing else (the Blobber's prefab has a tiara on, 0.10.1's had none). The Hinchados five (Ana's
@@ -49,7 +55,7 @@ namespace Bastion.Client.Units
         {
             ["xenoid"] = new[] { City("Jock_Male_01"), City("Cheerleader_Female_01", true), City("Hoodie_Male_01"), City("SchoolGirl_Female_01", true) },
             ["mec"] = new[] { City("RiotCop_Male_01", false, 1.06f), City("Police_Male_01", false, 1.06f), City("Firefighter_Male_01", false, 1.06f) },
-            ["sectoid"] = new[] { new DeadBody { prefab = "SM_Chr_ZombieBoss_Wretch_01", body = "SM_Chr_ZombieBoss_Wretch_01", scale = 1.12f, keep = new[] { "SM_Chr_Attach_Wretch_Hair_01" } } },
+            ["sectoid"] = new[] { new DeadBody { prefab = "SM_Chr_ZombieBoss_Wretch_01", body = "SM_Chr_ZombieBoss_Wretch_01", scale = 1.12f, keep = new[] { WretchHair } } },
             ["bloater"] = new[]
             {
                 Bloater("Blobber", null, "SM_Chr_Attach_Blobber_Hair_01"),
@@ -189,33 +195,69 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// The Chillón's scream (unitViews.ts scream: its aim pose): the trunk and the head thrown back and both arms flung
-        /// out and back, in over 0.18 s and held 0.55 s; done then, it lets go over 0.3 s more (the rings are Fx.Scream).
+        /// out and back, in over ScreamIn and held ScreamHold; done then, it lets go over ScreamOut more (the rings are
+        /// Fx.Scream). With Synty's roar (Emotes and Taunts' «Roar High», roarHighMasc: the 3D review's A-28, 10/11), its arms
+        /// up and its head back are the clip's, RoarFrom to RoarTo of it over the scream's 1.03 s on the upper body, and
+        /// the lean back half (DeadPose): by hand, its arms rose 20 cm and its head stayed under its hair.
         /// </summary>
         public async Awaitable Scream(string id, CancellationToken ct = default)
         {
             if (!views.TryGetValue(id, out var v))
             {
-                await Awaitable.WaitForSecondsAsync(0.73f, ct);
+                await Awaitable.WaitForSecondsAsync(ScreamIn + ScreamHold, ct);
                 return;
             }
-            for (float t = 0; t < 0.18f; t += Time.deltaTime)
+            var roar = v.anim != null ? FigureCatalog.Load()?.Clip(RoarClip) : null;
+            v.roar = roar != null;
+            void Roar(float t)
             {
-                v.scream = Mathf.SmoothStep(0, 1, t / 0.18f);
+                if (roar != null) v.anim.Scrub(roar, RoarFrom + (RoarTo - RoarFrom) * Mathf.Clamp01(t / (ScreamIn + ScreamHold + ScreamOut)), v.scream);
+            }
+            float t = 0;
+            for (; t < ScreamIn; t += Time.deltaTime)
+            {
+                v.scream = Mathf.SmoothStep(0, 1, t / ScreamIn);
+                Roar(t);
                 await Awaitable.NextFrameAsync(ct);
             }
             v.scream = 1;
-            await Awaitable.WaitForSecondsAsync(0.55f, ct);
+            for (; t < ScreamIn + ScreamHold; t += Time.deltaTime)
+            {
+                Roar(t);
+                await Awaitable.NextFrameAsync(ct);
+            }
             LetGo();
             async void LetGo()
             {
-                for (float t = 0; t < 0.3f && v.scream > 0; t += Time.deltaTime)
+                try
                 {
-                    v.scream = 1 - Mathf.SmoothStep(0, 1, t / 0.3f);
-                    await Awaitable.NextFrameAsync();
+                    for (float u = 0; u < ScreamOut && v.scream > 0; u += Time.deltaTime)
+                    {
+                        v.scream = 1 - Mathf.SmoothStep(0, 1, u / ScreamOut);
+                        Roar(ScreamIn + ScreamHold + u);
+                        await Awaitable.NextFrameAsync();
+                    }
                 }
-                v.scream = 0;
+                finally
+                {
+                    v.scream = 0;
+                    if (roar != null) v.anim?.Scrub(null, 0, 0);
+                    v.roar = false;
+                }
             }
         }
+
+        /// <summary>The scream's in, held and out (seconds: unitViews.ts scream's 0.18, 0.55 and 0.3).</summary>
+        const float ScreamIn = 0.18f, ScreamHold = 0.55f, ScreamOut = 0.3f;
+
+        /// <summary>
+        /// The Chillón's roar (A-28): Synty's «Roar High» (a man's, as the Chillón's body is; Emotes and Taunts, in by
+        /// importar-synty.sh), the part of it with its hands highest and its head furthest back, seconds (ClipProbe.Alone
+        /// BASTION_MANOS=1 BASTION_CABEZA=1: crouched to wind up at 0.6–0.8 s, both hands up past 1.9 m from 1.2 s to 2.5,
+        /// the head furthest back at 1.3–1.4).
+        /// </summary>
+        const string RoarClip = "roarHighMasc";
+        const float RoarFrom = 1.2f, RoarTo = 1.9f;
 
         /// <summary>
         /// What each kind of the dead adds to its clips (syntyFigures.ts STYLES, gaits.ts): how far it leans forward (radians),
@@ -244,18 +286,22 @@ namespace Bastion.Client.Units
         /// lean spread up the spine (0.35, 0.7 and all of it by the bone, each turned in the body's frame from the clip's
         /// own), the hips rolling and the shoulders twisting in step with its clips, the neck lolled to the side and back
         /// up by 0.55 of the lean so the eyes stay up; the legs as the clip has them. The Chillón's scream (`v.scream`)
-        /// throws the lean back half a radian and the neck 0.6 more, and the arms out. None while it dies (a death clip
-        /// takes the body: `live`).
+        /// throws the lean back half a radian and the neck 0.6 more, and the arms out. None while it dies, nor while a clip
+        /// takes the whole body (`live`).
         /// </summary>
         static void DeadPose(View v)
         {
             var a = v.animator;
             if (a == null || !a.isHuman || v.anim == null) return;
-            // (Eased off as its death comes in, life, not gone in its first frame: the 3D review's A-04, 10/11.)
-            float live = v.life, k = v.scream;
+            // (Eased off as its death comes in, life, not gone in its first frame: the 3D review's A-04, 10/11. And as a clip
+            // takes the whole body, a bite, going down to eat, eating, getting up, rising out of a body: the lean is a body
+            // standing's, and over «Zombie Biting» it laid the chest flat on the body, over a body lying it bent it into the
+            // floor or up like a board; back with the clip's fade out. The 3D review's M-2, 10/11. The scream keeps its own.)
+            float live = v.life * (1 - v.anim.WholeShare), k = v.scream;
             if (live <= 0 && k <= 0) return;
             var style = DeadStyles.TryGetValue(v.template, out var s) ? s : DeadStyles["sectoid"];
-            float lean = (style.lean + style.moving * v.anim.Moving) * live - k * 0.5f;
+            // (With the roar's clip its own trunk goes back: the lean back halved, not bent twice. A-28, 10/11.)
+            float lean = (style.lean + style.moving * v.anim.Moving) * live - k * (v.roar ? 0.25f : 0.5f);
             float twist = v.anim.Sway(1.7f, TwistRates) * 0.12f * style.twist * live;
             float roll = v.anim.Sway(1.3f, RollRates) * (0.05f + v.anim.Moving * 0.08f) * style.roll * live;
             var body = v.root.rotation;
@@ -283,11 +329,12 @@ namespace Bastion.Client.Units
             }
             if (neck != null)
             {
-                var head = upper * Quaternion.AngleAxis(0.32f * live * Mathf.Rad2Deg, Vector3.forward) * Quaternion.AngleAxis((-lean * 0.55f - k * 0.6f) * Mathf.Rad2Deg, Vector3.right);
+                // (Roaring, the clip throws the head back itself: the neck's own throw a third, A-28.)
+                var head = upper * Quaternion.AngleAxis(0.32f * live * Mathf.Rad2Deg, Vector3.forward) * Quaternion.AngleAxis((-lean * 0.55f - k * (v.roar ? 0.2f : 0.6f)) * Mathf.Rad2Deg, Vector3.right);
                 neck.rotation = World(head) * wasNeck;
             }
             DeadArms(v);
-            if (k <= 0) return;
+            if (k <= 0 || v.roar) return;
             // (0.10.1's model x is to its left, Unity's −x, and its z behind it, Unity's −z: its own screams, seen from
             // the game's camera and from the side, have the arms out wide and ahead of it.)
             FlingArm(a, v.root, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, new Vector3(-0.85f, -0.15f, 0.4f), new Vector3(-0.8f, 0.25f, 0.35f), k);
@@ -319,6 +366,9 @@ namespace Bastion.Client.Units
             // (Dying, let down over DeathEase as its death comes in, life: not cut in the first frame, the death's clip over
             // the whole body from then on; the 3D review's A-04, 10/11.)
             if (DeadArmsOff || v.feeding || v.chestRest is not Quaternion rest || (!v.dead && v.anim.WholeShare > 0.01f) || v.life <= 0) return;
+            // (Roaring, the arms the roar's as far as it is in: A-28.)
+            float keep = v.life * (v.roar ? 1 - v.scream : 1);
+            if (keep <= 0) return;
             var chest = ChestOf(a);
             if (chest == null) return;
             float scale = v.body != null ? v.body.lossyScale.x : 1;
@@ -335,12 +385,13 @@ namespace Bastion.Client.Units
                 if (s0 == null || s1 == null || s2 == null) continue;
                 var was = (s0.rotation, s1.rotation, s2.rotation);
                 Reach(a, upper, lower, hand, target, pole, SoftReach * scale, true);
-                if (v.life >= 1) continue;
-                // As much of the reach as is left of its life, from the shoulder down (each turn in the world, the parent's first).
+                if (keep >= 1) continue;
+                // As much of the reach as is left of its life (and of a roar), from the shoulder down (each turn in the
+                // world, the parent's first).
                 var now = (s0.rotation, s1.rotation, s2.rotation);
-                s0.rotation = Quaternion.Slerp(was.Item1, now.Item1, v.life);
-                s1.rotation = Quaternion.Slerp(was.Item2, now.Item2, v.life);
-                s2.rotation = Quaternion.Slerp(was.Item3, now.Item3, v.life);
+                s0.rotation = Quaternion.Slerp(was.Item1, now.Item1, keep);
+                s1.rotation = Quaternion.Slerp(was.Item2, now.Item2, keep);
+                s2.rotation = Quaternion.Slerp(was.Item3, now.Item3, keep);
             }
         }
 

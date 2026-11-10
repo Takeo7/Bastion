@@ -24,7 +24,8 @@ namespace Bastion.Client
     // JSON (LifeEntry.Key is JSON.stringify's), sines and cosines V8's (Trig), atan2 and hypot Js.cs's, three's math in
     // doubles. Math.random and performance.now come in (the constructor's `random` and `now`). The figures are Unity's,
     // behind ICampFigure; positions and turns are 0.10.1's (tiles: x east, z south; yaw three's, from +z towards +x).
-    // No Mathf, no scene: it runs in a plain dotnet harness (bport/life).
+    // No Mathf, no scene: it runs in a plain dotnet harness (bport/life). Since the 3D review of 10/11 (A-25) no longer
+    // to the bit: the one walking goes round the others (Room), where 0.10.1's walked straight through them.
 
     /// <summary>
     /// A soldier out about the clearing (0.10.1's clearingArt.ts LineupEntry, the fields the life reads; screen.ts
@@ -243,6 +244,12 @@ namespace Bastion.Client
         /// <summary>How far apart two talking stand (tiles), and the seconds between one's gestures and the other's.</summary>
         const double TalkApart = 1.05;
         static readonly (double from, double to) TalkEvery = (2.2, 4.5);
+        /// <summary>
+        /// How near another the one walking starts going round it (tiles), how hard it is pushed off it at the nearest, and
+        /// how far from its goal it stops minding them (its chair, La Lata's side: the 3D review's A-25, 10/11, one walked
+        /// through the two talking).
+        /// </summary>
+        const double Room = 0.9, RoomPush = 1.2, RoomTill = 1;
         /// <summary>How fast one turns to where it goes (radians a second), and how near it is turned enough to sit down.</summary>
         const double Turn = 5;
         const double Turned = 0.12;
@@ -294,6 +301,12 @@ namespace Bastion.Client
             ["drink"] = ("drinkIn", "drinkOut", "sip"),
             ["eat"] = ("eatIn", "eatOut", "bite"),
         };
+        /// <summary>
+        /// How far through putting the cup or the bar away (drinkOut, eatOut) the hand is down by the hip, where it goes: from
+        /// there on it is gone, not held in the hand hanging down till the move ends (the 3D review's A-31, 10/11: the hand
+        /// down at 0.42–0.46 of both, measured with ClipProbe.Alone). Getting it out, the hand starts by the hip already.
+        /// </summary>
+        const double ItemOut = 0.43;
         /// <summary>syntyManifest.ts CAMP_ITEMS: what each habit holds.</summary>
         static readonly Dictionary<string, string> CampItems = new Dictionary<string, string> { ["drink"] = "campCup", ["eat"] = "campBar" };
         /// <summary>Leant on La Lata: a shoulder to it (the back would put the slung gun through it), the left (1) or the right (−1).</summary>
@@ -617,6 +630,8 @@ namespace Bastion.Client
         {
             public readonly string move;
             public readonly bool into, once;
+            /// <summary>How far through its move it is (0 to 1), as the figure last said.</summary>
+            public double done;
 
             public Act(string move, bool into, bool once = false)
             {
@@ -997,6 +1012,7 @@ namespace Bastion.Client
                 {
                     // Into its place or out of it: the move to its end, standing where it stands for it.
                     double done = rig.CampMove(d.act.move);
+                    d.act.done = done;
                     if (done >= 1) EndAct(d);
                 }
                 else if (d.rise > 0)
@@ -1020,8 +1036,42 @@ namespace Bastion.Client
                     }
                     else
                     {
-                        d.at = new Vec(d.at.x + dx / far * step, d.at.z + dz / far * step);
-                        d.yaw = TurnToward(d.yaw, Js.Atan2(dx, dz), Turn * dt);
+                        // Round the others in its way (A-25): pushed off each within Room, and to its side of the way.
+                        double mx = dx / far, mz = dz / far;
+                        if (far > RoomTill)
+                        {
+                            double ux = mx, uz = mz;
+                            foreach (var o in idlers)
+                            {
+                                if (o == d) continue;
+                                double ox = d.at.x - o.at.x, oz = d.at.z - o.at.z;
+                                double apart = Js.Hypot(ox, oz);
+                                if (apart >= Room) continue;
+                                if (apart < 1e-6)
+                                {
+                                    (ox, oz, apart) = (uz, -ux, 1);
+                                }
+                                double k = (Room - apart) / Room * RoomPush;
+                                // Off it, and across the way on the side it is already (to the right, if dead ahead).
+                                double side = ox / apart * uz - oz / apart * ux;
+                                double sx = uz * (side < 0 ? -1 : 1), sz = -ux * (side < 0 ? -1 : 1);
+                                mx += (ox / apart + sx) * k;
+                                mz += (oz / apart + sz) * k;
+                            }
+                            double m = Js.Hypot(mx, mz);
+                            if (m > 1e-9)
+                            {
+                                mx /= m;
+                                mz /= m;
+                            }
+                            else
+                            {
+                                mx = ux;
+                                mz = uz;
+                            }
+                        }
+                        d.at = new Vec(d.at.x + mx * step, d.at.z + mz * step);
+                        d.yaw = TurnToward(d.yaw, Js.Atan2(mx, mz), Turn * dt);
                         moving = 1;
                     }
                 }
@@ -1074,7 +1124,8 @@ namespace Bastion.Client
                 rig.SetStance(moving != 0 || d.spot != null ? null : d.stance);
                 // At the camp: sat, knelt or leant once in its place; standing about, the camp's things now and then (not two talking).
                 rig.Camp(moving != 0 || !d.settled ? null : d.spot.loop, d.kind != Kind.Talk, false);
-                rig.HoldItem(d.spot?.item != null && (d.settled || d.act != null) ? d.spot.item : null, d.spot?.loop == "drink");
+                // (Put away, gone once the hand is down by the hip: ItemOut.)
+                rig.HoldItem(d.spot?.item != null && (d.settled || d.act != null && (d.act.into || d.act.done < ItemOut)) ? d.spot.item : null, d.spot?.loop == "drink");
                 rig.ApplyPose(d.yaw, d.phase, moving, time);
             }
         }

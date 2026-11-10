@@ -143,6 +143,21 @@ namespace Bastion.Client.Map
             Doors(model.transform);
             Lamps();
             built = true;
+            if (snowy) Snowy(true);
+        }
+
+        bool snowy;
+
+        /// <summary>
+        /// Snow on its roof and bonnet in winter (`on`), as on the map's cars: its renderers on SnowCover's layer, but its
+        /// wheels (they turn, and the decal's snow would stay up where it was) and its headlights. The 3D review's E-02, 10/11:
+        /// it stands beside the map (Settlement's, MapView.PlaceLata's own holder), which SnowCover.Mark never reaches.
+        /// </summary>
+        public void Snowy(bool on)
+        {
+            snowy = on;
+            if (body == null) return;
+            SnowCover.Snowy(body.transform, on, r => r.name == "Faro" || wheels.Any(w => r.transform == w || r.transform.IsChildOf(w)));
         }
 
         /// <summary>What 0.10.1 put on a vehicle's body from other models: its armour, its window bars, the van's roof props, the lorry's canvas.</summary>
@@ -337,6 +352,10 @@ namespace Bastion.Client.Map
             Glow(LightsStanding);
             bool bus = Vehicle == 3;
             var lamp = bus ? new Vector3(0.28f, 0.14f, 0.05f) : new Vector3(0.2f, 0.1f, 0.04f);
+            // The others by their own body, not its armour, bars and spikes, nor its wheels (the 3D review's E-06, 10/11: by
+            // the whole box they hung in the air before the 4×4's spikes and the van's bars, mula.ts's own place for them).
+            var own = bus ? box : BoundsOf(body.transform, body.transform, r => !Extra(r.name) && !r.name.Contains("Wheel"));
+            float front = 0;
             foreach (int side in new[] { -1, 1 })
             {
                 var o = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -344,13 +363,52 @@ namespace Bastion.Client.Map
                 DestroyNow(o.GetComponent<Collider>());
                 o.transform.SetParent(body.transform, false);
                 o.transform.localScale = lamp * Tile;
-                float x = bus ? side * 0.75f * Tile : box.center.x + side * (size.x / 2 - 0.25f * Tile);
-                float y = (bus ? 0.55f * Tile : size.y * 0.3f) + lamp.y * Tile / 2;
-                o.transform.localPosition = new Vector3(x, y, box.max.z + (bus ? 0.04f : 0.005f) * Tile);
+                float x = bus ? side * 0.75f * Tile : own.center.x + side * (own.size.x / 2 - 0.25f * Tile);
+                float y = (bus ? 0.55f * Tile : own.min.y + own.size.y * 0.3f) + lamp.y * Tile / 2;
+                // On its nose where the lamp is (the body's mesh there, if it can be read), sunk in all but LampOut of its depth.
+                float z = box.max.z + 0.04f * Tile;
+                if (!bus)
+                {
+                    float? face = FrontAt(new Vector3(x, y, 0), lamp * Tile / 2);
+                    z = (face ?? own.max.z - LampInset * Tile) - lamp.z * Tile * (0.5f - LampOut);
+                }
+                front = z + lamp.z * Tile / 2;
+                o.transform.localPosition = new Vector3(x, y, z);
                 var r = o.GetComponent<MeshRenderer>();
                 r.sharedMaterial = lights;
                 r.shadowCastingMode = ShadowCastingMode.Off;
             }
+            Debug.Log(FormattableString.Invariant($"[lata] ({Vehicle}) lamps at z {front:0.00} (body {own.max.z:0.00}, with its armour {box.max.z:0.00})"));
+        }
+
+        /// <summary>
+        /// How far in from its body's front a lamp sits when its mesh can't be read, in tiles; and how much of a lamp's depth
+        /// stands out of the body where it can (the 3D review's E-06, 10/11).
+        /// </summary>
+        const float LampInset = 0.02f, LampOut = 0.3f;
+
+        /// <summary>
+        /// The front of its own body (not what 0.10.1 put on it, nor its wheels) within `half` of `at` across and up (the
+        /// body's space, metres): the furthest point of its meshes there, or null if none can be read or none is there.
+        /// </summary>
+        float? FrontAt(Vector3 at, Vector3 half)
+        {
+            float? most = null;
+            foreach (var f in body.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var r = f.GetComponent<Renderer>();
+                if (r == null || r.name == "Faro" || Extra(r.name) || r.name.Contains("Wheel") || r.name.EndsWith("_Glass")) continue;
+                var mesh = f.sharedMesh;
+                if (mesh == null || !mesh.isReadable) continue;
+                var m = body.transform.worldToLocalMatrix * f.transform.localToWorldMatrix;
+                foreach (var v in mesh.vertices)
+                {
+                    var p = m.MultiplyPoint3x4(v);
+                    if (Mathf.Abs(p.x - at.x) > half.x || Mathf.Abs(p.y - at.y) > half.y) continue;
+                    if (most == null || p.z > most) most = p.z;
+                }
+            }
+            return most;
         }
 
         void Glow(float k)
@@ -375,33 +433,126 @@ namespace Bastion.Client.Map
             float windowY = (minY + maxY) / 2 + 0.05f;
             float plateH = SizeOf(prefabOf(PlateSlit)).y / Tile * 1.15f;
             float sy = Mathf.Max(1, (maxY - minY) / (plateH > 0 ? plateH : 0.45f * 1.15f));
-            float halfW = all.size.x / Tile / 2 + 0.02f;
+            // Against its sides at the windows' height, along its middle (E-15: by its whole box, the mirrors on its nose
+            // and all, they stood a third of a metre off the side, in the air past its back).
+            float halfW = (SideBetween(model, band.min.y, band.max.y, all.center.x, all.center.z, all.extents.z * 0.6f) ?? all.size.x / 2) / Tile + 0.02f;
             // The doorways' middles along it (as yet unknown: from the door leaves).
             var leaves = model.GetComponentsInChildren<Transform>(true).Where(t => System.Text.RegularExpressions.Regex.IsMatch(t.name, @"Door_0\d$")).Select(t => BoundsOf(t, body.transform, r => true).center.z / Tile).ToList();
             bool InDoorway(float z) => leaves.Any(c => Mathf.Abs(c - z) < 0.75f);
             var root = new GameObject("Planchas").transform;
             root.SetParent(body.transform, false);
-            for (float z = minZ + 0.35f; z < maxZ - 0.2f; z += 0.68f)
+            // Within its own body (the 3D review's E-15, 10/11: 0.10.1's numbers were its kit bus's, 1.52 by 5.12, and on
+            // Town's the end ones stood half a metre out past its back, the tall ones over its roof): along it, each side's
+            // plates no nearer its ends than half a plate and PlateMargin; up, none past its roof less PlateMargin.
+            var own = BoundsOf(model, body.transform, r => !Extra(r.name));
+            // Its sides' ends at the windows' height (its bumpers and ladder stand further out below and behind, its corners
+            // are rounded), where its meshes can be read; else its box's.
+            var (rear, front) = EndsBetween(model, band.min.y, band.max.y, own.center.x, own.extents.x * 0.97f);
+            float bodyMin = (rear ?? own.min.z) / Tile, bodyMax = (front ?? own.max.z) / Tile, roof = own.max.y / Tile - PlateMargin;
+            float halfLong = 0;
+            foreach (var key in new[] { Plate, PlateSlit })
+            {
+                var probe = PutPlate(root, prefabOf, key, 0, 0, 0, 0, 1.15f, sy);
+                if (probe == null) continue;
+                halfLong = Mathf.Max(halfLong, VerticesOf(probe, body.transform).size.z / Tile / 2);
+                // (Out of the body at once: Destroy waits for the frame's end, and its box is measured before then.)
+                probe.gameObject.SetActive(false);
+                probe.SetParent(null, false);
+                DestroyNow(probe.gameObject);
+            }
+            float from = Mathf.Max(minZ + 0.35f, bodyMin + halfLong + PlateMargin), to = Mathf.Min(maxZ - 0.2f, bodyMax - halfLong - PlateMargin);
+            float first = float.NaN, last = float.NaN, top = 0;
+            // Kept below the roof: squashed from its foot (its holder's origin) if it reached past it.
+            void UnderRoof(Transform plate)
+            {
+                if (plate == null) return;
+                var b = BoundsOf(plate, body.transform, r => true);
+                float height = b.max.y / Tile - plate.localPosition.y / Tile;
+                if (b.max.y / Tile > roof && height > 0)
+                {
+                    var k = plate.localScale;
+                    plate.localScale = new Vector3(k.x, k.y * Mathf.Max(0.1f, (roof - plate.localPosition.y / Tile) / height), k.z);
+                }
+                top = Mathf.Max(top, BoundsOf(plate, body.transform, r => true).max.y / Tile);
+            }
+            for (float z = from; z <= to + 1e-4f; z += 0.68f)
                 foreach (int side in new[] { -1, 1 })
                 {
                     // 0.10.1's doors on −x: here +x.
                     if (side < 0 && InDoorway(z)) continue;
-                    PutPlate(root, prefabOf, Mathf.RoundToInt(z * 3) % 3 != 0 ? Plate : PlateSlit, side * halfW, windowY - 0.25f * sy, z, 0, 1.15f, sy);
+                    UnderRoof(PutPlate(root, prefabOf, Mathf.RoundToInt(z * 3) % 3 != 0 ? Plate : PlateSlit, side * halfW, windowY - 0.25f * sy, z, 0, 1.15f, sy));
+                    if (float.IsNaN(first)) first = z;
+                    last = z;
                 }
             float nose = all.size.z / Tile / 2 + 0.03f;
-            foreach (float x in new[] { -0.55f, 0.55f }) PutPlate(root, prefabOf, PlateSlit, x, windowY - 0.35f, nose - 0.15f, Mathf.PI / 2, 1.3f, 1);
+            foreach (float x in new[] { -0.55f, 0.55f }) UnderRoof(PutPlate(root, prefabOf, PlateSlit, x, windowY - 0.35f, nose - 0.15f, Mathf.PI / 2, 1.3f, 1));
             for (float z = -2.6f; z <= 2.6f + 1e-4f; z += 1.3f) PutPlate(root, prefabOf, PlateRoof, Mathf.RoundToInt(z) % 2 * 0.2f, all.size.y / Tile + 0.01f, z, 0.05f * z, 1.1f, 1);
+            var drawn = VerticesOf(root, body.transform);
+            Debug.Log(FormattableString.Invariant($"[lata] plates at x ±{halfW:0.00} (its box ±{all.size.x / Tile / 2:0.00}), z {first - halfLong:0.00}..{last + halfLong:0.00} (drawn {drawn.min.z / Tile:0.00}..{drawn.max.z / Tile:0.00}; body {bodyMin:0.00}..{bodyMax:0.00}, its box {own.min.z / Tile:0.00}..{own.max.z / Tile:0.00}), top {top:0.00} (roof {roof + PlateMargin:0.00})"));
         }
+
+        /// <summary>
+        /// The hindmost and foremost points (z, the body's space) of `model`'s own meshes between heights `low` and `high`, no
+        /// nearer its middle line `mid` than `side` (along its sides); null where none can be read.
+        /// </summary>
+        (float? rear, float? front) EndsBetween(Transform model, float low, float high, float mid, float side)
+        {
+            float? rear = null, front = null;
+            foreach (var f in model.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var r = f.GetComponent<Renderer>();
+                if (r == null || Extra(r.name) || r.name.Contains("Wheel")) continue;
+                var mesh = f.sharedMesh;
+                if (mesh == null || !mesh.isReadable) continue;
+                var m = body.transform.worldToLocalMatrix * f.transform.localToWorldMatrix;
+                foreach (var v in mesh.vertices)
+                {
+                    var p = m.MultiplyPoint3x4(v);
+                    if (p.y < low || p.y > high || Mathf.Abs(p.x - mid) < side) continue;
+                    if (rear == null || p.z < rear) rear = p.z;
+                    if (front == null || p.z > front) front = p.z;
+                }
+            }
+            return (rear, front);
+        }
+
+        /// <summary>
+        /// How far out from its middle line `mid` (x, the body's space) `model`'s own meshes reach between heights `low` and
+        /// `high`, within `along` of `centre` along it (z); null where none can be read.
+        /// </summary>
+        float? SideBetween(Transform model, float low, float high, float mid, float centre, float along)
+        {
+            float? most = null;
+            foreach (var f in model.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var r = f.GetComponent<Renderer>();
+                if (r == null || Extra(r.name) || r.name.Contains("Wheel") || r.name.Contains("Mirror")) continue;
+                var mesh = f.sharedMesh;
+                if (mesh == null || !mesh.isReadable) continue;
+                var m = body.transform.worldToLocalMatrix * f.transform.localToWorldMatrix;
+                foreach (var v in mesh.vertices)
+                {
+                    var p = m.MultiplyPoint3x4(v);
+                    if (p.y < low || p.y > high || Mathf.Abs(p.z - centre) > along) continue;
+                    float x = Mathf.Abs(p.x - mid);
+                    if (most == null || x > most) most = x;
+                }
+            }
+            return most;
+        }
+
+        /// <summary>How far the side plates keep in from its body's ends, and below its roof (tiles; E-15).</summary>
+        const float PlateMargin = 0.03f;
 
         /// <summary>
         /// A kit model (centred on its box, on the floor) at (x, y, z) of 0.10.1's body, turned `yaw` (counter-clockwise from
         /// above), scaled s and sy more up: baseKit.ts putMatrix, in the body here (x mirrored, metres). The prefab stands a
         /// quarter turn from its source (Apocalypse's: MapArt.UnityTurn), and the kit had the source's frame.
         /// </summary>
-        void PutPlate(Transform parent, Func<string, GameObject> prefabOf, string key, float x, float y, float z, float yaw, float s, float sy)
+        Transform PutPlate(Transform parent, Func<string, GameObject> prefabOf, string key, float x, float y, float z, float yaw, float s, float sy)
         {
             var prefab = prefabOf(key);
-            if (prefab == null) return;
+            if (prefab == null) return null;
             var holder = new GameObject(prefab.name).transform;
             holder.SetParent(parent, false);
             var plate = Instantiate(prefab, holder, false);
@@ -415,6 +566,7 @@ namespace Bastion.Client.Map
             holder.localPosition = m.GetColumn(3);
             holder.localRotation = Quaternion.LookRotation(m.GetColumn(2), m.GetColumn(1));
             holder.localScale = new Vector3(m.GetColumn(0).magnitude, m.GetColumn(1).magnitude, m.GetColumn(2).magnitude);
+            return holder;
         }
 
         static Vector3 SizeOf(GameObject prefab)
@@ -424,6 +576,29 @@ namespace Bastion.Client.Map
             var b = BoundsOf(o.transform, o.transform, r => true);
             DestroyNow(o);
             return b.size;
+        }
+
+        /// <summary>The box of the vertices of what renders under `root`, in `space`'s frame (its meshes' boxes where they can't be read).</summary>
+        static Bounds VerticesOf(Transform root, Transform space)
+        {
+            bool any = false;
+            var b = new Bounds();
+            foreach (var f in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mesh = f.sharedMesh;
+                if (mesh == null || f.GetComponent<Renderer>() == null) continue;
+                var m = space.worldToLocalMatrix * f.transform.localToWorldMatrix;
+                var mb = mesh.bounds;
+                var points = mesh.isReadable ? (IEnumerable<Vector3>)mesh.vertices : Enumerable.Range(0, 8).Select(i => mb.center + Vector3.Scale(mb.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1)));
+                foreach (var v in points)
+                {
+                    var c = m.MultiplyPoint3x4(v);
+                    if (!any) b = new Bounds(c, Vector3.zero);
+                    else b.Encapsulate(c);
+                    any = true;
+                }
+            }
+            return b;
         }
 
         /// <summary>The box of what renders under `root` (its renderers that `take`), in `space`'s frame.</summary>
@@ -614,6 +789,26 @@ namespace Bastion.Client.Map
             });
         }
 
+        static Material outOfFog;
+
+        /// <summary>
+        /// Out of the fog of war (`on`) as the figures are (their stencil bit: Bastion/FigureMask, UnitViews.StepMasks), or in
+        /// it again: while it drives off the map, so that it isn't cut into lit and fogged pieces by the tiles it crosses (the
+        /// 3D review's E-07, 10/11). Parked, the fog takes it as it takes the map.
+        /// </summary>
+        public void OutOfFog(bool on)
+        {
+            if (body == null) return;
+            if (on && outOfFog == null) outOfFog = KitMaterials.New(KitMaterials.FigureMask, "La Lata (niebla fuera)");
+            if (outOfFog == null) return;
+            foreach (var r in body.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r is ParticleSystemRenderer) continue;
+                var mats = r.sharedMaterials.Where(m => m != outOfFog);
+                r.sharedMaterials = (on ? mats.Append(outOfFog) : mats).ToArray();
+            }
+        }
+
         /// <summary>Each renderer's own materials while it is seen through (their copies, transparent: Synty's shader allows it), and the copies' colours.</summary>
         readonly Dictionary<Renderer, Material[]> unfaded = new Dictionary<Renderer, Material[]>();
         readonly Dictionary<Material, Color> fadeColours = new Dictionary<Material, Color>();
@@ -629,7 +824,8 @@ namespace Bastion.Client.Map
                 {
                     var mats = r.sharedMaterials;
                     unfaded[r] = mats;
-                    r.sharedMaterials = mats.Select(Seethrough).ToArray();
+                    // (Out of the fog, its stencil's material as it is: OutOfFog.)
+                    r.sharedMaterials = mats.Select(m => m != null && m == outOfFog ? m : Seethrough(m)).ToArray();
                 }
             foreach (var kv in fadeColours) kv.Key.SetColor("_BaseColor", new Color(kv.Value.r, kv.Value.g, kv.Value.b, kv.Value.a * a));
         }

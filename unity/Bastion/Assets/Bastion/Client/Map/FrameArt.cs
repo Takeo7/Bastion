@@ -245,7 +245,10 @@ namespace Bastion.Client.Map
                 shapes.Add(MakeShape(form, x, y, z, yaw + (flip ? Math.PI : 0), along, tall, across, color));
             }
             double R(double k, double salt) => Hash(k, side * 31 + D, salt);
-            for (int u0 = -Along; u0 < n + Along; u0 += Stretch)
+            // A canal's walls and water as far as its hole in the ground goes (the ground's margin; the 3D review's E-16,
+            // 10/11: from 24 tiles past the corners to 80 the hole showed the camera's background).
+            int along = MapOutline.Sunken.Contains(band.Kind) ? GroundView.Margin : Along;
+            for (int u0 = -along; u0 < n + along; u0 += Stretch)
             {
                 double u = u0 + Stretch / 2.0;
                 if (band.Kind == FrameKinds.River)
@@ -347,7 +350,8 @@ namespace Bastion.Client.Map
             double R(double k, double salt) => Hash(k, side * 31 + D, salt);
             double near = D, far = -MapOutline.FarBank;
             int n = side % 2 != 0 ? h : w;
-            int ua = band.From == 0 ? -Along : band.From, ub = band.To == n - 1 ? n + Along : band.To + 1;
+            // (As far as the ground's hole goes past the corners: E-16.)
+            int ua = band.From == 0 ? -GroundView.Margin : band.From, ub = band.To == n - 1 ? n + GroundView.Margin : band.To + 1;
             double stream = (near + far) / 2 + (R(0, 1) - 0.5) * 1.4;
             double deep = ravine ? 5.2 : 0.45;
             const int rock = 0x6f675c, earth = 0x6b604c;

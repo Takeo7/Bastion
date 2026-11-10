@@ -185,7 +185,29 @@ namespace Bastion.Client.Map
                     sheltered = b >= 0 && plan.Inside[i] != 0 && b < plan.Buildings.Count && plan.Buildings[b].kind != BuildingKinds.Ruin
                         && p.y < (plan.Buildings[b].@base + plan.Buildings[b].storeys * BuildingPlan.Storey) * Tile;
                 }
-                r.renderingLayerMask = sheltered ? r.renderingLayerMask & ~Mask : r.renderingLayerMask | Mask;
+                r.renderingLayerMask = sheltered || Unsnowed(r.name) ? r.renderingLayerMask & ~Mask : r.renderingLayerMask | Mask;
+            }
+        }
+
+        /// <summary>
+        /// Models the snow's cap whitens whole, their sides too, though most of their faces stand upright: tyres and log piles
+        /// (the 3D review's E-11, 10/11: MapLab.NieveCaras measured 64–72 % of their area past 68° from straight up, face by
+        /// face and by their normals; the decal covers them anyway). None on them: the rubber black, the logs brown.
+        /// </summary>
+        static bool Unsnowed(string name) => name.Contains("Tire") || name.Contains("Wood_Pile");
+
+        /// <summary>
+        /// What under `root` takes the snow (`on`) or not, all of it on Layer but particles and what `skip` leaves out: what
+        /// stands beside the map rather than in it (La Lata, the Armory's corner of the base; the 3D review's E-02, 10/11:
+        /// Mark only goes through the map's root, and they had none in winter).
+        /// </summary>
+        public static void Snowy(Transform root, bool on, Func<Renderer, bool> skip = null)
+        {
+            if (root == null) return;
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r is ParticleSystemRenderer || (skip != null && skip(r))) continue;
+                r.renderingLayerMask = on ? r.renderingLayerMask | Mask : r.renderingLayerMask & ~Mask;
             }
         }
 

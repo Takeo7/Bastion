@@ -208,6 +208,14 @@
    "pack": "emotes",
    "fbx": "Animations/Polygon/Feminine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Femn"
   },
+  "roarHighMasc": {
+   "pack": "emotes",
+   "fbx": "Animations/Polygon/Masculine/Aggressive/A_POLY_EMOT_Aggressive_Roar_High_Masc"
+  },
+  "roarLowMasc": {
+   "pack": "emotes",
+   "fbx": "Animations/Polygon/Masculine/Aggressive/A_POLY_EMOT_Aggressive_Roar_Low_Masc"
+  },
   "leanBackMasc": {
    "pack": "idles",
    "fbx": "Animations/Polygon/Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFolded_Loop_Masc"
@@ -879,35 +887,59 @@
     "id": "deathHeadFMasc",
     "falls": -2.65,
     "reach": 0.85,
-    "head": true
+    "head": true,
+    "drop": [
+     0.73,
+     0.93
+    ]
    },
    {
     "id": "deathHeadLMasc",
     "falls": -2.46,
     "reach": 1.25,
-    "head": true
+    "head": true,
+    "drop": [
+     0.47,
+     0.6
+    ]
    },
    {
     "id": "deathHeadRMasc",
     "falls": 2.34,
     "reach": 1.41,
-    "head": true
+    "head": true,
+    "drop": [
+     0.5,
+     0.67
+    ]
    },
    {
     "id": "deathSpineMasc",
     "falls": 3,
-    "reach": 0.73
+    "reach": 0.73,
+    "drop": [
+     1.07,
+     1.27
+    ]
    },
    {
     "id": "deathStomachMasc",
     "falls": 0.21,
     "reach": 0.95,
-    "close": true
+    "close": true,
+    "drop": [
+     1.03,
+     1.27
+    ]
    },
    {
     "id": "deathForward",
     "falls": -0.14,
-    "reach": 1.58
+    "reach": 1.58,
+    "drop": [
+     1,
+     1.2
+    ]
    }
   ],
   "femn": [
@@ -915,35 +947,59 @@
     "id": "deathHeadFFemn",
     "falls": -2.65,
     "reach": 0.85,
-    "head": true
+    "head": true,
+    "drop": [
+     0.73,
+     0.93
+    ]
    },
    {
     "id": "deathHeadLFemn",
     "falls": -2.46,
     "reach": 1.25,
-    "head": true
+    "head": true,
+    "drop": [
+     0.47,
+     0.6
+    ]
    },
    {
     "id": "deathHeadRFemn",
     "falls": 2.34,
     "reach": 1.41,
-    "head": true
+    "head": true,
+    "drop": [
+     0.5,
+     0.67
+    ]
    },
    {
     "id": "deathSpineFemn",
     "falls": 3,
-    "reach": 0.73
+    "reach": 0.73,
+    "drop": [
+     1.07,
+     1.27
+    ]
    },
    {
     "id": "deathStomachFemn",
     "falls": 0.21,
     "reach": 0.95,
-    "close": true
+    "close": true,
+    "drop": [
+     1.03,
+     1.27
+    ]
    },
    {
     "id": "deathForward",
     "falls": -0.14,
-    "reach": 1.58
+    "reach": 1.58,
+    "drop": [
+     1,
+     1.2
+    ]
    }
   ]
  },
@@ -1301,6 +1357,11 @@
   "shotgun": {
    "fbx": "SM_Wep_Shotgun_01",
    "reach": 0.86,
+   "palm": [
+    -0.04,
+    0.06,
+    0
+   ],
    "fore": [
     -0.014,
     0.2
@@ -1311,6 +1372,10 @@
   "sniper": {
    "fbx": "SM_Wep_SniperRifle_01",
    "reach": 0.7,
+   "back": [
+    0.03,
+    0
+   ],
    "fore": [
     -0.02,
     0.14
@@ -1320,6 +1385,10 @@
   "sniper2": {
    "fbx": "SM_Wep_SniperRifle_02",
    "reach": 0.69,
+   "back": [
+    0.03,
+    0
+   ],
    "fore": [
     -0.022,
     0.18
@@ -1334,6 +1403,10 @@
   "machineGun": {
    "fbx": "SM_Wep_MachineGun_01",
    "reach": 0.97,
+   "back": [
+    0.05,
+    0.15
+   ],
    "fore": [
     0.018,
     0.3
@@ -1344,6 +1417,11 @@
   "huntingRifle": {
    "fbx": "SM_Wep_HuntingRifle_01",
    "reach": 0.91,
+   "palm": [
+    -0.03,
+    0.08,
+    0
+   ],
    "fore": [
     -0.04,
     0.22
@@ -1396,6 +1474,11 @@
   "boltRifle": {
    "fbx": "SM_Wep_HuntingRifle_Clean_01",
    "reach": 0.9,
+   "palm": [
+    -0.03,
+    0.08,
+    0
+   ],
    "fore": [
     -0.04,
     0.22
@@ -1405,6 +1488,10 @@
   "machineGun2": {
    "fbx": "SM_Wep_MachineGun_02",
    "reach": 0.69,
+   "back": [
+    0.03,
+    0.05
+   ],
    "fore": [
     0.018,
     0.3
@@ -1508,7 +1595,7 @@
    ],
    "two": [
     0,
-    -0.75,
+    -0.62,
     0
    ],
    "slung": true,

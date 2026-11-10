@@ -73,14 +73,19 @@ namespace Bastion.Client.Map
         bool waited;
         int[] seenInside = Array.Empty<int>();
         bool[] visible;
-        /// <summary>Things on a storey of a building (furniture, a sign, what stands on a roof), turned off while it hides them.</summary>
-        readonly List<(GameObject thing, int building, int level, bool sign)> tracked = new List<(GameObject, int, int, bool)>();
+        /// <summary>
+        /// Things on a storey of a building (furniture, a sign, what stands on a roof), turned off while it hides them; a
+        /// sign with the way it faces out (0.10.1's frame; zero for the rest).
+        /// </summary>
+        readonly List<(GameObject thing, int building, int level, bool sign, Vector2 outward)> tracked = new List<(GameObject, int, int, bool, Vector2)>();
         /// <summary>What hangs on a wall (a clinic's cross, sign or blood: medicalDetails.ts medicalWallPatch), with the way its wall looks out.</summary>
         readonly List<(GameObject thing, int building, int level, Vector2 outward)> fixtures = new List<(GameObject, int, int, Vector2)>();
         /// <summary>Something tracked since the last Upload: it is shown or hidden at once, not at the cut's next change.</summary>
         bool fresh;
         /// <summary>The way the camera looks, on the ground (0.10.1's frame: x east, y south; _CutView).</summary>
         Vector2 lookFlat;
+        /// <summary>lookFlat as the things were last shown or hidden by it (Things).</summary>
+        Vector2 thingsLook;
 
         void OnEnable() => Current = this;
 
@@ -119,11 +124,15 @@ namespace Bastion.Client.Map
             Upload();
         }
 
-        /// <summary>`thing` stands on storey `level` of building `building` (a sign: it goes while its building is cut on its storey).</summary>
-        public void Track(GameObject thing, int building, int level, bool sign = false)
+        /// <summary>
+        /// `thing` stands on storey `level` of building `building` (a sign: it goes while its building is cut on its storey;
+        /// one facing `outward`, 0.10.1's frame, also while its roof is off and its back is to the camera: the 3D review's
+        /// E-14, 10/11, a supermarket's «MARKET» read back to front from inside).
+        /// </summary>
+        public void Track(GameObject thing, int building, int level, bool sign = false, Vector2 outward = default)
         {
             if (thing == null || building < 0 || building >= n) return;
-            tracked.Add((thing, building, level, sign));
+            tracked.Add((thing, building, level, sign, outward));
             fresh = true;
         }
 
@@ -342,6 +351,8 @@ namespace Bastion.Client.Map
                 }
             }
             if (changed || fresh) Upload();
+            // (The camera turned: what shows or hides by the way it looks.)
+            else if (Vector2.Distance(lookFlat, thingsLook) > 0.02f) Things();
         }
 
         /// <summary>The fades into the cut map (smoothstepped), the storey each shows in its alpha; what they hide off.</summary>
@@ -358,15 +369,25 @@ namespace Bastion.Client.Map
             map.Apply(false);
             Shader.SetGlobalTexture(CutMap, map);
             Shader.SetGlobalFloat(CutCount, Mathf.Max(1, n));
+            Things();
+        }
+
+        /// <summary>What the cut hides shown or hidden, as it is now and as the camera looks.</summary>
+        void Things()
+        {
+            thingsLook = lookFlat;
             for (int k = tracked.Count - 1; k >= 0; k--)
             {
-                var (thing, b, level, sign) = tracked[k];
+                var (thing, b, level, sign, outward) = tracked[k];
                 if (thing == null)
                 {
                     tracked.RemoveAt(k);
                     continue;
                 }
                 bool gone = level > shown[b] ? now[b * 3] > 0.5f : sign && level == shown[b] && Mathf.Max(now[b * 3 + 1], now[b * 3 + 2]) > 0.5f;
+                // A sign seen from behind, its roof off (E-14): two thresholds, so that one side on doesn't flicker.
+                if (!gone && sign && level == shown[b] && outward.sqrMagnitude > 0.01f && now[b * 3] > 0.5f)
+                    gone = Vector2.Dot(outward, lookFlat) > (thing.activeSelf ? 0.25f : 0.15f);
                 if (thing.activeSelf == gone) thing.SetActive(!gone);
             }
             for (int k = fixtures.Count - 1; k >= 0; k--)

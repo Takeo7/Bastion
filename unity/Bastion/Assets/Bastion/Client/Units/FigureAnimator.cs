@@ -63,6 +63,16 @@ namespace Bastion.Client.Units
         int restNow = -1;
         float restFade = 0.25f;
         /// <summary>
+        /// The whole body's clip coming in over the one going out (the 3D review's M-1, 10/11): Whole's layer is a mixer of
+        /// two, the slot's clip on `wholeIn` and the one it takes over from on the other (wholeOut: on its own clock, or held
+        /// on its pose), crossfaded over the new one's fade in (wholeCross, 0 to 1 over wholeBlend). One slot had been dropped
+        /// for the next at the weight it had: eating's three clips each came in whole in a frame, the head 60 cm in a line.
+        /// </summary>
+        AnimationMixerPlayable whole;
+        readonly Slot wholeOut = new Slot();
+        int wholeIn;
+        float wholeCross = 1, wholeBlend;
+        /// <summary>
         /// Where in its loops this figure plays, a share of each (syntyAnims.ts AnimDriver's `phase`): each its own, so a
         /// crowd doesn't wait in step (Ana, 28/10: «se mueven a la vez como si estuvieran bailando»).
         /// </summary>
@@ -124,6 +134,9 @@ namespace Bastion.Client.Units
             layers.SetInputWeight(0, 1);
             rest = AnimationMixerPlayable.Create(graph, 2);
             graph.Connect(rest, 0, layers, Held);
+            whole = AnimationMixerPlayable.Create(graph, 2);
+            graph.Connect(whole, 0, layers, Whole);
+            layers.SetInputWeight(Whole, 0);
             var upper = UpperBody();
             layers.SetLayerMaskFromAvatarMask(Held, upper);
             layers.SetLayerMaskFromAvatarMask(Upper, upper);
@@ -462,14 +475,18 @@ namespace Bastion.Client.Units
         {
             if (clip == null) return 0;
             var slot = slots[layer];
-            if (slot.clip.IsValid())
+            if (layer == Whole) PlugWhole(clip, fadeIn);
+            else
             {
-                graph.Disconnect(layers, layer);
-                slot.clip.Destroy();
+                if (slot.clip.IsValid())
+                {
+                    graph.Disconnect(layers, layer);
+                    slot.clip.Destroy();
+                }
+                slot.clip = AnimationClipPlayable.Create(graph, clip);
+                slot.clip.SetApplyFootIK(false);
+                graph.Connect(slot.clip, 0, layers, layer);
             }
-            slot.clip = AnimationClipPlayable.Create(graph, clip);
-            slot.clip.SetApplyFootIK(false);
-            graph.Connect(slot.clip, 0, layers, layer);
             slot.length = Mathf.Max(clip.length, 1e-3f);
             slot.time = Mathf.Min(at, slot.length);
             slot.speed = speed;
@@ -484,6 +501,84 @@ namespace Bastion.Client.Units
             if (fadeIn <= 0) slot.weight = 1;
             if (evaluate && fadeIn <= 0) Step(0);
             return (slot.length - slot.time) / Mathf.Max(speed, 1e-3f);
+        }
+
+        /// <summary>
+        /// `clip` into Whole's slot (M-1): over what it has on if that weighs anything and `fadeIn` isn't 0, the old one kept
+        /// on the mixer's other input and crossfaded out (if a crossfade was going on, the one that weighs less dropped now);
+        /// else in alone, what was there gone.
+        /// </summary>
+        void PlugWhole(AnimationClip clip, float fadeIn)
+        {
+            var slot = slots[Whole];
+            if (fadeIn > 0 && slot.clip.IsValid() && slot.weight > 0)
+            {
+                if (wholeOut.clip.IsValid() && wholeCross < 0.5f)
+                {
+                    // (The one going out still weighs the more: the newer one goes, its input taken by this.)
+                    Unplug(whole, wholeIn);
+                    slot.clip.Destroy();
+                }
+                else
+                {
+                    if (wholeOut.clip.IsValid())
+                    {
+                        Unplug(whole, 1 - wholeIn);
+                        wholeOut.clip.Destroy();
+                    }
+                    wholeOut.clip = slot.clip;
+                    wholeOut.time = slot.time;
+                    wholeOut.length = slot.length;
+                    wholeOut.speed = slot.speed;
+                    wholeOut.hold = slot.hold;
+                    wholeOut.loop = slot.loop;
+                    wholeOut.from = slot.from;
+                    wholeIn = 1 - wholeIn;
+                }
+                wholeCross = 0;
+                wholeBlend = fadeIn;
+            }
+            else
+            {
+                DropWholeOut();
+                if (slot.clip.IsValid())
+                {
+                    Unplug(whole, wholeIn);
+                    slot.clip.Destroy();
+                }
+                wholeIn = 0;
+                wholeCross = 1;
+            }
+            slot.clip = AnimationClipPlayable.Create(graph, clip);
+            slot.clip.SetApplyFootIK(false);
+            graph.Connect(slot.clip, 0, whole, wholeIn);
+            whole.SetInputWeight(wholeIn, wholeCross);
+            whole.SetInputWeight(1 - wholeIn, wholeOut.clip.IsValid() ? 1 - wholeCross : 0);
+        }
+
+        /// <summary>The whole body's clip going out (M-1) on its clock and out of the mixer as the new one comes in; dropped once it is in.</summary>
+        void StepWholeOut(float dt)
+        {
+            if (!wholeOut.clip.IsValid()) return;
+            wholeOut.time += dt * wholeOut.speed;
+            if (wholeOut.loop && wholeOut.time >= wholeOut.length) wholeOut.time = wholeOut.from + (wholeOut.time - wholeOut.from) % Mathf.Max(wholeOut.length - wholeOut.from, 1e-3f);
+            wholeOut.time = Mathf.Min(wholeOut.length, wholeOut.time);
+            wholeOut.clip.SetTime(wholeOut.time);
+            wholeCross = Mathf.Min(1, wholeCross + dt / Mathf.Max(wholeBlend, 1e-3f));
+            whole.SetInputWeight(wholeIn, wholeCross);
+            whole.SetInputWeight(1 - wholeIn, 1 - wholeCross);
+            if (wholeCross >= 1) DropWholeOut();
+        }
+
+        void DropWholeOut()
+        {
+            if (wholeOut.clip.IsValid())
+            {
+                Unplug(whole, 1 - wholeIn);
+                wholeOut.clip.Destroy();
+            }
+            wholeCross = 1;
+            whole.SetInputWeight(wholeIn, 1);
         }
 
         /// <summary>The layers' weights and the motions mixer's inputs' (MOTION_ORDER, the camp's two loops, the variation), for the labs.</summary>
@@ -656,10 +751,22 @@ namespace Bastion.Client.Units
                     : Mathf.Min(slot.most, slot.weight + (slot.fadeIn > 0 ? dt / slot.fadeIn : 1));
                 slot.clip.SetTime(slot.time);
                 layers.SetInputWeight(layer, slot.weight);
+                if (layer == Whole) StepWholeOut(dt);
                 if (ending && slot.weight <= 0)
                 {
-                    Unplug(layers, layer);
-                    slot.clip.Destroy();
+                    if (layer == Whole)
+                    {
+                        // (Whole's mixer stays on its layer: its clips go, the layer at nothing.)
+                        DropWholeOut();
+                        Unplug(whole, wholeIn);
+                        slot.clip.Destroy();
+                        layers.SetInputWeight(Whole, 0);
+                    }
+                    else
+                    {
+                        Unplug(layers, layer);
+                        slot.clip.Destroy();
+                    }
                 }
             }
             graph.Evaluate(0);

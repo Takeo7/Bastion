@@ -355,6 +355,11 @@ Shader "Bastion/Ground"
                         float joint = max(step(sf.x, 0.035), step(sf.y, 0.035));
                         c = _Concrete.rgb * (0.95 + 0.08 * sHash(floor(sp))) * (0.93 + 0.1 * big) * (1.0 - 0.2 * joint);
                         c *= 1.0 - 0.3 * smoothstep(0.72, 0.8, sFbm(p * 0.6 + 23.0));
+                        // Under the outline's pines (GroundMap marks them as a lawn here): the country's floor, grass worn bare in
+                        // patches, its edge with the concrete as ragged as a town's lawn (the 3D review's E-04, 10/11).
+                        float wood = smoothstep(0.42, 0.6, sMask(p + warp * 0.6, -1.0, level) + (mid - 0.5) * 0.25);
+                        half3 bed = lerp(grass, dirt * 0.95, smoothstep(0.62, 0.78, sFbm(p * 0.45 + 41.0)) * 0.8);
+                        c = lerp(c, bed, wood);
                     }
                     else if (k < 1.5 || k > 5.5)
                     {
@@ -371,12 +376,14 @@ Shader "Bastion/Ground"
                         c = _Concrete.rgb;
                     }
                 }
-                // Deep cover on open ground and roofs; slushy streets keep their darker routes and markings.
+                // Deep cover on open ground and roofs; slushy streets keep their darker routes and markings. The streets
+                // trodden more than 0.10.1's (50–76 % snow): 26–46 %, the asphalt showing a mid grey (Arturo's choice B of the
+                // 3D review's E-03, 10/11: under snow the street was 22 of 255 darker than the field, and didn't read).
                 if (_Snow > 0.5 && abs(k - 2.0) > 0.5)
                 {
                     half3 snow = SAMPLE_TEXTURE2D(_SnowTex, sampler_linear_repeat, p / 3.0).rgb * half3(0.89, 0.95, 1.0);
                     float onRoad = sMask(p, 1.0, level) + sMask(p, 6.0, level);
-                    float cover = lerp(0.97, 0.5 + 0.26 * smoothstep(0.28, 0.72, mid), saturate(onRoad));
+                    float cover = lerp(0.97, 0.26 + 0.2 * smoothstep(0.28, 0.72, mid), saturate(onRoad));
                     c = lerp(c, snow * (0.94 + 0.08 * big), cover);
                 }
                 return c;

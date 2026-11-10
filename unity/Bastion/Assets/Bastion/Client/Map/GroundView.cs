@@ -14,7 +14,7 @@ namespace Bastion.Client.Map
     public sealed class GroundView
     {
         /// <summary>Tiles of ground past each edge of the map (0.10.1's surroundings: 160 in all), into the haze.</summary>
-        const int Margin = 80;
+        public const int Margin = 80;
 
         static readonly Color Pave = Hex(0xbdb5ac), Kerb = Hex(0xd3cbc1), Asphalt = Hex(0xc9b8b0), Moss = Hex(0x6c6e3e), Grime = Hex(0x564840),
             Dust = Hex(0x9c8a72), Paint = Hex(0xe6e2d4), Yellow = Hex(0xd8aa3a), Grass = Hex(0xd2dab8), GrassDry = Hex(0xf0dca2), Dirt = Hex(0xffffff),

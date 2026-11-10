@@ -211,12 +211,14 @@ namespace Bastion.Client
                 Put(onBench[k], -0.45f + col * 0.13f + row * 0.06f, -0.06f + row * 0.14f, (k * 1.7f) % 1.2f - 0.6f, 1, top);
             }
             var catalog = FigureCatalog.Load();
+            var weapons = new List<Transform>();
             // A weapon's model (or an improvement's) at the figures' scale, under the corner.
             Transform Model(string fbx, float size)
             {
                 var prefab = catalog?.Weapon(fbx);
                 if (prefab == null) return null;
                 var g = Instantiate(prefab, armoryCorner, false).transform;
+                weapons.Add(g);
                 foreach (var c in g.GetComponentsInChildren<Collider>()) DestroyNow(c);
                 foreach (var part in g.GetComponentsInChildren<Transform>(true).Where(t => t.name.Contains("Silencer") && t != g).ToList()) part.gameObject.SetActive(false);
                 g.localScale = Vector3.one * Figures.CharacterScale * (size > 0 ? size : 1);
@@ -245,10 +247,18 @@ namespace Bastion.Client
                     var g = Model(found[k].fbx, found[k].size);
                     if (g == null) continue;
                     float t = (k - 1) * 0.15f;
-                    g.position = World(new Vector3(rack.x + side.x * t + @out.x * 0.02f, 0.12f, rack.y + side.y * t + @out.y * 0.02f));
+                    g.position = World(new Vector3(rack.x + side.x * t + @out.x * 0.02f, RackFloor, rack.y + side.y * t + @out.y * 0.02f));
                     // Standing on its butt, its muzzle up and leant a little back to the caravan, its top out.
                     var barrel = Vector3.up * Mathf.Cos(0.12f) - outward * Mathf.Sin(0.12f);
                     g.rotation = Quaternion.LookRotation(barrel, outward);
+                    // Its model's middle in the rack's plane and its lowest point on the rack's floor, whatever its origin (a
+                    // weapon's is its grip, and a sight or a long barrel stood it out past the front bar: the 3D review's
+                    // E-19, 10/11).
+                    var box = WorldBox(g);
+                    var plane = World(new Vector3(rack.x + @out.x * 0.02f, 0, rack.y + @out.y * 0.02f));
+                    float shift = Vector3.Dot(plane - box.center, outward), lift = RackFloor * MapSpace.Tile - box.min.y;
+                    g.position += outward * shift + Vector3.up * lift;
+                    Debug.Log(System.FormattableString.Invariant($"[armeria] {found[k].fbx}: moved {shift:0.00} m out, {lift:0.00} m up"));
                 }
             if (found.Count > 3)
             {
@@ -264,6 +274,27 @@ namespace Bastion.Client
                 }
             }
             foreach (var r in armoryCorner.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            // Snow on it in winter (the 3D review's E-02, 10/11: beside the map, SnowCover.Mark missed it): the bench, the
+            // rack and the crates, not the weapons.
+            SnowCover.Snowy(armoryCorner, Snow, r => weapons.Any(w => r.transform.IsChildOf(w)));
+        }
+
+        /// <summary>How high the rack's floor is (tiles): a found weapon stands on it.</summary>
+        const float RackFloor = 0.12f;
+
+        /// <summary>The box in the world of what `root` renders.</summary>
+        static Bounds WorldBox(Transform root)
+        {
+            bool any = false;
+            var b = new Bounds(root.position, Vector3.zero);
+            foreach (var r in root.GetComponentsInChildren<Renderer>())
+            {
+                if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                if (any) b.Encapsulate(r.bounds);
+                else b = r.bounds;
+                any = true;
+            }
+            return b;
         }
 
         /// <summary>The loose improvements' models (syntyManifest.ts WEAPON_PARTS scope2, silencer2).</summary>

@@ -78,6 +78,18 @@ namespace Bastion.EditorTools
                         float pitch = Mathf.Atan2(fore.y, new Vector2(fore.x, fore.z).magnitude) * Mathf.Rad2Deg;
                         Debug.Log(FormattableString.Invariant($"[manos] {(next > 0 ? ids[next - 1] : "-")} {at:0.000} R {H(HumanBodyBones.RightHand):F3} L {H(HumanBodyBones.LeftHand):F3} forearmPitch {pitch:0.0}"));
                     }
+                    // (BASTION_CABEZA=1: the head and the hips over the feet each frame, m in the figure's frame, and the seconds
+                    // into the clip playing: the 3D review's M-2, A-17 and A-26, 10/11.)
+                    if (Environment.GetEnvironmentVariable("BASTION_CABEZA") == "1" && next > 0)
+                    {
+                        var root = figure.transform;
+                        Vector3 P(HumanBodyBones b) => root.InverseTransformPoint(animator.GetBoneTransform(b).position) * root.lossyScale.x;
+                        var playing = catalog.Clip(ids[next - 1]);
+                        float into = at - (until - (playing != null ? playing.length : 0));
+                        // (And how far ahead of the feet the hips and the head are, m: a clip not «In Place» moves in its pose.)
+                        Vector3 head = P(HumanBodyBones.Head), hips = P(HumanBodyBones.Hips);
+                        Debug.Log(FormattableString.Invariant($"[cabeza] {ids[next - 1]} {into:0.000} head {head.y:0.000} hips {hips.y:0.000} headZ {head.z:0.000} hipsZ {hips.z:0.000}"));
+                    }
                     if (widths && at >= nextWidth)
                     {
                         nextWidth = at + 0.5f;

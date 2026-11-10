@@ -208,6 +208,20 @@ namespace Bastion.EditorTools
                 Debug.Log($"[vida] {Settlement.Current?.LifeCount} out: {Settlement.Current?.LifeReport()}");
             }
             UnityEditor.EditorApplication.playModeStateChanged += Go;
+            // BASTION_MEDIR=cerca: every frame, each two nearer than 0.35 tiles while one walks (A-25); =giro, each walker's
+            // yaw (A-31, 5).
+            if (Environment.GetEnvironmentVariable("BASTION_MEDIR") is string measure && (measure == "cerca" || measure == "giro"))
+            {
+                int last = -1;
+                void Measure()
+                {
+                    if (!UnityEditor.EditorApplication.isPlaying || Settlement.Current == null || Time.frameCount == last) return;
+                    last = Time.frameCount;
+                    string said = measure == "cerca" ? Settlement.Current.LifeNear(0.35) : Settlement.Current.LifeTurns();
+                    if (said.Length > 0) Debug.Log(FormattableString.Invariant($"[vida] {measure} {Time.time:0.000} {said}"));
+                }
+                UnityEditor.EditorApplication.update += Measure;
+            }
             if (Environment.GetEnvironmentVariable("BASTION_VIDA") == "1")
             {
                 int frames = 0;
@@ -842,6 +856,8 @@ namespace Bastion.EditorTools
                 {
                     if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
                     UnityEditor.EditorApplication.playModeStateChanged -= Go;
+                    // BASTION_MEDIR=giro: each one's turn, place and fade every frame (Settlement.BoardMeasured: A-11).
+                    Settlement.BoardMeasured = Environment.GetEnvironmentVariable("BASTION_MEDIR") == "giro";
                     MakeEscuadra();
                     Later();
                     async void Later()

@@ -118,8 +118,9 @@ namespace Bastion.Client.Units
             public string build = "masc";
             /// <summary>Its figure's size over the figures' (CharacterScale): the special dead's own (UnitViews.Dead).</summary>
             public float size = 1;
-            /// <summary>How far into the Chillón's scream it is (0 none, 1 thrown back: UnitViews.Dead.Scream).</summary>
+            /// <summary>How far into the Chillón's scream it is (0 none, 1 thrown back: UnitViews.Dead.Scream), and whether with its roar's clip.</summary>
             public float scream;
+            public bool roar;
             /// <summary>The last blow at it (UnitViews.Blows): what its hit and its death go by.</summary>
             public Blow blow;
             public bool deadKind;
@@ -146,6 +147,8 @@ namespace Bastion.Client.Units
             /// <summary>The pistol at rest kept out of the thigh (syntyFigures.ts spreadPistol).</summary>
             public readonly PistolSpread spread = new PistolSpread();
             public float reload;
+            /// <summary>Where in its reload's clip it is (seconds; ReloadNow), for the left hand onto the pistol (PistolSupport: the 3D review's P-1).</summary>
+            public float reloadAt;
             /// <summary>The gun's turn in the right hand's frame, learnt while both hands are on it (syntyFigures.ts clipGrip).</summary>
             public Quaternion? grip;
             /// <summary>
@@ -252,6 +255,12 @@ namespace Bastion.Client.Units
             public float life = 1;
             /// <summary>How far into a search's pose it is (Rummage: 0 none, 1 down and rummaging).</summary>
             public float search;
+            /// <summary>How far a blade in its hand is carried out of the way as it moves (HoldBlade; the 3D review's H-1, 10/11).</summary>
+            public float carry;
+            /// <summary>How far its left hand is on the crowbar it pries with (Pry, PryHand; the 3D review's A-20, 10/11).</summary>
+            public float pryHand;
+            /// <summary>The knife's sheath at its belt (Sheathe; the 3D review's F-07, 10/11), or null.</summary>
+            public Transform sheath;
             /// <summary>What it searches (Rummage's point): where its hands go (SearchPose; the 3D review's A-18, 10/11).</summary>
             public Vector3? searchAt;
             /// <summary>Treating (Treat): the one it treats, stepped in to, or itself (its left hand on its thigh).</summary>
@@ -274,6 +283,15 @@ namespace Bastion.Client.Units
             public string armsKey;
             /// <summary>The death it went down in (its clip's id), for one that gets up out of its body (Reanimate).</summary>
             public string deathId;
+            /// <summary>
+            /// Dead, the weapon in its hands let go (Drop; the 3D review's F-02 and F-11, 10/11): seconds till it lets go (−1,
+            /// it holds it as ever), how long it has been falling (−1 not yet), from where and how turned, the turn it lies
+            /// in, and whether it goes there at once (one already dead as the map comes: Lie).
+            /// </summary>
+            public float letGo = -1, fallen = -1;
+            public Vector3 fallFrom;
+            public Quaternion fallTurn, fallTo;
+            public bool fallNow;
         }
 
         readonly Dictionary<string, View> views = new Dictionary<string, View>();
@@ -457,6 +475,7 @@ namespace Bastion.Client.Units
                 }
                 PistolKick(v, dt);
                 v.anim?.Step(dt);
+                bool dropping = Drop(v, dt);
                 if (v.aim > 0 && v.inHand == Held.Rifle)
                 {
                     Blade(v, AimBlade * v.aim);
@@ -473,12 +492,14 @@ namespace Bastion.Client.Units
                     Square(v, v.up, v.inHand == Held.Rifle);
                     Sight(v, v.up);
                 }
-                HoldNow(v, dt);
+                if (!dropping) HoldNow(v, dt);
+                PryHand(v);
                 Shoulder(v, dt);
                 Converge(v, dt);
                 Cheek(v);
                 Look(v);
                 Support(v, dt);
+                PistolSupport(v);
                 SearchPose(v);
                 ClimbPose(v);
                 Reach(v);
@@ -627,6 +648,24 @@ namespace Bastion.Client.Units
             if (v.weapon == null || v.animator == null || !v.animator.isHuman || v.dead || v.reload > 0 || v.striking || v.up <= 0 || SightOff || ConvergeOff
                 || (v.inHand != Held.Rifle && v.inHand != Held.Pistol))
             {
+                // (Dying with its rifle aimed, its knees' bend and its trunk's turn onto the aim let go as its death comes in,
+                // not in its first frame: bitten, it stood up 17 cm and its head came up 28 cm in a frame before it fell. The
+                // 3D review's A-13, 10/11.)
+                if (v.dead && v.inHand == Held.Rifle && v.anim != null && v.anim.WholeShare < 0.99f && (v.bend > 0 || v.converge != Quaternion.identity))
+                {
+                    float keep = 1 - v.anim.WholeShare;
+                    if (v.bend > 0 && !BendOff) Bend(v, v.bend * keep, v.bendAxis);
+                    if (v.animator.GetBoneTransform(HumanBodyBones.Spine) is Transform back && v.animator.GetBoneTransform(HumanBodyBones.Chest) is Transform front)
+                    {
+                        Quaternion.Slerp(Quaternion.identity, v.converge, keep).ToAngleAxis(out float degrees, out var axis);
+                        if (degrees > 180) degrees -= 360;
+                        var half = Quaternion.AngleAxis(degrees / 2, axis);
+                        back.rotation = half * back.rotation;
+                        front.rotation = half * front.rotation;
+                    }
+                    v.kickLeft = 0;
+                    return;
+                }
                 v.converge = v.convergeArms = Quaternion.identity;
                 v.kickLeft = 0;
                 v.bend = 0;
@@ -638,7 +677,7 @@ namespace Bastion.Client.Units
             void Place()
             {
                 // (Placed again in the hands, without the pistol's spread from the thigh: that one is stepped once a frame.)
-                if (rifle) Hold(v.animator, v.weapon, v.root, false, ref v.grip);
+                if (rifle) Hold(v.animator, v.weapon, v.root, false, ref v.grip, PalmAt(v));
                 else HoldPistol(v);
             }
             void Turn(Quaternion q)
@@ -795,7 +834,7 @@ namespace Bastion.Client.Units
                 neck.rotation = half * neck.rotation;
                 head.rotation = half * head.rotation;
             }
-            Hold(v.animator, v.weapon, v.root, false, ref v.grip);
+            Hold(v.animator, v.weapon, v.root, false, ref v.grip, PalmAt(v));
         }
 
         /// <summary>
@@ -870,7 +909,7 @@ namespace Bastion.Client.Units
                 Reach(a, upper, lower, handBone, hand.position + d, elbow.position - shoulder.position, 0.005f);
                 hand.rotation = turn;
             }
-            Hold(v.animator, v.weapon, v.root, false, ref v.grip);
+            Hold(v.animator, v.weapon, v.root, false, ref v.grip, PalmAt(v));
         }
 
         /// <summary>
@@ -1054,6 +1093,7 @@ namespace Bastion.Client.Units
                     _ = Equip(v, u);
                 }
                 if (!u.Alive && !v.dead) Lie(v);
+                if (!u.Alive && v.dead) HideDropped(v);
                 if (u.Alive && v.dead) Stand(v);
                 Pose(v, u);
                 // (Who eats a body or reaches for it stays where it is while its tile is the same: put back on the tile's
@@ -1108,7 +1148,12 @@ namespace Bastion.Client.Units
                     // from a veil or a cutaway, the first step's pose had been dropped and the dead's lean laid twice over the
                     // last one, its arms down and its trunk turned for a frame (the 3D review's A-14, 10/11).
                     view.animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-                    view.anim = new FigureAnimator(view.animator, m => catalog.Clip(IdOf(m)), m => Gaits.ArmedPace(m, ArmedId(m)), m => m != "crouchIdle" && ArmedId(m) != null);
+                    // (With the pistol as its main gun, the motions that swing their own arms (armedMotions.pistol «own»: walk,
+                    // run, sprint, crouchWalk) let its arm go: it had hung straight and still over the run, «Pistol Aim» held at
+                    // rest over Synty's arms. The 3D review's P-4, 10/11.)
+                    bool pistolMain = armed && PistolMain(view);
+                    view.anim = new FigureAnimator(view.animator, m => catalog.Clip(IdOf(m)), m => Gaits.ArmedPace(m, ArmedId(m)),
+                        m => m != "crouchIdle" && (ArmedId(m) != null || pistolMain && Anims.Armed("pistol", m) == "own"));
                     if (armed) AtRest(view, 0);
                 }
                 view.body = model.transform;
@@ -1196,7 +1241,9 @@ namespace Bastion.Client.Units
             {
                 v.crouched = false;
                 var clip = FigureCatalog.Load()?.Clip(v.inHand == Held.Rifle ? "rifleKneelUp" : "pistolKneelUp");
-                float seconds = clip != null ? v.anim.PlayWholePart(clip, 0, clip.length, 0.15f, false) : 0;
+                // (In over HideFade, not 0.15 s: from Synty's crouch, hunched with its arms hanging, it knelt in a frame and a
+                // half. The 3D review's A-23, 10/11.)
+                float seconds = clip != null ? v.anim.PlayWholePart(clip, 0, clip.length, HideFade, false) : 0;
                 v.anim.Motion(IdleOf(v));
                 if (v.weapon != null) Settle(v, HideFade);
                 if (clip == null) return;
@@ -1393,8 +1440,11 @@ namespace Bastion.Client.Units
         /// </summary>
         static void Hold(View v) => Hold(v.animator, v.weapon, v.root, v.dead, ref v.grip);
 
-        /// <summary>Hold(View) for any figure: `animator`'s hands on `weapon`, `root` its upright, `grip` the turn learnt in the right hand.</summary>
-        public static void Hold(Animator a, Transform weapon, Transform root, bool dead, ref Quaternion? grip)
+        /// <summary>
+        /// Hold(View) for any figure: `animator`'s hands on `weapon`, `root` its upright, `grip` the turn learnt in the right
+        /// hand; `palmAt` the point of the gun put in the right palm (its model's frame, unscaled: WeaponArt.palm; F-12).
+        /// </summary>
+        public static void Hold(Animator a, Transform weapon, Transform root, bool dead, ref Quaternion? grip, Vector3 palmAt = default)
         {
             if (weapon == null || a == null) return;
             Transform right = a.GetBoneTransform(HumanBodyBones.RightHand), rightBase = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
@@ -1413,7 +1463,7 @@ namespace Bastion.Client.Units
                 grip = Quaternion.Inverse(right.rotation) * turn;
             }
             else turn = grip.HasValue ? right.rotation * grip.Value : Quaternion.LookRotation(root.forward, root.up);
-            weapon.SetPositionAndRotation(palm, turn);
+            weapon.SetPositionAndRotation(palm - turn * (palmAt * weapon.lossyScale.x), turn);
         }
 
         /// <summary>wardrobe.ts pick's hash (FNV-1a of the seed) over `n`.</summary>
@@ -1473,6 +1523,10 @@ namespace Bastion.Client.Units
                 v.deathId = DeathIdOf(v, false);
                 var death = FigureCatalog.Load()?.Clip(v.deathId);
                 if (death != null) v.anim.PlayWhole(death, 0, true, death.length);
+                // (Its weapon by its hand where it lies, the rest put away: F-02.)
+                HoldNow(v);
+                LetGo(v, 0);
+                v.fallNow = true;
                 return;
             }
             v.body.localRotation = Quaternion.Euler(-90, 0, 0);
@@ -1485,6 +1539,14 @@ namespace Bastion.Client.Units
             if (v.anim != null)
             {
                 v.anim.StopWhole(0.4f);
+                // (Its weapons back where they were: F-02.)
+                if (v.letGo >= 0 && v.carried.Count > 0)
+                {
+                    v.letGo = v.fallen = -1;
+                    v.fallNow = false;
+                    if (v.sheath != null) v.sheath.gameObject.SetActive(true);
+                    Draw(v, v.drawn);
+                }
                 return;
             }
             v.body.localRotation = Quaternion.identity;
@@ -1597,6 +1659,8 @@ namespace Bastion.Client.Units
 
         /// <summary>Seconds the clip of going down into hiding fades into the crouch over, and the turn to the cover's ease (as Turn).</summary>
         const float HideFade = 0.3f, HideTurn = 6;
+        /// <summary>How near the cover's way it turns before it goes down (degrees), and how long it waits for that at most (A-23).</summary>
+        const float HideFacing = 20, HideTurnMost = 0.25f;
 
         async Awaitable GoIntoHiding(View v, Unit u, CancellationToken ct = default)
         {
@@ -1605,10 +1669,13 @@ namespace Bastion.Client.Units
             {
                 if (CoverYaw(v, u) is float yaw) TurnTo(v, yaw, HideTurn);
                 bool was = v.crouched;
-                v.crouched = true;
                 string down = was ? null : v.inHand == Held.Rifle ? "rifleKneelDown" : v.inHand == Held.Pistol ? "pistolKneelDown" : null;
                 var clip = down != null ? FigureCatalog.Load()?.Clip(down) : null;
-                float seconds = clip != null ? v.anim.PlayWholePart(clip, 0, clip.length, 0.15f, false) : 0;
+                // (Turned to the cover first, within HideFacing of it (HideTurnMost s at most), then down: the pistol's
+                // «Standing To Kneeling» begins aimed, and it came up turning 90° in a frame. In over HideFade. A-23, 10/11.)
+                if (clip != null) for (float t = 0; t < HideTurnMost && TurnLeft(v) > HideFacing; t += Time.deltaTime) await Awaitable.NextFrameAsync(ct);
+                v.crouched = true;
+                float seconds = clip != null ? v.anim.PlayWholePart(clip, 0, clip.length, HideFade, false) : 0;
                 // (Crouched under it already: the clip lets go into the crouch, the rifle's kneel of the same set.)
                 if (!was)
                 {
@@ -2213,7 +2280,9 @@ namespace Bastion.Client.Units
                 && FigureCatalog.Load()?.Clip(biteId) is AnimationClip bite)
             {
                 e.home = e.root.position;
-                float seconds = e.anim.PlayWholePart(bite, biteFrom, biteTo, 0.15f, false);
+                // (In over BiteIn: from the common dead's bent walk, its lean going with M-2 as the bite comes in, the head rose
+                // 59 cm in a tenth of a second over 0.15 s.)
+                float seconds = e.anim.PlayWholePart(bite, biteFrom, biteTo, BiteIn, false);
                 // Into the neck as the clip leans the head in (unitViews.ts lunge: BITE_GAP short of its middle, there by
                 // 0.62 of the clip), and it holds on: Feed goes on from there, or it lets go 2 s on (LetGo).
                 var reach = t != null ? Reach(e.home, t.root.position, BiteGap, 1) : Vector3.zero;
@@ -2322,6 +2391,7 @@ namespace Bastion.Client.Units
                     // syntyAnims.ts DEATH_BLEND; seen whole, until it lies still (settleOf).
                     float length = v.anim.PlayWhole(death, 0.2f, true);
                     float settle = Mathf.Min(length, FigureCatalog.Load()?.Settle(chosen.id) ?? length);
+                    LetGo(v, LetGoShare * settle);
                     if (cramped) await Tuck(v, chosen, settle, ct);
                     else await Awaitable.WaitForSecondsAsync(settle, ct);
                 }
@@ -2501,7 +2571,7 @@ namespace Bastion.Client.Units
             }
             if (!v.feeding) return;
             v.feedDown = true;
-            if (Anims.Feed("loop") is var (loopId, loopFrom, loopTo)) v.anim.PlayWholePart(catalog.Clip(loopId), loopFrom, loopTo, 0.25f, true);
+            if (Anims.Feed("loop") is var (loopId, loopFrom, loopTo)) v.anim.PlayWholePart(catalog.Clip(loopId), loopFrom, loopTo, FeedLoopIn, true);
         }
 
         /// <summary>One down eating kept at its place by the body as the body settles (its fall, its tuck), turned to it.</summary>
@@ -2576,7 +2646,12 @@ namespace Bastion.Client.Units
             foreach (var r in rising) await r;
         }
 
-        /// <summary>Off its knees by the body it ate (FEED_CLIPS up), back where it stood, to its stance (unitViews.ts unfeed).</summary>
+        /// <summary>
+        /// Off its knees by the body it ate (FEED_CLIPS up), back where it stood, to its stance (unitViews.ts unfeed). The 3D
+        /// review's A-17 (10/11): «Standing» played only till it is up (UpStanding of it), its feet kept where it knelt (the
+        /// clip isn't «In Place»: the root drawn back by as much as its feet go on), then turned to where it stood and walked
+        /// there at its gait's pace. It had slid there over the clip, without a step, its feet in the body as it rose.
+        /// </summary>
         async Awaitable GetUp(View v, CancellationToken ct)
         {
             v.feeding = false;
@@ -2585,21 +2660,73 @@ namespace Bastion.Client.Units
             v.feedDown = false;
             fed.Remove(v.id);
             var catalog = FigureCatalog.Load();
-            float up = 0.35f;
-            if (v.anim != null && catalog != null && Anims.Feed("up") is var (upId, upFrom, upTo))
-                up = Mathf.Max(0.35f, v.anim.PlayWholePart(catalog.Clip(upId), upFrom, upTo, 0.2f, false));
-            var from = v.root.position;
-            var home = v.home != Vector3.zero ? v.home : from;
-            for (float t = 0; t < up; t += Time.deltaTime)
+            var home = v.home != Vector3.zero ? v.home : v.root.position;
+            var span = Anims.Feed("up");
+            var upClip = span is var (upId, _, _) ? catalog?.Clip(upId) : null;
+            if (v.anim != null && upClip != null && span is var (_, upFrom, upTo))
             {
-                v.root.position = Vector3.Lerp(from, home, Mathf.SmoothStep(0, 1, Mathf.Min(1, t / up * 1.25f)));
-                if (t > up - 0.3f) v.anim?.StopWhole(0.3f);
-                await Awaitable.NextFrameAsync(ct);
+                float up = Mathf.Max(0.35f, v.anim.PlayWholePart(upClip, upFrom, Mathf.Min(upTo, UpStanding), UpIn, false, UpSpeed));
+                var planted = FeetMid(v);
+                for (float t = 0; t < up && v.root != null; t += Time.deltaTime)
+                {
+                    if (planted is Vector3 was && FeetMid(v) is Vector3 now)
+                    {
+                        var drift = now - was;
+                        drift.y = 0;
+                        v.root.position -= drift;
+                    }
+                    await Awaitable.NextFrameAsync(ct);
+                }
+                v.anim.StopWhole(UpOut);
             }
-            v.root.position = home;
+            else await Awaitable.WaitForSecondsAsync(0.35f, ct);
+            if (v.root == null) return;
+            var way = home - v.root.position;
+            way.y = 0;
+            if (way.magnitude > UpWalkFrom * MapSpace.Tile && v.anim != null)
+            {
+                // (Turned to it first, as far as UpFacing, then on its way at its gait's pace, its feet with the clip.)
+                var (one, _) = Gaits.Of(v.template);
+                Face(v.id, home);
+                for (float t = 0; t < UpTurnMost && TurnLeft(v) > UpFacing; t += Time.deltaTime) await Awaitable.NextFrameAsync(ct);
+                v.walking = true;
+                v.anim.Motion(one.motion, Gaits.ClipSpeed(v.template, one));
+                var from = v.root.position;
+                float seconds = way.magnitude / (MapSpace.Tile / one.seconds);
+                for (float t = 0; t < seconds && v.root != null; t += Time.deltaTime)
+                {
+                    v.root.position = Vector3.Lerp(from, home, t / seconds);
+                    await Awaitable.NextFrameAsync(ct);
+                }
+                v.walking = false;
+                v.anim.Motion(IdleOf(v));
+            }
+            if (v.root != null) v.root.position = home;
             v.home = Vector3.zero;
-            v.anim?.StopWhole(0.2f);
         }
+
+        /// <summary>
+        /// Getting up off its knees (GetUp; the 3D review's A-17, 10/11): «Standing» up to this far in (seconds of it: its
+        /// hips at 0.957 m of 0.99 standing at 1.2 s, ClipProbe.Alone BASTION_CABEZA=1; the 1.4 s after it stands still),
+        /// played this much quicker, let go over UpOut; walked back to where it stood only if that is further than
+        /// UpWalkFrom (tiles), once turned within UpFacing of it (degrees; UpTurnMost seconds at most). With the walk it
+        /// still takes no longer than the 2.6 s of before (EventPlayer waits for StandUpFed).
+        /// </summary>
+        const float UpStanding = 1.2f, UpSpeed = 1, UpOut = 0.5f, UpWalkFrom = 0.15f, UpFacing = 50, UpTurnMost = 0.35f;
+
+        /// <summary>
+        /// The crossfades of eating's clips over the whole body (FigureAnimator crossfades them since the 3D review's M-1,
+        /// 10/11): into the loop from kneeling upright (the head from 1 m to 0.2 over the body), and from it into «Standing»
+        /// (back up to 1 m); with M-2 the dead's own lean comes back over UpOut once it stands. Measured at 30 fps
+        /// (CombatLab.Devorar, BASTION_MEDIR=salto): 0.25, 0.2 and 0.25 s moved the head 13–18 cm a frame. And the bite
+        /// into the whole body from walking bent (BiteIn; Lunge).
+        /// </summary>
+        const float FeedLoopIn = 0.6f, UpIn = 0.5f, BiteIn = 0.3f;
+
+        /// <summary>Between its feet (their bones), or null.</summary>
+        static Vector3? FeetMid(View v) =>
+            v.animator != null && v.animator.isHuman && v.animator.GetBoneTransform(HumanBodyBones.LeftFoot) is Transform l && v.animator.GetBoneTransform(HumanBodyBones.RightFoot) is Transform r
+                ? (l.position + r.position) / 2 : (Vector3?)null;
 
         /// <summary>A reload (unitViews.ts reload: 0.6 s, «Reloading» scrubbed through, the gun held fast in the right hand); none with a pistol.</summary>
         public async Awaitable Reload(string id, CancellationToken ct = default)
@@ -2866,6 +2993,7 @@ namespace Bastion.Client.Units
             v.root.gameObject.SetActive(true);
             v.synced = true;
             var death = body?.deathId != null ? FigureCatalog.Load()?.Clip(body.deathId) : null;
+            var drop = body?.deathId != null ? Anims.Deaths(body.build).FirstOrDefault(d => d.id == body.deathId)?.drop : null;
             if (v.anim == null || death == null)
             {
                 await Awaitable.WaitForSecondsAsync(0.9f, ct);
@@ -2873,14 +3001,40 @@ namespace Bastion.Client.Units
             }
             v.anim.PlayWhole(death, 0, true, death.length, 0);
             float seconds = Mathf.Max(0.9f, death.length * 0.8f);
+            // (Where the body lay tucked back from its tile, a death without room (Tuck): it starts there and comes onto its
+            // tile as it gets up, not a tuck's length away floating the first frame. The 3D review's A-26, 10/11.)
+            var tucked = body?.body != null && v.body != null ? body.body.localPosition : Vector3.zero;
             for (float t = 0; t < seconds; t += Time.deltaTime)
             {
-                v.anim.WholeAt(death.length * (1 - t / seconds));
+                v.anim.WholeAt(Backwards(death.length, seconds, drop, t));
+                if (v.body != null) v.body.localPosition = tucked * (1 - t / seconds);
                 await Awaitable.NextFrameAsync(ct);
             }
             v.anim.WholeAt(0);
+            if (v.body != null) v.body.localPosition = Vector3.zero;
             v.anim.StopWhole(0.25f);
         }
+
+        /// <summary>
+        /// A death of `length` played backwards over `seconds` (Reanimate): its clip's time `t` seconds in. Its drop (Death.drop)
+        /// given DropLeast at least, the rest of it quicker for that, in the same time all in all (the 3D review's A-26,
+        /// 10/11: from lying to on all fours in a frame, the clip's fall played back as quick as it falls). Else linear.
+        /// </summary>
+        static float Backwards(float length, float seconds, float[] drop, float t)
+        {
+            float rate = length / Mathf.Max(seconds, 1e-3f);
+            if (drop == null || drop.Length < 2 || drop[1] <= drop[0] || (drop[1] - drop[0]) / rate >= DropLeast || seconds <= DropLeast)
+                return length * (1 - t / seconds);
+            float d0 = Mathf.Clamp(drop[0], 0, length), d1 = Mathf.Clamp(drop[1], d0, length);
+            float rest = seconds - DropLeast, rested = Mathf.Max(length - (d1 - d0), 1e-3f);
+            float lying = rest * (length - d1) / rested, falling = rest * d0 / rested;
+            if (t < lying) return length - (length - d1) * t / Mathf.Max(lying, 1e-3f);
+            if (t < lying + DropLeast) return d1 - (d1 - d0) * (t - lying) / DropLeast;
+            return Mathf.Max(0, d0 - d0 * (t - lying - DropLeast) / Mathf.Max(falling, 1e-3f));
+        }
+
+        /// <summary>How long a death's drop takes at least played backwards (seconds; A-26, the card's 0.4 and some: the head comes up 0.9–1.4 m in it).</summary>
+        const float DropLeast = 0.5f;
 
         public async Awaitable Alert(string id, CancellationToken ct = default) => await Awaitable.WaitForSecondsAsync(0.4f, ct);
 

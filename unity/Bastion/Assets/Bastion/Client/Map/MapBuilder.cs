@@ -258,6 +258,8 @@ namespace Bastion.Client.Map
         readonly Dictionary<int, NightLights.Glow> headlights = new Dictionary<int, NightLights.Glow>();
         /// <summary>Each car drawn on the ground, by its anchor (its nose's tile), and its prop: for CarCopy.</summary>
         readonly Dictionary<int, (GameObject car, string id)> cars = new Dictionary<int, (GameObject, string)>();
+        /// <summary>The cars drawn on the ground as they stand now, by their anchors (E-07's log of La Lata's way out).</summary>
+        public IEnumerable<(int anchor, GameObject car)> Cars => cars.Where(kv => kv.Value.car != null).Select(kv => (kv.Key, kv.Value.car));
         /// <summary>The ground, its textures and marks (UI's GroundView: ground.ts).</summary>
         GroundView ground;
         /// <summary>
@@ -323,6 +325,7 @@ namespace Bastion.Client.Map
                 var done = new HashSet<int>();
                 for (int i = 0; i < n; i++) Decor(k, i, done);
             }
+            SeparatePileups();
             DrawPieces();
             DrawSiege();
             DrawDropped();
@@ -965,6 +968,7 @@ namespace Bastion.Client.Map
                     int k = (int)(key >> 32), i = (int)(uint)key;
                     Decor(k, i, done[k]);
                 }
+                SeparatePileups();
                 Woods(redo);
             }
             using (Marks[8].Auto())
@@ -1261,6 +1265,8 @@ namespace Bastion.Client.Map
                 if (desks.Length > 0) Own(Place(props[k], desks[0], new Vector3((cx0 + 0.5f) * MapSpace.Tile, floor, -(cy0 + 0.5f) * MapSpace.Tile), alongX ? 0 : -90), k, new[] { i });
                 return;
             }
+            // A car blown up: its tiles floor now, its decor left (Rules' blast, Events): a burnt shell, not cover (E-12).
+            if (k == 0 && tile == TileKinds.Floor && Carcass(i, tiles, decor, done)) return;
             if (tile != "low" && tile != "high") return;
             // The base's pieces are drawn whole (DrawPieces), and the Bastion's yard with it.
             if (k == 0 && pieces != null && ((pieces.at[i] >= 0 && BasePieces.Drawn.Contains(pieces.spots[pieces.at[i]].piece.Piece)) || pieces.yard.Has(i))) return;
@@ -1821,6 +1827,7 @@ namespace Bastion.Client.Map
             }
             if (placed != null && thing.Kind == "carFront")
             {
+                if (floor == 0) ClearOfBusLane(placed, thing);
                 if (floor == 0) cars[thing.Anchor] = (placed, id);
                 // A whole car's boot searched (Looting.CarBoot): its lid up before it is painted (CarBoot; Arturo's #3 of 5/11),
                 // and what was in it on the ground behind it (his A13 of 2/11).
@@ -1852,6 +1859,92 @@ namespace Bastion.Client.Map
                 }
             }
             return placed;
+        }
+
+        /// <summary>
+        /// How far a car parked beside La Lata's way out is moved off it (tiles): the bus, plates and all, is 2.4 tiles across
+        /// on its 2-tile lane (the engine's, as 0.10.1's La Mula, 1.52 wide), and drove through the cars beside it (the 3D
+        /// review's E-07, 10/11: 0.37–0.38 m into the five beside it in HudShots.PartidaEvac).
+        /// </summary>
+        const float BusClear = 0.28f;
+
+        /// <summary>
+        /// A car beside La Lata's way out (the evacuation's bay, MissionState.evacBus, and on from it to the map's edge the way
+        /// it heads) moved BusClear off it, across it; not one on it (the engine keeps it clear).
+        /// </summary>
+        void ClearOfBusLane(GameObject car, DecorObject thing)
+        {
+            var bay = s.Mission?.EvacBus;
+            if (bay?.Tiles == null || bay.Tiles.Count == 0) return;
+            if (busLane == null)
+            {
+                busLane = new HashSet<int>();
+                var d = Bastion.Engine.Grid.Dirs4[((bay.Heading % 4) + 4) % 4];
+                foreach (var t in bay.Tiles)
+                    for (int x = t.X, y = t.Y; x >= 0 && y >= 0 && x < s.Width && y < s.Height; x += d.X, y += d.Y) busLane.Add(y * s.Width + x);
+            }
+            if (busLane.Count == 0 || thing.Tiles.Any(busLane.Contains)) return;
+            var head = Bastion.Engine.Grid.Dirs4[((bay.Heading % 4) + 4) % 4];
+            foreach (int j in thing.Tiles)
+            {
+                int x = j % s.Width, y = j / s.Width;
+                // Across the lane only (its side, not its end).
+                foreach (int side in new[] { 1, -1 })
+                {
+                    int nx = x + head.Y * side, ny = y - head.X * side;
+                    if (nx < 0 || ny < 0 || nx >= s.Width || ny >= s.Height || !busLane.Contains(ny * s.Width + nx)) continue;
+                    car.transform.position += new Vector3(x - nx, 0, -(y - ny)) * BusClear * MapSpace.Tile;
+                    Debug.Log($"[map] car at {thing.Anchor % s.Width},{thing.Anchor / s.Width} moved off La Lata's way out");
+                    return;
+                }
+            }
+        }
+
+        /// <summary>The tiles of La Lata's way out (ClearOfBusLane), worked out once a map.</summary>
+        HashSet<int> busLane;
+
+        /// <summary>How flat a blown car's shell is (of its height), and how dark (its colours times this).</summary>
+        const float CarcassHeight = 0.45f;
+        static readonly Color CarcassSoot = new Color(0.2f, 0.18f, 0.17f, 1);
+        static readonly Dictionary<Material, Material> burnt = new Dictionary<Material, Material>();
+
+        /// <summary>
+        /// What is left of a car a blast took (Arturo's choice B of the 3D review's E-12, 10/11: it was gone in a frame): on
+        /// a car's tiles all floor now (the blast's rule, which stays: no cover), once, from its anchor, the rusted shell
+        /// flattened to CarcassHeight, turned a few degrees, burnt dark; nothing of the search's outline. False if tile i
+        /// isn't such a car's.
+        /// </summary>
+        bool Carcass(int i, IList<string> tiles, List<int> decor, HashSet<int> done)
+        {
+            var thing = Bastion.Engine.Decor.ObjectAt(decor, s.Width, i);
+            if (thing == null || thing.Kind != DecorKinds.CarFront || thing.Tiles.Count < 2) return false;
+            if (thing.Tiles.Any(j => j >= tiles.Count || tiles[j] != TileKinds.Floor)) return false;
+            if (!done.Add(thing.Anchor)) return true;
+            int x0 = thing.Tiles.Min(t => t % s.Width), x1 = thing.Tiles.Max(t => t % s.Width);
+            int y0 = thing.Tiles.Min(t => t / s.Width), y1 = thing.Tiles.Max(t => t / s.Width);
+            int ax = thing.Anchor % s.Width, ay = thing.Anchor / s.Width;
+            float cx = (x0 + x1 + 1) / 2f, cz = (y0 + y1 + 1) / 2f;
+            var shell = Place(props[0], "carRusted", new Vector3(cx * MapSpace.Tile, 0, -cz * MapSpace.Tile), -((4 - thing.Facing) % 4) * 90 + (MapArt.Hash(ax, ay, 17) - 0.5f) * 16, MapArt.FootprintOf("carRusted"));
+            if (shell == null) return true;
+            shell.name = "Carcasa";
+            shell.transform.localScale = Vector3.Scale(shell.transform.localScale, new Vector3(1, CarcassHeight, 1));
+            foreach (var r in shell.GetComponentsInChildren<Renderer>())
+                r.sharedMaterials = r.sharedMaterials.Select(Burnt).ToArray();
+            Own(shell, 0, thing.Tiles);
+            return true;
+        }
+
+        /// <summary>Material `m` burnt (Kit/Plain with its colour map, dark), made the first time.</summary>
+        static Material Burnt(Material m)
+        {
+            if (m == null) return null;
+            if (burnt.TryGetValue(m, out var b) && b != null) return b;
+            b = KitMaterials.New(KitMaterials.Plain, m.name + " (quemado)");
+            if (b == null) return m;
+            b.SetTexture("_BaseMap", m.HasProperty("_Albedo_Map") ? m.GetTexture("_Albedo_Map") : m.mainTexture);
+            b.SetColor("_BaseColor", CarcassSoot);
+            if (b.HasProperty("_Smoothness")) b.SetFloat("_Smoothness", 0.1f);
+            return burnt[m] = b;
         }
 
         /// <summary>The cracks over a wall round a car's hole: dark, and so much of a tile each, either side and above.</summary>
@@ -1933,7 +2026,8 @@ namespace Bastion.Client.Map
             var tile = new Vector3((ax + 0.5f) * MapSpace.Tile, floor, -(ay + 0.5f) * MapSpace.Tile);
             var pivot = wreck.Kind == WreckKinds.Abandoned ? car.transform.position : tile + nose * 0.3f * MapSpace.Tile;
             car.transform.RotateAround(pivot, Vector3.up, wreck.Tilt);
-            float push = wreck.Kind == WreckKinds.Wall ? 0.62f : wreck.Kind == WreckKinds.Pileup ? 0.12f : 0;
+            // (A pileup's into what it hit as measured, once all are drawn: SeparatePileups.)
+            float push = wreck.Kind == WreckKinds.Wall ? 0.62f : 0;
             car.transform.position += nose * push * MapSpace.Tile;
             if (wreck.Kind == WreckKinds.Wall)
             {
@@ -1980,6 +2074,91 @@ namespace Bastion.Client.Map
                 if (R(20) < 0.6f) Bit("tire", tile + (side * (R(21) < 0.5f ? -0.9f : 0.9f) + nose * (R(22) - 0.3f)) * MapSpace.Tile, 0.8f);
                 Bit("pebbles", tile + (side * (R(23) - 0.5f) * 0.6f + nose * 0.55f) * MapSpace.Tile, 0.8f);
             }
+        }
+
+        /// <summary>How far a pileup's nose goes into what it hit (tiles): docs/UNITY-ARTE.md, the crashes, «se mete un poco en lo que golpeó».</summary>
+        const float PileupInto = 0.12f;
+
+        /// <summary>
+        /// A pileup's cars drawn into each other no further than PileupInto (the 3D review's E-10, 10/11: the cars are 2.95
+        /// tiles long and some 1.3 wide on their tiles, and turned about the nose by the engine's tilt one went up to a metre
+        /// into the other): each one whose nose points at another within 3 tiles, measured on their own boxes (the meshes'
+        /// along its turned facing), pulled back along it till its front is that far into the other's body, never on.
+        /// </summary>
+        void SeparatePileups()
+        {
+            if (s.Wrecks == null || s.Wrecks.Count == 0) return;
+            var decor = DecorOf(0);
+            var crashed = new List<(int anchor, Transform car, Vector3 f, Vector3 r, Vector2 lo, Vector2 hi)>();
+            foreach (var w in s.Wrecks)
+            {
+                if (w.Kind != WreckKinds.Pileup || !cars.TryGetValue(w.Anchor, out var drawn) || drawn.car == null) continue;
+                var thing = Bastion.Engine.Decor.ObjectAt(decor, s.Width, w.Anchor);
+                if (thing == null) continue;
+                var d = Bastion.Engine.Grid.Dirs4[thing.Facing];
+                var f = Quaternion.AngleAxis(w.Tilt, Vector3.up) * new Vector3(d.X, 0, -d.Y);
+                var r = new Vector3(f.z, 0, -f.x);
+                var car = drawn.car.transform;
+                // Its box along f and r from its origin, of its meshes' own boxes.
+                Vector2 lo = new Vector2(float.MaxValue, float.MaxValue), hi = new Vector2(float.MinValue, float.MinValue);
+                foreach (var mf in car.GetComponentsInChildren<MeshFilter>())
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var mb = mf.sharedMesh.bounds;
+                    for (int c = 0; c < 8; c++)
+                    {
+                        var q = mf.transform.TransformPoint(mb.center + Vector3.Scale(mb.extents, new Vector3((c & 1) == 0 ? -1 : 1, (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1))) - car.position;
+                        var ab = new Vector2(Vector3.Dot(q, f), Vector3.Dot(q, r));
+                        lo = Vector2.Min(lo, ab);
+                        hi = Vector2.Max(hi, ab);
+                    }
+                }
+                if (lo.x > hi.x) continue;
+                crashed.Add((w.Anchor, car, f, r, lo, hi));
+            }
+            float into = PileupInto * MapSpace.Tile;
+            // Twice round: a third car into the first's tail goes by the first as it ends up.
+            for (int pass = 0; pass < 2; pass++)
+                foreach (var a in crashed)
+                    foreach (var b in crashed)
+                    {
+                        if (a.car == b.car) continue;
+                        var mid = a.car.position + a.f * (a.lo.x + a.hi.x) / 2 + a.r * (a.lo.y + a.hi.y) / 2;
+                        var other = b.car.position + b.f * (b.lo.x + b.hi.x) / 2 + b.r * (b.lo.y + b.hi.y) / 2;
+                        if (Vector3.Distance(mid, other) > 3 * MapSpace.Tile || Vector3.Dot(other - mid, a.f) <= 0) continue;
+                        // b's outline (its four corners on the ground) in a's frame, cut to the strip a's width sweeps
+                        // ahead of its middle: its nearest point there.
+                        var poly = new List<Vector2>();
+                        foreach (var (u, v) in new[] { (b.lo.x, b.lo.y), (b.hi.x, b.lo.y), (b.hi.x, b.hi.y), (b.lo.x, b.hi.y) })
+                        {
+                            var q = b.car.position + b.f * u + b.r * v - a.car.position;
+                            poly.Add(new Vector2(Vector3.Dot(q, a.f), Vector3.Dot(q, a.r)));
+                        }
+                        poly = Clip(poly, new Vector2(0, 1), a.lo.y);
+                        poly = Clip(poly, new Vector2(0, -1), -a.hi.y);
+                        poly = Clip(poly, new Vector2(1, 0), (a.lo.x + a.hi.x) / 2);
+                        if (poly.Count == 0) continue;
+                        float nearest = poly.Min(q => q.x);
+                        float back = a.hi.x - nearest - into;
+                        if (back <= 0.005f) continue;
+                        a.car.position -= a.f * back;
+                        Debug.Log(FormattableString.Invariant($"[map] pileup at {a.anchor % s.Width},{a.anchor / s.Width} pulled back {back:0.00} m"));
+                    }
+        }
+
+        /// <summary>A convex outline cut to the side of the line where dot(p, n) ≥ c (Sutherland–Hodgman).</summary>
+        static List<Vector2> Clip(List<Vector2> poly, Vector2 n, float c)
+        {
+            var kept = new List<Vector2>();
+            for (int i = 0; i < poly.Count; i++)
+            {
+                var p = poly[i];
+                var q = poly[(i + 1) % poly.Count];
+                float dp = Vector2.Dot(p, n) - c, dq = Vector2.Dot(q, n) - c;
+                if (dp >= 0) kept.Add(p);
+                if ((dp >= 0) != (dq >= 0)) kept.Add(p + (q - p) * (dp / (dp - dq)));
+            }
+            return kept;
         }
 
         /// <summary>

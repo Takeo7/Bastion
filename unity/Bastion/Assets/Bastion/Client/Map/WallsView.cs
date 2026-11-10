@@ -338,7 +338,7 @@ namespace Bastion.Client.Map
             o.transform.localRotation = m.rotation;
             o.transform.localScale = new Vector3(m.GetColumn(0).magnitude, m.GetColumn(1).magnitude, m.GetColumn(2).magnitude);
             // A shop's sign and a shed's shutter go while their building is cut on their storey (the motel's stands outside).
-            if (prop.building >= 0) Cutaway.Current?.Track(o, prop.building, prop.level, true);
+            if (prop.building >= 0) Cutaway.Current?.Track(o, prop.building, prop.level, true, prop.outward);
         }
 
         /// <summary>

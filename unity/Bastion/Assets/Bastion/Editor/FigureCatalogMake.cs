@@ -320,8 +320,9 @@ namespace Bastion.EditorTools
             catalog.cellKinds = CellKinds();
             // The weapons, as the map's props are found (a prefab, else the model).
             var prefabOf = MapLab.Prefabs();
-            // (And the Armería's loose improvements, Settlement.Scope and Silencer.)
-            var weapons = ((JObject)anims["weapons"]).Properties().Select(p => (string)p.Value["fbx"]).Concat(new[] { Settlement.Scope, Settlement.Silencer }).Distinct().OrderBy(n => n)
+            // (And the Armería's loose improvements, Settlement.Scope and Silencer; and the knife's sheath at the belt,
+            // UnitViews.KnifeSheath: the 3D review's F-07, 10/11.)
+            var weapons = ((JObject)anims["weapons"]).Properties().Select(p => (string)p.Value["fbx"]).Concat(new[] { Settlement.Scope, Settlement.Silencer, Bastion.Client.Units.UnitViews.KnifeSheath }).Distinct().OrderBy(n => n)
                 .Select(n => (n, prefab: prefabOf(n))).Where(w => w.prefab != null).ToList();
             catalog.weaponNames = weapons.Select(w => w.n).ToArray();
             catalog.weapons = weapons.Select(w => w.prefab).ToArray();

@@ -264,6 +264,31 @@ namespace Bastion.Engine.Tests
             }
         }
 
+        [Fact(DisplayName = "procedural maps › stand the wilds' lights beside a track, never only beside the furrows of a field (the 3D review of 10/11, E-09)")]
+        public void StandTheWildsLightsBesideATrack()
+        {
+            var checkedLights = 0;
+            for (var seed = 1; seed <= 20; seed++)
+            {
+                var s = Setup.CreateMission(Generated(Biomes.Wilds, seed * 7919, new List<int> { 0 }, seed, seed % 2 != 0 ? MissionKinds.Recovery : MissionKinds.Scavenge));
+                bool IsRoad(int x, int y) =>
+                    x >= 0 && y >= 0 && x < s.Width && y < s.Height && s.Ground![y * s.Width + x] == 1 && s.Elev[y * s.Width + x] == 0;
+                bool Furrow(int x, int y) =>
+                    IsRoad(x, y) &&
+                    ((!IsRoad(x, y - 1) && !IsRoad(x, y + 1) && (IsRoad(x - 1, y) || IsRoad(x + 1, y))) ||
+                     (!IsRoad(x - 1, y) && !IsRoad(x + 1, y) && (IsRoad(x, y - 1) || IsRoad(x, y + 1))));
+                // The street lights (l…), not a fire's (f…).
+                foreach (var light in s.Lights!.Where((l) => l.Turns == null && l.Id.StartsWith("l")))
+                {
+                    var (x, y) = (light.Tile.X, light.Tile.Y);
+                    var beside = new[] { (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1) };
+                    Assert.True(beside.Any((t) => IsRoad(t.Item1, t.Item2) && !Furrow(t.Item1, t.Item2)), $"wilds/{seed}: light {light.Id} at {x},{y} has no track beside it");
+                    checkedLights++;
+                }
+            }
+            Assert.True(checkedLights > 20, $"only {checkedLights} lights in 20 wilds maps");
+        }
+
         [Fact(DisplayName = "procedural maps › leave no walkable pocket out of reach (rooftops, rooms, the heart of a grove)")]
         public void LeaveNoWalkablePocketOutOfReach()
         {

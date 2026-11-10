@@ -321,7 +321,7 @@ namespace Bastion.Client.Map
             });
         }
 
-        void Prop(string id, Matrix4x4 matrix, int b) => Props.Add(new WallProp { id = id, matrix = matrix, building = b, level = level, tile = tile });
+        void Prop(string id, Matrix4x4 matrix, int b, Vector2 outward = default) => Props.Add(new WallProp { id = id, matrix = matrix, building = b, level = level, tile = tile, outward = outward });
 
         /// <summary>
         /// The storeys above the ground floor of a stretch of wall (`along` its length, centred on (x, z), on tile (tx, ty)):
@@ -594,7 +594,7 @@ namespace Bastion.Client.Map
                 }
                 float size = bd.market != null ? MarketSign : Mathf.Min(1, Mathf.Min(2.2f / length, SignTall / 0.63f));
                 float off = WallHalf + 0.05f;
-                Prop(id, Compose(x + o.X * off, @base + SignUp, z + o.Y * off, Mathf.Atan2(-o.Y, o.X), Vector3.one * size), bd.index);
+                Prop(id, Compose(x + o.X * off, @base + SignUp, z + o.Y * off, Mathf.Atan2(-o.Y, o.X), Vector3.one * size), bd.index, new Vector2(o.X, o.Y));
             }
 
             // The ground's walls, then each storey's (GameState.Levels).

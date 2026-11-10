@@ -296,6 +296,7 @@ namespace Bastion.Client.Units
             kept.bandLeft = marks.left;
             kept.bandRight = marks.right;
             kept.pack = pack;
+            kept.holster = parts.Keys.Any(HolsterParts.Contains);
             if (shelf == null)
             {
                 shelf = new GameObject("Soldados hechos").transform;
@@ -459,6 +460,13 @@ namespace Bastion.Client.Units
             }
             return moved;
         }
+
+        /// <summary>
+        /// The trousers with a holster and its pistol on the right thigh (the five of police, survivor3's and survivor8's:
+        /// seen in their parts' photos, Biblioteca): ours isn't drawn there (SoldierMarks.holster; the 3D review's F-08, 10/11,
+        /// Arturo's A). The parts stay: they are the trousers.
+        /// </summary>
+        static readonly HashSet<string> HolsterParts = new HashSet<string> { "SK_MDRN_POLC_03_17HIPS_HU01", "SK_APOC_SURV_05_17HIPS_HU01" };
 
         /// <summary>Which way is behind a Sidekick part at rest, along its z (its figures face +z).</summary>
         const float PackBehind = 1;

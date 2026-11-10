@@ -577,8 +577,67 @@ namespace Bastion.Client.Map
                         var room = rooms.FirstOrDefault((r) => r.Z == k && tx >= r.X && tx < r.X + r.W && ty >= r.Y && ty < r.Y + r.H);
                         var f = room != null ? BuildingLooks.HomeFloor(room) : (swatch: looks.floorSwatch, tint: looks.floor);
                         Slab(@out, ax, az, bx, bz, y, f.swatch, f.tint, b.index);
+                        // Towards a hole blown through this storey's slab, its broken edge.
+                        for (int j = 0; j < 4; j++)
+                        {
+                            var d = Grid.Dirs4[j];
+                            int nx = tx + d.X, ny = ty + d.Y;
+                            if (nx < 0 || ny < 0 || nx >= plan.S.Width || ny >= plan.S.Height || !plan.Holed(ny * plan.S.Width + nx, k)) continue;
+                            BrokenEdge(@out, tx, ty, d, d.X != 0 ? (az, bz) : (ax, bx), d.X > 0 ? bx : d.X < 0 ? ax : d.Y > 0 ? bz : az, y, f.swatch, f.tint, b.index);
+                        }
                     }
                 }
+            }
+        }
+
+        /// <summary>How thick a slab's broken edge shows (tiles), how far it stands into the hole, and its broken boards: how many, how long, how wide.</summary>
+        const double EdgeDeep = 0.08, EdgeOut = 0.03, BoardWide = 0.1, BoardThick = 0.025;
+
+        /// <summary>
+        /// The edge of tile (tx, ty)'s slab towards a hole blown through it (Arturo's choice B of the 3D review's E-18, 10/11:
+        /// the hole was a square of the floor below with straight edges): the slab's thickness, darker, standing EdgeOut
+        /// into it along the side `d` (at `edge`, from `span.a` to `span.b` along it); and two to four broken boards of the
+        /// floor's own boards hanging into it (its swatch and tint), 0.15 to 0.35 tiles long, 20° to 50° down, where the tile and side's hash puts
+        /// them. All on the slab's storey: they go with it in the cutaway.
+        /// </summary>
+        static void BrokenEdge(Surfaces @out, int tx, int ty, Vec2 d, (double a, double b) span, double edge, double y, Swatch sw, Rgb tint, int building)
+        {
+            bool alongZ = d.X != 0;
+            // A point `u` along the side, `v` out into the hole, at height h.
+            Vec3d At(double u, double v, double h) => alongZ ? V(edge + d.X * v, h, u) : V(u, h, edge + d.Y * v);
+            var dark = tint.Scale(0.6);
+            var lo = At(span.a, Math.Min(0, EdgeOut), y - EdgeDeep);
+            var hi = At(span.b, Math.Max(0, EdgeOut), y);
+            @out.Box(V(Math.Min(lo.x, hi.x), lo.y, Math.Min(lo.z, hi.z)), V(Math.Max(lo.x, hi.x), hi.y, Math.Max(lo.z, hi.z)), sw, dark, building, true);
+            int side = (d.X + 1) * 3 + d.Y + 1;
+            float R(int salt) => MapArt.Hash(tx, ty, 700 + side * 17 + salt);
+            int boards = 2 + Math.Min(2, (int)(R(0) * 3));
+            var up = V(0, 1, 0);
+            for (int k = 0; k < boards; k++)
+            {
+                double at = span.a + (span.b - span.a) * ((k + 0.25 + 0.5 * R(1 + k)) / boards);
+                double length = 0.15 + 0.2 * R(5 + k);
+                double down = (20 + 30 * R(9 + k)) * Math.PI / 180;
+                // Askew a little either way along the side.
+                double skew = (R(13 + k) - 0.5) * 0.5;
+                double reach = Math.Cos(down) * length, drop = Math.Sin(down) * length;
+                double w = BoardWide / 2;
+                var a0 = At(at - w, EdgeOut * 0.5, y - 0.005);
+                var a1 = At(at + w, EdgeOut * 0.5, y - 0.005);
+                var b1 = At(at + w + skew * reach, EdgeOut * 0.5 + reach, y - 0.005 - drop);
+                var b0 = At(at - w + skew * reach, EdgeOut * 0.5 + reach, y - 0.005 - drop);
+                Vec3d Under(Vec3d p) => p.AddScaled(up, -BoardThick);
+                var into = alongZ ? V(d.X, 0, 0) : V(0, 0, d.Y);
+                var across = alongZ ? V(0, 0, 1) : V(1, 0, 0);
+                var faces = new (Vec3d[] corners, Vec3d facing)[]
+                {
+                    (new[] { a0, a1, b1, b0 }, up),
+                    (new[] { Under(a0), Under(b0), Under(b1), Under(a1) }, up.Negate()),
+                    (new[] { a1, Under(a1), Under(b1), b1 }, across),
+                    (new[] { a0, b0, Under(b0), Under(a0) }, across.Negate()),
+                    (new[] { b0, b1, Under(b1), Under(b0) }, into),
+                };
+                foreach (var (corners, facing) in faces) @out.Poly(corners, corners.Select((c) => (c.x + c.z, c.y)).ToArray(), sw, k % 2 == 0 ? tint : tint.Scale(0.85), building, facing);
             }
         }
 
@@ -602,6 +661,14 @@ namespace Bastion.Client.Map
                     if (kind == null) continue;
                     double ax = Math.Max(tx, x0), bx = Math.Min(tx + 1, x1), az = Math.Max(ty, z0), bz = Math.Min(ty + 1, z1);
                     Slab(@out, ax, az, bx, bz, y, Swatch.Flat, looks.tar, b.index);
+                    // Towards a hole a blast made through the deck, its broken edge (E-18, as the storeys' floors).
+                    for (int j = 0; j < 4; j++)
+                    {
+                        var d = Grid.Dirs4[j];
+                        int nx = tx + d.X, ny = ty + d.Y;
+                        if (nx < 0 || ny < 0 || nx >= plan.S.Width || ny >= plan.S.Height || !plan.Holed(ny * plan.S.Width + nx, k)) continue;
+                        BrokenEdge(@out, tx, ty, d, d.X != 0 ? (az, bz) : (ax, bx), d.X > 0 ? bx : d.X < 0 ? ax : d.Y > 0 ? bz : az, y, Swatch.Flat, looks.tar, b.index);
+                    }
                     // The parapet: on the deck's edge, along each side of this tile that is the roof's edge.
                     if (kind != TileKinds.Low) continue;
                     const double t = ParapetThick;

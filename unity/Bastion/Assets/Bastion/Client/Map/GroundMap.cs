@@ -63,11 +63,18 @@ namespace Bastion.Client.Map
             // The outline round what is played: a street going on past its closure is street; under the motorway and a
             // cordon, tarmac; the rest is open ground, which what stands on it covers.
             var outline = new byte[w * h];
+            // The outline's woods and rocks (E-04's floor under the pines: below).
+            var wood = new bool[w * h];
             foreach (var p in s.Frame ?? new List<FramePiece>())
             {
                 var kind = p.Kind == FrameKinds.Street ? Street : p.Kind == FrameKinds.Highway || p.Kind == FrameKinds.Barrier ? Yard : Open;
+                bool trees = p.Kind == FrameKinds.Forest || p.Kind == FrameKinds.Rocks;
                 for (int y = p.Y; y < p.Y + p.H; y++)
-                    for (int x = p.X; x < p.X + p.W; x++) outline[y * w + x] = (byte)(kind + 1);
+                    for (int x = p.X; x < p.X + p.W; x++)
+                    {
+                        outline[y * w + x] = (byte)(kind + 1);
+                        if (trees) wood[y * w + x] = true;
+                    }
             }
             // The river's band (its banks past it are ground), or the country's water or ravine: down to its water or floor.
             Band = MapOutline.BandOf(s);
@@ -148,6 +155,11 @@ namespace Bastion.Client.Map
                     Data[i * 4 + 3] = (byte)Math.Round(offset * 255, MidpointRounding.AwayFromZero);
                 }
             }
+            // A facility's outline of pines and rocks grows on grass and earth, not on its concrete slabs (the 3D review's
+            // E-04, 10/11): marked as a town's lawn, which the facility's ground then draws as the woods' floor.
+            if (s.Biome == Biomes.Facility)
+                for (int i = 0; i < w * h; i++)
+                    if (wood[i] && Kinds[i] == Open) Data[i * 4 + 2] = Lawn;
             // Hand-made maps say nothing of streets: they stay paved.
             if (s.Biome == Biomes.City && s.Ground != null)
             {

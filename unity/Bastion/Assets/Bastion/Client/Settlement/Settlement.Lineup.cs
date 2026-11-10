@@ -29,6 +29,8 @@ namespace Bastion.Client
         }
 
         const int LineupRow = 8;
+        /// <summary>How far from a fire of the Bastion's yard one of the row stands at least, if it can (tiles: the stools are 1 off it).</summary>
+        const float FireClear = 2;
         const float LineupStep = 0.95f, LineupGap = 0.5f;
 
         /// <summary>
@@ -446,9 +448,10 @@ namespace Bastion.Client
             float gap = lineupHalves && count > 1 ? LineupGap : 0;
             float halfWidth = (rows == 1 ? (count - 1) / 2f * LineupStep + gap / 2 : (front - 1) / 2f * LineupStep + LineupStep / 2) + 0.7f;
             // Along either side (also moved up towards the nose, away from the Bastion's lot behind it), or across the
-            // track at its tail.
+            // track at its tail. Up to 3 tiles towards the nose (the 3D review's E-01, 10/11: with 1.2 at most a row of
+            // eight still reached into the lot, its last one by the Bastion's fire); the least moved still wins.
             var candidates = new List<(Vector2 centre, Vector2 toward, int k, float shift)>();
-            foreach (float shift in new[] { 0, 0.6f, 1.2f })
+            foreach (float shift in new[] { 0, 0.6f, 1.2f, 1.8f, 2.4f, 3f })
             {
                 candidates.Add((at + side * reach + dir * shift, side, 0, shift));
                 candidates.Add((at - side * reach + dir * shift, -side, 1, shift));
@@ -456,6 +459,26 @@ namespace Bastion.Client
             candidates.Add((at - dir * (length / 2 + 1.3f), -dir, 2, 0));
             LineupPlace best = null;
             float bestCost = float.PositiveInfinity;
+            int bestK = -1, bestLot = 0;
+            var tried = new List<string>();
+            // The Bastion's fires (and the stools round them): where a row that can't keep off the lot at least keeps off them
+            // (E-01: in the sample campaign's base a row of eight fits neither between the lot and the pines up the track
+            // nor anywhere else, and its last one stood by the fire).
+            var fires = built?.PiecesPlaced.Where(q => q.id == "bFirePit").Select(q => { var c = q.matrix.GetColumn(3); return new Vector2(c.x, c.z); }).ToList() ?? new List<Vector2>();
+            float bestShift = 0;
+            // On the Bastion's lot (or off the clearing): any corner of a square of ±0.4 tiles round the spot, not only the
+            // tile under its middle (E-01: one 0.1 inside the lot's edge counted as out, its body and its gun in the yard).
+            bool OnLot(Vector2 p)
+            {
+                if (b == null) return false;
+                foreach (float dx in new[] { -0.4f, 0.4f })
+                    foreach (float dz in new[] { -0.4f, 0.4f })
+                    {
+                        float x = p.x + dx, z = p.y + dz;
+                        if (x < 0 || z < 0 || x >= b.Width || z >= b.Height || Bastion.Engine.Base.OnBastionLot(b, Mathf.FloorToInt(x), Mathf.FloorToInt(z))) return true;
+                    }
+                return false;
+            }
             foreach (var c in candidates)
             {
                 // Left to right as the camera sees them (right to left, mirrored); the second row a step behind, between the first's.
@@ -476,9 +499,21 @@ namespace Bastion.Client
                 }
                 // Nobody stands on anything built, a pine, the Bastion or its yard (its lot), nor off the clearing.
                 float standing = (c.k == 2 ? 0.5f : 0) + c.shift * 2;
+                int onLot = 0;
+                var why = new List<string>();
                 foreach (var p in spots)
-                    if (Height(p.x, p.y, false) > 0 || (b != null && (Bastion.Engine.Base.OnBastionLot(b, Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y)) || p.x < 0 || p.y < 0 || p.x >= b.Width || p.y >= b.Height)))
-                        standing += 20;
+                {
+                    bool yard = OnLot(p);
+                    if (yard) onLot++;
+                    float tall = Height(p.x, p.y, false);
+                    bool fire = fires.Any(f => Vector2.Distance(f, p) < FireClear);
+                    if (tall > 0 || yard)
+                    {
+                        standing += fire ? 40 : 20;
+                        why.Add(System.FormattableString.Invariant($"{p.x:0.0},{p.y:0.0} {(yard ? "lot" : "h" + tall.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))}{(fire ? " fire" : "")}"));
+                    }
+                }
+                tried.Add(System.FormattableString.Invariant($"k{c.k} s{c.shift:0.#} {standing:0.#}{(why.Count > 0 ? " (" + string.Join("; ", why) + ")" : "")}"));
                 float near = Mathf.Max(5.5f, halfWidth / 0.42f);
                 var middle = c.centre - c.toward * ((rows - 1) * 0.45f);
                 foreach (float a in new[] { 0, 0.3f, -0.3f, 0.6f, -0.6f, 0.9f, -0.9f })
@@ -503,6 +538,7 @@ namespace Bastion.Client
                             if (cost < bestCost)
                             {
                                 bestCost = cost;
+                                (bestK, bestShift, bestLot) = (c.k, c.shift, onLot);
                                 best = new LineupPlace { count = count, mirror = lineupMirror, halves = lineupHalves, spots = spots, toward = c.toward, cam = new Vector3(cam.x, y, cam.y), target = new Vector3(middle.x, 0.5f, middle.y) };
                             }
                         }
@@ -514,6 +550,7 @@ namespace Bastion.Client
                 var mid = Vector2.Lerp(best.spots[0], best.spots[count - 1], 0.5f);
                 Lata.Park(Lata.At, heading, new Vector3(mid.x, 0, mid.y), true, 0, false);
             }
+            if (best != null) Debug.Log(System.FormattableString.Invariant($"[settlement] lineup of {count}: side {bestK}, shift {bestShift:0.#}, cost {bestCost:0.#}, on the lot {bestLot}; tried: {string.Join(" | ", tried)}"));
             return place = best;
         }
     }

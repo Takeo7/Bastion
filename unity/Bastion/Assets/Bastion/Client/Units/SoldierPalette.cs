@@ -159,7 +159,10 @@ namespace Bastion.Client.Units
                     if (!dulled.TryGetValue(m, out var copy) || copy == null)
                     {
                         var cells = Cells(map);
-                        for (int c = 0; c < 256; c++) if (!Unused(cells[c])) cells[c] = IsBody(c) ? DullFlesh(cells[c]) : Dull(cells[c]);
+                        // (A cell its preset doesn't use, pure red, a dull neutral, the rag's strap's (UndeadFigure.RagCells):
+                        // the living made dead paint some from them, a rucksack's dots, the rings of skZombieCivil1–4, and they
+                        // were drawn loud red. The 3D review's Z-1 b, 10/11.)
+                        for (int c = 0; c < 256; c++) cells[c] = Unused(cells[c]) ? RedKept ? cells[c] : UnusedDead : IsBody(c) ? DullFlesh(cells[c]) : Dull(cells[c]);
                         var palette = Texture(cells);
                         palette.name = m.name + " (apagada)";
                         copy = dulled[m] = new Material(m) { name = m.name + " (apagada)", hideFlags = HideFlags.DontSave };
@@ -277,6 +280,11 @@ namespace Bastion.Client.Units
             texture.Apply(false, true);
             return texture;
         }
+
+        /// <summary>What a dead one's unused cell is painted (DullDead): UndeadFigure.RagCells' strap, 3b3631.</summary>
+        static readonly Color32 UnusedDead = new Color32(0x3b, 0x36, 0x31, 255);
+        /// <summary>BASTION_ROJO_SIN_APAGAR=1: the unused cells left pure red, as before Z-1 b (the labs' «before»).</summary>
+        static readonly bool RedKept = System.Environment.GetEnvironmentVariable("BASTION_ROJO_SIN_APAGAR") == "1";
 
         /// <summary>Whether a palette's cell is one its preset has no use for (pure red).</summary>
         public static bool Unused(Color32 c) => c.r > 252 && c.g < 3 && c.b < 3;

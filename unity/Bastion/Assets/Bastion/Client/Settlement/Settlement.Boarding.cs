@@ -15,12 +15,25 @@ namespace Bastion.Client
     /// </summary>
     public sealed partial class Settlement
     {
-        const float BoardSpeed = 2.9f, BoardEase = 0.35f, BoardStagger = 0.12f, BoardTurn = 7;
         /// <summary>
-        /// Where they fade at a doorway (tiles): out from it, and, for each at the same one after the first, a little further
-        /// out and to one side or the other along La Lata; how long its doors take to open or shut (seconds).
+        /// How fast they run (tiles/s), ease in and out of it (s), set off one after another (s), and turn while they run
+        /// (rad/s: 0.10.1's 7 turned 40° between two frames at 10 fps, A-11; under 25° now).
         /// </summary>
-        const float BoardOut = 0.55f, BoardBack = 0.25f, BoardApart = 0.5f, DoorOpen = 0.35f;
+        const float BoardSpeed = 2.9f, BoardEase = 0.35f, BoardStagger = 0.12f, BoardTurn = 4.3f;
+        /// <summary>
+        /// Where they fade at a doorway (tiles): out from it; how long its doors take to open or shut (seconds).
+        /// </summary>
+        const float BoardOut = 0.55f, DoorOpen = 0.35f;
+        /// <summary>
+        /// One behind another at a doorway (the 3D review's A-11, 10/11: the second and third stood half a metre to a metre
+        /// either side of it, against the bus's side, and faded there; those of a doorway ran glued together): each further
+        /// one BoardQueue tiles further out and BoardSide to one side or the other; a rear doorway (the van's, the lorry's)
+        /// two such lines BoardLanes apart. Each waits, then steps up a place in StepSeconds once the one before has left it
+        /// (from the doorway's own place, once BoardFaded of its fade is past), and fades at the doorway. Those of a doorway
+        /// set off BoardQueueDelay apart besides the row's stagger; no doorway takes more than its share of the row. In the
+        /// last BoardEase of its run each turns to its doorway, no faster than BoardTurnEnd (rad/s), walking.
+        /// </summary>
+        const float BoardQueue = 0.45f, BoardSide = 0.12f, BoardLanes = 0.3f, StepSeconds = 0.3f, BoardFaded = 0.6f, BoardQueueDelay = 0.3f, BoardTurnEnd = 4;
         /// <summary>
         /// The camera while La Lata goes (Arturo, 31/10: a short turn that watches it go, 2 to 3 s): turned after it no further
         /// than this from where it looked (it drives on out of the frame, not the camera after it into the pines: BUS_FOLLOW,
@@ -31,6 +44,12 @@ namespace Bastion.Client
 
         /// <summary>Whether the squad is getting in or La Lata going (Leave): the row and the camera are its meanwhile.</summary>
         public bool Leaving { get; private set; }
+
+        /// <summary>
+        /// (A lab's: SettlementLab.Escuadra, BASTION_MEDIR=giro.) Each one's turn, place and fade every frame of the boarding,
+        /// and how far from its doorway's middle, along La Lata, it starts fading (the 3D review's A-11, 10/11).
+        /// </summary>
+        public static bool BoardMeasured;
 
         /// <summary>
         /// The squad in the row gets into La Lata and it drives off (screen.ts on launching: clearingArt depart); done once it
@@ -95,8 +114,22 @@ namespace Bastion.Client
             public List<float> lengths;
             public float total, running, delay;
             public Vector3 foot, door;
-            public int way;
+            public int way, index;
             public bool started, there;
+            /// <summary>
+            /// Its places in its line at the doorway, the doorway's own first (slots[0]); when it steps up from each to the next
+            /// (steps[j]: from slots[j + 1] to slots[j]), and when it starts fading at the doorway.
+            /// </summary>
+            public List<Vector3> slots;
+            public float[] steps;
+            public float fades;
+            public string motion;
+            /// <summary>Its doorway's middle (its leaves' together) and the way along La Lata there (BoardMeasured).</summary>
+            public Vector3 doorway, side;
+            public float fade = 1;
+            /// <summary>Where it starts from, the way out from its doorway, and whether that is at La Lata's back.</summary>
+            public Vector3 from, normal;
+            public bool back;
         }
 
         /// <summary>
@@ -117,52 +150,108 @@ namespace Bastion.Client
             float half = Lata.Length / 2, width = Lata.Width;
             bool car = Lata.Vehicle == 0;
             var froms = standing.Select(s => Vector3.Scale(Tiles(s.root.position), new Vector3(1, 0, 1))).ToList();
-            // Into the 4×4 each by a door of its own, by the shortest runs all told; else by the doorway nearest (a double
-            // doorway's two leaves one way in).
-            var seat = car ? BestDoors(froms, doors) : froms.Select(f => Enumerable.Range(0, doors.Count).OrderBy(d => Vector3.Distance(doors[d], f)).First()).ToList();
-            var taken = new Dictionary<int, int>();
+            // Into the 4×4 each by a door of its own, by the shortest runs all told; else by the doorway nearest with room (a
+            // double doorway's two leaves one way in; none more than its share: A-11), the nearest of the row first.
+            int WayOf(int d) => car ? d : doors.FindIndex(e => Vector3.Distance(e, doors[d]) < 0.7f);
+            List<int> seat;
+            if (car) seat = BestDoors(froms, doors);
+            else
+            {
+                int share = Mathf.CeilToInt(standing.Count / (float)Enumerable.Range(0, doors.Count).Select(WayOf).Distinct().Count());
+                var load = new Dictionary<int, int>();
+                seat = new List<int>(new int[standing.Count]);
+                foreach (int i in Enumerable.Range(0, standing.Count).OrderBy(i => doors.Min(d => Vector3.Distance(d, froms[i]))))
+                {
+                    int pick = Enumerable.Range(0, doors.Count).Where(d => (load.TryGetValue(WayOf(d), out int l) ? l : 0) < share).OrderBy(d => Vector3.Distance(doors[d], froms[i])).First();
+                    load[WayOf(pick)] = (load.TryGetValue(WayOf(pick), out int had) ? had : 0) + 1;
+                    seat[i] = pick;
+                }
+            }
+            // Each one's place in its doorway's line: the nearest to it first.
+            var rank = new int[standing.Count];
+            foreach (var g in Enumerable.Range(0, standing.Count).GroupBy(i => WayOf(seat[i])))
+            {
+                int r = 0;
+                foreach (int i in g.OrderBy(i => Vector3.Distance(froms[i], doors[seat[i]]))) rank[i] = r++;
+            }
             var plans = new List<Boarder>();
             for (int i = 0; i < standing.Count; i++)
             {
                 var door = doors[seat[i]];
-                int way = car ? seat[i] : doors.FindIndex(d => Vector3.Distance(d, door) < 0.7f);
-                int nth = taken.TryGetValue(way, out int n) ? n : 0;
-                taken[way] = nth + 1;
+                int way = WayOf(seat[i]);
+                int nth = rank[i];
                 var offset = door - centre;
                 // A door on its side (the bus's, the 4×4's) or at its back (the van's, the lorry's), and out from it.
                 bool backDoor = Mathf.Abs(Vector3.Dot(offset, dir)) > half - 0.35f;
                 var normal = backDoor ? dir * (Vector3.Dot(offset, dir) < 0 ? -1 : 1) : across * (Vector3.Dot(offset, across) < 0 ? -1 : 1);
                 var along = new Vector3(normal.z, 0, -normal.x);
-                // The first right out from it, the next to either side in turn, each a little further out.
-                int step = (nth + 1) / 2;
-                var foot = door + normal * (BoardOut + BoardBack * step) + along * (step * BoardApart * (nth % 2 == 1 ? 1 : -1));
-                var from = froms[i];
+                // Its line (a rear doorway's two, side by side) and its place in it: the doorway's own, then each one out
+                // behind it, a little to one side or the other.
+                int lanes = backDoor ? 2 : 1, lane = nth % lanes, place = nth / lanes;
+                float laneAt = lanes == 1 ? 0 : (lane == 0 ? -BoardLanes : BoardLanes);
+                var slots = Enumerable.Range(0, place + 1).Select(q => door + normal * (BoardOut + BoardQueue * q) + along * (laneAt + (q == 0 ? 0 : (q % 2 == 1 ? 1 : -1) * BoardSide))).ToList();
+                var leaves = doors.Where(d => Vector3.Distance(d, door) < 0.7f).ToList();
+                plans.Add(new Boarder { s = standing[i], delay = i * BoardStagger + place * BoardQueueDelay, door = door, way = way * 2 + lane, index = i, doorway = leaves.Aggregate(Vector3.zero, (a, b) => a + b) / leaves.Count, side = along, slots = slots, from = froms[i], normal = normal, back = backDoor });
+            }
+            // The run from where one stands to `foot` by its doorway: round La Lata's corner first if it is on another side.
+            List<Vector3> Route(Boarder b, Vector3 foot)
+            {
+                var from = b.from;
                 var path = new List<Vector3> { from };
                 float endOf = Vector3.Dot(from - centre, dir) < 0 ? -1 : 1, sideOf = Vector3.Dot(from - centre, across) < 0 ? -1 : 1;
                 Vector3 Corner(float end, float side) => centre + dir * (end * (half + 0.45f)) + across * (side * (width / 2 + 0.6f));
-                if (backDoor)
+                if (b.back)
                 {
                     // From beside it, not out past its back: round that corner.
-                    float end = Vector3.Dot(normal, dir);
+                    float end = Vector3.Dot(b.normal, dir);
                     if (Vector3.Dot(from - centre, dir) * end < half) path.Add(Corner(end, sideOf));
                 }
-                else if (Vector3.Dot(from - centre, normal) < width / 2)
+                else if (Vector3.Dot(from - centre, b.normal) < width / 2)
                 {
                     // Not out on its door's side: round its nearer end (from out past it, its one corner on that side).
-                    float side = Vector3.Dot(normal, across);
+                    float side = Vector3.Dot(b.normal, across);
                     if (Mathf.Abs(Vector3.Dot(from - centre, dir)) <= half) path.Add(Corner(endOf, -side));
                     path.Add(Corner(endOf, side));
                 }
                 path.Add(foot);
-                var lengths = new List<float>();
-                for (int k = 1; k < path.Count; k++) lengths.Add(Vector3.Distance(path[k], path[k - 1]));
-                float total = lengths.Sum();
-                plans.Add(new Boarder { s = standing[i], run = path, lengths = lengths, total = total, running = total / BoardSpeed + BoardEase, delay = i * BoardStagger, foot = foot, door = door, way = way });
+                return path;
+            }
+            // Each line in turn (A-11): one runs to the nearest place of its line that is free by the time it gets there,
+            // steps up into each next once the one before has left it (the doorway's own once that one is BoardFaded
+            // faded), and fades at the doorway.
+            foreach (var line in plans.GroupBy(p => p.way))
+            {
+                Boarder ahead = null;
+                foreach (var p in line.OrderBy(p => p.slots.Count))
+                {
+                    // When the one ahead leaves place j (null ahead: never there).
+                    float Left(int j) => ahead == null ? 0 : j == 0 ? ahead.fades + BoardFaded * UnitViews.BoardSeconds : j - 1 < ahead.steps.Length ? ahead.steps[j - 1] : 0;
+                    for (int start = 0; start < p.slots.Count; start++)
+                    {
+                        var path = Route(p, p.slots[start]);
+                        var lengths = new List<float>();
+                        for (int k = 1; k < path.Count; k++) lengths.Add(Vector3.Distance(path[k], path[k - 1]));
+                        float total = lengths.Sum(), running = total / BoardSpeed + BoardEase;
+                        // (Not before it could have stepped in: running straight in, it came on the one ahead still fading.)
+                        if (start < p.slots.Count - 1 && p.delay + running < Left(start) + StepSeconds) continue;
+                        (p.run, p.lengths, p.total, p.running, p.foot) = (path, lengths, total, running, p.slots[start]);
+                        p.steps = new float[start];
+                        break;
+                    }
+                    float ready = p.delay + p.running;
+                    for (int j = p.steps.Length - 1; j >= 0; j--)
+                    {
+                        p.steps[j] = Mathf.Max(ready, Left(j));
+                        ready = p.steps[j] + StepSeconds;
+                    }
+                    p.fades = ready;
+                    ahead = p;
+                }
             }
             // Each doorway's doors: opening as its first gets there, shutting once its last is gone (the last ones as La Lata
             // goes: LaLata.Depart shuts them first).
-            var ways = plans.GroupBy(p => p.way).Select(g => (way: g.Key, open: Mathf.Max(0, g.Min(p => p.delay + p.running) - DoorOpen), shut: g.Max(p => p.delay + p.running) + UnitViews.BoardSeconds)).ToList();
-            float seconds = plans.Max(p => p.delay + p.running) + UnitViews.BoardSeconds + 0.05f;
+            var ways = plans.GroupBy(p => p.way / 2).Select(g => (way: g.Key, open: Mathf.Max(0, g.Min(p => p.delay + p.running) - DoorOpen), shut: g.Max(p => p.fades) + UnitViews.BoardSeconds)).ToList();
+            float seconds = plans.Max(p => p.fades) + UnitViews.BoardSeconds + 0.05f;
             moved = MoveSeconds;
             float now = 0;
             while (now < seconds && !ct.IsCancellationRequested)
@@ -174,14 +263,22 @@ namespace Bastion.Client
                     Lata.SetWay(way, Mathf.SmoothStep(0, 1, k), !car);
                 }
                 foreach (var p in plans) Step(p, now);
+                if (BoardMeasured)
+                    foreach (var p in plans)
+                        if (p.s.root != null && p.s.root.gameObject.activeSelf && now > p.delay)
+                        {
+                            var at = Tiles(p.s.root.position);
+                            Debug.Log(System.FormattableString.Invariant($"[subir] {now:0.000} {p.index} yaw {p.s.yaw * Mathf.Rad2Deg:0.0} at {at.x:0.000},{at.z:0.000} fade {p.fade:0.00}"));
+                        }
                 await Awaitable.NextFrameAsync(ct);
             }
             foreach (var p in plans) if (p.s.root != null) p.s.root.gameObject.SetActive(false);
         }
 
         /// <summary>
-        /// One of the row at `now` of the boarding: running to its place by its doorway (picking up speed, slowing to it,
-        /// turning to where it goes as it goes), then turned to the doorway and fading out.
+        /// One of the row at `now` of the boarding: running to its place in its doorway's line (picking up speed, turning to
+        /// where it goes as it goes, and in the run's last BoardEase to its doorway, walking: A-11), waiting there turned to
+        /// it, stepping up the line, then fading out at the doorway.
         /// </summary>
         void Step(Boarder p, float now)
         {
@@ -189,25 +286,63 @@ namespace Bastion.Client
             if (s.root == null) return;
             float since = now - p.delay;
             if (since <= 0) return;
+            float doorYaw(Vector3 from) => Mathf.Atan2(p.door.x - from.x, p.door.z - from.z);
             if (since < p.running)
             {
                 if (!p.started)
                 {
                     p.started = true;
-                    s.anim?.Motion("run", 1);
+                    Moving(p, "run", 1);
                 }
                 s.root.position = World(Along(p.run, p.lengths, p.total, p.running, since, out var from, out var to));
-                s.yaw = TurnToward(s.yaw, Mathf.Atan2(to.x - from.x, to.z - from.z));
+                // Its last stretch: turned to the doorway, slowing to a walk.
+                if (since > p.running - BoardEase)
+                {
+                    Moving(p, "walk");
+                    s.yaw = TurnToward(s.yaw, doorYaw(p.foot), BoardTurnEnd);
+                }
+                else s.yaw = TurnToward(s.yaw, Mathf.Atan2(to.x - from.x, to.z - from.z));
+                return;
+            }
+            // Up the line: waiting in a place, or stepping on to the next.
+            int at = p.steps.Length;
+            for (int j = p.steps.Length - 1; j >= 0; j--)
+            {
+                if (now < p.steps[j]) break;
+                if (now < p.steps[j] + StepSeconds)
+                {
+                    Moving(p, "walk");
+                    s.root.position = World(Vector3.Lerp(p.slots[j + 1], p.slots[j], Mathf.SmoothStep(0, 1, (now - p.steps[j]) / StepSeconds)));
+                    s.yaw = TurnToward(s.yaw, doorYaw(p.slots[j]), BoardTurnEnd);
+                    return;
+                }
+                at = j;
+            }
+            if (now < p.fades)
+            {
+                Moving(p, "idle");
+                s.root.position = World(p.slots[at]);
+                s.yaw = TurnToward(s.yaw, doorYaw(p.slots[at]), BoardTurnEnd);
                 return;
             }
             if (!p.there)
             {
                 p.there = true;
-                s.anim?.Motion("idle");
-                s.root.position = World(p.foot);
+                Moving(p, "idle");
+                s.root.position = World(p.slots[0]);
+                if (BoardMeasured) Debug.Log(System.FormattableString.Invariant($"[subir] {p.index} fades {Vector3.Dot(p.slots[0] - p.doorway, p.side):0.00} along from its doorway's middle, {Vector3.Distance(Vector3.Scale(p.slots[0] - p.doorway, new Vector3(1, 0, 1)), Vector3.zero):0.00} from it"));
             }
-            s.yaw = TurnToward(s.yaw, Mathf.Atan2(p.door.x - p.foot.x, p.door.z - p.foot.z));
-            FadeOut(s, 1 - (since - p.running) / UnitViews.BoardSeconds);
+            s.yaw = TurnToward(s.yaw, doorYaw(p.slots[0]), BoardTurnEnd);
+            p.fade = 1 - (now - p.fades) / UnitViews.BoardSeconds;
+            FadeOut(s, p.fade);
+        }
+
+        /// <summary>Its clip `motion` (at `speed`), unless it is on it already.</summary>
+        static void Moving(Boarder p, string motion, float speed = 1)
+        {
+            if (p.motion == motion) return;
+            p.motion = motion;
+            p.s.anim?.Motion(motion, speed);
         }
 
         /// <summary>
@@ -244,9 +379,9 @@ namespace Bastion.Client
 
         static MaterialPropertyBlock fadeBlock;
 
-        /// <summary>`yaw` (0.10.1's, radians) turned towards `goal` as fast as they turn (BOARD_TURN), the short way round.</summary>
-        static float TurnToward(float yaw, float goal) =>
-            Mathf.MoveTowardsAngle(yaw * Mathf.Rad2Deg, goal * Mathf.Rad2Deg, BoardTurn * Mathf.Rad2Deg * Time.deltaTime) * Mathf.Deg2Rad;
+        /// <summary>`yaw` (0.10.1's, radians) turned towards `goal` as fast as they turn (BOARD_TURN; `speed` rad/s if said), the short way round.</summary>
+        static float TurnToward(float yaw, float goal, float speed = BoardTurn) =>
+            Mathf.MoveTowardsAngle(yaw * Mathf.Rad2Deg, goal * Mathf.Rad2Deg, speed * Mathf.Rad2Deg * Time.deltaTime) * Mathf.Deg2Rad;
 
         /// <summary>
         /// Where a run of `total` tiles along `path` is `since` seconds into its `running`: picking up speed at the start,
@@ -343,12 +478,15 @@ namespace Bastion.Client
             // (0.10.1's −x, the right, is +x here.)
             var along = new Vector3(0.45f, 0.9f, 0).normalized;
             var turn = Quaternion.LookRotation(along, Vector3.back);
-            // The gun's middle along it, and its half thickness (in the figure's units).
+            // The gun's middle along it, and its half thickness (in the figure's units): its body's, not its magazine's or
+            // its bipod's (the 3D review's A-31, 10/11: by the whole gun's, a machine gun hung a hand off the back).
             var box = new Bounds();
-            bool any = false;
+            var own = new Bounds();
+            bool any = false, owned = false;
             foreach (var f in gun.GetComponentsInChildren<MeshFilter>())
             {
                 if (f.sharedMesh == null) continue;
+                bool loose = f.name.Contains("Magazine") || f.name.Contains("Bipod");
                 var m = gun.worldToLocalMatrix * f.transform.localToWorldMatrix;
                 foreach (var corner in Corners(f.sharedMesh.bounds))
                 {
@@ -356,10 +494,15 @@ namespace Bastion.Client
                     if (!any) box = new Bounds(q, Vector3.zero);
                     else box.Encapsulate(q);
                     any = true;
+                    if (loose) continue;
+                    if (!owned) own = new Bounds(q, Vector3.zero);
+                    else own.Encapsulate(q);
+                    owned = true;
                 }
             }
+            if (!owned) own = box;
             float scale = gun.lossyScale.x / Mathf.Max(figure.lossyScale.x, 1e-5f);
-            float middle = box.center.z * scale, thick = Mathf.Min(box.size.x, box.size.y) / 2 * scale;
+            float middle = box.center.z * scale, thick = Mathf.Min(own.size.x, own.size.y) / 2 * scale;
             float length = box.size.z * scale;
             var at = new Vector3(0, chest.y + 0.02f, chest.z - 0.11f);
             // Out from the back's skin wherever along it the gun lies (the hindmost of the body near its line).
@@ -390,6 +533,8 @@ namespace Bastion.Client
             s.slingTurn = Quaternion.Inverse(bone.rotation) * worldTurn;
             s.slingBone = bone;
             KeepSlung(s);
+            // How far the gun's body stands off the back's hindmost skin along its line, as slung (A-31, 4).
+            Debug.Log(System.FormattableString.Invariant($"[sling] {s.root.name} gun {gun.name} ({string.Join(",", gun.GetComponentsInChildren<MeshFilter>().Select(f => f.name))}) thick {thick:0.000} (whole {Mathf.Min(box.size.x, box.size.y) / 2 * scale:0.000}) back {back:0.000} at {at.z:0.000} gap {back - (at.z + thick):0.000}"));
         }
 
         /// <summary>The slung gun where it rides on its bone as the body is now.</summary>

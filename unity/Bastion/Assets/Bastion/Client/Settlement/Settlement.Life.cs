@@ -43,6 +43,29 @@ namespace Bastion.Client
         public string LifeReport() => life == null ? "none" : string.Join("; ", life.Idlers.Select(d =>
             FormattableString.Invariant($"{d.kind} at {d.at.x:0.0},{d.at.z:0.0}{(d.spot != null ? " " + d.spot.loop : "")}{(d.settled ? " settled" : "")}{(d.goal != null ? " walking" : "")}{(d.stance != null ? " " + d.stance : "")}{(d.habit != null ? " " + d.habit : "")}")));
 
+        /// <summary>
+        /// (For the labs: SettlementLab.Vida, BASTION_MEDIR=cerca; the 3D review's A-25, 10/11.) Each two of those out nearer
+        /// than `within` tiles while one of them walks: «a b tiles», by their places in the list; empty if none.
+        /// </summary>
+        public string LifeNear(double within)
+        {
+            if (life == null) return "";
+            var all = life.Idlers;
+            var near = new List<string>();
+            for (int a = 0; a < all.Count; a++)
+                for (int b = a + 1; b < all.Count; b++)
+                {
+                    if (all[a].goal == null && all[b].goal == null) continue;
+                    double d = Math.Sqrt((all[a].at.x - all[b].at.x) * (all[a].at.x - all[b].at.x) + (all[a].at.z - all[b].at.z) * (all[a].at.z - all[b].at.z));
+                    if (d < within) near.Add(FormattableString.Invariant($"{a} {b} {d:0.000}"));
+                }
+            return string.Join("; ", near);
+        }
+
+        /// <summary>(For the labs: BASTION_MEDIR=giro in Vida; A-31.) Each walker's place in the list, its yaw (degrees) and where it is.</summary>
+        public string LifeTurns() => life == null ? "" : string.Join("; ", life.Idlers.Select((d, i) => (d, i)).Where(q => q.d.kind == ClearingLife.Kind.Walk).Select(q =>
+            FormattableString.Invariant($"{q.i} yaw {q.d.yaw * 180 / Math.PI:0.0} at {q.d.at.x:0.000},{q.d.at.z:0.000}{(q.d.goal != null ? " walking" : "")}")));
+
         ClearingLife Life
         {
             get
@@ -241,6 +264,8 @@ namespace Bastion.Client
 
             /// <summary>What it holds sits this far up the grip from where the palm closes (syntyFigures.ts ITEM_AT: tiles).</summary>
             const float ItemUp = 0.02f;
+            /// <summary>How far a cup tips to the mouth at the top of a sip (degrees), and how much lower it is then (m: A-31).</summary>
+            const float SipTilt = 45, SipDown = 0.05f;
 
             static float Wait() => 5 + UnityEngine.Random.value * 9;
 
@@ -360,6 +385,8 @@ namespace Bastion.Client
                 time = now;
                 Vary(dt);
                 if (s.anim != null) s.anim.Step(dt);
+                // Arms folded and the leans close the left hand too (the 3D review's A-31, 10/11: its fingers stood stiff in the air).
+                if (s.animator != null && ((loop != null && loop.StartsWith("lean")) || stance == "armsFolded")) UnitViews.Fist(s.animator, true);
                 if (s.slung) KeepSlung(s);
                 PlaceItem();
             }
@@ -386,8 +413,17 @@ namespace Bastion.Client
                 if (right == null) return;
                 var palm = rightBase != null ? Vector3.Lerp(right.position, rightBase.position, 0.6f) : right.position;
                 var turn = itemUpright ? s.root.rotation : right.rotation;
+                // A sip: the cup tipped to the mouth and a little lower, as the hand comes up to it (the 3D review's A-31,
+                // 10/11: it went up straight to the nose); the hand at the mouth from 0.08 to 0.83 of sipMasc, highest at 0.46.
+                float sip = 0;
+                if (itemUpright && move == "sip" && moveLength > 0)
+                {
+                    float f = (float)((owner.lifeTime - moveAt) / moveLength);
+                    sip = Mathf.Sin(Mathf.PI * Mathf.Clamp01((f - 0.08f) / 0.75f));
+                    turn *= Quaternion.AngleAxis(-SipTilt * sip, Vector3.right);
+                }
                 item.rotation = turn;
-                item.position = palm + turn * (Vector3.up * ItemUp * MapSpace.Tile - Vector3.Scale(itemCentre, item.lossyScale));
+                item.position = palm + turn * (Vector3.up * ItemUp * MapSpace.Tile - Vector3.Scale(itemCentre, item.lossyScale)) - Vector3.up * SipDown * sip;
             }
 
             /// <summary>

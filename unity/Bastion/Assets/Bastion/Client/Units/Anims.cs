@@ -14,6 +14,12 @@ namespace Bastion.Client.Units
         public float reach;
         public bool head;
         public bool close;
+        /// <summary>
+        /// Where in its clip the body falls to the floor at last (seconds: its head from under 60 % of its height standing to
+        /// within a tenth of it lying; ClipProbe.Alone BASTION_CABEZA=1), for a death played backwards (UnitViews.Reanimate:
+        /// the 3D review's A-26, 10/11). None, as linear.
+        /// </summary>
+        public float[] drop;
     }
 
     /// <summary>A hit taken (syntyManifest.ts Hit): `from`, the way the blow comes from in the body's frame; `hard`, a critical's.</summary>
@@ -57,6 +63,18 @@ namespace Bastion.Client.Units
         /// StepBack; the 3D review's A-15, 10/11). 0: none, it waits for the measure as before.
         /// </summary>
         public float reach;
+        /// <summary>
+        /// A long gun's: the point of it (its model's frame, unscaled) that sits in the middle of the right palm at rest,
+        /// running and hidden (none: its origin, the grip; the 3D review's F-12, 10/11: the hunting rifle's and the
+        /// shotgun's wooden stocks went 6–15 cm through the right forearm). Aimed, none: what was passed aimed stays.
+        /// </summary>
+        public float[] palm;
+        /// <summary>
+        /// A gun slung across the back (UnitViews.Draw): how much further out from the back and how much lower along its line
+        /// it hangs than by its middle ([out, down], metres of the figure; none, by its middle). The 3D review's F-18, 10/11:
+        /// the machine gun stood a palm over the head, its carrying handle in the nape.
+        /// </summary>
+        public float[] back;
     }
 
     /// <summary>

@@ -36,15 +36,28 @@ namespace Bastion.Engine
         private static List<Vec2> StreetLights(Canvas c, string biome, int seed, bool town = false)
         {
             var rng = new Rng(seed ^ 0x11647);
+            bool IsRoad(int x, int y) => c.In(x, y) && c.ElevAt(x, y) == 0 && c.GroundAt(x, y) == Road;
+            // In the wilds a one-tile strip of Road is a furrow of a field (Country.Field paints every other row), not a
+            // track: no light beside it (the 3D review of 10/11, E-09: lamps stood in the middle of ploughed fields). The
+            // same rule the client draws furrows by (GroundMap).
+            bool Furrow(int x, int y) =>
+                biome == Biomes.Wilds && IsRoad(x, y) &&
+                ((!IsRoad(x, y - 1) && !IsRoad(x, y + 1) && (IsRoad(x - 1, y) || IsRoad(x + 1, y))) ||
+                 (!IsRoad(x - 1, y) && !IsRoad(x + 1, y) && (IsRoad(x, y - 1) || IsRoad(x, y + 1))));
             bool Kerb(Vec2 p) =>
                 c.Get(p.X, p.Y) == TileKinds.Floor &&
                 c.ElevAt(p.X, p.Y) == 0 &&
                 c.GroundAt(p.X, p.Y) == Open &&
                 // At a factory, along its yard lanes too (playtest 15/10, #17).
                 Grid.Dirs4.Any((d) => c.In(p.X + d.X, p.Y + d.Y) && (c.GroundAt(p.X + d.X, p.Y + d.Y) == Road || (biome == Biomes.Facility && c.GroundAt(p.X + d.X, p.Y + d.Y) == Yard)));
+            // Beside furrows only: skipped after the shuffle, so the other lights keep the places they had.
+            bool ByFurrowsOnly(Vec2 p) =>
+                biome == Biomes.Wilds &&
+                !Grid.Dirs4.Any((d) => c.In(p.X + d.X, p.Y + d.Y) && c.GroundAt(p.X + d.X, p.Y + d.Y) == Road && !Furrow(p.X + d.X, p.Y + d.Y));
             var out_ = new List<Vec2>();
             foreach (var p in Shuffle(TilesIn(Rect(0, 0, c.Width, c.Height)).Where(Kerb).ToList(), rng))
             {
+                if (ByFurrowsOnly(p)) continue;
                 if (out_.All((q) => Dist(p, q) >= (town ? TownLight.Spacing : LightSpacing[biome]))) out_.Add(p);
             }
             return out_;

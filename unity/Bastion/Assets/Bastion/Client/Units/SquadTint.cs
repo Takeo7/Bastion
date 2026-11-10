@@ -11,7 +11,9 @@ namespace Bastion.Client.Units
     /// worn on (bits: 1 the headgear, 2 the torso, 3 the arms, 4 the legs; convert.py write_parts, by each vertex's main
     /// bone), the palette as made, and the owner's band's radius round each upper arm (model units). Kept on the figure
     /// SoldierFigure makes, and so on every copy of it. And how far its rucksack stands out behind its upper chest (model
-    /// units; 0, none): the gun slung across the back goes over it (UnitViews.Stows; Arturo, 9/11: never through it).
+    /// units; 0, none): the gun slung across the back goes over it (UnitViews.Stows; Arturo, 9/11: never through it). And
+    /// whether its outfit has a holster of its own, a pistol in it (UnitViews.Draw: ours not drawn there; the 3D review's
+    /// F-08, 10/11, Arturo's A).
     /// </summary>
     public sealed class SoldierMarks : MonoBehaviour
     {
@@ -19,6 +21,7 @@ namespace Bastion.Client.Units
         public Color32[] palette = new Color32[256];
         public float bandLeft, bandRight;
         public float pack;
+        public bool holster;
     }
 
     /// <summary>

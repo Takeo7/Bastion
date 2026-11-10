@@ -817,6 +817,66 @@ namespace Bastion.EditorTools
             Lighting(true);
         }
 
+        /// <summary>
+        /// How much of each model's area faces up, for the snow (the 3D review's E-11, 10/11: tyres, logs and corrugated fences
+        /// came out white on their sides): for each of BASTION_MODELOS (MapArt's ids, or model keys as Prefabs takes them),
+        /// its triangles' area in the world by the height of their normal: over 0.8 (the snow's whole: SnowCover and
+        /// Bastion/Building's smoothstep(0.38, 0.8)), 0.38 to 0.8 (some) and under 0.38 (none). Edit mode, nothing shot.
+        ///   LOG=… BASTION_MODELOS=bTyres,bWoodPile,carWreck,apocalypse:SM_Prop_Wall_Quarantine_Bottom_01 unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.NieveCaras
+        /// </summary>
+        public static void NieveCaras()
+        {
+            var prefabs = Prefabs();
+            foreach (var key in (Environment.GetEnvironmentVariable("BASTION_MODELOS") ?? "").Split(',').Where(k => k.Length > 0))
+            {
+                var art = MapArt.Prop(key);
+                var model = prefabs(art != null ? MapArt.ModelKey(art) : key);
+                if (model == null)
+                {
+                    Debug.Log($"[nieve] {key}: none");
+                    continue;
+                }
+                var made = (GameObject)UnityEngine.Object.Instantiate(model);
+                double whole = 0, some = 0, none = 0;
+                // The same by the vertices' normals (what the light and the decal read), averaged over each triangle.
+                double vWhole = 0, vSome = 0, vNone = 0;
+                int unread = 0;
+                foreach (var f in made.GetComponentsInChildren<MeshFilter>())
+                {
+                    var mesh = f.sharedMesh;
+                    if (mesh == null) continue;
+                    var v = mesh.vertices;
+                    var t = mesh.triangles;
+                    var normals = mesh.normals;
+                    if (v.Length == 0 || t.Length == 0)
+                    {
+                        unread++;
+                        continue;
+                    }
+                    var m = f.transform.localToWorldMatrix;
+                    for (int i = 0; i + 2 < t.Length; i += 3)
+                    {
+                        Vector3 a = m.MultiplyPoint3x4(v[t[i]]), b = m.MultiplyPoint3x4(v[t[i + 1]]), c = m.MultiplyPoint3x4(v[t[i + 2]]);
+                        var n = Vector3.Cross(b - a, c - a);
+                        double area = n.magnitude / 2;
+                        if (area <= 0) continue;
+                        float up = n.normalized.y;
+                        if (up > 0.8f) whole += area;
+                        else if (up >= 0.38f) some += area;
+                        else none += area;
+                        if (normals.Length != v.Length) continue;
+                        float vUp = m.MultiplyVector(normals[t[i]] + normals[t[i + 1]] + normals[t[i + 2]]).normalized.y;
+                        if (vUp > 0.8f) vWhole += area;
+                        else if (vUp >= 0.38f) vSome += area;
+                        else vNone += area;
+                    }
+                }
+                double all = Math.Max(1e-9, whole + some + none);
+                Debug.Log(FormattableString.Invariant($"[nieve] {key}: {whole / all:0.00} entera, {some / all:0.00} a medias, {none / all:0.00} nada; por sus normales {vWhole / all:0.00}, {vSome / all:0.00}, {vNone / all:0.00} ({all:0.00} m²{(unread > 0 ? $", {unread} mallas sin leer" : "")})"));
+                UnityEngine.Object.DestroyImmediate(made);
+            }
+        }
+
         /// <summary>The weather a lab asks for (ClimaLab), over BASTION_CLIMA.</summary>
         internal static string WeatherOverride;
 

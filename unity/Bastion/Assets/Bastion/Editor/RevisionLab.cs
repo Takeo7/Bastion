@@ -30,10 +30,12 @@ namespace Bastion.EditorTools
             // (The same body for all, so that only the weapon changes; BASTION_COMPLEXION=heavy, slim…: another build.)
             string json = Bastion.Net.Json.Write(model);
             var row = new List<(Unit, string)>();
+            // (BASTION_PALMAS=x,y,z;…: each soldier's palm point on its gun, «-» its weapon's own; the 3D review's F-12, 10/11.)
+            var palms = Environment.GetEnvironmentVariable("BASTION_PALMAS")?.Split(';');
             for (int k = 0; k < arts.Length; k++)
             {
                 var u = Bastion.Net.Json.Read<Unit>(json);
-                u.Id = "lab-" + arts[k];
+                u.Id = "lab-" + arts[k] + (palms != null ? "-" + k : "");
                 u.Template = "rookie";
                 u.Overwatch = false;
                 u.Hunkered = false;
@@ -43,7 +45,15 @@ namespace Bastion.EditorTools
                 Put(u, 1 + 2 * k, y, -Math.PI / 2);
                 state.Units.Add(u);
                 UnitViews.ArtsForLab[u.Id] = arts[k];
-                row.Add((u, arts[k]));
+                string label = arts[k];
+                if (palms != null && k < palms.Length && palms[k] != "-")
+                {
+                    var p = palms[k].Split(',').Select(c => float.Parse(c, CultureInfo.InvariantCulture)).ToArray();
+                    UnitViews.PalmForLab[u.Id] = new Vector3(p[0], p[1], p[2]);
+                    label += "@" + palms[k];
+                }
+                else if (palms != null) label += "@-";
+                row.Add((u, label));
             }
             return row;
         }
@@ -140,11 +150,18 @@ namespace Bastion.EditorTools
                         Debug.Log($"[agarre] prueba: the gun ahead of the chest: {IntoReport(row[0].u.Id)}");
                         gun.SetPositionAndRotation(keep.position, keep.rotation);
                     }
+                    // (BASTION_REPOSO=s: each rest this long, a loop of each at least, for its seam: the 3D review's A-12, 10/11.)
+                    float restFor = float.TryParse(Environment.GetEnvironmentVariable("BASTION_REPOSO"), NumberStyles.Float, CultureInfo.InvariantCulture, out float rs) ? rs : 2.2f;
                     foreach (string rest in new[] { "rifleIdle", "rifleLowered", "rifleIdleLook" })
                     {
                         now = "reposo-" + rest;
                         foreach (var (u, _) in row) units.RestForLab(u.Id, rest);
-                        await Awaitable.WaitForSecondsAsync(2.2f);
+                        await Awaitable.WaitForSecondsAsync(restFor);
+                    }
+                    if (Environment.GetEnvironmentVariable("BASTION_SOLO_REPOSO") == "1")
+                    {
+                        Debug.Log($"[combat] {Time.time:0.00} s: done");
+                        return;
                     }
                     now = "carrera";
                     await All(u => units.MoveAlong(u.Id, Enumerable.Range(1, 4).Select(i => new Pos { X = u.Pos.X, Y = u.Pos.Y - i }).ToList(), 1));

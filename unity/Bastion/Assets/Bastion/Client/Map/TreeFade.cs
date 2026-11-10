@@ -13,7 +13,9 @@ namespace Bastion.Client.Map
     /// Arte's review of 27/10: on the country and road maps the soldiers went under them), as a building's roof does: over
     /// the selected soldier, the target, the tile under the cursor, or between any of them and the camera; the trunk stays.
     /// Over the enemies in sight too, which the 0.10.1 didn't do (Gameplay, 28/10: the siege's dead, coming in by the paths
-    /// between the pines, went unseen under the crowns until they reached the clearing; on the country maps as well).
+    /// between the pines, went unseen under the crowns until they reached the clearing; on the country maps as well); and
+    /// over the whole squad in sight (Arturo's choice B of the 3D review's E-05, 10/11: on the country and facility maps the
+    /// squad began among the pines, two to four of them under the crowns).
     /// Each tree (CROWNS, the map's props by their id) gets as much fade as the nearest of those lines brings, 0.88 at most:
     /// while it has some, its materials are Bastion/Crown's (its own texture, dithered above the trunk's top); with none,
     /// its own again, in the wind.
@@ -202,18 +204,20 @@ namespace Bastion.Client.Map
 
         /// <summary>
         /// The points looked at (tiles, and their height in tiles): the selected soldier, the target where their bodies
-        /// stand, the tile under the cursor; then each living enemy in sight (or heard: a shade), where its figure is.
+        /// stand, the tile under the cursor; then each other living unit in sight (or heard: a shade), the squad's too (E-05),
+        /// where its figure is.
         /// </summary>
         void Looked()
         {
             points.Clear();
             var cutaway = Cutaway.Current;
             var units = UnitViews.Current;
-            string target = null;
+            string target = null, selected = null;
             if (cutaway != null)
             {
                 var focus = cutaway.Focus;
                 target = focus.target;
+                selected = focus.selected;
                 Add(units, focus.selected);
                 Add(units, focus.target);
                 if (focus.hover != null) points.Add(new Vector3(focus.hover.X + 0.5f, focus.hover.Y + 0.5f, focus.hover.Z * MapSpace.Storey / MapSpace.Tile));
@@ -221,7 +225,7 @@ namespace Bastion.Client.Map
             var state = units != null ? units.State : null;
             if (state == null) return;
             foreach (var u in state.Units)
-                if (u.Alive && !u.Evacuated && u.Team != Teams.Xcom && u.Id != target && units.Shown(u.Id)) Add(units, u.Id);
+                if (u.Alive && !u.Evacuated && u.Id != target && u.Id != selected && units.Shown(u.Id)) Add(units, u.Id);
         }
 
         void Add(UnitViews units, string id)

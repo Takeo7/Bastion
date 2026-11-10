@@ -171,6 +171,14 @@ namespace Bastion.EditorTools
                         foreach (var (u, _) in row) u.Hunkered = true;
                         units.Sync(state);
                         await Photo("agachado", 1.2f);
+                        // ([traje-suelo]: the lowest of what each carries, not in its hands, over its feet, m; the 3D review's F-07, 10/11.)
+                        foreach (var (u, label) in row)
+                        {
+                            float low = float.MaxValue;
+                            foreach (var (model, drawn) in units.CarriedForLab(u.Id))
+                                if (!drawn) foreach (var r in model.GetComponentsInChildren<Renderer>()) if (r.enabled && r.gameObject.activeInHierarchy) low = Mathf.Min(low, r.bounds.min.y);
+                            if (low < float.MaxValue) Debug.Log(FormattableString.Invariant($"[traje-suelo] {label} {low - units.Feet(u.Id).y:0.000}"));
+                        }
                         now = "agachado-anda";
                         var going = All(u => units.MoveAlong(u.Id, Path(u, -1, 2), 1));
                         await Photo("agachado-anda-1", 0.6f);
@@ -259,6 +267,14 @@ namespace Bastion.EditorTools
                         now = "filo";
                         foreach (var (u, _) in row) if (u.Arms.Primary != null) units.GuardForLab(u.Id, 0);
                         await Photo("filo", 0.5f);
+                        // ([traje-espalda]: the top of what it carries on its back over its head's bone, m; the 3D review's F-18, 10/11.)
+                        foreach (var (u, label) in row)
+                            foreach (var (model, drawn) in units.CarriedForLab(u.Id))
+                                if (!drawn && model.parent != null && model.parent.name == "lleva weapon")
+                                {
+                                    float top = model.GetComponentsInChildren<Renderer>().Where(r => r.enabled && r.gameObject.activeInHierarchy).Select(r => r.bounds.max.y).DefaultIfEmpty(float.MinValue).Max();
+                                    Debug.Log(FormattableString.Invariant($"[traje-espalda] {label} {top - units.Head(u.Id).y:0.000}"));
+                                }
                     });
                     await Step("golpe", async () =>
                     {
@@ -275,6 +291,8 @@ namespace Bastion.EditorTools
                         await Photo("muriendo", 0.5f);
                         await dying;
                         await Photo("muerto", 1.0f);
+                        // ([traje-armas]: where each of its weapons is and whether it shows, dead; the 3D review's F-02 and F-11, 10/11.)
+                        foreach (var (u, label) in row) Debug.Log($"[traje-armas] {label} {units.ArmsReport(u.Id)}");
                     });
                     Debug.Log($"[traje] {Time.time:0.00} s: done");
                 }

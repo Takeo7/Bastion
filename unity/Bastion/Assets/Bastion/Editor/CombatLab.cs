@@ -120,6 +120,40 @@ namespace Bastion.EditorTools
         static Func<Awaitable> sequence;
 
         /// <summary>
+        /// BASTION_MEDIR=salto (the 3D review's M-1, M-2, A-13, A-17 and A-26; 10/11): every frame till play ends, for each of
+        /// `ids` drawn, a line [salto]: its head and its hips over its feet (m), and its feet from `body`'s chest along the
+        /// ground (tiles; while that body is drawn). At 30 fps, a clip over the whole body that cuts in moves the head tens of
+        /// centimetres in a line.
+        /// </summary>
+        static async void Jumps(Func<System.Collections.Generic.IEnumerable<string>> ids, string body)
+        {
+            if (Environment.GetEnvironmentVariable("BASTION_MEDIR") != "salto") return;
+            try
+            {
+                while (Application.isPlaying && units != null)
+                {
+                    await Awaitable.NextFrameAsync();
+                    if (units == null) return;
+                    var lying = body != null ? Figures.FeetOf(body) : null;
+                    var chest = lying != null && lying.gameObject.activeInHierarchy ? units.Chest(body) : (Vector3?)null;
+                    foreach (string id in ids())
+                    {
+                        var feet = Figures.FeetOf(id);
+                        if (feet == null || !feet.gameObject.activeInHierarchy) continue;
+                        var a = feet.GetComponentInChildren<Animator>();
+                        var hips = a != null && a.isHuman ? a.GetBoneTransform(HumanBodyBones.Hips) : null;
+                        string near = chest is Vector3 c && id != body ? FormattableString.Invariant($" chest {new Vector2(feet.position.x - c.x, feet.position.z - c.z).magnitude / MapSpace.Tile:0.00}") : "";
+                        Debug.Log(FormattableString.Invariant($"[salto] {Time.time:0.000} {id} head {units.Head(id).y - feet.position.y:0.000} hips {(hips != null ? hips.position.y - feet.position.y : 0):0.000}{near}"));
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+        }
+
+        /// <summary>
         /// The state with the squad seen, as the strips have always had it: unseen (GameState.Concealed, as a mission
         /// starts) it goes crouched, Ana's #1 of 1/11. BASTION_OCULTOS=1 keeps it unseen.
         /// </summary>
@@ -544,6 +578,7 @@ namespace Bastion.EditorTools
                 try
                 {
                     units.Sync(state);
+                    Jumps(() => new[] { soldier.Id, "r1" }, null);
                     await Awaitable.WaitForSecondsAsync(0.8f);
                     Debug.Log($"[combat] {Time.time:0.00} s: dies");
                     units.StruckFrom(soldier.Id, units.Feet(soldier.Id) + Vector3.left * 2 * MapSpace.Tile);
@@ -742,6 +777,7 @@ namespace Bastion.EditorTools
                 {
                     units.Sync(state);
                     Reveal();
+                    Jumps(() => dead.Take(1 + others.Count).Select(u => u.Id).Concat(risen != null ? new[] { risen.Id } : new string[0]).Append(soldier.Id), soldier.Id);
                     await Awaitable.WaitForSecondsAsync(1);
                     Debug.Log($"[devorar] {Time.time:0.00} s: bites");
                     await units.Lunge(target.Id, soldier.Id, true, () => _ = units.HitReact(soldier.Id, 1));
@@ -1277,6 +1313,17 @@ namespace Bastion.EditorTools
                         await Awaitable.WaitForSecondsAsync(0.2f);
                     }
                     Debug.Log($"[combat] {Time.time:0.00} s: the blow ({weapon})");
+                    // (Each frame of it, [cabezas]: the two heads apart along the ground, m; the 3D review's A-24 c, 10/11.)
+                    async void Heads()
+                    {
+                        for (float t0 = Time.time; Time.time - t0 < 1.4f && units != null;)
+                        {
+                            await Awaitable.NextFrameAsync();
+                            var d = units.Head(soldier.Id) - units.Head(target.Id);
+                            Debug.Log(FormattableString.Invariant($"[cabezas] {Time.time:0.000} apart {new Vector2(d.x, d.z).magnitude:0.000} over {d.y:0.000}"));
+                        }
+                    }
+                    Heads();
                     sfx.Melee("swing", units.Chest(soldier.Id), weapon);
                     await units.Lunge(soldier.Id, target.Id, false, () =>
                     {
@@ -1324,6 +1371,7 @@ namespace Bastion.EditorTools
             {
                 units.Sync(state);
                 Reveal();
+                Jumps(() => new[] { target.Id, soldier.Id }, soldier.Id);
                 await Awaitable.WaitForSecondsAsync(1);
                 // Where each figure's head is registered against the top of what is drawn (UI's marks hang there).
                 foreach (var u in state.Units)
@@ -1523,6 +1571,7 @@ namespace Bastion.EditorTools
             {
                 units.Sync(state);
                 Reveal();
+                Jumps(() => new[] { target.Id, soldier.Id }, soldier.Id);
                 await Awaitable.WaitForSecondsAsync(1);
                 Debug.Log($"[combat] {Time.time:0.00} s: {template} {id} ({Figures.FeetOf(target.Id)?.GetComponentInChildren<Animator>()?.name}) walks");
                 Debug.Log($"[combat] {soldier.Id} drawn by " + string.Join("; ", Figures.FeetOf(soldier.Id).GetComponentsInChildren<Renderer>().Select(r => $"{r.name} {(r is SkinnedMeshRenderer s ? s.sharedMesh?.subMeshCount : r.GetComponent<MeshFilter>()?.sharedMesh?.subMeshCount)} sub, {r.sharedMaterials.Length} mat")));
@@ -1537,6 +1586,25 @@ namespace Bastion.EditorTools
                     Debug.Log($"[combat] {Time.time:0.00} s: screams");
                     _ = units.Scream(target.Id);
                     fx.Scream(units.Head(target.Id));
+                    // (Each frame of it, [grito]: the line from its neck to its head back from the upright, degrees, behind it
+                    // along its facing positive; and each hand over its shoulder, m. The 3D review's A-28, 10/11.)
+                    async void Screamed()
+                    {
+                        var root = Figures.FeetOf(target.Id);
+                        var rig = root != null ? root.GetComponentInChildren<Animator>() : null;
+                        if (rig == null || !rig.isHuman) return;
+                        for (float t0 = Time.time; Time.time - t0 < 1.2f;)
+                        {
+                            await Awaitable.NextFrameAsync();
+                            Transform neck = rig.GetBoneTransform(HumanBodyBones.Neck), head = rig.GetBoneTransform(HumanBodyBones.Head);
+                            if (neck == null || head == null) return;
+                            var d = head.position - neck.position;
+                            float back = Mathf.Atan2(-Vector3.Dot(d, root.forward), d.y) * Mathf.Rad2Deg;
+                            float Over(HumanBodyBones hand, HumanBodyBones shoulder) => rig.GetBoneTransform(hand).position.y - rig.GetBoneTransform(shoulder).position.y;
+                            Debug.Log(FormattableString.Invariant($"[grito] {Time.time:0.000} headBack {back:0.0} L {Over(HumanBodyBones.LeftHand, HumanBodyBones.LeftUpperArm):0.000} R {Over(HumanBodyBones.RightHand, HumanBodyBones.RightUpperArm):0.000}"));
+                        }
+                    }
+                    Screamed();
                     await Awaitable.WaitForSecondsAsync(0.4f);
                     // Where its arms point at the scream's height (in its own frame: x its right, z ahead).
                     var a = Figures.FeetOf(target.Id).GetComponentInChildren<Animator>();
@@ -1759,7 +1827,34 @@ namespace Bastion.EditorTools
                     Reveal();
                     await Awaitable.WaitForSecondsAsync(1);
                     Debug.Log($"[combat] {Time.time:0.00} s: pries; {units.ArmsReport(soldier.Id)}; map {(MapView.Current == view ? "current" : "not current")}");
+                    // (Each frame of it, [palanca]: the bar's tip short of the edge between its tile and the boards' (m, past it
+                    // below 0) and its height, and the left palm from the bar's line (m); the 3D review's A-20, 10/11.)
+                    bool pried = false;
+                    async void Bar()
+                    {
+                        var edge = (MapSpace.TileToWorld(state, stand) + MapSpace.TileToWorld(state, boards)) / 2;
+                        var outward = MapSpace.TileToWorld(state, stand) - MapSpace.TileToWorld(state, boards);
+                        outward.y = 0;
+                        outward.Normalize();
+                        var rig = Figures.FeetOf(soldier.Id)?.GetComponentInChildren<Animator>();
+                        while (!pried && units != null)
+                        {
+                            await Awaitable.NextFrameAsync();
+                            if (!(units.BladeForLab(soldier.Id) is var (grip, tip)) || rig == null) continue;
+                            float l = -1;
+                            if (rig.GetBoneTransform(HumanBodyBones.LeftHand) is Transform h && rig.GetBoneTransform(HumanBodyBones.LeftMiddleProximal) is Transform k)
+                            {
+                                var palm = Vector3.Lerp(h.position, k.position, 0.6f);
+                                var line = tip - grip;
+                                float u = Mathf.Clamp01(Vector3.Dot(palm - grip, line) / Mathf.Max(line.sqrMagnitude, 1e-6f));
+                                l = Vector3.Distance(palm, grip + line * u);
+                            }
+                            Debug.Log(FormattableString.Invariant($"[palanca] {Time.time:0.000} tip {Vector3.Dot(tip - edge, outward):0.000} up {tip.y - units.Feet(soldier.Id).y:0.000} L {l:0.000}"));
+                        }
+                    }
+                    Bar();
                     await units.Pry(soldier.Id, MapSpace.TileToWorld(state, boards, 0.9f), boards);
+                    pried = true;
                     Events.ApplyEvent(state, new BoardsRemovedEvent { Unit = soldier.Id, Tile = boards });
                     Debug.Log($"[combat] rebuilt {view.Rebuild(Events.CloneState(state))} tiles");
                     units.Sync(state);
@@ -1844,6 +1939,18 @@ namespace Bastion.EditorTools
                 {
                     units.Sync(state);
                     Reveal();
+                    // (Every half second, [armas]: where each of its weapons is and whether it shows, and how deep they go into
+                    // the body; the 3D review's A-23, 10/11: the pistol «gone» while hidden.)
+                    bool over = false;
+                    async void Arms()
+                    {
+                        while (!over && units != null)
+                        {
+                            Debug.Log(FormattableString.Invariant($"[armas] {Time.time:0.00} {units.ArmsReport(soldier.Id)} {IntoReport(soldier.Id)}"));
+                            await Awaitable.WaitForSecondsAsync(0.5f);
+                        }
+                    }
+                    Arms();
                     await Awaitable.WaitForSecondsAsync(1);
                     Debug.Log($"[combat] {Time.time:0.00} s: walks");
                     await units.MoveAlong(soldier.Id, path, 1);
@@ -1863,6 +1970,7 @@ namespace Bastion.EditorTools
                     soldier.Hidden = null;
                     units.Sync(state);
                     await Awaitable.WaitForSecondsAsync(2);
+                    over = true;
                     Debug.Log($"[combat] {Time.time:0.00} s: done");
                 }
                 catch (Exception e)

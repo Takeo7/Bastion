@@ -64,14 +64,16 @@ if wanted "$@"; then
     Assets/Synty/InterfaceFantasyMenus/Sprites/FantasyMenus/SPR_FantasyMenus_Menu_Button_08_Background.png || failed=1
 fi
 # Emotes and Taunts: only the two gestures the camp's talkers make (clearingLife.ts SAYS: a shrug, calming down), a
-# woman's and a man's; the rest of the pack brings older copies of Sidekick's and Generic's shaders.
+# woman's and a man's; and the Chillón's scream (the roar, high and low, a man's: the 3D review's A-28, 10/11). The rest
+# of the pack brings older copies of Sidekick's and Generic's shaders.
 name=ANIMATION_Emotes_And_Taunts_Unity_2022_3_v1_0_0
 if wanted "$@"; then
-  echo "== $name (dos gestos)"
+  echo "== $name (dos gestos y el rugido)"
   e=Assets/Synty/AnimationEmotesAndTaunts/Animations/Polygon
   python3 -I "$tools/upkg-extract.py" "$synty/ANIMATION - Emotes and Taunts/Unity/$name.unitypackage" "$project" \
     $e/Masculine/Sad/A_POLY_EMOT_Sad_Shrug_Masc.fbx $e/Feminine/Sad/A_POLY_EMOT_Sad_Shrug_Femn.fbx \
-    $e/Masculine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Masc.fbx $e/Feminine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Femn.fbx || failed=1
+    $e/Masculine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Masc.fbx $e/Feminine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Femn.fbx \
+    $e/Masculine/Aggressive/A_POLY_EMOT_Aggressive_Roar_High_Masc.fbx $e/Masculine/Aggressive/A_POLY_EMOT_Aggressive_Roar_Low_Masc.fbx || failed=1
 fi
 # Woodland Apocalypse Map: its own folder alone (MapArt's fences, log piles, signs, lorries and containers), not the
 # copy of PolygonGeneric it brings (the other packs' is already in, and its shaders are shared) nor its demo scenes.

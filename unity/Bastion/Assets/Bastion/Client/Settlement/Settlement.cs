@@ -107,6 +107,8 @@ namespace Bastion.Client
             cleared.Clear();
             Mood.ShadowReach(ShadowMetres);
             if (Lata == null || Lata.Vehicle != vehicle) MakeLata();
+            // Its snow as the clearing's, the vehicle kept or not (the 3D review's E-02, 10/11).
+            Lata?.Snowy(snow);
             Park();
             CampPlaces();
             LifeBase();
@@ -136,6 +138,8 @@ namespace Bastion.Client
             if (Lata != null) DestroyNow(Lata.gameObject);
             Lata = LaLata.Make(transform, vehicle, prefabOf);
             UnFace(Lata.transform);
+            // (SetVehicle makes it again without Show.)
+            Lata.Snowy(Snow);
         }
 
         /// <summary>La Lata as the campaign has it (vehicleOf: 0 4×4, 1 van, 2 lorry, 3 the bus); after its going or coming if it is on its way.</summary>

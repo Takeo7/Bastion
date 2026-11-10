@@ -97,6 +97,10 @@ namespace Bastion.Client.Map
                 Lata = LaLata.Make(holder, vehicle, prefabs, s.Mission.Night == true);
             }
             Lata.gameObject.SetActive(true);
+            // Snow on it in winter as on the map's cars (the 3D review's E-02, 10/11: beside the map, SnowCover.Mark misses it).
+            Lata.Snowy(Mood.Snowy(s));
+            // Parked, in the fog as the map is (out of it only while it drives off: LataDeparts).
+            Lata.OutOfFog(false);
             Vector3 Mid(System.Collections.Generic.IReadOnlyList<Vec2> tiles)
             {
                 float x = 0, z = 0;
@@ -145,9 +149,52 @@ namespace Bastion.Client.Map
         public Awaitable LataDeparts(System.Threading.CancellationToken ct = default)
         {
             if (Lata == null || lataWay == null) return Done();
+            // Out of the fog while it goes (the 3D review's E-07, 10/11): over tiles seen, seen before and never seen at once,
+            // the fog cut it into lit and dark pieces.
+            Lata.OutOfFog(true);
+            Grazes();
             var going = Lata.DepartAsync(lataWay.Value, false, ct);
             _ = RunOver(ct);
             return going;
+        }
+
+        /// <summary>
+        /// The cars of the map its way out passes beside or through (E-07, 10/11: a parked taxi seemed grazed): each one whose
+        /// box reaches into the strip from where it stands to past the map's edge, its width over its plates, logged with how
+        /// far into it (m).
+        /// </summary>
+        void Grazes()
+        {
+            var fwd = Lata.transform.forward;
+            fwd.y = 0;
+            fwd.Normalize();
+            var right = new Vector3(fwd.z, 0, -fwd.x);
+            var start = Lata.transform.position;
+            float back = Lata.Length / 2 * MapSpace.Tile, ahead = (lataWay ?? 0) * MapSpace.Tile + back, half = Lata.PlatedWidth / 2 * MapSpace.Tile;
+            int n = 0;
+            foreach (var (anchor, car) in builder.Cars)
+            {
+                var rs = car.GetComponentsInChildren<Renderer>();
+                if (rs.Length == 0) continue;
+                var box = rs[0].bounds;
+                foreach (var r in rs) box.Encapsulate(r.bounds);
+                float a0 = float.MaxValue, a1 = float.MinValue, s0 = float.MaxValue, s1 = float.MinValue;
+                for (int k = 0; k < 4; k++)
+                {
+                    var c = new Vector3((k & 1) == 0 ? box.min.x : box.max.x, 0, (k & 2) == 0 ? box.min.z : box.max.z) - start;
+                    float a = Vector3.Dot(c, fwd), b = Vector3.Dot(c, right);
+                    a0 = Mathf.Min(a0, a);
+                    a1 = Mathf.Max(a1, a);
+                    s0 = Mathf.Min(s0, b);
+                    s1 = Mathf.Max(s1, b);
+                }
+                if (a1 < -back || a0 > ahead) continue;
+                float into = Mathf.Min(half - s0, s1 + half);
+                if (into <= 0) continue;
+                n++;
+                Debug.Log(FormattableString.Invariant($"[lata] its way out grazes car {anchor} ({anchor % State.Width},{anchor / State.Width}) by {Mathf.Min(into, s1 - s0):0.00} m"));
+            }
+            Debug.Log($"[lata] its way out: {n} cars in it");
         }
 
         /// <summary>

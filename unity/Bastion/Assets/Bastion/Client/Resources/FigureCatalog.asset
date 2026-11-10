@@ -291,6 +291,8 @@ MonoBehaviour:
   - rifleTurnR45
   - rifleTurnR90
   - rifleWalk
+  - roarHighMasc
+  - roarLowMasc
   - runFemn
   - runMasc
   - shiftLFemn
@@ -483,6 +485,8 @@ MonoBehaviour:
   - {fileID: -203655887218126122, guid: 04ff4e0257fbc4d67951f0514f140843, type: 3}
   - {fileID: -203655887218126122, guid: aca290918df8e430d95414b578c99b73, type: 3}
   - {fileID: -203655887218126122, guid: 38272d4bc99af434a99bc1ff5f9eeb21, type: 3}
+  - {fileID: -3462874112359102251, guid: 3b45604eecf1b2e4480646bfe99d5116, type: 3}
+  - {fileID: 8464049353885366500, guid: 06a1b81439ad25c4bb7992d22f697358, type: 3}
   - {fileID: 4763494864668633848, guid: 4dcfcd030150f2e408b985ae4c109387, type: 3}
   - {fileID: 1827226128182048838, guid: 6c670ea8c84cf324980a21b4b9b927a0, type: 3}
   - {fileID: -6416625868437695143, guid: 55307a12c9ac7084e9e07dd1c0f06762, type: 3}
@@ -538,6 +542,7 @@ MonoBehaviour:
   - apocalypse:SM_Wep_Katana_01
   - farm:SM_Prop_Tool_Rake_01
   - gang:SM_Wep_Sword_02
+  - military:SM_Chr_Attach_Knife_Sheath_01
   - SM_Wep_AssaultRifle_01
   - SM_Wep_AssaultRifle_02
   - SM_Wep_AssaultRifle_03
@@ -564,6 +569,7 @@ MonoBehaviour:
   - {fileID: 1104172259794306, guid: c93dc5e6b62380f499e6ec8328bc0160, type: 3}
   - {fileID: 1851300905487520, guid: 79e26d971e19c1f449f5d11c36eb05de, type: 3}
   - {fileID: 1592597363156974, guid: 1410f1cba8074a1429937abe0289a307, type: 3}
+  - {fileID: 1136006431183740, guid: f0b3adf97e1d6ba43bc2200fd5b75f36, type: 3}
   - {fileID: 1900586067242068, guid: ad49a19d2c4adc94b838606a5d459f85, type: 3}
   - {fileID: 1263777055603640, guid: d9f9bf1ca5142254ba3a359ff4a34b3e, type: 3}
   - {fileID: 1490873028196816, guid: a3fe0be603767ae42a0d14c81d777c2b, type: 3}
@@ -811,6 +817,8 @@ MonoBehaviour:
   - 1.1533337
   - 1.4666667
   - 1.3000001
+  - 3.6866646
+  - 4.1199975
   - 0.70000005
   - 0.70000005
   - 3.719998
