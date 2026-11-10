@@ -33,7 +33,14 @@ namespace Bastion.UI.Combat
                 pauseSent = mine;
                 NetLink.Instance?.Pause(mine);
             }
-            var partner = Players.FirstOrDefault(p => p.Slot != MySlot && p.Paused == true);
+            // (A loop, not LINQ: this runs every frame, and a lambda on `this` is a new delegate each time; review of 10/11.)
+            Bastion.Net.PlayerInfo partner = null;
+            foreach (var p in Players)
+                if (p.Slot != MySlot && p.Paused == true)
+                {
+                    partner = p;
+                    break;
+                }
             var paused = mine || partner != null;
             if (paused != Paused)
             {

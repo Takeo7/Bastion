@@ -273,6 +273,8 @@ namespace Bastion.Net
         public SavedCampaign? SavedCampaign { get; set; }
         /// <summary>A campaign from before the 0.7 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.</summary>
         public string? SetAside { get; set; }
+        /// <summary>The save wouldn't start (Room): which copy the game goes on from, or that none would, said for the players; null if it started.</summary>
+        public string? Restored { get; set; }
     }
 
     /// <summary>The whole campaign: sent whole after every change (it is small beside a mission).</summary>

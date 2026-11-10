@@ -256,6 +256,9 @@ namespace Bastion.Client
 
             public void Dispose()
             {
+                // (Its graph with it: left, each one out stayed till the app quit, six more each time the Asentamiento's
+                // tab was left; UI, 10/11.)
+                s.anim?.Dispose();
                 if (s.root != null) DestroyNow(s.root.gameObject);
             }
 

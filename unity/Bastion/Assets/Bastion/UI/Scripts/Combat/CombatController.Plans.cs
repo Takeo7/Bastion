@@ -132,7 +132,7 @@ namespace Bastion.UI.Combat
             {
                 if (slot != MySlot) continue;
                 var u = UnitById(State, id);
-                if (u == null || !u.Alive || Paths.MoveBudget(u) <= 0) continue;
+                if (u == null || !u.Alive || Paths.MoveBudget(u) < Paths.CostOrtho) continue;
                 var key = $"{id}:{tile.X},{tile.Y},{tile.Z}";
                 if (planSkip.Contains(key)) continue;
                 // Another of one's own still in play: this one waits, as it is, and so do those after it.

@@ -245,11 +245,13 @@
     border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
+/* A long name on to a second line, not cut (a narrow window, 0.12.17). */
 .setting__name {
     margin-bottom: 4px;
     font-size: 12px;
     letter-spacing: 1.4px;
     color: var(--t-muted);
+    white-space: normal;
 }
 
 /* On to a second line if they don't fit (four sizes in «Resolución» in a small window, 0.11.8). */

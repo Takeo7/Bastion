@@ -102,7 +102,8 @@ namespace Bastion.UI.Hud
             if (view.MovesMax > 0)
             {
                 var moves = Ui.El("bar-moves", host);
-                moves.EnableInClassList("bar-moves--none", view.Moves <= 0);
+                // Grey with less than a step left (a step costs 2: the engine's Paths.CostOrtho; HasTurnLeft since the 0.12.16).
+                moves.EnableInClassList("bar-moves--none", view.Moves < 2);
                 Ui.Text(HudText.Moves.Tiles(view.Moves), "bar-moves__value font-title", moves).pickingMode = PickingMode.Ignore;
                 Ui.Text(HudText.Moves.Of(view.MovesMax), "bar-moves__of font-title", moves).pickingMode = PickingMode.Ignore;
                 var feet = Ui.El("bar-moves__feet", moves);

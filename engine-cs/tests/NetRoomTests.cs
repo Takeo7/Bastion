@@ -147,10 +147,14 @@ namespace Bastion.Engine.Tests
                 Room.Pump();
             }
 
+            /// <summary>
+            /// From the house's network unless `peer` says where; there, with the room's key unless `key` says one (asked
+            /// while the router's port is open: Gameplay's review, 10/11, #9). From elsewhere, `key` alone.
+            /// </summary>
             public MemoryEnd Join(string name, string? token = null, string version = "1.0.0", string? peer = null, string? key = null)
             {
                 var player = Open(peer);
-                Say(player, new { t = "hello", name, token, version, key });
+                Say(player, new { t = "hello", name, token, version, key = key ?? (peer == null ? Key : null) });
                 return player;
             }
 
@@ -239,6 +243,91 @@ namespace Bastion.Engine.Tests
             Assert.Equal(new[] { "Ana", "Pepe" }, rig.Room.Summary().players);
             rig.Say(ana, new { t = "start" });
             Assert.Single(rig.Rules.Created);
+        }
+
+        [Fact]
+        public void WithTheRoutersPortOpenAJoinFromTheHouseBringsTheKey()
+        {
+            // Gameplay's review, 10/11, #9: a router that rewrites where it comes from, a double NAT or a tunnel bring the
+            // internet in looking like the house. While the port is open: the key or a seat's token, but on this machine.
+            using var rig = new Rig();
+            var ana = rig.Join("Ana");
+            var token = (string)ana.Take("welcome").Single()["token"]!;
+            ana.Close("se va");
+            rig.Room.Exposed(true);
+            rig.Room.Pump();
+            var pepe = rig.Join("Pepe", key: "");
+            Assert.Equal("Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su menú principal. Escribe la dirección y la clave juntas en «Unirse por dirección».", (string?)pepe.Take("error").Single()["message"]);
+            Assert.True(pepe.IsClosed);
+            Assert.Equal(1, (int)rig.Join("Pepe").Take("welcome").Single()["slot"]!);
+            // Her token alone takes Ana back.
+            var back = rig.Join("Ana", token, key: "");
+            Assert.Equal(0, (int)back.Take("welcome").Single()["slot"]!);
+            Assert.Equal(new[] { "Ana", "Pepe" }, rig.Room.Summary().players);
+        }
+
+        [Fact]
+        public void ThisMachineNeverBringsTheKey()
+        {
+            using var rig = new Rig();
+            rig.Room.Exposed(true);
+            rig.Room.Pump();
+            var ana = rig.Join("Ana", peer: "127.0.0.1:6000");
+            Assert.Equal(0, (int)ana.Take("welcome").Single()["slot"]!);
+            ana.Close("se va");
+            rig.Room.Pump();
+            // Back by name, nor then.
+            Assert.Equal(0, (int)rig.Join("Ana", peer: "127.0.0.1:6001").Take("welcome").Single()["slot"]!);
+        }
+
+        [Fact]
+        public void WithThePortClosedTheHouseJoinsAsBefore()
+        {
+            using var rig = new Rig();
+            rig.Room.Exposed(true);
+            rig.Room.Exposed(false);
+            rig.Room.Pump();
+            Assert.Equal(0, (int)rig.Join("Ana", key: "").Take("welcome").Single()["slot"]!);
+        }
+
+        [Fact]
+        public void AnOfflineSeatByItsNameAsksTheKeyOnlyWithTheRoutersPortOpen()
+        {
+            // From the house with the port closed, as before (Gameplay, 10/11: the token is kept by the host's address,
+            // which changes at home); with it open, a name is anyone's to type (#9): the key.
+            using var rig = new Rig();
+            var ana = rig.Join("Ana");
+            var token = (string)ana.Take("welcome").Single()["token"]!;
+            ana.Close("otro ordenador");
+            rig.Room.Pump();
+            rig.Join("Pepe");
+            var back = rig.Join("ANA", key: "");
+            var welcome = back.Take("welcome").Single();
+            Assert.Equal(0, (int)welcome["slot"]!);
+            Assert.Equal(token, (string?)welcome["token"]);
+            back.Close("otro ordenador");
+            rig.Room.Exposed(true);
+            rig.Room.Pump();
+            var again = rig.Join("ANA", key: "");
+            Assert.Equal("Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su menú principal. Escribe la dirección y la clave juntas en «Unirse por dirección».", (string?)again.Take("error").Single()["message"]);
+            Assert.True(again.IsClosed);
+            welcome = rig.Join("ANA").Take("welcome").Single();
+            Assert.Equal(0, (int)welcome["slot"]!);
+            Assert.Equal(token, (string?)welcome["token"]);
+        }
+
+        [Theory]
+        [InlineData("[2a01:4f8:c0c:1234::1]:5000", true)]
+        [InlineData("[::ffff:83.45.12.7]:5000", true)]
+        [InlineData("[fd7a:115c:a1e0::1]:5000", false)]
+        [InlineData("[fe80::1]:5000", false)]
+        [InlineData("[::1]:5000", false)]
+        public void AnIPv6FromTheInternetBringsTheKey(string peer, bool asked)
+        {
+            // Once they came in as the house's (#9): only IPv4 was the internet's.
+            using var rig = new Rig();
+            var someone = rig.Join("Ana", peer: peer);
+            Assert.Equal(asked, someone.Take("welcome").Count == 0);
         }
 
         [Fact]
@@ -381,7 +470,7 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
-        public void NothingButAHelloOrAReportBeforeASeat()
+        public void NothingButAHelloBeforeASeat()
         {
             using var rig = new Rig();
             var someone = rig.Open();
@@ -392,11 +481,69 @@ namespace Bastion.Engine.Tests
             rig.Say(someone, "{\"t\":\"teleport\"}");
             rig.Say(someone, "{\"t\":\"ping\",\"tile\":{\"x\":1,\"y\":1,\"z\":9},\"kind\":\"point\"}");
             Assert.Equal(4, someone.Take("error").Count((e) => (string?)e["message"] == "Mensaje no válido."));
+            // A report without a seat goes nowhere (Gameplay's review, 10/11, #8: anyone could fill red.log); with one, it goes.
+            rig.Say(someone, new { t = "report", line = "TypeError: antes" });
+            Assert.DoesNotContain(rig.Log, (line) => line.Contains("antes"));
+            rig.Say(someone, new { t = "hello", name = "Ana", version = "1.0.0" });
             rig.Say(someone, new { t = "report", line = "TypeError: algo\nen otra línea" });
             rig.Say(someone, new { t = "report", line = "[rend] 60 fps, 3,1 ms" });
             Assert.Contains("[app 10.0.0.1:5000] TypeError: algo en otra línea", rig.Log);
             Assert.Contains("[rend 10.0.0.1:5000] 60 fps, 3,1 ms", rig.Log);
             Assert.Contains("conecta 10.0.0.1:5000", rig.Log);
+        }
+
+        [Fact]
+        public void AConnectionWithoutAHelloIsClosedInTenSeconds()
+        {
+            using var rig = new Rig();
+            var silent = rig.Open();
+            var ana = rig.Join("Ana");
+            rig.Advance(Room.HelloMs - 1);
+            Assert.False(silent.IsClosed);
+            rig.Advance(1);
+            Assert.True(silent.IsClosed);
+            Assert.Contains("desconecta 10.0.0.1:5000 (sin identificarse)", rig.Log);
+            // Who said it keeps their connection.
+            rig.Advance(Room.SeatlessMs);
+            Assert.False(ana.IsClosed);
+        }
+
+        [Fact]
+        public void ARefusedHelloIsClosedAfterFiveMinutes()
+        {
+            using var rig = new Rig();
+            var ana = rig.Join("Ana");
+            var other = rig.Join("ana");
+            Assert.Single(other.Take("error"));
+            // Time to choose another name; not for good.
+            rig.Advance(Room.SeatlessMs - 1);
+            Assert.False(other.IsClosed);
+            rig.Advance(1);
+            Assert.True(other.IsClosed);
+            Assert.False(ana.IsClosed);
+        }
+
+        [Fact]
+        public void PastEightConnectionsWithoutASeatANewOneIsClosed()
+        {
+            using var rig = new Rig();
+            var ana = rig.Join("Ana");
+            var waiting = Enumerable.Range(0, Room.MaxSeatless).Select((_) => rig.Open()).ToList();
+            Assert.All(waiting, (w) => Assert.False(w.IsClosed));
+            var more = rig.Open();
+            var again = rig.Open();
+            Assert.True(more.IsClosed);
+            Assert.True(again.IsClosed);
+            // Said once, and what they send is nobody's.
+            Assert.Single(rig.Log, (line) => line.StartsWith("rechaza "));
+            rig.Say(more, new { t = "hello", name = "Pepe", version = "1.0.0" });
+            Assert.Empty(more.Take("welcome"));
+            Assert.Equal(new[] { "Ana" }, rig.Room.Summary().players);
+            // Once they're sent away, the partner gets in.
+            rig.Advance(Room.HelloMs);
+            Assert.All(waiting, (w) => Assert.True(w.IsClosed));
+            Assert.Equal(1, (int)rig.Join("Pepe").Take("welcome").Single()["slot"]!);
+            Assert.False(ana.IsClosed);
         }
 
         [Fact]

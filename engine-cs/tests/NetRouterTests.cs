@@ -73,13 +73,52 @@ namespace Bastion.Engine.Tests
         [Fact]
         public async Task ThisMachinesOwnLeftoverIsTakenAsItIs()
         {
+            // A run that died left it (ours by its name): taken, and taken back on quitting.
             using var igd = new FakeIgd();
             igd.Mapped[Game] = ("127.0.0.1", Game, 3600);
+            igd.Descriptions[Game] = "Bastion";
             igd.Conflict = true;
+            using var ssdp = new FakeSsdp(igd.Location);
+            var router = RouterPort.Open(Game, null, ssdp.Places());
+            await Settled(router);
+            Assert.Equal($"83.45.12.7:{Game}", router.Public);
+            router.Dispose();
+            Assert.Empty(igd.Mapped);
+        }
+
+        [Fact]
+        public async Task APortOpenedByHandIsUsedAndLeftAsItWas()
+        {
+            // The player's own rule to this machine's port (Gameplay's review, 10/11, #10: once it was taken over, and
+            // taken back on quitting): used as it is, never renewed nor deleted.
+            using var igd = new FakeIgd();
+            igd.Mapped[Game] = ("127.0.0.1", Game, 0);
+            igd.Descriptions[Game] = "Regla de Arturo";
+            igd.Conflict = true;
+            using var ssdp = new FakeSsdp(igd.Location);
+            var lines = new List<string>();
+            var router = RouterPort.Open(Game, (l) => { lock (lines) lines.Add(l); }, ssdp.Places());
+            await Settled(router);
+            Assert.Equal($"83.45.12.7:{Game}", router.Public);
+            router.Dispose();
+            Assert.Equal(("127.0.0.1", Game, 0), igd.Mapped[Game]);
+            Assert.Equal("Regla de Arturo", igd.Descriptions[Game]);
+            Assert.DoesNotContain(igd.Calls, (c) => c.EndsWith(" DeletePortMapping"));
+            lock (lines) Assert.Contains(lines, (l) => l.Contains("abierto a mano"));
+        }
+
+        [Fact]
+        public async Task APortOpenedIsTakenBackWhenTheRouterThenFails()
+        {
+            // Open, and then the router's address doesn't come (the connection cut): the screen says it couldn't, and the
+            // port isn't left open behind it (Gameplay's review, 10/11, #10).
+            using var igd = new FakeIgd { DropAddress = true };
             using var ssdp = new FakeSsdp(igd.Location);
             using var router = RouterPort.Open(Game, null, ssdp.Places());
             await Settled(router);
-            Assert.Equal($"83.45.12.7:{Game}", router.Public);
+            Assert.Equal(RouterState.Refused, router.State);
+            Assert.Null(router.Public);
+            Assert.Empty(igd.Mapped);
         }
 
         [Fact]
@@ -168,6 +207,11 @@ namespace Bastion.Engine.Tests
                 Assert.True(HostAddresses.FromTheInternet(p), p);
             foreach (var p in new[] { "192.168.1.30:51000", "100.101.12.7:41391", "127.0.0.1:4000", "10.0.0.2:5000", "?" })
                 Assert.False(HostAddresses.FromTheInternet(p), p);
+            // This machine: the host's own app, or a second copy beside it.
+            foreach (var p in new[] { "127.0.0.1:4000", "127.0.1.1:4000", "[::1]:5000", "[::ffff:127.0.0.1]:5000" })
+                Assert.True(HostAddresses.FromThisMachine(p), p);
+            foreach (var p in new[] { "192.168.1.30:51000", "83.45.12.7:51000", "[fe80::1]:5000", "?" })
+                Assert.False(HostAddresses.FromThisMachine(p), p);
         }
 
         private static async Task Settled(RouterPort router)
@@ -198,7 +242,11 @@ namespace Bastion.Engine.Tests
             public int? Refuse;
             public bool Ppp;
             public bool Chunked;
+
+            /// <summary>GetExternalIPAddress gets no answer: the connection is cut.</summary>
+            public bool DropAddress;
             public readonly ConcurrentDictionary<int, (string Client, int Inside, int Lease)> Mapped = new ConcurrentDictionary<int, (string, int, int)>();
+            public readonly ConcurrentDictionary<int, string> Descriptions = new ConcurrentDictionary<int, string>();
             public readonly ConcurrentQueue<string> Calls = new ConcurrentQueue<string>();
             private readonly TcpListener listener = new TcpListener(IPAddress.Loopback, 0);
             private readonly CancellationTokenSource stop = new CancellationTokenSource();
@@ -249,6 +297,7 @@ namespace Bastion.Engine.Tests
                     }
                     var path = text.Split(' ')[1];
                     var (status, body) = text.StartsWith("GET") ? (200, Description()) : Soap(path, text);
+                    if (status < 0) return;
                     var bytes = Encoding.UTF8.GetBytes(body);
                     var head = $"HTTP/1.1 {status} {(status == 200 ? "OK" : "Internal Server Error")}\r\nContent-Type: text/xml\r\n" + (Chunked ? "Transfer-Encoding: chunked\r\n\r\n" : $"Content-Length: {bytes.Length}\r\n\r\n");
                     var out_ = new MemoryStream();
@@ -295,6 +344,7 @@ namespace Bastion.Engine.Tests
                 switch (action)
                 {
                     case "GetExternalIPAddress":
+                        if (DropAddress) return (-1, "");
                         return Ok(action, $"<NewExternalIPAddress>{External}</NewExternalIPAddress>");
                     case "AddPortMapping":
                         if (Refuse != null) return Fault(Refuse.Value, "Action not authorized");
@@ -302,10 +352,11 @@ namespace Bastion.Engine.Tests
                         if (OnlyPermanent && lease != 0) return Fault(725, "OnlyPermanentLeasesSupported");
                         if (Taken.Contains(outside) || (Conflict && Mapped.ContainsKey(outside))) return Fault(718, "ConflictInMappingEntry");
                         Mapped[outside] = (Arg("NewInternalClient"), int.Parse(Arg("NewInternalPort")), lease);
+                        Descriptions[outside] = Arg("NewPortMappingDescription");
                         return Ok(action, "");
                     case "GetSpecificPortMappingEntry":
                         if (Taken.Contains(outside)) return Ok(action, $"<NewInternalPort>{Game}</NewInternalPort><NewInternalClient>192.168.1.50</NewInternalClient>");
-                        if (Mapped.TryGetValue(outside, out var m)) return Ok(action, $"<NewInternalPort>{m.Inside}</NewInternalPort><NewInternalClient>{m.Client}</NewInternalClient>");
+                        if (Mapped.TryGetValue(outside, out var m)) return Ok(action, $"<NewInternalPort>{m.Inside}</NewInternalPort><NewInternalClient>{m.Client}</NewInternalClient><NewPortMappingDescription>{(Descriptions.TryGetValue(outside, out var d) ? d : "")}</NewPortMappingDescription>");
                         return Fault(714, "NoSuchEntryInArray");
                     case "DeletePortMapping":
                         return Mapped.TryRemove(outside, out _) ? Ok(action, "") : Fault(714, "NoSuchEntryInArray");

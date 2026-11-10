@@ -42,8 +42,13 @@ namespace Bastion.UI.Combat
         /// <summary>The campaign as it was when the squad took off (the first `campaign` of the mission), for the base after it.</summary>
         CampaignState tookOff;
 
-        /// <summary>The presence last sent (the picked one and the pointer's tile), and when, so it goes at most a few times a second.</summary>
-        string presence;
+        /// <summary>
+        /// The presence last sent (the picked one and the pointer's tile), and when, so it goes at most a few times a second.
+        /// Kept as they are, not as a text: one made every frame to compare was garbage every frame (review of 10/11).
+        /// </summary>
+        string presenceUnit;
+        (int x, int y, int z)? presenceTile;
+        bool presenceSent;
         float presenceAt;
         bool? idleSent;
 
@@ -244,10 +249,13 @@ namespace Bastion.UI.Combat
             if (control == null || control.State == null) return;
             // What this player looks at, for the partner (game.ts sendPresence): the picked one and the pointer's tile.
             var tile = control.Hovered;
-            var key = $"{control.PickedId}|{tile?.X},{tile?.Y},{tile?.Z}";
-            if (key != presence && Time.realtimeSinceStartup - presenceAt > 0.15f)
+            var picked = control.PickedId;
+            var at = tile != null ? (tile.X, tile.Y, tile.Z) : ((int, int, int)?)null;
+            if ((!presenceSent || picked != presenceUnit || at != presenceTile) && Time.realtimeSinceStartup - presenceAt > 0.15f)
             {
-                presence = key;
+                presenceSent = true;
+                presenceUnit = picked;
+                presenceTile = at;
                 presenceAt = Time.realtimeSinceStartup;
                 net.Send(new PresenceMessage { Unit = control.PickedId, Tile = tile });
             }

@@ -297,7 +297,8 @@ namespace Bastion.UI.Combat
         /// Whether this player gives orders to `u` (rules.ts commandsFor): its own, the shared ones, and the partner's while
         /// the partner is gone (Arturo, 17/10). A siege's turret fires on its own: nobody's.
         /// </summary>
-        public bool Commands(Unit u) => u.Team == Teams.Xcom && u.Automaton == null && Content.CommandsFor(MySlot, u.Owner, ActiveSlots());
+        /// <remarks>Not a captive nor an objective (the VIP before it is freed, the relay): the engine's CommandUnit turns them down since the 0.12.16.</remarks>
+        public bool Commands(Unit u) => u.Team == Teams.Xcom && u.Automaton == null && !u.Captive && !u.Objective && Content.CommandsFor(MySlot, u.Owner, ActiveSlots());
 
         /// <summary>Whether this player holds the command (el mando); a holder who left blocks nobody.</summary>
         public bool HasCommand()
@@ -508,7 +509,8 @@ namespace Bastion.UI.Combat
             if (sent != null && Busy(sent)) sent = null;
             var u = Unit();
             // The movement it has left, apart from its actions (Arturo, 5/11 #14): one reach, in sky blue (#13).
-            var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && Paths.MoveBudget(u) > 0 && WaitingFor(u.Id) == null && !Busy(u.Id) && u.Id != sent;
+            // (Less than a step is none: Paths.HasTurnLeft, 0.12.16.)
+            var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && Paths.MoveBudget(u) >= Paths.CostOrtho && WaitingFor(u.Id) == null && !Busy(u.Id) && u.Id != sent;
             using (MRefreshReach.Auto())
             {
                 reach = moving ? Paths.ComputeReach(State, u, Paths.MoveBudget(u)) : null;

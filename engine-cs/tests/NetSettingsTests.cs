@@ -75,6 +75,29 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void TheRoutersPortIsOnUntilThePlayerTurnsItOff()
+        {
+            // Gameplay's review, 10/11, #10: a switch in Ajustes; a file of before, without it, keeps it on.
+            var dir = Path.Combine(Path.GetTempPath(), "bastion-router-" + Guid.NewGuid().ToString("N"));
+            var path = Path.Combine(dir, "conexion.json");
+            try
+            {
+                Assert.True(NetSettings.Load(path).Router);
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(path, "{\"name\":\"Ana\",\"tokens\":{}}");
+                var settings = NetSettings.Load(path);
+                Assert.True(settings.Router);
+                settings.Router = false;
+                settings.Save();
+                Assert.False(NetSettings.Load(path).Router);
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            }
+        }
+
+        [Fact]
         public void AHostTakesTheNextPortIfOneIsTaken()
         {
             var dir = Path.Combine(Path.GetTempPath(), "bastion-puerto-" + Guid.NewGuid().ToString("N"));

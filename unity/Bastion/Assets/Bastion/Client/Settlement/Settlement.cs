@@ -48,6 +48,11 @@ namespace Bastion.Client
             // No fade left over the next scene's 3D.
             Shader.SetGlobalFloat("_StageFade", 0);
             life?.ClearAll();
+            // The figures' graphs with them, Soldados', the row's and the posts' (the camp's go with ClearAll): left, each
+            // stayed till the app quit (UI, 10/11: «PlayableGraph was not destroyed», FigureAnimator, leaving the base).
+            showAnim?.Dispose();
+            foreach (var s in standers) s.anim?.Dispose();
+            foreach (var p in postStanders.Values) p.stander.anim?.Dispose();
             // (The pointer back, if it was walking about.)
             if (Walking)
             {

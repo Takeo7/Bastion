@@ -45,13 +45,20 @@ namespace Bastion.Net
 
     /// <summary>
     /// What a player's app keeps between games, next to the save (conexion.json): the name last played with, the address
-    /// last joined, and the seat's token at each host (the TypeScript app kept it in the page's storage, one per host).
+    /// last joined, the seat's token at each host (the TypeScript app kept it in the page's storage, one per host), and
+    /// whether hosting opens the game's port on the router.
     /// </summary>
     public sealed class NetSettings
     {
         public string? Name { get; set; }
         public string? Last { get; set; }
         public Dictionary<string, string> Tokens { get; set; } = new Dictionary<string, string>();
+
+        /// <summary>
+        /// Hosting asks the router for the game's port, to be joined from the internet (RouterPort): on unless the player
+        /// turns it off (Gameplay's review, 10/11, #10: it opened when playing alone too). Missing in older files: on.
+        /// </summary>
+        public bool Router { get; set; } = true;
 
         [JsonIgnore]
         public string Path { get; private set; } = "";

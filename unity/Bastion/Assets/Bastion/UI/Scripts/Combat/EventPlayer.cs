@@ -743,13 +743,13 @@ namespace Bastion.UI.Combat
         /// <summary>
         /// The dead walking in one run (game.ts playGroup; playtest 16/10 #6): one framing over where they are and where they
         /// go, a still moment, and they all walk at once, each one's actions as one stretch, a little quicker. The doors they
-        /// open go first, at once.
+        /// open go first, at once; their noises go on the view with the walks, in the engine's order (OnTheWalks).
         /// </summary>
         async Awaitable PlayGroup(Round r, List<(GameEvent e, int? by, int epoch)> all)
         {
             Fail("PlayGroup");
             var v = V;
-            var doors = all.Where(q => !(q.e is MovedEvent)).ToList();
+            var doors = all.Where(q => q.e is TileChangedEvent).ToList();
             var items = all.Where(q => q.e is MovedEvent).ToList();
             var shown = items.Where(q => EnemyActor(q.e) != null).ToList();
             var hold = resultHold;
@@ -807,8 +807,21 @@ namespace Bastion.UI.Combat
             Fresh(r);
             // All of them where they stopped before the view syncs (playtest 21/10 #21: they walked in, vanished, and came
             // back all at once).
-            foreach (var q in items) Apply(r, q.e);
-            await SettleAll(r, items.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
+            var rest = OnTheWalks(all, doors);
+            foreach (var q in rest) Apply(r, q.e);
+            await SettleAll(r, rest.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
+        }
+
+        /// <summary>
+        /// What of a run of walks goes on the view once they have been seen (PlayGroup, PlayWalks): all but the doors they
+        /// opened (`opened`, on it first, to be seen opening), in the engine's order, the noises of those doors with them. A
+        /// noise turns whoever hears it towards it (NoiseEvent: Facing): on the view before a walk that came first, the walk
+        /// turned them back, and the view faced elsewhere than the state (review of 10/11, the 0.12.16's lab).
+        /// </summary>
+        static List<(GameEvent e, int? by, int epoch)> OnTheWalks(List<(GameEvent e, int? by, int epoch)> all, List<(GameEvent e, int? by, int epoch)> opened)
+        {
+            var first = new HashSet<(GameEvent, int?, int)>(opened);
+            return all.Where(q => !first.Contains(q)).ToList();
         }
 
         /// <summary>
@@ -1102,10 +1115,12 @@ namespace Bastion.UI.Combat
             }
             else if (hold > 0) await Wait(hold);
             Fresh(r);
-            // The doors they open on their way, first and at once (playtest 17/10 #46): a door and the noise it makes.
-            var doorTiles = w.Items.Where(q => q.e is TileChangedEvent).Select(q => ((TileChangedEvent)q.e).Pos).ToList();
+            // The doors they open on their way, first and at once (playtest 17/10 #46); the noise each makes isn't played in a
+            // walker's chain, and goes on the view with the walks, in the engine's order (OnTheWalks).
+            var opened = w.Items.Where(q => q.e is TileChangedEvent).ToList();
+            var doorTiles = opened.Select(q => ((TileChangedEvent)q.e).Pos).ToList();
             var doors = new HashSet<(GameEvent, int?, int)>(w.Items.Where(q => q.e is TileChangedEvent || q.e is NoiseEvent n && doorTiles.Any(t => Grid.SamePos(t, n.Tile))));
-            await SettleAll(r, w.Items.Where(doors.Contains).Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
+            await SettleAll(r, opened.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), false);
             // Each walker's whole walk for the plan; each plays its own stretches, with what befalls it between them.
             var whole = w.Chains.Select(c => c.Where(q => q.e is MovedEvent).Select(q => (MovedEvent)q.e).ToList())
                 .Select(ms => new MovedEvent { Unit = ms[0].Unit, Path = ms.SelectMany(x => x.Path).ToList(), Ap = ms.Sum(x => x.Ap), Run = ms.Any(x => x.Run == true) ? true : (bool?)null }).ToList();
@@ -1135,7 +1150,7 @@ namespace Bastion.UI.Combat
             Fresh(r);
             // All of them where they stopped before the view syncs (playtest 21/10 #21).
             var settleFrom = Time.time;
-            var rest = w.Items.Where(q => !doors.Contains(q)).ToList();
+            var rest = OnTheWalks(w.Items, opened);
             foreach (var q in rest) Apply(r, q.e);
             await SettleAll(r, rest.Select(q => (q.e, q.by, (int?)q.epoch)).ToList(), true);
             await AnnounceSighted(rest.FirstOrDefault(q => q.e is MovedEvent).e ?? w, by, before, epoch);

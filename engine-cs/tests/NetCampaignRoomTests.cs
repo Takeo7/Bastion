@@ -294,6 +294,12 @@ namespace Bastion.Engine.Tests
             // A colour of the look with a line break after it: /$/ in JavaScript ends there, and so here.
             rig.Say(ana, Ccmd(new { type = "customize", soldier = "s0a", name = "Ana", nickname = "", appearance = new { primary = "#826cbd\n", look.secondary, look.visor, look.head, look.build } }));
             Assert.Single(ana.Take("error"));
+            // A field sent as null keeps its default (Json reads them with NullValueHandling.Ignore): the check never sees a
+            // null, and the rules answer as for any other (Gameplay's review, 10/11). Never a fault in red.log.
+            rig.Say(ana, Ccmd(new { type = "customize", soldier = "s0a", name = (string?)null, nickname = (string?)null, appearance = look }));
+            Assert.Empty(ana.Take("error"));
+            Assert.Equal(1, ana.Take("rejected").Count + ana.Take("campaign").Count);
+            Assert.DoesNotContain(rig.Log, (l) => l.Contains("Fallo"));
         }
 
         [Fact]

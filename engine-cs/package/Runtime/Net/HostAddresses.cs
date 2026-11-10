@@ -71,13 +71,18 @@ namespace Bastion.Net
         }
 
         /// <summary>
-        /// An IPv4 address on the internet: not a private network's, nor CG-NAT's or Tailscale's (100.64.0.0/10), nor this
-        /// machine's, a self-assigned or an unspecified one.
+        /// An address on the internet. IPv4: not a private network's, nor CG-NAT's or Tailscale's (100.64.0.0/10), nor this
+        /// machine's, a self-assigned or an unspecified one. IPv6 (Gameplay's review, 10/11, #9: they came in as the
+        /// house's): any but this machine's, the unspecified, a link's (fe80::/10, and the old site's, fec0::/10), the
+        /// unique local ones (fc00::/7: Tailscale's among them) and multicast.
         /// </summary>
         public static bool OnTheInternet(IPAddress address)
         {
             if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
             var b = address.GetAddressBytes();
+            if (b.Length == 16)
+                return !(IPAddress.IPv6Loopback.Equals(address) || IPAddress.IPv6None.Equals(address) || (b[0] == 0xfe && (b[1] & 0x80) == 0x80)
+                    || (b[0] & 0xfe) == 0xfc || b[0] == 0xff);
             if (b.Length != 4) return false;
             return !(b[0] == 0 || b[0] == 10 || b[0] == 127 || IsTailscale(address) || (b[0] == 169 && b[1] == 254)
                 || (b[0] == 172 && b[1] >= 16 && b[1] < 32) || (b[0] == 192 && b[1] == 168));
@@ -86,9 +91,22 @@ namespace Bastion.Net
         /// <summary>Whether a connection's peer (address:port, as IConnection.Peer says it) comes from the internet: through a port the router opened.</summary>
         public static bool FromTheInternet(string peer)
         {
+            return TryPeer(peer, out var address) && OnTheInternet(address);
+        }
+
+        /// <summary>Whether a connection's peer is this machine (127.0.0.0/8, ::1): the host's own app, or a second copy beside it.</summary>
+        public static bool FromThisMachine(string peer)
+        {
+            if (!TryPeer(peer, out var address)) return false;
+            if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+            return IPAddress.IsLoopback(address);
+        }
+
+        private static bool TryPeer(string peer, out IPAddress address)
+        {
             var at = peer.LastIndexOf(':');
             var host = (at > 0 ? peer.Substring(0, at) : peer).Trim('[', ']');
-            return IPAddress.TryParse(host, out var address) && OnTheInternet(address);
+            return IPAddress.TryParse(host, out address!);
         }
 
         /// <summary>

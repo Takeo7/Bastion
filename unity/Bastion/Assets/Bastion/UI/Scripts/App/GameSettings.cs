@@ -408,6 +408,7 @@ namespace Bastion.UI.App
         public const string TintId = "squadTint";
         public const string InterfaceId = "uiScale";
         public const string AutoId = "autoQuality";
+        public const string RouterId = "routerPort";
 
         public const string SoundId = "sound";
         const string VolumePrefix = "volume.";
@@ -424,7 +425,33 @@ namespace Bastion.UI.App
             if (battle != null) rows.AddRange(battle);
             rows.AddRange(Looks());
             rows.Add(Auto());
+            rows.Add(Router());
             return rows;
+        }
+
+        /// <summary>
+        /// Whether hosting opens the game's port on the router, to be joined from the internet (Gameplay's review, 10/11,
+        /// #10: Red's NetLink.RouterWanted, kept in conexion.json; on unless turned off, as before). Turned while hosting, the
+        /// port opens or closes at once. Without NetLink (the labs), as it starts: on.
+        /// </summary>
+        static Hud.SettingView Router() => new Hud.SettingView
+        {
+            Id = RouterId,
+            Label = RouterText.Label,
+            About = RouterText.About,
+            Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
+            ChoiceTips = new System.Collections.Generic.List<string> { RouterText.YesTip, RouterText.NoTip },
+            On = Bastion.Client.Net.NetLink.Instance == null || Bastion.Client.Net.NetLink.Instance.RouterWanted ? 0 : 1,
+            Tail = true,
+        };
+
+        /// <summary>The router's row's words (Lore, .dev-snapshots/lore/0.12.17/TEXTOS.md §5).</summary>
+        public static class RouterText
+        {
+            public const string Label = "Abrir el puerto del router";
+            public const string About = "Al alojar una partida, el juego abre su puerto en el router. Así, quien juegue contigo puede entrar por internet con la dirección y la clave. Con el puerto abierto, quien entra por primera vez desde tu red también necesita la clave. Con «No», el juego no toca el router: se entra desde tu red o con Tailscale.";
+            public const string YesTip = "Se puede entrar por internet";
+            public const string NoTip = "Desde tu red o con Tailscale";
         }
 
         /// <summary>The volumes' names and help (settingsPanel.ts soundSettings), by Red's keys (Bastion.Client.Audio.Volumes).</summary>
@@ -579,6 +606,11 @@ namespace Bastion.UI.App
             else if (id == TintId) SquadTint = value == 1;
             else if (id == AutoId) AutoQuality = value == 0;
             else if (id == InterfaceId) InterfaceSize = InterfaceSizes[Mathf.Clamp((int)value, 0, InterfaceSizes.Length - 1)];
+            else if (id == RouterId)
+            {
+                var link = Bastion.Client.Net.NetLink.Instance;
+                if (link != null) link.RouterWanted = value == 0;
+            }
             else if (id == SoundId)
             {
                 if ((value == 1) != Bastion.Client.Audio.Volumes.Muted) Bastion.Client.Audio.Volumes.ToggleMute();

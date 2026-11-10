@@ -222,6 +222,42 @@ namespace Bastion.Client.Net
         /// <summary>Hosting, the port open on the router: where the partner joins from the internet (address:port); null otherwise.</summary>
         public string? Internet => router?.Public;
 
+        /// <summary>
+        /// Ajustes (Gameplay's review, 10/11, #10): whether hosting asks the router for the game's port, to be joined from
+        /// the internet (NetSettings.Router: on unless the player turns it off). Turned while hosting, the port is asked for
+        /// or taken back at once; RouterChanged says so.
+        /// </summary>
+        public bool RouterWanted
+        {
+            get => settings.Router;
+            set
+            {
+                if (settings.Router == value) return;
+                settings.Router = value;
+                settings.Save();
+                if (host == null || LocalOnly) return;
+                if (value)
+                {
+                    if (router == null) OpenRouter();
+                    return;
+                }
+                var opened = router;
+                router = null;
+                if (opened == null) return;
+                log.Write("[router] el jugador lo apaga en Ajustes: se cierra el puerto");
+                _ = Task.Run(opened.Dispose);
+                routerNews = true;
+            }
+        }
+
+        /// <summary>Hosting, the game's port asked of the router (RouterPort); its answers come by RouterChanged.</summary>
+        private void OpenRouter()
+        {
+            router = RouterPort.Open(host!.Port, log.Write);
+            router.Changed += () => routerNews = true;
+            routerNews = true;
+        }
+
         /// <summary>Hosting, the room's key: what joining from the internet asks besides the address (Room.Key; Arturo, 1/11).</summary>
         public string? Key => room?.Key;
 
@@ -319,9 +355,8 @@ namespace Bastion.Client.Net
                 if (!LocalOnly)
                 {
                     announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
-                    router = RouterPort.Open(host.Port, log.Write);
-                    router.Changed += () => routerNews = true;
-                    routerNews = true;
+                    if (settings.Router) OpenRouter();
+                    else log.Write("[router] sin abrir: el jugador lo tiene apagado en Ajustes");
                 }
             }
             return Open("127.0.0.1", host.Port, name, false);
@@ -538,6 +573,8 @@ namespace Bastion.Client.Net
             if (routerNews)
             {
                 routerNews = false;
+                // While the port is open, the room asks the key of whoever isn't on this machine (Gameplay's review, 10/11, #9).
+                room?.Exposed(router?.State == RouterState.Open);
                 RouterChanged?.Invoke();
             }
             if (now - errorMinute > TimeSpan.FromMinutes(1))

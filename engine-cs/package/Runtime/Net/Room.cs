@@ -45,6 +45,15 @@ namespace Bastion.Net
         /// <summary>A report's line is cut here, as /__report's body was (index.ts).</summary>
         public const int ReportMax = 2000;
 
+        /// <summary>A connection that says no hello this long after it opens is closed (our app says it at once).</summary>
+        public const long HelloMs = 10_000;
+
+        /// <summary>One whose hello was refused (a name in use) and that gets no seat this long after is closed too: its player went.</summary>
+        public const long SeatlessMs = 5 * 60_000;
+
+        /// <summary>Connections without a seat at once: past these, a new one is closed as it comes.</summary>
+        public const int MaxSeatless = 8;
+
         private sealed class Seat
         {
             public int Slot;
@@ -66,6 +75,8 @@ namespace Bastion.Net
         {
             public readonly IConnection Socket;
             public Seat? Seat;
+            /// <summary>It sent a hello, taken or refused (HelloMs no longer runs for it, SeatlessMs does).</summary>
+            public bool Said;
 
             public Link(IConnection socket)
             {
@@ -118,6 +129,8 @@ namespace Bastion.Net
         private readonly List<Later> timers = new List<Later>();
         private long laterOrder;
         private readonly List<Link> links = new List<Link>();
+        /// <summary>When red.log last said a connection was turned away (MaxSeatless): once a minute at most.</summary>
+        private long? crowdNoted;
 
         private readonly Seat?[] seats = new Seat?[2];
         /// <summary>The waits on joint decisions now running (AnswerWaitMs), by kind.</summary>
@@ -140,6 +153,14 @@ namespace Bastion.Net
         private readonly bool[] idle = new bool[2];
         /// <summary>The last turnClock message sent, so an unchanged one isn't sent again.</summary>
         private string clockSent = "";
+
+        /// <summary>The save wouldn't start: what the players are told (the lobby, and a note to each as they come in), or null.</summary>
+        private readonly string? restored;
+        /// <summary>The seats' tokens already given that note.</summary>
+        private readonly HashSet<string> toldRestored = new HashSet<string>();
+
+        /// <summary>The game's port is open on the router (RouterPort, Exposed): the key from anywhere but this machine.</summary>
+        private bool exposed;
 
         private readonly object summaryGate = new object();
         private IReadOnlyList<string> summaryPlayers = new string[0];
@@ -197,10 +218,73 @@ namespace Bastion.Net
             this.say = say ?? ((_) => { });
             this.rng = rng ?? new Rng(unchecked((uint)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
             var saved = store.Load();
-            if (saved == null) return;
+            if (saved == null || Restore(saved, out var why)) return;
+            // Read, but the room won't start with it (Gameplay's review, 10/11, #11: once, every try to host failed on it):
+            // it goes aside as it is, and the copies are tried, newest first; the players are told which one it goes on from.
+            var broken = store.PutAside();
+            store.Log($"[save] La partida guardada no arranca ({why}){(broken != null ? $"; queda en {broken}" : "")}.");
+            foreach (var (label, file) in store.Copies())
+            {
+                var copy = store.LoadCopy(file);
+                if (copy == null) continue;
+                if (Restore(copy, out why))
+                {
+                    restored = RestoredText(label, broken);
+                    store.Log($"[save] Se sigue desde {file}.");
+                    Persist();
+                    return;
+                }
+                store.Log($"[save] Tampoco arranca {file} ({why}).");
+            }
+            restored = RestoredText(null, broken);
+            store.Log("[save] Ninguna copia arranca: se empieza en el vestíbulo.");
+        }
+
+        /// <summary>What the players are told when the save wouldn't start: the copy it goes on from (Copies' label), or none.</summary>
+        private static string RestoredText(string? copy, string? broken)
+        {
+            var day = Regex.Match(copy ?? "", @"^dia-(\d+)$");
+            var aside = broken != null ? $" La que falló queda aparte, en {Path.GetFileName(broken)}." : "";
+            if (copy == null) return $"La partida guardada no se ha podido abrir, ni ninguna de sus copias. Hay que empezar una nueva.{aside}";
+            return $"La partida guardada no se ha podido abrir. Se sigue desde {(day.Success ? $"la copia del día {day.Groups[1].Value}" : "la copia anterior")}.{aside}";
+        }
+
+        /// <summary>
+        /// The room as `saved` left it, or, if it won't take it (whatever throws: a seat out of its place, a state the rules
+        /// can't bring up to date), as a new one, and why.
+        /// </summary>
+        private bool Restore(SaveFile saved, out string? why)
+        {
+            try
+            {
+                Restoring(saved);
+                why = null;
+                return true;
+            }
+            catch (Exception e)
+            {
+                for (int i = 0; i < 2; i++) seats[i] = null;
+                campaign = null;
+                phase = RoomPhases.Lobby;
+                mode = "skirmish";
+                state = null;
+                resultApplied = false;
+                missionKind = MissionKinds.Elimination;
+                skirmishMap = SkirmishMaps.City;
+                skirmishVeterans = true;
+                skirmishNight = false;
+                Summarize();
+                why = $"{e.GetType().Name}: {e.Message}";
+                return false;
+            }
+        }
+
+        private void Restoring(SaveFile saved)
+        {
             for (int i = 0; i < 2; i++)
             {
                 var s = i < saved.Seats.Count ? saved.Seats[i] : null;
+                if (s != null && s.Slot != i) throw new InvalidDataException($"el puesto {i + 1} dice ser el {s.Slot + 1}");
                 seats[i] = s == null ? null : new Seat { Slot = s.Slot, Name = s.Name, Token = s.Token };
             }
             // Without the campaign's rules, only a skirmish's mission goes on; the campaign stays in the save as it was.
@@ -303,17 +387,42 @@ namespace Bastion.Net
 
         // ---------------------------------------------------------- connections
 
+        /// <summary>
+        /// Whether the game's port is open on the router (RouterPort; from any thread): while it is, whoever isn't on this
+        /// machine brings the key or a seat's token (Gameplay's review, 10/11, #9).
+        /// </summary>
+        public void Exposed(bool open) => Post(() => exposed = open);
+
         /// <summary>A line for red.log from the host's port (from any thread): a connection that failed as it came.</summary>
         public void Note(string line) => Post(() => store.Log(line));
 
-        /// <summary>A player's app connected (from any thread): before it says anything.</summary>
+        /// <summary>
+        /// A player's app connected (from any thread): before it says anything. Its hello within HelloMs, or it is closed;
+        /// past MaxSeatless connections without a seat, it is closed as it comes (Gameplay's review, 10/11, #8: anyone may
+        /// knock on the router's port, and once nothing sent them away).
+        /// </summary>
         public void Connect(IConnection socket)
         {
             var link = new Link(socket);
             Post(() =>
             {
+                if (links.Count((l) => l.Seat == null) >= MaxSeatless)
+                {
+                    // Someone knocking again and again: said once a minute, or red.log would fill with it.
+                    if (crowdNoted == null || clock.Now - crowdNoted >= 60_000)
+                    {
+                        crowdNoted = clock.Now;
+                        store.Log($"rechaza {socket.Peer}: ya hay {MaxSeatless} conexiones sin puesto");
+                    }
+                    socket.Close("demasiadas conexiones");
+                    return;
+                }
                 links.Add(link);
                 store.Log($"conecta {socket.Peer}");
+                After(HelloMs, () =>
+                {
+                    if (links.Contains(link) && !link.Said) link.Socket.Close("sin identificarse");
+                });
             });
             socket.Message += (text) => Post(() => Heard(link, text));
             socket.Closed += (why) => Post(() => Gone(link, why));
@@ -321,24 +430,31 @@ namespace Bastion.Net
 
         private void Heard(Link link, string text)
         {
+            // Turned away as it came (MaxSeatless): what it still sends is nobody's.
+            if (!links.Contains(link)) return;
             ClientMessage msg;
+            bool valid;
             try
             {
                 msg = Json.ReadFromPlayer<ClientMessage>(text);
+                // In the try too: whatever trips the check (a null it didn't expect; Json lets none through today) is a
+                // refusal like any other, not a fault in red.log (Gameplay's review, 10/11).
+                valid = Valid(msg);
             }
             catch (Exception)
             {
-                Send(link.Socket, new ErrorMessage { Message = "Mensaje no válido." });
-                return;
+                msg = null!;
+                valid = false;
             }
-            if (!Valid(msg))
+            if (!valid)
             {
                 Send(link.Socket, new ErrorMessage { Message = "Mensaje no válido." });
                 return;
             }
             if (msg is ReportMessage report)
             {
-                Report(link.Socket, report.Line);
+                // Only from a player in their seat: one without could write anything into red.log, and make it turn over.
+                if (link.Seat != null && link.Seat.Socket == link.Socket) Report(link.Socket, report.Line);
                 return;
             }
             if (msg is HelloMessage hello)
@@ -349,6 +465,15 @@ namespace Bastion.Net
                 {
                     Send(link.Socket, new ErrorMessage { Message = "Ya tienes un puesto en esta partida." });
                     return;
+                }
+                if (!link.Said)
+                {
+                    link.Said = true;
+                    // Refused (a name in use), it stays open for another; not for good.
+                    After(SeatlessMs, () =>
+                    {
+                        if (links.Contains(link) && link.Seat == null) link.Socket.Close("sin puesto");
+                    });
                 }
                 link.Seat = Join(link.Socket, hello);
                 return;
@@ -365,7 +490,8 @@ namespace Bastion.Net
 
         private void Gone(Link link, string why)
         {
-            links.Remove(link);
+            // One turned away as it came was never in: nothing to say.
+            if (!links.Remove(link)) return;
             store.Log($"desconecta {link.Socket.Peer} ({why})");
             var seat = link.Seat;
             if (seat == null || seat.Socket != link.Socket) return;
@@ -479,7 +605,7 @@ namespace Bastion.Net
                 case EquipCommand c:
                     return Id(c.Soldier) && ItemSlots.All.Contains(c.Slot) && (c.Item == null || Has(Content.Items, c.Item));
                 case CustomizeCommand c:
-                    return Id(c.Soldier) && c.Name.Length <= Appearances.NameMax * 2 && c.Nickname.Length <= Appearances.NicknameMax * 2 && ValidAppearance(c.Appearance);
+                    return Id(c.Soldier) && c.Name != null && c.Name.Length <= Appearances.NameMax * 2 && c.Nickname != null && c.Nickname.Length <= Appearances.NicknameMax * 2 && ValidAppearance(c.Appearance);
                 case TreatCommand c:
                     return Id(c.Soldier);
                 case MedicateCommand c:
@@ -529,7 +655,7 @@ namespace Bastion.Net
 
         private static bool UnitId(string? id) => Id(id);
 
-        private static bool Spot(Pos p) => p.Z >= 0 && p.Z <= 3;
+        private static bool Spot(Pos? p) => p != null && p.Z >= 0 && p.Z <= 3;
 
         /// <summary>A line from an app for red.log: how its screen draws comes tagged `[rend name]`; the address stands in for a missing one.</summary>
         private void Report(IConnection socket, string line)
@@ -538,11 +664,21 @@ namespace Bastion.Net
             store.Log(Regex.IsMatch(text, @"^\[rend[ \]]") ? Regex.Replace(text, @"^\[rend\]", $"[rend {socket.Peer}]") : $"[app {socket.Peer}] {text}");
         }
 
+        /// <summary>Why a hello is asked for the room's key (KeyGiven): what the refusal without one says.</summary>
+        private enum KeyFor
+        {
+            /// <summary>From the internet.</summary>
+            Internet,
+
+            /// <summary>From outside this machine with the router's port open (it may be the internet, looking like the house).</summary>
+            Exposed,
+        }
+
         /// <summary>
-        /// Whether a hello from the internet brings the room's key. If not, it is told so and closed, and its address counts
-        /// one more wrong one: KeyTries within KeyTriesMs shut it out for KeyShutMs, the right key and all.
+        /// Whether a hello brings the room's key, asked `why`. If not, it is told so and closed, and its address counts one
+        /// more wrong one: KeyTries within KeyTriesMs shut it out for KeyShutMs, the right key and all.
         /// </summary>
-        private bool KeyGiven(IConnection socket, string? key)
+        private bool KeyGiven(IConnection socket, string? key, KeyFor why)
         {
             var at = socket.Peer.LastIndexOf(':');
             var address = at > 0 ? socket.Peer.Substring(0, at) : socket.Peer;
@@ -562,9 +698,9 @@ namespace Bastion.Net
                 }
                 keyTries[address] = tries;
                 // Lore's (1/11): a wrong one is most likely an old one, from an earlier time it was hosted.
-                refusal = string.IsNullOrWhiteSpace(key)
-                    ? "Por internet hace falta la clave de la partida. Quien aloja la ve detrás de la dirección: pídele las dos juntas."
-                    : "Esa clave no es la de esta partida: cambia cada vez que se aloja. Pide la de ahora a quien la aloja.";
+                refusal = !string.IsNullOrWhiteSpace(key) ? "Esa clave no es la de esta partida: cambia cada vez que se aloja. Pide la de ahora a quien la aloja."
+                    : why == KeyFor.Exposed ? "Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su menú principal. Escribe la dirección y la clave juntas en «Unirse por dirección»."
+                    : "Por internet hace falta la clave de la partida. Quien la aloja la ve en su menú principal. Escribe la dirección y la clave juntas en «Unirse por dirección».";
             }
             if (refusal == null) return true;
             Send(socket, new ErrorMessage { Message = refusal });
@@ -583,11 +719,20 @@ namespace Bastion.Net
                 socket.Close("otra versión");
                 return null;
             }
-            // From the internet, the key or a seat's token; shut out after too many wrong keys.
-            if (HostAddresses.FromTheInternet(socket.Peer) && !(token != null && seats.Any((s) => s != null && s.Token == token)) && !KeyGiven(socket, hello.Key)) return null;
+            // The key or a seat's token from the internet, and from anywhere but this machine while the router's port is open
+            // (Gameplay's review, 10/11, #9: a router that rewrites where it comes from, a double NAT or a tunnel brought the
+            // internet in looking like the house); shut out after too many wrong keys. Asked once (Keyed).
+            var bySeat = seats.FirstOrDefault((s) => s != null && token != null && s.Token == token);
+            var here = HostAddresses.FromThisMachine(socket.Peer);
+            bool? keyed = null;
+            bool Keyed(KeyFor why) => keyed ??= KeyGiven(socket, hello.Key, why);
+            var internet = HostAddresses.FromTheInternet(socket.Peer);
+            if (bySeat == null && !here && (exposed || internet) && !Keyed(internet ? KeyFor.Internet : KeyFor.Exposed)) return null;
             // By the seat's token; from an app without it (another computer, a reinstall), by the player's name, so each
-            // finds their own seat and soldiers. Only a seat nobody plays from: one in use with that name is someone else's (below).
-            var seat = seats.FirstOrDefault((s) => s != null && token != null && s.Token == token) ?? seats.FirstOrDefault((s) => s != null && s.Socket == null && SameName(s.Name, name));
+            // finds their own seat and soldiers. Only a seat nobody plays from: one in use with that name is someone else's
+            // (below). No key for it from the house with the router's port closed (Gameplay, 10/11: the token is kept by the
+            // host's address, which changes at home, and the partner would be asked a key there); with it open, asked above.
+            var seat = bySeat ?? seats.FirstOrDefault((s) => s != null && s.Socket == null && SameName(s.Name, name));
             // Two commanders with one name can't be told apart (Arturo, 18/10 #51): the other seat's name is theirs.
             // Asked before any seat is made, so a refusal leaves none behind.
             if (seats.Any((s) => s != null && s != seat && SameName(s.Name, name)))
@@ -633,6 +778,8 @@ namespace Bastion.Net
             say($"[room] {name} ocupa el puesto {seat.Slot + 1}.");
 
             Send(socket, new WelcomeMessage { Token = seat.Token, Slot = seat.Slot, Hosts = hosts, Version = version });
+            // The save wouldn't start: each player is told once, wherever they land (the lobby says it too).
+            if (restored != null && toldRestored.Add(seat.Token)) Send(socket, new ErrorMessage { Message = restored });
             // A partner joining a campaign started without them gets soldiers of their own.
             if (phase == RoomPhases.Base) BringPlayersIn();
             BroadcastRoom();
@@ -1285,7 +1432,7 @@ namespace Bastion.Net
                 ? new SavedCampaign { Day = campaign.Day, Missions = campaign.MissionsFlown ?? 0, Doom = campaign.Doom, Level = Progression.BastionLevel(campaign.Level), InMission = paused != null ? paused.CampaignMission?.Name ?? paused.MapName : null }
                 : null;
             // A campaign from before the 0.7 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
-            return new RoomMessage { Players = Players(), Phase = phase, SavedCampaign = saved, SetAside = store.SetAside != null ? Path.GetFileName(store.SetAside) : null };
+            return new RoomMessage { Players = Players(), Phase = phase, SavedCampaign = saved, SetAside = store.SetAside != null ? Path.GetFileName(store.SetAside) : null, Restored = restored };
         }
 
         private void Broadcast(ServerMessage msg)

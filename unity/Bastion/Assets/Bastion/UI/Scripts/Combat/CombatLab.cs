@@ -521,6 +521,18 @@ namespace Bastion.UI.Combat
                                 Debug.Log($"[lab] Ajuste auto: {App.GameSettings.AutoQuality}, {App.GameSettings.Summary()}");
                             }
                             break;
+                        case "router":
+                            // Ajustes scrolled down to the router's row (Gameplay's review, 10/11, #10), for its capture.
+                            foreach (var doc in FindObjectsByType<UnityEngine.UIElements.UIDocument>(FindObjectsSortMode.None))
+                            {
+                                if (doc.rootVisualElement == null) continue;
+                                var row = UnityEngine.UIElements.UQueryExtensions.Query(doc.rootVisualElement, className: "setting").ToList()
+                                    .FirstOrDefault(r => UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Label>(r, className: "setting__name")?.text == App.GameSettings.RouterText.Label.ToUpperInvariant());
+                                if (row == null) continue;
+                                row.GetFirstAncestorOfType<UnityEngine.UIElements.ScrollView>()?.ScrollTo(row);
+                                Debug.Log("[lab] Ajustes: la fila del router a la vista");
+                            }
+                            break;
                         case "llegada":
                         case "llegada-dentro":
                             // Three of the dead and one of the living arriving where the squad sees them, nearest the edge

@@ -108,7 +108,7 @@ namespace Bastion.UI.Start
             // Drawn again only when who is in, their state, or the choices change.
             var k = room == null ? "" : string.Join("|", room.Players.Select(p => $"{p.Slot}:{p.Name}:{p.Connected}:{p.Away}"));
             var saved = room?.SavedCampaign;
-            k += $"#{Hosting}#{mission}#{night}#{warned}#{page}#{(saved != null ? RoomText.Saved(saved) : "")}#{room?.SetAside}#{Router}#{Internet}";
+            k += $"#{Hosting}#{mission}#{night}#{warned}#{page}#{(saved != null ? RoomText.Saved(saved) : "")}#{room?.SetAside}#{room?.Restored}#{Router}#{Internet}#{link.Key}";
             if (k == key) return;
             key = k;
             Draw();
@@ -200,6 +200,8 @@ namespace Bastion.UI.Start
             });
             Choice(menu, RoomText.Skirmish, saved?.InMission != null ? RoomText.SkirmishBlocked : RoomText.SkirmishAbout, false, ok && saved?.InMission == null, () => Go("skirmish"));
             if (!string.IsNullOrEmpty(room?.SetAside)) Ui.Text(RoomText.SetAside(room.SetAside), "start__hint", menu);
+            // The save wouldn't start: which copy the game goes on from (the host's words, Red 0.12.17).
+            if (!string.IsNullOrEmpty(room?.Restored)) Ui.Text(room.Restored, "start__hint", menu);
         }
 
         /// <summary>A choice of the main page (lobby.ts .menu-item): its name big, what it is small under it.</summary>
@@ -244,6 +246,10 @@ namespace Bastion.UI.Start
             if (addresses.Count > 0) Address(invite, addresses[0]);
             if (internet != null) Address(invite, new HostAddress { Address = internet, Kind = "internet" });
             else if (router != null && router != RouterState.Open) Ui.Text(RoomText.RouterLine(router.Value), router == RouterState.Trying ? "room__router" : "room__router room__router--off", invite);
+            // Without the internet's address (which carries it), the room's key on its own: asked of whoever comes from the
+            // internet (an IPv6 address too, the port closed or not), and from the house while the router's port is open (Red,
+            // 0.12.17; Gameplay's review, 10/11, #9; Lore's words).
+            if (internet == null && previewRoom == null && link.Key is string key) Ui.Text(RoomText.KeyLine(key), "room__router", invite);
             if (addresses.Count > 1)
             {
                 var more = new Foldout { text = RoomText.OtherAddresses(addresses.Count - 1), value = false };

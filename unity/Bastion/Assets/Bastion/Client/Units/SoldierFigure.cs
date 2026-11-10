@@ -38,6 +38,8 @@ namespace Bastion.Client.Units
                 if (job.key == key) job = default;
                 made[key] = model = Build(dress, separate);
             }
+            // (Asked for: kept as the others, till the scene goes.)
+            unasked.Remove(key);
             if (model == null) return null;
             var figure = UnityEngine.Object.Instantiate(model);
             figure.name = name;
@@ -56,7 +58,11 @@ namespace Bastion.Client.Units
         {
             queued.Clear();
             pending.Clear();
-            foreach (var d in dresses)
+            var wanted = dresses.ToList();
+            // What was made in the background before and no one asked for, let go now unless wanted again (Forget).
+            var keys = new HashSet<string>(wanted.Select(d => KeyOf(d, separate)));
+            foreach (string key in unasked.Keys.Where(k => !keys.Contains(k)).ToList()) Forget(key);
+            foreach (var d in wanted)
             {
                 string key = KeyOf(d, separate);
                 if (Ready(d, separate) || pending.ContainsKey(key)) continue;
@@ -78,9 +84,62 @@ namespace Bastion.Client.Units
         static (string key, IEnumerator<GameObject> steps) job;
         static Runner runner;
 
+        /// <summary>
+        /// The figures made in the background that no one has asked for yet (Make), with what each made of its own: its
+        /// meshes, its material and its palette (Owned). Personalizar made all the outfits again at each head or build,
+        /// 4.7 MB a figure, kept till the scene went: 110 MB a change, 870 MB after eight (the review of 10/11, row 4;
+        /// CombatLab.MemoriaPersonalizar). Those not wanted again are let go at the next Prepare, those left as the scene
+        /// goes then (its own unload keeps what a field holds).
+        /// </summary>
+        static readonly Dictionary<string, UnityEngine.Object[]> unasked = new Dictionary<string, UnityEngine.Object[]>();
+        /// <summary>What the figure Building gave last made of its own (Owned), for the Runner as it takes it.</summary>
+        static UnityEngine.Object[] builtOwn;
+
+        /// <summary>A figure no one has asked for let go, and what it made of its own: none of it was copied.</summary>
+        static void Forget(string key)
+        {
+            if (unasked.TryGetValue(key, out var own))
+                foreach (var o in own)
+                    if (o != null) DestroyNow(o);
+            unasked.Remove(key);
+            if (made.TryGetValue(key, out var model) && model != null) DestroyNow(model);
+            made.Remove(key);
+        }
+
+        /// <summary>
+        /// What `model` made of its own: its meshes, materials and their colour maps, made as it was (a negative instance
+        /// id), not the parts' (`parts`) nor any other asset's.
+        /// </summary>
+        static UnityEngine.Object[] Owned(GameObject model, IEnumerable<Mesh> parts)
+        {
+            var shared = new HashSet<Mesh>(parts);
+            var renderers = model.GetComponentsInChildren<Renderer>(true);
+            var meshes = renderers.OfType<SkinnedMeshRenderer>().Select(r => r.sharedMesh).Concat(model.GetComponentsInChildren<MeshFilter>(true).Select(f => f.sharedMesh))
+                .Where(m => m != null && !shared.Contains(m)).Cast<UnityEngine.Object>();
+            var materials = renderers.SelectMany(r => r.sharedMaterials).Where(m => m != null).ToList();
+            var maps = materials.Where(m => m.HasTexture("_ColorMap")).Select(m => m.GetTexture("_ColorMap")).Where(t => t != null).Cast<UnityEngine.Object>();
+            return meshes.Concat(materials).Concat(maps).Where(o => o.GetInstanceID() < 0).Distinct().ToArray();
+        }
+
+        static void DestroyNow(UnityEngine.Object o)
+        {
+            if (Application.isPlaying) UnityEngine.Object.Destroy(o);
+            else UnityEngine.Object.DestroyImmediate(o);
+        }
+
         /// <summary>A step of the background's next figure a frame.</summary>
         sealed class Runner : MonoBehaviour
         {
+            void OnEnable() => UnityEngine.SceneManagement.SceneManager.sceneUnloaded += Gone;
+
+            void OnDisable() => UnityEngine.SceneManagement.SceneManager.sceneUnloaded -= Gone;
+
+            /// <summary>The scene gone with the figures (the shelf is its): those no one asked for, let go with what they made.</summary>
+            static void Gone(UnityEngine.SceneManagement.Scene scene)
+            {
+                foreach (string key in unasked.Keys.ToList()) Forget(key);
+            }
+
             void Update()
             {
                 if (job.steps == null)
@@ -99,7 +158,12 @@ namespace Bastion.Client.Units
                 {
                     if (job.steps.MoveNext())
                     {
-                        if (job.steps.Current != null) made[job.key] = job.steps.Current;
+                        if (job.steps.Current != null)
+                        {
+                            made[job.key] = job.steps.Current;
+                            unasked[job.key] = builtOwn;
+                            builtOwn = null;
+                        }
                         else
                         {
                             LastStepMs = (float)clock.Elapsed.TotalMilliseconds;
@@ -239,7 +303,9 @@ namespace Bastion.Client.Units
             }
             model.transform.SetParent(shelf, false);
             model.SetActive(false);
+            builtOwn = Owned(model, parts.Values.Select(r => r.sharedMesh));
             yield return model;
+            builtOwn = null;
         }
 
         /// <summary>

@@ -155,6 +155,11 @@ namespace Bastion.Net
                 mapping = null;
             }
             if (m == null) return;
+            if (m.Foreign)
+            {
+                log($"[router] el puerto {m.Outside} se deja como estaba: lo abrió alguien a mano");
+                return;
+            }
             try
             {
                 if (m.Remove(ms).Wait(ms)) log($"[router] puerto {m.Outside} cerrado ({m.Kind})");
@@ -269,8 +274,38 @@ namespace Bastion.Net
             catch (Exception e)
             {
                 log($"[router] {Why(e)}");
+                // Whatever failed once the port was open (the router's address that didn't come), it isn't left open
+                // while the screen says it couldn't be (Gameplay's review, 10/11, #10).
+                Mapping? m;
+                lock (gate) m = mapping;
+                if (m != null) await TakeBack(m);
                 Set(answered ? RouterState.Refused : RouterState.NoRouter, null);
             }
+        }
+
+        /// <summary>
+        /// `m` taken back while the game goes on (no one could use it): forgotten once the router says so; if it doesn't,
+        /// kept, so Close tries again on quitting. One opened by hand is left as it was. Whether it went.
+        /// </summary>
+        private async Task<bool> TakeBack(Mapping m)
+        {
+            if (!m.Foreign)
+            {
+                try
+                {
+                    await m.Remove(HttpMs);
+                }
+                catch (Exception e)
+                {
+                    log($"[router] no se ha cerrado el puerto {m.Outside}: {Why(e)}; se intenta otra vez al salir");
+                    return false;
+                }
+            }
+            lock (gate)
+            {
+                if (mapping == m) mapping = null;
+            }
+            return true;
         }
 
         /// <summary>
@@ -283,18 +318,7 @@ namespace Bastion.Net
             if (address == null || Shared(address))
             {
                 log(address == null ? "[router] el router no dice su dirección en internet" : $"[router] el router sale a internet por {address}: CG-NAT o un router detrás de otro; desde fuera no se llega");
-                lock (gate)
-                {
-                    if (mapping == m) mapping = null;
-                }
-                try
-                {
-                    await m.Remove(HttpMs);
-                }
-                catch (Exception e)
-                {
-                    log($"[router] no se ha cerrado el puerto {m.Outside}: {Why(e)}");
-                }
+                await TakeBack(m);
                 Set(address == null ? RouterState.Refused : RouterState.Shared, null);
                 return false;
             }
@@ -331,6 +355,9 @@ namespace Bastion.Net
             public int Lease;
 
             public abstract string Kind { get; }
+
+            /// <summary>Opened by hand to this machine's port (not by us): used as it is, never renewed nor taken back.</summary>
+            public bool Foreign;
 
             public abstract Task Renew(CancellationToken c);
 
@@ -390,7 +417,7 @@ namespace Bastion.Net
             public override async Task Remove(int ms)
             {
                 using var timeout = new CancellationTokenSource(ms);
-                await Map(0, timeout.Token);
+                if (!await Map(0, timeout.Token)) throw new IOException("el router no contesta");
             }
 
             private static int Result(byte[] answer)
@@ -434,6 +461,14 @@ namespace Bastion.Net
                     Forget(receive);
                 }
             }
+        }
+
+        /// <summary>Who has a port mapped on the router already (UpnpMapping.Holder).</summary>
+        private enum Holders
+        {
+            Other,
+            Us,
+            ByHand,
         }
 
         /// <summary>UPnP (IGD): the router's WANIPConnection or WANPPPConnection service, by SOAP.</summary>
@@ -483,16 +518,28 @@ namespace Bastion.Net
                         }
                         catch (UpnpFault f) when (f.Code == 725 && m.Lease > 0)
                         {
-                            // OnlyPermanentLeasesSupported: kept for good, and taken back by Dispose.
+                            // OnlyPermanentLeasesSupported: kept for good, and taken back by Dispose; one a run that died left
+                            // behind is ours by its name (Description), and the next run takes it and takes it back.
                             heard = true;
+                            log($"[router] el router solo abre puertos para siempre: el {outside} se cierra al salir del juego");
                             m.Lease = 0;
                             outside--;
                         }
                         catch (UpnpFault f) when (f.Code == 718)
                         {
-                            // ConflictInMappingEntry: another machine's, or this one's left by a run that died (then it's ours).
+                            // ConflictInMappingEntry: another machine's; this one's left by a run that died (ours: taken as it
+                            // is, renewed and taken back); or one opened by hand to this machine's port, which is used but
+                            // left as it was (once it was taken back on quitting, and the player's rule with it).
                             heard = true;
-                            if (await m.Ours(c)) return (true, m);
+                            var holder = await m.Holder(c);
+                            if (holder == Holders.Us) return (true, m);
+                            if (holder == Holders.ByHand)
+                            {
+                                log($"[router] el puerto {outside} ya está abierto a mano hacia este equipo: se usa como está");
+                                m.Foreign = true;
+                                m.Lease = 0;
+                                return (true, m);
+                            }
                         }
                         catch (UpnpFault f)
                         {
@@ -519,23 +566,24 @@ namespace Bastion.Net
                 }, c);
             }
 
-            /// <summary>Whether the mapping on Outside already sends to this machine's port.</summary>
-            private async Task<bool> Ours(CancellationToken c)
+            /// <summary>Who has the mapping on Outside: this machine's port by us (its name, Description), by hand, or another machine.</summary>
+            public async Task<Holders> Holder(CancellationToken c)
             {
                 try
                 {
                     var entry = await Soap(control, service, "GetSpecificPortMappingEntry", new[] { ("NewRemoteHost", ""), ("NewExternalPort", Outside.ToString()), ("NewProtocol", "TCP") }, c);
-                    return entry.TryGetValue("NewInternalClient", out var client) && client == inside && entry.TryGetValue("NewInternalPort", out var p) && p == insidePort.ToString();
+                    if (!(entry.TryGetValue("NewInternalClient", out var client) && client == inside && entry.TryGetValue("NewInternalPort", out var p) && p == insidePort.ToString())) return Holders.Other;
+                    return entry.TryGetValue("NewPortMappingDescription", out var name) && name.Trim() == Description ? Holders.Us : Holders.ByHand;
                 }
                 catch (UpnpFault)
                 {
-                    return false;
+                    return Holders.Other;
                 }
             }
 
             public override Task Renew(CancellationToken c)
             {
-                return Add(c);
+                return Foreign ? Task.CompletedTask : Add(c);
             }
 
             public override async Task<IPAddress?> Address(CancellationToken c)
@@ -553,6 +601,7 @@ namespace Bastion.Net
 
             public override async Task Remove(int ms)
             {
+                if (Foreign) return;
                 using var timeout = new CancellationTokenSource(ms);
                 await Soap(control, service, "DeletePortMapping", new[] { ("NewRemoteHost", ""), ("NewExternalPort", Outside.ToString()), ("NewProtocol", "TCP") }, timeout.Token);
             }
