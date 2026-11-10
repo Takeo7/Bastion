@@ -340,10 +340,7 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
-        /// <summary>
-        /// Medicines on a sheet (careActions; docs/FASE3.md): treating a bite takes both commanders, as launching; healing a
-        /// wound faster is one click. «Mordisco», not «Mordido» (Lore, C2).
-        /// </summary>
+        /// <summary>Medicines on a sheet (careActions; docs/FASE3.md): healing a wound faster, one click.</summary>
         CareView Care(CampaignState c, CampaignSoldier s)
         {
             if (!s.Alive) return null;

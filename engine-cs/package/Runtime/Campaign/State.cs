@@ -164,22 +164,6 @@ namespace Bastion.Engine
             return text;
         }
 
-        // ------------------------------------------------------------ infection
-
-        /// <summary>A bitten soldier whose days ran out turns: one more of the Caídos (docs/FASE3.md). Gear stays in the base.</summary>
-        private static void Turn(CampaignState c, CampaignSoldier s)
-        {
-            s.Alive = false;
-            s.FellDay = c.Day;
-            s.FellCause = FellCauses.Turned;
-            s.Infection = null;
-            s.Loadout = new Loadout();
-            foreach (var w in c.FoundWeapons ?? new List<FoundWeapon>()) if (w.Holder == s.Id) w.Holder = null;
-            c.Squad = c.Squad.Where((id) => id != s.Id).ToList();
-            if (c.Treatment?.Soldier == s.Id) c.Treatment = null;
-            Log(c, $"{s.Name} no ha superado la fiebre y se ha convertido.{(FacilityCount(c, FacilityIds.Memorial) != 0 ? " Su nombre ya está en el Camposanto." : "")}", LogTones.Bad, Alert("Enfermería", $"{s.Name} se ha convertido"));
-        }
-
         // ------------------------------------------------------------------- food
 
         /// <summary>Rations come in; with enough for a day again, the hunger is over.</summary>

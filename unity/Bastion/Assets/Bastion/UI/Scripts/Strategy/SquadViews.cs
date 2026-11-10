@@ -45,7 +45,7 @@ namespace Bastion.UI.Strategy
         public List<LineupCardView> Cards = new List<LineupCardView>();
     }
 
-    /// <summary>A soldier's row in a squad list: hexagon, name, rank, a chip (✓, Fiebre, 2 misiones).</summary>
+    /// <summary>A soldier's row in a squad list: hexagon, name, rank, a chip (✓, 2 misiones).</summary>
     [Serializable]
     public sealed class PickRowView
     {

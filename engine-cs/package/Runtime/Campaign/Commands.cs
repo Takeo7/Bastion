@@ -64,10 +64,8 @@ namespace Bastion.Engine
                     return $"reclutar un soldado ({RecruitCost(c)} §)";
                 case BuyAction a:
                     return $"comprar {Content.Items[a.Item].Name.ToLowerInvariant()}{Times(a.Count)} ({ShopPrice(c, a.Item) * Batch(a.Count)} §)";
-                case TreatAction a:
-                    return $"tratar el mordisco de {c.Soldiers.FirstOrDefault((s) => s.Id == a.Soldier)?.Name ?? "un soldado"} ({TreatCost(c)} ✚)";
                 default:
-                    // The base of before's: nothing proposes them now.
+                    // The base of before's, and treating a bite (TreatAction): nothing proposes them now.
                     return "";
             }
         }
@@ -183,12 +181,6 @@ namespace Bastion.Engine
                     if (mine >= SoldierCap(c)) return $"Máximo {SoldierCap(c)} soldados por jugador.";
                     if (BedsFree(c) <= 0) return "No quedan camas: para reclutar más, construid un Barracón.";
                     return CanAfford(c, RecruitCost(c)) ? null : "No hay suministros suficientes.";
-                }
-                case TreatAction a:
-                {
-                    var s = c.Soldiers.FirstOrDefault((x) => x.Id == a.Soldier && x.Alive);
-                    if (s?.Infection == null) return "No tiene ningún mordisco.";
-                    return (c.Medicines ?? 0) < TreatCost(c) ? "No hay medicinas suficientes." : null;
                 }
                 case BuyAction a:
                     // The special rounds are the weapons' mods now (docs/FASE9.md §4): nowhere to put them.
@@ -368,14 +360,6 @@ namespace Bastion.Engine
                     Pay(c, ShopPrice(c, a.Item) * count);
                     c.Inventory[a.Item] = (c.Inventory.TryGetValue(a.Item, out var n) ? n : 0) + count;
                     Log(c, $"Comprado: {Content.Items[a.Item].Name}{Times(a.Count)}.");
-                    break;
-                }
-                case TreatAction a:
-                {
-                    var s = c.Soldiers.First((x) => x.Id == a.Soldier);
-                    c.Medicines = (c.Medicines ?? 0) - TreatCost(c);
-                    s.Infection = null;
-                    Log(c, $"{s.Name} recibe el tratamiento: se le quita la fiebre.", LogTones.Good);
                     break;
                 }
             }
@@ -563,41 +547,12 @@ namespace Bastion.Engine
                     }
                     else if (!c.Squad.Contains(s.Id))
                     {
-                        // «hay que tratarle antes» (text-fixes.ts, Lore 24/10): leísmo, and as the Escuadra's tooltip says it.
-                        if (s.Infection != null) return CampaignResult.Failure($"{s.Name} tiene fiebre: necesita el tratamiento antes de salir.");
                         if (!SoldierReady(s)) return CampaignResult.Failure($"{s.Name} no está en condiciones.");
                         var place = SquadPlace(c, slot, ctx.Connected);
                         if (place.Error != null) return CampaignResult.Failure(place.Error);
                         JoinSquad(c, s, place);
                     }
                     c.LaunchReady = new bool[2];
-                    return CampaignResult.Success();
-                }
-
-                case TreatCommand m:
-                {
-                    var s = c.Soldiers.FirstOrDefault((x) => x.Id == m.Soldier && x.Alive);
-                    // «No está contagiado.» (text-fixes.ts, Lore 24/10): it agrees with a soldier who is a woman too.
-                    if (s?.Infection == null) return CampaignResult.Failure("No tiene ningún mordisco.");
-                    if (!m.Ready)
-                    {
-                        if (c.Treatment?.Soldier == s.Id) c.Treatment = null;
-                        return CampaignResult.Success();
-                    }
-                    // A proposal like the rest, with the room's clock (Arturo, 1/11: the partner never saw it); the two keys
-                    // below only finish one a campaign was saved halfway through.
-                    if (c.Treatment == null) return Propose(c, new TreatAction { Soldier = s.Id }, ctx);
-                    if ((c.Medicines ?? 0) < TreatCost(c)) return CampaignResult.Failure("No hay medicinas suficientes.");
-                    if (c.Treatment != null && c.Treatment.Soldier != s.Id) return CampaignResult.Failure("Ya hay otro tratamiento propuesto: confirmadlo o rechazadlo antes.");
-                    c.Treatment ??= new Treatment { Soldier = s.Id, Ready = new bool[2] };
-                    c.Treatment.Ready[slot] = true;
-                    if (EveryoneReady(c.Treatment.Ready, ctx.Connected))
-                    {
-                        c.Medicines = (c.Medicines ?? 0) - TreatCost(c);
-                        s.Infection = null;
-                        c.Treatment = null;
-                        Log(c, $"{s.Name} recibe el tratamiento: se le quita la fiebre.", LogTones.Good);
-                    }
                     return CampaignResult.Success();
                 }
 

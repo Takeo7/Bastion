@@ -162,7 +162,8 @@ namespace Bastion.Engine
                 Unique = true,
             },
             // Food (docs/FASE4.md): costs and days like a barracón. Texts are placeholders for Lore.
-            // The bitten's own building (playtest 2026-10-15, #13): without it none of them boards La Lata.
+            // The bitten's own building (playtest 2026-10-15, #13), from when a bite infected: built no more (Base.Retired),
+            // and here for what a save names.
             [FacilityIds.Quarantine] = new FacilityDef
             {
                 Id = FacilityIds.Quarantine,
@@ -260,20 +261,17 @@ namespace Bastion.Engine
         /// <summary>Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`.</summary>
         public const int CampaignVersion = 27;
 
-        // ------------------------------------------------------------ infection
+        // ------------------------------------------------------------ medicines
 
         /// <summary>Medicines a campaign starts with.</summary>
         public const int StartMedicines = 2;
-        /// <summary>Days a bitten soldier lasts at the base before turning; the Enfermería adds INFIRMARY_TURN_DAYS.</summary>
-        public const int TurnDays = 1;
-        public const int InfirmaryTurnDays = 1;
         /// <summary>What curing a wound with medicines takes and gives: 1 ✚ for a day (a mission) of recovery fewer.</summary>
         public const int MedicateCost = 1;
         public const int MedicateDays = 1;
         /// <summary>The enclaves that send medicines while they are allies (contacted) and stand (no Nido in their region), 1 ✚ each every ENCLAVE_DAYS.</summary>
         public static readonly IReadOnlyList<string> Enclaves = new[] { RegionIds.Oce, RegionIds.Afr };
         public const int EnclaveDays = 1;
-        /// <summary>The cause the Caídos read for a soldier who turned (placeholder for Lore).</summary>
+        /// <summary>The cause the Caídos read for a soldier who turned, in campaigns from when a bite infected (till 0.12.5): nobody turns now.</summary>
         public const string TurnedCause = "Se convirtió";
 
         // ------------------------------------------------------------------- food

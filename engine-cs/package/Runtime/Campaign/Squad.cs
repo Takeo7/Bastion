@@ -229,12 +229,6 @@ namespace Bastion.Engine
             return new Appearance { Primary = a.Primary, Secondary = a.Secondary, Visor = a.Visor, Head = a.Head, Build = a.Build, Sex = a.Sex, Helmet = a.Helmet, Torso = a.Torso, Arms = a.Arms, Legs = a.Legs, Character = a.Character, Wardrobe = a.Wardrobe };
         }
 
-        /// <summary>Medicines also stop a bite's contagion in the missions (docs/FASE8.md §C): the Enfermería from level 2.</summary>
-        public static bool MedicineCures(CampaignState c)
-        {
-            return FacilityLevel(c, FacilityIds.Infirmary) >= 2;
-        }
-
         public static MissionOffer? ActiveOffer(CampaignState c)
         {
             return c.ActiveMission == null ? null : c.Offers.FirstOrDefault((o) => o.Id == c.ActiveMission);

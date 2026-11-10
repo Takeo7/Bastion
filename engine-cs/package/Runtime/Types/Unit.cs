@@ -325,8 +325,6 @@ namespace Bastion.Engine
         public Deeds? Deeds { get; set; }
         /// <summary>A zombie risen from a soldier of the squad (its id): it keeps that soldier's `appearance` (playtest 2026-10-16).</summary>
         public string? RisenFrom { get; set; }
-        /// <summary>Bitten and infected (docs/FASE3.md): no effect in combat, but if it falls it rises, and back at base it turns.</summary>
-        public bool? Infected { get; set; }
     }
 
     /// <summary>Unit.automaton: `{ piece: string }`.</summary>

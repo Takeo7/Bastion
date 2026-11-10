@@ -203,29 +203,6 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// The bite in the field (docs/PRUEBA-2026-10-15.md #13): the tag, its note,
-        /// the floating word and the log line. A noun, not «mordido», so it agrees with
-        /// everyone.
-        /// </summary>
-        public const string BiteTag = "MORDISCO";
-        public const string BiteFloat = "MORDISCO −1";
-
-        /// <summary>Why someone bitten can't board without a Cuarentena: the button's reason. The same words are written in rules.ts (the evac refusal) and test/prueba15.test.ts: change the three together.</summary>
-        public const string BiteNoBoard = "Con un mordisco no se sube a " + Bus.Name + " sin una Cuarentena en el Bastión.";
-
-        /// <summary>The tag's note, on the sheet and the list: what it does now and what it will need.</summary>
-        public static string BiteNote(bool quarantine)
-        {
-            return $"Mordisco: pierde 1 de salud al empezar cada turno y, si cae, se levanta. {(quarantine ? "En la base necesitará el tratamiento." : $"Sin Cuarentena en el Bastión no sube a {Bus.Name}.")}";
-        }
-
-        /// <summary>The log line each turn: «Ana pierde 1 de salud por el mordisco.»</summary>
-        public static string BiteLossLine(string who)
-        {
-            return $"{who} pierde 1 de salud por el mordisco.";
-        }
-
-        /// <summary>
         /// Leaving a mission early, asked of the partner like the bus (playtest 16/10):
         /// whoever is still standing comes home, and the mission is lost.
         /// </summary>

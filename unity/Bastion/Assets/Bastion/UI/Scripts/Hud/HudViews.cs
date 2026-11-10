@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Bastion.UI.Hud
 {
-    /// <summary>A tag on a card or a flag («VIGILANCIA», «MORDISCO»): its words, its kind (the colour) and its tooltip.</summary>
+    /// <summary>A tag on a card or a flag («VIGILANCIA», «CUBRIÉNDOSE»): its words, its kind (the colour) and its tooltip.</summary>
     [Serializable]
     public sealed class TagView
     {
@@ -156,9 +156,6 @@ namespace Bastion.UI.Hud
         /// <summary>A partner's soldier: whose (their name: the panel says «DE ANA», HudText.Squad.Whose) and their colour; empty, one's own.</summary>
         public string Whose;
         public string WhoseColor;
-        /// <summary>Bitten: its tag (Lore.BiteTag, «MORDISCO») and what a bite does in this mission; empty if not.</summary>
-        public string Bite;
-        public string BiteTip;
         public List<StatView> Stats = new List<StatView>();
         public string Weapon;
         public string WeaponTip;

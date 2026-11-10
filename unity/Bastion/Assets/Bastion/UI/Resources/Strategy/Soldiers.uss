@@ -214,13 +214,6 @@
     white-space: normal;
 }
 
-/* What a bite's care is about, over its buttons. */
-.sheet__care-line {
-    margin: 0 0 6px;
-    font-size: 12px;
-    white-space: normal;
-}
-
 .strat-why--wait {
     font-size: 12px;
     color: var(--t-accent);

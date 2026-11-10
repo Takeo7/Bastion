@@ -579,18 +579,16 @@ namespace Bastion.Engine.Tests
         {
             var s = BackpackField();
             var a = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => u.Backpack = Pack(Medicines(2), Food(1)));
-            var b = AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => { u.Hp = 1; u.Infected = true; });
+            var b = AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => u.Hp = 1);
             Refused("Solo se usan las medicinas.", Item(s, "s1", ItemActions.Use, index: 1));
             Refused("No tienes heridas.", Item(s, "s1", ItemActions.Use, index: 0));
             var ap = a.Ap;
             var r = Item(s, "s1", ItemActions.Use, index: 0, to: "s2");
             Assert.True(r.Ok);
             Assert.Equal((4, ap - 1), (b.Hp, a.Ap));
-            Assert.Empty(Of<CuredEvent>(r.Events!));
             SameJson(Pack(Medicines(1), Food(1)), a.Backpack);
-            // Healthy, even marked bitten in a save and with the Enfermería at level 2: nothing for a medicine to do.
+            // Healthy: nothing for a medicine to do.
             b.Hp = b.MaxHp;
-            s.Mission.MedicineCures = true;
             Refused("No tiene heridas.", Item(s, "s1", ItemActions.Use, index: 0, to: "s2"));
         }
 
@@ -611,18 +609,14 @@ namespace Bastion.Engine.Tests
             Assert.Equal(0, a.Ap);
         }
 
-        [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › the Chapistería gives one more slot, and the Enfermería at level 2 makes medicines stop the bite")]
+        [Fact(DisplayName = "the backpack (docs/FASE8.md §C) › the Chapistería gives one more slot")]
         public void TheChapisteriaGivesOneMoreSlot()
         {
             var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
             Assert.True(Campaign.BuildSquad(c).All((m) => m.PackSlots == null));
-            Assert.False(Campaign.MedicineCures(c));
             CampaignHelpers.Raise(c, PieceIds.Garage);
-            CampaignHelpers.Raise(c, PieceIds.Infirmary, 2);
             Assert.True(Campaign.BuildSquad(c).All((m) => m.PackSlots == 4));
-            Assert.True(Campaign.MedicineCures(c));
-            var s = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, 3), Slots = new List<int> { 0 }, Rng = new Rng(1), Squad = Campaign.BuildSquad(c), MedicineCures = Campaign.MedicineCures(c) });
-            Assert.Equal(true, s.Mission.MedicineCures);
+            var s = Setup.CreateMission(new MissionOptions { Map = MapSource.Generated(Biomes.City, 3), Slots = new List<int> { 0 }, Rng = new Rng(1), Squad = Campaign.BuildSquad(c) });
             Assert.True(s.Units.Where((u) => u.Team == Teams.Xcom).All((u) => u.PackSlots == 4));
         }
 
@@ -631,7 +625,7 @@ namespace Bastion.Engine.Tests
         {
             var s = BackpackField();
             AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => u.Backpack = Pack(Medicines(2), Food(3)));
-            AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => { u.Hp = 2; u.Infected = true; u.Perks = new List<string> { PerkIds.LightHands }; });
+            AddUnit(s, "s2", TemplateIds.Rookie, 6, 5, extra: (u) => { u.Hp = 2; u.Perks = new List<string> { PerkIds.LightHands }; });
             var client = Events.CloneState(s);
             var orders = new[]
             {

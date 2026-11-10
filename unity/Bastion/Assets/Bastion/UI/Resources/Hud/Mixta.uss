@@ -343,10 +343,6 @@ Button:disabled {
     color: #ffffff;
 }
 
-.tag--bite {
-    color: var(--t-danger);
-}
-
 .tag--data {
     color: #8fe6ff;
 }

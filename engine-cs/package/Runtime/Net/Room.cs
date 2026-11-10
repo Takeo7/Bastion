@@ -606,8 +606,6 @@ namespace Bastion.Net
                     return Id(c.Soldier) && ItemSlots.All.Contains(c.Slot) && (c.Item == null || Has(Content.Items, c.Item));
                 case CustomizeCommand c:
                     return Id(c.Soldier) && c.Name != null && c.Name.Length <= Appearances.NameMax * 2 && c.Nickname != null && c.Nickname.Length <= Appearances.NicknameMax * 2 && ValidAppearance(c.Appearance);
-                case TreatCommand c:
-                    return Id(c.Soldier);
                 case MedicateCommand c:
                     return Id(c.Soldier);
                 case CraftCommand c:

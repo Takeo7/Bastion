@@ -369,7 +369,7 @@ namespace Bastion.Engine.Tests
             Assert.Null(siege.ExpiresDay);
             // c.squad.sort(): in place, as JavaScript sorts strings (by UTF-16 code units).
             Js.Sort(c.Squad, string.CompareOrdinal);
-            var fit = c.Soldiers.Where((s) => s.Alive && s.WoundedDays == 0 && s.Infection == null).Select((s) => s.Id).ToList();
+            var fit = c.Soldiers.Where((s) => s.Alive && s.WoundedDays == 0).Select((s) => s.Id).ToList();
             Js.Sort(fit, string.CompareOrdinal);
             Assert.Equal(fit, c.Squad);
             // Nothing else to choose, nobody to leave out, no calling it off.

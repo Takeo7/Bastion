@@ -122,21 +122,6 @@ namespace Bastion.Engine
             var craft = Progression.CraftOrder.FirstOrDefault((id) => CraftBlocker(c, id) == null);
             if (craft != null) steps.Add(Step(BaseViews.Engineering, $"El Taller puede hacer {Progression.Crafts[craft].The}", NextStepTones.Info));
 
-            // The bitten (docs/FASE3.md): the partner's treatment to confirm, and every fever with its deadline.
-            var treating = c.Treatment != null ? c.Soldiers.FirstOrDefault((s) => s.Id == c.Treatment.Soldier) : null;
-            if (treating != null && shared && c.Treatment!.Ready[partner] && !c.Treatment.Ready[slot])
-            {
-                steps.Add(Step(BaseViews.Barracks, $"{partnerName} quiere tratar a {treating.Name} ({TreatCost(c)} ✚)", NextStepTones.Urgent, null, new NextStepGo { Soldier = treating.Id }));
-            }
-            var bitten = c.Soldiers.Where((x) => x.Alive && x.Infection != null).ToList();
-            Js.Sort(bitten, (a, b) => TurnDay(c, a)!.Value - TurnDay(c, b)!.Value);
-            foreach (var s in bitten)
-            {
-                var left = TurnDay(c, s)!.Value - c.Day;
-                // «mañana», «en N días» (text-fixes.ts, Lore 24/10): in missions, as the soldier's sheet says it.
-                steps.Add(Step(BaseViews.Barracks, $"{s.Name} se convierte {(left <= 1 ? "tras la próxima misión" : Lore.InMissions(left))}", NextStepTones.Urgent, null, new NextStepGo { Soldier = s.Id }));
-            }
-
             if (c.Listening == null && c.Rumors.Count > 0)
             {
                 var rumors = c.Rumors.ToList();

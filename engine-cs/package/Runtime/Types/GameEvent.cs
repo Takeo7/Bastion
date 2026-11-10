@@ -325,8 +325,8 @@ namespace Bastion.Engine
     }
 
     /// <summary>
-    /// A corpse rises as a zombie: raised by a Chillón (`unit`), or by itself, an
-    /// infected soldier fallen in the fight (docs/FASE3.md): then `pod` is its own new group.
+    /// A corpse rises as a zombie: raised by a Chillón (`unit`), or by itself, a
+    /// soldier fallen in the fight (docs/FASE3.md; Arturo, 7/11: all of them): then `pod` is its own new group.
     /// </summary>
     public sealed class ReanimatedEvent : GameEvent
     {
@@ -335,14 +335,6 @@ namespace Bastion.Engine
         public string Corpse { get; set; } = "";
         public Unit Zombie { get; set; } = new Unit();
         public Pod? Pod { get; set; }
-    }
-
-    /// <summary>Bitten and infected (`by`: the zombie, or the Hinchado that burst).</summary>
-    public sealed class InfectedEvent : GameEvent
-    {
-        public override string T => "infected";
-        public string Unit { get; set; } = "";
-        public string By { get; set; } = "";
     }
 
     public sealed class SmokeDeployedEvent : GameEvent
@@ -670,14 +662,6 @@ namespace Bastion.Engine
         public override string T => "beltEquipped";
         public string Unit { get; set; } = "";
         public int Index { get; set; }
-    }
-
-    /// <summary>A bite's contagion stopped (docs/FASE8.md §C).</summary>
-    public sealed class CuredEvent : GameEvent
-    {
-        public override string T => "cured";
-        public string Unit { get; set; } = "";
-        public string By { get; set; } = "";
     }
 
     /// <summary>Apaños (docs/FASE9.md): `amount` of condition back to the weapon in `target`'s hand.</summary>

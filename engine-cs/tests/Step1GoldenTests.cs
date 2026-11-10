@@ -500,7 +500,6 @@ namespace Bastion.Engine.Tests
                 ["weaponMods"] = AsJson(Content.WeaponMods),
                 ["plainWeapon"] = AsJson(Content.PlainWeapon),
                 ["rangeTables"] = AsJson(Content.RangeTables),
-                ["infectionBite"] = AsJson(Content.Infection.Bite),
                 ["soldierNames"] = AsJson(Content.SoldierNames),
                 ["playerColors"] = AsJson(Content.PlayerColors),
                 ["thrown"] = AsJson(Content.Thrown.OrderBy((x) => x, StringComparer.Ordinal)),
@@ -538,7 +537,6 @@ namespace Bastion.Engine.Tests
                     streetLight = Content.Night.StreetLight, floodlight = Content.Night.Floodlight, lampHeight = Content.Night.LampHeight,
                     supplies = Content.Night.Supplies,
                 },
-                ["infectionBurst"] = Content.Infection.Burst, ["infectionVest"] = Content.Infection.Vest,
             };
         }
 

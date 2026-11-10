@@ -52,7 +52,7 @@ namespace Bastion.Engine
         /// <summary>What leaves the dead's ways as they were (Sim.ways): neither the ground nor where the living stand changes.</summary>
         private static readonly HashSet<string> KeepsWays = new HashSet<string>
         {
-            "abilityUsed", "noise", "forgot", "hunting", "turned", "smashed", "shot", "damaged", "infected", "stunned", "disoriented", "psi", "overwatch", "trapSprung",
+            "abilityUsed", "noise", "forgot", "hunting", "turned", "smashed", "shot", "damaged", "stunned", "disoriented", "psi", "overwatch", "trapSprung",
         };
 
         /// <summary>How many more times in an enemy turn those waiting behind their own get to go on (Sim.runAlienTurn).</summary>
@@ -1861,13 +1861,6 @@ namespace Bastion.Engine
         {
             var def = Content.Items[item];
             return (def.Hp ?? 0) != 0 && def.Charges == null && string.IsNullOrEmpty(def.Ability);
-        }
-
-        /// <summary>Whether `u`'s medicines also stop a bite's contagion (docs/FASE8.md §C): the Enfermería for everyone, or the support talent.</summary>
-        /// <summary>No bite infects any more (Arturo, 7/11): nothing for a medicine to stop. Kept for the client till it lets go of it.</summary>
-        public static bool MedicineStopsBite(GameState s, Unit u)
-        {
-            return false;
         }
 
         /// <summary>Whether `u` uses a medicine without spending an action: Manos de enfermero (Arturo, 7/11, in the box; it stopped a bite's contagion).</summary>

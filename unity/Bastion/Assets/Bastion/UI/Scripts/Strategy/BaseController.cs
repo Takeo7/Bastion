@@ -400,8 +400,8 @@ namespace Bastion.UI.Strategy
             if (view == "barracks" || view == "facilities") Go(view == "facilities" ? "barracks" : "facilities");
         }
         /// <summary>The plate's keys: a vote, or a bite's treatment's (its own command: Arturo, 01/11 #8).</summary>
-        public void OnVote(bool accept) => Order(p.Proposal()?.Treat is string treat ? new TreatCommand { Soldier = treat, Ready = accept } : (CampaignCommand)new VoteCommand { Accept = accept });
-        public void OnWithdraw() => Order(p.Proposal()?.Treat is string treat ? new TreatCommand { Soldier = treat, Ready = false } : (CampaignCommand)new WithdrawCommand());
+        public void OnVote(bool accept) => Order(new VoteCommand { Accept = accept });
+        public void OnWithdraw() => Order(new WithdrawCommand());
         public void OnWaitingGo() => Go("squad");
         public void OnOption(int index) => Order(new AnswerEventCommand { Option = index });
 

@@ -56,6 +56,35 @@ namespace Bastion.Engine.Tests
             }
         }
 
+        /// <summary>
+        /// An old campaign without what it carried of the contagion, which nobody reads since the 0.12.18 and so is not
+        /// written back: a soldier's `infection`, the campaign's `treatment`, a report's `infected`, and in a mission a
+        /// unit's `infected` and the mission's `quarantine` and `medicineCures`. By name and kind of value: the
+        /// Cuarentena's own `quarantine` (its levels, its costs) is no yes or no, and stays.
+        /// </summary>
+        internal static JToken Retired(JToken token)
+        {
+            switch (token)
+            {
+                case JObject o:
+                    var copy = new JObject();
+                    foreach (var p in o.Properties())
+                    {
+                        var kind = p.Value.Type;
+                        if (p.Name == "infection" && (kind == JTokenType.Object || kind == JTokenType.Null)) continue;
+                        if (p.Name == "treatment" && (kind == JTokenType.Object || kind == JTokenType.Null)) continue;
+                        if (p.Name == "infected" && (kind == JTokenType.Array || kind == JTokenType.Boolean)) continue;
+                        if ((p.Name == "quarantine" || p.Name == "medicineCures") && kind == JTokenType.Boolean) continue;
+                        copy[p.Name] = Retired(p.Value);
+                    }
+                    return copy;
+                case JArray a:
+                    return new JArray(a.Select(Retired));
+                default:
+                    return token.DeepClone();
+            }
+        }
+
         /// <summary>Where `a` (TypeScript) and `b` (C#) first differ: a JSON path and the two values; null if they don't.</summary>
         internal static string? FirstDifference(JToken a, JToken b, string path = "$")
         {
@@ -97,13 +126,13 @@ namespace Bastion.Engine.Tests
             return s.Length > 100 ? s.Substring(0, 100) + "…" : s;
         }
 
-        /// <summary>Read as `T` and written again: what came back, which must say what `typescript` says but for its nulls.</summary>
+        /// <summary>Read as `T` and written again: what came back, which must say what `typescript` says but for its nulls and for the contagion (Retired).</summary>
         private static T SameThrough<T>(JToken typescript, string label, Action<JObject>? written = null)
         {
             var value = typescript.ToObject<T>(Serializer)!;
             var back = JObject.Parse(Write(value!));
             written?.Invoke(back);
-            var difference = FirstDifference(Clean(typescript), Clean(back));
+            var difference = FirstDifference(Clean(Retired(typescript)), Clean(back));
             Assert.True(difference == null, $"{label}: {difference}");
             return value;
         }
@@ -118,8 +147,9 @@ namespace Bastion.Engine.Tests
             foreach (var s in states)
             {
                 var c = SameThrough<CampaignState>(s["campaign"]!, (string)s["name"]!);
-                // (Recorded at 26, with their fevers and sieges: what the other goldens start from, they stay. Loaded, version 27
-                // cures the fevers and drops an announced siege, Arturo 7/11: Prueba15Tests.)
+                // (Recorded at 26, with their fevers and sieges: what the other goldens start from, they stay. The fevers
+                // are not read any more, ContagionGoneTests; loaded, version 27 drops an announced siege, Arturo 7/11:
+                // Prueba15Tests.)
                 Assert.Equal(26, c.Version);
             }
         }
@@ -296,9 +326,10 @@ namespace Bastion.Engine.Tests
                 Assert.Equal((string)cmd["type"]!, read.Type);
                 tags.Add(read.Type);
             }
-            // 30 variants of CampaignCommand, each told by its `type`, and every one of them recorded.
+            // 29 variants of CampaignCommand (30 with the contagion's `treat`, till the 0.12.17), each told by its `type`,
+            // and every one of them recorded.
             var converter = new TagConverter<CampaignCommand>("type", (c) => c.Type);
-            Assert.Equal(30, converter.Tags.Count);
+            Assert.Equal(29, converter.Tags.Count);
             Assert.Equal(converter.Tags.OrderBy((t) => t, StringComparer.Ordinal), tags.OrderBy((t) => t, StringComparer.Ordinal));
         }
 
@@ -363,8 +394,6 @@ namespace Bastion.Engine.Tests
                 ["FRESH_CAMPAIGN_VERSION"] = Campaign.FreshCampaignVersion,
                 ["CAMPAIGN_VERSION"] = Campaign.CampaignVersion,
                 ["START_MEDICINES"] = Campaign.StartMedicines,
-                ["TURN_DAYS"] = Campaign.TurnDays,
-                ["INFIRMARY_TURN_DAYS"] = Campaign.InfirmaryTurnDays,
                 ["MEDICATE_COST"] = Campaign.MedicateCost,
                 ["MEDICATE_DAYS"] = Campaign.MedicateDays,
                 ["ENCLAVES"] = Campaign.Enclaves,

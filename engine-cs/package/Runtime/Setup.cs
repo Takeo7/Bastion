@@ -135,10 +135,6 @@ namespace Bastion.Engine
         public bool? Living { get; set; }
         /// <summary>A recovery whose story puts the item outdoors (playtest 2026-10-14, #27).</summary>
         public bool? ItemOutdoors { get; set; }
-        /// <summary>Medicines also stop a bite's contagion, for everyone (docs/FASE8.md §C).</summary>
-        public bool? MedicineCures { get; set; }
-        /// <summary>The campaign's Bastion has a Cuarentena (#13): false, the bitten can't board La Lata.</summary>
-        public bool? Quarantine { get; set; }
         /// <summary>The campaign counts its pistols (CampaignState.Pistols; Arturo, 1/11): MissionState.Pistols.</summary>
         public bool? Pistols { get; set; }
         /// <summary>Still winter in the campaign (campaign.ts wintry): the map under snow.</summary>
@@ -1000,9 +996,7 @@ namespace Bastion.Engine
                 ObjectiveUnit = objectiveUnit,
                 ObjectiveDone = false,
                 HackBonus = opts.HackBonus ?? 0,
-                MedicineCures = opts.MedicineCures == true ? true : (bool?)null,
                 Alarm = !string.IsNullOrEmpty(opts.Alarm) ? opts.Alarm : null,
-                Quarantine = opts.Quarantine,
                 Pistols = opts.Pistols == true ? true : (bool?)null,
                 Reinforcements = reinforcements,
                 Difficulty = difficulty,

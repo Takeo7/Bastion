@@ -109,10 +109,6 @@ namespace Bastion.UI.Hud
                     return tip;
                 });
             }
-            var bite = tree.Q<Label>("bite");
-            Ui.Show(bite, !string.IsNullOrEmpty(view.Bite));
-            bite.text = view.Bite ?? "";
-            tips.Attach(bite, view.BiteTip);
 
             var stats = tree.Q("stats");
             // A thin line before the figures that aren't rounds (Ana, 7/11 #13: rounds, then the rest).

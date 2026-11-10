@@ -692,7 +692,7 @@ namespace Bastion.UI.Combat
                 s.Mission.Kind == MissionKinds.Elimination,
                 Rules.EvacWins(s),
                 // Outside, and the bitten with no Cuarentena to go to (playtest 15/10 #13): they stay too.
-                s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && (!Abilities.InEvacZone(s, x.Pos) || (x.Infected == true && s.Mission.Quarantine == false))).Select(x => x.Name).ToList());
+                s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && !Abilities.InEvacZone(s, x.Pos)).Select(x => x.Name).ToList());
         }
 
         /// <summary>Our soldiers in the bus, on the state orders go by.</summary>
@@ -717,7 +717,7 @@ namespace Bastion.UI.Combat
             // The same soldier the bar offered (Bar: EvacActions).
             var s = State;
             var sel = Unit();
-            var u = MineAboard().OrderBy(x => x.Id != sel?.Id).FirstOrDefault(x => !(x.Infected == true && s.Mission.Quarantine == false));
+            var u = MineAboard().OrderBy(x => x.Id != sel?.Id).FirstOrDefault();
             if (u == null || s.EvacCall != null) return;
             if (!(evacArmed == u.Id && Time.time < evacArmedUntil))
             {

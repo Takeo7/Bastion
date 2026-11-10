@@ -152,7 +152,6 @@ namespace Bastion.Engine.Tests
             old.NextDoomDay = 43;
             old.NextSupplyDay = 61;
             old.Soldiers[0].WoundedDays = 8;
-            old.Soldiers[1].Infection = new SoldierInfection { Since = 29 };
             var m = Campaign.MigrateCampaign(old);
             Assert.Equal(Campaign.CampaignVersion, m.Version);
             Assert.Equal(31, m.Day);
@@ -160,8 +159,6 @@ namespace Bastion.Engine.Tests
             Assert.Equal(31 + 6, m.NextSupplyDay);
             Assert.Equal(6, Campaign.ConvoyIn(m));
             Assert.Equal(2, m.Soldiers[0].WoundedDays);
-            // (Its fever came over a day later; since bites don't infect, Arturo 7/11, it is gone: MigrateCampaign version 27.)
-            Assert.Null(m.Soldiers[1].Infection);
             Assert.True(Campaign.ConvoyIncome(m) > 0);
         }
 

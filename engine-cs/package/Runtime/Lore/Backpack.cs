@@ -51,20 +51,13 @@ namespace Bastion.Engine
 
         /// <summary>
         /// A medicine used in the field: «Ana se cura con una medicina: +3 de salud.»,
-        /// «Ana cura a Kofi con una medicina: +3 de salud, y el contagio se corta.».
-        /// `to` is null on oneself.
+        /// «Ana cura a Kofi con una medicina: +3 de salud.». `to` is null on oneself.
         /// </summary>
-        public static string MedicineLine(string who, string? to, int healed, bool cured)
+        public static string MedicineLine(string who, string? to, int healed)
         {
             var what = !string.IsNullOrEmpty(to) ? $"{who} cura a {to} con una medicina" : $"{who} se cura con una medicina";
-            var effects = new List<string>();
-            if (healed != 0) effects.Add($"+{healed} de salud");
-            if (cured) effects.Add("el contagio se corta");
-            return effects.Count > 0 ? $"{what}: {string.Join(", y ", effects)}." : $"{what}.";
+            return healed != 0 ? $"{what}: +{healed} de salud." : $"{what}.";
         }
-
-        /// <summary>Floating over whoever is cured of the bite.</summary>
-        public const string CuredFloat = "SIN CONTAGIO";
 
         /// <summary>Taking up a found weapon in the field: «Ana empuña un fusil de asalto.»</summary>
         public static string WeaponEquippedLine(string who, string kind)

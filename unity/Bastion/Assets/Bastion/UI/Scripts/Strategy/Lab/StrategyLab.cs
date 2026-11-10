@@ -191,7 +191,7 @@ namespace Bastion.UI.Strategy
             var v = new SoldiersView { MineHead = "Tus soldados", PartnerHead = "De Ana", PartnerNote = "no está: los preparas tú" };
             v.Mine.Add(Tile("s1", "Yuki", Arturo, new float[] { 20, 10, 55, 10, 5, 10 }, 1, true));
             v.Mine.Add(Tile("s3", "Dmitri", Arturo, new float[] { 60, 10, 10, 5, 5, 10 }, 1, true));
-            v.Mine.Add(Tile("s5", "Hiro", Arturo, new float[] { 10, 50, 5, 5, 5, 10 }, 0, true, "Fiebre · ahora", "bad"));
+            v.Mine.Add(Tile("s5", "Hiro", Arturo, new float[] { 10, 50, 5, 5, 5, 10 }, 0, true, "2 misiones", "warn"));
             v.Mine.Add(Tile("s7", "Lucía", Arturo, new float[] { 10, 55, 5, 5, 5, 10 }, 0, true));
             v.Partner.Add(Tile("s0", "Anja", Ana, new float[] { 60, 10, 10, 5, 5, 10 }));
             v.Partner.Add(Tile("s2", "Arjun", Ana, new float[] { 10, 10, 55, 10, 5, 10 }, 0, false, "2 misiones", "warn"));
@@ -382,15 +382,15 @@ namespace Bastion.UI.Strategy
             new PickRowView
             {
                 Id = id, Name = name, Accent = accent, Skills = new float[] { 30, 20, 10, 10, 5, 10 }, Rank = rank, Chip = chip, ChipTone = tone, In = inSquad, Enabled = enabled,
-                ChipTip = chip == "✓" ? StrategyText.Squad.InTip : chip == "Fiebre" ? "Mordisco: necesita el tratamiento antes de salir." : chip != null ? "Heridas" : null,
+                ChipTip = chip == "✓" ? StrategyText.Squad.InTip : chip != null ? "Heridas" : null,
                 Peek = new SoldierPeekView
                 {
                     Name = name, Kicker = (rank > 0 ? "Fogueado" : "Novato") + (accent == Arturo ? " · tuyo" : " · de Ana"),
                     Stats = { new PeekStatView { Name = "Salud", Value = "7" }, new PeekStatView { Name = "Puntería", Value = rank > 0 ? "72" : "65" }, new PeekStatView { Name = "Movimiento", Value = "8" } },
                     Weapon = "Fusil de asalto · Machete", Belt = "Botiquín · Granada de humo",
                     Abilities = rank > 0 ? new List<string> { "Pulso firme", "Tajo" } : new List<string>(),
-                    Health = chip == "Fiebre" ? "Mordisco · se convierte en 3 días" : tone == "warn" ? "Heridas · " + chip : "Sin heridas",
-                    HealthTone = chip == "Fiebre" ? "bad" : tone == "warn" ? "warn" : null,
+                    Health = tone == "warn" ? "Heridas · " + chip : "Sin heridas",
+                    HealthTone = tone == "warn" ? "warn" : null,
                 },
             };
 
@@ -410,7 +410,7 @@ namespace Bastion.UI.Strategy
             };
             v.Mine.Add(Pick("s7", "Lucía Ortega", Arturo, 0, "✓", "good", true));
             v.Mine.Add(Pick("s1", "Yuki Tanaka", Arturo, 1, "✓", "good", true));
-            v.Mine.Add(Pick("s5", "Hiro Sato", Arturo, 0, "Fiebre", "bad", false, false));
+            v.Mine.Add(Pick("s5", "Hiro Sato", Arturo, 0, "2 misiones", "warn", false, false));
             v.Mine.Add(Pick("s3", "Dmitri Volkov", Arturo, 1, "✓", "good", true));
             v.Partner.Add(Pick("s6", "Rafael Costa", Ana, 0, null, null, false, false));
             v.Partner.Add(Pick("s2", "Arjun Mehta", Ana, 0, "2 misiones", "warn", false, false));
@@ -662,13 +662,7 @@ namespace Bastion.UI.Strategy
             if (which.StartsWith("parte-") && int.TryParse(which.Substring("parte-".Length), out var kept) && p.State.LastReport != null)
                 p.State.LastReport.Squad = p.State.LastReport.Squad.Take(kept).ToList();
             // 70- and 71-propuesta: a recruit proposed by Ana or by Arturo, with the engine's sentence (Lore).
-            // «propuesta-tratamiento», «propuesta-tratamiento-mio»: a bite's treatment for Hiro proposed by Ana, or by Arturo, on
-            // the plate (#8): a proposal of the room's (TreatAction); «-viejo», one of before saved halfway (c.Treatment).
-            if (which.StartsWith("propuesta-tratamiento-viejo"))
-                p.State.Treatment = new Bastion.Engine.Treatment { Soldier = "c6", Ready = new[] { true, false } };
-            else if (which.StartsWith("propuesta-tratamiento"))
-                p.State.Proposal = new Bastion.Engine.Proposal { By = which.EndsWith("-mio") ? 1 : 0, Action = new Bastion.Engine.TreatAction { Soldier = "c6" }, Text = "tratar el mordisco de Hiro Sato (2 ✚)" };
-            else if (which.StartsWith("propuesta"))
+            if (which.StartsWith("propuesta"))
                 p.State.Proposal = new Bastion.Engine.Proposal { By = which == "propuesta-mia" ? 1 : 0, Action = new Bastion.Engine.RecruitAction { For = which == "propuesta-mia" ? 1 : 0 }, Text = "reclutar un soldado (30 §)" };
             // 50-escuadra: the first offer chosen, as its steps sent chooseMission (the command, with Red's room: the
             // squad the engine fills for whoever is connected).

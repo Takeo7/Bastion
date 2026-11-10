@@ -320,11 +320,8 @@ namespace Bastion.UI.Combat
                 var limits = left != null ? Lore.EvacClock(left, false) : null;
                 return new List<AbilityView> { CallKey("evacAccept", Lore.EvacBar.Accept, ask.Text, limits), CallKey("evacRefuse", Lore.EvacBar.Wait, Lore.EvacBar.Stay, limits) };
             }
-            // Asking costs no action: whichever of ours is in the bus asks, the one picked if it is, any other if not;
-            // one who can board before a bitten one who can't.
-            var inside = MineAboard().OrderBy(x => x.Id != u?.Id).ToList();
-            bool Boards(Unit x) => !(x.Infected == true && s.Mission.Quarantine == false);
-            var aboard = inside.FirstOrDefault(Boards) ?? inside.FirstOrDefault();
+            // Asking costs no action: whichever of ours is in the bus asks, the one picked if it is, any other if not.
+            var aboard = MineAboard().OrderBy(x => x.Id != u?.Id).FirstOrDefault();
             if (call != null && call.By == MySlot)
             {
                 var waiting = Lore.EvacWaiting(EvacPartner()?.Name ?? "el otro jugador");
@@ -334,13 +331,6 @@ namespace Bastion.UI.Combat
                 return new List<AbilityView> { wait };
             }
             if (aboard == null) return none;
-            if (!Boards(aboard))
-            {
-                var bitten = CallKey("evac", leave, Lore.BiteNoBoard);
-                bitten.Enabled = false;
-                bitten.Reason = Lore.BiteNoBoard;
-                return new List<AbilityView> { bitten };
-            }
             var p = Lore.EvacPrompt(o, EvacPartner()?.Name);
             var armed = evacArmed == aboard.Id && Time.time < evacArmedUntil;
             var go = CallKey("evac", armed ? $"Confirmar: {p.Go}" : p.Go, $"{p.Title}. {p.Text}");

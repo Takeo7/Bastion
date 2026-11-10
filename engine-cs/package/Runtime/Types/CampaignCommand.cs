@@ -210,14 +210,6 @@ namespace Bastion.Engine
         public bool Ready { get; set; }
     }
 
-    /// <summary>Treat a bitten soldier: two keys, like launching (docs/FASE3.md).</summary>
-    public sealed class TreatCommand : CampaignCommand
-    {
-        public override string Type => "treat";
-        public string Soldier { get; set; } = "";
-        public bool Ready { get; set; }
-    }
-
     /// <summary>1 ✚ for 3 days fewer of a wound.</summary>
     public sealed class MedicateCommand : CampaignCommand
     {

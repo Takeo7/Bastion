@@ -107,32 +107,9 @@ namespace Bastion.Engine.Tests
 
         // ------------------------------------------------------------ the bitten and the Cuarentena (#13)
 
-        private static (GameState s, Unit bitten, Unit fine) Bus(bool? quarantine)
-        {
-            var s = Field();
-            s.Mission.Kind = MissionKinds.Recovery;
-            s.Mission.EvacZone = new List<Vec2> { new Vec2 { X = 0, Y = 0 }, new Vec2 { X = 1, Y = 0 } };
-            s.Mission.Quarantine = quarantine;
-            var bitten = AddUnit(s, "s1", TemplateIds.Rookie, 0, 0, extra: (u) => u.Infected = true);
-            var fine = AddUnit(s, "s2", TemplateIds.Rookie, 1, 0);
-            AddUnit(s, "z", TemplateIds.Zombie, 19, 19);
-            return (s, bitten, fine);
-        }
+        // (Nobody is marked bitten any more, so nobody is kept off La Lata: Unit.Infected and Mission.Quarantine, out in the 0.12.18.)
 
-        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › no more: one marked bitten in a save boards La Lata with no Cuarentena, and loses no health (Arturo, 7/11)")]
-        public void OneMarkedBittenBoardsAndLosesNoHealth()
-        {
-            var (s, bitten, fine) = Bus(false);
-            bitten.Armor = 2;
-            var hp = bitten.Hp;
-            NewSim(s).RunAlienTurn();
-            Assert.Equal(hp, bitten.Hp);
-            Run(s, new EvacCommand { Unit = "s1" }, 0, new[] { 0 });
-            Assert.True(bitten.Evacuated);
-            Assert.True(fine.Evacuated);
-        }
-
-        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › the Cuarentena is built no more; one built goes as a save loads, paid back whole, and a fever is gone (Arturo, 7/11)")]
+        [Fact(DisplayName = "the bitten and the Cuarentena (#13) › the Cuarentena is built no more; one built goes as a save loads, paid back whole (Arturo, 7/11)")]
         public void TheCuarentenaIsBuiltNoMore()
         {
             var c = Campaign.CreateCampaign(new[] { 0 }, new Rng(1));
@@ -142,13 +119,11 @@ namespace Bastion.Engine.Tests
             Base.PlacePiece(c.Bastion!, PieceIds.Quarantine, spot.X, spot.Y, 0);
             Assert.Contains(c.Bastion!.Pieces, (p) => p.Piece == PieceIds.Quarantine);
             Assert.Equal("Ya no se construye.", Base.PlaceBlocker(c.Bastion, PieceIds.Quarantine, 10, 10, 0));
-            c.Soldiers[0].Infection = new SoldierInfection { Since = c.Day };
             c.Version = 26;
             var credits = c.Credits;
             var m = Campaign.MigrateCampaign(c);
             Assert.DoesNotContain(m.Bastion!.Pieces, (p) => p.Piece == PieceIds.Quarantine);
             Assert.Equal(credits + Base.Pieces[PieceIds.Quarantine].Cost.Supplies, m.Credits);
-            Assert.Null(m.Soldiers[0].Infection);
         }
 
         // ------------------------------------------------------------ operations say who and what (#14, #20)

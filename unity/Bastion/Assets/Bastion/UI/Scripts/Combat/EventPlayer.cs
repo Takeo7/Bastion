@@ -47,15 +47,13 @@ namespace Bastion.UI.Combat
         /// <summary>What the squad sees of the ground (los.ts teamVisibility), from View: the fog's, for what to show.</summary>
         bool[] sight;
 
-        // What earlier events leave for later ones (game.ts): the last shot's result for its damage, who struck, a bite's toll.
+        // What earlier events leave for later ones (game.ts): the last shot's result for its damage, who struck.
         (string target, string result)? lastShot;
         string lastAttacker;
         (string unit, string ability)? lastUsed;
-        bool biteTick;
         /// <summary>Who has just been burnt (`burned`): their `damaged`, next, is said as the burn.</summary>
         readonly HashSet<string> burnt = new HashSet<string>();
         bool medicineHeal;
-        bool medicineCure;
         bool itemFell;
         bool alarmRaised;
         bool risenSeen;
@@ -156,7 +154,7 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>What follows an enemy's action and belongs to it: it doesn't end the action, nor start the next (game.ts FOLLOW_UP).</summary>
-        static bool FollowUp(GameEvent e) => e is DamagedEvent || e is DiedEvent || e is InfectedEvent || e is StunnedEvent || e is DisorientedEvent || e is NoiseEvent || e is TileChangedEvent || e is FloorBrokenEvent || e is FellEvent || e is ItemDroppedEvent;
+        static bool FollowUp(GameEvent e) => e is DamagedEvent || e is DiedEvent || e is StunnedEvent || e is DisorientedEvent || e is NoiseEvent || e is TileChangedEvent || e is FloorBrokenEvent || e is FellEvent || e is ItemDroppedEvent;
 
         /// <summary>The pause after the last event of one of this player's own actions before the controls are back (game.ts HOLD_AFTER).</summary>
         static float HoldAfter(GameEvent e)
@@ -179,7 +177,6 @@ namespace Bastion.UI.Combat
                 case AidedEvent _: return 0.5f;
                 case EvacuatedEvent _: return 0.4f;
                 case SearchedEvent _: return 0.7f;
-                case InfectedEvent _: return 0.75f;
                 case MovedEvent _: return 0.25f;
                 default: return 0.2f;
             }
@@ -317,10 +314,8 @@ namespace Bastion.UI.Combat
             lastShot = null;
             lastAttacker = null;
             lastUsed = null;
-            biteTick = false;
             burnt.Clear();
             medicineHeal = false;
-            medicineCure = false;
             itemFell = false;
             enemyFrom = null;
             failed = 0;
@@ -1334,7 +1329,7 @@ namespace Bastion.UI.Combat
         {
             var all = queue.ToList();
             var n = 0;
-            while (n < all.Count && (all[n].e is DamagedEvent || all[n].e is DiedEvent || all[n].e is InfectedEvent || all[n].e is StunnedEvent)) n++;
+            while (n < all.Count && (all[n].e is DamagedEvent || all[n].e is DiedEvent || all[n].e is StunnedEvent)) n++;
             var run = new List<(GameEvent, int?, int)>();
             if (n < 2) return run;
             for (var i = 0; i < n; i++) run.Add(Take(r));
@@ -1672,8 +1667,6 @@ namespace Bastion.UI.Combat
         /// </summary>
         async Awaitable Play(GameEvent e, int? by, int epoch)
         {
-            // Right after the squad's turn begins come the bites' tolls (a `damaged` for each bitten, and a fall).
-            biteTick = e is TurnBeganEvent tb ? tb.Team == Teams.Xcom : biteTick && (e is DamagedEvent || e is DiedEvent);
             if (by != null && by != control.MySlot) NotePartner(e, by.Value);
             var v = V;
             var alienPhase = v.ActiveTeam == Teams.Alien;
@@ -1795,8 +1788,6 @@ namespace Bastion.UI.Combat
                 case DamagedEvent d:
                 {
                     var target = Unit(d.Unit);
-                    // The bite's toll as the squad's turn begins (playtest 15/10 #13): said as such, not as a hit.
-                    var bite = biteTick && target.Infected == true;
                     // Burnt (the fire's point of health): its own line; one of the dead's only if the squad sees it.
                     if (burnt.Remove(d.Unit))
                     {
@@ -1810,18 +1801,18 @@ namespace Bastion.UI.Combat
                         else await Wait(0.4f);
                         return;
                     }
-                    var shot = bite ? null : lastShot?.target == d.Unit ? lastShot?.result : null;
+                    var shot = lastShot?.target == d.Unit ? lastShot?.result : null;
                     var crit = shot == "crit";
                     // Enemies fighting each other (18/10 #47): only what the squad sees of it.
                     var from = Unit(lastAttacker);
                     var feud = target.Team == Teams.Alien && from?.Team == Teams.Alien;
                     if (feud && !ShownToSquad(target)) return;
-                    if (d.Amount > 0) Log(bite ? Lore.BiteLossLine(target.Name) : $"{target.Name} recibe {d.Amount} de daño{(crit ? " (crítico)" : "")}", feud ? "#e8d8c0" : target.Team == Teams.Alien ? "#54d1ff" : "#ff6b5a");
+                    if (d.Amount > 0) Log($"{target.Name} recibe {d.Amount} de daño{(crit ? " (crítico)" : "")}", feud ? "#e8d8c0" : target.Team == Teams.Alien ? "#54d1ff" : "#ff6b5a");
                     if (!ShownToSquad(target)) return;
                     var chest = Chest(target.Id);
-                    if (d.Amount > 0) Float(chest, bite ? Lore.BiteFloat : crit ? $"CRÍTICO −{d.Amount}" : shot == "graze" ? $"ROZADURA −{d.Amount}" : $"−{d.Amount}", crit ? "crit" : "damage");
+                    if (d.Amount > 0) Float(chest, crit ? $"CRÍTICO −{d.Amount}" : shot == "graze" ? $"ROZADURA −{d.Amount}" : $"−{d.Amount}", crit ? "crit" : "damage");
                     // One of ours hurt short of dying (the death has its own): a scream if the dead bit them.
-                    if (d.Amount > 0 && target.Team == Teams.Xcom && target.Hp > d.Amount) control.Sfx.Hurt(target, chest, !bite && from != null && Content.Templates[from.Template].Undead);
+                    if (d.Amount > 0 && target.Team == Teams.Xcom && target.Hp > d.Amount) control.Sfx.Hurt(target, chest, from != null && Content.Templates[from.Template].Undead);
                     if (d.Mitigated > 0)
                     {
                         Float(chest - Vector3.up * 0.45f, $"BLINDAJE −{d.Mitigated}", "info");
@@ -1844,7 +1835,7 @@ namespace Bastion.UI.Combat
                     }
                     else Log(u.Team == Teams.Xcom ? $"{u.Name} ha caído en combate" : $"{u.Name} eliminado", u.Team == Teams.Xcom ? "#ff6b5a" : "#54d1ff");
                     if (!ShownToSquad(u)) return;
-                    // One of ours falling with no attack framed first (a bite's toll, a blast): close on them (#21).
+                    // One of ours falling with no attack framed first (the fire, a blast): close on them (#21).
                     if (u.Team == Teams.Xcom && killCam == null && Cam() && DeathShot(u, killer) is (Vector3, Vector3) close)
                     {
                         StartKillCam(u.Id, close);
@@ -2196,25 +2187,14 @@ namespace Bastion.UI.Combat
                     var target = Unit(med.Target);
                     if (target.Id != u.Id) units?.Face(u.Id, Feet(target.Id));
                     Look(Feet(target.Id));
-                    // One line for the whole cure (Lore): what the `healed` and `cured` that follow it do.
+                    // One line for the whole cure (Lore): what the `healed` that follows it does.
                     var after = queue.Take(3).Select(q => q.e).ToList();
                     var healed = after.OfType<HealedEvent>().FirstOrDefault(x => x.Target == target.Id)?.Amount ?? 0;
-                    var cured = after.OfType<CuredEvent>().Any(x => x.Unit == target.Id);
-                    Log(Lore.MedicineLine(u.Name, target.Id == u.Id ? null : target.Name, healed, cured), "#6dff9a");
+                    Log(Lore.MedicineLine(u.Name, target.Id == u.Id ? null : target.Name, healed), "#6dff9a");
                     medicineHeal = true;
-                    medicineCure = cured;
                     // (Arte, 9/11: down by the one it treats, its hand with the syringe on them.)
                     if (units != null) await units.Treat(u.Id, target.Id, stop);
                     else await Wait(0.3f);
-                    return;
-                }
-                case CuredEvent cure:
-                {
-                    var u = Unit(cure.Unit);
-                    Float(Chest(u.Id), Lore.CuredFloat, "heal");
-                    if (!medicineCure) Log($"{u.Name}: {Lore.CuredFloat.ToLowerInvariant()}", "#6dff9a");
-                    medicineCure = false;
-                    await Wait(0.5f);
                     return;
                 }
                 case WeaponEquippedEvent we:
@@ -3036,7 +3016,7 @@ namespace Bastion.UI.Combat
         Lore.EvacSituation Situation(GameState s) => new Lore.EvacSituation(
             s.Mission.Kind == MissionKinds.Elimination,
             Rules.EvacWins(s),
-            s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && (!Abilities.InEvacZone(s, x.Pos) || (x.Infected == true && s.Mission.Quarantine == false))).Select(x => x.Name).ToList());
+            s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && !Abilities.InEvacZone(s, x.Pos)).Select(x => x.Name).ToList());
 
         // ------------------------------------------------------- the partner's moments
 

@@ -108,11 +108,7 @@ namespace Bastion.Engine
                     r.DaysLeft = OldDaysToNow(r.DaysLeft);
                 }
                 foreach (var w in c.Base.Works) w.DaysLeft = OldDaysToNow(w.DaysLeft);
-                foreach (var s in c.Soldiers)
-                {
-                    if (s.WoundedDays > 0) s.WoundedDays = OldDaysToNow(s.WoundedDays);
-                    if (s.Infection != null) s.Infection.Since = Behind(s.Infection.Since);
-                }
+                foreach (var s in c.Soldiers) if (s.WoundedDays > 0) s.WoundedDays = OldDaysToNow(s.WoundedDays);
                 foreach (var q in c.QuestLog.Values) if (q != null) q.Day = Behind(q.Day);
             }
             if (version < 26)
@@ -122,9 +118,9 @@ namespace Bastion.Engine
             }
             if (version < 27)
             {
-                // No bites that infect any more (Arturo, 7/11): whoever had a fever is well; the Cuarentena goes from the base,
-                // what it cost given back (in the box, «fuera, y se devuelve lo gastado»).
-                foreach (var s in c.Soldiers) s.Infection = null;
+                // No bites that infect any more (Arturo, 7/11): whoever had a fever is well (a soldier's `infection` and the
+                // campaign's `treatment` are not read any more); the Cuarentena goes from the base, what it cost given back
+                // (in the box, «fuera, y se devuelve lo gastado»).
                 if (c.Bastion != null)
                 {
                     foreach (var p in c.Bastion.Pieces.Where((x) => Base.Retired.Contains(x.Piece)).ToList())

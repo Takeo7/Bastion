@@ -247,16 +247,8 @@ namespace Bastion.Engine
         public Appearance Appearance { get; set; } = new Appearance();
         /// <summary>Left by side quests, for good (quests.ts TRAITS).</summary>
         public List<string> Traits { get; set; } = new List<string>(); // TraitIds
-        /// <summary>Came back from a mission bitten (docs/FASE3.md): turns on `turnDay` unless treated. Can't deploy meanwhile.</summary>
-        public SoldierInfection? Infection { get; set; }
-        /// <summary>Why the fallen fell, when it wasn't in combat: 'turned', the infection won (TURNED_CAUSE).</summary>
+        /// <summary>Why the fallen fell, when it wasn't in combat: 'turned', the infection won (TURNED_CAUSE; till 0.12.5).</summary>
         public string? FellCause { get; set; } // FellCauses
-    }
-
-    /// <summary>CampaignSoldier.infection: `{ since: number }`, the day it came back bitten (not Infection: that is content.ts INFECTION, Content.Infection).</summary>
-    public sealed class SoldierInfection
-    {
-        public int Since { get; set; }
     }
 
     // ----------------------------------------------------------------- missions
@@ -445,8 +437,8 @@ namespace Bastion.Engine
     }
 
     /// <summary>
-    /// Treating a bite (TreatCommand), paid in medicines: a proposal like the rest since 1/11 (Arturo: «no le llega la
-    /// propuesta al otro»), with the room's clock; CampaignState.Treatment stays only for campaigns saved halfway through one.
+    /// Treating a bite, till 0.12.5: no bite infects any more (Arturo, 7/11) and nothing proposes it. The class stays so
+    /// that a campaign saved with one proposed still opens (a tag nobody knows is refused, TagConverter); voted, it does nothing.
     /// </summary>
     public sealed class TreatAction : ProposalAction
     {
@@ -525,8 +517,6 @@ namespace Bastion.Engine
         public MissionLoot? Loot { get; set; }
         /// <summary>It was a night mission (docs/ALTURA-Y-NOCHE.md).</summary>
         public bool? Night { get; set; }
-        /// <summary>Soldiers (campaign ids) who came back bitten (docs/FASE3.md); missing in older reports.</summary>
-        public List<string>? Infected { get; set; }
         /// <summary>Parts stripped from the Acorazados brought down (docs/FASE4.md), already added.</summary>
         public int? Scrap { get; set; }
         /// <summary>A siege of the base (docs/FASE12.md §11.5); `fallen`, the base fell (and the rest fled to another clearing).</summary>
@@ -646,12 +636,10 @@ namespace Bastion.Engine
         public List<CampaignSoldier> Soldiers { get; set; } = new List<CampaignSoldier>();
         /// <summary>Accessories bought: copies owned (equipped ones included).</summary>
         public Dictionary<string, int> Inventory { get; set; } = new Dictionary<string, int>(); // ItemIds → copies (Partial<Record>)
-        /// <summary>Medicines (✚): from searching, some rewards and the enclaves; they treat the infected and heal wounds (docs/FASE3.md).</summary>
+        /// <summary>Medicines (✚): from searching, some rewards and the enclaves; they heal wounds (docs/FASE3.md).</summary>
         public int? Medicines { get; set; }
         /// <summary>Next day the enclaves send medicines (ENCLAVES).</summary>
         public int? NextMedicineDay { get; set; }
-        /// <summary>A treatment one commander has proposed, waiting for both keys (like launching); null for none.</summary>
-        public Treatment? Treatment { get; set; }
         // Food and the Taller (docs/FASE4.md); missing before version 13.
         /// <summary>Rations: the Bastion eats every day (dailyRations).</summary>
         public int? Food { get; set; }
@@ -722,13 +710,6 @@ namespace Bastion.Engine
         /// <summary>Tells campaigns apart in each browser (scenes already played); missing in campaigns from before it.</summary>
         public string? Uid { get; set; }
         public int NextId { get; set; }
-    }
-
-    /// <summary>CampaignState.treatment: `{ soldier: string; ready: [boolean, boolean] }`.</summary>
-    public sealed class Treatment
-    {
-        public string Soldier { get; set; } = "";
-        public bool[] Ready { get; set; } = new bool[2]; // [boolean, boolean]: by Slot.
     }
 
     /// <summary>The next siege of the base (docs/FASE12.md §11.5).</summary>

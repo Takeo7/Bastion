@@ -433,23 +433,6 @@ namespace Bastion.Engine
             public const double Supplies = 1.5;
         }
 
-        /// <summary>
-        /// Infection (docs/FASE3.md): out of 100, the chance that a zombie's melee hit
-        /// that draws blood infects, by who bites, and a Hinchado's burst to each it
-        /// hurts; a Chaleco antibalas takes `vest` off.
-        /// </summary>
-        public static class Infection
-        {
-            public static readonly IReadOnlyDictionary<string, int> Bite = new Dictionary<string, int>
-            {
-                [TemplateIds.Zombie] = 25,
-                [TemplateIds.Xenoid] = 20,
-                [TemplateIds.Mec] = 35,
-            };
-            public const int Burst = 50;
-            public const int Vest = 10;
-        }
-
         /// <summary>What a noise of that radius made by the squad adds to the horde's clock.</summary>
         public static int HordePoints(double radius)
         {

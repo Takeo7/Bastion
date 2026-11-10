@@ -348,7 +348,7 @@ namespace Bastion.Engine.Tests
             SameMap(DeedsOf((DeedIds.Throw, 3), (DeedIds.ThrowHit, 2)), a.Deeds);
         }
 
-        [Fact(DisplayName = "what a soldier does in a mission is counted by the events › cures, searches, a fixed radio, a silenced alarm, hunkering and running")]
+        [Fact(DisplayName = "what a soldier does in a mission is counted by the events › heals, searches, a fixed radio, a silenced alarm, hunkering and running")]
         public void CuresSearchesARadioAnAlarmHunkeringAndRunning()
         {
             var (s, a, b, _, _) = CountingField();
@@ -359,7 +359,6 @@ namespace Bastion.Engine.Tests
             {
                 new HealedEvent { Unit = "s1", Target = "s2", Amount = 3 },
                 new HealedEvent { Unit = "s1", Target = "s1", Amount = 2 },
-                new CuredEvent { Unit = "s2", By = "s1" },
                 new SearchedEvent { Unit = "s2", Tile = P(2, 2, 0), Loot = null },
                 new RoomSearchedEvent { Unit = "s2", Room = 1, Loot = null },
                 new HackedEvent { Unit = "s2", Success = true, Chance = 60 },
@@ -369,7 +368,7 @@ namespace Bastion.Engine.Tests
                 new MovedEvent { Unit = "s2", Path = new List<Pos> { P(3, 1, 0) }, Ap = 1 },
                 new MovedEvent { Unit = "s2", Path = new List<Pos> { P(9, 1, 0) }, Ap = 2 },
             }) Events.ApplyEvent(s, e);
-            SameMap(DeedsOf((DeedIds.HealOther, 2), (DeedIds.HealSelf, 1), (DeedIds.Shot, 1), (DeedIds.Hit, 1), (DeedIds.Fix, 1)), a.Deeds);
+            SameMap(DeedsOf((DeedIds.HealOther, 1), (DeedIds.HealSelf, 1), (DeedIds.Shot, 1), (DeedIds.Hit, 1), (DeedIds.Fix, 1)), a.Deeds);
             SameMap(DeedsOf((DeedIds.Search, 2), (DeedIds.Fix, 1), (DeedIds.Hunker, 1), (DeedIds.Run, 1)), b.Deeds);
         }
 

@@ -246,10 +246,10 @@ namespace Bastion.UI.Start
             if (addresses.Count > 0) Address(invite, addresses[0]);
             if (internet != null) Address(invite, new HostAddress { Address = internet, Kind = "internet" });
             else if (router != null && router != RouterState.Open) Ui.Text(RoomText.RouterLine(router.Value), router == RouterState.Trying ? "room__router" : "room__router room__router--off", invite);
-            // Without the internet's address (which carries it), the room's key on its own: asked of whoever comes from the
-            // internet (an IPv6 address too, the port closed or not), and from the house while the router's port is open (Red,
-            // 0.12.17; Gameplay's review, 10/11, #9; Lore's words).
-            if (internet == null && previewRoom == null && link.Key is string key) Ui.Text(RoomText.KeyLine(key), "room__router", invite);
+            // The room's key on its own line, with the internet's address or without it: asked of whoever comes from the
+            // internet (an IPv6 address too, the port closed or not), and from the house while the router's port is open, where
+            // what is typed is the house's address and the key (Red, 0.12.17 and 0.12.18; Gameplay's review, 10/11, #9; Lore).
+            if (previewRoom == null && link.Key is string key) Ui.Text(RoomText.KeyLine(key), "room__router", invite);
             if (addresses.Count > 1)
             {
                 var more = new Foldout { text = RoomText.OtherAddresses(addresses.Count - 1), value = false };

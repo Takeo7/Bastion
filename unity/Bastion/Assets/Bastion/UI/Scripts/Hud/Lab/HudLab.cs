@@ -249,7 +249,7 @@ namespace Bastion.UI.Hud
             }
             Card("s1", "Mateo Rojas", Arturo, true, 6, 7, 2, new float[] { 20, 0, 0, 0, 0, 10 });
             Card("s2", "«Chispa»", Arturo, true, 5, 5, 1, new float[] { 10, 10, 0, 0, 0, 0 }, new TagView { Text = "VIGILANCIA", Kind = "ow" });
-            Card("s3", "Freya Lund", Arturo, true, 3, 6, 0, new float[] { 0, 0, 10, 10, 10, 0 }, new TagView { Text = Bastion.Engine.Lore.BiteTag, Kind = "bite", Tip = Bastion.Engine.Lore.BiteNote(true) });
+            Card("s3", "Freya Lund", Arturo, true, 3, 6, 0, new float[] { 0, 0, 10, 10, 10, 0 });
             Card("s4", "Zainab Bello", Arturo, true, 0, 6, 0, new float[] { 0, 0, 0, 0, 0, 0 });
             Card("s5", "Chiara Rossi", Ana, false, 6, 6, 2, new float[] { 0, 10, 0, 0, 0, 10 });
             // Ana's turn, one soldier at a time: hers in play.

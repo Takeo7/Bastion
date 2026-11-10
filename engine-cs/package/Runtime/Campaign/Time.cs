@@ -159,15 +159,6 @@ namespace Bastion.Engine
                 }
             }
 
-            // The bitten whose days ran out turn.
-            foreach (var s in c.Soldiers)
-            {
-                var day = s.Alive ? TurnDay(c, s) : null;
-                if (day == null || c.Day < day.Value) continue;
-                Turn(c, s);
-                stop = true;
-            }
-
             // Food (docs/FASE4.md): the Huerto grows, La Vega sends, and the Bastion eats.
             AddFood(c, GardenYield(c));
             if (c.Day >= (c.NextFoodDay ?? 0))

@@ -39,7 +39,7 @@ namespace Bastion.UI.Strategy
         public string RankTip;
         public bool Points;
         public string PointsTip;
-        /// <summary>Under the name: «Fiebre · ahora», «2 misiones», «Caído»; null, none.</summary>
+        /// <summary>Under the name: «2 misiones», «Caído»; null, none.</summary>
         public string Tag;
         /// <summary>bad, warn or null.</summary>
         public string TagTone;
@@ -88,7 +88,7 @@ namespace Bastion.UI.Strategy
         public string Customize;
         /// <summary>Health, firearm aim, melee aim, will: each an icon, a figure, a colour.</summary>
         public List<SheetStatView> Stats = new List<SheetStatView>();
-        /// <summary>«Listo», «Fiebre · ahora»… at the end of the figures.</summary>
+        /// <summary>«Listo», «Heridas · 2 misiones»… at the end of the figures.</summary>
         public string Health;
         public string HealthTone;
         public string HealthTip;
@@ -112,14 +112,10 @@ namespace Bastion.UI.Strategy
         public string Tip;
     }
 
-    /// <summary>A bitten or wounded soldier's care: the head, the buttons (the first the main one), who it waits for.</summary>
+    /// <summary>A wounded soldier's care: the buttons (the first the main one), who it waits for.</summary>
     [Serializable]
     public sealed class CareView
     {
-        /// <summary>«Mordisco»; null, no head (a wound's cure).</summary>
-        public string Title;
-        /// <summary>What it is about: «El tratamiento le quita la fiebre. Tenéis 4 ✚.»; null, none.</summary>
-        public string Line;
         public List<string> Buttons = new List<string>();
         public List<bool> Enabled = new List<bool>();
         public string Waiting;

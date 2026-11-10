@@ -105,8 +105,6 @@ namespace Bastion.UI.Strategy
         public List<RowView> Rows = new List<RowView>();
         /// <summary>«Ver» goes where it is (a piece on the clearing, a zone on the map…).</summary>
         public bool CanSee;
-        /// <summary>A bite's treatment (c.Treatment), not a vote: the soldier's id; its keys send TreatCommand (Arturo, 01/11 #8).</summary>
-        public string Treat;
     }
 
     /// <summary>A key and its value in a detail list (Suministros: 30 §).</summary>

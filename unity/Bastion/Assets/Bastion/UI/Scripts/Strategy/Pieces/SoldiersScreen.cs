@@ -398,8 +398,6 @@ namespace Bastion.UI.Strategy
             tips.Attach(health, s.HealthTip);
             if (s.Care != null)
             {
-                if (!string.IsNullOrEmpty(s.Care.Title)) SubHead(s.Care.Title, parent);
-                if (!string.IsNullOrEmpty(s.Care.Line)) Ui.Text(s.Care.Line, "sheet__care-line muted", parent);
                 var actions = Ui.El("sheet__care", parent);
                 for (var i = 0; i < s.Care.Buttons.Count; i++)
                 {

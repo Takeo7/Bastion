@@ -220,19 +220,19 @@ namespace Bastion.Engine
             return (c.Inventory.TryGetValue(id, out var owned) ? owned : 0) - used;
         }
 
-        /// <summary>Fit to deploy: alive, healed, and not running a fever from a bite.</summary>
+        /// <summary>Fit to deploy: alive and healed.</summary>
         public static bool SoldierReady(CampaignSoldier s)
         {
-            return s.Alive && s.WoundedDays == 0 && s.Infection == null;
+            return s.Alive && s.WoundedDays == 0;
         }
 
         /// <summary>
         /// Who defends a siege (docs/FASE12.md §11.5): the fit; with nobody fit, the wounded too, or nobody could
-        /// (Arturo, 2/11). The bitten stay in.
+        /// (Arturo, 2/11).
         /// </summary>
         public static bool Defends(CampaignState c, CampaignSoldier s)
         {
-            return SoldierReady(s) || (s.Alive && s.Infection == null && !c.Soldiers.Any(SoldierReady));
+            return SoldierReady(s) || (s.Alive && !c.Soldiers.Any(SoldierReady));
         }
 
         /// <summary>

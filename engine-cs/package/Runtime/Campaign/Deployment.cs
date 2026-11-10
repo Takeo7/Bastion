@@ -1,7 +1,7 @@
 #nullable enable
 // campaign.ts: a level reached (reachedLevel), and a finished tactical mission folded back into the campaign
 // (applyMissionResult): the squad as it came back, what it brought, what it learnt, the reward, the story and the
-// quests, the siege's clock, the bitten.
+// quests, the siege's clock.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -47,7 +47,7 @@ namespace Bastion.Engine
             var siege = offer?.Siege == true;
             c.MissionsFlown = (c.MissionsFlown ?? 0) + 1;
             // Time goes by with the missions (docs/FASE12.md §11.6): the days pass while the squad is out, so whoever
-            // comes back hurt or bitten starts from today; the mission they flew doesn't expire under them (passDay).
+            // comes back hurt starts from today; the mission they flew doesn't expire under them (passDay).
             PassDays(c, DaysPerMission, rng);
             MissionReward? reward = null;
             if (victory && offer != null)
@@ -340,8 +340,6 @@ namespace Bastion.Engine
             c.LaunchReady = new bool[2];
             c.LastReport = report;
             MaybeFaces(c, report, rng);
-            // Nobody comes home bitten any more: a bite is only its damage (Arturo, 7/11; it brought a fever, docs/FASE3.md).
-            report.Infected = new List<string>();
             SyncMarea(c);
             if (c.Outcome == null)
             {

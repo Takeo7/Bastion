@@ -111,7 +111,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal((int)typescript["campaign"]!["day"]!, save.Campaign.Day);
             Assert.Null(store.SetAside);
             store.Save(save);
-            var difference = Json2.FirstDifference(Json2.Clean(typescript), Json2.Clean(Written(typescript)));
+            var difference = Json2.FirstDifference(Json2.Clean(CampaignJsonTests.Retired(typescript)), Json2.Clean(Written(typescript)));
             Assert.True(difference == null, $"{name}: {difference}");
             // And again: what C# wrote, C# reads and writes to the letter.
             var first = File.ReadAllText(SavePath);
@@ -163,7 +163,7 @@ namespace Bastion.Engine.Tests
             ana.Send("{\"t\":\"hello\",\"name\":\"Ana\",\"token\":\"ficha-0\",\"version\":\"1.0.0\"}");
             room.Pump();
             Assert.Equal(0, (int)ana.Take("welcome").Single()["slot"]!);
-            var expected = (JObject)typescript["campaign"]!.DeepClone();
+            var expected = (JObject)CampaignJsonTests.Retired(typescript["campaign"]!);
             expected["version"] = Campaign.CampaignVersion;
             var sent = ana.Take("campaign").Last()["state"]!;
             var difference = Json2.FirstDifference(Json2.Clean(expected), Json2.Clean(Comparable(sent, expected)));
@@ -224,7 +224,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("mission", room.Summary().phase);
             Assert.Empty(ana.Take("campaign"));
             var back = JObject.Parse(File.ReadAllText(SavePath));
-            var difference = Json2.FirstDifference(Json2.Clean(typescript["campaign"]!), Json2.Clean(back["campaign"]!));
+            var difference = Json2.FirstDifference(Json2.Clean(CampaignJsonTests.Retired(typescript["campaign"]!)), Json2.Clean(back["campaign"]!));
             Assert.True(difference == null, difference);
         }
     }

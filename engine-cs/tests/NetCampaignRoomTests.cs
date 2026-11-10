@@ -249,7 +249,7 @@ namespace Bastion.Engine.Tests
             // One of each kind, as campaignCommandSchema takes them (golden/campaign/commands.json): past the check, each
             // reaches the campaign's rules, which do it or say why not.
             var commands = (JArray)JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "golden", "campaign", "commands.json")))["commands"]!;
-            Assert.Equal(34, commands.Count);
+            Assert.Equal(33, commands.Count);
             foreach (var cmd in commands)
             {
                 rig.Say(ana, Ccmd(cmd));
@@ -284,6 +284,8 @@ namespace Bastion.Engine.Tests
                 new { type = "customize", soldier = "s0a", name = "Ana", nickname = "" },
                 new { type = "craft", project = "warpDrive" },
                 new { type = "assignWeapon", weapon = "w1", soldier = "" },
+                // Treating a bite, a command till the 0.12.17: no command any more.
+                new { type = "treat", soldier = "s0a", ready = true },
             };
             foreach (var cmd in bad)
             {

@@ -66,7 +66,6 @@ namespace Bastion.Engine
                 Inventory = new Dictionary<string, int>(),
                 Medicines = StartMedicines,
                 NextMedicineDay = 1 + EnclaveDays,
-                Treatment = null,
                 Food = StartFood,
                 Hungry = false,
                 NextFoodDay = 1 + LaVegaFoodDays,

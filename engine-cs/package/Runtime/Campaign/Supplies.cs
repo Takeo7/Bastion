@@ -1,6 +1,6 @@
 #nullable enable
-// campaign.ts: infection, food, the Taller and the Armería (docs/FASE3.md, FASE4.md, FASE9.md §5), what can be read of
-// them. turn, addFood and wornAs, which change the state, come with the rules that use them.
+// campaign.ts: medicines, food, the Taller and the Armería (docs/FASE3.md, FASE4.md, FASE9.md §5), what can be read of
+// them. addFood and wornAs, which change the state, come with the rules that use them.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,29 +9,7 @@ namespace Bastion.Engine
 {
     public static partial class Campaign
     {
-        // ------------------------------------------------------------ infection
-
-        /// <summary>Medicines a treatment takes: 2, or 1 with the Enfermería at level 2 or more.</summary>
-        public static int TreatCost(CampaignState c)
-        {
-            return FacilityLevel(c, FacilityIds.Infirmary) >= 2 ? 1 : 2;
-        }
-
-        /// <summary>The day a bitten soldier turns, unless treated: the day after coming back, two with an Enfermería, and one more for each level of the Cuarentena past the first.</summary>
-        public static int? TurnDay(CampaignState c, CampaignSoldier s)
-        {
-            if (s.Infection == null) return null;
-            return s.Infection.Since + TurnDays + (FacilityCount(c, FacilityIds.Infirmary) != 0 ? InfirmaryTurnDays : 0) + Math.Max(0, FacilityLevel(c, FacilityIds.Quarantine) - 1);
-        }
-
-        /// <summary>
-        /// Whether the bitten may board La Lata (playtest 2026-10-15, #13): only with a Cuarentena to take them to, once the
-        /// Bastion is big enough to build one (Ana, 21/10 #36: not at the caravan's level); before that, they board.
-        /// </summary>
-        public static bool HasQuarantine(CampaignState c)
-        {
-            return FacilityCount(c, FacilityIds.Quarantine) > 0 || Progression.BastionLevel(c.Level) < Base.Pieces[PieceIds.Quarantine].Level;
-        }
+        // ------------------------------------------------------------ medicines
 
         /// <summary>An enclave that is an ally (contacted) and stands (no Nido in its region).</summary>
         private static bool EnclaveStands(CampaignState c, string id)

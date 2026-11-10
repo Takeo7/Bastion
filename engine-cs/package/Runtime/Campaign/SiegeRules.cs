@@ -33,7 +33,7 @@ namespace Bastion.Engine
 
         /// <summary>
         /// The siege has come (§11.5): it is the next thing the base does, and every
-        /// soldier fit to fight defends; the wounded and the bitten stay inside.
+        /// soldier fit to fight defends; the wounded stay inside.
         /// </summary>
         private static void StartSiege(CampaignState c, Rng rng)
         {

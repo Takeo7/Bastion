@@ -105,7 +105,7 @@ namespace Bastion.Net
             // host proposes the easiest one there is, and the partner says yes; with none, a day's wait for more.
             if (c.ActiveMission == null)
             {
-                if (c.Soldiers.Any((s) => s.Alive && s.Infection == null && s.WoundedDays > 0)) return new AdvanceCommand { Ready = true };
+                if (c.Soldiers.Any((s) => s.Alive && s.WoundedDays > 0)) return new AdvanceCommand { Ready = true };
                 var easiest = c.Offers.Where((o) => !o.Final && o.Facility == null && o.Siege != true && (o.ExpiresDay == null || o.ExpiresDay >= c.Day))
                     .OrderBy((o) => o.Difficulty).ThenBy((o) => o.Id, System.StringComparer.Ordinal).FirstOrDefault();
                 if (easiest == null) return new AdvanceCommand { Ready = true };

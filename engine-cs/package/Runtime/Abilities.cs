@@ -320,7 +320,7 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// Where a corpse gets up (the Chillón's, or one of the bitten): on its own
+        /// Where a corpse gets up (the Chillón's, or a fallen soldier): on its own
         /// tile if nobody stands there, else on the first free tile a step away on its
         /// floor (not a shut door); null with none, and it can't rise yet. Nobody
         /// rises on top of anyone (Arturo, 19/10). One that fell on a flight of stairs

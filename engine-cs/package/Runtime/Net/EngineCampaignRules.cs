@@ -51,8 +51,6 @@ namespace Bastion.Net
                 ObjectiveName = string.IsNullOrEmpty(info.Alarm) ? null : Lore.AlarmNames[info.Alarm!],
                 Leader = info.Leader,
                 ItemOutdoors = info.ItemOutdoors,
-                MedicineCures = Campaign.MedicineCures(c),
-                Quarantine = Campaign.HasQuarantine(c),
                 Pistols = c.Pistols == true ? true : (bool?)null,
                 Snow = info.Snow,
                 Weather = Campaign.OfferWeather(c, offer),

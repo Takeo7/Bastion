@@ -49,7 +49,8 @@ namespace Bastion.Engine
                 ["infirmary"] = new PieceText("Enfermería", "la Enfermería", "una Enfermería", "Las heridas curan antes.", new[] { "Una camilla y un hornillo para hervir el agua.", "Agua caliente en la sala de curas.", "Un quirófano de verdad, con lámpara y generador propio." }),
                 ["workshop"] = new PieceText("Taller", "el Taller", "un Taller", "Accesorios y armas más baratos.", new[] { "Un banco de trabajo y las herramientas de Teo.", "Un torno de verdad.", "Teo deja de quejarse." }),
                 ["garden"] = new PieceText("Huerto", "el Huerto", "un Huerto", "Da 5 raciones por misión a nivel 1, 10 a nivel 2 y 15 a nivel 3.", new[] { "Bancales bajo plástico y bidones para el agua de lluvia.", "Un invernadero de verdad, con estufa.", "Riego por goteo y semillas de La Vega." }),
-                ["quarantine"] = new PieceText("Cuarentena", "la Cuarentena", "una Cuarentena", $"Sin ella, un mordido no sube {Bus.To}.", new[] { "Una nave aparte, con cerrojo por fuera.", "Catres separados y una ventana con rejas.", "Una sala de guardia, y alguien despierto toda la noche." }),
+                // Built no more (Base.Retired; Arturo, 7/11: a bite doesn't infect): its name stays, for the save that loses it (Migration).
+                ["quarantine"] = new PieceText("Cuarentena", "la Cuarentena", "una Cuarentena", "Ya no se construye."),
                 ["memorial"] = new PieceText("Camposanto", "el Camposanto", "un Camposanto", "Los caídos descansan aquí y salen de la lista de Soldados; sus nombres se guardan.", new[] { "Cruces de pino bajo la nieve, una por cada uno.", "Una cerca y un banco.", "Los nombres, grabados en una tabla." }),
                 ["range"] = new PieceText("Campo de tiro", "el Campo de tiro", "un Campo de tiro", "Puntería para todos.", new[] { "Dianas de cartón en una trinchera del pinar.", "Siluetas de zombi a cincuenta metros.", "Blancos móviles, con una polea de Teo." }),
                 ["training"] = new PieceText("Centro de entrenamiento", "el Centro de entrenamiento", "un Centro de entrenamiento", "Los reclutas llegan sabiendo más.", new[] { "Un patio despejado y un horario.", "Una semana de prácticas antes de salir.", "Alguien que ya ha vuelto de fuera les enseña." }),
@@ -90,7 +91,7 @@ namespace Bastion.Engine
         /// («+5 raciones por misión»). The engine sums them over the base (campaign.ts:
         /// gardenYield, beds, healRate, shopPrice, rangeAim, rewardMultiplier,
         /// garageCut, memorialWill, the training's seasoned, learningBonus,
-        /// contactCapacity, the Cuarentena's fever days); these are one building on its
+        /// contactCapacity); these are one building on its
         /// own, and change with them. Defences, traps and the caravan count nothing.
         /// </summary>
         private static Figure? PieceFigureOf(string piece, int l)
@@ -109,7 +110,6 @@ namespace Bastion.Engine
                 case "simulation": return new Figure($"+{25 + 15 * (l - 1)} %", $"Suministros +{25 + 15 * (l - 1)} %");
                 case "garage": return new Figure($"−{l}", $"Heridas: −{l} {(l == 1 ? "misión" : "misiones")}"); // Fixed in C# only (text-fixes.ts): lore.ts counts it in days
                 case "memorial": return l >= 2 ? new Figure($"+{(l == 2 ? 5 : 10)}", $"Voluntad +{(l == 2 ? 5 : 10)}") : null;
-                case "quarantine": return l >= 2 ? new Figure($"+{l - 1}", $"Fiebre: +{l - 1} {(l == 2 ? "misión" : "misiones")}") : null; // The same
                 case "training": return new Figure($"+{l}", $"Reclutas: +{l} {(l == 1 ? "nivel" : "niveles")}");
                 case "echoes": return new Figure($"+{20 * l} %", $"Barras +{20 * l} %");
                 case "radio": return new Figure($"+{1 + l}", $"+{1 + l} contactos");
@@ -142,7 +142,6 @@ namespace Bastion.Engine
             ["piece:infirmary"] = "Las heridas curan antes",
             ["piece:workshop"] = "Armas y accesorios más baratos",
             ["piece:garden"] = "Raciones en cada misión",
-            ["piece:quarantine"] = "Sin ella, un mordido no sube a La Lata",
             ["piece:memorial"] = "Los caídos salen de la lista",
             ["piece:range"] = "Puntería para todos",
             ["piece:training"] = "Reclutas con más nivel",

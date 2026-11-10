@@ -176,10 +176,6 @@ namespace Bastion.Engine
         public int HackBonus { get; set; }
         /// <summary>A sabotage's alarm (playtest 2026-10-15, #14); missing in older saves and outside the campaign: a siren.</summary>
         public string? Alarm { get; set; } // Alarms
-        /// <summary>Medicines also stop a bite's contagion, for everyone (docs/FASE8.md §C: the Enfermería from level 2).</summary>
-        public bool? MedicineCures { get; set; }
-        /// <summary>The campaign's Bastion has a Cuarentena (playtest 2026-10-15, #13); false, the bitten can't board La Lata. Missing (a skirmish, older saves): no rule.</summary>
-        public bool? Quarantine { get; set; }
         /// <summary>The campaign counts its pistols (CampaignState.Pistols; Arturo, 1/11): searches turn them up too.</summary>
         public bool? Pistols { get; set; }
         /// <summary>

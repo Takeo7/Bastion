@@ -115,15 +115,13 @@ namespace Bastion.Engine.Tests
             Assert.Single(c.Squad);
         }
 
-        [Fact(DisplayName = "the siege › with nobody fit, the wounded defend; the bitten stay in (Arturo, 2/11)", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
+        [Fact(DisplayName = "the siege › with nobody fit, the wounded defend (Arturo, 2/11)", Skip = "Sin asedios por ahora (Arturo, 7/11: Campaign.SiegesOn): vuelven con ellos")]
         public void TheWoundedDefend()
         {
             var c = SiegeAfter((s) => { foreach (var u in s.Units.Where((x) => x.CampaignId != null)) u.Hp = 1; });
-            var bitten = c.Soldiers.First((s) => s.Alive);
             Assert.True(c.Soldiers.Where((s) => s.Alive).All((s) => s.WoundedDays > 0));
             Assert.Equal(c.Soldiers.Where((s) => s.Alive).Select((s) => s.Id), c.Squad);
-            bitten.Infection = new SoldierInfection { Since = c.Day };
-            Assert.Equal(c.Squad.Count - 1, Campaign.BuildSquad(c).Count);
+            Assert.Equal(c.Squad.Count, Campaign.BuildSquad(c).Count);
             // One fit among them, and the wounded go back in.
             Assert.True(CampaignHelpers.Run(c, new RecruitCommand()).Ok);
             Assert.Single(Campaign.BuildSquad(c));

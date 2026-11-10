@@ -444,9 +444,6 @@ namespace Bastion.Engine
                     if (pod != null) pod.UnitIds.Add(z.Id);
                     break;
                 }
-                case InfectedEvent ev:
-                    UnitOf(s, ev.Unit).Infected = true;
-                    break;
                 case SmokeDeployedEvent ev:
                     s.Smoke.Add(new SmokeCloud { Pos = CopyPos(ev.Pos), Radius = ev.Radius, Turns = ev.Turns });
                     break;
@@ -741,10 +738,6 @@ namespace Bastion.Engine
                     if (!string.IsNullOrEmpty(target.Arms?.Primary)) target.Arms!.Condition = Math.Min(100, Content.ConditionOf(target) + ev.Amount);
                     break;
                 }
-                case CuredEvent ev:
-                    UnitOf(s, ev.Unit).Infected = false;
-                    Deed(s, ev.By, ev.By == ev.Unit ? DeedIds.HealSelf : DeedIds.HealOther);
-                    break;
                 case WeaponEquippedEvent ev:
                 {
                     var u = UnitOf(s, ev.Unit);
@@ -1067,7 +1060,6 @@ namespace Bastion.Engine
                 PackSlots = u.PackSlots,
                 Deeds = u.Deeds != null ? CopyDeeds(u.Deeds) : null,
                 RisenFrom = u.RisenFrom,
-                Infected = u.Infected,
             };
         }
 
@@ -1147,8 +1139,6 @@ namespace Bastion.Engine
                     EvacDone = m.EvacDone,
                     HackBonus = m.HackBonus,
                     Alarm = m.Alarm,
-                    MedicineCures = m.MedicineCures,
-                    Quarantine = m.Quarantine,
                     Pistols = m.Pistols,
                     PoliceCar = CopyInts(m.PoliceCar),
                     Reinforcements = m.Reinforcements.Select(CopyReinforcement).ToList(),

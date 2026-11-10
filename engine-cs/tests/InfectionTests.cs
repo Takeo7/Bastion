@@ -11,10 +11,10 @@ using static Bastion.Engine.Tests.Step2Helpers;
 namespace Bastion.Engine.Tests
 {
     /// <summary>
-    /// packages/engine/test/infection.test.ts: phase 3 of the zombies, infection and medicines (docs/FASE3.md), test by
-    /// test: the five of «infection in combat» and the seven of «infection at the base», which play a campaign. `client
-    /// toEqual s` is Step2Json.StateDiff. Its helpers `field`, `pod`, `biteRate`, and the base's `run` and `bitten`, here
-    /// as private ones (`pod` is Step2Helpers.Pod).
+    /// What is left of packages/engine/test/infection.test.ts (phase 3 of the zombies, docs/FASE3.md) with no bite that
+    /// infects (Arturo, 7/11; its code out in the 0.12.18): the fallen who rise, and the medicines at the base. `client
+    /// toEqual s` is Step2Json.StateDiff. Its helpers `field`, `pod` and the base's `run`, here as private ones (`pod` is
+    /// Step2Helpers.Pod).
     /// </summary>
     public class InfectionTests
     {
@@ -23,106 +23,19 @@ namespace Bastion.Engine.Tests
             return StateFrom(Enumerable.Range(0, 12).Select((_) => new string('.', 12)).ToArray());
         }
 
-        /// <summary>Out of `n` bites that drew blood, how many infected.</summary>
-        private static double BiteRate(string template, int n, Action<Unit>? extra = null)
-        {
-            var hurt = 0;
-            var infected = 0;
-            for (var seed = 1; hurt < n; seed++)
-            {
-                var s = Field();
-                s.ActiveTeam = Teams.Alien;
-                var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) =>
-                {
-                    u.Hp = 99;
-                    u.MaxHp = 99;
-                    extra?.Invoke(u);
-                });
-                var zombie = AddUnit(s, "a1", template, 6, 5);
-                var run = NewSim(s, seed);
-                run.Attack(zombie, soldier, AbilityIds.Claw);
-                if (soldier.Hp == 99) continue;
-                hurt++;
-                if (Of<InfectedEvent>(run.Events).Count > 0) infected++;
-            }
-            return (double)infected / n;
-        }
-
-        /// <summary>toBeCloseTo(expected, 1): within 0.05.</summary>
-        private static void CloseTo(double expected, double actual)
-        {
-            Assert.True(Math.Abs(expected - actual) < 0.05, $"expected {expected} (± 0.05), got {actual}");
-        }
-
         // ------------------------------------------------------------ infection in combat
 
-        [Fact(DisplayName = "infection in combat › a bite or a Hinchado's burst that draws blood only hurts: nobody is infected (Arturo, 7/11)")]
-        public void ABiteOnlyHurts()
-        {
-            foreach (var template in new[] { TemplateIds.Zombie, TemplateIds.Xenoid, TemplateIds.Mec })
-                Assert.Equal(0, BiteRate(template, 200));
-            for (var seed = 1; seed < 100; seed++)
-            {
-                var s = Field();
-                var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) =>
-                {
-                    u.Hp = 99;
-                    u.MaxHp = 99;
-                });
-                var bloater = AddUnit(s, "a1", TemplateIds.Bloater, 6, 5, extra: (u) => u.Hp = 1);
-                var run = NewSim(s, seed);
-                run.Damage(bloater, 5, 0);
-                Assert.True(soldier.Hp < 99);
-                Assert.Empty(Of<InfectedEvent>(run.Events));
-            }
-        }
+        // (A bite only hurts: the tests that counted who it infected went with InfectedEvent, 0.12.18.)
 
-        [Fact(DisplayName = "infection in combat › no blood, no infection: a miss, or a bite the armour stops; and only the living of the squad")]
-        public void NoBloodNoInfection()
-        {
-            for (var seed = 1; seed < 80; seed++)
-            {
-                var s = Field();
-                var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => u.Armor = 20);
-                var zombie = AddUnit(s, "a1", TemplateIds.Zombie, 6, 5);
-                var run = NewSim(s, seed);
-                run.Attack(zombie, soldier, AbilityIds.Claw);
-                Assert.Empty(Of<InfectedEvent>(run.Events));
-            }
-        }
-
-        [Fact(DisplayName = "infection in combat › the event marks the soldier for the rest of the mission; the botiquín heals wounds, not bites")]
-        public void TheEventMarksTheSoldier()
-        {
-            var s = Field();
-            var soldier = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) =>
-            {
-                u.Hp = 2;
-                u.MaxHp = 6;
-                u.Charges = new Dictionary<string, int> { [ChargeIds.FirstAid] = 1 };
-                u.Gear = new List<string> { ItemIds.FirstAid };
-            });
-            Events.ApplyEvent(s, new InfectedEvent { Unit = "s1", By = "a1" });
-            Assert.True(soldier.Infected);
-            NewSim(s).Perform(soldier, AbilityIds.FirstAid, target: soldier);
-            Assert.Equal(6, soldier.Hp);
-            Assert.True(soldier.Infected);
-        }
-
-        [Fact(DisplayName = "infection in combat › every soldier who falls rises as the zombies’ turn begins, infected or not, and acts from the next (Arturo, 7/11)")]
+        [Fact(DisplayName = "infection in combat › every soldier who falls rises as the zombies’ turn begins and acts from the next (Arturo, 7/11)")]
         public void EverySoldierWhoFallsRises()
         {
             var s = Field();
             var look = new Appearance { Primary = "#123456", Secondary = "#654321", Visor = "#9fe3ff", Head = HeadIds.Helmet, Build = BuildIds.Normal, Sex = Sexes.F };
-            var fallen = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) =>
-            {
-                u.Infected = true;
-                u.Appearance = look;
-            });
+            var fallen = AddUnit(s, "s1", TemplateIds.Rookie, 5, 5, extra: (u) => u.Appearance = look);
             var clean = AddUnit(s, "s2", TemplateIds.Rookie, 7, 5);
             var out_ = AddUnit(s, "s3", TemplateIds.Rookie, 0, 0, extra: (u) =>
             {
-                u.Infected = true;
                 u.Alive = false;
                 u.Evacuated = true;
             });
@@ -139,7 +52,7 @@ namespace Bastion.Engine.Tests
             var client = Events.CloneState(s);
             var turn = NewSim(s, 2);
             turn.RunAlienTurn();
-            // Both who fell, the infected and the one never bitten (Arturo, 7/11: «cualquier soldado que muera»); not one evacuated.
+            // Both who fell (Arturo, 7/11: «cualquier soldado que muera»); not one evacuated.
             var risen = Of<ReanimatedEvent>(turn.Events);
             Assert.Equal(new[] { "s1", "s2" }, risen.Select((e) => e.Corpse).OrderBy((x) => x, StringComparer.Ordinal));
             Assert.All(risen, (e) => Assert.True(e.Pod?.Active));
@@ -176,7 +89,7 @@ namespace Bastion.Engine.Tests
         }
 
         // (The fever at the base, its treatment and its turning, gone with the bites that infected: Arturo, 7/11. A save's
-        // fever is cured as it loads, CampaignTests' version 27.)
+        // fever is not read any more: ContagionGoneTests.)
 
         [Fact(DisplayName = "infection at the base › medicines heal wounds: 1 ✚ for a day (a mission) fewer")]
         public void MedicinesHealWounds()
