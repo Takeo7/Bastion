@@ -60,6 +60,25 @@ namespace Bastion.Client.Units
             [7 * 16 + 8] = "5b5446", [8 * 16 + 10] = "3b3631", [6 * 16 + 6] = "45463f", [7 * 16 + 6] = "8b8d80", [6 * 16 + 7] = "5d5b48",
         };
 
+        /// <summary>
+        /// Cells one body has painted over once its palette is filled, whatever its preset has there ('x,y' as RagCells'):
+        /// the 3D review's Z-1 (10/11), skZombieCop1's back. ModernPolice_01 carries on it a pig in a police cap strapped on
+        /// like a rucksack (SK_MDRN_POLC_05_24ABAC_HU01), pink in the preset's own cells 7,5, 7,6, 15,6 and 15,7 (B4827E,
+        /// A46762, 936B79, A2615C: CombatLab.MuertoPaleta), which DullDead leaves pink (under its saturation): in the
+        /// torn rucksack's canvas and strap (RagCells'), it reads from the game's camera as a pack.
+        /// </summary>
+        static readonly Dictionary<string, Dictionary<int, string>> OwnCells = new Dictionary<string, Dictionary<int, string>>
+        {
+            ["skZombieCop1"] = new Dictionary<int, string> { [5 * 16 + 7] = "5b5446", [6 * 16 + 7] = "3b3631", [6 * 16 + 15] = "5b5446", [7 * 16 + 15] = "3b3631" },
+        };
+
+        /// <summary>
+        /// BASTION_Z1_ESPALDA=fuera, when the bodies are baked (FigureCatalogMake): skZombieCop1 without that back piece at
+        /// all, the other way Z-1 could go (for Arte to set the two side by side; not the game's).
+        /// </summary>
+        static bool BackOff(string id, string partType) =>
+            id == "skZombieCop1" && partType == "AttachmentBack" && System.Environment.GetEnvironmentVariable("BASTION_Z1_ESPALDA") == "fuera";
+
         /// <summary>convert.ts SIDEKICK_NEVER: the teeth and the tongue never show.</summary>
         static readonly HashSet<string> Never = new HashSet<string> { "Teeth", "Tongue" };
 
@@ -145,7 +164,7 @@ namespace Bastion.Client.Units
             foreach (var (name, partType) in rows)
             {
                 string partName = name;
-                if (string.IsNullOrEmpty(partName) || Never.Contains(partType)) continue;
+                if (string.IsNullOrEmpty(partName) || Never.Contains(partType) || BackOff(id, partType)) continue;
                 if (swaps != null && swaps.Any(s => s.type == partType))
                 {
                     partName = swaps.First(s => s.type == partType).part;
@@ -186,6 +205,10 @@ namespace Bastion.Client.Units
                     if (RagCells.TryGetValue(c, out string hex) && ColorUtility.TryParseHtmlString("#" + hex, out var paint)) cells[c] = paint;
                     else if (others.FirstOrDefault(m => !SoldierPalette.Unused(m[c])) is Color32[] other) cells[c] = other[c];
                 }
+                // (And its own cells painted over: OwnCells, Z-1.)
+                if (OwnCells.TryGetValue(id, out var painted))
+                    foreach (var kv in painted)
+                        if (ColorUtility.TryParseHtmlString("#" + kv.Value, out var paint)) cells[kv.Key] = paint;
                 palette = SoldierPalette.Texture(cells);
                 palette.name = id + " palette";
             }

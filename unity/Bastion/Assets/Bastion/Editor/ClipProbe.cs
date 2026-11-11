@@ -19,7 +19,8 @@ namespace Bastion.EditorTools
         /// front at chest height, playing BASTION_CLIPS one after the other over the whole body, each from its start, as the
         /// camp plays its moves (FigureAnimator.PlayWholePart, held at its end), nothing else under it but the plain idle. In
         /// play mode. BASTION_ANCHO=1: how far its body (as skinned) reaches to either side of its feet, every half second (the
-        /// one leant on La Lata: its side against the bus).
+        /// one leant on La Lata: its side against the bus). BASTION_PIES=1: each clip looped three times, both feet logged
+        /// each frame ([pies-clip]: how fast the foot it stands on goes back, the clip's own pace on our figures).
         ///   BASTION_CLIPS=drinkInMasc,drinkMasc,sipMasc unity/tools/captura.sh -shotOut tira -shotSetup Bastion.EditorTools.ClipProbe.Alone -shotCamera "Cámara del clip" -shotPlay -shotFrames 60 -shotFps 10
         /// </summary>
         public static void Alone()
@@ -40,6 +41,7 @@ namespace Bastion.EditorTools
                 string sex = Environment.GetEnvironmentVariable("BASTION_SEXO") == "f" ? "f" : "m", build = sex == "f" ? "femn" : "masc";
                 var dress = Dress.Of(Bastion.Engine.Appearances.DefaultAppearance(0, "#e8a33a", sex), Environment.GetEnvironmentVariable("BASTION_SOLDADO") ?? "lab");
                 bool widths = Environment.GetEnvironmentVariable("BASTION_ANCHO") == "1";
+                bool feet = Environment.GetEnvironmentVariable("BASTION_PIES") == "1";
                 var baked = new Mesh();
                 float nextWidth = 0;
                 var figure = SoldierFigure.Make(dress, "clip", true);
@@ -64,11 +66,22 @@ namespace Bastion.EditorTools
                     {
                         var clip = catalog.Clip(ids[next]);
                         Debug.Log($"[clip] {ids[next]} from {at:0.0} s ({clip?.length:0.00} s)");
-                        if (clip != null) anim.PlayWholePart(clip, 0, clip.length, 0.25f, false);
-                        until = at + (clip != null ? clip.length : 0);
+                        // (BASTION_PIES=1: each looped FeetLoops times, for its feet's pace.)
+                        if (clip != null) anim.PlayWholePart(clip, 0, clip.length, 0.25f, feet);
+                        until = at + (clip != null ? clip.length * (feet ? FeetLoops : 1) : 0);
                         next++;
                     }
                     anim.Step(dt);
+                    // (BASTION_PIES=1: both feet each frame in the figure's frame, m at its scale, and the seconds into the clip:
+                    // how fast the foot it stands on goes back, what Gaits' clip speeds are. The 3D review's A-06, 10/11.)
+                    if (feet && next > 0)
+                    {
+                        var root = figure.transform;
+                        Vector3 F(HumanBodyBones b) => animator.GetBoneTransform(b) is Transform t ? root.InverseTransformPoint(t.position) * root.lossyScale.x : Vector3.zero;
+                        var playing = catalog.Clip(ids[next - 1]);
+                        float into = at - (until - (playing != null ? playing.length * FeetLoops : 0));
+                        Debug.Log(FormattableString.Invariant($"[pies-clip] {ids[next - 1]} {into:0.0000} L {F(HumanBodyBones.LeftFoot):F4} R {F(HumanBodyBones.RightFoot):F4} toes {F(HumanBodyBones.LeftToes):F4} {F(HumanBodyBones.RightToes):F4}"));
+                    }
                     // (BASTION_MANOS=1: both hands and the right forearm's pitch each frame, in the figure's frame: a shot's kick, a reload's hands.)
                     if (Environment.GetEnvironmentVariable("BASTION_MANOS") == "1")
                     {
@@ -119,6 +132,9 @@ namespace Bastion.EditorTools
             }
             EditorApplication.playModeStateChanged += Go;
         }
+
+        /// <summary>How many times each clip loops with BASTION_PIES=1 (Alone).</summary>
+        const int FeetLoops = 3;
 
         public static void Run()
         {

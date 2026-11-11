@@ -25,11 +25,13 @@ Shader "Bastion/ClimaGota"
             #pragma fragment Fragment
             #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            // What passes by the camera fades out, from NearTo metres off to gone at NearFrom: the storm's streaks close to
-            // it were huge, over the squad. The far ones, that make the rain, as they were. The review of 10/11, L-13 (6 to
-            // 20 m, tried, took most of the rain away at the nearest camera and little more at the first one).
+            // What passes by the camera fades out, from _ClimaNear.y metres off to gone at _ClimaNear.x (Weather.Follow: a
+            // share of the way to the ground it looks at, 4 to 12 m at the least; those two without it): the storm's streaks
+            // close to it were huge, over the squad. The far ones, that make the rain, as they were. The review of 10/11, L-13
+            // (6 to 20 m, tried, took most of the rain away at the nearest camera and little more at the first one).
             #define NearFrom 4.0
             #define NearTo 12.0
+            float4 _ClimaNear;
 
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
@@ -76,7 +78,8 @@ Shader "Bastion/ClimaGota"
                 }
                 half4 c = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, v.uv) * v.colour;
                 c.rgb *= _Gain;
-                c.a *= smoothstep(NearFrom, NearTo, distance(v.world, GetCameraPositionWS()));
+                float2 near = _ClimaNear.y > 0 ? _ClimaNear.xy : float2(NearFrom, NearTo);
+                c.a *= smoothstep(near.x, near.y, distance(v.world, GetCameraPositionWS()));
                 c.rgb = MixFog(c.rgb, v.fog);
                 return c;
             }

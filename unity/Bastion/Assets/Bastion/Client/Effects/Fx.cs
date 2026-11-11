@@ -83,6 +83,8 @@ namespace Bastion.Client.Effects
         Material hotMaterial;
         Material solid;
         Texture2D glow;
+        /// <summary>A pool of blood's blot (PoolBlot): soft, its edge ragged, not a polygon (the 3D review's L-01, 10/11).</summary>
+        Texture2D pool;
         Mesh quad;
         Mesh cube;
         Mesh sphere;
@@ -134,6 +136,7 @@ namespace Bastion.Client.Effects
             solid = new Material(lit) { name = "Fx solid", enableInstancing = true };
             solid.SetFloat("_Smoothness", 0.05f);
             glow = Glow();
+            pool = PoolBlot();
             for (int k = 0; k < Lamps; k++)
             {
                 var light = new GameObject("Luz de efecto").AddComponent<UnityEngine.Light>();
@@ -205,6 +208,31 @@ namespace Bastion.Client.Effects
             }
             tex.SetPixels32(pixels);
             tex.Apply();
+            return tex;
+        }
+
+        /// <summary>
+        /// A pool of blood (L-01 and L-15): even over most of it, its edge soft and a little ragged (alpha only).
+        /// The soot's own (FireView.Blot, the card's) is darkest in the middle and fades from there: a pool showed a third of
+        /// its size, a dot.
+        /// </summary>
+        static Texture2D PoolBlot()
+        {
+            const int n = 64;
+            var tex = new Texture2D(n, n, TextureFormat.RGBA32, true) { name = "Charco", wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                var p = new Vector2(x + 0.5f - n / 2f, y + 0.5f - n / 2f) / (n / 2f);
+                float angle = Mathf.Atan2(p.y, p.x);
+                // (Less ragged than the soot's 0.75 ± 0.25: small, that read as a star.)
+                float ragged = 0.87f + 0.13f * Mathf.Sin(angle * 5 + 1.3f) * Mathf.Sin(angle * 3);
+                float e = Mathf.Clamp01((p.magnitude / ragged - 0.55f) / 0.45f);
+                pixels[y * n + x] = new Color32(255, 255, 255, (byte)(255 * (1 - e * e * (3 - 2 * e))));
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply(true);
             return tex;
         }
 
@@ -556,14 +584,18 @@ namespace Bastion.Client.Effects
             Spawn(p, life, grow);
         }
 
+        /// <summary>
+        /// Bits of flesh flying out (the Hinchado bursting): small, 6–12 cm, and gone within a second as they shrink, not
+        /// left lying (the 3D review's L-15, 10/11: 10–20 cm cubes that stayed on the ground like dice).
+        /// </summary>
         void Gore(Vector3 at, int count, float speed = 4)
         {
             Mesh[] chunks = { Shape(f => f.goreChunk1), Shape(f => f.goreChunk2), Shape(f => f.goreChunk3) };
             for (int i = 0; i < count; i++)
             {
-                var p = Solid(at, chunks[i % chunks.Length], GoreColours[i % GoreColours.Length], Rand(0.07f, 0.15f));
+                var p = Solid(at, chunks[i % chunks.Length], GoreColours[i % GoreColours.Length], Rand(0.04f, 0.08f));
                 var dir = new Vector3(Rand(-1, 1), Rand(0.5f, 1.4f), Rand(-1, 1)).normalized;
-                Spawn(p, Rand(1.6f, 2.6f), gravity: 12, velocity: dir * speed * Rand(0.5f, 1), spin: new Vector3(Rand(-10, 10), Rand(-10, 10), 0));
+                Spawn(p, Rand(0.7f, 1.1f), gravity: 12, velocity: dir * speed * Rand(0.5f, 1), spin: new Vector3(Rand(-10, 10), Rand(-10, 10), 0));
             }
         }
 
@@ -648,7 +680,10 @@ namespace Bastion.Client.Effects
             if (sparks) Sparks(at, colour, 10);
         }
 
-        /// <summary>A medkit: green motes rising and a first-aid cross.</summary>
+        /// <summary>
+        /// A medkit: green motes rising and a first-aid cross, its face always to the camera as a sprite's (the 3D review's
+        /// L-18, 10/11: it spun about the upright and went past edge on, a green stick).
+        /// </summary>
         public void Heal(Vector3 at)
         {
             Motes(at, Hex(0x6dff9a), 12);
@@ -656,8 +691,17 @@ namespace Bastion.Client.Effects
             var mesh = Shape(f => f.medCross);
             var obj = Make("cruz", mesh ?? cube, blended, mesh != null, false, out var r);
             obj.position = at + Vector3.up * 0.7f * T;
-            var p = new Particle { obj = obj, renderer = r, colour = Hex(0x6dff9a) * 1.4f, fades = true, scale = Vector3.one * 0.26f * T, opacity = 0.95f };
-            Spawn(p, 1.2f, velocity: new Vector3(0, 0.55f, 0), spin: new Vector3(0, 2.2f, 0));
+            // (Its flat face onto the holder's z, whichever axis its model has it on: the thinnest.)
+            if (mesh != null && obj.childCount > 0)
+            {
+                var shape = obj.GetChild(0);
+                var b = mesh.bounds.size;
+                var turn = b.x < b.y && b.x < b.z ? Quaternion.Euler(0, 90, 0) : b.y < b.x && b.y < b.z ? Quaternion.Euler(90, 0, 0) : Quaternion.identity;
+                shape.localRotation = turn;
+                shape.localPosition = turn * shape.localPosition;
+            }
+            var p = new Particle { obj = obj, renderer = r, colour = Hex(0x6dff9a) * 1.4f, fades = true, sprite = true, scale = Vector3.one * 0.26f * T, opacity = 0.95f };
+            Spawn(p, 1.2f, velocity: new Vector3(0, 0.55f, 0));
         }
 
         /// <summary>A brief protective bubble (Aid Protocol).</summary>
@@ -782,7 +826,10 @@ namespace Bastion.Client.Effects
 
         /// <summary>
         /// A molotov (Arturo, 1/11): Apocalypse's bottle at the figures' size, its rag lit (Particle FX's middling fire made
-        /// a candle's) over its neck, under `parent` where it stands; null without FxArt's bottle.
+        /// a candle's) over its neck, under `parent` where it stands; null without FxArt's bottle. Its flame a palm high,
+        /// riding on the neck (burning as it shows: the prefab prewarms), without the prefab's embers (the 3D review's L-06,
+        /// 10/11: a column of orange balls a metre and more over the bottle, a trail of them where the hand had been, yellow
+        /// drops left on the ground, and in the air none on the bottle).
         /// </summary>
         public static Transform Molotov(Transform parent)
         {
@@ -804,19 +851,34 @@ namespace Bastion.Client.Effects
                 flame.localPosition = neck;
                 flame.localRotation = Quaternion.identity;
                 // (A rag's flame, a hand high, whatever the bottle's size.)
-                flame.localScale = Vector3.one * 0.12f / Mathf.Max(bottle.lossyScale.x, 1e-4f);
-                foreach (var ps in flame.GetComponentsInChildren<ParticleSystem>())
+                flame.localScale = Vector3.one * RagScale / Mathf.Max(bottle.lossyScale.x, 1e-4f);
+                foreach (var ps in flame.GetComponentsInChildren<ParticleSystem>(true))
                 {
+                    // The prefab's embers (a child: stretched sparks that fall) lay on the ground as yellow drops: only its flame.
+                    if (ps.transform != flame)
+                    {
+                        ps.gameObject.SetActive(false);
+                        continue;
+                    }
                     var main = ps.main;
                     main.scalingMode = ParticleSystemScalingMode.Hierarchy;
-                    main.simulationSpace = ParticleSystemSimulationSpace.World;
+                    // (In its own space, with the bottle: in the world's, what was born stayed where the hand or the arc had
+                    // been, a trail behind it, and a flying bottle had none on it.)
+                    main.simulationSpace = ParticleSystemSimulationSpace.Local;
                     main.loop = true;
+                    // Its balls rise by the prefab's gravity and wander by its noise: in the world's space, in its metres,
+                    // which the hierarchy's scale doesn't reach (over their 1–2 s, a column of a metre and more); in its own,
+                    // at the flame's scale. Shorter lived, they stay a palm over the neck.
+                    main.startLifetimeMultiplier *= RagLife;
                     if (!Application.isPlaying) ps.Simulate(1, false, true);
                     else ps.Play();
                 }
             }
             return bottle;
         }
+
+        /// <summary>The rag's flame against the middling fire's own size, and its life (L-06).</summary>
+        const float RagScale = 0.12f, RagLife = 0.5f;
 
         /// <summary>
         /// A molotov thrown (as a grenade's arc, GrenadeArc): the bottle tumbling end over end from the hand to `to`, its rag
@@ -833,13 +895,16 @@ namespace Bastion.Client.Effects
             }
             float d = Vector3.Distance(from, to) / T;
             float height = (1.5f + d * 0.3f) * T;
+            void Fly(float t)
+            {
+                bottle.position = Vector3.Lerp(from, to, t) + Vector3.up * Mathf.Sin(t * Mathf.PI) * height;
+                bottle.rotation = Quaternion.LookRotation(new Vector3(to.x - from.x, 0, to.z - from.z).normalized + Vector3.up * 1e-3f) * Quaternion.Euler(t * 540, 0, 0);
+            }
+            // (Where it starts before its first frame.)
+            Fly(0);
             try
             {
-                await Run(0.55f + d * 0.03f, t =>
-                {
-                    bottle.position = Vector3.Lerp(from, to, t) + Vector3.up * Mathf.Sin(t * Mathf.PI) * height;
-                    bottle.rotation = Quaternion.LookRotation(new Vector3(to.x - from.x, 0, to.z - from.z).normalized + Vector3.up * 1e-3f) * Quaternion.Euler(t * 540, 0, 0);
-                }, ct);
+                await Run(0.55f + d * 0.03f, Fly, ct);
             }
             finally
             {
@@ -966,12 +1031,17 @@ namespace Bastion.Client.Effects
             var cloud = at + Vector3.up * 0.3f * T;
             Puffs(cloud, Hex(0x949a4a), 9, size: 0.7f, spread: radius * 0.35f, rise: 0.25f, away: radius * 0.7f, life: 3.2f, grow: 1.6f);
             Puffs(cloud, Hex(0xbdb464), 5, size: 0.5f, spread: radius * 0.25f, rise: 0.35f, away: radius * 0.5f, life: 2.6f, grow: 1.4f);
-            Gore(at + Vector3.up * 0.8f * T, 14, 5);
+            Gore(at + Vector3.up * 0.8f * T, 6, 4);
+            // Its splashes soft and growing as they land, one after another (the 3D review's L-15, 10/11: flat polygons,
+            // whole from the first frame, two overlapping into a point), at the end the size they had.
             for (int i = 0; i < 7; i++)
             {
                 float a = Rand(0, Mathf.PI * 2);
                 float d = 0.2f + Rand(0, radius * 0.9f);
-                Decal(at + new Vector3(Mathf.Cos(a) * d, 0, Mathf.Sin(a) * d) * T, TextureOf(f => f.polyDisc), Blood[i % Blood.Length], Rand(0.4f, 0.9f), 6 + Rand(0, 3), 0.9f);
+                var spot = at + new Vector3(Mathf.Cos(a) * d, 0, Mathf.Sin(a) * d) * T;
+                var colour = Blood[i % Blood.Length];
+                float size = Rand(0.4f, 0.9f) * 0.4f, life = 6 + Rand(0, 3);
+                After(0.15f + i * 0.04f, () => Decal(spot, pool, colour, size, life, 0.9f, grow: 1.5f));
             }
         }
 
@@ -991,22 +1061,26 @@ namespace Bastion.Client.Effects
                 });
         }
 
-        /// <summary>A bite or a claw that gets in: blood spurting away from the attacker (`from`), a drop or two on the ground.</summary>
+        /// <summary>
+        /// A bite or a claw that gets in: blood spurting away from the attacker (`from`), drops of 4–9 cm falling from the
+        /// chest to the ground half a metre off and gone as they land, and there a soft pool that spreads as it fades (the
+        /// 3D review's L-01, 10/11: 10–21 cm balls flew up over the head and went out in the air, the pool was whole and
+        /// bright before them, and a chunk was left lying).
+        /// </summary>
         public void Bite(Vector3 at, Vector3 from)
         {
             var away = at - from;
             away.y = 0;
             away = away.sqrMagnitude > 1e-6f ? away.normalized : Vector3.forward;
-            for (int i = 0; i < 12; i++)
+            for (int i = 0; i < 8; i++)
             {
-                var drop = Sprite(at, TextureOf(f => f.polyDisc), Blood[i % Blood.Length], Rand(0.07f, 0.14f), 0.95f);
-                var dir = away * (0.8f + Rand(0, 1)) + new Vector3(Rand(-0.45f, 0.45f), 0.5f + Rand(0, 0.9f), Rand(-0.45f, 0.45f));
-                Spawn(drop, 0.45f + Rand(0, 0.3f), gravity: 9, velocity: dir * (1.8f + Rand(0, 1.6f)));
+                var drop = Sprite(at, TextureOf(f => f.polyDisc), Blood[i % Blood.Length], Rand(0.03f, 0.06f), 0.95f);
+                var dir = away * (0.6f + Rand(0, 0.6f)) + new Vector3(Rand(-0.3f, 0.3f), Rand(0, 0.35f), Rand(-0.3f, 0.3f));
+                Spawn(drop, 0.35f + Rand(0, 0.2f), gravity: 9, velocity: dir * (1f + Rand(0, 0.8f)));
             }
-            Gore(at, 2, 2.5f);
             var ground = at + away * 0.5f * T;
             ground.y = FloorOf(at);
-            Decal(ground, TextureOf(f => f.polyDisc), Blood[1], Rand(0.25f, 0.4f), 5, 0.85f);
+            After(0.3f, () => Decal(ground, pool, Blood[0], Rand(0.15f, 0.22f), 5, 0.85f, grow: 1.5f));
         }
 
         /// <summary>Dust kicked up by feet or wheels at the ground point `at`.</summary>

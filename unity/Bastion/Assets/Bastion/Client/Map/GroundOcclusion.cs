@@ -75,6 +75,9 @@ namespace Bastion.Client.Map
         {
             if (!dirty || Map == null || Width <= 0 || Height <= 0) return;
             dirty = false;
+            // (The first bake, in the map's first frame, timed for the load: MapLoad's «[carga]».)
+            var clock = baked ? null : System.Diagnostics.Stopwatch.StartNew();
+            int drawn = 0;
             if (bake == null)
             {
                 var source = Resources.Load<Material>("GroundBake");
@@ -110,12 +113,15 @@ namespace Bastion.Client.Map
                 // (Joined (MapBuilder.Still), its mesh is the whole batch's: its own parts are as many as its materials.)
                 int subs = r.isPartOfStaticBatch ? r.sharedMaterials.Length : filter != null && filter.sharedMesh != null ? filter.sharedMesh.subMeshCount : 1;
                 for (int k = 0; k < subs; k++) cmd.DrawRenderer(r, bake, k, 0);
+                drawn++;
             }
             // Each tree's trunk, its crown left out (mapView.ts TRUNK_OCCLUDER): without it they stood on the ground with
-            // nothing at their foot, as if lifted off it (playtest 21/10 #12).
+            // nothing at their foot, as if lifted off it (playtest 21/10 #12). Not the outline's: its clumps of trees by what
+            // is played are named as a tree (FrameView, E-05), and a trunk at each clump's middle darkened the outline's
+            // ground in patches (1383 of wilds-5-recovery's 5184 tiles, to 0.57), where it had none (0.10.1's occlude false).
             if (trunk == null) trunk = TrunkMesh();
             foreach (var t in Map.GetComponentsInChildren<Transform>())
-                if (TreeFade.Crowns.Contains(t.name) && (Ground == null || !t.IsChildOf(Ground))) cmd.DrawMesh(trunk, Matrix4x4.Translate(t.position), bake, 0, 0);
+                if (TreeFade.Crowns.Contains(t.name) && (Ground == null || !t.IsChildOf(Ground)) && !InOutline(t)) cmd.DrawMesh(trunk, Matrix4x4.Translate(t.position), bake, 0, 0);
             bake.SetVector(BakeSizeId, new Vector4(width, depth, 0, 0));
             cmd.Blit(heights, occlusion, bake, 1);
             context.ExecuteCommandBuffer(cmd);
@@ -123,6 +129,18 @@ namespace Bastion.Client.Map
             cmd.Release();
             Shader.SetGlobalTexture(AoId, occlusion);
             Shader.SetGlobalVector(AreaId, new Vector4(0, -depth, width, depth));
+            if (clock != null) Debug.Log($"[carga] occlusion baked in {clock.ElapsedMilliseconds} ms ({drawn} renderers)");
+            baked = true;
+        }
+
+        /// <summary>Whether it has baked once (its first bake is logged).</summary>
+        bool baked;
+
+        /// <summary>Whether `t` is part of the outline round what is played (FrameView's «Marco»).</summary>
+        static bool InOutline(Transform t)
+        {
+            for (; t != null; t = t.parent) if (t.name == "Marco") return true;
+            return false;
         }
 
         /// <summary>

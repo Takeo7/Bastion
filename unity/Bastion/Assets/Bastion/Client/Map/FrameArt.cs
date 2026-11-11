@@ -85,6 +85,8 @@ namespace Bastion.Client.Map
             // Each run of a line with its length: the longest first (Apart keeps them whole where two meet).
             var runs = new List<(int n, List<Dressing> props)>();
             var band = MapOutline.BandOf(s);
+            // (Its stages timed for the load's line: MapLoad.)
+            var pieces = MapLoad.Time("pieces");
             foreach (var p in frame)
             {
                 Func<double, double> r = salt => Hash(p.X * 7 + p.W, p.Y * 7 + p.H, salt);
@@ -122,9 +124,13 @@ namespace Bastion.Client.Map
             }
             var lines = runs.Select((run, i) => (run, i)).OrderByDescending(x => x.run.n).ThenBy(x => x.i).SelectMany(x => x.run.props).ToList();
             output.InsertRange(0, lines);
-            if (band != null && (band.Kind == FrameKinds.Water || band.Kind == FrameKinds.Ravine)) DrawSunken(s, band, output, shapes);
-            else if (band != null) DrawBand(s, band, output, shapes);
-            return (Apart(output), shapes);
+            pieces.Dispose();
+            using (MapLoad.Time("band"))
+            {
+                if (band != null && (band.Kind == FrameKinds.Water || band.Kind == FrameKinds.Ravine)) DrawSunken(s, band, output, shapes);
+                else if (band != null) DrawBand(s, band, output, shapes);
+            }
+            using (MapLoad.Time("apart")) return (Apart(output), shapes);
         }
 
         /// <summary>A piece's line from played tile `a` to `b` (along its side), `inward` into the piece: what keeps anybody out.</summary>

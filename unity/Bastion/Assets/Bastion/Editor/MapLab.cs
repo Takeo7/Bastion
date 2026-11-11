@@ -22,6 +22,137 @@ namespace Bastion.EditorTools
         public static void Night() => Build(false);
 
         /// <summary>
+        /// La Mula's plates against its body, by their vertices (the 3D review's E-15, 10/11: the hindmost plate's boards
+        /// stood half a metre out past its back, and its body's ends couldn't be read: Town's bus isn't imported readable).
+        /// Its meshes read in the editor whatever their import (Mesh.AcquireReadOnlyMeshData): each one's reach along the
+        /// bus (body's frame, tiles) between the windows' heights and over its whole height, [planchas]. Edit mode, no scene.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.Planchas
+        /// </summary>
+        public static void Planchas()
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+            var lata = LaLata.Make(null, 3, Bastion.Client.Map.MapCatalog.Load()?.PrefabOf());
+            var body = lata.transform.Find("Cuerpo");
+            var glass = body.GetComponentsInChildren<MeshFilter>(true).FirstOrDefault(f => f.name == "SM_Veh_Bus_Glass");
+            (Vector3 min, Vector3 max) Reach(MeshFilter f, float low, float high)
+            {
+                var min = Vector3.one * 1e9f;
+                var max = -min;
+                using (var data = Mesh.AcquireReadOnlyMeshData(f.sharedMesh))
+                {
+                    var points = new Unity.Collections.NativeArray<Vector3>(data[0].vertexCount, Unity.Collections.Allocator.Temp);
+                    data[0].GetVertices(points);
+                    var m = body.worldToLocalMatrix * f.transform.localToWorldMatrix;
+                    foreach (var v in points)
+                    {
+                        var p = m.MultiplyPoint3x4(v) / MapSpace.Tile;
+                        if (p.y < low || p.y > high) continue;
+                        min = Vector3.Min(min, p);
+                        max = Vector3.Max(max, p);
+                    }
+                    points.Dispose();
+                }
+                return (min, max);
+            }
+            var band = glass != null ? Reach(glass, -1e9f, 1e9f) : (Vector3.zero, Vector3.zero);
+            Debug.Log(FormattableString.Invariant($"[planchas] glass: y {band.Item1.y:0.00}..{band.Item2.y:0.00}, z {band.Item1.z:0.00}..{band.Item2.z:0.00}, x {band.Item1.x:0.00}..{band.Item2.x:0.00}"));
+            // The body's rear and front, slice by slice: how far out to its sides it reaches at the plates' height ([planchas] perfil).
+            var shell = body.GetComponentsInChildren<MeshFilter>(true).FirstOrDefault(f => f.name == "SM_Veh_Bus_01");
+            if (shell != null)
+                using (var data = Mesh.AcquireReadOnlyMeshData(shell.sharedMesh))
+                {
+                    var points = new Unity.Collections.NativeArray<Vector3>(data[0].vertexCount, Unity.Collections.Allocator.Temp);
+                    data[0].GetVertices(points);
+                    var m = body.worldToLocalMatrix * shell.transform.localToWorldMatrix;
+                    var wide = new SortedDictionary<int, float>();
+                    foreach (var v in points)
+                    {
+                        var p = m.MultiplyPoint3x4(v) / MapSpace.Tile;
+                        if (p.y < 1.02f || p.y > 2.04f) continue;
+                        int k = Mathf.FloorToInt(p.z / 0.05f);
+                        wide[k] = Mathf.Max(wide.TryGetValue(k, out float w) ? w : 0, Mathf.Abs(p.x));
+                    }
+                    points.Dispose();
+                    Debug.Log("[planchas] perfil (z: most |x| between y 1.02 and 2.04): " + string.Join(", ", wide.Where(kv => kv.Key * 0.05f < -3.0f || kv.Key * 0.05f > 3.0f).Select(kv => FormattableString.Invariant($"{kv.Key * 0.05f:0.00} {kv.Value:0.00}"))));
+                }
+            foreach (var f in body.GetComponentsInChildren<MeshFilter>(true).Where(f => f.sharedMesh != null).OrderBy(f => f.transform.position.z))
+            {
+                var whole = Reach(f, -1e9f, 1e9f);
+                var windows = Reach(f, band.Item1.y, band.Item2.y);
+                Debug.Log(FormattableString.Invariant($"[planchas] {f.name} (readable {f.sharedMesh.isReadable}, under {f.transform.parent.name}): z {whole.min.z:0.00}..{whole.max.z:0.00}, y {whole.min.y:0.00}..{whole.max.y:0.00}, x {whole.min.x:0.00}..{whole.max.x:0.00}; at the windows z {windows.min.z:0.00}..{windows.max.z:0.00}, x {windows.min.x:0.00}..{windows.max.x:0.00}"));
+            }
+        }
+
+        /// <summary>
+        /// BASTION_SONDA_NOCHE (in play, in any scene: the real battle's too, HudShots.PartidaTurn), what the figures' night
+        /// look is made of, one thing off at a time, comma-separated: «sinborde» the moonlit rim (each renderer's _Rim to 0),
+        /// «sinluna» the moon (the sun's light, «Sol»), «sinsombra» its shadows, «sinrelleno» the fill, «sinbrillo» the
+        /// figures' specular and reflections (copies of their materials), «sinniebla» the haze, «sinluces» the night's
+        /// lamps and fires (point lights). Each frame, logged once: [sonda noche]. The 3D review's L-03, 10/11.
+        /// </summary>
+        [InitializeOnLoadMethod]
+        static void NightProbe()
+        {
+            var off = Environment.GetEnvironmentVariable("BASTION_SONDA_NOCHE");
+            if (string.IsNullOrEmpty(off)) return;
+            var what = new HashSet<string>(off.Split(','));
+            bool said = false;
+            var block = new MaterialPropertyBlock();
+            var dulled = new HashSet<Renderer>();
+            EditorApplication.update += () =>
+            {
+                if (!Application.isPlaying) return;
+                int rims = 0, dull = 0, lamps = 0;
+                foreach (var r in UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                {
+                    if (what.Contains("sinborde") && r.sharedMaterials.Any(m => m != null && m.shader != null && m.shader.name == "Bastion/NightRim"))
+                    {
+                        r.GetPropertyBlock(block);
+                        block.SetFloat("_Rim", 0);
+                        r.SetPropertyBlock(block);
+                        rims++;
+                    }
+                    if (what.Contains("sinbrillo") && Bastion.Client.Units.UnitViews.Current != null && r.transform.IsChildOf(Bastion.Client.Units.UnitViews.Current.transform) && dulled.Add(r))
+                    {
+                        foreach (var m in r.materials)
+                        {
+                            if (m == null) continue;
+                            m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+                            m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+                            if (m.HasProperty("_SpecularHighlights")) m.SetFloat("_SpecularHighlights", 0);
+                            if (m.HasProperty("_EnvironmentReflections")) m.SetFloat("_EnvironmentReflections", 0);
+                            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0);
+                        }
+                        dull++;
+                    }
+                }
+                foreach (var l in UnityEngine.Object.FindObjectsByType<UnityEngine.Light>(FindObjectsSortMode.None))
+                {
+                    if (l.type == LightType.Directional && l.name == "Relleno")
+                    {
+                        if (what.Contains("sinrelleno")) l.intensity = 0;
+                    }
+                    else if (l.type == LightType.Directional && l == RenderSettings.sun)
+                    {
+                        if (what.Contains("sinluna")) l.intensity = 0;
+                        if (what.Contains("sinsombra")) l.shadows = LightShadows.None;
+                    }
+                    else if (l.type != LightType.Directional && what.Contains("sinluces"))
+                    {
+                        l.intensity = 0;
+                        lamps++;
+                    }
+                }
+                if (what.Contains("sinniebla")) RenderSettings.fog = false;
+                if (!said && (rims > 0 || dull > 0 || Time.time > 3))
+                {
+                    said = true;
+                    Debug.Log($"[sonda noche] off: {off}; {rims} rims, {dull} figures' renderers dulled, {lamps} lamps, sun {(RenderSettings.sun != null ? RenderSettings.sun.name : "-")}");
+                }
+            };
+        }
+
+        /// <summary>
         /// What the sun's shadows cost on a battle's map (Gameplay 26/10: ShadowFit, the shadows over what the camera sees):
         /// BASTION_MAP (city-7) by day, the camera over its middle at each of BASTION_DISTANCIAS (tiles: 24, the game's, and
         /// 42, its farthest), at each quality level (BASTION_CALIDAD=Medio,Alto; all if not said), drawn n times (BASTION_FRAMES,
@@ -874,6 +1005,50 @@ namespace Bastion.EditorTools
                 double all = Math.Max(1e-9, whole + some + none);
                 Debug.Log(FormattableString.Invariant($"[nieve] {key}: {whole / all:0.00} entera, {some / all:0.00} a medias, {none / all:0.00} nada; por sus normales {vWhole / all:0.00}, {vSome / all:0.00}, {vNone / all:0.00} ({all:0.00} m²{(unread > 0 ? $", {unread} mallas sin leer" : "")})"));
                 UnityEngine.Object.DestroyImmediate(made);
+            }
+        }
+
+        /// <summary>
+        /// The ground's shader as the app gets it (the mission's load, 10/11: Bastion/Ground changed in 0.12.20, E-03 and E-04,
+        /// and a player compiles a shader's Metal code the first frame it draws it): for each of BASTION_SHADERS (.shader
+        /// files, absolute; its source made a shader here, not imported), its pass ForwardLit's vertex and fragment programs for
+        /// Metal and the Mac, with no keywords and with the ones a day map in «Alto» draws with (BASTION_CLAVES, or
+        /// _MAIN_LIGHT_SHADOWS_CASCADE _SHADOWS_SOFT _SCREEN_SPACE_OCCLUSION _CLUSTER_LIGHT_LOOP FOG_EXP2), each written to
+        /// BASTION_OUT as it comes (Unity's blob) with its size and the time Unity's compiler took. BASTION_PASO: another pass
+        /// by its name (another shader's: Bastion/Fog's «Fog»). Edit mode, nothing shot.
+        ///   LOG=… BASTION_SHADERS=/a/Ground-old.shader,/a/Ground-new.shader BASTION_OUT=/abs/dir unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.SueloShader
+        /// </summary>
+        public static void SueloShader()
+        {
+            string output = Environment.GetEnvironmentVariable("BASTION_OUT") ?? Path.GetFullPath("Temp/suelo-shader");
+            Directory.CreateDirectory(output);
+            var rich = (Environment.GetEnvironmentVariable("BASTION_CLAVES") ?? "_MAIN_LIGHT_SHADOWS_CASCADE _SHADOWS_SOFT _SCREEN_SPACE_OCCLUSION _CLUSTER_LIGHT_LOOP FOG_EXP2").Split(' ').Where(k => k.Length > 0).ToArray();
+            foreach (string path in (Environment.GetEnvironmentVariable("BASTION_SHADERS") ?? "").Split(',').Where(p => p.Length > 0))
+            {
+                var shader = ShaderUtil.CreateShaderAsset(File.ReadAllText(path), false);
+                if (shader == null)
+                {
+                    Debug.Log($"[suelo-shader] {path}: no shader");
+                    continue;
+                }
+                var data = ShaderUtil.GetShaderData(shader);
+                for (int sub = 0; sub < data.SubshaderCount; sub++)
+                    for (int k = 0; k < data.GetSubshader(sub).PassCount; k++)
+                    {
+                        var pass = data.GetSubshader(sub).GetPass(k);
+                        if (pass.Name != (Environment.GetEnvironmentVariable("BASTION_PASO") ?? "ForwardLit")) continue;
+                        foreach (var (set, keywords) in new[] { ("none", new string[0]), ("day", rich) })
+                            foreach (var type in new[] { UnityEditor.Rendering.ShaderType.Vertex, UnityEditor.Rendering.ShaderType.Fragment })
+                            {
+                                var clock = System.Diagnostics.Stopwatch.StartNew();
+                                var made = pass.CompileVariant(type, keywords, UnityEditor.Rendering.ShaderCompilerPlatform.Metal, BuildTarget.StandaloneOSX);
+                                long ms = clock.ElapsedMilliseconds;
+                                string name = $"{Path.GetFileNameWithoutExtension(path)}-{set}-{type}".ToLowerInvariant();
+                                if (made.ShaderData != null) File.WriteAllBytes(Path.Combine(output, name + ".bin"), made.ShaderData);
+                                Debug.Log($"[suelo-shader] {name}: {(made.Success ? "ok" : "failed")}, {made.ShaderData?.Length ?? 0} bytes, Unity's compiler {ms} ms{(made.Messages != null && made.Messages.Length > 0 ? "; " + string.Join(" | ", made.Messages.Take(3).Select(m => m.message)) : "")}");
+                            }
+                    }
+                UnityEngine.Object.DestroyImmediate(shader);
             }
         }
 

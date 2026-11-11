@@ -207,7 +207,9 @@ namespace Bastion.Client.Units
             // (What on the head the wardrobe hasn't, as the engine's newer heads before their pieces, left off: bare-headed.)
             var pieces = dress.Pieces().Select(p => (p.piece, art: p.piece == "headwear" ? Wardrobe.Find(p.piece, p.id) : Wardrobe.Piece(p.piece, p.id))).Where(p => p.art != null).ToList();
             var parts = new Dictionary<string, SkinnedMeshRenderer>();
-            foreach (string name in pieces.SelectMany(p => p.art.parts).Distinct())
+            // (Under the gas mask, the face's nose MaskNose.)
+            bool masked = dress.headwear == "mask";
+            foreach (string name in pieces.SelectMany(p => masked && p.piece == "face" ? p.art.parts.Select(n => n.Contains("_35NOSE_") ? MaskNose : n) : p.art.parts).Distinct())
             {
                 var part = SidekickPart.SearchForByName(database, name)?.GetPartModel();
                 var renderer = part != null ? part.GetComponentInChildren<SkinnedMeshRenderer>() : null;
@@ -244,6 +246,31 @@ namespace Bastion.Client.Units
                 }
             }
             yield return null;
+            // The hair under a hat fitted to it (FitUnder), a torso's own hood flattened under a hood on the head (Flatten):
+            // those parts' corners moved, in a copy of their meshes as Split's UVs. Worked out once a session for each pair.
+            var reshaped = new Dictionary<string, (Vector3[] corners, Vector3[] normals)>();
+            var hatParts = pieces.Where(p => p.piece == "headwear").SelectMany(p => p.art.parts).Where(parts.ContainsKey).ToList();
+            if (dress.headwear != null && Fitted.Contains(dress.headwear) && hatParts.Count > 0)
+                foreach (string name in pieces.Where(p => p.piece == "hair").SelectMany(p => p.art.parts).Where(parts.ContainsKey).ToList())
+                {
+                    string key = string.Join("+", hatParts) + "|" + name;
+                    if (!fitted.TryGetValue(key, out var corners))
+                    {
+                        fitted[key] = corners = FitUnder(parts[name], hatParts.Select(n => parts[n]));
+                        yield return null;
+                    }
+                    if (corners != null) reshaped[name] = (corners, null);
+                }
+            if (dress.headwear != null && Hoods.Contains(dress.headwear))
+                foreach (string name in parts.Keys.Where(HoodedTorsos.Contains).ToList())
+                {
+                    if (!flattened.TryGetValue(name, out var flat))
+                    {
+                        flattened[name] = flat = Flatten(parts[name]);
+                        yield return null;
+                    }
+                    if (flat.corners != null) reshaped[name] = flat;
+                }
             var outfit = pieces[0].art;
             var hat = pieces.Where(p => p.piece == "headwear").Select(p => p.art).FirstOrDefault();
             List<Mesh> Meshes(WardrobePiece piece) => piece?.parts.Where(parts.ContainsKey).Select(n => parts[n].sharedMesh).ToList();
@@ -266,11 +293,13 @@ namespace Bastion.Client.Units
                 BodySizeHeavyBlendValue = dress.build == "heavy" ? 40 : 0,
                 MusclesBlendValue = -100,
             };
-            // (A part split, from a copy of its model with its mesh's UVs moved: the kit's own stay as they are.)
+            // (A part split or reshaped, from a copy of its model with its mesh's UVs or corners moved: the kit's own stay as
+            // they are.)
             var temporary = new List<UnityEngine.Object>();
             var used = parts.Select(kv =>
             {
-                if (!split.TryGetValue(kv.Key, out var uvs)) return kv.Value;
+                bool moved = split.TryGetValue(kv.Key, out var uvs), shaped = reshaped.TryGetValue(kv.Key, out var shape);
+                if (!moved && !shaped) return kv.Value;
                 var holder = UnityEngine.Object.Instantiate(kv.Value.transform.root.gameObject);
                 holder.hideFlags = HideFlags.HideAndDontSave;
                 var r = holder.GetComponentsInChildren<SkinnedMeshRenderer>(true).FirstOrDefault(x => x.name == kv.Value.name);
@@ -278,7 +307,13 @@ namespace Bastion.Client.Units
                 if (r == null) return kv.Value;
                 var mesh = UnityEngine.Object.Instantiate(kv.Value.sharedMesh);
                 mesh.name = kv.Value.sharedMesh.name;
-                mesh.uv = uvs;
+                if (moved) mesh.uv = uvs;
+                if (shaped)
+                {
+                    mesh.vertices = shape.corners;
+                    if (shape.normals != null) mesh.normals = shape.normals;
+                    mesh.RecalculateBounds();
+                }
                 r.sharedMesh = mesh;
                 temporary.Add(mesh);
                 return r;
@@ -289,6 +324,17 @@ namespace Bastion.Client.Units
                 if (Application.isPlaying) UnityEngine.Object.Destroy(o);
                 else UnityEngine.Object.DestroyImmediate(o);
             }
+            // Sidekick's police elbow pads (31AEBL, 32AEBR) lie on the upper arm's end but ride the forearm's elbowAttach: as the
+            // arm bent they swung 15–20 cm off the elbow (the 3D review of 10/11, F-09). Hung from the upper arm, they stay on
+            // it; where they are at rest doesn't change.
+            var bones = model.GetComponentsInChildren<Transform>(true);
+            foreach (string side in new[] { "_l", "_r" })
+            {
+                var pad = bones.FirstOrDefault(t => t.name == "elbowAttach" + side);
+                var upper = bones.FirstOrDefault(t => t.name == "upperarm" + side);
+                if (pad != null && upper != null) pad.SetParent(upper, true);
+            }
+            ShutJaw(model);
             OwnColours(model);
             var kept = model.AddComponent<SoldierMarks>();
             kept.cells = marks.cells;
@@ -467,6 +513,203 @@ namespace Bastion.Client.Units
         /// Arturo's A). The parts stay: they are the trousers.
         /// </summary>
         static readonly HashSet<string> HolsterParts = new HashSet<string> { "SK_MDRN_POLC_03_17HIPS_HU01", "SK_APOC_SURV_05_17HIPS_HU01" };
+
+        /// <summary>
+        /// Under the gas mask, the nose Synty gives it (Apocalypse Survivor 03's preset; face6's): the noses of face2, face3
+        /// and face5 showed through the mask (the 3D review of 10/11, F-13). Under it, it isn't seen.
+        /// </summary>
+        const string MaskNose = "SK_HUMN_BASE_07_35NOSE_HU01";
+
+        /// <summary>
+        /// The headwear the hair under it (Dress.HairUnder: the police's, Synty's shortest) is fitted to as the figure is made
+        /// (FitUnder): it went through them at the back and the crown (the 3D review of 10/11, F-03; Arturo's B, the hair
+        /// that shows below them kept).
+        /// </summary>
+        static readonly HashSet<string> Fitted = new HashSet<string> { "helmet", "earflapHat", "bandana", "cap", "plainCap" };
+
+        /// <summary>Each hair part's corners fitted under each hat's parts («hat parts|hair part»; null, none moved).</summary>
+        static readonly Dictionary<string, Vector3[]> fitted = new Dictionary<string, Vector3[]>();
+
+        /// <summary>
+        /// FitUnder's measures (the parts' own units, metres as bound): the point the hat is seen from, over the head's bone;
+        /// how far inside the hat the hair is left; its cells of directions round that point, and the points of each of the
+        /// hat's triangles (36).
+        /// </summary>
+        const float FitAbove = 0.06f, FitGap = 0.004f;
+        const int FitRound = 64, FitUp = 32, FitSamples = 7;
+
+        /// <summary>
+        /// `hair`'s corners drawn in under `hats` (in its mesh's space; null if none had to move): from 6 cm over the head's
+        /// bone, the nearest of the hats' surface in each direction (64 × 32 cells, 36 points of each triangle); a corner
+        /// further out than that less 4 mm, in a direction a hat covers (its cell; the nearest of it and the 8 round it),
+        /// moved in along its ray to there. What hangs below them (no cell of theirs) is left as it is.
+        /// </summary>
+        static Vector3[] FitUnder(SkinnedMeshRenderer hair, IEnumerable<SkinnedMeshRenderer> hats)
+        {
+            var mesh = hair.sharedMesh;
+            var head = hair.bones.FirstOrDefault(b => b != null && b.name == "head");
+            if (mesh == null || head == null) return null;
+            var into = hair.transform.worldToLocalMatrix;
+            var centre = into.MultiplyPoint3x4(head.position + Vector3.up * FitAbove);
+            var nearest = new float[FitRound * FitUp];
+            for (int k = 0; k < nearest.Length; k++) nearest[k] = float.MaxValue;
+            int Cell(Vector3 p, out float r)
+            {
+                var d = p - centre;
+                r = d.magnitude;
+                float round = Mathf.Atan2(d.x, d.z), up = Mathf.Asin(Mathf.Clamp(d.y / Mathf.Max(r, 1e-6f), -1, 1));
+                int i = (int)((round + Mathf.PI) / (2 * Mathf.PI) * FitRound) % FitRound;
+                int j = Mathf.Clamp((int)((up + Mathf.PI / 2) / Mathf.PI * FitUp), 0, FitUp - 1);
+                return j * FitRound + i;
+            }
+            foreach (var hat in hats)
+            {
+                if (hat.sharedMesh == null) continue;
+                var to = into * hat.transform.localToWorldMatrix;
+                var corners = hat.sharedMesh.vertices;
+                var triangles = hat.sharedMesh.triangles;
+                for (int t = 0; t + 2 < triangles.Length; t += 3)
+                {
+                    Vector3 a = to.MultiplyPoint3x4(corners[triangles[t]]), b = to.MultiplyPoint3x4(corners[triangles[t + 1]]), c = to.MultiplyPoint3x4(corners[triangles[t + 2]]);
+                    for (int u = 0; u <= FitSamples; u++)
+                        for (int w = 0; u + w <= FitSamples; w++)
+                        {
+                            float s = u / (float)FitSamples, q = w / (float)FitSamples;
+                            int cell = Cell(a + (b - a) * s + (c - a) * q, out float r);
+                            if (r < nearest[cell]) nearest[cell] = r;
+                        }
+                }
+            }
+            var fit = mesh.vertices;
+            bool any = false;
+            for (int v = 0; v < fit.Length; v++)
+            {
+                int cell = Cell(fit[v], out float r);
+                if (nearest[cell] == float.MaxValue || r < 1e-6f) continue;
+                int i = cell % FitRound, j = cell / FitRound;
+                float inside = float.MaxValue;
+                for (int dj = -1; dj <= 1; dj++)
+                    for (int di = -1; di <= 1; di++)
+                        if (j + dj >= 0 && j + dj < FitUp) inside = Mathf.Min(inside, nearest[(j + dj) * FitRound + (i + di + FitRound) % FitRound]);
+                float reach = inside - FitGap;
+                if (r <= reach) continue;
+                fit[v] = centre + (fit[v] - centre) * (Mathf.Max(reach, 0) / r);
+                any = true;
+            }
+            return any ? fit : null;
+        }
+
+        /// <summary>
+        /// The torsos with a hood of their own down the back (Sidekick sews it into the torso, with no back under it:
+        /// survivor2's, survivor4's and civilian3's, survivor6's and survivor11's, survivor7's, civilian6's), and the heads
+        /// with a hood (Hoods): with one of those on, the torso's showed hanging below its rim (the 3D review of 10/11, F-05;
+        /// Arturo's A, flattened as the figure is made).
+        /// </summary>
+        static readonly HashSet<string> HoodedTorsos = new HashSet<string>
+        {
+            "SK_APOC_SURV_06_10TORS_HU01", "SK_APOC_SURV_04_10TORS_HU01", "SK_APOC_SURV_03_10TORS_HU01", "SK_MDRN_CIVL_07_10TORS_HU01", "SK_MDRN_CIVL_15_10TORS_HU01",
+        };
+        static readonly HashSet<string> Hoods = new HashSet<string> { "hood", "scarfHood", "twoToneCap" };
+
+        /// <summary>Each hooded torso's corners and normals with its hood flattened (null if none had to move).</summary>
+        static readonly Dictionary<string, (Vector3[] corners, Vector3[] normals)> flattened = new Dictionary<string, (Vector3[], Vector3[])>();
+
+        /// <summary>
+        /// Flatten's measures (the torso's mesh as bound: metres, y up, facing +z; CombatLab.Piezas): the band its back is
+        /// taken from, under every hood; from where up a hood is flattened, and how wide (whole to HoodMiddle, none from
+        /// HoodWide); how far behind the back it is left, and how deep a hood is squeezed into that; from where up the back
+        /// bends in to the neck, and how fast (m per m²; Survivor 01's torso, without a hood, bends so).
+        /// </summary>
+        const float BackLow = 1.20f, BackHigh = 1.28f, HoodFrom = 1.30f, HoodMiddle = 0.10f, HoodWide = 0.16f, HoodGap = 0.01f, HoodSqueeze = 0.10f,
+            NeckFrom = 1.40f, NeckBend = 4.7f;
+
+        /// <summary>
+        /// `torso`'s corners (its mesh's own space) with the hood down its back flattened onto it: its back is the furthest
+        /// back of the torso between 1.20 and 1.28 m, by columns 2 cm wide; above 1.30 m and within 16 cm of the middle,
+        /// what stands further back than 1 cm behind that (bent in towards the neck from 1.40 m) is squeezed into the next
+        /// centimetre, in its order, so the hood lies on the back as cloth; above the head's hood's rim, under it. Their
+        /// normals turned as much to the back's (BackFacing): left as the hood's, its shading drew it still. Nulls if
+        /// nothing had to move.
+        /// </summary>
+        static (Vector3[] corners, Vector3[] normals) Flatten(SkinnedMeshRenderer torso)
+        {
+            var mesh = torso.sharedMesh;
+            if (mesh == null) return (null, null);
+            var corners = mesh.vertices;
+            var normals = mesh.normals;
+            var back = new Dictionary<int, float>();
+            foreach (var p in corners)
+            {
+                if (p.y < BackLow || p.y > BackHigh || p.z >= 0) continue;
+                int column = Mathf.RoundToInt(p.x / 0.02f);
+                back[column] = Mathf.Max(back.TryGetValue(column, out float b) ? b : 0, -p.z);
+            }
+            if (back.Count == 0) return (null, null);
+            float Back(float x)
+            {
+                int column = Mathf.RoundToInt(x / 0.02f);
+                return back.TryGetValue(column, out float b) ? b : back[back.Keys.OrderBy(k => Mathf.Abs(k - column)).First()];
+            }
+            bool any = false;
+            for (int v = 0; v < corners.Length; v++)
+            {
+                var p = corners[v];
+                float side = Mathf.Abs(p.x), deep = -p.z;
+                if (p.y < HoodFrom || p.z >= 0 || side >= HoodWide) continue;
+                float bend = Mathf.Max(0, p.y - NeckFrom);
+                float to = Back(p.x) + HoodGap - NeckBend * bend * bend;
+                if (deep <= to) continue;
+                float squeezed = Mathf.Min(1, (deep - to) / HoodSqueeze);
+                float flat = to + HoodGap * squeezed;
+                float share = side <= HoodMiddle ? 1 : (HoodWide - side) / (HoodWide - HoodMiddle);
+                corners[v].z = -(deep + (flat - deep) * share);
+                if (v < normals.Length) normals[v] = Vector3.Lerp(normals[v], BackFacing, share * squeezed).normalized;
+                any = true;
+            }
+            return any ? (corners, normals) : (null, null);
+        }
+
+        /// <summary>The upper back's normal, the way a flattened hood is turned: back and a little up (its mesh's space).</summary>
+        static readonly Vector3 BackFacing = new Vector3(0, 0.3f, -1).normalized;
+
+        /// <summary>
+        /// Each avatar Sidekick gives its figures (its base model's: the same for all) without the jaw (the 3D review of 10/11,
+        /// F-17): Mixamo's clips, the gun's and the pistol's rests, aims and reloads, hold «Jaw Close» at 0, the mouth open on
+        /// the head's purple hollow (the faces have no teeth); Synty's hold it at 1.03 (CombatLab.Mandibula). Without it no clip
+        /// moves the jaw: it stays as bound, the mouth shut. Null, one that couldn't be made (the figure keeps its own).
+        /// </summary>
+        static readonly Dictionary<Avatar, Avatar> jawless = new Dictionary<Avatar, Avatar>();
+
+        /// <summary>The figure's avatar the same without its jaw (jawless), its animator bound again.</summary>
+        static void ShutJaw(GameObject model)
+        {
+            var animator = model.GetComponent<Animator>();
+            var avatar = animator != null ? animator.avatar : null;
+            if (avatar == null || !avatar.isHuman) return;
+            if (!jawless.TryGetValue(avatar, out var shut))
+            {
+                var description = avatar.humanDescription;
+                if (description.human != null && description.human.Any(h => h.humanName == "Jaw"))
+                {
+                    description.human = description.human.Where(h => h.humanName != "Jaw").ToArray();
+                    // (Built on this figure under the root's name the avatar knows: its bones are the base model's.)
+                    string name = model.name;
+                    if (description.skeleton != null && description.skeleton.Length > 0) model.name = description.skeleton[0].name;
+                    shut = AvatarBuilder.BuildHumanAvatar(model, description);
+                    model.name = name;
+                    if (shut != null && shut.isValid && shut.isHuman) shut.name = avatar.name + " (jawless)";
+                    else
+                    {
+                        Debug.LogWarning($"[figures] {avatar.name} without its jaw: not made, the jaw left to the clips");
+                        shut = null;
+                    }
+                }
+                jawless[avatar] = shut;
+            }
+            if (shut == null) return;
+            animator.avatar = shut;
+            animator.Rebind();
+        }
 
         /// <summary>Which way is behind a Sidekick part at rest, along its z (its figures face +z).</summary>
         const float PackBehind = 1;

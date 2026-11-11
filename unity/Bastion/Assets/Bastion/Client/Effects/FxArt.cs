@@ -38,6 +38,8 @@ namespace Bastion.Client.Effects
         /// <summary>A map's fires (Map.FireView, Arturo 1/11): Particle FX's flames, small, middling and big; its embers; its black smoke.</summary>
         public GameObject fireSmall;
         public GameObject fire;
+        /// <summary>A pool's flames (the 3D review's L-05, 10/11): Particle FX's small fire of flame shapes, not FX_Fire_01's balls.</summary>
+        public GameObject fireLick;
         public GameObject fireBig;
         public GameObject embers;
         public GameObject smoke;

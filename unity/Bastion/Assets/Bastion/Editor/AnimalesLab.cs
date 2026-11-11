@@ -340,10 +340,13 @@ namespace Bastion.EditorTools
                     return k < 0 ? "-1 0 0 0" : FormattableString.Invariant($"{k} {bones[k].position.x:0.0000} {bones[k].position.y:0.0000} {bones[k].position.z:0.0000}");
                 }
             }
-            // (BASTION_SONDA_PERRO=1: its place, turn and animator each frame, [perro] t x z yaw speed state time param.)
+            // (BASTION_SONDA_PERRO=1: its place, turn and animator each frame, [perro] t x z yaw speed state time param
+            // transition | animator's speed, its pace parameter's name, its clip, whether a camera draws it (Renderer.isVisible)
+            // and its culling: the 3D review's A-29, 10/11, the wild ones sliding with their legs still.)
             if (Environment.GetEnvironmentVariable("BASTION_SONDA_PERRO") == "1")
             {
                 var animator = first.GetComponentInChildren<Animator>();
+                var drawn = first.GetComponentsInChildren<Renderer>(true);
                 var last = first.position;
                 float clock = 0;
                 var before = Fauna.Stepping;
@@ -354,9 +357,14 @@ namespace Bastion.EditorTools
                     var p = first.position;
                     float speed = Vector3.Distance(new Vector3(p.x, 0, p.z), new Vector3(last.x, 0, last.z)) / Mathf.Max(dt, 1e-4f);
                     last = p;
-                    var info = animator != null && animator.isActiveAndEnabled ? animator.GetCurrentAnimatorStateInfo(0) : default;
-                    float pace = animator != null && animator.isActiveAndEnabled && animator.parameters.Any(q => q.name == "Movement_f") ? animator.GetFloat("Movement_f") : -1;
-                    Debug.Log(FormattableString.Invariant($"[perro] {clock:0.000} {p.x:0.000} {p.z:0.000} {first.eulerAngles.y:0.0} {speed:0.00} {info.shortNameHash} {info.normalizedTime:0.000} {pace:0.00} {(animator != null && animator.IsInTransition(0) ? 1 : 0)}"));
+                    bool on = animator != null && animator.isActiveAndEnabled && animator.runtimeAnimatorController != null;
+                    var info = on ? animator.GetCurrentAnimatorStateInfo(0) : default;
+                    string name = on ? animator.parameters.Any(q => q.name == "Movement_f") ? "Movement_f" : animator.parameters.Any(q => q.name == "Speed_f") ? "Speed_f" : "-" : "-";
+                    float pace = name != "-" ? animator.GetFloat(name) : -1;
+                    var clips = on ? animator.GetCurrentAnimatorClipInfo(0) : new AnimatorClipInfo[0];
+                    string clip = clips.Length > 0 ? string.Join("+", clips.OrderByDescending(c => c.weight).Select(c => FormattableString.Invariant($"{c.clip.name.Replace(' ', '_')}:{c.weight:0.00}"))) : "-";
+                    bool visible = drawn.Any(r => r != null && r.isVisible);
+                    Debug.Log(FormattableString.Invariant($"[perro] {clock:0.000} {p.x:0.000} {p.z:0.000} {first.eulerAngles.y:0.0} {speed:0.00} {info.shortNameHash} {info.normalizedTime:0.000} {pace:0.00} {(on && animator.IsInTransition(0) ? 1 : 0)} | speed {(animator != null ? animator.speed : 0):0.00} {name} {clip} visible {(visible ? 1 : 0)} culling {(animator != null ? animator.cullingMode.ToString() : "-")}"));
                 };
             }
             // (BASTION_SOLO=1: nobody coming, the camera on the animal: how it stands and wanders.)

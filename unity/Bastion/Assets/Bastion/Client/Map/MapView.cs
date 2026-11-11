@@ -30,10 +30,15 @@ namespace Bastion.Client.Map
         /// <summary>Builds the map of `state` under this object (what was there goes); every storey shown.</summary>
         public MapBuilder Build(GameState state, Func<string, GameObject> prefabOf, Func<string, Material> materialOf = null)
         {
-            for (int k = transform.childCount - 1; k >= 0; k--) DestroyNow(transform.GetChild(k).gameObject);
-            // La Lata made again for this map (PlaceLata).
-            if (Lata != null) DestroyNow(Lata.transform.parent != null ? Lata.transform.parent.gameObject : Lata.gameObject);
-            Lata = null;
+            // What each stage takes, in one line once the map is whole (MapLoad: «[carga] map …»).
+            MapLoad.Begin();
+            using (MapLoad.Time("clear"))
+            {
+                for (int k = transform.childCount - 1; k >= 0; k--) DestroyNow(transform.GetChild(k).gameObject);
+                // La Lata made again for this map (PlaceLata).
+                if (Lata != null) DestroyNow(Lata.transform.parent != null ? Lata.transform.parent.gameObject : Lata.gameObject);
+                Lata = null;
+            }
             State = state;
             prefabs = prefabOf;
             materials = materialOf;
@@ -44,9 +49,10 @@ namespace Bastion.Client.Map
             Level = storeys.Length;
             Current = this;
             wearLeft = -1;
-            PlaceLata(state);
+            using (MapLoad.Time("lata")) PlaceLata(state);
             // (BASTION_SOMBRAS_FIJAS=1: the pipeline's own, to weigh what fitting them costs: a test.)
             if (FitShadows && GetComponent<ShadowFit>() == null && Environment.GetEnvironmentVariable("BASTION_SOMBRAS_FIJAS") != "1") gameObject.AddComponent<ShadowFit>();
+            MapLoad.End($"{(string.IsNullOrEmpty(state.MapId) ? state.MapName : state.MapId)} {state.Width}×{state.Height}");
             return builder;
         }
 

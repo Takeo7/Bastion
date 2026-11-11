@@ -13,7 +13,7 @@ namespace Bastion.Client.Map
     /// By night its light is NightLights' (the fire's own in GameState.lights). Made with the map: the fires are there from
     /// the start and burn to the end. A molotov's (Arturo, 1/11: Fire.Turns) lit and put out as the battle goes (Light,
     /// Out: EventPlayer's FireLitEvent and FireOutEvent), a pool of petrol burning: low flames all over its tiles, the
-    /// ground under them aglow, a thin smoke, the ground scorched (left when it goes out), nothing over what burns.
+    /// ground under them aglow, the ground scorched (left when it goes out), nothing over what burns.
     /// </summary>
     public sealed class FireView : MonoBehaviour
     {
@@ -22,6 +22,17 @@ namespace Bastion.Client.Map
 
         /// <summary>A molotov's fire growing to its size, and dying down once out (s).</summary>
         const float Grows = 0.6f, DiesDown = 3;
+        /// <summary>
+        /// A pool's flames (FxArt.fireLick, Particle FX's small fire of flame shapes) against the middling fire's scale they
+        /// had, so they stand as high (the 3D review's L-05, 10/11: FX_Fire_01's balls rising read from above as yellow
+        /// cylinders with white tops).
+        /// </summary>
+        const float LickScale = 18;
+        /// <summary>
+        /// And of their flames a second: they stand on one spot each, and its own (8–10 a second, a second each) summed up
+        /// white, light added to light.
+        /// </summary>
+        const float LickRate = 0.4f;
         /// <summary>How high the big flames stand over what burns (m): a car's body, bins and drums, a heap on the ground.</summary>
         const float OverCar = 0.55f, OverBins = 0.45f, OverHeap = 0.1f;
         /// <summary>The soot under the fire: its colour and how dark.</summary>
@@ -36,14 +47,17 @@ namespace Bastion.Client.Map
         /// </summary>
         static readonly Color Ablaze = new Color(2.2f, 0.75f, 0.18f, 0.5f);
         const float Flicker = 0.35f;
-        /// <summary>The burning ground of each pool, by its fire: its own flicker, and since when it dies down (Out; null, burning).</summary>
-        readonly Dictionary<string, (Material material, float seed, float? since)> glows = new Dictionary<string, (Material, float, float?)>();
+        /// <summary>
+        /// The burning ground of each pool, by its fire: its own flicker, since when it dies down (Out; null, burning), and
+        /// when it was lit (it comes up over Grows, L-05).
+        /// </summary>
+        readonly Dictionary<string, (Material material, float seed, float? since, float born)> glows = new Dictionary<string, (Material, float, float?, float)>();
 
         void Update()
         {
             foreach (var id in glows.Keys.ToList())
             {
-                var (material, seed, since) = glows[id];
+                var (material, seed, since, born) = glows[id];
                 if (material == null)
                 {
                     glows.Remove(id);
@@ -51,6 +65,9 @@ namespace Bastion.Client.Map
                 }
                 float n = Mathf.PerlinNoise(Time.time * 2.6f, seed);
                 float left = since is float t ? Mathf.Clamp01(1 - (Time.time - t) / DiesDown) : 1;
+                // (Lit up over Grows, as its flames grow: grown with them from a tenth, its blots came together in the middle,
+                // their light summed, as white discs spreading out: L-05.)
+                left *= Mathf.Clamp01((Time.time - born) / Grows);
                 material.SetColor("_BaseColor", new Color(Ablaze.r, Ablaze.g, Ablaze.b, Ablaze.a * (1 - Flicker + Flicker * 2 * n) * left));
             }
         }
@@ -91,7 +108,7 @@ namespace Bastion.Client.Map
             var holder = id != null ? transform.Find(id) : null;
             if (holder == null) return;
             holder.name = id + " (apagado)";
-            if (glows.TryGetValue(id, out var glow)) glows[id] = (glow.material, glow.seed, Time.time);
+            if (glows.TryGetValue(id, out var glow)) glows[id] = (glow.material, glow.seed, Time.time, glow.born);
             foreach (Transform part in holder.Cast<Transform>().ToList())
             {
                 if (part.name == "hollín") continue;
@@ -102,9 +119,11 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>
-        /// A molotov's fire: a pool of petrol burning over its tiles (the 3×3 one can step on), low flames on each, a little
-        /// smoke and embers over the middle, the ground scorched under it all; `grow`, from where the bottle broke out to
-        /// its size (Grows).
+        /// A molotov's fire: a pool of petrol burning over its tiles (the 3×3 one can step on), low flames on each, embers
+        /// over the middle, the ground scorched under it all; `grow`, its flames from where the bottle broke out to their
+        /// size, and the burning ground coming up with them (Grows). No smoke of its own (the 3D review's L-05, with Arturo's
+        /// C for the smoke, 10/11: Particle FX's black smoke was a column of opaque dark hexagons; the bottle breaking puffs
+        /// its own, see-through).
         /// </summary>
         void Pool(GameState s, Fire fire, FxArt art, bool grow)
         {
@@ -114,11 +133,14 @@ namespace Bastion.Client.Map
             var holder = new GameObject(fire.Id).transform;
             holder.SetParent(transform, false);
             holder.position = at;
-            // (A thin smoke, low: a pool's, not a car's column.)
-            Effect(art.smoke, holder, at + Vector3.up * 0.2f, 0, 0.28f);
-            Effect(art.embers, holder, at + Vector3.up * 0.1f, 0, 0.7f);
+            // What grows (Grow): the flames and embers alone, not the ground under them (L-05).
+            var flames = new GameObject("llamas").transform;
+            flames.SetParent(holder, false);
+            Effect(art.embers, flames, at + Vector3.up * 0.1f, 0, 0.7f);
             Scorch(holder, at, 3.4f, MapArt.Hash(sx, sy, 440) * 360);
-            var glow = Glow(holder, fire.Id);
+            var glow = Glow(holder, fire.Id, grow);
+            var licks = art.fireLick != null ? art.fireLick : art.fire;
+            float lick = art.fireLick != null ? LickScale : 1;
             foreach (int i in fire.Tiles)
             {
                 int x = i % w, y = i / w;
@@ -132,10 +154,10 @@ namespace Bastion.Client.Map
                 {
                     var quarter = new Vector3((k % 2) - 0.5f, 0, (k / 2) - 0.5f) * 0.5f + new Vector3(r(k * 3) - 0.5f, 0, r(k * 3 + 1) - 0.5f) * 0.25f;
                     var spot = MapSpace.World(x, y) + quarter * MapSpace.Tile;
-                    Effect(art.fire, holder, spot, r(k * 3 + 2) * 360, (i == fire.Source && k == 0 ? 0.62f : 0.42f) + 0.16f * r(13 + k));
+                    Effect(licks, flames, spot, r(k * 3 + 2) * 360, ((i == fire.Source && k == 0 ? 0.62f : 0.42f) + 0.16f * r(13 + k)) * lick, art.fireLick != null ? LickRate : 1);
                 }
             }
-            if (grow) StartCoroutine(Grow(holder));
+            if (grow) StartCoroutine(Grow(flames));
         }
 
         /// <summary>From a tenth of its size to its own over Grows, eased out.</summary>
@@ -184,8 +206,8 @@ namespace Bastion.Client.Map
             }
         }
 
-        /// <summary>One of Particle FX's effects at `at`, turned and scaled (its particles with it), playing.</summary>
-        static void Effect(GameObject prefab, Transform parent, Vector3 at, float yaw, float scale)
+        /// <summary>One of Particle FX's effects at `at`, turned and scaled (its particles with it), playing; `rate`, of its particles a second.</summary>
+        static void Effect(GameObject prefab, Transform parent, Vector3 at, float yaw, float scale, float rate = 1)
         {
             if (prefab == null) return;
             var made = Instantiate(prefab, parent, false);
@@ -196,6 +218,11 @@ namespace Bastion.Client.Map
                 var main = ps.main;
                 main.scalingMode = ParticleSystemScalingMode.Hierarchy;
                 main.loop = true;
+                if (rate != 1)
+                {
+                    var emission = ps.emission;
+                    emission.rateOverTimeMultiplier *= rate;
+                }
                 // (Burning already as the map is shown: some seconds of it run before.)
                 if (!Application.isPlaying) ps.Simulate(3, false, true);
                 else ps.Play();
@@ -204,14 +231,15 @@ namespace Bastion.Client.Map
 
         /// <summary>The ground scorched round `at`: a dark blot `size` tiles across, lying on the ground.</summary>
         /// <summary>A pool's burning ground (Ablaze), its own copy for its flicker (Update), gone with the pool; null without the kit.</summary>
-        Material Glow(Transform holder, string id)
+        Material Glow(Transform holder, string id, bool grow)
         {
             var material = KitMaterials.New(KitMaterials.SeeThrough, "Fuego en el suelo " + id);
             if (material == null) return null;
-            material.SetColor("_BaseColor", Ablaze);
+            // (Growing, unlit till Update brings it up: else whole for its first frame.)
+            material.SetColor("_BaseColor", grow ? new Color(Ablaze.r, Ablaze.g, Ablaze.b, 0) : Ablaze);
             material.mainTexture = embers ??= Embers();
             material.renderQueue = 2991;
-            glows[id] = (material, MapArt.Hash(id.Length, id.GetHashCode() & 1023, 460) * 100, null);
+            glows[id] = (material, MapArt.Hash(id.Length, id.GetHashCode() & 1023, 460) * 100, null, grow ? Time.time : Time.time - Grows);
             holder.gameObject.AddComponent<Owned>().material = material;
             return material;
         }

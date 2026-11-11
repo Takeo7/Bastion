@@ -37,6 +37,8 @@ namespace Bastion.Client
             public bool backlit;
             /// <summary>Its body's clips ("masc", "femn": Anims).</summary>
             public string build = "masc";
+            /// <summary>How far its head bows (degrees; HeadBow, or BrimBow under a peak).</summary>
+            public float bow = HeadBow;
             public RenderTexture texture;
             public bool drawn;
             /// <summary>What a soldier's was known as (to paint it again when the tint changes).</summary>
@@ -93,6 +95,7 @@ namespace Bastion.Client
                 return figure;
             };
             bust.build = dress.sex == "f" ? "femn" : "masc";
+            bust.bow = Peaked.Contains(dress.headwear ?? "") ? BrimBow : HeadBow;
             Enqueue(id, bust);
         }
 
@@ -128,7 +131,7 @@ namespace Bastion.Client
                     bust.texture.Create();
                 }
                 var clock = System.Diagnostics.Stopwatch.StartNew();
-                bool drawn = Draw(bust.make, bust.turn, bust.backlit, bust.build, bust.texture);
+                bool drawn = Draw(bust.make, bust.turn, bust.backlit, bust.build, bust.bow, bust.texture);
                 LastDrawMs = (float)clock.Elapsed.TotalMilliseconds;
                 if (drawn)
                 {
@@ -157,10 +160,17 @@ namespace Bastion.Client
         const float HeadTurn = 20, HeadBow = 8;
 
         /// <summary>
-        /// The head a little further round than the body, and bowed (0.10.1's idle turns it on its neck; Unity's humanoid
+        /// The caps whose peak hid the eyes at 160 px, the head bowed (the cap over a hood in 3 of 4: the 3D review of 10/11,
+        /// F-06), and how far their bust lifts the chin instead (Arturo's A; docs/UNITY-ARTE.md, the busts).
+        /// </summary>
+        static readonly HashSet<string> Peaked = new HashSet<string> { "twoToneCap", "cap" };
+        const float BrimBow = -6;
+
+        /// <summary>
+        /// The head a little further round than the body, and bowed `bow` (0.10.1's idle turns it on its neck; Unity's humanoid
         /// copy of the clip keeps it over the chest): half on the neck, half on the head, `yaw` being the body's.
         /// </summary>
-        static void Look(Animator animator, Transform head, float yaw)
+        static void Look(Animator animator, Transform head, float yaw, float bow)
         {
             var round = Quaternion.AngleAxis(HeadTurn * 0.5f, Vector3.up);
             var neck = animator.GetBoneTransform(HumanBodyBones.Neck);
@@ -168,15 +178,15 @@ namespace Bastion.Client
             else round *= round;
             head.rotation = round * head.rotation;
             var face = Quaternion.Euler(0, yaw + HeadTurn, 0) * Vector3.forward;
-            head.rotation = Quaternion.AngleAxis(HeadBow, Vector3.Cross(Vector3.up, face)) * head.rotation;
+            head.rotation = Quaternion.AngleAxis(bow, Vector3.Cross(Vector3.up, face)) * head.rotation;
         }
 
         /// <summary>
         /// The figure `make` gives, at rest, turned `turn` (0.10.1's, radians: counter-clockwise from above, so its face to
         /// the left), shot head and shoulders into `target` (portraits.ts bust and shoot: 20° of view, 1.45 tiles off,
-        /// looking at its head). Whether there was a figure to shoot.
+        /// looking at its head), its head bowed `bow`. Whether there was a figure to shoot.
         /// </summary>
-        static bool Draw(Func<GameObject> make, float turn, bool backlit, string build, RenderTexture target)
+        static bool Draw(Func<GameObject> make, float turn, bool backlit, string build, float bow, RenderTexture target)
         {
             var studio = new GameObject("Estudio");
             studio.transform.position = Studio.At;
@@ -205,7 +215,7 @@ namespace Bastion.Client
                 for (int k = 0; k < 12; k++) anim.Step(0.1f);
             }
             var head = animator != null && animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Head) : null;
-            if (head != null) Look(animator, head, -turn * Mathf.Rad2Deg);
+            if (head != null) Look(animator, head, -turn * Mathf.Rad2Deg, bow);
             var at = head != null ? head.position : figure.transform.position + Vector3.up * 1.6f;
             at += Vector3.up * 0.02f * Tile;
             // The camera in front of it, looking back at its head (three's +z, here −z of the figure's frame turned back).

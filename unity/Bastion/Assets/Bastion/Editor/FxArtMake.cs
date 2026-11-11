@@ -91,6 +91,7 @@ namespace Bastion.EditorTools
 
             art.fireSmall = Effect("FX_Fire_Small_02");
             art.fire = Effect("FX_Fire_01");
+            art.fireLick = Effect("FX_Fire_Small_03");
             art.fireBig = Effect("FX_Fire_Big_01");
             art.embers = Effect("FX_Embers_01");
             art.smoke = Effect("FX_Smoke_Black_01");

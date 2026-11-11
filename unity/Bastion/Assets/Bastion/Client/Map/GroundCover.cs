@@ -134,7 +134,11 @@ namespace Bastion.Client.Map
             var placed = new Dictionary<int, List<(string id, Matrix4x4 m, bool cast)>>();
             // Nothing grows through the base's buildings, nor through what is left of them (mapView.ts, by where it lands).
             var pieces = BasePieces.MapOf(s);
-            foreach (var (id, x, y, m, cast) in Scatter(s, ground, only))
+            // (Its stages timed for the load's line: MapLoad.)
+            List<(string id, int x, int y, Matrix4x4 m, bool cast)> scattered;
+            using (MapLoad.Time("scatter")) scattered = Scatter(s, ground, only).ToList();
+            var merging = MapLoad.Time("merge");
+            foreach (var (id, x, y, m, cast) in scattered)
             {
                 if (pieces != null)
                 {
@@ -156,6 +160,7 @@ namespace Bastion.Client.Map
                 }
                 if (placed.TryGetValue(c, out var list)) chunks[c] = Merge(c, list);
             }
+            merging.Dispose();
         }
 
         /// <summary>One chunk's cover: a mesh per material, its props' parts merged at their places; no shadows.</summary>

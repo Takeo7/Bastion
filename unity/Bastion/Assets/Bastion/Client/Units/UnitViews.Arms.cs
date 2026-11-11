@@ -175,7 +175,7 @@ namespace Bastion.Client.Units
                 v.butts[carry] = ButtOf(model);
             }
             if (v.carried.Count == 0) return false;
-            Stows(v);
+            Stows(v, u.Appearance?.Character);
             v.rest = RestFor(v.seed);
             if (SheathOn) Sheathe(v, catalog);
             KeepOff(v);
@@ -207,7 +207,7 @@ namespace Bastion.Client.Units
         /// back from the chest, its barrel up over the right shoulder; the pistol down the right thigh, its muzzle down;
         /// the blade by the hips on the left, round towards the back, pointing down and back.
         /// </summary>
-        static void Stows(View v)
+        static void Stows(View v, string outfit = null)
         {
             var a = v.animator;
             var body = v.body;
@@ -226,6 +226,8 @@ namespace Bastion.Client.Units
             // (Over a rucksack, out behind it: SoldierMarks.pack; Arturo, 9/11, the 0.12.15's rucksacks: never through it.)
             float pack = body.GetComponent<SoldierMarks>() is SoldierMarks marks ? marks.pack : 0;
             float back = Mathf.Max(0.11f, pack + PackGap);
+            // (Over a padded vest, out by PaddedGap: F-18, part 2.)
+            if (outfit != null && PaddedBacks.Contains(outfit) && pack + PackGap <= 0.11f) back += PaddedGap;
             Hang(MainCarry, chest, new Vector3(0, s3.y + 0.02f, s3.z - back), new Vector3(0.45f, 0.9f, 0), new Vector3(0, 0, -1));
             var hipR = In(HumanBodyBones.RightUpperLeg);
             Hang(SidearmCarry, HumanBodyBones.RightUpperLeg, new Vector3(hipR.x + 0.075f, hipR.y - HolsterDrop, hipR.z + 0.01f), new Vector3(0, -1, 0.1f), new Vector3(0, 0, 1));
@@ -243,6 +245,16 @@ namespace Bastion.Client.Units
         /// in the air, at −0.1 it lies on them and goes through none.
         /// </summary>
         static readonly float PackGap = LabFloat("BASTION_HOLGURA_MOCHILA", -0.1f);
+
+        /// <summary>
+        /// The outfits whose torso is a padded vest (Modern Civilians' SK_MDRN_CIVL_06_10TORS and _08_10TORS: civilian2 and
+        /// civilian7), and how much further out the gun across the back rides over it (metres of the figure's frame; the
+        /// 3D review's F-18, part 2, 10/11: the precision rifles' deep stocks sank into the vest). Measured on the body's
+        /// bulk (BodyBulk, [espalda] line=) they come out no deeper than others (2–5 cm), so the card's list and a gap found
+        /// in the photos (CombatLab.Trajes, paso filo). BASTION_HOLGURA_CHALECO=m for the labs (0, as before).
+        /// </summary>
+        static readonly HashSet<string> PaddedBacks = new HashSet<string> { "civilian2", "civilian7" };
+        static readonly float PaddedGap = LabFloat("BASTION_HOLGURA_CHALECO", 0.04f);
 
         /// <summary>
         /// syntyFigures.ts draw and hold: `which` in the hands (one it doesn't carry: the main one), the others where they
@@ -345,11 +357,25 @@ namespace Bastion.Client.Units
                 string ride = RideOf(v, kv.Key, pistolOnly);
                 if ((ride != SidearmCarry && ride != BeltCarry) || !v.stows.TryGetValue(ride, out var mount)) continue;
                 Ride(v, kv.Key, kv.Value, ride, mount);
-                if (ride == SidearmCarry) bulk.Clear(mount, kv.Value, v.body.right, HolsterStep, HolsterMost, HolsterTouch);
-                // (The knife's sheath, if it has one, is what is at the belt: the wider of the two.)
-                else bulk.Clear(mount, v.sheath != null ? v.sheath : kv.Value, v.body.TransformDirection(BeltOut), BeltStep, BeltMost, -BeltRoom);
+                float moved = ride == SidearmCarry ? bulk.Clear(mount, kv.Value, v.body.right, HolsterStep, HolsterMost, HolsterTouch)
+                    // (The knife's sheath, if it has one, is what is at the belt: the wider of the two.)
+                    : bulk.Clear(mount, v.sheath != null ? v.sheath : kv.Value, v.body.TransformDirection(BeltOut), BeltStep, BeltMost, -BeltRoom);
+                if (BulkLog) Debug.Log(FormattableString.Invariant($"[bulk] keep {v.id} {ride} moved={moved * 100:0.0}"));
+            }
+            // (BASTION_LOG_ESPALDA=1, the labs: how deep the main gun rides in the body's bulk across the back, cm, a line
+            // [espalda] each; the 3D review's F-18, 10/11, part 2: the padded vest.)
+            if (BackLog && !pistolOnly && v.carried.TryGetValue(MainCarry, out var gun) && v.stows.TryGetValue(MainCarry, out var back))
+            {
+                Ride(v, MainCarry, gun, MainCarry, back);
+                Debug.Log(FormattableString.Invariant($"[espalda] {v.id} {v.arts[MainCarry].fbx} depth={bulk.Depth(gun) * 100:0.0} line={bulk.Depth(gun, true) * 100:0.0}"));
             }
         }
+
+        /// <summary>BASTION_LOG_BULK=1: how far KeepOff moved each (the labs, [bulk] keep: the same with BodyBulk made cheaper).</summary>
+        static readonly bool BulkLog = Environment.GetEnvironmentVariable("BASTION_LOG_BULK") == "1";
+
+        /// <summary>BASTION_LOG_ESPALDA=1: KeepOff's [espalda] lines (the labs).</summary>
+        static readonly bool BackLog = Environment.GetEnvironmentVariable("BASTION_LOG_ESPALDA") == "1";
 
         /// <summary>
         /// The knife's sheath (the 3D review's F-07, 10/11, Arturo's A): POLYGON Military's, put by FigureCatalogMake among
@@ -1000,6 +1026,9 @@ namespace Bastion.Client.Units
         /// <summary>For the labs: where the muzzle of what `id` holds is in the model's own frame.</summary>
         public Vector3 MuzzleLocalForLab(string id) => views.TryGetValue(id, out var v) ? v.muzzle : Vector3.zero;
 
+        /// <summary>For the labs: the meshes of `id`'s body, not what it carries (the 3D review's A-15, 10/11).</summary>
+        public List<Renderer> BodyOnlyForLab(string id) => views.TryGetValue(id, out var v) && v.body != null ? BodyRenderers(v) : null;
+
         /// <summary>For the labs: what `id` carries and shows, each model with whether it is the one in its hands.</summary>
         public List<(Transform model, bool drawn)> CarriedForLab(string id) =>
             views.TryGetValue(id, out var v) ? v.carried.Where(kv => kv.Value != null && kv.Value.gameObject.activeInHierarchy).Select(kv => (kv.Value, kv.Key == v.drawn))
@@ -1042,6 +1071,14 @@ namespace Bastion.Client.Units
             {
                 // (The left palm from the middle of the magazine of what it holds: the 3D review's P-1, 10/11.)
                 if (MagazineOf(w) is Transform mag && mag.GetComponent<Renderer>() is Renderer mr) parts.Add($"Lmag={Cm(Vector3.Distance(l, mr.bounds.center))}");
+                // (The pistol's: the left palm from the grip's foot, where the magazine goes in, whether that is in the gun or
+                // the hand now, and how far into its reload's clip it is: P-1, 10/11, measured again for the 0.12.21.)
+                if (v.inHand == Held.Pistol)
+                {
+                    parts.Add($"Lwell={Cm(Vector3.Distance(l, w.position + w.rotation * Vector3.down * MagWell))}");
+                    if (SlideOf(w) is Transform slide && slide.GetComponent<Renderer>() is Renderer sr) parts.Add($"Lslide={Cm(Vector3.Distance(l, sr.bounds.center))}");
+                    if (v.reload > 0) parts.Add(FormattableString.Invariant($"clip={v.reloadAt:0.000} reload={v.reload:0.00}"));
+                }
                 var local = w.InverseTransformPoint(l);
                 float scale = w.lossyScale.z;
                 parts.Add($"Lz={Cm(local.z * scale)}");
@@ -1663,40 +1700,35 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// The pistol's reload (P-1): the left palm onto it by two-bone IK about the clip's moments (seconds of «Reloading
-        /// 2», each a bell PistolBell wide, whole within PistolBellTop of it): the magazine in at the grip's foot, the slide
-        /// as it is racked; as far as the reload is in, and no more than SupportMost from where the clip has the hand.
+        /// 2»): the magazine in at the grip's foot, the slide as it is racked, and on it between them (the 0.12.21: a bell
+        /// each, the hand went 34 cm off and back in 0.15 s between them), coming and going over PistolBell, whole from
+        /// PistolBellTop before the first to as long after the last; as far as the reload is in, and no more than
+        /// SupportMost from where the clip has the hand.
         /// </summary>
         static readonly float[] PistolGrabs = { 2.27f, 2.79f };
         const float PistolBell = 0.25f, PistolBellTop = 0.08f;
         /// <summary>How far under the pistol's grip (its origin, in the right palm) the magazine goes in (metres).</summary>
         const float MagWell = 0.06f;
 
+        /// <summary>The pistol's slide (Military's «SM_Wep_Pistol_Slide_01»), or null.</summary>
+        static Transform SlideOf(Transform gun) =>
+            gun != null ? gun.GetComponentsInChildren<Transform>().FirstOrDefault(t => t != gun && t.name.Contains("Slide")) : null;
+
         static void PistolSupport(View v)
         {
             if (v.inHand != Held.Pistol || v.reload <= 0 || v.weapon == null || v.animator == null || !v.animator.isHuman || v.dead) return;
-            float share = 0;
-            int which = -1;
-            for (int k = 0; k < PistolGrabs.Length; k++)
-            {
-                float off = Mathf.Abs(v.reloadAt - PistolGrabs[k]);
-                float w = off <= PistolBellTop ? 1 : 1 - Mathf.SmoothStep(0, 1, (off - PistolBellTop) / (PistolBell - PistolBellTop));
-                if (w > share)
-                {
-                    share = w;
-                    which = k;
-                }
-            }
-            share *= v.reload;
+            float first = PistolGrabs[0], last = PistolGrabs[PistolGrabs.Length - 1], at = v.reloadAt;
+            float off = at < first ? first - at : at > last ? at - last : 0;
+            float share = (off <= PistolBellTop ? 1 : 1 - Mathf.SmoothStep(0, 1, (off - PistolBellTop) / (PistolBell - PistolBellTop))) * v.reload;
             if (share <= 0.001f) return;
             var gun = v.weapon;
-            // (The magazine where it rides in the gun, out or in; the slide, racked.)
-            Vector3 goal;
-            var slide = which == 1 ? gun.GetComponentsInChildren<Transform>().FirstOrDefault(t => t != gun && t.name.Contains("Slide")) : null;
+            // (The magazine where it rides in the gun, out or in (out of it, in the hand: the grip's foot, where it goes in);
+            // then over to the slide, racked.)
             var mag = MagazineOf(gun);
-            if (slide != null && slide.GetComponent<Renderer>() is Renderer sr) goal = sr.bounds.center;
-            else if (mag != null && mag.GetComponent<Renderer>() is Renderer mr && mag.parent == gun) goal = mr.bounds.center;
-            // (Out of it, in the hand: to the grip's foot, where it goes in.)
-            else goal = gun.position + gun.rotation * Vector3.down * MagWell;
+            var well = mag != null && mag.GetComponent<Renderer>() is Renderer mr && mag.parent == gun ? mr.bounds.center : gun.position + gun.rotation * Vector3.down * MagWell;
+            var goal = well;
+            if (SlideOf(gun) is Transform slide && slide.GetComponent<Renderer>() is Renderer sr)
+                goal = Vector3.Lerp(well, sr.bounds.center, Mathf.SmoothStep(0, 1, Mathf.Clamp01((at - first) / Mathf.Max(last - first, 1e-3f))));
             var a = v.animator;
             Transform shoulder = a.GetBoneTransform(HumanBodyBones.LeftUpperArm), elbow = a.GetBoneTransform(HumanBodyBones.LeftLowerArm), hand = a.GetBoneTransform(HumanBodyBones.LeftHand),
                 knuckle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);

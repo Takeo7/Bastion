@@ -4,6 +4,12 @@
 // colour map is the copy's, or the renderer's own block's (a soldier's palette: SidekickLab.OwnColours). (0.10.1's was
 // (1 − n·v)³ × 0.5: as much light over a round figure, in a band twice as wide and a less white edge; the cube's band
 // was thinner than a pixel at the game's distance, motes on a black figure, or white wire close. The review of 10/11, L-03.)
+// Far off it goes over to 0.03 + (1 − n·v) × 0.06, the same light over a round figure (0.03 + 0.06 × 1/3 = 0.3 × 1/6)
+// spread nearly evenly, from RimNear to RimFar metres from the camera. At the battle's camera (36 m, a figure some 40 px tall) the body's facets
+// come to a pixel or two, and those edge on lit at the band's peak: the light-blue motes on a dark figure were all the rim
+// (the 3D review's L-03, 10/11: none with it off, MapLab's BASTION_SONDA_NOCHE=sinborde). And its own colour there 0.12,
+// not 0.07: from that camera the squad's bodies, unmottled, were nearly the dark ground's (29 against 25 of 255), only
+// their heads read.
 Shader "Bastion/NightRim"
 {
     Properties
@@ -51,6 +57,10 @@ Shader "Bastion/NightRim"
                 float2 uv : TEXCOORD2;
             };
 
+            // (Metres from the camera: the band as it was up to RimNear, the even light from RimFar.)
+            #define RimNear 15.0
+            #define RimFar 30.0
+
             Varyings Vertex(Attributes input)
             {
                 Varyings output;
@@ -66,8 +76,10 @@ Shader "Bastion/NightRim"
                 float3 n = normalize(input.normal);
                 float3 v = normalize(GetWorldSpaceViewDir(input.world));
                 half edge = 1 - saturate(dot(n, v));
+                half far = saturate((distance(input.world, GetCameraPositionWS()) - RimNear) / (RimFar - RimNear));
+                half band = lerp(edge * edge * 0.3, 0.03 + edge * 0.06, far);
                 half3 own = SAMPLE_TEXTURE2D(_ColorMap, sampler_ColorMap, input.uv).rgb;
-                return half4((half3(0.42, 0.62, 0.8) * edge * edge * 0.3 + own * 0.07) * _Rim, 0);
+                return half4((half3(0.42, 0.62, 0.8) * band + own * lerp(0.07, 0.12, far)) * _Rim, 0);
             }
             ENDHLSL
         }

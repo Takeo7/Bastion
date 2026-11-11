@@ -46,6 +46,12 @@ namespace Bastion.Client.Units
         readonly float[] weights = new float[Anims.MotionOrder.Length];
         readonly float[] times = new float[Anims.MotionOrder.Length];
         readonly float[] paces = new float[Anims.MotionOrder.Length];
+        /// <summary>
+        /// The speed each motion last had while it was the one moved in (Motion's): what it goes on at as it fades out, not
+        /// its bare pace. A run stopping went on at a sprint's own speed under a body standing still, its feet sliding as
+        /// it eased into the idle (the 3D review's A-06, 10/11).
+        /// </summary>
+        readonly float[] speeds = Enumerable.Repeat(1f, Anims.MotionOrder.Length).ToArray();
         /// <summary>The motions whose clip holds the gun its own way (Mixamo's armed walk, run and sprint): the held clip off during them.</summary>
         readonly bool[] ownHold = new bool[Anims.MotionOrder.Length];
         /// <summary>The layers that play once (Upper, Free, Whole), by their index (the motions, the gun arm and the held rest have none).</summary>
@@ -191,6 +197,7 @@ namespace Bastion.Client.Units
             if (k < 0 || !motionClips[k].IsValid()) k = 0;
             motion = k;
             this.speed = speed;
+            speeds[k] = speed;
             motionShare = k == 0 ? 1 : Mathf.Clamp01(share);
         }
 
@@ -641,7 +648,8 @@ namespace Bastion.Client.Units
                 weights[k] = Mathf.MoveTowards(weights[k], goal, dt / Blend);
                 if (dt == 0 && k == motion && weights[k] == 0) weights[k] = 1;
                 total += weights[k];
-                times[k] += dt * (k == motion ? speed * paces[k] : paces[k]);
+                if (k == motion) speeds[k] = speed;
+                times[k] += dt * speeds[k] * paces[k];
             }
             for (int k = 0; k < weights.Length; k++) shares[k] = motionClips[k].IsValid() && total > 0 ? weights[k] / total : 0;
             float down = Mathf.Clamp01(Crouch);

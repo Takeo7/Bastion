@@ -137,11 +137,16 @@ namespace Bastion.Client.Map
             // side, that already its shoulder to the plates (with them, a third of a tile off: Gameplay 26/10).
             box = BoundsOf(body.transform, body.transform, r => true);
             size = box.size;
-            if (Vehicle == 3) Plates(model.transform, prefabOf);
+            // (Its stages timed for the load's line: MapLoad.)
+            using (MapLoad.Time("plates"))
+                if (Vehicle == 3) Plates(model.transform, prefabOf);
             plated = BoundsOf(body.transform, body.transform, r => true).size;
-            if (Vehicle == 0) CutDoors(model.transform);
-            Doors(model.transform);
-            Lamps();
+            using (MapLoad.Time("doors"))
+            {
+                if (Vehicle == 0) CutDoors(model.transform);
+                Doors(model.transform);
+            }
+            using (MapLoad.Time("lamps")) Lamps();
             built = true;
             if (snowy) Snowy(true);
         }
@@ -434,8 +439,11 @@ namespace Bastion.Client.Map
             float plateH = SizeOf(prefabOf(PlateSlit)).y / Tile * 1.15f;
             float sy = Mathf.Max(1, (maxY - minY) / (plateH > 0 ? plateH : 0.45f * 1.15f));
             // Against its sides at the windows' height, along its middle (E-15: by its whole box, the mirrors on its nose
-            // and all, they stood a third of a metre off the side, in the air past its back).
-            float halfW = (SideBetween(model, band.min.y, band.max.y, all.center.x, all.center.z, all.extents.z * 0.6f) ?? all.size.x / 2) / Tile + 0.02f;
+            // and all, they stood a third of a metre off the side, in the air past its back). Where its meshes can't be read
+            // (Town's bus isn't imported readable), its side windows' glass, as wide as its sides there (the 3D review's
+            // E-15, 10/11, read in the editor: MapLab.Planchas; its box's 1.08 tiles are its mirrors', its sides 0.89).
+            float sideX = (SideBetween(model, band.min.y, band.max.y, all.center.x, all.center.z, all.extents.z * 0.6f)
+                ?? (glass != null ? Mathf.Max(band.max.x - all.center.x, all.center.x - band.min.x) : all.size.x / 2)) / Tile;
             // The doorways' middles along it (as yet unknown: from the door leaves).
             var leaves = model.GetComponentsInChildren<Transform>(true).Where(t => System.Text.RegularExpressions.Regex.IsMatch(t.name, @"Door_0\d$")).Select(t => BoundsOf(t, body.transform, r => true).center.z / Tile).ToList();
             bool InDoorway(float z) => leaves.Any(c => Mathf.Abs(c - z) < 0.75f);
@@ -443,24 +451,29 @@ namespace Bastion.Client.Map
             root.SetParent(body.transform, false);
             // Within its own body (the 3D review's E-15, 10/11: 0.10.1's numbers were its kit bus's, 1.52 by 5.12, and on
             // Town's the end ones stood half a metre out past its back, the tall ones over its roof): along it, each side's
-            // plates no nearer its ends than half a plate and PlateMargin; up, none past its roof less PlateMargin.
+            // plates no nearer its ends than half a plate and PlateEnd; up, none past its roof less PlateMargin.
             var own = BoundsOf(model, body.transform, r => !Extra(r.name));
             // Its sides' ends at the windows' height (its bumpers and ladder stand further out below and behind, its corners
             // are rounded), where its meshes can be read; else its box's.
             var (rear, front) = EndsBetween(model, band.min.y, band.max.y, own.center.x, own.extents.x * 0.97f);
-            float bodyMin = (rear ?? own.min.z) / Tile, bodyMax = (front ?? own.max.z) / Tile, roof = own.max.y / Tile - PlateMargin;
-            float halfLong = 0;
+            // (Unread, its glass's ends: its sides at the windows' height end there, rounded past them.)
+            float bodyMin = (rear ?? (glass != null ? band.min.z : own.min.z)) / Tile, bodyMax = (front ?? (glass != null ? band.max.z : own.max.z)) / Tile, roof = own.max.y / Tile - PlateMargin;
+            float halfLong = 0, halfThick = 0;
             foreach (var key in new[] { Plate, PlateSlit })
             {
                 var probe = PutPlate(root, prefabOf, key, 0, 0, 0, 0, 1.15f, sy);
                 if (probe == null) continue;
-                halfLong = Mathf.Max(halfLong, VerticesOf(probe, body.transform).size.z / Tile / 2);
+                var probed = VerticesOf(probe, body.transform).size / Tile / 2;
+                halfLong = Mathf.Max(halfLong, probed.z);
+                halfThick = Mathf.Max(halfThick, probed.x);
                 // (Out of the body at once: Destroy waits for the frame's end, and its box is measured before then.)
                 probe.gameObject.SetActive(false);
                 probe.SetParent(null, false);
                 DestroyNow(probe.gameObject);
             }
-            float from = Mathf.Max(minZ + 0.35f, bodyMin + halfLong + PlateMargin), to = Mathf.Min(maxZ - 0.2f, bodyMax - halfLong - PlateMargin);
+            float from = Mathf.Max(minZ + 0.35f, bodyMin + halfLong + PlateEnd), to = Mathf.Min(maxZ - 0.2f, bodyMax - halfLong - PlateEnd);
+            // (Each plate's inner face a centimetre or so off its side.)
+            float halfW = sideX + halfThick + PlateGap;
             float first = float.NaN, last = float.NaN, top = 0;
             // Kept below the roof: squashed from its foot (its holder's origin) if it reached past it.
             void UnderRoof(Transform plate)
@@ -488,7 +501,7 @@ namespace Bastion.Client.Map
             foreach (float x in new[] { -0.55f, 0.55f }) UnderRoof(PutPlate(root, prefabOf, PlateSlit, x, windowY - 0.35f, nose - 0.15f, Mathf.PI / 2, 1.3f, 1));
             for (float z = -2.6f; z <= 2.6f + 1e-4f; z += 1.3f) PutPlate(root, prefabOf, PlateRoof, Mathf.RoundToInt(z) % 2 * 0.2f, all.size.y / Tile + 0.01f, z, 0.05f * z, 1.1f, 1);
             var drawn = VerticesOf(root, body.transform);
-            Debug.Log(FormattableString.Invariant($"[lata] plates at x ±{halfW:0.00} (its box ±{all.size.x / Tile / 2:0.00}), z {first - halfLong:0.00}..{last + halfLong:0.00} (drawn {drawn.min.z / Tile:0.00}..{drawn.max.z / Tile:0.00}; body {bodyMin:0.00}..{bodyMax:0.00}, its box {own.min.z / Tile:0.00}..{own.max.z / Tile:0.00}), top {top:0.00} (roof {roof + PlateMargin:0.00})"));
+            Debug.Log(FormattableString.Invariant($"[lata] plates at x ±{halfW:0.00} (its side ±{sideX:0.00}, its box ±{all.size.x / Tile / 2:0.00}), z {first - halfLong:0.00}..{last + halfLong:0.00} (drawn {drawn.min.z / Tile:0.00}..{drawn.max.z / Tile:0.00}; body {bodyMin:0.00}..{bodyMax:0.00}, its box {own.min.z / Tile:0.00}..{own.max.z / Tile:0.00}), top {top:0.00} (roof {roof + PlateMargin:0.00})"));
         }
 
         /// <summary>
@@ -541,8 +554,12 @@ namespace Bastion.Client.Map
             return most;
         }
 
-        /// <summary>How far the side plates keep in from its body's ends, and below its roof (tiles; E-15).</summary>
-        const float PlateMargin = 0.03f;
+        /// <summary>
+        /// How far the side plates keep below its roof (tiles; E-15), off its sides, and in from its sides' ends: the bus's
+        /// corners round in over their last 0.1 (0.85 to 0.79 from its middle, MapLab.Planchas), and a board 12 cm thick
+        /// that reached them stood out past its back, seen along it.
+        /// </summary>
+        const float PlateMargin = 0.03f, PlateGap = 0.01f, PlateEnd = 0.12f;
 
         /// <summary>
         /// A kit model (centred on its box, on the floor) at (x, y, z) of 0.10.1's body, turned `yaw` (counter-clockwise from
@@ -699,7 +716,34 @@ namespace Bastion.Client.Map
         {
             wheelAngle += tiles * Tile / Mathf.Max(wheelRadius, 0.05f) * Mathf.Rad2Deg;
             for (int i = 0; i < wheels.Count; i++) wheels[i].localRotation = wheelsAt[i] * Quaternion.Euler(wheelAngle, 0, 0);
+            Kick(tiles);
         }
+
+        /// <summary>
+        /// The effects its wheels kick dust up with (the base's: its earth track; the 3D review's L-17, 10/11); none in a
+        /// battle, where it goes over the tarmac.
+        /// </summary>
+        [NonSerialized] public Effects.Fx DustFx;
+        float dusted;
+
+        /// <summary>
+        /// Dust off its back every DustEvery tiles it goes, with DustFx: two puffs a wheel's, bigger and longer lived than a
+        /// footstep's (Fx.Dust's, a few specks from the clearing's camera).
+        /// </summary>
+        void Kick(float tiles)
+        {
+            if (DustFx == null) return;
+            dusted += Mathf.Abs(tiles);
+            while (dusted >= DustEvery)
+            {
+                dusted -= DustEvery;
+                var back = transform.position - transform.forward * (Length / 2 * Tile);
+                DustFx.Puffs(new Vector3(back.x, transform.position.y + 0.1f * Tile, back.z), Effects.Fx.Hex(0x9a8a72), 2, size: 0.5f, spread: 0.4f, rise: 0.3f, away: 0.3f, life: 1.8f, grow: 1.6f);
+            }
+        }
+
+        /// <summary>How far it goes between two puffs of dust (tiles; L-17).</summary>
+        const float DustEvery = 0.5f;
 
         /// <summary>
         /// Its doors shut, its lights on, then away along its nose `distance` tiles, faster and faster, and gone (back where

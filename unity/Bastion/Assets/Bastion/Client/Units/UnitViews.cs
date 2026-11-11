@@ -29,9 +29,12 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// Metres a second each clip's feet cover at its own speed on our characters (gaits.ts CLIP_SPEED), the living's
-        /// (Base Locomotion) and the dead's (Goblin Locomotion).
+        /// (Base Locomotion) and the dead's (Goblin Locomotion). The living's crouched walk measured again (ArmedClip's way),
+        /// 1.38 not 1.48: one crouched slid 8 cm a step as it stopped (the 3D review's A-06, 10/11; BASTION_ZANCADA_ANTES=1,
+        /// the old one).
         /// </summary>
-        static readonly Dictionary<string, float> LivingClip = new Dictionary<string, float> { ["walk"] = 1.46f, ["run"] = 2.4f, ["sprint"] = 5.95f, ["crouchWalk"] = 1.48f };
+        static readonly Dictionary<string, float> LivingClip = new Dictionary<string, float> { ["walk"] = 1.46f, ["run"] = 2.4f, ["sprint"] = 5.95f,
+            ["crouchWalk"] = Environment.GetEnvironmentVariable("BASTION_ZANCADA_ANTES") == "1" ? 1.48f : 1.38f };
         static readonly Dictionary<string, float> DeadClip = new Dictionary<string, float> { ["walk"] = 1.78f, ["run"] = 2.95f, ["sprint"] = 5.6f, ["crouchWalk"] = 1.48f };
         /// <summary>Tiles a character's metre covers: a tile is 1.5 m, the characters drawn 1.125 times larger.</summary>
         const float TilesPerMetre = 1 / MapSpace.Tile * Figures.CharacterScale;
@@ -63,8 +66,19 @@ namespace Bastion.Client.Units
         /// <summary>Whether `template` moves like the dead (their clips, Goblin Locomotion's).</summary>
         public static bool MovesDead(string template) => Dead.ContainsKey(template ?? "");
 
-        /// <summary>Mixamo's clips a soldier moves in with a gun (gaits.ts ARMED_CLIP_SPEED): slow ones, with long strides.</summary>
-        static readonly Dictionary<string, float> ArmedClip = new Dictionary<string, float> { ["rifleWalk"] = 0.54f, ["rifleRun"] = 1.84f, ["rifleSprint"] = 2.89f };
+        /// <summary>BASTION_ZANCADA_ANTES=1: the 0.10.1's clip speeds and the legs not held as a walk stops (the labs' «before» of A-06).</summary>
+        public static readonly bool OldStride = System.Environment.GetEnvironmentVariable("BASTION_ZANCADA_ANTES") == "1";
+
+        /// <summary>
+        /// Mixamo's clips a soldier moves in with a gun (gaits.ts ARMED_CLIP_SPEED), measured again on our figures as
+        /// LivingClip's are (ClipProbe.Alone, BASTION_PIES=1: how fast the foot it stands on goes back, at the clip's own
+        /// speed): twice 0.10.1's 0.54, 1.84 and 2.89, which played them twice as fast as the ground went by, the foot
+        /// it stood on sliding back some 40 cm a step and seven steps a second sprinting (Synty's walk and run measured
+        /// so came to Gaits' 1.46 and 2.4). The 3D review's A-06, 10/11: the foot slid on as a run stopped.
+        /// </summary>
+        static readonly Dictionary<string, float> ArmedClip = OldStride
+            ? new Dictionary<string, float> { ["rifleWalk"] = 0.54f, ["rifleRun"] = 1.84f, ["rifleSprint"] = 2.89f }
+            : new Dictionary<string, float> { ["rifleWalk"] = 1.09f, ["rifleRun"] = 3.79f, ["rifleSprint"] = 5.84f };
 
         /// <summary>How much faster than Synty's clip for `motion` clip `id` plays for its feet to keep the same pace (gaits.ts armedPace).</summary>
         public static float ArmedPace(string motion, string id) =>
@@ -269,6 +283,15 @@ namespace Bastion.Client.Units
             /// <summary>The gun in its right hand's frame as a search began, and its upper chest's turn then in the root's frame.</summary>
             public Vector3 searchGunAt;
             public Quaternion searchGun = Quaternion.identity, searchChest = Quaternion.identity;
+            /// <summary>
+            /// Seconds since a walk stopped while its legs ease into the idle (LandFeet; below 0, none), and where each foot
+            /// was then in its root's frame (the 3D review's A-06, 10/11).
+            /// </summary>
+            public float landing = -1;
+            public Vector3 landFromL, landFromR;
+            /// <summary>Its right hand then, in its upper chest's frame: where LowReady takes the gun from (the 3D review's A-18, 10/11).</summary>
+            public Vector3 searchHandAt;
+            public Quaternion searchHand = Quaternion.identity;
             /// <summary>On a ladder's rungs (ClimbPose), on a window's sill (a landing's crouch kept off it).</summary>
             public bool climbing, onSill;
             /// <summary>Its night rim on (UnitViews.Rim): over which renderers of which body.</summary>
@@ -475,6 +498,7 @@ namespace Bastion.Client.Units
                 }
                 PistolKick(v, dt);
                 v.anim?.Step(dt);
+                LandFeet(v, dt);
                 bool dropping = Drop(v, dt);
                 if (v.aim > 0 && v.inHand == Held.Rifle)
                 {
@@ -1121,7 +1145,10 @@ namespace Bastion.Client.Units
             var view = new View { id = u.Id, template = u.Template, team = u.Team, root = root, seed = u.CampaignId ?? (u.Team == "xcom" ? u.Name : u.Id), armsKey = ArmsKey(u), oddPhase = (made++ & 1) == 1 };
             view.deadKind = Gaits.MovesDead(u.Template);
             if (view.deadKind) (view.dealt, view.map) = (TurnOf(u), state?.MapId);
+            // (BASTION_LOG_BULK=1: how long its figure took to make, and all of it with its weapons: a line [bulk] make.)
+            var making = BulkLog ? System.Diagnostics.Stopwatch.StartNew() : null;
             var model = FigureOf(u, view);
+            double figureMs = making?.Elapsed.TotalMilliseconds ?? 0;
             if (model != null)
             {
                 model.transform.SetParent(root, false);
@@ -1159,6 +1186,7 @@ namespace Bastion.Client.Units
                 view.body = model.transform;
             }
             else view.body = StandIn(u, root);
+            if (making != null) Debug.Log(FormattableString.Invariant($"[bulk] make {u.Id} {u.Template} figure={figureMs:0.00} all={making.Elapsed.TotalMilliseconds:0.00} ms"));
             Figures.Register(u.Id, root, view.animator != null && view.animator.isHuman ? view.animator.GetBoneTransform(HumanBodyBones.Head) : root.Find("cabeza"));
             if (u.Facing is double f) root.rotation = Quaternion.Euler(0, YawOf(f), 0);
             return view;
@@ -2008,9 +2036,10 @@ namespace Bastion.Client.Units
         /// <summary>
         /// Plain steps one after another are walked as one way (unitViews.ts, playtest 23/10 #6: a jolt at every tile and a
         /// sharp turn at each corner): its corners rounded off within this of the tile's middle (tiles), this many samples
-        /// round; and one going by another on a tile goes this far to the right of its way there (walkPlan.ts passes).
+        /// round; and one going by another on a tile goes this far to the right of its way there (walkPlan.ts passes: 0.24;
+        /// the 3D review's A-25, 10/11: two crossing came within 0.27 of a tile, half into each other, CombatLab.Andar).
         /// </summary>
-        const float WalkRound = 0.38f, Swerve = 0.24f;
+        const float WalkRound = 0.38f, Swerve = 0.3f;
         const int WalkRoundSteps = 8;
         /// <summary>
         /// Seconds a walk slows to a stop over at its end (Walk), of its last stretch at most StopShare, its clip down to
@@ -2118,12 +2147,64 @@ namespace Bastion.Client.Units
             v.root.position = MapSpace.StandAt(state, path[path.Count - 1]);
             v.walking = false;
             v.onSill = false;
+            // (Its legs held as they are as it eases into its idle (FigureAnimator: a motion going out keeps the speed it
+            // had): at StopLegs, the foot it had come down on slid on 36 cm under a body standing still. A-06, 10/11.)
+            if (!StopOff && !Gaits.OldStride) v.anim?.Motion(gait.motion, 0);
+            StartLanding(v);
             if (v.risen)
             {
                 v.risen = false;
                 if (state.Units.FirstOrDefault(x => x.Id == id) is Unit u) Pose(v, u);
             }
             v.anim?.Motion(IdleOf(v));
+        }
+
+        /// <summary>
+        /// The 3D review's A-06 (10/11): a walk stopped mid-stride eases into the idle over the motions' blend (FigureAnimator,
+        /// LandSeconds), each foot going from where the stride had it to where it stands, along the ground: a sprint's front
+        /// foot slid 30–50 cm back as it came down. Lifted on the way, as far as it has to go (LandFull for all of LandLift, a
+        /// bell over the blend), it steps there. The legs by two-bone IK, the knees bent the way they were, the feet turned as
+        /// they were. BASTION_SIN_PASO=1, none (the labs' «before»).
+        /// </summary>
+        const float LandSeconds = 0.35f, LandLift = 0.1f, LandFull = 0.2f;
+        public static bool LandOff = Environment.GetEnvironmentVariable("BASTION_SIN_PASO") == "1";
+
+        static void StartLanding(View v)
+        {
+            var a = v.animator;
+            if (LandOff || Gaits.OldStride || a == null || !a.isHuman || !(a.GetBoneTransform(HumanBodyBones.LeftFoot) is Transform l) || !(a.GetBoneTransform(HumanBodyBones.RightFoot) is Transform r)) return;
+            v.landing = 0;
+            v.landFromL = v.root.InverseTransformPoint(l.position);
+            v.landFromR = v.root.InverseTransformPoint(r.position);
+        }
+
+        void LandFeet(View v, float dt)
+        {
+            if (v.landing < 0) return;
+            v.landing += dt;
+            float u = v.landing / LandSeconds;
+            var a = v.animator;
+            if (u >= 1 || v.walking || v.dead || a == null)
+            {
+                v.landing = -1;
+                return;
+            }
+            foreach (var (thighBone, shinBone, footBone, from) in new[] { (HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, v.landFromL),
+                (HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, v.landFromR) })
+            {
+                Transform thigh = a.GetBoneTransform(thighBone), shin = a.GetBoneTransform(shinBone), foot = a.GetBoneTransform(footBone);
+                if (thigh == null || shin == null || foot == null) continue;
+                // (How far it has come along the ground since the stop, and so how far it goes in all: the blend is even.)
+                var now = v.root.InverseTransformPoint(foot.position);
+                float moved = new Vector2(now.x - from.x, now.z - from.z).magnitude * v.root.lossyScale.x;
+                float travel = moved / Mathf.Max(u, 0.15f);
+                float lift = Mathf.Clamp01(travel / LandFull) * LandLift * Mathf.Sin(Mathf.PI * u) * (v.body != null ? v.body.lossyScale.x / Figures.CharacterScale : 1);
+                if (lift < 0.002f) continue;
+                var knee = Vector3.ProjectOnPlane(shin.position - thigh.position, foot.position - thigh.position) + v.root.forward * 0.05f;
+                var turn = foot.rotation;
+                Reach(a, thighBone, shinBone, footBone, foot.position + Vector3.up * lift, knee, 0.005f);
+                foot.rotation = turn;
+            }
         }
 
         /// <summary>A walk's way through `points` (where it is, then the tiles' middles), its corners rounded (unitViews.ts roundedWay).</summary>

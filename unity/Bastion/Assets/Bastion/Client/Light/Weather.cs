@@ -335,6 +335,11 @@ namespace Bastion.Client
             var ray = new Ray(eye.transform.position, eye.transform.forward);
             float along = ray.direction.y < -1e-3f ? -ray.origin.y / ray.direction.y : 40;
             var target = ray.GetPoint(along);
+            // What falls by the camera fades (ClimaGota): within so much of the way to the ground it looks at, no nearer
+            // than 4 to 12 m (the nearest camera's, 13.5 m off). The 3D review's L-13, 10/11: with 4 to 12 m only, from the
+            // battle's first camera (36 m) the storm's streaks between it and the ground, 12 to 22 m up, still hid 7 % of the
+            // picture; the rain is the far ones, on the ground it looks at.
+            Shader.SetGlobalVector("_ClimaNear", new Vector4(Mathf.Max(NearFrom, NearShare.x * along), Mathf.Max(NearTo, NearShare.y * along), 0, 0));
             float wide = Mathf.Max(30, along * 1.8f);
             bool first = span == 0;
             bool resize = always || first || Mathf.Abs(wide - span) > span * 0.1f;
@@ -354,6 +359,10 @@ namespace Bastion.Client
                 if (first && !always) system.Simulate(fall.life + 0.5f, true, true, false);
             }
         }
+
+        /// <summary>Where what falls by the camera fades: its shares of the way to the ground looked at, and the least (m; L-13).</summary>
+        static readonly Vector2 NearShare = new Vector2(0.35f, 0.7f);
+        const float NearFrom = 4, NearTo = 12;
 
         void Update() => Step(Time.deltaTime);
 

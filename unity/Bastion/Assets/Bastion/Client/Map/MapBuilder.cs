@@ -117,6 +117,87 @@ namespace Bastion.Client.Map
     }
 
     /// <summary>
+    /// What each stage of a map's build takes (ms), logged once it is whole as «[carga] …» (MapView.Build): the city's mission
+    /// loaded half a second slower in 0.12.20 (Gameplay, 10/11, BASTION_MEDIR=ciudad: its longest frame from 2.9–3.1 s to
+    /// 3.6 s), and the map is most of that frame. Stages nest (the ground's frame, its river): each with its parts in
+    /// brackets, and «rest» for what none of them took. A stage timed with no build begun counts for nothing.
+    /// </summary>
+    public static class MapLoad
+    {
+        sealed class Stage
+        {
+            public string Name;
+            public double Ms;
+            public readonly List<Stage> Parts = new List<Stage>();
+        }
+
+        sealed class Lap : IDisposable
+        {
+            readonly Stage stage;
+            readonly double from;
+            bool done;
+
+            public Lap(Stage stage, double from)
+            {
+                this.stage = stage;
+                this.from = from;
+            }
+
+            public void Dispose()
+            {
+                if (done || stage == null) return;
+                done = true;
+                stage.Ms += clock.Elapsed.TotalMilliseconds - from;
+                open.Remove(stage);
+            }
+        }
+
+        static Stage top;
+        static readonly List<Stage> open = new List<Stage>();
+        static readonly System.Diagnostics.Stopwatch clock = new System.Diagnostics.Stopwatch();
+        static readonly Lap Nothing = new Lap(null, 0);
+
+        /// <summary>A map's build begins: the stages timed from now on go in its line.</summary>
+        public static void Begin()
+        {
+            top = new Stage { Name = "" };
+            open.Clear();
+            open.Add(top);
+            clock.Restart();
+        }
+
+        /// <summary>Stage `name` (of the one open now), timed till it is disposed: `using (MapLoad.Time("…"))`.</summary>
+        public static IDisposable Time(string name)
+        {
+            if (top == null || open.Count == 0) return Nothing;
+            var stage = open[open.Count - 1].Parts.FirstOrDefault(p => p.Name == name);
+            if (stage == null) open[open.Count - 1].Parts.Add(stage = new Stage { Name = name });
+            open.Add(stage);
+            return new Lap(stage, clock.Elapsed.TotalMilliseconds);
+        }
+
+        /// <summary>The build's line (`what`: which map), and its stages forgotten.</summary>
+        public static void End(string what)
+        {
+            if (top == null) return;
+            double total = clock.Elapsed.TotalMilliseconds;
+            top.Ms = total;
+            Debug.Log($"[carga] map {what}: {Ms(total)} ms: {Parts(top)}");
+            top = null;
+            open.Clear();
+        }
+
+        static string Ms(double ms) => ms.ToString(ms < 10 ? "0.0" : "0", System.Globalization.CultureInfo.InvariantCulture);
+
+        static string Parts(Stage stage)
+        {
+            double rest = stage.Ms - stage.Parts.Sum(p => p.Ms);
+            var parts = stage.Parts.Select(p => p.Parts.Count > 0 ? $"{p.Name} {Ms(p.Ms)} ({Parts(p)})" : $"{p.Name} {Ms(p.Ms)}");
+            return string.Join(", ", rest >= 0.5 ? parts.Append($"rest {Ms(rest)}") : parts);
+        }
+    }
+
+    /// <summary>
     /// The map from the state, 0.10.1's mapView.ts: the ground (UI's GroundView), the buildings in Synty's kit pieces
     /// (WallLayout, WallsView) with their floors, roofs and stairs (BuildingSurfaces), and the decor as Synty's props as
     /// 0.10.1 picked, turned and fitted them. `prefabOf` gives a prop's model by its Synty name.
@@ -311,43 +392,63 @@ namespace Bastion.Client.Map
             }
             Roofs = new GameObject("Tejados").transform;
             Roofs.SetParent(root, false);
-            Terrain();
-            plan = new BuildingPlan(terrain);
-            MedicalFinish();
-            ground = new GroundView();
-            ground.Build(terrain, plan, Storeys[0]);
-            BuildingParts();
-            wallsView = new WallsView(walls, s.Width, (parent, id) => Place(parent, id, Vector3.zero, 0), LooksOf, plan);
-            wallsView.Lay(WallLayout.Of(terrain, plan));
-            for (int k = 0; k < levels; k++)
+            // (Each stage timed for the load's line: MapLoad.)
+            using (MapLoad.Time("plan"))
             {
-                int n = TilesOf(k).Count;
-                var done = new HashSet<int>();
-                for (int i = 0; i < n; i++) Decor(k, i, done);
+                Terrain();
+                plan = new BuildingPlan(terrain);
+                MedicalFinish();
             }
-            SeparatePileups();
-            DrawPieces();
-            DrawSiege();
-            DrawDropped();
-            Woods(null);
-            Beyond();
-            Furnish();
-            Dressing();
-            Night();
+            using (MapLoad.Time("ground"))
+            {
+                ground = new GroundView();
+                ground.Build(terrain, plan, Storeys[0]);
+            }
+            using (MapLoad.Time("buildings")) BuildingParts();
+            using (MapLoad.Time("walls"))
+            {
+                wallsView = new WallsView(walls, s.Width, (parent, id) => Place(parent, id, Vector3.zero, 0), LooksOf, plan);
+                wallsView.Lay(WallLayout.Of(terrain, plan));
+            }
+            using (MapLoad.Time("decor"))
+                for (int k = 0; k < levels; k++)
+                {
+                    int n = TilesOf(k).Count;
+                    var done = new HashSet<int>();
+                    for (int i = 0; i < n; i++) Decor(k, i, done);
+                }
+            using (MapLoad.Time("pileups")) SeparatePileups();
+            using (MapLoad.Time("base"))
+            {
+                DrawPieces();
+                DrawSiege();
+            }
+            using (MapLoad.Time("dropped")) DrawDropped();
+            using (MapLoad.Time("base"))
+            {
+                Woods(null);
+                Beyond();
+            }
+            using (MapLoad.Time("furnish")) Furnish();
+            using (MapLoad.Time("dressing")) Dressing();
+            using (MapLoad.Time("night")) Night();
             // A winter's map: the snow on what faces up (snow.ts).
             if (Mood.Snowy(s))
-            {
-                snow = SnowCover.Make(root, s, plan, prefabOf);
-                SnowCover.Mark(root, plan, s, GroundPlane());
-            }
+                using (MapLoad.Time("snow"))
+                {
+                    snow = SnowCover.Make(root, s, plan, prefabOf);
+                    SnowCover.Mark(root, plan, s, GroundPlane());
+                }
             // The animals about it (Fauna, Gameplay 1/11): only on the screen. Their tops set (BuildingParts), the crows can stand on the roofs.
-            if (WithFauna) Fauna.Make(root, s, plan, prefabOf);
+            if (WithFauna)
+                using (MapLoad.Time("fauna")) Fauna.Make(root, s, plan, prefabOf);
             // What burns all the mission long (GameState.fires, 1/11): flames, smoke and soot (its light by night is NightLights').
             // (Made with no fire too: a molotov's are lit as the battle goes, FireView.Light.)
-            FireView.Make(root, s);
+            using (MapLoad.Time("fire")) FireView.Make(root, s);
             // Rain or snow (GameState.weather, 1/11): what falls, the wet and the snow lying (Weather; its sky is Mood.For's).
-            Weather.Make(root, s, plan);
-            if (JoinStill) Still();
+            using (MapLoad.Time("weather")) Weather.Make(root, s, plan);
+            if (JoinStill)
+                using (MapLoad.Time("still")) Still();
         }
 
         /// <summary>Whether a map built has its still things joined (Still); a lab may weigh it without.</summary>
@@ -1283,7 +1384,7 @@ namespace Bastion.Client.Map
                 foreach (int j in thing.Tiles)
                     if (onTile.TryGetValue(Key(k, j), out var standing))
                         foreach (var o in standing.Where(o => o != null && o.transform.parent == props[k]).ToList()) Drop(o);
-                Own(Thing(props[k], thing, floor), k, thing.Tiles);
+                using (MapLoad.Time("things")) Own(Thing(props[k], thing, floor), k, thing.Tiles);
                 return;
             }
             if (Block(k, i, look, tiles, decor, done)) return;

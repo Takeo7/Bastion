@@ -8,7 +8,8 @@ namespace Bastion.Client.Map
 {
     /// <summary>
     /// The outline drawn (UI's; FrameArt says what it is): its props merged by chunks of the map (and past its edge), each
-    /// casting a shadow or not as FrameArt says; its boxes and wedges in one mesh of flat colours, its water in another.
+    /// casting a shadow or not as FrameArt says, but for its trees near what is played (Loose), in clumps of their own so
+    /// their crowns fade as the map's do (TreeFade); its boxes and wedges in one mesh of flat colours, its water in another.
     /// Built once a map: the outline never changes.
     /// </summary>
     public static class FrameView
@@ -16,17 +17,68 @@ namespace Bastion.Client.Map
         /// <summary>Tiles a side of a chunk of the outline's props.</summary>
         const int Chunk = 16;
 
+        /// <summary>
+        /// How near what is played (tiles, either way) the outline's trees with a crown stand apart (in clumps, LooseCell),
+        /// named as TreeFade looks for them (its Crowns), not merged into their chunk: on the country's and the facilities'
+        /// maps the squad began among them, under crowns that never faded (the 3D review's E-05, Arturo's choice B, 10/11:
+        /// the crowns faded over the whole squad by then, but those were the outline's, merged by chunks, and TreeFade found
+        /// none of them; on facility-2-hack all its pines are the outline's).
+        /// </summary>
+        const int Loose = 6;
+        /// <summary>
+        /// Tiles a side of the clumps those trees are merged in, each faded as one (TreeFade): one by one, 1068 trees on
+        /// wilds-5-recovery, a renderer each more, cost 0.45 ms a frame on the Mac in «Alto» (RendimientoLab, campo).
+        /// </summary>
+        const int LooseCell = 2;
+        /// <summary>BASTION_MARCO_JUNTO=1: all of them merged as before (a lab weighs what they cost: RendimientoLab, E-05).</summary>
+        static readonly bool AllMerged = System.Environment.GetEnvironmentVariable("BASTION_MARCO_JUNTO") == "1";
+
         /// <summary>The outline of `s` under `parent` ("Marco"); null if the map has none.</summary>
         public static GameObject Build(GameState s, PropParts parts, Transform parent)
         {
             if (s.Frame == null || s.Frame.Count == 0) return null;
-            var (props, shapes) = FrameArt.Dress(s);
+            List<FrameArt.Dressing> props;
+            List<FrameArt.Shape> shapes;
+            using (MapLoad.Time("dress")) (props, shapes) = FrameArt.Dress(s);
             var root = new GameObject("Marco");
             root.transform.SetParent(parent, false);
-            foreach (var chunk in props.GroupBy(d => (Mathf.FloorToInt(d.Matrix.m03 / Chunk), Mathf.FloorToInt(d.Matrix.m23 / Chunk))))
-                parts.Merge(root.transform, $"Trozo {chunk.Key.Item1},{chunk.Key.Item2}", chunk.Select(d => (d.Id, PropParts.InMetres(d.Matrix), d.Cast)));
-            Shapes(root.transform, "Formas", shapes.Where(x => x.Form != FrameArt.Water).ToList(), "FrameShape", true);
-            Shapes(root.transform, "Agua", shapes.Where(x => x.Form == FrameArt.Water).ToList(), "FrameWater", false);
+            var at = MapOutline.FrameOf(s);
+            // How near what is played a prop stands (tiles, Chebyshev, Loose + 1 if further).
+            int Off(FrameArt.Dressing d)
+            {
+                int tx = Mathf.FloorToInt(d.Matrix.m03), ty = Mathf.FloorToInt(d.Matrix.m23);
+                int best = Loose + 1;
+                for (int y = Mathf.Max(0, ty - Loose); y <= Mathf.Min(s.Height - 1, ty + Loose); y++)
+                    for (int x = Mathf.Max(0, tx - Loose); x <= Mathf.Min(s.Width - 1, tx + Loose); x++)
+                        if (at[y * s.Width + x] < 0) best = Mathf.Min(best, Mathf.Max(Mathf.Abs(x - tx), Mathf.Abs(y - ty)));
+                return best;
+            }
+            List<int> off;
+            using (MapLoad.Time("near")) off = props.Select(d => TreeFade.Crowns.Contains(d.Id) && !AllMerged ? Off(d) : Loose + 1).ToList();
+            var loose = props.Where((d, i) => off[i] <= Loose).ToList();
+            // By clumps of LooseCell tiles, each named as its first tree and put where they stand (their middle, as a map's
+            // tree has its place: what TreeFade reads), their meshes merged round it.
+            int clumps = 0;
+            using (MapLoad.Time("clumps"))
+                foreach (var clump in loose.GroupBy(d => (Mathf.FloorToInt(d.Matrix.m03 / LooseCell), Mathf.FloorToInt(d.Matrix.m23 / LooseCell))))
+                {
+                    var ms = clump.Select(d => PropParts.InMetres(d.Matrix)).ToList();
+                    var tree = new GameObject(clump.First().Id).transform;
+                    tree.SetParent(root.transform, false);
+                    var middle = ms.Aggregate(Vector3.zero, (a, m) => a + (Vector3)m.GetColumn(3)) / ms.Count;
+                    tree.localPosition = new Vector3(middle.x, ms.Min(m => m.m13), middle.z);
+                    parts.Merge(tree, "partes", clump.Select((d, i) => (d.Id, Matrix4x4.Translate(-tree.localPosition) * ms[i], d.Cast)));
+                    clumps++;
+                }
+            Debug.Log($"[map] outline: {loose.Count} trees apart in {clumps} clumps (within {Loose} tiles of play), {props.Count - loose.Count} props merged");
+            using (MapLoad.Time("chunks"))
+                foreach (var chunk in props.Where((d, i) => off[i] > Loose).GroupBy(d => (Mathf.FloorToInt(d.Matrix.m03 / Chunk), Mathf.FloorToInt(d.Matrix.m23 / Chunk))))
+                    parts.Merge(root.transform, $"Trozo {chunk.Key.Item1},{chunk.Key.Item2}", chunk.Select(d => (d.Id, PropParts.InMetres(d.Matrix), d.Cast)));
+            using (MapLoad.Time("shapes"))
+            {
+                Shapes(root.transform, "Formas", shapes.Where(x => x.Form != FrameArt.Water).ToList(), "FrameShape", true);
+                Shapes(root.transform, "Agua", shapes.Where(x => x.Form == FrameArt.Water).ToList(), "FrameWater", false);
+            }
             return root;
         }
 

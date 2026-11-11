@@ -32,16 +32,24 @@ namespace Bastion.Client.Units
                 v.anim.ArmRest(catalog.Clip(RestOf(v)), 0, 0.2f);
             }
             v.anim.Motion("crouchIdle", 1, 0.6f);
+            // (Down on a knee and up again, Mixamo's «Kneeling Down» and «Standing» over the whole body, in the same time all
+            // told: crouched 0.6, the shoulder stayed some 1.15 m up and the hand never got under 0.6 m. The 3D review's
+            // A-18, 10/11, its point 4; BASTION_REGISTRO_AGACHADO=1, the crouch as before.)
+            var kneel = KneelOff ? null : FigureCatalog.Load();
+            AnimationClip down = kneel?.Clip("kneelDown"), up = kneel?.Clip("kneelUp");
+            bool knelt = down != null && up != null && v.animator != null && v.animator.isHuman;
+            float goDown = knelt ? SearchDown : 0.22f, stay = knelt ? 0.97f - SearchDown - SearchRise : 0.45f, goUp = knelt ? SearchRise : SearchUp;
+            if (knelt) v.anim.PlayWholePart(down, KneelSpan.from, KneelSpan.to, KneelFade, false, (KneelSpan.to - KneelSpan.from) / SearchDown);
             bool settled = false;
             try
             {
-                for (float t = 0; t < 0.22f; t += Time.deltaTime)
+                for (float t = 0; t < goDown; t += Time.deltaTime)
                 {
-                    v.search = Mathf.SmoothStep(0, 1, t / 0.22f);
+                    v.search = Mathf.SmoothStep(0, 1, t / goDown);
                     await Awaitable.NextFrameAsync(ct);
                 }
                 v.search = 1;
-                await Awaitable.WaitForSecondsAsync(0.45f, ct);
+                await Awaitable.WaitForSecondsAsync(stay, ct);
                 v.anim.Motion(IdleOf(v));
                 // (The rest with both hands on the gun back as it gets up, not after: the gun went from level to upright
                 // towards the left hand hanging, in a frame, as the search let go of it. And up over SearchUp, not 0.18 s.
@@ -51,14 +59,23 @@ namespace Bastion.Client.Units
                     Settle(v, 0.2f);
                     settled = true;
                 }
-                for (float t = 0; t < SearchUp; t += Time.deltaTime)
+                if (knelt) v.anim.PlayWholePart(up, StandSpan.from, StandSpan.to, KneelFade, false, (StandSpan.to - StandSpan.from) / SearchRise);
+                bool stood = false;
+                for (float t = 0; t < goUp; t += Time.deltaTime)
                 {
-                    v.search = 1 - Mathf.SmoothStep(0, 1, t / SearchUp);
+                    v.search = 1 - Mathf.SmoothStep(0, 1, t / goUp);
+                    // (Out of «Standing» by the time the search lets go of the gun: its empty hand had had the gun a moment.)
+                    if (knelt && !stood && t >= goUp - KneelFade)
+                    {
+                        v.anim.StopWhole(KneelFade);
+                        stood = true;
+                    }
                     await Awaitable.NextFrameAsync(ct);
                 }
             }
             finally
             {
+                if (knelt) v.anim?.StopWhole(KneelFade);
                 v.search = 0;
                 v.searchAt = null;
                 if (!v.walking && !v.feeding && !v.dead) v.anim?.Motion(IdleOf(v));
@@ -72,6 +89,15 @@ namespace Bastion.Client.Units
 
         /// <summary>Seconds a search takes to get back up (0.18 in 0.10.1's rummage; the 3D review's A-18, 10/11).</summary>
         const float SearchUp = 0.3f;
+        /// <summary>
+        /// A search on a knee (Rummage; the 3D review's A-18, 10/11): «Kneeling Down» from standing to down on the knee
+        /// (KneelSpan, seconds of it: the hips from 0.95 to 0.31 m) in SearchDown, «Standing» from down to upright (StandSpan:
+        /// 0.31 to 0.97 m) in SearchRise, each in and out over KneelFade (ClipProbe.Alone, BASTION_CABEZA=1 BASTION_MANOS=1).
+        /// </summary>
+        static readonly (float from, float to) KneelSpan = (1.0f, 2.0f), StandSpan = (0.2f, 1.3f);
+        const float SearchDown = 0.32f, SearchRise = 0.32f, KneelFade = 0.12f;
+        /// <summary>BASTION_REGISTRO_AGACHADO=1: a search crouched, as before (the labs' «before»).</summary>
+        public static bool KneelOff = System.Environment.GetEnvironmentVariable("BASTION_REGISTRO_AGACHADO") == "1";
         /// <summary>How far out across the floor from under its shoulder a searching hand goes at most (metres), and how far it moves to and fro to its side (of a figure's scale 1).</summary>
         const float SearchReach = 0.55f, SearchSway = 0.1f;
 
@@ -218,6 +244,8 @@ namespace Bastion.Client.Units
             v.searchGunAt = Quaternion.Inverse(hand.rotation) * (v.weapon.position - hand.position);
             v.searchGun = Quaternion.Inverse(hand.rotation) * v.weapon.rotation;
             v.searchChest = Quaternion.Inverse(v.root.rotation) * chest.rotation;
+            v.searchHandAt = chest.InverseTransformPoint(hand.position);
+            v.searchHand = Quaternion.Inverse(chest.rotation) * hand.rotation;
         }
 
         /// <summary>
@@ -243,10 +271,21 @@ namespace Bastion.Client.Units
             var gun = Quaternion.LookRotation(muzzle, Vector3.ProjectOnPlane(Vector3.up, muzzle));
             var handTurn = gun * Quaternion.Inverse(v.searchGun);
             var target = at - handTurn * v.searchGunAt;
-            Reach(a, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, Vector3.Lerp(hand.position, target, k),
+            // (From the hand as it held the gun as this began, carried by the chest, not from where the clip has it: on a
+            // knee, «Kneeling Down»'s right hand, empty, swung the gun 30° in a frame as it went down and up. A-18, 10/11.)
+            var from = v.searchHandAt != Vector3.zero ? chest.TransformPoint(v.searchHandAt) : hand.position;
+            var fromTurn = v.searchHandAt != Vector3.zero ? chest.rotation * v.searchHand : hand.rotation;
+            Reach(a, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, Vector3.Lerp(from, target, k),
                 turn * new Vector3(0.7f, -1, -0.35f), SoftReach * scale);
-            hand.rotation = Quaternion.Slerp(hand.rotation, handTurn, k);
+            hand.rotation = Quaternion.Slerp(fromTurn, handTurn, k);
             v.weapon.SetPositionAndRotation(hand.position + hand.rotation * v.searchGunAt, hand.rotation * v.searchGun);
+        }
+
+        /// <summary>From the shoulder to the palm along the arm, straight (metres).</summary>
+        static float ArmLength(Animator a, HumanBodyBones upper, HumanBodyBones lower, HumanBodyBones hand)
+        {
+            Transform s = a.GetBoneTransform(upper), e = a.GetBoneTransform(lower), h = a.GetBoneTransform(hand);
+            return s != null && e != null && h != null ? Vector3.Distance(s.position, e.position) + Vector3.Distance(e.position, h.position) : 0.5f;
         }
 
         /// <summary>The search's pose over the clips and the hold (applyPose: the lean, rummage's hands by two-bone IK).</summary>
@@ -291,9 +330,14 @@ namespace Bastion.Client.Units
                 {
                     var across = spot - shoulder.position;
                     across.y = 0;
-                    if (across.sqrMagnitude > SearchReach * SearchReach) across = across.normalized * SearchReach;
+                    // (Down first, as far as the arm goes, and out towards it with what the arm has left: out to SearchReach
+                    // first, the hand stayed 0.6 m up. The 3D review's A-18, 10/11.)
+                    float height = Mathf.Clamp(spot.y, v.root.position.y + 0.1f, hips.position.y) + Mathf.Sin(t * 1.4f) * 0.03f * scale;
+                    float arm = ArmLength(a, upper, lower, hand) * 0.95f, drop = shoulder.position.y - height;
+                    float most = Mathf.Min(SearchReach, drop < arm ? Mathf.Sqrt(arm * arm - drop * drop) : 0);
+                    if (across.sqrMagnitude > most * most) across = across.normalized * most;
                     var into = shoulder.position + across + v.root.rotation * new Vector3(-s * (0.1f + Mathf.Sin(t) * SearchSway), 0, Mathf.Cos(t * 0.8f) * 0.04f) * scale;
-                    into.y = Mathf.Clamp(spot.y, v.root.position.y + 0.1f, hips.position.y) + Mathf.Sin(t * 1.4f) * 0.03f * scale;
+                    into.y = height;
                     rummage = into;
                 }
                 // (Treating: the left hand on the one treated, still, a little to and fro; the right one stays as in a search.)

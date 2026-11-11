@@ -86,7 +86,7 @@ namespace Bastion.EditorTools
                     // (After the frame's Update: the pose this frame drew. End of frame never comes in batchmode.)
                     await Awaitable.NextFrameAsync();
                     foreach (var (u, label) in row)
-                        Debug.Log(FormattableString.Invariant($"[traje] {Time.time:0.000} {now} {label} {units.GripReport(u.Id)} {IntoReport(u.Id)}"));
+                        Debug.Log(FormattableString.Invariant($"[traje] {Time.time:0.000} {now} {label} {units.GripReport(u.Id)} {IntoReport(u.Id)} {FaceReport(u.Id)}"));
                 }
             }
             async Awaitable All(Func<Unit, Awaitable> act)
@@ -403,6 +403,180 @@ namespace Bastion.EditorTools
             }
         }
 
+        /// <summary>Each figure's jaw and elbow pads as FaceReport found them at rest, by unit id.</summary>
+        static readonly Dictionary<string, (Transform head, Transform jaw, Quaternion rest, Transform[] pads, Vector3[] middles, Transform[] uppers, Vector3[] rests)> faces
+            = new Dictionary<string, (Transform, Transform, Quaternion, Transform[], Vector3[], Transform[], Vector3[])>();
+
+        /// <summary>
+        /// How open its mouth is and how far its elbow pads are off their place, now (the 3D review's F-17 and F-09, 10/11):
+        /// «jaw» the jaw's turn from its rest in the head (the bind pose, from its skin's bindposes), degrees; «pads» how far
+        /// each elbow pad's middle (its corners on elbowAttach_l/_r, as bound) is from where it lay on the upper arm as bound
+        /// (the pad 93 % over the elbow: on the forearm's bone it swung off the arm as the elbow bent), cm, left/right; «-»
+        /// where it has none.
+        /// </summary>
+        static string FaceReport(string id)
+        {
+            var root = Figures.FeetOf(id);
+            if (root == null) return "jaw - pads -";
+            if (!faces.TryGetValue(id, out var f) || f.head == null)
+            {
+                f = (null, null, Quaternion.identity, new Transform[2], new Vector3[2], new Transform[2], new Vector3[2]);
+                foreach (var skin in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    var bones = skin.bones;
+                    var binds = skin.sharedMesh != null ? skin.sharedMesh.bindposes : null;
+                    if (binds == null) continue;
+                    int Index(string name) => Array.FindIndex(bones, b => b != null && b.name == name);
+                    int head = Index("head"), jaw = Index("jaw");
+                    if (f.jaw == null && head >= 0 && jaw >= 0 && head < binds.Length && jaw < binds.Length)
+                    {
+                        f.head = bones[head];
+                        f.jaw = bones[jaw];
+                        f.rest = (binds[head] * binds[jaw].inverse).rotation;
+                    }
+                    for (int side = 0; side < 2; side++)
+                    {
+                        string s = side == 0 ? "_l" : "_r";
+                        int pad = Index("elbowAttach" + s), upper = Index("upperarm" + s);
+                        if (f.pads[side] != null || pad < 0 || pad >= binds.Length || upper < 0 || upper >= binds.Length) continue;
+                        var weights = skin.sharedMesh.boneWeights;
+                        var vertices = skin.sharedMesh.vertices;
+                        Vector3 sum = Vector3.zero;
+                        int count = 0;
+                        for (int v = 0; v < vertices.Length && v < weights.Length; v++)
+                        {
+                            if (weights[v].boneIndex0 != pad || weights[v].weight0 < 0.99f) continue;
+                            sum += vertices[v];
+                            count++;
+                        }
+                        if (count == 0) continue;
+                        f.pads[side] = bones[pad];
+                        f.middles[side] = binds[pad].MultiplyPoint3x4(sum / count);
+                        f.uppers[side] = bones[upper];
+                        f.rests[side] = binds[upper].MultiplyPoint3x4(sum / count);
+                    }
+                }
+                if (f.head == null) f.head = root;
+                faces[id] = f;
+            }
+            string jawOpen = f.jaw != null ? Quaternion.Angle(Quaternion.Inverse(f.head.rotation) * f.jaw.rotation, f.rest).ToString("0.0", CultureInfo.InvariantCulture) : "-";
+            string Off(int side)
+            {
+                if (f.pads[side] == null || f.uppers[side] == null) return "-";
+                var p = f.pads[side].TransformPoint(f.middles[side]);
+                return (Vector3.Distance(p, f.uppers[side].TransformPoint(f.rests[side])) * 100).ToString("0.0", CultureInfo.InvariantCulture);
+            }
+            return $"jaw {jawOpen} pads {Off(0)}/{Off(1)}";
+        }
+
+        /// <summary>
+        /// Whether each clip (BASTION_CLIPS, ids of Anims.json; the rests, aims and reloads of the gun and the pistol, and
+        /// the camp's yawns unless said) has a curve for the jaw's muscle («Jaw Close»), and its range if it has: the 3D
+        /// review's F-17 (10/11), the mouth left open by the clips without one. Edit mode.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.CombatLab.Mandibula -quit
+        /// </summary>
+        public static void Mandibula()
+        {
+            var catalog = FigureCatalog.Load();
+            string ids = Environment.GetEnvironmentVariable("BASTION_CLIPS") ?? "rifleIdle,rifleAim,rifleReload,pistolRest,pistolAim,pistolReload,idleMasc,idleFemn,yawnMasc,yawnFemn";
+            foreach (string id in ids.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var clip = catalog?.Clip(id);
+                if (clip == null)
+                {
+                    Debug.Log($"[mandibula] {id}: none");
+                    continue;
+                }
+                var jaw = UnityEditor.AnimationUtility.GetCurveBindings(clip).Where(b => b.type == typeof(Animator) && b.propertyName.Contains("Jaw")).ToList();
+                string range = string.Join(", ", jaw.Select(b =>
+                {
+                    var keys = UnityEditor.AnimationUtility.GetEditorCurve(clip, b).keys;
+                    return FormattableString.Invariant($"{b.propertyName} {keys.Min(k => k.value):0.00}…{keys.Max(k => k.value):0.00}");
+                }));
+                Debug.Log($"[mandibula] {id} ({clip.name}): humanoid {clip.humanMotion}, jaw curves {jaw.Count}{(jaw.Count > 0 ? ": " + range : "")}");
+            }
+        }
+
+        /// <summary>
+        /// Sidekick parts (BASTION_PIEZAS, part names) written out as they are bound, for measuring them outside Unity
+        /// (BASTION_OUT, a JSON file): each one's vertices in its mesh's space, its triangles, each vertex's main bone and
+        /// weight, its bones' names and bindposes, and its renderer's place. The 3D review's F-03 and F-05 (10/11): hats,
+        /// hair and hooded torsos. Edit mode.
+        /// </summary>
+        public static void Piezas()
+        {
+            var all = new List<object>();
+            foreach (string name in (Environment.GetEnvironmentVariable("BASTION_PIEZAS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                // (By its file: Sidekick's database would need SQLite's assembly here.)
+                string path = UnityEditor.AssetDatabase.FindAssets(name).Select(UnityEditor.AssetDatabase.GUIDToAssetPath).FirstOrDefault(p => System.IO.Path.GetFileNameWithoutExtension(p) == name && p.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase));
+                var part = path != null ? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path) : null;
+                var skin = part != null ? part.GetComponentInChildren<SkinnedMeshRenderer>() : null;
+                if (skin == null || skin.sharedMesh == null)
+                {
+                    Debug.Log($"[piezas] {name}: none");
+                    continue;
+                }
+                var mesh = skin.sharedMesh;
+                var weights = mesh.boneWeights;
+                float[] Flat(Matrix4x4 m) => Enumerable.Range(0, 16).Select(i => m[i % 4, i / 4]).ToArray();
+                all.Add(new
+                {
+                    name,
+                    renderer = Flat(skin.transform.localToWorldMatrix),
+                    bones = skin.bones.Select(b => b != null ? b.name : "").ToArray(),
+                    bonesAt = skin.bones.Select(b => b != null ? new[] { b.position.x, b.position.y, b.position.z } : new float[3]).ToArray(),
+                    bindposes = mesh.bindposes.Select(Flat).ToArray(),
+                    vertices = mesh.vertices.Select(v => new[] { v.x, v.y, v.z }).ToArray(),
+                    triangles = mesh.triangles,
+                    bone = weights.Select(w => w.boneIndex0).ToArray(),
+                    weight = weights.Select(w => w.weight0).ToArray(),
+                });
+                Debug.Log($"[piezas] {name}: {mesh.vertexCount} vertices, {mesh.triangles.Length / 3} triangles, {skin.bones.Length} bones");
+            }
+            string file = Environment.GetEnvironmentVariable("BASTION_OUT") ?? throw new ArgumentException("BASTION_OUT is missing");
+            System.IO.File.WriteAllText(file, Newtonsoft.Json.JsonConvert.SerializeObject(all));
+            Debug.Log($"[piezas] {all.Count} in {file}");
+        }
+
+        /// <summary>
+        /// A baked living-made-dead body's cells (BASTION_CUERPO, skZombieCop1 unless said; Assets/Synty/Extra/Undead): each
+        /// cell its mesh paints from, how many corners, where they are on the body (their middle: across, up, ahead, m), its
+        /// colour as baked and as drawn (SoldierPalette.DullDead), and whether its living preset (BASTION_PRESET,
+        /// ModernPolice_01 unless said) leaves it unused (pure red: the bake filled it from a zombie's). The 3D review's Z-1
+        /// (10/11): which cell is skZombieCop1's pink rucksack. Edit mode.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.CombatLab.MuertoPaleta -quit
+        /// </summary>
+        public static void MuertoPaleta()
+        {
+            string id = Environment.GetEnvironmentVariable("BASTION_CUERPO") ?? "skZombieCop1";
+            string preset = Environment.GetEnvironmentVariable("BASTION_PRESET") ?? "ModernPolice_01";
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Synty/Extra/Undead/{id}.prefab");
+            if (prefab == null)
+            {
+                Debug.Log($"[muerto-paleta] {id}: no bake");
+                return;
+            }
+            var body = UnityEngine.Object.Instantiate(prefab);
+            var skin = body.GetComponentInChildren<SkinnedMeshRenderer>();
+            var baked = skin.sharedMaterial.GetTexture("_ColorMap") as Texture2D;
+            SoldierPalette.DullDead(body);
+            var drawn = skin.sharedMaterial.GetTexture("_ColorMap") as Texture2D;
+            var own = FigureCatalog.Load()?.ColourMap(preset);
+            Color32[] before = baked != null ? SoldierPalette.Cells(baked) : null, after = drawn != null ? SoldierPalette.Cells(drawn) : null, living = own != null ? SoldierPalette.Cells(own) : null;
+            var mesh = skin.sharedMesh;
+            var uv = mesh.uv;
+            var corners = mesh.vertices;
+            foreach (var group in Enumerable.Range(0, uv.Length).GroupBy(v => SoldierPalette.CellOf(uv[v])).OrderBy(g => g.Key))
+            {
+                var middle = group.Aggregate(Vector3.zero, (s, v) => s + corners[v]) / group.Count();
+                string Hex(Color32[] cells) => cells != null ? ColorUtility.ToHtmlStringRGB(cells[group.Key]) : "-";
+                bool unused = living != null && SoldierPalette.Unused(living[group.Key]);
+                Debug.Log(FormattableString.Invariant($"[muerto-paleta] {id} {group.Key % 16},{group.Key / 16} (cell {group.Key}): {group.Count()} corners at {middle.x:0.00} {middle.y:0.00} {middle.z:0.00}; baked {Hex(before)}, drawn {Hex(after)}{(unused ? ", unused by " + preset : "")}{(SoldierPalette.IsBody(group.Key) ? ", body" : "")}"));
+            }
+            UnityEngine.Object.DestroyImmediate(body);
+        }
+
         static readonly string[] HairsF = { "hairBun", "hairBangs", "hairSidePony", "hairCurls", "hairPony", "hairLong", "hairTopBun", "hairPonyBangs", "hairStraight", "hairHighBun", "hairSwept" };
         static readonly string[] HairsM = { "hairFade", "hairMessy", "hairMedium", "hairBack", "hairShaggy", "hairLongM" };
         static readonly string[] BeardsM = { null, "beard1", "beard2", "beard3", "beard4", "beard5", "beard6", "beard7", "beard8" };
@@ -495,6 +669,8 @@ namespace Bastion.EditorTools
                     await Awaitable.WaitForSecondsAsync(1.2f);
                     await Awaitable.NextFrameAsync();
                     Measures(row);
+                    // ([cabeza-boca]: its jaw and elbow pads at rest, unarmed: Synty's idle; FaceReport.)
+                    foreach (var (u, label) in row) Debug.Log($"[cabeza-boca] {label} {FaceReport(u.Id)}");
                     if (folder != null) Busts(row, folder);
                     Debug.Log($"[cabeza] {Time.time:0.00} s: done, {row.Count}");
                 }

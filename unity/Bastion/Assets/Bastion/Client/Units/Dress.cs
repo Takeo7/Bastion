@@ -49,13 +49,57 @@ namespace Bastion.Client.Units
         };
         static readonly string[] Faces = { "face1", "face2", "face3", "face4", "face5", "face6", "face7", "face8" };
         static readonly string[] Beards = { "beard1", "beard2", "beard3", "beard4", "beard5", "beard6", "beard7", "beard8" };
-        /// <summary>The hair under each headwear (HEADWEAR.hair): HAIR_UNDER's, none (a hood) or the soldier's own (a mask).</summary>
+        /// <summary>
+        /// The hair under each headwear (HEADWEAR.hair): HAIR_UNDER's, none (a hood) or the soldier's own (a mask). None too
+        /// under the four that cover the crown and the nape, the cap over a hood and the closed helmets: the police's hair
+        /// under them, made for Synty's police caps, showed through them (the 3D review of 10/11, F-03; Synty's presets put
+        /// none under twoToneCap and goggleHelmet). The others' is fitted to them as the figure is made (SoldierFigure.Fitted).
+        /// </summary>
         static readonly Dictionary<string, string> HairUnder = new Dictionary<string, string>
         {
             ["helmet"] = "under", ["hood"] = "none", ["beret"] = "under", ["cap"] = "under", ["mask"] = "own",
             // (The 0.12.15's, HeadIds.)
-            ["visorHelmet"] = "under", ["earflapHat"] = "under", ["twoToneCap"] = "under", ["goggleHelmet"] = "under", ["riotHelmet"] = "under",
+            ["visorHelmet"] = "none", ["earflapHat"] = "under", ["twoToneCap"] = "none", ["goggleHelmet"] = "none", ["riotHelmet"] = "none",
             ["plainCap"] = "under", ["bandana"] = "under", ["scarfHood"] = "none", ["bucketHat"] = "under",
+        };
+        /// <summary>
+        /// The headwear closed over the nape, under which a woman wears the men's hair under (hairUnderM): hers has a
+        /// ponytail that went through them, and drawn in under them (SoldierFigure.FitUnder) its end was left hanging below
+        /// the rim as a thin strand (the 3D review of 10/11, F-03).
+        /// </summary>
+        static readonly HashSet<string> Closed = new HashSet<string> { "helmet", "earflapHat" };
+        /// <summary>The long beards (beard1, beard2): they went through what covers the mouth (the 3D review of 10/11, F-04).</summary>
+        static readonly string[] Long = { "beard1", "beard2" };
+        /// <summary>
+        /// The beards left off under each headwear that covers the mouth or the jaw, where they don't show (Synty's presets
+        /// put none under the gas mask and the goggles' balaclava): the 3D review of 10/11, F-04.
+        /// </summary>
+        static readonly Dictionary<string, string[]> Shaven = new Dictionary<string, string[]>
+        {
+            ["mask"] = Long, ["goggleHelmet"] = Long, ["riotHelmet"] = Long, ["visorHelmet"] = Long, ["scarfHood"] = Long,
+        };
+        /// <summary>
+        /// Under a hood, where the face shows, a long beard's short one (Arturo, 10/11: «barba corta»; the 3D review's F-04):
+        /// the long ones went through its rim. Of the five that go through neither hood (beard4–beard8), the likest: the
+        /// bushy full beard a short full one, the dark full beard a moustache with a beard on the chin.
+        /// </summary>
+        static readonly HashSet<string> Hooded = new HashSet<string> { "hood", "twoToneCap" };
+        static readonly Dictionary<string, string> Trimmed = new Dictionary<string, string> { ["beard1"] = "beard6", ["beard2"] = "beard8" };
+        /// <summary>
+        /// The outfits with something behind the nape (a hood down, a high collar, a rucksack): a long hair went 5–15 cm into
+        /// them (the 3D review of 10/11, F-15; Arturo's A). With them a long hair is its short one (Shorter).
+        /// </summary>
+        static readonly HashSet<string> Nape = new HashSet<string>
+        {
+            "survivor2", "survivor4", "survivor6", "survivor7", "survivor11", "civilian3", "civilian6",
+            "survivor9", "survivor10", "civilian5", "police1", "police2", "police4", "police5",
+        };
+        /// <summary>A long hair's short one with those outfits: the likest of its sex's that go into none of them.</summary>
+        static readonly Dictionary<string, string> Shorter = new Dictionary<string, string>
+        {
+            ["hairLong"] = "hairSwept", ["hairStraight"] = "hairSwept", ["hairBangs"] = "hairSwept", ["hairCurls"] = "hairHighBun",
+            ["hairBun"] = "hairTopBun", ["hairPonyBangs"] = "hairTopBun", ["hairSidePony"] = "hairHighBun", ["hairPony"] = "hairHighBun",
+            ["hairLongM"] = "hairMessy", ["hairMedium"] = "hairBack", ["hairShaggy"] = "hairMessy",
         };
         /// <summary>How likely each hair colour is (wardrobe.ts HAIR_ODDS): the dark ones most.</summary>
         static readonly int[] HairOdds = new[] { 4, 4, 3, 1, 1, 1, 1 }.SelectMany((n, i) => Enumerable.Repeat(i, n)).ToArray();
@@ -73,16 +117,23 @@ namespace Bastion.Client.Units
             string head = !string.IsNullOrEmpty(look?.Head) ? look.Head : "helmet";
             string headwear = head == "bare" ? null : head;
             string own = Pick(Hairs.Where(h => h.sex == s && h.id != Under(s)).Select(h => h.id).ToArray(), seed + "|hair");
+            if (Nape.Contains(outfit) && Shorter.TryGetValue(own, out var shorter)) own = shorter;
             string under = headwear != null && HairUnder.TryGetValue(headwear, out var u) ? u : "own";
+            // Half the men shaven.
+            string beard = s == "m" ? Pick(Beards.Concat(Beards.Select(_ => (string)null)).ToArray(), seed + "|beard") : null;
+            if (beard != null && headwear != null)
+            {
+                if (Shaven.TryGetValue(headwear, out var off) && off.Contains(beard)) beard = null;
+                else if (Hooded.Contains(headwear) && Trimmed.TryGetValue(beard, out var trimmed)) beard = trimmed;
+            }
             return new Dress
             {
                 outfit = outfit,
                 sex = s,
                 build = !string.IsNullOrEmpty(look?.Build) ? look.Build : "normal",
                 face = Pick(Faces, seed + "|face"),
-                hair = under == "own" ? own : under == "under" ? Under(s) : null,
-                // Half the men shaven.
-                beard = s == "m" ? Pick(Beards.Concat(Beards.Select(_ => (string)null)).ToArray(), seed + "|beard") : null,
+                hair = under == "own" ? own : under == "under" ? Under(Closed.Contains(headwear) ? "m" : s) : null,
+                beard = beard,
                 headwear = headwear,
                 skin = risen ? -1 : Pick(Enumerable.Range(0, SoldierPalette.SkinTones.Length).ToArray(), seed + "|skin"),
                 hairColor = Pick(HairOdds, seed + "|hairColor"),

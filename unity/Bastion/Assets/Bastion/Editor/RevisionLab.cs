@@ -163,6 +163,33 @@ namespace Bastion.EditorTools
                         Debug.Log($"[combat] {Time.time:0.00} s: done");
                         return;
                     }
+                    // (BASTION_SOLO_RECARGA=1: from the rests straight to a reload crouched and one standing, at a quicker frame
+                    // rate: the 3D review's P-1, 10/11, the left hand to the pistol.)
+                    if (Environment.GetEnvironmentVariable("BASTION_SOLO_RECARGA") == "1")
+                    {
+                        now = "agachado";
+                        foreach (var (u, _) in row) u.Hunkered = true;
+                        units.Sync(state);
+                        await Awaitable.WaitForSecondsAsync(1.2f);
+                        now = "agachado-recarga";
+                        dense = true;
+                        await All(u => units.Reload(u.Id));
+                        dense = false;
+                        now = "agachado";
+                        await Awaitable.WaitForSecondsAsync(0.4f);
+                        now = "levantandose";
+                        foreach (var (u, _) in row) u.Hunkered = false;
+                        units.Sync(state);
+                        await Awaitable.WaitForSecondsAsync(1.0f);
+                        now = "recarga";
+                        dense = true;
+                        await All(u => units.Reload(u.Id));
+                        dense = false;
+                        now = "quieto";
+                        await Awaitable.WaitForSecondsAsync(0.6f);
+                        Debug.Log($"[combat] {Time.time:0.00} s: done");
+                        return;
+                    }
                     now = "carrera";
                     await All(u => units.MoveAlong(u.Id, Enumerable.Range(1, 4).Select(i => new Pos { X = u.Pos.X, Y = u.Pos.Y - i }).ToList(), 1));
                     now = "esprint";

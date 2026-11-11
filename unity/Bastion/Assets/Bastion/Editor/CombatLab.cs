@@ -69,7 +69,8 @@ namespace Bastion.EditorTools
         /// The same actions close up, on a plain floor (Gameplay reviews each figure's strips so, and from the game's camera):
         /// a soldier and one of the dead alone (BASTION_TEMPLATE, zombie unless said), the soldier walking three tiles and
         /// stopping four short of it; the camera at BASTION_DIST tiles (6 unless said; 24 is the game's). BASTION_AP=2: the
-        /// walk as a dash; BASTION_PIES=1: its feet and root logged each frame of it ([pies]), for how far the planted foot slides.
+        /// walk as a dash; BASTION_PIES=1: its feet and root logged each frame of it and FeetAfter more ([pies]), for how far the
+        /// planted foot slides.
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Close -shotPlay -shotCamera "Shot camera"
         ///     -shotFrames 110 -shotFps 10 -shotOut &lt;folder&gt;
         /// </summary>
@@ -115,6 +116,9 @@ namespace Bastion.EditorTools
             Debug.Log($"[combat] close: {soldier.Id} and {target.Id} {target.Template}, the camera {distance} tiles off");
             EditorApplication.playModeStateChanged += Started;
         }
+
+        /// <summary>Seconds Close's [pies] go on once the walk is there (BASTION_PIES=1).</summary>
+        const float FeetAfter = 0.8f;
 
         /// <summary>The play-mode sequence the setup chose (Shoot's and Close's: Play).</summary>
         static Func<Awaitable> sequence;
@@ -242,6 +246,15 @@ namespace Bastion.EditorTools
                     Debug.Log($"[combat] {Time.time:0.00} s: walk");
                     var one = units.MoveAlong(a.Id, pathA, 1, 1, null, passA);
                     var two = units.MoveAlong(b.Id, pathB, 1, 1, null, passB);
+                    // (Each frame of the walk, [andar] cerca: how far apart their roots are along the floor, tiles; the 3D review's
+                    // A-25, 10/11: two crossing went half into each other.)
+                    while (!one.IsCompleted || !two.IsCompleted)
+                    {
+                        var gap = units.Feet(a.Id) - units.Feet(b.Id);
+                        gap.y = 0;
+                        Debug.Log(FormattableString.Invariant($"[andar] cerca {Time.time:0.000} {gap.magnitude / MapSpace.Tile:0.000}"));
+                        await Awaitable.NextFrameAsync();
+                    }
                     await one;
                     await two;
                     Debug.Log($"[combat] {Time.time:0.00} s: there, {units.Feet(a.Id)} and {units.Feet(b.Id)}");
@@ -1026,7 +1039,11 @@ namespace Bastion.EditorTools
                         : Mathf.Sqrt(box.SqrDistance(muzzle));
                     var rig = units.transform.Find(soldier.Id);
                     var stepped = rig != null && rig.childCount > 0 ? -rig.GetChild(0).localPosition.z : 0;
-                    Debug.Log(FormattableString.Invariant($"[quemarropa] {Time.time:0.000} muzzleIn={into * 100:0.0} back={stepped * 100:0.0}"));
+                    // (And from its skin and from what it holds, as drawn: the box takes in a Cuervo's own gun held out. The 3D
+                    // review's A-15, 10/11, the Cuervo at point blank.)
+                    float skin = SkinGap(units.BodyOnlyForLab(target.Id), muzzle);
+                    float guns = SkinGap(units.CarriedForLab(target.Id).SelectMany(c => c.model.GetComponentsInChildren<Renderer>()).ToList(), muzzle);
+                    Debug.Log(FormattableString.Invariant($"[quemarropa] {Time.time:0.000} muzzleIn={into * 100:0.0} back={stepped * 100:0.0} body={skin * 100:0.0} gun={guns * 100:0.0}"));
                 }
             }
             sequence = async () =>
@@ -1073,6 +1090,87 @@ namespace Bastion.EditorTools
                     done = true;
                 }
             };
+        }
+
+        /// <summary>
+        /// How far `point` is from the surface of `renderers` as drawn now (m; below 0, inside): from the nearest point of
+        /// their triangles, on the side that triangle faces (a skinned one baked as posed). One whose mesh can't be read (a
+        /// weapon's) by its own box, turned with it. The 3D review's A-15, 10/11.
+        /// </summary>
+        static float SkinGap(System.Collections.Generic.List<Renderer> renderers, Vector3 point)
+        {
+            if (renderers == null) return float.NaN;
+            // (Each renderer's own: its nearest surface, on the side it faces; then the deepest in, or else the nearest.)
+            float worst = float.PositiveInfinity;
+            var baked = new Mesh();
+            foreach (var r in renderers)
+            {
+                if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                Mesh mesh = null;
+                if (r is SkinnedMeshRenderer skin)
+                {
+                    skin.BakeMesh(baked, false);
+                    mesh = baked;
+                }
+                else if (r.GetComponent<MeshFilter>() is MeshFilter filter && filter.sharedMesh != null)
+                {
+                    if (!filter.sharedMesh.isReadable)
+                    {
+                        // (Its box in its own frame: inside, by how far to its nearest face.)
+                        var local = r.transform.InverseTransformPoint(point);
+                        var box = filter.sharedMesh.bounds;
+                        float k = r.transform.lossyScale.x;
+                        float own = box.Contains(local)
+                            ? -Mathf.Min(Mathf.Min(local.x - box.min.x, box.max.x - local.x), Mathf.Min(Mathf.Min(local.y - box.min.y, box.max.y - local.y), Mathf.Min(local.z - box.min.z, box.max.z - local.z))) * k
+                            : Mathf.Sqrt(box.SqrDistance(local)) * k;
+                        worst = Mathf.Min(worst, own);
+                        continue;
+                    }
+                    mesh = filter.sharedMesh;
+                }
+                if (mesh == null) continue;
+                var vertices = mesh.vertices;
+                var triangles = mesh.triangles;
+                var to = r.transform;
+                for (int i = 0; i < vertices.Length; i++) vertices[i] = to.TransformPoint(vertices[i]);
+                float nearest = float.PositiveInfinity, side = 1;
+                for (int t = 0; t + 2 < triangles.Length; t += 3)
+                {
+                    Vector3 a = vertices[triangles[t]], b = vertices[triangles[t + 1]], c = vertices[triangles[t + 2]];
+                    var near = Nearest(point, a, b, c);
+                    float d = (near - point).sqrMagnitude;
+                    if (d >= nearest) continue;
+                    var normal = Vector3.Cross(b - a, c - a);
+                    if (normal.sqrMagnitude < 1e-12f) continue;
+                    nearest = d;
+                    side = Vector3.Dot(point - near, normal) < 0 ? -1 : 1;
+                }
+                if (!float.IsInfinity(nearest)) worst = Mathf.Min(worst, side * Mathf.Sqrt(nearest));
+            }
+            UnityEngine.Object.DestroyImmediate(baked);
+            return float.IsInfinity(worst) ? float.NaN : worst;
+        }
+
+        /// <summary>The nearest point to `p` of the triangle (a, b, c) (Ericson's Real-Time Collision Detection, 5.1.5).</summary>
+        static Vector3 Nearest(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector3 ab = b - a, ac = c - a, ap = p - a;
+            float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+            if (d1 <= 0 && d2 <= 0) return a;
+            var bp = p - b;
+            float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+            if (d3 >= 0 && d4 <= d3) return b;
+            float vc = d1 * d4 - d3 * d2;
+            if (vc <= 0 && d1 >= 0 && d3 <= 0) return a + ab * (d1 / (d1 - d3));
+            var cp = p - c;
+            float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+            if (d6 >= 0 && d5 <= d6) return c;
+            float vb = d5 * d2 - d1 * d6;
+            if (vb <= 0 && d2 >= 0 && d6 <= 0) return a + ac * (d2 / (d2 - d6));
+            float va = d3 * d6 - d5 * d4;
+            if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+            float denom = 1 / (va + vb + vc);
+            return a + ab * (vb * denom) + ac * (vc * denom);
         }
 
         /// <summary>
@@ -2391,6 +2489,42 @@ namespace Bastion.EditorTools
                 foreach (var light in fx.GetComponentsInChildren<UnityEngine.Light>()) light.enabled = false;
         }
 
+        /// <summary>
+        /// A mission's load weighed (Gameplay, 10/11: a city mission loaded 0.6 s slower in the 0.12.20 app): BASTION_MAP
+        /// (city-3-elimination unless said, step2's) built as the game builds it, in edit mode, BASTION_VUELTAS times (2 unless
+        /// said: the first pays for what loads once), each a line [carga]: the catalog of figures loaded (the first time), the
+        /// map, the figures (UnitViews.Sync: with BASTION_LOG_BULK=1 each one's [bulk] lines), all in milliseconds.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.CombatLab.Carga
+        /// </summary>
+        public static void Carga()
+        {
+            string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "../step2/city-3-elimination";
+            int rounds = int.TryParse(Environment.GetEnvironmentVariable("BASTION_VUELTAS"), out int n) && n > 0 ? n : 2;
+            for (int round = 0; round < rounds; round++)
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                _ = FigureCatalog.Load();
+                double loaded = watch.Elapsed.TotalMilliseconds;
+                var seen = MapLab.Golden(name);
+                double read = watch.Elapsed.TotalMilliseconds;
+                MapLab.Map(seen, name);
+                double map = watch.Elapsed.TotalMilliseconds;
+                var made = new GameObject("Unidades").AddComponent<UnitViews>();
+                made.Sync(seen);
+                double figures = watch.Elapsed.TotalMilliseconds;
+                Debug.Log(FormattableString.Invariant($"[carga] {name} round {round}: catalog {loaded:0} ms, state {read - loaded:0} ms, map {map - read:0} ms, figures {figures - map:0} ms ({seen.Units.Count} units, {seen.Units.Count(u => u.Team == "xcom")} of the squad); all {figures:0} ms"));
+            }
+            // (What the catalog holds, by what it weighs loaded: the clips, and of them what the 0.12.20 added, the Chillón's
+            // two roars; the prefabs, and the knife's sheath.)
+            var held = FigureCatalog.Load();
+            long Size(UnityEngine.Object o) => o != null ? UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(o) : 0;
+            long clips = held.clips.Sum(Size), roars = held.clipIds.Select((id, k) => id.StartsWith("roar") ? Size(held.clips[k]) : 0).Sum();
+            long prefabs = held.presets.Sum(Size) + held.weapons.Sum(Size) + held.characters.Sum(Size), sheath = Size(held.Weapon(UnitViews.KnifeSheath));
+            long maps = held.colourMaps.Sum(Size) + held.atlases.Sum(Size);
+            Debug.Log(FormattableString.Invariant($"[carga] catalog: {held.clips.Length} clips {clips / 1048576.0:0.0} MB (the roars {roars / 1048576.0:0.00} MB), prefabs {prefabs / 1048576.0:0.0} MB (the sheath {sheath / 1048576.0:0.00} MB), maps {maps / 1048576.0:0.0} MB"));
+        }
+
         /// <summary>The labs' enemies shown wherever they are put (out of the squad's sight they would hide).</summary>
         static void Reveal()
         {
@@ -2419,10 +2553,13 @@ namespace Bastion.EditorTools
                 var walking = units.MoveAlong(soldier.Id, path, ap);
                 // (BASTION_PIES=1: both feet and the root each frame of the walk, for how far the foot it stands on slides.)
                 var rig = Environment.GetEnvironmentVariable("BASTION_PIES") == "1" ? units.transform.Find(soldier.Id)?.GetComponentInChildren<Animator>() : null;
-                while (rig != null && !walking.IsCompleted)
+                // (And on for FeetAfter once there, as its legs come to rest: the 3D review's A-06, 10/11.)
+                float after = -1;
+                while (rig != null && (!walking.IsCompleted || after < 0 || Time.time < after))
                 {
+                    if (walking.IsCompleted && after < 0) after = Time.time + FeetAfter;
                     Vector3 l = rig.GetBoneTransform(HumanBodyBones.LeftFoot).position, r = rig.GetBoneTransform(HumanBodyBones.RightFoot).position, o = units.Feet(soldier.Id);
-                    Debug.Log(FormattableString.Invariant($"[pies] {Time.time:0.0000} {l.x:0.0000} {l.y:0.0000} {l.z:0.0000} {r.x:0.0000} {r.y:0.0000} {r.z:0.0000} {o.x:0.0000} {o.z:0.0000}"));
+                    Debug.Log(FormattableString.Invariant($"[pies] {Time.time:0.0000} {l.x:0.0000} {l.y:0.0000} {l.z:0.0000} {r.x:0.0000} {r.y:0.0000} {r.z:0.0000} {o.x:0.0000} {o.z:0.0000}{(walking.IsCompleted ? " there" : "")}"));
                     await Awaitable.NextFrameAsync();
                 }
                 await walking;

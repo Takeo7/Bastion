@@ -140,7 +140,18 @@ namespace Bastion.Client
             UnFace(Lata.transform);
             // (SetVehicle makes it again without Show.)
             Lata.Snowy(Snow);
+            // Its dust going down the earth track and coming back (the 3D review's L-17, 10/11: none; with Arturo's C for the
+            // smoke and dust, see-through): the base's own effects, there being none in its scene.
+            if (dust == null)
+            {
+                dust = new GameObject("Efectos").AddComponent<Effects.Fx>();
+                dust.transform.SetParent(transform, false);
+            }
+            Lata.DustFx = dust;
         }
+
+        /// <summary>The effects La Lata kicks its dust up with (L-17).</summary>
+        Effects.Fx dust;
 
         /// <summary>La Lata as the campaign has it (vehicleOf: 0 4×4, 1 van, 2 lorry, 3 the bus); after its going or coming if it is on its way.</summary>
         public void SetVehicle(int v)

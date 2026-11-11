@@ -68,6 +68,9 @@ namespace Bastion.Client.Map
             public bool shown = true;
             /// <summary>On a building's roof (seen as its roof is, Fog.InSight's roof).</summary>
             public bool onRoof;
+            /// <summary>Its place among them (who gives way to whom: A-30), and how long it has waited for one in its way (s).</summary>
+            public int id;
+            public float held;
         }
 
         /// <summary>Strays of the Dog Pack (no collars), and the wild ones of the country.</summary>
@@ -116,6 +119,12 @@ namespace Bastion.Client.Map
         const float DogFear = 6, WildFear = 9, BirdFear = 4.5f, Calm = 14, Wander = 5;
         /// <summary>How quickly it gets going and slows down (m/s²), walking and running off, and how much quicker it gets up off the ground to run.</summary>
         const float WalkStart = 2.5f, WalkBrake = 2, FleeStart = 14, FleeBrake = 9, RiseQuick = 2.5f;
+        /// <summary>
+        /// The 3D review's A-29, 10/11: how fast it turns to run off (degrees a second; it was 540, 54° from frame to frame at
+        /// 10 fps), a cat up off the ground to run (RiseQuick's 2.5 got it up in a frame), and how long a grazer takes off
+        /// its grazing into its walk or run (s).
+        /// </summary>
+        const float FleeTurn = 360, CatRise = 1.6f, EatOut = 0.3f, EatOutFleeing = 0.15f;
         /// <summary>
         /// How far before a corner of its way it starts round it (tiles; as far after it, or half the next stretch), and
         /// the sharpest corner it goes round so (degrees; past it, it turns on the spot): Arturo's of 7/11, its jerks from
@@ -371,7 +380,7 @@ namespace Bastion.Client.Map
                 animator.cullingMode = Application.isPlaying ? AnimatorCullingMode.CullUpdateTransforms : AnimatorCullingMode.AlwaysAnimate;
             }
             foreach (var r in made.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-            animals.Add(new Animal { kind = kind, breed = prefab, root = root, animator = animator, stride = stride, state = State.Idle, wait = 1 + Hash(p.y, p.x, 83) * 4, yaw = yaw, rng = (uint)(p.x * 7919 + p.y * 104729 + 1), renderers = made.GetComponentsInChildren<Renderer>() });
+            animals.Add(new Animal { kind = kind, breed = prefab, root = root, animator = animator, stride = stride, state = State.Idle, wait = 1 + Hash(p.y, p.x, 83) * 4, yaw = yaw, rng = (uint)(p.x * 7919 + p.y * 104729 + 1), renderers = made.GetComponentsInChildren<Renderer>(), id = animals.Count });
         }
 
         Transform AddBird(Kind kind, Vector3 at, float yaw, uint seed)
@@ -383,7 +392,7 @@ namespace Bastion.Client.Map
             var (body, left, right) = Bird(root, kind == Kind.Crow ? new Color(0.07f, 0.07f, 0.08f) : new Color(0.42f, 0.44f, 0.48f));
             var tile = MapSpace.WorldToTile(at);
             bool roof = tile.x >= 0 && tile.y >= 0 && tile.x < s.Width && tile.y < s.Height && plan.Owner[tile.y * s.Width + tile.x] >= 0;
-            animals.Add(new Animal { kind = kind, root = root, body = body, left = left, right = right, state = State.Idle, wait = 0.5f + (seed % 7) * 0.3f, yaw = yaw, rng = seed * 2654435761u + 1, renderers = root.GetComponentsInChildren<Renderer>(), onRoof = roof });
+            animals.Add(new Animal { kind = kind, root = root, body = body, left = left, right = right, state = State.Idle, wait = 0.5f + (seed % 7) * 0.3f, yaw = yaw, rng = seed * 2654435761u + 1, renderers = root.GetComponentsInChildren<Renderer>(), onRoof = roof, id = animals.Count });
             return root;
         }
 
@@ -556,11 +565,60 @@ namespace Bastion.Client.Map
                 var t = MapSpace.WorldToTile(from + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * d);
                 if (t.x < 0 || t.y < 0 || t.x >= s.Width || t.y >= s.Height || steps[t.y * s.Width + t.x] <= 0) continue;
                 var end = MapSpace.World(t.x, t.y) + new Vector3(Random01(a) - 0.5f, 0, Random01(a) - 0.5f) * MapSpace.Tile * 0.6f;
+                // (Not onto another, nor where another is going: A-30.)
+                if (Crowded(a, end)) continue;
                 a.way = Route(from, t.y * s.Width + t.x, back, end);
                 return end;
             }
             a.way.Clear();
             return from;
+        }
+
+        /// <summary>Whether `end` is within Apart of another animal on the ground, or of where one walks to (A-30).</summary>
+        bool Crowded(Animal a, Vector3 end) =>
+            animals.Any(b => b != a && !b.gone && !Flies(b) && (Flat(b.root.position, end) < Apart || (b.state == State.Walk && Flat(b.target, end) < Apart)));
+
+        static bool Flies(Animal a) => a.kind == Kind.Crow || a.kind == Kind.Pigeon;
+
+        /// <summary>
+        /// How much room an animal takes (m, its middle to its side): the stag and the doe, the boar, the wolf, the fox and
+        /// the dog, the rabbit and the cat.
+        /// </summary>
+        static float Room(Animal a) =>
+            a.kind == Kind.Cat || a.breed.StartsWith("Rabbit") ? 0.2f : a.breed.StartsWith("Stag") ? 0.6f : a.breed.StartsWith("Doe") ? 0.5f : a.breed.StartsWith("Boar") ? 0.45f : 0.4f;
+
+        /// <summary>
+        /// The 3D review's A-30 (10/11: the doe walked into the stag and he turned inside her): how far apart a wander's end
+        /// keeps from the others and where they go (m); the room kept round each besides their own (m); how far to either
+        /// side of its way another is in its way (degrees); how much it swerves off its way round one (degrees); how long
+        /// the one that gives way waits before it goes round (s).
+        /// </summary>
+        const float Apart = 1.5f, RoomMargin = 0.3f, AheadAngle = 60, SwerveAngle = 40, HoldMost = 1.5f;
+
+        /// <summary>
+        /// Whether another animal on the ground is in `a`'s way, going `to` (A-30): nearer than their rooms and RoomMargin,
+        /// within AheadAngle of it (`any`). Then, walking, the later one (its id) waits for it to go, HoldMost at most; the
+        /// other, or one running off, swerves away from it (`swerve`, degrees, + to its right).
+        /// </summary>
+        (bool any, bool hold, float swerve) InTheWay(Animal a, Vector3 to, bool flees)
+        {
+            bool any = false, hold = false;
+            float swerve = 0;
+            var mine = a.root.position;
+            foreach (var b in animals)
+            {
+                if (b == a || b.gone || Flies(b)) continue;
+                var off = b.root.position - mine;
+                off.y = 0;
+                float d = off.magnitude;
+                if (d < 1e-4f || d >= Room(a) + Room(b) + RoomMargin) continue;
+                float angle = Vector3.SignedAngle(to, off, Vector3.up);
+                if (Mathf.Abs(angle) > AheadAngle) continue;
+                any = true;
+                if (!flees && a.id > b.id && a.held < HoldMost) hold = true;
+                else swerve = angle >= 0 ? -SwerveAngle : SwerveAngle;
+            }
+            return (any, hold, swerve);
         }
 
         /// <summary>
@@ -764,10 +822,14 @@ namespace Bastion.Client.Map
                 }
                 else
                 {
+                    // Another in its way (A-30): it waits for it, or goes round it.
+                    var (blocked, hold, swerve) = a.bending ? (false, false, 0f) : InTheWay(a, to, a.state == State.Flee);
+                    a.held = blocked ? a.held + dt : 0;
+                    if (swerve != 0) to = Quaternion.Euler(0, swerve, 0) * to;
                     // The way it goes now: along the curve, or at its next corner.
                     var ahead = a.bending ? BendTangent(a, a.bendDone) : to;
                     float want = Mathf.Atan2(ahead.x, ahead.z) * Mathf.Rad2Deg, was = a.yaw;
-                    a.yaw = Mathf.MoveTowardsAngle(a.yaw, want, (a.state == State.Flee ? 540 : 200) * dt);
+                    a.yaw = Mathf.MoveTowardsAngle(a.yaw, want, (a.state == State.Flee ? FleeTurn : 200) * dt);
                     a.turning = Mathf.Abs(Mathf.DeltaAngle(was, a.yaw)) / dt;
                     a.root.rotation = Quaternion.Euler(0, a.yaw, 0);
                     // (Turning on the spot first when it faces away: off only once it faces within 60° of its way, and
@@ -776,7 +838,7 @@ namespace Bastion.Client.Map
                     // Speeding up and slowing down, not off at once and stopped dead (Arturo's #1 of 2/11, its jerks): to
                     // its end slowing down so as to stop there.
                     bool flees = a.state == State.Flee;
-                    float goal = speed * facing;
+                    float goal = hold ? 0 : speed * facing;
                     // (Braking for what is left of its whole way, not only its last stretch: one short after a corner left it
                     // no room, and it got there running.)
                     // (To a stop at a corner too sharp to go round: it turns there on the spot.)
@@ -823,12 +885,17 @@ namespace Bastion.Client.Map
                 // (Turning on the spot, a slow step round, eased in and out: not a statue turned on its stand.)
                 a.stepping = Mathf.MoveTowards(a.stepping, 0.2f * Mathf.Clamp01(a.turning / 200), dt);
                 movement = Mathf.Max(movement, a.stepping);
-                a.animator.speed = a.state == State.Flee && Down(a) ? RiseQuick : Stride(a, dt);
+                a.animator.speed = a.state == State.Flee && Down(a) ? (a.kind == Kind.Cat ? CatRise : RiseQuick) : Stride(a, dt);
                 // (SIMPLE's controller: Speed_f the same way, Eat_b while it grazes, a cat's Sit_b while it sits.)
                 string pace = Simple(a.kind) ? "Speed_f" : "Movement_f";
                 a.animator.SetFloat(pace, movement);
                 if (Simple(a.kind)) a.animator.SetBool("Eat_b", a.doing == Graze && a.state == State.Idle);
                 if (a.kind == Kind.Cat) a.animator.SetBool("Sit_b", a.doing == Sit && a.state == State.Idle);
+                // Off its grazing as it goes (the 3D review's A-29, 10/11): SIMPLE's controller leaves Eat only at its clip's
+                // end (exit time 0.93, the deer's a 2.5 s loop), and meanwhile it went on its way, or turned round, or ran
+                // off at 5 m/s, its head down and its legs still, then snapped to its walk in a frame.
+                if (Simple(a.kind) && a.state != State.Idle && !a.animator.IsInTransition(0) && a.animator.GetCurrentAnimatorStateInfo(0).IsName("Eat"))
+                    a.animator.CrossFadeInFixedTime("Locomotion", a.state == State.Flee ? EatOutFleeing : EatOut);
             }
         }
 

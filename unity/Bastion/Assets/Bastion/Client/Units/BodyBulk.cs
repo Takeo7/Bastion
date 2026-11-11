@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -33,8 +34,55 @@ namespace Bastion.Client.Units
 
         BodyBulk() { }
 
+        /// <summary>
+        /// BASTION_LOG_BULK=1 (the labs; Gameplay, 10/11: a city mission loaded 0.6 s slower in the 0.12.20 app): a line
+        /// [bulk] for each body measured, how long it took and what came out (the girths' slices and the sum of their radii,
+        /// to tell the same results), and the milliseconds and bodies so far.
+        /// </summary>
+        static readonly bool Log = System.Environment.GetEnvironmentVariable("BASTION_LOG_BULK") == "1";
+        static double spent;
+        static int measured;
+
         /// <summary>The body of `a`'s figure: its thighs (to the knees), its hips (to the spine) and its trunk (the spine to the neck).</summary>
         public static BodyBulk Of(Animator a)
+        {
+            var watch = Log ? System.Diagnostics.Stopwatch.StartNew() : null;
+            var bulk = Measure(a);
+            if (watch != null)
+            {
+                double ms = watch.Elapsed.TotalMilliseconds;
+                spent += ms;
+                measured++;
+                int slices = 0;
+                double sum = 0;
+                foreach (var g in bulk.parts)
+                {
+                    slices += g.slices;
+                    foreach (float r in g.radii) sum += r;
+                }
+                Debug.Log(FormattableString.Invariant($"[bulk] of {(a != null && a.transform.parent != null ? a.transform.parent.name : "-")} {ms:0.00} ms, {bulk.parts.Count} parts, {slices} slices, radii {sum:0.0000}; {measured} so far, {spent:0.0} ms"));
+            }
+            return bulk;
+        }
+
+        /// <summary>
+        /// What one body's mesh, build and scale gave (Measure): its girths without their bones, bound to each figure's own
+        /// (the same outfit and build again, a squad's Cuervos: one measure). Kept for the meshes still about, SameMost at most.
+        /// </summary>
+        sealed class Measured
+        {
+            public Mesh mesh;
+            public float[] shapes;
+            public float metre;
+            public List<(HumanBodyBones bone, Girth girth)> girths;
+        }
+
+        static readonly Dictionary<int, Measured> same = new Dictionary<int, Measured>();
+        /// <summary>BASTION_BULK_ANTES=1: measured as in the 0.12.20, each vertex into its bone's frame and nothing kept (the labs' «before»).</summary>
+        static readonly bool SlowWay = System.Environment.GetEnvironmentVariable("BASTION_BULK_ANTES") == "1";
+        const int SameMost = 64;
+
+        static BodyBulk Measure(Animator a)
         {
             var bulk = new BodyBulk();
             if (a == null || !a.isHuman) return bulk;
@@ -50,11 +98,21 @@ namespace Bastion.Client.Units
             if (body == null) return bulk;
             var mesh = body.sharedMesh;
             bulk.metre = body.transform.lossyScale.x;
+            var shapes = new float[mesh.blendShapeCount];
+            for (int shape = 0; shape < shapes.Length; shape++) shapes[shape] = body.GetBlendShapeWeight(shape);
+            // (The same mesh, build and scale measured before: its girths on this figure's bones. Gameplay, 10/11: a city
+            // mission loaded 0.6 s slower in the 0.12.20 app.)
+            if (!SlowWay && same.TryGetValue(mesh.GetInstanceID(), out var known) && known.mesh == mesh && known.metre == bulk.metre && Same(known.shapes, shapes))
+            {
+                foreach (var (bone, g) in known.girths)
+                    if (a.GetBoneTransform(bone) is Transform b) bulk.parts.Add(new Girth { bone = b, origin = g.origin, axis = g.axis, u = g.u, v = g.v, slices = g.slices, radii = g.radii });
+                return bulk;
+            }
             var vertices = mesh.vertices;
             var delta = new Vector3[vertices.Length];
-            for (int shape = 0; shape < mesh.blendShapeCount; shape++)
+            for (int shape = 0; shape < shapes.Length; shape++)
             {
-                float weight = body.GetBlendShapeWeight(shape);
+                float weight = shapes[shape];
                 if (Mathf.Abs(weight) < 1e-3f) continue;
                 int frame = mesh.GetBlendShapeFrameCount(shape) - 1;
                 float full = mesh.GetBlendShapeFrameWeight(shape, frame);
@@ -66,9 +124,20 @@ namespace Bastion.Client.Units
             var weights = mesh.boneWeights;
             // (The trunk: the spine's three, each vertex into the spine's frame; the chest's and the upper chest's go along.)
             var trunk = new HashSet<int>();
-            for (int k = 0; k < bones.Length; k++) if (bones[k] != null && bones[k] != hips && torso.Contains(bones[k])) trunk.Add(k);
+            var ofTorso = new bool[bones.Length];
+            for (int k = 0; k < bones.Length; k++)
+            {
+                ofTorso[k] = bones[k] != null && torso.Contains(bones[k]);
+                if (ofTorso[k] && bones[k] != hips) trunk.Add(k);
+            }
             int spineAt = System.Array.IndexOf(bones, spine), hipsAt = System.Array.IndexOf(bones, hips);
             int rightAt = System.Array.IndexOf(bones, thighR), leftAt = System.Array.IndexOf(bones, thighL);
+            // (Each of the four bones' frame worked out once, not for each vertex: InBone's inverse and turn were most of
+            // the 0.12.20's time, as much again for every figure armed.)
+            var (rightFrom, rightTurn) = BoneFrame(binds, rightAt);
+            var (leftFrom, leftTurn) = BoneFrame(binds, leftAt);
+            var (hipsFrom, hipsTurn) = BoneFrame(binds, hipsAt);
+            var (spineFrom, spineTurn) = BoneFrame(binds, spineAt);
             var ofRight = new List<Vector3>();
             var ofLeft = new List<Vector3>();
             var ofHips = new List<Vector3>();
@@ -81,7 +150,7 @@ namespace Bastion.Client.Units
                 void Weigh(int bone, float weight)
                 {
                     if (weight <= 0 || bone < 0 || bone >= bones.Length) return;
-                    if (torso.Contains(bones[bone])) torsoWeight += weight;
+                    if (ofTorso[bone]) torsoWeight += weight;
                     if (weight > most)
                     {
                         most = weight;
@@ -93,27 +162,63 @@ namespace Bastion.Client.Units
                 Weigh(w.boneIndex2, w.weight2);
                 Weigh(w.boneIndex3, w.weight3);
                 if (most < Own) continue;
-                if (main == rightAt) ofRight.Add(InBone(binds[rightAt], vertices[i]));
-                else if (main == leftAt) ofLeft.Add(InBone(binds[leftAt], vertices[i]));
-                else if (main == hipsAt && torsoWeight >= TorsoPure) ofHips.Add(InBone(binds[hipsAt], vertices[i]));
-                else if (trunk.Contains(main) && spineAt >= 0) ofTrunk.Add(InBone(binds[spineAt], vertices[i]));
+                if (SlowWay)
+                {
+                    if (main == rightAt) ofRight.Add(InBone(binds[rightAt], vertices[i]));
+                    else if (main == leftAt) ofLeft.Add(InBone(binds[leftAt], vertices[i]));
+                    else if (main == hipsAt && torsoWeight >= TorsoPure) ofHips.Add(InBone(binds[hipsAt], vertices[i]));
+                    else if (trunk.Contains(main) && spineAt >= 0) ofTrunk.Add(InBone(binds[spineAt], vertices[i]));
+                    continue;
+                }
+                if (main == rightAt) ofRight.Add(rightTurn * (vertices[i] - rightFrom));
+                else if (main == leftAt) ofLeft.Add(leftTurn * (vertices[i] - leftFrom));
+                else if (main == hipsAt && torsoWeight >= TorsoPure) ofHips.Add(hipsTurn * (vertices[i] - hipsFrom));
+                else if (trunk.Contains(main) && spineAt >= 0) ofTrunk.Add(spineTurn * (vertices[i] - spineFrom));
             }
-            void Add(Transform bone, List<Vector3> points, Transform to)
+            var girths = new List<(HumanBodyBones, Girth)>();
+            void Add(HumanBodyBones of, Transform bone, List<Vector3> points, Transform to)
             {
-                if (to != null && GirthOf(bone, points, Quaternion.Inverse(bone.rotation) * (to.position - bone.position)) is Girth g) bulk.parts.Add(g);
+                if (to != null && GirthOf(bone, points, Quaternion.Inverse(bone.rotation) * (to.position - bone.position)) is Girth g)
+                {
+                    bulk.parts.Add(g);
+                    girths.Add((of, g));
+                }
             }
-            Add(thighR, ofRight, kneeR);
-            Add(thighL, ofLeft, kneeL);
-            Add(hips, ofHips, spine);
-            Add(spine, ofTrunk, neck);
+            Add(HumanBodyBones.RightUpperLeg, thighR, ofRight, kneeR);
+            Add(HumanBodyBones.LeftUpperLeg, thighL, ofLeft, kneeL);
+            Add(HumanBodyBones.Hips, hips, ofHips, spine);
+            Add(HumanBodyBones.Spine, spine, ofTrunk, neck);
+            if (same.Count >= SameMost) same.Clear();
+            same[mesh.GetInstanceID()] = new Measured { mesh = mesh, shapes = shapes, metre = bulk.metre, girths = girths };
             return bulk;
+        }
+
+        static bool Same(float[] a, float[] b)
+        {
+            if (a.Length != b.Length) return false;
+            for (int k = 0; k < a.Length; k++) if (a[k] != b[k]) return false;
+            return true;
+        }
+
+        /// <summary>A bone's frame from its bind pose (InBone's, once): its origin in the mesh, and the turn into it.</summary>
+        static (Vector3 from, Quaternion turn) BoneFrame(Matrix4x4[] binds, int at)
+        {
+            if (at < 0 || at >= binds.Length) return (Vector3.zero, Quaternion.identity);
+            var back = binds[at].inverse;
+            return (back.MultiplyPoint3x4(Vector3.zero), Quaternion.Inverse(Quaternion.LookRotation(back.GetColumn(2), back.GetColumn(1))));
         }
 
         /// <summary>
         /// How deep `model` (any carried thing, as it is placed now) is in the body: the worst of points along its longest
         /// side and across its middle, each a ball of half its thickness (metres of the model's world; ≤ 0, clear by that).
         /// </summary>
-        public float Depth(Transform model)
+        public float Depth(Transform model) => Depth(model, false);
+
+        /// <summary>
+        /// The same along its middle line alone, a point at a time (`line`): how far the body's skin is past it, for a gun
+        /// across the back whose box takes in a deep stock (F-18's measure, 10/11).
+        /// </summary>
+        public float Depth(Transform model, bool line)
         {
             if (parts.Count == 0 || model == null) return -1;
             var box = new Bounds();
@@ -137,8 +242,8 @@ namespace Bastion.Client.Units
             int thin = longest == 0 ? (size.y <= size.z ? 1 : 2) : longest == 1 ? (size.x <= size.z ? 0 : 2) : (size.x <= size.y ? 0 : 1);
             int mid = 3 - longest - thin;
             float scale = model.lossyScale.x;
-            float radius = size[thin] / 2 * scale / Mathf.Max(metre, 1e-6f);
-            float across = Mathf.Max(0, size[mid] / 2 - size[thin] / 2);
+            float radius = line ? 0 : size[thin] / 2 * scale / Mathf.Max(metre, 1e-6f);
+            float across = line ? 0 : Mathf.Max(0, size[mid] / 2 - size[thin] / 2);
             float worst = -1;
             for (int k = 0; k < Points; k++)
                 for (int h = -1; h <= 1; h++)
