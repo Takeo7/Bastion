@@ -636,6 +636,13 @@ namespace Bastion.UI.Combat
                                 Debug.Log($"[lab] tras {what}: {control.LabState()}; pulsadas: {string.Join(" ", keys.allKeys.Where(x => x.isPressed).Select(x => x.keyCode))}");
                                 break;
                             }
+                            // «girar=45»: the camera round by that many degrees, eased (CameraRig.Turn), not by quarter turns as Q
+                            // and E: a building's front square on (the walking range into found houses, Arturo 11/11).
+                            if (what.StartsWith("girar="))
+                            {
+                                if (float.TryParse(what.Substring(6), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var degrees)) control.Rig?.Turn(degrees);
+                                break;
+                            }
                             if (what.StartsWith("key="))
                             {
                                 // «key=Digit4», or several held together: «key=LeftMeta+LeftShift+Digit4» (a screenshot's).

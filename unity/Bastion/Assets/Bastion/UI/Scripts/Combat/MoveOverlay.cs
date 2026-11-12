@@ -76,6 +76,11 @@ namespace Bastion.UI.Combat
         /// a body standing over them (a line a tile's edge behind the feet is a metre behind the legs).
         /// </summary>
         const float Pull = 0.4f;
+        /// <summary>
+        /// The range's border inside a building (EdgesIn), tested against what is in front, this much nearer the camera: on
+        /// its floor, short of a rug, behind a wall that stands (Arturo, 11/11: the range into found houses; Ana, 7/11 #15).
+        /// </summary>
+        const float InsidePull = 0.1f;
 
         public static Color32 Hex(int rgb, byte alpha = 0xff) => new Color32((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb, alpha);
 
@@ -91,6 +96,11 @@ namespace Bastion.UI.Combat
         MeshFilter strips;
         MeshFilter rangeShade;
         MeshFilter edges;
+        /// <summary>
+        /// The border of the range inside a building: over nothing, behind its walls that stand and its roof (the cutaway
+        /// opens them), so from the street it stays on the floor inside, not on the front (Arturo, 11/11).
+        /// </summary>
+        MeshFilter edgesIn;
         MeshFilter wayShade;
         MeshFilter way;
         MeshFilter hover;
@@ -123,6 +133,7 @@ namespace Bastion.UI.Combat
             flames.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = FlameTexture();
             rangeShade = Layer("Alcance (sombra)", 3103, false, true, zone, Pull, true);
             edges = Layer("Alcance (bordes)", 3104, false, false, zone, Pull, true);
+            edgesIn = Layer("Alcance dentro (bordes)", 3104, false, false, zone, InsidePull);
             wayShade = Layer("Camino (sombra)", 3103, false, true, zone, Pull, true);
             way = Layer("Camino", 3105, false, false, zone, Pull, true);
 
@@ -256,6 +267,7 @@ namespace Bastion.UI.Combat
             build.Clear();
             under.Clear();
             var lines = new MeshBuilder();
+            var linesIn = new MeshBuilder();
             var eye = new MeshBuilder();
             var flame = new MeshBuilder();
             if (s != null && tiles != null)
@@ -305,19 +317,46 @@ namespace Bastion.UI.Combat
                 var dashBends = new List<Bend>();
                 var walkLine = RoundCorners(walkSegs, CornerR, walkBends);
                 var dashLine = RoundCorners(dashSegs, CornerR, dashBends);
-                foreach (var seg in walkLine) lines.Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : WalkEdge, edge));
-                foreach (var seg in dashLine) lines.Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : DashEdge, edge));
+                foreach (var seg in walkLine) (Indoor(s, bands, seg) ? linesIn : lines).Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : WalkEdge, edge));
+                foreach (var seg in dashLine) (Indoor(s, bands, seg) ? linesIn : lines).Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : DashEdge, edge));
                 Glow(build, walkFloors, walkLine, walkBends, planning ? PlanTint : WalkFill, fill);
                 Glow(build, dashFloors, dashLine, dashBends, planning ? PlanTint : DashFill, fill);
             }
             strips.sharedMesh = build.Build(strips.sharedMesh);
             rangeShade.sharedMesh = under.Build(rangeShade.sharedMesh);
             edges.sharedMesh = lines.Build(edges.sharedMesh);
+            edgesIn.sharedMesh = linesIn.Build(edgesIn.sharedMesh);
             eyes.sharedMesh = eye.Build(eyes.sharedMesh);
             flames.sharedMesh = flame.Build(flames.sharedMesh);
         }
 
         static int Key(int x, int y) => x * 1024 + y;
+
+        /// <summary>
+        /// Whether a piece of the range's border is the edge of a tile inside a building (Interior): the band's tile on either
+        /// side of it, or under it at a rounded corner.
+        /// </summary>
+        static bool Indoor(GameState s, Dictionary<int, (Pos pos, bool dash)> bands, Vector3[] seg)
+        {
+            var middle = (seg[0] + seg[1]) * 0.5f;
+            var along = seg[1] - seg[0];
+            along.y = 0;
+            var side = along.sqrMagnitude > 1e-8f ? new Vector3(-along.z, 0, along.x).normalized * (0.1f * T) : Vector3.zero;
+            for (var k = 0; k < 3; k++)
+            {
+                var tile = Board.TileOf(k == 0 ? middle + side : k == 1 ? middle - side : middle);
+                if (bands.TryGetValue(Key(tile.x, tile.y), out var band)) return Interior(s, band.pos);
+            }
+            return false;
+        }
+
+        /// <summary>Whether `p` is inside a building, under a storey of it (GameState.Storeys), as CombatController's.</summary>
+        static bool Interior(GameState s, Pos p)
+        {
+            if (s.Storeys == null || !Grid.InBounds(s, p.X, p.Y)) return false;
+            var storeys = s.Storeys[Grid.TileIndex(s, p.X, p.Y)];
+            return storeys > 0 && p.Z < storeys;
+        }
 
         /// <summary>
         /// What the reach's border goes round, each tile in its band (dash or not): the reach; those in the way beside it

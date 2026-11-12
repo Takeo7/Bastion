@@ -517,9 +517,10 @@ namespace Bastion.UI.Combat
                 tiles = reach != null ? Tiles(u) : null;
             }
             // Without the command the range is still shown, fainter: it is for planning (#35). Only the floor shown's, and of
-            // a building's inside only with the picked one in it (InsideOf; Ana, 7/11 #15).
-            var inside = tiles != null ? InsideOf(u) : null;
-            Overlay?.ShowRange(State, tiles?.Where(t => t.Pos.Z == Level && (!Interior(State, t.Pos) || inside != null && inside.Contains(TileKey(t.Pos)))).ToList(), Planning, Soft);
+            // a building's inside only if the squad has found it (Arturo, 11/11: «El área de andar debería entrar también en
+            // casas», only the found ones); one not found shows nothing inside, its doorway yes (Ana, 7/11 #15).
+            var found = tiles != null ? FoundInside() : null;
+            Overlay?.ShowRange(State, tiles?.Where(t => t.Pos.Z == Level && (!Interior(State, t.Pos) || found[Grid.NodeOf(State, t.Pos)])).ToList(), Planning, Soft);
             using (MRefreshWay.Auto()) ShowWay();
             DrawPlans();
             using (MRefreshHud.Auto()) RefreshHud();
@@ -535,37 +536,32 @@ namespace Bastion.UI.Combat
             return storeys > 0 && p.Z < storeys;
         }
 
-        static int TileKey(Pos p) => (p.Z * 4096 + p.Y) * 4096 + p.X;
-
         /// <summary>
-        /// The inside of the building `u` is in, on its storey, if the squad has found it: the tiles under its roof one can
-        /// stand on that join its own without going out (through its inner doors, never its walls); null when it is out in
-        /// the street or the building is unfound. Only there does the reach show inside a building (Ana, 7/11 #15: from the
-        /// street its lines showed on the front of one nobody had found).
+        /// Every place of the map (Grid.NodeOf) that isn't hidden inside a building the squad hasn't found, as the rules have
+        /// it (Buildings.Veil: what was found, and what its members find where they stand; a doorway always shows): where
+        /// the walking range may go indoors (Arturo, 11/11). Worked out again only when what is found or where the squad
+        /// stands changes, not at each Refresh (a Buildings.Hidden a tile was the stalls' kind of cost, 7/11).
         /// </summary>
-        HashSet<int> InsideOf(Unit u)
+        bool[] FoundInside()
         {
             var s = State;
-            if (u == null || !Interior(s, u.Pos)) return null;
-            // Found as the rules have it (Buildings.Hidden, Los's), from where the soldier stands too: in a doorway, nothing
-            // of an unfound building shows.
-            var from = new[] { u.Pos };
-            var inside = new HashSet<int> { TileKey(u.Pos) };
-            var queue = new Queue<Pos>();
-            queue.Enqueue(u.Pos);
-            while (queue.Count > 0)
-            {
-                var p = queue.Dequeue();
-                foreach (var d in Grid.Dirs4)
-                {
-                    var q = new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = p.Z };
-                    if (!Grid.InBounds(s, q.X, q.Y) || inside.Contains(TileKey(q)) || !Interior(s, q) || !Grid.CanStandOn(Grid.KindAt(s, q)) || Buildings.Hidden(s, q, from)) continue;
-                    inside.Add(TileKey(q));
-                    queue.Enqueue(q);
-                }
-            }
-            return inside;
+            var places = 17L;
+            foreach (var a in s.Units)
+                if (Los.IsViewer(a, Teams.Xcom)) places = places * 31 + Grid.NodeOf(s, a.Pos);
+            var count = s.Discovered?.Count ?? 0;
+            if (foundMask != null && foundFor == s && foundList == s.Discovered && foundCount == count && foundPlaces == places) return foundMask;
+            var mask = new bool[s.Width * s.Height * Grid.LevelCount(s)];
+            for (var i = 0; i < mask.Length; i++) mask[i] = true;
+            Buildings.Veil(s, mask);
+            (foundMask, foundFor, foundList, foundCount, foundPlaces) = (mask, s, s.Discovered, count, places);
+            return mask;
         }
+
+        bool[] foundMask;
+        GameState foundFor;
+        List<int> foundList;
+        int foundCount;
+        long foundPlaces;
 
         /// <summary>
         /// Where `u` can end its move (game.ts reach): all of it one band now, the movement apart from the actions (Arturo,
