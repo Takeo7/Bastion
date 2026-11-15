@@ -342,14 +342,28 @@ namespace Bastion.Engine
             var leader = members.Count > 0 ? members[0] : null;
             if (leader == null) return;
 
+            // Whoever of them can walk there goes first: the leader may be boxed in by the rest, and then the pod stood
+            // where it was all game, looking the same way (Ana, 23/10 #25), or forgot at once a noise it had heard (Arturo's
+            // notes of 14/11: a shot inside a house, and the pods outside that heard it never came).
+            (Unit m, List<Pos> path)? GoFor(Pos goal, int actions = 1)
+            {
+                foreach (var m in members)
+                {
+                    var path = WalkPath(s, m, goal, 0, actions);
+                    if (path != null) return (m, path);
+                }
+                return null;
+            }
+
             var heard = members.Find((m) => m.Heard != null)?.Heard;
             if (heard != null)
             {
-                var path = !Arrived(s, leader.Pos, heard, 1.5) ? WalkPath(s, leader, heard, 0, InvestigateActions) : null;
-                if (path != null)
+                var look = !Arrived(s, leader.Pos, heard, 1.5) ? GoFor(heard, InvestigateActions) : null;
+                if (look != null)
                 {
-                    sim.MoveAlong(leader, path, 0);
-                    Follow(sim, pod, members, InvestigateActions);
+                    var goer = look.Value.m;
+                    sim.MoveAlong(goer, look.Value.path, 0);
+                    Follow(sim, pod, new[] { goer }.Concat(members.Where((m) => m != goer)).ToList(), InvestigateActions);
                     return;
                 }
                 // Nobody there, or no way to it.
@@ -359,18 +373,6 @@ namespace Bastion.Engine
             {
                 LookRound(sim, pod, members);
                 return;
-            }
-
-            // Whoever of them can walk there goes first: the leader may be boxed in by the rest, and then the pod stood
-            // where it was all game, looking the same way (Ana, 23/10 #25).
-            (Unit m, List<Pos> path)? GoFor(Pos goal)
-            {
-                foreach (var m in members)
-                {
-                    var path = WalkPath(s, m, goal);
-                    if (path != null) return (m, path);
-                }
-                return null;
             }
             var index = pod.PatrolIndex % pod.Patrol.Count;
             var walk = Arrived(s, leader.Pos, pod.Patrol[index], 2) ? null : GoFor(pod.Patrol[index]);

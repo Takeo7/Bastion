@@ -81,6 +81,8 @@ namespace Bastion.UI.Combat
         /// <summary>The distance's spring: the point's, a little livelier framing the enemy's turn (FrameZoom), which waits for it (A-01).</summary>
         float zoomStiffness = Spring;
         const float FrameSpring = 8f;
+        /// <summary>The nearest an attack's framing comes of itself (FrameZoom `closer`): 16 tiles.</summary>
+        const float CloserFrame = 16f * 1.5f;
         Vector2 dragFrom;
         bool dragging;
         Camera cam;
@@ -194,9 +196,17 @@ namespace Bastion.UI.Combat
         public void Rotate(int dir)
         {
             if (Overhead) return;
+            // Aiming over a shoulder, Q and E (or two fingers turned) turn that shot instead of going back out (TurnClose).
+            if (closeOn && TurnClose != null && TurnClose(dir)) return;
             TakeControl();
             desiredYaw += dir * 90f;
         }
+
+        /// <summary>
+        /// A quarter turn asked for while in a shot over a shoulder that the player may turn (aiming: Arturo, 14/11): whether
+        /// it took it (CombatController.TurnAim); if not, the turn leaves the shot for the rig's own view, as before.
+        /// </summary>
+        public System.Func<int, bool> TurnClose;
 
         /// <summary>Round by `degrees` more, eased as a quarter turn is, for a cinematic (La Lata leaving: Arturo, 31/10 #1); not the player's.</summary>
         public void Turn(float degrees) => desiredYaw += degrees;
@@ -299,7 +309,7 @@ namespace Bastion.UI.Combat
         /// #4), within the share of the screen `room` leaves clear of the HUD; never nearer than the player had it, never
         /// past the farthest. RestoreZoom goes back.
         /// </summary>
-        public void FrameZoom(Vector3 centre, System.Collections.Generic.IList<Vector3> points, float room = 0.72f)
+        public void FrameZoom(Vector3 centre, System.Collections.Generic.IList<Vector3> points, float room = 0.72f, bool closer = false)
         {
             if (Overhead) return;
             if (savedDistance == null) savedDistance = desiredDistance;
@@ -320,7 +330,9 @@ namespace Bastion.UI.Combat
                 var depth = Vector3.Dot(r, forward);
                 need = Mathf.Max(need, Mathf.Abs(Vector3.Dot(r, right)) / tanH - depth, Mathf.Abs(Vector3.Dot(r, up)) / tanV - depth);
             }
-            desiredDistance = Mathf.Clamp(Mathf.Max(savedDistance.Value, need), MinDistance, MaxDistance);
+            // `closer`, an attack framed (Arturo, 14/11: «Acercar la cámara para encuadrar el ataque»): nearer than the player
+            // had it too, down to CloserFrame, never so near that one of them is out.
+            desiredDistance = Mathf.Clamp(Mathf.Max(closer ? Mathf.Min(savedDistance.Value, CloserFrame) : savedDistance.Value, need), MinDistance, MaxDistance);
             zoomSpring = true;
             zoomStiffness = FrameSpring;
         }

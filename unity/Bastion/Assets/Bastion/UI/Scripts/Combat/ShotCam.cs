@@ -67,7 +67,13 @@ namespace Bastion.UI.Combat
         /// The shot from `from` (the attacker's chest, where it strikes or shoots from) at `to` (the target's chest), or null
         /// where there is no room for one: the camera stays as it is. Out of everyone's body but `skip`'s (the two of them).
         /// </summary>
-        public static (Vector3 pos, Vector3 look)? OverShoulder(GameState s, Vector3 from, Vector3 to, params string[] skip)
+        public static (Vector3 pos, Vector3 look)? OverShoulder(GameState s, Vector3 from, Vector3 to, params string[] skip) => OverShoulder(s, from, to, 0, skip);
+
+        /// <summary>
+        /// The same, every place it tries turned `around` (rad, + to the attacker's right) round the head: Q and E while
+        /// aiming (Arturo, 14/11: «girar la cámara conservando la vista en tercera persona»).
+        /// </summary>
+        public static (Vector3 pos, Vector3 look)? OverShoulder(GameState s, Vector3 from, Vector3 to, float around, params string[] skip)
         {
             var flat = new Vector3(to.x - from.x, 0, to.z - from.z);
             var run = flat.magnitude;
@@ -90,7 +96,7 @@ namespace Bastion.UI.Combat
             var bestScore = float.NegativeInfinity;
             for (var n = 0; n < Turns.Length; n++)
             {
-                var turn = Turns[n];
+                var turn = Turns[n] + around;
                 foreach (var (tilt, lift) in Rises)
                 {
                     var p = pitch * tilt;

@@ -990,6 +990,18 @@ namespace Bastion.Client.Effects
             }
         }
 
+        /// <summary>
+        /// A window breaking (Arturo's play-test of 14/11, «Ventanas rotas»; before, the cover's grey chunks in its blue and a
+        /// puff of dust): a glint where it gives, splinters of pale glass flying out and falling, a sparkle of bits; no dust.
+        /// `at` the pane's middle. What is left of it stays on the map (WallLayout.ShardsMesh).
+        /// </summary>
+        public void Shatter(Vector3 at)
+        {
+            Flash(at, Hex(0xe4f4ff), 0.5f, 2, 0.1f);
+            Chips(at, Hex(0xbfe0ee), 12, 3.4f);
+            Sparks(at, Hex(0xd6efff), 8);
+        }
+
         /// <summary>Chunks flying out of a cover block broken.</summary>
         public void Debris(Vector3 at, Color colour, int count = 8)
         {

@@ -39,7 +39,10 @@ namespace Bastion.Client.Map
         public bool cap;
     }
 
-    /// <summary>A window's pane (buildWalls `pane`): the kit's glass (WallLayout.PaneMesh) at that matrix (tiles).</summary>
+    /// <summary>
+    /// A window's pane (buildWalls `pane`): the kit's glass (WallLayout.PaneMesh) at that matrix (tiles); or, `broken`, what is
+    /// left of it (WallLayout.ShardsMesh: shards in the frame and on the floor under it).
+    /// </summary>
     public sealed class WallPane
     {
         public string kit;
@@ -52,6 +55,13 @@ namespace Bastion.Client.Map
         public Vector2 outward;
         public bool between;
         public float floor;
+        /// <summary>
+        /// A window broken (windowBroken: a unit went through it, or the map's ruins): its glass gone but for the shards. Arturo's
+        /// play-test of 14/11, «Ventanas rotas … ambas se veían iguales».
+        /// </summary>
+        public bool broken;
+        /// <summary>A broken one's shards outside too, on the ground under it (the ground floor's: an upper storey's would hang in the air).</summary>
+        public bool fallOutside;
     }
 
     /// <summary>

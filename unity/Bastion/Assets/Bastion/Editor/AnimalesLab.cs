@@ -13,6 +13,10 @@ namespace Bastion.EditorTools
     ///   Perros: on the first dog. Pajaros: on the first crows. Campo: on the first wild one (a country map, wilds-7).
     /// The camera on it (between it and the stand-in's start, a third of the way) BASTION_DIST tiles off (12).
     ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.AnimalesLab.Perros -shotFrames 80 -shotFps 10 -shotWarm 0.5 …
+    /// For Arturo's play-test of 14/11 (fewer, and food, shelter and running from the dead of their own): BASTION_NOCHE=1
+    /// the map by night; BASTION_CUERPO=x,y (or 1) a body of the dead to eat at (Body); BASTION_QUIERE=Food|Shelter|Wander
+    /// what every animal goes about (Fauna.LabWant); BASTION_SONDA_PLAN=1 each choice in the log ([plan]). Palomas: the
+    /// pigeons. Muerto: one of the dead walking at the animal. Cuantos: how many each map gets. Coste: what they cost.
     /// </summary>
     public static class AnimalesLab
     {
@@ -32,6 +36,8 @@ namespace Bastion.EditorTools
             };
         }
         public static void Pajaros() => Show("Crow");
+        /// <summary>The pigeons' flock on a town's paving (Arturo's play-test of 14/11: they fly up to a roof, not off the map).</summary>
+        public static void Palomas() => Show("Pigeon");
         public static void Campo() => Show("Wild");
         /// <summary>A rabbit (SIMPLE's, Arturo 1/11) on a country map, wilds-7: hopping off as the stand-in comes, before the rest.</summary>
         public static void Conejo() => Show("Grazer", "Rabbit");
@@ -252,11 +258,296 @@ namespace Bastion.EditorTools
         static float Number(string name, float otherwise) =>
             float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : otherwise;
 
-        static void Show(string kind, string breed = null)
+        /// <summary>
+        /// How many animals each map gets (Arturo's play-test of 14/11: «dio la impresión de que había demasiados»): for each
+        /// of BASTION_MAPAS (step1's goldens, and BASTION_SEMILLAS generated missions of each biome, 12, unless said), its
+        /// Fauna made as MapBuilder makes it (an empty stands in for each model: nothing drawn), and in the log a line
+        /// [cuantos] with the map, its size and its outdoor tiles, each kind's count and how many of them stand where the
+        /// squad sees as the mission starts (Los.TeamVisibility; one on a roof, if a tile beside its own is), and at the end
+        /// each biome's mean a map.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.AnimalesLab.Cuantos -quit
+        /// </summary>
+        public static void Cuantos()
+        {
+            var names = Environment.GetEnvironmentVariable("BASTION_MAPAS")?.Split(',') ?? new[] { "city-1", "city-5-night", "city-7", "facility-1", "facility-7", "wilds-1", "wilds-3-night", "wilds-7", "torre" };
+            var maps = names.Select(n => (name: n, read: (Func<Bastion.Engine.GameState>)(() => MapLab.Golden(n)))).ToList();
+            int seeds = (int)Number("BASTION_SEMILLAS", 12);
+            foreach (string biome in Bastion.Engine.Biomes.All)
+                for (int k = 1; k <= seeds; k++)
+                {
+                    int seed = k;
+                    maps.Add(($"{biome}:{seed}", () => MapLab.Generated(biome, seed, "elimination")));
+                }
+            var stub = new GameObject("modelo de prueba");
+            string[] kinds = { "Dog", "Cat", "Wild", "Grazer", "Crow", "Pigeon" };
+            var sums = new System.Collections.Generic.Dictionary<string, (int maps, float tiles, int[] all, int[] seen)>();
+            foreach (var (name, read) in maps)
+            {
+                Bastion.Engine.GameState s;
+                try { s = read(); }
+                catch (Exception e)
+                {
+                    Debug.Log($"[cuantos] {name}: not made ({e.GetType().Name}: {e.Message})");
+                    continue;
+                }
+                var plan = new BuildingPlan(s);
+                BuildingSurfaces.Of(s, plan);
+                var parent = new GameObject("Cuantos");
+                var fauna = Fauna.Make(parent.transform, s, plan, key => stub);
+                var sight = Bastion.Engine.Los.TeamVisibility(s, Bastion.Engine.Teams.Xcom);
+                bool Seen(int x, int y)
+                {
+                    if (x < 0 || y < 0 || x >= s.Width || y >= s.Height) return false;
+                    int node = Bastion.Engine.Grid.NodeOf(s, new Bastion.Engine.Pos { X = x, Y = y, Z = 0 });
+                    return node >= 0 && node < sight.Length && sight[node];
+                }
+                int outdoor = 0;
+                for (int i = 0; i < s.Width * s.Height; i++)
+                    if (Bastion.Engine.Grid.IsWalkable(s.Tiles[i]) && plan.Owner[i] < 0 && (s.Ground == null || i >= s.Ground.Count || (s.Ground[i] != 2 && s.Ground[i] != 4))) outdoor++;
+                var all = new int[kinds.Length];
+                var seen = new int[kinds.Length];
+                foreach (var (kind, root) in fauna.Animals)
+                {
+                    int k = Array.IndexOf(kinds, kind);
+                    if (k < 0) continue;
+                    all[k]++;
+                    var t = MapSpace.WorldToTile(root.position);
+                    bool high = root.position.y > 1;
+                    bool look = Seen(t.x, t.y);
+                    for (int dy = -1; dy <= 1 && high && !look; dy++) for (int dx = -1; dx <= 1 && !look; dx++) look = Seen(t.x + dx, t.y + dy);
+                    if (look) seen[k]++;
+                }
+                Debug.Log($"[cuantos] {name} {s.Biome}{(s.Base != null ? " base" : "")} {s.Width}×{s.Height}, {outdoor} outdoor: " + string.Join(", ", kinds.Select((k, i) => $"{k} {all[i]} ({seen[i]})")) + $"; total {all.Sum()} ({seen.Sum()} seen)");
+                string key = s.Base != null ? "base" : s.Biome;
+                var sum = sums.TryGetValue(key, out var was) ? was : (maps: 0, tiles: 0f, all: new int[kinds.Length], seen: new int[kinds.Length]);
+                sum.maps++;
+                sum.tiles += outdoor;
+                for (int i = 0; i < kinds.Length; i++)
+                {
+                    sum.all[i] += all[i];
+                    sum.seen[i] += seen[i];
+                }
+                sums[key] = sum;
+                UnityEngine.Object.DestroyImmediate(parent);
+            }
+            UnityEngine.Object.DestroyImmediate(stub);
+            foreach (var (key, sum) in sums.OrderBy(p => p.Key))
+                Debug.Log(FormattableString.Invariant($"[cuantos] mean of {sum.maps} {key} maps ({sum.tiles / sum.maps:0} outdoor tiles): ") + string.Join(", ", kinds.Select((k, i) => FormattableString.Invariant($"{k} {sum.all[i] / (float)sum.maps:0.0} ({sum.seen[i] / (float)sum.maps:0.0})")))
+                    + FormattableString.Invariant($"; total {sum.all.Sum() / (float)sum.maps:0.0} ({sum.seen.Sum() / (float)sum.maps:0.0} seen)"));
+        }
+
+        /// <summary>
+        /// What the animals cost in play (Arturo's play-test of 14/11, their own behaviour: measured before and after): MapLab's
+        /// map (BASTION_MAP, city-7) by day with its animals, the camera over its middle BASTION_DIST tiles off (24); from
+        /// BASTION_ESPERA frames on (120), BASTION_CUADROS frames (1200) in blocks of 60, the animals on and off in turn (Fauna's
+        /// object): the main thread's frame, the scripts' Update (Fauna's among them) and the animators' (the player loop's
+        /// DirectorUpdateAnimation markers), ms a frame, the mean of each half and the difference. [coste]
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.AnimalesLab.Coste -shotPlay -shotCamera "Shot camera"
+        ///     -shotFps 30 -shotWarm 46 -shotFrames 1 -shotOut &lt;file.png&gt;
+        /// </summary>
+        public static void Coste()
         {
             MapLab.Day();
+            var fauna = Fauna.Current;
+            if (fauna == null)
+            {
+                Debug.LogWarning("[coste] the map made no animals");
+                return;
+            }
+            var state = Bastion.Client.NightLights.StateForLab;
+            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            MapSpace.Aim(camera, MapSpace.World(state.Width / 2, state.Height / 2), Number("BASTION_DIST", 24));
+            int wait = (int)Number("BASTION_ESPERA", 120), frames = (int)Number("BASTION_CUADROS", 1200);
+            string[] wanted = { "PlayerLoop", "Update.ScriptRunBehaviourUpdate", "PreLateUpdate.DirectorUpdateAnimationBegin", "PreLateUpdate.DirectorUpdateAnimationEnd" };
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                var recorders = new System.Collections.Generic.List<(string name, Unity.Profiling.ProfilerRecorder recorder)>();
+                var on = new double[wanted.Length];
+                var off = new double[wanted.Length];
+                int from = -1, frame = -1, counted = 0, onFrames = 0, offFrames = 0;
+                var animals = fauna.gameObject;
+                void Step()
+                {
+                    if (from < 0) from = Time.frameCount + wait;
+                    if (Time.frameCount == frame) return;
+                    frame = Time.frameCount;
+                    if (Time.frameCount < from) return;
+                    if (recorders.Count == 0)
+                    {
+                        var handles = new System.Collections.Generic.List<Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle>();
+                        Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle.GetAvailable(handles);
+                        foreach (string name in wanted)
+                        {
+                            var found = handles.Select(h => Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle.GetDescription(h)).FirstOrDefault(d => d.Name == name);
+                            recorders.Add((name, found.Name != null ? Unity.Profiling.ProfilerRecorder.StartNew(found.Category, found.Name, 1) : default));
+                        }
+                        Debug.Log($"[coste] {fauna.Animals.Count()} animals; markers: " + string.Join(", ", recorders.Select(r => $"{r.name} {(r.recorder.Valid ? "on" : "missing")}")));
+                        return;
+                    }
+                    // (The block just measured: the animals were as they are now since its first frame.)
+                    bool were = animals.activeSelf;
+                    for (int k = 0; k < recorders.Count; k++)
+                        if (recorders[k].recorder.Valid) (were ? on : off)[k] += recorders[k].recorder.LastValue / 1e6;
+                    if (were) onFrames++;
+                    else offFrames++;
+                    // (Switched a frame ahead of the block's first counted frame: what goes off settles.)
+                    if (++counted % 60 == 0) animals.SetActive(!were);
+                    if (counted < frames) return;
+                    animals.SetActive(true);
+                    EditorApplication.update -= Step;
+                    Debug.Log($"[coste] {Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7"}: {onFrames} frames with the animals, {offFrames} without; ms a frame, with / without / the difference: "
+                        + string.Join(" · ", wanted.Select((n, k) => FormattableString.Invariant($"{n} {on[k] / Math.Max(1, onFrames):0.000} / {off[k] / Math.Max(1, offFrames):0.000} / {on[k] / Math.Max(1, onFrames) - off[k] / Math.Max(1, offFrames):+0.000;-0.000}"))));
+                    foreach (var (_, recorder) in recorders) recorder.Dispose();
+                }
+                EditorApplication.update += Step;
+            };
+        }
+
+        /// <summary>
+        /// One of the dead walking at an animal (Arturo's play-test of 14/11: they run from the dead too; the dead don't see
+        /// them, Arturo's choice): MapLab's map (BASTION_MAP, city-7; BASTION_NOCHE=1 by night), the animal Show would pick
+        /// (BASTION_TIPO, Dog unless said; BASTION_RAZA, BASTION_ANIMAL, BASTION_EN) and one of the map's dead put
+        /// BASTION_DESDE tiles off it (8) to the south-east, on the nearest tile it can stand on, the map's other units gone; a
+        /// second in it walks at the animal by the engine's ways (UnitViews.MoveAlong). BASTION_OCULTO=1: the dead not drawn
+        /// (out of the squad's sight: the animal runs all the same). The camera as Show's (BASTION_DIST, BASTION_GIRO,
+        /// BASTION_MIRA, BASTION_SEGUIR).
+        ///   BASTION_MAP=wilds-7 BASTION_TIPO=Grazer unity/tools/captura.sh -shotSetup Bastion.EditorTools.AnimalesLab.Muerto -shotPlay
+        ///     -shotCamera "Shot camera" -shotFrames 150 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Muerto()
+        {
+            if (Environment.GetEnvironmentVariable("BASTION_NOCHE") == "1") MapLab.Night();
+            else MapLab.Day();
+            var fauna = Fauna.Current;
+            var state = Bastion.Client.NightLights.StateForLab;
+            if (fauna == null || state == null)
+            {
+                Debug.LogWarning("[animales] the map made no animals");
+                return;
+            }
+            string kind = Environment.GetEnvironmentVariable("BASTION_TIPO") ?? "Dog", breed = Environment.GetEnvironmentVariable("BASTION_RAZA");
+            var middle = MapSpace.World(state.Width / 2, state.Height / 2);
+            var first = fauna.Animals.Where(a => a.kind == kind && (breed == null || a.root.name.StartsWith(breed))).OrderBy(a => Vector3.Distance(a.root.position, middle)).Skip((int)Number("BASTION_ANIMAL", 0)).FirstOrDefault().root;
+            if (first == null)
+            {
+                Debug.LogWarning($"[animales] no {kind} on the map");
+                return;
+            }
+            if (Environment.GetEnvironmentVariable("BASTION_EN")?.Split(',') is string[] en && en.Length == 2)
+                first.position = MapSpace.World(int.Parse(en[0]), int.Parse(en[1]));
+            var dead = state.Units.Where(u => u.Alive && u.Team == Bastion.Engine.Teams.Alien && Bastion.Client.Units.Gaits.MovesDead(u.Template)).OrderBy(u => u.Template == "zombie" ? 0 : 1).FirstOrDefault();
+            if (dead == null)
+            {
+                Debug.LogWarning("[animales] no dead on the map");
+                return;
+            }
+            state.Units = new System.Collections.Generic.List<Bastion.Engine.Unit> { dead };
+            var plan = new BuildingPlan(state);
+            var at = MapSpace.WorldToTile(first.position);
+            float off = Number("BASTION_DESDE", 8);
+            int wantX = at.x + Mathf.RoundToInt(off / Mathf.Sqrt(2)), wantY = at.y + Mathf.RoundToInt(off / Mathf.Sqrt(2));
+            // (Where it starts: the open outdoor tile nearest that place; where it goes, the one beside the animal it reaches.)
+            bool Open(int x, int y) => x >= 1 && y >= 1 && x < state.Width - 1 && y < state.Height - 1 && Bastion.Engine.Grid.IsWalkable(state.Tiles[y * state.Width + x]) && plan.Owner[y * state.Width + x] < 0;
+            var start = Enumerable.Range(0, state.Width * state.Height).Select(i => (x: i % state.Width, y: i / state.Width)).Where(p => Open(p.x, p.y))
+                .OrderBy(p => (p.x - wantX) * (p.x - wantX) + (p.y - wantY) * (p.y - wantY)).First();
+            dead.Pos = new Bastion.Engine.Pos { X = start.x, Y = start.y, Z = 0 };
+            dead.Facing = Math.Atan2(at.y - start.y, at.x - start.x);
+            var reach = Bastion.Engine.Paths.ComputeReach(state, dead, 400);
+            var to = Bastion.Engine.Paths.Destinations(state, dead, reach).OrderBy(d => Math.Max(Math.Abs(d.Pos.X - at.x), Math.Abs(d.Pos.Y - at.y))).First().Pos;
+            var path = Bastion.Engine.Paths.BuildPath(state, dead, reach, to) ?? new System.Collections.Generic.List<Bastion.Engine.Pos>();
+            var units = new GameObject("Unidades").AddComponent<Bastion.Client.Units.UnitViews>();
+            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            var startAt = MapSpace.World(start.x, start.y);
+            MapSpace.Aim(camera, Vector3.Lerp(first.position, startAt, Number("BASTION_MIRA", 0.3f)), Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
+            bool follow = Environment.GetEnvironmentVariable("BASTION_SEGUIR") == "1";
+            Debug.Log($"[animales] {kind} {first.name} on {at.x},{at.y}; {dead.Id} ({dead.Template}) from {start.x},{start.y} to {to.X},{to.Y}, {path.Count} tiles{(Environment.GetEnvironmentVariable("BASTION_OCULTO") == "1" ? ", not drawn" : "")}");
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                Walk();
+            };
+            async void Walk()
+            {
+                try
+                {
+                    units.Sync(state);
+                    if (Environment.GetEnvironmentVariable("BASTION_OCULTO") != "1") units.Reveal(dead.Id);
+                    if (follow)
+                    {
+                        var stepping = Fauna.Stepping;
+                        Fauna.Stepping = dt =>
+                        {
+                            stepping?.Invoke(dt);
+                            if (camera != null && first != null) MapSpace.Aim(camera, Vector3.Lerp(first.position, units.Feet(dead.Id), Number("BASTION_MIRA", 0.3f)), Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
+                        };
+                    }
+                    await Awaitable.WaitForSecondsAsync(1);
+                    Debug.Log($"[animales] {Time.time:0.00} s: {dead.Id} walks");
+                    await units.MoveAlong(dead.Id, path, 1);
+                    Debug.Log($"[animales] {Time.time:0.00} s: {dead.Id} there");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            }
+        }
+
+        /// <summary>
+        /// BASTION_CUERPO=x,y (or 1: two tiles south-east of the animal): one of the map's dead lying on the open tile nearest
+        /// there, a body to eat at (Arturo's play-test of 14/11: the dog, the fox, the wolf and the crows go to the bodies of
+        /// the dead put down), drawn in play mode (UnitViews.Sync); the map's other units gone. Where it lies, or null.
+        /// </summary>
+        static Vector3? Body(Transform near)
+        {
+            string spec = Environment.GetEnvironmentVariable("BASTION_CUERPO");
+            var state = Bastion.Client.NightLights.StateForLab;
+            if (spec == null || state == null) return null;
+            var corpse = state.Units.FirstOrDefault(u => u.Alive && u.Team == Bastion.Engine.Teams.Alien && Bastion.Client.Units.Gaits.MovesDead(u.Template));
+            if (corpse == null)
+            {
+                Debug.LogWarning("[animales] no dead on the map for a body");
+                return null;
+            }
+            var at = MapSpace.WorldToTile(near.position);
+            var xy = spec.Split(',');
+            int wantX = xy.Length == 2 ? int.Parse(xy[0]) : at.x + 2, wantY = xy.Length == 2 ? int.Parse(xy[1]) : at.y + 2;
+            var plan = new BuildingPlan(state);
+            bool Open(int x, int y) => x >= 1 && y >= 1 && x < state.Width - 1 && y < state.Height - 1 && Bastion.Engine.Grid.IsWalkable(state.Tiles[y * state.Width + x]) && plan.Owner[y * state.Width + x] < 0;
+            // (In the open, where the camera sees it: two tiles clear round it, no crown nor wall over it.)
+            bool Clear(int x, int y)
+            {
+                for (int dy = -2; dy <= 2; dy++)
+                    for (int dx = -2; dx <= 2; dx++)
+                        if (!Open(x + dx, y + dy)) return false;
+                return true;
+            }
+            var spot = Enumerable.Range(0, state.Width * state.Height).Select(i => (x: i % state.Width, y: i / state.Width)).Where(p => Open(p.x, p.y))
+                .OrderBy(p => Clear(p.x, p.y) ? 0 : 1).ThenBy(p => (p.x - wantX) * (p.x - wantX) + (p.y - wantY) * (p.y - wantY)).First();
+            corpse.Pos = new Bastion.Engine.Pos { X = spot.x, Y = spot.y, Z = 0 };
+            corpse.Alive = false;
+            corpse.Hp = 0;
+            state.Units = new System.Collections.Generic.List<Bastion.Engine.Unit> { corpse };
+            var units = new GameObject("Unidades").AddComponent<Bastion.Client.Units.UnitViews>();
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                units.Sync(state);
+                units.Reveal(corpse.Id);
+            };
+            Debug.Log($"[animales] a body ({corpse.Id}, {corpse.Template}) on {spot.x},{spot.y}");
+            return MapSpace.World(spot.x, spot.y);
+        }
+
+        static void Show(string kind, string breed = null)
+        {
+            // (BASTION_NOCHE=1: the map by night.)
+            if (Environment.GetEnvironmentVariable("BASTION_NOCHE") == "1") MapLab.Night();
+            else MapLab.Day();
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
-            var state = MapLab.Golden(name);
+            // (The state MapLab built, a generated one too: BASTION_GENERAR.)
+            var state = Bastion.Client.NightLights.StateForLab ?? MapLab.Golden(name);
             // (The map makes its own, as the game's does: MapBuilder.)
             var fauna = Fauna.Current;
             if (fauna == null)
@@ -278,6 +569,7 @@ namespace Bastion.EditorTools
             if (Environment.GetEnvironmentVariable("BASTION_EN")?.Split(',') is string[] en && en.Length == 2)
                 first.position = MapSpace.World(int.Parse(en[0]), int.Parse(en[1]));
             var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            var body = Body(first);
             // (BASTION_SONDA_TODOS=1: every animal's place and turn each frame, [animal] k kind name t x z yaw: where the
             // way a cluttered street gives them is seen, not only the first one's in the open.)
             if (Environment.GetEnvironmentVariable("BASTION_SONDA_TODOS") == "1")
@@ -373,7 +665,8 @@ namespace Bastion.EditorTools
                 // (BASTION_MIRAR=x,y: the camera still, on that place (in tiles from the map's corner, decimals too: a tile's
                 // middle is .5), not on the animal.)
                 var look = Environment.GetEnvironmentVariable("BASTION_MIRAR")?.Split(',');
-                var at = look != null && look.Length == 2 ? new Vector3(float.Parse(look[0], System.Globalization.CultureInfo.InvariantCulture), 0, -float.Parse(look[1], System.Globalization.CultureInfo.InvariantCulture)) * MapSpace.Tile : first.position;
+                // (BASTION_MIRAR=cuerpo: on the body, BASTION_CUERPO's.)
+                var at = body is Vector3 lying && Environment.GetEnvironmentVariable("BASTION_MIRAR") == "cuerpo" ? lying : look != null && look.Length == 2 ? new Vector3(float.Parse(look[0], System.Globalization.CultureInfo.InvariantCulture), 0, -float.Parse(look[1], System.Globalization.CultureInfo.InvariantCulture)) * MapSpace.Tile : first.position;
                 MapSpace.Aim(camera, at, Number("BASTION_DIST", 12), Number("BASTION_GIRO", 45));
                 Debug.Log($"[animales] {kind} {first.name} alone, at {MapSpace.WorldToTile(first.position)}");
                 // (BASTION_SEGUIR=1: the camera on it wherever it wanders.)

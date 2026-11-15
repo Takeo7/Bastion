@@ -30,6 +30,12 @@ namespace Bastion.Client.Map
             public float storey;
             /// <summary>Its pane: width, height, middle's height and how far out, in the kit's metres.</summary>
             public float[] glass;
+            /// <summary>
+            /// Where its frame's own glass stood, how far out (m of the piece, before the wall's thickening), if not where the pane
+            /// says (a broken one's shards: ShardsMesh). Measured on the dropped glass (14/11): the sheet's ribbon window is 8.5 cm
+            /// in, not 7 out; an office's sash window, its lower sash 4.6 cm in.
+            /// </summary>
+            public float? shardsAt;
             public string top;
             /// <summary>An office's cornice along the top of its top storey, and its plinth at the foot of its ground floor (phase 3 of #3).</summary>
             public string crown, plinth;
@@ -136,7 +142,7 @@ namespace Bastion.Client.Map
                 {
                     wall = new[] { "officeWall" + facing }, window = new[] { "officeWindowWall" + facing }, door = new[] { "officeDoorWall" + facing, "shopSideDoor" },
                     lintel = new[] { "officeLintel" + facing }, post = "officeCorner" + facing, postAlong = 1, postSquare = true, postTint = true, thick = Thick, storey = 3,
-                    glass = new[] { 1.087f, 1.821f, 1.4425f, 0f }, crown = "officeCrown" + facing, plinth = "officePlinth" + facing,
+                    glass = new[] { 1.087f, 1.821f, 1.4425f, 0f }, crown = "officeCrown" + facing, plinth = "officePlinth" + facing, shardsAt = -0.046f,
                 };
             // A hall's facing (phase 4 of #3, the estates' warehouses): Gang Warfare's brick wall (0.39 m thick, as Shops'
             // thickened), its factory window a bay a tile (the pane the bay's glass: 1.57 m tall, its middle 1.87 m up, 9 cm
@@ -154,7 +160,7 @@ namespace Bastion.Client.Map
                 {
                     wall = new[] { "sheetWall" + facing }, window = new[] { "sheetWindowWall" + facing }, door = new[] { "sheetDoorWall" + facing, "sheetDoor" + facing },
                     lintel = new[] { "sheetLintel" + facing }, post = "sheetCorner" + facing, postAlong = 1, postSquare = true, thick = Thick, storey = 3,
-                    glass = new[] { KitTile, 1.073f, 1.473f, 0.071f },
+                    glass = new[] { KitTile, 1.073f, 1.473f, 0.071f }, shardsAt = -0.085f,
                 };
             return new Dictionary<string, Kit>(kits)
             {
@@ -311,13 +317,16 @@ namespace Bastion.Client.Map
         void Post(Kit kit, float x, float z, float @base, Vec2 o, bool between, int b, bool roof = false) =>
             Put(kit.post, x, z, @base, o, between, b, along: kit.postAlong, thick: kit.thick, square: kit.postSquare, tint: kit.postTint, roof: roof, cap: true);
 
-        /// <summary>A window pane at (x, z), `base` its storey's floor (upper storeys' go with the roof).</summary>
-        void Pane(string kit, float x, float z, float @base, Vec2 o, int b, bool roof, bool between = false)
+        /// <summary>
+        /// A window pane at (x, z), `base` its storey's floor (upper storeys' go with the roof); `broken`, what is left of it
+        /// (its shards outside too where there is ground under it: the ground floor's, or a wall between rooms).
+        /// </summary>
+        void Pane(string kit, float x, float z, float @base, Vec2 o, int b, bool roof, bool between = false, bool broken = false)
         {
             Panes.Add(new WallPane
             {
                 kit = kit, matrix = Compose(x, @base, z, Yaw(o), Vector3.one), building = b, level = level, tile = tile, roof = roof,
-                outward = new Vector2(o.X, o.Y), between = between, floor = @base,
+                outward = new Vector2(o.X, o.Y), between = between, floor = @base, broken = broken, fallOutside = broken && (level == 0 || between),
             });
         }
 
@@ -862,8 +871,8 @@ namespace Bastion.Client.Map
                     }
                     else PutAll(kit.window, cx, cz, @base, o, between, b, kit);
                     if (shuttered) Put("houseShutters", cx, cz, @base, o, between, b, thick: kit.thick);
-                    if (kind == TileKinds.Window)
-                        Pane(between ? KitIds.House : front ? KitIds.ShopFront : KitIdOf(building), cx, cz, @base, o, b, false, between);
+                    // (A broken one, what is left of its glass: before, none, and it looked as a whole one. Arturo's play-test of 14/11.)
+                    Pane(between ? KitIds.House : front ? KitIds.ShopFront : KitIdOf(building), cx, cz, @base, o, b, false, between, kind == TileKinds.WindowBroken);
                 }
                 else if (broken)
                 {
@@ -1034,6 +1043,121 @@ namespace Bastion.Client.Map
             mesh.normals = new[] { Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward };
             mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.one, Vector2.up };
             mesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        /// <summary>How many shapes a broken pane comes in (ShardsMesh's `variant`, by the window's place).</summary>
+        public const int ShardVariants = 8;
+        /// <summary>
+        /// A broken pane's ring of shards: so many teeth, each a sector, mostly long and short by turns (their tips this far
+        /// from the middle, of the way to the frame, give or take ToothSpread).
+        /// </summary>
+        const int ShardSectors = 13;
+        const float ToothLong = 0.32f, ToothShort = 0.78f, ToothSpread = 0.34f;
+        /// <summary>Shards on the floor under a broken window, inside and out, and how big (m).</summary>
+        const int FloorShards = 9;
+        const float ShardSmall = 0.05f, ShardBig = 0.13f;
+        /// <summary>How far behind the frame's glass the shards in it stand (m).</summary>
+        const float ShardsIn = 0.01f;
+
+        /// <summary>
+        /// What is left of kit `kitId`'s pane once broken (Arturo's play-test of 14/11: «Ventanas rotas. Dar a la ventana rota
+        /// un aspecto que se distinga de la intacta. En la prueba ambas se veían iguales»): shards still in the frame all
+        /// round it, pointing in, about a jagged hole in the middle, each a little aslant so they catch the light; and some
+        /// on the floor at its foot, inside and, `outside`, out. In PaneMesh's frame (0.10.1's, metres, the pane facing +z,
+        /// out); `variant` one of ShardVariants shapes. Drawn solid (WallsView.ShardMaterial): a see-through pane takes the
+        /// fog of what is behind it, so a whole one and the hole were the same black in a building nobody has been in.
+        /// </summary>
+        public static Mesh ShardsMesh(string kitId, int variant, bool outside)
+        {
+            var kit = Kits.TryGetValue(kitId, out var k) ? k : Kits[KitIds.House];
+            float gw = kit.glass[0], gh = kit.glass[1], gy = kit.glass[2], gz = kit.glass[3];
+            float fit = Storey * MapSpace.Tile / (kit.storey * Map.Pieces.KitScale);
+            // As the frame's own glass was, not as the pane (half as wide again and further out, as 0.10.1's: hidden in the
+            // wall, but in front of a hall's brick), and a centimetre further in, behind the glazing bars. (Measured on the
+            // pieces' dropped glass, 14/11: Town's 1.07 m wide, its middle 1.73 m up, 3.6 cm in; Shops' 0.86 m.)
+            float halfW = gw * Map.Pieces.KitScale / 2, halfH = gh * Map.Pieces.KitScale * fit / 2;
+            float y = gy * Map.Pieces.KitScale * fit, z = (kit.shardsAt ?? gz * Map.Pieces.KitScale) * kit.thick - ShardsIn;
+            float R(int n, int salt) => (float)BuildingPlan.Hash(variant, n, salt);
+            var points = new List<Vector3>();
+            var normals = new List<Vector3>();
+            // A triangle, flat: its own normal, on the side of `up` (both faces are drawn), and wound against it as PaneMesh's,
+            // which the world's mirror (MapSpace.FromGame) turns round: its front is the side towards `up`. (Else it was a back
+            // face from outside, its normal turned in, and the fog took it as the inside's: dark in a building nobody has
+            // been in.)
+            void Tri(Vector3 a, Vector3 b, Vector3 c, Vector3 up)
+            {
+                var n = Vector3.Cross(b - a, c - a).normalized;
+                if (Vector3.Dot(n, up) < 0) n = -n;
+                else (b, c) = (c, b);
+                points.Add(a);
+                points.Add(b);
+                points.Add(c);
+                for (int i = 0; i < 3; i++) normals.Add(n);
+            }
+            // The ring: the frame's edge (where a ray from the middle meets it) and the hole's (the ray's tooth), sector by
+            // sector; the frame's corners in the sectors they fall in. Each tooth's tip bent in a little.
+            float turn = R(0, 1) * Mathf.PI * 2;
+            var angles = new float[ShardSectors];
+            for (int s = 0; s < ShardSectors; s++) angles[s] = turn + (s + (R(s, 2) - 0.5f) * 0.7f) * Mathf.PI * 2 / ShardSectors;
+            Vector3 Edge(float a)
+            {
+                float c = Mathf.Cos(a), sn = Mathf.Sin(a);
+                float reach = 1 / Mathf.Max(Mathf.Abs(c), Mathf.Abs(sn));
+                return new Vector3(c * halfW * reach, y + sn * halfH * reach, z);
+            }
+            Vector3 Tip(int s)
+            {
+                // (One in four the other way: not a star.)
+                bool longer = (s % 2 == 0) != (R(s, 5) < 0.25f);
+                float r = (longer ? ToothLong : ToothShort) + (R(s, 3) - 0.5f) * ToothSpread;
+                float c = Mathf.Cos(angles[s]), sn = Mathf.Sin(angles[s]);
+                float reach = 1 / Mathf.Max(Mathf.Abs(c), Mathf.Abs(sn));
+                // (Towards the rectangle's edge as the frame is, a little rounder.)
+                float along = r * Mathf.Lerp(1, reach, 0.6f);
+                // (Its tip bent in a little, never out past the glazing bars.)
+                return new Vector3(c * halfW * along, y + sn * halfH * along, z - R(s, 4) * 0.06f);
+            }
+            for (int s = 0; s < ShardSectors; s++)
+            {
+                int t = (s + 1) % ShardSectors;
+                float a0 = angles[s], a1 = angles[t] + (t == 0 ? Mathf.PI * 2 : 0);
+                var rim = new List<Vector3> { Edge(a0) };
+                // (The rectangle's corners, at its diagonals.)
+                for (int q = -8; q <= 8; q++)
+                {
+                    float corner = Mathf.PI / 4 + q * Mathf.PI / 2;
+                    if (corner > a0 && corner < a1) rim.Add(Edge(corner));
+                }
+                rim.Add(Edge(a1));
+                var tip = Tip(s);
+                for (int i = 0; i + 1 < rim.Count; i++) Tri(tip, rim[i], rim[i + 1], Vector3.forward);
+                Tri(tip, rim[rim.Count - 1], Tip(t), Vector3.forward);
+            }
+            // On the floor at its foot: inside (−z), and out (+z), past the wall's face; small, lying nearly flat, turned any way.
+            float face = 0.1f * kit.thick * KitTiles * MapSpace.Tile;
+            foreach (int side in outside ? new[] { -1, 1 } : new[] { -1 })
+                for (int n = 0; n < FloorShards; n++)
+                {
+                    int m = n + (side > 0 ? 40 : 0);
+                    float size = Mathf.Lerp(ShardSmall, ShardBig, R(m, 5));
+                    var at = new Vector3((R(m, 6) * 2 - 1) * Mathf.Max(halfW, 0.45f), 0.012f + R(m, 7) * 0.01f, (face + 0.06f + R(m, 8) * R(m, 8) * 0.6f) * side);
+                    float spin = R(m, 9) * Mathf.PI * 2;
+                    var corners = new Vector3[3];
+                    for (int c = 0; c < 3; c++)
+                    {
+                        float a = spin + c * Mathf.PI * 2 / 3 + (R(m, 10 + c) - 0.5f) * 0.9f;
+                        float r = size * (0.55f + 0.45f * R(m, 13 + c));
+                        corners[c] = at + new Vector3(Mathf.Cos(a) * r, (R(m, 16 + c) - 0.3f) * 0.02f, Mathf.Sin(a) * r);
+                    }
+                    Tri(corners[0], corners[1], corners[2], Vector3.up);
+                }
+            var mesh = new Mesh { name = $"Cristal roto {kitId} {variant}" };
+            mesh.SetVertices(points);
+            mesh.SetNormals(normals);
+            mesh.SetUVs(0, Enumerable.Repeat(Vector2.zero, points.Count).ToList());
+            mesh.SetTriangles(Enumerable.Range(0, points.Count).ToArray(), 0);
             mesh.RecalculateBounds();
             return mesh;
         }

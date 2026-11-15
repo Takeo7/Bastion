@@ -20,6 +20,7 @@ namespace Bastion.EditorTools
     public static class FaunaMake
     {
         const string Path = "Assets/Bastion/Client/Resources/" + Bastion.Client.Map.Fauna.ControllerName + ".controller";
+        const string Temp = "Assets/Bastion/Client/Resources/" + Bastion.Client.Map.Fauna.ControllerName + "_nuevo.controller";
         const string Clips = "Assets/Synty/PolygonDog/Animations/";
 
         const string Folder = "Assets/Bastion/Client/Resources/";
@@ -59,8 +60,10 @@ namespace Bastion.EditorTools
         {
             Simple(Bastion.Client.Map.Fauna.SimpleMaterial, "Assets/Synty/SimpleForestAnimal/Textures/SimpleForestAnimalsTexture.png", "SIMPLE_Forest_Animals_Unity_2020_3_v1_02");
             Simple(Bastion.Client.Map.Fauna.CatMaterial, "Assets/Synty/SimpleCats/Textures/SimpleCats.png", "SIMPLE_Cats_Unity_2020_3_v1_0_1");
-            if (AssetDatabase.LoadAssetAtPath<AnimatorController>(Path) != null) AssetDatabase.DeleteAsset(Path);
-            var controller = AnimatorController.CreateAnimatorControllerAtPath(Path);
+            // (Made beside it and copied over it, so that it keeps its GUID from one making to the next: its .meta isn't
+            // made again, nor anything that names it changed in git. Arturo's play-test of 14/11 added Comer.)
+            if (AssetDatabase.LoadAssetAtPath<AnimatorController>(Temp) != null) AssetDatabase.DeleteAsset(Temp);
+            var controller = AnimatorController.CreateAnimatorControllerAtPath(Temp);
             controller.AddParameter("Movement_f", AnimatorControllerParameterType.Float);
             controller.AddParameter("Accion", AnimatorControllerParameterType.Int);
             controller.AddParameter("Gesto", AnimatorControllerParameterType.Trigger);
@@ -126,6 +129,15 @@ namespace Bastion.EditorTools
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
             Debug.Log($"[fauna] {Path}: {machine.states.Length} states, " + string.Join(", ", machine.states.Select(s => $"{s.state.name} ({(s.state.motion != null ? s.state.motion.name : "none")})")));
+            if (System.IO.File.Exists(Path))
+            {
+                // (Its name inside as its file's.)
+                string made = System.IO.File.ReadAllText(Temp).Replace($"m_Name: {Bastion.Client.Map.Fauna.ControllerName}_nuevo\n", $"m_Name: {Bastion.Client.Map.Fauna.ControllerName}\n");
+                System.IO.File.WriteAllText(Path, made);
+                AssetDatabase.DeleteAsset(Temp);
+                AssetDatabase.ImportAsset(Path, ImportAssetOptions.ForceUpdate);
+            }
+            else AssetDatabase.MoveAsset(Temp, Path);
         }
     }
 }

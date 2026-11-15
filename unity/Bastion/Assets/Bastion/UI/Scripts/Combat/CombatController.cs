@@ -372,6 +372,9 @@ namespace Bastion.UI.Combat
         void AutoSelect()
         {
             var current = Unit();
+            // (Within a turn: as one opens, its banner says so.)
+            var sameTurn = State.Turn == autoTurn;
+            autoTurn = State.Turn;
             var playing = UnitById(State, State.ActiveUnit);
             var mineInPlay = playing != null && playing.Alive && Paths.HasTurnLeft(playing) && Commands(playing) ? playing : null;
             var turned = State.ActiveUnit != lastInPlay || State.Command != lastCommand;
@@ -383,6 +386,7 @@ namespace Bastion.UI.Combat
                 if (current?.Id == mineInPlay.Id) return;
                 picked = mineInPlay.Id;
                 TurnCamera(mineInPlay);
+                if (sameTurn) NextSoldier(current, mineInPlay);
                 return;
             }
             // The partner's soldier comes into play: the camera to it too, if wanted (#47).
@@ -397,26 +401,54 @@ namespace Bastion.UI.Combat
             if (current != null && Commands(current) && (Paths.HasTurnLeft(current) || !CanAct())) return;
             var next = mineInPlay ?? MyUnits().FirstOrDefault(x => x.Ap > 0) ?? MyUnits().FirstOrDefault(Paths.HasTurnLeft) ?? (current != null && Commands(current) ? current : MyUnits().FirstOrDefault());
             picked = next?.Id;
-            if (next != null && current != null && next.Id != current.Id && CanAct()) TurnCamera(next);
+            if (next != null && current != null && next.Id != current.Id && CanAct())
+            {
+                TurnCamera(next);
+                if (sameTurn) NextSoldier(current, next);
+            }
+        }
+
+        /// <summary>The turn AutoSelect last saw.</summary>
+        int autoTurn = -1;
+        /// <summary>How long the next soldier's name stays over it (NextSoldier).</summary>
+        const float NextSoldierSeconds = 2f;
+
+        /// <summary>
+        /// The pick gone on by itself to `to`, `from` having nothing left (Arturo, 14/11: «el juego pasó al siguiente sin
+        /// avisar»): the new one's name over it a moment, in its player's colour, and a sound, so the change is seen
+        /// wherever the camera is.
+        /// </summary>
+        void NextSoldier(Unit from, Unit to)
+        {
+            if (from == null || to == null || from.Id == to.Id || !Commands(from) || Paths.HasTurnLeft(from) || Hud == null) return;
+            var at = FeetOf(to.Id) ?? Board.TileToWorld(State, to.Pos);
+            var name = !string.IsNullOrEmpty(to.Nickname) ? $"«{to.Nickname}»" : to.Name.Split(' ')[0];
+            Hud.Pin(at + Vector3.up * 1.25f, name, PlayerColor(to.Owner ?? MySlot), NextSoldierSeconds);
+            Bastion.Client.Audio.Sound.Play("ui.return");
         }
 
         /// <summary>The camera keeps off a turn's soldier this long after the player moved it (game.ts TURN_CAMERA_QUIET_MS).</summary>
         const float TurnCameraQuiet = 4f;
+        /// <summary>
+        /// As the squad's turn opens («TU TURNO»), only this long: the camera goes back to the soldier who plays unless the
+        /// player is moving it right then (Arturo, 14/11: one moved in the enemy's turn kept it away).
+        /// </summary>
+        const float OpeningQuiet = 1f;
 
         /// <summary>
         /// The camera to the soldier whose turn it is (playtest 17/10 #47; game.ts turnCamera): as the turn begins, the
         /// command passes or a soldier comes into play, if the HUD's switch («Cámara al soldado») says so; never fighting
         /// the player (not if they moved the camera in the last few seconds).
         /// </summary>
-        void TurnCamera(Unit u)
+        void TurnCamera(Unit u, float quiet = TurnCameraQuiet)
         {
-            if (u == null || !u.Alive || Hud == null || !Hud.FollowsTurn || Rig == null || Time.unscaledTime - Rig.TakenAt < TurnCameraQuiet) return;
+            if (u == null || !u.Alive || Hud == null || !Hud.FollowsTurn || Rig == null || Time.unscaledTime - Rig.TakenAt < quiet) return;
             SetLevel(u.Pos.Z);
             Rig.Focus(FeetOf(u.Id) ?? Board.TileToWorld(State, u.Pos));
         }
 
         /// <summary>The camera to `slot`'s soldier whose turn it is in `v` (the event player: a turn opens, the command passes).</summary>
-        public void TurnCamera(GameState v, int slot, bool opening = false) => TurnCamera(TurnSoldier(v, slot, opening));
+        public void TurnCamera(GameState v, int slot, bool opening = false) => TurnCamera(TurnSoldier(v, slot, opening), opening ? OpeningQuiet : TurnCameraQuiet);
 
         string lastInPlay;
         int? lastCommand;
@@ -518,9 +550,25 @@ namespace Bastion.UI.Combat
             }
             // Without the command the range is still shown, fainter: it is for planning (#35). Only the floor shown's, and of
             // a building's inside only if the squad has found it (Arturo, 11/11: «El área de andar debería entrar también en
-            // casas», only the found ones); one not found shows nothing inside, its doorway yes (Ana, 7/11 #15).
+            // casas», only the found ones); one not found shows nothing inside, its doorway yes (Ana, 7/11 #15), and the tile
+            // just inside each door or window it gets to, to go in by it (Gameplay, 14/11: the window broken on the way).
             var found = tiles != null ? FoundInside() : null;
-            Overlay?.ShowRange(State, tiles?.Where(t => t.Pos.Z == Level && (!Interior(State, t.Pos) || found[Grid.NodeOf(State, t.Pos)])).ToList(), Planning, Soft);
+            List<MoveTile> shown = null;
+            if (tiles != null)
+            {
+                shown = new List<MoveTile>();
+                foreach (var t in tiles)
+                {
+                    if (t.Pos.Z != Level) continue;
+                    if (Interior(State, t.Pos) && !found[Grid.NodeOf(State, t.Pos)])
+                    {
+                        if (!JustInside(State, t.Pos)) continue;
+                        t.Entry = true;
+                    }
+                    shown.Add(t);
+                }
+            }
+            Overlay?.ShowRange(State, shown, Planning, Soft);
             using (MRefreshWay.Auto()) ShowWay();
             DrawPlans();
             using (MRefreshHud.Auto()) RefreshHud();
@@ -534,6 +582,23 @@ namespace Bastion.UI.Combat
             if (s.Storeys == null || !Grid.InBounds(s, p.X, p.Y)) return false;
             var storeys = s.Storeys[Grid.TileIndex(s, p.X, p.Y)];
             return storeys > 0 && p.Z < storeys;
+        }
+
+        /// <summary>
+        /// Whether `p` is the tile just inside a door or a window of a building's outer wall (the opening beside it, the
+        /// street beyond): where one goes in by it, into a building not found (Gameplay, 14/11).
+        /// </summary>
+        static bool JustInside(GameState s, Pos p)
+        {
+            foreach (var d in Grid.Dirs4)
+            {
+                int ox = p.X + d.X, oy = p.Y + d.Y, bx = ox + d.X, by = oy + d.Y;
+                if (!Grid.InBounds(s, ox, oy) || !Grid.InBounds(s, bx, by)) continue;
+                var kind = Grid.KindAt(s, new Pos { X = ox, Y = oy, Z = p.Z });
+                if (kind != TileKinds.Door && kind != TileKinds.DoorOpen && !Grid.IsWindow(kind)) continue;
+                if (!Interior(s, new Pos { X = bx, Y = by, Z = p.Z })) return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -631,6 +696,8 @@ namespace Bastion.UI.Combat
                 // drawn again under it takes its leaving with it).
                 if (listPointed != null && Mouse.current is var m && m != null && m.delta.ReadValue() != Vector2.zero && Hud != null && !Hud.Over(m.position.ReadValue())) OnHoverSquad(null);
                 Overlay.ShowPointed(listPointed != null ? FeetOf(listPointed) : null);
+                // The range's islands while the pointer is on one (Arturo, 14/11).
+                Overlay.PointIslands(hover);
             }
             Keys();
             PauseTick();

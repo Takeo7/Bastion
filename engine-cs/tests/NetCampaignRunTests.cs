@@ -5,7 +5,7 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// The campaign the two test apps play by themselves (CampaignAutoRun, the app's CampaignRun), through a room with the
-    /// engine's rules. Seed 47 is the one the apps are tested with (BASTION_SEMILLA=47): its opening operation is done, its
+    /// engine's rules. The seed is the one the apps are tested with (BASTION_SEMILLA, below): its opening operation is done, its
     /// debrief comes, and its second operation, chosen on the base, is won. If the engine changes it, CampaignAutoRun finds
     /// another: MissionBot doesn't win every one. It was seed 2 till the dead went faster (28/10), and 4 till Arturo's rules of 31/10
     /// (recruits' aim, fewer dead out of town, no seeing through windows); with the base aim at 55 and the dead of a siege
@@ -30,16 +30,19 @@ namespace Bastion.Engine.Tests
     /// operation, chosen once the wounded are fit (HeardGame.BaseOrder); of seeds 1 to 200, 47 win the first and only 31,
     /// 58, 87, 98 and 157 both, 364 not: 157, which wins both without the wait as well. With the windows in columns and the
     /// walls between rooms kept off them (playtest note 17, Arturo, 7/11: the maps change), 157 loses its second mission;
-    /// of seeds 1 to 200, 44 win the first and only 47 and 91 both: 47.
+    /// of seeds 1 to 200, 44 win the first and only 47 and 91 both: 47. With a pod that heard something going to look
+    /// though its first member is boxed in, and climbing in through windows to a noise inside (Arturo's notes of 14/11),
+    /// 47 loses its first mission (of 10 seeds, 3 win the first, as 4 did before: MissionBot is no worse off); 71 wins
+    /// both, its second mission another operation: 71 (BASTION_SEMILLA=71 for the apps).
     /// </summary>
     public class NetCampaignRunTests
     {
         [Fact]
         public void TheTestAppsCampaignIsPlayedThrough()
         {
-            var played = CampaignAutoRun.Run(47, 2);
+            var played = CampaignAutoRun.Run(71, 2);
             Assert.Null(CampaignAutoRun.Stuck);
-            Assert.Equal(new[] { "El consultorio de Metsovo", "El colegio de La Vega" }, played.Select((m) => m.Name));
+            Assert.Equal(new[] { "El consultorio de Metsovo", "El polígono de Los Llanos de Ceniza" }, played.Select((m) => m.Name));
             Assert.All(played, (m) => Assert.Equal(Outcomes.Victory, m.Outcome));
         }
     }

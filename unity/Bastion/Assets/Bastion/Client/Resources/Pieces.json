@@ -925,6 +925,9 @@
    ],
    "run": "x",
    "out": -1,
+   "drop": [
+    "Glass"
+   ],
    "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_02.fbx"
   },
   "houseWindow3": {
@@ -936,6 +939,9 @@
    ],
    "run": "x",
    "out": -1,
+   "drop": [
+    "Glass"
+   ],
    "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_03.fbx"
   },
   "houseWindow4": {
@@ -947,6 +953,9 @@
    ],
    "run": "x",
    "out": -1,
+   "drop": [
+    "Glass"
+   ],
    "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_04.fbx"
   },
   "houseWindow5": {

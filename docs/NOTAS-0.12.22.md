@@ -13,7 +13,7 @@ Versión 0.12.22 (commit [commit]). Una versión pequeña, con un solo cambio qu
 - **El área de andar entra en los edificios ya descubiertos** (lo eligió Arturo).
   - **Antes:** las casillas a las que llega el soldado solo se pintaban dentro de un edificio si el soldado ya estaba dentro. Desde la calle, el área se quedaba en la puerta, aunque llegara más allá.
   - **Ahora:** desde la calle se pinta también dentro de los edificios que la escuadra ya ha descubierto, en el suelo de dentro. Las paredes que están en pie tapan su borde, y se ve donde el corte las abre.
-  - **En un edificio que nadie ha explorado,** sigue sin verse dentro: hay que asomarse a la puerta, como antes.
+  - **En un edificio que nadie ha explorado,** sigue sin verse dentro: hay que asomarse antes, parándose en la puerta o justo delante de una de sus ventanas, como antes.
   - **Entrar andando en un solo movimiento** ya se podía. Ahora se ve hasta dónde llega.
 
 ## Partidas guardadas

@@ -86,7 +86,8 @@ namespace Bastion.Client.Map
                     h = h * 31 + p.matrix.GetHashCode();
                     h = h * 31 + (p.open ? 1 : 0) + (p.otherHinge ? 2 : 0);
                 }
-                foreach (var p in glass) h = h * 31 + p.kit.GetHashCode() * 7 + p.matrix.GetHashCode();
+                // (Whole or broken: a window broken in the mission makes its chunk again.)
+                foreach (var p in glass) h = (h * 31 + p.kit.GetHashCode() * 7 + p.matrix.GetHashCode()) * 3 + (p.broken ? 1 : 0) + (p.fallOutside ? 1 : 0);
                 foreach (var p in props) h = h * 31 + p.id.GetHashCode() * 5 + p.matrix.GetHashCode();
                 return h;
             }
@@ -152,8 +153,17 @@ namespace Bastion.Client.Map
             if (clear != null)
                 foreach (var pane in glass)
                 {
-                    if (!panes.TryGetValue(pane.kit, out var mesh) || mesh == null) panes[pane.kit] = mesh = WallLayout.PaneMesh(pane.kit);
                     var cut = CutOf(pane.building, pane.roof, pane.between, pane.outward, pane.floor);
+                    if (pane.broken)
+                    {
+                        // What is left of a broken one: its shards, one of a few shapes by its place (Arturo's play-test of 14/11).
+                        int variant = (int)(BuildingPlan.Hash(Mathf.RoundToInt(pane.matrix.m03 * 2), Mathf.RoundToInt(pane.matrix.m23 * 2), 91) * WallLayout.ShardVariants);
+                        string shape = $"{pane.kit}:{variant}:{(pane.fallOutside ? 1 : 0)}";
+                        if (!shards.TryGetValue(shape, out var bits) || bits == null) shards[shape] = bits = WallLayout.ShardsMesh(pane.kit, variant, pane.fallOutside);
+                        BatchOf(ShardMaterial(clear)).Add(bits, 0, MapSpace.FromGame(InMetres(pane.matrix)), Vector4.one, Vector4.one, cut, new Vector4(StoreyOf(pane.building, pane.floor), 0, 0, 0));
+                        continue;
+                    }
+                    if (!panes.TryGetValue(pane.kit, out var mesh) || mesh == null) panes[pane.kit] = mesh = WallLayout.PaneMesh(pane.kit);
                     // Lit by night, one in three or so (buildings.ts: by the pane's place).
                     float lit = BuildingPlan.Hash(Mathf.RoundToInt(pane.matrix.m03 * 2), Mathf.RoundToInt(pane.matrix.m23 * 2), 90) < 0.35 ? 1 : 0;
                     // (None in the halls, barns and sheds, whose glass is a band a tile wide: lit, a flat yellow square, and
@@ -161,9 +171,36 @@ namespace Bastion.Client.Map
                     if (pane.kit.StartsWith("hall") || pane.kit.StartsWith("shed")) lit = 0;
                     BatchOf(clear).Add(mesh, 0, MapSpace.FromGame(InMetres(pane.matrix)), Vector4.one, Vector4.one, cut, new Vector4(StoreyOf(pane.building, pane.floor), 0, lit, 0));
                 }
-            foreach (var (material, batch) in byMaterial) Draw(holder.transform, material.name, batch.Make($"{holder.name} {material.name}"), material, material != clear);
+            foreach (var (material, batch) in byMaterial) Draw(holder.transform, material.name, batch.Make($"{holder.name} {material.name}"), material, material != clear && material != shardMaterial);
             foreach (var prop in props) Prop(holder.transform, prop);
             return holder;
+        }
+
+        static readonly Dictionary<string, Mesh> shards = new Dictionary<string, Mesh>();
+        static Material shardMaterial;
+        /// <summary>
+        /// A broken pane's shards: a pale blue-grey glass (sRGB; white in the sun was paper), and a glow about the panes' own (by
+        /// night the shader takes it to 0.3), so they read in the shade of a deep frame and by night.
+        /// </summary>
+        static readonly Color ShardColour = new Color(0.55f, 0.66f, 0.72f, 1), ShardGlow = new Color(0.12f, 0.16f, 0.19f, 1);
+
+        /// <summary>
+        /// The material of a broken pane's shards (WallLayout.ShardsMesh): the panes' glass (Bastion/Building's _GLASS) made solid,
+        /// so they are in the depth and the normals the fog reads and it takes them as the wall's face (a see-through pane
+        /// takes the fog of what is behind it), pale and glossy; it casts no shadow (Build).
+        /// </summary>
+        static Material ShardMaterial(Material clear)
+        {
+            if (shardMaterial != null) return shardMaterial;
+            shardMaterial = new Material(clear) { name = "Cristal roto", renderQueue = (int)RenderQueue.Geometry };
+            shardMaterial.SetOverrideTag("RenderType", "Opaque");
+            shardMaterial.SetFloat("_SrcBlend", (float)BlendMode.One);
+            shardMaterial.SetFloat("_DstBlend", (float)BlendMode.Zero);
+            shardMaterial.SetFloat("_ZWrite", 1);
+            shardMaterial.SetColor("_BaseColor", ShardColour);
+            shardMaterial.SetColor("_EmissionColor", ShardGlow);
+            shardMaterial.SetFloat("_Smoothness", 0.8f);
+            return shardMaterial;
         }
 
         /// <summary>Height the cut walls drop to, and a door's leaf in the cutaway (tiles: buildings.ts CUT_LOW, LEAF_CUT).</summary>

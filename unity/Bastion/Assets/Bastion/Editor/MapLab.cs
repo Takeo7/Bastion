@@ -508,6 +508,124 @@ namespace Bastion.EditorTools
             Debug.Log($"[ao] volcado en {file}");
         }
 
+        /// <summary>BASTION_VISTAS's views, one a frame: Shots steps it before every frame but the first.</summary>
+        sealed class Views : MonoBehaviour, Bastion.Client.IShotStep
+        {
+            readonly List<(Vector3 at, float distance, float yaw)> list = new List<(Vector3, float, float)>();
+            Camera shot;
+            int next;
+
+            public void Set(Camera camera, string spec)
+            {
+                shot = camera;
+                foreach (string view in spec.Split(';').Where(v => v.Length > 0))
+                {
+                    var v = view.Split(',');
+                    float F(int k, float or) => v.Length > k ? float.Parse(v[k], System.Globalization.CultureInfo.InvariantCulture) : or;
+                    list.Add((MapSpace.World(int.Parse(v[0]), int.Parse(v[1]), v.Length > 3 ? int.Parse(v[3]) : 0), F(2, 24), F(4, 45)));
+                }
+                Show();
+            }
+
+            void Show()
+            {
+                if (list.Count == 0) return;
+                var (at, distance, yaw) = list[Mathf.Min(next++, list.Count - 1)];
+                MapSpace.Aim(shot, at, distance, yaw);
+                // (The sun's shadows fitted to it: ShadowFit's LateUpdate doesn't run in edit mode.)
+                shot.GetComponent<Bastion.Client.ShadowFit>()?.Fit();
+            }
+
+            public void ShotStep(float dt) => Show();
+        }
+
+        /// <summary>BASTION_ROMPER's windows broken before frame `at`: a copy of the state with them so, the map brought to it.</summary>
+        sealed class Breaker : MonoBehaviour, Bastion.Client.IShotStep
+        {
+            public MapView view;
+            public GameState state;
+            public string spec;
+            public int at = 1;
+            public Bastion.Client.Effects.Fx fx;
+            int frame;
+
+            public void ShotStep(float dt)
+            {
+                if (++frame != at || view == null) return;
+                var next = Bastion.Engine.Events.CloneState(state);
+                Break(next, spec);
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                int redone = view.Rebuild(next);
+                Debug.Log($"[ventanas] broken before frame {at}: {spec}; {redone} tiles made again in {clock.ElapsedMilliseconds} ms");
+                foreach (string place in spec.Split(';').Where(v => v.Length > 0))
+                {
+                    var v = place.Split(',').Select(int.Parse).ToArray();
+                    fx?.Shatter(MapSpace.TileToWorld(next, new Pos { X = v[0], Y = v[1], Z = v.Length > 2 ? v[2] : 0 }, 1.45f));
+                }
+            }
+        }
+
+        /// <summary>
+        /// BASTION_ROTAS's windows broken in `state` (on the ground and every storey): «x,y[,z];…», «mitad» (every other one along
+        /// each row or column of wall, WallRun) or «todas».
+        /// </summary>
+        static void Break(GameState state, string which)
+        {
+            int w = state.Width, area = w * state.Height;
+            var layers = new List<IList<string>> { state.Tiles };
+            if (state.Levels != null) layers.AddRange(state.Levels.Select(l => (IList<string>)l.Tiles));
+            if (which == "mitad" || which == "todas")
+            {
+                // (Every other one along each row or column of wall, on each storey.)
+                var count = new Dictionary<int, int>();
+                for (int k = 0; k < layers.Count; k++)
+                    for (int i = 0; i < Mathf.Min(area, layers[k].Count); i++)
+                    {
+                        if (layers[k][i] != TileKinds.Window) continue;
+                        int key = k * 2 * area + WallRun(state, layers[k], i);
+                        count[key] = count.TryGetValue(key, out int n) ? n + 1 : 1;
+                        if (which == "todas" || count[key] % 2 == 0) layers[k][i] = TileKinds.WindowBroken;
+                    }
+                return;
+            }
+            foreach (string spec in which.Split(';').Where(v => v.Length > 0))
+            {
+                var v = spec.Split(',').Select(int.Parse).ToArray();
+                int k = v.Length > 2 ? v[2] : 0, i = v[1] * w + v[0];
+                if (k < layers.Count && i < layers[k].Count && layers[k][i] == TileKinds.Window) layers[k][i] = TileKinds.WindowBroken;
+                else Debug.LogWarning($"[ventanas] no window on {v[0]},{v[1]},{k}");
+            }
+        }
+
+        /// <summary>The run of wall window tile i is in: its row (open ground north and south of it) or its column (an area on).</summary>
+        static int WallRun(GameState state, IList<string> tiles, int i)
+        {
+            int w = state.Width, area = w * state.Height;
+            bool Solid(int j) => j < 0 || j >= tiles.Count || tiles[j] == null || BuildingPlan.IsWallLike(tiles[j]) || tiles[j] == TileKinds.Door || tiles[j] == TileKinds.DoorOpen;
+            return !Solid(i - w) && !Solid(i + w) ? i / w : area + i % w;
+        }
+
+        /// <summary>Every window of the map as laid (WallLayout): its tile, storey, whole or broken, and its frame's pieces.</summary>
+        static void Windows(GameState state, BuildingPlan plan)
+        {
+            var layout = WallLayout.Of(state, plan);
+            int w = state.Width, area = w * state.Height;
+            var lines = new List<string>();
+            for (int k = 0; k <= (state.Levels?.Count ?? 0); k++)
+            {
+                var tiles = k == 0 ? state.Tiles : state.Levels[k - 1].Tiles;
+                for (int i = 0; i < Mathf.Min(area, tiles.Count); i++)
+                {
+                    if (tiles[i] != TileKinds.Window && tiles[i] != TileKinds.WindowBroken) continue;
+                    var ids = layout.Pieces.Where(p => p.tile == i && p.level == k && (p.id.Contains("indow") || p.id.Contains("Sill"))).Select(p => p.id).Distinct();
+                    int b = i < plan.Owner.Length ? plan.Owner[i] : -1;
+                    var bd = b >= 0 ? plan.Buildings[b] : null;
+                    lines.Add($"{i % w},{i / w},{k} {(tiles[i] == TileKinds.Window ? "entera" : "rota")} b{b} {bd?.kind}/{bd?.kit}/{bd?.facing}: {string.Join(" ", ids)}");
+                }
+            }
+            Debug.Log($"[ventanas] {lines.Count}:\n" + string.Join("\n", lines));
+        }
+
         /// <summary>reference.ts's mission with a medical site (`medical`: clinic, ward, hospital), as it makes it.</summary>
         internal static GameState Medical(string medical)
         {
@@ -1100,12 +1218,25 @@ namespace Bastion.EditorTools
                 int door = xy[1] * state.Width + xy[0];
                 if (state.Tiles[door] == TileKinds.Door) state.Tiles[door] = TileKinds.DoorOpen;
             }
+            // BASTION_ROTAS=x,y[,z];…: those windows broken (windowBroken, as one a unit went through); =mitad, every other
+            // window along each wall (on every storey), the rest left whole beside them; =todas, all of them. To set a broken
+            // window against a whole one (Arturo's play-test of 14/11: «Ventanas rotas … ambas se veían iguales»); the list of
+            // every window ([ventanas]: tile, storey, whole or broken, its frame's pieces), to frame some.
+            if (Environment.GetEnvironmentVariable("BASTION_ROTAS") is string breaking) Break(state, breaking);
             // BASTION_NIEVE=1: a winter map (GameState.snow, as the campaign's winter: SnowCover), 0 not one.
             if (Environment.GetEnvironmentVariable("BASTION_NIEVE") is string snowy) state.Snow = snowy == "1";
             // BASTION_DENTRO=x,y: the squad's first soldier there (in a building, to see it cut away round them: BASTION_SELECT=1).
             if (Environment.GetEnvironmentVariable("BASTION_DENTRO")?.Split(',').Select(int.Parse).ToArray() is int[] inside && inside.Length == 2
                 && state.Units.FirstOrDefault(u => u.Alive && u.Team == "xcom") is Unit first)
                 first.Pos = new Pos { X = inside[0], Y = inside[1], Z = 0 };
+            // BASTION_ESCUADRA=x,y;…: the squad's soldiers there, one a place in order (what each sees opens the fog's streets).
+            var places = (Environment.GetEnvironmentVariable("BASTION_ESCUADRA") ?? "").Split(';').Where(v => v.Length > 0).ToList();
+            var squadUnits = state.Units.Where(u => u.Alive && u.Team == "xcom").ToList();
+            for (int k = 0; k < Mathf.Min(places.Count, squadUnits.Count); k++)
+            {
+                var xy = places[k].Split(',').Select(int.Parse).ToArray();
+                squadUnits[k].Pos = new Pos { X = xy[0], Y = xy[1], Z = xy.Length > 2 ? xy[2] : 0 };
+            }
             // BASTION_BENGALAS=x,y,radius;…: Bengalas (radius 3 or more) and fires (less) burning there, lighting what they reach
             // as the engine's (Los.LightTiles from the lamps' height), for the night's glow and pools.
             foreach (string spec in (Environment.GetEnvironmentVariable("BASTION_BENGALAS") ?? "").Split(';').Where(v => v.Length > 0))
@@ -1134,6 +1265,8 @@ namespace Bastion.EditorTools
             WallsView.MaterialOf = Environment.GetEnvironmentVariable("BASTION_ATLAS") == "1" ? AtlasVariants() : null;
             var view = Map(state, name);
             var root = view.transform;
+            // (With BASTION_ROTAS, every window's tile, storey and frame, whole or broken: to frame some.)
+            if (Environment.GetEnvironmentVariable("BASTION_ROTAS") != null && view.Builder?.Plan != null) Windows(state, view.Builder.Plan);
             // BASTION_FIGURAS=1: the game's units drawn on it too, standing (to weigh their light against 0.10.1's figures);
             // =vistas, those the squad sees alone, as in the game.
             string figures = Environment.GetEnvironmentVariable("BASTION_FIGURAS");
@@ -1299,6 +1432,21 @@ namespace Bastion.EditorTools
             if (at != null && at.Length >= 3)
                 MapSpace.Aim(camera, MapSpace.World(int.Parse(at[0]), int.Parse(at[1]), at.Length > 3 ? int.Parse(at[3]) : 0), float.Parse(at[2], System.Globalization.CultureInfo.InvariantCulture),
                     at.Length > 4 ? float.Parse(at[4], System.Globalization.CultureInfo.InvariantCulture) : 45);
+            // BASTION_VISTAS=x,y,distance[,storey[,yaw]];…: BASTION_AT's views a frame each, one after another (the last kept):
+            // several places of a map in one run (-shotFrames as many).
+            if (Environment.GetEnvironmentVariable("BASTION_VISTAS") is string views) camera.gameObject.AddComponent<Views>().Set(camera, views);
+            // BASTION_ROMPER=x,y[,z];…: those windows broken as the mission breaks one, the map brought to it (MapView.Rebuild, as
+            // the event player does once the event has played) before frame BASTION_ROMPER_EN (1 unless said): what draws a
+            // window broken during the mission, the same frame; and the glass bursting there (Fx.Shatter).
+            if (Environment.GetEnvironmentVariable("BASTION_ROMPER") is string breakLater)
+            {
+                var breaker = camera.gameObject.AddComponent<Breaker>();
+                breaker.view = view;
+                breaker.state = state;
+                breaker.spec = breakLater;
+                breaker.at = int.TryParse(Environment.GetEnvironmentVariable("BASTION_ROMPER_EN"), out int frame) ? frame : 1;
+                breaker.fx = new GameObject("Efectos").AddComponent<Bastion.Client.Effects.Fx>();
+            }
             // BASTION_ARRIBA=1: over the whole map as the battle's «Mapa» (M) puts the camera (CameraRig.EnterOverhead: 89°
             // down, far enough for the map, CombatController.MiniMap's room to spare).
             if (Environment.GetEnvironmentVariable("BASTION_ARRIBA") == "1")

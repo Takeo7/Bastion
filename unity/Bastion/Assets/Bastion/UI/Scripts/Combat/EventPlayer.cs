@@ -1129,13 +1129,34 @@ namespace Bastion.UI.Combat
         {
             Fail("PlayWalks");
             var v = V;
+            // Those of the dead that attack once arrived (their attacks come next, one by one: Choreograph) and whom: the
+            // framing is theirs when there are any in sight, not every walker's far off (Arturo, 14/11: «Durante el
+            // ataque la cámara se alejó… Acercar la cámara para encuadrar el ataque»).
+            var walkers = new HashSet<string>(w.Items.Where(q => q.e is MovedEvent).Select(q => ((MovedEvent)q.e).Unit));
+            var attacks = new List<(string unit, string target)>();
+            foreach (var (next, _, _) in queue)
+            {
+                if (next is TurnBeganEvent || next is MissionEndedEvent) break;
+                if (next is ShotEvent attack && walkers.Contains(attack.Unit)) attacks.Add((attack.Unit, attack.Target));
+            }
+            var striking = new HashSet<string>(attacks.Select(a => a.unit));
             var points = new List<Vector3>();
+            var near = new List<Vector3>();
             foreach (var q in w.Items)
             {
                 if (!(q.e is MovedEvent m) || Unit(m.Unit) is not Unit u) continue;
-                if (ShownToSquad(u)) points.Add(Feet(u.Id));
-                points.AddRange(m.Path.Where(p => IsVisible(p.X, p.Y)).Select(p => Board.TileToWorld(v, p)));
+                var these = striking.Contains(u.Id) ? near : points;
+                if (ShownToSquad(u)) these.Add(Feet(u.Id));
+                these.AddRange(m.Path.Where(p => IsVisible(p.X, p.Y)).Select(p => Board.TileToWorld(v, p)));
             }
+            var closer = near.Count > 0;
+            if (closer)
+            {
+                foreach (var (_, whom) in attacks)
+                    if (Unit(whom) is Unit struck && ShownToSquad(struck)) near.Add(Feet(struck.Id));
+                points = near;
+            }
+            else points.AddRange(near);
             var hold = resultHold;
             resultHold = 0;
             var framed = false;
@@ -1145,7 +1166,7 @@ namespace Bastion.UI.Combat
                 var first = lastActor == null;
                 lastActor = "walkers";
                 await Wait(Math.Max(first ? 0 : Between, hold));
-                framed = await FrameAll(points);
+                framed = await FrameAll(points, closer);
             }
             else if (hold > 0) await Wait(hold);
             Fresh(r);
@@ -1224,7 +1245,7 @@ namespace Bastion.UI.Combat
         /// The camera over all of `points` (unless the player has had it lately): to their middle and back until all are in
         /// view, there, and a still moment; whether it went back (to come nearer again after).
         /// </summary>
-        async Awaitable<bool> FrameAll(List<Vector3> points)
+        async Awaitable<bool> FrameAll(List<Vector3> points, bool closer = false)
         {
             var rig = control.Rig;
             var moved = false;
@@ -1233,7 +1254,7 @@ namespace Bastion.UI.Combat
                 var bounds = new Bounds(points[0], Vector3.zero);
                 foreach (var p in points) bounds.Encapsulate(p);
                 rig.Focus(bounds.center);
-                rig.FrameZoom(bounds.center, points);
+                rig.FrameZoom(bounds.center, points, closer: closer);
                 moved = true;
                 for (var i = 0; i < 20 && !rig.Arrived; i++) await Wait(0.05f);
             }
@@ -2424,7 +2445,7 @@ namespace Bastion.UI.Combat
                     }
                     if (tc.Kind == "windowBroken")
                     {
-                        fx.Debris(Board.TileToWorld(v, tc.Pos, 1.95f), Fx.Hex(0x9fd8ff), 10);
+                        fx.Shatter(Board.TileToWorld(v, tc.Pos, 1.7f));
                         control.Sfx.Glass(Board.TileToWorld(v, tc.Pos, 1.95f));
                         return;
                     }

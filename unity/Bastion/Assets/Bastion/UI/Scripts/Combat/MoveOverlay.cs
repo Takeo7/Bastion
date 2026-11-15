@@ -15,6 +15,11 @@ namespace Bastion.UI.Combat
         public bool Run;
         public bool Detected;
         public bool Fire;
+        /// <summary>
+        /// Just inside a door or window of a building not found (Gameplay, 14/11): its border over everything as the street's,
+        /// for the roof that stays on it.
+        /// </summary>
+        public bool Entry;
     }
 
     /// <summary>
@@ -40,8 +45,6 @@ namespace Bastion.UI.Combat
         static readonly Color32 DashFill = Hex(0x9a4a2c);
         static readonly Color32 WalkEdge = Hex(0x7fd4fa);
         static readonly Color32 DashEdge = Hex(0xc4704a);
-        static readonly Color32 WalkPath = Hex(0xa6e2fc);
-        static readonly Color32 DashPath = Hex(0xe2a684);
         static readonly Color32 PlanTint = Hex(0xb4bec6);
         /// <summary>The brightest the ground goes under a line (overlays.ts SHADE).</summary>
         static readonly Color32 Shade = Hex(0x56606a);
@@ -53,8 +56,8 @@ namespace Bastion.UI.Combat
         /// <summary>The pointer's ring planning without the command (on a reachable tile only: Ana, Arturo 01/11 #1).</summary>
         public static readonly Color32 PlanRing = PlanTint;
         /// <summary>The pointer's ring on a tile one action away, on one for the dash (TileLook.ringColors).</summary>
-        public static readonly Color32 WalkRing = WalkPath;
-        public static readonly Color32 DashRing = DashPath;
+        public static readonly Color32 WalkRing = WalkEdge;
+        public static readonly Color32 DashRing = DashEdge;
         /// <summary>The pointer's ring on a tile where the squad would be noticed.</summary>
         public static readonly Color32 NoticedRing = Hex(0xff4a4a);
         /// <summary>The lit ring of a soldier pointed at from the list (#11), as its flag's arrow (Flags.uss .uflag__pointer).</summary>
@@ -65,8 +68,11 @@ namespace Bastion.UI.Combat
         const float EdgeAlpha = 0.75f;
         const float EdgePx = 1.8f;
         const float EdgeShadePx = 1.8f + 2.2f;
-        const float PathPx = 2f;
-        const float PathShadePx = 2f + 4f;
+        /// <summary>The way's glow, each side of its line, faded out (as the range's border's inside it: Arturo, 14/11).</summary>
+        const float WayGlow = 0.2f * T;
+        /// <summary>The pointer's ring: its line's radius, and how far in its glow goes (the range's border's look; Arturo, 14/11).</summary>
+        const float RingRadius = 0.37f * T;
+        const float RingGlowIn = 0.2f * T;
         /// <summary>How far in from the border its glow fades (overlays.ts FADE_DEPTH).</summary>
         const float FadeDepth = 0.55f * T;
         /// <summary>How far back from a corner of the range its border turns (overlays.ts CORNER_R).</summary>
@@ -103,6 +109,19 @@ namespace Bastion.UI.Combat
         MeshFilter edgesIn;
         MeshFilter wayShade;
         MeshFilter way;
+        /// <summary>The way's glow on the floor (ShowPath).</summary>
+        MeshFilter wayGlow;
+        /// <summary>
+        /// The islands of the range (holes in it round a car, a bollard…): their borders and glow, apart, shown only while
+        /// the pointer is over one, all of them at once (PointIslands; Arturo, 14/11: the outer border alone otherwise).
+        /// </summary>
+        Transform isles;
+        MeshFilter isleStrips;
+        MeshFilter isleEdges;
+        MeshFilter isleEdgesIn;
+        /// <summary>The islands' tiles (Key) and their storey, for the pointer over one.</summary>
+        readonly HashSet<int> isleTiles = new HashSet<int>();
+        int isleZ = -1;
         MeshFilter hover;
         Material hoverMaterial;
         Transform picked;
@@ -136,11 +155,30 @@ namespace Bastion.UI.Combat
             edgesIn = Layer("Alcance dentro (bordes)", 3104, false, false, zone, InsidePull);
             wayShade = Layer("Camino (sombra)", 3103, false, true, zone, Pull, true);
             way = Layer("Camino", 3105, false, false, zone, Pull, true);
+            wayGlow = Layer("Camino (brillo)", 3100, false, false, zone);
+            isles = new GameObject("Islas").transform;
+            isles.SetParent(zone, false);
+            isleStrips = Layer("Islas (franjas)", 3100, false, false, isles);
+            isleEdges = Layer("Islas (bordes)", 3104, false, false, isles, Pull, true);
+            isleEdgesIn = Layer("Islas dentro (bordes)", 3104, false, false, isles, InsidePull);
+            isles.gameObject.SetActive(false);
 
             // The pointer's ring (TileLook.ring: 0.33–0.41 of a tile), tinted by its material.
             hover = Layer("Puntero", 3102, false, false, zone);
             build.Clear();
-            build.Arc(Vector3.zero, 0.33f * T, 0.41f * T, 0, Mathf.PI * 2, 36, Hex(0xffffff, 0xe6));
+            // As the range's border (Arturo, 14/11): a thin line, and a glow inside it fading in; its colour the material's.
+            const int ringSteps = 48;
+            var glowEdge = Hex(0xffffff, (byte)(255 * FillAlpha));
+            var glowIn = Hex(0xffffff, 0);
+            for (var k = 0; k < ringSteps; k++)
+            {
+                var t0 = Mathf.PI * 2 * k / ringSteps;
+                var t1 = Mathf.PI * 2 * (k + 1) / ringSteps;
+                var d0 = new Vector3(Mathf.Cos(t0), 0, Mathf.Sin(t0));
+                var d1 = new Vector3(Mathf.Cos(t1), 0, Mathf.Sin(t1));
+                build.Line(d0 * RingRadius, d1 * RingRadius, EdgePx, Hex(0xffffff, (byte)(255 * EdgeAlpha)));
+                build.Quad(d0 * RingRadius, d1 * RingRadius, d1 * RingGlowIn, d0 * RingGlowIn, glowEdge, glowEdge, glowIn, glowIn);
+            }
             hover.sharedMesh = build.Build(null);
             hoverMaterial = hover.GetComponent<MeshRenderer>().sharedMaterial;
             hover.gameObject.SetActive(false);
@@ -268,16 +306,29 @@ namespace Bastion.UI.Combat
             under.Clear();
             var lines = new MeshBuilder();
             var linesIn = new MeshBuilder();
+            var isleBuild = new MeshBuilder();
+            var isleLines = new MeshBuilder();
+            var isleLinesIn = new MeshBuilder();
             var eye = new MeshBuilder();
             var flame = new MeshBuilder();
+            isleTiles.Clear();
+            isleZ = -1;
             if (s != null && tiles != null)
             {
                 var walkSegs = new List<Vector3[]>();
                 var dashSegs = new List<Vector3[]>();
+                var walkIsle = new List<Vector3[]>();
+                var dashIsle = new List<Vector3[]>();
                 var walkFloors = new Dictionary<int, float>();
                 var dashFloors = new Dictionary<int, float>();
                 var fill = FillAlpha * (planning ? 0.5f : 1);
                 var bands = Outline(tiles, soft);
+                var entries = new HashSet<int>();
+                foreach (var t in tiles)
+                    if (t.Entry) entries.Add(Key(t.Pos.X, t.Pos.Y));
+                // The islands: what is left out inside the range, not reached from round it.
+                Islands(bands, isleTiles);
+                if (tiles.Count > 0) isleZ = tiles[0].Pos.Z;
                 foreach (var (p, dash) in bands.Values)
                 {
                     var floor = Board.TileToWorld(s, p).y;
@@ -289,7 +340,8 @@ namespace Bastion.UI.Combat
                         var outside = dash ? !has : !has || n.dash;
                         if (!outside) continue;
                         Side(p.X, p.Y, side, floor + 0.06f * T, out var a, out var b);
-                        (dash ? dashSegs : walkSegs).Add(new[] { a, b });
+                        var isle = !has && isleTiles.Contains(Key(p.X + d.X, p.Y + d.Y));
+                        (isle ? dash ? dashIsle : walkIsle : dash ? dashSegs : walkSegs).Add(new[] { a, b });
                     }
                 }
                 foreach (var t in tiles)
@@ -317,15 +369,28 @@ namespace Bastion.UI.Combat
                 var dashBends = new List<Bend>();
                 var walkLine = RoundCorners(walkSegs, CornerR, walkBends);
                 var dashLine = RoundCorners(dashSegs, CornerR, dashBends);
-                foreach (var seg in walkLine) (Indoor(s, bands, seg) ? linesIn : lines).Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : WalkEdge, edge));
-                foreach (var seg in dashLine) (Indoor(s, bands, seg) ? linesIn : lines).Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : DashEdge, edge));
+                foreach (var seg in walkLine) (Indoor(s, bands, entries, seg) ? linesIn : lines).Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : WalkEdge, edge));
+                foreach (var seg in dashLine) (Indoor(s, bands, entries, seg) ? linesIn : lines).Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : DashEdge, edge));
                 Glow(build, walkFloors, walkLine, walkBends, planning ? PlanTint : WalkFill, fill);
                 Glow(build, dashFloors, dashLine, dashBends, planning ? PlanTint : DashFill, fill);
+                // The islands' the same, apart (PointIslands).
+                var walkIsleBends = new List<Bend>();
+                var dashIsleBends = new List<Bend>();
+                var walkIsleLine = RoundCorners(walkIsle, CornerR, walkIsleBends);
+                var dashIsleLine = RoundCorners(dashIsle, CornerR, dashIsleBends);
+                foreach (var seg in walkIsleLine) (Indoor(s, bands, entries, seg) ? isleLinesIn : isleLines).Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : WalkEdge, edge));
+                foreach (var seg in dashIsleLine) (Indoor(s, bands, entries, seg) ? isleLinesIn : isleLines).Line(seg[0], seg[1], EdgePx, Alpha(planning ? PlanTint : DashEdge, edge));
+                Glow(isleBuild, walkFloors, walkIsleLine, walkIsleBends, planning ? PlanTint : WalkFill, fill);
+                Glow(isleBuild, dashFloors, dashIsleLine, dashIsleBends, planning ? PlanTint : DashFill, fill);
             }
             strips.sharedMesh = build.Build(strips.sharedMesh);
             rangeShade.sharedMesh = under.Build(rangeShade.sharedMesh);
             edges.sharedMesh = lines.Build(edges.sharedMesh);
             edgesIn.sharedMesh = linesIn.Build(edgesIn.sharedMesh);
+            isleStrips.sharedMesh = isleBuild.Build(isleStrips.sharedMesh);
+            isleEdges.sharedMesh = isleLines.Build(isleEdges.sharedMesh);
+            isleEdgesIn.sharedMesh = isleLinesIn.Build(isleEdgesIn.sharedMesh);
+            if (isleTiles.Count == 0) isles.gameObject.SetActive(false);
             eyes.sharedMesh = eye.Build(eyes.sharedMesh);
             flames.sharedMesh = flame.Build(flames.sharedMesh);
         }
@@ -333,10 +398,63 @@ namespace Bastion.UI.Combat
         static int Key(int x, int y) => x * 1024 + y;
 
         /// <summary>
-        /// Whether a piece of the range's border is the edge of a tile inside a building (Interior): the band's tile on either
-        /// side of it, or under it at a rounded corner.
+        /// The islands' borders shown while the pointer is on one of their tiles (`tile`, the pointer's; null, none), all of
+        /// them at once, and hidden as it leaves (Arturo, 14/11: «Mostrar el perímetro exterior por defecto»).
         /// </summary>
-        static bool Indoor(GameState s, Dictionary<int, (Pos pos, bool dash)> bands, Vector3[] seg)
+        public void PointIslands(Pos tile)
+        {
+            var on = tile != null && tile.Z == isleZ && isleTiles.Contains(Key(tile.X, tile.Y));
+            if (isles.gameObject.activeSelf != on) isles.gameObject.SetActive(on);
+        }
+
+        /// <summary>
+        /// The tiles inside the range that aren't in it and can't be reached from round it without crossing it: what its
+        /// islands are made of (a car, a bollard, a hole of nothing), into `into`.
+        /// </summary>
+        static void Islands(Dictionary<int, (Pos pos, bool dash)> bands, HashSet<int> into)
+        {
+            if (bands.Count == 0) return;
+            int x0 = int.MaxValue, y0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue;
+            foreach (var (p, _) in bands.Values)
+            {
+                x0 = Mathf.Min(x0, p.X);
+                y0 = Mathf.Min(y0, p.Y);
+                x1 = Mathf.Max(x1, p.X);
+                y1 = Mathf.Max(y1, p.Y);
+            }
+            x0--;
+            y0--;
+            x1++;
+            y1++;
+            var outside = new HashSet<int>();
+            var queue = new Queue<(int x, int y)>();
+            for (var x = x0; x <= x1; x++)
+            {
+                queue.Enqueue((x, y0));
+                queue.Enqueue((x, y1));
+            }
+            for (var y = y0; y <= y1; y++)
+            {
+                queue.Enqueue((x0, y));
+                queue.Enqueue((x1, y));
+            }
+            while (queue.Count > 0)
+            {
+                var (x, y) = queue.Dequeue();
+                if (x < x0 || x > x1 || y < y0 || y > y1 || bands.ContainsKey(Key(x, y)) || !outside.Add(Key(x, y))) continue;
+                foreach (var d in Grid.Dirs4) queue.Enqueue((x + d.X, y + d.Y));
+            }
+            for (var x = x0; x <= x1; x++)
+                for (var y = y0; y <= y1; y++)
+                    if (!bands.ContainsKey(Key(x, y)) && !outside.Contains(Key(x, y))) into.Add(Key(x, y));
+        }
+
+        /// <summary>
+        /// Whether a piece of the range's border is the edge of a tile inside a building (Interior): the band's tile on either
+        /// side of it, or under it at a rounded corner; not one just inside a building not found (`entries`), drawn as the
+        /// street's.
+        /// </summary>
+        static bool Indoor(GameState s, Dictionary<int, (Pos pos, bool dash)> bands, HashSet<int> entries, Vector3[] seg)
         {
             var middle = (seg[0] + seg[1]) * 0.5f;
             var along = seg[1] - seg[0];
@@ -345,7 +463,7 @@ namespace Bastion.UI.Combat
             for (var k = 0; k < 3; k++)
             {
                 var tile = Board.TileOf(k == 0 ? middle + side : k == 1 ? middle - side : middle);
-                if (bands.TryGetValue(Key(tile.x, tile.y), out var band)) return Interior(s, band.pos);
+                if (bands.TryGetValue(Key(tile.x, tile.y), out var band)) return Interior(s, band.pos) && !entries.Contains(Key(tile.x, tile.y));
             }
             return false;
         }
@@ -698,21 +816,35 @@ namespace Bastion.UI.Combat
         {
             build.Clear();
             under.Clear();
+            var glow = new MeshBuilder();
             if (s != null && from != null && path != null && path.Count > 0)
             {
-                var color = Alpha(planning ? PlanTint : dash ? DashPath : WalkPath, 0.95f);
+                // The range's border's look (Arturo, 14/11): its line, thin and in its colour, no dark stroke, and its glow
+                // each side of it on the floor.
+                var color = Alpha(planning ? PlanTint : dash ? DashEdge : WalkEdge, EdgeAlpha * (planning ? 0.55f : 1));
+                var lit = Alpha(planning ? PlanTint : dash ? DashFill : WalkFill, FillAlpha * (planning ? 0.5f : 1));
+                var none = Alpha(lit, 0);
                 // Up a flight of stairs it rides the treads, not the floor under them.
                 var prev = Board.WayPoint(s, from, 0.08f * T);
                 foreach (var p in path)
                 {
                     var at = Board.WayPoint(s, p, 0.08f * T);
-                    build.Line(prev, at, PathPx, color);
-                    under.Line(prev, at, PathShadePx, Shade);
+                    build.Line(prev, at, EdgePx, color);
+                    var along = at - prev;
+                    along.y = 0;
+                    if (along.sqrMagnitude > 1e-6f)
+                    {
+                        var side = new Vector3(-along.z, 0, along.x).normalized * WayGlow;
+                        var low = Vector3.down * (0.05f * T);
+                        glow.Quad(prev + low, at + low, at + low + side, prev + low + side, lit, lit, none, none);
+                        glow.Quad(prev + low, at + low, at + low - side, prev + low - side, lit, lit, none, none);
+                    }
                     prev = at;
                 }
             }
             way.sharedMesh = build.Build(way.sharedMesh);
             wayShade.sharedMesh = under.Build(wayShade.sharedMesh);
+            wayGlow.sharedMesh = glow.Build(wayGlow.sharedMesh);
         }
 
         /// <summary>The pointer's ring on `tile` in `color` (PlanRing, WalkRing, DashRing, NoticedRing); null: none.</summary>

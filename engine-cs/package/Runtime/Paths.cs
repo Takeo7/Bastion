@@ -386,7 +386,8 @@ namespace Bastion.Engine
         /// XCOM): a soldier, one of the dead, a turret, the VIP; not the floor above or
         /// below. A pod on patrol
         /// keeps to doors and open ground (playtest: undiscovered aliens went into a
-        /// building through a window): vaulting in is for aliens in the fight. In a
+        /// building through a window): vaulting in is for aliens in the fight, or going
+        /// to look where they heard something (14/11). In a
         /// siege the dead don't open doors: they break them down (docs/FASE12.md §4).
         /// `ignore`: units a plan may look past, as if gone (ai.ts breachPlan asks
         /// whether the ground leaves a way, its own crowd about to move); never for a
@@ -395,7 +396,9 @@ namespace Bastion.Engine
         public static Reach ComputeReach(GameState s, Unit u, double maxCost, Pos? from = null, Func<Unit, bool>? ignore = null, HashSet<int>? avoid = null)
         {
             var origin = from ?? u.Pos;
-            var windows = !OnPatrol(s, u);
+            // On patrol, not through windows; going to look where it heard something, yes: something is in there (Arturo's
+            // notes of 14/11, a shot inside a house and the dead outside never came in).
+            var windows = !OnPatrol(s, u) || u.Heard != null;
             var shut = s.Mission.Siege != null && Content.Templates[u.Template].Undead;
             // Barbed wire (docs/FASE12.md §11.4): costlier to cross, for everyone.
             var slow = s.Slow != null && s.Slow.Count > 0 ? new HashSet<int>(s.Slow) : null;

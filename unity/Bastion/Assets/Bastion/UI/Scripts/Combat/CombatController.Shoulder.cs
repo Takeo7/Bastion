@@ -91,6 +91,33 @@ namespace Bastion.UI.Combat
 
         /// <summary>The aim's shot over the shoulder now: who aims at whom from where; empty, none (game.ts aimCam).</summary>
         string aimCam = "";
+        /// <summary>Who aims at whom in it, for Q and E (TurnAim).</summary>
+        Unit aimUnit, aimTarget;
+        /// <summary>
+        /// How far Q and E have turned the aim's shot round the one aiming (rad, + to its right): a step of AimTurn each, at
+        /// most AimAround either way (Arturo, 14/11); back to none as the aim ends.
+        /// </summary>
+        float aimAround;
+        const float AimTurn = 45 * Mathf.Deg2Rad;
+        const float AimAround = 90 * Mathf.Deg2Rad;
+
+        /// <summary>
+        /// Q or E while aiming (CameraRig.TurnClose; Arturo, 14/11): the shot over the shoulder turned a step round the one
+        /// aiming, still at its target; where there is no room for it there, it stays. False when not aiming (the turn is the
+        /// rig's own).
+        /// </summary>
+        bool TurnAim(int dir)
+        {
+            var units = UnitViews.Current;
+            if (aimCam == "" || Rig == null || units == null || aimUnit == null || aimTarget == null) return false;
+            var was = aimAround;
+            aimAround = Mathf.Clamp(aimAround + dir * AimTurn, -AimAround, AimAround);
+            if (aimAround == was) return true;
+            var shot = AimShot(units, aimUnit, aimTarget);
+            if (shot != null) Rig.CloseShot(shot.Value.pos, shot.Value.look);
+            else aimAround = was;
+            return true;
+        }
 
         /// <summary>
         /// Aiming at an enemy (Ana, 22/10 #19; game.ts updateAimCam): with a target picked that the squad sees, the camera
@@ -105,8 +132,11 @@ namespace Bastion.UI.Combat
             if (key == aimCam || Rig == null) return;
             var was = aimCam != "";
             aimCam = key;
+            Rig.TurnClose = TurnAim;
+            (aimUnit, aimTarget) = on ? (u, target) : (null, null);
             if (!on)
             {
+                aimAround = 0;
                 if (was && CloseFocus?.Invoke()?.target == null) Rig.EndCloseShot();
                 return;
             }
@@ -127,7 +157,7 @@ namespace Bastion.UI.Combat
             (Vector3 pos, Vector3 look)? first = null;
             foreach (var rise in new[] { 0f, 0.6f, 1.2f, 1.8f, 2.6f })
             {
-                var shot = ShotCam.OverShoulder(Shown, from + Vector3.up * (rise * Board.Tile), to, u.Id, target.Id);
+                var shot = ShotCam.OverShoulder(Shown, from + Vector3.up * (rise * Board.Tile), to, aimAround, u.Id, target.Id);
                 if (shot == null) continue;
                 if (!BodyInWay(shot.Value.pos, to, u.Id, target.Id)) return shot;
                 first ??= shot;
