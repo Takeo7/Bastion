@@ -1,47 +1,68 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <!--
-        The start screen (the Electron app's launcher.html of the 0.10.1): be the host, a game on the network, join by
-        address, quit. In Unity the name is asked here, before opening or joining (NetLink.Host/Join take it).
+        The start screen (Arturo's notes of 14/11, menu-inicial p1 and p2; 0.12.24), over Arte's scene. The main menu:
+        BASTIÓN at the top left and the keys in a column under it, on a dark band that fades into the scene. «Partida
+        multijugador»: two cards in the middle, to host and to join. The name, a new game over a saved one and joining by
+        address are asked in a small plate where the keys were. Ajustes is the game's menu on its own page (GameMenu).
         Filled by StartScreen.cs against Red's NetLink.
     -->
     <Style src="../Hud/Mixta.uss" />
+    <Style src="../Hud/GameMenu.uss" />
+    <Style src="../Hud/Cards.uss" />
     <Style src="Start.uss" />
     <ui:VisualElement name="start" class="start font-text">
-        <ui:VisualElement class="start__column panel">
-            <ui:Label name="title" class="start__title font-title" />
-            <ui:Label name="kicker" class="start__kicker" />
+        <ui:VisualElement name="fade" class="start__fade" picking-mode="Ignore" />
 
-            <ui:VisualElement class="start__field">
+        <ui:VisualElement name="side" class="start__side" picking-mode="Ignore">
+            <ui:Label name="title" class="start__title font-title" picking-mode="Ignore" />
+            <ui:VisualElement name="menu" class="start__menu" picking-mode="Ignore">
+                <ui:Button name="continue" class="start__key font-title" />
+                <ui:Button name="new" class="start__key font-title" />
+                <ui:Button name="two" class="start__key font-title" />
+                <ui:Button name="settings" class="start__key font-title" />
+                <ui:Button name="quit" class="start__key font-title" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="center" class="start__center" picking-mode="Ignore">
+            <ui:VisualElement name="cards" class="start__cards" picking-mode="Ignore">
+                <ui:Button name="host" class="start__card">
+                    <ui:VisualElement class="start__card-face" picking-mode="Ignore">
+                        <ui:VisualElement name="host-icon" class="start__card-icon start__card-icon--host" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:Label name="host-label" class="start__card-label font-title" picking-mode="Ignore" />
+                </ui:Button>
+                <ui:Button name="join" class="start__card">
+                    <ui:VisualElement class="start__card-face" picking-mode="Ignore">
+                        <ui:VisualElement name="join-icon" class="start__card-icon start__card-icon--join" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:Label name="join-label" class="start__card-label font-title" picking-mode="Ignore" />
+                </ui:Button>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Moved under the keys (the main menu) or into the middle (Partida multijugador) as it is asked. -->
+        <ui:VisualElement name="form" class="start__form">
+            <ui:VisualElement name="name-box" class="start__field">
                 <ui:Label name="name-label" class="start__label" />
                 <ui:TextField name="name" class="start__input" max-length="20" />
             </ui:VisualElement>
-
-            <ui:Button name="host" class="start__choice btn-primary">
-                <ui:Label name="host-title" class="start__choice-title font-title" picking-mode="Ignore" />
-                <ui:Label name="host-about" class="start__choice-about" picking-mode="Ignore" />
-            </ui:Button>
-
-            <ui:VisualElement name="lan" class="start__section">
-                <ui:Label name="lan-label" class="start__label" />
-                <ui:Label name="lan-hint" class="start__hint" />
-                <ui:VisualElement name="games" class="start__games" />
+            <ui:VisualElement name="address-box" class="start__field">
+                <ui:Label name="address-label" class="start__label" />
+                <ui:TextField name="address" class="start__input" />
             </ui:VisualElement>
-
-            <ui:VisualElement class="start__section">
-                <ui:Label name="join-label" class="start__label" />
-                <ui:Label name="join-hint" class="start__hint" />
-                <ui:VisualElement class="start__row">
-                    <ui:TextField name="address" class="start__input start__input--address" />
-                    <ui:Button name="join" class="start__join font-title" />
-                </ui:VisualElement>
+            <ui:VisualElement name="key-box" class="start__field">
+                <ui:Label name="key-label" class="start__label" />
+                <ui:TextField name="key" class="start__input start__input--key" max-length="12" />
             </ui:VisualElement>
-
-            <ui:Label name="status" class="start__status" />
-
-            <ui:Button name="quit" class="start__choice start__choice--quit">
-                <ui:Label name="quit-title" class="start__choice-title font-title" picking-mode="Ignore" />
-            </ui:Button>
-            <ui:Label name="version" class="start__version" />
+            <ui:VisualElement class="start__row">
+                <ui:Button name="go" class="start__key start__key--go font-title" />
+                <ui:Button name="form-back" class="start__key font-title" />
+            </ui:VisualElement>
         </ui:VisualElement>
+
+        <ui:Button name="back" class="start__key start__back font-title" />
+        <ui:Label name="status" class="start__status" picking-mode="Ignore" />
+        <ui:Label name="version" class="start__version" picking-mode="Ignore" />
     </ui:VisualElement>
 </ui:UXML>

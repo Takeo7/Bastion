@@ -1,0 +1,86 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77e0c08c7614747beb61edd471b21cf2, type: 3}
+  m_Name: MenuArt
+  m_EditorClassIdentifier: Bastion.Client::Bastion.Client.Menu.MenuArt
+  modelNames:
+  - apocalypse:SM_Bld_House_01
+  - apocalypse:SM_Bld_House_03
+  - apocalypse:SM_Prop_Barrier_Long_01
+  - apocalypse:SM_Prop_Car_Wrecked_01
+  - apocalypse:SM_Prop_Car_Wrecked_Rusted_01
+  - apocalypse:SM_Prop_Car_Wrecked_SUV_01
+  - apocalypse:SM_Prop_Floodlights_01
+  - apocalypse:SM_Prop_Gaspump_01
+  - apocalypse:SM_Prop_LightPole_Base_01
+  - apocalypse:SM_Prop_Powerpole_Single_01
+  - apocalypse:SM_Prop_Powerpole_Single_Line_01
+  - apocalypse:SM_Prop_Sign_Stop_01
+  - apocalypse:SM_Prop_SpikeWall_01
+  - apocalypse:SM_Veh_Car_Medium_01
+  - farm:SM_Bld_Barn_01
+  - farm:SM_Bld_Farmhouse_02
+  - farm:SM_Bld_Silo_01
+  - farm:SM_Prop_Fence_Wire_01
+  - farm:SM_Prop_Fence_Wood_01
+  - farm:SM_Prop_Windmill_01
+  - military:SM_Bld_GasStation_01
+  - military:SM_Bld_GuardTower_01
+  - nature:SM_Plant_Bush_01
+  - nature:SM_Rock_01
+  - nature:SM_Tree_Log_01
+  - nature:SM_Tree_Pine_Dead_01
+  - nature:SM_Tree_PolyPine_01
+  - nature:SM_Tree_PolyPine_02
+  - nature:SM_Tree_PolyPine_03
+  - town:SM_Bld_House_Preset_01
+  - town:SM_Bld_House_Preset_05
+  - town:SM_Bld_House_Preset_09
+  - town:SM_Bld_House_Preset_10
+  - town:SM_Bld_House_Preset_Garage_01
+  - town:SM_Veh_Pickup_01
+  models:
+  - {fileID: 1250344563677490, guid: cacdce86a66c20b46b7a922e1c118390, type: 3}
+  - {fileID: 919132149155446097, guid: c02f6fce62e3e44edbe00cba38db32d8, type: 3}
+  - {fileID: 1251467192584636, guid: aba887719f07fd5479fa6418efa4fd7e, type: 3}
+  - {fileID: 1572569093490736, guid: f6433493c51db7a4c9ea72ac5084e6c6, type: 3}
+  - {fileID: 1243194821767460, guid: 1f51b8de285f2b04887f1bda933b3af3, type: 3}
+  - {fileID: 1356109316017642, guid: e5997f29051e1c24fa02c8fcc2698d5f, type: 3}
+  - {fileID: 1134603172269386, guid: 63e1ccf938e98b142a479d9e9bd3293a, type: 3}
+  - {fileID: 1267131352853402, guid: 47da375f113338e47b5357cdd6284614, type: 3}
+  - {fileID: 1778623379932398, guid: 4697b39c37e780e4aaf80be9374b774b, type: 3}
+  - {fileID: 1007931602397796, guid: 9caa3a12ba5616940bc19c6783c58fa6, type: 3}
+  - {fileID: 1164509012883688, guid: 2408b4ca4bb6ab146a27fc64a424e143, type: 3}
+  - {fileID: 1033860218315092, guid: ffc021460e31bd444a0c04338d020c57, type: 3}
+  - {fileID: 1983442847941076, guid: 5eff2ea50f05d6847864deada34d5f27, type: 3}
+  - {fileID: 1504709610077770, guid: 6ab5e36b96200d54f9bfd6968bc577de, type: 3}
+  - {fileID: 1427016662113696, guid: 1135f5bcd489da04cb5f4fcb4355006b, type: 3}
+  - {fileID: 1144098775505912, guid: ed86c303c0d761e4c9b890662dd882a3, type: 3}
+  - {fileID: 1957237772272410, guid: ca2a787328680534488b66d6a68eae8d, type: 3}
+  - {fileID: 1679096892086428, guid: d1c03d059e1691742ba1b2311fbe2254, type: 3}
+  - {fileID: 1731819059591772, guid: 8157d7b10c2fa75449c20daa36513d38, type: 3}
+  - {fileID: 1853804450421360, guid: 2c837521d4253d74f844a10fd29446ef, type: 3}
+  - {fileID: 1953947631515658, guid: e927b4c822e05b1458cfdf087756b34a, type: 3}
+  - {fileID: 1112122440176180, guid: 7fa410500dabdde4cb375f3c7e442e92, type: 3}
+  - {fileID: 1153903725125606, guid: 7f253e36a99c6454e9f631317cb450b9, type: 3}
+  - {fileID: 1279149807870478, guid: 51917b8e41ef6a1469249c9dfee70390, type: 3}
+  - {fileID: 1209787234085090, guid: e4d35fc487ff62e45b34ae45f80c88fc, type: 3}
+  - {fileID: 1560461424881576, guid: 11d0d688b29309541acbbbf9497b8b78, type: 3}
+  - {fileID: 1566788591921752, guid: 5d7318dc4214e88458f42323d9cc4706, type: 3}
+  - {fileID: 1233735431766336, guid: 581bafddb39268e429cb24408e026c4d, type: 3}
+  - {fileID: 1591408165005554, guid: d18846c2d467b2c47b310be6e80b0434, type: 3}
+  - {fileID: 1185575685447016, guid: aba168a0966599544980000f122159b4, type: 3}
+  - {fileID: 1048238969174676, guid: facb89cf187493649838350bdbfaccb5, type: 3}
+  - {fileID: 1239824965422734, guid: eac406a61aaed8d448c9491a41fc4c32, type: 3}
+  - {fileID: 1812981227390338, guid: c155efb4b01f559438ae63e1747ad7df, type: 3}
+  - {fileID: 1453203562746868, guid: c967b3d3b3d988144acf28f592fdb2fe, type: 3}
+  - {fileID: 1968802732931520, guid: 03cb2a4568ff1a942aa83dc550cdfcf9, type: 3}

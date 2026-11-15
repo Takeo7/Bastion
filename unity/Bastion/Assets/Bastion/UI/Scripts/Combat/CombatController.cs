@@ -400,10 +400,14 @@ namespace Bastion.UI.Combat
             // shoot, move the 5 left).
             if (current != null && Commands(current) && (Paths.HasTurnLeft(current) || !CanAct())) return;
             var next = mineInPlay ?? MyUnits().FirstOrDefault(x => x.Ap > 0) ?? MyUnits().FirstOrDefault(Paths.HasTurnLeft) ?? (current != null && Commands(current) ? current : MyUnits().FirstOrDefault());
+            if (CameraRig.Logging && next?.Id != current?.Id)
+                Debug.Log($"[cámara] cambio de soldado: {current?.Id ?? "ninguno"} → {next?.Id ?? "ninguno"} ({(current == null ? $"elegido «{picked}»" : $"acciones {current.Ap}, movimiento {Paths.MoveBudget(current)}, manda {Commands(current)}")}, órdenes {CanAct()})");
             picked = next?.Id;
             if (next != null && current != null && next.Id != current.Id && CanAct())
             {
-                TurnCamera(next);
+                // The camera only with the command: with the partner holding it (turns one soldier each), it goes to
+                // theirs as it passes (CommandPassedEvent), not to this one, who waits (Arturo, 15/11).
+                if (HasCommand()) TurnCamera(next);
                 if (sameTurn) NextSoldier(current, next);
             }
         }
@@ -427,28 +431,31 @@ namespace Bastion.UI.Combat
             Bastion.Client.Audio.Sound.Play("ui.return");
         }
 
-        /// <summary>The camera keeps off a turn's soldier this long after the player moved it (game.ts TURN_CAMERA_QUIET_MS).</summary>
-        const float TurnCameraQuiet = 4f;
         /// <summary>
-        /// As the squad's turn opens («TU TURNO»), only this long: the camera goes back to the soldier who plays unless the
-        /// player is moving it right then (Arturo, 14/11: one moved in the enemy's turn kept it away).
+        /// The camera keeps off the soldier whose turn it is only while the player is moving it right then: as the squad's
+        /// turn opens («TU TURNO»: Arturo, 14/11, one moved in the enemy's turn kept it away) and as the next soldier comes
+        /// in (Arturo, 15/11: «tengo el toggle de ir al soldado on y no me lleva al soldado que le toca»). It was 4 s
+        /// (game.ts TURN_CAMERA_QUIET_MS): a turn of the wheel while aiming was enough to lose it.
         /// </summary>
-        const float OpeningQuiet = 1f;
+        const float TurnCameraQuiet = 1f;
 
         /// <summary>
         /// The camera to the soldier whose turn it is (playtest 17/10 #47; game.ts turnCamera): as the turn begins, the
         /// command passes or a soldier comes into play, if the HUD's switch («Cámara al soldado») says so; never fighting
         /// the player (not if they moved the camera in the last few seconds).
         /// </summary>
-        void TurnCamera(Unit u, float quiet = TurnCameraQuiet)
+        void TurnCamera(Unit u)
         {
-            if (u == null || !u.Alive || Hud == null || !Hud.FollowsTurn || Rig == null || Time.unscaledTime - Rig.TakenAt < quiet) return;
+            // BASTION_CAMARA_LOG: whether it goes, and why not.
+            if (CameraRig.Logging && u != null && Rig != null)
+                Debug.Log($"[cámara] al soldado {u.Id}: {(Hud == null || !Hud.FollowsTurn ? "no, «Cámara al soldado» apagado" : Time.unscaledTime - Rig.TakenAt < TurnCameraQuiet ? $"no, el jugador la movió hace {Time.unscaledTime - Rig.TakenAt:0.0} s" : "va")}");
+            if (u == null || !u.Alive || Hud == null || !Hud.FollowsTurn || Rig == null || Time.unscaledTime - Rig.TakenAt < TurnCameraQuiet) return;
             SetLevel(u.Pos.Z);
             Rig.Focus(FeetOf(u.Id) ?? Board.TileToWorld(State, u.Pos));
         }
 
         /// <summary>The camera to `slot`'s soldier whose turn it is in `v` (the event player: a turn opens, the command passes).</summary>
-        public void TurnCamera(GameState v, int slot, bool opening = false) => TurnCamera(TurnSoldier(v, slot, opening), opening ? OpeningQuiet : TurnCameraQuiet);
+        public void TurnCamera(GameState v, int slot, bool opening = false) => TurnCamera(TurnSoldier(v, slot, opening));
 
         string lastInPlay;
         int? lastCommand;
@@ -689,7 +696,7 @@ namespace Bastion.UI.Combat
             }
             if (Overlay != null)
             {
-                Overlay.ShowPicked(Unit() != null ? FeetOf(picked) : null);
+                Overlay.ShowPicked(Unit() != null ? FeetOf(picked) : null, Ui.Hex(PlayerColor(Unit()?.Owner ?? MySlot), Color.white));
                 Overlay.ShowPartner(partnerPicked != picked ? FeetOf(partnerPicked) : null, partnerColor);
                 Overlay.ShowEnemies(EnemyFeet());
                 // The one pointed at from the list (#11), followed as it walks; off once the pointer moves on the map (a list

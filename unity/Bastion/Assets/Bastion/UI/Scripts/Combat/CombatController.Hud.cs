@@ -587,7 +587,8 @@ namespace Bastion.UI.Combat
             // Each soldier's bust for its card, asked for once (Arte's Portraits draws one a frame).
             foreach (var u in units)
                 if (u.Team == Teams.Xcom && busts.Add(u.Id))
-                    Bastion.Client.Portraits.Know(u.Id, u.Appearance, u.Name, Bastion.Client.Units.SquadTint.ColourOf(u.Owner ?? MySlot));
+                    // Dressed by the figure's own seed (UnitViews: the campaign's id), or each card showed someone else (Arte, 15/11).
+                    Bastion.Client.Portraits.Know(u.Id, u.Appearance, u.Name, Bastion.Client.Units.SquadTint.ColourOf(u.Owner ?? MySlot), u.CampaignId ?? u.Name);
             int Rank(Unit u) => u.Owner == MySlot || u.Owner == null ? 0 : 1;
             var carrier = v.Mission.Item?.Carrier;
             foreach (var u in units.OrderBy(Rank))

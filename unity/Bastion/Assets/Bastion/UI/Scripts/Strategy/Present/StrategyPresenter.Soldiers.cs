@@ -122,14 +122,10 @@ namespace Bastion.UI.Strategy
             if (picked == null || !mine.Concat(theirs).Any(s => s.Id == picked))
                 picked = mine.FirstOrDefault(s => s.Alive)?.Id ?? mine.FirstOrDefault()?.Id ?? theirs.FirstOrDefault()?.Id;
             pick.Soldier = picked;
-            var v = new SoldiersView { MineHead = "Tus soldados" };
+            // One grid, no heads (Arturo, 14/11): the partner's with their own light, and who they are on hover.
+            var v = new SoldiersView();
             foreach (var s in mine) v.Mine.Add(Tile(c, s, picked));
-            if (theirs.Count > 0)
-            {
-                v.PartnerHead = $"De {PlayerName(theirs[0].Owner)}";
-                v.PartnerNote = "no está: los preparas tú";
-                foreach (var s in theirs) v.Partner.Add(Tile(c, s, picked));
-            }
+            foreach (var s in theirs) v.Partner.Add(Tile(c, s, picked));
             v.Recruit = Recruit(c, mine.Count(s => s.Alive));
             v.MustWait = MustWait(c);
             var soldier = c.Soldiers.FirstOrDefault(s => s.Id == picked);
@@ -222,10 +218,10 @@ namespace Bastion.UI.Strategy
             var rank = Bars.VeterancyRank(spent);
             var t = new SoldierTileView
             {
-                Id = s.Id, Name = string.IsNullOrEmpty(s.Nickname) ? s.Name.Split(' ')[0] : s.Nickname, Accent = PlayerColor(s.Owner),
-                Skills = SkillsOf(s), Rank = rank, RankTip = RankTip(s), Dead = !s.Alive, Selected = s.Id == picked,
+                Id = s.Id, Name = string.IsNullOrEmpty(s.Nickname) ? s.Name.Split(' ')[0] : s.Nickname, Theirs = s.Owner != Slot,
+                Rank = rank, RankTip = RankTip(s), Dead = !s.Alive, Selected = s.Id == picked,
                 Points = s.Owner == Slot && s.Alive && Campaign.CanSpendPoints(c, s), PointsTip = "Puntos por gastar en el tablero",
-                FullName = Appearances.DisplayName(s.Name, s.Nickname),
+                FullName = Appearances.DisplayName(s.Name, s.Nickname) + (s.Owner == Slot ? "" : Partner?.Connected == true ? $" · de {PlayerName(s.Owner)}" : $" · de {PlayerName(s.Owner)}, que no está: {(Female(s) ? "la" : "lo")} preparas tú"),
             };
             if (!s.Alive || s.WoundedDays > 0)
             {
@@ -256,7 +252,7 @@ namespace Bastion.UI.Strategy
             return (Female(s) ? "Lista" : "Listo", brief ? null : "good", null);
         }
 
-        /// <summary>Recruiting, on its own card: what it is, what it costs, what it needs, and why not (renderBarracks).</summary>
+        /// <summary>Recruiting, a tile of the grid: what it costs; what it is, what it needs and why not on hover (renderBarracks).</summary>
         RecruitView Recruit(CampaignState c, int count)
         {
             var cap = Campaign.SoldierCap(c);
@@ -267,22 +263,19 @@ namespace Bastion.UI.Strategy
                 (free <= 0, "No quedan camas: para reclutar más, construid un Barracón."),
                 (true, PendingWhy(c)),
                 (true, Shortfall(c, price)));
-            var v = new RecruitView
+            // Where the Armería counts the pistols (a campaign since the 0.11.5), a recruit comes with the knife and one of the
+            // start's weapons at random (Campaign.AddSoldier, StartArms; Arturo, 5/11).
+            var blurb = c.Pistols == true ? "Un recluta nuevo: sale con el cuchillo y un arma al azar (una pistola, un machete o una palanca), y con algo de práctica en una o dos habilidades. Llega al momento."
+                : "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.";
+            // Lore, C4: the caravan's eight beds, not the old bunker's.
+            return new RecruitView
             {
-                Title = "Reclutar un soldado",
-                // Where the Armería counts the pistols (a campaign since the 0.11.5), a recruit comes with the knife and one of the
-                // start's weapons at random (Campaign.AddSoldier, StartArms; Arturo, 5/11).
-                Blurb = c.Pistols == true ? "Un recluta nuevo: sale con el cuchillo y un arma al azar (una pistola, un machete o una palanca), y con algo de práctica en una o dos habilidades. Llega al momento."
-                    : "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.",
-                Button = $"Reclutar · {Campaign.CostText(price)}",
+                Label = "Reclutar",
+                Cost = Campaign.CostText(price),
+                Tip = $"{blurb}\nTus soldados: {count} de {cap}. Camas libres: {System.Math.Max(0, free)}. Cada soldado necesita una cama: la autocaravana tiene 8, y cada Barracón suma más.",
                 Enabled = why == null,
                 Why = why,
             };
-            v.Chips.Add(new ChipView { Text = Campaign.CostText(price) });
-            v.Chips.Add(new ChipView { Text = $"Tus soldados {count}/{cap}", Tip = $"Como mucho {cap} soldados por jugador" });
-            // Lore, C4: the caravan's eight beds, not the old bunker's.
-            v.Chips.Add(new ChipView { Text = $"Camas libres {System.Math.Max(0, free)}", Tone = free <= 0 ? "warn" : null, Tip = "Cada soldado necesita una cama: la autocaravana tiene 8, y cada Barracón suma más." });
-            return v;
         }
 
         /// <summary>The picked soldier's sheet (renderBarracks, skillSheet.ts skillsBlock, arms.ts weaponPick).</summary>
@@ -292,31 +285,30 @@ namespace Bastion.UI.Strategy
             var isMine = Commands(s.Owner);
             var stats = Campaign.SquadMember(c, s);
             var aim = Content.Templates[TemplateIds.Rookie].Aim;
+            // The strip of figures is out (Arturo, 14/11): both aims (the soldier's own, without the weapon), the will and the
+            // dodge (Forma física's: Arturo, 6/11) go on the name's help.
+            var dodge = Content.Templates[stats.Template].Dodge + stats.Mods.Dodge;
+            var rank = Bars.VeterancyRank(s.Board.Count);
+            var moves = (int)System.Math.Round((Content.Templates[stats.Template].Mobility + stats.Mods.Mobility) * Paths.CostOrtho) / Paths.CostOrtho;
+            var ap = rank >= Content.ThirdActionRank ? Content.ApPerTurn + 1 : Content.ApPerTurn;
             var v = new SoldierSheetView
             {
-                // Lore, 26/10: «tuya» for a woman, as the rank already agrees («Fogueada · tuya»).
-                Kicker = $"{Campaign.VeterancyName(s)} · {(own ? (Female(s) ? "tuya" : "tuyo") : $"de {PlayerName(s.Owner)}")}",
                 Name = Appearances.DisplayName(s.Name, s.Nickname),
-                Skills = SkillsOf(s),
-                NameTip = $"Misiones: {s.Missions} · Bajas: {s.Kills}",
-                Subtitle = Campaign.WeaponLabel(c, s),
+                NameTip = $"Misiones: {s.Missions} · Bajas: {s.Kills}\nPuntería con armas de fuego {aim + stats.Mods.Aim + stats.Mods.GunAim} · cuerpo a cuerpo {aim + stats.Mods.Aim + stats.Mods.MeleeAim}\nVoluntad {stats.Will} · Esquiva {dodge}",
+                Hp = stats.MaxHp, HpTip = $"Salud: {stats.MaxHp}",
+                Ap = ap, ApTip = $"{ap} acciones por turno",
+                Moves = moves, MovesTip = $"Movimiento: {moves} casillas por turno",
                 Note = !own && isMine && s.Alive ? $"{PlayerName(s.Owner)} no está: {(Female(s) ? "la" : "lo")} preparas tú hasta que vuelva." : null,
-                Customize = isMine && s.Alive ? "Personalizar" : null,
-                ArmsHead = isMine && s.Alive ? "Arma y armadura · se eligen aquí" : "Arma y armadura",
-                BeltHead = "Cinturón · se elige aquí",
+                Customizable = isMine && s.Alive,
             };
-            // Both aims, the soldier's own without the weapon: the base and what the bars and the board add (playtest 17/10).
-            v.Stats.Add(new SheetStatView { Icon = "stat:hp", Value = stats.MaxHp.ToString(), Color = "#8fd05a", Tip = "Salud" });
-            v.Stats.Add(new SheetStatView { Icon = "stat:aim", Value = (aim + stats.Mods.Aim + stats.Mods.GunAim).ToString(), Color = "#ffffff", Tip = $"Puntería con armas de fuego: {Bars.BaseAim} de base, más lo que suman las barras de Disparo y el tablero" });
-            v.Stats.Add(new SheetStatView { Icon = "stat:melee", Value = (aim + stats.Mods.Aim + stats.Mods.MeleeAim).ToString(), Color = "#ffffff", Tip = $"Puntería cuerpo a cuerpo: {Bars.BaseAim} de base, más lo que suman las barras de Cuerpo a cuerpo y el tablero" });
-            v.Stats.Add(new SheetStatView { Icon = "stat:ap", Value = stats.Will.ToString(), Color = "#ffffff", Tip = "Voluntad" });
-            // Dodge (Arturo, 6/11: Forma física's bars grow it, not health): its template's and what the bars and the board add.
-            var dodge = Content.Templates[stats.Template].Dodge + stats.Mods.Dodge;
-            v.Stats.Add(new SheetStatView { Icon = "stat:dodge", Value = dodge.ToString(), Color = "#ffffff", Tip = "Esquiva: de cada 100 impactos que recibe, cuántos se quedan en rozadura. La suben las barras de Forma física y el tablero" });
             var (health, tone, tip) = Health(c, s, false);
-            v.Health = health;
-            v.HealthTone = tone;
-            v.HealthTip = tip;
+            // Ready says nothing (Arturo, 14/11: no «Listo»); hurt or fallen, it does.
+            if (tone != "good")
+            {
+                v.Health = health;
+                v.HealthTone = tone;
+                v.HealthTip = tip;
+            }
             v.Care = Care(c, s);
             foreach (var t in s.Traits ?? new List<string>())
                 if (Quests.Traits.TryGetValue(t, out var def)) v.Traits.Add(new ChipView { Text = def.Name, Tip = def.Description });
@@ -331,7 +323,7 @@ namespace Bastion.UI.Strategy
             v.Armor = new ArmorView
             {
                 Tier = tier, Name = Progression.ArmorTiers[tier - 1].Name,
-                Figures = $"· {stats.MaxHp} de salud{(stats.Armor != 0 ? $" · {stats.Armor} de blindaje" : "")}",
+                Figures = $"{stats.MaxHp} de salud{(stats.Armor != 0 ? $" · {stats.Armor} de blindaje" : "")}",
                 Next = blocker != null && next != null ? $"→ {next.Name}" : null, NextTip = blocker,
             };
             v.Belt.Add(BeltPick(c, s, "utility", "Hueco 1", "slot0", isMine && s.Alive));
@@ -421,6 +413,8 @@ namespace Bastion.UI.Strategy
             // the side, or nothing); nothing at the side.
             var none = melee ? Content.Weapons[WeaponIds.Knife].Name : side ? "Nada" : !counted || pistol != null ? Content.Weapons[WeaponIds.Pistol].Name : "Nada";
             var v = new PickView { Id = place, Label = melee ? "Cinto" : side ? "Costado" : "Mano", Value = current != null ? Content.FoundWeapons[current.Kind].Name : none, Editable = editable };
+            // Its tile's picture: what is there, or what it falls back on (the knife, the pistol); the side with nothing, none.
+            v.Icon = current != null ? WeaponIcon(Content.FoundWeapons[current.Kind].Weapon) : side ? null : none == "Nada" ? null : WeaponIcon(melee || (counted && pistol == null) ? WeaponIds.Knife : WeaponIds.Pistol);
             if (side) v.Lines.Add(current != null ? WeaponLine(Aim.WeaponProfileOf(current.Kind, current.Condition ?? 100, current.Mods)) : "Sin pistola");
             else v.Lines.Add(WeaponLine(Carried(c, s, melee)));
             if (place == Hand && !counted) v.Lines.Add(current != null ? "y la pistola al costado" : "sin arma: la pistola");
@@ -473,7 +467,7 @@ namespace Bastion.UI.Strategy
         static PickView BeltPick(CampaignState c, CampaignSoldier s, string slot, string title, string id, bool editable)
         {
             var current = slot == "utility" ? s.Loadout.Utility : s.Loadout.Ammo;
-            var v = new PickView { Id = id, Label = title, Value = current != null ? Content.Items[current].Name : editable ? "Nada" : "—", Editable = editable };
+            var v = new PickView { Id = id, Label = title, Value = current != null ? Content.Items[current].Name : editable ? "Nada" : "—", Icon = current != null ? ItemIcon(current) : null, Editable = editable };
             if (!editable) return v;
             v.Options.Add(new PickOptionView { Id = "none", Name = "Nada", Current = current == null });
             foreach (var item in Content.Items.Values.Where(i => i.Slot == ItemSlots.Utility))
@@ -529,14 +523,14 @@ namespace Bastion.UI.Strategy
             var v = new SkillsView
             {
                 Head = "Experiencia",
+                RankLabel = "Rango",
                 Rank = Female(s) ? def.Female : def.Name,
                 RankFilled = reward != null ? spent - def.From : Bars.RankStep,
                 RankTotal = Bars.RankStep,
-                Will = reward?.Short ?? "Rango máximo",
-                WillTip = reward?.Long ?? "No hay rango más alto.",
-                RankLine = def.Line,
-                Gives = $"Voluntad {Bars.VeteranWill(rank)} · {(rank >= Content.ThirdActionRank ? 3 : 2)} acciones por turno",
-                Board = points > 0 ? $"Tablero de habilidades · {(points == 1 ? "un punto" : $"{points} puntos")} por gastar" : "Tablero de habilidades",
+                // Its old lines, on its help: what the rank gives now, and the next one.
+                RankTip = $"{def.Line}\nVoluntad {Bars.VeteranWill(rank)} · {(rank >= Content.ThirdActionRank ? 3 : 2)} acciones por turno\n{(reward != null ? $"Siguiente rango: {reward.Long}" : "No hay rango más alto.")}",
+                Board = "Tablero de habilidades",
+                BoardPoints = points > 0 ? $"{points} {(points == 1 ? "punto" : "puntos")} por gastar" : null,
                 BoardPulse = points > 0 && mine,
             };
             for (var i = 0; i < SkillIds.All.Count; i++)
@@ -549,12 +543,13 @@ namespace Bastion.UI.Strategy
                 // Forma física's growth as the dodge it adds, in points (Arturo, 6/11): its percent is of a base of 50
                 // nobody sees (Bars.DodgeBase); the other lines', as a percent of their stat.
                 var dodge = id == SkillIds.Fitness ? Bars.GrowthDeltaOf(id, 0, grown).Mods.Dodge : 0;
+                // The experience into the bar being filled, of what it needs (Arturo, 14/11: the figure right, the bar under).
                 v.Rows.Add(new SkillRowView
                 {
-                    Line = i, Name = skill.Name, Tip = skill.Line,
+                    Name = skill.Name, Tip = $"{skill.Line}\n{bars.Into} de {bars.Need} para la siguiente barra. {r.Long}",
                     Growth = grown == 0 ? null : id == SkillIds.Fitness ? $"+{dodge}" : $"+{grown} %",
                     GrowthTip = id == SkillIds.Fitness ? $"{skill.Stat}: +{dodge} de sus barras" : skill.Stat,
-                    Filled = bars.Into, Total = bars.Need, Reward = r.Short, RewardTip = r.Long,
+                    Value = bars.Into, Share = bars.Need > 0 ? (float)bars.Into / bars.Need : 1,
                 });
             }
             return v;

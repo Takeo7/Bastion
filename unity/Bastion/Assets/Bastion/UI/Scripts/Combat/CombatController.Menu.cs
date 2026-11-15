@@ -74,6 +74,8 @@ namespace Bastion.UI.Combat
                 Abandon = !over,
                 AbandonLabel = Lore.AbandonText.Button,
                 QuitLabel = Lore.QuitText.Button,
+                // Hosting while the partner isn't in: how they join (Gameplay, 14/11).
+                Invite = Bastion.UI.Start.RoomText.InviteOf(Bastion.Client.Net.NetLink.Instance),
                 AbandonTip = HudText.Menu.AbandonTip(partner?.Name, Players.Count > 1),
                 // One's own call waiting for the partner: off, saying so.
                 AbandonWaiting = State.AbandonCall != null && State.AbandonCall.By == MySlot ? Lore.EvacWaiting(partner?.Name ?? "el otro jugador") : null,

@@ -175,8 +175,6 @@
     -unity-font-style: bold;
     color: var(--t-text);
     background-color: rgba(240, 80, 60, 0.08);
-    border-left-width: 3px;
-    border-left-color: var(--t-danger);
 }
 
 .battle-file__text {

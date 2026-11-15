@@ -6,8 +6,8 @@ namespace Bastion.UI.Hud
 {
     /// <summary>
     /// The log under the objective (hud.ts log/renderLog; docs/UNITY-UI.md §2.8): what happened, a line each, the newest
-    /// on top, a stroke on its left in the colour of its tone (one's own hurt, the enemy's, enemies among themselves, good
-    /// news), the words in the log's own (styles.css .log-line). Folded it
+    /// on top, the words in the log's own (styles.css .log-line), without the stroke of its tone's colour at its left
+    /// that it had until the 0.12.23 (Arturo, 14/11: «la línea roja decorativa»). Folded it
     /// shows the last two and «▾ 3 más»; open, the last thirty and «▴ Plegar». Lines come from the events, in Lore's words;
     /// what the partner found, with «Ver» at its end (Arturo's B2 of 2/11: no longer a notice over the bar).
     /// </summary>
@@ -47,6 +47,7 @@ namespace Bastion.UI.Hud
             Draw();
         }
 
+        /// <summary>A line; `color`, its tone, isn't drawn any more (the stroke out, 14/11), kept for whoever calls.</summary>
         public void Add(string text, string color = null, System.Action see = null)
         {
             VisualElement line;
@@ -59,7 +60,6 @@ namespace Bastion.UI.Hud
                 button.AddToClassList("log__see");
                 line.Add(button);
             }
-            if (!string.IsNullOrEmpty(color)) line.style.borderLeftColor = Ui.Hex(color, Color.white);
             kept.Insert(0, line);
             lines.Insert(0, line);
             while (kept.Count > Keep)

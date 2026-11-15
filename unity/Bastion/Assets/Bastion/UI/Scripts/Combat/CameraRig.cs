@@ -214,6 +214,8 @@ namespace Bastion.UI.Combat
         /// <summary>The player took the camera (a move, a pick): whatever was taking it somewhere lets go.</summary>
         public void TakeControl()
         {
+            // BASTION_CAMARA_LOG: who took it (the log carries the stack).
+            if (Logging) Debug.Log("[cámara] tomada por el jugador");
             Epoch++;
             TakenAt = Time.unscaledTime;
             savedDistance = null;

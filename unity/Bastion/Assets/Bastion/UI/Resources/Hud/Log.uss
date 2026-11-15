@@ -22,14 +22,13 @@
     max-height: 300px;
 }
 
-/* Its tone on a stroke at its left (Log.cs), the words white. */
+/* The words white, with no stroke of colour at their left (Arturo, 14/11: «la línea roja decorativa del aviso de
+   llegada de zombis», out wherever it shows). */
 .log__line {
-    padding: 1px 0 1px 6px;
+    padding: 1px 0;
     font-size: 12px;
     white-space: normal;
     margin-top: 2px;
-    border-left-width: 2px;
-    border-left-color: rgba(42, 35, 24, 0.25);
 }
 
 /* A line of the partner's (Log.cs): its words, then «Ver» to take the camera there. */

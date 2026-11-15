@@ -1,3 +1,4 @@
+using System.Linq;
 using Bastion.Engine;
 using Bastion.Net;
 
@@ -15,7 +16,13 @@ namespace Bastion.UI.Start
         public const string Connected = "En línea";
         public const string Offline = "Sin conexión";
         public const string Away = "Ausente";
-        public const string Invite = "Quien juegue contigo te verá en «Partidas en tu red» de su app. Si no te ve, que use «Unirse por dirección» con:";
+        /// <summary>
+        /// How the partner finds this game (Lore, 15/11: as their card in «Partida multijugador» says it, with the host's
+        /// name); without the name, in general.
+        /// </summary>
+        public static string Invite(string name) => string.IsNullOrEmpty(name)
+            ? "Quien juegue contigo verá tu partida en «Partida multijugador» de su app. Si no la ve, que pulse «Unirse por dirección» y escriba:"
+            : $"Quien juegue contigo verá «Unirte a la partida de {name}» en «Partida multijugador». Si no le sale, que pulse «Unirse por dirección» y escriba:";
         /// <summary>Each of the host's addresses, by what it is (net.ts inviteLinks of the 0.10.1).</summary>
         public const string Lan = "En tu misma red";
         /// <summary>«Con Tailscale» (Lore, 01/11: «Por internet» is the router's alone now).</summary>
@@ -44,6 +51,28 @@ namespace Bastion.UI.Start
         public const string Replaced = "Has abierto la partida en otra ventana, y esta se ha desconectado.";
 
         public static string OtherAddresses(int n) => $"Otras direcciones ({n})";
+
+        /// <summary>
+        /// How the partner joins, for the game's menu (Esc) in the base and in the mission: hosting while they aren't in
+        /// (Gameplay, 14/11), as DrawInvite in the room's menu: the first of the host's addresses and any by Tailscale, the
+        /// internet's with the key once the router's port is open, else why not, and the key's line. Null otherwise.
+        /// </summary>
+        public static Bastion.UI.Hud.InviteView InviteOf(Bastion.Client.Net.NetLink link)
+        {
+            if (link == null || !link.Hosting || link.PartnerConnected) return null;
+            var addresses = link.Addresses;
+            var router = link.Router;
+            var internet = router == RouterState.Open ? link.Invite ?? link.Internet : null;
+            if (addresses.Count == 0 && internet == null) return null;
+            var name = link.LastRoom?.Players.FirstOrDefault(p => p.Slot == link.Slot)?.Name ?? link.LastName;
+            var v = new Bastion.UI.Hud.InviteView { Line = Invite(name), Copy = Copy, Copied = Copied };
+            for (var i = 0; i < addresses.Count; i++)
+                if (i == 0 || addresses[i].Kind == "tailscale") v.Addresses.Add((addresses[i].Kind == "tailscale" ? Tailscale : Lan, addresses[i].Address));
+            if (internet != null) v.Addresses.Add((Internet, internet));
+            else if (router != null && router != RouterState.Open) v.Router = RouterLine(router.Value);
+            if (link.Key is string key) v.Key = KeyLine(key);
+            return v;
+        }
 
         /// <summary>The router's port while it opens, or why it won't (Lore's words, 01/11).</summary>
         public static string RouterLine(RouterState state) => state switch

@@ -106,6 +106,8 @@ namespace Bastion.UI.Hud
             var studio = tree.Q("studio");
             studio.style.backgroundImage = new StyleBackground(Studio());
             studio.style.unityBackgroundImageTintColor = new Color(owner.r, owner.g, owner.b, 0.85f);
+            // The bust's edges lit from behind in the same colour (Arte's Portraits.Light, 0.12.24).
+            Bastion.Client.Portraits.Light(c.Id, owner);
             var face = tree.Q("face");
             var portrait = c.Bust ? PortraitOf?.Invoke(c.Id) : null;
             if (portrait is RenderTexture rt) face.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
@@ -156,9 +158,9 @@ namespace Bastion.UI.Hud
 
         /// <summary>
         /// The studio's light behind a bust (Ana, 7/11 #13; ours: a soft round glow, white for its tint), strongest a little
-        /// above the middle, where the head is, and gone at the edges.
+        /// above the middle, where the head is, and gone at the edges. The base's Soldados too (SoldiersScreen, 0.12.24).
         /// </summary>
-        static Texture2D Studio()
+        public static Texture2D Studio()
         {
             if (studio != null) return studio;
             const int size = 64;

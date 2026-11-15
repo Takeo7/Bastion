@@ -625,6 +625,8 @@ namespace Bastion.Client
             }
             if (!Walking) MoveCamera(Time.deltaTime);
             StepFaceKey();
+            // The soldier of Soldados lit under the pointer (Settlement.Highlight).
+            StepHighlight(Time.deltaTime);
             StepFade(Time.deltaTime);
             EndWalk();
         }

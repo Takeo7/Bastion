@@ -32,8 +32,8 @@ namespace Bastion.UI.Combat
     /// #18, Arturo 01/11 #4: Outline). The way to
     /// the tile under the pointer, a ring on that tile, and over it a shield on each side with cover. Where the squad
     /// would be noticed, an eye in a soft red, no frame (Arturo, 31/10 #14); where the ground burns, a flame in orange
-    /// (Arturo, 01/11: it burns whoever steps on it). Round the picked one's feet a white ring in
-    /// three arcs that turn; round the partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and grey (blue is the reach's now).
+    /// (Arturo, 01/11: it burns whoever steps on it). Round the picked one's feet a wide ring in its player's colour over
+    /// a dark band (Arturo, 15/11); round the partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and grey (blue is the reach's now).
     /// Lines keep their width in pixels (Bastion/Marks). The shields are drawn over walls, as the web's; the lines over
     /// everything but the figures, soldiers and the dead (Arturo, 31/10 #3: not cars, crates or walls), behind the legs
     /// standing over them (Ana, Arturo 31/10 #6: Pull).
@@ -183,13 +183,9 @@ namespace Bastion.UI.Combat
             hoverMaterial = hover.GetComponent<MeshRenderer>().sharedMaterial;
             hover.gameObject.SetActive(false);
 
-            // The picked one's: Apocalypse's thin ring, white (0.54 of a tile; Ana, Arturo 29/10: much thinner).
-            var ring = Layer("Elegido", 3102, false, false);
-            ring.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = RingTexture();
-            build.Clear();
-            Ring(build, Vector3.zero, 0.54f * T, Hex(0xffffff, 0xf2));
-            ring.sharedMesh = build.Build(null);
-            picked = ring.transform;
+            // The picked one's: a wide ring in its player's colour over a dark band (Arturo, 15/11: on snow the white one
+            // was hardly seen), made in that colour when shown (PickedRing).
+            picked = Layer("Elegido", 3102, false, false).transform;
             picked.gameObject.SetActive(false);
 
             var other = Layer("Elegido del compañero", 3102, false, false);
@@ -270,9 +266,8 @@ namespace Bastion.UI.Combat
 
         void Update()
         {
-            // The picked one's ring turns (18/10 #28: «en movimiento»); the partner's breathes.
+            // The partner's pick breathes.
             var time = Time.time;
-            picked.localRotation = Quaternion.Euler(0, time * 0.9f * Mathf.Rad2Deg, 0);
             partner.localScale = Vector3.one * (1 - Mathf.Sin(time * 5) * 0.06f);
             pointed.localScale = Vector3.one * (1 + Mathf.Sin(time * 7) * 0.08f);
         }
@@ -290,7 +285,7 @@ namespace Bastion.UI.Combat
             ShowPath(null, null, null);
             ShowHover(null, null, default);
             ShowCover(null, null);
-            ShowPicked(null);
+            ShowPicked(null, Color.white);
             ShowPartner(null, Color.white);
             ShowEnemies(null);
         }
@@ -881,11 +876,45 @@ namespace Bastion.UI.Combat
             if (feet != null) pointed.localPosition = feet.Value + Vector3.up * (0.04f * T);
         }
 
-        /// <summary>The ring round the picked soldier, at its feet (null: none).</summary>
-        public void ShowPicked(Vector3? feet)
+        /// <summary>The colour the picked one's ring was made in last.</summary>
+        Color32 pickedColour;
+
+        /// <summary>The ring round the picked soldier, at its feet (null: none), in its player's colour.</summary>
+        public void ShowPicked(Vector3? feet, Color colour)
         {
             picked.gameObject.SetActive(feet != null);
-            if (feet != null) picked.localPosition = feet.Value + Vector3.up * (0.035f * T);
+            if (feet == null) return;
+            picked.localPosition = feet.Value + Vector3.up * (0.035f * T);
+            Color32 c = colour;
+            var mesh = picked.GetComponent<MeshFilter>();
+            if (pickedColour.Equals(c) && mesh.sharedMesh != null) return;
+            pickedColour = c;
+            PickedRing(mesh, c);
+        }
+
+        /// <summary>
+        /// The picked one's ring (Arturo's choice, 15/11): a band of its colour 0.13 of a tile wide at 0.47–0.6, between a
+        /// dark band inside and one outside that fades, so it reads on snow and asphalt, by day and by night.
+        /// </summary>
+        void PickedRing(MeshFilter into, Color32 colour)
+        {
+            build.Clear();
+            const int n = 48;
+            var dark = Hex(0, 0x9c);
+            var clear = Hex(0, 0);
+            var lit = new Color32(colour.r, colour.g, colour.b, 0xf0);
+            for (var i = 0; i < n; i++)
+            {
+                var a0 = i * Mathf.PI * 2 / n;
+                var a1 = (i + 1) * Mathf.PI * 2 / n;
+                var d0 = new Vector3(Mathf.Cos(a0), 0, Mathf.Sin(a0));
+                var d1 = new Vector3(Mathf.Cos(a1), 0, Mathf.Sin(a1));
+                void Band(float r0, float r1, Color32 inner, Color32 outer) => build.Quad(d0 * r0 * T, d1 * r0 * T, d1 * r1 * T, d0 * r1 * T, inner, inner, outer, outer);
+                Band(0.42f, 0.47f, clear, dark);
+                Band(0.47f, 0.6f, lit, lit);
+                Band(0.6f, 0.68f, dark, clear);
+            }
+            into.sharedMesh = build.Build(into.sharedMesh);
         }
 
         /// <summary>

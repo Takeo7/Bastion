@@ -4,26 +4,22 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Hud
 {
     /// <summary>
-    /// What to press next, cut at the ends like the packs' buttons (mixta.css .x-btn.primary: clip-path polygon(9px 0,
-    /// 100% 0, calc(100% - 9px) 100%, 0 100%)). USS has no clip-path nor skew: the button's own background goes clear
-    /// (Strategy.uss .btn-slant) and this paints the slanted plate under its text, in the colours the sheet gives it as
-    /// custom properties, so hover, disabled and «a punto» stay in USS:
+    /// What to press next: a plate with its top lit and its foot shaded, its ends straight (Arturo, 14/11: «Retirar el
+    /// estilo de botón inclinado donde aparezca»; until the 0.12.23 they were cut in 9 px, as mixta.css .x-btn.primary).
+    /// USS has no gradients: the button's own background goes clear (Mixta.uss .btn-slant) and this paints the plate
+    /// under its text, in the colours the sheet gives it as custom properties, so hover, disabled and «a punto» stay in USS:
     ///   --slant-fill   the plate at 46 % of its height, --slant-hi at its top and --slant-lo at its foot (the 0.10.1's
     ///                  linear-gradient(180deg, hi 0%, fill 46%, lo 100%));
     ///   --slant-top    its lit top line (inset 0 1px 0);
     ///   --slant-foot   its shaded foot (inset 0 -3px 0);
     ///   --slant-edge   an outline round it (the partner waiting), clear for none.
     /// Only while the button has `btn-primary`: without it, it is the plain steel key it was. With `btn-notched` (Arturo's
-    /// report of 7/11, the maqueta v39's «LANZAR MISIÓN»): not slanted but a rectangle with a few notches torn in its ends,
-    /// in the same colours.
+    /// report of 7/11, the maqueta v39's «LANZAR MISIÓN»): a few notches torn in its ends, in the same colours.
     /// </summary>
     public static class Slant
     {
         public const string ClassName = "btn-slant";
         public const string Notched = "btn-notched";
-        /// <summary>--t-cut: how far each end is cut in.</summary>
-        const float Cut = 9;
-
         static readonly CustomStyleProperty<Color> Fill = new CustomStyleProperty<Color>("--slant-fill");
         static readonly CustomStyleProperty<Color> Hi = new CustomStyleProperty<Color>("--slant-hi");
         static readonly CustomStyleProperty<Color> Lo = new CustomStyleProperty<Color>("--slant-lo");
@@ -49,11 +45,11 @@ namespace Bastion.UI.Hud
             if (!e.ClassListContains("btn-primary")) return;
             var w = e.layout.width;
             var h = e.layout.height;
-            if (w <= 2 * Cut || h <= 0) return;
+            if (w <= 4 || h <= 0) return;
             var notched = e.ClassListContains(Notched);
-            // Where the plate's left and right edges are at a height: slanted, or notched.
-            System.Func<float, float> left = notched ? y => Notch(LeftNotches, y / h) : y => Cut * (1 - y / h);
-            System.Func<float, float> right = notched ? y => w - Notch(RightNotches, y / h) : y => w - Cut + Cut * (1 - y / h);
+            // Where the plate's left and right edges are at a height: straight, or notched.
+            System.Func<float, float> left = notched ? y => Notch(LeftNotches, y / h) : _ => 0;
+            System.Func<float, float> right = notched ? y => w - Notch(RightNotches, y / h) : _ => w;
             if (!e.customStyle.TryGetValue(Fill, out var fill)) return;
             var hi = e.customStyle.TryGetValue(Hi, out var a) ? a : fill;
             var lo = e.customStyle.TryGetValue(Lo, out var b) ? b : fill;
@@ -85,9 +81,9 @@ namespace Bastion.UI.Hud
                 }
                 else
                 {
-                    p.MoveTo(new Vector2(Cut + 1, 1));
+                    p.MoveTo(new Vector2(1, 1));
                     p.LineTo(new Vector2(w - 1, 1));
-                    p.LineTo(new Vector2(w - Cut - 1, h - 1));
+                    p.LineTo(new Vector2(w - 1, h - 1));
                     p.LineTo(new Vector2(1, h - 1));
                 }
                 p.ClosePath();

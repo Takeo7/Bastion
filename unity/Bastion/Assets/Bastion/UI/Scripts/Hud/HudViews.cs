@@ -654,6 +654,26 @@ namespace Bastion.UI.Hud
         public List<string> CoverRules = new List<string>();
         public string MoveLabel;
         public List<string> MoveRules = new List<string>();
+        /// <summary>Under «MENÚ», hosting while the partner isn't in: how they join (InviteView); null, nothing.</summary>
+        public InviteView Invite;
+    }
+
+    /// <summary>
+    /// How the partner joins the game this app hosts, on its menu (Esc) in the base and in the mission while they aren't
+    /// in (Gameplay, 14/11: «Continuar partida» and «Nueva partida» go straight to the base, past the room's menu, which
+    /// showed it): a line, each address with «Copiar», and the key's and the router's lines (RoomText.InviteOf).
+    /// </summary>
+    public sealed class InviteView
+    {
+        public string Line;
+        /// <summary>What each one is («En tu misma red», «Por internet, con la clave») and the address, copied whole.</summary>
+        public List<(string Kind, string Address)> Addresses = new List<(string, string)>();
+        /// <summary>The room's key and when it is asked (RoomText.KeyLine); null, none.</summary>
+        public string Key;
+        /// <summary>The router's port while it opens, or why it won't (RoomText.RouterLine); null, none.</summary>
+        public string Router;
+        public string Copy;
+        public string Copied;
     }
 
     /// <summary>

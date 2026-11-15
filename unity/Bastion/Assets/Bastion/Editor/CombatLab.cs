@@ -2525,6 +2525,234 @@ namespace Bastion.EditorTools
             Debug.Log(FormattableString.Invariant($"[carga] catalog: {held.clips.Length} clips {clips / 1048576.0:0.0} MB (the roars {roars / 1048576.0:0.00} MB), prefabs {prefabs / 1048576.0:0.0} MB (the sheath {sheath / 1048576.0:0.00} MB), maps {maps / 1048576.0:0.0} MB"));
         }
 
+        /// <summary>
+        /// The selected soldier's outline (UnitViews.Highlight(id, colour); Arturo's note on the battle, 15/11: «cuando está
+        /// seleccionado el soldado tiene que estar resaltado de alguna forma»), from the game's camera: on a recorded map
+        /// (BASTION_MAP, city-7 unless said), by night with BASTION_NOCHE=1, on a winter map with BASTION_NIEVE=1
+        /// (BASTION_CLIMA, a weather), the squad's first soldier on BASTION_DESDE=x,y[,z] (calle: the street nearest it;
+        /// arriba: a floor a storey up in a building; where it stands unless said), selected for the cutaway as the game's.
+        /// For each distance of BASTION_DIST ("9,24" unless said, tiles), the camera on it: a second without the line, then a
+        /// second in each colour of BASTION_COLORES ("#a678ff,#ffa630": Ana's, Arturo's), each logged ([resalte]: when,
+        /// which). Then, BASTION_RESALTE_PRUEBAS=1: veiled and back (Veil, as one in the way of a shot over a shoulder), over
+        /// to the second soldier, put out while that one is veiled, and off, each step's passes logged; BASTION_CORTE=1: the
+        /// cursor on the ground storey under it and back (one a storey up is cut away, its line with it), =0 no cutaway (one
+        /// inside a building behind its walls and roof, its line too); BASTION_RESALTE_COSTE=1: what it costs, a frame drawn without it and with it (the least of three rounds) and the
+        /// step's own (its marker, Bastion.Units.Resalte).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Resalte -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 75 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Resalte()
+        {
+            if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
+            string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
+            state = Seen(MapLab.Golden(name));
+            bool dark = Environment.GetEnvironmentVariable("BASTION_NOCHE") == "1";
+            if (dark && state.Mission != null) state.Mission.Night = true;
+            if (Environment.GetEnvironmentVariable("BASTION_NIEVE") is string snowy) state.Snow = snowy == "1";
+            if (Environment.GetEnvironmentVariable("BASTION_CLIMA") is string weather) state.Weather = weather;
+            var squad = state.Units.Where(u => u.Alive && u.Team == "xcom").ToList();
+            soldier = squad[0];
+            // (BASTION_DESDE=calle: the street's floor nearest it, Ground 1, with nobody on it or beside it.)
+            string from = Environment.GetEnvironmentVariable("BASTION_DESDE");
+            if (from == "calle" && state.Ground != null)
+            {
+                var near = Enumerable.Range(0, Math.Min(state.Ground.Count, state.Width * state.Height))
+                    .Where(i => state.Ground[i] == 1 && state.Tiles[i] == TileKinds.Floor
+                        && !state.Units.Any(u => u != soldier && u.Pos.Z == 0 && Math.Abs(u.Pos.X - i % state.Width) <= 1 && Math.Abs(u.Pos.Y - i / state.Width) <= 1))
+                    .OrderBy(i => Math.Max(Math.Abs(i % state.Width - soldier.Pos.X), Math.Abs(i / state.Width - soldier.Pos.Y))).DefaultIfEmpty(-1).First();
+                if (near >= 0) soldier.Pos = new Pos { X = near % state.Width, Y = near / state.Width, Z = 0 };
+            }
+            else if (from != "arriba" && from?.Split(',').Select(int.Parse).ToArray() is int[] start && start.Length >= 2)
+                soldier.Pos = new Pos { X = start[0], Y = start[1], Z = start.Length > 2 ? start[2] : 0 };
+            Bastion.Client.NightLights.StateForLab = state;
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, dark));
+            var view = MapLab.Map(state, name);
+            // (BASTION_DESDE=arriba: a floor a storey up inside a building, floor round it too, the nearest it.)
+            if (from == "arriba" && view.Builder?.Plan is BuildingPlan plan)
+            {
+                bool Inside(int x, int y) => Bastion.Engine.Grid.InBounds(state, x, y) && Bastion.Engine.Grid.CanStandOn(Bastion.Engine.Grid.KindAt(state, new Pos { X = x, Y = y, Z = 1 }))
+                    && plan.At(new Vec2 { X = x, Y = y }) is int b && b >= 0 && !plan.Buildings[b].frame;
+                var up = Enumerable.Range(0, state.Width * state.Height).Where(i => Inside(i % state.Width, i / state.Width)
+                        && Bastion.Engine.Grid.Dirs4.All(d => Inside(i % state.Width + d.X, i / state.Width + d.Y)))
+                    .OrderBy(i => Math.Max(Math.Abs(i % state.Width - soldier.Pos.X), Math.Abs(i / state.Width - soldier.Pos.Y))).DefaultIfEmpty(-1).First();
+                if (up >= 0) soldier.Pos = new Pos { X = up % state.Width, Y = up / state.Width, Z = 1 };
+            }
+            var cutaway = view.GetComponent<Cutaway>();
+            if (cutaway != null) cutaway.Focus.selected = soldier.Id;
+            // (BASTION_CORTE=0: no cutaway, every wall and roof standing: one inside a building is seen through nothing.)
+            if (cutaway != null && Environment.GetEnvironmentVariable("BASTION_CORTE") == "0") cutaway.enabled = false;
+            units = new GameObject("Unidades").AddComponent<UnitViews>();
+            fx = new GameObject("Efectos").AddComponent<Fx>();
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.farClipPlane = 800;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.72f, 0.78f, 0.86f);
+            var distances = (Environment.GetEnvironmentVariable("BASTION_DIST") ?? "9,24").Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+            var colours = (Environment.GetEnvironmentVariable("BASTION_COLORES") ?? "#a678ff,#ffa630").Split(',').Select(h => ColorUtility.TryParseHtmlString(h, out var c) ? c : Color.white).ToList();
+            MapSpace.Aim(camera, MapSpace.TileToWorld(state, soldier.Pos), distances[0]);
+            // (Again with the camera made: the fill light along it, as the battle's.)
+            Bastion.Client.Mood.Show(Bastion.Client.Mood.Of(state, dark));
+            Debug.Log($"[resalte] {name}: {soldier.Id} on {soldier.Pos.X},{soldier.Pos.Y},{soldier.Pos.Z}, {(dark ? "night" : "day")}, snow {state.Snow}, weather {state.Weather ?? "clear"}; the squad on {string.Join(" ", squad.Select(u => $"{u.Id} {u.Pos.X},{u.Pos.Y},{u.Pos.Z}"))}");
+            // Each of the first two soldiers' renderers and the passes over them: the line's, the moon rims, the fade's copies.
+            void Passes(string what)
+            {
+                foreach (var u in squad.Take(2))
+                {
+                    var rs = units.BodyRenderers(u.Id) ?? new System.Collections.Generic.List<Renderer>();
+                    int Of(Renderer r, Func<Material, bool> which) => r.sharedMaterials.Count(m => m != null && which(m));
+                    bool Line(Material m) => m.name.StartsWith("Resalte");
+                    int lined = rs.Count(r => Of(r, Line) > 0), twice = rs.Count(r => Of(r, Line) > 3);
+                    int drawn = rs.Count(r => Of(r, Line) > 0 && r.enabled && r.gameObject.activeInHierarchy);
+                    int rims = rs.Sum(r => Of(r, m => m.name.EndsWith(" (luna)"))), doubled = rs.Count(r => Of(r, m => m.name.EndsWith(" (luna)")) > 1);
+                    int faded = rs.Sum(r => Of(r, m => m.name.EndsWith(" (fundido)")));
+                    Debug.Log($"[resalte] {Time.time:0.00} s, {what}: {u.Id} drawn {units.Drawn(u.Id)}, {rs.Count} renderers, {lined} with the line ({drawn} of them on, {twice} with it twice), {rims} moon rims ({doubled} with two), {faded} faded");
+                }
+            }
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    // (The strip's first frame is taken a second in: nothing asked before then.)
+                    await Awaitable.WaitForSecondsAsync(1.2f);
+                    foreach (float d in distances)
+                    {
+                        MapSpace.Aim(camera, units.Feet(soldier.Id), d);
+                        units.Highlight(soldier.Id, null);
+                        Debug.Log(FormattableString.Invariant($"[resalte] {Time.time:0.00} s: {d} tiles off, without"));
+                        await Awaitable.WaitForSecondsAsync(1);
+                        foreach (var colour in colours)
+                        {
+                            units.Highlight(soldier.Id, colour);
+                            Debug.Log(FormattableString.Invariant($"[resalte] {Time.time:0.00} s: {d} tiles off, #{ColorUtility.ToHtmlStringRGB(colour)}"));
+                            await Awaitable.WaitForSecondsAsync(1);
+                        }
+                    }
+                    if (Environment.GetEnvironmentVariable("BASTION_RESALTE_PRUEBAS") == "1")
+                    {
+                        MapSpace.Aim(camera, units.Feet(soldier.Id), 9);
+                        units.Highlight(soldier.Id, colours[0]);
+                        await Awaitable.WaitForSecondsAsync(0.5f);
+                        Passes("lit");
+                        units.Veil(soldier.Id, true);
+                        await Awaitable.WaitForSecondsAsync(0.1f);
+                        Passes("veiling");
+                        await Awaitable.WaitForSecondsAsync(0.4f);
+                        Passes("veiled");
+                        units.Veil(soldier.Id, false);
+                        await Awaitable.WaitForSecondsAsync(0.6f);
+                        Passes("back");
+                        if (squad.Count > 1)
+                        {
+                            var other = squad[1].Id;
+                            MapSpace.Aim(camera, (units.Feet(soldier.Id) + units.Feet(other)) / 2, 12);
+                            units.Highlight(other, colours[colours.Count - 1]);
+                            await Awaitable.WaitForSecondsAsync(0.5f);
+                            Passes("over to the second");
+                            // (Put out while its figure is faded out: once back, what was put out stays out.)
+                            units.Veil(other, true);
+                            await Awaitable.WaitForSecondsAsync(0.3f);
+                            units.Highlight(other, null);
+                            await Awaitable.WaitForSecondsAsync(0.3f);
+                            units.Veil(other, false);
+                            await Awaitable.WaitForSecondsAsync(0.6f);
+                            Passes("put out while veiled, back");
+                        }
+                        units.Highlight(soldier.Id, colours[0]);
+                        await Awaitable.WaitForSecondsAsync(0.3f);
+                        units.Highlight(null, null);
+                        await Awaitable.WaitForSecondsAsync(0.3f);
+                        Passes("off");
+                    }
+                    if (Environment.GetEnvironmentVariable("BASTION_CORTE") == "1" && cutaway != null)
+                    {
+                        MapSpace.Aim(camera, units.Feet(soldier.Id), 12);
+                        units.Highlight(soldier.Id, colours[0]);
+                        await Awaitable.WaitForSecondsAsync(1);
+                        Debug.Log(FormattableString.Invariant($"[resalte] {Time.time:0.00} s: on its storey"));
+                        Passes("on its storey");
+                        cutaway.Focus.hover = new Pos { X = soldier.Pos.X, Y = soldier.Pos.Y, Z = 0 };
+                        cutaway.Focus.level = 0;
+                        await Awaitable.WaitForSecondsAsync(1);
+                        Debug.Log(FormattableString.Invariant($"[resalte] {Time.time:0.00} s: the ground storey shown"));
+                        Passes("its storey cut away");
+                        cutaway.Focus.hover = null;
+                        cutaway.Focus.level = null;
+                        await Awaitable.WaitForSecondsAsync(1);
+                        Passes("its storey again");
+                    }
+                    if (Environment.GetEnvironmentVariable("BASTION_RESALTE_COSTE") == "1") await Cost(camera, colours[0]);
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            };
+            EditorApplication.playModeStateChanged += Started;
+        }
+
+        /// <summary>
+        /// Resalte's cost: from the game's camera at 24 tiles, a frame drawn and read back (so the GPU's work is in it) 200
+        /// times without the line and 200 with it, three rounds; and the line's step each frame (its marker), with the passes
+        /// it draws.
+        /// </summary>
+        static async Awaitable Cost(Camera camera, Color colour)
+        {
+            MapSpace.Aim(camera, units.Feet(soldier.Id), 24);
+            var made = camera.targetTexture == null ? camera.targetTexture = new RenderTexture(1920, 1080, 24) : null;
+            var probe = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+            double Frames(int n)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                for (int k = 0; k < n; k++)
+                {
+                    camera.Render();
+                    RenderTexture.active = camera.targetTexture;
+                    probe.ReadPixels(new Rect(0, 0, 1, 1), 0, 0);
+                    probe.Apply(false);
+                    RenderTexture.active = null;
+                }
+                return watch.Elapsed.TotalMilliseconds / n;
+            }
+            Frames(20);
+            double without = double.MaxValue, with = double.MaxValue;
+            for (int round = 0; round < 3; round++)
+            {
+                units.Highlight(soldier.Id, null);
+                await Awaitable.WaitForSecondsAsync(0.3f);
+                double a = Frames(200);
+                units.Highlight(soldier.Id, colour);
+                await Awaitable.WaitForSecondsAsync(0.3f);
+                double b = Frames(200);
+                without = Math.Min(without, a);
+                with = Math.Min(with, b);
+                Debug.Log(FormattableString.Invariant($"[resalte] cost round {round}: a frame {a:0.000} ms without, {b:0.000} ms with ({camera.targetTexture.width}×{camera.targetTexture.height})"));
+            }
+            var rs = units.BodyRenderers(soldier.Id) ?? new System.Collections.Generic.List<Renderer>();
+            var lined = rs.Where(r => r.sharedMaterials.Any(m => m != null && m.name.StartsWith("Resalte"))).ToList();
+            long vertices = lined.Sum(r => (long)(r is SkinnedMeshRenderer s && s.sharedMesh != null ? s.sharedMesh.vertexCount : r.GetComponent<MeshFilter>()?.sharedMesh?.vertexCount ?? 0));
+            using (var step = Unity.Profiling.ProfilerRecorder.StartNew(Unity.Profiling.ProfilerCategory.Scripts, "Bastion.Units.Resalte", 64))
+            {
+                await Awaitable.WaitForSecondsAsync(3);
+                double sum = 0;
+                long most = 0;
+                for (int k = 0; k < step.Count; k++)
+                {
+                    sum += step.GetSample(k).Value;
+                    most = Math.Max(most, step.GetSample(k).Value);
+                }
+                Debug.Log(FormattableString.Invariant($"[resalte] cost: a frame {without:0.000} ms without the line, {with:0.000} ms with it (+{with - without:0.000}; the least of three rounds of 200); its step {(step.Count > 0 ? sum / step.Count / 1000 : -1):0.0} µs a frame on average ({step.Count} frames, most {most / 1000.0:0.0} µs); {lined.Count} renderers lined, {lined.Count * 3} draws more of {vertices} vertices each pass"));
+            }
+            if (made != null)
+            {
+                camera.targetTexture = null;
+                UnityEngine.Object.DestroyImmediate(made);
+            }
+        }
+
         /// <summary>The labs' enemies shown wherever they are put (out of the squad's sight they would hide).</summary>
         static void Reveal()
         {
@@ -2535,6 +2763,18 @@ namespace Bastion.EditorTools
         {
             if (change != PlayModeStateChange.EnteredPlayMode) return;
             EditorApplication.playModeStateChanged -= Started;
+            // BASTION_RESALTE=#rrggbb (any of these labs): the soldier it plays outlined in that colour, as the one selected
+            // (UnitViews.Highlight; Resalte's own way). BASTION_RESALTE_LINEA=line,edge: the line's pixels and its dark edge's.
+            if (Environment.GetEnvironmentVariable("BASTION_RESALTE_LINEA")?.Split(',') is string[] widths && widths.Length >= 2)
+            {
+                UnitViews.SelectLine = float.Parse(widths[0], System.Globalization.CultureInfo.InvariantCulture);
+                UnitViews.SelectEdge = float.Parse(widths[1], System.Globalization.CultureInfo.InvariantCulture);
+            }
+            if (Environment.GetEnvironmentVariable("BASTION_RESALTE") is string lit && ColorUtility.TryParseHtmlString(lit, out var colour) && soldier != null && units != null)
+            {
+                units.Highlight(soldier.Id, colour);
+                Debug.Log($"[resalte] {soldier.Id} outlined in {lit}");
+            }
             _ = (sequence ?? Play)();
         }
 

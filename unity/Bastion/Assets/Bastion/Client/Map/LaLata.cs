@@ -416,6 +416,12 @@ namespace Bastion.Client.Map
             return most;
         }
 
+        /// <summary>
+        /// Its headlights lit as it drives (by night or by day, as it was made), or dim, as it stands: parked with its lights
+        /// on, the main menu's backdrop (Menu.MenuBackdrop; Arte, 0.12.24).
+        /// </summary>
+        public void Headlights(bool on) => Glow(on ? LightsStanding + (night ? LightsNight : LightsDay) : LightsStanding);
+
         void Glow(float k)
         {
             glow = k;

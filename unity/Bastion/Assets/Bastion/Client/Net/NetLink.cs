@@ -45,6 +45,10 @@ namespace Bastion.Client.Net
 
         private const string NameProblem = "Escribe tu nombre: de 1 a 20 letras.";
 
+        private static string AddressProblem => $"Escribe la dirección que sale en la pantalla de quien aloja la partida, o en su «Menú»; por ejemplo, 192.168.1.20:{RoomHost.FirstPort}.";
+
+        private const string KeyProblem = "Escribe la clave que sale junto a la dirección, en la pantalla de quien aloja la partida o en su «Menú»; por ejemplo, KXRT5.";
+
         private static NetLink? instance;
 
         /// <summary>The app's, made the first time it is asked for if no scene has one; it lives across scenes.</summary>
@@ -93,6 +97,13 @@ namespace Bastion.Client.Net
         private DateTime lastFrame;
         /// <summary>BASTION_EMPEZAR: hosting, the skirmish starts once both are in.</summary>
         private bool startWhenBoth;
+        /// <summary>Continue's or NewGame's message (the start screen's menu, 0.12.24), for the room once in; null when done.</summary>
+        private ClientMessage? carry;
+        /// <summary>`carry` sent: what is left is the room leaving the lobby.</summary>
+        private bool carried;
+        /// <summary>Saved, as last read, and the save's and its backup's size and time then.</summary>
+        private SavedCampaign? saved;
+        private string? savedStamp;
         /// <summary>BASTION_CAMPANA: a campaign to its missions and back, by itself.</summary>
         private CampaignRun? campaignRun;
         /// <summary>BASTION_MEDIR: a case played alone while the telemetry measures it.</summary>
@@ -178,6 +189,45 @@ namespace Bastion.Client.Net
 
         /// <summary>This app hosts the game.</summary>
         public bool Hosting => host != null;
+
+        /// <summary>
+        /// Continue or NewGame under way (the start screen's menu, 0.12.24): from the call until the room leaves the lobby
+        /// for the base or the mission, or turns out to have nothing to go on with. Meanwhile the room's menu isn't for
+        /// showing: it would flash before the base.
+        /// </summary>
+        public bool Opening => carry != null;
+
+        /// <summary>
+        /// The campaign saved on this computer, for the start screen's «Continuar partida» (0.12.24): as the room would go
+        /// on with it (SaveStore.Peek), read without opening a room or moving anything; null without one, or with one over.
+        /// Read again when the save or its backup changes on disk.
+        /// </summary>
+        public SavedCampaign? Saved
+        {
+            get
+            {
+                var file = Path.Combine(DataDir, "save.json");
+                var stamp = Stamp(file) + " " + Stamp(Path.Combine(DataDir, "save.anterior.json"));
+                if (stamp == savedStamp) return saved;
+                savedStamp = stamp;
+                try
+                {
+                    saved = new SaveStore(file, log.Write, CampaignRules).Peek();
+                }
+                catch (Exception e)
+                {
+                    saved = null;
+                    log.Write($"[save] no se pudo mirar la partida guardada: {e.GetType().Name}: {e.Message}");
+                }
+                return saved;
+            }
+        }
+
+        private static string Stamp(string file)
+        {
+            var f = new FileInfo(file);
+            return f.Exists ? $"{f.Length}:{f.LastWriteTimeUtc.Ticks}" : "-";
+        }
 
         /// <summary>This player's slot, -1 before the welcome.</summary>
         public int Slot => session?.Slot ?? -1;
@@ -319,6 +369,45 @@ namespace Bastion.Client.Net
         /// </summary>
         public string? Host(string name)
         {
+            return Host(name, false);
+        }
+
+        /// <summary>
+        /// «Continuar partida» (the start screen's menu, 0.12.24): hosts, as Host, and once in goes on with the saved
+        /// campaign, to the base or to the mission left half played; Opening until there. The problem, said for the
+        /// player, or null.
+        /// </summary>
+        public string? Continue(string name)
+        {
+            var problem = Host(name);
+            if (problem == null) Carry(new ContinueCampaignMessage());
+            return problem;
+        }
+
+        /// <summary>
+        /// «Nueva partida» (0.12.24): hosts a room that starts with nothing (SaveStore.StartAfresh: what was saved stays
+        /// next to the save, as with the room's «Nueva campaña»), and once in begins a campaign, this player's alone until
+        /// the partner comes; Opening until the base. The problem, said for the player, or null.
+        /// </summary>
+        public string? NewGame(string name)
+        {
+            if (name.Trim().Length < 1 || name.Trim().Length > 20) return NameProblem;
+            // A room still open from before (leaving the start screen closes it): closed and saved first.
+            if (host != null) Leave();
+            var problem = Host(name, true);
+            if (problem == null) Carry(new NewCampaignMessage());
+            return problem;
+        }
+
+        private void Carry(ClientMessage msg)
+        {
+            carry = msg;
+            carried = false;
+        }
+
+        /// <summary>`afresh`: NewGame's, the room from nothing.</summary>
+        private string? Host(string name, bool afresh)
+        {
             name = name.Trim();
             if (name.Length < 1 || name.Length > 20) return NameProblem;
             if (host == null)
@@ -334,6 +423,7 @@ namespace Bastion.Client.Net
                         foreach (var old in new[] { file, file + ".tmp", Path.Combine(DataDir, "medida.anterior.json") })
                             if (File.Exists(old)) File.Delete(old);
                     var store = new SaveStore(file, log.Write, CampaignRules);
+                    if (afresh) store.StartAfresh();
                     // BASTION_SEMILLA, only in the tests' campaign (CampaignRun): the room's dice, as CampaignAutoRun's.
                     var seed = CampaignRun.Seed();
                     var made = new Room(store, Rules, Version, LocalOnly ? new List<HostAddress>() : HostAddresses.List(), rng: seed != null ? new Rng(seed.Value) : null, say: (line) => Debug.Log(line), campaignRules: CampaignRules);
@@ -367,8 +457,22 @@ namespace Bastion.Client.Net
         {
             name = name.Trim();
             if (name.Length < 1 || name.Length > 20) return NameProblem;
-            if (!GameAddress.TryParse(address, out var h, out var p, out var roomKey)) return $"Escribe la dirección que aparece en el menú principal de quien aloja la partida; por ejemplo, 192.168.1.20:{RoomHost.FirstPort}.";
+            if (!GameAddress.TryParse(address, out var h, out var p, out var roomKey)) return AddressProblem;
             return Open(h, p, name, true, roomKey);
+        }
+
+        /// <summary>
+        /// «Unirse por dirección» with the key in a field of its own (the start screen's menu, 0.12.24): empty, as Join
+        /// (one pasted after the address still counts); typed, it goes with the address, over one pasted there.
+        /// </summary>
+        public string? Join(string address, string name, string? key)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return Join(address, name);
+            name = name.Trim();
+            if (name.Length < 1 || name.Length > 20) return NameProblem;
+            if (!GameAddress.TryParse(address, out var h, out var p)) return AddressProblem;
+            if (!GameAddress.IsKey(key)) return KeyProblem;
+            return Open(h, p, name, true, Room.NormalKey(key));
         }
 
         /// <summary>`roomKey`: the room's, to join from the internet (with the address, as Invite gives them).</summary>
@@ -413,6 +517,7 @@ namespace Bastion.Client.Net
             {
                 if (s != session) return;
                 refused = true;
+                carry = null;
                 log.Write($"[red] {target}: no deja entrar ({why})");
                 Failed?.Invoke(why);
             };
@@ -435,7 +540,7 @@ namespace Bastion.Client.Net
             Drop();
             if (!nobody) return;
             log.Write($"[red] {where}: no responde nadie");
-            Failed?.Invoke($"No responde nadie en {where}. ¿Está abierta la partida («Alojar la partida»)? Desde otra red, usa la dirección «Por internet» o la de «Con Tailscale».");
+            Failed?.Invoke($"No responde nadie en {where}. ¿Tiene ya abierta la partida quien la aloja? Desde otra red, usa la dirección «Por internet» o la de «Con Tailscale».");
         }
 
         /// <summary>A message from the host, already read on the network thread (ClientSession): a whole mission never costs a frame.</summary>
@@ -451,6 +556,12 @@ namespace Bastion.Client.Net
             {
                 startWhenBoth = false;
                 Send(new StartMessage());
+            }
+            if (carry != null && Hosting)
+            {
+                if (msg is RoomMessage now) CarryOn(now);
+                // Refused (a copy of the campaign that couldn't be kept): the room's menu, with what the room said.
+                else if (carried && msg is ErrorMessage) carry = null;
             }
             using (HeardMarker(msg).Auto())
             {
@@ -496,8 +607,29 @@ namespace Bastion.Client.Net
             Drop();
         }
 
+        /// <summary>Continue's or NewGame's message, once, from the lobby; done when the room leaves it.</summary>
+        private void CarryOn(RoomMessage now)
+        {
+            if (now.Phase != RoomPhases.Lobby)
+            {
+                carry = null;
+                return;
+            }
+            if (carried) return;
+            // Nothing to go on with after all (the save didn't start, and the copy it went on from has no campaign): the
+            // room's menu, which says why.
+            if (carry is ContinueCampaignMessage && now.SavedCampaign == null)
+            {
+                carry = null;
+                return;
+            }
+            carried = true;
+            Send(carry!);
+        }
+
         private void Drop()
         {
+            carry = null;
             var old = session;
             session = null;
             joining = false;

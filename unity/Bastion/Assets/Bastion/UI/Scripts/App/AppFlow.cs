@@ -189,7 +189,9 @@ namespace Bastion.UI.App
                 else Load(want);
                 return;
             }
-            if (want == startScene) Screens(phase == null);
+            // «Continuar partida» and «Nueva partida» (NetLink.Opening, 0.12.24): the start screen stays, saying so, while the
+            // room is in the lobby on its way to the base; its menu only if it stops there (nothing to go on with, refused).
+            if (want == startScene) Screens(phase == null || link.Opening);
         }
 
         /// <summary>

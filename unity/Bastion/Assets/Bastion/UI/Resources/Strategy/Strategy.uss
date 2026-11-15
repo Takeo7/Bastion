@@ -539,6 +539,12 @@
     padding: 18px 22px 16px;
 }
 
+/* The windows' plates opaque (0.12.24): at Mixta's 0.9, blended in linear, Soldados' gear tiles showed through them. */
+.strat-modal__card,
+.board-modal {
+    -unity-background-image-tint-color: rgb(0, 0, 0);
+}
+
 .strat-modal__card--event,
 .strat-modal__card--end {
     width: 500px;
@@ -702,12 +708,12 @@
 
 .strat .btn-primary:disabled {
     opacity: 1;
-    color: rgb(33, 31, 23);
+    color: rgb(150, 152, 150);
 }
 
 /* The big plates' frame and the slanted keys are Mixta's own (Mixta.uss .plate-frame, .btn-slant); here, the base's. */
 
-/* «A punto»: the same cut in green (mixta.css .x-btn.ready); the partner waiting: a white outline round it. */
+/* «A punto»: the same plate in green (mixta.css .x-btn.ready); the partner waiting: a white outline round it. */
 .strat .btn-slant.squad-launch--ready,
 .strat .btn-slant.squad-launch--ready:hover {
     --slant-hi: #b0e27a;

@@ -97,12 +97,14 @@ namespace Bastion.Client.Units
                 if (!v.cut && !v.gone) foreach (var w in v.carried.Values) if (w != null) Show(w, v.fade >= 0.5f);
                 return;
             }
-            // All there: its own materials (and any pass laid over them since), its shadow, what it carries.
+            // All there: its own materials and the passes over them now (not those it had as the fade began: one taken off
+            // since, the night rim's as it fades or the selected one's line put out, had come back, the rim twice once
+            // UnitViews.Rim laid it on again; 0.12.24, the selected soldier's outline), its shadow, what it carries.
             foreach (var (r, own, map) in f.saved)
             {
                 if (r == null) continue;
                 var now = r.sharedMaterials;
-                r.sharedMaterials = own.Concat(now.Skip(own.Length).Where(IsPass)).ToArray();
+                r.sharedMaterials = own.Where(m => m == null || !IsPass(m)).Concat(now.Where(m => m != null && IsPass(m))).ToArray();
                 f.block.Clear();
                 if (map != null) f.block.SetTexture(ColourMap, map);
                 r.SetPropertyBlock(map != null ? f.block : null);
@@ -112,8 +114,8 @@ namespace Bastion.Client.Units
             fadings.Remove(v);
         }
 
-        /// <summary>A pass laid over a body (the flash, the mark), not one of its own materials.</summary>
-        bool IsPass(Material m) => flashes.Values.Any(f => f.material == m) || marks.Values.Any(k => k.material == m) || IsRim(m) || IsMask(m);
+        /// <summary>A pass laid over a body (the flash, the mark, the selected one's line), not one of its own materials.</summary>
+        bool IsPass(Material m) => flashes.Values.Any(f => f.material == m) || marks.Values.Any(k => k.material == m) || IsRim(m) || IsMask(m) || IsSelect(m);
 
         static void Show(Transform carried, bool on)
         {

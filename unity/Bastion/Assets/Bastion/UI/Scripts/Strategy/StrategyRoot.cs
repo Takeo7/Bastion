@@ -112,7 +112,13 @@ namespace Bastion.UI.Strategy
             menu = new GameMenu(root, tips, s => Sound?.Invoke(s));
             menu.Chose += what => MenuChose?.Invoke(what);
             menu.Changed += (id, value) => SettingChanged?.Invoke(id, value);
-            soldiers = new SoldiersScreen(root.Q("view"), tips, Icon, relay) { PortraitOf = id => PortraitOf?.Invoke(id), Turn = d => Settlement.Instance?.TurnShowcase(d) };
+            soldiers = new SoldiersScreen(root.Q("view"), tips, Icon, relay)
+            {
+                PortraitOf = id => PortraitOf?.Invoke(id), Turn = d => Settlement.Instance?.TurnShowcase(d),
+                // A click on the figure opens Personalizar, lit while the pointer is on it (Arturo, 14/11; Arte's).
+                OverFigure = p => Settlement.Instance is Settlement s ? s.FigureAt(ScreenOf(p)) != null : (bool?)null,
+                LightFigure = on => Settlement.Instance?.Highlight(null, on),
+            };
             soldiers.Show(false);
             armory = new ArmoryScreen(root.Q("view"), tips, Icon, relay);
             armory.Show(false);
@@ -487,6 +493,16 @@ namespace Bastion.UI.Strategy
             var p = new Vector2(screen.x / Mathf.Max(1, w) * size.x, (1 - screen.y / Mathf.Max(1, h)) * size.y);
             var picked = root.panel.Pick(p);
             return picked != null && picked.pickingMode == PickingMode.Position && picked != root && picked != root.parent;
+        }
+
+        /// <summary>A point of the panel as a screen point (y up) of the clearing's picture: Over's, the other way.</summary>
+        Vector2 ScreenOf(Vector2 p)
+        {
+            var camera = Settlement.Instance?.Camera;
+            var w = camera != null ? camera.pixelWidth : Screen.width;
+            var h = camera != null ? camera.pixelHeight : Screen.height;
+            var size = root.panel.visualTree.layout.size;
+            return new Vector2(p.x / Mathf.Max(1, size.x) * w, (1 - p.y / Mathf.Max(1, size.y)) * h);
         }
 
         /// <summary>The Mapa: the valley is made the first time (its painting, the Marea's field, its camera).</summary>

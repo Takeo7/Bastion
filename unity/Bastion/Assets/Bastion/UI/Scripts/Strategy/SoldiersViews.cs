@@ -10,12 +10,12 @@ namespace Bastion.UI.Strategy
     [Serializable]
     public sealed class SoldiersView
     {
-        public string MineHead;
+        /// <summary>
+        /// One grid, no heads (Arturo, 14/11): one's own soldiers, the partner's while the partner is away (to prepare them;
+        /// their backdrop another colour), and the recruit's tile last.
+        /// </summary>
         public List<SoldierTileView> Mine = new List<SoldierTileView>();
         public RecruitView Recruit;
-        /// <summary>«De Ana» and «no está: los preparas tú»; none while the partner is here.</summary>
-        public string PartnerHead;
-        public string PartnerNote;
         public List<SoldierTileView> Partner = new List<SoldierTileView>();
         public SoldierSheetView Sheet;
         /// <summary>Personalizar open: in place of the sheet.</summary>
@@ -24,16 +24,18 @@ namespace Bastion.UI.Strategy
         public WaitDayView MustWait;
     }
 
-    /// <summary>A soldier's tile: the bust, the best line's hexagon and the name, the rank's chevrons, ▲ for a talent to choose.</summary>
+    /// <summary>
+    /// A soldier's tile (Arturo, 14/11): the bust filling its square on a studio light (purple for one's own, another
+    /// colour for the partner's), the name in a band under it (the picked one's lit), the rank's chevron, ▲ for points to
+    /// spend, and how they are (hurt, fallen) over the bust's foot.
+    /// </summary>
     [Serializable]
     public sealed class SoldierTileView
     {
         public string Id;
         public string Name;
-        /// <summary>The owner's colour: the tile's bottom edge.</summary>
-        public string Accent;
-        /// <summary>The cells bought of each line of the board (SkillIds.All order), for the hexagon.</summary>
-        public float[] Skills = new float[6];
+        /// <summary>The partner's: its studio light the partner's colour.</summary>
+        public bool Theirs;
         public int Rank;
         /// <summary>«Fogueada · 6 puntos gastados en el tablero».</summary>
         public string RankTip;
@@ -50,15 +52,17 @@ namespace Bastion.UI.Strategy
         public string FullName;
     }
 
+    /// <summary>Recruiting, a tile of the grid (Arturo, 14/11): a «+», «Reclutar» and the price; what it is, on hover.</summary>
     [Serializable]
     public sealed class RecruitView
     {
-        public string Title;
-        public string Blurb;
-        public List<ChipView> Chips = new List<ChipView>();
-        public string Button;
+        public string Label;
+        /// <summary>«30 §».</summary>
+        public string Cost;
+        /// <summary>What a recruit is, the soldiers and the beds (its old card's words), on hover.</summary>
+        public string Tip;
         public bool Enabled;
-        /// <summary>Why not (the first reason that applies); null, it can be done.</summary>
+        /// <summary>Why not (the first reason that applies), on hover in red; null, it can be done.</summary>
         public string Why;
     }
 
@@ -72,44 +76,41 @@ namespace Bastion.UI.Strategy
         public string Tip;
     }
 
-    /// <summary>The picked soldier's sheet (the right column).</summary>
+    /// <summary>
+    /// The picked soldier (Arturo, 14/11, vista-soldados): on the right the sheet (the name, the battle HUD's three lines,
+    /// the experience, the rank and the board's button); round the figure its gear, the hand, the side and the belt on the
+    /// left, the clothes and the belt's two places on the right.
+    /// </summary>
     [Serializable]
     public sealed class SoldierSheetView
     {
-        /// <summary>«NOVATO · DE ANA», «FOGUEADA · TUYO».</summary>
-        public string Kicker;
         public string Name;
-        public float[] Skills = new float[6];
+        /// <summary>On the name: missions and kills, and the figures the sheet's strip had (aims, will, dodge).</summary>
         public string NameTip;
-        /// <summary>Under the name: the weapon in the hand.</summary>
-        public string Subtitle;
+        /// <summary>The battle HUD's three lines (its squad cards'): health, actions a turn, movement in tiles; their help.</summary>
+        public int Hp;
+        public int Ap;
+        public int Moves;
+        public string HpTip;
+        public string ApTip;
+        public string MovesTip;
         /// <summary>«Ana no está: lo preparas tú hasta que vuelva.»; null, none.</summary>
         public string Note;
-        public string Customize;
-        /// <summary>Health, firearm aim, melee aim, will: each an icon, a figure, a colour.</summary>
-        public List<SheetStatView> Stats = new List<SheetStatView>();
-        /// <summary>«Listo», «Heridas · 2 misiones»… at the end of the figures.</summary>
+        /// <summary>«Heridas · 2 misiones», «Caído»; null when ready (no «Listo» any more: Arturo, 14/11).</summary>
         public string Health;
         public string HealthTone;
         public string HealthTip;
         /// <summary>Mordido, Herido: what can be done for them; null, nothing.</summary>
         public CareView Care;
         public List<ChipView> Traits = new List<ChipView>();
-        public string ArmsHead;
+        /// <summary>Round the figure, on its left: the hand, the side (where the Armería counts the pistols) and the belt.</summary>
         public List<PickView> Arms = new List<PickView>();
+        /// <summary>On its right, at the top: the clothes; under them the belt's two places.</summary>
         public ArmorView Armor;
-        public string BeltHead;
         public List<PickView> Belt = new List<PickView>();
         public SkillsView Experience;
-    }
-
-    [Serializable]
-    public sealed class SheetStatView
-    {
-        public string Icon;
-        public string Value;
-        public string Color;
-        public string Tip;
+        /// <summary>Personalizar, by a click on the figure (Arturo, 14/11): one's own (or the absent partner's), alive.</summary>
+        public bool Customizable;
     }
 
     /// <summary>A wounded soldier's care: the buttons (the first the main one), who it waits for.</summary>
@@ -138,6 +139,8 @@ namespace Bastion.UI.Strategy
         public string Id;
         public string Label;
         public string Value;
+        /// <summary>What is there, on its tile (a weapon's, an accessory's); null, an empty place («+»).</summary>
+        public string Icon;
         public List<string> Lines = new List<string>();
         /// <summary>The weapon's condition, 0–100; −1, none shown.</summary>
         public int Condition = -1;
@@ -173,28 +176,32 @@ namespace Bastion.UI.Strategy
     {
         public int Tier;
         public string Name;
+        /// <summary>«5 de salud», «6 de salud · 1 de blindaje».</summary>
         public string Figures;
         /// <summary>«→ Chaleco de kevlar» and why it isn't there yet; null, the top.</summary>
         public string Next;
         public string NextTip;
     }
 
-    /// <summary>The experience (skillSheet.ts skillsBlock): six lines, the rank, the board's button.</summary>
+    /// <summary>
+    /// The experience (skillSheet.ts skillsBlock; Arturo, 14/11): six rows, each its name and its green growth on the
+    /// left, the experience into its bar on the right, the bar under them; «Rango» and the rank's name over its five
+    /// pieces; the board's button with the points to spend beside it.
+    /// </summary>
     [Serializable]
     public sealed class SkillsView
     {
         public string Head;
         public List<SkillRowView> Rows = new List<SkillRowView>();
+        public string RankLabel;
         public string Rank;
         public int RankFilled;
         public int RankTotal;
-        public string Will;
-        /// <summary>What the next rank gives in full; at the top, «No hay rango más alto.».</summary>
-        public string WillTip;
-        public string RankLine;
-        /// <summary>What the rank gives now: «Voluntad 40 · 2 acciones por turno».</summary>
-        public string Gives;
+        /// <summary>On the rank's row: what it gives now and what the next one gives (its old lines).</summary>
+        public string RankTip;
         public string Board;
+        /// <summary>«3 puntos por gastar» beside the button; null, none.</summary>
+        public string BoardPoints;
         /// <summary>One's own soldier with points to spend: the button pulses.</summary>
         public bool BoardPulse;
     }
@@ -202,16 +209,13 @@ namespace Bastion.UI.Strategy
     [Serializable]
     public sealed class SkillRowView
     {
-        /// <summary>The line's place in SkillIds.All (its colour).</summary>
-        public int Line;
         public string Name;
         /// <summary>«+8 %» growth from the last missions; null, none.</summary>
         public string Growth;
-        public int Filled;
-        public int Total;
-        public string Reward;
-        public string RewardTip;
-        /// <summary>How the bar fills (SKILL_DEFS line), on its name; what it raises (its stat), on the growth.</summary>
+        /// <summary>The experience into the bar being filled, and how far that is of it (0–1).</summary>
+        public int Value;
+        public float Share;
+        /// <summary>How the bar fills and what a full one gives, on the row; what it raises (its stat), on the growth.</summary>
         public string Tip;
         public string GrowthTip;
     }

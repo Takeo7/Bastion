@@ -47,22 +47,44 @@ namespace Bastion.Client.Map
             return snow;
         }
 
+        /// <summary>
+        /// A cover with no map under it, over `size` (metres across x and z) round `middle` of `root`: the cap on what
+        /// carries Layer, no banks, no buildings' snow. The menu's backdrops (Menu.MenuBackdrop; Arte, 0.12.24).
+        /// </summary>
+        public static SnowCover Over(Transform root, Vector3 middle, Vector2 size)
+        {
+            var o = new GameObject("Nieve");
+            o.transform.SetParent(root, false);
+            var snow = o.AddComponent<SnowCover>();
+            snow.Projector(middle, size);
+            return snow;
+        }
+
         void Build(GameState s, BuildingPlan plan, Func<string, GameObject> prefabOf)
         {
             float w = s.Width * Tile, h = s.Height * Tile;
             // Out past the edge as far as the pinar and the outline go.
             const float margin = 80;
+            Projector(new Vector3(w / 2, 0, -h / 2), new Vector2(w + margin, h + margin));
+            Shelter(s, plan);
+            Banks(s, plan, prefabOf);
+            if (counted) Buildings();
+        }
+
+        /// <summary>The decal that lays the cap, over `size` (metres across x and z) round `middle`.</summary>
+        void Projector(Vector3 middle, Vector2 size)
+        {
             var projector = new GameObject("Proyector").AddComponent<DecalProjector>();
             projector.transform.SetParent(transform, false);
             // Projecting down from above: URP fades a decal by how far a surface's normal turns from facing it (as
             // ((1 - cos) / 2)², on 0 to 180), so what faces up is at 0.
-            projector.transform.localPosition = new Vector3(w / 2, 40, -h / 2);
+            projector.transform.localPosition = new Vector3(middle.x, 40, middle.z);
             projector.transform.localRotation = Quaternion.Euler(90, 0, 0);
-            projector.size = new Vector3(w + margin, h + margin, 80);
+            projector.size = new Vector3(size.x, size.y, 80);
             projector.pivot = new Vector3(0, 0, 40);
             projector.material = Resources.Load<Material>("SnowDecal");
             // snow.ts: the texture every 3 tiles.
-            projector.uvScale = new Vector2((w + margin) / (3 * Tile), (h + margin) / (3 * Tile));
+            projector.uvScale = new Vector2(size.x / (3 * Tile), size.y / (3 * Tile));
             projector.fadeFactor = 0.96f;
             // snow.ts smoothstep(0.38, 0.8, normal.y): whole up to 37° from straight up, none past 68°; on URP's scale,
             // ((1 - cos θ) / 2)² × 180.
@@ -70,9 +92,6 @@ namespace Bastion.Client.Map
             projector.endAngleFade = Angle(0.38f);
             projector.renderingLayerMask = Mask;
             projector.drawDistance = 1000;
-            Shelter(s, plan);
-            Banks(s, plan, prefabOf);
-            if (counted) Buildings();
         }
 
         /// <summary>

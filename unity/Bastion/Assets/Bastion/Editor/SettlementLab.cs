@@ -213,14 +213,14 @@ namespace Bastion.EditorTools
             if (Environment.GetEnvironmentVariable("BASTION_MEDIR") is string measure && (measure == "cerca" || measure == "giro"))
             {
                 int last = -1;
-                void Measure()
+                void Watch()
                 {
                     if (!UnityEditor.EditorApplication.isPlaying || Settlement.Current == null || Time.frameCount == last) return;
                     last = Time.frameCount;
                     string said = measure == "cerca" ? Settlement.Current.LifeNear(0.35) : Settlement.Current.LifeTurns();
                     if (said.Length > 0) Debug.Log(FormattableString.Invariant($"[vida] {measure} {Time.time:0.000} {said}"));
                 }
-                UnityEditor.EditorApplication.update += Measure;
+                UnityEditor.EditorApplication.update += Watch;
             }
             if (Environment.GetEnvironmentVariable("BASTION_VIDA") == "1")
             {
@@ -292,7 +292,7 @@ namespace Bastion.EditorTools
             if (Environment.GetEnvironmentVariable("BASTION_APOYO") is string leaner)
             {
                 int last = -1;
-                void Measure()
+                void Watch()
                 {
                     if (!UnityEditor.EditorApplication.isPlaying || Settlement.Current?.Lata == null) return;
                     int second = Mathf.FloorToInt(Time.time);
@@ -309,7 +309,7 @@ namespace Bastion.EditorTools
                     }
                     Debug.Log(FormattableString.Invariant($"[apoyo] {Time.time:0.0} s: La Lata x {drawn.min.x:0.000} to {drawn.max.x:0.000} (centre {drawn.center.x:0.000}); root {who.position.x:0.000}; right shoulder {Bone(HumanBodyBones.RightShoulder)}, upper arm {Bone(HumanBodyBones.RightUpperArm)}, elbow {Bone(HumanBodyBones.RightLowerArm)}; left upper arm {Bone(HumanBodyBones.LeftUpperArm)}; scale {Bastion.Client.Units.Figures.CharacterScale:0.###}"));
                 }
-                UnityEditor.EditorApplication.update += Measure;
+                UnityEditor.EditorApplication.update += Watch;
             }
             // BASTION_PESOS=seed[,from,to]: that one's animator weights every frame from `from` to `to` seconds (a test).
             if (Environment.GetEnvironmentVariable("BASTION_PESOS") is string weighed)
@@ -554,7 +554,8 @@ namespace Bastion.EditorTools
         /// 0.10.1's references were taken with; BASTION_PARTIDA another): the settlement as the game shows it
         /// (Settlement.Show(campaign)), BASTION_SOLDADO's soldier (c1 unless said) as Showcase has them, in BASTION_ROPA's
         /// outfit if given (Personalizar's draft; BASTION_CAIDO=1 fallen), the camera on BASTION_VISTA's tab (barracks unless said), the Armería's corner with the
-        /// campaign's stock, and the squad's row (BASTION_FILA) or the debrief's, framed in 0.10.1's panels.
+        /// campaign's stock, and the squad's row (BASTION_FILA) or the debrief's, framed in 0.10.1's panels. BASTION_RESALTE=1
+        /// (or line,rim[,#rrggbbaa]): the soldier lit as under the pointer; BASTION_RATON_MAPA=file.png: where FigureAt finds them.
         ///   unity/tools/captura.sh -shotOut soldados.png -shotSetup Bastion.EditorTools.SettlementLab.Soldados -shotSize 1440x900
         /// </summary>
         public static void Soldados()
@@ -665,13 +666,67 @@ namespace Bastion.EditorTools
             // The fill turned with the camera.
             Mood.Show(settlement.Snow ? Mood.SnowDay : Mood.Day);
             Debug.Log($"[settlement] Soldados: {id} on day {campaign.Day}, {(Campaign.Wintry(campaign) ? "winter" : "thaw")}, the camera on {settlement.View}");
+            // BASTION_RESALTE=1 (or line,rim[,#rrggbbaa]): the soldier lit as under the pointer (Settlement.Highlight; 14/11).
+            if (Environment.GetEnvironmentVariable("BASTION_RESALTE") is string lit)
+            {
+                Tried(lit);
+                settlement.Highlight(id, true);
+            }
+            // BASTION_RATON_MAPA=file.png: where FigureAt says the soldier is, a point every 8 px of the 1440 × 900 screen
+            // (white there, clear elsewhere), and what it costs.
+            if (Environment.GetEnvironmentVariable("BASTION_RATON_MAPA") is string map) PointerMap(settlement, camera, size, map);
+        }
+
+        /// <summary>The highlight's line, rim and colour from a lab's «line,rim[,#rrggbbaa]» (anything else: the game's).</summary>
+        static void Tried(string lit)
+        {
+            var v = lit.Split(',');
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            if (v.Length >= 2 && float.TryParse(v[0], System.Globalization.NumberStyles.Float, inv, out float line) && float.TryParse(v[1], System.Globalization.NumberStyles.Float, inv, out float rim))
+            {
+                Settlement.HighlightLine = line;
+                Settlement.HighlightRim = rim;
+            }
+            if (v.Length >= 3 && ColorUtility.TryParseHtmlString(v[2], out var colour)) Settlement.HighlightColour = colour;
+            Debug.Log(FormattableString.Invariant($"[resalte] line {Settlement.HighlightLine} px, rim {Settlement.HighlightRim}, colour #{ColorUtility.ToHtmlStringRGBA(Settlement.HighlightColour)}"));
+        }
+
+        /// <summary>FigureAt over the screen (`size`, as the shots are taken), a point every 8 px, into a PNG mask; its box and cost logged.</summary>
+        static void PointerMap(Settlement settlement, Camera camera, Vector2 size, string file)
+        {
+            int w = Mathf.RoundToInt(size.x / 8), h = Mathf.RoundToInt(size.y / 8);
+            var mask = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            int hits = 0, x0 = w, x1 = -1, y0 = h, y1 = -1;
+            string who = null;
+            var clock = Stopwatch.StartNew();
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    // The point in the camera's own pixels (its pixel size need not be the shot's: the same place on screen).
+                    var screen = new Vector2((x + 0.5f) / w * camera.pixelWidth, (y + 0.5f) / h * camera.pixelHeight);
+                    string id = settlement.FigureAt(screen);
+                    mask.SetPixel(x, y, id != null ? Color.white : Color.clear);
+                    if (id == null) continue;
+                    who = id;
+                    hits++;
+                    x0 = Mathf.Min(x0, x);
+                    x1 = Mathf.Max(x1, x);
+                    y0 = Mathf.Min(y0, y);
+                    y1 = Mathf.Max(y1, y);
+                }
+            double ms = clock.Elapsed.TotalMilliseconds / (w * h);
+            mask.Apply();
+            File.WriteAllBytes(file, mask.EncodeToPNG());
+            UnityEngine.Object.DestroyImmediate(mask);
+            Debug.Log(FormattableString.Invariant($"[raton] {who ?? "nobody"} under {hits} of {w * h} points; from x {x0 * 8} to {x1 * 8 + 8}, y {size.y - y1 * 8 - 8} to {size.y - y0 * 8} px from the top; {ms * 1000:0.0} µs a call; the map in {file}"));
         }
 
         /// <summary>
         /// The scene «Base» as the game has it, in play mode: once it runs, the sample campaign shown as UI shows it
         /// (Settlement.Instance.Show, the game's catalog), BASTION_SOLDADO's soldier on Soldados (c1) and its busts drawn
         /// (Portraits.Know; each logged as it is ready), the camera on BASTION_VISTA's tab (barracks), and on
-        /// to BASTION_LUEGO's if given; BASTION_MAPA=1 into the Mapa and back, through black. BASTION_LATA=v the campaign's
+        /// to BASTION_LUEGO's if given; BASTION_MAPA=1 into the Mapa and back, through black; BASTION_RESALTE=on,off the
+        /// soldier lit and put out at those seconds (Settlement.Highlight). BASTION_LATA=v the campaign's
         /// vehicle; BASTION_PANELES=1 UI's Escuadra plates over it (for the row's shot). BASTION_LEJOS=1: once the shot
         /// has eased in, the camera where the free look is at its farthest (CameraRig: 33.5 tiles, 45° down, 40° of view, from
         /// the south-east); BASTION_GRAFICOS=level: «Gráficos» changed to it then, as the app does (GameSettings:
@@ -711,6 +766,38 @@ namespace Bastion.EditorTools
                 // (BASTION_GIRO=degrees: turned by the player as if dragged, Ana's #5; 90 their right side to the camera.)
                 if (float.TryParse(Environment.GetEnvironmentVariable("BASTION_GIRO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float turn))
                     settlement.TurnShowcase(turn);
+                // BASTION_RESALTE=on,off (seconds of play; with line,rim[,#rrggbbaa] after them): the soldier lit as under the
+                // pointer and put out again (Settlement.Highlight; 14/11), FigureAt at the middle of the screen logged then.
+                if (Environment.GetEnvironmentVariable("BASTION_RESALTE") is string lit)
+                {
+                    var at = lit.Split(',');
+                    if (at.Length > 2) Tried(string.Join(",", at.Skip(2)));
+                    float on = float.Parse(at[0], System.Globalization.CultureInfo.InvariantCulture), off = at.Length > 1 ? float.Parse(at[1], System.Globalization.CultureInfo.InvariantCulture) : 1e9f;
+                    string id = Environment.GetEnvironmentVariable("BASTION_SOLDADO") ?? "c1";
+                    bool lighted = false, dark = false;
+                    void Lit()
+                    {
+                        if (!UnityEditor.EditorApplication.isPlaying)
+                        {
+                            UnityEditor.EditorApplication.update -= Lit;
+                            return;
+                        }
+                        var middle = new Vector2(settlement.Camera.pixelWidth / 2f, settlement.Camera.pixelHeight / 2f);
+                        if (!lighted && Time.time >= on)
+                        {
+                            lighted = true;
+                            settlement.Highlight(id, true);
+                            Debug.Log(FormattableString.Invariant($"[resalte] on at {Time.time:0.00} s; FigureAt the middle: {settlement.FigureAt(middle) ?? "nobody"}, at the top left corner: {settlement.FigureAt(Vector2.one) ?? "nobody"}"));
+                        }
+                        if (!dark && Time.time >= off)
+                        {
+                            dark = true;
+                            settlement.Highlight(id, false);
+                            Debug.Log(FormattableString.Invariant($"[resalte] off at {Time.time:0.00} s"));
+                        }
+                    }
+                    UnityEditor.EditorApplication.update += Lit;
+                }
                 settlement.SetView(Environment.GetEnvironmentVariable("BASTION_VISTA") ?? Settlement.Views.Barracks);
                 if (Environment.GetEnvironmentVariable("BASTION_LEJOS") == "1" || Environment.GetEnvironmentVariable("BASTION_GRAFICOS") != null) Far();
                 async void Far()

@@ -1,4 +1,8 @@
-/* The start screen (launcher.html): one column of steel in the middle, the choices one under another. */
+/*
+   The start screen (Arturo's notes of 14/11; 0.12.24), over Arte's scene: clear itself, the main menu's dark band
+   drawn by StartScreen (Fade) from the left, fading on a slant into the scene; BASTIÓN and the keys on it. «Partida
+   multijugador»: no band, two cards in the middle.
+*/
 
 .start {
     position: absolute;
@@ -6,38 +10,170 @@
     top: 0;
     right: 0;
     bottom: 0;
-    align-items: center;
-    justify-content: center;
-    background-color: rgb(12, 14, 15);
 }
 
-.start__column {
-    width: 520px;
-    padding: 24px 28px 18px;
+.start__fade {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
 }
 
-.start__column > * {
-    margin-bottom: 12px;
-}
-
-/* The steel frame (Mixta.uss .plate-frame) is a child of the column too, out of the flow: no gap under it. */
-.start__column > .plate-frame {
-    margin-bottom: 0;
+/* The main menu's column: the title, then the keys under it, all to the left. */
+.start__side {
+    position: absolute;
+    left: 7%;
+    top: 10%;
+    bottom: 8%;
+    align-items: flex-start;
 }
 
 .start__title {
-    font-size: 54px;
-    letter-spacing: 8px;
-    -unity-text-align: middle-center;
-    color: var(--t-accent);
+    margin-bottom: 26px;
+    font-size: 92px;
+    letter-spacing: 3px;
+    color: #ffffff;
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.6);
 }
 
-.start__kicker {
-    margin-top: -10px;
-    font-size: 12px;
-    letter-spacing: 3px;
+.start__menu {
+    align-items: flex-start;
+}
+
+/*
+   A key (the maqueta's): straight ends, dark grey worn (the steel's grain faint over it), its words white, as wide as
+   they are; pointed at, lighter and a step to the right.
+*/
+.start__key {
+    margin: 0 0 12px 0;
+    padding: 6px 16px 7px;
+    font-size: 24px;
+    letter-spacing: 1.5px;
+    -unity-text-align: middle-left;
+    color: #eceee8;
+    background-color: rgba(34, 36, 38, 0.94);
+    background-image: url("../../Textures/steel-plate.png");
+    background-repeat: repeat repeat;
+    background-size: 256px 256px;
+    -unity-background-image-tint-color: rgba(70, 72, 74, 0.9);
+    border-width: 0 0 2px 0;
+    border-bottom-color: rgba(0, 0, 0, 0.55);
+    border-radius: 0;
+    transition-property: translate, background-color, color;
+    transition-duration: 0.1s, 0.1s, 0.1s;
+}
+
+.start__key:hover {
+    translate: 4px 0;
+    color: #ffffff;
+    background-color: rgba(58, 61, 63, 0.96);
+    -unity-background-image-tint-color: rgba(96, 99, 101, 0.9);
+}
+
+.start__key:active {
+    scale: 1 1;
+}
+
+.start__key:disabled {
+    opacity: 0.5;
+}
+
+/* «Volver» of «Partida multijugador»: where the keys were, at the foot. */
+.start__back {
+    position: absolute;
+    left: 7%;
+    bottom: 8%;
+    margin: 0;
+}
+
+/* «Partida multijugador»: the two cards side by side in the middle. */
+.start__center {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.start__cards {
+    flex-direction: row;
+}
+
+/*
+   A card (the maqueta's): straight, dark, its edge worn light grey, a red icon on its face and its words in a band at
+   its foot. Both the same size.
+*/
+.start__card {
+    width: 300px;
+    height: 230px;
+    margin: 0 10px;
+    padding: 0;
+    align-items: stretch;
+    background-color: rgba(10, 11, 12, 0.9);
+    background-image: url("../../Textures/steel-plate.png");
+    background-repeat: repeat repeat;
+    background-size: 256px 256px;
+    -unity-background-image-tint-color: rgba(34, 36, 38, 0.9);
+    border-width: 2px;
+    border-color: rgba(196, 198, 194, 0.55);
+    border-radius: 0;
+    transition-property: translate, border-color, background-color;
+    transition-duration: 0.1s, 0.1s, 0.1s;
+}
+
+.start__card:hover {
+    translate: 0 -3px;
+    border-color: rgba(236, 238, 232, 0.85);
+    background-color: rgba(22, 24, 25, 0.92);
+}
+
+.start__card:active {
+    scale: 1 1;
+}
+
+.start__card:disabled {
+    opacity: 0.5;
+}
+
+.start__card-face {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Arte's red icons (the flag, the two soldiers): Resources/Start/icono-alojar and icono-unirse, put by StartScreen. */
+.start__card-icon {
+    width: 132px;
+    height: 132px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: rgb(196, 56, 40);
+}
+
+.start__card-label {
+    padding: 10px 8px 12px;
+    font-size: 21px;
+    letter-spacing: 1.2px;
     -unity-text-align: middle-center;
-    color: var(--t-muted);
+    white-space: normal;
+    color: #eceee8;
+    border-top-width: 2px;
+    border-top-color: rgba(196, 198, 194, 0.55);
+}
+
+/* What is asked (the name; a game by its address and key): a dark plate where the keys were, or in the middle. */
+.start__form {
+    width: 380px;
+    padding: 14px 16px 4px;
+    background-color: rgba(10, 11, 12, 0.92);
+    border-width: 1px;
+    border-color: rgba(196, 198, 194, 0.3);
+}
+
+.start__field {
+    margin-bottom: 12px;
 }
 
 .start__label {
@@ -48,26 +184,20 @@
     margin-bottom: 3px;
 }
 
-.start__hint {
-    font-size: 12px;
-    white-space: normal;
-    color: var(--t-muted);
-    margin-bottom: 4px;
-}
-
 .start__input {
     margin: 0;
 }
 
 .start__input > .unity-base-field__input {
     padding: 4px 8px;
-    font-size: 15px;
+    font-size: 16px;
     color: var(--t-text);
     background-color: var(--m-well);
     border-color: rgba(255, 255, 255, 0.14);
+    border-radius: 0;
 }
 
-/* The address's example, a hint and not a value: grey. */
+/* An example, a hint and not a value: grey. */
 .start__input .unity-base-text-field__input--placeholder,
 .start__input .unity-text-element--placeholder {
     color: var(--t-muted);
@@ -77,74 +207,38 @@
     flex-direction: row;
 }
 
-.start__input--address {
-    flex-grow: 1;
-    margin-right: 6px;
-}
-
-.start__join {
-    font-size: 15px;
-    padding: 4px 16px;
-}
-
-/* A choice: its name big, what it does small under it. */
-.start__choice {
-    padding: 10px 14px;
-    align-items: flex-start;
-}
-
-.start__choice-title {
+.start__form .start__key {
+    margin-right: 10px;
     font-size: 20px;
-    letter-spacing: 2px;
 }
 
-.btn-primary .start__choice-title,
-.btn-primary .start__choice-about {
-    color: var(--t-primary-ink);
+/* What it does, lit (the form's first key). */
+.start__key--go {
+    color: #15181a;
+    background-color: rgba(236, 235, 230, 0.96);
+    -unity-background-image-tint-color: rgba(255, 255, 255, 0.25);
 }
 
-.start__choice-about {
-    font-size: 12px;
-    white-space: normal;
-    -unity-text-align: upper-left;
-    margin-top: 2px;
+.start__key--go:hover {
+    color: #15181a;
+    background-color: #ffffff;
+    -unity-background-image-tint-color: rgba(255, 255, 255, 0.25);
 }
 
-.start__choice--quit {
-    align-items: center;
-}
-
-.start__choice--quit .start__choice-title {
-    font-size: 14px;
-    color: var(--t-muted);
-}
-
-/* A game found on the network: whose, how many, where it is (in the menu, on the base, in a mission), its address. */
-.start__game {
-    margin-bottom: 4px;
-    padding: 6px 10px;
-    align-items: flex-start;
-}
-
-.start__game-name {
-    font-size: 15px;
-    -unity-font-style: bold;
-}
-
-.start__game-about {
-    font-size: 11px;
-    color: var(--t-muted);
-}
-
-/* Another version: shown, not joinable. */
-.start__game--other {
-    opacity: 0.5;
-}
-
+/* What is under way or what went wrong: a line at the foot, in the middle, on a dark plate while it says something. */
 .start__status {
-    font-size: 13px;
+    position: absolute;
+    left: 25%;
+    right: 25%;
+    bottom: 8%;
+    font-size: 14px;
     white-space: normal;
-    min-height: 18px;
+    -unity-text-align: middle-center;
+}
+
+.start__status--on {
+    padding: 6px 12px;
+    background-color: rgba(10, 11, 12, 0.88);
 }
 
 .start__status--bad {
@@ -152,7 +246,9 @@
 }
 
 .start__version {
+    position: absolute;
+    right: 16px;
+    bottom: 10px;
     font-size: 10px;
-    -unity-text-align: middle-center;
     color: var(--t-muted);
 }

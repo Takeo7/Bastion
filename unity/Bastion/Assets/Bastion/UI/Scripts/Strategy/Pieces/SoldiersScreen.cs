@@ -7,10 +7,11 @@ using UnityEngine.UIElements;
 namespace Bastion.UI.Strategy
 {
     /// <summary>
-    /// Soldados (screen.ts renderBarracks): on the left one's own soldiers in a grid of busts, the recruit's card and the
-    /// partner's soldiers while the partner is away; on the right the picked soldier's sheet (figures, care, traits, the
-    /// weapon in each hand and the armour, the belt, the experience with its rank and the board's button). The choices
-    /// open in place (one at a time). The busts are Arte's (Portraits); a silhouette until they are there.
+    /// Soldados (screen.ts renderBarracks; Arturo's notes of 14/11, vista-soldados): on the left one grid of busts, one's
+    /// own, the partner's while the partner is away and the recruit's tile; on the right the picked soldier's sheet (the
+    /// name, the battle's three lines, how they are, care, traits, the experience with its rank and the board's button);
+    /// round the figure in the clearing its gear in two columns, whose choices open beside them (one at a time). A click on
+    /// the figure opens Personalizar. The busts are Arte's (Portraits); a silhouette until they are there.
     /// </summary>
     public sealed class SoldiersScreen
     {
@@ -20,8 +21,17 @@ namespace Bastion.UI.Strategy
         readonly VisualElement bottom;
         /// <summary>The clearing between the panels, where dragging turns the soldier shown (Ana's #5, Arturo 29/10).</summary>
         readonly VisualElement turnPad;
-        /// <summary>The pointer's last x while it drags on the pad.</summary>
+        /// <summary>The pointer's last x while it drags on the pad; where it went down, and whether it has dragged since.</summary>
         float dragX;
+        Vector2 downAt;
+        bool dragged;
+        /// <summary>The gear's two columns round the figure, over the pad (Gear).</summary>
+        readonly VisualElement gear;
+        /// <summary>Between the columns, where the figure stands: a click there opens Personalizar (OverFigure), «Personalizar» at its foot meanwhile.</summary>
+        readonly VisualElement figure;
+        readonly Label figureCue;
+        /// <summary>The pointer is on the figure (LightFigure told).</summary>
+        bool lit;
         readonly TooltipLayer tips;
         readonly Func<string, Sprite> icon;
         readonly IStrategyHandlers handlers;
@@ -46,6 +56,20 @@ namespace Bastion.UI.Strategy
 
         /// <summary>Degrees the soldier turns for each point the pointer drags.</summary>
         const float TurnPerPoint = 0.4f;
+        /// <summary>A press that moves less than this (panel points) is a click, not a turn.</summary>
+        const float ClickSlop = 4;
+
+        /// <summary>
+        /// Whether a point of the panel is on the soldier shown (Arte's Settlement.FigureAt); null when there is no clearing
+        /// to ask (the labs' flat sky): then the room between the gear's columns, where the figure stands.
+        /// </summary>
+        public Func<Vector2, bool?> OverFigure;
+
+        /// <summary>The figure lit while the pointer is on it, or not (Arte's Settlement.Highlight).</summary>
+        public Action<bool> LightFigure;
+
+        /// <summary>«Personalizar», at the figure's foot while the pointer is on it.</summary>
+        public static string Customize = "Personalizar";
 
         public SoldiersScreen(VisualElement view, TooltipLayer tips, Func<string, Sprite> icon, IStrategyHandlers handlers)
         {
@@ -53,24 +77,42 @@ namespace Bastion.UI.Strategy
             this.icon = icon;
             this.handlers = handlers;
             // Under the panels: a drag on the clearing turns the soldier, a drag on a panel doesn't.
+            // A press on the figure that doesn't drag opens Personalizar (Arturo, 14/11).
             turnPad = Ui.El("soldiers-turn", view);
             turnPad.RegisterCallback<PointerDownEvent>(e =>
             {
                 if (e.button != 0) return;
                 dragX = e.position.x;
+                downAt = e.position;
+                dragged = false;
                 turnPad.CapturePointer(e.pointerId);
             });
             turnPad.RegisterCallback<PointerMoveEvent>(e =>
             {
-                if (!turnPad.HasPointerCapture(e.pointerId)) return;
+                if (!turnPad.HasPointerCapture(e.pointerId))
+                {
+                    Hover(e.position);
+                    return;
+                }
+                if (((Vector2)e.position - downAt).magnitude > ClickSlop) dragged = true;
                 var dx = e.position.x - dragX;
                 dragX = e.position.x;
                 if (dx != 0) Turn?.Invoke(dx * TurnPerPoint);
             });
             turnPad.RegisterCallback<PointerUpEvent>(e =>
             {
-                if (turnPad.HasPointerCapture(e.pointerId)) turnPad.ReleasePointer(e.pointerId);
+                if (!turnPad.HasPointerCapture(e.pointerId)) return;
+                turnPad.ReleasePointer(e.pointerId);
+                if (!dragged && OnFigure(e.position)) handlers.OnCustomize();
             });
+            turnPad.RegisterCallback<PointerLeaveEvent>(_ => Hover(null));
+            gear = Ui.El("soldier-gear", view);
+            gear.pickingMode = PickingMode.Ignore;
+            figure = Ui.El("soldier-figure", gear);
+            figure.pickingMode = PickingMode.Ignore;
+            figureCue = Ui.Text(Customize.ToUpperInvariant(), "soldier-figure__cue font-title", figure);
+            figureCue.pickingMode = PickingMode.Ignore;
+            Ui.Show(figureCue, false);
             left = Ui.El("strat-side strat-side--left panel", view);
             right = Ui.El("strat-side strat-side--right panel", view);
             bottom = Ui.El("strat-center-bottom", view);
@@ -86,7 +128,25 @@ namespace Bastion.UI.Strategy
             Ui.Show(left, on);
             Ui.Show(right, on && (last?.Sheet != null || last?.Customizer != null));
             Ui.Show(turnPad, on && (last?.Sheet != null || last?.Customizer != null));
+            Ui.Show(gear, on && last?.Sheet != null && last.Customizer == null);
             Ui.Show(bottom, on && last?.MustWait != null);
+            if (!on) Hover(null);
+        }
+
+        /// <summary>The figure can be clicked into Personalizar: its sheet up (not Personalizar already), one's to dress.</summary>
+        bool Customizable => last?.Customizer == null && last?.Sheet?.Customizable == true;
+
+        bool OnFigure(Vector2 p) => Customizable && (OverFigure?.Invoke(p) ?? figure.worldBound.Contains(p));
+
+        /// <summary>The pointer at `p` (null, gone): on the figure, it lights (Arte's) and «Personalizar» shows at its foot.</summary>
+        void Hover(Vector2? p)
+        {
+            var on = p != null && OnFigure(p.Value);
+            if (on == lit) return;
+            lit = on;
+            Ui.Show(figureCue, on);
+            turnPad.EnableInClassList("soldiers-turn--figure", on);
+            LightFigure?.Invoke(on);
         }
 
         /// <summary>The choice open on the sheet (hand, belt, a slot); null, none.</summary>
@@ -124,21 +184,24 @@ namespace Bastion.UI.Strategy
             leftBody.Clear();
             rightBody.Clear();
             bottom.Clear();
+            gear.Clear();
+            gear.Add(figure);
             Ui.Show(bottom, shown && v?.MustWait != null);
             Ui.Show(turnPad, shown && (v?.Sheet != null || v?.Customizer != null));
+            Ui.Show(gear, shown && v?.Sheet != null && v.Customizer == null);
+            if (!Customizable) Hover(null);
             if (v == null) return;
             if (v.MustWait != null) MustWait(v.MustWait);
-            Head(v.MineHead, null, leftBody);
-            Grid(v.Mine, leftBody);
-            if (v.Recruit != null) Recruit(v.Recruit, leftBody);
-            if (v.Partner.Count > 0)
-            {
-                Head(v.PartnerHead, v.PartnerNote, leftBody);
-                Grid(v.Partner, leftBody);
-            }
+            Grid(v, leftBody);
             Ui.Show(right, shown && (v.Sheet != null || v.Customizer != null));
+            // The sheet as tall as it is (Arturo, 14/11); Personalizar, as before, down to the foot.
+            right.EnableInClassList("soldiers-sheet", v.Customizer == null);
             if (v.Customizer != null) Customizer(v.Customizer, rightBody);
-            else if (v.Sheet != null) Sheet(v.Sheet, rightBody);
+            else if (v.Sheet != null)
+            {
+                Sheet(v.Sheet, rightBody);
+                Gear(v.Sheet);
+            }
         }
 
         /// <summary>
@@ -291,67 +354,98 @@ namespace Bastion.UI.Strategy
             row.Add(picker);
         }
 
-        void Head(string text, string note, VisualElement parent)
-        {
-            var head = Ui.El("strat-head", parent);
-            Ui.Text(text.ToUpperInvariant(), "strat-head__text font-title", head);
-            if (!string.IsNullOrEmpty(note)) Ui.Text("· " + note, "strat-head__note", head);
-        }
-
-        void Grid(System.Collections.Generic.List<SoldierTileView> tiles, VisualElement parent)
+        /// <summary>
+        /// The grid (Arturo, 14/11): one's own, then the partner's while away, then the recruit's tile, with no heads; the
+        /// picked one known by its name's band.
+        /// </summary>
+        void Grid(SoldiersView v, VisualElement parent)
         {
             var grid = Ui.El("soldier-grid", parent);
-            foreach (var t in tiles)
-            {
-                var id = t.Id;
-                var tile = new Button(() => handlers.OnSoldier(id));
-                tile.AddToClassList("soldier-tile");
-                tile.EnableInClassList("soldier-tile--on", t.Selected);
-                tile.EnableInClassList("soldier-tile--dead", t.Dead);
-                tile.style.borderBottomColor = Ui.Hex(t.Accent, new Color(0.95f, 0.65f, 0.2f));
-                if (!string.IsNullOrEmpty(t.FullName)) tips.Attach(tile, t.FullName);
-                var face = Ui.El("soldier-tile__face well", tile);
-                var portrait = PortraitOf?.Invoke(t.Id);
-                if (portrait is RenderTexture rt) face.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
-                else if (portrait is Texture2D t2) face.style.backgroundImage = new StyleBackground(t2);
-                else Ui.Icon(icon, "tab:barracks", "soldier-tile__silhouette", face);
-                if (t.Rank > 0)
-                {
-                    // The rank as the Military Combat HUD's chevron (mixta.css .rank), bronze, silver, gold.
-                    var rank = Ui.Icon(icon, "rank:" + Mathf.Clamp(t.Rank, 1, 7), "soldier-tile__rank rank-badge", tile);
-                    if (!string.IsNullOrEmpty(t.RankTip)) tips.Attach(rank, t.RankTip);
-                }
-                if (t.Points)
-                {
-                    var points = Ui.Text("▲", "soldier-tile__points font-title", tile);
-                    tips.Attach(points, t.PointsTip);
-                }
-                var name = Ui.El("soldier-tile__name-row", tile);
-                var hex = new SkillHex();
-                hex.Set(t.Skills, tips);
-                name.Add(hex);
-                Ui.Text(t.Name, "soldier-tile__name font-title", name);
-                if (!string.IsNullOrEmpty(t.Tag))
-                {
-                    var tag = Ui.Text(t.Tag, "soldier-tile__tag", tile);
-                    if (!string.IsNullOrEmpty(t.TagTone)) tag.AddToClassList("soldier-tile__tag--" + t.TagTone);
-                    tips.Attach(tag, t.TagTip);
-                }
-                grid.Add(tile);
-            }
+            foreach (var t in v.Mine.Concat(v.Partner)) grid.Add(Tile(t));
+            if (v.Recruit != null) grid.Add(Recruit(v.Recruit));
         }
 
-        void Recruit(RecruitView r, VisualElement parent)
+        /// <summary>One's own soldiers' studio light (Arturo, 14/11: purple), and the partner's (turquoise: Arturo's choice, 15/11).</summary>
+        public static Color MineLight = new Color32(0xa6, 0x78, 0xff, 0xff);
+        public static Color TheirLight = new Color32(0x3f, 0xb8, 0xc8, 0xff);
+
+        /// <summary>A bust's backdrop: its light's colour dark, lit in its middle (as the battle's squad cards: SquadList.Studio).</summary>
+        static void Studio(VisualElement face, bool theirs)
         {
-            var card = Ui.El("recruit-card", parent);
-            Ui.Text(r.Title.ToUpperInvariant(), "recruit-card__title font-title", card);
-            Ui.Text(r.Blurb, "recruit-card__blurb", card);
-            Chips(r.Chips, card);
-            var b = new Button(handlers.OnRecruit) { text = r.Button.ToUpperInvariant() };
-            Ui.AddClasses(b, "recruit-card__button btn-primary font-title");
-            b.SetEnabled(r.Enabled);
-            card.Add(b);
-            if (!string.IsNullOrEmpty(r.Why)) Ui.Text(r.Why, "strat-why", card);
+            var light = theirs ? TheirLight : MineLight;
+            face.style.backgroundColor = new Color(light.r * 0.3f, light.g * 0.3f, light.b * 0.3f, 1);
+            var studio = Ui.El("soldier-tile__studio", face);
+            studio.pickingMode = PickingMode.Ignore;
+            studio.style.backgroundImage = new StyleBackground(SquadList.Studio());
+            studio.style.unityBackgroundImageTintColor = new Color(light.r, light.g, light.b, 0.85f);
+        }
+
+        Button Tile(SoldierTileView t)
+        {
+            var id = t.Id;
+            var tile = new Button(() => handlers.OnSoldier(id));
+            tile.AddToClassList("soldier-tile");
+            tile.EnableInClassList("soldier-tile--on", t.Selected);
+            tile.EnableInClassList("soldier-tile--dead", t.Dead);
+            tile.EnableInClassList("soldier-tile--theirs", t.Theirs);
+            if (!string.IsNullOrEmpty(t.FullName)) tips.Attach(tile, t.FullName);
+            var face = Ui.El("soldier-tile__face", tile);
+            Studio(face, t.Theirs);
+            // The bust's edges lit from behind in its studio's colour (Arte's Portraits.Light, 0.12.24).
+            Bastion.Client.Portraits.Light(t.Id, t.Theirs ? TheirLight : MineLight);
+            var bust = Ui.El("soldier-tile__bust", face);
+            var portrait = PortraitOf?.Invoke(t.Id);
+            if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
+            else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
+            else Ui.Icon(icon, "tab:barracks", "soldier-tile__silhouette", bust);
+            if (t.Rank > 0)
+            {
+                // The rank as the Military Combat HUD's chevron (mixta.css .rank), bronze, silver, gold.
+                var rank = Ui.Icon(icon, "rank:" + Mathf.Clamp(t.Rank, 1, 7), "soldier-tile__rank rank-badge", face);
+                if (!string.IsNullOrEmpty(t.RankTip)) tips.Attach(rank, t.RankTip);
+            }
+            if (t.Points)
+            {
+                var points = Ui.Text("▲", "soldier-tile__points font-title", face);
+                tips.Attach(points, t.PointsTip);
+            }
+            if (!string.IsNullOrEmpty(t.Tag))
+            {
+                var tag = Ui.Text(t.Tag, "soldier-tile__tag", face);
+                if (!string.IsNullOrEmpty(t.TagTone)) tag.AddToClassList("soldier-tile__tag--" + t.TagTone);
+                tips.Attach(tag, t.TagTip);
+            }
+            Ui.Text(t.Name, "soldier-tile__name font-title", tile);
+            return tile;
+        }
+
+        /// <summary>
+        /// Recruiting as one more tile (Arturo, 14/11): see-through, a «+» of worn steel, the price under it and «RECLUTAR»
+        /// in its band; what a recruit is and why not, on hover (off, it says why and does nothing).
+        /// </summary>
+        Button Recruit(RecruitView r)
+        {
+            var tile = new Button(() =>
+            {
+                if (r.Enabled) handlers.OnRecruit();
+            });
+            Ui.AddClasses(tile, "soldier-tile recruit-tile");
+            tile.EnableInClassList("recruit-tile--off", !r.Enabled);
+            var face = Ui.El("soldier-tile__face recruit-tile__face", tile);
+            Plus(face, "recruit-tile__plus");
+            if (!string.IsNullOrEmpty(r.Cost)) Ui.Text(r.Cost, "recruit-tile__cost font-title", face);
+            Ui.Text(r.Label.ToUpperInvariant(), "soldier-tile__name font-title", tile);
+            tips.Attach(tile, string.IsNullOrEmpty(r.Why) ? r.Tip : $"{r.Why}\n{r.Tip}");
+            return tile;
+        }
+
+        /// <summary>A «+» of worn steel (two bars with the plates' grain), for the recruit and an empty place of the belt.</summary>
+        static void Plus(VisualElement parent, string classes)
+        {
+            var plus = Ui.El("steel-plus " + classes, parent);
+            plus.pickingMode = PickingMode.Ignore;
+            Ui.El("steel-plus__bar steel-plus__bar--across", plus).pickingMode = PickingMode.Ignore;
+            Ui.El("steel-plus__bar steel-plus__bar--down", plus).pickingMode = PickingMode.Ignore;
         }
 
         void Chips(System.Collections.Generic.List<ChipView> chips, VisualElement parent)
@@ -365,37 +459,26 @@ namespace Bastion.UI.Strategy
             }
         }
 
+        /// <summary>
+        /// The sheet (Arturo, 14/11, vista-soldados p2): the name to the margin, the battle HUD's three lines under it as
+        /// wide as the sheet, the partner's note and how they are when hurt or fallen, what can be done for them, the
+        /// traits, and the experience with the rank and the board's button. The gear goes round the figure (Gear).
+        /// </summary>
         void Sheet(SoldierSheetView s, VisualElement parent)
         {
-            Ui.Text(s.Kicker.ToUpperInvariant(), "sheet__kicker font-title", parent);
-            var name = Ui.El("sheet__name-row", parent);
-            var hex = new SkillHex();
-            hex.Set(s.Skills, tips);
-            name.Add(hex);
-            var title = Ui.Text(s.Name.ToUpperInvariant(), "sheet__name font-title", name);
+            var title = Ui.Text(s.Name.ToUpperInvariant(), "sheet__name font-title", parent);
             tips.Attach(title, s.NameTip);
-            Ui.Text(s.Subtitle, "sheet__subtitle muted", parent);
+            var lines = Ui.El("sheet-lines", parent);
+            Line(lines, "pips--hp", s.Hp, s.HpTip);
+            Line(lines, "pips--ap", s.Ap, s.ApTip);
+            Line(lines, "pips--moves", s.Moves, s.MovesTip);
             if (!string.IsNullOrEmpty(s.Note)) Ui.Text(s.Note, "sheet__note", parent);
-            if (!string.IsNullOrEmpty(s.Customize))
+            if (!string.IsNullOrEmpty(s.Health))
             {
-                var custom = new Button(handlers.OnCustomize) { text = s.Customize.ToUpperInvariant() };
-                Ui.AddClasses(custom, "sheet__customize font-title");
-                parent.Add(custom);
+                var health = Ui.Text(s.Health, "sheet__health font-title", parent);
+                if (!string.IsNullOrEmpty(s.HealthTone)) health.AddToClassList("sheet__health--" + s.HealthTone);
+                tips.Attach(health, s.HealthTip);
             }
-            var stats = Ui.El("sheet__stats well", parent);
-            foreach (var st in s.Stats)
-            {
-                var stat = Ui.El("sheet__stat", stats);
-                var i = Ui.Icon(icon, st.Icon, "sheet__stat-icon", stat);
-                var color = Ui.Hex(st.Color, Color.white);
-                i.style.unityBackgroundImageTintColor = color;
-                var value = Ui.Text(st.Value, "sheet__stat-value font-title", stat);
-                value.style.color = color;
-                tips.Attach(stat, st.Tip);
-            }
-            var health = Ui.Text(s.Health, "sheet__health font-title", stats);
-            if (!string.IsNullOrEmpty(s.HealthTone)) health.AddToClassList("sheet__health--" + s.HealthTone);
-            tips.Attach(health, s.HealthTip);
             if (s.Care != null)
             {
                 var actions = Ui.El("sheet__care", parent);
@@ -418,52 +501,149 @@ namespace Bastion.UI.Strategy
                 SubHead("Rasgos", parent);
                 Chips(s.Traits, parent);
             }
-            tips.Attach(SubHead(s.ArmsHead, parent), StrategyText.Sheet.ArmsTip);
-            foreach (var p in s.Arms) Pick(p, parent);
-            if (s.Armor != null) Armor(s.Armor, parent);
-            tips.Attach(SubHead(s.BeltHead, parent), StrategyText.Sheet.BeltTip);
-            foreach (var p in s.Belt) Pick(p, parent);
             if (s.Experience != null) Experience(s.Experience, parent);
+        }
+
+        /// <summary>One of the battle's lines (its squad cards'): `n` pieces as wide as the sheet, all lit.</summary>
+        void Line(VisualElement parent, string kind, int n, string tip)
+        {
+            var row = Ui.El("pips sheet-lines__row " + kind, parent);
+            Ui.Pips(row, n, n);
+            tips.Attach(row, tip);
         }
 
         static Label SubHead(string text, VisualElement parent) => Ui.Text(text.ToUpperInvariant(), "sheet__head font-title", parent);
 
-        /// <summary>A choice: «LABEL Value ▾» and its lines; open, its options under it.</summary>
-        void Pick(PickView p, VisualElement parent)
+        // ------------------------------------------------------------ the gear round the figure
+
+        /// <summary>
+        /// Round the figure (Arturo, 14/11): on its left the hand, the side and the belt, on its right the clothes and the
+        /// belt's two places, three tiles a side in the same rows (a place that isn't there keeps its row), each column on a
+        /// dark curtain with soft edges; the open choice's options beside its column.
+        /// </summary>
+        void Gear(SoldierSheetView s)
         {
-            var box = Ui.El("pick", parent);
+            var left = Column("soldier-gear__col--left");
+            var arms = s.Arms;
+            for (var i = 0; i < 3; i++)
+            {
+                // The hand first and the belt last: with no side (pistols not counted), its row stays empty.
+                var p = i == 0 ? arms.FirstOrDefault() : i == 2 ? (arms.Count > 1 ? arms[arms.Count - 1] : null) : arms.Count > 2 ? arms[1] : null;
+                if (p != null) GearTile(p, left);
+                else Ui.El("gear-tile gear-tile--none", left).pickingMode = PickingMode.Ignore;
+            }
+            var right = Column("soldier-gear__col--right");
+            if (s.Armor != null) ArmorTile(s.Armor, right);
+            foreach (var p in s.Belt.Take(2)) GearTile(p, right);
+            var chosen = arms.Concat(s.Belt).FirstOrDefault(p => p.Id == open && p.Editable);
+            if (chosen != null) Options(chosen, arms.Contains(chosen));
+        }
+
+        VisualElement Column(string side)
+        {
+            var col = Ui.El("soldier-gear__col " + side, gear);
+            col.pickingMode = PickingMode.Ignore;
+            var curtain = Ui.El("soldier-gear__curtain", col);
+            curtain.pickingMode = PickingMode.Ignore;
+            curtain.generateVisualContent += Curtain;
+            return col;
+        }
+
+        /// <summary>
+        /// A column's curtain (Arturo, 14/11: «una cortina oscura semitransparente con bordes suaves»): dark in the middle,
+        /// fading to nothing over Soft at every edge.
+        /// </summary>
+        static void Curtain(MeshGenerationContext ctx)
+        {
+            var r = ctx.visualElement.contentRect;
+            float w = r.width, h = r.height;
+            if (w <= 2 * CurtainSoft || h <= 2 * CurtainSoft) return;
+            var dark = new Color32(4, 5, 6, 150);
+            var clear = new Color32(4, 5, 6, 0);
+            float[] xs = { 0, CurtainSoft, w - CurtainSoft, w };
+            float[] ys = { 0, CurtainSoft, h - CurtainSoft, h };
+            var vertices = new Vertex[16];
+            for (var j = 0; j < 4; j++)
+                for (var i = 0; i < 4; i++)
+                    vertices[j * 4 + i] = new Vertex { position = new Vector3(xs[i], ys[j], Vertex.nearZ), tint = i == 0 || i == 3 || j == 0 || j == 3 ? clear : dark };
+            var indices = new ushort[54];
+            var k = 0;
+            for (var j = 0; j < 3; j++)
+                for (var i = 0; i < 3; i++)
+                {
+                    var a = (ushort)(j * 4 + i);
+                    foreach (var n in new[] { 0, 1, 5, 0, 5, 4 }) indices[k++] = (ushort)(a + n);
+                }
+            var mesh = ctx.Allocate(16, 54);
+            mesh.SetAllVertices(vertices);
+            mesh.SetAllIndices(indices);
+        }
+
+        /// <summary>How far a curtain fades at its edges (panel pixels).</summary>
+        const float CurtainSoft = 18;
+
+        /// <summary>
+        /// A place of the gear: what is there (its picture; an empty place, a «+»), its name under it, a worn weapon's
+        /// state at its foot; what it is on hover; a click opens its choice (or shuts it).
+        /// </summary>
+        void GearTile(PickView p, VisualElement col)
+        {
             var id = p.Id;
-            var head = new Button(() =>
+            var tile = new Button(() =>
             {
                 if (!p.Editable) return;
                 open = open == id ? null : id;
                 key = null;
                 Set(last);
             });
-            head.AddToClassList("pick__head");
-            head.EnableInClassList("pick__head--fixed", !p.Editable);
-            Ui.Text(p.Label.ToUpperInvariant(), "pick__label font-title", head);
-            Ui.Text(p.Value, "pick__value font-title", head);
-            if (p.Editable) Ui.Text("▾", "pick__arrow", head);
-            box.Add(head);
-            if (p.Lines.Count > 0 || p.Condition >= 0 || p.Tags.Count > 0)
+            tile.name = "gear-" + id;
+            tile.AddToClassList("gear-tile");
+            tile.EnableInClassList("gear-tile--open", open == id);
+            tile.EnableInClassList("gear-tile--fixed", !p.Editable);
+            var face = Ui.El("gear-tile__face", tile);
+            face.pickingMode = PickingMode.Ignore;
+            if (!string.IsNullOrEmpty(p.Icon)) Ui.Icon(icon, p.Icon, "gear-tile__icon", face).pickingMode = PickingMode.Ignore;
+            else Plus(face, "gear-tile__plus");
+            if (p.Condition >= 0)
             {
-                var lines = Ui.El("pick__lines", box);
-                var first = Ui.El("pick__line-row", lines);
-                if (p.Lines.Count > 0) Ui.Text(p.Lines[0], "pick__line", first);
-                if (p.Condition >= 0)
-                {
-                    var gauge = Ui.El("pick__gauge well", first);
-                    var fill = Ui.El("pick__gauge-fill", gauge);
-                    fill.style.width = Length.Percent(Mathf.Clamp(p.Condition, 0, 100));
-                    fill.EnableInClassList("pick__gauge-fill--worn", p.Condition < 30);
-                    Ui.Text(p.ConditionText, "pick__line", first);
-                }
-                foreach (var tag in p.Tags) Ui.Text(tag, "pick__tag font-title", first);
-                for (var i = 1; i < p.Lines.Count; i++) Ui.Text(p.Lines[i], "pick__line", lines);
+                var gauge = Ui.El("gear-tile__gauge", face);
+                var fill = Ui.El("gear-tile__gauge-fill", gauge);
+                fill.style.width = Length.Percent(Mathf.Clamp(p.Condition, 0, 100));
+                fill.EnableInClassList("gear-tile__gauge-fill--worn", p.Condition < 30);
             }
-            if (open != id || !p.Editable) return;
-            var list = Ui.El("pick__options well", box);
+            Ui.Text(p.Label.ToUpperInvariant(), "gear-tile__label font-title", tile).pickingMode = PickingMode.Ignore;
+            var help = new System.Collections.Generic.List<string> { p.Value };
+            help.AddRange(p.Lines);
+            if (!string.IsNullOrEmpty(p.ConditionText)) help.Add(p.ConditionText);
+            if (p.Tags.Count > 0) help.Add(string.Join(" · ", p.Tags));
+            tips.Attach(tile, string.Join("\n", help.Where(x => !string.IsNullOrEmpty(x))));
+            col.Add(tile);
+        }
+
+        /// <summary>The clothes (the Taller's, everyone's): their picture, their name and what they give; the next ones and why not, on hover.</summary>
+        void ArmorTile(ArmorView a, VisualElement col)
+        {
+            var tile = Ui.El("gear-tile gear-tile--fixed gear-tile--armor", col);
+            var face = Ui.El("gear-tile__face", tile);
+            Ui.Icon(icon, "stat:armor", "gear-tile__icon", face);
+            Ui.Text(a.Name.ToUpperInvariant(), "gear-tile__label gear-tile__label--name font-title", tile);
+            Ui.Text(a.Figures, "gear-tile__figures", tile);
+            tips.Attach(tile, string.IsNullOrEmpty(a.Next) ? $"{a.Name}: {a.Figures}" : $"{a.Name}: {a.Figures}\n{a.Next}: {a.NextTip}");
+        }
+
+        /// <summary>
+        /// A choice open (arms.ts weaponPick): its options in a plate beside its column, inwards over the figure: the
+        /// picture, the name and its marks, what it is, against what it carries now; a click picks it.
+        /// </summary>
+        void Options(PickView p, bool left)
+        {
+            var plate = Ui.El("gear-options panel " + (left ? "gear-options--left" : "gear-options--right"), gear);
+            Ui.Text($"{p.Label.ToUpperInvariant()} · {p.Value}", "gear-options__head font-title", plate);
+            var scroll = new ScrollView(ScrollViewMode.Vertical) { verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden };
+            scroll.AddToClassList("gear-options__scroll");
+            plate.Add(scroll);
+            var list = scroll.contentContainer;
+            var id = p.Id;
             foreach (var o in p.Options)
             {
                 var option = o.Id;
@@ -502,20 +682,13 @@ namespace Bastion.UI.Strategy
             if (!string.IsNullOrEmpty(p.Empty)) Ui.Text(p.Empty, "pick__empty muted", list);
         }
 
-        void Armor(ArmorView a, VisualElement parent)
-        {
-            var row = Ui.El("sheet__armor", parent);
-            var marks = Ui.El("tier-marks", row);
-            for (var i = 0; i < Mathf.Max(1, a.Tier); i++) Ui.Text("◆", "tier-marks__mark", marks);
-            Ui.Text(a.Name, "sheet__armor-name font-title", row);
-            Ui.Text(a.Figures, "sheet__armor-figures muted", row);
-            if (!string.IsNullOrEmpty(a.Next))
-            {
-                var next = Ui.Text(a.Next, "strat-chip", row);
-                tips.Attach(next, a.NextTip);
-            }
-        }
+        // ------------------------------------------------------------ experience
 
+        /// <summary>
+        /// The experience (Arturo, 14/11, p2): each line its name and its green growth on the left, its experience into the
+        /// bar on the right, a continuous bar under them (white done, grey to go); «Rango» and the rank's name over its five
+        /// pieces, as wide; the board's button with its own plate and full outline, the points to spend beside it.
+        /// </summary>
         void Experience(SkillsView x, VisualElement parent)
         {
             SubHead(x.Head, parent);
@@ -523,39 +696,30 @@ namespace Bastion.UI.Strategy
             {
                 var row = Ui.El("skill-row", parent);
                 var top = Ui.El("skill-row__top", row);
-                var color = SkillHex.Colors[Mathf.Clamp(r.Line, 0, SkillHex.Colors.Length - 1)];
-                Ui.El("skill-row__dot", top).style.backgroundColor = color;
-                var name = Ui.Text(r.Name, "skill-row__name font-title", top);
-                if (!string.IsNullOrEmpty(r.Tip)) tips.Attach(name, r.Tip);
+                Ui.Text(r.Name, "skill-row__name font-title", top);
                 if (!string.IsNullOrEmpty(r.Growth))
                 {
                     var growth = Ui.Text(r.Growth, "skill-row__growth font-title", top);
                     if (!string.IsNullOrEmpty(r.GrowthTip)) tips.Attach(growth, r.GrowthTip);
                 }
-                var bottom = Ui.El("skill-row__bottom", row);
-                var bar = Ui.El("skill-row__bar", bottom);
-                for (var i = 0; i < r.Total; i++)
-                {
-                    var seg = Ui.El("skill-row__seg", bar);
-                    seg.style.backgroundColor = i < r.Filled ? color : new Color(color.r, color.g, color.b, 0.18f);
-                }
-                var reward = Ui.Text(r.Reward, "skill-row__reward", bottom);
-                tips.Attach(reward, r.RewardTip);
+                Ui.Text(r.Value.ToString(), "skill-row__value font-title", top);
+                var bar = Ui.El("skill-row__bar", row);
+                Ui.El("skill-row__fill", bar).style.width = Length.Percent(Mathf.Clamp01(r.Share) * 100);
+                if (!string.IsNullOrEmpty(r.Tip)) tips.Attach(row, r.Tip);
             }
-            var rank = Ui.El("skill-rank well", parent);
-            var rankTop = Ui.El("skill-rank__top", rank);
-            Ui.Text(x.Rank.ToUpperInvariant(), "skill-rank__name font-title", rankTop);
-            var marks = Ui.El("skill-rank__bar", rankTop);
+            var rank = Ui.El("skill-row skill-rank", parent);
+            var rankTop = Ui.El("skill-row__top", rank);
+            Ui.Text(x.RankLabel, "skill-row__name font-title", rankTop);
+            Ui.Text(x.Rank, "skill-row__value font-title", rankTop);
+            var marks = Ui.El("skill-rank__bar", rank);
             for (var i = 0; i < x.RankTotal; i++) Ui.El(i < x.RankFilled ? "skill-rank__seg skill-rank__seg--on" : "skill-rank__seg", marks);
-            tips.Attach(marks, StrategyText.Sheet.RankTip);
-            var will = Ui.Text(x.Will, "skill-rank__will", rankTop);
-            if (!string.IsNullOrEmpty(x.WillTip)) tips.Attach(will, x.WillTip);
-            Ui.Text(x.RankLine, "skill-rank__line", rank);
-            if (!string.IsNullOrEmpty(x.Gives)) Ui.Text(x.Gives, "skill-rank__line skill-rank__gives", rank);
+            if (!string.IsNullOrEmpty(x.RankTip)) tips.Attach(rank, x.RankTip);
+            var foot = Ui.El("skill-foot", parent);
             var board = new Button(handlers.OnBoard) { text = x.Board.ToUpperInvariant() };
             Ui.AddClasses(board, "skill-board font-title");
             board.EnableInClassList("skill-board--pulse", x.BoardPulse);
-            parent.Add(board);
+            foot.Add(board);
+            if (!string.IsNullOrEmpty(x.BoardPoints)) Ui.Text(x.BoardPoints, "skill-foot__points font-title", foot);
         }
     }
 }

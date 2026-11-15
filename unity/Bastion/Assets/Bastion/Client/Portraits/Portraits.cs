@@ -11,16 +11,23 @@ using Light = UnityEngine.Light;
 namespace Bastion.Client
 {
     /// <summary>
-    /// The busts (0.10.1's strategy/portraits.ts): each soldier's head and shoulders in their resting pose, turned a little
-    /// so it isn't a passport photo, in a soft studio light (a warm key from the front left, a cool rim from behind, a
-    /// soft sky; three's ACES at 1.1), rendered once into a texture of its own (160 px, clear round the figure) and kept;
+    /// The busts (0.10.1's strategy/portraits.ts): each soldier's head and shoulders in their resting pose, from the front
+    /// and filling the square (Arturo, 14/11: Soldados' grid, vista-soldados p1; 0.10.1's were turned a little, so as not to
+    /// be passport photos), in a soft studio light (a warm key from the front left; a rim from behind, on both sides in the
+    /// colour of the studio light UI puts behind it if told (Light), else a cool one on its right; a soft sky; three's
+    /// ACES at 1.1),
+    /// rendered once into a texture of its own (Size, clear round the figure: UI paints the studio behind it) and kept;
     /// made again when their looks change (Changed). Until one is drawn it is null: UI shows a silhouette.
     /// Soldiers are known by the campaign (Know); in play mode a bust is made a frame at a time, in edit mode (the labs)
     /// at Flush.
     /// </summary>
     public static class Portraits
     {
-        public const int Size = 160;
+        /// <summary>
+        /// Its side in pixels: Soldados' squares are 98 points, the battle's squad cards up to 88, and the panel scales them
+        /// with the screen (1440 × 900 its reference: twice on a Retina Mac, 2.4 on a 4K screen), so 256, not 0.10.1's 160.
+        /// </summary>
+        public const int Size = 256;
         /// <summary>How long the last bust took to make and draw (ms; one a frame while the game runs).</summary>
         public static float LastDrawMs { get; private set; }
 
@@ -33,22 +40,26 @@ namespace Bastion.Client
         {
             public string key;
             public Func<GameObject> make;
-            public float turn;
-            public bool backlit;
             /// <summary>Its body's clips ("masc", "femn": Anims).</summary>
             public string build = "masc";
             /// <summary>How far its head bows (degrees; HeadBow, or BrimBow under a peak).</summary>
             public float bow = HeadBow;
+            /// <summary>Whether it wears a peaked cap (Peaked: BrimBow).</summary>
+            public bool peaked;
+            /// <summary>The studio light's colour behind it (Light); null, the cool rim of 0.10.1's studio.</summary>
+            public Color? light;
             public RenderTexture texture;
             public bool drawn;
             /// <summary>What a soldier's was known as (to paint it again when the tint changes).</summary>
             public Appearance look;
-            public string name, band;
+            public string name, band, seed;
         }
 
         static bool listening;
 
         static readonly Dictionary<string, Bust> soldiers = new Dictionary<string, Bust>();
+        /// <summary>The studio light asked for each soldier (Light), kept for busts not known yet.</summary>
+        static readonly Dictionary<string, Color> lights = new Dictionary<string, Color>();
         static readonly Queue<(string id, Bust bust)> queue = new Queue<(string, Bust)>();
         static Worker worker;
 
@@ -63,9 +74,10 @@ namespace Bastion.Client
 
         /// <summary>
         /// A soldier as they look (`look`; who has none, a body of their sex by their name): dressed as in battle
-        /// (Dress.Of, by their id), drawn again if that changed (Personalizar: the draft as it is edited).
+        /// (Dress.Of, by `seed`: their campaign id, which is `id` but in a mission, where the unit is «s1» and the figure is
+        /// dressed by its CampaignId, UnitViews' seed), drawn again if that changed (Personalizar: the draft as it is edited).
         /// </summary>
-        public static void Know(string id, Appearance look, string name = null, string band = null)
+        public static void Know(string id, Appearance look, string name = null, string band = null, string seed = null)
         {
             if (string.IsNullOrEmpty(id)) return;
             if (!listening)
@@ -74,19 +86,23 @@ namespace Bastion.Client
                 // Tinted or not, every bust again (SquadTint: their clothes in their colours, their band).
                 SquadTint.Changed += _ =>
                 {
-                    foreach (var kv in soldiers.ToList()) Know(kv.Key, kv.Value.look, kv.Value.name, kv.Value.band);
+                    foreach (var kv in soldiers.ToList()) Know(kv.Key, kv.Value.look, kv.Value.name, kv.Value.band, kv.Value.seed);
                 };
             }
             string sex = look == null || string.IsNullOrEmpty(look.Sex) ? (name != null ? Content.SexOfName(name) : null) : null;
-            // The same bust while the same figure (Dress.Key: the roster's outfit too) in the same paint.
-            var dress = Dress.Of(look, id, sex);
-            string key = dress.Key + "|" + (SquadTint.On ? Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { look, band }) : "plain");
+            // The same bust while the same figure (Dress.Key: the roster's outfit too) in the same paint and light.
+            var dress = Dress.Of(look, string.IsNullOrEmpty(seed) ? id : seed, sex);
+            Color? light = lights.TryGetValue(id, out var l) ? l : (Color?)null;
+            string key = dress.Key + "|" + (SquadTint.On ? Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { look, band }) : "plain")
+                + "|" + (light is Color c ? ColorUtility.ToHtmlStringRGB(c) : "");
             if (soldiers.TryGetValue(id, out var bust) && bust.key == key) return;
-            if (bust == null) soldiers[id] = bust = new Bust { turn = -0.3f };
+            if (bust == null) soldiers[id] = bust = new Bust();
             bust.key = key;
             bust.look = look;
             bust.name = name;
             bust.band = band;
+            bust.seed = seed;
+            bust.light = light;
             // Its parts apart, as Soldados' soldier and Personalizar's previews: a quarter of the time, and the same figure.
             bust.make = () =>
             {
@@ -95,12 +111,35 @@ namespace Bastion.Client
                 return figure;
             };
             bust.build = dress.sex == "f" ? "femn" : "masc";
-            bust.bow = Peaked.Contains(dress.headwear ?? "") ? BrimBow : HeadBow;
+            bust.peaked = Peaked.Contains(dress.headwear ?? "");
+            bust.bow = bust.peaked ? BrimBow : HeadBow;
             Enqueue(id, bust);
         }
 
         /// <summary>A soldier's bust (null until it is drawn).</summary>
         public static Texture Soldier(string id) => id != null && soldiers.TryGetValue(id, out var b) && b.drawn ? b.texture : null;
+
+        /// <summary>
+        /// The studio light UI puts behind `id`'s bust (Arturo, 14/11: purple behind one's own soldiers, another colour
+        /// behind the partner's), lighting the figure's edges from behind in it; null, the studio's own cool rim (as before).
+        /// Their bust drawn again if it changed (Changed); asked before Know, it waits for it.
+        /// </summary>
+        public static void Light(string id, Color? colour)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            bool had = lights.TryGetValue(id, out var was);
+            if (colour is Color c)
+            {
+                if (had && ColorUtility.ToHtmlStringRGB(was) == ColorUtility.ToHtmlStringRGB(c)) return;
+                lights[id] = c;
+            }
+            else
+            {
+                if (!had) return;
+                lights.Remove(id);
+            }
+            if (soldiers.TryGetValue(id, out var bust)) Know(id, bust.look, bust.name, bust.band, bust.seed);
+        }
 
         static void Enqueue(string id, Bust bust)
         {
@@ -110,6 +149,16 @@ namespace Bastion.Client
                 var o = new GameObject("Retratos") { hideFlags = HideFlags.HideAndDontSave };
                 UnityEngine.Object.DontDestroyOnLoad(o);
                 worker = o.AddComponent<Worker>();
+            }
+        }
+
+        /// <summary>Every bust known drawn again (the labs, trying framings: Frame, HeadBow), each with its bow as they are now.</summary>
+        public static void Again()
+        {
+            foreach (var kv in soldiers)
+            {
+                kv.Value.bow = kv.Value.peaked ? BrimBow : HeadBow;
+                Enqueue(kv.Key, kv.Value);
             }
         }
 
@@ -131,7 +180,7 @@ namespace Bastion.Client
                     bust.texture.Create();
                 }
                 var clock = System.Diagnostics.Stopwatch.StartNew();
-                bool drawn = Draw(bust.make, bust.turn, bust.backlit, bust.build, bust.bow, bust.texture);
+                bool drawn = Draw(bust.make, bust.build, bust.bow, bust.light, bust.texture);
                 LastDrawMs = (float)clock.Elapsed.TotalMilliseconds;
                 if (drawn)
                 {
@@ -156,38 +205,59 @@ namespace Bastion.Client
 
         // -------------------------------------------------------------------------------------------------------- studio
 
-        /// <summary>How much further round than the body its head looks, and how far it bows (degrees; by eye, beside 0.10.1).</summary>
-        const float HeadTurn = 20, HeadBow = 8;
+        /// <summary>
+        /// How a bust is framed (Arturo, 14/11: from the front, filling the square): the body turned `turn` (0.10.1's
+        /// radians; it had −0.3) and the head `headTurn` degrees further round (it had 20); the frame `height` tiles tall
+        /// where the head is, its middle `lift` tiles over the head's bone (the top of the hair near its top edge, the
+        /// shoulders out to its sides), seen from `eyes` tiles over that bone at `fov` degrees. The labs try others
+        /// (PortraitLab's BASTION_ENCUADRES).
+        /// </summary>
+        public struct Framing
+        {
+            public float turn, headTurn, height, lift, eyes, fov;
+        }
+
+        public static Framing Frame = new Framing { turn = 0, headTurn = 0, height = 0.48f, lift = -0.015f, eyes = 0.05f, fov = 20 };
+
+        /// <summary>
+        /// How far the head bows (degrees; by eye: 0.10.1's idle bows it on its neck, Unity's humanoid copy keeps it over the
+        /// chest). 3 from the front (it was 8 with the head turned away: from the front, 8 had them looking at the floor).
+        /// </summary>
+        public static float HeadBow = 3;
 
         /// <summary>
         /// The caps whose peak hid the eyes at 160 px, the head bowed (the cap over a hood in 3 of 4: the 3D review of 10/11,
         /// F-06), and how far their bust lifts the chin instead (Arturo's A; docs/UNITY-ARTE.md, the busts).
         /// </summary>
         static readonly HashSet<string> Peaked = new HashSet<string> { "twoToneCap", "cap" };
-        const float BrimBow = -6;
+        public static float BrimBow = -6;
 
         /// <summary>
-        /// The head a little further round than the body, and bowed `bow` (0.10.1's idle turns it on its neck; Unity's humanoid
-        /// copy of the clip keeps it over the chest): half on the neck, half on the head, `yaw` being the body's.
+        /// The head Frame.headTurn degrees further round than the body (none since 14/11: from the front), and bowed `bow`
+        /// (0.10.1's idle turns it on its neck; Unity's humanoid copy of the clip keeps it over the chest): half on the neck,
+        /// half on the head, `yaw` being the body's.
         /// </summary>
         static void Look(Animator animator, Transform head, float yaw, float bow)
         {
-            var round = Quaternion.AngleAxis(HeadTurn * 0.5f, Vector3.up);
+            float turn = Frame.headTurn;
+            var round = Quaternion.AngleAxis(turn * 0.5f, Vector3.up);
             var neck = animator.GetBoneTransform(HumanBodyBones.Neck);
             if (neck != null) neck.rotation = round * neck.rotation;
             else round *= round;
             head.rotation = round * head.rotation;
-            var face = Quaternion.Euler(0, yaw + HeadTurn, 0) * Vector3.forward;
+            var face = Quaternion.Euler(0, yaw + turn, 0) * Vector3.forward;
             head.rotation = Quaternion.AngleAxis(bow, Vector3.Cross(Vector3.up, face)) * head.rotation;
         }
 
         /// <summary>
-        /// The figure `make` gives, at rest, turned `turn` (0.10.1's, radians: counter-clockwise from above, so its face to
-        /// the left), shot head and shoulders into `target` (portraits.ts bust and shoot: 20° of view, 1.45 tiles off,
-        /// looking at its head), its head bowed `bow`. Whether there was a figure to shoot.
+        /// The figure `make` gives, at rest, turned Frame.turn (0.10.1's radians: counter-clockwise from above, its face to
+        /// the left), shot head and shoulders into `target` (portraits.ts bust and shoot, framed as Frame says: from in front
+        /// of its head, a little over its eyes), its head bowed `bow`, lit from behind in `light` (none: the studio's cool
+        /// rim, from its right alone). Whether there was a figure to shoot.
         /// </summary>
-        static bool Draw(Func<GameObject> make, float turn, bool backlit, string build, float bow, RenderTexture target)
+        static bool Draw(Func<GameObject> make, string build, float bow, Color? light, RenderTexture target)
         {
+            float turn = Frame.turn;
             var studio = new GameObject("Estudio");
             studio.transform.position = Studio.At;
             var figure = make();
@@ -216,33 +286,39 @@ namespace Bastion.Client
             }
             var head = animator != null && animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Head) : null;
             if (head != null) Look(animator, head, -turn * Mathf.Rad2Deg, bow);
-            var at = head != null ? head.position : figure.transform.position + Vector3.up * 1.6f;
-            at += Vector3.up * 0.02f * Tile;
-            // The camera in front of it, looking back at its head (three's +z, here −z of the figure's frame turned back).
+            var bone = head != null ? head.position : figure.transform.position + Vector3.up * 1.6f;
+            var at = bone + Vector3.up * Frame.lift * Tile;
+            // The camera in front of it (three's +z, here the studio's forward), as far as Frame.height fills its view.
             var front = studio.transform.forward;
+            float distance = Frame.height * Tile * 0.5f / Mathf.Tan(Frame.fov * 0.5f * Mathf.Deg2Rad);
             var cameraObject = new GameObject("Cámara del estudio");
             cameraObject.transform.SetParent(studio.transform, false);
             var camera = cameraObject.AddComponent<Camera>();
             camera.enabled = false;
-            camera.transform.position = at + Vector3.up * 0.03f * Tile + front * 1.45f * Tile;
+            camera.transform.position = bone + Vector3.up * Frame.eyes * Tile + front * distance;
             camera.transform.LookAt(at);
-            camera.fieldOfView = 20;
+            camera.fieldOfView = Frame.fov;
             camera.nearClipPlane = 0.05f;
             camera.farClipPlane = 15;
-            // Lights: the studio's, from the camera's left, above and in front, and from behind on its right.
+            // Lights: the studio's key, warm, from the camera's left, above and in front; from behind, its cool rim on the
+            // right, or the studio light's colour on both sides (stronger on the right, across from the key).
             var right = camera.transform.right;
             var up = Vector3.up;
             var toward = (camera.transform.position - at).normalized;
-            if (backlit)
-                Studio.Shoot(camera, target, new[] { new Studio.Lamp(0x7dffb0, 3.2f, 1.3f * right + 0.8f * up - toward), new Studio.Lamp(0x7dffb0, 3.2f, -1.3f * right + 0.8f * up - toward) },
-                    Studio.Hex(0x203028), Studio.Hex(0x050807), 0.35f);
-            else
-                Studio.Shoot(camera, target, new[] { new Studio.Lamp(0xffe6c8, 2.4f, -1 * right + 1.2f * up + 1.5f * toward), new Studio.Lamp(0xa8c8ff, 1.4f, 1.2f * right + 0.6f * up - 1 * toward) },
-                    Studio.Hex(0xd8e4ff), Studio.Hex(0x4a3a30), 1.3f);
+            var key = new Studio.Lamp(0xffe6c8, 2.4f, -1 * right + 1.2f * up + 1.5f * toward);
+            var lamps = light is Color c
+                ? new[] { key, new Studio.Lamp(Hex(c), RimLight, 1.2f * right + 0.6f * up - 1 * toward), new Studio.Lamp(Hex(c), RimLight * 0.6f, -1.2f * right + 0.6f * up - 1 * toward) }
+                : new[] { key, new Studio.Lamp(0xa8c8ff, 1.4f, 1.2f * right + 0.6f * up - 1 * toward) };
+            Studio.Shoot(camera, target, lamps, Studio.Hex(0xd8e4ff), Studio.Hex(0x4a3a30), 1.3f);
             anim?.Dispose();
             Destroy(studio);
             return true;
         }
+
+        /// <summary>How strong the studio light's rim is (three's intensity, as the lamps': the cool rim's was 1.4).</summary>
+        public static float RimLight = 1.8f;
+
+        static int Hex(Color c) => (Mathf.RoundToInt(Mathf.Clamp01(c.r) * 255) << 16) | (Mathf.RoundToInt(Mathf.Clamp01(c.g) * 255) << 8) | Mathf.RoundToInt(Mathf.Clamp01(c.b) * 255);
 
         static void Destroy(UnityEngine.Object o)
         {

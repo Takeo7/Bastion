@@ -52,16 +52,26 @@ namespace Bastion.UI.EditorTools
         /// <summary>The objective's card pressed: the mission's window again, the card where it was (#13).</summary>
         public static void GoalAgain() => Mount("llegada", "objetivo");
 
-        /// <summary>The start screen (StartScreen with Red's NetLink): the name, be the host, the games on the network, join.</summary>
+        /// <summary>
+        /// The start screen (StartScreen with Red's NetLink; 0.12.24): the main menu. `BASTION_INICIO=<page>[,guardada][,red=<name>]`
+        /// opens a page of it (menu, nombre, nueva, multijugador, direccion, ajustes), with a game saved or not, and one
+        /// heard on the network or not (StartScreen.Preview). Over Arte's backdrop, shot from a camera that follows its own.
+        /// </summary>
         public static void Entry()
         {
             var camera = new GameObject("Shot camera").AddComponent<Camera>();
             camera.tag = "MainCamera";
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.05f, 0.06f, 0.06f);
+            camera.gameObject.AddComponent<Bastion.UI.Start.StartScreen.BackdropShot>();
             var screen = new GameObject("Start");
             screen.AddComponent<UIDocument>().panelSettings = Panel();
-            screen.AddComponent<Bastion.UI.Start.StartScreen>();
+            var start = screen.AddComponent<Bastion.UI.Start.StartScreen>();
+            var ask = System.Environment.GetEnvironmentVariable("BASTION_INICIO");
+            if (string.IsNullOrEmpty(ask)) return;
+            var parts = ask.Split(',');
+            var heard = System.Array.Find(parts, p => p.StartsWith("red="))?.Substring(4);
+            start.Preview(System.Array.IndexOf(parts, "guardada") >= 0, heard, parts[0]);
         }
 
         /// <summary>The room menu with a made-up room (RoomLab): Arturo hosting, Ana to come, the addresses to give her.</summary>

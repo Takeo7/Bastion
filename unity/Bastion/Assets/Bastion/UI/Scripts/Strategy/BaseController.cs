@@ -346,6 +346,7 @@ namespace Bastion.UI.Strategy
             {
                 Abandon = false, QuitLabel = Lore.QuitText.Button, Settings = App.GameSettings.Views(), LeaveTip = "La campaña queda guardada",
                 SettingsNote = partner != null && partner.Connected ? $"Solo para ti: {partner.Name} sigue a lo suyo." : "Se guardan en este ordenador.",
+                Invite = Bastion.UI.Start.RoomText.InviteOf(Bastion.Client.Net.NetLink.Instance),
             });
         }
 

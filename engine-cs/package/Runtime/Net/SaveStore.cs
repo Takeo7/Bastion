@@ -58,6 +58,9 @@ namespace Bastion.Net
         /// </summary>
         public const int DayCopies = 5;
 
+        /// <summary>The copy of the save a new campaign leaves next to it (Room's «Nueva campaña», StartAfresh).</summary>
+        public const string NewCampaignLabel = "antes-de-campana-nueva";
+
         private readonly string path;
         private readonly ICampaignRules? campaignRules;
 
@@ -73,6 +76,9 @@ namespace Bastion.Net
         /// <summary>The campaign day of the save on disk (Load's, then each Save's): a Save on another one keeps a copy (KeepDay).</summary>
         private int? dayOnDisk;
 
+        /// <summary>StartAfresh: the next Load keeps a copy and reads nothing.</summary>
+        private bool afresh;
+
         /// <summary>`campaignRules`: to bring a campaign of an older version up to date (without them, it is read as it is).</summary>
         public SaveStore(string path, Action<string>? log = null, ICampaignRules? campaignRules = null)
         {
@@ -86,9 +92,55 @@ namespace Bastion.Net
 
         public SaveFile? Load()
         {
+            if (afresh)
+            {
+                afresh = false;
+                // The save, or the backup without one (Save stopped between its moves): kept as it is. If it can't be,
+                // KeepAside throws and the host doesn't open, rather than start over it.
+                var from = File.Exists(path) ? path : File.Exists(Backup) ? Backup : null;
+                if (from != null) Log($"[save] Partida nueva: la de antes queda en {KeepAside(NewCampaignLabel, from, false)}.");
+                dayOnDisk = null;
+                return null;
+            }
             var save = LoadOnce();
             dayOnDisk = save?.Campaign?.Day;
             return save;
+        }
+
+        /// <summary>
+        /// «Nueva partida» on the start screen (0.12.24), over whatever was saved: the next Load keeps a copy of the save as
+        /// it is next to it, as the room's «Nueva campaña» does (&lt;name&gt;.antes-de-campana-nueva.json, -2, -3…), and reads
+        /// nothing, so the room starts in the lobby with nothing, and its saves write over the one there was.
+        /// </summary>
+        public void StartAfresh()
+        {
+            afresh = true;
+        }
+
+        /// <summary>
+        /// The campaign on disk as the room would go on with it, for the start screen's «Continuar partida» (0.12.24), read
+        /// as Load reads it but moving nothing and saying nothing: the save, or its backup if it is missing or can't be
+        /// read. Null without the campaign's rules, without a campaign, with one over, or with a save the room wouldn't
+        /// take (a newer Bastión's, one from before FreshRelease, one that can't be read).
+        /// </summary>
+        public SavedCampaign? Peek()
+        {
+            if (campaignRules == null) return null;
+            foreach (var file in new[] { path, Backup })
+            {
+                if (!File.Exists(file)) continue;
+                if (!Read(file, out var save, out _, false)) continue;
+                if (save == null) return null;
+                var paused = save.Mode == "campaign" && save.State != null && save.State.Outcome == null ? save.State : null;
+                return SavedCampaign.Of(save.Campaign, paused != null ? MissionName(paused) : null);
+            }
+            return null;
+        }
+
+        /// <summary>A mission left half played, as the lobby names it: the campaign's mission, or the map.</summary>
+        public static string MissionName(GameState state)
+        {
+            return state.CampaignMission?.Name ?? state.MapName;
         }
 
         private SaveFile? LoadOnce()
@@ -116,8 +168,11 @@ namespace Bastion.Net
             return null;
         }
 
-        /// <summary>The save in `file` (null: nothing to carry on with), or why it can't be read.</summary>
-        private bool Read(string file, out SaveFile? save, out string? error)
+        /// <summary>
+        /// The save in `file` (null: nothing to carry on with), or why it can't be read. `keep`: as the room loads it (an
+        /// old campaign kept aside, the log told); without it, Peek's look, which moves and says nothing.
+        /// </summary>
+        private bool Read(string file, out SaveFile? save, out string? error, bool keep = true)
         {
             save = null;
             error = null;
@@ -143,6 +198,7 @@ namespace Bastion.Net
                 var campaignVersion = (data["campaign"] as JObject)?["version"];
                 if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion < Campaign.FreshCampaignVersion)
                 {
+                    if (!keep) return true;
                     SetAside = KeepAside($"antes-{FreshRelease}", file, false);
                     Log($"[save] Partida de antes de la {FreshRelease}: guardada aparte en {SetAside}; se empieza en el vestíbulo.");
                     return true;
@@ -160,7 +216,7 @@ namespace Bastion.Net
                 // An older shape: TypeScript's, which the C# host never wrote.
                 if ((int)version < SaveVersion)
                 {
-                    Log($"[save] Partida guardada de una versión anterior ({(int)version}); se empieza de cero.");
+                    if (keep) Log($"[save] Partida guardada de una versión anterior ({(int)version}); se empieza de cero.");
                     return true;
                 }
                 save = data.ToObject<SaveFile>(Json.Serializer);

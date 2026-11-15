@@ -41,6 +41,15 @@ namespace Bastion.Net
             host = m.Groups[1].Value;
             return true;
         }
+
+        /// <summary>
+        /// A key as typed in its own field («Unirse por dirección», 0.12.24): any case, with spaces or dashes; the length
+        /// one pasted after the address may have (TryParse).
+        /// </summary>
+        public static bool IsKey(string? text)
+        {
+            return Regex.IsMatch(Room.NormalKey(text), "^[A-Z0-9]{4,6}$");
+        }
     }
 
     /// <summary>

@@ -202,12 +202,12 @@ Button:disabled {
     background-image: none;
 }
 
-/* =============================================================== what to press next, slanted */
+/* =============================================================== what to press next, its plate */
 
 /*
-   mixta.css .x-btn.primary: a hazard-yellow plate cut 9 px in at its ends, its top lit, its foot shaded (Slant paints
-   it from these; the button's own background goes clear). Its colours as the 0.10.1's, worked out over the plate
-   in sRGB: USS would blend the 0.10.1's alphas in linear and come out stronger.
+   mixta.css .x-btn.primary: a white plate, its top lit, its foot shaded (Slant paints it from these; the button's own
+   background goes clear), its ends straight (Arturo, 14/11: no slanted keys anywhere). Its colours worked out over the
+   plate in sRGB: USS would blend alphas in linear and come out stronger.
 */
 .btn-slant.btn-primary,
 .btn-slant.btn-primary:hover,
@@ -218,8 +218,8 @@ Button:disabled {
 }
 
 .btn-slant.btn-primary {
-    padding-left: 18px;
-    padding-right: 18px;
+    padding-left: 14px;
+    padding-right: 14px;
     --slant-hi: #ffffff;
     --slant-fill: #ecebe6;
     --slant-lo: #c8c7c2;
@@ -236,16 +236,16 @@ Button:disabled {
     --slant-foot: rgb(142, 142, 138);
 }
 
-/* Off: the yellow at 45 % over the plate, as measured on the 0.10.1's captures, with dark ink (opaque: USS would
-   blend an opacity in linear and come out pale). */
+/* Off (waiting, as «Alojar partida» once pressed): a grey plate with grey ink, opaque (USS would blend an opacity in
+   linear and come out pale); not the 0.10.1's dark yellow, which read orange (Arturo, 14/11). */
 .btn-slant.btn-primary:disabled {
     opacity: 1;
-    color: rgb(33, 31, 23);
-    --slant-hi: rgb(127, 112, 58);
-    --slant-fill: rgb(121, 105, 50);
-    --slant-lo: rgb(115, 98, 42);
-    --slant-top: rgb(132, 117, 62);
-    --slant-foot: rgb(115, 98, 42);
+    color: rgb(150, 152, 150);
+    --slant-hi: rgb(78, 81, 82);
+    --slant-fill: rgb(70, 73, 74);
+    --slant-lo: rgb(60, 63, 64);
+    --slant-top: rgb(92, 95, 96);
+    --slant-foot: rgb(52, 55, 56);
 }
 
 /* ================================================================ pips */

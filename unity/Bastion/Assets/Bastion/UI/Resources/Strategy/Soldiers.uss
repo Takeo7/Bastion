@@ -1,6 +1,7 @@
 /*
-   Soldados (screen.ts renderBarracks with strategy.css and mixta-base.css): the left column with the busts and the
-   recruit's card, the right one with the sheet. The side panels are every screen's (strat-side).
+   Soldados (screen.ts renderBarracks with strategy.css and mixta-base.css; Arturo's notes of 14/11): the left column
+   with the busts and the recruit's tile, the right one with the sheet, the gear round the figure between them. The
+   side panels are every screen's (strat-side).
 */
 
 .strat-side {
@@ -20,6 +21,13 @@
     top: 16px;
     bottom: 0;
     width: 330px;
+}
+
+/* The sheet as tall as it is, with a regular margin under its last row (Arturo, 14/11): not down to the foot. */
+.soldiers-sheet {
+    bottom: auto;
+    max-height: 96%;
+    padding-bottom: 14px;
 }
 
 .strat-side ScrollView {
@@ -54,24 +62,19 @@
     flex-wrap: wrap;
 }
 
+/*
+   A soldier (Arturo, 14/11): the bust filling its square on its studio light (SoldiersScreen.Studio), its name in a band
+   under it; the picked one's band lit white, no frame round it.
+*/
 .soldier-tile {
     width: 98px;
-    height: 104px;
     margin: 0 4px 6px 0;
-    padding: 6px 0 4px;
-    align-items: center;
-    background-color: rgba(255, 255, 255, 0.03);
+    padding: 0;
+    align-items: stretch;
+    background-color: rgba(0, 0, 0, 0);
     background-image: none;
-    border-width: 0 0 3px 0;
-    border-radius: 2px;
-}
-
-.soldier-tile--on {
-    border-width: 2px 2px 3px 2px;
-    border-top-color: var(--t-accent);
-    border-left-color: var(--t-accent);
-    border-right-color: var(--t-accent);
-    background-color: rgba(255, 255, 255, 0.08);
+    border-width: 0;
+    border-radius: 0;
 }
 
 .soldier-tile--dead {
@@ -79,22 +82,42 @@
 }
 
 .soldier-tile__face {
-    width: 64px;
-    height: 64px;
+    height: 98px;
+    overflow: hidden;
+    align-items: center;
+    justify-content: center;
+}
+
+.soldier-tile__studio {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+/* The bust as big as the square, its face to the front (Arte's Portraits, clear round the figure). */
+.soldier-tile__bust {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
     align-items: center;
     justify-content: center;
     -unity-background-scale-mode: scale-and-crop;
 }
 
 .soldier-tile__silhouette {
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     -unity-background-image-tint-color: rgba(201, 205, 198, 0.35);
 }
 
 .soldier-tile__rank {
     position: absolute;
-    left: 8px;
+    left: 4px;
     top: 4px;
 }
 
@@ -108,7 +131,7 @@
 
 .soldier-tile__points {
     position: absolute;
-    right: 6px;
+    right: 4px;
     top: 4px;
     width: 16px;
     height: 16px;
@@ -119,26 +142,36 @@
     border-radius: 2px;
 }
 
-.soldier-tile__name-row {
-    flex-direction: row;
-    align-items: center;
-    margin-top: 4px;
-}
-
-.soldier-tile__name-row .skill-hex {
-    width: 9px;
-    height: 10px;
-    margin-right: 4px;
-}
-
 .soldier-tile__name {
+    padding: 2px 4px 3px;
     font-size: 13px;
+    -unity-text-align: middle-center;
     color: #ffffff;
+    background-color: rgba(8, 9, 10, 0.88);
 }
 
+.soldier-tile:hover .soldier-tile__name {
+    background-color: rgba(46, 50, 52, 0.95);
+}
+
+/* The picked one: its band lit (Arturo, 14/11: «La maqueta distingue a Liam en la banda del nombre»). */
+.soldier-tile--on .soldier-tile__name,
+.soldier-tile--on:hover .soldier-tile__name {
+    color: #15181a;
+    background-color: #ecebe6;
+}
+
+/* How they are (hurt, fallen), over the bust's foot. */
 .soldier-tile__tag {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 1px 3px;
     font-size: 11px;
+    -unity-text-align: middle-center;
     color: var(--t-muted);
+    background-color: rgba(8, 9, 10, 0.72);
 }
 
 .soldier-tile__tag--bad {
@@ -227,21 +260,43 @@
     color: var(--t-accent);
 }
 
-.sheet__name-row {
-    flex-direction: row;
-    align-items: center;
-}
-
-.sheet__name-row .skill-hex {
-    width: 16px;
-    height: 18px;
-    margin-right: 8px;
-}
-
 .sheet__name {
-    font-size: 27px;
+    font-size: 30px;
     letter-spacing: 1px;
     color: #ffffff;
+}
+
+/* The battle HUD's three lines (its squad cards'), under the name and as wide as the sheet: health, actions, movement. */
+.sheet-lines {
+    margin: 2px 0 4px;
+}
+
+.sheet-lines__row {
+    margin-bottom: 4px;
+}
+
+.sheet-lines__row .pip {
+    flex-grow: 1;
+    width: 0;
+    margin-right: 3px;
+    border-radius: 0;
+}
+
+.sheet-lines__row.pips--hp .pip {
+    height: 7px;
+}
+
+.sheet-lines__row.pips--ap .pip {
+    height: 5px;
+}
+
+.pips--moves .pip--on {
+    background-color: #5cc4f5;
+}
+
+.sheet-lines__row.pips--moves .pip {
+    height: 3px;
+    margin-right: 6px;
 }
 
 .sheet__subtitle {
@@ -252,41 +307,6 @@
     margin-top: 6px;
     font-size: 13px;
     white-space: normal;
-}
-
-.sheet__customize {
-    align-self: flex-start;
-    margin-top: 4px;
-    padding: 3px 10px;
-    font-size: 12px;
-    letter-spacing: 1px;
-}
-
-/* The figures, then the state at the right (strategy.css .x-statline: wrap, .x-state margin-left auto); a long state
-   («Heridas · 2 misiones», Lore 26/10) goes under them, at the right, rather than against the last figure. */
-.sheet__stats {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    margin-top: 6px;
-    padding: 3px 10px;
-}
-
-.sheet__stat {
-    flex-direction: row;
-    flex-shrink: 0;
-    align-items: center;
-    margin-right: 12px;
-}
-
-.sheet__stat-icon {
-    width: 15px;
-    height: 15px;
-    margin-right: 3px;
-}
-
-.sheet__stat-value {
-    font-size: 18px;
 }
 
 .sheet__health {
@@ -330,101 +350,9 @@
     font-size: 13px;
 }
 
-/* =============================================================== choices */
-
-.pick {
-    margin-top: 2px;
-}
-
-.pick__head {
-    flex-direction: row;
-    align-items: flex-end;
-    justify-content: flex-start;
-    padding: 1px 2px 2px;
-    background-color: rgba(0, 0, 0, 0);
-    background-image: none;
-    border-width: 0 0 1px 0;
-    border-bottom-color: rgba(255, 255, 255, 0.16);
-    border-radius: 0;
-}
-
-.pick__head:hover {
-    background-color: rgba(255, 255, 255, 0.04);
-}
-
-.pick__head--fixed:hover {
-    background-color: rgba(0, 0, 0, 0);
-}
-
-.pick__label,
-.pick__value,
 .pick__option-name,
 .pick__option-note {
     -unity-text-align: middle-left;
-}
-
-.pick__label {
-    width: 48px;
-    margin-bottom: 3px;
-    font-size: 11px;
-    letter-spacing: 1.5px;
-    color: var(--t-muted);
-}
-
-.pick__value {
-    flex-grow: 1;
-    font-size: 17px;
-    color: var(--t-accent);
-}
-
-.pick__arrow {
-    margin-bottom: 4px;
-    font-size: 12px;
-    color: var(--t-text);
-}
-
-.pick__lines {
-    padding: 2px 2px 0;
-}
-
-.pick__line-row {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-.pick__line {
-    font-size: 11px;
-    color: var(--t-muted);
-}
-
-.pick__gauge {
-    width: 54px;
-    height: 4px;
-    margin: 0 6px 0 8px;
-}
-
-.pick__gauge-fill {
-    height: 100%;
-    background-color: #8fd05a;
-}
-
-.pick__gauge-fill--worn {
-    background-color: #ff6a55;
-}
-
-.pick__tag {
-    margin-left: 6px;
-    padding: 0 3px;
-    font-size: 10px;
-    color: #ffffff;
-    border-width: 1px;
-    border-color: var(--t-accent);
-}
-
-.pick__options {
-    margin-top: 2px;
-    padding: 2px;
 }
 
 .pick__option {
@@ -482,13 +410,6 @@
     white-space: normal;
 }
 
-.sheet__armor {
-    flex-direction: row;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-top: 6px;
-}
-
 .tier-marks {
     flex-direction: row;
     margin-right: 4px;
@@ -499,20 +420,11 @@
     color: #ffffff;
 }
 
-.sheet__armor-name {
-    font-size: 13px;
-    color: #ffffff;
-}
-
-.sheet__armor-figures {
-    margin-left: 4px;
-    font-size: 11px;
-}
-
 /* =============================================================== experience */
 
+/* A line (Arturo, 14/11): its name and growth on the left, its experience on the right, a continuous bar under them. */
 .skill-row {
-    margin-top: 3px;
+    margin-top: 6px;
 }
 
 .skill-row__top {
@@ -520,110 +432,89 @@
     align-items: center;
 }
 
-.skill-row__dot {
-    width: 8px;
-    height: 8px;
-    margin-right: 6px;
-    border-radius: 4px;
-}
-
 .skill-row__name {
-    font-size: 13px;
+    font-size: 14px;
     color: #ffffff;
 }
 
 .skill-row__growth {
     margin-left: 6px;
-    font-size: 11px;
+    font-size: 12px;
     color: #8fd05a;
 }
 
-.skill-row__bottom {
-    flex-direction: row;
-    align-items: center;
-    margin-top: 2px;
+.skill-row__value {
+    margin-left: auto;
+    font-size: 14px;
+    color: #ffffff;
 }
 
+/* White done, grey to go. */
 .skill-row__bar {
-    flex-direction: row;
-    flex-grow: 1;
+    height: 5px;
+    margin-top: 2px;
+    background-color: rgba(255, 255, 255, 0.22);
 }
 
-.skill-row__seg {
-    flex-grow: 1;
-    height: 7px;
-    margin-right: 1px;
+.skill-row__fill {
+    height: 100%;
+    background-color: #ffffff;
 }
 
-.skill-row__reward {
-    margin-left: 6px;
-    font-size: 11px;
-    color: var(--t-muted);
-}
-
+/* «Rango» and its name, over its five pieces as wide. */
 .skill-rank {
-    margin-top: 10px;
-    padding: 6px 10px 8px;
-    border-left-width: 2px;
-    border-left-color: var(--t-accent);
-}
-
-.skill-rank__top {
-    flex-direction: row;
-    align-items: center;
-}
-
-.skill-rank__name {
-    font-size: 16px;
-    color: var(--t-accent);
+    margin-top: 8px;
 }
 
 .skill-rank__bar {
     flex-direction: row;
-    flex-grow: 1;
-    margin: 0 8px;
+    margin-top: 3px;
 }
 
 .skill-rank__seg {
     flex-grow: 1;
-    height: 7px;
-    margin-right: 2px;
-    background-color: rgba(255, 255, 255, 0.18);
+    height: 5px;
+    margin-right: 4px;
+    background-color: rgba(255, 255, 255, 0.22);
 }
 
 .skill-rank__seg--on {
-    background-color: var(--t-accent);
+    background-color: #ffffff;
 }
 
-.skill-rank__will {
-    font-size: 11px;
-    color: var(--t-text);
-}
-
-.skill-rank__line {
-    margin-top: 2px;
-    font-size: 12px;
-    -unity-font-style: italic;
-    color: var(--t-muted);
-    white-space: normal;
-}
-
-/* What the rank gives now (skillSheet.ts sk-vet-gives): «Voluntad 40 · 2 acciones por turno». */
-.skill-rank__gives {
-    -unity-font-style: normal;
+/* The board's button with its own plate and a full outline, the points to spend beside it, out of it. */
+.skill-foot {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 12px;
 }
 
 .skill-board {
-    margin-top: 8px;
     height: 30px;
+    padding: 0 12px;
     font-size: 13px;
     letter-spacing: 1px;
+    background-color: rgba(34, 36, 38, 0.95);
+    border-width: 1px;
+    border-color: rgba(236, 238, 232, 0.7);
+    border-radius: 0;
+}
+
+.skill-board:hover {
+    background-color: rgba(58, 61, 63, 0.98);
+    border-color: #ffffff;
 }
 
 .skill-board--pulse {
-    border-width: 1px;
-    border-color: var(--t-accent);
-    color: var(--t-accent);
+    border-color: #ffffff;
+    color: #ffffff;
+}
+
+.skill-foot__points {
+    margin-left: auto;
+    padding-left: 8px;
+    font-size: 13px;
+    color: var(--t-muted);
 }
 
 /* =============================================================== personalizar */
@@ -993,4 +884,267 @@
     top: 0;
     right: 0;
     bottom: 0;
+}
+
+/* =============================================================== the recruit's tile */
+
+/* One more tile (Arturo, 14/11): see-through, a «+» of worn steel and the price over it, «RECLUTAR» in its band. */
+.recruit-tile__face {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.recruit-tile:hover .recruit-tile__face {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.recruit-tile--off {
+    opacity: 0.55;
+}
+
+.recruit-tile__cost {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 4px;
+    font-size: 12px;
+    -unity-text-align: middle-center;
+    color: var(--t-muted);
+}
+
+/* A «+» of worn steel: two bars with the plates' grain, light. */
+.steel-plus {
+    width: 34px;
+    height: 34px;
+}
+
+.steel-plus__bar {
+    position: absolute;
+    background-color: rgba(214, 216, 210, 0.92);
+    background-image: url("../../Textures/steel-plate.png");
+    background-size: 64px 64px;
+    -unity-background-image-tint-color: rgba(150, 152, 148, 0.85);
+}
+
+.steel-plus__bar--across {
+    left: 0;
+    right: 0;
+    top: 13px;
+    height: 8px;
+}
+
+.steel-plus__bar--down {
+    top: 0;
+    bottom: 0;
+    left: 13px;
+    width: 8px;
+}
+
+.recruit-tile__plus {
+    margin-bottom: 10px;
+}
+
+/* =============================================================== the gear round the figure */
+
+/*
+   Arturo, 14/11: two columns of three tiles at each side of the soldier in the clearing, in the same rows; each on a
+   dark curtain with soft edges (SoldiersScreen.Curtain). The figure stands in the middle of the clearing between the
+   panels, at the screen's middle.
+*/
+.soldier-gear {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.soldier-gear__col {
+    position: absolute;
+    top: 36%;
+    left: 50%;
+    width: 80px;
+}
+
+.soldier-gear__col--left {
+    margin-left: -192px;
+}
+
+.soldier-gear__col--right {
+    margin-left: 120px;
+}
+
+.soldier-gear__curtain {
+    position: absolute;
+    left: -18px;
+    top: -18px;
+    right: -18px;
+    bottom: -18px;
+}
+
+/* Where the figure stands: a click there opens Personalizar (SoldiersScreen.OverFigure), «PERSONALIZAR» at its foot meanwhile. */
+.soldier-figure {
+    position: absolute;
+    left: 50%;
+    width: 200px;
+    margin-left: -100px;
+    top: 22%;
+    bottom: 6%;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.soldier-figure__cue {
+    padding: 3px 10px;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    color: #ffffff;
+    background-color: rgba(8, 9, 10, 0.8);
+}
+
+/* A place: dark and see-through, a thin worn white edge, what is there in the middle and its name at the foot. */
+.gear-tile {
+    width: 80px;
+    height: 80px;
+    margin: 0 0 8px 0;
+    padding: 0;
+    align-items: stretch;
+    background-color: rgba(8, 9, 10, 0.72);
+    background-image: none;
+    border-width: 1px;
+    border-color: rgba(236, 238, 232, 0.5);
+    border-radius: 0;
+}
+
+.gear-tile:hover {
+    background-color: rgba(30, 32, 34, 0.85);
+    border-color: rgba(255, 255, 255, 0.85);
+}
+
+.gear-tile--fixed:hover {
+    background-color: rgba(8, 9, 10, 0.72);
+    border-color: rgba(236, 238, 232, 0.5);
+}
+
+.gear-tile--open {
+    border-color: #ffffff;
+    background-color: rgba(46, 50, 52, 0.9);
+}
+
+/* A row with nothing there (the side, where the Armería doesn't count the pistols): its room kept, nothing drawn. */
+.gear-tile--none {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+}
+
+.gear-tile__face {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.gear-tile__icon {
+    width: 40px;
+    height: 40px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.gear-tile__plus {
+    width: 24px;
+    height: 24px;
+}
+
+.gear-tile__plus .steel-plus__bar--across {
+    top: 9px;
+    height: 6px;
+}
+
+.gear-tile__plus .steel-plus__bar--down {
+    left: 9px;
+    width: 6px;
+}
+
+/* A firearm's state, along the foot of its picture: green, red once worn. */
+.gear-tile__gauge {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 2px;
+    height: 3px;
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.gear-tile__gauge-fill {
+    height: 100%;
+    background-color: #8fd05a;
+}
+
+.gear-tile__gauge-fill--worn {
+    background-color: #ff6a55;
+}
+
+.gear-tile__label {
+    padding: 0 3px 4px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    color: #eceee8;
+}
+
+/* The clothes: their name over what they give, smaller, both able to take two lines. */
+.gear-tile--armor .gear-tile__face {
+    padding-top: 4px;
+}
+
+.gear-tile--armor .gear-tile__icon {
+    width: 24px;
+    height: 24px;
+}
+
+.gear-tile__label--name {
+    padding-bottom: 0;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+}
+
+.gear-tile__figures {
+    padding: 0 3px 4px;
+    font-size: 9px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    color: var(--t-muted);
+}
+
+/* A choice open: its options beside its column, inwards over the figure (outwards they ran under the side panels). */
+.gear-options {
+    position: absolute;
+    top: 36%;
+    left: 50%;
+    width: 290px;
+    max-height: 56%;
+    padding: 8px 10px 10px;
+    background-color: rgba(12, 14, 15, 0.96);
+    border-width: 1px;
+    border-color: rgba(236, 238, 232, 0.35);
+}
+
+.gear-options--left {
+    margin-left: -104px;
+}
+
+.gear-options--right {
+    margin-left: -178px;
+}
+
+.gear-options__head {
+    margin-bottom: 4px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+.gear-options__scroll {
+    flex-shrink: 1;
 }

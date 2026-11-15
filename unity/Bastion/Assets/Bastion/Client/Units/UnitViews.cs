@@ -538,6 +538,7 @@ namespace Bastion.Client.Units
             StepRims();
             StepMasks();
             StepMarks(step);
+            StepSelect(step);
         }
 
         /// <summary>Where the camera looks on the ground the figures stand on (its line of sight's foot).</summary>

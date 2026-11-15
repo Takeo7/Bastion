@@ -50,12 +50,14 @@
     -unity-text-align: middle-center;
 }
 
-/* No taller than the room it has: its lists scroll (GameMenu.Scroll). */
+/* No taller than the room it has: its lists scroll (GameMenu.Scroll). Its plate opaque: at Mixta's 0.9, blended in
+   linear, what is white behind it showed through (the gear's tiles in Soldados, 0.12.24). */
 .game-menu__card {
     width: 360px;
     max-height: 100%;
     padding: 16px 22px 14px;
     rotate: 0deg;
+    -unity-background-image-tint-color: rgb(0, 0, 0);
 }
 
 .game-menu__scroll {
@@ -423,4 +425,52 @@
 
 .btn-danger:hover {
     background-color: #ff6a55;
+}
+
+/* Hosting while the partner isn't in (GameMenu.Invite; Gameplay, 14/11): how they join, under the title, as the room's
+   menu has it (Room.uss .room__address): what each address is small, the address in a well with «Copiar». */
+.game-menu__invite {
+    margin: 0 0 10px;
+    padding: 8px 10px 10px;
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.game-menu__invite-line {
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--t-text);
+    white-space: normal;
+}
+
+.game-menu__invite-kind {
+    margin-top: 4px;
+    margin-bottom: 1px;
+    font-size: 10px;
+    color: var(--t-muted);
+}
+
+.game-menu__invite-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.game-menu__invite-address {
+    flex-grow: 1;
+    flex-shrink: 1;
+    padding: 3px 8px;
+    font-size: 14px;
+    background-color: var(--m-well);
+}
+
+.game-menu__invite-copy {
+    margin-left: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+.game-menu__invite-note {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--t-muted);
+    white-space: normal;
 }

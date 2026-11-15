@@ -36,6 +36,8 @@ namespace Bastion.UI.Strategy
             }
             // BASTION_INTERFAZ=1.3: Ajustes' «Interfaz» for this capture (the panel put back as play stops).
             App.GameSettings.ApplyInterface();
+            // BASTION_LUZ_COMPANERO=#rrggbb: the partner's soldiers' studio light in Soldados, to propose one (14/11).
+            if (ColorUtility.TryParseHtmlString(System.Environment.GetEnvironmentVariable("BASTION_LUZ_COMPANERO") ?? "", out var light)) SoldiersScreen.TheirLight = light;
         }
 
         /// <summary>BASTION_ESTRATEGIA_PULSA: a button's text, pressed a few frames after the case is up (TestSteps.Press); the order goes to the log.</summary>
@@ -47,6 +49,11 @@ namespace Bastion.UI.Strategy
         /// the turning pad's own pointer events.
         /// </summary>
         float drag = Number(System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_ARRASTRE"), 0);
+        /// <summary>
+        /// BASTION_ESTRATEGIA_FIGURA=encima|clic: the pointer on Soldados' figure (the pad's middle), lighting it, or a click
+        /// there, into Personalizar (0.12.24), through the pad's own pointer events, as the case is up.
+        /// </summary>
+        string figure = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_FIGURA");
         readonly float dragAt = Number(System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_ARRASTRE"), 1);
         float dragged;
 
@@ -103,6 +110,7 @@ namespace Bastion.UI.Strategy
                 }
             }
             if (shown && drag != 0 && pressAt >= 0 && Time.frameCount >= pressAt && Time.timeSinceLevelLoad >= dragAt) Drag();
+            if (shown && figure != null && pressAt >= 0 && Time.frameCount >= pressAt) Figure();
             if (shown && !string.IsNullOrEmpty(press) && pressAt >= 0 && Time.frameCount >= pressAt)
             {
                 Debug.Log($"[estrategia] pulsado «{press}»: {Bastion.UI.TestSteps.Press(press)}");
@@ -143,10 +151,21 @@ namespace Bastion.UI.Strategy
             if (Case == "diario") root.SetModal(Diary());
             if (Case == "fin") root.SetModal(new StrategyModalView { Kind = "end", Kicker = "Fin de la campaña", Title = "Campaña perdida", Text = "No queda nadie que conteste por radio. El Bastión se queda a oscuras.", Buttons = { "Volver al menú" } });
             if (Case == "menu") root.ToggleMenu(new GameMenuView { Abandon = false, QuitLabel = "Salir de Bastión" });
+            if (Case == "menu-invitacion") root.ToggleMenu(new GameMenuView { Abandon = false, QuitLabel = "Salir de Bastión", Invite = Invite() });
             if (Case == "volver") root.SetModal(new StrategyModalView { Kind = "leave", Kicker = StrategyText.Leave.Kicker, Title = StrategyText.Leave.Title, Text = StrategyText.Leave.Text("Ana"), Buttons = { StrategyText.Leave.Yes, StrategyText.Leave.No } });
         }
 
         static TipView Tip(string name, string text) => new TipView { Name = name, Lines = StrategyText.Sentences(text) };
+
+        /// <summary>«menu-invitacion»: the menu of a host whose partner isn't in, the router's port open (as RoomText.InviteOf gives it).</summary>
+        static InviteView Invite() => new InviteView
+        {
+            Line = Bastion.UI.Start.RoomText.Invite("Arturo"),
+            Addresses = { (Bastion.UI.Start.RoomText.Lan, "192.168.1.20:41391"), (Bastion.UI.Start.RoomText.Internet, "83.45.12.7:41391 · KXRT5") },
+            Key = Bastion.UI.Start.RoomText.KeyLine("KXRT5"),
+            Copy = Bastion.UI.Start.RoomText.Copy,
+            Copied = Bastion.UI.Start.RoomText.Copied,
+        };
 
         /// <summary>The strip as the sample's (renderTop), its tooltips from Lore; `proposal`: «theirs», «mine» or null.</summary>
         static TopView Top(string proposal)
@@ -183,55 +202,49 @@ namespace Bastion.UI.Strategy
         const string Arturo = "#f2a23a";
         const string Ana = "#a678ff";
 
-        static SoldierTileView Tile(string id, string name, string accent, float[] skills, int rank = 0, bool points = false, string tag = null, string tone = null, bool selected = false) =>
-            new SoldierTileView { Id = id, Name = name, Accent = accent, Skills = skills, Rank = rank, Points = points, PointsTip = "Puntos por gastar en el tablero", Tag = tag, TagTone = tone, Selected = selected };
+        static SoldierTileView Tile(string id, string name, bool theirs, int rank = 0, bool points = false, string tag = null, string tone = null, bool selected = false) =>
+            new SoldierTileView { Id = id, Name = name, Theirs = theirs, Rank = rank, Points = points, PointsTip = "Puntos por gastar en el tablero", Tag = tag, TagTone = tone, Selected = selected };
 
         static SoldiersView Soldiers()
         {
-            var v = new SoldiersView { MineHead = "Tus soldados", PartnerHead = "De Ana", PartnerNote = "no está: los preparas tú" };
-            v.Mine.Add(Tile("s1", "Yuki", Arturo, new float[] { 20, 10, 55, 10, 5, 10 }, 1, true));
-            v.Mine.Add(Tile("s3", "Dmitri", Arturo, new float[] { 60, 10, 10, 5, 5, 10 }, 1, true));
-            v.Mine.Add(Tile("s5", "Hiro", Arturo, new float[] { 10, 50, 5, 5, 5, 10 }, 0, true, "2 misiones", "warn"));
-            v.Mine.Add(Tile("s7", "Lucía", Arturo, new float[] { 10, 55, 5, 5, 5, 10 }, 0, true));
-            v.Partner.Add(Tile("s0", "Anja", Ana, new float[] { 60, 10, 10, 5, 5, 10 }));
-            v.Partner.Add(Tile("s2", "Arjun", Ana, new float[] { 10, 10, 55, 10, 5, 10 }, 0, false, "2 misiones", "warn"));
-            v.Partner.Add(Tile("s4", "Chiara", Ana, new float[] { 10, 10, 10, 5, 60, 10 }));
-            v.Partner.Add(Tile("s6", "Rafael", Ana, new float[] { 10, 10, 10, 60, 5, 10 }, 0, false, null, null, true));
+            var v = new SoldiersView();
+            v.Mine.Add(Tile("s1", "Yuki", false, 1, true));
+            v.Mine.Add(Tile("s3", "Dmitri", false, 1, true));
+            v.Mine.Add(Tile("s5", "Hiro", false, 0, true, "2 misiones", "warn"));
+            v.Mine.Add(Tile("s7", "Lucía", false, 0, true));
+            v.Partner.Add(Tile("s0", "Anja", true));
+            v.Partner.Add(Tile("s2", "Arjun", true, 0, false, "2 misiones", "warn"));
+            v.Partner.Add(Tile("s4", "Chiara", true));
+            v.Partner.Add(Tile("s6", "Rafael", true, 0, false, null, null, true));
             v.Recruit = new RecruitView
             {
-                Title = "Reclutar un soldado",
-                Blurb = "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.",
-                Chips = { new ChipView { Text = "30 §" }, new ChipView { Text = "Tus soldados 4/6", Tip = "Como mucho 6 soldados por jugador" }, new ChipView { Text = "Camas libres 0", Tone = "warn", Tip = "Cada soldado necesita una cama: la autocaravana tiene 8, y cada Barracón suma más." } },
-                Button = "Reclutar · 30 §",
+                Label = "Reclutar",
+                Cost = "30 §",
+                Tip = "Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.\nTus soldados: 4 de 6. Camas libres: 0. Cada soldado necesita una cama: la autocaravana tiene 8, y cada Barracón suma más.",
                 Enabled = false,
                 Why = "No quedan camas: para reclutar más, construid un Barracón.",
             };
             var sheet = new SoldierSheetView
             {
-                Kicker = "Novato · de Ana", Name = "Rafael Costa", Skills = new float[] { 10, 10, 10, 60, 5, 10 }, NameTip = "Misiones: 3 · Bajas: 2",
-                Subtitle = "Fusil de asalto", Note = "Ana no está: lo preparas tú hasta que vuelva.", Customize = "Personalizar",
-                Health = "Listo", HealthTone = "good",
-                ArmsHead = "Arma y armadura · se eligen aquí", BeltHead = "Cinturón · se elige aquí",
+                Name = "Rafael Costa", NameTip = "Misiones: 3 · Bajas: 2\nPuntería con armas de fuego 68 · cuerpo a cuerpo 63\nVoluntad 40 · Esquiva 10",
+                Hp = 10, HpTip = "Salud: 10", Ap = 2, ApTip = "2 acciones por turno", Moves = 8, MovesTip = "Movimiento: 8 casillas por turno",
+                Note = "Ana no está: lo preparas tú hasta que vuelva.", Customizable = true,
             };
-            sheet.Stats.Add(new SheetStatView { Icon = "stat:hp", Value = "10", Color = "#8fd05a", Tip = "Salud" });
-            sheet.Stats.Add(new SheetStatView { Icon = "stat:aim", Value = "68", Color = "#ffffff", Tip = "Puntería con armas de fuego: 60 de base, más lo que suman las barras de Disparo y el tablero" });
-            sheet.Stats.Add(new SheetStatView { Icon = "stat:melee", Value = "63", Color = "#ffffff", Tip = "Puntería cuerpo a cuerpo: 60 de base, más lo que suman las barras de Cuerpo a cuerpo y el tablero" });
-            sheet.Stats.Add(new SheetStatView { Icon = "stat:ap", Value = "40", Color = "#a678ff", Tip = "Voluntad" });
-            var hand = new PickView { Id = "hand", Label = "Mano", Value = "Fusil de asalto", Lines = { "Daño 3–5 · Alcance medio", "y la pistola al costado" }, Condition = 100, ConditionText = "Estado 100", Tags = { "Mira" }, Editable = true };
+            var hand = new PickView { Id = "hand", Label = "Mano", Value = "Fusil de asalto", Icon = "weapon:rifle", Lines = { "Daño 3–5 · Alcance medio", "y la pistola al costado" }, Condition = 100, ConditionText = "Estado 100", Tags = { "Mira" }, Editable = true };
             hand.Options.Add(new PickOptionView { Id = "none", Name = "Sin arma: la pistola", Note = "Fusil de asalto vuelve a la Armería" });
             hand.Options.Add(new PickOptionView { Id = "w103", Name = "Fusil de precisión", Note = "En la Armería" });
             hand.Options.Add(new PickOptionView { Id = "w104", Name = "Escopeta", Note = "La lleva Hiro Sato, de Arturo", Enabled = false });
             sheet.Arms.Add(hand);
-            sheet.Arms.Add(new PickView { Id = "belt", Label = "Cinto", Value = "Cuchillo", Lines = { "Daño 2–4" }, Editable = true });
-            sheet.Armor = new ArmorView { Tier = 3, Name = "Equipo antidisturbios", Figures = "· 10 de salud · 1 de blindaje" };
+            sheet.Arms.Add(new PickView { Id = "belt", Label = "Cinto", Value = "Cuchillo", Icon = "overwatchMelee", Lines = { "Daño 2–4" }, Editable = true });
+            sheet.Armor = new ArmorView { Tier = 3, Name = "Equipo antidisturbios", Figures = "10 de salud · 1 de blindaje" };
             sheet.Belt.Add(new PickView { Id = "slot0", Label = "Hueco 1", Value = "Nada", Editable = true });
             sheet.Belt.Add(new PickView { Id = "slot1", Label = "Hueco 2", Value = "Nada", Editable = true });
             var next = EngineLore.RankReward(0, "m");
             var xp = new SkillsView
             {
-                Head = "Experiencia", Rank = "Novato", RankFilled = 4, RankTotal = 8, Will = next?.Short ?? "Rango máximo", WillTip = next?.Long ?? "No hay rango más alto.",
-                RankLine = "Sin rango: menos de 5 puntos gastados en el tablero.", Gives = $"Voluntad {Bastion.Engine.Bars.VeteranWill(0)} · 2 acciones por turno",
-                Board = "Tablero de habilidades · 3 puntos por gastar",
+                Head = "Experiencia", RankLabel = "Rango", Rank = "Novato", RankFilled = 4, RankTotal = 5,
+                RankTip = $"Sin rango: menos de 5 puntos gastados en el tablero.\nVoluntad {Bastion.Engine.Bars.VeteranWill(0)} · 2 acciones por turno\nSiguiente rango: {next?.Long}",
+                Board = "Tablero de habilidades", BoardPoints = "3 puntos por gastar",
             };
             var filled = new[] { 0, 18, 10, 3, 2, 0 };
             var growth = new[] { "+8 %", null, null, null, null, "+10 %" };
@@ -240,7 +253,7 @@ namespace Bastion.UI.Strategy
                 var skill = Bastion.Engine.SkillIds.All[i];
                 var reward = EngineLore.BarReward(skill);
                 var def = Bastion.Engine.Bars.SkillDefs[skill];
-                xp.Rows.Add(new SkillRowView { Line = i, Name = def.Name, Tip = def.Line, Growth = growth[i], GrowthTip = def.Stat, Filled = filled[i], Total = 20, Reward = reward.Short, RewardTip = reward.Long });
+                xp.Rows.Add(new SkillRowView { Name = def.Name, Tip = $"{def.Line}\n{reward.Long}", Growth = growth[i], GrowthTip = def.Stat, Value = filled[i], Share = filled[i] / 20f });
             }
             sheet.Experience = xp;
             v.Sheet = sheet;
@@ -542,6 +555,23 @@ namespace Bastion.UI.Strategy
             Send(pad, EventType.MouseUp, at + new Vector2(step, 0));
             Debug.Log($"[estrategia] arrastre de {dragged} puntos sobre el claro (frame {Time.frameCount})");
             drag = 0;
+        }
+
+        /// <summary>BASTION_ESTRATEGIA_FIGURA: the pointer onto the figure, or a click on it.</summary>
+        void Figure()
+        {
+            var pad = UnityEngine.UIElements.UQueryExtensions.Q(root.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement, className: "soldiers-turn");
+            var what = figure;
+            figure = null;
+            if (pad == null) return;
+            var at = pad.worldBound.center;
+            Send(pad, EventType.MouseMove, at);
+            if (what == "clic")
+            {
+                Send(pad, EventType.MouseDown, at);
+                Send(pad, EventType.MouseUp, at);
+            }
+            Debug.Log($"[estrategia] figura: {what} en {at}");
         }
 
         /// <summary>

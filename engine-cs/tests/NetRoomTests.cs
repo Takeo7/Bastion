@@ -257,7 +257,7 @@ namespace Bastion.Engine.Tests
             rig.Room.Exposed(true);
             rig.Room.Pump();
             var pepe = rig.Join("Pepe", key: "");
-            Assert.Equal("Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su menú principal. Escribe la dirección y la clave juntas en «Unirse por dirección».", (string?)pepe.Take("error").Single()["message"]);
+            Assert.Equal("Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su pantalla o en su «Menú», junto a la dirección. Escribe las dos en «Unirse por dirección».", (string?)pepe.Take("error").Single()["message"]);
             Assert.True(pepe.IsClosed);
             Assert.Equal(1, (int)rig.Join("Pepe").Take("welcome").Single()["slot"]!);
             // Her token alone takes Ana back.
@@ -309,7 +309,7 @@ namespace Bastion.Engine.Tests
             rig.Room.Exposed(true);
             rig.Room.Pump();
             var again = rig.Join("ANA", key: "");
-            Assert.Equal("Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su menú principal. Escribe la dirección y la clave juntas en «Unirse por dirección».", (string?)again.Take("error").Single()["message"]);
+            Assert.Equal("Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su pantalla o en su «Menú», junto a la dirección. Escribe las dos en «Unirse por dirección».", (string?)again.Take("error").Single()["message"]);
             Assert.True(again.IsClosed);
             welcome = rig.Join("ANA").Take("welcome").Single();
             Assert.Equal(0, (int)welcome["slot"]!);

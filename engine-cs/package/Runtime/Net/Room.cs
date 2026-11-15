@@ -697,8 +697,8 @@ namespace Bastion.Net
                 keyTries[address] = tries;
                 // Lore's (1/11): a wrong one is most likely an old one, from an earlier time it was hosted.
                 refusal = !string.IsNullOrWhiteSpace(key) ? "Esa clave no es la de esta partida: cambia cada vez que se aloja. Pide la de ahora a quien la aloja."
-                    : why == KeyFor.Exposed ? "Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su menú principal. Escribe la dirección y la clave juntas en «Unirse por dirección»."
-                    : "Por internet hace falta la clave de la partida. Quien la aloja la ve en su menú principal. Escribe la dirección y la clave juntas en «Unirse por dirección».";
+                    : why == KeyFor.Exposed ? "Esta partida está abierta a internet, así que hace falta su clave. Quien la aloja la ve en su pantalla o en su «Menú», junto a la dirección. Escribe las dos en «Unirse por dirección»."
+                    : "Por internet hace falta la clave de la partida. Quien la aloja la ve en su pantalla o en su «Menú», junto a la dirección. Escribe las dos en «Unirse por dirección».";
             }
             if (refusal == null) return true;
             Send(socket, new ErrorMessage { Message = refusal });
@@ -849,7 +849,7 @@ namespace Bastion.Net
                     {
                         try
                         {
-                            var kept = store.KeepCopy("antes-de-campana-nueva");
+                            var kept = store.KeepCopy(SaveStore.NewCampaignLabel);
                             if (kept != null) store.Log($"[save] La campaña anterior queda en {kept}.");
                         }
                         catch (IOException e)
@@ -1426,9 +1426,7 @@ namespace Bastion.Net
         private RoomMessage RoomNow()
         {
             var paused = PausedMission();
-            var saved = campaign != null && campaign.Outcome == null && campaignRules != null
-                ? new SavedCampaign { Day = campaign.Day, Missions = campaign.MissionsFlown ?? 0, Doom = campaign.Doom, Level = Progression.BastionLevel(campaign.Level), InMission = paused != null ? paused.CampaignMission?.Name ?? paused.MapName : null }
-                : null;
+            var saved = campaignRules != null ? SavedCampaign.Of(campaign, paused != null ? SaveStore.MissionName(paused) : null) : null;
             // A campaign from before the 0.7 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
             return new RoomMessage { Players = Players(), Phase = phase, SavedCampaign = saved, SetAside = store.SetAside != null ? Path.GetFileName(store.SetAside) : null, Restored = restored };
         }

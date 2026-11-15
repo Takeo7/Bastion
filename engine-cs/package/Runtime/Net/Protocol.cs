@@ -262,6 +262,16 @@ namespace Bastion.Net
         public int Doom { get; set; }
         public int Level { get; set; }
         public string? InMission { get; set; }
+
+        /// <summary>
+        /// The room's (RoomMessage) and the start screen's (SaveStore.Peek, «Continuar partida», 0.12.24) from the same
+        /// place: `campaign` told, with `inMission` the mission left half played; null without one, or with one over.
+        /// </summary>
+        public static SavedCampaign? Of(CampaignState? campaign, string? inMission)
+        {
+            if (campaign == null || campaign.Outcome != null) return null;
+            return new SavedCampaign { Day = campaign.Day, Missions = campaign.MissionsFlown ?? 0, Doom = campaign.Doom, Level = Progression.BastionLevel(campaign.Level), InMission = inMission };
+        }
     }
 
     /// <summary>Who is in the room and which screen it is on.</summary>

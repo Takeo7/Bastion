@@ -1,36 +1,49 @@
 namespace Bastion.UI.Start
 {
     /// <summary>
-    /// The start screen's words, as the Electron app's launcher.html had them (0.10.1), plus the name, asked here now
-    /// (Lore reviews them, docs/UNITY-UI.md §6). Red's NetLink gives its own texts for what fails (Failed).
+    /// The start screen's words (Arturo's notes of 14/11, menu-inicial; 0.12.24): the main menu's keys, «Partida
+    /// multijugador»'s two cards, and what is asked (the name, an address and its key); no help under them (Lore reviews
+    /// them, docs/UNITY-UI.md §6). Red's NetLink gives its own texts for what fails (Failed).
     /// </summary>
     public static class StartText
     {
         public const string Title = "BASTIÓN";
-        public const string Kicker = "TÁCTICA POR TURNOS COOPERATIVA";
+
+        // The main menu (p1), in this order; «Continuar partida» only with a game saved.
+        public const string Continue = "Continuar partida";
+        public const string New = "Nueva partida";
+        public const string Two = "Partida multijugador";
+        public const string Settings = "Ajustes";
+        public const string Quit = "Salir de Bastión";
+        public const string Back = "Volver";
+
+        // «Partida multijugador» (p2): to host; to join the game heard on the network, or by address when there is none
+        // (Arturo's choice, 14/11).
+        public const string Host = "Alojar partida";
+        public static string JoinOf(string name) => $"Unirte a la partida de {name}";
+        public const string ByAddress = "Unirse por dirección";
+
+        // What is asked: the name (before a new game; before anything else while there is none), an address and its key.
+        // Under the name, the verb of what was pressed (Lore, 15/11: «Seguir» is staying, in «¿Salir de Bastión?»).
         public const string NameLabel = "TU NOMBRE";
         public const string NameMissing = "Escribe tu nombre.";
-        public const string Host = "ALOJAR LA PARTIDA";
-        public const string HostAbout = "La partida se abre en este ordenador. Quien juegue contigo entra desde su app.";
-        public const string LanLabel = "PARTIDAS EN TU RED";
-        public const string LanSearching = "Buscando partidas en tu red…";
-        public const string LanNone = "Ninguna por ahora. Cuando el otro jugador pulse «Alojar la partida», saldrá aquí.";
-        public const string JoinLabel = "UNIRSE POR DIRECCIÓN";
-        /// <summary>The host's address is on its main menu once the game is open (lobby.ts invite, and so in Unity).</summary>
-        public const string JoinHint = "Si la partida no sale arriba, o no estáis en la misma red: escribe la dirección que sale en el menú principal de quien la aloja, con la clave si la lleva.";
+        public const string Start = "Empezar";
+        public const string ContinueGo = "Continuar";
+        public const string HostGo = "Alojar";
+        public const string AddressLabel = "DIRECCIÓN";
         public const string JoinPlaceholder = "192.168.1.20:41391";
-        public const string Join = "UNIRSE";
-        public const string Quit = "SALIR DE BASTIÓN";
+        /// <summary>The key is always on the host's screen: needed only where the game asks it (Lore, 15/11).</summary>
+        public const string KeyLabel = "CLAVE, SI LA PIDE";
+        public const string KeyPlaceholder = "KXRT5";
+        public const string Join = "Unirse";
+
+        // While it goes.
         public const string Opening = "Abriendo la partida…";
         public const string Looking = "Buscando la partida…";
-
-        /// <summary>What a game on the network is doing (LanGame.Phase).</summary>
-        public static string Phase(string phase) => phase == "lobby" ? "en el menú" : phase == "base" ? "en la base" : phase == "mission" ? "en misión" : phase;
-
-        public static string GameOf(string name) => $"Partida de {name}";
         public static string Entering(string name) => $"Entrando en la partida de {name}…";
-        public static string Players(int n) => n == 1 ? "1 jugador" : $"{n} jugadores";
-        public static string OtherVersion(string theirs, string mine) => $"Tiene Bastión {theirs} y tú, {mine}: necesitáis la misma.";
         public static string Version(string v) => $"versión {v}";
+
+        /// <summary>Under Ajustes' title, on the start screen.</summary>
+        public const string SettingsHere = "Se guardan en este ordenador.";
     }
 }

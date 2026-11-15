@@ -65,15 +65,25 @@ namespace Bastion.UI.Hud
             else Show(v);
         }
 
-        public void Show(GameMenuView v)
+        public void Show(GameMenuView v) => Show(v, "main");
+
+        /// <summary>
+        /// Opened on `page`; on another than the main one (the start screen's «Ajustes», 0.12.24), its «Volver» to the main
+        /// page closes it instead.
+        /// </summary>
+        public void Show(GameMenuView v, string page)
         {
             view = v ?? new GameMenuView();
             if (!Open) sound?.Invoke("paper");
             Open = true;
+            first = page;
             Ui.Show(layer, true);
             layer.EnableInClassList("game-menu--cover", view.Cover);
-            Page("main");
+            Page(page);
         }
+
+        /// <summary>The page it was opened on (Show).</summary>
+        string first = "main";
 
         public void Close()
         {
@@ -134,6 +144,7 @@ namespace Bastion.UI.Hud
                 // The same list as the base's (playtest 19/10 #7), one entry a line, all alike; the controls are in Ajustes.
                 Ui.Text(HudText.Menu.Title, "game-menu__title font-title", card);
                 if (!string.IsNullOrEmpty(view.PauseNote)) Ui.Text(view.PauseNote, "game-menu__note", card);
+                if (view.Invite != null) Invite(card, view.Invite);
                 Entry(card, HudText.Menu.Continue, Close);
                 if (!string.IsNullOrEmpty(view.GoTo)) Keyed(card, view.GoTo, HudText.Command.GoKey, HudText.Command.GoTip, () => Choose(GoTo));
                 if (!string.IsNullOrEmpty(view.Watch)) Keyed(card, view.Watch, HudText.Command.GoKey, HudText.Command.WatchTip, () => Choose(Watch));
@@ -181,7 +192,8 @@ namespace Bastion.UI.Hud
                 }
                 else
                     foreach (var s in view.Settings) Setting(rows, s);
-                Entry(card, HudText.Menu.Controls, () => Page("controls"));
+                // Only where there are keys to tell (the battle's): the base's and the start screen's had an empty page.
+                if (view.Controls.Count > 0) Entry(card, HudText.Menu.Controls, () => Page("controls"));
                 BackTo(card, "main");
             }
             else
@@ -278,9 +290,40 @@ namespace Bastion.UI.Hud
             if (!string.IsNullOrEmpty(tip)) tips?.Attach(entry, tip);
         }
 
+        /// <summary>
+        /// How the partner joins (InviteView; Gameplay, 14/11): its line, each address under what it is with «Copiar» (the
+        /// internet's with the key, whole, as the room's menu copies it), the router's line and the key's.
+        /// </summary>
+        void Invite(VisualElement card, InviteView v)
+        {
+            var box = Ui.El("game-menu__invite", card);
+            if (!string.IsNullOrEmpty(v.Line)) Ui.Text(v.Line, "game-menu__invite-line", box);
+            foreach (var (kind, address) in v.Addresses)
+            {
+                Ui.Text(kind, "game-menu__invite-kind", box);
+                var row = Ui.El("game-menu__invite-row", box);
+                Ui.Text(address, "game-menu__invite-address", row);
+                Button copy = null;
+                copy = new Button(() =>
+                {
+                    GUIUtility.systemCopyBuffer = address;
+                    copy.text = v.Copied;
+                    copy.schedule.Execute(() => copy.text = v.Copy).StartingIn(1500);
+                }) { text = v.Copy };
+                copy.AddToClassList("game-menu__invite-copy");
+                row.Add(copy);
+            }
+            if (!string.IsNullOrEmpty(v.Router)) Ui.Text(v.Router, "game-menu__invite-note", box);
+            if (!string.IsNullOrEmpty(v.Key)) Ui.Text(v.Key, "game-menu__invite-note", box);
+        }
+
         void BackTo(VisualElement card, string page)
         {
-            var b = new Button(() => Page(page)) { text = HudText.Menu.Back };
+            var b = new Button(() =>
+            {
+                if (page == "main" && first != "main") Close();
+                else Page(page);
+            }) { text = HudText.Menu.Back };
             b.AddToClassList("game-menu__back");
             card.Add(b);
         }
