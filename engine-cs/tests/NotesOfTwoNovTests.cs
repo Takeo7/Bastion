@@ -232,7 +232,8 @@ namespace Bastion.Engine.Tests
             Assert.True(police >= 2, $"{police}");
             Assert.True(boots >= 5 * police, $"{boots} {police}");
             int Guns(string kind) => Enumerable.Range(1, 300).Count((seed) => !string.IsNullOrEmpty(Looting.RollBox(kind, new Rng(seed), false, true)?.Weapon));
-            Assert.InRange(Guns(Looting.PoliceBoot), 90, 140);
+            // A gun one time in five plus a boot's own chance (Looting.PoliceBootGun; one in three till Arturo's notes of 15/11).
+            Assert.InRange(Guns(Looting.PoliceBoot), 55, 100);
             Assert.InRange(Guns(Looting.CarBoot), 4, 25);
         }
 

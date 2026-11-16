@@ -685,9 +685,9 @@ namespace Bastion.Engine.Tests
             var pepe = rig.Join("Pepe");
             rig.Say(ana, new { t = "start" });
             var clocks = Last(pepe, "turnClock")["clocks"]!;
-            // Two soldiers for Ana, one for Pepe.
-            Assert.Equal(90_000, (long)clocks[0]!["total"]!);
-            Assert.Equal(45_000, (long)clocks[1]!["total"]!);
+            // Two soldiers for Ana, one for Pepe: 30 s each (Arturo, 15/11).
+            Assert.Equal(60_000, (long)clocks[0]!["total"]!);
+            Assert.Equal(30_000, (long)clocks[1]!["total"]!);
             Assert.False((bool)clocks[0]!["running"]!);
             rig.Say(ana, new { t = "idle", idle = true });
             Assert.True((bool)Last(pepe, "turnClock")["clocks"]![0]!["running"]!);
@@ -696,12 +696,12 @@ namespace Bastion.Engine.Tests
             rig.Say(ana, new { t = "cmd", cmd = new { type = "endTurn", ready = false } });
             clocks = Last(ana, "turnClock")["clocks"]!;
             Assert.False((bool)clocks[0]!["running"]!);
-            Assert.Equal(80_000, (long)clocks[0]!["left"]!);
+            Assert.Equal(50_000, (long)clocks[0]!["left"]!);
             rig.Advance(30_000);
             Assert.Empty(ana.Take("turnClock"));
             // Still again, it runs out: her soldiers take cover.
             rig.Say(ana, new { t = "idle", idle = true });
-            rig.Advance(80_000);
+            rig.Advance(50_000);
             Assert.Equal(new[] { 0 }, rig.Rules.RanOut);
             Assert.Equal(0, (long)Last(pepe, "turnClock")["clocks"]![0]!["left"]!);
             Assert.Equal("ready", (string?)Last(pepe, "events")["events"]![0]!["t"]);
@@ -725,7 +725,7 @@ namespace Bastion.Engine.Tests
             }
             var clocks = Last(ana, "turnClock")["clocks"]!;
             Assert.False((bool)clocks[0]!["running"]!);
-            Assert.Equal(80_000, (long)clocks[0]!["left"]!);
+            Assert.Equal(50_000, (long)clocks[0]!["left"]!);
             rig.Advance(100_000);
             Assert.Empty(rig.Rules.RanOut);
             // No orders from either; a ping, and the answer to a call to evacuate, still go.
@@ -820,9 +820,9 @@ namespace Bastion.Engine.Tests
             rig.Rules.Last!.Turn = 2;
             rig.Say(pepe, new { t = "sync" });
             var clocks = Last(ana, "turnClock")["clocks"]!;
-            // 80 s left of 90: 16 s more; Pepe, 45 s untouched: 9 s more.
-            Assert.Equal(90_000 + 16_000, (long)clocks[0]!["total"]!);
-            Assert.Equal(45_000 + 9_000, (long)clocks[1]!["total"]!);
+            // 50 s left of 60: 10 s more; Pepe, 30 s untouched: 6 s more.
+            Assert.Equal(60_000 + 10_000, (long)clocks[0]!["total"]!);
+            Assert.Equal(30_000 + 6_000, (long)clocks[1]!["total"]!);
         }
 
         [Fact]

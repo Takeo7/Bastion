@@ -315,6 +315,14 @@ namespace Bastion.Client.Units
             public Vector3 fallFrom;
             public Quaternion fallTurn, fallTo;
             public bool fallNow;
+            /// <summary>
+            /// What it had heard when last synced (Unit.Heard; UnitViews.Hear), and its turn to a noise as it is seen: the yaw
+            /// it turns to, seconds since it heard (−1, none) and whether its body has set off round (E3 of Arturo's notes of
+            /// 15/11: «no se le vio girar»).
+            /// </summary>
+            public Pos heard;
+            public float hearYaw, hearClock = -1;
+            public bool hearTurning;
         }
 
         readonly Dictionary<string, View> views = new Dictionary<string, View>();
@@ -425,6 +433,7 @@ namespace Bastion.Client.Units
             foreach (var v in views.Values)
             {
                 dt = step;
+                if (v.hearClock >= 0) StepHear(v, dt);
                 if (v.yawTo is float yawTo && v.root != null)
                 {
                     float yaw = v.root.eulerAngles.y, left = Mathf.DeltaAngle(yaw, yawTo);
@@ -528,6 +537,7 @@ namespace Bastion.Client.Units
                 ClimbPose(v);
                 Reach(v);
                 if (v.deadKind) DeadPose(v);
+                HearLead(v);
                 if (v.reachShare > 0 && v.reachFor != null && views.TryGetValue(v.reachFor, out var reached)) ReachPose(v, BodyChest(reached), v.reachShare, clock);
                 LogFigureNow(v, true);
             }
@@ -1091,6 +1101,8 @@ namespace Bastion.Client.Units
         {
             using var synced = SyncMarker.Auto();
             state = view;
+            // (The street's tall things a straightened walk keeps clear of, worked out now, once a map: UnitViews.Straight.)
+            if (view != null) Poles();
             // The enemy shows where the squad has it in sight (teamVisibility), or where UI shows it in the fog (a shade). One
             // UI shows as it acts (ForceVisible) is so till now, as 0.10.1's (Ana, 7/11 #14: one of the dead shown once at a
             // contact stayed drawn for good, inside a building not found too).
@@ -1121,6 +1133,7 @@ namespace Bastion.Client.Units
                 if (!u.Alive && v.dead) HideDropped(v);
                 if (u.Alive && v.dead) Stand(v);
                 Pose(v, u);
+                Hear(v, u);
                 // (Who eats a body or reaches for it stays where it is while its tile is the same: put back on the tile's
                 // middle at every event, it went on eating a tile off the body, Ana's #7 of 1/11.)
                 bool still = was != null && was.X == u.Pos.X && was.Y == u.Pos.Y && was.Z == u.Pos.Z;
@@ -2054,6 +2067,8 @@ namespace Bastion.Client.Units
             CancellationToken ct)
         {
             if (!views.TryGetValue(id, out var v) || path.Count == 0 || state == null) return;
+            // Its way taken from now for the others' straightened walks (Straighten).
+            Claim(id, v.place, path);
             // One eating gets up first (unitViews.ts moveAlong: unfeed); one reaching lets its arms down as it goes.
             v.reachFor = null;
             if (v.feeding) await GetUp(v, ct);
@@ -2129,13 +2144,29 @@ namespace Bastion.Client.Units
                 // A-06, 10/11: from 6 m/s to still in a frame).
                 float seconds = way.length / MapSpace.Tile * tile;
                 float e = !StopOff && m == path.Count && seconds > 0 ? Mathf.Clamp(StopSeconds / seconds, 0, StopShare) : 0, v0 = 1 / (1 - e / 2);
+                // A staircase straightened where nothing is in between (Straighten; E2 of Arturo's notes of 15/11), at its
+                // first frame, once every walk set off with it has its way taken: at the gait's own pace, so in less time, as
+                // its way is shorter (Gameplay, 16/11: «el ritmo gana»; till then in the staircase's seconds, its clip slower).
+                float legs = 1;
+                bool looked = false;
                 for (float t = 0; t < seconds;)
                 {
                     await Awaitable.NextFrameAsync(ct);
+                    if (!looked)
+                    {
+                        looked = true;
+                        if (way.length > 0 && Straighten(v, Before(k), path, k, m, passes) is Way straight)
+                        {
+                            way = straight;
+                            seconds = way.length / MapSpace.Tile * tile;
+                            e = !StopOff && m == path.Count && seconds > 0 ? Mathf.Clamp(StopSeconds / seconds, 0, StopShare) : 0;
+                            v0 = 1 / (1 - e / 2);
+                        }
+                    }
                     t = Mathf.Min(seconds, t + Time.deltaTime);
                     float u = seconds > 0 ? t / seconds : 1, past = u - (1 - e);
                     float done = e <= 0 ? u : past <= 0 ? v0 * u : v0 * (1 - e) + v0 * past - v0 * past * past / (2 * e);
-                    if (e > 0) v.anim?.Motion(gait.motion, clip * Mathf.Max(StopLegs, past <= 0 ? v0 : v0 * (1 - past / e)));
+                    if (e > 0) v.anim?.Motion(gait.motion, clip * legs * Mathf.Max(StopLegs, past <= 0 ? v0 : v0 * (1 - past / e)));
                     float d = seconds > 0 ? Mathf.Min(1, done) * way.length : way.length;
                     var (at, heading) = OnWay(way, d);
                     v.root.position = at;
@@ -2143,9 +2174,11 @@ namespace Bastion.Client.Units
                     Pass(d);
                 }
                 Pass(float.PositiveInfinity);
+                if (legs != 1 && m < path.Count) v.anim?.Motion(gait.motion, clip);
                 k = m;
             }
             v.root.position = MapSpace.StandAt(state, path[path.Count - 1]);
+            walkingOn.Remove(id);
             v.walking = false;
             v.onSill = false;
             // (Its legs held as they are as it eases into its idle (FigureAnimator: a motion going out keeps the speed it

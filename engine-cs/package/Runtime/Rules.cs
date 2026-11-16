@@ -716,6 +716,8 @@ namespace Bastion.Engine
 
             var origin = Engine.Events.CopyPos(u.Pos);
             var patrolling = Paths.OnPatrol(S, u);
+            // The dead a soldier ran past and that tried to bite it, once each a walk (RunPastBite).
+            var bitAt = new HashSet<string>();
             // Who a patrol walking up or down a flight of stairs saw: it stops once off it.
             Unit? sighted = null;
             for (var i = 0; i < path.Count; i++)
@@ -802,8 +804,9 @@ namespace Bastion.Engine
                         !(o.KillZone && o.ReactedTo.Contains(u.Id)) &&
                         (o.WatchMelee == true ? Aim.InMeleeReach(S, o.Pos, step) : Loaded(o) && Watches(o, step))).ToList();
                 var suppressors = shadow ? new List<Unit>() : S.Units.Where((o) => o.Alive && Content.HostileTo(o, u) && o.Suppressing == u.Id && Loaded(o)).ToList();
+                var biters = shadow ? new List<Unit>() : RunPastBiters(u, step, run && i < path.Count - 1, bitAt);
                 var noticing = u.Team == Teams.Xcom ? PodsNoticing(step, u) : new List<string>();
-                if (reactors.Count == 0 && suppressors.Count == 0 && noticing.Count == 0) continue;
+                if (reactors.Count == 0 && suppressors.Count == 0 && biters.Count == 0 && noticing.Count == 0) continue;
 
                 Flush();
                 foreach (var r in reactors)
@@ -818,11 +821,36 @@ namespace Bastion.Engine
                     Attack(r, u, AbilityIds.Shoot, true);
                     Emit(new SuppressionEndedEvent { Unit = r.Id });
                 }
+                foreach (var b in biters)
+                {
+                    if (!u.Alive || Over) break;
+                    if (b.Alive) Attack(b, u, AbilityIds.Claw, true);
+                }
                 if (noticing.Count > 0 && !Over) ActivatePods(noticing, Sighting(noticing, u, step));
                 if (!u.Alive || Over) return;
             }
             Flush();
             if (u.Team == Teams.Xcom && u.Alive && !Over) HuntedBy(u);
+        }
+
+        /// <summary>
+        /// The dead a soldier runs past (Arturo's notes of 15/11: «darle una posibilidad de intentar morder al soldado que
+        /// pasa corriendo; el intento podría acertar o fallar»): on a run (Paths.IsRun, the whole turn's movement at once),
+        /// each of the dead alongside a tile it crosses, not the one it stops on, with nothing between them, tries a bite
+        /// once in the walk, as a reaction (Aim's reaction penalty, so it may miss). Walking past, never.
+        /// </summary>
+        private List<Unit> RunPastBiters(Unit u, Pos step, bool running, HashSet<string> tried)
+        {
+            if (!running || u.Team != Teams.Xcom) return new List<Unit>();
+            var biters = S.Units.Where((o) =>
+                o.Alive &&
+                Content.HostileTo(o, u) &&
+                Content.Templates[o.Template].Undead &&
+                !tried.Contains(o.Id) &&
+                Aim.InMeleeReach(S, o.Pos, step) &&
+                Los.LineClear(S, o.Pos, step)).ToList();
+            foreach (var b in biters) tried.Add(b.Id);
+            return biters;
         }
 
         /// <summary>
@@ -958,10 +986,7 @@ namespace Bastion.Engine
         public void MakeNoise(Pos tile, double radius, Unit? by = null)
         {
             if (radius <= 0 || Over) return;
-            if (by?.Team == Teams.Xcom) radius = Js.Round(radius * Rules.SquadLouder * 10) / 10;
-            // Rain muffles it (Content.Weather; Arturo, 1/11).
-            var muffle = Content.Weather.NoiseOf(S.Weather);
-            if (muffle < 1) radius = Js.Round(radius * muffle * 10) / 10;
+            radius = Rules.SquadNoiseRadius(S, radius, by);
             var heard = S.Units.Where((o) =>
                 o.Alive &&
                 o.Team == Teams.Alien &&
@@ -1654,6 +1679,20 @@ namespace Bastion.Engine
     {
         /// <summary>Everything the squad does makes this much more noise than its table says (Ana, 23/10: «un 15 % más de ruido»).</summary>
         public const double SquadLouder = 1.15;
+
+        /// <summary>
+        /// How far the dead hear a noise of `noise` tiles that `by` makes (Sim.MakeNoise): the squad's louder by SquadLouder,
+        /// rain muffles it (Content.Weather), each to a tenth. For the noise shown before acting too (Arturo's notes of 15/11).
+        /// </summary>
+        public static double SquadNoiseRadius(GameState s, double noise, Unit? by)
+        {
+            var radius = noise;
+            if (by?.Team == Teams.Xcom) radius = Js.Round(radius * SquadLouder * 10) / 10;
+            // Rain muffles it (Content.Weather; Arturo, 1/11).
+            var muffle = Content.Weather.NoiseOf(s.Weather);
+            if (muffle < 1) radius = Js.Round(radius * muffle * 10) / 10;
+            return radius;
+        }
 
         /// <summary>
         /// Where the horde's clock stands (Sim.CallHorde): the noise the squad has made, a wave every Horde.Wave. The turns

@@ -34,6 +34,20 @@ namespace Bastion.UI.Hud
             /// </summary>
             public static string Done(string name, string to) => $"{HudText.Done.Key(name)} (Retroceso). {HudText.Done.Tip(name, to)} Pulsa otra vez para terminar tu turno.";
             public static string Command(string name) => $"Tiene el mando {name}. Puedes planear: clic en una casilla.";
+
+            /// <summary>
+            /// A soldier in play with something left, «Terminar turno» pressed once (Arturo, 15/11): what it still has, and
+            /// that a second press ends its turn; meanwhile its actions, its movement and its card blink (HudRoot.PointOut).
+            /// `tiles`, its movement left as HudText.Moves.Tiles says it; null, none.
+            /// </summary>
+            public static string Left(string name, int actions, string tiles)
+            {
+                var what = new System.Collections.Generic.List<string>();
+                if (actions > 0) what.Add(actions == 1 ? "1 acción" : $"{actions} acciones");
+                if (tiles != null) what.Add(tiles == "1" ? "1 casilla de movimiento" : $"{tiles} casillas de movimiento");
+                var one = what.Count == 1 && (actions == 1 || tiles == "1");
+                return $"A {name} {(one ? "le queda" : "le quedan")} {string.Join(" y ", what)}. Pulsa otra vez para terminar su turno.";
+            }
         }
 
         /// <summary>The cover's shield on the soldier's panel (Arturo, 7/11; Lore's words): its title and what it says.</summary>
@@ -256,6 +270,23 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>The movement left, apart from the actions (Arturo, 5/11 #14), in points (Lore's: a tile one, a diagonal 1,5): a path's cost is two a point.</summary>
+        /// <summary>
+        /// A zombie finding the squad (Arturo, 15/11: «que se note la detección»; Lore's words): over the soldier it saw (for
+        /// anyone, a man or a woman), and, after who saw whom, that the whole squad is found, not that one alone.
+        /// </summary>
+        public static class Spotted
+        {
+            public const string Seen = "¡A LA VISTA!";
+            public const string All = "Toda la escuadra queda al descubierto.";
+        }
+
+        /// <summary>Throwing (CombatController.ThrowNote).</summary>
+        public static class Throw
+        {
+            /// <summary>Pointed past its reach: it falls where the line is, nearer (Arturo, 15/11, E3; Lore's words).</summary>
+            public const string Short = "No llega más lejos";
+        }
+
         public static class Moves
         {
             /// <summary>«5», «6,5» (a diagonal step costs a tile and a half).</summary>

@@ -998,6 +998,245 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// The diagonal walk (Arturo's notes of 15/11, E2: «al caminar en diagonal, los personajes avanzan en zigzag»): since
+        /// 7/11 a path has no diagonal steps, so a diagonal one is a staircase, which the figures walked turning at every tile;
+        /// now as a line where nothing is in between (UnitViews.Walk, Straighten). BASTION_DIAGONAL=abierto (unless said): on
+        /// a plain floor a soldier and one of the dead each walk a staircase of BASTION_PASOS steps (10: east, north, east…),
+        /// side by side; BASTION_QUIEN=soldado|zombi, only that one, the camera on its walk. esquina: on city-7 a soldier walks a
+        /// staircase south-east round the south-west corner of the block at (33–39, 5–11), whose straight line goes through
+        /// the corner (the figure must go round it), the camera from the south-west. BASTION_RUTA=motor: the engine's own path
+        /// to the same tile (Paths.BuildPath) instead of the staircase. The game's camera BASTION_DIST tiles off (24 unless
+        /// said; 9 its nearest). A line [diagonal] a walk: its seconds and seconds a tile, how far its root strayed from the
+        /// staircase's tile middles at most, how near it came to a tile nobody walks on (tiles), and how far its heading swung
+        /// over the middle of the walk (degrees: a zigzag's some 90).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Diagonal -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 120 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Diagonal()
+        {
+            string mode = Environment.GetEnvironmentVariable("BASTION_DIAGONAL") ?? "abierto";
+            string who = Environment.GetEnvironmentVariable("BASTION_QUIEN") ?? "ambos";
+            int steps = int.TryParse(Environment.GetEnvironmentVariable("BASTION_PASOS"), out int n) ? n : 10;
+            float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float tiles) ? tiles : 24;
+            Pos P(int x, int y) => new Pos { X = x, Y = y };
+            // A staircase from `from`: east, then `dy` (−1 north, 1 south), and so on.
+            System.Collections.Generic.List<Pos> Stair(Pos from, int dy, int count)
+            {
+                var list = new System.Collections.Generic.List<Pos>();
+                int x = from.X, y = from.Y;
+                for (int k = 0; k < count; k++)
+                {
+                    if (k % 2 == 0) x++;
+                    else y += dy;
+                    list.Add(P(x, y));
+                }
+                return list;
+            }
+            var walks = new System.Collections.Generic.List<(Unit unit, System.Collections.Generic.List<Pos> way)>();
+            Camera camera;
+            Vector3 middle;
+            float yaw = 45;
+            if (mode == "esquina")
+            {
+                if (Resources.Load<FxArt>("FxArt") == null) FxArtMake.Run();
+                state = Seen(MapLab.Golden("city-7"));
+                MapLab.Lighting(true);
+                MapLab.Map(state, "city-7");
+                var walker = state.Units.First(u => u.Alive && u.Team == "xcom");
+                state.Units = new System.Collections.Generic.List<Unit> { Put(walker, 30, 9, 0) };
+                walks.Add((walker, new System.Collections.Generic.List<Pos> { P(31, 9), P(31, 10), P(32, 10), P(32, 11), P(32, 12), P(33, 12), P(33, 13), P(34, 13), P(35, 13), P(36, 13), P(37, 13) }));
+                units = new GameObject("Unidades").AddComponent<UnitViews>();
+                fx = new GameObject("Efectos").AddComponent<Fx>();
+                camera = new GameObject("Shot camera").AddComponent<Camera>();
+                camera.tag = "MainCamera";
+                camera.farClipPlane = 800;
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0.72f, 0.78f, 0.86f);
+                middle = MapSpace.TileToWorld(state, P(33, 11));
+                // (From the south-west, the walk across the picture: the game's camera turned a quarter.)
+                yaw = -45;
+                // (Plain does this for the other.)
+                EditorApplication.playModeStateChanged += Started;
+            }
+            else
+            {
+                var first = MapLab.Golden("city-7");
+                string sid = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
+                string zid = first.Units.First(u => u.Alive && u.Template == "zombie").Id;
+                Plain(u => (u.Id == sid && who != "zombi") || (u.Id == zid && who != "soldado"), 4, 13);
+                camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+                // North-east (east, north…), across the game's camera from the south-east.
+                if (who != "zombi") walks.Add((Put(state.Units.First(u => u.Id == sid), 4, 14, 0), Stair(P(4, 14), -1, steps)));
+                if (who != "soldado") walks.Add((Put(state.Units.First(u => u.Id == zid), 8, 18, 0), Stair(P(8, 18), -1, steps)));
+                var ends = walks.SelectMany(w => new[] { w.unit.Pos, w.way[w.way.Count - 1] }).Select(p => MapSpace.TileToWorld(state, p)).ToList();
+                middle = ends.Aggregate(Vector3.zero, (a, b) => a + b) / ends.Count;
+            }
+            if (Environment.GetEnvironmentVariable("BASTION_RUTA") == "motor")
+                for (int k = 0; k < walks.Count; k++)
+                {
+                    var (u, way) = walks[k];
+                    var reach = Paths.ComputeReach(state, u, 1000);
+                    var made = Paths.BuildPath(state, u, reach, way[way.Count - 1]);
+                    if (made != null) walks[k] = (u, made);
+                }
+            foreach (var (u, way) in walks) Debug.Log($"[diagonal] {u.Id} {u.Template} from ({u.Pos.X},{u.Pos.Y}): {string.Join(" ", way.Select(p => $"{p.X},{p.Y}"))}");
+            MapSpace.Aim(camera, middle, off, yaw);
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(1);
+                    Debug.Log($"[combat] {Time.time:0.00} s: walk");
+                    var going = walks.Select(w => (w.unit, w.way, from: w.unit.Pos, start: Time.time, walk: units.MoveAlong(w.unit.Id, w.way, 1))).ToList();
+                    var stray = new float[going.Count];
+                    var clear = Enumerable.Repeat(float.MaxValue, going.Count).ToArray();
+                    var yaws = going.Select(_ => new System.Collections.Generic.List<(float t, float yaw)>()).ToList();
+                    var took = new float[going.Count];
+                    while (going.Any(g => !g.walk.IsCompleted))
+                    {
+                        await Awaitable.NextFrameAsync();
+                        for (int k = 0; k < going.Count; k++)
+                        {
+                            var g = going[k];
+                            if (took[k] > 0) continue;
+                            if (g.walk.IsCompleted)
+                            {
+                                took[k] = Time.time - g.start;
+                                continue;
+                            }
+                            var at = units.Feet(g.unit.Id);
+                            // (BASTION_DIAGONAL_XY=1: where it is each frame, in tiles: the labs' plans of the walk.)
+                            if (Environment.GetEnvironmentVariable("BASTION_DIAGONAL_XY") == "1")
+                                Debug.Log(FormattableString.Invariant($"[diagonal-xy] {g.unit.Id} {at.x / MapSpace.Tile - 0.5f:0.000} {-at.z / MapSpace.Tile - 0.5f:0.000}"));
+                            var (s, c) = Strayed(at, g.from, g.way);
+                            stray[k] = Mathf.Max(stray[k], s);
+                            clear[k] = Mathf.Min(clear[k], c);
+                            yaws[k].Add((Time.time - g.start, units.FacingNow(g.unit.Id) ?? 0));
+                        }
+                    }
+                    for (int k = 0; k < going.Count; k++)
+                    {
+                        var g = going[k];
+                        if (took[k] <= 0) took[k] = Time.time - g.start;
+                        // The heading's swing over the middle 60 % of the walk, round its mean.
+                        var middleYaws = yaws[k].Where(y => y.t > 0.2f * took[k] && y.t < 0.8f * took[k]).Select(y => y.yaw).ToList();
+                        float mean = middleYaws.Count > 0 ? middleYaws[0] : 0;
+                        var swings = middleYaws.Select(y => Mathf.DeltaAngle(mean, y)).ToList();
+                        float swing = swings.Count > 0 ? swings.Max() - swings.Min() : 0;
+                        Debug.Log(FormattableString.Invariant($"[diagonal] {g.unit.Id} {g.unit.Template}: {g.way.Count} tiles in {took[k]:0.00} s ({took[k] / g.way.Count:0.000} s a tile); strayed {stray[k]:0.00} tiles at most from the tiles' middles; {clear[k]:0.00} tiles from the nearest tile nobody walks on; heading swung {swing:0} degrees over the middle"));
+                    }
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[combat] " + e);
+                }
+            };
+        }
+
+        /// <summary>
+        /// How far `at` (the world) is from the line through `from` and `way`'s tile middles, and from the nearest tile of
+        /// the state nobody walks on (tiles; within two).
+        /// </summary>
+        static (float stray, float clear) Strayed(Vector3 at, Pos from, System.Collections.Generic.IReadOnlyList<Pos> way)
+        {
+            float x = at.x / MapSpace.Tile - 0.5f, y = -at.z / MapSpace.Tile - 0.5f;
+            var points = new[] { from }.Concat(way).Select(p => new Vector2(p.X, p.Y)).ToList();
+            float stray = float.MaxValue;
+            var q = new Vector2(x, y);
+            for (int k = 1; k < points.Count; k++)
+            {
+                var a = points[k - 1];
+                var ab = points[k] - a;
+                float t = ab.sqrMagnitude > 0 ? Mathf.Clamp01(Vector2.Dot(q - a, ab) / ab.sqrMagnitude) : 0;
+                stray = Mathf.Min(stray, (a + ab * t - q).magnitude);
+            }
+            float clear = float.MaxValue;
+            int tx = Mathf.RoundToInt(x), ty = Mathf.RoundToInt(y);
+            for (int j = ty - 2; j <= ty + 2; j++)
+                for (int i = tx - 2; i <= tx + 2; i++)
+                {
+                    if (Bastion.Engine.Grid.IsWalkable(Bastion.Engine.Grid.TileAt(state, i, j))) continue;
+                    float dx = Mathf.Max(Mathf.Abs(x - i) - 0.5f, 0), dy = Mathf.Max(Mathf.Abs(y - j) - 0.5f, 0);
+                    clear = Mathf.Min(clear, Mathf.Sqrt(dx * dx + dy * dy));
+                }
+            return (stray, clear);
+        }
+
+        /// <summary>
+        /// A stone behind one of the dead (Arturo's notes of 15/11, E3: «no se le vio girar ni ir»): on a plain floor a soldier
+        /// at (6, 10) throws a stone (TossStone, Fx.Stone) to (17, 10), three tiles behind one of the dead at (14, 10) that
+        /// faces the soldier. Then as the game does with the noise (NoiseEvent on the view: Heard and Facing; then Sync), and
+        /// BASTION_PIEDRA_ANDA seconds on (1.5 unless said) the one that heard it walks two tiles towards it (its move, the
+        /// enemy's next events). Its yaw each tenth of a second from the noise, [piedra]. Camera: the game's over the dead
+        /// one, BASTION_DIST tiles off (24; 9 its nearest), or low from the side (BASTION_VIEW=side).
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Piedra -shotPlay -shotCamera "Shot camera"
+        ///     -shotFrames 80 -shotFps 10 -shotOut &lt;folder&gt;
+        /// </summary>
+        public static void Piedra()
+        {
+            var first = MapLab.Golden("city-7");
+            string sid = first.Units.First(u => u.Alive && u.Team == "xcom").Id;
+            string zid = first.Units.First(u => u.Alive && u.Template == "zombie").Id;
+            Plain(u => u.Id == sid || u.Id == zid, 12, 16);
+            var thrower = Put(state.Units.First(u => u.Id == sid), 6, 10, 0);
+            var heard = Put(state.Units.First(u => u.Id == zid), 14, 10, Math.PI);
+            soldier = thrower;
+            var tile = new Pos { X = 17, Y = 10 };
+            float off = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float tiles) ? tiles : 24;
+            var camera = GameObject.Find("Shot camera").GetComponent<Camera>();
+            if (Environment.GetEnvironmentVariable("BASTION_VIEW") != "side") MapSpace.Aim(camera, MapSpace.World(14.5f, 10), off);
+            else
+            {
+                var middle = MapSpace.World(15, 10);
+                camera.transform.position = middle + new Vector3(0, 1.3f, -6.5f);
+                camera.transform.LookAt(middle + Vector3.up * 0.95f);
+            }
+            float walkAfter = float.TryParse(Environment.GetEnvironmentVariable("BASTION_PIEDRA_ANDA"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float s) ? s : 1.5f;
+            sequence = async () =>
+            {
+                try
+                {
+                    units.Sync(state);
+                    Reveal();
+                    await Awaitable.WaitForSecondsAsync(1);
+                    Debug.Log($"[combat] {Time.time:0.00} s: throw");
+                    var to = MapSpace.TileToWorld(state, tile);
+                    var hand = await units.TossStone(thrower.Id, to);
+                    await fx.Stone(hand, to, false);
+                    // The noise on the view (Events.ApplyEvent's NoiseEvent: whoever hears it turns to look), and the figures synced.
+                    heard.Heard = new Pos { X = tile.X, Y = tile.Y, Z = tile.Z };
+                    heard.Facing = Los.FacingTo(heard.Pos, tile) ?? heard.Facing;
+                    units.Sync(state);
+                    float noise = Time.time;
+                    Debug.Log($"[combat] {Time.time:0.00} s: noise at ({tile.X},{tile.Y}), {heard.Id} heard it");
+                    for (float t = 0; t < walkAfter; t += 0.1f)
+                    {
+                        Debug.Log(FormattableString.Invariant($"[piedra] {Time.time - noise:0.00} s {heard.Id} yaw {units.FacingNow(heard.Id) ?? 0:0}"));
+                        await Awaitable.WaitForSecondsAsync(0.1f);
+                    }
+                    Debug.Log($"[combat] {Time.time:0.00} s: walks to it");
+                    var walk = units.MoveAlong(heard.Id, new[] { new Pos { X = 15, Y = 10 }, new Pos { X = 16, Y = 10 } }, 1);
+                    while (!walk.IsCompleted)
+                    {
+                        Debug.Log(FormattableString.Invariant($"[piedra] {Time.time - noise:0.00} s {heard.Id} yaw {units.FacingNow(heard.Id) ?? 0:0} walking"));
+                        await Awaitable.WaitForSecondsAsync(0.1f);
+                    }
+                    await walk;
+                    await Awaitable.WaitForSecondsAsync(1.5f);
+                    Debug.Log($"[combat] {Time.time:0.00} s: done");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[combat] " + e);
+                }
+            };
+        }
+
+        /// <summary>
         /// Aiming (Gameplay 26/10, A2: unitViews.ts aimAt, raiseWeapon, apply's step back): a soldier with a machine gun
         /// (BASTION_ARMA: assaultRifle, pumpShotgun…) aims at one of the dead four tiles off as it is picked (marked: A6,
         /// Highlight, taken off as it fires, as UI does), fires, lowers;

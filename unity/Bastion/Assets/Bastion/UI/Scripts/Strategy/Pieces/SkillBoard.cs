@@ -112,22 +112,28 @@ namespace Bastion.UI.Strategy
 
         public static void LoadAtlases()
         {
-            if (grey != null) return;
+            if (grey != null && dark != null && core != null) return;
             grey = Resources.Load<Texture2D>("Board/grey");
             dark = Resources.Load<Texture2D>("Board/dark");
             core = Resources.Load<Texture2D>("Board/core");
         }
 
-        /// <summary>A cell's icon: dark on a bought cell's colour, grey on a dull one; the core's own picture.</summary>
+        /// <summary>
+        /// A cell's icon: dark on a bought cell's colour, grey on a dull one; the core's own picture. Kept, but only while its
+        /// atlas lives: going from the base to a battle or back unloads the atlases (they were loaded by Resources.Load, and no
+        /// scene holds them), and the icons kept from before came out blank, the core's too (Arturo, 15/11, E5: «habilidades
+        /// que antes eran visibles»). Made again from the atlas loaded anew.
+        /// </summary>
         public static Sprite IconOf(string id, bool bought)
         {
+            LoadAtlases();
             if (id == Board.Core)
             {
-                if (coreIcon == null && core != null) coreIcon = Sprite.Create(core, new Rect(0, 0, core.width, core.height), Vector2.one * 0.5f);
+                if ((coreIcon == null || coreIcon.texture == null) && core != null) coreIcon = Sprite.Create(core, new Rect(0, 0, core.width, core.height), Vector2.one * 0.5f);
                 return coreIcon;
             }
             var table = bought ? darkIcons : greyIcons;
-            if (table.TryGetValue(id, out var s)) return s;
+            if (table.TryGetValue(id, out var s) && s != null && s.texture != null) return s;
             var atlas = bought ? dark : grey;
             if (atlas == null || !BoardIconIndex.Index.TryGetValue(id, out var i)) return null;
             // The cell's size from the texture as Unity has it (it may scale a 1664 px atlas to a power of two).

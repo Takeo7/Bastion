@@ -209,6 +209,7 @@ namespace Bastion.UI.Combat
             var reach = id == AbilityIds.Slash && Content.ReachOf(u) > 1 ? BladeReach(u)
                 : weapon != null ? ReachText(weapon.Range, Los.SightIn(s, u)) : range > 0 ? $"{Number(range)} casillas" : null;
             var noise = watch ? Content.AttackWeapon(u, AbilityIds.Shoot).Noise : Abilities.NoiseOf(s, u, id);
+            var rise = noise > 0 ? MeterRise(s, u, noise) : null;
             u.Cooldowns.TryGetValue(id, out var left);
             var stats = new List<(string, string)>
             {
@@ -217,8 +218,10 @@ namespace Bastion.UI.Combat
                 // A long blade's Tajo, every enemy alongside (Content.Sweeps: the katana, the sword, the chainsaw).
                 ("Golpea", id == AbilityIds.Slash && Content.Sweeps(u) ? "a todos los que tenga al lado" : null),
                 ("Daño", DamageValue(s, u, id)),
-                // In tiles, as on the weapons' sheet (Lore, 19/10).
-                ("Ruido", noise > 0 ? $"{Heard(s, noise)} casillas{(watch ? " al disparar" : "")}" : Content.IsAttack(id) ? "ninguno" : null),
+                // How far it is heard, in tiles as on the weapons' sheet (Lore, 19/10), and apart what it raises the meter by
+                // (Arturo's proposal of 15/11: «12 casillas al disparar» read as the meter).
+                ("Se oye", noise > 0 ? $"hasta {HeardTiles(s, u, noise)}{(watch ? " al disparar" : "")}" : null),
+                ("Ruido", rise != null ? $"{rise}{(watch ? " por disparo" : "")}" : noise == 0 && Content.IsAttack(id) ? "ninguno" : null),
                 ("Usos", def.Charge != null ? Charge(u, def.Charge).ToString() : null),
                 // Ready, how often; waiting, when (Lore: not to mix them up).
                 ("Recarga", left > 0 ? $"lista en {left} {(left == 1 ? "turno" : "turnos")}" : def.Cooldown is int cd && cd > 0 ? $"cada {cd} turnos" : null),
@@ -226,21 +229,24 @@ namespace Bastion.UI.Combat
             return stats.Where(x => !string.IsNullOrEmpty(x.Item2)).Select(x => new StatPair { Key = x.Item1, Value = x.Item2 }).ToList();
         }
 
-        /// <summary>How far using it is heard (docs/FASE2.md): «ruido 12», or «sin ruido» for a silent attack; Vigilancia when it fires.</summary>
+        /// <summary>
+        /// What using it is heard (docs/FASE2.md): «se oye hasta 13 casillas · ruido +2 dB» (NoiseEstimate), or «sin ruido» for a
+        /// silent attack; Vigilancia when it fires.
+        /// </summary>
         public static string NoiseText(GameState s, Unit u, string id)
         {
             if (Watch(id))
             {
                 var w = Content.AttackWeapon(u, AbilityIds.Shoot).Noise;
-                return w > 0 ? $"ruido {Heard(s, w)} al disparar" : null;
+                return w > 0 ? $"al disparar, {NoiseEstimate(s, u, w)}" : null;
             }
             var n = Abilities.NoiseOf(s, u, id);
-            if (n > 0) return $"ruido {Heard(s, n)}";
+            if (n > 0) return NoiseEstimate(s, u, n);
             return Content.IsAttack(id) ? "sin ruido" : null;
         }
 
-        /// <summary>What a move sounds like: running, a door, a window's glass; null when it is quiet.</summary>
-        public static string MoveNoise(GameState s, IList<Pos> path, bool dash)
+        /// <summary>What `by`'s move sounds like: running, a door, a window's glass; null when it is quiet.</summary>
+        public static string MoveNoise(GameState s, Unit by, IList<Pos> path, bool dash)
         {
             var parts = new List<(int, string)>();
             var kinds = path.Select(p => Grid.KindAt(s, p)).ToList();
@@ -249,18 +255,41 @@ namespace Bastion.UI.Combat
             if (kinds.Contains("door")) parts.Add((Content.Noise.Door, "abre una puerta"));
             if (parts.Count == 0) return null;
             parts = parts.OrderByDescending(p => p.Item1).ToList();
-            return $"Ruido {Heard(s, parts[0].Item1)}: {string.Join(", ", parts.Select(p => p.Item2))}";
+            return $"Se oye hasta {HeardTiles(s, by, parts[0].Item1)}: {string.Join(", ", parts.Select(p => p.Item2))}";
         }
 
         /// <summary>
-        /// A noise of `n` tiles as far as it will carry in this mission's weather (Content.Weather.NoiseOf; Gameplay, 01/11:
-        /// what will happen, as its ring), rounded as Rules.MakeNoise rounds it: «6», and in a storm «3,6».
+        /// How far a noise of `n` that `by` makes is heard, in whole tiles: what the dead hear (Rules.SquadNoiseRadius, as
+        /// Rules.MakeNoise: the squad's SQUAD_LOUDER, then the weather), rounded down so it never promises too much (Gameplay,
+        /// 15/11: they hear one 13,8 tiles off or nearer): «13 casillas».
         /// </summary>
-        public static string Heard(GameState s, int n)
+        public static string HeardTiles(GameState s, Unit by, int n)
         {
-            var muffle = Content.Weather.NoiseOf(s.Weather);
-            var carries = muffle < 1 ? Js.Round(n * muffle * 10) / 10 : n;
-            return carries == Math.Floor(carries) ? ((long)carries).ToString() : carries.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
+            var tiles = (long)Math.Floor(Rules.SquadNoiseRadius(s, n, by));
+            return tiles == 1 ? "1 casilla" : $"{tiles} casillas";
+        }
+
+        /// <summary>
+        /// How much a noise of `n` that `by` makes raises the meter (Rules: Content.HordePoints of the radius heard, a wave's
+        /// points over the meter's 50 dB), or null in a mission without one: «+2 dB». The squad's noise only (Arturo, 02/11).
+        /// </summary>
+        public static string MeterRise(GameState s, Unit by, int n)
+        {
+            if (by?.Team != Teams.Xcom || Rules.HordeFill(s) == null) return null;
+            var db = (int)Math.Round(Content.HordePoints(Rules.SquadNoiseRadius(s, n, by)) * 50.0 / Content.Horde.Wave);
+            return $"+{db} dB";
+        }
+
+        /// <summary>
+        /// A noise before it is made (Arturo's proposal of 15/11): how far it is heard and how much it raises the meter, which
+        /// are two things: «se oye hasta 13 casillas · ruido +2 dB» (Lore's words); without a meter, how far alone. `capital`: each
+        /// part with its capital, as the aim panel's and the throw's lines are («Se oye hasta 13 casillas · Ruido +2 dB»).
+        /// </summary>
+        public static string NoiseEstimate(GameState s, Unit by, int n, bool capital = false)
+        {
+            var rise = MeterRise(s, by, n);
+            var heard = $"{(capital ? "Se" : "se")} oye hasta {HeardTiles(s, by, n)}";
+            return rise == null ? heard : $"{heard} · {(capital ? "Ruido" : "ruido")} {rise}";
         }
 
         /// <summary>The weapon an attack is made with, by name: a found weapon carried as the main one keeps its own (docs/FASE4.md).</summary>

@@ -34,9 +34,10 @@ namespace Bastion.UI.Combat
     /// would be noticed, an eye in a soft red, no frame (Arturo, 31/10 #14); where the ground burns, a flame in orange
     /// (Arturo, 01/11: it burns whoever steps on it). Round the picked one's feet a wide ring in its player's colour over
     /// a dark band (Arturo, 15/11); round the partner's pick, a ring in their colour that breathes. Planning without the command, all of it fainter and grey (blue is the reach's now).
-    /// Lines keep their width in pixels (Bastion/Marks). The shields are drawn over walls, as the web's; the lines over
+    /// Lines keep their width in pixels (Bastion/Marks). The shields are drawn over walls, as the web's; the way over
     /// everything but the figures, soldiers and the dead (Arturo, 31/10 #3: not cars, crates or walls), behind the legs
-    /// standing over them (Ana, Arturo 31/10 #6: Pull).
+    /// standing over them (Ana, Arturo 31/10 #6: Pull); the range's border behind whatever stands in front of it, as
+    /// inside a building (Arturo, 15/11, E6: InsidePull).
     /// Over a shoulder all but the rings go (Cinematic: #3).
     /// </summary>
     public sealed class MoveOverlay : MonoBehaviour
@@ -83,8 +84,10 @@ namespace Bastion.UI.Combat
         /// </summary>
         const float Pull = 0.4f;
         /// <summary>
-        /// The range's border inside a building (EdgesIn), tested against what is in front, this much nearer the camera: on
-        /// its floor, short of a rug, behind a wall that stands (Arturo, 11/11: the range into found houses; Ana, 7/11 #15).
+        /// The range's border, inside a building (EdgesIn) and out of doors, tested against what is in front, this much
+        /// nearer the camera: on its floor, short of a rug, behind a wall that stands (Arturo, 11/11: the range into found
+        /// houses; Ana, 7/11 #15), and behind a container, a car or a crate (Arturo, 15/11, E6: «que lo tapen los objetos,
+        /// como dentro de las casas»; it was drawn over all but the figures).
         /// </summary>
         const float InsidePull = 0.1f;
 
@@ -150,8 +153,8 @@ namespace Bastion.UI.Combat
             eyes.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = EyeTexture();
             flames = Layer("Alcance (fuego)", 3101, false, false, zone);
             flames.GetComponent<MeshRenderer>().sharedMaterial.mainTexture = FlameTexture();
-            rangeShade = Layer("Alcance (sombra)", 3103, false, true, zone, Pull, true);
-            edges = Layer("Alcance (bordes)", 3104, false, false, zone, Pull, true);
+            rangeShade = Layer("Alcance (sombra)", 3103, false, true, zone, InsidePull);
+            edges = Layer("Alcance (bordes)", 3104, false, false, zone, InsidePull);
             edgesIn = Layer("Alcance dentro (bordes)", 3104, false, false, zone, InsidePull);
             wayShade = Layer("Camino (sombra)", 3103, false, true, zone, Pull, true);
             way = Layer("Camino", 3105, false, false, zone, Pull, true);
@@ -159,7 +162,7 @@ namespace Bastion.UI.Combat
             isles = new GameObject("Islas").transform;
             isles.SetParent(zone, false);
             isleStrips = Layer("Islas (franjas)", 3100, false, false, isles);
-            isleEdges = Layer("Islas (bordes)", 3104, false, false, isles, Pull, true);
+            isleEdges = Layer("Islas (bordes)", 3104, false, false, isles, InsidePull);
             isleEdgesIn = Layer("Islas dentro (bordes)", 3104, false, false, isles, InsidePull);
             isles.gameObject.SetActive(false);
 

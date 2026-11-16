@@ -231,7 +231,7 @@ namespace Bastion.Engine
                 case Looting.CarBoot:
                     return "Abre el maletero de un coche que tengas al lado. Sale lo que haya: suministros, piezas, medicinas, algún cargador o accesorio y, a veces, un arma. Hace un poco de ruido.";
                 case Looting.PoliceBoot:
-                    return "Abre el maletero de un coche de policía que tengas al lado. Una vez de cada tres hay un arma; si no, lo que haya en cualquier maletero. Hace un poco de ruido.";
+                    return "Abre el maletero de un coche de policía que tengas al lado. Una vez de cada cinco hay un arma; si no, lo que haya en cualquier maletero. Hace un poco de ruido.";
                 case Looting.Body:
                     return "Registra el cuerpo de un enemigo caído a tu lado o a tus pies. Los vivos llevan siempre su arma. Un zombi casi nunca lleva una, salvo los policías y los militares: uno de cada cuatro. Hace un poco de ruido.";
                 default:

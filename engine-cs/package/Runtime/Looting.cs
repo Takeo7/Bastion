@@ -196,9 +196,10 @@ namespace Bastion.Engine
         /// any whole car on the ground but a wreck, searched once as a box is, with what a boot holds (Spots.Trunk).
         /// </summary>
         public const string CarBoot = "carBoot";
-        /// <summary>A police car's boot (MissionState.PoliceCar): a gun one time in PoliceBootGun, a boot's finds otherwise.</summary>
+        /// <summary>A police car's boot (MissionState.PoliceCar): a gun one time in PoliceBootGun (5, Arturo, 15/11: «aparecieron armas en el 100 % de los coches de policía»; it was 3), a
+        /// boot's finds otherwise.</summary>
         public const string PoliceBoot = "policeBoot";
-        public const int PoliceBootGun = 3;
+        public const int PoliceBootGun = 5;
         /// <summary>A dead enemy's body (Arturo, 2/11: «registras cualquier cuerpo»): what it carried (RollBody).</summary>
         public const string Body = "body";
 

@@ -308,7 +308,12 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>Orders are taken once the enemy's turn has played out on screen, not just on the server.</summary>
-        public bool CanAct() => State != null && State.ActiveTeam == Teams.Xcom && Shown.ActiveTeam == Teams.Xcom && State.Outcome == null;
+        /// <remarks>
+        /// The squad's turn shown too, the same one: ending it, the engine plays the enemy's turn and opens the next in that
+        /// same answer, and until the screen has played them an order went to the next turn (Arturo, 15/11, E1: a soldier put
+        /// on watch while the dead were still to move was still on watch in the next turn).
+        /// </remarks>
+        public bool CanAct() => State != null && State.ActiveTeam == Teams.Xcom && Shown.ActiveTeam == Teams.Xcom && Shown.Turn == State.Turn && State.Outcome == null;
 
         List<Unit> MyUnits() => State.Units.Where(u => u.Alive && Commands(u)).ToList();
 
@@ -948,6 +953,8 @@ namespace Bastion.UI.Combat
         /// <summary>The detected tile clicked once (breaking concealment can't be undone: the first click only warns).</summary>
         string concealWarn;
 
+        const string ConcealWarning = "Desde ahí os ven: se rompe la ocultación. Haz clic otra vez para mover.";
+
         /// <summary>
         /// A click on the map (game.ts clickTile): a target picked, or acted on if picked already; one of the squad picked
         /// (a partner's says whose); with something armed, it is done there; an enemy aimed at with the first attack that
@@ -1037,9 +1044,11 @@ namespace Bastion.UI.Combat
             if (dest.Detected && concealWarn != key)
             {
                 concealWarn = key;
-                Toast("Desde ahí os ven: se rompe la ocultación. Haz clic otra vez para mover.");
+                Toast(ConcealWarning);
                 return;
             }
+            // Answered: the question goes, not left under the «OCULTACIÓN ROTA» that follows (P4 of 15/11).
+            if (concealWarn != null) Hud?.ClearToast(ConcealWarning);
             concealWarn = null;
             Send(new MoveCommand { Unit = u.Id, To = tile });
         }
@@ -1182,7 +1191,7 @@ namespace Bastion.UI.Combat
             Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : MoveOverlay.WalkRing);
             // Running, a door or a window is heard (docs/FASE2.md): an icon under the destination, no words (Ana, 7/11 #3); the
             // fire it goes through; and at night, whether it ends in the light.
-            var heard = path != null && AbilityTexts.MoveNoise(State, path, dest.Run) != null;
+            var heard = path != null && AbilityTexts.MoveNoise(State, u, path, dest.Run) != null;
             NoteWith(hover, heard ? "noise" : null, FireNote(path), LitNote(hover));
         }
 

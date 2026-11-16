@@ -174,3 +174,15 @@
     right: 0;
     bottom: 0;
 }
+
+/* What ending the turn would leave unspent, blinking (HudRoot.PointOut; Arturo, 15/11): the picked one's actions, its
+   movement on the bar, the cards of those with anything left. */
+.hud-point,
+.bar-moves.hud-point,
+.squad-card.hud-point,
+.stat.hud-point {
+    scale: 1.12 1.12;
+    background-color: rgba(255, 255, 255, 0.45);
+    border-width: 2px;
+    border-color: #ffffff;
+}

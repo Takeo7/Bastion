@@ -57,7 +57,7 @@ namespace Bastion.UI.Combat
             // Without the command too (Arturo, 7/11): the key ends one's own turn, «A punto» until the partner's is over.
             // One of mine in play: the key ends its turn first (Arturo, 7/11, Ana's #5).
             var playing = InPlayMine();
-            var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : EndArmed && idle > 0 ? "confirm" : playing != null && !EndArmed ? "done" : "act";
+            var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : (EndArmed && idle > 0) || (playing != null && WarnedLeft) ? "confirm" : playing != null && !EndArmed ? "done" : "act";
             // (With actions or movement left: the turn ends by itself only when none has either, Arturo 5/11 #14; Lore's words.)
             var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : waiting;
             Hud.SetEndTurn(new EndTurnView
@@ -880,7 +880,7 @@ namespace Bastion.UI.Combat
                     Effect = AbilityTexts.SupportEffects.TryGetValue(ability, out var effect) ? effect : def.Description,
                     Index = index,
                     Total = list.Count,
-                    Noise = noise > 0 ? $"Ruido {AbilityTexts.Heard(State, noise)}" : null,
+                    Noise = noise > 0 ? AbilityTexts.NoiseEstimate(State, u, noise, true) : null,
                 };
                 if (dmg != null)
                 {
@@ -908,7 +908,7 @@ namespace Bastion.UI.Combat
                 Total = list.Count,
                 Note = AbilityTexts.AttackNotes.TryGetValue(ability, out var note) ? note : AbilityTexts.BladeNote(u, ability),
                 Locked = LockLabel(),
-                Noise = loud > 0 ? $"Ruido {AbilityTexts.Heard(State, loud)}" : "Sin ruido",
+                Noise = loud > 0 ? AbilityTexts.NoiseEstimate(State, u, loud, true) : "Sin ruido",
             };
             if (d != null)
             {

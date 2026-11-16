@@ -294,6 +294,36 @@ namespace Bastion.UI.Hud
         public void ClearLog() => log.Clear();
         public void Toast(string text) => notes.Toast(text);
 
+        IVisualElementScheduledItem pointing;
+
+        /// <summary>
+        /// What ending the turn now would leave unspent, pointed out a moment (Arturo, 15/11: «resaltar el contador o el
+        /// control correspondiente»): the picked one's actions on its sheet, its movement on the bar, and the cards of
+        /// `soldiers`, blinking white for `seconds`. Looked for again at each blink, as the bar and the cards are drawn anew.
+        /// </summary>
+        public void PointOut(bool actions, bool moves, System.Collections.Generic.IReadOnlyCollection<string> soldiers, float seconds = 3)
+        {
+            pointing?.Pause();
+            var start = Time.unscaledTime;
+            void Mark(bool on)
+            {
+                if (actions) root.Query(className: "stat--ap").ForEach(e => e.EnableInClassList("hud-point", on));
+                if (moves) root.Query(className: "bar-moves").ForEach(e => e.EnableInClassList("hud-point", on));
+                foreach (var id in soldiers ?? new string[0]) root.Q("card-" + id)?.EnableInClassList("hud-point", on);
+            }
+            pointing = root.schedule.Execute(() =>
+            {
+                var t = Time.unscaledTime - start;
+                if (t >= seconds)
+                {
+                    Mark(false);
+                    pointing.Pause();
+                    return;
+                }
+                Mark((int)(t / 0.3f) % 2 == 0);
+            }).Every(50);
+        }
+
         /// <summary>The window over the battle (BattleWindow): a soldier's sheet, an enemy's file; open; closed (whether it was).</summary>
         public void ShowSheet(SoldierSheetView v) => window.Sheet(v);
         public void ShowEnemyFile(EnemyFileView v) => window.File(v);

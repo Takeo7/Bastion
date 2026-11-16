@@ -33,8 +33,11 @@ namespace Bastion.Net
         /// </summary>
         private static readonly IReadOnlyDictionary<string, long> AnswerWaitMs = new Dictionary<string, long> { [DeadlineKinds.Proposal] = 30_000, [DeadlineKinds.Evac] = 120_000, [DeadlineKinds.Abandon] = 120_000 };
 
-        /// <summary>The squad's turn clock (Arturo, 22/10): each player gets this long for each soldier they command.</summary>
-        public const long TurnMsPerSoldier = 45_000;
+        /// <summary>
+        /// The squad's turn clock (Arturo, 22/10): each player gets this long for each soldier they command. 45 s until the
+        /// 0.12.25 (Arturo, 15/11: there was nearly always time to spare, and it seldom made anyone decide faster).
+        /// </summary>
+        public const long TurnMsPerSoldier = 30_000;
 
         /// <summary>Each this much a player has left at the end of the squad's turn is a second more in the next (Arturo, 22/10).</summary>
         public const long SavedMsPerSecond = 5_000;

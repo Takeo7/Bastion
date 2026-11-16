@@ -2597,14 +2597,26 @@ namespace Bastion.UI.Combat
                     var spotter = Unit(cb.By);
                     if (spotter != null && spotter.Alive && spotter.Team == Teams.Alien && (cb.Reason == "spotted" || cb.Reason == "patrol"))
                     {
+                        var seen = Unit(cb.Unit);
                         if (units != null)
                         {
                             units.ForceVisible(spotter.Id);
-                            units.Face(spotter.Id, cb.Unit != null ? Feet(cb.Unit) : ClosestSoldier(spotter.Pos));
+                            units.Face(spotter.Id, seen != null ? Feet(seen.Id) : ClosestSoldier(spotter.Pos));
                         }
+                        // Who saw whom, together (Arturo, 15/11: in the open it went by unnoticed): both in the shot, the line
+                        // of sight between them a moment, a word over each; and every card of the squad blinking, as all of it
+                        // is found, not that one alone.
                         Float(Chest(spotter.Id), "OS HA VISTO", "callout");
-                        Look(Feet(spotter.Id));
+                        Hud?.PointOut(false, false, v.Units.Where(x => x.Alive && x.Team == Teams.Xcom && !x.Evacuated).Select(x => x.Id).ToList());
+                        if (seen != null)
+                        {
+                            Float(Chest(seen.Id), HudText.Spotted.Seen, "callout");
+                            control.AimMarks?.ShowAim(v, spotter.Pos, seen.Pos);
+                            if (Cam()) await FrameAll(new List<Vector3> { Feet(spotter.Id), Feet(seen.Id) }, true);
+                        }
+                        else Look(Feet(spotter.Id));
                         await Wait(Cam() ? 1.4f : 0.6f);
+                        control.AimMarks?.ShowAim(null, null, null);
                         return;
                     }
                     await Wait(0.8f);
@@ -2709,7 +2721,10 @@ namespace Bastion.UI.Combat
             // dead's blow on one of ours, over the dead's shoulder too (Ana, Arturo 29/10; not as they come near: a horde would
             // bring it at every step). Back at the next action.
             var fells = Fells(e);
-            var bite = !fells && weapon.Melee && shooter.Team != Teams.Xcom && target.Team == Teams.Xcom && ShownToSquad(shooter);
+            // One of the dead biting at a soldier running past it (Rules.RunPastBiters): from the camera as it is, one after
+            // another, and the run goes on (Gameplay, 15/11: three shots over the shoulder in a row cut the run).
+            var passing = e.Reaction && e.Ability == AbilityIds.Claw;
+            var bite = !fells && !passing && weapon.Melee && shooter.Team != Teams.Xcom && target.Team == Teams.Xcom && ShownToSquad(shooter);
             var close = !cam() ? null
                 : fells ? (target.Team == Teams.Xcom ? DeathShot(target, shooter) : ShownToSquad(shooter) ? ShotCam.OverShoulder(v, from, chest, shooter.Id, target.Id) : null)
                 : bite ? ShotCam.OverShoulder(v, from, chest, shooter.Id, target.Id) : null;
@@ -2717,12 +2732,13 @@ namespace Bastion.UI.Combat
             else if (cam())
             {
                 look(Vector3.Lerp(Feet(shooter.Id), Feet(target.Id), 0.5f));
-                control.Rig.CinematicZoom(Mathf.Clamp(Vector3.Distance(Feet(shooter.Id), Feet(target.Id)) * 1.1f + 9 * Board.Tile, 13 * Board.Tile, 24 * Board.Tile));
+                if (!passing) control.Rig.CinematicZoom(Mathf.Clamp(Vector3.Distance(Feet(shooter.Id), Feet(target.Id)) * 1.1f + 9 * Board.Tile, 13 * Board.Tile, 24 * Board.Tile));
             }
             if (close != null) await ShotIn(cam);
             if (e.Reaction)
             {
-                Float(Chest(shooter.Id), weapon.Melee ? "TAJO DE REACCIÓN" : "FUEGO DE REACCIÓN", "warn");
+                // One of the dead biting at a soldier running past it (Rules.RunPastBiters, Arturo's notes of 15/11).
+                Float(Chest(shooter.Id), passing ? "MORDISCO AL PASAR" : weapon.Melee ? "TAJO DE REACCIÓN" : "FUEGO DE REACCIÓN", "warn");
                 control.Sfx.Alert();
             }
             if (units == null || fx == null)
@@ -3087,9 +3103,9 @@ namespace Bastion.UI.Combat
             {
                 case "spotted":
                     var unseen = alien != null && !control.Visible(alien) ? " que no veíais" : "";
-                    return $"{Capitalize(AnEnemy(alien))}{unseen} ha visto a {who}: entró en su radio de detección{range}.";
+                    return $"{Capitalize(AnEnemy(alien))}{unseen} ha visto a {who}: entró en su radio de detección{range}. {HudText.Spotted.All}";
                 case "patrol":
-                    return $"{Capitalize(AnEnemy(alien))} de patrulla se ha acercado hasta tener a {who} en su radio de detección{range}.";
+                    return $"{Capitalize(AnEnemy(alien))} de patrulla se ha acercado hasta tener a {who} en su radio de detección{range}. {HudText.Spotted.All}";
                 case "attack":
                     return $"{Capitalize(who)} ha atacado{(alien != null ? $" a {AnEnemy(alien)}" : "")}: el combate os delata.";
                 case "explosive":

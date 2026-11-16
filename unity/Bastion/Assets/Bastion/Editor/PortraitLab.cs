@@ -17,7 +17,7 @@ namespace Bastion.EditorTools
     ///   partner's, owner 1, another) · BASTION_RIM=k its strength · BASTION_ENCUADRES=name:turn,headTurn,height,lift,eyes,fov,bow,brim;…
     ///   framings to try, each into BASTION_OUT/name (Portraits.Frame; an empty value keeps the game's) · BASTION_COMO_MISION=1
     ///   also each as a mission's unit asks for it, by its unit id («s1»…; the battle's squad list) without and with its
-    ///   campaign id as the seed (BASTION_OUT/mision-sin, mision-con).
+    ///   campaign id as the seed (BASTION_OUT/mision-sin, mision-con; the k-th soldier listed is the unit «sk»).
     ///   BASTION_OUT=dir unity/tools/unity.sh -executeMethod Bastion.EditorTools.PortraitLab.Muestra -quit
     /// </summary>
     public static class PortraitLab
@@ -53,9 +53,11 @@ namespace Bastion.EditorTools
                 Portraits.Know(id, look, (string)s["name"], band);
                 ids.Add(id);
                 if (!mission) continue;
-                // As the battle's squad list asks for it today (by the unit's id alone), and with the campaign id as the seed.
+                // As the battle's squad list asked for it up to the 0.12.23 (by the unit's id alone, «s1»…, the k-th in the
+                // squad: its seed), and with the campaign id as the seed (the 0.12.24). (Up to 15/11 the first was seeded
+                // «sin-s1», not the unit's id: E4 of Arturo's notes of 15/11.)
                 k++;
-                Portraits.Know("sin-s" + k, look, (string)s["name"], band);
+                Portraits.Know("sin-s" + k, look, (string)s["name"], band, "s" + k);
                 Portraits.Know("con-s" + k, look, (string)s["name"], band, id);
             }
             var framings = (Environment.GetEnvironmentVariable("BASTION_ENCUADRES") ?? "").Split(';').Where(f => f.Contains(':')).ToList();

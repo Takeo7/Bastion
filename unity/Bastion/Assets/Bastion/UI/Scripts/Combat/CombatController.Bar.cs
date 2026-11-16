@@ -235,16 +235,29 @@ namespace Bastion.UI.Combat
                 keys.RemoveAt(throwAt);
                 keys.Insert(keys.FindIndex(k => k.key.Id == "menu:watch") + 1, t);
             }
+            // Each key at its own number always, whatever the soldier carries (Arturo, 15/11): those with one first, in its
+            // order, a key the soldier lacks leaving its number free; the rest after them (the board's, a door, the crowbar).
+            keys = keys.OrderBy(k => Slot(k.key.Id) < 0 ? Numbered.Length : Slot(k.key.Id)).ToList();
             var bar = new List<AbilityView>();
-            for (var i = 0; i < keys.Count; i++)
+            foreach (var (key, options) in keys)
             {
-                var (key, options) = keys[i];
-                key.Hotkey = i < 9 ? (key.Id == AbilityIds.Shoot ? $"{i + 1} · Espacio" : (i + 1).ToString()) : i == 9 ? "0" : "";
+                var slot = Slot(key.Id);
+                var number = slot < 0 ? "" : slot == 9 ? "0" : (slot + 1).ToString();
+                key.Hotkey = number == "" ? "" : key.Id == AbilityIds.Shoot ? $"{number} · Espacio" : number;
                 bar.Add(key);
                 if (options != null) bar.AddRange(options);
             }
             return bar;
         }
+
+        /// <summary>
+        /// The keys with a number of their own, 1 to 9 and 0 (Arturo, 15/11: «las acciones siempre en el mismo número»): a
+        /// soldier's usual ten, in the order they had.
+        /// </summary>
+        static readonly string[] Numbered = { AbilityIds.Shoot, AbilityIds.Slash, AbilityIds.Pistol, "menu:watch", "menu:throw", AbilityIds.Reload, AbilityIds.Hunker, AbilityIds.Hide, AbilityIds.FirstAid, "menu:investigate" };
+
+        /// <summary>`id`'s place among Numbered (its number less one; 9 is the 0); -1, none.</summary>
+        static int Slot(string id) => Array.IndexOf(Numbered, id);
 
         /// <summary>A box beside the soldier, opened or not, that its hands reach: a body at its feet too (SearchBeside).</summary>
         bool CrateBeside(Unit u) => SearchBeside(u) != null;

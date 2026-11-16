@@ -338,11 +338,12 @@ namespace Bastion.UI.Combat
                 Hud.PickMenu(n);
                 return;
             }
+            // The key with that number (Numbered), not the one in that place: a soldier without a pistol has no 3.
             var bar = BarKeys();
             var keys = bar.Where(v => string.IsNullOrEmpty(v.Menu)).ToList();
             var i = n == 0 ? 9 : n - 1;
-            if (i >= keys.Count) return;
-            var v = keys[i];
+            var v = keys.FirstOrDefault(k => Slot(k.Id) == i);
+            if (v == null) return;
             if (v.Id.StartsWith("evac")) return;
             var options = bar.Where(o => o.Menu == v.Id).ToList();
             if (options.Count > 1)
@@ -527,8 +528,8 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// Where a throw lands, its line (game.ts updateHover; docs/FASE7.md §4–5): «Ruido 4 · Rompe una pared · Hunde el
-        /// suelo», what of it there is; none, the tile's own line stays.
+        /// Where a throw lands, its line (game.ts updateHover; docs/FASE7.md §4–5): «Se oye hasta 4 casillas · Ruido +0 dB · Rompe
+        /// una pared · Hunde el suelo», what of it there is; none, the tile's own line stays.
         /// </summary>
         void ThrowNote()
         {
@@ -539,11 +540,14 @@ namespace Bastion.UI.Combat
             var walls = Abilities.BreachedWalls(State, modeAbility, centre, u).Count;
             // A molotov burns on the ground floor only (Arturo, 01/11 #10): up a storey it says so, else how long it burns.
             var molotov = modeAbility == AbilityIds.Molotov;
+            // Pointed past its reach, it falls short, where the line is: said (Arturo, 15/11, E3: the stone fell nearer than aimed).
             var parts = new[]
             {
+                Same(centre, hover) ? null : Bastion.UI.Hud.HudText.Throw.Short,
                 molotov && centre.Z != 0 ? "Solo a la calle o a una planta baja" : null,
                 molotov && centre.Z == 0 ? $"Arde {Content.MolotovTurns} turnos" : null,
-                loud > 0 ? $"Ruido {AbilityTexts.Heard(State, loud)}" : null,
+                loud > 0 ? $"Se oye hasta {AbilityTexts.HeardTiles(State, u, loud)}" : null,
+                loud > 0 && AbilityTexts.MeterRise(State, u, loud) is string rise ? $"Ruido {rise}" : null,
                 walls == 0 ? null : walls == 1 ? "Rompe una pared" : $"Rompe {walls} paredes",
                 Abilities.BreaksFloor(State, modeAbility, centre) ? "Hunde el suelo" : null,
             };
@@ -598,6 +602,10 @@ namespace Bastion.UI.Combat
                 // (Actions or movement left: Lore, 5/11 #14.)
                 endQuestion = $"{(idle == 1 ? "A un soldado le quedan" : $"A {idle} soldados les quedan")} acciones o movimiento. Pulsa otra vez para terminar: {next}.";
                 Toast(endQuestion);
+                // Who, pointed out (Arturo, 15/11): their cards, and the picked one's actions and movement if it is one of them.
+                var picked = Unit();
+                var left = picked != null && Commands(picked) && Paths.HasTurnLeft(picked);
+                Hud?.PointOut(left && picked.Ap > 0, left && Paths.MoveBudget(picked) >= Paths.CostOrtho, MyUnits().Where(Paths.HasTurnLeft).Select(x => x.Id).ToList());
                 RefreshHud();
                 return;
             }
@@ -750,6 +758,22 @@ namespace Bastion.UI.Combat
             Debug.Log($"[fin] {(playing != null && !EndArmed ? $"el turno de {playing.Name}" : "el turno")}");
             if (playing != null && !EndArmed)
             {
+                // With something left, said first, and what is left pointed out (Arturo, 15/11); a second press ends its turn.
+                if (warnedLeft != playing.Id || Time.time > warnedUntil)
+                {
+                    warnedLeft = playing.Id;
+                    warnedUntil = Time.time + 4;
+                    var budget = Paths.MoveBudget(playing);
+                    var moves = budget >= Paths.CostOrtho;
+                    endQuestion = Bastion.UI.Hud.HudText.EndTurn.Left(ShortName(playing), playing.Ap, moves ? Bastion.UI.Hud.HudText.Moves.Tiles(budget) : null);
+                    Toast(endQuestion);
+                    Hud?.PointOut(playing.Ap > 0, moves, new[] { playing.Id });
+                    RefreshHud();
+                    return;
+                }
+                warnedLeft = null;
+                if (endQuestion != null) Hud?.ClearToast(endQuestion);
+                endQuestion = null;
                 Send(new DoneCommand { Unit = playing.Id });
                 endArmedUntil = Time.time + 4;
                 RefreshHud();
@@ -757,6 +781,16 @@ namespace Bastion.UI.Combat
             }
             ToggleReady();
         }
+
+        /// <summary>The soldier in play whose turn «Terminar turno» was pressed once for, and until when a second press ends it.</summary>
+        string warnedLeft;
+        float warnedUntil;
+
+        /// <summary>A soldier warned about (EndKey) and the second press still to come.</summary>
+        bool WarnedLeft => warnedLeft != null && Time.time <= warnedUntil;
+
+        /// <summary>«Yuki», or the nickname: as the next soldier's name says it.</summary>
+        static string ShortName(Unit u) => !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name.Split(' ')[0];
 
         /// <summary>One's own soldier in play (the rules' ActiveUnit, while it has anything left), with the command and in one's turn; none, null.</summary>
         Unit InPlayMine()

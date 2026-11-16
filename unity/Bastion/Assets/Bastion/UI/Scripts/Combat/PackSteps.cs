@@ -186,6 +186,15 @@ namespace Bastion.UI.Combat
                 keys[place].AddToClassList("lab-pin");
                 return control.Hud.PinTip("lab-pin");
             }
+            // «fichamenu=0»: the card of an open menu's choice pinned (key=Digit4 opens Vigilancia; its «A distancia»).
+            if (what == "fichamenu")
+            {
+                int.TryParse(arg, out var choice);
+                var choices = root.Q(className: "ability-menu")?.Query<Button>(className: "ability").ToList();
+                if (choices == null || choice < 0 || choice >= choices.Count) return false;
+                choices[choice].AddToClassList("lab-pin");
+                return control.Hud.PinTip("lab-pin");
+            }
             int.TryParse(arg, out var n);
             Button button = null;
             switch (what)
