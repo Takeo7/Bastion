@@ -216,6 +216,8 @@ namespace Bastion.Client.Map
             }
             bool close = focus.Close;
             bool roofs = focus.roofs || close;
+            // A map that is one building, found room by room (H7, the hospital).
+            bool inside = Bastion.Engine.Buildings.ByRoom(s);
             if (!roofs) foreach (int b in seenInside) Mark(b, 0);
             // Opens building b for something inside it on storey `level`: what stands above off, the walls facing the camera down.
             void Within(int x, int y, int level, bool keen = false)
@@ -289,7 +291,11 @@ namespace Bastion.Client.Map
                 if (!close) Within(tx, ty, u.Pos.Z, acting ? u.Id == focus.acting : u.Id == focus.selected && !chosen);
                 Behind(point, plan.At(new Vec2 { X = tx, Y = ty }), keen);
                 if (u.Id != focus.selected || close || acting) continue;
-                // The selected soldier by a building's wall (about to go in, or in cover against it).
+                // The selected soldier by a building's wall (about to go in, or in cover against it). Not on a map that is one
+                // building (H7) from out of doors: the hospital's whole front, three storeys, went down onto its unfound
+                // inside, all dark, as a soldier walked along it; in the way, Behind does. In its doorway (a door is no
+                // tile inside for At, but the building's: Owner) it is this that opens it.
+                if (inside && (u.Pos.X < 0 || u.Pos.Y < 0 || u.Pos.X >= s.Width || u.Pos.Y >= s.Height || plan.Owner[u.Pos.Y * s.Width + u.Pos.X] < 0)) continue;
                 foreach (var b in plan.Buildings)
                 {
                     if (b.frame) continue;
@@ -318,8 +324,16 @@ namespace Bastion.Client.Map
                     }
                 }
             }
-            // A storey chosen by hand: every building with storeys above it opens down to it.
-            if (chosen && !roofs) foreach (var b in plan.Buildings) if (b.leveled && b.storeys > view) Mark(b.index, 0);
+            // A storey chosen by hand: every building with storeys above it opens down to it. On a map that is one building
+            // (H7), its walls facing the camera down too, as with someone in it: else, looking at a storey nobody stood on,
+            // the hospital's near outer wall, a storey high, hid the near rooms.
+            if (chosen && !roofs)
+                foreach (var b in plan.Buildings)
+                    if (b.leveled && b.storeys > view)
+                    {
+                        Mark(b.index, 0);
+                        if (inside) Mark(b.index, 1);
+                    }
             // The storey each opened building shows: the cursor's or the selected soldier's in theirs; else the one chosen
             // by hand; else the highest anyone in it stands on; else the one in view. A building whose storeys aren't real
             // shows its ground floor. Kept while it fades back.

@@ -172,6 +172,118 @@ namespace Bastion.Engine
             return new Pos { X = spot.X, Y = spot.Y, Z = 0 };
         }
 
+        // ------------------------------------------------------ the hospital only inside
+
+        /// <summary>
+        /// The dead of a map that is one building (H7; Gameplay, 16/11: about a third on each storey, in rooms, «patients in
+        /// beds fit the place»): its groups and its lone dead, shared out over its storeys, the biggest first to the storey
+        /// with fewest so far; up there each group in a room of its own, not the corridor (a storey's biggest), a ward first
+        /// (MedicalUses.Ward), beside its beds (a bed is furniture: nobody stands on it) and then round them, its round that
+        /// room. On the ground floor, where they were; a Guarida's guard by its box. As many as before.
+        /// </summary>
+        private static void UpstairsDead(MissionLayout layout, List<Unit> units, List<Pod> pods, Rng rng)
+        {
+            var storeys = layout.Storeys;
+            var levels = layout.Levels;
+            if (storeys == null || levels == null) return;
+            var w = layout.Width;
+            var area = w * layout.Height;
+            if (storeys.Count != area) return;
+            var floors = 1;
+            while (floors <= levels.Count && storeys.Any((k) => k > floors)) floors++;
+            if (floors < 2) return;
+            var groups = pods
+                .Select((p, k) => (Pod: p, K: k, Units: p.UnitIds.Select((id) => units.First((u) => u.Id == id)).ToList()))
+                .Where((g) => g.Pod.Id != "pg" && g.Units.Count > 0 && g.Units.All((u) => Content.Templates[u.Template].Undead))
+                .OrderByDescending((g) => g.Units.Count)
+                .ThenBy((g) => g.K)
+                .ToList();
+            // Each storey's rooms: its floor joined side by side, not through doors, flights nor ladders.
+            var rooms = new Dictionary<int, List<List<int>>>();
+            var wards = new Dictionary<int, HashSet<int>>();
+            var byBed = new Dictionary<int, HashSet<int>>();
+            var taken = new HashSet<int>(units.Select((u) => u.Pos.Z * area + u.Pos.Y * w + u.Pos.X));
+            var used = new HashSet<(int, int)>();
+            for (var z = 1; z < floors; z++)
+            {
+                var level = levels[z - 1];
+                if (level.Tiles.Count != area) continue;
+                bool Floor(int i) => storeys[i] > z && level.Tiles[i] == TileKinds.Floor && !Flights.LongFlightTile(level.Tiles, level.Decor, w, i);
+                var of = Enumerable.Repeat(-1, area).ToArray();
+                var list = new List<List<int>>();
+                for (var start = 0; start < area; start++)
+                {
+                    if (of[start] >= 0 || !Floor(start)) continue;
+                    var tiles = new List<int> { start };
+                    of[start] = list.Count;
+                    for (var k = 0; k < tiles.Count; k++)
+                    {
+                        int x = tiles[k] % w, y = tiles[k] / w;
+                        foreach (var d in Grid.Dirs4)
+                        {
+                            int nx = x + d.X, ny = y + d.Y;
+                            if (nx < 0 || ny < 0 || nx >= w || ny >= layout.Height) continue;
+                            var j = ny * w + nx;
+                            if (of[j] >= 0 || !Floor(j)) continue;
+                            of[j] = list.Count;
+                            tiles.Add(j);
+                        }
+                    }
+                    list.Add(tiles);
+                }
+                // Not the corridor.
+                if (list.Count > 1) list.Remove(list.OrderByDescending((r) => r.Count).ThenBy((r) => r[0]).First());
+                rooms[z] = list;
+                var sites = layout.Medical ?? new List<MedicalSite>();
+                wards[z] = new HashSet<int>(sites.SelectMany((m) => m.Rooms ?? new List<MedicalRoom>()).Where((r) => r.Z == z && r.Use == MedicalUses.Ward).SelectMany((r) => Enumerable.Range(r.Y, r.H).SelectMany((y) => Enumerable.Range(r.X, r.W).Select((x) => y * w + x))));
+                var beds = sites.SelectMany((m) => m.Dressing ?? new List<MedicalDetail>()).Where((d) => d.Z == z && (d.Kind == MedicalDetailKinds.CoveredBed || d.Kind == MedicalDetailKinds.BareBed)).Select((d) => (d.X, d.Y)).ToList();
+                byBed[z] = new HashSet<int>(beds.SelectMany((b) => Grid.Dirs4.Select((d) => (b.X + d.X, b.Y + d.Y))).Where((p) => p.Item1 >= 0 && p.Item2 >= 0 && p.Item1 < w && p.Item2 < layout.Height).Select((p) => p.Item2 * w + p.Item1));
+            }
+            var count = new int[floors];
+            foreach (var g in groups)
+            {
+                var placed = false;
+                foreach (var z in Enumerable.Range(0, floors).OrderBy((k) => count[k]).ThenBy((k) => k))
+                {
+                    if (z == 0)
+                    {
+                        placed = true;
+                        count[0] += g.Units.Count;
+                        break;
+                    }
+                    if (!rooms.TryGetValue(z, out var list)) continue;
+                    List<int> Free(List<int> room) => room.Where((i) => !taken.Contains(z * area + i)).ToList();
+                    var fit = list.Select((r, k) => (R: r, K: k)).Where((r) => Free(r.R).Count >= g.Units.Count).ToList();
+                    if (fit.Count == 0) continue;
+                    // A room nobody has yet, a ward, first.
+                    var best = fit.Where((r) => !used.Contains((z, r.K))).ToList();
+                    if (best.Count == 0) best = fit;
+                    var ward = best.Where((r) => r.R.Any(wards[z].Contains)).ToList();
+                    if (ward.Count > 0) best = ward;
+                    var (room, index) = best[rng.Int(best.Count)];
+                    used.Add((z, index));
+                    var free = Free(room);
+                    // Beside its beds first, then round the first of them.
+                    var first = free.Where(byBed[z].Contains).OrderBy((i) => i).ToList();
+                    var anchor = first.Count > 0 ? first[0] : free.OrderBy((i) => i).First();
+                    var spots = first.Concat(free.Where((i) => !byBed[z].Contains(i)).OrderBy((i) => Math.Max(Math.Abs(i % w - anchor % w), Math.Abs(i / w - anchor / w))).ThenBy((i) => i)).Take(g.Units.Count).ToList();
+                    for (var k = 0; k < g.Units.Count; k++)
+                    {
+                        var u = g.Units[k];
+                        taken.Remove(u.Pos.Z * area + u.Pos.Y * w + u.Pos.X);
+                        u.Pos = new Pos { X = spots[k] % w, Y = spots[k] / w, Z = z };
+                        taken.Add(z * area + spots[k]);
+                    }
+                    g.Pod.Patrol = new List<Pos> { new Pos { X = anchor % w, Y = anchor / w, Z = z } };
+                    g.Pod.PatrolIndex = 0;
+                    count[z] += g.Units.Count;
+                    placed = true;
+                    break;
+                }
+                if (!placed) count[0] += g.Units.Count;
+            }
+        }
+
         /// <summary>A Guarida's guard (H5), by the stage's map seed: an Acorazado or a Chillón.</summary>
         public static string GuardOf(int seed)
         {

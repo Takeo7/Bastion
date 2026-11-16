@@ -38,11 +38,12 @@ namespace Bastion.Net
         /// <summary>A run's Saqueo: rooms farther than this many turns' walk aren't gone for (RoomGoal); with none nearer, the squad goes.</summary>
         public const int RoomTurns = 2;
 
-        /// <summary>
-        /// A run's Saqueo: the most a room may take the squad off its way to La Lata, in tiles (RoomGoal). The squad is set down
-        /// at one end of the map and La Lata waits at the other (a farm's 72 tiles: 13,4 to 57,61), so it searches on the way.
-        /// </summary>
-        public const double RoomDetour = 8;
+        /// <summary>A run's Saqueo: the rooms the squad searches before it goes (Gameplay, 16/11: «las 3–4 más cercanas»).</summary>
+        public const int RoomsWanted = 4;
+
+        /// <summary>A run's Saqueo: the dead the squad sees this near (tiles) to one of it, and this many, and it goes (RunLeaving).</summary>
+        public const double ThreatNear = 5;
+        public const int ThreatMany = 3;
 
         /// <summary>The next order of `slot`, or null: nothing for it now (the partner holds the command, or it is done).</summary>
         public static Command? Next(GameState s, int slot, IReadOnlyList<int> connected)
@@ -331,36 +332,29 @@ namespace Bastion.Net
         }
 
         /// <summary>
-        /// A run's Saqueo is over for the squad: the turn RunLeaveTurn has come, one of it is at half health or less, or none
-        /// of it has a room left to search that it can walk to (`roomOf`). Hunting the dead it fell on every one (Gameplay,
-        /// 16/11: 4 of 4, with rifles too): the horde grows with the noise (Rules.HordeClock), and kept coming.
+        /// A run's Saqueo is over for the squad: the turn RunLeaveTurn has come, RoomsWanted rooms are searched, one of it is
+        /// at half health or less, ThreatMany of the dead it sees are within ThreatNear of it, or none of it has a room or a
+        /// box left to search that it can walk to (`roomOf`). Hunting the dead it fell on every one (Gameplay, 16/11: 4 of 4,
+        /// with rifles too): the horde grows with the noise (Rules.HordeClock), and kept coming.
         /// </summary>
         private static bool RunLeaving(GameState s, System.Func<Unit, Pos?> roomOf)
         {
-            if (s.Turn >= RunLeaveTurn) return true;
+            if (s.Turn >= RunLeaveTurn || (s.RoomsSearched?.Count ?? 0) >= RoomsWanted) return true;
             var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
-            return squad.Any((o) => o.Hp * 2 <= o.MaxHp) || squad.All((o) => roomOf(o) == null);
+            if (squad.Any((o) => o.Hp * 2 <= o.MaxHp)) return true;
+            var near = Enemies(s).Count((e) => Aim.TeamSees(s, Teams.Xcom, e) && squad.Any((o) => Grid.Distance(o.Pos, e.Pos) <= ThreatNear));
+            return near >= ThreatMany || squad.All((o) => roomOf(o) == null);
         }
 
         /// <summary>
-        /// The room nobody has searched (Looting.RoomAt, RoomSearched), or the place beside a box, a boot or a body still shut
-        /// (Looting.IsSearchable), that takes `u` least off its way to La Lata: its walk
-        /// there (`walks`, within RoomTurns of movement) less what it brings it nearer La Lata, as the crow flies; a tile of it.
-        /// Gone for if that is RoomDetour at most, or if the walk there and on to La Lata fit in the turns left till
-        /// RunLeaveTurn (La Lata near, in the squad's half since 16/11: then the rooms round it). Null with none. In the
-        /// country (a farm and a barn on a map of 72) it walked out four turns for the nearest and back again with nothing.
-        /// `known`: each tile's room as found, for the next soldier (a room is a flood of its floor).
+        /// The nearest place by the walk (`walks`, within RoomTurns of movement) in a room nobody has searched (Looting.RoomAt,
+        /// RoomSearched), or beside a box, a boot or a body still shut (Looting.IsSearchable): whichever way, La Lata waiting
+        /// near since 16/11 (Gameplay: «las 3–4 más cercanas a la escuadra», RoomsWanted). Null with none. `known`: each tile's
+        /// room as found, for the next soldier (a room is a flood of its floor).
         /// </summary>
         private static Pos? RoomGoal(GameState s, Unit u, Reach walks, Dictionary<int, LootRoom?> known)
         {
-            var bus = s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).ToList();
-            if (bus.Count == 0) return null;
-            double ToBus(Pos p) => bus.Min((b) => Grid.Distance(p, b));
-            var here = ToBus(u.Pos);
             var most = RoomTurns * Paths.FullMoves(u);
-            var left = (double)System.Math.Max(0, RunLeaveTurn - s.Turn) * Paths.FullMoves(u) / Paths.CostOrtho;
-            Pos? best = null;
-            var bestDetour = double.MaxValue;
             foreach (var kv in walks.Cost.Where((kv) => kv.Value <= most).OrderBy((kv) => kv.Value).ThenBy((kv) => kv.Key))
             {
                 if (!known.TryGetValue(kv.Key, out var room))
@@ -370,17 +364,10 @@ namespace Bastion.Net
                     else foreach (var p in room.Tiles) known[Grid.NodeOf(s, p)] = room;
                 }
                 var at = Grid.PosOf(s, kv.Key);
-                // A room left to search, or a box, a boot or a body beside the place (the factory's crates, the country's cars).
-                var spot = (room != null && !Looting.RoomSearched(s, room))
-                    || Grid.Dirs8.Any((d) => new Pos { X = at.X + d.X, Y = at.Y + d.Y, Z = at.Z } is Pos q && Looting.IsSearchable(s, q) && Looting.ReachesToSearch(s, at, q));
-                if (!spot) continue;
-                var walk = (double)kv.Value / Paths.CostOrtho;
-                var detour = walk - (here - ToBus(at));
-                if ((detour > RoomDetour && walk + ToBus(at) > left) || detour >= bestDetour - 1e-9) continue;
-                best = at;
-                bestDetour = detour;
+                if ((room != null && !Looting.RoomSearched(s, room))
+                    || Grid.Dirs8.Any((d) => new Pos { X = at.X + d.X, Y = at.Y + d.Y, Z = at.Z } is Pos q && Looting.IsSearchable(s, q) && Looting.ReachesToSearch(s, at, q))) return at;
             }
-            return best;
+            return null;
         }
 
         /// <summary>

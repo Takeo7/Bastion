@@ -312,11 +312,17 @@ namespace Bastion.Engine.Tests
             Assert.Equal(2, RunMap.VisibleRows(c));
             Assert.True(RunMap.Visible(c, run.Nodes.First((n) => n.Row == 2)));
             Assert.False(RunMap.Visible(c, run.Nodes.First((n) => n.Row == 3)));
+            // The boss, always, from the start (as in Slay the Spire); the rows before it, not.
+            var boss = run.Nodes.Single((n) => n.Kind == NodeKinds.Boss);
+            Assert.Equal(RunMap.BossRow, boss.Row);
+            Assert.True(RunMap.Visible(c, boss));
+            Assert.All(run.Nodes.Where((n) => n.Row > 2 && n.Row < RunMap.BossRow), (n) => Assert.False(RunMap.Visible(c, n)));
             GoTo(c, NodeKinds.Normal);
             Assert.Equal(3, RunMap.VisibleRows(c));
             c.Upgrades![UpgradeIds.Sight] = 2;
             Assert.Equal(5, RunMap.VisibleRows(c));
             Assert.False(RunMap.Visible(c, run.Nodes.First((n) => n.Row == 6)));
+            Assert.True(RunMap.Visible(c, boss));
             // A node out of sight can't be chosen, should the map lead there.
             Runs.NodeCleared(c, new Rng(1));
             c.Upgrades[UpgradeIds.Sight] = 0;

@@ -34,14 +34,10 @@ namespace Bastion.UI.Hud
         /// <summary>Held and up: it covers the field to be read.</summary>
         public bool Covering => held && host.ClassListContains("banner--show");
 
-        /// <summary>From Show till it goes, on its own clock (El Toro's roar waits for it: EventPlayer, H6).</summary>
-        public bool Up { get; private set; }
-
         /// <summary>kind: turn (a turn's, white: Ana, 7/11 #8), xcom, alien (a danger's, its title red) or warn.</summary>
         public void Show(string text, string kind = "xcom", string detail = null, bool hold = false)
         {
             sound?.Invoke("stamp");
-            Up = true;
             timer?.Pause();
             host.Clear();
             var plate = Ui.El("banner__plate", host);
@@ -75,7 +71,6 @@ namespace Bastion.UI.Hud
         void Hide()
         {
             held = false;
-            Up = false;
             host.pickingMode = PickingMode.Ignore;
             host.RemoveFromClassList("banner--show");
         }

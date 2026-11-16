@@ -110,12 +110,14 @@ namespace Bastion.Engine.Tests
         /// Asedio held till La Lata comes and the Travesía crossed, won; a Guarida's box opened and El Toro killed, what the
         /// bot does for them (16/11: 2 Guaridas of 6 won, the box opened in 5, the rest lost on the long way back from it to
         /// La Lata, the box being as far from it as it can; El Toro killed in 6, 4 won). No order refused, and every one over.
+        /// The least asked is some two under what it does (the Travesía 12 of 16 on more seeds): the map's generator moves
+        /// on under it, and a bot broken loses them all.
         /// </summary>
         [Theory]
-        [InlineData(NodeKinds.Hold, 5)]
-        [InlineData(NodeKinds.Crossing, 4)]
-        [InlineData(NodeKinds.Elite, 4)]
-        [InlineData(NodeKinds.Boss, 5)]
+        [InlineData(NodeKinds.Hold, 4)]
+        [InlineData(NodeKinds.Crossing, 3)]
+        [InlineData(NodeKinds.Elite, 3)]
+        [InlineData(NodeKinds.Boss, 4)]
         public void TheNewStagesArePlayed(string kind, int least)
         {
             var done = 0;
@@ -160,10 +162,12 @@ namespace Bastion.Engine.Tests
                 new EngineCampaignRules().ApplyMissionResult(c, s, new Rng(seed));
                 var report = c.LastReport!.Run!;
                 if (s.Outcome == Outcomes.Victory) won++;
-                output.WriteLine($"{(rifles ? "fusiles" : "cuchillos")} {seed} ({s.MapName}): {s.Outcome}/{s.OutcomeReason}, turno {s.Turn}, {s.RoomsSearched?.Count ?? 0} habitaciones, {report.Found.Count} objetos, {report.Fallen.Count} caídos, {played.Orders} órdenes");
+                output.WriteLine($"{(rifles ? "fusiles" : "cuchillos")} {seed} ({s.MapName}): {s.Outcome}/{s.OutcomeReason}, turno {s.Turn}, {s.RoomsSearched?.Count ?? 0} habitaciones, {report.Found.Count} objetos, {report.Found.Where((g) => g.Kind == GearKinds.Supplies).Sum((g) => g.Count)} §, {report.Fallen.Count} caídos, {played.Orders} órdenes");
             }
             output.WriteLine($"ganadas: {won} de {Seeds}");
-            Assert.True(won >= (rifles ? 7 : 5), $"{won} de {Seeds}");
+            // On 20 seeds (16/11): 19 with knives, 17 with rifles. Some two under it on these 8, as the map's generator moves on
+            // under the test; hunting the dead, it lost them all.
+            Assert.True(won >= (rifles ? 5 : 6), $"{won} de {Seeds}");
         }
     }
 }

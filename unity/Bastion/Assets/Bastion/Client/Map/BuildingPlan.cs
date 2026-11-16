@@ -449,6 +449,13 @@ namespace Bastion.Client.Map
             bool Touch(Building a, Building b) => a.x0 <= b.x1 + 1 && b.x0 <= a.x1 + 1 && a.y0 <= b.y1 + 1 && b.y0 <= a.y1 + 1;
             foreach (var b in Buildings)
             {
+                // (A hospital or a clinic, of concrete as a city's offices: of the house's kit, its weatherboards, it read as a
+                // big house, not a hospital; Gameplay, 16/11, the runs' hospital.)
+                if (b.kind == BuildingKinds.Medical && !Siege)
+                {
+                    b.facing = OfficeFacings.Concrete;
+                    continue;
+                }
                 // (An office of the house's kit or of brick, phase 3: stone blocks in six of ten, concrete in the rest. A hall
                 // of brick, phase 4: red brick in half, brown in a quarter, block in the rest; a shed's sheet brown, red, green
                 // or blue, about as many each.)

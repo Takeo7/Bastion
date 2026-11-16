@@ -283,8 +283,6 @@ namespace Bastion.UI.Hud
 
         public void Banner(string text, string kind = "xcom", string detail = null, bool held = false) => banner.Show(text, kind, detail, held);
         public bool ReleaseBanner(bool quiet = false) => banner.Release(quiet);
-        /// <summary>Whether the stamp is up (Banner.Up).</summary>
-        public bool BannerUp => banner != null && banner.Up;
 
         /// <summary>Whether a screen point (y up) is on the turn's stamp: a click there only lets it go, with its sound (Banner).</summary>
         public bool OverBanner(Vector2 screen)

@@ -173,6 +173,9 @@ namespace Bastion.UI.Strategy
                         v.Title = who.Name;
                         v.Survivor.Add(StrategyText.Stash.Health(Runs.MaxHp(who), Runs.MaxHp(who)));
                     }
+                    // Answered, the engine keeps who it was in the result (Gameplay, 16/11): the title stays theirs.
+                    else if (stop.Result is EventResult said && said.Event == NodeKinds.Survivor && !string.IsNullOrEmpty(said.SoldierName))
+                        v.Title = said.SoldierName;
                     if (stop.Outcome == null)
                         for (var i = 0; i < 2; i++)
                             v.Options.Add(new StopOptionView { Index = i, Label = i == 0 ? StrategyText.Runs.Join : StrategyText.Runs.NoJoin, Why = Runs.AnswerStopRefusal(c, i) });

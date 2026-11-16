@@ -182,7 +182,7 @@ namespace Bastion.Client.Map
 
         /// <summary>The kit building `bd`'s outer walls are of: a shop's, an office's or a hall's its facing's, any other's its own; a wall of nobody's, the map's.</summary>
         string KitIdOf(Building bd) => bd == null ? plan.LooseKit : BuildingLooks.Facing(bd) is string facing
-            ? (bd.kind == BuildingKinds.Office ? OfficeKit(facing) : bd.kind == BuildingKinds.Hall || bd.kind == BuildingKinds.Barn ? HallKit(facing) : ShopKit(facing)) : bd.kit;
+            ? (bd.kind == BuildingKinds.Office || bd.kind == BuildingKinds.Medical ? OfficeKit(facing) : bd.kind == BuildingKinds.Hall || bd.kind == BuildingKinds.Barn ? HallKit(facing) : ShopKit(facing)) : bd.kit;
 
         /// <summary>
         /// Whether `level` is building bd's top storey, the one its cornice runs along: laid from its own tiles (a building of

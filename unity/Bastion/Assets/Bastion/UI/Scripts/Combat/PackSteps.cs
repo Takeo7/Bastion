@@ -32,6 +32,12 @@ namespace Bastion.UI.Combat
                 control.OnSheet(arg);
                 return true;
             }
+            // «apertura»: the opening shot, as CombatSession makes it on the first snapshot (the lab has none: the hospital, H7).
+            if (what == "apertura")
+            {
+                control.OpeningShot();
+                return true;
+            }
             if (what == "file")
             {
                 control.OnEnemyFile(arg);

@@ -186,6 +186,16 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void ACopyKeepsItInside()
+        {
+            // Every copy of the state (the screen's, the lab's) is found room by room too (UI, 16/11: CloneState lost Inside).
+            var (_, s) = Hospital();
+            var copy = Events.CloneState(s);
+            Assert.True(copy.Mission.Inside);
+            Assert.True(Buildings.ByRoom(copy));
+        }
+
+        [Fact]
         public void AnyOtherMapAsBefore()
         {
             // A town: no rooms, found by building.
@@ -210,10 +220,49 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void ItsDeadOnEveryStorey()
+        {
+            foreach (var seed in Seeds)
+            {
+                foreach (var kind in new[] { NodeKinds.Normal, NodeKinds.Stealth, NodeKinds.Hold })
+                {
+                    var (_, s) = Hospital(kind, seed);
+                    var dead = s.Units.Where((u) => u.Team == Teams.Alien).ToList();
+                    var by = new[] { 0, 1, 2 }.Select((z) => dead.Count((u) => u.Pos.Z == z)).ToArray();
+                    // About a third on each storey.
+                    Assert.All(by, (n) => Assert.InRange(n, dead.Count / 3 - 3, dead.Count / 3 + 4));
+                    var area = s.Width * s.Height;
+                    foreach (var u in dead.Where((x) => x.Pos.Z > 0))
+                    {
+                        // On a floor one can stand on, in a room (not the corridor), each group in its own and its round there.
+                        Assert.True(Flights.CanStopAt(s, u.Pos), $"seed {seed}: {u.Id} at {u.Pos.X},{u.Pos.Y},{u.Pos.Z}");
+                        var room = Buildings.RoomAt(s, u.Pos)!;
+                        Assert.NotNull(room);
+                        var corridor = Buildings.Rooms(s).Where((r) => r[0] / area == u.Pos.Z).OrderByDescending((r) => r.Count).First();
+                        Assert.NotSame(corridor, room);
+                        var pod = s.Pods.Single((p) => p.UnitIds.Contains(u.Id));
+                        Assert.All(pod.UnitIds, (id) => Assert.Contains(Grid.NodeOf(s, Grid.GetUnit(s, id)!.Pos), room));
+                        Assert.All(pod.Patrol, (p) => Assert.Contains(Grid.NodeOf(s, p), room));
+                    }
+                    // Nobody on another.
+                    Assert.Equal(dead.Count, dead.Select((u) => Grid.NodeOf(s, u.Pos)).Distinct().Count());
+                }
+            }
+            // In the wards, by the beds (furniture: nobody stands on one).
+            var (_, h) = Hospital();
+            var upstairs = h.Units.Where((u) => u.Team == Teams.Alien && u.Pos.Z > 0).ToList();
+            var wards = h.Medical!.SelectMany((m) => m.Rooms ?? new List<MedicalRoom>()).Where((r) => r.Use == MedicalUses.Ward && r.Z > 0).ToList();
+            Assert.True(upstairs.Count((u) => wards.Any((r) => r.Z == u.Pos.Z && u.Pos.X >= r.X && u.Pos.X < r.X + r.W && u.Pos.Y >= r.Y && u.Pos.Y < r.Y + r.H)) >= upstairs.Count / 2);
+            var beds = h.Medical!.SelectMany((m) => m.Dressing ?? new List<MedicalDetail>()).Where((d) => d.Z > 0 && (d.Kind == MedicalDetailKinds.CoveredBed || d.Kind == MedicalDetailKinds.BareBed)).ToList();
+            Assert.Contains(upstairs, (u) => beds.Any((b) => b.Z == u.Pos.Z && Math.Abs(b.X - u.Pos.X) + Math.Abs(b.Y - u.Pos.Y) == 1));
+        }
+
+        [Fact]
         public void ItsWavesLand()
         {
-            // An Asedio's and a Travesía's: by any edge there is room on (the strip, the rooms by the outer walls).
-            foreach (var kind in new[] { NodeKinds.Hold, NodeKinds.Crossing })
+            // An Asedio's (a Travesía never goes there), and the horde's: by any edge there is room on (the strip, the rooms
+            // by the outer walls).
+            foreach (var kind in new[] { NodeKinds.Hold, NodeKinds.Normal })
             {
                 foreach (var seed in Seeds)
                 {
@@ -236,8 +285,9 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void OnTheRunsMapOnlyWithItsFlag()
         {
-            Assert.False(RunMap.HospitalSites);
-            var off = Enumerable.Range(0, 60).Select((seed) => RunMap.Generate(1, seed)).ToList();
+            // On since 16/11 (Arte's camera and walls, UI's pass).
+            Assert.True(RunMap.HospitalSites);
+            var off = Enumerable.Range(0, 60).Select((seed) => RunMap.Generate(1, seed, false)).ToList();
             Assert.DoesNotContain(off.SelectMany((m) => m), (n) => n.Site == Places.Hospital);
             var on = Enumerable.Range(0, 60).Select((seed) => RunMap.Generate(1, seed, true)).ToList();
             var hospitals = on.SelectMany((m) => m).Where((n) => n.Site == Places.Hospital).ToList();
@@ -245,7 +295,9 @@ namespace Bastion.Engine.Tests
             // Normal nodes and specials both; never a sabotage nor the boss.
             Assert.Contains(hospitals, (n) => n.Kind == NodeKinds.Normal);
             Assert.Contains(hospitals, (n) => n.Kind != NodeKinds.Normal);
-            Assert.DoesNotContain(hospitals, (n) => n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss);
+            Assert.DoesNotContain(hospitals, (n) => n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss || n.Kind == NodeKinds.Crossing);
+            // An Asedio, yes (Gameplay, 16/11); a Travesía, never.
+            Assert.Contains(hospitals, (n) => n.Kind == NodeKinds.Hold);
             // Nothing else changes: a hospital where a town or a city was.
             for (var k = 0; k < off.Count; k++)
             {

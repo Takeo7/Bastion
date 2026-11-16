@@ -945,6 +945,8 @@ namespace Bastion.Engine
 
             var pods = new List<Pod>();
             var alienIndex = 0;
+            // A map that is one building (H7, the hospital only inside).
+            var oneBuilding = opts.Map.Kind == MapSourceKinds.Generated && opts.Map.Site == Sites.Hospital;
             // From difficulty 2, one group of the living posted upstairs, where the map has room for it (decision 7 in docs/FASE6-PLAN.md).
             var perch = layout.Perch ?? new List<Pos>();
             var perched = difficulty >= 2 ? plan.FindIndex((members) => members.Count > 0 && members.Count <= perch.Count && members.All((t) => !Content.Templates[t].Undead)) : -1;
@@ -981,6 +983,8 @@ namespace Bastion.Engine
                     pods.Add(pod);
                 }
             }
+            // On a map that is one building, the dead over its storeys (H7), on a seed of their own.
+            if (oneBuilding) UpstairsDead(layout, units, pods, new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x75707374))));
             // The dead in plain clothes that start inside a clinic or a hospital wear its patients' gowns (Arturo, 9/11: the patients
             // of Horror Asylum); a uniform stays a uniform.
             foreach (var site in layout.Medical ?? new List<MedicalSite>())
@@ -1012,7 +1016,6 @@ namespace Bastion.Engine
             // A run's Asedio (H5): waves every two turns till La Lata comes.
             // A map that is one building (H7): its edges are out of play but the strip, so the waves by any edge there is room
             // on (the strip, the rooms by the outer walls).
-            var oneBuilding = opts.Map.Kind == MapSourceKinds.Generated && opts.Map.Site == Sites.Hospital;
             if (opts.HoldUntil != null && siege == null) reinforcements.AddRange(HoldWaves(difficulty, opts.HoldUntil.Value, reinforcements.Count + 1).Select((r) =>
             {
                 if (oneBuilding) r.Side = null;

@@ -141,6 +141,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal(Runs.MaxHp(survivor), c.Run.Hp[survivor.Id]);
             Assert.Null(stop.Survivor);
             Assert.Equal("survivor.yes", stop.Outcome);
+            // Who it was, after the answer too.
+            Assert.Equal((NodeKinds.Survivor, 0, survivor.Id, survivor.Name, (bool?)true), (stop.Result!.Event, stop.Result.Option, stop.Result.Soldier, stop.Result.SoldierName, stop.Result.InSquad));
             Assert.Equal(RunTexts.SurvivorJoins(survivor.Name), c.Log[0].Text);
             // No seat: to the base.
             var d = Solo();
@@ -150,6 +152,7 @@ namespace Bastion.Engine.Tests
             Assert.Contains(other, d.Soldiers);
             Assert.DoesNotContain(other.Id, d.Run.Squad);
             Assert.Equal("survivor.base", d.Run.Stop!.Outcome);
+            Assert.Equal((other.Id, other.Name, (bool?)false), (d.Run.Stop.Result!.Soldier, d.Run.Stop.Result.SoldierName, d.Run.Stop.Result.InSquad));
             Assert.Equal(RunTexts.SurvivorJoins(other.Name, false), d.Log[0].Text);
             // No.
             var e = Solo();
@@ -158,6 +161,7 @@ namespace Bastion.Engine.Tests
             Ok(e, new AnswerStopCommand { Option = 1 });
             Assert.DoesNotContain(gone, e.Soldiers);
             Assert.Equal("survivor.no", e.Run.Stop.Outcome);
+            Assert.Equal((1, gone.Id, gone.Name, (bool?)null), (e.Run.Stop.Result!.Option, e.Run.Stop.Result.Soldier, e.Run.Stop.Result.SoldierName, e.Run.Stop.Result.InSquad));
             Ok(e, new LeaveStopCommand());
             Assert.Equal(RunPhases.Choose, e.Run.Phase);
         }

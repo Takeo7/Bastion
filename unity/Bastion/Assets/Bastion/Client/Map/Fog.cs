@@ -54,6 +54,12 @@ namespace Bastion.Client.Map
         /// beside them is unfound), kept unknown (Close); `all`, none (SeeAll).
         /// </summary>
         bool[] closed;
+        /// <summary>
+        /// On a map that is one building, found room by room (H7, the hospital: the engine's Buildings.ByRoom): what is still
+        /// closed node by node (z × area + tile), every storey's, as GameState.discovered keeps it; null on any other map,
+        /// whose storeys all go by `closed`, the ground's.
+        /// </summary>
+        bool[] closedNodes;
         bool all;
         /// <summary>
         /// Where an enemy in sight stands (its node): on a closed tile, its tile alone shown, so that it stands on its floor
@@ -107,7 +113,9 @@ namespace Bastion.Client.Map
             visible = view = null;
             // The map's outline (the frame round what is played) under the fog for good (setShut).
             shut = new bool[n];
-            if (s.Frame != null && s.Frame.Count > 0 && s.Ground != null)
+            // (So too what is out of play round a map that is one building, H7's hospital, which has no outline: the ground
+            // 4 at its sides and behind it, never to be seen.)
+            if (((s.Frame != null && s.Frame.Count > 0) || Bastion.Engine.Buildings.ByRoom(s)) && s.Ground != null)
                 for (int i = 0; i < n && i < s.Ground.Count; i++) shut[i] = s.Ground[i] == 4;
             pixels = new Color32[n];
             shellPixels = new Color32[n];
@@ -192,6 +200,35 @@ namespace Bastion.Client.Map
                 shells.Add(shell);
             }
             for (int i = 0; i < n; i++) shellPixels[i].r = (byte)Mathf.Clamp(storeys[i] * 32, 0, 255);
+            if (Bastion.Engine.Buildings.ByRoom(s)) OutOfPlay(s);
+        }
+
+        /// <summary>
+        /// Round a map that is one building (H7, the hospital), what is out of play in the shells' alpha, for the pass to
+        /// leave it dark and sharp (Fog.shader): 1 a tile of it (ground 4); on a tile of the building beside it, the sides
+        /// it lies on, 2 east, 4 west, 8 south, 16 north. Blended a tile's way as the fog is, the hospital's outer walls,
+        /// seen, spilt their light half a tile onto the yard's grass past them: a lit smear along the foot of each one
+        /// facing the camera, cut down to its stump. And 32 on the building's outer walls (a tile of it beside one of
+        /// nobody's: the street's or out of play), whose faces and tops the pass shows as seen, its shell. Zero on any
+        /// other map: the pass does as it did.
+        /// </summary>
+        void OutOfPlay(GameState s)
+        {
+            int n = width * height;
+            var storeys = s.Storeys;
+            bool Out(int x, int y) => x >= 0 && y >= 0 && x < width && y < height && shut[y * width + x];
+            bool Nobodys(int x, int y) => x < 0 || y < 0 || x >= width || y >= height || storeys[y * width + x] <= 0;
+            for (int i = 0; i < n; i++)
+            {
+                int x = i % width, y = i / width, bits = 0;
+                if (shut[i]) bits = 1;
+                else if (storeys != null && i < storeys.Count && storeys[i] > 0)
+                {
+                    bits = (Out(x + 1, y) ? 2 : 0) | (Out(x - 1, y) ? 4 : 0) | (Out(x, y + 1) ? 8 : 0) | (Out(x, y - 1) ? 16 : 0);
+                    if (Nobodys(x + 1, y) || Nobodys(x - 1, y) || Nobodys(x, y + 1) || Nobodys(x, y - 1)) bits |= 32;
+                }
+                shellPixels[i].a = (byte)bits;
+            }
         }
 
         /// <summary>
@@ -205,6 +242,12 @@ namespace Bastion.Client.Map
             var storeys = s.Storeys;
             bool open = all || s.Mission?.Siege != null || storeys == null || storeys.Count != closed.Length || s.Tiles == null || s.Tiles.Count != closed.Length;
             var found = open ? null : Bastion.Engine.Buildings.FoundTiles(s);
+            if (!open && Bastion.Engine.Buildings.ByRoom(s))
+            {
+                CloseRooms(s, found);
+                return;
+            }
+            closedNodes = null;
             for (int i = 0; i < closed.Length; i++)
             {
                 closed[i] = false;
@@ -215,6 +258,39 @@ namespace Bastion.Client.Map
                 else closed[i] = !Beside(i).Any(j => storeys[j] > 0 && found.Contains(j));
             }
         }
+
+        /// <summary>
+        /// Close on a map found room by room (H7): `found` is nodes (Buildings.FoundTiles), every storey's, so each storey
+        /// is closed by its own (Fog.Close looked at the ground's alone, and a storey above went by the ground under it).
+        /// A door is no room's (the engine's rooms part at doors: it is never found itself), so it goes as a wall does,
+        /// closed while every room beside it on its storey is; else every doorway stayed a black hole.
+        /// </summary>
+        void CloseRooms(GameState s, HashSet<int> found)
+        {
+            var storeys = s.Storeys;
+            int area = closed.Length, levels = Bastion.Engine.Grid.LevelCount(s);
+            if (closedNodes == null || closedNodes.Length != area * levels) closedNodes = new bool[area * levels];
+            for (int z = 0; z < levels; z++)
+            {
+                var tiles = z == 0 ? s.Tiles : s.Levels[z - 1].Tiles;
+                for (int i = 0; i < area; i++)
+                {
+                    int node = z * area + i;
+                    string t = i < tiles.Count ? tiles[i] : null;
+                    bool shut = false;
+                    if (storeys[i] > z && t != null)
+                    {
+                        if (t != "wall" && t != "window" && t != "windowBroken" && t != "door" && t != "doorOpen") shut = !found.Contains(node);
+                        else shut = !Beside(i).Any(j => storeys[j] > z && found.Contains(z * area + j));
+                    }
+                    closedNodes[node] = shut;
+                }
+            }
+            System.Array.Copy(closedNodes, closed, area);
+        }
+
+        /// <summary>Whether tile i on storey z is still closed: its own storey's on a map found room by room, else the ground's.</summary>
+        bool Closed(int z, int i) => closedNodes != null && z * closed.Length + i < closedNodes.Length ? closedNodes[z * closed.Length + i] : closed[i];
 
         /// <summary>
         /// A siege's base and its clearing by day (Arturo, 31/10, his #5): the ground that is not a pine, but for the ways
@@ -332,7 +408,7 @@ namespace Bastion.Client.Map
             }
             if (explored == null || explored.Length != view.Length) explored = new bool[view.Length];
             int area = width * height;
-            for (int k = 0; k < view.Length; k++) explored[k] |= (view[k] || (k < visible.Length && visible[k])) && !closed[k % area];
+            for (int k = 0; k < view.Length; k++) explored[k] |= (view[k] || (k < visible.Length && visible[k])) && !Closed(k / area, k % area);
             // A siege's base and clearing by day, on every storey (its towers' decks): seen, whoever looks.
             if (home != null)
                 for (int k = 0; k < explored.Length; k++) explored[k] |= home[k % area];
@@ -374,7 +450,7 @@ namespace Bastion.Client.Map
                 bool seen = inSight || (node < view.Length && view[node]) || (node < explored.Length && explored[node]);
                 // (A building nobody has been in: nothing of its inside, though its tiles be in sight through a window; but
                 // the tile an enemy in sight stands on, while it is, with its ring and its shadow: Gameplay, 28/10.)
-                if (closed[i] && !spotted.Contains(node)) inSight = seen = false;
+                if (Closed(levels[i], i) && !spotted.Contains(node)) inSight = seen = false;
                 sightTo[i] = inSight && !shut[i] ? 1 : 0;
                 litTo[i] = lights != null && node < lights.Length && lights[node] ? 1 : 0;
                 knownTo[i] = seen && !shut[i] ? 1 : 0;
@@ -449,7 +525,7 @@ namespace Bastion.Client.Map
                 }
                 if (!any) continue;
                 foreach (int i in tiles.Concat(round))
-                    if (!shut[i] && !closed[i]) knownTo[i] = 1;
+                    if (!shut[i] && !Closed(levels[i], i)) knownTo[i] = 1;
             }
         }
 

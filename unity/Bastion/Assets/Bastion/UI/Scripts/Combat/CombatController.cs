@@ -1405,6 +1405,9 @@ namespace Bastion.UI.Combat
         Vector3? FlagAt(string id)
         {
             if (FeetOf(id) is not Vector3 feet) return null;
+            // Cut away with its storey (Arte, 16/11: a soldier upstairs while the ground floor is in view, the flag in the
+            // black): the flag goes with the figure, frame by frame as the cutaway does.
+            if (Bastion.Client.Map.Cutaway.Current is { } cut && Shown.Units.FirstOrDefault(x => x.Id == id) is Unit u && cut.Hides(u.Pos)) return null;
             var top = Figures.HeadOf(id) is Transform head ? Mathf.Clamp(head.position.y - feet.y, 1.2f, 2.4f) : 1.65f;
             if (tops.TryGetValue(id, out var was) && was >= top) top = was;
             else tops[id] = top;

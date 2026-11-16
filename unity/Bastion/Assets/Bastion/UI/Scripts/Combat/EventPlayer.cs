@@ -195,6 +195,45 @@ namespace Bastion.UI.Combat
             return by != null ? ShotCam.OverShoulder(V, from, chest, victim.Id, by.Id) : ShotCam.OverShoulder(V, from, chest, victim.Id);
         }
 
+        /// <summary>
+        /// El Toro roaring, close (Gameplay, 16/11: as a blow that kills, seen whole from near): from in front of him and a
+        /// little aside, towards the nearest soldier he sees (else where the camera is), his chest and head in the frame;
+        /// null where there is no room.
+        /// </summary>
+        (Vector3 pos, Vector3 look)? RoarShot(Unit boss)
+        {
+            var v = V;
+            var seen = Grid.Combatants(v, Teams.Xcom).Where(t => Los.CanSee(v, boss, t)).OrderBy(t => Grid.Distance(t.Pos, boss.Pos)).FirstOrDefault();
+            var look = Vector3.Lerp(Feet(boss.Id), Head(boss.Id), 0.7f);
+            var toward = seen != null ? Feet(seen.Id) : control.Rig != null ? control.Rig.Camera.transform.position : look + Vector3.back;
+            var away = new Vector3(toward.x - look.x, 0, toward.z - look.z);
+            if (away.sqrMagnitude < 0.01f) away = Vector3.forward;
+            away = Quaternion.Euler(0, -0.5f * Mathf.Rad2Deg, 0) * away.normalized;
+            var from = look + away * (2.4f * Board.Tile);
+            from.y = look.y - 0.1f * Board.Tile;
+            return seen != null ? ShotCam.OverShoulder(v, from, look, boss.Id, seen.Id) : ShotCam.OverShoulder(v, from, look, boss.Id);
+        }
+
+        /// <summary>
+        /// El Toro's charge seen whole (Gameplay, 16/11): from the side of his line the camera is on, far enough for the run
+        /// and whom it reaches (`end`, at its feet) to be in the frame; null where there is no room.
+        /// </summary>
+        (Vector3 pos, Vector3 look)? ChargeShot(Unit boss, Vector3 end, string target)
+        {
+            var start = Chest(boss.Id);
+            end.y = start.y;
+            var mid = Vector3.Lerp(start, end, 0.5f);
+            var line = new Vector3(end.x - start.x, 0, end.z - start.z);
+            var length = line.magnitude;
+            if (length < 0.01f) return null;
+            var side = new Vector3(line.z, 0, -line.x) / length;
+            var cam = control.Rig != null ? control.Rig.Camera.transform.position : mid + side;
+            if (Vector3.Dot(cam - mid, side) < 0) side = -side;
+            var from = mid + side * Mathf.Max(2.5f * Board.Tile, 0.65f * length);
+            from.y = mid.y + 0.5f * Board.Tile;
+            return target != null ? ShotCam.OverShoulder(V, from, mid, boss.Id, target) : ShotCam.OverShoulder(V, from, mid, boss.Id);
+        }
+
         /// <summary>What follows an enemy's action and belongs to it: it doesn't end the action, nor start the next (game.ts FOLLOW_UP).</summary>
         static bool FollowUp(GameEvent e) => e is DamagedEvent || e is DiedEvent || e is StunnedEvent || e is DisorientedEvent || e is NoiseEvent || e is TileChangedEvent || e is FloorBrokenEvent || e is FellEvent || e is ItemDroppedEvent;
 
@@ -2603,28 +2642,28 @@ namespace Bastion.UI.Combat
                 case RoaredEvent r:
                 {
                     var u = Unit(r.Unit);
-                    // The whole map hears it, seen or not: Lore's banner and line (H6).
-                    Hud?.Banner(Lore.BossText.RoarBanner(u.Name), "alien", Lore.BossText.RoarSub);
+                    // Lore's banner and line (H6). The whole map hears it: out of sight, the banner at once.
                     Log(Lore.BossText.RoarLog(u.Name), "#e8d8c0");
-                    if (!ShownToSquad(u)) return;
-                    units?.ForceVisible(u.Id);
-                    // Close on him while the banner reads, and the roar once it has gone (Arte, 16/11: from afar and under the
-                    // banner it was hardly seen). The banner keeps its own clock (3.6 s, Banner.LongMs): waited for by its state,
-                    // at most 5 s of the camera's.
-                    if (Cam())
+                    if (!ShownToSquad(u))
                     {
-                        rig.Focus(Feet(u.Id));
-                        rig.CinematicZoom(11 * Board.Tile);
-                        await WaitUnscaled(5f, Cam, () => Hud == null || !Hud.BannerUp);
-                    }
-                    control.Sfx.Roar(Chest(u.Id));
-                    if (units == null)
-                    {
-                        await Wait(1.2f);
+                        Hud?.Banner(Lore.BossText.RoarBanner(u.Name), "alien", Lore.BossText.RoarSub);
                         return;
                     }
+                    units?.ForceVisible(u.Id);
+                    // Close on him, in front, as a blow that kills (Gameplay, Arte, 16/11: from afar and under the banner it was
+                    // hardly seen); the banner once he has roared, read there. The next action takes the shot back.
+                    if (Cam() && RoarShot(u) is (Vector3, Vector3) shot)
+                    {
+                        StartKillCam(u.Id, shot);
+                        await ShotIn(Cam);
+                    }
+                    else Look(Feet(u.Id));
+                    control.Sfx.Roar(Chest(u.Id));
                     // (Its dust is Roar's: no fx.Scream.)
-                    await units.Roar(u.Id, stop);
+                    if (units != null) await units.Roar(u.Id, stop);
+                    else await Wait(1.2f);
+                    Hud?.Banner(Lore.BossText.RoarBanner(u.Name), "alien", Lore.BossText.RoarSub);
+                    await Wait(1.5f);
                     return;
                 }
                 case ChargedEvent ch:
@@ -2635,14 +2674,23 @@ namespace Bastion.UI.Combat
                     lastCharger = u.Id;
                     if (!ShownToSquad(u) && (t == null || !ShownToSquad(t))) return;
                     Log(t != null ? Lore.BossText.ChargeLog(u.Name, t.Name) : Lore.BossText.ChargeCutLog(u.Name), t != null ? "#ff6a5a" : null);
-                    // Him and whom he runs at in the picture, nearer, as an attack (Arte, 16/11), there before he sets off.
+                    // Seen whole from near, as a blow that kills (Gameplay, Arte, 16/11): from the side of his line, his run and
+                    // whom it reaches in the frame, there before he sets off; with no room for it, nearer from above.
                     var end = t != null ? Feet(t.Id) : ch.Path.Count > 0 ? Board.TileToWorld(v, ch.Path[ch.Path.Count - 1]) : Feet(u.Id);
                     if (Cam())
                     {
                         units?.ForceVisible(u.Id);
-                        rig.Focus(Vector3.Lerp(Feet(u.Id), end, 0.5f));
-                        rig.CinematicZoom(Mathf.Clamp(Vector3.Distance(Feet(u.Id), end) * 1.1f + 9 * Board.Tile, 13 * Board.Tile, 24 * Board.Tile));
-                        await WaitUnscaled(1f, Cam, () => rig.Arrived);
+                        if (ChargeShot(u, end, t?.Id) is (Vector3, Vector3) side)
+                        {
+                            StartKillCam(t?.Id ?? u.Id, side);
+                            await ShotIn(Cam);
+                        }
+                        else
+                        {
+                            rig.Focus(Vector3.Lerp(Feet(u.Id), end, 0.5f));
+                            rig.CinematicZoom(Mathf.Clamp(Vector3.Distance(Feet(u.Id), end) * 1.1f + 9 * Board.Tile, 13 * Board.Tile, 24 * Board.Tile));
+                            await WaitUnscaled(1f, Cam, () => rig.Arrived);
+                        }
                     }
                     if (units == null)
                     {

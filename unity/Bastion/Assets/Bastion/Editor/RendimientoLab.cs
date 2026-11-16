@@ -80,6 +80,15 @@ namespace Bastion.EditorTools
                 // (Phase 4 of #3: an estate's halls of Gang Warfare's sheet metal, two and three storeys of them.)
                 case "poligono":
                     return MapLab.Generated("city", 11, "elimination", "industrial");
+                // (H7: the hospital only inside, a map that is one building, as the squad walks it: BASTION_HOSPITAL a save of
+                // it, {"state": …}; else Gameplay's sample, a bare state, just launched, the squad on the street.)
+                case "hospital":
+                {
+                    var path = Environment.GetEnvironmentVariable("BASTION_HOSPITAL");
+                    if (!string.IsNullOrEmpty(path)) return MapLab.Golden(path);
+                    path = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../../../.dev-snapshots/gameplay/runs/muestras/hospital.json"));
+                    return Bastion.Net.Json.Read<GameState>(System.IO.File.ReadAllText(path));
+                }
                 case "fuego":
                 {
                     var s = MapLab.Golden("../step2/city-3-elimination");

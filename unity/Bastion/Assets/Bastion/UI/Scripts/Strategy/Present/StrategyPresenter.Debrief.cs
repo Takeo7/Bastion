@@ -27,8 +27,12 @@ namespace Bastion.UI.Strategy
                 v.Haul.Add(new HaulView { Kind = GearKinds.Supplies, Icon = "store:parts", Figure = $"+{reward}", Big = true, Tip = StrategyText.Runs.RewardTip(reward) });
                 if ((run.RewardLost ?? 0) > 0) v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.RewardLost(run.RewardLost.Value) });
             }
-            foreach (var g in run.Found)
-                v.Haul.Add(new HaulView { Kind = g.Kind, Type = g.Type, Icon = GearIconOf(g), Figure = g.Count > 1 || g.Kind == GearKinds.Supplies ? g.Count.ToString() : "", Better = g.Kind == GearKinds.Weapon, Tip = Lore.GearName(g.Kind, g.Type, g.Count) });
+            // The supplies found in one tile, however many piles they came in (the pass of 16/11: «9» and «10» side by side).
+            var supplies = run.Found.Where(g => g.Kind == GearKinds.Supplies).Sum(g => g.Count);
+            if (supplies > 0) v.Haul.Add(new HaulView { Kind = GearKinds.Supplies, Icon = GearIconOf(run.Found.First(g => g.Kind == GearKinds.Supplies)), Figure = supplies.ToString(), Tip = Lore.GearName(GearKinds.Supplies, null, supplies) });
+            foreach (var g in run.Found.Where(g => g.Kind != GearKinds.Supplies))
+                v.Haul.Add(new HaulView { Kind = g.Kind, Type = g.Type, Icon = GearIconOf(g), Figure = g.Count > 1 ? g.Count.ToString() : "", Better = g.Kind == GearKinds.Weapon, Tip = Lore.GearName(g.Kind, g.Type, g.Count) });
+            if (v.Haul.Count == 0 && run.Ended != RunEnds.Wiped) v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.NothingFound });
             foreach (var f in run.Fallen)
                 v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.FallenLine(f.Name, f.Lost.Select(g => Lore.GearThe(g.Kind, g.Type, g.Count)).ToList()), Bad = true });
             if (run.Joined != null && c.Soldiers.FirstOrDefault(x => x.Id == run.Joined) is CampaignSoldier rescued)

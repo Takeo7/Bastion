@@ -68,6 +68,17 @@ namespace Bastion.UI.Strategy
 
         void Update()
         {
+            // BASTION_RUNS_SERIE="path[|scene];…": one sample after another, 2 s apart from 11 s (a capture's first frame comes
+            // at 10 s), two frames each at 1 fps: a whole expedition's states, the engine's (the pass of 16/11).
+            if (series != null && shown && Time.time >= seriesAt && seriesNext < series.Length)
+            {
+                var item = series[seriesNext++].Split('|');
+                seriesScene = item.Length > 1 && item[1] != "" ? item[1] : null;
+                runsChosen = null;
+                Debug.Log($"[serie] {seriesNext} {item[0]} {seriesScene} a {Time.time:0.0} s");
+                RunsSample(item[0]);
+                seriesAt += 2;
+            }
             // BASTION_ESTRATEGIA_PARPADEO / _LATIDO: an element by its class blinking (StrategyRoot.Blink) or pulsing (Pulse), with the press.
             if (shown && pressAt >= 0 && Time.frameCount >= pressAt && !blinked)
             {
@@ -689,7 +700,8 @@ namespace Bastion.UI.Strategy
         /// </summary>
         void RunsSample(string which)
         {
-            var path = System.IO.Path.Combine(Application.dataPath, "../../../.dev-snapshots/gameplay/runs/muestras", which + ".json");
+            // An absolute path (a dump of the pass), or one of Gameplay's by name.
+            var path = which.StartsWith("/") ? which : System.IO.Path.Combine(Application.dataPath, "../../../.dev-snapshots/gameplay/runs/muestras", which + ".json");
             var state = Bastion.Net.Json.Read<Bastion.Engine.CampaignState>(System.IO.File.ReadAllText(path));
             var p = new StrategyPresenter { State = state, Slot = 0, Seats = SampleCampaign.Seats(state.Players.Count > 1) };
             var gear = new RunsGear(p, () => Show(p, null));
@@ -699,11 +711,15 @@ namespace Bastion.UI.Strategy
         }
 
         System.Action<string> runsShow;
+        readonly string[] series = System.Environment.GetEnvironmentVariable("BASTION_RUNS_SERIE")?.Split(';', System.StringSplitOptions.RemoveEmptyEntries);
+        int seriesNext;
+        float seriesAt = 11;
+        string seriesScene;
 
         void Show(StrategyPresenter p, string chosen)
         {
             if (chosen != null) runsChosen = chosen;
-            var scene = System.Environment.GetEnvironmentVariable("BASTION_RUNS_ESCENA");
+            var scene = series != null ? seriesScene : System.Environment.GetEnvironmentVariable("BASTION_RUNS_ESCENA");
             // «respondido»: the sample's event answered with its first option, by Anja, as the engine leaves it (H4).
             if (scene == "respondido" && p.State.Run?.Stop is Bastion.Engine.StopState stop && stop.Event != null)
             {

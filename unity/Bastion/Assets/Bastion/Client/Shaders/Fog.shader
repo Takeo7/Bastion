@@ -147,6 +147,26 @@ Shader "Bastion/Fog"
                     seen = 0;
                     known = 0;
                 }
+                // Out of play round a map that is one building (H7, the hospital; Fog.OutOfPlay, the shells' alpha): never
+                // anything to see there, and sharp, not a tile's blend: a tile of it, and the ground on the outer half of a
+                // tile of the building beside it (past its outer wall's foot). And the building's outer walls themselves, their
+                // faces and tops (not the floor along them), always as seen: its shell, which the squad saw from the street,
+                // the rim of what is cut away; else, with its inside unfound and nothing out there ever seen, the hospital in
+                // the way of the camera was a hole in the dark. Zero on every other map.
+                uint outFlags = (uint)round(home.a * 255.0);
+                if (outFlags != 0u)
+                {
+                    float2 part = frac(own) - 0.5;
+                    bool ground = normal.y > 0.7 && high < 0.25;
+                    bool past = ((outFlags & 2u) != 0u && part.x > 0.0) || ((outFlags & 4u) != 0u && part.x < 0.0)
+                        || ((outFlags & 8u) != 0u && part.y > 0.0) || ((outFlags & 16u) != 0u && part.y < 0.0);
+                    if ((outFlags & 1u) != 0u || (ground && past))
+                    {
+                        seen = 0;
+                        known = 0;
+                    }
+                    else if (!none && (outFlags & 32u) != 0u && (abs(normal.y) < 0.7 || high > 0.25)) known = 1;
+                }
                 // Night: a lit tile glows warm, so players read where they'd be seen (fogOfWar.ts: the lamp's light over the
                 // surface's own colour, less where it is bright already, on what stands at its floor). How light a
                 // material is: the picture over the light it gets (the sky's hemisphere, the moon and the real lights).

@@ -211,6 +211,19 @@ namespace Bastion.UI.Combat
         /// <summary>Round by `degrees` more, eased as a quarter turn is, for a cinematic (La Lata leaving: Arturo, 31/10 #1); not the player's.</summary>
         public void Turn(float degrees) => desiredYaw += degrees;
 
+        /// <summary>
+        /// The view turned to `degrees` (45° looks north-west), at once or eased: the opening shot inside a building, its
+        /// way in ahead (the hospital, H7: CombatController.OpeningShot).
+        /// </summary>
+        public void FaceYaw(float degrees, bool instant = false)
+        {
+            if (Overhead) return;
+            desiredYaw = degrees;
+            if (!instant) return;
+            yaw = degrees;
+            Place();
+        }
+
         /// <summary>The player took the camera (a move, a pick): whatever was taking it somewhere lets go.</summary>
         public void TakeControl()
         {

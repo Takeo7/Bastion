@@ -49,10 +49,11 @@ namespace Bastion.UI.Strategy
             if (v.Wares.Count > 0 || !string.IsNullOrEmpty(v.Purse))
             {
                 var purse = Ui.El("runstop__purse", Root);
-                // «Lleváis [95 and the crate] en las mochilas.»
+                // «Tus soldados llevan [95 and the crate].»: a stop after it, close to the crate.
                 var line = Ui.El("runstop__purse-line", purse);
+                var tail = StrategyText.Runs.PurseAfter;
                 Ui.Text(StrategyText.Runs.PurseBefore, "runstop__purse-text font-title", line);
-                SuppliesMark.Make(line, v.Purse, "supplies-mark--small runstop__purse-amount");
+                SuppliesMark.Make(line, v.Purse, "supplies-mark--small runstop__purse-amount" + (tail.Length > 0 && char.IsPunctuation(tail[0]) ? " runstop__purse-amount--end" : ""));
                 Ui.Text(StrategyText.Runs.PurseAfter, "runstop__purse-text font-title", line);
                 if (!string.IsNullOrEmpty(v.For)) Ui.Text(v.For, "runstop__for muted", purse);
                 var list = Ui.El("runstop__wares", Root);

@@ -137,7 +137,10 @@ namespace Bastion.Engine
     {
         public string Event { get; set; } = "";
         public int Option { get; set; }
-        /// <summary>The soldier «a uno» fell to ({Nombre}), id and name.</summary>
+        /// <summary>
+        /// The soldier «a uno» fell to ({Nombre}), id and name. At a Survivor stop (Event "survivor"), who asked to come,
+        /// answered yes or no; InSquad, whether into the squad (null: not taken in).
+        /// </summary>
         public string? Soldier { get; set; }
         public string? SoldierName { get; set; }
         /// <summary>Who joined ({Superviviente}), id and name, and whether into the squad (false: at the base, no seat).</summary>

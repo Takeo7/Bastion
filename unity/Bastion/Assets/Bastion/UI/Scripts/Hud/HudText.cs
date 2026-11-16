@@ -149,6 +149,13 @@ namespace Bastion.UI.Hud
             /// <summary>«Matad al Toro…»: «a el» contracted.</summary>
             public static string Boss(string name) => $"Matad {(name.StartsWith("El ") ? "al " + name.Substring(3) : "a " + name)} y salid en La Lata";
             public static string BossDead(string name) => $"{name} ha caído: salid en La Lata";
+            /// <summary>
+            /// A Guarida and a Travesía (H5): Saqueos underneath, with an objective of their own (the pass of 16/11: they
+            /// said the Saqueo's «Registrad lo que podáis»; Lore to confirm).
+            /// </summary>
+            public const string Lair = "Abrid la caja de la Guarida y salid en La Lata";
+            public const string LairOpen = "Caja abierta: salid en La Lata";
+            public const string Crossing = "Cruzad el mapa: La Lata espera en el otro extremo";
             public const string IntroObjective = "Objetivo: ";
             public const string IntroClose = "Entendido";
             public const string DockTip = "Ver la misión";

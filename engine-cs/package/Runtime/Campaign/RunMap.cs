@@ -46,10 +46,10 @@ namespace Bastion.Engine
         public const int EarlyRows = 2;
 
         /// <summary>
-        /// The hospital only inside on the maps (H7, Places.Hospital): off till Gameplay says (Arte draws its camera and its
-        /// walls). On, a town's or a city's fight (not a sabotage nor the boss) is one, one in HospitalOdds by its map's seed.
+        /// The hospital only inside on the maps (H7, Places.Hospital): on since Arte's camera and walls and UI's pass (16/11).
+        /// A town's or a city's fight (not a sabotage, a Travesía nor the boss) is one, one in HospitalOdds by its map's seed.
         /// </summary>
-        public const bool HospitalSites = false;
+        public const bool HospitalSites = true;
         public const int HospitalOdds = 5;
 
         /// <summary>Fights from row 2 with a modifier, in percent.</summary>
@@ -109,8 +109,9 @@ namespace Bastion.Engine
                 if (n.Site == Places.Roadside && n.Row <= EarlyRows) n.Site = Places.Country;
                 // A town or a city is the map's seed's (Places.OldTownSeed): the site says the one it will be.
                 if (n.Site == Places.Town) n.Site = Places.Of(MapOf(n)!);
-                // The hospital only inside (H7), by the map's seed: nothing else drawn changes.
-                if (hospitals && (n.Site == Places.Town || n.Site == Places.City) && Math.Abs(n.Seed.Value) % HospitalOdds == 0) n.Site = Places.Hospital;
+                // The hospital only inside (H7), by the map's seed: nothing else drawn changes. No Travesía there (Gameplay,
+                // 16/11: its far end makes no sense in one building); an Asedio, yes.
+                if (hospitals && n.Kind != NodeKinds.Crossing && (n.Site == Places.Town || n.Site == Places.City) && Math.Abs(n.Seed.Value) % HospitalOdds == 0) n.Site = Places.Hospital;
             }
             return all;
         }
@@ -228,10 +229,13 @@ namespace Bastion.Engine
             return (Node(run, run.At)?.Row ?? 0) + Sight + Runs.Level(c, UpgradeIds.Sight);
         }
 
-        /// <summary>Whether both players see what a node is: the engine says, so both see the same. One not seen is drawn dark.</summary>
+        /// <summary>
+        /// Whether both players see what a node is: the engine says, so both see the same. One not seen is drawn dark. The
+        /// boss, always, from the start (Gameplay, 16/11, as in Slay the Spire), whatever the sight.
+        /// </summary>
         public static bool Visible(CampaignState c, RunNode n)
         {
-            return n.Row <= VisibleRows(c);
+            return n.Row <= VisibleRows(c) || n.Kind == NodeKinds.Boss;
         }
 
         /// <summary>The map a fight is played on: its site and its seed (null for a stop).</summary>

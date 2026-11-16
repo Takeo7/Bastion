@@ -1217,6 +1217,7 @@ namespace Bastion.Engine
                     Stealth = m.Stealth,
                     Lair = CopyPosOrNull(m.Lair),
                     Boss = m.Boss,
+                    Inside = m.Inside,
                 },
                 Turn = s.Turn,
                 ActiveTeam = s.ActiveTeam,

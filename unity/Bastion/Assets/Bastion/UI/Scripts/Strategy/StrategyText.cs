@@ -96,11 +96,14 @@ namespace Bastion.UI.Strategy
             public static string Head(int chapter) => Lore.ExpeditionText.Header(chapter);
             public const string Choose = "Elige la siguiente etapa.";
             public const string NoWay = "No queda más camino.";
-            /// <summary>«Lleváis [95 and the crate] en las mochilas.»: the words round the amount.</summary>
-            public const string PurseBefore = "Lleváis";
-            public const string PurseAfter = "en las mochilas.";
+            /// <summary>
+            /// «Tus soldados llevan [95 and the crate].»: the words round the amount; each player pays with their own
+            /// soldiers' (Lore, 16/11: «lleváis» sounded like the whole squad's).
+            /// </summary>
+            public const string PurseBefore = "Tus soldados llevan";
+            public const string PurseAfter = ".";
 
-            public static string For(string name) => $"Lo que cambiéis va a la mochila de {name}.";
+            public static string For(string name) => $"Lo que cambies va a la mochila de {name}.";
             public const string Join = "Que se una";
             public const string NoJoin = "Que no";
             public static string Waiting(string partner) => $"Esperando a {partner}.";
@@ -142,6 +145,8 @@ namespace Bastion.UI.Strategy
             /// <summary>The reward's tile, on hover; what of it didn't fit in the packs (no «§» in the line: the crate is on the tile).</summary>
             public static string RewardTip(int reward) => $"{Lore.ExpeditionText.Reward}: {reward} suministros.";
             public static string RewardLost(int lost) => $"De la recompensa, {lost} suministros no cabían en las mochilas y se han quedado allí.";
+            /// <summary>A stage's report with nothing found nor a reward (the pass of 16/11: only its title was left; Lore to confirm).</summary>
+            public const string NothingFound = "No habéis encontrado nada.";
 
             /// <summary>«Rafael ha caído. Se pierden con él el fusil y 2 granadas.»</summary>
             /// <summary>A Rescate won (H4): who was held out joins (Lore to confirm).</summary>

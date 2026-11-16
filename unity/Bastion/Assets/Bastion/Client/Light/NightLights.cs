@@ -318,11 +318,33 @@ namespace Bastion.Client
                 float t = ray.y < -0.01f ? -camera.transform.position.y / ray.y : 0;
                 focus = camera.transform.position + ray * t;
             }
-            var nearest = Enumerable.Range(0, lamps.Count).OrderBy(i => (lamps[i].at.x - focus.x) * (lamps[i].at.x - focus.x) + (lamps[i].at.z - focus.z) * (lamps[i].at.z - focus.z)).Take(pool.Length - n).ToList();
+            // On a map that is one building (H7, the hospital), its rooms' ceiling lights too (Ceiling), among the street lights.
+            var inside = s != null && Bastion.Engine.Buildings.ByRoom(s) ? Ceiling(s) : null;
+            var candidates = inside == null || inside.Count == 0 ? lamps : lamps.Concat(inside).ToList();
+            if (inside != null && inside.Count > 0 && camera != null)
+            {
+                // (Where the camera looks on the storey in view's floor, not the ground's.)
+                var ray = camera.transform.forward;
+                float floorY = ceilingStorey * Map.MapSpace.Storey;
+                float t = ray.y < -0.01f ? (floorY - camera.transform.position.y) / ray.y : 0;
+                focus = camera.transform.position + ray * t;
+            }
+            var nearest = Enumerable.Range(0, candidates.Count).OrderBy(i => (candidates[i].at.x - focus.x) * (candidates[i].at.x - focus.x) + (candidates[i].at.z - focus.z) * (candidates[i].at.z - focus.z)).Take(pool.Length - n).ToList();
             foreach (int i in nearest)
             {
                 var light = pool[n++];
-                var l = lamps[i];
+                var l = candidates[i];
+                if (l.power < 0)
+                {
+                    // A ceiling's (Ceiling): cold, all round, under the ceiling, nearer than a street light's.
+                    light.enabled = true;
+                    if (light.type != LightType.Point) light.type = LightType.Point;
+                    light.color = CeilingLight.gamma;
+                    light.intensity = CeilingPower * Unity;
+                    light.range = CeilingReach * MapTile;
+                    light.transform.position = l.at;
+                    continue;
+                }
                 light.enabled = true;
                 if (LampsDown && light.type != LightType.Spot)
                 {
@@ -342,8 +364,56 @@ namespace Bastion.Client
             if (Unlit) foreach (var l in pool) l.enabled = false;
             // BASTION_LUCES=1 (the labs): where the camera looks and the street lights given the real ones, now and then.
             if (Logs)
-                Debug.Log($"[luces] focus {focus:F1}, camera {(camera != null ? camera.transform.position.ToString("F1") + " looking " + camera.transform.forward.ToString("F3") : "-")}: {string.Join(" ", nearest.Select(i => lamps[i].at.ToString("F1")))}");
+                Debug.Log($"[luces] focus {focus:F1}, camera {(camera != null ? camera.transform.position.ToString("F1") + " looking " + camera.transform.forward.ToString("F3") : "-")}: {string.Join(" ", nearest.Select(i => candidates[i].at.ToString("F1")))}");
             Publish(false);
+        }
+
+        /// <summary>
+        /// The ceiling lights of a map that is one building (H7, the hospital: Buildings.ByRoom), the battle's all inside: a
+        /// cold white, the colour of a tube, not the street lights' amber, whose pools are the engine's lit tiles (where one
+        /// is seen from afar); dimmer and nearer, so a room reads lit round where the camera looks and not as a lit tile.
+        /// Without them the rooms by night were the moon's teal, barely to be told from the fog. Linear, three's as the rest.
+        /// </summary>
+        static readonly Color CeilingLight = new Color(0.78f, 0.9f, 1.0f);
+        /// <summary>How strong, how far it reaches (tiles), how high over its storey's floor (tiles: a storey is 2.3, the cut walls 0.95), how far apart in a room (tiles).</summary>
+        const float CeilingPower = 7, CeilingReach = 5, CeilingHigh = 1.6f, CeilingApart = 4;
+
+        List<Glow> ceiling;
+        Bastion.Engine.GameState ceilingFor;
+        int ceilingSeq = -1, ceilingFound = -1, ceilingStorey;
+
+        /// <summary>
+        /// The ceiling lights of the rooms found on the storey in view (the fog's: MapView.Level), each a Glow with power −1:
+        /// in each room the tile nearest its middle, then again and again the one of its tiles furthest from those, while
+        /// it is CeilingApart or more from them all (a room a light, the corridor one every four tiles, a room joined to it
+        /// as its shape goes). Worked out again when what is found or the storey changes.
+        /// </summary>
+        List<Glow> Ceiling(Bastion.Engine.GameState s)
+        {
+            var view = Map.MapView.Current;
+            int storey = view == null || view.Level >= view.Levels ? 0 : view.Level;
+            int found = s.Discovered?.Count ?? 0;
+            if (ceiling != null && s == ceilingFor && s.Seq == ceilingSeq && found == ceilingFound && storey == ceilingStorey) return ceiling;
+            (ceilingFor, ceilingSeq, ceilingFound, ceilingStorey) = (s, s.Seq, found, storey);
+            ceiling = new List<Glow>();
+            var known = Bastion.Engine.Buildings.FoundTiles(s);
+            int area = s.Width * s.Height;
+            foreach (var room in Bastion.Engine.Buildings.Rooms(s))
+            {
+                if (room.Count == 0 || room[0] / area != storey || !known.Contains(room[0])) continue;
+                var tiles = room.Select(node => new Vector2(node % area % s.Width, node % area / s.Width)).ToList();
+                var middle = tiles.Aggregate(Vector2.zero, (a, b) => a + b) / tiles.Count;
+                var lit = new List<Vector2> { tiles.OrderBy(p => (p - middle).sqrMagnitude).First() };
+                while (true)
+                {
+                    var far = tiles.OrderByDescending(p => lit.Min(q => (p - q).sqrMagnitude)).First();
+                    if (lit.Min(q => (far - q).magnitude) < CeilingApart) break;
+                    lit.Add(far);
+                }
+                foreach (var p in lit)
+                    ceiling.Add(new Glow { at = Map.MapSpace.World(p.x, p.y, storey) + Vector3.up * (CeilingHigh * MapTile), power = -1 });
+            }
+            return ceiling;
         }
 
         static void DestroyNow(Object o)

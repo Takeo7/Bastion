@@ -310,6 +310,11 @@
     margin: 0 6px;
 }
 
+/* A stop right after the crate. */
+.runstop__purse-amount--end {
+    margin-right: 1px;
+}
+
 .runstop__buy,
 .runstop__leave {
     height: 32px;

@@ -489,6 +489,8 @@ namespace Bastion.Engine
                     Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name, inSquad), LogTones.Good);
                 }
                 stop.Outcome = option != 0 ? "survivor.no" : inSquad ? "survivor.yes" : "survivor.base";
+                // Who it was, after the answer too (UI, 16/11: the screen lost them): as an event's result.
+                stop.Result = new EventResult { Event = NodeKinds.Survivor, Option = option, Soldier = s.Id, SoldierName = s.Name, InSquad = option == 0 ? inSquad : (bool?)null };
                 return;
             }
             Event(c, option, rng);

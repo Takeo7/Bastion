@@ -250,6 +250,17 @@ namespace Bastion.UI.Combat
         /// <summary>Who has boarded La Lata as the event player plays it (EvacuatedEvent), before the view has it: no flag.</summary>
         public readonly HashSet<string> Aboard = new HashSet<string>();
 
+        /// <summary>
+        /// Whether `u` is indoors on a storey below the one in view: the storey over it is drawn (the cutaway's), its
+        /// ceiling hiding it. Out in the street, nothing is over it and it shows from any storey.
+        /// </summary>
+        bool UnderView(GameState s, Unit u)
+        {
+            if (u.Pos.Z >= Level || s.Storeys == null) return false;
+            var i = u.Pos.Y * s.Width + u.Pos.X;
+            return i >= 0 && i < s.Storeys.Count && s.Storeys[i] > u.Pos.Z;
+        }
+
         void RefreshFlags()
         {
             using var flagsMark = MFlags.Auto();
@@ -274,6 +285,9 @@ namespace Bastion.UI.Combat
             {
                 // Aboard La Lata (evacuated, or boarding as it is played): out of sight, and so its flag (unitViews.ts board).
                 if (!u.Alive || u.Evacuated || Aboard.Contains(u.Id) || !Marked(u)) continue;
+                // Under the storey in view: no flag over the slab that hides it (Arte, 16/11: looking at the hospital's
+                // upper storeys, the squad's flags floated in the black).
+                if (UnderView(v, u)) continue;
                 var f = new FlagView { Id = u.Id, Enemy = u.Team != Teams.Xcom, Hp = u.Hp, MaxHp = u.MaxHp, Armor = u.Armor, Cover = -1 };
                 // Pointed at from the list (Arturo, 31/10 #11): its name too, and the arrow over it.
                 f.Pointed = u.Id == listPointed;
@@ -868,6 +882,17 @@ namespace Bastion.UI.Combat
             }
             if (m.Boss != null && UnitById(s, m.Boss) is Unit boss)
                 objective = boss.Alive ? HudText.Mission.Boss(boss.Name) : HudText.Mission.BossDead(boss.Name);
+            // A Guarida's box to open first, then out; a Travesía, across (H5): Lore's line of the stage, the tip.
+            else if (m.Lair != null)
+            {
+                objective = m.ObjectiveDone ? HudText.Mission.LairOpen : HudText.Mission.Lair;
+                tip = Lore.StageLine(NodeKinds.Elite);
+            }
+            else if (s.Run?.NodeKind == NodeKinds.Crossing)
+            {
+                objective = HudText.Mission.Crossing;
+                tip = Lore.StageLine(NodeKinds.Crossing);
+            }
             return new MissionView
             {
                 Label = s.Run != null ? Bastion.UI.Strategy.StrategyText.Runs.NodeName(s.Run.NodeKind) : MissionName(m.Kind),
@@ -1196,8 +1221,29 @@ namespace Bastion.UI.Combat
             var foes = v.Units.Where(a => a.Alive && a.Team == Teams.Alien && Visible(a)).ToList();
             var toward = foes.Count > 0 ? new UnityEngine.Vector2((float)foes.Average(a => a.Pos.X), (float)foes.Average(a => a.Pos.Y)) : new UnityEngine.Vector2(v.Width / 2f, v.Height / 2f);
             var gap = UnityEngine.Vector2.Distance(here, toward);
-            var k = gap > 0 ? Math.Min(6, gap / 2) / gap : 0;
+            // Inside a building only (the hospital), the squad in the middle and its door behind: two tiles towards it.
+            var k = gap > 0 ? Math.Min(v.Mission?.Inside == true ? 2 : 6, gap / 2) / gap : 0;
             var at = here + (toward - here) * k;
+            // Only the building (the hospital, H7: Mission.Inside): looked at from the strip the squad starts on, its door
+            // ahead, not behind the squad; the quarter of the four that faces it most.
+            if (v.Mission?.Inside == true)
+            {
+                var from = Board.TileToWorld(v, new Pos { X = (int)Math.Round(here.x), Y = (int)Math.Round(here.y) });
+                var to = Board.TileToWorld(v, new Pos { X = v.Width / 2, Y = v.Height / 2 });
+                var best = 45f;
+                var most = float.NegativeInfinity;
+                foreach (var yaw in new[] { 45f, 135f, 225f, 315f })
+                {
+                    var r = yaw * Mathf.Deg2Rad;
+                    var ahead = -Mathf.Sin(r) * (to.x - from.x) + Mathf.Cos(r) * (to.z - from.z);
+                    if (ahead > most)
+                    {
+                        most = ahead;
+                        best = yaw;
+                    }
+                }
+                Rig.FaceYaw(best, true);
+            }
             Rig.Focus(Board.TileToWorld(v, new Pos { X = (int)Math.Round(at.x), Y = (int)Math.Round(at.y) }), true);
         }
 
