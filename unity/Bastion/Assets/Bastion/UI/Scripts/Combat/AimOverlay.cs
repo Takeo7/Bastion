@@ -73,6 +73,9 @@ namespace Bastion.UI.Combat
         Mesh beam;
         Mesh pingRing;
         MeshFilter plans;
+        /// <summary>El Toro's charge lines (H6): a lane on the ground with arrows, and a ring on whom it reaches.</summary>
+        MeshFilter charges;
+        static readonly Color32 Charge = MoveOverlay.Hex(0xff3b2a);
         Mesh disc;
         Mesh thick;
         Mesh thin;
@@ -118,6 +121,7 @@ namespace Bastion.UI.Combat
             spots = Layer("A mano", 3108, true);
             vision = Layer("Lo que ve", 3096, false);
             plans = Layer("Planes", 3109, true);
+            charges = Layer("Embestida", 3110, true);
         }
 
         MeshFilter Layer(string name, int queue, bool overAll)
@@ -242,10 +246,51 @@ namespace Bastion.UI.Combat
             plans.sharedMesh = build.Build(plans.sharedMesh);
         }
 
+        /// <summary>
+        /// El Toro's charge (H6; Gameplay, 16/11): from where he stands to each one in `list` it would reach (Toro.ChargePath),
+        /// a red lane on the ground with arrows towards them and a ring on them; `soon` false (not at his next turn), faint.
+        /// </summary>
+        public void ShowCharges(GameState s, IList<(Pos from, IList<Pos> path, Pos target)> list, bool soon)
+        {
+            build.Clear();
+            if (s != null && list != null)
+            {
+                var lane = new Color32(Charge.r, Charge.g, Charge.b, (byte)(soon ? 0x48 : 0x1e));
+                var mark = new Color32(Charge.r, Charge.g, Charge.b, (byte)(soon ? 0xf0 : 0x8c));
+                // The arrows light on the red lane.
+                var arrow = new Color32(0xff, 0xe4, 0xdc, (byte)(soon ? 0xf0 : 0x80));
+                foreach (var (from, path, target) in list)
+                {
+                    var a = Board.TileToWorld(s, from, 0.06f * T);
+                    var b = Board.TileToWorld(s, target, 0.06f * T);
+                    var d = b - a;
+                    d.y = 0;
+                    if (d.sqrMagnitude < 1e-6f) continue;
+                    d.Normalize();
+                    var left = new Vector3(-d.z, 0, d.x) * (0.27f * T);
+                    // From his tile's edge to the ring on whom it reaches.
+                    var a0 = a + d * (0.45f * T);
+                    var b0 = b - d * (0.46f * T);
+                    build.Quad(a0 - left, b0 - left, b0 + left, a0 + left, lane);
+                    // An arrow on each tile he runs through.
+                    foreach (var p in path)
+                    {
+                        var tip = Board.TileToWorld(s, p, 0.07f * T) + d * (0.18f * T);
+                        var back = tip - d * (0.3f * T);
+                        build.Line(back - left * 0.9f, tip, 3, arrow);
+                        build.Line(back + left * 0.9f, tip, 3, arrow);
+                    }
+                    build.Arc(Board.TileToWorld(s, target, 0.07f * T), 0.36f * T, 0.46f * T, 0, Mathf.PI * 2, 36, mark);
+                }
+            }
+            charges.sharedMesh = build.Build(charges.sharedMesh);
+        }
+
         /// <summary>Over a shoulder, the moves planned go with the rest of a move's marks (MoveOverlay.Cinematic); back as it ends.</summary>
         public void Cinematic(bool on)
         {
             if (plans != null && plans.gameObject.activeSelf == on) plans.gameObject.SetActive(!on);
+            if (charges != null && charges.gameObject.activeSelf == on) charges.gameObject.SetActive(!on);
         }
 
         void Update()

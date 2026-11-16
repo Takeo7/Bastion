@@ -29,6 +29,7 @@ namespace Bastion.UI.Hud
         TurnStrip strip;
         SquadList squad;
         UnitPanel unit;
+        BossBar boss;
         /// <summary>The runs' pack in combat (H3): its grids, one thing dragged at a time, at 40 points a cell.</summary>
         Bastion.UI.Gear.GearBoard gear;
         readonly Bastion.UI.Gear.GearRelay gearRelay = new Bastion.UI.Gear.GearRelay();
@@ -101,6 +102,7 @@ namespace Bastion.UI.Hud
             root.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
             cards = new Cards(root.Q("cards"), relay, s => Sound?.Invoke(s));
             goal = new GoalCard(root.Q("goal"), root.Q("compass"), tips, ReopenIntro, root.Q("edge-marks"));
+            boss = new BossBar(root, tips, relay);
             if (Bastion.Client.GameInput.Touch) goal.TurnsCamera(relay.OnTurnCamera);
             log = new Log(root.Q("log"), Icon);
             flags = new UnitFlags(root.Q("flags"), Icon);
@@ -228,6 +230,8 @@ namespace Bastion.UI.Hud
         public void SetAbilities(ActionBarView v) => bar.Set(v);
         public void SetEndTurn(EndTurnView v) => turnActions.SetEndTurn(v);
         public void SetMission(MissionView v) => goal.Set(v);
+        /// <summary>A chapter's boss (H6), at the top; null, none in sight yet or none.</summary>
+        public void SetBoss(BossView v) => boss?.Set(v);
         public void SetCompass(CompassView v) => goal.SetCompass(v);
         public void SetFlags(FlagsView v) => flags.Set(v);
         public void SetWorldTags(System.Collections.Generic.List<WorldTagView> v) => flags.SetTags(v);
@@ -279,6 +283,8 @@ namespace Bastion.UI.Hud
 
         public void Banner(string text, string kind = "xcom", string detail = null, bool held = false) => banner.Show(text, kind, detail, held);
         public bool ReleaseBanner(bool quiet = false) => banner.Release(quiet);
+        /// <summary>Whether the stamp is up (Banner.Up).</summary>
+        public bool BannerUp => banner != null && banner.Up;
 
         /// <summary>Whether a screen point (y up) is on the turn's stamp: a click there only lets it go, with its sound (Banner).</summary>
         public bool OverBanner(Vector2 screen)

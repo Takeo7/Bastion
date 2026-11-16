@@ -335,6 +335,20 @@ namespace Bastion.UI.Hud
         public RunPackView Run;
     }
 
+    /// <summary>A chapter's boss on the bar at the top (H6): name, health, armour, its charge ready or in how many turns.</summary>
+    [Serializable]
+    public sealed class BossView
+    {
+        /// <summary>Its unit, for its file on a click (OnSheet).</summary>
+        public string Id;
+        public string Name;
+        public int Hp, Max, Armor;
+        /// <summary>«Embestida lista», «Embestida en 2 turnos».</summary>
+        public string Charge;
+        public bool ChargeReady;
+        public string Tip;
+    }
+
     /// <summary>
     /// A run's soldier's pack in combat (H3; RunPack): its grid, its kit's places, what lies at its feet laid out in a grid,
     /// and the partners beside it as places to give to. Things go from one to another on the grids' board (GearBoard).

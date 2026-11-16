@@ -36,7 +36,7 @@ namespace Bastion.UI.Hud
         void OnNewMission(bool random);
         void OnReturnToBase();
         void OnBackToMenu();
-        /// <summary>The soldier's sheet, to look at (H).</summary>
+        /// <summary>The soldier's sheet, to look at (H); an enemy's file, from the boss's bar (H6).</summary>
         void OnSheet(string unit);
         /// <summary>One floor up (1) or down (-1).</summary>
         void OnFloor(int dir);

@@ -338,7 +338,8 @@ namespace Bastion.Engine
         /// leaves the edge open there (dressing.ts dressEdges). Null if no side has
         /// room.
         /// </summary>
-        private static BusPlace? ParkBus(Canvas c, List<Vec2> zone, Rng rng)
+        /// <remarks>`dry` (Mapgen.NearEvac): whether it has room, nothing changed on the canvas.</remarks>
+        private static BusPlace? ParkBus(Canvas c, List<Vec2> zone, Rng rng, bool dry = false)
         {
             // Math.min(...[]) is Infinity: no side touches an empty zone (NaN >= 3), none, and no draw.
             if (zone.Count == 0) return null;
@@ -409,6 +410,7 @@ namespace Bastion.Engine
             if (pick == null) return null;
             var chosen = pick.Value;
             var tiles = TilesIn(chosen.R);
+            if (dry) return new BusPlace { Tiles = tiles, Heading = HeadingOf(chosen.R, chosen.AlongX), Lane = new List<Vec2>() };
             foreach (var p in tiles)
             {
                 c.Force(p.X, p.Y, TileKinds.High);
@@ -475,7 +477,8 @@ namespace Bastion.Engine
         /// a planter, a tree, a bench) goes, whole; so does what stands in the bus's way out to the edge. Null without a way
         /// out five wide or more but the squad's, or room on it.
         /// </summary>
-        private static (List<Vec2> Zone, BusPlace Bus)? AvenueEvac(Canvas c, Rect objective, Rng rng, bool relaxed = false)
+        /// <remarks>`near` (GenOptions.EvacNear): only on the squad's half, NearMost on foot from it at most, NearWalk the nearer the better.</remarks>
+        private static (List<Vec2> Zone, BusPlace Bus)? AvenueEvac(Canvas c, Rect objective, Rng rng, bool relaxed = false, bool near = false)
         {
             var fromSquad = StepsFrom(c, new List<Vec2> { c.Squad });
             var fromObjective = StepsFrom(c, TilesIn(objective).Where((p) => c.In(p.X, p.Y) && Grid.IsWalkable(c.Get(p.X, p.Y))).ToList());
@@ -562,7 +565,8 @@ namespace Bastion.Engine
                         var a = fromSquad[c.I(mid.X, mid.Y)];
                         var b = fromObjective[c.I(mid.X, mid.Y)];
                         if (a < 0 || b < 0) continue;
-                        options.Add((Off(a) * 2 + Off(b) * 2 + Math.Abs(a - b) * 0.1 + rng.Next(), tiles, zone, verge, heading, () =>
+                        if (near && (a > NearMost || !SquadHalf(c, mid))) continue;
+                        options.Add(((near ? OffNear(a) * 2 : Off(a) * 2 + Off(b) * 2 + Math.Abs(a - b) * 0.1) + rng.Next(), tiles, zone, verge, heading, () =>
                         {
                             var lane = new List<Vec2>();
                             for (var k = nose; k != end; k += forward) lane.AddRange(Way(k));

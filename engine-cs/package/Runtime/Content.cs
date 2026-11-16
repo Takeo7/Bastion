@@ -555,7 +555,7 @@ namespace Bastion.Engine
             [AbilityIds.Claw] = new AbilityDef { Id = AbilityIds.Claw, Name = "Mordisco", Description = "Muerde a quien tiene al lado.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
             // El Toro's (H6, H6-TORO.md; texts Lore: provisional).
             [AbilityIds.Pound] = new AbilityDef { Id = AbilityIds.Pound, Name = "Mazazo", Description = "Un golpe con los dos puños a quien tiene al lado: 6 de daño.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
-            [AbilityIds.Charge] = new AbilityDef { Id = AbilityIds.Charge, Name = "Embestida", Description = "Corre en línea recta hasta 6 casillas hacia un soldado que ve, le hace 4 de daño y lo tumba. Gasta sus dos acciones. Cada 3 turnos como mucho.", Target = AbilityTargets.Enemy, Ap = 2, EndsTurn = true, Cooldown = 3, Range = 6 },
+            [AbilityIds.Charge] = new AbilityDef { Id = AbilityIds.Charge, Name = "Embestida", Description = "Corre en línea recta, hasta 6 casillas, hacia un soldado que ve. Le hace 4 de daño y lo tumba: queda en el suelo hasta vuestro turno, y levantarse le cuesta una acción. Gasta sus dos acciones. Cada 3 turnos como mucho.", Target = AbilityTargets.Enemy, Ap = 2, EndsTurn = true, Cooldown = 3, Range = 6 },
             [AbilityIds.Roar] = new AbilityDef { Id = AbilityIds.Roar, Name = "Rugido", Description = "La primera vez que ve a la escuadra, ruge: todos los grupos del mapa despiertan y van hacia él. Una vez por combate.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false, Charge = ChargeIds.Roar },
             [AbilityIds.Overwatch] = new AbilityDef { Id = AbilityIds.Overwatch, Name = "Vigilancia", Description = "Dispara al primer enemigo que se mueva a la vista.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true },
             // Fase 10 (docs/FASE10.md §4): the reach is the throw's (abilityRange), the noise grows with Señuelo and Reclamo.
@@ -800,6 +800,12 @@ namespace Bastion.Engine
         public const int SoldierMobility = 8;
         public const int ZombieMobility = 5;
         /// <summary>
+        /// El Toro's movement a turn, in tiles (Gameplay, 16/11: «6 por acción», as the dead's rule): a common zombie went from
+        /// 6.4 tiles an action to ZombieMobility a turn, so 6 an action is 6 × 5 / 6.4 = 4.69 a turn, and a path counts half
+        /// tiles (Paths.CostOrtho 2): 4.5, a little slower than a zombie, with his two actions (ApPerTurnOf).
+        /// </summary>
+        public const double BruteMobility = 4.5;
+        /// <summary>
         /// What the squad walks more a turn while it is hidden, in tiles (Arturo, 16/11: «Cuando estas oculto que tengas más
         /// movimiento y que cuando dejes de estarlo tengas lo normal», 3 more): a soldier 11 tiles, not 8. Once the squad is
         /// found, each soldier loses them from what it has left that turn (Events, concealmentBroken), and has its own after.
@@ -952,9 +958,9 @@ namespace Bastion.Engine
             [TemplateIds.Sectoid] = Alien(TemplateIds.Sectoid, "Chillón", "CHI", WeaponIds.SectoidPistol, hp: 7, mobility: 5, will: 100, undead: true, abilities: new[] { AbilityIds.Mindspin, AbilityIds.Reanimate }),
             // The Hinchado: slow; it bursts when it dies or reaches a soldier (rules.ts burst).
             [TemplateIds.Bloater] = Alien(TemplateIds.Bloater, "Hinchado", "HIN", WeaponIds.BloaterBurst, hp: 8, aim: 0, defense: -15, mobility: 3, sight: 12, detection: 5, will: 100, undead: true, abilities: new[] { AbilityIds.Burst }),
-            // El Toro (H6, H6-TORO.md): chapter 1's boss. Two actions (ApPerTurnOf), 6 of movement; nothing makes it panic,
+            // El Toro (H6, H6-TORO.md): chapter 1's boss. Two actions (ApPerTurnOf), BruteMobility; nothing makes it panic,
             // the Golpe silencioso doesn't take it (Abilities.TakedownRefusal: the Zombi and the Corredor only).
-            [TemplateIds.Brute] = Alien(TemplateIds.Brute, "El Toro", "TRO", WeaponIds.BruteFists, meleeWeapon: WeaponIds.BruteFists, hp: 30, armor: 1, aim: 60, mobility: 6, sight: 14, detection: 6, will: 100, undead: true, abilities: new[] { AbilityIds.Pound, AbilityIds.Charge, AbilityIds.Roar, AbilityIds.Smash }, charges: Charges(ChargeIds.Roar, 1)),
+            [TemplateIds.Brute] = Alien(TemplateIds.Brute, "El Toro", "TRO", WeaponIds.BruteFists, meleeWeapon: WeaponIds.BruteFists, hp: 30, armor: 1, aim: 60, mobility: BruteMobility, sight: 14, detection: 6, will: 100, undead: true, abilities: new[] { AbilityIds.Pound, AbilityIds.Charge, AbilityIds.Roar, AbilityIds.Smash }, charges: Charges(ChargeIds.Roar, 1)),
             // Objectives. The relay is an alien "unit" so every weapon can hit it; it never acts.
             [TemplateIds.Turret] = Soldier(TemplateIds.Turret, "Torreta", "TOR", WeaponIds.TurretGun, hp: 12, armor: 1, aim: 60, mobility: 0, sight: 14, will: 100, robotic: true, abilities: new string[0], charges: Charges()),
             [TemplateIds.Relay] = Alien(TemplateIds.Relay, "Alarma", "ALA", WeaponIds.TrooperRifle, hp: 8, armor: 1, aim: 0, mobility: 0, sight: 0, detection: 0, robotic: true, abilities: new string[0]),

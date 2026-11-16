@@ -105,6 +105,13 @@ namespace Bastion.Net
             var m = s.Mission;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier);
             if (m.Kind == MissionKinds.Rescue && Vip(s) is Unit vip && !vip.Captive) return true;
+            if (s.Run != null)
+            {
+                // A run's Asedio and Travesía: La Lata from the start, where the Asedio holds till it comes; a Guarida, once
+                // its box is open; El Toro, once he is dead; either of these given up when the squad is broken (H5, H6).
+                if (m.HoldUntil != null || s.Run.NodeKind == NodeKinds.Crossing) return true;
+                if (m.Lair != null || !string.IsNullOrEmpty(m.Boss)) return m.ObjectiveDone || Routed(s);
+            }
             if (RunSaqueo(s)) return RunLeaving(s, roomOf);
             if (m.Kind == MissionKinds.Scavenge && m.EvacZone.Count > 0)
             {
@@ -132,7 +139,7 @@ namespace Bastion.Net
         {
             // In La Lata with the job done: the bus, once everyone is aboard who can get there. No clock hurries it: only the
             // sabotage's alarm has one now (Arturo, 5/11 #1), and it stops once the alarm is silenced (Events.CompleteObjective).
-            if (leaving && Abilities.InEvacZone(s, u.Pos))
+            if (leaving && Abilities.InEvacZone(s, u.Pos) && BusHere(s))
             {
                 var all = AllAboard(s);
                 // The one with the item aboard and the dead on it: now, with whoever is in.
@@ -171,9 +178,17 @@ namespace Bastion.Net
             // The silent takedown (Arturo, 16/11): one of the dead beside it that hasn't seen it, killed for sure and unheard.
             var unaware = Usable(s, u, AbilityIds.Takedown) ? Abilities.TakedownTargets(s, u).OrderBy((t) => t.Id, System.StringComparer.Ordinal).FirstOrDefault() : null;
             if (unaware != null) return Ability(u, AbilityIds.Takedown, unaware.Id);
+            // A Guarida's box beside it: opened, the job done (H5).
+            var lair = s.Run != null && s.Mission.Lair is Pos box && !s.Mission.ObjectiveDone && Usable(s, u, AbilityIds.Search)
+                ? Looting.SearchableTiles(s, u).FirstOrDefault((p) => Grid.SameTile(p, box)) : null;
+            if (lair != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = lair };
+            // El Toro first, at any fair odds and farther than the rest: his group comes on, he doesn't stop (H6).
+            var bull = Bull(s);
+            var atBull = bull != null && !carrier ? BestShot(s, u, Close * 2, bull.Id) : null;
+            if (atBull != null && atBull.Value.hit >= 25) return atBull.Value.cmd;
             // Only what is close is shot at: a shot is heard, and draws more of them (docs/FASE2.md). In a run, on the way
             // out, only what stands beside it: it stood fighting by La Lata till the horde had it (a Saqueo, 16/11).
-            var going = s.Run != null && leaving;
+            var going = s.Run != null && leaving && !Holding(s);
             var shot = BestShot(s, u, going ? 1.5 : Close);
             var nearest = Enemies(s).Select((e) => Grid.Distance(u.Pos, e.Pos)).DefaultIfEmpty(double.MaxValue).Min();
             if (shot != null && !carrier && shot.Value.hit >= 30) return shot.Value.cmd;
@@ -184,8 +199,9 @@ namespace Bastion.Net
                 var spot = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault() : null;
                 if (spot != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = spot };
             }
-            // The blade alone: a step up to one of the dead, keeping an action to strike (not on a run's way out).
-            if (!armed && !carrier && !going)
+            // The blade alone: a step up to one of the dead, keeping an action to strike (not on a run's way out, nor out of
+            // La Lata in an Asedio).
+            if (!armed && !carrier && !going && !Holding(s))
             {
                 var close = MoveToStrike(s, u);
                 if (close != null) return close;
@@ -217,6 +233,8 @@ namespace Bastion.Net
             if (m.Kind == MissionKinds.Recovery && m.Item != null && m.Item.Pos != null) return m.Item.Pos;
             if (m.Kind == MissionKinds.Hack && m.Terminal != null && !m.ObjectiveDone) return m.Terminal;
             if ((Vip(s) ?? Alarm(s)) is Unit objective) return objective.Pos;
+            if (s.Run != null && m.Lair != null) return m.Lair;
+            if (Bull(s) is Unit bull) return bull.Pos;
             if (RunSaqueo(s)) return roomOf(u) ?? bus;
             return NearestEnemy(s, u, walksOf(u)) ?? bus;
         }
@@ -280,7 +298,37 @@ namespace Bastion.Net
         }
 
         /// <summary>A run's Saqueo: the normal node (Gameplay, 16/11), no objective but to search and go.</summary>
-        private static bool RunSaqueo(GameState s) => s.Run != null && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
+        private static bool RunSaqueo(GameState s) => s.Run?.NodeKind == NodeKinds.Normal && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
+
+        /// <summary>El Toro alive, in his fight (H6); null in any other.</summary>
+        private static Unit? Bull(GameState s) => !string.IsNullOrEmpty(s.Mission.Boss) && Grid.GetUnit(s, s.Mission.Boss!) is Unit b && b.Alive ? b : null;
+
+        /// <summary>A run's Asedio (H5): the squad holds by La Lata till it comes (MissionState.HoldUntil).</summary>
+        private static bool Holding(GameState s) => s.Run != null && s.Mission.HoldUntil != null;
+
+        /// <summary>La Lata takes the squad now: in an Asedio, from its turn on («La Lata llega en el turno 8»).</summary>
+        private static bool BusHere(GameState s) => s.Mission.HoldUntil == null || s.Turn >= s.Mission.HoldUntil;
+
+        /// <summary>
+        /// The squad broken: one or none of it left, or all at half health or less. A Guarida or El Toro is given up then: lost,
+        /// but whoever is left comes home.
+        /// </summary>
+        private static bool Routed(GameState s)
+        {
+            var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+            return squad.Count <= 1 || squad.All((o) => o.Hp * 2 <= o.MaxHp);
+        }
+
+        /// <summary>
+        /// Whether `p` lies on a line El Toro could charge along (Toro.ChargePath: straight, one of eight ways, 2 to ChargeRun + 1
+        /// tiles off, at his level), walls and the rest aside: a place to keep out of.
+        /// </summary>
+        private static bool InChargeLine(Unit bull, Pos p)
+        {
+            int dx = p.X - bull.Pos.X, dy = p.Y - bull.Pos.Y;
+            var steps = System.Math.Max(System.Math.Abs(dx), System.Math.Abs(dy));
+            return p.Z == bull.Pos.Z && steps >= 2 && steps <= Toro.ChargeRun + 1 && (dx == 0 || dy == 0 || System.Math.Abs(dx) == System.Math.Abs(dy));
+        }
 
         /// <summary>
         /// A run's Saqueo is over for the squad: the turn RunLeaveTurn has come, one of it is at half health or less, or none
@@ -295,11 +343,13 @@ namespace Bastion.Net
         }
 
         /// <summary>
-        /// The room nobody has searched (Looting.RoomAt, RoomSearched) that takes `u` least off its way to La Lata: its walk
-        /// there (`walks`, within RoomTurns of movement) less what it brings it nearer La Lata, as the crow flies, at most
-        /// RoomDetour; a tile of it. Null with none. In the country (a farm and a barn on a map of 72) it walked out four turns
-        /// for the nearest and back again with nothing. `known`: each tile's room as found, for the next soldier (a room is a
-        /// flood of its floor).
+        /// The room nobody has searched (Looting.RoomAt, RoomSearched), or the place beside a box, a boot or a body still shut
+        /// (Looting.IsSearchable), that takes `u` least off its way to La Lata: its walk
+        /// there (`walks`, within RoomTurns of movement) less what it brings it nearer La Lata, as the crow flies; a tile of it.
+        /// Gone for if that is RoomDetour at most, or if the walk there and on to La Lata fit in the turns left till
+        /// RunLeaveTurn (La Lata near, in the squad's half since 16/11: then the rooms round it). Null with none. In the
+        /// country (a farm and a barn on a map of 72) it walked out four turns for the nearest and back again with nothing.
+        /// `known`: each tile's room as found, for the next soldier (a room is a flood of its floor).
         /// </summary>
         private static Pos? RoomGoal(GameState s, Unit u, Reach walks, Dictionary<int, LootRoom?> known)
         {
@@ -308,6 +358,7 @@ namespace Bastion.Net
             double ToBus(Pos p) => bus.Min((b) => Grid.Distance(p, b));
             var here = ToBus(u.Pos);
             var most = RoomTurns * Paths.FullMoves(u);
+            var left = (double)System.Math.Max(0, RunLeaveTurn - s.Turn) * Paths.FullMoves(u) / Paths.CostOrtho;
             Pos? best = null;
             var bestDetour = double.MaxValue;
             foreach (var kv in walks.Cost.Where((kv) => kv.Value <= most).OrderBy((kv) => kv.Value).ThenBy((kv) => kv.Key))
@@ -318,10 +369,14 @@ namespace Bastion.Net
                     if (room == null) known[kv.Key] = null;
                     else foreach (var p in room.Tiles) known[Grid.NodeOf(s, p)] = room;
                 }
-                if (room == null || Looting.RoomSearched(s, room)) continue;
                 var at = Grid.PosOf(s, kv.Key);
-                var detour = (double)kv.Value / Paths.CostOrtho - (here - ToBus(at));
-                if (detour > RoomDetour || detour >= bestDetour - 1e-9) continue;
+                // A room left to search, or a box, a boot or a body beside the place (the factory's crates, the country's cars).
+                var spot = (room != null && !Looting.RoomSearched(s, room))
+                    || Grid.Dirs8.Any((d) => new Pos { X = at.X + d.X, Y = at.Y + d.Y, Z = at.Z } is Pos q && Looting.IsSearchable(s, q) && Looting.ReachesToSearch(s, at, q));
+                if (!spot) continue;
+                var walk = (double)kv.Value / Paths.CostOrtho;
+                var detour = walk - (here - ToBus(at));
+                if ((detour > RoomDetour && walk + ToBus(at) > left) || detour >= bestDetour - 1e-9) continue;
                 best = at;
                 bestDetour = detour;
             }
@@ -450,7 +505,10 @@ namespace Bastion.Net
             var reach = Paths.ComputeReach(s, u, cost);
             // Where it ends up matters as much as how near: beside the dead it is bitten in their turn.
             var enemies = Enemies(s).ToList();
-            double Danger(Pos p) => enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0);
+            // El Toro's charge ready (or by the next turn): his lines are kept out of (H6).
+            var bull = Bull(s);
+            var charging = bull != null && (!bull.Cooldowns.TryGetValue(AbilityIds.Charge, out var wait) || wait <= 1);
+            double Danger(Pos p) => enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
             var stops = Paths.Destinations(s, u, reach);
             Destination? best = null;
             var end = WayTo(s, walks, goal, bus);

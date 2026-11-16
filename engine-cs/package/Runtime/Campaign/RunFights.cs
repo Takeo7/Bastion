@@ -182,6 +182,8 @@ namespace Bastion.Engine
                 Stealth = node.Kind == NodeKinds.Stealth ? true : (bool?)null,
                 Guard = node.Kind == NodeKinds.Elite ? Setup.GuardOf(seed) : null,
                 Boss = boss ? TemplateIds.Brute : null,
+                // A normal node's La Lata near the squad (Gameplay, 16/11): far was for the Travesía.
+                EvacNear = node.Kind == NodeKinds.Normal ? true : (bool?)null,
             });
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
             return (state, name);

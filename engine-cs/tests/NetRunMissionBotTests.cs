@@ -10,7 +10,7 @@ namespace Bastion.Engine.Tests
     /// <summary>
     /// MissionBot in a run's fight (H3; Gameplay, 16/11): the Saqueo of the first row, searched and left on La Lata, never
     /// hunting the dead (it fell on every one so: 4 of 4); the pack used, magazines spent on reloading. With the knife the
-    /// campaign starts with, and with rifles.
+    /// campaign starts with, and with rifles. And the stages of H5 and H6: the Asedio, the Travesía, the Guarida and El Toro.
     /// </summary>
     public class NetRunMissionBotTests
     {
@@ -103,6 +103,44 @@ namespace Bastion.Engine.Tests
             Assert.Equal((ItemActions.Equip, "g901"), (equip.Action, equip.Gear));
             Do(s, equip);
             Assert.Equal("g901", u.Kit.Primary?.Id);
+        }
+
+        /// <summary>
+        /// The four stages of H5 and H6 with both players and rifles, as the squad is by the chapter's end, on six seeds: the
+        /// Asedio held till La Lata comes and the Travesía crossed, won; a Guarida's box opened and El Toro killed, what the
+        /// bot does for them (16/11: 2 Guaridas of 6 won, the box opened in 5, the rest lost on the long way back from it to
+        /// La Lata, the box being as far from it as it can; El Toro killed in 6, 4 won). No order refused, and every one over.
+        /// </summary>
+        [Theory]
+        [InlineData(NodeKinds.Hold, 5)]
+        [InlineData(NodeKinds.Crossing, 4)]
+        [InlineData(NodeKinds.Elite, 4)]
+        [InlineData(NodeKinds.Boss, 5)]
+        public void TheNewStagesArePlayed(string kind, int least)
+        {
+            var done = 0;
+            for (var seed = 1; seed <= 6; seed++)
+            {
+                var c = Two(seed);
+                foreach (var x in c.Soldiers)
+                {
+                    InSlot(c, x, KitSlots.Primary, GearKinds.Weapon, FoundWeaponIds.AssaultRifle);
+                    InSlot(c, x, KitSlots.Pistol, GearKinds.Weapon, FoundWeaponIds.Pistol);
+                    InSlot(c, x, KitSlots.Vest, GearKinds.Vest, VestIds.Vest);
+                    InPack(c, x, GearKinds.Mags, null, 0, 0, 3);
+                }
+                Start(c, seed);
+                GoTo(c, kind);
+                var s = new EngineCampaignRules().LaunchMission(c, new Rng(seed * 31))!.Value.state;
+                var played = Play(s, seed, Both);
+                Assert.Equal(0, played.Refused);
+                Assert.NotNull(s.Outcome);
+                var job = kind == NodeKinds.Elite || kind == NodeKinds.Boss ? s.Mission.ObjectiveDone : s.Outcome == Outcomes.Victory;
+                if (job) done++;
+                output.WriteLine($"{kind} {seed} ({s.MapName}): {s.Outcome}/{s.OutcomeReason}, turno {s.Turn}, objetivo {(s.Mission.ObjectiveDone ? "cumplido" : "no")}, {played.Orders} órdenes");
+            }
+            output.WriteLine($"{kind}: {done} de 6");
+            Assert.True(done >= least, $"{kind}: {done} de 6");
         }
 
         private const int Seeds = 8;

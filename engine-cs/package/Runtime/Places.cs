@@ -14,6 +14,8 @@ namespace Bastion.Engine
         public const string Factory = "factory";
         public const string Roadside = "roadside";
         public const string Country = "country";
+        /// <summary>The hospital only inside (H7; Sites.Hospital).</summary>
+        public const string Hospital = "hospital";
 
         public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>
         {
@@ -23,6 +25,8 @@ namespace Bastion.Engine
             [Factory] = "Fábrica",
             [Roadside] = "Área de servicio",
             [Country] = "Campo",
+            // Lore: provisional
+            [Hospital] = "Hospital",
         };
 
         /// <summary>How many of the dead a place holds, as a share of what a city holds (Arturo, 31/10): the city as it was.</summary>
@@ -34,6 +38,8 @@ namespace Bastion.Engine
             [Factory] = 0.8,
             [Roadside] = 0.6,
             [Country] = 0.5,
+            // One building, the dead on its ground floor (H7): fewer than a town's.
+            [Hospital] = 0.35,
         };
 
         /// <summary>
@@ -66,6 +72,7 @@ namespace Bastion.Engine
             if (map.Biome == Biomes.Wilds) return map.Site == Sites.Roadside ? Roadside : Country;
             if (map.Biome != Biomes.City) return null;
             if (map.Site == Sites.Industrial) return Estate;
+            if (map.Site == Sites.Hospital) return Hospital;
             var grid = story == 1 || story == 2 || !string.IsNullOrEmpty(map.Medical);
             return !grid && OldTownSeed(map.Seed ?? 0) ? Town : City;
         }

@@ -193,3 +193,59 @@
     border-width: 2px;
     border-color: #ffffff;
 }
+
+/* ================================================================ a chapter's boss (BossBar, H6) */
+
+.boss-bar {
+    position: absolute;
+    top: 64px;
+    left: 30%;
+    right: 30%;
+    padding: 6px 12px 8px 12px;
+    background-color: rgba(18, 12, 12, 0.92);
+    border-width: 1px;
+    border-color: #6b1d16;
+}
+
+.boss-bar__top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.boss-bar__name {
+    font-size: 20px;
+    color: #ffffff;
+    letter-spacing: 2px;
+}
+
+.boss-bar__hp {
+    font-size: 16px;
+    color: #f0d0c8;
+}
+
+.boss-bar__track {
+    height: 10px;
+    margin-top: 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.boss-bar__fill {
+    height: 100%;
+    background-color: #c0392b;
+}
+
+.boss-bar__line {
+    flex-direction: row;
+    margin-top: 5px;
+}
+
+.boss-bar__chip {
+    font-size: 11px;
+    color: #c4c9c0;
+    margin-right: 10px;
+}
+
+.boss-bar__chip--ready {
+    color: #ff8a7a;
+}

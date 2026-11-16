@@ -95,5 +95,10 @@ namespace Bastion.Engine
         public string? Site { get; set; } // Sites
         /// <summary>A sabotage's alarm (playtest 2026-10-15, #14): a patrol car or an ambulance takes a second tile, its nose.</summary>
         public string? Alarm { get; set; } // Alarms
+        /// <summary>
+        /// La Lata near (an expedition's normal node; Gameplay, 16/11): on the squad's half of the map at a moderate walk
+        /// from where it comes in (Mapgen.NearWalk), where the map allows. Null: where the map puts it.
+        /// </summary>
+        public bool? EvacNear { get; set; }
     }
 }

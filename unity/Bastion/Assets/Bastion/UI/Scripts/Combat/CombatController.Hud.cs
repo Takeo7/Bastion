@@ -106,6 +106,7 @@ namespace Bastion.UI.Combat
             turn.InPlay = inPlay?.Name;
             Hud.SetTurn(turn);
             Hud.SetMission(MissionView());
+            Hud.SetBoss(BossOf(v));
             Hud.SetCompass(CompassOf(v) is var rose && !rose.Shown && Bastion.Client.GameInput.Touch ? new CompassView { Shown = true, Edges = false } : rose);
             Hud.SetPlayers(alone ? null : PlayersView(v, sharing ? holder : (int?)null));
             Hud.SetSquad(SquadView(v, inPlay?.Id));
@@ -281,9 +282,9 @@ namespace Bastion.UI.Combat
                 {
                     // (Its cover is on the picked one's panel now, as a shield: Arturo, 7/11. CoverOf.)
                 }
-                void Tag(bool on, string text, string kind)
+                void Tag(bool on, string text, string kind, string tip = null)
                 {
-                    if (on) f.Tags.Add(new TagView { Text = text, Kind = kind });
+                    if (on) f.Tags.Add(new TagView { Text = text, Kind = kind, Tip = tip });
                 }
                 Tag(u.ControlledBy != null, UnitWords.Agree(u, "CONTROLADO"), "psi");
                 Tag(u.Overwatch, u.KillZone ? "ZONA LETAL" : u.WatchMelee == true ? "HOJA EN ALTO" : "VIGILANCIA", "ow");
@@ -291,6 +292,9 @@ namespace Bastion.UI.Combat
                 Tag(u.Hidden == true, UnitWords.Agree(u, "ESCONDIDO"), "hide");
                 Tag(u.Aided > 0, UnitWords.Agree(u, "PROTEGIDO"), "aid");
                 Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun");
+                // Knocked down by El Toro's charge (H6): up at the squad's next turn, an action spent. Lore's «EN EL SUELO»
+                // (masculine «tumbado» would go over anyone).
+                Tag(u.Down == true, Lore.BossText.DownTag, "stun", Lore.Glossary["En el suelo"]);
                 Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi");
                 Tag(u.Panicked, "PÁNICO", "psi");
                 Tag(u.SuppressedBy != null, UnitWords.Agree(u, "SUPRIMIDO"), "stun");
@@ -682,6 +686,9 @@ namespace Bastion.UI.Combat
                 Tag(u.Hunkered, "CUBRIÉNDOSE", "hk");
                 Tag(u.Hidden == true, UnitWords.Agree(u, "ESCONDIDO"), "hide");
                 Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun");
+                // Knocked down by El Toro's charge (H6): up at the squad's next turn, an action spent. Lore's «EN EL SUELO»
+                // (masculine «tumbado» would go over anyone).
+                Tag(u.Down == true, Lore.BossText.DownTag, "stun", Lore.Glossary["En el suelo"]);
                 view.Cards.Add(card);
             }
             return view;
@@ -851,19 +858,96 @@ namespace Bastion.UI.Combat
             var alert = m.Reinforcements.Any(r => !r.Landed && r.Horde != true && r.Pos != null) ? "VIENEN MÁS" : null;
             // The noise meter (Ana's notes, Arturo 29/10): the horde's next wave as dB, 40 quiet and 90 as it comes (Math.round).
             var fill = Rules.HordeFill(s);
+            var turnsLeft = m.TurnsLeft ?? -1;
+            // A stage of an expedition (H5, H6): its name; the Asedio's count to La Lata; El Toro to kill.
+            if (m.HoldUntil is int until)
+            {
+                turnsLeft = Math.Max(0, until - s.Turn);
+                objective = HudText.Mission.Hold(until, turnsLeft);
+                tip = HudText.Mission.HoldTip;
+            }
+            if (m.Boss != null && UnitById(s, m.Boss) is Unit boss)
+                objective = boss.Alive ? HudText.Mission.Boss(boss.Name) : HudText.Mission.BossDead(boss.Name);
             return new MissionView
             {
-                Label = MissionName(m.Kind),
+                Label = s.Run != null ? Bastion.UI.Strategy.StrategyText.Runs.NodeName(s.Run.NodeKind) : MissionName(m.Kind),
                 Area = s.MapName,
                 Objective = objective,
                 ObjectiveTip = tip,
-                TurnsLeft = m.TurnsLeft ?? -1,
+                TurnsLeft = turnsLeft,
                 Alert = alert,
                 HordeFill = fill.HasValue ? (float)fill.Value : -1,
                 HordeDb = fill.HasValue ? 40 + (int)Math.Floor(50 * fill.Value + 0.5) : 0,
                 HordeTitle = !fill.HasValue ? null : HudText.Mission.NoiseTip,
                 Weather = s.Weather,
             };
+        }
+
+        /// <summary>
+        /// The chapter's boss (H6; MissionState.Boss) for the bar at the top: once seen, or once it has roared (all the map
+        /// heard it), till it dies; its charge ready or in how many turns (Cooldowns).
+        /// </summary>
+        BossView BossOf(GameState s)
+        {
+            var id = s.Mission?.Boss;
+            var u = id != null ? UnitById(s, id) : null;
+            if (u == null || !u.Alive) return null;
+            var roared = u.Charges != null && u.Charges.TryGetValue(AbilityIds.Roar, out var left) && left <= 0;
+            if (!Visible(u) && !roared) return null;
+            var soon = ChargeSoon(s, u);
+            return new BossView
+            {
+                Id = u.Id, Name = u.Name, Hp = u.Hp, Max = u.MaxHp, Armor = u.Armor,
+                Charge = soon ? HudText.Boss.ChargeReady : HudText.Boss.ChargeIn(ChargeWait(u)), ChargeReady = soon,
+                Tip = HudText.Boss.Tip,
+            };
+        }
+
+        /// <summary>The turns El Toro's charge still waits (Cooldowns; gone, none).</summary>
+        static int ChargeWait(Unit boss) => boss.Cooldowns != null && boss.Cooldowns.TryGetValue(AbilityIds.Charge, out var n) ? n : 0;
+
+        /// <summary>
+        /// Whether El Toro can charge at his next turn, or now in his: the wait gone, or going as his turn starts
+        /// (TickCooldowns; MissionBot's «charging»). In the squad's turn, a wait of 1 is ready.
+        /// </summary>
+        static bool ChargeSoon(GameState s, Unit boss) => ChargeWait(boss) <= (s.ActiveTeam == Teams.Alien ? 0 : 1);
+
+        /// <summary>
+        /// The pointer on El Toro (Gameplay, 16/11): his charge to each soldier it would reach from where he stands
+        /// (Toro.ChargeTargets), faint while it isn't his next turn's.
+        /// </summary>
+        void ShowBossCharges(Unit boss)
+        {
+            var v = Shown;
+            if (AimMarks == null || !boss.Alive || !Visible(boss) || v.Outcome != null) return;
+            var lines = Toro.ChargeTargets(v, boss).Select(c => (boss.Pos, (IList<Pos>)c.Path, c.Target.Pos)).ToList();
+            AimMarks.ShowCharges(v, lines, ChargeSoon(v, boss));
+        }
+
+        /// <summary>
+        /// `u` moving to `at` (Gameplay, 16/11): whether it would stand in El Toro's line with his charge ready at his next
+        /// turn; if so, the line drawn to it. `u` is put there a moment for Toro.ChargePath (its old tile mustn't block
+        /// the line it steps back along) and back.
+        /// </summary>
+        bool ChargeLineTo(Unit u, Pos at)
+        {
+            var s = State;
+            var boss = UnitById(s, s.Mission?.Boss);
+            if (AimMarks == null || boss == null || !boss.Alive || !Visible(boss) || !ChargeSoon(s, boss)) return false;
+            var was = u.Pos;
+            List<Pos> path;
+            try
+            {
+                u.Pos = new Pos { X = at.X, Y = at.Y, Z = at.Z };
+                path = Toro.ChargePath(s, boss, u);
+            }
+            finally
+            {
+                u.Pos = was;
+            }
+            if (path == null) return false;
+            AimMarks.ShowCharges(s, new List<(Pos, IList<Pos>, Pos)> { (boss.Pos, path, at) }, true);
+            return true;
         }
 
         /// <summary>A mission's name (setup.ts MISSION_NAMES, as the room lists them, until setup is in C#).</summary>

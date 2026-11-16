@@ -34,6 +34,8 @@ namespace Bastion.Engine
             ["trooper"] = new EnemyFile("Saqueador de los Cuervos.", "Escopeta o fusil de caza, y alguna granada. Se cubre y dispara.", "Rómpele la cobertura o flanquéalo. Sus disparos también atraen zombis."),
             ["officer"] = new EnemyFile("Jefe de un grupo de Cuervos.", "Mejor arma y más aguante que un Saqueador. Usa la vigilancia.", "Es el más peligroso del grupo: dispárale primero."),
             ["lancer"] = new EnemyFile("Cuervo que captura en vez de matar.", "Red y porra cuerpo a cuerpo: el soldado inmovilizado empieza su siguiente turno con una sola acción.", "Corre mucho y no necesita línea de tiro. Pon vigilancia en su camino y no dejes a nadie solo."),
+            // El Toro, chapter 1's boss (H6, .dev-snapshots/gameplay/runs/H6-TORO.md).
+            ["brute"] = new EnemyFile("Un muerto del tamaño de dos.", "30 de salud y blindaje 1, y dos acciones por turno. Su mazazo hace 6. Cada 3 turnos puede embestir: corre en línea recta hasta 6 casillas hacia un soldado, le hace 4 de daño y lo tumba. Al ver a la escuadra por primera vez, ruge, y todos los muertos del mapa van hacia él.", "No os quedéis en línea recta con él. Separaos y disparadle de lejos. Contra él no vale el golpe silencioso."),
             ["relay"] = new EnemyFile("La alarma: un coche patrulla, una ambulancia o la de una nave.", "No dispara. Tiene salud y blindaje 1. Mientras suena, la zona se llena de zombis.", "Es el objetivo: hay que callarla antes de que acabe la cuenta atrás. Los explosivos ayudan."),
         };
     }

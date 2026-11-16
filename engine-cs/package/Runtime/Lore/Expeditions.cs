@@ -64,6 +64,24 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// A boss on the field (H6: El Toro's roared, charged, knockedDown and gotUp). `name`: BossName, or the template's.
+        /// A soldier knocked down is «en el suelo», not «tumbado»: it goes over anyone.
+        /// </summary>
+        public static class BossText
+        {
+            /// <summary>The banner when it roars: its name, and under it what the roar does.</summary>
+            public static string RoarBanner(string name) => name.ToUpperInvariant();
+            public const string RoarSub = "Ruge: todos los muertos del mapa van hacia él.";
+            public static string RoarLog(string name) => $"{name} os ha visto y ruge. Todos los muertos del mapa van hacia él.";
+            /// <summary>A charge that reaches `who`, and one the way cuts (its target null).</summary>
+            public static string ChargeLog(string name, string who) => $"{name} embiste a {who}, que cae al suelo.";
+            public static string ChargeCutLog(string name) => $"{name} embiste, pero algo le corta el paso.";
+            /// <summary>Over a soldier knocked down, and its log line when it gets up.</summary>
+            public const string DownTag = "EN EL SUELO";
+            public static string GotUpLog(string who) => $"{who} se levanta: le cuesta una acción.";
+        }
+
+        /// <summary>
         /// What is done at a stage, in one line, for its sheet on the map. The figures and names when known: the item to
         /// bring back, the alarm (Alarms), the turn La Lata comes on a Hold, the guard of a Guarida (a template).
         /// </summary>

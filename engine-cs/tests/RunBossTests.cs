@@ -31,7 +31,9 @@ namespace Bastion.Engine.Tests
         public void HisNumbers()
         {
             var t = Content.Templates[TemplateIds.Brute];
-            Assert.Equal((30, 1, 6.0, "El Toro"), (t.Hp, t.Armor, t.Mobility, t.Name));
+            Assert.Equal((30, 1, Content.BruteMobility, "El Toro"), (t.Hp, t.Armor, t.Mobility, t.Name));
+            // Half a tile less than a zombie a turn: 4.5 tiles, 9 of path.
+            Assert.Equal((9, 10), (Paths.FullMoves(Setup.MakeUnit("t", TemplateIds.Brute, "t", null, new Pos(), null)), Paths.FullMoves(Setup.MakeUnit("z", TemplateIds.Zombie, "z", null, new Pos(), null))));
             Assert.True(t.Undead);
             Assert.Equal(new[] { AbilityIds.Pound, AbilityIds.Charge, AbilityIds.Roar, AbilityIds.Smash }, t.Abilities);
             var (_, toro, _) = Arena();

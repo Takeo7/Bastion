@@ -189,9 +189,9 @@ namespace Bastion.Engine.Tests
         {
             Assert.Equal(Json.Write(RunMap.Generate(1, 12345)), Json.Write(RunMap.Generate(1, 12345)));
             Assert.NotEqual(Json.Write(RunMap.Generate(1, 12345)), Json.Write(RunMap.Generate(1, 12346)));
-            // The places all turn up.
+            // The places all turn up; the hospital only with its flag (H7, RunHospitalTests).
             var sites = Maps().SelectMany((m) => m.Map).Where((n) => n.Site != null).Select((n) => n.Site!).Distinct().ToList();
-            Assert.Equal(Places.Names.Keys.OrderBy((x) => x), sites.OrderBy((x) => x));
+            Assert.Equal(Places.Names.Keys.Where((x) => x != Places.Hospital || RunMap.HospitalSites).OrderBy((x) => x), sites.OrderBy((x) => x));
         }
 
         [Fact]

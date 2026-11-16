@@ -24,6 +24,9 @@ namespace Bastion.Engine
             // Gameplay, 16/11 (0.12.26): the extra movement and the dead's cone while hidden (Paths.ConcealedBonus, Los.InNoticeCone).
             ["Ocultación"] = $"Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene {Content.ConcealedMobility} puntos de movimiento más, y un zombi solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso. Entonces cada soldado pierde {Content.ConcealedMobility} de los puntos de movimiento que le queden.",
             ["Golpe silencioso"] = "Mata siempre, sin ruido y sin romper la ocultación, a un Zombi o un Corredor que tengas al lado, si aún no está alerta y no te tiene delante. No sirve con la motosierra.",
+            // The expeditions' boss of chapter 1 (H6).
+            ["El Toro"] = "El jefe del capítulo 1: un muerto enorme que embiste y tumba. Matarlo supera el capítulo.",
+            ["En el suelo"] = "Tras una embestida, el soldado queda en el suelo hasta vuestro turno: −20 de defensa y sin vigilancia. Levantarse le cuesta una acción.",
             ["Horda"] = "Los muertos que entran por los bordes. El ruido llena el medidor, en dB: a 90 se oye llegar una oleada, que entra un turno después. Salvo en la Limpieza, además, llegan unos pocos cada turno, el doble mientras suena la alarma de un Sabotaje.",
             ["Saqueo"] = "Misión de registrar y volver con el botín. Entran zombis por los bordes, y antes cuanto más ruido hagas.",
             ["Registrar"] = "Una acción, dentro de una habitación; cada una se registra una vez. Casas: comida y medicinas. Oficinas: piezas. Tiendas: comida. Almacenes: de todo.",

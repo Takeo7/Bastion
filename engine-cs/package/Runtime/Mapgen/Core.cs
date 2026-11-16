@@ -43,7 +43,7 @@ namespace Bastion.Engine
         private static readonly IReadOnlyList<int> RoadsideSize = new[] { 64, 72 };
 
         /// <summary>Whether a generated map is a town laid out on a plan (townPlan.ts): a city but the industrial estate.</summary>
-        private static bool IsTown(string biome, string? site = null) => biome == Biomes.City && site != Sites.Industrial;
+        private static bool IsTown(string biome, string? site = null) => biome == Biomes.City && site != Sites.Industrial && site != Sites.Hospital;
         /// <summary>Whether a generated map is the industrial estate, on a plan too (estate).</summary>
         private static bool IsEstate(string biome, string? site = null) => biome == Biomes.City && site == Sites.Industrial;
 
@@ -53,6 +53,8 @@ namespace Bastion.Engine
             // The country (docs/MAPAS.md §4.8, phase 5): the outskirts 72, the service area 64 × 72.
             if (biome == Biomes.Wilds) return site == Sites.Roadside ? (RoadsideSize[0], RoadsideSize[1]) : (CountrySize, CountrySize);
             if (IsEstate(biome, site)) return (EstateSize, EstateSize);
+            // The hospital only inside (H7).
+            if (biome == Biomes.City && site == Sites.Hospital) return HospitalOnlySize;
             if (biome == Biomes.Facility) return (FactorySize, FactorySize);
             if (!IsTown(biome, site)) return (GenSize, GenSize);
             return hospital ? (HospitalSize[0], HospitalSize[1]) : (TownSize, TownSize);

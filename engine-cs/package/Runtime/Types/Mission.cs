@@ -206,6 +206,12 @@ namespace Bastion.Engine
         public Pos? Lair { get; set; }
         /// <summary>A boss's fight (H6): its unit; it must be dead to win.</summary>
         public string? Boss { get; set; }
+        /// <summary>
+        /// A map that is one building (H7, the hospital only inside: Sites.Hospital): the outside out of play but the strip at
+        /// its main entrance, and the squad finds it room by room, not whole (Buildings: GameState.Discovered keeps nodes, z ×
+        /// area + tile).
+        /// </summary>
+        public bool? Inside { get; set; }
     }
 
     /// <summary>MissionState.evacBus: `{ tiles: Vec2[]; heading: number }`.</summary>

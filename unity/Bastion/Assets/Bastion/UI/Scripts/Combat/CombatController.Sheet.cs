@@ -39,6 +39,12 @@ namespace Bastion.UI.Combat
         void OpenSheet(string id)
         {
             var u = UnitById(Shown, id);
+            // An enemy's (the boss's bar, H6): its file, if in sight.
+            if (u != null && u.Team == Teams.Alien)
+            {
+                OnEnemyFile(id);
+                return;
+            }
             if (u == null || u.Team != Teams.Xcom || Hud == null) return;
             var t = Content.Templates[u.Template];
             var soldier = u.Template == TemplateIds.Rookie;

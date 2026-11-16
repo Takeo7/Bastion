@@ -105,6 +105,20 @@ namespace Bastion.Engine.Tests
             return Runs.Launch(c, new Rng(7))!.Value.State;
         }
 
+        /// <summary>A normal node at the hospital only inside (H7, Sites.Hospital), just launched: for Arte and UI.</summary>
+        public static GameState Hospital()
+        {
+            var c = Full();
+            var run = Start(c);
+            var node = RunMap.Choices(run).First((n) => RunMap.IsFight(n.Kind));
+            node.Kind = NodeKinds.Normal;
+            node.Site = Places.Hospital;
+            node.Seed = 11;
+            node.Modifier = null;
+            Agree(c, new ChooseNodeCommand { Node = node.Id });
+            return Runs.Launch(c, new Rng(7))!.Value.State;
+        }
+
         private static void Save(string name, CampaignState c)
         {
             Directory.CreateDirectory(Dir);
@@ -200,6 +214,7 @@ namespace Bastion.Engine.Tests
             Save("superviviente.json", survivor);
             Save("combate-mochila.json", Combat());
             Save("toro.json", Boss());
+            Save("hospital.json", Hospital());
         }
     }
 }

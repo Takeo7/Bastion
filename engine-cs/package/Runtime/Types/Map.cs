@@ -323,6 +323,11 @@ namespace Bastion.Engine
     {
         public const string Roadside = "roadside";
         public const string Industrial = "industrial";
+        /// <summary>
+        /// The hospital only inside (H7, behind RunMap.HospitalSites): a map that is the town's hospital (Mapgen.HospitalOnly),
+        /// in a city. Not in All: the campaign's own missions never go there.
+        /// </summary>
+        public const string Hospital = "hospital";
 
         public static readonly IReadOnlyList<string> All = new[] { Roadside, Industrial };
     }

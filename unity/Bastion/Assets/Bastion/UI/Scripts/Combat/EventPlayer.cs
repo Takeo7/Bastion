@@ -155,6 +155,20 @@ namespace Bastion.UI.Combat
             if (CameraRig.Logging) Debug.Log($"[camara] espera {waited:0.00} s, close={(control.Rig != null ? control.Rig.Closeness : 0):0.00}");
         }
 
+        /// <summary>
+        /// `seconds` on the camera's and the banner's clock (unscaled: a stamp's time and the camera's move are), a frame at
+        /// a time, the pause not counted; sooner if `done` says so or the player takes the camera (El Toro, H6).
+        /// </summary>
+        async Awaitable WaitUnscaled(float seconds, Func<bool> cam, Func<bool> done = null)
+        {
+            var waited = 0f;
+            while (waited < seconds && cam() && (done == null || !done()))
+            {
+                await Awaitable.NextFrameAsync(stop);
+                if (Time.timeScale > 0) waited += Time.unscaledDeltaTime;
+            }
+        }
+
         /// <summary>Back from the shot over the shoulder to where the camera was.</summary>
         void EndKillCam()
         {
@@ -209,6 +223,9 @@ namespace Bastion.UI.Combat
                 default: return 0.2f;
             }
         }
+
+        /// <summary>El Toro that charged last: who a knockedDown falls away from (H6).</summary>
+        string lastCharger;
 
         /// <summary>The enemy acting last (or «walkers»), the result still to be read, and the last group's framing.</summary>
         string lastActor;
@@ -2582,6 +2599,85 @@ namespace Bastion.UI.Combat
                     await Wait(0.5f);
                     return;
                 }
+                // El Toro (H6; Arte's animations, Red's sounds: .dev-snapshots/arte/unity/runs/brute/LEEME.md, red/runs/H6-SONIDOS.md).
+                case RoaredEvent r:
+                {
+                    var u = Unit(r.Unit);
+                    // The whole map hears it, seen or not: Lore's banner and line (H6).
+                    Hud?.Banner(Lore.BossText.RoarBanner(u.Name), "alien", Lore.BossText.RoarSub);
+                    Log(Lore.BossText.RoarLog(u.Name), "#e8d8c0");
+                    if (!ShownToSquad(u)) return;
+                    units?.ForceVisible(u.Id);
+                    // Close on him while the banner reads, and the roar once it has gone (Arte, 16/11: from afar and under the
+                    // banner it was hardly seen). The banner keeps its own clock (3.6 s, Banner.LongMs): waited for by its state,
+                    // at most 5 s of the camera's.
+                    if (Cam())
+                    {
+                        rig.Focus(Feet(u.Id));
+                        rig.CinematicZoom(11 * Board.Tile);
+                        await WaitUnscaled(5f, Cam, () => Hud == null || !Hud.BannerUp);
+                    }
+                    control.Sfx.Roar(Chest(u.Id));
+                    if (units == null)
+                    {
+                        await Wait(1.2f);
+                        return;
+                    }
+                    // (Its dust is Roar's: no fx.Scream.)
+                    await units.Roar(u.Id, stop);
+                    return;
+                }
+                case ChargedEvent ch:
+                {
+                    var u = Unit(ch.Unit);
+                    var t = ch.Target != null ? Unit(ch.Target) : null;
+                    // Who charged, for the knockedDown that follows (the fall away from it).
+                    lastCharger = u.Id;
+                    if (!ShownToSquad(u) && (t == null || !ShownToSquad(t))) return;
+                    Log(t != null ? Lore.BossText.ChargeLog(u.Name, t.Name) : Lore.BossText.ChargeCutLog(u.Name), t != null ? "#ff6a5a" : null);
+                    // Him and whom he runs at in the picture, nearer, as an attack (Arte, 16/11), there before he sets off.
+                    var end = t != null ? Feet(t.Id) : ch.Path.Count > 0 ? Board.TileToWorld(v, ch.Path[ch.Path.Count - 1]) : Feet(u.Id);
+                    if (Cam())
+                    {
+                        units?.ForceVisible(u.Id);
+                        rig.Focus(Vector3.Lerp(Feet(u.Id), end, 0.5f));
+                        rig.CinematicZoom(Mathf.Clamp(Vector3.Distance(Feet(u.Id), end) * 1.1f + 9 * Board.Tile, 13 * Board.Tile, 24 * Board.Tile));
+                        await WaitUnscaled(1f, Cam, () => rig.Arrived);
+                    }
+                    if (units == null)
+                    {
+                        await Wait(1.5f);
+                        return;
+                    }
+                    units.ForceVisible(u.Id);
+                    await units.Charge(u.Id, ch.Path, t?.Id, () =>
+                    {
+                        if (t == null) return;
+                        control.Sfx.ChargeHit(Chest(t.Id));
+                        if (Cam()) control.Rig.Shake(0.2f * Board.Tile, 0.35f);
+                    }, stop);
+                    return;
+                }
+                case KnockedDownEvent kd:
+                {
+                    var u = Unit(kd.Unit);
+                    if (!ShownToSquad(u)) return;
+                    if (units != null) await units.KnockDown(u.Id, lastCharger != null ? Feet(lastCharger) : Feet(u.Id), stop);
+                    else await Wait(1.0f);
+                    // On the ground: its thud and its groan.
+                    control.Sfx.KnockedDown(u, Feet(u.Id));
+                    return;
+                }
+                case GotUpEvent up:
+                {
+                    var u = Unit(up.Unit);
+                    if (!ShownToSquad(u)) return;
+                    Log(Lore.BossText.GotUpLog(u.Name));
+                    control.Sfx.GotUp(Feet(u.Id));
+                    if (units != null) await units.GetUp(u.Id, stop);
+                    else await Wait(0.9f);
+                    return;
+                }
                 case BoardsRemovedEvent boards:
                 {
                     // The crowbar on a boarded window or door (Arturo, 02/11 A11): Arte's blow topples the boards, and the map is
@@ -2774,6 +2870,20 @@ namespace Bastion.UI.Combat
                     // no arc and no flash of a hit (the dead one already falling).
                     await units.Takedown(shooter.Id, target.Id, () => control.Sfx.Takedown(chest), stop);
                     await Wait(0.05f);
+                    return;
+                }
+                // El Toro's pound (H6): both fists down, Arte's Smash; Red's blow as it lands.
+                if (e.Ability == AbilityIds.Pound)
+                {
+                    control.Sfx.Melee("swing", Chest(shooter.Id), weapon.Id);
+                    await units.Smash(shooter.Id, target.Id, () =>
+                    {
+                        if (!hit) return;
+                        control.Sfx.Pound(chest);
+                        if (cam()) control.Rig.Shake(0.12f * Board.Tile, 0.25f);
+                    }, stop);
+                    if (!hit) ShowMiss(e, shooter, target);
+                    await Wait(hit ? 0.05f : 0.25f);
                     return;
                 }
                 control.Sfx.Melee("swing", Chest(shooter.Id), Content.AttackWeapon(shooter, e.Ability).Id);

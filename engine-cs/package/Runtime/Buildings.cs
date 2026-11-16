@@ -3,14 +3,14 @@
 // building the squad has neither been into nor looked into from just before one of its windows, nobody shows to it,
 // though they see it. A building is its tiles inside, joined side by side and through its doors, by the ground's: two
 // houses wall to wall without a door are two (the client's Fog.Buildings and Fog.Peeks, Arte's, 31/10). What the squad
-// has found is kept by tile (GameState.Discovered).
+// has found is kept by tile (GameState.Discovered). A map that is one building is found room by room (BuildingRooms.cs).
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Bastion.Engine
 {
-    public static class Buildings
+    public static partial class Buildings
     {
         /// <summary>A map's buildings as it stands now.</summary>
         private sealed class Plan
@@ -140,6 +140,12 @@ namespace Bastion.Engine
         {
             // A siege's map is the squad's own base: known inside.
             if (s.Mission?.Siege != null) return;
+            // A map that is one building (H7): room by room (BuildingRooms.cs).
+            if (ByRoom(s))
+            {
+                DiscoverRooms(s, p, stopped);
+                return;
+            }
             var plan = PlanOf(s);
             var found = Found(s, plan, p, stopped);
             if (found.Count == 0) return;
@@ -163,6 +169,7 @@ namespace Bastion.Engine
             if (s.Mission?.Siege != null || s.Storeys == null || !Grid.InBounds(s, p.X, p.Y)) return false;
             var i = Grid.TileIndex(s, p.X, p.Y);
             if (s.Storeys[i] <= 0 || p.Z >= s.Storeys[i]) return false;
+            if (ByRoom(s)) return HiddenByRoom(s, p, viewers);
             var plan = PlanOf(s);
             if (plan.Of.Length == 0) return false;
             var seen = new HashSet<int>();
@@ -194,6 +201,8 @@ namespace Bastion.Engine
         {
             var found = new HashSet<int>(s.Discovered ?? new List<int>());
             if (s.Mission?.Siege != null) return found;
+            // Room by room (H7): nodes, z × area + tile; a ground floor's are its tiles.
+            if (ByRoom(s)) return FoundRoomNodes(s);
             var plan = PlanOf(s);
             foreach (var u in s.Units)
             {
@@ -207,6 +216,11 @@ namespace Bastion.Engine
         public static void Veil(GameState s, bool[] mask)
         {
             if (s.Mission?.Siege != null || s.Storeys == null) return;
+            if (ByRoom(s))
+            {
+                VeilRooms(s, mask);
+                return;
+            }
             var plan = PlanOf(s);
             if (plan.Of.Length == 0) return;
             var known = Known(s);

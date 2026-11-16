@@ -162,6 +162,8 @@ namespace Bastion.Engine
         public string? Guard { get; set; } // TemplateIds
         /// <summary>A boss's fight (H6): the first unit of its template in the groups is the one to kill (MissionState.Boss).</summary>
         public string? Boss { get; set; } // TemplateIds
+        /// <summary>A run's normal node (Gameplay, 16/11): La Lata near the squad (GenOptions.EvacNear).</summary>
+        public bool? EvacNear { get; set; }
     }
 
     public static partial class Setup
@@ -696,7 +698,7 @@ namespace Bastion.Engine
         /// </summary>
         private static readonly IReadOnlyDictionary<string, string> LayoutKind = new Dictionary<string, string> { [MissionKinds.Scavenge] = MissionKinds.Recovery };
 
-        public static MissionLayout MissionLayout(MapSource map, string kind, List<int> podSizes, bool itemOutdoors = false, bool clinic = false, bool hospital = false, string? alarm = null)
+        public static MissionLayout MissionLayout(MapSource map, string kind, List<int> podSizes, bool itemOutdoors = false, bool clinic = false, bool hospital = false, string? alarm = null, bool evacNear = false)
         {
             if (map.Kind == MapSourceKinds.Base) return Base.BaseLayout(map.Base!);
             if (map.Kind == MapSourceKinds.Handmade)
@@ -716,6 +718,7 @@ namespace Bastion.Engine
                 Clinic = clinic ? true : (bool?)null,
                 Hospital = hospital ? true : (bool?)null,
                 Alarm = !string.IsNullOrEmpty(alarm) ? alarm : null,
+                EvacNear = evacNear ? true : (bool?)null,
             });
         }
 
@@ -815,7 +818,7 @@ namespace Bastion.Engine
             var plan = new List<List<string>>(basePlan);
             if (extra != null) plan.Add(extra);
             if (opts.Night == true && opts.Map.Kind != MapSourceKinds.Base) plan.Add(NightPod(difficulty));
-            var layout = MissionLayout(opts.Map, kind, plan.Select((p) => p.Count).ToList(), opts.ItemOutdoors == true, opts.CampaignMission?.Story == 1, opts.CampaignMission?.Story == 2, opts.Alarm);
+            var layout = MissionLayout(opts.Map, kind, plan.Select((p) => p.Count).ToList(), opts.ItemOutdoors == true, opts.CampaignMission?.Story == 1, opts.CampaignMission?.Story == 2, opts.Alarm, opts.EvacNear == true);
             if (opts.Vehicle != null) FitVehicle(layout, opts.Vehicle.Value);
             // A run's Travesía (H5): the squad at the far end from La Lata.
             if (opts.Crossing == true) FarSpawns(layout);
@@ -1007,7 +1010,14 @@ namespace Bastion.Engine
                 foreach (var u in units) if (u.Team == Teams.Xcom && u.Mags != null) u.Mags = Math.Max(u.Mags.Value, Content.Siege.Mags);
             }
             // A run's Asedio (H5): waves every two turns till La Lata comes.
-            if (opts.HoldUntil != null && siege == null) reinforcements.AddRange(HoldWaves(difficulty, opts.HoldUntil.Value, reinforcements.Count + 1));
+            // A map that is one building (H7): its edges are out of play but the strip, so the waves by any edge there is room
+            // on (the strip, the rooms by the outer walls).
+            var oneBuilding = opts.Map.Kind == MapSourceKinds.Generated && opts.Map.Site == Sites.Hospital;
+            if (opts.HoldUntil != null && siege == null) reinforcements.AddRange(HoldWaves(difficulty, opts.HoldUntil.Value, reinforcements.Count + 1).Select((r) =>
+            {
+                if (oneBuilding) r.Side = null;
+                return r;
+            }));
             // The runs' «horda despierta» (H3): every group alert from the start, and a wave by an edge in the first enemy turn.
             var awake = opts.Awake == true && siege == null;
             if (awake)
@@ -1039,10 +1049,11 @@ namespace Bastion.Engine
                 Awake = awake ? true : (bool?)null,
                 // The runs' stages (H5, H6).
                 HoldUntil = siege == null ? opts.HoldUntil : null,
-                HordeSide = opts.Crossing == true && layout.Spawns.Count > 0 ? StartSide(layout) : (int?)null,
+                HordeSide = opts.Crossing == true && layout.Spawns.Count > 0 && !oneBuilding ? StartSide(layout) : (int?)null,
                 Stealth = opts.Stealth == true && kind == MissionKinds.Recovery ? true : (bool?)null,
                 Lair = lair,
                 Boss = !string.IsNullOrEmpty(opts.Boss) ? units.FirstOrDefault((u) => u.Template == opts.Boss)?.Id : null,
+                Inside = oneBuilding ? true : (bool?)null,
             };
 
             // The squad starts looking into the map (Arturo, 23/10: «los soldados aparecen mirando al revés»): towards what the

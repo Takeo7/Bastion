@@ -74,6 +74,8 @@ namespace Bastion.Engine
         private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> SiteNames = new Dictionary<string, IReadOnlyList<string>>
         {
             [Sites.Roadside] = new[] { "Área de servicio del Pinar", "El aserradero viejo", "Motel Los Abetos", "La gasolinera del alto" },
+            // The hospital only inside (H7). Lore: provisional
+            [Sites.Hospital] = new[] { "Hospital comarcal", "Hospital de San Rafael", "Hospital Santa Lucía", "Hospital del Ensanche" },
             [Sites.Industrial] = new[] { "Polígono Este", "Los muelles de carga", "Naves del Sur", "Polígono Norte" },
         };
 
@@ -114,7 +116,8 @@ namespace Bastion.Engine
             var clinic = biome == Biomes.City && ((kind == MissionKinds.Recovery && opts.Clinic == true) || opts.Medical == MedicalSiteKinds.Clinic || opts.Medical == MedicalSiteKinds.Ward);
             var hospital = biome == Biomes.City && ((kind == MissionKinds.Rescue && opts.Hospital == true) || opts.Medical == MedicalSiteKinds.Hospital);
             // A scenario only where it belongs: the service area in the wilds, the industrial estate in a city.
-            var site = (opts.Site == Sites.Roadside && biome == Biomes.Wilds) || (opts.Site == Sites.Industrial && biome == Biomes.City) ? opts.Site : null;
+            // The hospital only inside (H7), in a city.
+            var site = (opts.Site == Sites.Roadside && biome == Biomes.Wilds) || (opts.Site == Sites.Industrial && biome == Biomes.City) || (opts.Site == Sites.Hospital && biome == Biomes.City) ? opts.Site : null;
             var (W, H) = GeneratedSize(biome, site, hospital);
             var c = new Canvas(W, H);
             // The finished map is mirrored and/or transposed, so the squad may start in any corner.
@@ -142,6 +145,7 @@ namespace Bastion.Engine
             Rect objRect;
             if (compound != null) objRect = compound.Value.Objective;
             else if (built != null) objRect = built.Value.Objective;
+            else if (site == Sites.Hospital) objRect = HospitalOnly(c, rng, style);
             else if (biome == Biomes.City)
             {
                 // `{ ...style, industrial: site === 'industrial' }`: a copy.
@@ -179,21 +183,29 @@ namespace Bastion.Engine
                 postSpots.Add(V(sq.X + inward.X * 8, sq.Y + inward.Y * 8));
             }
             else postSpots = new List<Vec2> { V(8, 3), V(3, 8), V(8, 8) };
-            foreach (var at in postSpots) if (Bare(at)) GroupNear(c, at, rng, posts, 1, 0, 5);
+            // None on the hospital's strip (H7): the squad comes in at its door.
+            if (site != Sites.Hospital) foreach (var at in postSpots) if (Bare(at)) GroupNear(c, at, rng, posts, 1, 0, 5);
 
             var evacZone = new List<Vec2>();
             BusPlace? townBus = null;
             if (needsEvac && c.Exits.Count > 0)
             {
                 // A town's on a way out, the bus by the kerb; the country's by the far end of its track (its own seed); else
-                // somewhere between the squad and the objective.
-                var evac = AvenueEvac(c, objRect, new Rng(opts.Seed ^ 0x6576)) ?? AvenueEvac(c, objRect, new Rng(opts.Seed ^ 0x6577), true);
+                // somewhere between the squad and the objective. An expedition's normal node (EvacNear), near the squad: on a
+                // way out if one is near, else carved near (Mapgen.NearEvac), else as any other.
+                (List<Vec2> Zone, BusPlace Bus)? evac = null;
+                if (opts.EvacNear == true)
+                {
+                    evac = AvenueEvac(c, objRect, new Rng(opts.Seed ^ 0x6576), false, true) ?? AvenueEvac(c, objRect, new Rng(opts.Seed ^ 0x6577), true, true);
+                    if (evac == null) evacZone = NearEvac(c);
+                }
+                if (evac == null && evacZone.Count == 0) evac = AvenueEvac(c, objRect, new Rng(opts.Seed ^ 0x6576)) ?? AvenueEvac(c, objRect, new Rng(opts.Seed ^ 0x6577), true);
                 if (evac != null)
                 {
                     evacZone = evac.Value.Zone;
                     townBus = evac.Value.Bus;
                 }
-                else
+                else if (evacZone.Count == 0)
                 {
                     var mid = Centre(objRect);
                     evacZone = CarveEvac(c, Rect(0, 0, W, H), V((int)Js.Round((mid.X + sq.X) / 2), (int)Js.Round((mid.Y + sq.Y) / 2)), rng);
@@ -201,10 +213,13 @@ namespace Bastion.Engine
             }
             else if (needsEvac)
             {
+                // The hospital's on its strip (H7); an expedition's normal node (EvacNear), near the squad.
+                if (site == Sites.Hospital) evacZone = HospitalEvac(c);
+                if (opts.EvacNear == true && evacZone.Count == 0) evacZone = NearEvac(c);
                 // In a facility entered from the apron the evac is inside the fence (a yard by the far wall).
                 var top = compound != null && !compound.Value.Inside ? FacilityInside : 0;
                 var corner = V(W - 1, top);
-                evacZone = CarveEvac(c, Rect(W - 14, top, 14, 14), corner, rng);
+                if (evacZone.Count == 0) evacZone = CarveEvac(c, Rect(W - 14, top, 14, 14), corner, rng);
                 if (evacZone.Count == 0) evacZone = CarveEvac(c, Rect(W - 22, top, 22, 22), corner, rng);
             }
             // The bus waits beside it, drawn on its own seed so nothing else in the layout moves.

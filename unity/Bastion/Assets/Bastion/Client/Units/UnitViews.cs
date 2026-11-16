@@ -1135,8 +1135,14 @@ namespace Bastion.Client.Units
             {
                 if (u.Evacuated) continue;
                 seen.Add(u.Id);
+                bool made = false;
                 if (!views.TryGetValue(u.Id, out var v))
+                {
                     using (MakeMarker.Auto()) views[u.Id] = v = Make(u);
+                    made = true;
+                }
+                // (One the Brute's charge knocked down, made lying there: a game loaded or joined in the enemy's turn.)
+                if (made && u.Alive && u.Down == true) LieDownNow(v);
                 // (One La Lata threw stays as it came down: alive to the rules, the mission over.)
                 if (v.runOver) continue;
                 var was = v.place;

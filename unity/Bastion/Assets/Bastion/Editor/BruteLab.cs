@@ -39,7 +39,7 @@ namespace Bastion.EditorTools
             UnitViews.LabBody = "brute";
             UnitViews.LabKind = "brute";
             const int sx = 11;
-            int bx = action switch { "andar" => 16, "rugido" => 14, "golpe" => 12, "embestida" => 17, "tumbado" => 13, "muerte" => 14, _ => 20 };
+            int bx = action switch { "andar" => 16, "rugido" => 14, "golpe" => 12, "embestida" => 17, "tumbado" => 13, "cargado" => 13, "muerte" => 14, _ => 20 };
             Plain(u => u.Id == soldierId || u.Id == deadId, sx, bx);
             soldier = Put(state.Units.First(u => u.Id == soldierId), sx, 10, 0);
             var copy = Bastion.Net.Json.Read<Unit>(Bastion.Net.Json.Write(state.Units.First(u => u.Id == deadId)));
@@ -210,9 +210,12 @@ namespace Bastion.EditorTools
             {
                 try
                 {
+                    // «cargado»: the soldier knocked down already as its figure is made (Unit.Down: a game loaded, LieDownNow).
+                    if (action == "cargado") soldier.Down = true;
                     units.Sync(state);
                     Reveal();
-                    _ = BruteWatch(() => now, () => done, brute, man, Fists);
+                    // (Not for «cargado»: its skins measured against one lying from the first frame took minutes a frame.)
+                    if (action != "cargado") _ = BruteWatch(() => now, () => done, brute, man, Fists);
                     await Awaitable.WaitForSecondsAsync(1);
                     Heights(brute, man);
                     switch (action)
@@ -234,6 +237,15 @@ namespace Bastion.EditorTools
                             break;
                         case "muerte":
                             await Shot();
+                            break;
+                        case "cargado":
+                            Say("en-el-suelo");
+                            await Awaitable.WaitForSecondsAsync(2);
+                            Say("levantarse");
+                            await units.GetUp(man);
+                            Took("levantarse");
+                            now = "de-pie";
+                            await Awaitable.WaitForSecondsAsync(1);
                             break;
                         default:
                             await Walk(17);

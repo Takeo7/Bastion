@@ -1232,12 +1232,15 @@ namespace Bastion.UI.Combat
             Overlay?.ShowCover(State, null);
             // The pointer's ring only on a tile the picked one can walk to (below; #1: it went on every tile, as the web's).
             Overlay?.ShowHover(State, null, MoveOverlay.WalkRing);
+            AimMarks?.ShowCharges(null, null, false);
             ShowVision();
             ShowArmed();
             // At night, a lit tile says what the light does there and how long it lasts (#50); over one of the dead, whom
             // it sees and where it goes next (21/10 #11). A move, a door or a box beside say theirs instead (below).
             var hovered = hover != null ? Grid.UnitAt(Shown, hover) : null;
             Note(hover, hover != null && Burning.At(Shown, hover) ? $"Fuego: quita {Content.Flames.Damage} de salud al pisarlo, y {Content.Flames.Damage} más al acabar el turno en él" : null, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered));
+            // The pointer on El Toro: whom his charge reaches from there (H6).
+            if (hovered != null && hovered.Id == Shown.Mission?.Boss) ShowBossCharges(hovered);
             if (mode == Mode.Tile) ThrowNote();
             if (mode == Mode.Target) AimLitNote();
             if (mode != Mode.Move) return;
@@ -1306,13 +1309,15 @@ namespace Bastion.UI.Combat
             Overlay?.ShowPath(State, u.Pos, path, dest.Dash, Planning);
             Overlay?.ShowCover(State, CoverMatters() ? hover : null);
             Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
+            // Into El Toro's line, his charge drawn to it before one stands there (Gameplay, 16/11).
+            var charged = ChargeLineTo(u, hover);
             // Running, a door or a window is heard (docs/FASE2.md): an icon under the destination, no words (Ana, 7/11 #3); the
             // fire it goes through; and at night, whether it ends in the light.
             // With the finger, the second tap: what it does (Lore, 7/11).
             var again = !GameInput.Touch ? null : Planning ? HudText.Touch.AgainPlan : dest.Detected ? HudText.Touch.Concealed : HudText.Touch.AgainMove;
             var heard = path != null && AbilityTexts.MoveNoise(State, u, path, dest.Run) != null;
             // Into the hidden squad's extra: that it is lost if they are seen (Gameplay, 16/11).
-            NoteWith(hover, heard ? "noise" : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
+            NoteWith(hover, heard ? "noise" : null, charged ? HudText.Boss.InLine : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
         }
 
         /// <summary>

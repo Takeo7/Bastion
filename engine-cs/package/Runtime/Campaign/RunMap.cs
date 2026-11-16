@@ -45,6 +45,13 @@ namespace Bastion.Engine
         /// <summary>Rows with no service area: the first fights, made with knives only.</summary>
         public const int EarlyRows = 2;
 
+        /// <summary>
+        /// The hospital only inside on the maps (H7, Places.Hospital): off till Gameplay says (Arte draws its camera and its
+        /// walls). On, a town's or a city's fight (not a sabotage nor the boss) is one, one in HospitalOdds by its map's seed.
+        /// </summary>
+        public const bool HospitalSites = false;
+        public const int HospitalOdds = 5;
+
         /// <summary>Fights from row 2 with a modifier, in percent.</summary>
         public const int ModifierChance = 30;
 
@@ -64,7 +71,10 @@ namespace Bastion.Engine
         // ---------------------------------------------------------------- the map
 
         /// <summary>The map of a run of `chapter`, all of it, from its seed.</summary>
-        public static List<RunNode> Generate(int chapter, int seed)
+        public static List<RunNode> Generate(int chapter, int seed) => Generate(chapter, seed, HospitalSites);
+
+        /// <summary>Generate, with the hospital only inside or without it (`hospitals`: HospitalSites); the rest the same.</summary>
+        public static List<RunNode> Generate(int chapter, int seed, bool hospitals)
         {
             var rng = new Rng(seed);
             var rows = new List<List<RunNode>>();
@@ -99,6 +109,8 @@ namespace Bastion.Engine
                 if (n.Site == Places.Roadside && n.Row <= EarlyRows) n.Site = Places.Country;
                 // A town or a city is the map's seed's (Places.OldTownSeed): the site says the one it will be.
                 if (n.Site == Places.Town) n.Site = Places.Of(MapOf(n)!);
+                // The hospital only inside (H7), by the map's seed: nothing else drawn changes.
+                if (hospitals && (n.Site == Places.Town || n.Site == Places.City) && Math.Abs(n.Seed.Value) % HospitalOdds == 0) n.Site = Places.Hospital;
             }
             return all;
         }
@@ -235,6 +247,8 @@ namespace Bastion.Engine
                     return MapSource.Generated(Biomes.Facility, seed);
                 case Places.Roadside:
                     return MapSource.Generated(Biomes.Wilds, seed, Sites.Roadside);
+                case Places.Hospital:
+                    return MapSource.Generated(Biomes.City, seed, Sites.Hospital);
                 case Places.Country:
                     return MapSource.Generated(Biomes.Wilds, seed);
                 default:

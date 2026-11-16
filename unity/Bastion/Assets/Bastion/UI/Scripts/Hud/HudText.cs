@@ -143,6 +143,12 @@ namespace Bastion.UI.Hud
 
         public static class Mission
         {
+            // The expeditions' stages (H5, H6; Lore to confirm).
+            public static string Hold(int until, int left) => left > 0 ? $"Aguantad: La Lata llega en el turno {until}, dentro de {left} {(left == 1 ? "turno" : "turnos")}" : "La Lata ha llegado: subid";
+            public const string HoldTip = "Llegan oleadas cada dos turnos, cada vez mayores. Hasta que llegue La Lata no se puede salir.";
+            /// <summary>«Matad al Toro…»: «a el» contracted.</summary>
+            public static string Boss(string name) => $"Matad {(name.StartsWith("El ") ? "al " + name.Substring(3) : "a " + name)} y salid en La Lata";
+            public static string BossDead(string name) => $"{name} ha caído: salid en La Lata";
             public const string IntroObjective = "Objetivo: ";
             public const string IntroClose = "Entendido";
             public const string DockTip = "Ver la misión";
@@ -404,7 +410,8 @@ namespace Bastion.UI.Hud
         public static class Window
         {
             public const string SheetKicker = "HOJA DEL SOLDADO";
-            public const string FileKicker = "FICHA DE ATALAYA";
+            /// <summary>Over an enemy's file: the Bastión's (Lore, 16/11: no story in the runs, so not the Atalaya).</summary>
+            public const string FileKicker = "FICHA DEL BASTIÓN";
             public const string Carries = "Lleva";
             public const string Skills = "Habilidades";
             public const string Close = "CERRAR";
@@ -413,6 +420,17 @@ namespace Bastion.UI.Hud
         }
 
         /// <summary>The backpack on the soldier's panel (hud.ts backpack, packMenuEl, packOffer; docs/FASE8.md §C).</summary>
+        /// <summary>A chapter's boss on its bar (H6; Lore's review, 16/11). Its file is Lore.EnemyFiles'.</summary>
+        public static class Boss
+        {
+            public static string Armor(int n) => $"BLINDAJE {n}";
+            public const string ChargeReady = "EMBESTIDA LISTA";
+            public static string ChargeIn(int turns) => turns == 1 ? "EMBESTIDA EN 1 TURNO" : $"EMBESTIDA EN {turns} TURNOS";
+            public const string Tip = "Embiste en línea recta hasta 6 casillas: hace 4 de daño y tumba a quien alcanza, que se queda en el suelo hasta vuestro turno y pierde una acción al levantarse. Si no puede embestir, golpea con los puños: 6 de daño. Contra él no vale el golpe silencioso.";
+            /// <summary>A move's destination in his line, with the charge ready at his next turn (the line drawn to it).</summary>
+            public const string InLine = "En la línea de la embestida";
+        }
+
         /// <summary>What a run's search found (H3; Lore to confirm).</summary>
         public static class Found
         {

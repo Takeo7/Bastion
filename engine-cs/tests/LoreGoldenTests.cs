@@ -84,7 +84,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("La alarma: un coche patrulla, una ambulancia o la de una nave.", Lore.EnemyFiles["relay"].What);
             Assert.Equal("No dispara. Tiene salud y blindaje 1. Mientras suena, la zona se llena de zombis.", Lore.EnemyFiles["relay"].Does);
             Assert.Equal("Es el objetivo: hay que callarla antes de que acabe la cuenta atrás. Los explosivos ayudan.", Lore.EnemyFiles["relay"].Tip);
-            Assert.Equal(9, Lore.EnemyFiles.Count);
+            Assert.Equal(10, Lore.EnemyFiles.Count);
 
             // regions
             Assert.Equal("el Refugio de Metsovo", Lore.RegionLores["weu"].Ally);
@@ -3109,7 +3109,14 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene 3 puntos de movimiento más, y un zombi solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso. Entonces cada soldado pierde 3 de los puntos de movimiento que le queden.", Lore.Glossary["Ocultación"]);
             Assert.Equal("Mata siempre, sin ruido y sin romper la ocultación, a un Zombi o un Corredor que tengas al lado, si aún no está alerta y no te tiene delante. No sirve con la motosierra.", Lore.Glossary["Golpe silencioso"]);
             Assert.Equal("Mientras la escuadra está oculta, cada soldado tiene 3 puntos más: 11. Al romperse la ocultación, pierde 3 de los que le queden ese turno.", Lore.MoveText.Rules[1]);
-            Assert.Equal(38, Lore.Glossary.Count);
+            Assert.Equal("El jefe del capítulo 1: un muerto enorme que embiste y tumba. Matarlo supera el capítulo.", Lore.Glossary["El Toro"]);
+            Assert.Equal(40, Lore.Glossary.Count);
+            Assert.Equal("Un muerto del tamaño de dos.", Lore.EnemyFiles[TemplateIds.Brute].What);
+            Assert.All(TemplateIds.All, (t) => Assert.True(!Content.Templates[t].Undead || Lore.EnemyFiles.ContainsKey(t), t));
+            Assert.Equal("EL TORO", Lore.BossText.RoarBanner(Lore.BossName(1)));
+            Assert.Equal("El Toro embiste a Lucía Vidal, que cae al suelo.", Lore.BossText.ChargeLog("El Toro", "Lucía Vidal"));
+            Assert.Equal("Apagad la alarma de la nave antes de que termine la cuenta atrás, y volved a La Lata.", Lore.StageLine(NodeKinds.Sabotage, alarm: "factory"));
+            Assert.Equal("Un Chillón y su grupo guardan la mejor caja del capítulo.", Lore.StageLine(NodeKinds.Elite, guard: TemplateIds.Sectoid));
             // The Sucesos of the expeditions (H4, Gameplay, 16/11): texts in Lore, figures in Content by the same id.
             Assert.Equal(10, Lore.RunEvents.Count);
             Assert.All(Lore.RunEvents.Values, (e) => Assert.Equal(2, e.Options.Count));

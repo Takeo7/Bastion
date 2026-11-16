@@ -48,7 +48,8 @@ namespace Bastion.UI.Strategy
                     nv.Name = StrategyText.Runs.NodeName(n.Kind, run.Chapter);
                     nv.Icon = NodeIcon(n.Kind);
                     nv.Stop = NodeKinds.IsStop(n.Kind);
-                    nv.Card.Add(StrategyText.Runs.NodeLine(n.Kind));
+                    // Its line with what is known of it (Runs.StageLine: the alarm, the Asedio's turn, the Guarida's guard).
+                    nv.Card.Add(Runs.StageLine(n));
                     if (!nv.Stop)
                     {
                         if (n.Site != null && Places.Names.TryGetValue(n.Site, out var place)) nv.Card.Add(StrategyText.Runs.Site(place));

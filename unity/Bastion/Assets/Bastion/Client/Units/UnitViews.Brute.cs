@@ -462,6 +462,32 @@ namespace Bastion.Client.Units
             await Tuck(v, chosen, settle, ct);
         }
 
+        /// <summary>
+        /// One the state has knocked down (Unit.Down) when its figure is made (a game loaded, or joined, before the squad's turn
+        /// gets it up): lying in its tile at once as KnockDown leaves it, its death's last frame tucked in, for GetUp to get up
+        /// out of.
+        /// </summary>
+        void LieDownNow(View v)
+        {
+            if (v.root == null || v.down) return;
+            v.down = true;
+            v.dead = true;
+            var chosen = v.anim != null ? DeathFor(v, out _) : null;
+            var death = chosen != null ? FigureCatalog.Load()?.Clip(chosen.id) : null;
+            v.downId = chosen?.id;
+            if (death == null)
+            {
+                if (v.body == null) return;
+                v.body.localRotation = Quaternion.Euler(-90, 0, 0);
+                v.body.localPosition = Vector3.up * 0.3f;
+                return;
+            }
+            v.deathId = chosen.id;
+            v.anim.PlayWhole(death, 0, true, death.length);
+            // (No seconds: Tuck puts the body where it ends at once.)
+            _ = Tuck(v, chosen, 0, default);
+        }
+
         /// <summary>Knocked down: the death's way in (seconds: a death's own is 0.2, from a shot; a charge throws it at once), and the dust as it hits the floor (Fx.Thud's size).</summary>
         const float KnockIn = 0.08f, KnockThud = 0.8f;
 
