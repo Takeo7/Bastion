@@ -246,10 +246,15 @@ namespace Bastion.Net
         /// <summary>What the players are told when the save wouldn't start: the copy it goes on from (Copies' label), or none.</summary>
         private static string RestoredText(string? copy, string? broken)
         {
-            var day = Regex.Match(copy ?? "", @"^dia-(\d+)$");
+            // A copy as each stage began (SaveStore.Copies), by the stages played in all the game then (NodesPlayed): not
+            // the map's row («Etapa 3 de 7»). Lore's texts (16/11).
+            var stage = Regex.Match(copy ?? "", @"^etapa-(\d+)$");
             var aside = broken != null ? $" La que falló queda aparte, en {Path.GetFileName(broken)}." : "";
             if (copy == null) return $"La partida guardada no se ha podido abrir, ni ninguna de sus copias. Hay que empezar una nueva.{aside}";
-            return $"La partida guardada no se ha podido abrir. Se sigue desde {(day.Success ? $"la copia del día {day.Groups[1].Value}" : "la copia anterior")}.{aside}";
+            var from = !stage.Success ? "la copia anterior"
+                : stage.Groups[1].Value == "0" ? "la copia del principio"
+                : $"la copia de cuando llevabais {stage.Groups[1].Value} {(stage.Groups[1].Value == "1" ? "etapa jugada" : "etapas jugadas")}";
+            return $"La partida guardada no se ha podido abrir. Se sigue desde {from}.{aside}";
         }
 
         /// <summary>
@@ -313,7 +318,7 @@ namespace Bastion.Net
             skirmishVeterans = saved.SkirmishVeterans;
             skirmishNight = saved.SkirmishNight ?? false;
             Summarize();
-            this.say($"[room] Partida restaurada ({phase}{(campaign != null ? $", campaña día {campaign.Day}" : "")}).");
+            this.say($"[room] Partida restaurada ({phase}{(campaign == null ? "" : campaign.Stash != null ? $", capítulo {campaign.Chapter}, etapa {campaign.NodesPlayed}" : $", campaña día {campaign.Day}")}).");
         }
 
         // ------------------------------------------------------------- the thread
@@ -504,6 +509,12 @@ namespace Bastion.Net
             seat.Paused = false;
             say($"[room] {seat.Name} se ha desconectado.");
             BroadcastRoom();
+            // On the runs' base, the one left takes the seats (CampaignRules.Regroup).
+            if (phase == RoomPhases.Base && campaign != null && campaignRules != null && campaignRules.Regroup(campaign, ConnectedSlots()))
+            {
+                Broadcast(new CampaignMessage { State = campaign });
+                Persist();
+            }
             idle[seat.Slot] = false;
             CheckTurnClock();
             After((seat.Away ? AwayGraceMs : ReconnectGraceMs) + 100, () => ResyncTurn());
@@ -555,7 +566,9 @@ namespace Bastion.Net
                 case DoneCommand c:
                     return UnitId(c.Unit);
                 case ItemCommand c:
-                    return UnitId(c.Unit) && ItemActions.All.Contains(c.Action) && (c.Index == null || (c.Index >= 0 && c.Index <= 7)) && (c.Id == null || UnitId(c.Id)) && (c.To == null || UnitId(c.To));
+                    // A run's pack (H3): the gear by its id, a cell of the pack and a kit place.
+                    return UnitId(c.Unit) && ItemActions.All.Contains(c.Action) && (c.Index == null || (c.Index >= 0 && c.Index <= 7)) && (c.Id == null || UnitId(c.Id)) && (c.To == null || UnitId(c.To))
+                        && (c.Gear == null || Id(c.Gear)) && (c.X == null || GridCell(c.X.Value, 0)) && (c.Y == null || GridCell(0, c.Y.Value)) && (c.Slot == null || KitSlots.All.Contains(c.Slot));
                 case RtOrderCommand c:
                     return UnitId(c.Unit) && (c.To == null || Spot(c.To)) && (c.Target == null || UnitId(c.Target)) && (c.Ability == null || AbilityIds.All.Contains(c.Ability)) && (c.Tile == null || Spot(c.Tile));
                 default:
@@ -615,8 +628,31 @@ namespace Bastion.Net
                     return Has(Progression.Crafts, c.Project);
                 case AssignWeaponCommand c:
                     return Id(c.Weapon) && (c.Soldier == null || Id(c.Soldier));
+                // The runs (H0-DISENO §5, 16/11): ids and places in bounds; whether the gear is there, fits and is theirs to
+                // move, the engine's refusals (Gears, Runs).
+                case MoveGearCommand c:
+                    return Id(c.Gear) && GearTo(c.To) && KitSlots.All.Contains(c.Slot) && GridCell(c.X, c.Y);
+                case SplitGearCommand c:
+                    return Id(c.Gear) && c.Count >= 1 && c.Count <= PileMax && GearTo(c.To) && KitSlots.All.Contains(c.Slot) && GridCell(c.X, c.Y);
+                case DropGearCommand c:
+                    return Id(c.Gear);
+                case MountCommand c:
+                    return Id(c.Mod) && Id(c.Weapon);
+                case UnmountCommand c:
+                    return Id(c.Weapon) && Has(Content.WeaponMods, c.Mod);
+                case UseGearCommand c:
+                    return Id(c.Gear) && Id(c.Soldier);
+                case UpgradeCommand c:
+                    return UpgradeIds.All.Contains(c.Upgrade);
+                case ChooseNodeCommand c:
+                    return Id(c.Node);
+                case AnswerStopCommand c:
+                    return c.Option == 0 || c.Option == 1;
+                case BuyWareCommand c:
+                    return Id(c.Ware) && Id(c.Soldier);
                 default:
-                    // levelUp, cancelMission, recruit, advance, launch, vote, withdraw: nothing past their types.
+                    // levelUp, cancelMission, recruit, advance, launch, vote, withdraw; startRun, endRun, leaveStop: nothing
+                    // past their types.
                     return true;
             }
         }
@@ -640,6 +676,15 @@ namespace Bastion.Net
         {
             return s.Length >= 1 && s.Length <= 24 && s[0] >= 'a' && s[0] <= 'z' && s.All((ch) => (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'));
         }
+
+        /// <summary>Where a gear goes: the stash, or a soldier's id.</summary>
+        private static bool GearTo(string? to) => to == GearPlaces.Stash || Id(to);
+
+        /// <summary>A cell of a gear grid: the stash at its biggest is 10×12, a pack 4×5 (H0-DISENO §2–3); room to spare.</summary>
+        private static bool GridCell(int x, int y) => x >= 0 && x <= 31 && y >= 0 && y <= 31;
+
+        /// <summary>The biggest pile there is: the supplies', 100 (Content.PileOf).</summary>
+        private const int PileMax = 100;
 
         /// <summary>A key of one of the engine's tables (z.enum(keys(…))).</summary>
         private static bool Has<T>(IReadOnlyDictionary<string, T> table, string? key) => key != null && table.ContainsKey(key);
@@ -816,7 +861,7 @@ namespace Bastion.Net
                         // Not over a campaign mission left half played: it would be lost, and played again.
                         if (PausedMission() != null)
                         {
-                            Send(seat.Socket!, new ErrorMessage { Message = "Antes, acabad la misión de la campaña que está a medias: «Continuar campaña»." });
+                            Send(seat.Socket!, new ErrorMessage { Message = "Antes, acabad la etapa a medias: «Continuar campaña»." });
                             return;
                         }
                         if (m.Veterans != null) skirmishVeterans = m.Veterans.Value;
@@ -1046,16 +1091,23 @@ namespace Bastion.Net
             var c = campaign;
             if (c == null || campaignRules == null) return;
             var changed = false;
-            foreach (var slot in ConnectedSlots())
+            var connected = ConnectedSlots();
+            foreach (var slot in connected)
                 if (campaignRules.AddPlayer(c, slot, rng)) changed = true;
-            if (!changed) return;
             // A squad being picked is redone with both commanders' soldiers.
-            if (c.ActiveMission != null)
+            if (changed && campaignRules.SquadOpen(c))
             {
-                c.Squad = campaignRules.DefaultSquad(c, ConnectedSlots());
+                c.Squad = campaignRules.DefaultSquad(c, connected);
                 campaignRules.SyncPads(c);
                 c.LaunchReady = new bool[2];
             }
+            // In the runs' base, the squad for who is here now (one back, not new, too).
+            if (campaignRules.Regroup(c, connected)) changed = true;
+            // In a run under way, one with none of their soldiers in it takes half the squad till it ends (Runs.HandOver,
+            // 16/11): the one who joins finds the map, and soldiers of their own on it.
+            foreach (var slot in connected)
+                if (campaignRules.HandOver(c, slot, connected) > 0) changed = true;
+            if (!changed) return;
             Broadcast(new CampaignMessage { State = c });
             Persist();
         }
@@ -1097,7 +1149,14 @@ namespace Bastion.Net
         {
             var c = campaign!;
             var made = campaignRules!.LaunchMission(c, rng);
-            if (made == null) return;
+            if (made == null)
+            {
+                // Told to launch with nothing to launch (a run's fight before H3 made its missions): the campaign as the
+                // order left it, for both, and said in red.log.
+                store.Log("[campaña] La orden lanzaba una misión, pero no hay ninguna que lanzar.");
+                Broadcast(new CampaignMessage { State = c });
+                return;
+            }
             state = made.Value.state;
             resultApplied = false;
             phase = RoomPhases.Mission;

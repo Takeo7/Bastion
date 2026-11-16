@@ -16,6 +16,8 @@ namespace Bastion.Net
         /// </summary>
         public (GameState state, string name)? LaunchMission(CampaignState c, Rng rng)
         {
+            // A run campaign (H3): the fight of the node the squad is at.
+            if (Campaign.IsRuns(c)) return Runs.Launch(c, rng);
             var offer = Campaign.ActiveOffer(c);
             if (offer == null) return null;
             var info = Campaign.MissionInfo(c, offer);
@@ -58,7 +60,7 @@ namespace Bastion.Net
             return (state, offer.Name);
         }
 
-        public List<string> DefaultSquad(CampaignState c, IReadOnlyList<int> connected) => Campaign.DefaultSquad(c, connected);
+        public List<string> DefaultSquad(CampaignState c, IReadOnlyList<int> connected) => Campaign.IsRuns(c) ? Runs.DefaultSquad(c, connected) : Campaign.DefaultSquad(c, connected);
 
         /// <summary>
         /// Changes the campaign where it is, unlike TypeScript's copy (JSON.parse/stringify): the room keeps only what it
@@ -66,14 +68,36 @@ namespace Bastion.Net
         /// </summary>
         public CampaignState MigrateCampaign(CampaignState c) => Campaign.MigrateCampaign(c);
 
-        public CampaignState CreateCampaign(IReadOnlyList<int> slots, Rng rng) => Campaign.CreateCampaign(slots, rng);
+        /// <summary>A campaign of runs (Arturo, 16/11): the one of before isn't begun any more, only carried on until the runs are done.</summary>
+        public CampaignState CreateCampaign(IReadOnlyList<int> slots, Rng rng) => Campaign.CreateRunsCampaign(slots, rng);
 
-        public void OpeningMission(CampaignState c) => Campaign.OpeningMission(c);
+        /// <summary>The first operation chosen, in a campaign of before; a run's is chosen on its map.</summary>
+        public void OpeningMission(CampaignState c)
+        {
+            if (!Campaign.IsRuns(c)) Campaign.OpeningMission(c);
+        }
 
         /// <summary>addPlayer gives how many soldiers they got: none, they were in.</summary>
         public bool AddPlayer(CampaignState c, int slot, Rng rng) => Campaign.AddPlayer(c, slot, rng) > 0;
 
-        public void SyncPads(CampaignState c) => Campaign.SyncPads(c);
+        /// <summary>La Lata's seats, in a campaign of before; the runs have none.</summary>
+        public void SyncPads(CampaignState c)
+        {
+            if (!Campaign.IsRuns(c)) Campaign.SyncPads(c);
+        }
+
+        public bool SquadOpen(CampaignState c) => Campaign.IsRuns(c) ? c.Run == null : c.ActiveMission != null;
+
+        public int HandOver(CampaignState c, int slot, IReadOnlyList<int> connected) => Campaign.IsRuns(c) ? Runs.HandOver(c, slot, connected) : 0;
+
+        public bool Regroup(CampaignState c, IReadOnlyList<int> connected)
+        {
+            if (!Campaign.IsRuns(c) || c.Run != null || connected.Count == 0) return false;
+            var squad = Runs.DefaultSquad(c, connected);
+            if (squad.SequenceEqual(c.Squad)) return false;
+            c.Squad = squad;
+            return true;
+        }
 
         public CampaignResult ExecuteCampaignCommand(CampaignState c, CampaignCommand cmd, int slot, IReadOnlyList<int> connected, Rng rng)
         {
@@ -81,6 +105,11 @@ namespace Bastion.Net
         }
 
         /// <summary>Its report stays in the campaign (lastReport), which goes to both whole: the room needs nothing else.</summary>
-        public void ApplyMissionResult(CampaignState c, GameState state, Rng rng) => Campaign.ApplyMissionResult(c, state, rng);
+        public void ApplyMissionResult(CampaignState c, GameState state, Rng rng)
+        {
+            // A run campaign (H3): the node's fight, folded into the run.
+            if (Campaign.IsRuns(c)) Runs.ApplyFight(c, state, rng);
+            else Campaign.ApplyMissionResult(c, state, rng);
+        }
     }
 }

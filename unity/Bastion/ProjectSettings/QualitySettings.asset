@@ -113,7 +113,6 @@ QualitySettings:
     terrainMaxTrees: 50
     excludedTargetPlatforms:
     - Android
-    - iPhone
   - serializedVersion: 5
     name: Alto
     pixelLightCount: 2
@@ -168,7 +167,6 @@ QualitySettings:
     terrainMaxTrees: 50
     excludedTargetPlatforms:
     - Android
-    - iPhone
   m_TextureMipmapLimitGroupNames: []
   m_PerPlatformDefaultQuality:
     Android: 2

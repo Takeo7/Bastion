@@ -62,6 +62,26 @@ namespace Bastion.UI.Combat
                 return true;
             }
             // «pack»: the pockets opened or shut, as a click on the backpack's mark (Ana, 7/11 #13: only then).
+            // The runs' pack (H3): «arrastra=g44>s1/pack@0,2» a thing dragged there and held (~ turned, ! let go; places:
+            // s1/pack, s1/primary…, floor, s2/give); «toca=g47» a click on one (its orders).
+            if (what == "arrastra" && control.Hud?.Gear is Bastion.UI.Gear.GearBoard board)
+            {
+                var parts = arg.Split('>');
+                if (parts.Length != 2) return false;
+                var where = parts[1].TrimEnd('!', '~');
+                var spot = where.Split('@');
+                var place = spot[0].Split('/');
+                var xy = spot.Length > 1 ? spot[1].Split(',') : new[] { "0", "0" };
+                var done = board.TestDragTo(parts[0], place[0], place.Length > 1 ? place[1] : null, int.Parse(xy[0]), int.Parse(xy[1]), parts[1].Contains("~"), parts[1].EndsWith("!"));
+                Debug.Log($"[mochila] arrastra {arg}: {(done ? "hecho" : "no está")}");
+                return done;
+            }
+            if (what == "toca" && control.Hud?.Gear is Bastion.UI.Gear.GearBoard picker)
+            {
+                var done = picker.TestPick(arg);
+                Debug.Log($"[mochila] toca {arg}: {(done ? "hecho" : "no está")}");
+                return done;
+            }
             if (what == "pack")
             {
                 control.Hud?.TogglePockets();
@@ -85,6 +105,16 @@ namespace Bastion.UI.Combat
                 control.SetPlayers(players);
                 // «gone»: dropped, and past the server's grace already (its 30 s aren't seen in a capture).
                 if (what == "gone") control.EndGraces();
+                return true;
+            }
+            if (what == "ausente")
+            {
+                // The partner never came in, and nobody waits for them (a mission opened again without them, 0.12.2: the
+                // room sends them unconnected with no GraceMs; Arturo, 7/11 «no esperar nunca»): their soldiers are this one's.
+                var players = control.Players.Where(p => p.Slot != 1).Select(p => new Bastion.Net.PlayerInfo { Slot = p.Slot, Name = p.Name, Color = p.Color, Connected = p.Connected }).ToList();
+                control.Players = players.ToList();
+                players.Add(new Bastion.Net.PlayerInfo { Slot = 1, Name = "Ana", Color = Bastion.Engine.Content.PlayerColors[1], Connected = false });
+                control.SetPlayers(players);
                 return true;
             }
             if (what == "waiting")

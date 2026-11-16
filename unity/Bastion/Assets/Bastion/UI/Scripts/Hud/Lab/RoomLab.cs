@@ -29,7 +29,7 @@ namespace Bastion.UI.Hud
                 new HostAddress { Address = "100.101.12.7:41391", Kind = "tailscale" },
             };
             var which = System.Environment.GetEnvironmentVariable("BASTION_SALA") ?? "";
-            if (which == "campana" || which == "pregunta") room.SavedCampaign = new SavedCampaign { Day = 20, Missions = 8, Doom = 5, Level = 3 };
+            if (which == "campana" || which == "pregunta") room.SavedCampaign = new SavedCampaign { Chapter = 1, Row = 3, Soldiers = 4, Supplies = 245, NodesPlayed = 7 };
             var router = System.Environment.GetEnvironmentVariable("BASTION_SALA_ROUTER") switch
             {
                 "trying" => RouterState.Trying,

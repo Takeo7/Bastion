@@ -71,7 +71,7 @@ namespace Bastion.Client.Net
         /// <summary>The campaign's (Campaign/, campaign.ts in C#): its save brought up to date, its base and its missions. Set before Host.</summary>
         public ICampaignRules CampaignRules { get; set; } = new EngineCampaignRules();
 
-        /// <summary>Where the save, red.log and conexion.json are.</summary>
+        /// <summary>Where the save, red.log and conexion.json are (conexion.prueba.json for a test driver).</summary>
         public string DataDir { get; private set; } = "";
 
         /// <summary>This build's: a host and a player of different ones can't play together (the hello says so).</summary>
@@ -104,6 +104,8 @@ namespace Bastion.Client.Net
         /// <summary>Saved, as last read, and the save's and its backup's size and time then.</summary>
         private SavedCampaign? saved;
         private string? savedStamp;
+        /// <summary>OldCampaign, read with Saved.</summary>
+        private string? oldCampaign;
         /// <summary>BASTION_CAMPANA: a campaign to its missions and back, by itself.</summary>
         private CampaignRun? campaignRun;
         /// <summary>BASTION_MEDIR: a case played alone while the telemetry measures it.</summary>
@@ -187,6 +189,18 @@ namespace Bastion.Client.Net
         /// </summary>
         public bool LocalOnly { get; private set; }
 
+        /// <summary>
+        /// iOS (Arturo, 7/11: Apple's free account): neither multicast nor broadcast without Apple's entitlement, which only
+        /// a paid account gets. So no beacon, no listening for the network's games and no UPnP; the partner joins by
+        /// address («Unirse por dirección»), the room's TCP is the same, and NAT-PMP, straight to the router, still opens
+        /// the port. The start screen says so where the network's games would be. BASTION_RED_CIEGA=1 makes a desktop
+        /// app or the editor blind too, to test those screens (UI, 7/11).
+        /// </summary>
+        public static bool LanBlind => Application.platform == RuntimePlatform.IPhonePlayer || Environment.GetEnvironmentVariable("BASTION_RED_CIEGA") == "1";
+
+        /// <summary>LanBlind said once in red.log.</summary>
+        private bool lanBlindSaid;
+
         /// <summary>This app hosts the game.</summary>
         public bool Hosting => host != null;
 
@@ -212,14 +226,31 @@ namespace Bastion.Client.Net
                 savedStamp = stamp;
                 try
                 {
-                    saved = new SaveStore(file, log.Write, CampaignRules).Peek();
+                    var store = new SaveStore(file, log.Write, CampaignRules);
+                    saved = store.Peek();
+                    oldCampaign = saved == null ? store.PeekOutdated() : null;
                 }
                 catch (Exception e)
                 {
                     saved = null;
+                    oldCampaign = null;
                     log.Write($"[save] no se pudo mirar la partida guardada: {e.GetType().Name}: {e.Message}");
                 }
                 return saved;
+            }
+        }
+
+        /// <summary>
+        /// With no campaign to go on with (Saved null), the file a campaign from before the runs is kept in, or will be once
+        /// a game is hosted (SaveStore.PeekOutdated), for the start screen to say so: Arturo's and Ana's doesn't go on into
+        /// the runs (16/11). Null otherwise. Read with Saved, again when the save or its backup changes.
+        /// </summary>
+        public string? OldCampaign
+        {
+            get
+            {
+                _ = Saved;
+                return oldCampaign;
             }
         }
 
@@ -300,10 +331,10 @@ namespace Bastion.Client.Net
             }
         }
 
-        /// <summary>Hosting, the game's port asked of the router (RouterPort); its answers come by RouterChanged.</summary>
+        /// <summary>Hosting, the game's port asked of the router (RouterPort; on iOS by NAT-PMP alone, LanBlind); its answers come by RouterChanged.</summary>
         private void OpenRouter()
         {
-            router = RouterPort.Open(host!.Port, log.Write);
+            router = RouterPort.Open(host!.Port, log.Write, LanBlind ? RouterPlaces.OfThisMachine(upnp: false) : null);
             router.Changed += () => routerNews = true;
             routerNews = true;
         }
@@ -331,10 +362,13 @@ namespace Bastion.Client.Net
             var dir = Environment.GetEnvironmentVariable("BASTION_DATOS");
             DataDir = string.IsNullOrEmpty(dir) ? Application.persistentDataPath : dir!;
             log = new NetLog(Path.Combine(DataDir, "red.log"));
-            settings = NetSettings.Load(Path.Combine(DataDir, "conexion.json"));
-            LocalOnly = Environment.GetEnvironmentVariable("BASTION_SOLO_LOCAL") == "1"
-                || new[] { "BASTION_MEDIR", "BASTION_CAMPANA", "BASTION_ANFITRION", "BASTION_UNIRSE", "BASTION_PASOS_COMBATE", "BASTION_SONIDO_GUION" }.Any((v) => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(v)))
+            // A test driver (it names the player itself) keeps the name and the seats' tokens in a file of its own: run on
+            // a player's data (8/11, BASTION_MEDIR on Arturo's iPhone), it left «Medida» in their conexion.json, and their
+            // own campaign then took them in as another player.
+            var driven = new[] { "BASTION_MEDIR", "BASTION_CAMPANA", "BASTION_ANFITRION", "BASTION_UNIRSE", "BASTION_PASOS_COMBATE", "BASTION_SONIDO_GUION" }.Any((v) => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(v)))
                 || Environment.GetCommandLineArgs().Contains("-shotOut");
+            settings = NetSettings.Load(Path.Combine(DataDir, driven ? "conexion.prueba.json" : "conexion.json"));
+            LocalOnly = Environment.GetEnvironmentVariable("BASTION_SOLO_LOCAL") == "1" || driven;
             if (LocalOnly) log.Write("[prueba] app de prueba: la sala solo en 127.0.0.1, sin anunciarse ni escuchar la red");
             var mission = Environment.GetEnvironmentVariable("BASTION_MISION");
             if (!string.IsNullOrEmpty(mission)) Rules = EngineRules.Recorded(mission!);
@@ -444,7 +478,8 @@ namespace Bastion.Client.Net
                 log.Write($"anfitrión arrancado: tcp {host.Port} · {(LocalOnly ? "solo 127.0.0.1 (prueba)" : string.Join(", ", HostAddresses.List().Select((a) => a.Address)))} · versión {Version}");
                 if (!LocalOnly)
                 {
-                    announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
+                    // iOS: no beacon, and the router by NAT-PMP alone (LanBlind).
+                    if (!LanBlind) announce = LanBeacon.Announce(host.Port, SystemInfo.deviceName, Version, room.Summary);
                     if (settings.Router) OpenRouter();
                     else log.Write("[router] sin abrir: el jugador lo tiene apagado en Ajustes");
                 }
@@ -581,6 +616,12 @@ namespace Bastion.Client.Net
         {
             // A test app hears no network: listening on UDP is one more of macOS's questions.
             if (listen != null || LocalOnly) return;
+            if (LanBlind)
+            {
+                if (!lanBlindSaid) log.Write("[lan] iOS: sin el permiso de multidifusión de Apple no se oyen las partidas de la red; se entra con «Unirse por dirección»");
+                lanBlindSaid = true;
+                return;
+            }
             try
             {
                 listen = LanBeacon.Listen((games) => lanHeard.Enqueue(games), (port) => host?.Port == port);

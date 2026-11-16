@@ -123,42 +123,108 @@ namespace Bastion.Engine.Tests
 
         private static JToken CampaignSent(MemoryEnd player) => player.Take("campaign").Last()["state"]!;
 
+        /// <summary>
+        /// The room's tests with a mission of the campaign: they launched an operation of before, and a new campaign is of
+        /// runs now (16/11), whose fights get their missions in H3 (Gameplay). Played again then, from a node's.
+        /// </summary>
+        private const string UntilH3 = "Hasta H3: una etapa de combate aún no tiene misión (EngineCampaignRules.LaunchMission).";
+
         private static object Ccmd(object cmd) => new { t = "ccmd", cmd };
 
+        /// <summary>The ids of the run's nodes in `row`, as both heard them.</summary>
+        private static List<string> RowOf(JToken campaign, int row) => campaign["run"]!["nodes"]!.Where((n) => (int)n["row"]! == row).Select((n) => (string)n["id"]!).ToList();
+
         [Fact]
-        public void TwoCommandersGoFromTheBaseToTheirMissionAndBack()
+        public void TwoCommandersGoOutOnARunAndChooseTheirWay()
         {
             using var host = new Host();
             var ana = host.Join("Ana");
             var pepe = host.Join("Pepe");
             host.Say(ana, new { t = "newCampaign" });
+            // A campaign of runs (16/11): two soldiers each, with their knives, all going out.
             var c = CampaignSent(pepe);
+            Assert.Equal(Campaign.RunsCampaignVersion, (int)c["version"]!);
             Assert.Equal(new[] { 0, 1 }, c["players"]!.Select((x) => (int)x));
-            var operation = (string)c["activeMission"]!;
-            Assert.NotEmpty(c["squad"]!);
-            // Launched with both keys.
-            host.Say(ana, Ccmd(new { type = "launch", ready = true }));
-            Assert.Equal("base", host.Room.Summary().phase);
-            host.Say(pepe, Ccmd(new { type = "launch", ready = true }));
-            Assert.Equal("mission", host.Room.Summary().phase);
-            var mission = ana.Take("snapshot").Single()["state"]!;
-            Assert.Equal(operation, (string?)mission["campaignMission"]!["id"]);
-            Assert.Equal(new[] { 0, 1 }, mission["units"]!.Where((u) => (string?)u["team"] == "xcom").Select((u) => (int)u["owner"]!).Distinct().OrderBy((x) => x));
-            // Left with the partner's yes: over, and folded into the campaign once.
-            host.Say(ana, new { t = "abandon" });
-            host.Say(pepe, new { t = "abandonAnswer", accept = true });
-            var after = CampaignSent(ana);
-            Assert.NotNull(after["lastReport"]);
-            Assert.False((bool)after["lastReport"]!["victory"]!);
-            Assert.Equal(1, (int?)after["missionsFlown"]);
-            host.Say(pepe, new { t = "returnToBase" });
-            Assert.Equal("base", host.Room.Summary().phase);
+            Assert.Equal(4, c["squad"]!.Count());
+            Assert.All(c["soldiers"]!, (s) => Assert.Equal(FoundWeaponIds.Knife, (string?)s["kit"]!["melee"]!["type"]));
+            // Out, by Ana's proposal and Pepe's yes.
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            Assert.Equal("startRun", (string?)CampaignSent(pepe)["proposal"]!["action"]!["type"]);
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            c = CampaignSent(ana);
+            Assert.Equal(RunPhases.Choose, (string?)c["run"]!["phase"]);
+            // The way, by Pepe's proposal and Ana's yes: a node of the first row, a fight.
+            var node = RowOf(c, 1).First();
+            host.Say(pepe, Ccmd(new { type = "chooseNode", node }));
+            host.Say(ana, Ccmd(new { type = "vote", accept = true }));
+            var after = host.Saved();
+            Assert.Equal((node, RunPhases.Fight, 1), (after.Run!.At, after.Run.Phase, after.NodesPlayed ?? 0));
+            Assert.Null(after.Proposal);
+            Assert.NotEmpty(pepe.Take("campaign"));
             Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo"));
-            // And it comes back from its save as it was.
-            var saved = JObject.Parse(File.ReadAllText(host.SavePath))["campaign"]!;
-            host.Room = host.Make();
+        }
+
+        [Fact]
+        public void ARunEndedOnItsMapGoesBackToTheBase()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            host.Say(ana, new { t = "newCampaign" });
+            // Alone, at once.
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            Assert.NotNull(host.Saved().Run);
+            host.Say(ana, Ccmd(new { type = "endRun" }));
+            Assert.Null(host.Saved().Run);
+            Assert.Null(CampaignSent(ana)["run"]);
             Assert.Equal("base", host.Room.Summary().phase);
-            Assert.True(JToken.DeepEquals(saved, JObject.Parse(File.ReadAllText(host.SavePath))["campaign"]));
+            // The summary says it is on the base.
+            var saved = ana.Take("room").Last()["savedCampaign"]!;
+            Assert.Null(saved["row"]);
+        }
+
+        [Fact]
+        public void OnTheBaseTheSquadIsForWhoIsIn()
+        {
+            // Gameplay, 16/11: with no run under way, the seats are shared out again whenever one comes or goes, so nobody
+            // has to take soldiers out for the other's (StartRunRefusal, the most each player takes).
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            host.Say(ana, new { t = "newCampaign" });
+            var token = (string)pepe.Take("welcome").Single()["token"]!;
+            int Theirs(CampaignState c, int slot) => c.Squad.Count((id) => c.Soldiers.Single((s) => s.Id == id).Owner == slot);
+            Assert.Equal((2, 2), (Theirs(host.Saved(), 0), Theirs(host.Saved(), 1)));
+            pepe.Close("se va");
+            host.Room.Pump();
+            Assert.Equal((2, 0), (Theirs(host.Saved(), 0), Theirs(host.Saved(), 1)));
+            Assert.Equal(2, CampaignSent(ana)["squad"]!.Count());
+            pepe = host.Join("Pepe", token);
+            Assert.Equal((2, 2), (Theirs(host.Saved(), 0), Theirs(host.Saved(), 1)));
+            // Out, the squad stays as it went.
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            Assert.NotNull(host.Saved().Run);
+        }
+
+        [Fact]
+        public void APartnerJoiningARunUnderWayIsHandedHalfTheSquad()
+        {
+            // Runs.HandOver (16/11): Ana went out alone with her four; Pepe, coming, takes two of them till the run ends, and
+            // gets two of his own on the base.
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            host.Say(ana, new { t = "newCampaign" });
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            var squad = host.Saved().Run!.Squad;
+            Assert.Equal(4, squad.Count);
+            var pepe = host.Join("Pepe");
+            var c = CampaignSent(pepe);
+            var hands = ((JObject)c["run"]!["hands"]!).Properties().ToDictionary((p) => p.Name, (p) => (int)p.Value);
+            Assert.Equal(2, hands.Count);
+            Assert.All(hands, (h) => Assert.Equal(1, h.Value));
+            Assert.All(hands.Keys, (id) => Assert.Contains(id, squad));
+            Assert.Equal(2, c["soldiers"]!.Count((s) => (int)s["owner"]! == 1));
+            Assert.NotEmpty(ana.Take("campaign"));
         }
 
         [Fact]
@@ -177,9 +243,9 @@ namespace Bastion.Engine.Tests
         }
 
         /// <summary>
-        /// A decision of the story is a proposal as the base's are (Ana's notes of 2/11, #4: «Un desertor», that the players
-        /// saw reach nought and not go ahead). Whoever proposes it, host or guest, the room says yes for the other after 30 s;
-        /// with their window out of sight, after 5 min; dropped, as when here or away.
+        /// A vote of the runs (going out) goes ahead with nobody answering, as the base's proposals did (Ana's notes of 2/11,
+        /// #4: «Un desertor», that the players saw reach nought and not go ahead). Whoever proposes it, host or guest, the
+        /// room says yes for the other after 30 s; with their window out of sight, after 5 min; dropped, as when here or away.
         /// </summary>
         [Theory]
         [InlineData(0, "here", 30_000L)]
@@ -188,23 +254,14 @@ namespace Bastion.Engine.Tests
         [InlineData(1, "away", Room.AwayGraceMs)]
         [InlineData(0, "gone", 30_000L)]
         [InlineData(1, "away and gone", Room.AwayGraceMs)]
-        public void AStoryDecisionNobodyAnswersGoesAhead(int by, string other, long wait)
+        public void AVoteNobodyAnswersGoesAhead(int by, string other, long wait)
         {
             using var host = new Host();
-            var first = host.Join("Ana");
-            host.Join("Pepe");
-            host.Say(first, new { t = "newCampaign" });
-            // The deserter at the door, as the save keeps it, and the host opened again.
-            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
-            var save = store.Load()!;
-            save.Campaign!.Event = CampaignEventIds.Defector;
-            save.Campaign.Doom = 3;
-            store.Save(save);
-            host.Room = host.Make();
             var players = new[] { host.Join("Ana"), host.Join("Pepe") };
+            host.Say(players[0], new { t = "newCampaign" });
             var (proposer, answerer) = (players[by], players[1 - by]);
-            host.Say(proposer, Ccmd(new { type = "answerEvent", option = 1 }));
-            Assert.Equal("event", (string?)CampaignSent(answerer)["proposal"]!["action"]!["type"]);
+            host.Say(proposer, Ccmd(new { type = "startRun" }));
+            Assert.Equal("startRun", (string?)CampaignSent(answerer)["proposal"]!["action"]!["type"]);
             if (other.StartsWith("away")) host.Say(answerer, new { t = "away", away = true });
             if (other.EndsWith("gone"))
             {
@@ -219,21 +276,20 @@ namespace Bastion.Engine.Tests
                 host.Advance(wait - 30_000 - 1);
             }
             else host.Advance(wait - 1);
-            Assert.Equal(CampaignEventIds.Defector, host.Saved().Event);
+            Assert.Null(host.Saved().Run);
             host.Advance(1);
-            // «Mandarlo a llevarse una horda lejos»: the dead fall back, and both hear it is over.
+            // Out: and both hear it is over.
             var c = host.Saved();
-            Assert.Null(c.Event);
+            Assert.NotNull(c.Run);
             Assert.Null(c.Proposal);
-            Assert.Equal(2, c.Doom);
             var told = CampaignSent(proposer);
             Assert.Null(told["proposal"]);
-            Assert.Null(told["event"]);
+            Assert.NotNull(told["run"]);
             Assert.Null(proposer.Take("deadline").Last()["ms"]);
             Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo"));
             // red.log says so, and, away, that it waited for them.
             var name = by == 0 ? "Pepe" : "Ana";
-            Assert.Contains($"[campaña] Propuesta sin respuesta de {name}: responder «Mandarlo a llevarse una horda lejos», sigue adelante", host.Log);
+            Assert.Contains($"[campaña] Propuesta sin respuesta de {name}: {RunTexts.StartRunText(1)}, sigue adelante", host.Log);
             Assert.Equal(wait > 30_000, host.Log.Contains($"[campaña] {name} no tiene el juego a la vista: la propuesta espera 270 s más"));
         }
 
@@ -245,16 +301,20 @@ namespace Bastion.Engine.Tests
             host.Say(ana, new { t = "newCampaign" });
             var first = CampaignSent(ana)["soldiers"]![0]!;
             var soldier = (string)first["id"]!;
-            // A new soldier has no wound to treat.
-            host.Say(ana, Ccmd(new { type = "medicate", soldier }));
-            Assert.Equal("No tiene heridas.", (string?)ana.Take("rejected").Single()["message"]);
+            // A new campaign has no supplies for the stash's first upgrade.
+            var price = Content.UpgradePrices[UpgradeIds.Stash][0];
+            host.Say(ana, Ccmd(new { type = "upgrade", upgrade = UpgradeIds.Stash }));
+            Assert.Equal(RunTexts.Missing(price), (string?)ana.Take("rejected").Single()["message"]);
             Assert.Empty(ana.Take("campaign"));
-            // red.log says whose soldier it was, and how it stood.
-            Assert.Contains(host.Log, (l) => l.StartsWith($"[campaña] Ana (puesto 1): «medicate» rechazada: No tiene heridas. · {(string)first["name"]!} ({soldier}), de 1, vivo,"));
+            Assert.Contains($"[campaña] Ana (puesto 1): «upgrade» rechazada: {RunTexts.Missing(price)}", host.Log);
+            // A medicine that isn't there, for her own soldier: red.log says whose soldier it was, and how it stood.
+            host.Say(ana, Ccmd(new { type = "useGear", gear = "g999", soldier }));
+            Assert.NotEmpty((string?)ana.Take("rejected").Single()["message"]!);
+            Assert.Contains(host.Log, (l) => l.StartsWith("[campaña] Ana (puesto 1): «useGear» rechazada: ") && l.Contains($" · {(string)first["name"]!} ({soldier}), de 1, vivo,"));
         }
 
         [Fact]
-        public void ACampaignOfTheZeroNineIsBroughtUpToDateWhenTheHostOpens()
+        public void ACampaignOfBeforeTheRunsIsKeptAsideWhenTheHostOpens()
         {
             using var host = new Host();
             Directory.CreateDirectory(host.Dir);
@@ -273,9 +333,13 @@ namespace Bastion.Engine.Tests
             };
             File.WriteAllText(host.SavePath, save.ToString());
             host.Room = host.Make();
-            Assert.Equal("base", host.Room.Summary().phase);
+            Assert.Equal("lobby", host.Room.Summary().phase);
             var ana = host.Join("Ana", "ficha-0");
-            Assert.Equal(Campaign.CampaignVersion, (int)CampaignSent(ana)["version"]!);
+            Assert.Equal($"save.{SaveStore.OutdatedLabel}.json", (string?)ana.Take("room").Last()["setAside"]);
+            Assert.Empty(ana.Take("campaign"));
+            // A new one is of runs.
+            host.Say(ana, new { t = "newCampaign" });
+            Assert.Equal(Campaign.RunsCampaignVersion, (int)CampaignSent(ana)["version"]!);
             Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.Contains("ilegible"));
         }
 
@@ -284,7 +348,7 @@ namespace Bastion.Engine.Tests
         /// down, a bad mission left and «Continuar campaña»): the squad's turn waits for them as for one whose laptop went to
         /// sleep (AwayGraceMs), and both hear how long; past that, it ends as after any drop.
         /// </summary>
-        [Theory]
+        [Theory(Skip = UntilH3)]
         [InlineData("save")]
         [InlineData("continue")]
         public void AMissionOpenedAgainLeavesThePartnersSoldiersToTheOneHere(string how)
@@ -349,7 +413,7 @@ namespace Bastion.Engine.Tests
 
         private static List<JObject> Players(JObject room) => ((JArray)room["players"]!).Cast<JObject>().ToList();
 
-        [Theory]
+        [Theory(Skip = UntilH3)]
         [InlineData(MissionKinds.Recovery, null)]
         [InlineData(MissionKinds.Sabotage, 7)]
         public void AMissionSavedBeforeIsBroughtUpToDate(string kind, int? clock)

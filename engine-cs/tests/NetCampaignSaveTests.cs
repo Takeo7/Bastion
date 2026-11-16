@@ -10,9 +10,12 @@ using Xunit;
 namespace Bastion.Engine.Tests
 {
     /// <summary>
-    /// The campaigns saved while playing the 0.7.0 to the 0.10.x (golden/campaign/saves/, versions 20 to 25) and UI's
-    /// sample (muestra.json), in the room's save (Net/SaveStore.cs) as the TypeScript host wrote it: read, written and
-    /// read again, they say the same, nulls apart (engine-cs README); and the room goes on with them.
+    /// The room's save (Net/SaveStore.cs) with a campaign. Those saved while playing the 0.7.0 to the 0.10.x
+    /// (golden/campaign/saves/, versions 20 to 25) and UI's sample (muestra.json), as the TypeScript host wrote them, don't
+    /// go on into the runs (Arturo, 16/11): each is kept aside as it is, never brought up to date, and the room starts in
+    /// the lobby. One of runs, read, written and read again, says the same, and the room goes on with it. Bringing one up
+    /// to date (MigrateCampaign, which failing kept the save aside) has nothing to do till the runs' campaign changes
+    /// shape: its test comes back then.
     /// </summary>
     public sealed class NetCampaignSaveTests : IDisposable
     {
@@ -69,121 +72,102 @@ namespace Bastion.Engine.Tests
             File.WriteAllText(SavePath, save.ToString(Formatting.None));
         }
 
-        /// <summary>
-        /// A campaign C# wrote, made comparable with TypeScript's: UI's sample was written by hand, and its Taller's work
-        /// lacks `plot`, `kind` and `total`, which C# writes with their defaults (CampaignJsonTests). Those go, once seen
-        /// to be the defaults; nothing else.
-        /// </summary>
-        private static JToken Comparable(JToken csharp, JToken typescript)
-        {
-            var back = csharp.DeepClone();
-            var works = (JArray?)back["base"]?["works"];
-            var were = (JArray?)typescript["base"]?["works"];
-            for (int i = 0; works != null && were != null && i < works.Count; i++)
-                foreach (var (field, empty) in new[] { ("plot", (JToken)""), ("kind", ConstructionKinds.Craft), ("total", 0) })
-                {
-                    if (were[i][field] != null) continue;
-                    Assert.True(JToken.DeepEquals(works[i][field], empty), $"works[{i}].{field}: {works[i][field]}");
-                    ((JObject)works[i]).Remove(field);
-                }
-            return back;
-        }
-
-        /// <summary>The save C# wrote, made comparable with TypeScript's (Comparable).</summary>
-        private JObject Written(JObject typescript)
-        {
-            var back = JObject.Parse(File.ReadAllText(SavePath));
-            back["campaign"] = Comparable(back["campaign"]!, typescript["campaign"]!);
-            return back;
-        }
-
         [Theory]
         [MemberData(nameof(Saved))]
-        public void ASavedCampaignIsReadAndWrittenTheSame(string name)
+        public void ACampaignOfBeforeTheRunsIsKeptAsideAsItIs(string name)
         {
-            var typescript = SaveOf(CampaignOf(name));
-            Put(typescript);
+            Put(SaveOf(CampaignOf(name)));
+            var before = File.ReadAllText(SavePath);
+            var log = new List<string>();
+            var rules = new FakeCampaignRules();
+            var room = new Room(new SaveStore(SavePath, log.Add, rules), new FakeRules(), "1.0.0", null, new FakeClock(), new Rng(5), null, rules);
+            Assert.Equal("lobby", room.Summary().phase);
+            Assert.Equal(before, File.ReadAllText(Path.Combine(temp, $"save.{SaveStore.OutdatedLabel}.json")));
+            Assert.Equal(0, rules.Migrated);
+            Assert.Contains(log, (l) => l.StartsWith("[save] Partida de antes de las runs: guardada aparte en "));
+            var (ana, host) = MemoryEnd.Pair("jugador", "10.0.0.1:5000");
+            room.Connect(host);
+            room.Pump();
+            ana.Send("{\"t\":\"hello\",\"name\":\"Ana\",\"token\":\"ficha-0\",\"version\":\"1.0.0\"}");
+            room.Pump();
+            var lobby = ana.Take("room").Last();
+            Assert.Equal($"save.{SaveStore.OutdatedLabel}.json", (string?)lobby["setAside"]);
+            Assert.Null(lobby["savedCampaign"]);
+            Assert.Empty(ana.Take("campaign"));
+        }
+
+        /// <summary>
+        /// A campaign of runs as the host saves it: two players, supplies in the stash and a medicine in a pack, the run at
+        /// a Trade it has just reached (its wares, the node chosen by both).
+        /// </summary>
+        private static CampaignState RunsCampaign()
+        {
+            var c = RunsHelpers.Two(3);
+            RunsHelpers.InStash(c, GearKinds.Supplies, null, 0, 0, 40);
+            RunsHelpers.InPack(c, RunsHelpers.Soldier(c, 1), GearKinds.Medicine, null, 0, 0, 2);
+            RunsHelpers.GoTo(c, NodeKinds.Trade);
+            Assert.Equal(RunPhases.Stop, c.Run!.Phase);
+            Assert.NotEmpty(c.Run.Stop!.Wares!);
+            return c;
+        }
+
+        private static JObject JsonOf(CampaignState c) => JObject.Parse(Json.Write(c));
+
+        [Fact]
+        public void ACampaignOfRunsIsReadAndWrittenTheSame()
+        {
+            var c = RunsCampaign();
+            Put(SaveOf(JsonOf(c)));
             var store = new SaveStore(SavePath);
             var save = store.Load();
             Assert.NotNull(save);
             Assert.Equal(("base", "campaign"), (save!.Phase, save.Mode));
-            Assert.Equal((int)typescript["campaign"]!["version"]!, save.Campaign!.Version);
-            Assert.Equal((int)typescript["campaign"]!["day"]!, save.Campaign.Day);
             Assert.Null(store.SetAside);
+            Assert.Equal(Json.Write(c), Json.Write(save.Campaign!));
             store.Save(save);
-            var difference = Json2.FirstDifference(Json2.Clean(CampaignJsonTests.Retired(typescript)), Json2.Clean(Written(typescript)));
-            Assert.True(difference == null, $"{name}: {difference}");
             // And again: what C# wrote, C# reads and writes to the letter.
             var first = File.ReadAllText(SavePath);
             store.Save(new SaveStore(SavePath).Load()!);
             Assert.Equal(first, File.ReadAllText(SavePath));
         }
 
-        [Theory]
-        [MemberData(nameof(Saved))]
-        public void AnOlderOneIsBroughtUpToDateWithTheCampaignsRules(string name)
-        {
-            var version = (int)CampaignOf(name)["version"]!;
-            Put(SaveOf(CampaignOf(name)));
-            var rules = new FakeCampaignRules();
-            var save = new SaveStore(SavePath, null, rules).Load()!;
-            // From the 0.7 on, none is put aside; only those before the 25 go through migrateCampaign.
-            Assert.Equal(version < Campaign.CampaignVersion ? 1 : 0, rules.Migrated);
-            Assert.Equal(Campaign.CampaignVersion, save.Campaign!.Version);
-        }
-
         [Fact]
-        public void ACampaignThatCantBeBroughtUpToDateIsKeptAsideAndTheHostGoesOn()
+        public void TheRoomGoesOnWithARunsCampaign()
         {
-            // persistence.ts migrates within its try: whatever fails, the save is one that can't be read, never written over.
-            Put(SaveOf(CampaignOf("saves/v24.json")));
+            var c = RunsCampaign();
+            Put(SaveOf(JsonOf(c)));
             var log = new List<string>();
-            var rules = new FakeCampaignRules { MigrationFails = true };
-            var room = new Room(new SaveStore(SavePath, log.Add, rules), new FakeRules(), "1.0.0", null, new FakeClock(), new Rng(5), null, rules);
-            Assert.Equal("lobby", room.Summary().phase);
-            Assert.True(File.Exists(Path.Combine(temp, "save.ilegible.json")));
-            Assert.Equal(24, (int)JObject.Parse(File.ReadAllText(Path.Combine(temp, "save.ilegible.json")))["campaign"]!["version"]!);
-            Assert.Contains(log, (l) => l.Contains("no se pudo poner al día su campaña (KeyNotFoundException: una pieza que ya no existe)"));
-        }
-
-        [Theory]
-        [MemberData(nameof(Saved))]
-        public void TheRoomGoesOnWithIt(string name)
-        {
-            var typescript = SaveOf(CampaignOf(name));
-            Put(typescript);
-            var log = new List<string>();
-            var rules = new FakeCampaignRules();
-            var room = new Room(new SaveStore(SavePath, log.Add, rules), new FakeRules(), "1.0.0", null, new FakeClock(), new Rng(5), null, rules);
+            var rules = new EngineCampaignRules();
+            var room = new Room(new SaveStore(SavePath, log.Add, rules), new EngineRules(), "1.0.0", null, new FakeClock(), new Rng(5), null, rules);
             Assert.Equal("base", room.Summary().phase);
             var (ana, host) = MemoryEnd.Pair("jugador", "10.0.0.1:5000");
             room.Connect(host);
             room.Pump();
-            // Her seat by its token, and the campaign as it was saved (brought up to version 25).
             ana.Send("{\"t\":\"hello\",\"name\":\"Ana\",\"token\":\"ficha-0\",\"version\":\"1.0.0\"}");
             room.Pump();
             Assert.Equal(0, (int)ana.Take("welcome").Single()["slot"]!);
-            var expected = (JObject)CampaignJsonTests.Retired(typescript["campaign"]!);
-            expected["version"] = Campaign.CampaignVersion;
-            var sent = ana.Take("campaign").Last()["state"]!;
-            var difference = Json2.FirstDifference(Json2.Clean(expected), Json2.Clean(Comparable(sent, expected)));
-            Assert.True(difference == null, $"{name}: {difference}");
+            // Her seat by its token, and the campaign as it was saved: she has soldiers in the run, nothing to hand over.
+            var difference = Json2.FirstDifference(Json2.Clean(JsonOf(c)), Json2.Clean(ana.Take("campaign").Last()["state"]!));
+            Assert.True(difference == null, difference);
+            // The lobby's summary (and the start screen's): chapter, the row reached, the living, the stash's supplies.
             var saved = ana.Take("room").Last()["savedCampaign"]!;
-            Assert.Equal((int)expected["day"]!, (int)saved["day"]!);
-            Assert.Equal(Progression.BastionLevel((int?)expected["level"]), (int)saved["level"]!);
-            Assert.DoesNotContain(log, (l) => l.Contains("Fallo"));
+            var at = c.Run!.Nodes.Single((n) => n.Id == c.Run.At).Row;
+            Assert.Equal((1, at, 4, 40, 1), ((int)saved["chapter"]!, (int?)saved["row"], (int)saved["soldiers"]!, (int)saved["supplies"]!, (int)saved["nodesPlayed"]!));
+            Assert.DoesNotContain(log, (l) => l.Contains("Fallo") || l.Contains("aparte"));
         }
 
         [Fact]
         public void AProposalWaitingIsReadAsItsActionAndItsClockStartsWhenSomeoneIsBack()
         {
-            // Saved by the 0.9.3 with Ana's proposal waiting for Pepe: to buy grenades.
-            Put(SaveOf(CampaignOf("saves/v25-093.json")));
+            // Ana's proposal to go out waiting for Pepe, as the host saved it.
+            var c = RunsHelpers.Two(3);
+            RunsHelpers.Ok(c, new StartRunCommand(), 0, RunsHelpers.Both);
+            Put(SaveOf(JsonOf(c)));
             var save = new SaveStore(SavePath).Load()!;
-            Assert.Equal("fragGrenade", Assert.IsType<BuyAction>(save.Campaign!.Proposal!.Action).Item);
-            Assert.Contains("\"action\":{\"type\":\"buy\",\"item\":\"fragGrenade\"}", Json.Write(save.Campaign.Proposal));
-            var rules = new FakeCampaignRules();
-            var room = new Room(new SaveStore(SavePath, null, rules), new FakeRules(), "1.0.0", null, new FakeClock(), new Rng(5), null, rules);
+            Assert.IsType<StartRunAction>(save.Campaign!.Proposal!.Action);
+            Assert.Contains("\"action\":{\"type\":\"startRun\"", Json.Write(save.Campaign.Proposal));
+            var rules = new EngineCampaignRules();
+            var room = new Room(new SaveStore(SavePath, null, rules), new EngineRules(), "1.0.0", null, new FakeClock(), new Rng(5), null, rules);
             var (pepe, host) = MemoryEnd.Pair("jugador", "10.0.0.2:5000");
             room.Connect(host);
             room.Pump();
@@ -211,7 +195,7 @@ namespace Bastion.Engine.Tests
         public void WithoutTheCampaignsRulesTheCampaignStaysInTheSave()
         {
             // A host with skirmishes only, on a save with a campaign: it isn't played, but nor is it lost.
-            var typescript = SaveOf(CampaignOf("saves/v25.json"));
+            var typescript = SaveOf(JsonOf(RunsCampaign()));
             Put(typescript);
             var room = new Room(new SaveStore(SavePath), new FakeRules(), "1.0.0", null, new FakeClock(), new Rng(5));
             Assert.Equal("lobby", room.Summary().phase);
@@ -224,8 +208,18 @@ namespace Bastion.Engine.Tests
             Assert.Equal("mission", room.Summary().phase);
             Assert.Empty(ana.Take("campaign"));
             var back = JObject.Parse(File.ReadAllText(SavePath));
-            var difference = Json2.FirstDifference(Json2.Clean(CampaignJsonTests.Retired(typescript["campaign"]!)), Json2.Clean(back["campaign"]!));
+            var difference = Json2.FirstDifference(Json2.Clean(typescript["campaign"]!), Json2.Clean(back["campaign"]!));
             Assert.True(difference == null, difference);
+        }
+
+        [Fact]
+        public void WithoutTheCampaignsRulesOneOfBeforeTheRunsIsKeptAsideToo()
+        {
+            Put(SaveOf(CampaignOf("saves/v25.json")));
+            var before = File.ReadAllText(SavePath);
+            var room = new Room(new SaveStore(SavePath), new FakeRules(), "1.0.0", null, new FakeClock(), new Rng(5));
+            Assert.Equal("lobby", room.Summary().phase);
+            Assert.Equal(before, File.ReadAllText(Path.Combine(temp, $"save.{SaveStore.OutdatedLabel}.json")));
         }
     }
 

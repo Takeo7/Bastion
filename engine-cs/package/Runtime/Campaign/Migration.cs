@@ -24,6 +24,8 @@ namespace Bastion.Engine
         /// </remarks>
         public static CampaignState MigrateCampaign(CampaignState old)
         {
+            // A campaign of runs (version 28) is not one of these: as it is.
+            if (old.Version >= RunsCampaignVersion) return old;
             if (CampaignOutdated(old.Version)) throw new InvalidOperationException($"Campaña de la versión {old.Version}: de antes de la 0.7, no se convierte.");
             var c = old;
             var version = old.Version;

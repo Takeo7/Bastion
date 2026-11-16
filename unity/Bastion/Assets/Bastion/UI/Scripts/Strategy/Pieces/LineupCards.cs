@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Bastion.UI.Hud;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -154,18 +155,67 @@ namespace Bastion.UI.Strategy
             if (Level)
                 for (var i = 0; i < n; i++)
                     if (at[i].HasValue) level = Mathf.Max(level, at[i].Value.y + BelowBoots);
+            var xs = Bastion.Client.GameInput.Touch ? Apart(at, ref width) : null;
+            // Spread apart, the row at one height: under the lowest pad, or higher only as the tallest card needs to stay
+            // above the floor (Gameplay, 8/11: on the Duo the debrief's tallest card stood out above the rest).
+            float? shared = null;
+            if (xs != null)
+            {
+                var lowest = float.MinValue;
+                var cap = float.MaxValue;
+                for (var i = 0; i < n; i++)
+                {
+                    if (!at[i].HasValue) continue;
+                    lowest = Mathf.Max(lowest, Level ? level : at[i].Value.y);
+                    var h = cards[i].resolvedStyle.height;
+                    cap = Mathf.Min(cap, floor - (float.IsNaN(h) ? 0 : h) - 8);
+                }
+                shared = Mathf.Min(lowest, cap);
+            }
             for (var i = 0; i < n; i++)
             {
                 var card = cards[i];
                 Ui.Show(card, at[i].HasValue);
                 if (!at[i].HasValue) continue;
                 var p = at[i].Value;
+                if (xs != null) p.x = xs[i];
                 var height = card.resolvedStyle.height;
-                var top = Mathf.Min(Level ? level : p.y, floor - (float.IsNaN(height) ? 0 : height) - 8);
+                var top = shared ?? Mathf.Min(Level ? level : p.y, floor - (float.IsNaN(height) ? 0 : height) - 8);
                 card.style.left = p.x - width / 2;
                 card.style.top = top;
                 card.style.width = width;
             }
+        }
+
+        /// <summary>The panel's edge a row spread apart keeps clear of (panel pixels).</summary>
+        const float Edge = 12;
+
+        /// <summary>
+        /// With the finger (docs/IOS.md; Arturo's Duo, 8/11): on a screen of 951 points the figures stand closer than the
+        /// cards are wide, and the cards sat one on another. Where two would touch, the row is spread out from its middle,
+        /// in the figures' order, a card's width and a gap apart, kept on the panel (narrower if even the panel is short);
+        /// null, none touch (each stays under its figure). The desktop keeps its cards under the figures.
+        /// </summary>
+        float[] Apart(Vector2?[] at, ref float width)
+        {
+            var shown = Enumerable.Range(0, at.Length).Where(i => at[i].HasValue).OrderBy(i => at[i].Value.x).ToList();
+            if (shown.Count < 2) return null;
+            var touching = false;
+            for (var k = 1; k < shown.Count; k++)
+                if (at[shown[k]].Value.x - at[shown[k - 1]].Value.x < width + Gap) touching = true;
+            if (!touching) return null;
+            var room = layer.layout.width;
+            if (float.IsNaN(room) || room <= 0) room = float.MaxValue;
+            // As wide as the row lets them (up to MaxWidth), unless they are all one width (Escuadra's).
+            var fit = (room - 2 * Edge - (shown.Count - 1) * Gap) / shown.Count;
+            width = Width.HasValue ? Mathf.Min(width, fit) : Mathf.Min(MaxWidth, fit);
+            var step = width + Gap;
+            var middle = shown.Average(i => at[i].Value.x);
+            var row = shown.Count * width + (shown.Count - 1) * Gap;
+            var left = Mathf.Clamp(middle - row / 2, Edge, Mathf.Max(Edge, room - Edge - row));
+            var xs = new float[at.Length];
+            for (var k = 0; k < shown.Count; k++) xs[shown[k]] = left + width / 2 + k * step;
+            return xs;
         }
     }
 }

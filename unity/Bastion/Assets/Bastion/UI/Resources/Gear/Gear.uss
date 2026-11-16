@@ -1,0 +1,340 @@
+/*
+ * The grids of the runs (GearBoard): the stash, the packs, the kit's places and the bin, the dragged thing and where it
+ * would go. Mixta's steel and wells; green where it goes, red where it doesn't, with its reason beside the pointer.
+ */
+
+.gear-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* Over everything while a press lasts: it holds the pointer. */
+.gear-catcher {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+/* ================================================================ grids and places */
+
+.gear-grid {
+    flex-shrink: 0;
+    align-self: flex-start;
+    background-color: #0c0e0f;
+    border-width: 1px;
+    border-color: #060708;
+}
+
+.gear-grid--theirs {
+    opacity: 0.7;
+}
+
+.gear-cells {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.gear-scroll .unity-scroller--vertical {
+    width: 6px;
+}
+
+.gear-slot {
+    position: relative;
+    flex-shrink: 0;
+    justify-content: center;
+    align-items: center;
+    background-color: #0c0e0f;
+    border-width: 1px;
+    border-color: #060708;
+}
+
+.gear-slot--theirs {
+    opacity: 0.7;
+}
+
+.gear-slot__label {
+    font-size: 11px;
+    color: #6f756c;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    margin: 0 4px;
+}
+
+/* While a thing is dragged: the places that take it. */
+.gear-slot--takes {
+    border-color: rgba(143, 208, 90, 0.55);
+}
+
+.gear-slot--ok {
+    border-width: 2px;
+    border-color: #8fd05a;
+    background-color: rgba(143, 208, 90, 0.16);
+}
+
+.gear-slot--no {
+    border-width: 2px;
+    border-color: #f0503c;
+    background-color: rgba(240, 80, 60, 0.16);
+}
+
+/* ================================================================ things */
+
+.gear-item {
+    position: absolute;
+    overflow: hidden;
+    background-color: rgba(61, 67, 70, 0.55);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.gear-item:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* By kind, faintly: what is what at a glance (never the players' purple or orange). */
+.gear-item--medicine {
+    background-color: rgba(74, 104, 70, 0.55);
+}
+
+.gear-item--item {
+    background-color: rgba(88, 86, 62, 0.55);
+}
+
+.gear-item--supplies {
+    background-color: rgba(92, 78, 58, 0.55);
+}
+
+.gear-item--vest,
+.gear-item--mod {
+    background-color: rgba(58, 72, 84, 0.55);
+}
+
+.gear-item--picked {
+    border-width: 2px;
+    border-color: #ffffff;
+}
+
+.gear-item--away {
+    opacity: 0.25;
+}
+
+.gear-item__pic {
+    position: absolute;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* The HUD's icon while Arte's picture is missing: light on the steel, smaller than the thing. */
+.gear-item__pic--icon {
+    -unity-background-image-tint-color: #dfe2da;
+    scale: 0.7 0.7;
+}
+
+.gear-item__name {
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    font-size: 11px;
+    color: #c4c9c0;
+}
+
+.gear-item__count {
+    position: absolute;
+    right: 4px;
+    bottom: 0;
+    font-size: 14px;
+    color: #eef0ea;
+}
+
+/* ================================================================ dragging */
+
+.gear-ghost {
+    position: absolute;
+    opacity: 0.9;
+    background-color: rgba(61, 67, 70, 0.7);
+    border-width: 1px;
+    border-color: #ffffff;
+}
+
+.gear-ghost--no {
+    border-color: #f0503c;
+}
+
+.gear-foot {
+    position: absolute;
+    border-width: 2px;
+}
+
+.gear-foot--ok {
+    background-color: rgba(143, 208, 90, 0.22);
+    border-color: #8fd05a;
+}
+
+.gear-foot--no {
+    background-color: rgba(240, 80, 60, 0.22);
+    border-color: #f0503c;
+}
+
+/* Why it doesn't go there, beside the pointer. */
+.gear-why {
+    position: absolute;
+    max-width: 300px;
+    white-space: normal;
+    font-size: 13px;
+    color: #ffffff;
+    background-color: rgba(120, 28, 20, 0.95);
+    border-width: 1px;
+    border-color: #f0503c;
+    padding: 3px 8px;
+}
+
+/* ================================================================ the picked thing's orders */
+
+/* In a row, onto a second when they don't fit (a medicine beside three partners has eight). */
+.gear-orders {
+    position: absolute;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    max-width: 400px;
+    padding: 4px 0 0 4px;
+}
+
+.gear-order {
+    height: 30px;
+    margin: 0 4px 4px 0;
+    padding: 0 12px;
+    font-size: 13px;
+    color: #eef0ea;
+    background-color: #3d4346;
+    border-width: 1px;
+    border-color: #060708;
+    border-radius: 0;
+}
+
+.gear-order:hover {
+    background-color: #4b5254;
+}
+
+.gear-order:disabled,
+.gear-order--off {
+    color: #6f756c;
+}
+
+.gear-order--danger {
+    color: #ff8a7a;
+}
+
+.gear-order--step {
+    width: 30px;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+
+.gear-orders__count {
+    margin: 0 8px 0 4px;
+    font-size: 14px;
+}
+
+/* ================================================================ the bin */
+
+.gear-bin {
+    flex-shrink: 0;
+    min-height: 52px;
+    min-width: 170px;
+    justify-content: center;
+    align-items: center;
+    background-color: #0c0e0f;
+    border-width: 1px;
+    border-color: #3a2a26;
+    padding: 6px 10px;
+}
+
+.gear-bin__label {
+    font-size: 13px;
+    color: #8a6a62;
+}
+
+.gear-bin--over {
+    border-width: 2px;
+    border-color: #f0503c;
+    background-color: rgba(240, 80, 60, 0.16);
+}
+
+.gear-bin--no {
+    border-color: #f0503c;
+}
+
+.gear-bin--over .gear-bin__label {
+    color: #ffffff;
+}
+
+.gear-bin--asking {
+    align-items: flex-start;
+    border-color: #f0503c;
+}
+
+.gear-bin__ask {
+    font-size: 13px;
+    white-space: normal;
+    max-width: 260px;
+    margin-bottom: 6px;
+}
+
+.gear-bin__row {
+    flex-direction: row;
+}
+
+.gear-item__line {
+    position: absolute;
+    -unity-background-image-tint-color: #dfe2da;
+}
+
+/* The supplies' «§» (our crate, the fonts' fallback) while Arte's picture is missing. */
+.gear-item__glyph {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    color: #e2d6b4;
+}
+
+/* ================================================================ a run's pack in combat (Backpack.DrawRun) */
+
+.runpack-section {
+    align-self: flex-start;
+    margin-bottom: 4px;
+    padding: 4px 8px 6px 8px;
+    background-color: rgba(18, 21, 22, 0.94);
+    border-width: 1px;
+    border-color: #060708;
+}
+
+.runpack-label {
+    font-size: 11px;
+    color: #a1a79d;
+    margin: 4px 0 2px 0;
+}
+
+.runpack-kit,
+.runpack-give {
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: 260px;
+    align-items: flex-end;
+}
+
+.runpack-place {
+    margin: 0 4px 4px 0;
+}
+
+.runpack-grid {
+    align-self: flex-start;
+}

@@ -34,6 +34,9 @@ namespace Bastion.UI.Hud
             this.icon = icon;
         }
 
+        /// <summary>The runs' pack's grids (HudRoot's GearBoard, 40 points a cell).</summary>
+        public Bastion.UI.Gear.GearBoard Gear;
+
         /// <summary>Whether its menu is open.</summary>
         public bool MenuOpen => menu != null;
 
@@ -109,6 +112,11 @@ namespace Bastion.UI.Hud
             Ui.Show(host, pack != null);
             if (pack == null) return;
             tips.Attach(host, pack.Tip);
+            if (pack.Run != null && Gear != null)
+            {
+                DrawRun(pack.Run);
+                return;
+            }
             var full = pack.Slots.Count >= pack.Size;
 
             // What lies on its tile: a click picks it up, or, with the backpack full, asks what to leave for it.
@@ -170,6 +178,34 @@ namespace Bastion.UI.Hud
 
             menu = Menu();
             if (menu != null) host.Add(menu);
+        }
+
+        /// <summary>
+        /// A run's pack (H3): what lies at its feet always (dragged to the pack, picked up); with the pockets open, the pack's
+        /// grid, the kit's places (a thing let go on one is put on: «equip») and the partners beside (given). The orders and
+        /// why not are the controller's (RunPack.Refusal); a click on a thing opens its others (use, drop, give).
+        /// </summary>
+        void DrawRun(RunPackView run)
+        {
+            if (run.Floor != null && run.Floor.Items.Count > 0)
+            {
+                var floor = Ui.El("runpack-section runpack-floor", host);
+                Ui.Text(HudText.Pack.Floor, "runpack-label font-title", floor);
+                Gear.SetGrid(Ui.El("runpack-grid", floor), run.Floor);
+            }
+            if (!pockets) return;
+            var body = Ui.El("runpack-section", host);
+            Ui.Text(HudText.Pack.KitHead, "runpack-label font-title", body);
+            var kit = Ui.El("runpack-kit", body);
+            foreach (var s in run.Kit) Gear.SetSlot(Ui.El("runpack-place runpack-place--" + s.Slot, kit), s);
+            Ui.Text(HudText.Pack.PackHead, "runpack-label font-title", body);
+            if (run.Pack != null) Gear.SetGrid(Ui.El("runpack-grid", body), run.Pack);
+            if (run.Give.Count > 0)
+            {
+                Ui.Text(HudText.Pack.GiveHead, "runpack-label font-title", body);
+                var give = Ui.El("runpack-give", body);
+                foreach (var s in run.Give) Gear.SetSlot(Ui.El("runpack-place", give), s);
+            }
         }
 
         /// <summary>

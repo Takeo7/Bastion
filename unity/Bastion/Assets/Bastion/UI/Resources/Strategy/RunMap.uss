@@ -1,0 +1,386 @@
+/*
+ * The map of an expedition (RunMapScreen): flat, over a dark ground of its own (the clearing's camera off), the stages
+ * as round marks from the start at the bottom to the boss at the top, the ways as lines (drawn in C#); the squad's
+ * plate on the right is Almacén's (Stash.uss).
+ */
+
+.runmap {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #111416;
+}
+
+.runmap-plate {
+    position: absolute;
+    left: 60px;
+    top: 10px;
+    bottom: 10px;
+    width: 800px;
+    align-items: center;
+}
+
+.runmap-head {
+    align-self: flex-start;
+    font-size: 22px;
+}
+
+.runmap-line {
+    align-self: flex-start;
+    font-size: 14px;
+}
+
+.runmap-field {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.runmap-links {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.runmap-back {
+    align-self: flex-start;
+    height: 34px;
+    margin: 4px 0 0 0;
+    padding: 0 16px;
+    font-size: 14px;
+    color: #eef0ea;
+    background-color: #3d4346;
+    border-width: 1px;
+    border-color: #060708;
+    border-radius: 0;
+}
+
+.runmap-back:hover {
+    background-color: #4b5254;
+}
+
+.runmap-back:disabled {
+    color: #6f756c;
+}
+
+/* ================================================================ the stages */
+
+.rnode {
+    position: absolute;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    background-color: #2b2f31;
+    border-width: 2px;
+    border-color: #4b5254;
+}
+
+.rnode__icon {
+    width: 58%;
+    height: 58%;
+    -unity-background-image-tint-color: #dfe2da;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.rnode--start {
+    background-color: #1c1f21;
+}
+
+/* The stops, no fight: a green steel. */
+.rnode--stop {
+    background-color: #24332b;
+    border-color: #4f6b58;
+}
+
+.rnode--boss {
+    background-color: #3a1e1c;
+    border-color: #b3261e;
+}
+
+.rnode--hidden {
+    background-color: #16191b;
+    border-color: #262a2d;
+}
+
+.rnode__q {
+    font-size: 22px;
+    color: #3f4447;
+}
+
+.rnode--done {
+    opacity: 0.5;
+}
+
+.rnode--at {
+    border-width: 3px;
+    border-color: #ffffff;
+    opacity: 1;
+}
+
+.rnode--open {
+    border-width: 3px;
+    border-color: #8fd05a;
+}
+
+.rnode--open:hover {
+    background-color: #3d4346;
+}
+
+.rnode--blocked {
+    border-color: #a1a79d;
+}
+
+/* The modifier's badge, its colour by kind. */
+.rnode__mod {
+    position: absolute;
+    right: -6px;
+    top: -6px;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+    background-color: #2a3550;
+    border-width: 1px;
+    border-color: #111416;
+}
+
+.rnode__mod--storm {
+    background-color: #46505a;
+}
+
+.rnode__mod--awake {
+    background-color: #8a2a20;
+}
+
+.rnode__mod-icon {
+    width: 16px;
+    height: 16px;
+    -unity-background-image-tint-color: #ffffff;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.rnode__name {
+    position: absolute;
+    width: 160px;
+    -unity-text-align: upper-center;
+    font-size: 12px;
+    color: #a1a79d;
+}
+
+.rnode__name--open {
+    color: #ffffff;
+}
+
+.rnode__here {
+    position: absolute;
+    width: 160px;
+    -unity-text-align: middle-right;
+    font-size: 11px;
+    color: #ffffff;
+}
+
+/* The squad's plate beside the map: up to the foot, so that a long kit scrolls in it. */
+.runmap-squad {
+    top: 12px;
+}
+
+/* ================================================================ a stop, over the map */
+
+.runmap-field--under {
+    opacity: 0.25;
+}
+
+/* Solid, so that the map under it doesn't show through. */
+.runstop {
+    position: absolute;
+    left: 110px;
+    top: 120px;
+    width: 560px;
+    padding: 16px 20px 16px 20px;
+    background-color: #1a1d1f;
+    border-width: 1px;
+    border-color: #3d4346;
+}
+
+.runstop__kicker {
+    font-size: 13px;
+    color: #a1a79d;
+}
+
+.runstop__title {
+    font-size: 24px;
+    margin-bottom: 6px;
+}
+
+.runstop__text {
+    font-size: 15px;
+    white-space: normal;
+    margin-bottom: 8px;
+}
+
+.runstop__line {
+    font-size: 14px;
+    white-space: normal;
+    color: #c4c9c0;
+}
+
+.runstop__purse {
+    margin: 4px 0 8px 0;
+}
+
+.runstop__purse-text {
+    font-size: 16px;
+}
+
+.runstop__for {
+    font-size: 13px;
+}
+
+.runstop__wares {
+    margin-bottom: 6px;
+}
+
+.runstop__ware {
+    flex-direction: row;
+    align-items: center;
+    height: 50px;
+    margin-bottom: 4px;
+    padding: 0 6px;
+    background-color: rgba(0, 0, 0, 0.25);
+}
+
+.runstop__tile {
+    width: 84px;
+    height: 42px;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(61, 67, 70, 0.55);
+    margin-right: 10px;
+}
+
+.runstop__icon {
+    width: 30px;
+    height: 30px;
+    -unity-background-image-tint-color: #dfe2da;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* Arte's picture of the ware, its long side across the tile (a rifle reads small but whole). */
+.runstop__art {
+    width: 80px;
+    height: 38px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.runstop__glyph {
+    font-size: 24px;
+    color: #e2d6b4;
+}
+
+.runstop__ware-name {
+    flex-grow: 1;
+    font-size: 15px;
+}
+
+.runstop__price {
+    width: 80px;
+    justify-content: flex-end;
+    margin-right: 12px;
+}
+
+.runstop__purse-line {
+    flex-direction: row;
+    align-items: center;
+}
+
+.runstop__purse-amount {
+    margin: 0 6px;
+}
+
+.runstop__buy,
+.runstop__leave {
+    height: 32px;
+    margin: 0;
+    padding: 0 14px;
+    font-size: 14px;
+    color: #15181a;
+    background-color: #ecebe6;
+    border-width: 0;
+    border-radius: 0;
+}
+
+.runstop__buy:hover,
+.runstop__leave:hover {
+    background-color: #ffffff;
+}
+
+.runstop__buy:disabled,
+.runstop__leave:disabled {
+    color: #6f756c;
+    background-color: #2b2f31;
+}
+
+.runstop__options {
+    margin: 6px 0;
+}
+
+.runstop__option {
+    margin: 0 0 6px 0;
+    padding: 8px 12px;
+    align-items: flex-start;
+    background-color: #2b2f31;
+    border-width: 1px;
+    border-color: #4b5254;
+    border-radius: 0;
+}
+
+.runstop__option:hover {
+    background-color: #3d4346;
+    border-color: #ffffff;
+}
+
+.runstop__option-label {
+    font-size: 16px;
+}
+
+.runstop__option-short {
+    font-size: 13px;
+    color: #c4c9c0;
+    white-space: normal;
+}
+
+.runstop__vote {
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.runstop__outcome {
+    font-size: 15px;
+    white-space: normal;
+    padding: 8px 12px;
+    margin: 6px 0;
+    background-color: rgba(143, 208, 90, 0.12);
+    border-left-width: 3px;
+    border-color: #8fd05a;
+}
+
+.runstop__foot {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 8px;
+}
+
+/* Asked to go on, the partner awaited: pressed again, taken back. */
+.runstop__leave--on {
+    background-color: #8fd05a;
+}
+
+.runstop__waiting {
+    font-size: 13px;
+    margin-left: 12px;
+}

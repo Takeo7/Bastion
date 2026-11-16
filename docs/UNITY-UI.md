@@ -813,6 +813,160 @@ En `unity/Bastion/Assets/Bastion/UI/` (asmdef `Bastion.UI`). Compila en el proye
   - restaurando la partida y con «Continuar campaña», el turno espera y no sale ningún aviso hasta que entra el otro, que manda lo suyo;
   - pasado el plazo, sigue como tras una caída, y al volver sale «X ha vuelto…»;
   - al restaurar, el mando pasa enseguida al que falta; con «Continuar campaña», solo cuando entra (para Red, en la 0.11.9). Capturas en `.dev-snapshots/ui/unity/app-0118/` |
+| sí | iOS táctil, fase 2 (docs/IOS.md, Arturo 7/11), el primer paso: la capa de entrada. El juego pide sus órdenes a `Bastion.Client.GameInput` (`Assets/Bastion/Client/Input/`, en el ensamblado de Client para que el paseo de Arte la use):
+  - el puntero, sus botones por lo que hacen (`Primary`, `Secondary`, `Middle`), la rueda, las teclas modificadoras y cada atajo por lo que hace (`Key.Back`, `Key.Map`, `Key.Sight`…, `Number(n)`);
+  - en escritorio lee el ratón y el teclado llamada por llamada, igual que antes. `Shortcuts` pasa entero a `GameInput` (`SystemHeld`, `AnyOtherKey`, y soltar las teclas al soltar Cmd);
+  - usan la capa CombatController (y Plans), CameraRig, GameCursor, ClearingInput y BaseSession;
+  - quedan el paseo de Arte (`Settlement.Walk`; le pasé el cambio exacto) y los arneses CombatLab y CombatRun, que no leen la entrada: fabrican estados de teclado y ratón, y eso entra también por `GameInput`;
+  - comprobado: en el laboratorio, la V, el Tab, los rótulos y Esc hacen lo mismo y los fotogramas enseñan lo mismo que el 5/11 (solo cambia el instante de la cámara); `CombatLab.Close`, sin excepciones del juego;
+  - la propuesta con el dedo, en `.dev-snapshots/ui/unity/ios/MENSAJE-A-GAMEPLAY.md`;
+  - de paso, la ayuda del volumen ya no dice que la M lo silencia (Lore): la M es el mapa desde el 1/11.
+  - **Los gestos** (`GameInput.Finger.cs`). Solo con el dedo (`GameInput.Touch`: en iOS, o con `BASTION_TACTIL=1` en el Mac); en escritorio no corre nada. Se leen antes que ningún script, una vez por fotograma:
+    - un toque; una pulsación larga (0,5 s quieto); arrastrar (a partir de 10 pt), con uno o con dos dedos; pellizcar; girar con dos dedos, que da un cuarto de vuelta a los 30°;
+    - un dedo que baja sobre un panel es del panel (`GameInput.OverUi`, `App/FingerPanels.cs`, con la regla de GameCursor);
+    - `BASTION_DEDO_LOG=1` apunta cada gesto y lo que hace el combate (`[dedo]`);
+    - en el laboratorio, `dedo=toque/x/y`, `casilla/x/y`, `largo/…`, `largocasilla/…`, `arrastre/…`, `pellizco/x/y/f` y `giro/x/y/°` (con `-shotWarm 0`, al ritmo real).
+  - **La cámara con el dedo** (CameraRig): un dedo, o dos, arrastran el suelo; pellizcar acerca y aleja entre los límites de la rueda; girar con dos dedos da un cuarto de vuelta, como Q y E (el mapa sigue a los dedos). Con un dedo en el mapa, la cámara es del jugador (`TakeControl`).
+  - **El combate con el dedo** (`CombatController.FingerOnMap`; Arturo, 7/11):
+    - un toque en el suelo señala la casilla, con lo que enseñaba el ratón al pasar y la nota de Lore («Toca otra vez para mover.», «… para planear el camino.», la de la ocultación, la de la puerta, las tablas y registrar); otro toque en la misma casilla lo hace;
+    - un toque en un soldado o en un zombi a la vista hace al momento (elegir, apuntar), y también apuntando o con algo propio armado;
+    - mantener el dedo en un zombi enseña su vista, y al soltar sale su ficha; en un soldado propio, su hoja; en el suelo, la marca para el compañero;
+    - desde arriba (el mapa), un toque baja la cámara y mantener el dedo pone la marca;
+    - probado en el laboratorio: dos toques mueven (5 de 8), la vista y la ficha de a3, la marca, apuntar con un toque, arrastrar, pellizcar y girar.
+  - **El perfil táctil** (`App/TouchProfile.cs`):
+    - un píxel del HUD mide 1/161 de pulgada en cualquier cristal (un punto de iPhone), así que 44 px son 44 pt;
+    - caben unos 1001 × 704 en el Duo abierto, 1120 × 736 en el iPad mini y 1475 × 1017 en el de 11";
+    - las pantallas usan una copia del `HudPanel` con tamaño de píxel constante (el asset no cambia) y llevan la clase `touch`;
+    - en el laboratorio, `BASTION_TACTIL_ESCALA=1` y una captura de 1001 × 704 lo enseñan como en el Duo;
+    - el HUD de hoy no cabe abajo en el Duo abierto: la propuesta de sitio, en el §10 de `.dev-snapshots/ui/unity/ios/MENSAJE-A-GAMEPLAY.md`.
+  - **El Duo cerrado:** si el lado corto mide menos de 600 px del HUD (el Duo cerrado, unos 490), sale encima de todo «Abre el teléfono para jugar: Bastión necesita la pantalla grande.» (Lore). Probado a 700 × 490 (sale) y a 1001 × 704 (no sale).
+  - **Las teclas, aparte** (Lore, grupo A): `HudText.Keyed(texto, tecla)` y `KeyOnly`. Con el dedo no salen «(Retroceso)», «(Tab)», «(F)», «(V)», «(H)», «(O)», «(Esc)», «· Tab», ni las teclas de la barra. En escritorio, todo igual.
+  - **Las ayudas con el dedo** (`TooltipLayer`): mantener el dedo 0,5 s enseña la ayuda, y al levantarlo no se pulsa el botón (se suelta la captura del puntero). Falta probarlo en el simulador.
+  - **El HUD con el dedo** (Gameplay, 7/11: solo dónde va cada cosa, todo detrás de `touch`; capturas en `.dev-snapshots/ui/unity/ios/`):
+    - la placa de la escuadra, arriba a la izquierda, con las tarjetas de dos en dos y todas iguales (`SquadList`, `.touch .squad`);
+    - las teclas, de 50 px, y la barra sola abajo en el centro;
+    - a la derecha, de abajo arriba: la flecha del objetivo, el ojo, «Mapa» y ▲ ▼ donde hay plantas;
+    - el menú, en un aro arriba a la derecha, junto a la tarjeta de la misión;
+    - «»», la tecla que mantenida acelera el turno enemigo, antes de «Terminar turno» y solo en ese turno (`IHudHandlers.OnHurry`);
+    - «Ceder», en la tira, junto al compañero, con la regla del «Ceder el mando» del menú;
+    - todo con los aros del ojo, las teclas de la barra y los iconos que ya había (`TouchButtons`), y las ayudas de Lore;
+    - comprobado en el laboratorio a 1001 × 704 (Duo abierto), 1120 × 736 (iPad mini) y 1475 × 1017 (iPad de 11"), y en escritorio a 1440 × 900, que sale igual que antes;
+    - el laboratorio pone ya `EnemyTurnPlaying`, como la app, así que también Espacio acelera ahí. |
+| sí | 7/11, para la 0.12.2 (docs/PRUEBA-2026-11-07-ARTURO.md) y la fase 1 de iOS:
+  - **El clic tras un soldado.** Investigando «no se puede mover en diagonal», apareció un fallo que viene del hito 1 y está en la app de la 0.12.1:
+    - con la cámara a la distancia con que empieza (36 m), un clic en la casilla que queda justo detrás de un soldado, hacia arriba en la pantalla, lo volvía a elegir en vez de moverlo; desde más lejos, también en más casillas vecinas;
+    - la causa: `BodyUnder` cogía cualquier cuerpo a 28 píxeles del pecho;
+    - ahora se mide la figura en el mundo: una cápsula de 0,2 a 1,5 m sobre los pies y 0,3 m alrededor (`RayToSegment`), y gana la más cercana a la cámara; sigue igual que un clic en la casilla de alguien lo elige;
+    - el parche contra HEAD, en `.dev-snapshots/ui/unity/diagonal/clic-figura.patch`;
+    - laboratorio: `sonda` (o `sonda=36`) apunta qué coge un clic en cada casilla alrededor del elegido a cada distancia de la cámara.
+  - **Sin diagonales** (Arturo, en el cuadro de Gameplay; el motor anda en 4 direcciones):
+    - la ayuda del movimiento ya no dice «en diagonal, 1,5»;
+    - en el laboratorio, el alcance es un rombo (con 1 punto, una cruz) y el camino pintado va en cruz;
+    - soldados y zombis andan en cruz: en las curvas se salen como mucho 0,09 casillas, dentro de su casilla (el redondeo de `UnitViews`);
+    - WalkPlan y Arrivals solo actúan en pasos en diagonal;
+    - laboratorio: `puntero=x/y` deja el ratón en una casilla sin hacer clic, y `rastro=<id>/<s>` apunta por dónde pisan los pies (con `-shotFps 30`: el juego avanza a saltos de la captura);
+    - capturas y medidas en `.dev-snapshots/ui/unity/diagonal/`.
+  - **Sin el compañero (0.12.2).** Probado en el laboratorio con el motor nuevo y el paso `ausente` (Ana no ha entrado nunca y no hay espera):
+    - sale «Ana no está: mandas también sus soldados.»;
+    - con los de Arturo en «Hoja en alto», el turno espera y sus soldados («DE ANA») tienen la barra;
+    - «Terminar turno» pasa el turno.
+  - **La pantalla de inicio en iOS** (Red y Lore; `NetLink.LanBlind`):
+    - no se buscan partidas de la red, y salen los textos de Lore para entrar por dirección (`StartText.*Blind`, `RoomText.InviteBlind`), con «iPad» o «iPhone» según el aparato;
+    - los ajustes se guardan «en este iPad» o «iPhone»;
+    - «Salir de Bastión» no sale en iOS, ni en la pantalla de inicio ni en el menú (`GameMenu`);
+    - en el escritorio, «Ninguna por ahora…» avisa de que la partida de un iPad o un iPhone no sale ahí;
+    - con `BASTION_RED_CIEGA=1` (Red) se ve así en el Mac: `.dev-snapshots/ui/unity/ios/7-inicio-red-ciega.png` y `8-sala-red-ciega.png`.
+  - **El combate con el dedo, los textos de Lore que faltaban** (TEXTOS-TACTILES.md §2 y §4), detrás de `GameInput.Touch`; en el escritorio, iguales:
+    - las notas de lo armado: «Pulsa otra vez o toca la puerta: abrir», «… quitar las tablas», «… registrar» (`HudText.Touch.Hand`);
+    - «Pulsa otra vez para usarla», «Puedes planear los movimientos», «Toca dónde lanzarla.», el plan («Toca otra vez esa casilla para quitarlo»), el turno enemigo y la velocidad con «»», «Toca para seguir», el mapa y los retratos («Dos toques: cámara al soldado»);
+    - «Controles» con el dedo, la tabla de Lore (`CombatController.TouchControls`).
+  - **La brújula con el dedo** (Arturo, 7/11: girar a saltos, con dos dedos o con la brújula):
+    - sale en todas las misiones, bajo la tarjeta del objetivo; las letras de los bordes, solo en los asedios (`CompassView.Edges`);
+    - tocar su mitad izquierda gira como la Q, y la derecha como la E (`GoalCard.TurnsCamera`, `IHudHandlers.OnTurnCamera`);
+    - su ayuda: `HudText.Touch.Compass`;
+    - **sin probar el toque:** en el laboratorio no llegan a UI Toolkit ni los toques ni los clics simulados (tampoco al botón del menú), así que queda para el simulador.
+  - **La base con el dedo** (lo aprobado por Gameplay el 7/11):
+    - con algo en la mano (una pieza, una fila, el hacha, un defensor en el asedio), un dedo es la herramienta (`ClearingInput.Holds`, `GameInput.FingerNow`) y dos mueven la cámara (`CameraRig.OneFingerTaken`); un segundo dedo deja lo que se estaba haciendo;
+    - la pieza sigue al dedo y se pone donde se levanta, si cabe; la fila y la tala, como al arrastrar con el ratón;
+    - sin nada en la mano, un toque elige y un dedo mueve la cámara;
+    - «GIRAR» y «ATRÁS» bajo la pieza en la mano, y «ATRÁS» bajo Talar (`SettlementScreen.Hands`, `IStrategyHandlers.OnTurnPiece`), con el aspecto de «Andar por la base»;
+    - los textos de Lore con el dedo (`Lore.BuildText.FellingTouch`, `Lore.HoldingLineTouch`, «Arrastra un dedo para poner una fila.»);
+    - sin «Andar por la base» con el dedo (Arturo: sin paseo en iOS por ahora).
+  - **La escala con el dedo:** en el simulador, `Screen.dpi` da 326 en el Duo, que es @3x, y el Duo cerrado medía como abierto (1005 × 690), así que no salía el aviso de abrirlo. En iOS, un píxel del HUD es ahora un punto de la pantalla (`UIScreen.nativeScale`, con `Client/Input/iOS/BastionScreen.mm` y `GameInput.PixelsPerPoint`). Caben 951 × 669 con el Duo abierto y 678 × 466 cerrado, donde sale el aviso. |
+| sí | 0.12.3, commit 01: la pantalla de preparación de la misión (el informe de Arturo del 7/11, la maqueta v39; docs/PRUEBA-2026-11-07-ARTURO.md «Para la 0.12.3»). Las medidas del informe son a 2560 × 1440, donde un píxel del HUD (1440 × 900, a medias entre ancho y alto) son 1,687:
+  - **La barra de arriba** (`TopStrip`, `Strategy.uss`):
+    - 49 px de alto, #141618 al 75 %, sin el acero ni el ribete;
+    - sin la Marea, que pasa al Mapa (Arturo, en el cuadro de Gameplay: «Llevarla al Mapa»): arriba de la columna de la izquierda, con su nombre, sus marcas, su valor y la misma ayuda (`MapScreen.Doom`, `StrategyPresenter.DoomOf`, `MapView.Doom*`);
+    - «Menú» en una placa rasgada;
+    - es la misma barra en toda la base, y con ella bajan 3 px las vistas (`.strat-view`, el Mapa, los carteles).
+  - **La placa rasgada** (`.torn`, `.torn--low`, `.torn--small`): las cajas blancas de Synty INTERFACE - Apocalypse HUD teñidas de negro al 75 %, con los cortes a un tercio (`-unity-slice-scale`, que va en px). `StrategyRoot.Dress` no les pone el marco de acero.
+  - **«Tus soldados»** (`SquadScreen`, `Squad.uss`):
+    - 207 × 190 en una placa rasgada, con el encabezado en blanco;
+    - las filas de 186 × 34, sobre un relleno rasgado #535458 al 30 % (`squad-row__fill`);
+    - los elegidos, con el marco blanco desgastado (`Frame_Large_03_Underlay`) en vez del ✓ verde (el presentador ya no lo pone, y su ayuda va en la fila);
+    - sin el color del jugador.
+  - **Los carteles bajo la fila** (`LineupCards.Level`, `Width`; solo en la escuadra, con `lineup-cards--squad`; el parte no cambia):
+    - 119 × 54, en una placa rasgada pequeña;
+    - todos a la altura del sitio más bajo, 27 px bajo las botas (Arte quitó los aros del suelo);
+    - el nombre más grande, el rango en gris claro y la × pequeña.
+  - **El panel de la misión:** 555 de ancho, como el de la maqueta, y a la misma altura, en una placa rasgada. «LANZAR MISIÓN» va en el rectángulo con muescas de 119 × 30 (`Slant`, `btn-notched`), con el mismo amarillo.
+  - **Capturas:** `.dev-snapshots/ui/unity/v39/`: antes, después, la maqueta junto al juego, y el Mapa y Soldados con la barra nueva. En db5679b.
+| sí | 0.12.3, commit 02: las tarjetas del resto del juego (el mismo informe):
+  - **Todas las placas** (`.panel`, en Mixta.uss) pasan del acero a la placa rasgada al 75 %: el combate, la base, el inicio, la sala, los menús y las ventanas.
+  - **La caja según el tamaño** (`App/TornPlates.cs`, que mira las pantallas cada 0,1 s y vuelve a medir cada placa cuando cambia):
+    - la pequeña (Box_Small_02), con menos de 60 de alto o 100 de ancho;
+    - la baja (Box_Medium_01), con menos de 150 de alto;
+    - la ancha (Box_Large_02), con más de 2,4 veces de ancho que de alto;
+    - si no, la grande de la maqueta (Box_Large_01).
+    Box_Medium_03 y _04 no tienen cortes de nueve partes, así que no se usan.
+  - **Fuera el marco de acero y los remaches** (`PlateFrame.Dress` no viste una placa rasgada), y el borde claro de las ventanas de la base y del tablero.
+  - **Al pasar el puntero,** la tarjeta del objetivo y las marcas del borde se aclaran con el tinte. Las marcas en alerta o de un soldado conservan su borde.
+  - **Los carteles del parte,** rasgados como los de la escuadra; el caído, en rojo oscuro.
+  - **Capturas antes y después:** `.dev-snapshots/ui/unity/v39/commit02/`.
+  - **Parche contra db5679b** sin lo de iOS: `.dev-snapshots/ui/unity/v39/commit02.patch` (EdgeMarks.uss lleva en el árbol el bloque de `touch` aparte). |
+| sí | 0.12.4, notas #1, #3 y #4 de Arturo del 7/11 y su escudo de cobertura:
+  - **En juego, mientras le quede algo:** el cliente cuenta «en juego» con `Paths.HasTurnLeft`, como el motor nuevo:
+    - `AutoSelect`: el elegido no salta a otro mientras le quede movimiento;
+    - `WaitingFor`;
+    - «EN JUEGO» en la tira;
+    - `TurnSoldier`.
+  - **«Terminar turno» sin el mando** (Gameplay: sí): antes salía gris («Tiene el mando Ana») y no hacía nada. Ahora termina el turno de uno, que queda «A punto», y la pregunta dice «Ana sigue con el mando».
+  - **De quién es el mando, claro:**
+    - «MANDO» junto al nombre de quien lo tiene, en su color, en la tira (`HudText.Players.Command`);
+    - el aviso de la barra bloqueada, a 15 px sobre una placa oscura.
+  - **Laboratorio:** `BASTION_LAB_DOS=1` (el compañero conectado también para las reglas) y el paso `mando=1`. Con `join` antes, el cliente lo ve presente.
+  - **Capturas:** `.dev-snapshots/ui/unity/turnos-0124/`.
+  - **Terminar el turno de un soldado** (`DoneCommand` de Gameplay; textos de Lore, TEXTOS-0124.md):
+    - en la barra, «Terminar el turno de Yuki» (✓) cuando le queda solo movimiento; su ayuda dice si el mando pasa al compañero (`CommandGoesTo`);
+    - al elegir a otro de los míos con uno en juego, la carta de las llamadas pregunta (`LeaveCall`): lo que le queda, lo que cuesta, «Terminar su turno» y «Seguir con Yuki». Va sin campana, y la llamada del compañero pasa delante;
+    - «A punto» sin el mando: «Ana sigue con el mando: el turno acaba cuando termine» (`EndTurnView.Holder`);
+    - la ayuda de «EN JUEGO», nueva.
+  - **La mochila (#3):**
+    - «×3» en el hueco de un montón de objetos iguales (`Looting.CountOf`), y las medicinas con su número;
+    - dar y recoger miran si cabe con `Looting.Fits`;
+    - los resúmenes cuentan las mejoras sueltas (`LootSummary` con `Mods`).
+  - **El escudo de cobertura** (Arturo, 7/11):
+    - fuera el cuadrado de las banderas;
+    - en la placa del soldado elegido, tras su nombre, un escudo (`Hud/Draw/CoverShield.cs`, el contorno del de mover): azul y lleno, completa; amarillo por la mitad, media; vacío con borde rojo, flanqueado;
+    - con la regla de antes (`CoverOf`) y la ayuda de Lore, con su título.
+  - **Laboratorio:** `respuesta=si|no` (la carta), `ap=s1/0` y `botin=s1`.
+  - **Parche contra 8139506,** sin lo de iOS: `.dev-snapshots/ui/unity/turnos-0124/0124.patch`. |
+| sí | 0.12.6 (notas de Arturo del 7/11, tras la 0.12.4; docs/PRUEBA-2026-11-07-ARTURO.md «Para la 0.12.6»):
+  - **#1:** las placas rasgadas, al 90 % («se ve poco el contenido»): `.panel`, `.torn`, los carteles y el menú de la barra.
+  - **#3:** las cajas, las puertas, las ventanas y puertas tapiadas y los muebles, como los cuerpos y los coches:
+    - su contorno (Arte, `SearchOutline`, que ya los encuentra) y el icono de su acción: la mochila, la puerta abierta o cerrada (`LineIcon`, también en las marcas sobre el mapa) o la palanca (`MarkIcon`);
+    - sin el marco de la casilla ni texto, salvo por qué no se puede y las notas del dedo;
+    - el icono, sobre lo alto del objeto (`SearchOutline.TopOf`);
+    - igual con la acción elegida en la barra (`ShowArmed`).
+  - **#2:** «Acaba el turno» sale del motor (`Abilities.EndsTurn`). «Mechero» guarda el id `salvo` y su icono.
+  - **#4, sin mordisco:**
+    - fuera la etiqueta MORDISCO, el chip «Fiebre», el tratamiento (la tarjeta, sus órdenes, la propuesta), el aviso del contagio y el parpadeo del tratamiento;
+    - el que cae se levanta con los textos de Lore («{nombre} se levanta», «ya no es de los vuestros»);
+    - la Cuarentena, fuera de la paleta y de lo que trae cada nivel (`Base.Retired`);
+    - con Manos de enfermero, la medicina sin acción (`Rules.FreeMedicine`).
+  - **#6, sin asedio:** nada lo anuncia mientras `Campaign.SiegesOn` esté apagado.
+  - **Laboratorio:** el paso `cosas`, que dice qué se puede registrar, abrir o destablar cerca.
+  - **Parche contra 4297c68,** sin lo de iOS: `.dev-snapshots/ui/unity/0126/0126.patch`. |
 | sí | Notas de Arturo del 5/11 (docs/PRUEBA-2026-11-05-ARTURO.md, decididas en el cuadro), las de UI. Tocan archivos de UI-COMBATE porque son notas nuevas. Capturas del laboratorio en `.dev-snapshots/ui/unity/notas-05-11/`:
   - **#5 y #8:** al pasar por una casilla del alcance, un ojo gris sobre cada zombi que vería al soldado allí. Si aún puede disparar, también el porcentaje, en la misma placa (`FlagView.Eye`, `UnitFlags.EyeMark`); «A la vista» desaparece. Sale también sin arma de fuego (antes, sin «Disparar» no salía nada). Quién lo vería: `Los.Watchers` de Gameplay, solo los que la escuadra ve (`CombatController.WatchersAt`);
   - **#6:** un botón redondo con un ojo junto a la flecha del objetivo, también con la V (`SightButton`, `CombatController.ToggleSight`). Se queda puesto toda la partida. En nuestro turno enseña la vista de todos los zombis que se ven a la vez, más tenue que la de uno, y un ojo rojo sobre los que ven ahora al soldado elegido; el que está bajo el ratón lo lleva delante de su porcentaje. Con el ratón sobre un zombi, solo la suya. La vista de cada zombi se guarda y solo se rehace si se mueve, se gira o cambia el mapa: puertas, tablas o quién se esconde (`SightWorld`). La de 54 zombis cuesta unos 50 ms;

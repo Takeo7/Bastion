@@ -66,7 +66,8 @@ namespace Bastion.Engine.Tests
                     var phase = heard.Room?.Phase;
                     // Nothing moving for a while: said, and the run stops.
                     var c = heard.Campaign;
-                    var where = $"{phase} · día {c?.Day} · acontecimiento {c?.Event ?? "-"} · propuesta {(c?.Proposal != null ? $"{c.Proposal.Action.Type} de {c.Proposal.By}" : "-")} · llaves {string.Join(",", c?.LaunchReady ?? new bool[0])} · operación {c?.ActiveMission ?? "-"} · seq {heard.Mission?.Seq}";
+                    var where = $"{phase} · día {c?.Day} · acontecimiento {c?.Event ?? "-"} · propuesta {(c?.Proposal != null ? $"{c.Proposal.Action.Type} de {c.Proposal.By}" : "-")} · llaves {string.Join(",", c?.LaunchReady ?? new bool[0])} · operación {c?.ActiveMission ?? "-"} · seq {heard.Mission?.Seq}"
+                        + (c?.Stash != null ? $" · expedición {c.Run?.Phase ?? "-"} {c.Run?.At ?? "-"} · etapas {c.NodesPlayed} · objetos {Gears.All(c).Count()}" : "");
                     still = where == was ? still + 1 : 0;
                     was = where;
                     if (still > 200)

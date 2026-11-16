@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using Bastion.Client.Units;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -18,7 +19,8 @@ namespace Bastion.Client.Net.EditorTools
 {
     /// <summary>
     /// The app, built: the scenes of the build settings, into Builds/&lt;system&gt;/ (or -salida &lt;path&gt;). In batchmode:
-    /// unity/tools/unity.sh -executeMethod Bastion.Client.Net.EditorTools.AppBuild.Mac (or .Windows, .Linux). Two copies play
+    /// unity/tools/unity.sh -executeMethod Bastion.Client.Net.EditorTools.AppBuild.Mac (or .Windows, .Linux; iOS through
+    /// unity/tools/ios.sh, in a copy of the project: IosSimulator, IosDevice). Two copies play
     /// together on one computer if each has its own BASTION_DATOS (NetLink). Its data unpacked unless -comprimir (LZ4HC):
     /// the Synty atlases are mostly flat colour and the meshes repeat, so the Mac's 844 MB come to 306, but each build takes
     /// some 95 s more and each load some tenths of a second (26/10, docs/UNITY.md); the releases decide. The sound must be
@@ -131,6 +133,95 @@ pause
         public static void Linux()
         {
             Build(BuildTarget.StandaloneLinux64, "Builds/Linux/Bastion.x86_64");
+        }
+
+        /// <summary>The app's identifier on iOS, signed as it is by Arturo's personal team.</summary>
+        private const string BundleId = "com.takeo7.bastion";
+
+        /// <summary>
+        /// iOS's question before the app may use the local network (NSLocalNetworkUsageDescription): the room's TCP, to
+        /// join the partner's game or host it. Lore's words.
+        /// </summary>
+        private const string LocalNetworkUse = "Para jugar con otra persona en la misma red: entrar en su partida o abrir la tuya.";
+
+        /// <summary>
+        /// iOS (Arturo, 7/11; docs/IOS.md): the Xcode project for the simulator, Builds/iOS-sim. unity/tools/ios.sh brings
+        /// the copy up to date, runs this, then xcodebuild, and installs it. Only in the iOS copy of the project, open with
+        /// -buildTarget iOS: switching the main one would make every session import it all again.
+        /// </summary>
+        public static void IosSimulator()
+        {
+            Ios(false);
+        }
+
+        /// <summary>The same for the iPad and Arturo's Duo, Builds/iOS: signed automatically by the team -equipo &lt;id&gt; says (his personal one).</summary>
+        public static void IosDevice()
+        {
+            Ios(true);
+        }
+
+        /// <summary>
+        /// The Xcode project: IL2CPP (iOS has no JIT, so link.xml keeps the engine whole), iPhone and iPad, iOS 17 up, only
+        /// landscape either way round (Gameplay: the HUD is laid out wide), full screen. Then into its Info.plist the name
+        /// the player sees, the question for the local network, the iPhone above 60 Hz and the landscape alone, checked; and
+        /// the icon with the version (AppIcon.Ios). As every build: the figures, the sound and the panels checked first
+        /// (Build).
+        /// </summary>
+        private static void Ios(bool device)
+        {
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS)
+            {
+                Debug.LogError($"[red] app (iOS): solo en la copia de iOS del proyecto, abierta con -buildTarget iOS (unity/tools/ios.sh); esta está en {EditorUserBuildSettings.activeBuildTarget}");
+                if (Application.isBatchMode) EditorApplication.Exit(1);
+                return;
+            }
+            var args = Environment.GetCommandLineArgs();
+            var at = Array.IndexOf(args, "-equipo");
+            var team = at >= 0 && at + 1 < args.Length ? args[at + 1] : null;
+            var ios = NamedBuildTarget.iOS;
+            PlayerSettings.SetScriptingBackend(ios, ScriptingImplementation.IL2CPP);
+            PlayerSettings.SetApplicationIdentifier(ios, BundleId);
+            PlayerSettings.iOS.buildNumber = Application.version;
+            PlayerSettings.iOS.sdkVersion = device ? iOSSdkVersion.DeviceSDK : iOSSdkVersion.SimulatorSDK;
+            PlayerSettings.iOS.simulatorSdkArchitecture = AppleMobileArchitectureSimulator.ARM64;
+            PlayerSettings.iOS.targetDevice = iOSTargetDevice.iPhoneAndiPad;
+            PlayerSettings.iOS.targetOSVersionString = "17.0";
+            PlayerSettings.iOS.requiresFullScreen = true;
+            PlayerSettings.statusBarHidden = true;
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+            PlayerSettings.allowedAutorotateToLandscapeRight = true;
+            PlayerSettings.allowedAutorotateToPortrait = false;
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+            PlayerSettings.iOS.appleEnableAutomaticSigning = true;
+            if (!string.IsNullOrEmpty(team)) PlayerSettings.iOS.appleDeveloperTeamID = team;
+            var project = Build(BuildTarget.iOS, device ? "Builds/iOS" : "Builds/iOS-sim");
+            if (project == null) return;
+            project = Path.GetFullPath(project);
+            if (!AppIcon.Ios(project)) return;
+            var plist = Path.Combine(project, "Info.plist");
+            var steps = new[]
+            {
+                ("plutil", $"-replace CFBundleDisplayName -string {Shown} \"{plist}\""),
+                ("plutil", $"-replace NSLocalNetworkUsageDescription -string \"{LocalNetworkUse}\" \"{plist}\""),
+                // Above 60 Hz on an iPhone's ProMotion screen (Arturo, 7/11: no cap of its own, the settings as on the Mac;
+                // GameSettings asks for the screen's rate): Unity writes it false, and the iPhone then stops at 60.
+                ("plutil", $"-replace CADisableMinimumFrameDurationOnPhone -bool YES \"{plist}\""),
+            };
+            foreach (var (tool, arguments) in steps)
+                if (!Ran(tool, arguments)) return;
+            // The turns Unity writes from PlayerSettings, checked below; an iPad's own list, if it wrote one, would let it turn upright.
+            if (Said("plutil", $"-extract UISupportedInterfaceOrientations~ipad json -o - \"{plist}\"") != null && !Ran("plutil", $"-remove UISupportedInterfaceOrientations~ipad \"{plist}\"")) return;
+            var turns = Said("plutil", $"-extract UISupportedInterfaceOrientations json -o - \"{plist}\"") ?? "";
+            var name = Said("plutil", $"-extract CFBundleDisplayName raw -o - \"{plist}\"")?.Trim();
+            var fast = Said("plutil", $"-extract CADisableMinimumFrameDurationOnPhone raw -o - \"{plist}\"")?.Trim();
+            if (turns.Contains("Portrait") || !turns.Contains("LandscapeLeft") || !turns.Contains("LandscapeRight") || name != Shown || Said("plutil", $"-extract NSLocalNetworkUsageDescription raw -o - \"{plist}\"") == null || fast != "true")
+            {
+                Debug.LogError($"[red] app (iOS): el Info.plist no quedó como debe (nombre «{name}», giros {turns.Trim()}, más de 60 Hz {fast})");
+                if (Application.isBatchMode) EditorApplication.Exit(1);
+                return;
+            }
+            Debug.Log($"[red] app (iOS, {(device ? $"aparato, equipo {(string.IsNullOrEmpty(team) ? "sin decir" : team)}" : "simulador")}): {BundleId} {Application.version}, «{Shown}», solo en horizontal, con el permiso de red local y hasta 120 Hz → {project}");
         }
 
         /// <summary>The project's active platform, said in the log: a build for another one must leave it as it was.</summary>
@@ -261,6 +352,17 @@ pause
         private static string PathOf(Transform t)
         {
             return t.parent == null ? t.name : $"{PathOf(t.parent)}/{t.name}";
+        }
+
+        /// <summary>What a command of the Mac's wrote (UTF-8: Mono's default isn't, and «Bastión» came back «Basti??n»), or null if it failed (nothing fails for it).</summary>
+        private static string? Said(string tool, string arguments)
+        {
+            var start = new ProcessStartInfo(tool, arguments) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = System.Text.Encoding.UTF8 };
+            using var process = Process.Start(start)!;
+            var output = process.StandardOutput.ReadToEndAsync();
+            process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            return process.ExitCode == 0 ? output.Result : null;
         }
 
         /// <summary>A command of the Mac's, waited for (in `directory`, if said); if it fails, what it said goes to the log and the build fails.</summary>

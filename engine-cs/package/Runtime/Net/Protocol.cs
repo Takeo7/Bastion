@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Bastion.Engine;
 
 namespace Bastion.Net
@@ -257,10 +258,22 @@ namespace Bastion.Net
     /// <summary>The campaign there is, for the lobby's «Continuar campaña»: how far it went, and the mission left half played.</summary>
     public sealed class SavedCampaign
     {
+        // The campaign of before the runs: its day, outings, Marea and the Bastión's level (0 in one of runs).
         public int Day { get; set; }
         public int Missions { get; set; }
         public int Doom { get; set; }
         public int Level { get; set; }
+        /// <summary>The runs (16/11): the chapter open; 0 in a campaign of before.</summary>
+        public int Chapter { get; set; }
+        /// <summary>The row of the node last reached in the run under way (RunNode.Row, 1 to RunMap.Rows); 0 before the first; null in the base.</summary>
+        public int? Row { get; set; }
+        /// <summary>The campaign's soldiers alive, not only the squad's.</summary>
+        public int Soldiers { get; set; }
+        /// <summary>The supplies (§) in the stash.</summary>
+        public int Supplies { get; set; }
+        /// <summary>Nodes entered in all the campaign (CampaignState.NodesPlayed).</summary>
+        public int NodesPlayed { get; set; }
+        /// <summary>The mission (in the runs, the node) left half played, by its name; null without one.</summary>
         public string? InMission { get; set; }
 
         /// <summary>
@@ -270,6 +283,20 @@ namespace Bastion.Net
         public static SavedCampaign? Of(CampaignState? campaign, string? inMission)
         {
             if (campaign == null || campaign.Outcome != null) return null;
+            if (Campaign.IsRuns(campaign))
+            {
+                var run = campaign.Run;
+                var at = run?.At != null ? run.Nodes.Find((n) => n.Id == run.At) : null;
+                return new SavedCampaign
+                {
+                    Chapter = campaign.Chapter ?? 1,
+                    Row = run == null ? (int?)null : at?.Row ?? 0,
+                    Soldiers = campaign.Soldiers.Count((s) => s.Alive),
+                    Supplies = Runs.StashSupplies(campaign),
+                    NodesPlayed = campaign.NodesPlayed ?? 0,
+                    InMission = inMission,
+                };
+            }
             return new SavedCampaign { Day = campaign.Day, Missions = campaign.MissionsFlown ?? 0, Doom = campaign.Doom, Level = Progression.BastionLevel(campaign.Level), InMission = inMission };
         }
     }
@@ -281,7 +308,7 @@ namespace Bastion.Net
         public List<PlayerInfo> Players { get; set; } = new List<PlayerInfo>();
         public string Phase { get; set; } = RoomPhases.Lobby;
         public SavedCampaign? SavedCampaign { get; set; }
-        /// <summary>A campaign from before the 0.7 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.</summary>
+        /// <summary>A campaign from before the runs kept aside (SaveStore.OutdatedLabel): its file's name, for the lobby to say so.</summary>
         public string? SetAside { get; set; }
         /// <summary>The save wouldn't start (Room): which copy the game goes on from, or that none would, said for the players; null if it started.</summary>
         public string? Restored { get; set; }

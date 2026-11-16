@@ -73,10 +73,14 @@ namespace Bastion.EditorTools
                 level.FindPropertyRelative("name").stringValue = names[k];
                 level.FindPropertyRelative("customRenderPipeline").objectReferenceValue = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(pipelines[k]);
                 // Every level in the apps (5/11, UI's test of the 0.11.9: «Bajo» kept the template's «Mobile» off Standalone
-                // since a679b18, and in the app «Bajos» was «Medio»).
+                // since a679b18, and in the app «Bajos» was «Medio»), the iPhone's and the iPad's too (Arturo, 7/11: «que vaya
+                // con los ajustes igual que en Mac»; the template kept «Medio» and «Alto» off them).
                 var excluded = level.FindPropertyRelative("excludedTargetPlatforms");
                 for (int i = excluded.arraySize - 1; i >= 0; i--)
-                    if (excluded.GetArrayElementAtIndex(i).stringValue == "Standalone") excluded.DeleteArrayElementAtIndex(i);
+                {
+                    string platform = excluded.GetArrayElementAtIndex(i).stringValue;
+                    if (platform == "Standalone" || platform == "iPhone") excluded.DeleteArrayElementAtIndex(i);
+                }
             }
             // The editor (and the captures) as before: on PC's pipeline, now «Alto»; every platform's default «Alto»
             // (UI's Ajustes sets the player's own at start: «Medio» on the Mac).
@@ -88,10 +92,14 @@ namespace Bastion.EditorTools
             Debug.Log($"[project] {PlayerSettings.companyName} / {PlayerSettings.productName} ({PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Standalone)}); frame timing {PlayerSettings.enableFrameTimingStats}; levels {string.Join(", ", QualitySettings.names)}, in the apps {AppLevels()}");
         }
 
-        /// <summary>The quality levels a Mac's, Windows' or Linux's app has, by name (RendimientoLab logs them too).</summary>
+        /// <summary>Only the levels each app has, in the log (unity.sh -executeMethod Bastion.EditorTools.ProjectSetup.Levels): nothing changed.</summary>
+        public static void Levels() => Debug.Log($"[project] levels in the apps: {AppLevels()}");
+
+        /// <summary>The quality levels a Mac's, Windows' or Linux's app has, by name (RendimientoLab logs them too), and an iPhone's or iPad's.</summary>
         internal static string AppLevels()
         {
-            return string.Join(", ", QualitySettings.GetActiveQualityLevelsForPlatform("Standalone").Select(i => QualitySettings.names[i]));
+            string Of(string platform) => string.Join(", ", QualitySettings.GetActiveQualityLevelsForPlatform(platform).Select(i => QualitySettings.names[i]));
+            return $"{Of("Standalone")}; on iOS {Of("iPhone")}";
         }
     }
 }

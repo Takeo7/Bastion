@@ -51,7 +51,7 @@ namespace Bastion.UI.Strategy
                 Named(siege, v.SiegeTip);
             }
             var stores = Ui.El("strat-res", host);
-            var day = Well(stores, "base:day", "strat-well--day", $"DÍA {v.Day}");
+            var day = Well(stores, "base:day", "strat-well--day", v.Chapter ?? $"DÍA {v.Day}");
             Named(day, v.DayTip);
             foreach (var s in v.Stores)
             {
@@ -85,7 +85,9 @@ namespace Bastion.UI.Strategy
         VisualElement Well(VisualElement parent, string iconId, string cls, string value)
         {
             var well = Ui.El("strat-well " + cls, parent);
-            Ui.Icon(icon, iconId, "strat-well__icon", well);
+            // The runs' supplies: Arte's crate, not a banknote (Gameplay, 16/11).
+            if (iconId == "store:supplies") SuppliesMark.Crate(well, "strat-well__icon strat-well__crate");
+            else Ui.Icon(icon, iconId, "strat-well__icon", well);
             Ui.Text(value, "strat-well__value font-title", well);
             return well;
         }

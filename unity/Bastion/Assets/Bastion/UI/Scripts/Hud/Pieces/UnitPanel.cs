@@ -38,6 +38,8 @@ namespace Bastion.UI.Hud
 
         /// <summary>The backpack's menu: open, and the swap opened for a thing on the floor (the notice's «Cambiar»).</summary>
         public bool PackMenuOpen => backpack.MenuOpen;
+        /// <summary>The runs' pack's grids (HudRoot's), for the backpack.</summary>
+        public Bastion.UI.Gear.GearBoard Gear { set => backpack.Gear = value; }
         /// <summary>The pockets shown or hidden, as the backpack's mark's click does (the labs: PackSteps «pack»).</summary>
         public void TogglePockets() => backpack.Pockets = !backpack.Pockets;
         public void OpenSwap(string unit, string id) => backpack.OpenSwap(unit, id);

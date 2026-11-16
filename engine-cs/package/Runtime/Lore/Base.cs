@@ -223,6 +223,12 @@ namespace Bastion.Engine
             /// <summary>The bottom line, by what is in hand: felling, or nothing (a piece in hand: HoldingLine).</summary>
             public const string Felling = "Arrastra sobre los árboles que quieras talar. Esc para dejarlo.";
             public const string NoTrees = "Aquí no hay árboles: arrastra sobre el pinar.";
+            /// <summary>
+            /// With the finger (docs/IOS.md; UI's gestures, 7/11): «Girar» and «Atrás» are the touch buttons for R and Esc;
+            /// with a tool in hand one finger drags it and two move the camera. NoTrees serves both.
+            /// </summary>
+            public const string PaletteHelpTouch = "Elige una pieza y ponla en el claro: «Girar» la gira y «Atrás» la suelta.";
+            public const string FellingTouch = "Arrastra un dedo sobre los árboles que quieras talar; con dos, mueves la cámara. «Atrás» para dejarlo.";
             /// <summary>A piece with the partner connected: its tag (it goes to a vote).</summary>
             public const string Vote = "se propone";
             /// <summary>Dismantling's confirmation, and its two buttons.</summary>
@@ -334,6 +340,12 @@ namespace Bastion.Engine
         public static string HoldingLine(string piece)
         {
             return $"{PieceTexts.All[piece].Name}: clic para poner, R para girar, Esc para soltar.";
+        }
+
+        /// <summary>HoldingLine with the finger (docs/IOS.md): «Empalizada: toca para poner, «Girar» para girar, «Atrás» para soltar.»</summary>
+        public static string HoldingLineTouch(string piece)
+        {
+            return $"{PieceTexts.All[piece].Name}: toca para poner, «Girar» para girar, «Atrás» para soltar.";
         }
 
         /// <summary>By the pointer, where it fits: «Empalizada · Cuesta 6 §», « · se propone» when dear; where it doesn't: «Sala de radio · Hay árboles: tala antes.»</summary>

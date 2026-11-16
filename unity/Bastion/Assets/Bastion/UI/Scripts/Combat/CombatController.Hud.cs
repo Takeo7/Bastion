@@ -106,7 +106,7 @@ namespace Bastion.UI.Combat
             turn.InPlay = inPlay?.Name;
             Hud.SetTurn(turn);
             Hud.SetMission(MissionView());
-            Hud.SetCompass(CompassOf(v));
+            Hud.SetCompass(CompassOf(v) is var rose && !rose.Shown && Bastion.Client.GameInput.Touch ? new CompassView { Shown = true, Edges = false } : rose);
             Hud.SetPlayers(alone ? null : PlayersView(v, sharing ? holder : (int?)null));
             Hud.SetSquad(SquadView(v, inPlay?.Id));
             var shown = UnitById(v, picked);
@@ -607,6 +607,10 @@ namespace Bastion.UI.Combat
                 var status = !p.Connected ? HudText.Players.Offline : p.Away == true ? HudText.Players.Away : alone || holds ? "" : v.Ready[p.Slot] ? HudText.Players.Ready : busy.Contains(p.Slot) ? (acting.Contains(p.Slot) ? HudText.Players.WithActions : HudText.Players.WithMoves) : HudText.Players.NoActions;
                 view.Players.Add(new PlayerView { Slot = p.Slot, Name = p.Name, Color = p.Color, Me = p.Slot == MySlot, Connected = p.Connected, Ready = v.Ready[p.Slot], Command = holds, Status = status });
             }
+            // With the finger, «Ceder» by the partner, as the menu's «Ceder el mando» (CombatController.Menu: PassOn).
+            var partner = PartnerHere();
+            view.CanPass = Bastion.Client.GameInput.Touch && partner != null && v.ActiveTeam == Teams.Xcom && v.Outcome == null && CanAct()
+                && HasCommand() && !v.Ready[partner.Slot] && busy.Contains(partner.Slot);
             return view;
         }
 
@@ -985,13 +989,15 @@ namespace Bastion.UI.Combat
             if (id == AbilityIds.Pry)
             {
                 var what = Abilities.Boards(State, tile) == DecorKinds.DoorBoards ? "la puerta" : "la ventana";
-                view.Hint = $"Otra vez, Espacio o clic en {what}: quitar las tablas{(others > 0 ? $" · Tab: {(others == 1 ? "la otra" : "otra")} tapiada" : "")} · Esc: cancelar";
+                view.Hint = Bastion.Client.GameInput.Touch ? HudText.Touch.Hand(what, "quitar las tablas")
+                    : $"Otra vez, Espacio o clic en {what}: quitar las tablas{(others > 0 ? $" · Tab: {(others == 1 ? "la otra" : "otra")} tapiada" : "")} · Esc: cancelar";
                 return view;
             }
             if (id != AbilityIds.Search)
             {
                 var what = id == AbilityIds.OpenDoor ? "abrir" : "cerrar";
-                view.Hint = $"Otra vez, Espacio o clic en la puerta: {what}{(others > 0 ? $" · Tab: {(others == 1 ? "la otra" : "otra")} puerta" : "")} · Esc: cancelar";
+                view.Hint = Bastion.Client.GameInput.Touch ? HudText.Touch.Hand("la puerta", what)
+                    : $"Otra vez, Espacio o clic en la puerta: {what}{(others > 0 ? $" · Tab: {(others == 1 ? "la otra" : "otra")} puerta" : "")} · Esc: cancelar";
                 return view;
             }
             var decor = Looting.SearchSpot(State, tile);
@@ -1010,7 +1016,8 @@ namespace Bastion.UI.Combat
             string NameOf(string spot) => Lore.SearchSpots.TryGetValue(spot, out var s) ? s.Name : "la caja";
             var next = others == 1 ? HandTiles().FirstOrDefault(t => !Same(t, tile)) : null;
             var tab = next != null && Looting.SearchSpot(State, next) is string after ? NameOf(after) : "el siguiente";
-            view.Hint = $"Otra vez, Espacio o clic en {NameOf(decor)}: {(decor == Looting.Body ? "registrar" : "abrir")}{(others > 0 ? $" · Tab: {tab}" : "")} · Esc: cancelar";
+            view.Hint = Bastion.Client.GameInput.Touch ? HudText.Touch.Hand(NameOf(decor), decor == Looting.Body ? "registrar" : "abrir")
+                : $"Otra vez, Espacio o clic en {NameOf(decor)}: {(decor == Looting.Body ? "registrar" : "abrir")}{(others > 0 ? $" · Tab: {tab}" : "")} · Esc: cancelar";
             return view;
         }
 

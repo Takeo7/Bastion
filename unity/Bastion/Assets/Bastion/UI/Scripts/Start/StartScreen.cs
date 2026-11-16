@@ -98,7 +98,8 @@ namespace Bastion.UI.Start
             link.Joined += OnJoined;
             link.Failed += OnFailed;
             link.LanGamesChanged += Heard;
-            link.StartLooking();
+            // On iOS nothing is heard on the network (NetLink.LanBlind): the right card is always «Unirse por dirección».
+            if (!NetLink.LanBlind) link.StartLooking();
             Heard(link.LanGames);
             Go(Page.Menu);
             ShowSaved();
@@ -139,7 +140,7 @@ namespace Bastion.UI.Start
             }
             Debug.Log($"[inicio] vista previa: {open}, guardada {saved}, en la red {heardOf ?? "nadie"}");
             previewing = true;
-            previewSaved = saved ? new SavedCampaign { Day = 12, Missions = 8, Level = 3, Doom = 5 } : null;
+            previewSaved = saved ? new SavedCampaign { Chapter = 1, Row = 3, Soldiers = 4, Supplies = 245, NodesPlayed = 7 } : null;
             previewHeard = string.IsNullOrEmpty(heardOf) ? null : new LanGame { Name = heardOf, Address = "192.168.1.20:41391", Version = link.Version };
             Heard(heardList);
             ShowSaved();
@@ -171,10 +172,16 @@ namespace Bastion.UI.Start
             keyBox = root.Q("key-box");
             root.Q<Label>("title").text = StartText.Title;
             continueKey = Key("continue", StartText.Continue, Continue);
+            // Where it would be, the campaign from before the expeditions, set aside (Red, 16/11).
+            oldNote = new Label();
+            Ui.AddClasses(oldNote, "start__old");
+            continueKey.parent.Insert(continueKey.parent.IndexOf(continueKey) + 1, oldNote);
             Key("new", StartText.New, NewGame);
             Key("two", StartText.Two, () => Go(Page.Two));
             Key("settings", StartText.Settings, OpenSettings);
-            Key("quit", StartText.Quit, Quit);
+            // Not with the finger: iOS apps aren't closed from inside them (Apple; Application.Quit there looks like a crash. Red, 7/11;
+            // Gameplay, 8/11: wherever the game is played with the finger, the lab's too).
+            Ui.Show(Key("quit", StartText.Quit, Quit), !Bastion.Client.GameInput.Touch);
             backKey = Key("back", StartText.Back, () => Go(Page.Menu));
 
             var host = root.Q<Button>("host");
@@ -282,7 +289,14 @@ namespace Bastion.UI.Start
         void ShowSaved()
         {
             if (continueKey != null) Ui.Show(continueKey, Saved != null);
+            if (oldNote == null) return;
+            var old = previewing ? null : link.OldCampaign;
+            Ui.Show(oldNote, Saved == null && old != null);
+            if (old != null) oldNote.text = StartText.OldCampaign(old);
         }
+
+        /// <summary>The campaign from before the expeditions, where «Continuar partida» would be; hidden without one.</summary>
+        Label oldNote;
 
         // ------------------------------------------------------------ the keys
 

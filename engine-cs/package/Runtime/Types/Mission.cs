@@ -194,6 +194,8 @@ namespace Bastion.Engine
         public bool? Night { get; set; }
         /// <summary>A siege of the base (docs/FASE12.md); an elimination mission otherwise.</summary>
         public Siege? Siege { get; set; }
+        /// <summary>The runs' «horda despierta» (H3): every group alert from the start, and a wave by an edge in the first enemy turn.</summary>
+        public bool? Awake { get; set; }
     }
 
     /// <summary>MissionState.evacBus: `{ tiles: Vec2[]; heading: number }`.</summary>

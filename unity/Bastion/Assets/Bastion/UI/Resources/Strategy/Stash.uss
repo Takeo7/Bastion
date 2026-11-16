@@ -1,0 +1,253 @@
+/*
+ * Almacén, the runs' base (StashScreen): the stash's plate on the left, as wide as its ten cells; the chosen soldier's
+ * kit on the right; the clearing between them. The grids themselves are Gear/Gear.uss.
+ */
+
+.stash-left {
+    width: 562px;
+}
+
+.stash-top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.stash-supplies {
+    flex-direction: row;
+    align-items: center;
+}
+
+.stash-supplies__icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 6px;
+    -unity-background-image-tint-color: #d8cfb4;
+}
+
+.stash-supplies__value {
+    font-size: 20px;
+}
+
+.stash-hint {
+    font-size: 12px;
+    white-space: normal;
+    margin-top: 8px;
+}
+
+.stash-bin {
+    margin-top: 10px;
+    align-self: flex-start;
+}
+
+.stash-right {
+    width: 300px;
+    bottom: auto;
+}
+
+.stash-chooser {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.stash-tab {
+    flex-direction: column;
+    justify-content: center;
+    height: 28px;
+    margin: 0 4px 4px 0;
+    padding: 0 10px;
+    font-size: 13px;
+    color: #a1a79d;
+    background-color: #2b2f31;
+    border-width: 1px;
+    border-color: #060708;
+    border-radius: 0;
+}
+
+.stash-tab:hover {
+    color: #eef0ea;
+}
+
+.stash-tab--on {
+    color: #ffffff;
+    background-color: #3d4346;
+    border-color: #ffffff;
+}
+
+.stash-tab--theirs {
+    opacity: 0.75;
+}
+
+.stash-tab__top {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* In a run, each one's health under the name. */
+.stash-tab--hp {
+    height: 34px;
+}
+
+.stash-tab__hp {
+    height: 3px;
+    margin-top: 3px;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.stash-tab__fill {
+    height: 100%;
+    background-color: #8fd05a;
+}
+
+.stash-tab__fill--low {
+    background-color: #f0503c;
+}
+
+.kit-head {
+    margin-bottom: 6px;
+}
+
+.stash-tab__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-right: 6px;
+}
+
+.stash-name {
+    font-size: 20px;
+}
+
+.stash-line {
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.stash-row {
+    flex-direction: row;
+    align-items: flex-end;
+    margin-top: 8px;
+}
+
+.stash-row--tight {
+    margin-top: 2px;
+}
+
+.stash-place {
+    margin-right: 10px;
+}
+
+.stash-place--tight {
+    margin-right: 4px;
+}
+
+.stash-label {
+    font-size: 11px;
+    margin-top: 10px;
+}
+
+.stash-pack {
+    margin-top: 4px;
+}
+
+.stash-note {
+    font-size: 12px;
+    white-space: normal;
+    margin-top: 8px;
+}
+
+/* ================================================================ Mejoras (UpgradesScreen) */
+
+.upgrades {
+    width: 440px;
+}
+
+.upgrade {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 0;
+    border-top-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.upgrade__text {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.upgrade__name {
+    font-size: 17px;
+}
+
+.upgrade__line {
+    font-size: 13px;
+    white-space: normal;
+}
+
+.upgrade__marks {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.upgrade__mark {
+    width: 18px;
+    height: 4px;
+    margin-right: 3px;
+    background-color: rgba(255, 255, 255, 0.14);
+}
+
+.upgrade__mark--on {
+    background-color: #8fd05a;
+}
+
+.upgrade__side {
+    align-items: flex-end;
+    margin-left: 12px;
+}
+
+.upgrade__price {
+    font-size: 16px;
+    margin-bottom: 4px;
+}
+
+.upgrade__button {
+    height: 30px;
+    margin: 0;
+    padding: 0 12px;
+    font-size: 13px;
+    color: #15181a;
+    background-color: #ecebe6;
+    border-width: 0;
+    border-radius: 0;
+}
+
+.upgrade__button:hover {
+    background-color: #ffffff;
+}
+
+.upgrade__button:disabled {
+    color: #6f756c;
+    background-color: #2b2f31;
+}
+
+/* ================================================================ supplies (SuppliesMark): the figure and Arte's crate */
+
+.supplies-mark {
+    flex-direction: row;
+    align-items: center;
+}
+
+.supplies-mark__pic {
+    width: 26px;
+    height: 26px;
+    margin-left: 4px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.supplies-mark--small .supplies-mark__pic {
+    width: 20px;
+    height: 20px;
+    margin-left: 3px;
+}

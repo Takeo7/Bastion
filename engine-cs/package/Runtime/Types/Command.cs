@@ -66,6 +66,14 @@ namespace Bastion.Engine
         public int? Index { get; set; }
         public string? Id { get; set; }
         public string? To { get; set; }
+        /// <summary>A run's soldier (H3, RunPack): the gear, by its id, instead of `index` (and of `id` to take it from the floor).</summary>
+        public string? Gear { get; set; }
+        /// <summary>Where in a pack it goes (take, arrange): its top-left cell, turned or not; absent, the first place it fits.</summary>
+        public int? X { get; set; }
+        public int? Y { get; set; }
+        public bool? Turned { get; set; }
+        /// <summary>Equip: the kit place (KitSlots: a belt place; the rest follow from the gear); absent, the gear's own.</summary>
+        public string? Slot { get; set; } // KitSlots
     }
 
     /// <summary>ItemCommand.action: `'drop' | 'take' | 'give' | 'use' | 'equip'`.</summary>
@@ -76,8 +84,10 @@ namespace Bastion.Engine
         public const string Give = "give";
         public const string Use = "use";
         public const string Equip = "equip";
+        /// <summary>A run's soldier (H3): a gear moved within its own pack, or from its kit into it; free.</summary>
+        public const string Arrange = "arrange";
 
-        public static readonly IReadOnlyList<string> All = new[] { Drop, Take, Give, Use, Equip };
+        public static readonly IReadOnlyList<string> All = new[] { Drop, Take, Give, Use, Equip, Arrange };
     }
 
     /// <summary>

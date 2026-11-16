@@ -310,7 +310,8 @@ namespace Bastion.Engine.Tests
                 Assert.Equal(action.GetType(), back.Action.GetType());
                 Assert.Equal(json, Write(back));
             }
-            Assert.Equal(20, new TagConverter<ProposalAction>("type", (a) => a.Type).Tags.Count);
+            // And the runs' five (Types/Runs.cs RunAction, H0), which RunsJsonTests reads and writes.
+            Assert.Equal(20 + RunsJsonTests.ActionTags.Count, new TagConverter<ProposalAction>("type", (a) => a.Type).Tags.Count);
         }
 
         // ------------------------------------------------------------------- the commands
@@ -327,10 +328,10 @@ namespace Bastion.Engine.Tests
                 tags.Add(read.Type);
             }
             // 29 variants of CampaignCommand (30 with the contagion's `treat`, till the 0.12.17), each told by its `type`,
-            // and every one of them recorded.
+            // and every one of them recorded; and the runs' (H0), which RunsJsonTests reads and writes.
             var converter = new TagConverter<CampaignCommand>("type", (c) => c.Type);
-            Assert.Equal(29, converter.Tags.Count);
-            Assert.Equal(converter.Tags.OrderBy((t) => t, StringComparer.Ordinal), tags.OrderBy((t) => t, StringComparer.Ordinal));
+            Assert.Equal(29 + RunsJsonTests.CommandTags.Count, converter.Tags.Count);
+            Assert.Equal(converter.Tags.Except(RunsJsonTests.CommandTags).OrderBy((t) => t, StringComparer.Ordinal), tags.OrderBy((t) => t, StringComparer.Ordinal));
         }
 
         [Fact]

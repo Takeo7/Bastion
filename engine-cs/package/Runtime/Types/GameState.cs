@@ -119,6 +119,10 @@ namespace Bastion.Engine
         public List<DroppedLoot>? Dropped { get; set; }
         /// <summary>How many things have been left on the floor so far: the next one's id.</summary>
         public int? DroppedCount { get; set; }
+        /// <summary>A run's node (H3): what it is, and the gear counter; absent outside the runs.</summary>
+        public RunFight? Run { get; set; }
+        /// <summary>A run's fight (H3): gear on the floor, by its own id (dropped, found with no room, a fallen soldier's).</summary>
+        public List<DroppedGear>? FloorGear { get; set; }
         /// <summary>
         /// In a siege (docs/FASE12.md §4), what each door and barricade still holds,
         /// by node (grid.ts nodeOf); 0 once it gave way, to blows or a blast: the

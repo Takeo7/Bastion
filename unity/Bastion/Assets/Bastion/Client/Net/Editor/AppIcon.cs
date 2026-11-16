@@ -17,7 +17,8 @@ namespace Bastion.Client.Net.EditorTools
     /// - the Mac's goes into the app once Unity has built it, as Resources/PlayerIcon.icns (iconutil, every size of
     ///   macOS's set drawn at its own pixels), before it is signed;
     /// - the Windows one, inside the .exe, only Unity puts there: through PlayerSettings, imported in Generado/ (in
-    ///   .gitignore) and put back as it was after the build, so ProjectSettings doesn't change.
+    ///   .gitignore) and put back as it was after the build, so ProjectSettings doesn't change;
+    /// - iOS's (Arturo, 7/11) goes into the Xcode project Unity writes, as its asset catalog's one icon of 1024 px.
     /// </summary>
     public static class AppIcon
     {
@@ -66,6 +67,28 @@ namespace Bastion.Client.Net.EditorTools
             {
                 if (Directory.Exists(folder)) Directory.Delete(folder, true);
             }
+        }
+
+        /// <summary>
+        /// iOS's icon into the Xcode project Unity wrote at `project`: the app icon set's only image, 1024 px, of which
+        /// Xcode makes every size (one size, since Xcode 14); opaque and filling the square, for iOS rounds the corners
+        /// (icono.swift's ios). Unity's own sizes, of its default icon, go. False if it couldn't be made (in batchmode,
+        /// Unity exits with 1).
+        /// </summary>
+        public static bool Ios(string project)
+        {
+            var set = Path.Combine(project, "Unity-iPhone", "Images.xcassets", "AppIcon.appiconset");
+            if (!Directory.Exists(set))
+            {
+                Debug.LogError($"[red] icono {Application.version} · iOS: el proyecto de Xcode no tiene {set}");
+                if (Application.isBatchMode) EditorApplication.Exit(1);
+                return false;
+            }
+            foreach (var old in Directory.GetFiles(set)) File.Delete(old);
+            if (!Draw(set, "ios", new[] { 1024 })) return false;
+            File.WriteAllText(Path.Combine(set, "Contents.json"), "{\n  \"images\" : [\n    {\n      \"filename\" : \"icono-1024.png\",\n      \"idiom\" : \"universal\",\n      \"platform\" : \"ios\",\n      \"size\" : \"1024x1024\"\n    }\n  ],\n  \"info\" : {\n    \"author\" : \"xcode\",\n    \"version\" : 1\n  }\n}\n");
+            Debug.Log($"[red] icono {Application.version} · iOS: 1024 px en el catálogo del proyecto de Xcode · {new FileInfo(Path.Combine(set, "icono-1024.png")).Length / 1024} KB");
+            return true;
         }
 
         /// <summary>
@@ -124,7 +147,7 @@ namespace Bastion.Client.Net.EditorTools
             };
         }
 
-        /// <summary>The icon at each of `sizes` px into `folder` (icono-&lt;n&gt;.png), for `system` (mac, windows).</summary>
+        /// <summary>The icon at each of `sizes` px into `folder` (icono-&lt;n&gt;.png), for `system` (mac, windows, ios).</summary>
         private static bool Draw(string folder, string system, System.Collections.Generic.IEnumerable<int> sizes)
         {
             return AppBuild.Ran("swift", $"\"{Path.GetFullPath(Tool)}\" \"{Path.GetFullPath(Base)}\" \"{Path.GetFullPath(Font)}\" {Application.version} \"{folder}\" {system} {string.Join(" ", sizes)}");

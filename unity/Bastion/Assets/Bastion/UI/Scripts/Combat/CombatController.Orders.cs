@@ -321,7 +321,7 @@ namespace Bastion.UI.Combat
                 case Mode.Tile:
                     if (HandArmed() != null) ConfirmHand(HandTarget());
                     else if (hover != null) ThrowAt(hover);
-                    else Toast("Señala con el ratón dónde lanzarla.");
+                    else Toast(Bastion.Client.GameInput.Touch ? Bastion.UI.Hud.HudText.Touch.ThrowWhere : "Señala con el ratón dónde lanzarla.");
                     return;
             }
             // Nothing armed: the first attack, only with the command (#15).
@@ -361,7 +361,7 @@ namespace Bastion.UI.Combat
         /// <summary>Esc: a menu of the bar, then what is armed, then a pending «Terminar turno»; otherwise the game's menu.</summary>
         void Escape()
         {
-            if (Hud != null && (Hud.CloseAbilityMenu() || Hud.ClosePackMenu())) return;
+            if (Hud != null && (Hud.CloseGear() || Hud.CloseAbilityMenu() || Hud.ClosePackMenu())) return;
             if (CloseMiniMap()) return;
             if (mode != Mode.Move) CancelMode();
             // (A detected tile's warning too: game.ts.)
@@ -888,5 +888,7 @@ namespace Bastion.UI.Combat
         public void OnSheet(string unit) => OpenSheet(unit);
         public void OnFloor(int dir) => SetLevel(Level + dir);
         public void OnMenu() => ToggleMenu();
+        public void OnHurry(bool on) => Hurry?.Invoke(on);
+        public void OnTurnCamera(int dir) => Rig?.Rotate(dir);
     }
 }

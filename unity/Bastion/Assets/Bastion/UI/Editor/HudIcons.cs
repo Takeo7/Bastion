@@ -127,6 +127,16 @@ namespace Bastion.UI.EditorTools
             ("map:lata", Vehicle), ("map:pin", "ICON_MilitaryCombat_Map_Pin_01_Clean"),
             ("kind:elimination", Skull), ("kind:recovery", "ICON_MilitaryCombat_Map_Treasure_01_Clean"), ("kind:sabotage", "ICON_Apocalpyse_Map_Fire_01"),
             ("kind:hack", "ICON_MilitaryCombat_Inventory_Comms_01_Clean"), ("kind:rescue", "ICON_Apocalpyse_Map_Healing_01"), ("kind:scavenge", Backpack),
+            // The runs' stages on the map (16/11; today's objectives keep their kind:): Asedio a shield, Travesía boots, the
+            // Guarida's best box a chest, the boss a monster; the stops, a shelter, a merchant, a quest's mark, someone; and the
+            // horde awake, an exclamation mark (night and the weather are our line drawings).
+            ("node:hold", "ICON_DarkFantasy_Inventory_Shields_01_Clean"), ("node:crossing", "ICON_DarkFantasy_Inventory_Boots_01_Clean"),
+            ("node:elite", "ICON_ModernMenus_Chest_01_Clean"), ("node:boss", "ICON_DarkFantasy_Map_Monster_01_Clean"),
+            ("node:refuge", "ICON_DarkFantasy_Map_Home_01_Clean"), ("node:trade", "ICON_DarkFantasy_Map_Merchant_01_Clean"),
+            ("node:event", "ICON_Apocalpyse_Map_Quest_01"), ("node:survivor", "ICON_MilitaryCombat_Map_Player_01_Clean"),
+            ("node:awake", "ICON_ModernMenus_ExclamationMark_01_Clean"),
+            // The runs' base tabs: Almacén a backpack, Mejoras the workshop's tools (Salir is the Escuadra's La Lata).
+            ("tab:stash", Backpack), ("tab:upgrades", "ICON_Apocalpyse_Inventory_Crafting_01"),
         };
 
         public static void Make()

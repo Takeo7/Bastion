@@ -1815,6 +1815,8 @@ namespace Bastion.EditorTools
             }
             string template = Environment.GetEnvironmentVariable("BASTION_TEMPLATE") ?? "xenoid";
             string id = Environment.GetEnvironmentVariable("BASTION_ID") ?? "m0";
+            // BASTION_CUERPO=brute: drawn with that body of UnitViews' (its rules the template's: the Brute before the engine has it).
+            UnitViews.LabBody = Environment.GetEnvironmentVariable("BASTION_CUERPO");
             Plain(u => u.Id == soldierId || u.Id == deadId, 14, 18);
             soldier = Put(state.Units.First(u => u.Id == soldierId), 14, 10, 0);
             target = Put(Like(state.Units.First(u => u.Id == deadId), id, template), 18, 10, Math.PI);

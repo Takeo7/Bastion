@@ -780,29 +780,6 @@
     --dash-color: rgb(52, 53, 54);
 }
 
-/* Walking about the clearing (Arte's Settlement.WalkAbout; walkAbout.ts): every panel hidden, its place kept, and how to
-   walk at the bottom in the middle. */
-.strat--walking > * {
-    visibility: hidden;
-}
-
-.walk-hint {
-    display: none;
-    position: absolute;
-    bottom: 18px;
-    align-self: center;
-    padding: 6px 12px;
-    border-radius: 4px;
-    background-color: rgba(10, 12, 14, 0.8);
-    color: #e8e4dc;
-    font-size: 14px;
-}
-
-.strat--walking > .walk-hint {
-    display: flex;
-    visibility: visible;
-}
-
 /* The sides' scrollbar (strategy.css .strat-left/.strat-right: scrollbar-width thin, mixta's --t-line): thin and faint, and
    only when there is more below (the ScrollViews' Auto). Over the panel's padding, not beside the content: taking its
    width, the Asentamiento's grid lost a column. The Asentamiento's own, the same. */

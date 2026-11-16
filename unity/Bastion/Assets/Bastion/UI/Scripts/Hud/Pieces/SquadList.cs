@@ -32,6 +32,13 @@ namespace Bastion.UI.Hud
         const float Least = 354;
         /// <summary>Narrower than this a card says only the first name.</summary>
         const float Narrow = 64;
+        /// <summary>
+        /// With the finger (docs/IOS.md, phase 2; Gameplay, 7/11): the plate goes to the left, under the top strip, and the
+        /// cards stand two a row, all as wide (the picked one marked, not bigger), so the keys have the foot of the screen.
+        /// </summary>
+        const float TouchCardW = 82;
+        const int TouchColumns = 2;
+
         /// <summary>Two clicks on one card within this long are a double click (seconds, unscaled: the pause doesn't hold it).</summary>
         const float DoubleClick = 0.4f;
 
@@ -69,6 +76,19 @@ namespace Bastion.UI.Hud
             // No soldier yet (the HUD before the first view): no plate either.
             Ui.Show(plate, cards.Count > 0);
             var n = cards.Count;
+            if (Bastion.Client.GameInput.Touch)
+            {
+                // With the finger: two a row, all as wide, the plate as wide as two.
+                plate.style.width = TouchColumns * TouchCardW + (TouchColumns - 1) * Gap + 2 * Padding + 2;
+                for (var i = 0; i < n; i++)
+                {
+                    var card = Card(cards[i], TouchCardW);
+                    if (i % TouchColumns > 0) card.style.marginLeft = Gap;
+                    if (i >= TouchColumns) card.style.marginTop = Gap;
+                    host.Add(card);
+                }
+                return;
+            }
             var width = n <= 4 ? CardW : Mathf.Max(MinW, Mathf.Floor((MaxRow - PickedMore - (n - 1) * Gap) / n));
             var row = n * width + PickedMore + Mathf.Max(0, n - 1) * Gap;
             plate.style.width = Mathf.Max(Least, row + 2 * Padding);

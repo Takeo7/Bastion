@@ -65,7 +65,8 @@ namespace Bastion.UI.App
         /// <summary>0 bajos, 1 medios, 2 altos. Medios on a Mac (its target, ≥30 fps), altos elsewhere (the 0.10.1's).</summary>
         public static int Level
         {
-            get => LevelForTest ?? Mathf.Clamp(PlayerPrefs.GetInt(LevelKey, Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor ? 1 : 2), 0, 2);
+            // «Medios» unless chosen on the Mac and on iOS (Arturo, 7/11: «que vaya con los ajustes igual que en Mac»), «altos» elsewhere.
+            get => LevelForTest ?? Mathf.Clamp(PlayerPrefs.GetInt(LevelKey, Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.IPhonePlayer ? 1 : 2), 0, 2);
             set
             {
                 if (LevelForTest == null) PlayerPrefs.SetInt(LevelKey, Mathf.Clamp(value, 0, 2));
@@ -293,7 +294,7 @@ namespace Bastion.UI.App
             var quality = Array.FindIndex(names, n => string.Equals(n, QualityNames[level], StringComparison.OrdinalIgnoreCase));
             if (quality < 0 && names.Length > 0) quality = level == 0 ? 0 : level == 2 ? names.Length - 1 : (names.Length - 1) / 2;
             if (quality >= 0 && quality != QualitySettings.GetQualityLevel()) QualitySettings.SetQualityLevel(quality, true);
-            var (sync, rate) = Pacing(FpsCap, inMenu, Application.platform == RuntimePlatform.OSXPlayer, ScreenHz());
+            var (sync, rate) = Pacing(FpsCap, inMenu, Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.IPhonePlayer, ScreenHz());
             QualitySettings.vSyncCount = sync;
             Application.targetFrameRate = rate;
             ScreenCap = sync == 0 && FpsCap == 0 && !inMenu;
@@ -305,7 +306,8 @@ namespace Bastion.UI.App
         /// the battle or in it, on the Mac or not, with the screen's refresh in Hz: none, the screen's sync; a cap, that many
         /// frames and no sync; out of the battle, `MenuFps` at most. On the Mac no sync even with none, the screen's refresh
         /// (60 if it doesn't say) as the cap instead: with the screen asleep its presentation never came and the battle
-        /// waited for it for ever, also once the screen woke (1/11, 0.11.3).
+        /// waited for it for ever, also once the screen woke (1/11, 0.11.3). And on iOS, where the sync doesn't count and -1
+        /// is 30 fps (Arturo, 7/11: «no la capes de base a 30»): the screen's refresh there too (120 on the Duo, Arte).
         /// </summary>
         public static (int sync, int rate) Pacing(int cap, bool menu, bool mac, int hz)
         {
@@ -457,7 +459,7 @@ namespace Bastion.UI.App
         /// <summary>The volumes' names and help (settingsPanel.ts soundSettings), by Red's keys (Bastion.Client.Audio.Volumes).</summary>
         static readonly (string key, string label, string about)[] VolumeRows =
         {
-            (Bastion.Client.Audio.Volumes.Master, "Volumen", "Todo el sonido del juego. La tecla M lo silencia en combate."),
+            (Bastion.Client.Audio.Volumes.Master, "Volumen", "Todo el sonido del juego."),
             (Bastion.Client.Audio.Volumes.Sfx, "Efectos", "Disparos, explosiones, pasos y acciones."),
             (Bastion.Client.Audio.Volumes.Music, "Música", "La música de la base, del mapa y del combate."),
             (Bastion.Client.Audio.Volumes.Ambience, "Ambiente", "Viento, ciudad, bosque, máquinas."),

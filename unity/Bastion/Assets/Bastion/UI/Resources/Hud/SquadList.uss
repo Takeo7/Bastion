@@ -9,6 +9,12 @@
     align-items: flex-end;
 }
 
+/* With the finger, two a row (SquadList), all as tall: the picked one marked by its edge, not bigger. */
+.touch .squad-cards {
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
 .squad-card {
     padding: 2px;
     background-color: var(--m-steel-lo);
@@ -55,6 +61,10 @@
 
 .squad-card--selected .squad-card__bust {
     height: 86px;
+}
+
+.touch .squad-card--selected .squad-card__bust {
+    height: 72px;
 }
 
 /* The name in a strip of its own under the bust (Ana, 7/11 #13). */

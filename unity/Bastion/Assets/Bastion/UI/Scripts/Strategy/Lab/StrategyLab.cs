@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Bastion.UI.Gear;
 using Bastion.UI.Hud;
 using UnityEngine;
 using EngineBase = Bastion.Engine.Base;
@@ -42,6 +43,7 @@ namespace Bastion.UI.Strategy
 
         /// <summary>BASTION_ESTRATEGIA_PULSA: a button's text, pressed a few frames after the case is up (TestSteps.Press); the order goes to the log.</summary>
         string press = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_PULSA");
+        string gearDrag = System.Environment.GetEnvironmentVariable("BASTION_RUNS_ARRASTRE");
         int pressAt = -1;
         /// <summary>
         /// BASTION_ESTRATEGIA_ARRASTRE=points[:seconds]: a drag on Soldados' clearing that far to the right (left if
@@ -111,6 +113,20 @@ namespace Bastion.UI.Strategy
             }
             if (shown && drag != 0 && pressAt >= 0 && Time.frameCount >= pressAt && Time.timeSinceLevelLoad >= dragAt) Drag();
             if (shown && figure != null && pressAt >= 0 && Time.frameCount >= pressAt) Figure();
+            // BASTION_RUNS_ARRASTRE=id>owner/slot[@x,y][~][!]: a thing of a runs sample dragged there and held (! lets it go).
+            if (shown && !string.IsNullOrEmpty(gearDrag) && pressAt >= 0 && Time.frameCount >= pressAt)
+            {
+                var parts = gearDrag.Split('>');
+                var where = parts[1].TrimEnd('!', '~');
+                var release = parts[1].EndsWith("!");
+                var turned = parts[1].Contains("~");
+                var at = where.Split('@');
+                var place = at[0].Split('/');
+                var xy = at.Length > 1 ? at[1].Split(',') : new[] { "0", "0" };
+                var done = root.Gear.TestDragTo(parts[0], place[0], place.Length > 1 ? place[1] : null, int.Parse(xy[0]), int.Parse(xy[1]), turned, release);
+                Debug.Log($"[estrategia] arrastre {gearDrag}: {(done ? "hecho" : "no está")}");
+                gearDrag = null;
+            }
             if (shown && !string.IsNullOrEmpty(press) && pressAt >= 0 && Time.frameCount >= pressAt)
             {
                 Debug.Log($"[estrategia] pulsado «{press}»: {Bastion.UI.TestSteps.Press(press)}");
@@ -125,23 +141,26 @@ namespace Bastion.UI.Strategy
                 Sample(Case.Substring("muestra-".Length));
                 return;
             }
+            if (Case.StartsWith("runs-"))
+            {
+                RunsSample(Case.Substring("runs-".Length));
+                return;
+            }
             var mineAsked = Case == "propuesta-mia";
             root.ClockOf = () => (EngineLore.ProposalClock("0:24", mineAsked), 0.62f, false);
             root.SetTop(Top(Case == "propuesta" ? "theirs" : mineAsked ? "mine" : null));
-            var screen = Case.StartsWith("armeria") ? "engineering" : Case == "escuadra" ? "squad" : Case == "parte" ? "debrief" : Case.StartsWith("mapa") ? "geoscape" : Case.StartsWith("asentamiento") ? "facilities" : "barracks";
-            root.ValleyCamera = GameObject.Find("Cámara del valle")?.GetComponent<Camera>() ?? Camera.main;
+            var screen = Case == "almacen" ? "stash" : Case == "etapas" || Case.StartsWith("parada") ? "runmap" : Case == "escuadra" ? "squad" : Case == "parte" ? "debrief" : "barracks";
             root.SetNav(Nav(screen));
             // Soldados under everything else, as the 0.10.1's shots (Rafael, Ana's, picked while she is away).
             root.SetScreen(screen);
-            if (screen == "engineering") root.SetArmory(Case == "armeria-arma" ? Gear() : Items());
             // The pads where the 0.10.1's shots have them (Arte's Settlement.PadWorld, projected, in the game).
             var squadPads = new[] { 454f, 606f, 835f, 986f };
             var debriefPads = new[] { 223f, 355f, 487f, 619f, 820f, 952f, 1085f, 1217f };
             root.PadAt = (i, n) => screen == "squad" ? new Vector2(squadPads[i % squadPads.Length], 497) : new Vector2(debriefPads[i % debriefPads.Length], 403);
             if (screen == "squad") root.SetSquad(Squad());
             if (screen == "debrief") root.SetDebrief(Debrief());
-            if (screen == "geoscape") root.SetMap(Map(Case));
-            if (screen == "facilities") root.SetSettlement(Settlement(Case));
+            if (screen == "stash") root.SetStash(Stash());
+            if (screen == "runmap") root.SetRunMap(Expedition(Case));
             var soldiers = Soldiers();
             if (Case == "personalizar") soldiers.Customizer = Customizer();
             root.SetSoldiers(soldiers);
@@ -156,6 +175,195 @@ namespace Bastion.UI.Strategy
         }
 
         static TipView Tip(string name, string text) => new TipView { Name = name, Lines = StrategyText.Sentences(text) };
+
+        /// <summary>
+        /// «etapas»: the map of an expedition of chapter 1, two stages in (Saqueo, then a Trueque), choosing the third:
+        /// a Limpieza at night, a Sigilo, a stop; row 5 not seen yet; Rafael's kit with the squad.
+        /// </summary>
+        static RunMapView Expedition(string which = "etapas")
+        {
+            RunNodeView N(string id, int row, int col, int cols, string kind, string icon, bool stop = false) => new RunNodeView
+            {
+                Id = id, Row = row, Col = col, Cols = cols, Name = StrategyText.Runs.NodeName(kind), Icon = icon, Stop = stop, Boss = kind == "boss",
+                Card = { StrategyText.Runs.NodeLine(kind), stop ? null : StrategyText.Runs.Difficulty(row < 3 ? 1 : 2) },
+            };
+            var v = new RunMapView
+            {
+                Head = StrategyText.Runs.Head(1), Line = StrategyText.Runs.Choose, Start = StrategyText.Runs.Start,
+                Back = StrategyText.Runs.Back, BackTip = StrategyText.Runs.BackTip, SquadHead = StrategyText.Runs.Squad,
+            };
+            v.Nodes.Add(N("n1-0", 1, 0, 3, "normal", "kind:scavenge"));
+            v.Nodes.Add(N("n1-1", 1, 1, 3, "normal", "kind:scavenge"));
+            v.Nodes.Add(N("n1-2", 1, 2, 3, "normal", "kind:scavenge"));
+            v.Nodes.Add(N("n2-0", 2, 0, 4, "rescue", "kind:rescue"));
+            v.Nodes.Add(N("n2-1", 2, 1, 4, "trade", "node:trade", true));
+            v.Nodes.Add(N("n2-2", 2, 2, 4, "normal", "kind:scavenge"));
+            v.Nodes.Add(N("n2-3", 2, 3, 4, "event", "node:event", true));
+            v.Nodes.Add(N("n3-0", 3, 0, 3, "elimination", "kind:elimination"));
+            v.Nodes.Add(N("n3-1", 3, 1, 3, "stealth", "hide"));
+            v.Nodes.Add(N("n3-2", 3, 2, 3, "refuge", "node:refuge", true));
+            v.Nodes.Add(N("n4-0", 4, 0, 4, "hold", "node:hold"));
+            v.Nodes.Add(N("n4-1", 4, 1, 4, "normal", "kind:scavenge"));
+            v.Nodes.Add(N("n4-2", 4, 2, 4, "elite", "node:elite"));
+            v.Nodes.Add(N("n4-3", 4, 3, 4, "survivor", "node:survivor", true));
+            for (var c = 0; c < 3; c++) v.Nodes.Add(new RunNodeView { Id = $"n5-{c}", Row = 5, Col = c, Cols = 3, Hidden = true, Card = { StrategyText.Runs.Unseen } });
+            v.Nodes.Add(new RunNodeView { Id = "n6-0", Row = 6, Col = 0, Cols = 1, Hidden = true, Card = { StrategyText.Runs.Unseen } });
+            v.Nodes.Add(N("n7-0", 7, 0, 1, "boss", "node:boss"));
+            var byId = v.Nodes.ToDictionary(n => n.Id);
+            byId["n1-1"].Done = true;
+            byId["n2-1"].Done = byId["n2-1"].At = true;
+            foreach (var id in new[] { "n3-0", "n3-1" }) byId[id].Open = true;
+            byId["n3-0"].ModifierId = "night";
+            byId["n3-0"].Modifier = StrategyText.Runs.ModifierName("night");
+            byId["n3-0"].ModifierIcon = "night";
+            byId["n3-0"].Card.Add($"{byId["n3-0"].Modifier}: {StrategyText.Runs.ModifierLine("night").ToLowerInvariant()}");
+            byId["n4-0"].ModifierId = "awake";
+            byId["n4-0"].ModifierIcon = "node:awake";
+            byId["n4-1"].ModifierId = "storm";
+            byId["n4-1"].ModifierIcon = "weather:storm";
+            void Link(string a, string b, bool taken = false, bool open = false, bool dim = false) => v.Links.Add(new RunLinkView { From = a, To = b, Taken = taken, Open = open, Dim = dim });
+            Link(null, "n1-0"); Link(null, "n1-1", taken: true); Link(null, "n1-2");
+            Link("n1-0", "n2-0"); Link("n1-0", "n2-1"); Link("n1-1", "n2-1", taken: true); Link("n1-1", "n2-2"); Link("n1-2", "n2-2"); Link("n1-2", "n2-3");
+            Link("n2-0", "n3-0"); Link("n2-1", "n3-0", open: true); Link("n2-1", "n3-1", open: true); Link("n2-2", "n3-1"); Link("n2-3", "n3-2");
+            Link("n3-0", "n4-0"); Link("n3-0", "n4-1"); Link("n3-1", "n4-1"); Link("n3-1", "n4-2"); Link("n3-2", "n4-3");
+            Link("n4-0", "n5-0", dim: true); Link("n4-1", "n5-0", dim: true); Link("n4-1", "n5-1", dim: true); Link("n4-2", "n5-1", dim: true); Link("n4-3", "n5-2", dim: true);
+            for (var c = 0; c < 3; c++) Link($"n5-{c}", "n6-0", dim: true);
+            Link("n6-0", "n7-0", dim: true);
+            var stash = Stash();
+            v.Squad.Add(new KitTabView { Id = "s6", Name = "Rafael", On = true, Mine = true, Hp = 9, HpMax = 12 });
+            v.Squad.Add(new KitTabView { Id = "s2", Name = "Inés", Mine = true, Hp = 3, HpMax = 10 });
+            v.Squad.Add(new KitTabView { Id = "s4", Name = "Marta", Mine = false, Color = "#c58cff", Hp = 10, HpMax = 10 });
+            v.Squad.Add(new KitTabView { Id = "s5", Name = "Teo", Mine = false, Color = "#c58cff", Hp = 7, HpMax = 10 });
+            v.Kit = stash.Kit;
+            v.Stop = Stop(which);
+            return v;
+        }
+
+        /// <summary>«parada-trueque», «parada-suceso», «parada-suceso-hecho», «parada-superviviente», «parada-refugio»: the stop over the map.</summary>
+        static StopView Stop(string which)
+        {
+            var leave = new StopView { Leave = StrategyText.Runs.Leave };
+            switch (which)
+            {
+                case "parada-trueque":
+                    leave.Kind = "trade";
+                    leave.Kicker = StrategyText.Runs.NodeName("trade");
+                    leave.Title = "Un vendedor en una gasolinera";
+                    leave.Text = StrategyText.Runs.NodeLine("trade");
+                    leave.Purse = "40";
+                    leave.For = StrategyText.Runs.For("Rafael");
+                    leave.Wares.Add(new WareView { Gear = new GearItemView { Id = "w1", Kind = "weapon", Name = "Fusil de asalto", Icon = "weapon:rifle", W = 4, H = 1, Tip = "Fusil de asalto" }, Price = "90", Why = "Faltan 50 §." });
+                    leave.Wares.Add(new WareView { Gear = new GearItemView { Id = "w2", Kind = "item", Name = "Botiquín", Icon = "firstAid", Pile = 5, Count = 1, Tip = "Botiquín" }, Price = "25" });
+                    leave.Wares.Add(new WareView { Gear = new GearItemView { Id = "w3", Kind = "item", Name = "Molotov", Icon = "molotov", Pile = 5, Count = 2, Tip = "Molotov" }, Price = "20" });
+                    leave.Wares.Add(new WareView { Gear = new GearItemView { Id = "w4", Kind = "vest", Name = "Chaleco antibalas", Icon = "stat:armor", W = 2, H = 2, Tip = "Chaleco antibalas" }, Price = "60", Why = "Faltan 20 §." });
+                    break;
+                case "parada-suceso":
+                case "parada-suceso-hecho":
+                    leave.Kind = "event";
+                    leave.Kicker = StrategyText.Runs.NodeName("event");
+                    leave.Title = "La gasolinera";
+                    leave.Text = "Un coche sigue en el surtidor de una gasolinera. Al depósito le queda gasolina.";
+                    if (which == "parada-suceso")
+                    {
+                        leave.Options.Add(new StopOptionView { Index = 0, Label = "Sacarla con la bomba", Short = "+25 § · La siguiente etapa, con la horda despierta" });
+                        leave.Options.Add(new StopOptionView { Index = 1, Label = "Dejarla", Short = "Nada" });
+                        leave.LeaveWhy = "Antes hay que responder.";
+                    }
+                    else leave.Outcome = "La bomba hace ruido, y se oye lejos. En la siguiente etapa, horda despierta.";
+                    break;
+                case "parada-superviviente":
+                    leave.Kind = "survivor";
+                    leave.Kicker = StrategyText.Runs.NodeName("survivor");
+                    leave.Title = "Lucía Prieto";
+                    leave.Text = StrategyText.Runs.NodeLine("survivor");
+                    leave.Survivor.Add("Novata · 10 de salud");
+                    leave.Survivor.Add("Lleva un cuchillo y nada más.");
+                    leave.Options.Add(new StopOptionView { Index = 0, Label = "Que se una" });
+                    leave.Options.Add(new StopOptionView { Index = 1, Label = "Que no" });
+                    leave.LeaveWhy = "Antes hay que responder.";
+                    break;
+                case "parada-refugio":
+                    leave.Kind = "refuge";
+                    leave.Kicker = StrategyText.Runs.NodeName("refuge");
+                    leave.Title = "Una ermita con la puerta entera";
+                    leave.Text = StrategyText.Runs.NodeLine("refuge");
+                    leave.Outcome = "La escuadra descansa. Todos curados.";
+                    leave.LeaveOn = true;
+                    leave.Waiting = "Esperando a Ana.";
+                    break;
+                default:
+                    return null;
+            }
+            return leave;
+        }
+
+        /// <summary>«almacen»: Almacén with a made-up stash and Rafael's kit (the runs, 16/11); the grids' rules are GearLab's.</summary>
+        static StashScreenView Stash()
+        {
+            GearItemView G(string id, string kind, string type, string name, string icon, int w, int h, int count = 1, int pile = 1) =>
+                new GearItemView { Id = id, Kind = kind, Type = type, Name = name, Icon = icon, W = w, H = h, Count = count, Pile = pile, Tip = name };
+            PlacedView P(GearItemView g, int x, int y, bool turned = false) => new PlacedView { Gear = g, X = x, Y = y, Turned = turned };
+            GearSlotView S(string slot, int w, int h, GearItemView g = null) => new GearSlotView { Owner = "s6", Slot = slot, W = w, H = h, Gear = g };
+            return new StashScreenView
+            {
+                Head = "Almacén",
+                Supplies = "135",
+                SuppliesTip = "Suministros en el almacén: pagan las mejoras de la base.",
+                Hint = GearText.Hint,
+                Stash = new GearGridView
+                {
+                    Owner = "stash", W = 10, H = 6, Rows = 8,
+                    Items =
+                    {
+                        P(G("g1", "weapon", "rifle", "Fusil de asalto", "weapon:rifle", 4, 1), 0, 0),
+                        P(G("g2", "weapon", "shotgun", "Escopeta", "weapon:shotgun", 4, 1), 0, 1),
+                        P(G("g3", "weapon", "lmg", "Ametralladora", "weapon:cannon", 4, 2), 4, 0),
+                        P(G("g4", "weapon", "pistol", "Pistola", "weapon:pistol", 2, 1), 8, 0),
+                        P(G("g5", "weapon", "bat", "Bate", "weapon:bat", 3, 1), 0, 2),
+                        P(G("g8", "item", "grenade", "Granada", "grenade", 1, 1, 3, 5), 3, 2),
+                        P(G("g6", "weapon", "sniper", "Fusil de precisión", "weapon:sniper", 4, 1), 4, 2),
+                        P(G("g9", "item", "molotov", "Molotov", "molotov", 1, 1, 2, 5), 0, 3),
+                        P(G("g10", "medicine", null, "Medicinas", "store:medicines", 1, 1, 4, 5), 1, 3),
+                        P(G("g12", "mags", null, "Cargadores", "stat:ammo", 1, 1, 5, 5), 2, 3),
+                        P(G("g13", "mod", "scope", "Mira", "aimedShot", 1, 1, 1, 3), 3, 3),
+                        P(G("g7", "vest", "vest", "Chaleco", "stat:armor", 2, 2), 8, 4),
+                        P(G("g14", "supplies", null, "Suministros", "§", 1, 1, 100, 100), 6, 5),
+                        P(G("g15", "supplies", null, "Suministros", "§", 1, 1, 35, 100), 7, 5),
+                        P(G("g16", "weapon", "crowbar", "Palanca", "weapon:crowbar", 3, 1), 0, 5),
+                    },
+                },
+                Soldiers =
+                {
+                    new KitTabView { Id = "s6", Name = "Rafael", On = true, Mine = true },
+                    new KitTabView { Id = "s2", Name = "Inés", Mine = true },
+                    new KitTabView { Id = "s4", Name = "Marta", Mine = false, Color = "#c58cff", Tip = "De Ana" },
+                    new KitTabView { Id = "s5", Name = "Teo", Mine = false, Color = "#c58cff", Tip = "De Ana" },
+                },
+                Kit = new KitView
+                {
+                    Soldier = "s6", Name = "Rafael Costa", Line = "9 de 12 de salud", Mine = true,
+                    Slots =
+                    {
+                        S("primary", 4, 2, G("g18", "weapon", "rifle", "Fusil de asalto", "weapon:rifle", 4, 1)),
+                        S("melee", 3, 1, G("g17", "weapon", "knife", "Cuchillo", "overwatchMelee", 2, 1)),
+                        S("pistol", 2, 1),
+                        S("vest", 2, 2),
+                        S("belt0", 1, 1, G("g19", "item", "firstAid", "Botiquín", "firstAid", 1, 1, 1, 5)),
+                        S("belt1", 1, 1),
+                    },
+                    Pack = new GearGridView
+                    {
+                        Owner = "s6", Slot = "pack", W = 4, H = 3,
+                        Items =
+                        {
+                            P(G("g20", "mags", null, "Cargadores", "stat:ammo", 1, 1, 2, 5), 0, 0),
+                            P(G("g21", "supplies", null, "Suministros", "§", 1, 1, 20, 100), 1, 0),
+                            P(G("g22", "weapon", "pistol", "Pistola", "weapon:pistol", 2, 1), 2, 0),
+                        },
+                    },
+                },
+            };
+        }
 
         /// <summary>«menu-invitacion»: the menu of a host whose partner isn't in, the router's port open (as RoomText.InviteOf gives it).</summary>
         static InviteView Invite() => new InviteView
@@ -295,102 +503,6 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
-        static ArmoryView Items()
-        {
-            var v = new ArmoryView { Head = "Armería", Tab = "items", GearNew = true };
-            var list = new ArmorySectionView();
-            const string equip = "Se equipan en la ficha de cada soldado";
-            list.Rows.Add(new ArmoryRowView { Id = "i:grenade", Name = "Granadas", Price = "20 §", Right = "Tienes 2", Selected = true, Tip = equip });
-            list.Rows.Add(new ArmoryRowView { Id = "i:smoke", Name = "Granada de humo", Price = "25 §", Tip = equip });
-            list.Rows.Add(new ArmoryRowView { Id = "i:firstAid", Name = "Botiquín", Price = "25 §", Right = "Tienes 1", Tip = equip });
-            list.Rows.Add(new ArmoryRowView { Id = "i:flashbang", Name = "Granada aturdidora", Price = "30 §", Tip = equip });
-            v.Sections.Add(list);
-            v.Detail = new ArmoryDetailView
-            {
-                Kicker = "Accesorio · Cinturón", KickerTip = "Se equipa en la ficha del soldado; si cae, se pierde", Name = "Granadas", Art = "grenade",
-                Text = { "Dos granadas de fragmentación, en el cinturón. Quien no las lleva, no puede lanzar." },
-                Chips = { new ChipView { Text = "Tienes 2" }, new ChipView { Text = "20 §" } },
-                Button = "Comprar", Action = "buy",
-            };
-            return v;
-        }
-
-        static ArmoryView Gear()
-        {
-            var v = new ArmoryView { Head = "Armería", Tab = "gear", ItemsNew = true };
-            var rack = new ArmorySectionView { Title = "En la Armería" };
-            ArmoryRowView Gun(string id, string icon, string name, string place, string holder, ChipView tag = null, bool selected = false)
-            {
-                var r = new ArmoryRowView { Id = id, Icon = icon, Name = name, Place = place, Holder = holder, Selected = selected };
-                if (tag != null) r.Tags.Add(tag);
-                return r;
-            }
-            rack.Rows.Add(Gun("f:w100", "weapon:rifle", "Fusil de asalto", "Mano", "Rafael Costa", new ChipView { Text = "+1", Tone = "good" }, true));
-            rack.Rows.Add(Gun("f:w101", "weapon:shotgun", "Escopeta", "Mano", "Lucía Ortega"));
-            rack.Rows.Add(Gun("f:w102", "weapon:sniper", "Fusil de precisión", "Mano", "Arjun Mehta", new ChipView { Text = "Gastada", Tone = "warn" }));
-            rack.Rows.Add(Gun("f:w103", "weapon:cannon", "Ametralladora", "Mano", "En la Armería"));
-            rack.Rows.Add(Gun("f:w104", "overwatchMelee", "Machete", "Cinto", "En la Armería"));
-            rack.Rows.Add(Gun("f:w105", "weapon:sniper", "Fusil de cerrojo", "Mano", "En la Armería"));
-            rack.Rows.Add(Gun("f:w106", "weapon:shotgun", "Escopeta recortada", "Mano", "En la Armería"));
-            v.Sections.Add(rack);
-            var mods = new ArmorySectionView { Title = "Mejoras sueltas" };
-            mods.Rows.Add(new ArmoryRowView { Id = "x:stock", Icon = "store:parts", Name = "Culata", Right = "× 2" });
-            mods.Rows.Add(new ArmoryRowView { Id = "x:bigMag", Icon = "store:parts", Name = "Cargador ampliado", Right = "× 1" });
-            v.Sections.Add(mods);
-            var armor = new ArmorySectionView { Title = "Armadura" };
-            armor.Rows.Add(new ArmoryRowView { Id = "a1", Tier = 1, Name = "Ropa reforzada", Right = "✓" });
-            armor.Rows.Add(new ArmoryRowView { Id = "a2", Tier = 2, Name = "Armadura de placas", Right = "✓" });
-            armor.Rows.Add(new ArmoryRowView { Id = "a3", Tier = 3, Name = "Equipo antidisturbios", Right = "✓" });
-            v.Sections.Add(armor);
-            var make = new ArmorySectionView { Title = "Hacer en el Taller" };
-            make.Rows.Add(new ArmoryRowView { Id = "m:rifle", Icon = "weapon:rifle", Name = "Fusil de asalto", Place = "Mano", Dim = true });
-            make.Rows.Add(new ArmoryRowView { Id = "m:shotgun", Icon = "weapon:shotgun", Name = "Escopeta", Chip = new ChipView { Text = "Taller · 2 misiones", Tone = "warn" } });
-            make.Rows.Add(new ArmoryRowView { Id = "m:machete", Icon = "overwatchMelee", Name = "Machete", Place = "Cinto", Dim = true });
-            make.Rows.Add(new ArmoryRowView { Id = "m:sniper", Icon = "weapon:sniper", Name = "Fusil de precisión", Place = "Mano", Dim = true });
-            make.Rows.Add(new ArmoryRowView { Id = "m:mags", Icon = "stat:ammo", Name = "Primeros cargadores", Dim = true });
-            make.Rows.Add(new ArmoryRowView { Id = "m:mags2", Icon = "stat:ammo", Name = "Más cargadores", Dim = true });
-            make.Rows.Add(new ArmoryRowView { Id = "m:stock", Icon = "store:parts", Name = "Culata", Dim = true });
-            make.Rows.Add(new ArmoryRowView { Id = "m:silencer", Icon = "store:parts", Name = "Silenciador", Dim = true });
-            v.Sections.Add(make);
-            var d = new ArmoryDetailView
-            {
-                Kicker = "Arma · Mano", Name = "Fusil de asalto", Art = "weapon:rifle",
-                Text = { "Para un soldado: la lleva en la mano y la pistola al costado. Si cae, se pierde." },
-                Figures =
-                {
-                    new RowView { Key = "Daño", Value = "3–5" }, new RowView { Key = "Daño crítico", Value = "5–7" },
-                    new RowView { Key = "Crítico", Value = "±0 %" }, new RowView { Key = "Puntería", Value = "+10", Tip = "Lo que el arma suma o resta a la puntería: la mira, el desgaste" },
-                    new RowView { Key = "Cargador", Value = "4 balas" }, new RowView { Key = "Acciones por disparo", Value = "1 acción" },
-                    new RowView { Key = "Ruido", Value = "18 casillas" },
-                },
-                Range = new RangeView
-                {
-                    Name = "Medio", Line = "Vale para todo: suma de cerca y no resta de lejos.",
-                    Steps =
-                    {
-                        new RangeStepView { Distance = "2", Value = "+19", Height = 0.95f }, new RangeStepView { Distance = "5", Value = "+13", Height = 0.65f },
-                        new RangeStepView { Distance = "8", Value = "+7", Height = 0.35f }, new RangeStepView { Distance = "12", Value = "+2", Height = 0.1f },
-                        new RangeStepView { Distance = "16", Value = "±0", Height = 0f },
-                    },
-                },
-                Condition = new ConditionView { Value = 100, Text = "Estado 100", Line = "Está como nueva." },
-                Mods = new ModsView
-                {
-                    Head = "Mejoras · 1/2",
-                    Mounted = { new ModRowView { Id = "scope", Name = "Mira", Line = "+10 de puntería", Button = "Quitar" } },
-                    FreeHead = "Hueco libre",
-                    Options = { new ModRowView { Id = "stock", Button = "Poner culata (2)" }, new ModRowView { Id = "bigMag", Button = "Poner cargador ampliado (1)" } },
-                },
-                Holder = new HolderView { Head = "La lleva", Name = "Rafael Costa", Button = "Quitársela" },
-                SoldiersHead = "Tus soldados y los de Ana",
-            };
-            d.Soldiers.Add(new CarrierView { Id = "s1", Name = "Yuki Tanaka", Note = "· en la mano: Pistola", Diff = { new ChipView { Text = "Daño 3–5", Tone = "good" }, new ChipView { Text = "De lejos +6", Tone = "good" }, new ChipView { Text = "Ruido +6", Tone = "bad" } }, Button = "Dársela" });
-            d.Soldiers.Add(new CarrierView { Id = "s3", Name = "Dmitri Volkov", Note = "· en la mano: Pistola", Diff = { new ChipView { Text = "Daño 3–5", Tone = "good" }, new ChipView { Text = "De lejos +6", Tone = "good" } }, Button = "Dársela" });
-            d.Soldiers.Add(new CarrierView { Id = "s6", Name = "Rafael Costa", Note = "· en la mano: Fusil de asalto", Chip = "La lleva" });
-            v.Detail = d;
-            return v;
-        }
-
         static PickRowView Pick(string id, string name, string accent, int rank, string chip = null, string tone = null, bool inSquad = false, bool enabled = true) =>
             new PickRowView
             {
@@ -468,68 +580,6 @@ namespace Bastion.UI.Strategy
         const string Story = "#4a7dff";
         const string Op = "#ffb030";
         const string Nest = "#ff4a5a";
-
-        static MapView Map(string which)
-        {
-            var mission = which == "mapa-mision";
-            var zone = which == "mapa-zona";
-            var v = new MapView
-            {
-                Level = 5, Lata = "weu", Selected = mission ? "oce" : zone ? "afr" : null, Contacts = 4, ContactsMax = 2,
-                ContactsTip = "Zonas contactadas / máximo (la Sala de radio da más)",
-                // Not the glossary's Nido, which names the Marea before level 4 (Lore.NestTip).
-                NestsTip = EngineLore.NestTip(Level), QuestsTip = EngineLore.Glossary["Encargo"],
-                // One is being listened to in the sample (screen.ts rumorHead).
-                RumorsTip = EngineLore.Glossary["Rumor"] + " Solo se escucha uno a la vez.",
-            };
-            ZoneMarkView Zone(string id, string name, bool contacted, bool flooded = false) => new ZoneMarkView { Id = id, Name = name, Contacted = contacted, Flooded = flooded, Selected = v.Selected == id };
-            var weu = Zone("weu", "Metsovo", true);
-            weu.Missions.AddRange(new[] { Story, Op, Story, Op });
-            weu.Kinds.AddRange(new[] { "rescue", "recovery", "rescue", "scavenge" });
-            var oce = Zone("oce", "La Vega", true);
-            oce.Missions.Add(Op);
-            oce.Kinds.Add("rescue");
-            var me = Zone("me", "Koper", false);
-            me.Nest = true;
-            me.Rumor = true;
-            me.Listening = true;
-            var eas = Zone("eas", "El Pantano Gris", false);
-            eas.Rumor = true;
-            v.Zones.AddRange(new[] { Zone("na", "Los Llanos de Ceniza", false, true), Zone("sa", "Rudnik", true), weu, Zone("eeu", "Sappada", false), Zone("afr", "Tarbes", false), me, eas, oce });
-            // The row's help as screen.ts renderMissions: «Historia · Rescate · Metsovo», the kind by its name (MISSION_NAMES).
-            MissionRowView Row(string id, string tone, string kind, string name, string zoneName, string where, bool on = false) =>
-                new MissionRowView { Id = id, Tone = tone, Kind = kind, Name = name, Where = where, Selected = on, Tip = $"{(tone == Story ? "Historia · " : "")}{Bastion.Engine.Setup.MissionNames[kind]} · {zoneName}" };
-            v.Missions.Add(Row("o1", Story, "rescue", "El consultorio de Metsovo", "Metsovo", "Metsovo"));
-            v.Missions.Add(Row("o2", Op, "rescue", "El colegio de La Vega", "La Vega", "La Vega · De noche", mission));
-            v.Missions.Add(Row("o3", Op, "recovery", "El hospital de Metsovo", "Metsovo", "Metsovo · De noche"));
-            v.Missions.Add(Row("o4", Op, "scavenge", "El centro comercial de Metsovo", "Metsovo", "Metsovo"));
-            v.Wait = new WaitDayView { Label = "Esperar un día", Tip = $"Un día sin salir: se come, se curan las heridas y avanzan el Taller y {EngineLore.DoomSubject(Level)}." };
-            v.Nests.Add(new MapRowView { Id = "me", Name = "Koper", Chip = "Sin contacto", ChipTip = EngineLore.NestNoContactTip("me", 110) });
-            v.Quests.Add(new MapRowView { Id = "q1", Name = "La estación de números", Line = "Paso 1 de 2 · Esperando vuestra decisión" });
-            v.Rumors.Add(new RumorRowView { Id = "r1", Region = "Koper", Text = "Se habla de una camioneta de la cruz roja volcada en la cuneta.", Listening = "Escuchando · 3 misiones" });
-            v.Rumors.Add(new RumorRowView { Id = "r2", Region = "El Pantano Gris", Text = "Se habla de luces en la vieja fábrica de conservas.", Button = "Escuchar · 2 misiones", Chip = "en 2", ChipTone = "warn" });
-            if (mission)
-                v.Detail = new MapDetailView
-                {
-                    Kicker = "Misión", Title = "El colegio de La Vega", Subtitle = "La Vega · Ciudad · De noche",
-                    Text = { "Aviso de las Bodegas. Los Cuervos se han llevado al Dr. Femi Adebayo. Si llegan a su campamento, **no habrá otra ocasión**. ==Que salga con vida.== De noche: a oscuras, tus soldados ven 10 casillas en vez de 18. Hay más zombis, y el botín vale la mitad más." },
-                    Note = "— N. A.", Warning = "Los muertos van a por cualquier vivo, también a por ellos, y el tiroteo los atrae.",
-                    Rows = { new RowView { Key = "Tipo", Value = "Rescate" }, new RowView { Key = "Dificultad", Value = "<color=#f0503c>★★</color> Difícil" }, new RowView { Key = "Recompensa", Value = "158 suministros · un recluta" } },
-                    Buttons = { new MapButtonView { Action = "deploy", Label = "Desplegar", Primary = true } },
-                };
-            if (zone)
-                v.Detail = new MapDetailView
-                {
-                    Kicker = "Zona sin contacto", Title = "Tarbes",
-                    // Who is there and what they send, from Lore (screen.ts regionInfo: REGION_LORE[id].ally, regionIncome).
-                    Text = { EngineLore.RegionLores["afr"].Situation },
-                    Lines = { new MapLineView { Text = $"{Capital(EngineLore.RegionLores["afr"].Ally)} · +25 § en cada convoy", Tip = "Lo que deja en cada convoy, una vez contactada. El convoy llega cada 6 misiones." } },
-                    Meter = 4, MeterMax = 2,
-                    Buttons = { new MapButtonView { Action = "contact", Label = "Contactar · 110 §", Primary = true, Enabled = false } },
-                    Why = "No caben más contactos: construid o mejorad la Sala de radio.",
-                };
-            return v;
-        }
 
         /// <summary>
         /// «muestra-…»: the presenter's views from the sample campaign itself (SampleCampaign), not made-up ones: as Arturo
@@ -632,6 +682,111 @@ namespace Bastion.UI.Strategy
             }
         }
 
+        /// <summary>
+        /// «runs-…»: one of Gameplay's samples (.dev-snapshots/gameplay/runs/muestras/<name>.json: base-vacia, base-llena,
+        /// mapa-fila3, trueque, suceso, superviviente) through the presenter, as player 0; the grids with the engine's own
+        /// rules, its moves applied here (RunsGear). BASTION_RUNS_ESCENA: almacen, else the map (with its stop) in a run.
+        /// </summary>
+        void RunsSample(string which)
+        {
+            var path = System.IO.Path.Combine(Application.dataPath, "../../../.dev-snapshots/gameplay/runs/muestras", which + ".json");
+            var state = Bastion.Net.Json.Read<Bastion.Engine.CampaignState>(System.IO.File.ReadAllText(path));
+            var p = new StrategyPresenter { State = state, Slot = 0, Seats = SampleCampaign.Seats(state.Players.Count > 1) };
+            var gear = new RunsGear(p, () => Show(p, null));
+            root.BindGear(gear);
+            runsShow = id => Show(p, id);
+            Show(p, null);
+        }
+
+        System.Action<string> runsShow;
+
+        void Show(StrategyPresenter p, string chosen)
+        {
+            if (chosen != null) runsChosen = chosen;
+            var scene = System.Environment.GetEnvironmentVariable("BASTION_RUNS_ESCENA");
+            // «parte»: a stage's report made up over the sample: things found, a reward of which some didn't fit, one fallen.
+            if (scene == "parte" && p.State.LastReport == null)
+            {
+                var c = p.State;
+                var squad = c.Soldiers.Where(x => x.Alive).Take(4).ToList();
+                var gone = squad.Last();
+                var found = c.Stash.Items.Take(4).Select(x => x.Gear).ToList();
+                c.LastReport = new Bastion.Engine.MissionReport
+                {
+                    MissionName = "Limpieza · Pueblo", Victory = true,
+                    Squad = squad.Select(x => new Bastion.Engine.ReportSoldier { Id = x.Id, Name = x.Name, Owner = x.Owner, Status = x == gone ? "dead" : "ok", Kills = 2 }).ToList(),
+                    Run = new Bastion.Engine.RunReport
+                    {
+                        Node = "n3-0", NodeKind = "elimination", Found = found, Reward = 60, RewardLost = 20,
+                        Fallen = { new Bastion.Engine.RunFallen { Id = gone.Id, Name = gone.Name, Lost = gone.Kit?.Primary != null ? new List<Bastion.Engine.Gear> { gone.Kit.Primary } : new List<Bastion.Engine.Gear>() } },
+                        Hp = squad.Where(x => x != gone).ToDictionary(x => x.Id, x => 3),
+                    },
+                };
+            }
+            var view = p.State.Run != null && scene == null ? "runmap" : scene == "parte" ? "debrief" : scene == "mejoras" ? "upgrades" : scene == "salir" ? "squad" : scene == "soldados" ? "barracks" : "stash";
+            root.SetTop(p.Top());
+            root.SetNav(p.Nav(view));
+            root.SetScreen(view);
+            if (view == "runmap") root.SetRunMap(p.Expedition(runsChosen));
+            else if (view == "upgrades") root.SetUpgrades(p.Upgrades());
+            else if (view == "squad") root.SetSquad(p.RunSquad());
+            else if (view == "barracks") root.SetSoldiers(p.Soldiers(new SoldiersPick { Soldier = runsChosen }));
+            else if (view == "debrief") root.SetDebrief(p.Debrief());
+            else root.SetStash(p.StashScreen(runsChosen));
+        }
+
+        string runsChosen;
+
+        /// <summary>The grids of a runs sample with the engine's rules: each move asked (Gears.*Refusal) and applied as the server would.</summary>
+        sealed class RunsGear : IGearHandlers
+        {
+            readonly StrategyPresenter p;
+            readonly System.Action changed;
+
+            public RunsGear(StrategyPresenter p, System.Action changed)
+            {
+                this.p = p;
+                this.changed = changed;
+            }
+
+            System.Collections.Generic.List<int> Connected => p.Seats.Where(s => s.Connected).Select(s => s.Slot).ToList();
+
+            public string GearRefusal(GearMove m) => p.GearRefusal(m);
+
+            public void GearMoved(GearMove m)
+            {
+                var c = p.State;
+                var cmd = p.GearCommand(m);
+                Debug.Log($"[estrategia] {cmd.Type}: {m}");
+                switch (cmd)
+                {
+                    case Bastion.Engine.MountCommand mc: Bastion.Engine.Gears.Mount(c, mc); break;
+                    case Bastion.Engine.SplitGearCommand sc: Bastion.Engine.Gears.SplitGear(c, p.Slot, Connected, sc); break;
+                    case Bastion.Engine.MoveGearCommand mv: Bastion.Engine.Gears.Move(c, p.Slot, Connected, mv); break;
+                }
+                changed();
+            }
+
+            public void GearDropped(string gear)
+            {
+                Bastion.Engine.Gears.Drop(p.State, new Bastion.Engine.DropGearCommand { Gear = gear });
+                changed();
+            }
+
+            public System.Collections.Generic.IReadOnlyList<GearActionView> GearActions(string gear) => p.GearActions(gear);
+
+            public void GearAction(string gear, string action)
+            {
+                var c = p.State;
+                switch (p.GearActionCommand(gear, action))
+                {
+                    case Bastion.Engine.UnmountCommand u: Bastion.Engine.Gears.Unmount(c, u); break;
+                    case Bastion.Engine.UseGearCommand g: Bastion.Engine.Gears.Use(c, g); break;
+                }
+                changed();
+            }
+        }
+
         void Sample(string which)
         {
             // Ana here only for the proposals (70- and 71-propuesta), as the 0.10.1's steps set her connected.
@@ -704,7 +859,6 @@ namespace Bastion.UI.Strategy
             root.SetTop(p.Top());
             root.SetNav(p.Nav(screen));
             root.SetScreen(screen);
-            if (screen == "facilities") root.SetSettlement(p.Settlement(new SettlementPick { Piece = which == "asentamiento-bastion" ? "b1" : null }));
             // The 0.10.1's 10-soldados: the first of Ana's soldiers picked, as its steps did.
             // 72-acontecimiento was shot after 50-escuadra (its mission chosen), on Arturo's first soldier.
             if (which.StartsWith("acontecimiento"))
@@ -727,7 +881,6 @@ namespace Bastion.UI.Strategy
             if (clearing != null)
             {
                 clearing.Show(p.State);
-                clearing.SetArmory(p.State);
                 var (mirror, halves) = p.LineupSides(screen == "debrief");
                 clearing.SetLineup(p.State, p.Lineup(screen == "debrief"), mirror, halves);
                 clearing.SetView(screen, true);
@@ -739,28 +892,6 @@ namespace Bastion.UI.Strategy
             }
             if (screen == "squad") root.SetSquad(p.Squad());
             if (screen == "debrief") root.SetDebrief(p.Debrief());
-            // 20- to 22-armeria: the belt with its first item, and the gear with the Armería's first weapon; «armeria-arma-ana»,
-            // with Ana here: Rafael, who carries it, is hers, so its keys are off.
-            // BASTION_ESTRATEGIA_ARMA=wp2: that weapon of the Armería instead.
-            var weaponOf = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_ARMA");
-            // «muestra-armeria-cantidad»: the molotov picked, four of it (Arturo, 02/11 A7); «-taller», the Taller's first weapon, three.
-            if (screen == "engineering") root.SetArmory(p.Armory(which.StartsWith("armeria-arma") ? new ArmoryPick { Tab = "gear", Pick = "f:" + (string.IsNullOrEmpty(weaponOf) ? p.State.FoundWeapons[0].Id : weaponOf) }
-                : which == "armeria-cantidad" ? new ArmoryPick { Pick = Bastion.Engine.ItemIds.Molotov, Count = 4 }
-                : which == "armeria-taller" ? new ArmoryPick { Tab = "gear", Pick = "m:" + Bastion.Engine.Progression.Crafts.Values.First(d => d.Kind == Bastion.Engine.CraftKinds.Arms).Id, Count = 3 }
-                : new ArmoryPick()));
-            // 30- to 32-mapa: nothing picked, the first offer, the first zone without contact.
-            if (screen == "geoscape")
-            {
-                // HudShots.EstrategiaBase's own camera for the valley when there is one (the clearing's goes off on the Mapa).
-                root.ValleyCamera = GameObject.Find("Cámara del valle")?.GetComponent<Camera>() ?? Camera.main;
-                // With the weathers' strip, the first offer flown in some weather, to see its row on the card.
-                var skies = System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_TIEMPOS") == "1";
-                var offer = which == "mapa-mision" ? (skies ? p.State.Offers.Find(o => Bastion.Engine.Campaign.OfferWeather(p.State, o) != null) : null) ?? p.State.Offers[0] : null;
-                var zone = which == "mapa-zona" ? (p.State.Regions.Find(r => !r.Contacted) ?? p.State.Regions[0]).Id : offer?.Region;
-                root.SetMap(p.Map(new MapPick { Offer = offer?.Id, Region = zone }));
-                if (System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_LUGARES") == "1") PlaceDrawings();
-                if (System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_TIEMPOS") == "1") WeatherDrawings();
-            }
             root.SetProposal(p.Proposal(), p.Waiting(screen));
             if (p.State.Proposal != null) root.ClockOf = () => (EngineLore.ProposalClock("0:24", p.State.Proposal.By == 1), 0.62f, false);
             // 72-acontecimiento: the smugglers' event from the state (Campaign.EventDef), over Soldados; «-voto», Ana's
@@ -796,100 +927,8 @@ namespace Bastion.UI.Strategy
             if (clearing == null) root.PadAt = (i, n) => screen == "squad" ? new Vector2(squadPads[(squadPads.Length - 1 - i + squadPads.Length) % squadPads.Length], 497) : new Vector2(debriefPads[(n - 1 - i + debriefPads.Length) % debriefPads.Length], 403);
         }
 
-        /// <summary>The sample's stores and level: the palette's costs against them (pieceBlocker).</summary>
-        const int Credits = 540;
-        const int Parts = 9;
-        /// <summary>The Bastion's level: 3, or BASTION_ESTRATEGIA_NIVEL (1 shows «Subir a la autocaravana con toldo»).</summary>
+        /// <summary>The Bastion's level in the sample's strip: 3, or BASTION_ESTRATEGIA_NIVEL.</summary>
         static readonly int Level = int.TryParse(System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_NIVEL"), out var n) ? n : 3;
-
-        /// <summary>
-        /// The Asentamiento as the 0.10.1 showed the sample (40-asentamiento and after): the palette from the engine's
-        /// pieces and Lore's words, the Bastion's figures as the sample's (campaign.ts isn't in C# yet), and the card of
-        /// the caravan, of a Barracón, of a Muro being taken down or of a spent Foso.
-        /// </summary>
-        static SettlementView Settlement(string which)
-        {
-            var inHand = which == "asentamiento-mano" ? "quarters" : null;
-            var felling = which == "asentamiento-talar";
-            var v = new SettlementView { StatsHead = "Bastión", Walk = "Andar por la base" };
-            v.Fell = new FellView { Label = EngineLore.BuildText.Fell, Supplies = EngineBase.FellCost, Per = "por árbol", On = felling, Keys = EngineLore.BuildText.Felling, Tip = EngineLore.BuildText.Felling };
-            var groups = new[] { (EngineLore.BuildText.Tabs.Building, new[] { "building" }), (EngineLore.BuildText.Tabs.Defence, new[] { "defence", "trap" }) };
-            foreach (var (title, kinds) in groups)
-            {
-                var g = new PaletteGroupView { Title = title };
-                foreach (var id in EngineBase.PieceOrder)
-                {
-                    var def = EngineBase.Pieces[id];
-                    if (id == "caravan" || def.Level > Level || System.Array.IndexOf(kinds, def.Kind) < 0) continue;
-                    var shortOf = (System.Math.Max(0, def.Cost.Supplies - Credits), System.Math.Max(0, (def.Cost.Parts ?? 0) - Parts));
-                    var why = shortOf.Item1 > 0 || shortOf.Item2 > 0 ? EngineLore.BuildShortLine(shortOf.Item1, shortOf.Item2) + "." : null;
-                    var line = EngineLore.PieceTexts.All[id].Line;
-                    g.Tiles.Add(new PieceTileView { Id = id, Name = EngineLore.PieceTexts.All[id].Name, Supplies = def.Cost.Supplies, Parts = def.Cost.Parts ?? 0, Short = why != null, On = id == inHand, Tip = why != null ? line + "\n" + why : line });
-                    if (id == inHand) g.Keys = EngineLore.HoldingLine(id) + (id == "palisade" || id == "wall" || id == "sandbags" || id == "logs" || id == "wire" ? " Arrastra para poner una fila." : "");
-                }
-                v.Groups.Add(g);
-            }
-            var barracks = which == "asentamiento-barracon" || which == "asentamiento-muro" || which == "asentamiento-foso";
-            v.Stats.Add(new BastionStatView { Icon = "base:beds", IconColor = "#b2c3d0", Value = barracks ? "8/10" : "8/8", Label = "Camas", Tone = barracks ? null : "warn" });
-            v.Stats.Add(new BastionStatView { Icon = "store:food", IconColor = "#eab96c", Value = "−8", Label = "Raciones por misión" });
-            v.Stats.Add(new BastionStatView { Icon = "store:credits", Value = "+140", Label = "Convoy tras la próxima misión" });
-            if (which == "asentamiento-bastion") v.Card = Card(new Bastion.Engine.BasePiece { Id = "b1", Piece = "caravan", Hp = 40, Level = 1 });
-            if (which == "asentamiento-barracon") v.Card = Card(new Bastion.Engine.BasePiece { Id = "b90", Piece = "quarters", Hp = 22, Level = 1 });
-            if (which == "asentamiento-muro") v.Card = Card(new Bastion.Engine.BasePiece { Id = "b91", Piece = "wall", Hp = 20 }, true);
-            if (which == "asentamiento-foso") v.Card = Card(new Bastion.Engine.BasePiece { Id = "b92", Piece = "spikes", Hp = 9, Charges = 0 });
-            return v;
-        }
-
-        /// <summary>
-        /// buildMode.ts pieceCard over a piece of the sample, with the engine's costs and Lore's words; what campaign.ts
-        /// says (raiseCost, nextLevel, levelUpBlocker) as the 0.10.1 showed it.
-        /// </summary>
-        static PieceCardView Card(Bastion.Engine.BasePiece p, bool dismantling = false)
-        {
-            var def = EngineBase.Pieces[p.Piece];
-            var text = EngineLore.PieceTexts.All[p.Piece];
-            var level = p.Level ?? 1;
-            var building = def.Kind == "building" && p.Piece != "caravan";
-            var c = new PieceCardView { Title = p.Piece == "caravan" ? EngineLore.BastionLevelName(Level) : text.Name, CloseTip = "Soltarla (Esc)" };
-            c.Figure = building ? EngineLore.PieceFigure(p.Piece, level) : null;
-            if (c.Figure == null) c.Line = text.Line;
-            if (building)
-            {
-                var top = text.Levels?.Count ?? 3;
-                for (var n = 1; n <= top; n++)
-                    c.Ladder.Add(new LadderStepView { Label = $"Nivel {n}", Figure = EngineLore.PieceFigureShort(p.Piece, n) ?? "—", Now = n == level, Past = n < level });
-                if (text.Levels != null && level <= text.Levels.Count) c.LevelLine = text.Levels[level - 1];
-            }
-            c.Holds = EngineLore.HoldsLine(p.Hp, def.Hp);
-            c.HoldsTip = "Lo que aguanta los golpes de los muertos";
-            if (def.Charges != null)
-            {
-                c.Uses = EngineLore.UsesLine(p.Charges ?? 0, def.Charges.Value);
-                if ((p.Charges ?? 0) == 0) c.State = p.Piece == "turret" ? EngineLore.PieceState.SilentLine : EngineLore.PieceState.SpentLine;
-            }
-            if (p.Hp < def.Hp)
-            {
-                var cost = EngineBase.RepairCost(p);
-                c.Actions.Add(new PieceActionView { Action = "mend", Label = EngineLore.ActionPrice("repair", cost.Supplies, cost.Parts ?? 0) });
-            }
-            // The sample's raiseCost: a Barracón to level 2 for 40 §.
-            if (building) c.Actions.Add(new PieceActionView { Action = "raise", Label = EngineLore.ActionPrice("upgrade", 40), Tip = EngineLore.UpgradeLine(p.Piece, level + 1) });
-            // The sample's nextLevel: the casa móvil con porche, 240 §, 6 missions, and it has both (8 flown, 540 §), so
-            // nothing under the button (Lore, 24/10: not the 0.10.1's «8 de 6 misiones…»). When it can't, its Why is
-            // what is missing, levelUpBlocker's: «Para la casa móvil con porche hacen falta 6 misiones hechas: lleváis
-            // 3.» or «Faltan N §.».
-            if (p.Piece == "caravan")
-                c.Actions.Add(new PieceActionView { Action = "levelUp", Label = $"Subir a {EngineLore.BastionLevelThe(Level + 1)}\u00a0·\u00a0240\u00a0§", Hover = EngineLore.LevelUpLine(Level + 1, 240) });
-            if (def.Charges != null && (p.Charges ?? 0) < def.Charges)
-                c.Actions.Add(new PieceActionView { Action = "rearm", Label = EngineLore.ActionPrice("rearm", 0, EngineBase.RearmCost(p)) });
-            if (EngineBase.DismantleBlocker(p) == null)
-            {
-                var back = EngineBase.DismantleRefund(p);
-                c.Actions.Add(new PieceActionView { Action = "dismantle", Label = EngineLore.ActionPrice("dismantle", back) });
-                if (dismantling) c.Confirm = new PieceConfirmView { Text = $"{EngineLore.BuildText.DismantleAsk} {EngineLore.DismantleBack(back)}", Yes = EngineLore.BuildText.DismantleYes, No = EngineLore.BuildText.DismantleNo };
-            }
-            return c;
-        }
 
         async void LaunchSoon(Bastion.Client.Settlement clearing)
         {
@@ -954,7 +993,11 @@ namespace Bastion.UI.Strategy
         public void OnWaitingGo() => Debug.Log("[estrategia] waiting go");
         public void OnOption(int index) => Debug.Log("[estrategia] option " + index);
         public void OnModalButton(int index) => root.SetModal(null);
-        public void OnSoldier(string id) => Debug.Log("[estrategia] soldier " + id);
+        public void OnSoldier(string id)
+        {
+            Debug.Log("[estrategia] soldier " + id);
+            runsShow?.Invoke(id);
+        }
         public void OnRecruit() => Debug.Log("[estrategia] recruit");
         public void OnCustomize() => Debug.Log("[estrategia] customize");
         public void OnCare(int index) => Debug.Log("[estrategia] care " + index);
@@ -966,9 +1009,6 @@ namespace Bastion.UI.Strategy
         public void OnCustomAction(string action) => Debug.Log("[estrategia] custom " + action);
         public void OnUnlock(string cell) => Debug.Log("[estrategia] unlock " + cell);
         public void OnBoardClose() => root.SetSkillBoard(null);
-        public void OnArmoryTab(string tab) => root.SetArmory(tab == "gear" ? Gear() : Items());
-        public void OnArmoryPick(string id) => Debug.Log("[estrategia] armory pick " + id);
-        public void OnArmoryAction(string action, string arg) => Debug.Log($"[estrategia] armory {action} {arg}");
         public void OnSquadToggle(string id, bool on)
         {
             Debug.Log($"[estrategia] squad {id} {on}");
@@ -982,21 +1022,12 @@ namespace Bastion.UI.Strategy
         public void OnLaunch() => Debug.Log("[estrategia] launch");
         public void OnSquadBack() => Debug.Log("[estrategia] squad back");
         public void OnSquadRecruit() => Debug.Log("[estrategia] squad recruit");
-        public void OnPostHome() => Debug.Log("[estrategia] post home");
-        public void OnGoMap() => Debug.Log("[estrategia] go map");
         public void OnDebriefContinue() => Debug.Log("[estrategia] debrief continue");
-        public void OnDebriefLine(int index) => Debug.Log("[estrategia] debrief line " + index);
-        public void OnZone(string id, bool mark) => Debug.Log($"[estrategia] zone {id}{(mark ? " (marca)" : "")}");
-        public void OnOffer(string id) => Debug.Log("[estrategia] offer " + id);
         public void OnWait() => Debug.Log("[estrategia] wait");
-        public void OnListen(string rumor) => Debug.Log("[estrategia] listen " + rumor);
-        public void OnMapAction(string action) => Debug.Log("[estrategia] map " + action);
-        public void OnPieceTake(string piece) => Debug.Log("[estrategia] take " + piece);
-        public void OnFell() => Debug.Log("[estrategia] fell");
-        public void OnBuildDrop() => Debug.Log("[estrategia] drop");
-        public void OnPieceAction(string action) => Debug.Log("[estrategia] piece " + action);
-        public void OnPieceClose() => Debug.Log("[estrategia] piece close");
-        public void OnWalk() => Debug.Log("[estrategia] walk");
-        public void OnSeen(string key) => Debug.Log("[estrategia] seen " + key);
+        public void OnNode(string id) => Debug.Log("[estrategia] etapa " + id);
+        public void OnEndRun() => Debug.Log("[estrategia] volver a la base");
+        public void OnBuy(string ware) => Debug.Log("[estrategia] cambiar " + ware);
+        public void OnLeaveStop() => Debug.Log("[estrategia] seguir");
+        public void OnUpgrade(string id) => Debug.Log("[estrategia] mejorar " + id);
     }
 }

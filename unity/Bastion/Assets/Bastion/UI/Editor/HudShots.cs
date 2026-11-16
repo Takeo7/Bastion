@@ -163,6 +163,21 @@ namespace Bastion.UI.EditorTools
         }
 
         /// <summary>
+        /// The runs' grids with a made-up base (Gear.GearLab: the stash, Rojas's kit and pack, Ana's soldier's pack), over
+        /// a plain dark ground; BASTION_CUADRICULA picks the moment (a drag, the orders, the bin…).
+        /// </summary>
+        public static void Cuadricula()
+        {
+            var camera = new GameObject("Shot camera").AddComponent<Camera>();
+            camera.tag = "MainCamera";
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.13f, 0.15f, 0.16f);
+            var screen = new GameObject("Cuadrícula");
+            screen.AddComponent<UIDocument>().panelSettings = Panel();
+            screen.AddComponent<Bastion.UI.Gear.GearLab>();
+        }
+
+        /// <summary>
         /// The combat on a recorded state (CombatLab, engine-cs/golden/step2/city-3-elimination.json) with its HUD: the reach
         /// of a soldier's move, the way to a tile and the cover there, over a rough floor with capsules for the units.
         /// </summary>

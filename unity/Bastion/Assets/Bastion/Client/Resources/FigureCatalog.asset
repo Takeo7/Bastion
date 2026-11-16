@@ -601,6 +601,7 @@ MonoBehaviour:
   - SM_Chr_ZombieBoss_Wretch_01
   - SM_Chr_ZombieBoss_Blobber_01
   - SM_Chr_ZombieBoss_Slobber_01
+  - SM_Chr_ZombieBoss_Brute_01
   - SM_Chr_Zombie_Military_Male_01
   - SM_Chr_Zombie_BioHazardSuit_Male_01
   - SM_Chr_Zombie_Prisoner_Male_01
@@ -639,6 +640,7 @@ MonoBehaviour:
   - {fileID: 1960997148460282, guid: a3029e28af10f4f458f5d25d6118a906, type: 3}
   - {fileID: 1658146812600542, guid: 574d3bbe7d1c8684f9101c2b823c5770, type: 3}
   - {fileID: 1389694247779218, guid: 6e6f4b3417a0abb45b1cce8fdf021eb5, type: 3}
+  - {fileID: 1397897947513670, guid: 602e2bafea94085478f3eb9b58f4f7b6, type: 3}
   - {fileID: 1160577204630336, guid: 7c521770c9e780444b9b27cb7183739f, type: 3}
   - {fileID: 1379516714727752, guid: cecba8cbb65991c42a1e7219f8210b9a, type: 3}
   - {fileID: 1448682853809946, guid: fd7713efca146e545aafa284b89a051e, type: 3}

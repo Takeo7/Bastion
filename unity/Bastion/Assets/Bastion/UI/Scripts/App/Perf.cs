@@ -198,8 +198,17 @@ namespace Bastion.UI.App
             if (Counter != null && GameSettings.ShowFps)
             {
                 Counter.text = $"{Mathf.RoundToInt(counterFrames / (now - counterFrom))} FPS";
+                if (Bastion.Client.GameInput.Touch)
+                {
+                    // With the finger, bottom left: top right the base's Menú and the battle's ≡ and mission card take the
+                    // corner (Arturo's Duo, 8/11: «60 FPS» over «MENÚ»); the foot's left end is free on every screen.
+                    Counter.style.top = StyleKeyword.Auto;
+                    Counter.style.right = StyleKeyword.Auto;
+                    Counter.style.left = 8;
+                    Counter.style.bottom = 6;
+                }
                 // In the battle, beside the Menú tab.
-                Counter.style.right = SceneManager.GetActiveScene().name == BattleScene ? 74 : 8;
+                else Counter.style.right = SceneManager.GetActiveScene().name == BattleScene ? 74 : 8;
             }
             counterFrames = 0;
             counterFrom = now;

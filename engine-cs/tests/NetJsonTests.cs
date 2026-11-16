@@ -124,11 +124,12 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void EveryEventClassHasItsOwnTag()
         {
-            // 81 variants of GameEvent (engine-cs Types/GameEvent.cs), each told by its `t` (`burned` since 1/11, the
+            // 83 variants of GameEvent (engine-cs Types/GameEvent.cs), each told by its `t` (`burned` since 1/11, the
             // molotov's `fireLit` and `fireOut`, Ana's `hidden` and `podSplit`, the crowbar's `boardsRemoved`, and
-            // `unitDone` since 7/11; without the contagion's `infected` and `cured` since the 0.12.18).
+            // `unitDone` since 7/11; without the contagion's `infected` and `cured` since the 0.12.18; the runs' pack in a
+            // fight, `gearMoved` and `gearUsed`, since 16/11).
             var converter = new TagConverter<GameEvent>("t", (e) => e.T);
-            Assert.Equal(81, converter.Tags.Count);
+            Assert.Equal(83, converter.Tags.Count);
         }
 
         [Fact]
@@ -203,6 +204,36 @@ namespace Bastion.Engine.Tests
             Assert.Equal(3, Assert.IsType<ItemCommand>(Assert.IsType<CmdMessage>(Json.ReadFromPlayer<ClientMessage>("{\"t\":\"cmd\",\"cmd\":{\"type\":\"item\",\"unit\":\"s1\",\"action\":\"use\",\"index\":3}}")).Cmd).Index);
             // Read as the engine's own JSON instead, a union (its tag first read into a JObject) would take 1.5 for 2.
             Assert.Equal(2, Assert.IsType<MoveCommand>(Json.Read<Command>("{\"type\":\"move\",\"unit\":\"s1\",\"to\":{\"x\":1.5,\"y\":3}}")).To.X);
+        }
+
+        /// <summary>
+        /// Every class of a union TagConverter reads (Json.cs), as it finds them: concrete ones deriving from `TBase` in its
+        /// assembly and the network's. It finds them by itself, so a new one (the runs' orders, 16/11) needs nothing in
+        /// Json.cs; but one without a constructor without arguments is left out unsaid, and of two with the same tag the
+        /// second takes it from the first unsaid. Both said here, by class.
+        /// </summary>
+        private static List<string> UnionTrouble<TBase>(Func<TBase, string> tagOf) where TBase : class
+        {
+            var classes = new[] { typeof(TBase).Assembly, typeof(Json).Assembly }.Distinct().SelectMany((a) => a.GetTypes())
+                .Where((t) => !t.IsAbstract && typeof(TBase).IsAssignableFrom(t)).ToList();
+            var trouble = classes.Where((t) => t.GetConstructor(Type.EmptyTypes) == null).Select((t) => $"{t.Name}: sin constructor sin argumentos").ToList();
+            trouble.AddRange(classes.Where((t) => t.GetConstructor(Type.EmptyTypes) != null)
+                .GroupBy((t) => tagOf((TBase)Activator.CreateInstance(t)!))
+                .Where((g) => g.Count() > 1)
+                .Select((g) => $"«{g.Key}»: {string.Join(", ", g.Select((t) => t.Name).OrderBy((n) => n, StringComparer.Ordinal))}"));
+            return trouble;
+        }
+
+        [Fact]
+        public void EachClassOfAUnionHasATagOfItsOwn()
+        {
+            Assert.Empty(UnionTrouble<GameEvent>((e) => e.T));
+            Assert.Empty(UnionTrouble<Command>((c) => c.Type));
+            Assert.Empty(UnionTrouble<RtOrder>((o) => o.Kind));
+            Assert.Empty(UnionTrouble<CampaignCommand>((c) => c.Type));
+            Assert.Empty(UnionTrouble<ProposalAction>((a) => a.Type));
+            Assert.Empty(UnionTrouble<ClientMessage>((m) => m.T));
+            Assert.Empty(UnionTrouble<ServerMessage>((m) => m.T));
         }
     }
 }

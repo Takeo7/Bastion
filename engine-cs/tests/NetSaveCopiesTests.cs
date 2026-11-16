@@ -33,11 +33,12 @@ namespace Bastion.Engine.Tests
             }
         }
 
-        private static SaveFile OnDay(int day) => new SaveFile
+        /// <summary>A campaign of runs as its stage `stage` goes (CampaignState.NodesPlayed).</summary>
+        private static SaveFile AtStage(int stage) => new SaveFile
         {
             Phase = RoomPhases.Base,
             Mode = "campaign",
-            Campaign = new CampaignState { Version = Campaign.CampaignVersion, Day = day },
+            Campaign = new CampaignState { Version = Campaign.RunsCampaignVersion, Stash = new GearGrid { W = Runs.StashW, H = Runs.StashH }, NodesPlayed = stage },
             Seats = { new SavedSeat { Slot = 0, Name = "Ana", Token = "t-ana" }, null },
         };
 
@@ -62,29 +63,47 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
-        public void EachDayOfTheCampaignKeepsACopyAndTheLastFiveStay()
+        public void EachStageOfTheCampaignKeepsACopyAndTheLastFiveStay()
         {
             var store = new SaveStore(SavePath, log.Add);
-            // Several saves a day: one copy, as the day began.
-            for (int day = 1; day <= 7; day++)
+            // Several saves a stage: one copy, as the stage began (its node chosen).
+            for (int stage = 1; stage <= 7; stage++)
                 for (int i = 0; i < 3; i++)
-                    store.Save(OnDay(day));
-            Assert.Equal(new[] { "save.dia-3.json", "save.dia-4.json", "save.dia-5.json", "save.dia-6.json", "save.dia-7.json" }, Directory.GetFiles(dir, "save.dia-*.json").Select(Path.GetFileName).OrderBy((n) => n));
-            Assert.Equal(7, Json.Read<SaveFile>(File.ReadAllText(Beside("dia-7"))).Campaign!.Day);
-            // Opened again on the same day: no copy. A new campaign's first day: one, and the oldest goes.
+                    store.Save(AtStage(stage));
+            Assert.Equal(new[] { "save.etapa-3.json", "save.etapa-4.json", "save.etapa-5.json", "save.etapa-6.json", "save.etapa-7.json" }, Directory.GetFiles(dir, "save.etapa-*.json").Select(Path.GetFileName).OrderBy((n) => n));
+            Assert.Equal(7, Json.Read<SaveFile>(File.ReadAllText(Beside("etapa-7"))).Campaign!.NodesPlayed);
+            // Opened again on the same stage: no copy. A new campaign's stage 0: one, and the oldest goes.
             store = new SaveStore(SavePath, log.Add);
             store.Load();
-            var seventh = File.GetLastWriteTimeUtc(Beside("dia-7"));
-            store.Save(OnDay(7));
-            Assert.Equal(seventh, File.GetLastWriteTimeUtc(Beside("dia-7")));
-            store.Save(OnDay(1));
-            Assert.True(File.Exists(Beside("dia-1")));
-            Assert.False(File.Exists(Beside("dia-3")));
+            var seventh = File.GetLastWriteTimeUtc(Beside("etapa-7"));
+            store.Save(AtStage(7));
+            Assert.Equal(seventh, File.GetLastWriteTimeUtc(Beside("etapa-7")));
+            store.Save(AtStage(0));
+            Assert.True(File.Exists(Beside("etapa-0")));
+            Assert.False(File.Exists(Beside("etapa-3")));
             // What a room that won't start goes back to, newest first.
             var copies = store.Copies().Select((c) => c.Label).ToList();
-            Assert.Equal(new[] { "anterior", "dia-1" }, copies.Take(2));
-            Assert.Equal(new[] { "dia-4", "dia-5", "dia-6", "dia-7" }, copies.Skip(2).OrderBy((l) => l));
+            Assert.Equal(new[] { "anterior", "etapa-0" }, copies.Take(2));
+            Assert.Equal(new[] { "etapa-4", "etapa-5", "etapa-6", "etapa-7" }, copies.Skip(2).OrderBy((l) => l));
             Assert.Empty(log);
+        }
+
+        [Fact]
+        public void TheDaysCopiesOfBeforeTheRunsAreLeftAsTheyAre()
+        {
+            // Arturo's and Ana's (save.dia-N.json): their campaign doesn't go on, so they are neither offered nor pruned.
+            Write(Beside("dia-40"), "t-ana");
+            var store = new SaveStore(SavePath, log.Add);
+            for (int stage = 0; stage <= 6; stage++) store.Save(AtStage(stage));
+            Assert.True(File.Exists(Beside("dia-40")));
+            Assert.DoesNotContain(store.Copies(), (c) => c.Label.StartsWith("dia-"));
+            // A campaign that isn't one of runs (none the host makes now) keeps none.
+            Directory.Delete(dir, true);
+            store = new SaveStore(SavePath, log.Add);
+            var before = AtStage(3);
+            before.Campaign!.Stash = null;
+            store.Save(before);
+            Assert.Empty(Directory.GetFiles(dir, "save.etapa-*.json"));
         }
 
         [Fact]
@@ -116,19 +135,19 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
-        public void WithoutABackupThatStartsTheNewestDayGoesOn()
+        public void WithoutABackupThatStartsTheNewestStageGoesOn()
         {
             Write(SavePath, "t-rota", slot: 7);
             Write(Beside("anterior"), "t-rota", slot: 5);
-            Write(Beside("dia-2"), "t-dos");
-            Write(Beside("dia-3"), "t-ana");
-            File.SetLastWriteTimeUtc(Beside("dia-2"), DateTime.UtcNow.AddDays(-2));
-            File.SetLastWriteTimeUtc(Beside("dia-3"), DateTime.UtcNow.AddDays(-1));
+            Write(Beside("etapa-2"), "t-dos");
+            Write(Beside("etapa-3"), "t-ana");
+            File.SetLastWriteTimeUtc(Beside("etapa-2"), DateTime.UtcNow.AddDays(-2));
+            File.SetLastWriteTimeUtc(Beside("etapa-3"), DateTime.UtcNow.AddDays(-1));
             var room = Make();
             Assert.Contains(log, (l) => l.StartsWith("[save] Tampoco arranca ") && l.Contains("save.anterior.json"));
             var ana = Join(room, "t-ana");
             Assert.Equal("t-ana", (string?)ana.Take("welcome").Single()["token"]);
-            Assert.StartsWith("La partida guardada no se ha podido abrir. Se sigue desde la copia del día 3.", (string?)ana.Take("room").Last()["restored"]);
+            Assert.StartsWith("La partida guardada no se ha podido abrir. Se sigue desde la copia de cuando llevabais 3 etapas jugadas.", (string?)ana.Take("room").Last()["restored"]);
         }
 
         [Fact]

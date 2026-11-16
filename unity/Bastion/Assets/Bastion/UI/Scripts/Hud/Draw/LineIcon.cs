@@ -123,6 +123,17 @@ namespace Bastion.UI.Hud
                 pen.Line(15.5f, 16.8f, 13.8f, 22.2f);
                 pen.Line(19.5f, 16.8f, 17.8f, 22.2f);
             },
+            // A stage at night (the runs' map, 16/11): a crescent moon opening to the right, and a star.
+            ["night"] = pen =>
+            {
+                pen.Begin(15.6f, 3.2f);
+                pen.Curve(6.4f, 3.4f, 2.6f, 11.4f, 4.4f, 16.4f);
+                pen.Curve(6.2f, 21.4f, 12.6f, 22.6f, 16.8f, 20.6f);
+                pen.Curve(10.6f, 19.4f, 7.8f, 14.4f, 9.2f, 9.8f);
+                pen.Curve(10.2f, 6.4f, 12.6f, 4.2f, 15.6f, 3.2f);
+                pen.Fill();
+                pen.Dot(18.6f, 9.2f, 1.5f);
+            },
             ["weather:storm"] = pen =>
             {
                 Cloud(pen);

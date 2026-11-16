@@ -272,6 +272,11 @@
     justify-content: center;
 }
 
+/* With the finger (Arturo's Duo, 8/11): the title starts where the words do, not centred over them. */
+.touch .squad-mission__title-row {
+    justify-content: flex-start;
+}
+
 .squad-mission__title {
     font-size: 20px;
     letter-spacing: 1px;
@@ -572,6 +577,38 @@
     border-radius: 4px;
 }
 
+/* With the finger (Gameplay, 8/11: the Duo's 951 points, eight cards of about 110): the debrief's cards keep less inside
+   their edges and their tags are a size smaller, so that «▲ DISPARO +8 %» and «+1 Habilidad» stay on one line each. The
+   name keeps clear of the bust. */
+.touch .lineup-card--bust {
+    padding-left: 6px;
+    padding-right: 4px;
+}
+
+.touch .lineup-card--bust .lineup-card__name {
+    margin-left: 26px;
+}
+
+.touch .lineup-learned {
+    padding: 0 3px;
+}
+
+.touch .lineup-learned__text {
+    font-size: 10px;
+}
+
+.touch .lineup-learned__arrow {
+    margin-right: 2px;
+    font-size: 11px;
+}
+
+.touch .lineup-learned__hex {
+    width: 18px;
+    height: 18px;
+    margin-right: 3px;
+    font-size: 10px;
+}
+
 /* =============================================================== debrief */
 
 .debrief-card {
@@ -685,4 +722,20 @@
     margin-right: 16px;
     font-size: 13px;
     white-space: normal;
+}
+
+/* A side plate as tall as what it holds (once the Armería's, gone with it on 16/11). */
+.strat-side--fit {
+    bottom: auto;
+    max-height: 96%;
+}
+
+.strat-why--small {
+    font-size: 12px;
+}
+
+/* A run's find in the report: Arte's picture, in its own colours (not the icons' tint). */
+.haul__art {
+    -unity-background-image-tint-color: #ffffff;
+    -unity-background-scale-mode: scale-to-fit;
 }

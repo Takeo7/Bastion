@@ -151,3 +151,70 @@
 .sight__button--on:hover .sight__eye {
     color: #ffffff;
 }
+
+/* With the finger (docs/IOS.md, phase 2): the goal's arrow and the eye stand up on the right, over the keys' row, which
+   then has the screen's foot to itself on a Duo open (1001 px). */
+.touch .goal-arrow {
+    bottom: 84px;
+}
+
+.touch .sight {
+    right: 24px;
+    bottom: 152px;
+}
+
+/* The finger's buttons (TouchButtons; only with the finger): in the eye's ring and grey, the menu top right by the
+   mission's card, the map and the floors over the eye. */
+.touch-btn {
+    position: absolute;
+    width: 52px;
+    height: 52px;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.touch-btn__icon {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    right: 14px;
+    bottom: 14px;
+    -unity-background-image-tint-color: #8f999f;
+}
+
+.touch-btn__glyph {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: 18px;
+    color: #8f999f;
+}
+
+.touch-btn:disabled {
+    opacity: 0.4;
+}
+
+.touch-btn--menu {
+    top: var(--edge);
+    right: 240px;
+}
+
+.touch-btn--map {
+    right: 24px;
+    bottom: 224px;
+}
+
+.touch-btn--down {
+    right: 24px;
+    bottom: 284px;
+}
+
+.touch-btn--up {
+    right: 24px;
+    bottom: 344px;
+}

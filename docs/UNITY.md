@@ -56,12 +56,18 @@ packages/                  la versión de Three.js, congelada en la 0.10.1
 
 ## 4. Estado
 
-**Hoy (10/11): la 0.12.18.** El port está hecho y es el juego: Arturo y Ana juegan la campaña con la app de Unity desde la 0.11.0 (29/10).
+**Hoy (16/11): la 0.12.26.** El port está hecho y es el juego: Arturo y Ana juegan la campaña con la app de Unity desde la 0.11.0 (29/10).
 
 - **Apps:** Mac (universal, con firma *ad hoc* y sin notarizar) y Windows. La 0.12.16, la 0.12.17 y la 0.12.18 salieron firmadas con el certificado «Apple Development» de Arturo, para ver si el Mac dejaba de preguntar por el cortafuegos y la red local en cada versión: siguió preguntando (Arturo, 10/11), así que desde la siguiente se vuelve a la *ad hoc*. La de Linux se compila, pero no se publica. Windows sigue sin abrirse en un PC.
 - **Reglas:** solo en C# desde el 29/10. Ya no son idénticas a las de TypeScript: los cambios desde la 0.10.1 están en `engine-cs/golden/since-0101.patch` y en las notas de cada versión.
 - **Apagado o quitado:** los asedios, apagados desde el 7/11 (`Campaign.SiegesOn`); el contagio, quitado en la 0.12.18; el tiempo real no se trajo.
-- **En marcha:** iOS táctil ([IOS.md](IOS.md), en la copia `Bastion-ios`) y la revisión de lo 3D (Arte, 10/11).
+- **En marcha (16/11): las runs.** Arturo cambió la campaña por runs, como en Slay the Spire: un mapa de nodos por capítulo con un jefe, y la base queda en almacén en cuadrícula, equipo y mejoras.
+  - Lo decidido: `.dev-snapshots/producto/RUNS.md`.
+  - El plan: `.dev-snapshots/gameplay/runs/PLAN-RUNS.md`.
+  - El motor: `.dev-snapshots/gameplay/runs/H0-DISENO.md`.
+  - Sale todo en una versión, con el capítulo 1 entero.
+  - Mientras, el árbol principal está en la rama local `runs`, y los arreglos graves de la 0.12.26 se compilan en la copia limpia, sobre `main`. Tras publicar uno de esos, **no** se ejecuta `publicar.sh … principal` en el árbol principal: se lleva `main` a `runs` a mano.
+  - iOS táctil ([IOS.md](IOS.md), en la copia `Bastion-ios`) espera a que acaben las runs.
 - **Qué lleva cada versión:** [NOTAS-UNITY.md](NOTAS-UNITY.md) y `NOTAS-<versión>.md`. Lo que falta, en el §5.
 
 ### El 26/10 (histórico)

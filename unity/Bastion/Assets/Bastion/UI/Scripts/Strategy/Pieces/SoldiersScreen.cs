@@ -523,6 +523,8 @@ namespace Bastion.UI.Strategy
         /// </summary>
         void Gear(SoldierSheetView s)
         {
+            // The runs: the kit is Almacén's, none round the figure.
+            if (s.Arms.Count == 0 && s.Armor == null && s.Belt.Count == 0) return;
             var left = Column("soldier-gear__col--left");
             var arms = s.Arms;
             for (var i = 0; i < 3; i++)

@@ -13,6 +13,8 @@ namespace Bastion.UI.Hud
     public sealed class TooltipLayer
     {
         const long DelayMs = 350;
+        /// <summary>With the finger the help is a long press (Lore, 7/11; GameInput.LongTime): held this long, it shows.</summary>
+        const long TouchDelayMs = 500;
         const float Gap = 6;
         const string HookedClass = "has-tip";
 
@@ -27,6 +29,8 @@ namespace Bastion.UI.Hud
         /// <summary>The element whose help stays as the pointer leaves it (tests: Pin).</summary>
         VisualElement pinned;
         IVisualElementScheduledItem pending;
+        /// <summary>The finger down on an element with help (its pointer), so that once the help shows, lifting it presses nothing.</summary>
+        int? heldPointer;
 
         public TooltipLayer(VisualElement root)
         {
@@ -97,6 +101,12 @@ namespace Bastion.UI.Hud
             {
                 if (pinned == null) Enter(target);
             });
+            // With the finger: which finger is down on it (Fill lets its press go once the help shows).
+            if (Bastion.Client.GameInput.Touch)
+            {
+                target.RegisterCallback<PointerDownEvent>(e => heldPointer = e.pointerId, TrickleDown.TrickleDown);
+                target.RegisterCallback<PointerUpEvent>(_ => heldPointer = null, TrickleDown.TrickleDown);
+            }
             target.RegisterCallback<PointerLeaveEvent>(_ =>
             {
                 if (over == target && pinned != target) Hide();
@@ -116,7 +126,10 @@ namespace Bastion.UI.Hud
             {
                 if (over != target) return;
                 Fill();
-            }).StartingIn(DelayMs);
+                // With the finger the help was a long press: lifting it must not press what is under it (its press let go).
+                if (Bastion.Client.GameInput.Touch && heldPointer is int id && target.panel?.GetCapturingElement(id) is IEventHandler holder)
+                    holder.ReleasePointer(id);
+            }).StartingIn(Bastion.Client.GameInput.Touch ? TouchDelayMs : DelayMs);
         }
 
         void Fill()

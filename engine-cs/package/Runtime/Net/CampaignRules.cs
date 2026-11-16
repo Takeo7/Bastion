@@ -31,6 +31,25 @@ namespace Bastion.Net
 
         void SyncPads(CampaignState c);
 
+        /// <summary>
+        /// Whether the squad that goes out is being picked now, so a player who joins is put in it (DefaultSquad): with an
+        /// operation chosen; in the runs, in the base (no run under way).
+        /// </summary>
+        bool SquadOpen(CampaignState c);
+
+        /// <summary>
+        /// Who is in changed on the base (one came or went): in the runs, with no run under way, the squad that goes out is
+        /// redone for them (Runs.DefaultSquad; Gameplay, 16/11: the seats shared out without anyone taking soldiers out).
+        /// Whether it changed.
+        /// </summary>
+        bool Regroup(CampaignState c, IReadOnlyList<int> connected);
+
+        /// <summary>
+        /// A player here with none of their soldiers in the squad of a run under way takes half of it till the run ends
+        /// (Runs.HandOver, 16/11); how many. 0 outside a run, or with soldiers of their own in it.
+        /// </summary>
+        int HandOver(CampaignState c, int slot, IReadOnlyList<int> connected);
+
         /// <summary>executeCampaignCommand, with its CampaignContext (`slot`, `connected`, `rng`) given apart, as IRules does.</summary>
         CampaignResult ExecuteCampaignCommand(CampaignState c, CampaignCommand cmd, int slot, IReadOnlyList<int> connected, Rng rng);
 

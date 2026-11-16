@@ -21,6 +21,8 @@ namespace Bastion.UI.Strategy
         public bool SiegeNear;
         public TipView SiegeTip;
         public int Day;
+        /// <summary>The runs: the chapter open («CAPÍTULO 1»), where the day was; null, the day.</summary>
+        public string Chapter;
         public TipView DayTip;
         /// <summary>Suministros, medicinas, raciones, piezas: each in its well.</summary>
         public List<StoreView> Stores = new List<StoreView>();

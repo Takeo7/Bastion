@@ -452,7 +452,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("La partida queda guardada tal como está, con la misión a medias.", Lore.QuitText.SavedMission);
             Assert.Equal("Salir", Lore.QuitText.Accept);
             Assert.Equal("Seguir", Lore.QuitText.Refuse);
-            Assert.Equal("La partida está en tu ordenador: si sales, Ana se desconecta hasta que vuelvas a abrirla.", Lore.QuitHostWarning("Ana"));
+            Assert.Equal("Alojas tú la partida: si sales, Ana se desconecta hasta que vuelvas a abrirla.", Lore.QuitHostWarning("Ana"));
             Assert.Equal("Arturo sigue la misión sin ti: tus soldados se quedan quietos donde están hasta que vuelvas.", Lore.QuitGuestWarning("Arturo"));
             Assert.Equal("Cuando la vuelva a abrir, podrás entrar de nuevo.", Lore.HostClosed.Back);
             Assert.Equal("Volver a entrar", Lore.HostClosed.Retry);
@@ -1646,7 +1646,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Los del otro también son de los nuestros.", Lore.BoardAbout["bridge"]);
             Assert.Equal("Una bolsa más grande y mejor ordenada.", Lore.BoardAbout["bigKit"]);
             Assert.Equal("Primero se aparta al herido de la línea de tiro; luego se le cura.", Lore.BoardAbout["firstAid"]);
-            Assert.Equal("Cinta, alambre y un poco de paciencia.", Lore.BoardAbout["patchUp"]);
+            Assert.Equal("Siempre mira en el segundo cajón.", Lore.BoardAbout["patchUp"]);
             Assert.Equal("Las cerraduras le duran poco.", Lore.BoardAbout["deft"]);
             Assert.Equal("Dos ángulos y ningún sitio donde esconderse.", Lore.BoardAbout["crossfire"]);
             Assert.Equal("Cuando hay que correr, llega antes que nadie.", Lore.BoardAbout["sprinter"]);
@@ -1668,7 +1668,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Aguja, hilo y pulso.", Lore.BoardAbout["suture"]);
             Assert.Equal("Alguien que se sienta al lado y no se va.", Lore.BoardAbout["bedside"]);
             Assert.Equal("Las heridas pequeñas ya ni las nota.", Lore.BoardAbout["toughSkin"]);
-            Assert.Equal("Limpia el arma cada noche, aunque no la haya usado.", Lore.BoardAbout["care"]);
+            Assert.Equal("Sabe doblar, enrollar y apretar.", Lore.BoardAbout["care"]);
             Assert.Equal("Con alguien al lado, se apunta mejor.", Lore.BoardAbout["sideBySide"]);
             Assert.Equal("El compañero cubre lo que uno no ve.", Lore.BoardAbout["parapet"]);
             Assert.Equal("Un alambre doblado abre más puertas que una llave.", Lore.BoardAbout["picklock"]);
@@ -1696,7 +1696,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Sabe qué decir para que nadie salga corriendo.", Lore.BoardAbout["lullaby"]);
             Assert.Equal("Vendas y gasas de sobra en cada bolsillo.", Lore.BoardAbout["spares"]);
             Assert.Equal("Mientras venda, se pone en medio.", Lore.BoardAbout["triage"]);
-            Assert.Equal("Siempre le queda un trozo de cinta.", Lore.BoardAbout["morePatch"]);
+            Assert.Equal("Mira debajo de todo.", Lore.BoardAbout["morePatch"]);
             Assert.Equal("Unos prismáticos de cazador, sin una raya.", Lore.BoardAbout["binoculars"]);
             Assert.Equal("Primero piensa, luego se mueve.", Lore.BoardAbout["coolHead"]);
             Assert.Equal("Dos que se conocen pelean como uno.", Lore.BoardAbout["shoulder"]);
@@ -1735,7 +1735,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Todo tiene un punto por donde cede.", Lore.BoardAbout["weakSpot"]);
             Assert.Equal("Ha oído gritos peores que los de un Chillón.", Lore.BoardAbout["temperance"]);
             Assert.Equal("Ve moverse algo en la niebla antes que nadie.", Lore.BoardAbout["lynx"]);
-            Assert.Equal("No queda bonito, pero aguanta hasta casa.", Lore.BoardAbout["bodge"]);
+            Assert.Equal("Sabe dónde esconde la gente lo que no quiere perder.", Lore.BoardAbout["bodge"]);
             Assert.Equal("Va y vuelve de Metsovo sin parar.", Lore.BoardAbout["marathon"]);
             Assert.Equal("Las caídas, los golpes, el frío: todo le resbala.", Lore.BoardAbout["ironBody"]);
             Assert.Equal("Nada le hace perder la calma.", Lore.BoardAbout["poise"]);
@@ -1776,7 +1776,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Sabe dónde dar para que no se levanten.", Lore.BoardAbout["anatomy"]);
             Assert.Equal("Desde lo alto de cualquier cosa, todo el pueblo.", Lore.BoardAbout["watchtower"]);
             Assert.Equal("Se mueve junto a las paredes, sin ruido y sin prisa.", Lore.BoardAbout["shadow"]);
-            Assert.Equal("Con lo que hay a mano, arregla lo que haga falta.", Lore.BoardAbout["ingenuity"]);
+            Assert.Equal("Lo que brilla entre los escombros, lo ve.", Lore.BoardAbout["ingenuity"]);
             Assert.Equal("Grande como un armario, y igual de difícil de mover.", Lore.BoardAbout["titan"]);
             Assert.Equal("Lleva dos inviernos sin dejar de correr.", Lore.BoardAbout["longRunner"]);
             Assert.Equal("Le pueden dar. No le mueven.", Lore.BoardAbout["rock"]);
@@ -3110,6 +3110,47 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Mata siempre, sin ruido y sin romper la ocultación, a un Zombi o un Corredor que tengas al lado, si aún no está alerta y no te tiene delante. No sirve con la motosierra.", Lore.Glossary["Golpe silencioso"]);
             Assert.Equal("Mientras la escuadra está oculta, cada soldado tiene 3 puntos más: 11. Al romperse la ocultación, pierde 3 de los que le queden ese turno.", Lore.MoveText.Rules[1]);
             Assert.Equal(38, Lore.Glossary.Count);
+            // The Sucesos of the expeditions (H4, Gameplay, 16/11): texts in Lore, figures in Content by the same id.
+            Assert.Equal(10, Lore.RunEvents.Count);
+            Assert.All(Lore.RunEvents.Values, (e) => Assert.Equal(2, e.Options.Count));
+            Assert.Equal("Una farmacia con la persiana medio bajada. Dentro se oye algo que se arrastra.", Lore.RunEvents["farmacia"].Text);
+            Assert.Equal("Había un muerto atrapado bajo un estante. Hiro sale con un botiquín y un mordisco.", Lore.RunEvents["farmacia"].Options[0].Result("Hiro"));
+            Assert.Equal("Llegáis cuando ya oscurece. Marta Gil se une a la escuadra.", Lore.RunEvents["radio"].Options[0].Result(survivor: "Marta Gil"));
+            Assert.Equal("+1 botiquín · −2 de salud a uno", Lore.RunEventEffects(hurtOne: 2, gearKind: GearKinds.Item, gearType: ItemIds.FirstAid, gearCount: 1));
+            Assert.Equal("+25 § · La siguiente etapa, con la horda despierta", Lore.RunEventEffects(supplies: 25, modifier: Modifiers.Awake));
+            Assert.Equal("−15 § · +1 pistola", Lore.RunEventEffects(supplies: -15, gearKind: GearKinds.Weapon, gearType: FoundWeaponIds.Pistol, gearCount: 1));
+            Assert.Equal("Se une alguien, con la mitad de su salud", Lore.RunEventEffects(survivor: true, survivorHalf: true));
+            Assert.Equal("Nada", Lore.RunEventEffects());
+            Assert.Equal("Faltan 20 §.", Lore.RunEventShort(20));
+            Assert.Equal("+2 granadas", Lore.RunEventEffects(gearKind: GearKinds.Item, gearType: ItemIds.FragGrenade, gearCount: 2));
+            // The expeditions' words (Arturo's box, 16/11) and the stages, modifiers and upgrades (Lore's, Gameplay's yes).
+            Assert.Equal("Expedición · Capítulo 1", Lore.ExpeditionText.Header(1));
+            Assert.Equal(15, Lore.StageNames.Count);
+            Assert.Equal("El Toro", Lore.StageName(NodeKinds.Boss, 1));
+            Assert.Equal("Saqueo", Lore.StageName(NodeKinds.Normal));
+            Assert.Equal("Registrad lo que queráis y salid en La Lata.", Lore.StageLine(NodeKinds.Normal));
+            Assert.Equal("Recuperad la carga y volved a La Lata.", Lore.StageLine(NodeKinds.Recovery));
+            Assert.Equal("Aguantad hasta que llegue La Lata, en el turno 8. Llegan oleadas, cada vez mayores.", Lore.StageLine(NodeKinds.Hold, holdTurns: 8));
+            Assert.Equal("Un Acorazado y su grupo guardan la mejor caja del capítulo.", Lore.StageLine(NodeKinds.Elite, guard: TemplateIds.Mec));
+            Assert.Equal("Mal tiempo", Lore.ModifierName(Modifiers.Storm));
+            Assert.Equal("Ventisca", Lore.ModifierName(Modifiers.Storm, snow: true));
+            Assert.Equal("De noche", Lore.ModifierName(Modifiers.Night));
+            Assert.Equal("Salen 6 soldados en vez de 4.", Lore.UpgradeLine(UpgradeIds.Squad, now: 4, next: 6));
+            Assert.Equal("En el Trueque, todo cuesta un 20 % menos.", Lore.UpgradeLine(UpgradeIds.Haggle));
+            Assert.All(UpgradeIds.All, (id) => Assert.True(Lore.UpgradeNames.ContainsKey(id)));
+            // The gear's names (UI: the grid's sheets, the Trueque, throwing away).
+            Assert.Equal("Granada", Lore.GearName(GearKinds.Item, ItemIds.FragGrenade));
+            Assert.Equal("2 cócteles molotov", Lore.GearName(GearKinds.Item, ItemIds.Molotov, 2));
+            Assert.Equal("Medicina", Lore.GearName(GearKinds.Medicine, null));
+            Assert.Equal("3 cargadores", Lore.GearName(GearKinds.Mags, null, 3));
+            Assert.Equal("Fusil de cerrojo", Lore.GearName(GearKinds.Weapon, FoundWeaponIds.HuntingRifle));
+            Assert.Equal("Suministros", Lore.GearName(GearKinds.Supplies, null, 35));
+            Assert.Equal("la escopeta", Lore.GearThe(GearKinds.Weapon, FoundWeaponIds.PumpShotgun));
+            Assert.Equal("el cuchillo", Lore.GearThe(GearKinds.Weapon, FoundWeaponIds.Knife));
+            Assert.Equal("la mira", Lore.GearThe(GearKinds.Mod, WeaponModIds.Scope));
+            Assert.Equal("los tapones", Lore.GearThe(GearKinds.Item, ItemIds.MindShield));
+            Assert.Equal("2 medicinas", Lore.GearThe(GearKinds.Medicine, null, 2));
+            Assert.Equal("35 §", Lore.GearThe(GearKinds.Supplies, null, 35));
             Assert.Equal("De noche", Lore.NightText.Label);
             Assert.Equal("De noche: a oscuras, tus soldados ven 10 casillas en vez de 18. Hay más zombis, y el botín vale la mitad más.", Lore.NightText.Briefing);
             Assert.Equal("Misión de noche: el botín y la recompensa valen la mitad más.", Lore.NightText.Report);

@@ -58,9 +58,8 @@ namespace Bastion.UI.App
         // After every Update: what the 3D asked this frame is in.
         void LateUpdate()
         {
-            var mouse = Mouse.current;
-            if (mouse == null) return;
-            var at = mouse.position.ReadValue();
+            if (!Bastion.Client.GameInput.HasPointer) return;
+            var at = Bastion.Client.GameInput.Point;
             var kind = askedAt >= Time.frameCount - 1 ? asked : Kind.Arrow;
             // Over a panel the 3D has no say: the yellow arrow on what can be pressed, else the arrow.
             if (OverPanel(at, out var pressable)) kind = pressable ? Kind.Hot : Kind.Arrow;

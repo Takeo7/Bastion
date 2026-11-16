@@ -35,6 +35,35 @@ namespace Bastion.UI.Combat
             ("Esc", "Cancelar, o abrir este menú y pausar la partida"),
         };
 
+        /// <summary>
+        /// Controles with the finger (Lore, .dev-snapshots/lore/TEXTOS-TACTILES.md §4): each gesture or button and what it
+        /// does. No F12 (iOS takes its own captures), nor «Terminar turno», which is its own button.
+        /// </summary>
+        static readonly (string keys, string what)[] TouchControls =
+        {
+            ("Un toque en un soldado", "Seleccionarlo"),
+            ("Dos toques en un retrato", "Llevar la cámara a ese soldado"),
+            ("Un toque en una casilla", "Ver el camino, el ruido y quién vería al soldado allí"),
+            ("Otro toque en la misma casilla", "Mover"),
+            ("Un toque en un zombi", "Apuntarle"),
+            ("Mantener el dedo en un zombi", "Lo que ve; al soltar, su ficha"),
+            ("Mantener el dedo en el suelo", Lore.SettingsText.PingControls),
+            ("Mantener el dedo en un botón", "Su ayuda"),
+            ("Los botones de la barra", "Usar una habilidad; si necesita objetivo, elegirlo y pulsar otra vez"),
+            ("Las flechas del panel de tiro", "Otro objetivo"),
+            ("«Ceder»", "Ceder el mando"),
+            ("Arrastrar un dedo", "Mover la cámara"),
+            ("Pellizcar", "Acercar o alejar"),
+            ("Girar dos dedos · la brújula", "Girar la cámara"),
+            ("▲ ▼", "Subir o bajar de planta"),
+            ("Una marca del borde", "Centrar la cámara en ella"),
+            ("«Mapa»", "Mapa"),
+            ("El ojo", "Vista de los zombis: lo que ve cada uno"),
+            ("» mantenido", "Ver más rápido el turno enemigo"),
+            ("«Cancelar»", "Cancelar lo elegido"),
+            ("≡", "Abrir este menú y pausar la partida"),
+        };
+
         const string EnemySpeedId = "enemySpeed";
         const string WalkSpeedId = "walkSpeed";
         const string PlansId = "autoPlan";
@@ -87,7 +116,7 @@ namespace Bastion.UI.Combat
                     {
                         Id = EnemySpeedId,
                         Label = Lore.SettingsText.EnemySpeed,
-                        About = Lore.SettingsText.EnemySpeedAbout + " En el turno enemigo, mantén la barra espaciadora para verlo más rápido.",
+                        About = Lore.SettingsText.EnemySpeedAbout + (Bastion.Client.GameInput.Touch ? HudText.Touch.EnemySpeed : " En el turno enemigo, mantén la barra espaciadora para verlo más rápido."),
                         Slider = true,
                         Min = 0.5f,
                         Max = 2.5f,
@@ -119,7 +148,7 @@ namespace Bastion.UI.Combat
                         On = AutoPlan ? 0 : 1,
                     },
                 }),
-                Controls = Controls.Select(c => new ControlView { Keys = c.keys, What = c.what }).ToList(),
+                Controls = (Bastion.Client.GameInput.Touch ? TouchControls : Controls).Select(c => new ControlView { Keys = c.keys, What = c.what }).ToList(),
                 NightLabel = Lore.NightText.Label,
                 NightRules = Lore.NightText.Rules.ToList(),
                 CoverLabel = Lore.CoverText.Label,

@@ -38,8 +38,8 @@ namespace Bastion.Net
 
     /// <summary>
     /// The game on disk (persistence.ts SaveStore): written whole after every change, never cut short by a crash or a
-    /// power cut, with the one before kept as a backup and a copy of the campaign as each of its last DayCopies days began;
-    /// one that cannot be read is moved aside, never written over.
+    /// power cut, with the one before kept as a backup and a copy of the campaign as each of its last DayCopies stages
+    /// began; one that cannot be read is moved aside, never written over.
     /// </summary>
     public sealed class SaveStore
     {
@@ -47,14 +47,23 @@ namespace Bastion.Net
         public const int SaveVersion = 6;
 
         /// <summary>
-        /// The release whose progression a campaign must be from (campaign.ts campaignOutdated, Campaign.FreshCampaignVersion):
-        /// older ones are kept aside under its name, save.antes-&lt;release&gt;.json, and the messages say it.
+        /// The oldest campaign the host goes on with: the first of the runs (Campaign.RunsCampaignVersion, 16/11). Older ones
+        /// are kept aside (OutdatedLabel) and the room starts anew; from it up to Campaign.RunsCampaignVersion they are
+        /// brought up to date (ICampaignRules.MigrateCampaign); newer ones aren't read. It was Campaign.FreshCampaignVersion,
+        /// the progression of the 0.7.
         /// </summary>
-        public const string FreshRelease = "0.7";
+        public const int FreshVersion = 28;
 
         /// <summary>
-        /// Copies of the campaign kept, one a day of it (Gameplay's review, 10/11, #11: with one backup only, a save that
-        /// wouldn't start left nothing to go back to): the newest so many.
+        /// What a campaign older than FreshVersion is kept aside as, save.antes-de-las-runs.json: no older one goes on into
+        /// the runs (Arturo, 16/11: set aside, and a new one). It was save.antes-0.7.json (docs/FASE9.md §7, FASE10.md).
+        /// </summary>
+        public const string OutdatedLabel = "antes-de-las-runs";
+
+        /// <summary>
+        /// Copies of the campaign kept, one as each stage of it began (a node chosen, CampaignState.NodesPlayed; one a day
+        /// before the runs: Gameplay's review, 10/11, #11, with one backup only a save that wouldn't start left nothing to
+        /// go back to): the newest so many.
         /// </summary>
         public const int DayCopies = 5;
 
@@ -67,14 +76,14 @@ namespace Bastion.Net
         /// <summary>A line for the host's red.log; the room writes there too.</summary>
         public Action<string> Log { get; }
 
-        /// <summary>Where a campaign from before FreshRelease was put aside on loading, if one was (docs/FASE9.md §7, FASE10.md).</summary>
+        /// <summary>Where a campaign older than FreshCampaignVersion was put aside on loading (OutdatedLabel), if one was.</summary>
         public string? SetAside { get; private set; }
 
         /// <summary>The file Load read the game from: the save, or its backup.</summary>
         public string? Loaded { get; private set; }
 
-        /// <summary>The campaign day of the save on disk (Load's, then each Save's): a Save on another one keeps a copy (KeepDay).</summary>
-        private int? dayOnDisk;
+        /// <summary>The campaign stage of the save on disk (Load's, then each Save's): a Save on another one keeps a copy (KeepStage).</summary>
+        private int? stageOnDisk;
 
         /// <summary>StartAfresh: the next Load keeps a copy and reads nothing.</summary>
         private bool afresh;
@@ -98,12 +107,13 @@ namespace Bastion.Net
                 // The save, or the backup without one (Save stopped between its moves): kept as it is. If it can't be,
                 // KeepAside throws and the host doesn't open, rather than start over it.
                 var from = File.Exists(path) ? path : File.Exists(Backup) ? Backup : null;
-                if (from != null) Log($"[save] Partida nueva: la de antes queda en {KeepAside(NewCampaignLabel, from, false)}.");
-                dayOnDisk = null;
+                // One from before the runs under the name it would have had anyway: where the start screen said it is (OldCampaign).
+                if (from != null) Log($"[save] Partida nueva: la de antes queda en {KeepAside(Outdated(from) ? OutdatedLabel : NewCampaignLabel, from, false)}.");
+                stageOnDisk = null;
                 return null;
             }
             var save = LoadOnce();
-            dayOnDisk = save?.Campaign?.Day;
+            stageOnDisk = StageOf(save?.Campaign);
             return save;
         }
 
@@ -121,7 +131,7 @@ namespace Bastion.Net
         /// The campaign on disk as the room would go on with it, for the start screen's «Continuar partida» (0.12.24), read
         /// as Load reads it but moving nothing and saying nothing: the save, or its backup if it is missing or can't be
         /// read. Null without the campaign's rules, without a campaign, with one over, or with a save the room wouldn't
-        /// take (a newer Bastión's, one from before FreshRelease, one that can't be read).
+        /// take (a newer Bastión's, one older than FreshVersion, one that can't be read).
         /// </summary>
         public SavedCampaign? Peek()
         {
@@ -135,6 +145,40 @@ namespace Bastion.Net
                 return SavedCampaign.Of(save.Campaign, paused != null ? MissionName(paused) : null);
             }
             return null;
+        }
+
+        /// <summary>
+        /// For the start screen, with no campaign to go on with (Peek null): the file name a campaign from before the runs
+        /// is kept in (OutdatedLabel), or will be once the room opens, since the save or its backup is one; null without one.
+        /// Arturo's and Ana's campaign (16/11): with the start screen's «Nueva partida» they seldom see the lobby, where the
+        /// room says so (RoomMessage.SetAside). Like Peek, it moves nothing and says nothing.
+        /// </summary>
+        public string? PeekOutdated()
+        {
+            if (campaignRules == null || Peek() != null) return null;
+            var aside = Beside(OutdatedLabel);
+            if (File.Exists(aside) || Outdated(path) || Outdated(Backup)) return Path.GetFileName(aside);
+            return null;
+        }
+
+        /// <summary>Whether `file` holds a campaign older than FreshVersion (one the room keeps aside); false if it isn't there or can't be read.</summary>
+        private static bool Outdated(string file)
+        {
+            try
+            {
+                return File.Exists(file) && JToken.Parse(File.ReadAllText(file, Encoding.UTF8)) is JObject data && OutdatedCampaign(data);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is JsonException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>A save's campaign older than FreshVersion (`campaign: null`, TypeScript's skirmishes, none).</summary>
+        private static bool OutdatedCampaign(JObject data)
+        {
+            var version = (data["campaign"] as JObject)?["version"];
+            return version?.Type == JTokenType.Integer && (int)version < FreshVersion;
         }
 
         /// <summary>A mission left half played, as the lobby names it: the campaign's mission, or the map.</summary>
@@ -191,19 +235,19 @@ namespace Bastion.Net
                     error = "es de una versión más nueva de Bastión";
                     return false;
                 }
-                // A campaign from before FreshRelease can't take the new progression (docs/FASE9.md §7, FASE10.md): the file
-                // is kept aside as it is and the room starts in the lobby. If it can't be kept aside, the host stops
+                // A campaign older than FreshVersion doesn't go on (the runs, 16/11; the progression of the 0.7 before): the
+                // file is kept aside as it is and the room starts in the lobby. If it can't be kept aside, the host stops
                 // (KeepAside throws, past the catch below), rather than write over it.
-                // `campaign: null` in TypeScript's skirmishes: no campaign, as when it is missing.
-                var campaignVersion = (data["campaign"] as JObject)?["version"];
-                if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion < Campaign.FreshCampaignVersion)
+                if (OutdatedCampaign(data))
                 {
                     if (!keep) return true;
-                    SetAside = KeepAside($"antes-{FreshRelease}", file, false);
-                    Log($"[save] Partida de antes de la {FreshRelease}: guardada aparte en {SetAside}; se empieza en el vestíbulo.");
+                    SetAside = KeepAside(OutdatedLabel, file, false);
+                    Log($"[save] Partida de antes de las runs: guardada aparte en {SetAside}; se empieza en el vestíbulo.");
                     return true;
                 }
-                if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion > Campaign.CampaignVersion)
+                // `campaign: null` in TypeScript's skirmishes: no campaign, as when it is missing.
+                var campaignVersion = (data["campaign"] as JObject)?["version"];
+                if (campaignVersion?.Type == JTokenType.Integer && (int)campaignVersion > Campaign.RunsCampaignVersion)
                 {
                     error = "es de una versión más nueva de Bastión";
                     return false;
@@ -220,7 +264,7 @@ namespace Bastion.Net
                     return true;
                 }
                 save = data.ToObject<SaveFile>(Json.Serializer);
-                if (save?.Campaign != null && campaignRules != null && save.Campaign.Version != Campaign.CampaignVersion)
+                if (save?.Campaign != null && campaignRules != null && save.Campaign.Version < Campaign.RunsCampaignVersion)
                 {
                     // Whatever goes wrong bringing it up to date, the save is one that can't be read (persistence.ts migrate
                     // within its try): kept aside, never written over, and the host goes on.
@@ -246,13 +290,14 @@ namespace Bastion.Net
 
         /// <summary>
         /// What to go back to when the save is read but the room won't start with it (Room), newest first: the backup, then
-        /// the days' copies. Each with its label for the players («anterior», «dia-12»); not the file Load read.
+        /// the stages' copies. Each with its label for the players («anterior», «etapa-12»); not the file Load read. The days'
+        /// copies of before the runs (dia-N) are left as they are: their campaign doesn't go on.
         /// </summary>
         public List<(string Label, string File)> Copies()
         {
             var copies = new List<(string, string)>();
             if (File.Exists(Backup) && Backup != Loaded) copies.Add(("anterior", Backup));
-            foreach (var file in DayFiles()) copies.Add(($"dia-{DayOf(file)}", file));
+            foreach (var file in StageFiles()) copies.Add(($"{StagePrefix}{StageOf(file)}", file));
             return copies;
         }
 
@@ -343,47 +388,53 @@ namespace Bastion.Net
                 File.Move(path, Backup);
             }
             File.Move(tmp, path);
-            var day = data.Campaign?.Day;
-            if (day != null && day != dayOnDisk) KeepDay(day.Value);
-            dayOnDisk = day;
+            var stage = StageOf(data.Campaign);
+            if (stage != null && stage != stageOnDisk) KeepStage(stage.Value);
+            stageOnDisk = stage;
         }
 
+        /// <summary>The label of a stage's copy, before its number: etapa-3 (Lore's name for a node, 16/11).</summary>
+        private const string StagePrefix = "etapa-";
+
+        /// <summary>The stage a campaign is at, for its copies: the nodes chosen in it (NodesPlayed); null outside the runs.</summary>
+        private static int? StageOf(CampaignState? c) => c != null && Campaign.IsRuns(c) ? c.NodesPlayed ?? 0 : (int?)null;
+
         /// <summary>
-        /// The save as the campaign's day `day` began (the first written on it; a new campaign's first day too) as
-        /// &lt;name&gt;.dia-&lt;day&gt;.json, and only the newest DayCopies kept. One that can't be made is said, and the game
-        /// goes on.
+        /// The save as the campaign's stage `stage` began (the first written on it, as its node was chosen; a new campaign's
+        /// stage 0 too) as &lt;name&gt;.etapa-&lt;stage&gt;.json, and only the newest DayCopies kept. One that can't be made is
+        /// said, and the game goes on.
         /// </summary>
-        private void KeepDay(int day)
+        private void KeepStage(int stage)
         {
             try
             {
-                var copy = Beside($"dia-{day}");
+                var copy = Beside($"{StagePrefix}{stage}");
                 File.Copy(path, copy, true);
                 // Newest by when it was made (a copy may keep its source's time).
                 File.SetLastWriteTimeUtc(copy, DateTime.UtcNow);
-                foreach (var old in DayFiles().Skip(DayCopies)) File.Delete(old);
+                foreach (var old in StageFiles().Skip(DayCopies)) File.Delete(old);
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
-                Log($"[save] No se pudo guardar la copia del día {day}: {e.Message}");
+                Log($"[save] No se pudo guardar la copia de la etapa {stage}: {e.Message}");
             }
         }
 
-        /// <summary>The days' copies on disk, newest first (by when they were made, then by day).</summary>
-        private List<string> DayFiles()
+        /// <summary>The stages' copies on disk, newest first (by when they were made, then by stage).</summary>
+        private List<string> StageFiles()
         {
             var dir = Path.GetDirectoryName(path);
             if (string.IsNullOrEmpty(dir)) dir = ".";
             if (!Directory.Exists(dir)) return new List<string>();
-            return Directory.GetFiles(dir, $"{Path.GetFileNameWithoutExtension(path)}.dia-*.json")
-                .Where((f) => DayOf(f) != null)
-                .OrderByDescending((f) => File.GetLastWriteTimeUtc(f)).ThenByDescending((f) => DayOf(f))
+            return Directory.GetFiles(dir, $"{Path.GetFileNameWithoutExtension(path)}.{StagePrefix}*.json")
+                .Where((f) => StageOf(f) != null)
+                .OrderByDescending((f) => File.GetLastWriteTimeUtc(f)).ThenByDescending((f) => StageOf(f))
                 .ToList();
         }
 
-        private static int? DayOf(string file)
+        private static int? StageOf(string file)
         {
-            var m = Regex.Match(Path.GetFileName(file), @"\.dia-(\d{1,6})\.json$");
+            var m = Regex.Match(Path.GetFileName(file), $@"\.{StagePrefix}(\d{{1,6}})\.json$");
             return m.Success ? int.Parse(m.Groups[1].Value) : (int?)null;
         }
     }

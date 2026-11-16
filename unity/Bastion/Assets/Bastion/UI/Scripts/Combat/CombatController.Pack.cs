@@ -31,7 +31,14 @@ namespace Bastion.UI.Combat
             var dropped = v.Dropped ?? new List<DroppedLoot>();
             var underfoot = dropped.Where(d => Grid.SamePos(d.Pos, u.Pos)).ToList();
             var backpack = u.Backpack ?? new List<Loot>();
-            if (Content.Templates[u.Template].Team != Teams.Xcom || u.Template == TemplateIds.Vip || (!HasSpots && backpack.Count == 0 && underfoot.Count == 0)) return null;
+            if (Content.Templates[u.Template].Team != Teams.Xcom || u.Template == TemplateIds.Vip) return null;
+            // A run's soldier (H3): the pack in a grid, its kit and the floor (RunPackOf).
+            if (u.Pack != null)
+            {
+                var live = Commands(u) && u.Alive && CanAct();
+                return new PackView { Live = live, Locked = live && !HasCommand() ? HudText.Pack.Locked(PlayerName(State.Command)) : null, Run = RunPackOf(v, u, live) };
+            }
+            if (!HasSpots && backpack.Count == 0 && underfoot.Count == 0) return null;
             var size = u.PackSlots ?? Content.BackpackSlots;
             var pack = new PackView { Size = size, Live = Commands(u) && u.Alive && CanAct(), Tip = HudText.Pack.Tip(backpack.Count, size) };
             // The partner holds the command: what can be done is shown, each order saying why not yet (the engine's refusal).

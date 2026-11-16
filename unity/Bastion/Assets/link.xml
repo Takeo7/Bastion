@@ -1,0 +1,10 @@
+<!--
+  What IL2CPP's code stripping must leave whole (iOS, Arturo 7/11; the desktop's Mono doesn't strip). The engine and the
+  network are read and written by reflection: Net/Json.cs makes the commands, events and messages by type
+  (Activator.CreateInstance) and Newtonsoft sets their properties; BasePieces.StateProperties copies GameState's; the
+  combat's EventPlayer reads an event's «Unit». A member nothing calls by name may still be needed, so both go whole.
+-->
+<linker>
+  <assembly fullname="Bastion.Engine" preserve="all"/>
+  <assembly fullname="Bastion.Net" preserve="all"/>
+</linker>

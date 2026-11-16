@@ -109,8 +109,8 @@ namespace Bastion.Client
             Life.SetCamp(bare);
         }
 
-        /// <summary>For the labs: these cells kept clear of those out, as a building's ghost keeps them (Ghost: KeepClear).</summary>
-        public void LifeKeepClear(IReadOnlyList<Vector2Int> cells) => KeepClear(cells);
+        /// <summary>For the labs: these cells kept clear of those out (as a building's ghost kept them, before the runs).</summary>
+        public void LifeKeepClear(IReadOnlyList<Vector2Int> cells) => life?.KeepClear(cells?.Select(c => new Vec2 { X = c.x, Y = c.y }));
 
         /// <summary>Those out about the clearing given as they are (claro.html's vida: the lab's), not from a campaign; shown on the Asentamiento's tab.</summary>
         public void SetLife(IReadOnlyList<LifeEntry> entries)
@@ -163,7 +163,7 @@ namespace Bastion.Client
                 double across = dx * Math.Cos(yaw) - dz * Math.Sin(yaw);
                 if (Math.Abs(along) < Lata.Length / 2 + 1 && Math.Abs(across) < Lata.Width / 2 + 1) return true;
             }
-            return Js.Hypot(x - armoryAt.x, z - armoryAt.y) < 2 || Js.Hypot(x - soldierAt.x, z - soldierAt.y) < 1.5;
+            return Js.Hypot(x - soldierAt.x, z - soldierAt.y) < 1.5;
         }
 
         /// <summary>Those out on the Asentamiento's tab, none on the others (screen.ts render: setLife).</summary>

@@ -2215,6 +2215,12 @@ namespace Bastion.UI.Combat
                     control.Sfx.Search(place);
                     if (units != null) await units.Rummage(u.Id, place + new Vector3(0.9f, 0.6f, 0), stop);
                     else await Wait(0.6f);
+                    if (room.Packed != null || room.Floor != null)
+                    {
+                        FoundGear(Chest(u.Id), u.Name, room.Packed, room.Floor);
+                        await Wait(0.5f);
+                        return;
+                    }
                     Float(Chest(u.Id), Lore.FindLabel(room.Loot), room.Loot?.Weapon != null ? "callout" : room.Loot != null ? "heal" : "info");
                     if (room.Loot != null) control.Sfx.Found(place);
                     // The seed comes from the event, so both players read the same line.
@@ -2562,6 +2568,13 @@ namespace Bastion.UI.Combat
                     control.Sfx.Search(place);
                     if (units != null) await units.Rummage(u.Id, place, stop);
                     else await Wait(0.6f);
+                    // A run's (H3): the things themselves, what went into the pack and what stayed at its feet.
+                    if (searched.Packed != null || searched.Floor != null)
+                    {
+                        FoundGear(place + Vector3.up, u.Name, searched.Packed, searched.Floor);
+                        await Wait(0.5f);
+                        return;
+                    }
                     Float(place + Vector3.up, Lore.FindLabel(searched.Loot), searched.Loot?.Weapon != null ? "callout" : searched.Loot != null ? "heal" : "info",
                         searched.Loot?.Weapon != null ? Ui.WeaponIcon(Content.FoundWeapons[searched.Loot.Weapon].Weapon) : null);
                     if (searched.Loot != null) control.Sfx.Found(place);
@@ -3132,6 +3145,22 @@ namespace Bastion.UI.Combat
                 default:
                     return "El enemigo sabe dónde estáis.";
             }
+        }
+
+        /// <summary>
+        /// What a run's search found (H3: the event's Packed and Floor), over it and in the log: the things by Lore's names
+        /// («Granada · 12 §»), and what didn't fit in the pack, left at its feet; «Nada» when nothing.
+        /// </summary>
+        void FoundGear(Vector3 at, string who, List<Placed> packed, List<Bastion.Engine.Gear> floor)
+        {
+            string Name(Bastion.Engine.Gear g) => g.Kind == GearKinds.Supplies ? Lore.GearThe(g.Kind, g.Type, g.Count) : Lore.GearName(g.Kind, g.Type, g.Count);
+            var into = (packed ?? new List<Placed>()).Select(p => Name(p.Gear)).ToList();
+            var left = (floor ?? new List<Bastion.Engine.Gear>()).Select(Name).ToList();
+            var all = into.Concat(left).ToList();
+            var weapon = (packed ?? new List<Placed>()).Select(p => p.Gear).Concat(floor ?? new List<Bastion.Engine.Gear>()).Any(g => g.Kind == GearKinds.Weapon);
+            Float(at, all.Count == 0 ? HudText.Found.Nothing : string.Join(" · ", all.Take(3)) + (all.Count > 3 ? " …" : ""), weapon ? "callout" : all.Count > 0 ? "heal" : "info");
+            if (all.Count > 0) control.Sfx.Found(at);
+            Log(HudText.Found.Line(who, into, left), weapon ? "#ffd23a" : all.Count > 0 ? "#6dff9a" : null);
         }
 
         /// <summary>Which edge of the map a tile is nearest to, as the radio says it (the map's top row is the north).</summary>

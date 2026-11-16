@@ -89,6 +89,13 @@
     rotate: 0deg;
 }
 
+/* With the finger (docs/IOS.md, phase 2): the plate up on the left, under the top strip, its cards two a row (SquadList),
+   so that the keys have the foot of the screen to themselves on a Duo open (1001 × 704). */
+.touch .squad {
+    top: 64px;
+    bottom: auto;
+}
+
 /* The keys and «Terminar turno» in one row, the clock under them as wide (UI-04, UI-05): as wide as its row, its middle at
    the screen's (HudRoot moves it right when the squad's plate would reach it). */
 .actions {

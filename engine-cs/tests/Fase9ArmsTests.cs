@@ -80,8 +80,10 @@ namespace Bastion.Engine.Tests
             Assert.Null(Abilities.AbilityBlocker(s, u, AbilityIds.Slash));
         }
 
-        [Fact(DisplayName = "weapons wear › Apaños mends 40 of a partner's weapon alongside, once a mission")]
-        public void ApanosMends40OfAPartnersWeaponAlongside()
+        // Apaños mended 40 of a partner's weapon alongside, once a mission, till the runs: it is Rebuscar now (Arturo, 16/11;
+        // H3), the room the soldier stands in searched again (RunFightTests). Nothing mends a weapon any more.
+        [Fact(DisplayName = "weapons wear › Apaños is Rebuscar now: it mends nothing, and outside a room it can't be used")]
+        public void ApanosIsRebuscarNow()
         {
             var s = Field();
             AddUnit(s, "s1", TemplateIds.Rookie, 1, 1, extra: (u) =>
@@ -97,10 +99,10 @@ namespace Bastion.Engine.Tests
             });
             AddUnit(s, "z1", TemplateIds.Zombie, 11, 11);
             var ctx = new CommandContext { Slot = 0, Connected = new[] { 0 }, Rng = new Rng(1) };
-            var r = Rules.ExecuteCommand(s, Ability("s1", AbilityIds.PatchUp, target: "s2"), ctx);
-            if (!r.Ok) throw new Exception(r.Error);
-            Assert.Equal(60, mate.Arms!.Condition);
-            Assert.False(Rules.ExecuteCommand(s, Ability("s1", AbilityIds.PatchUp, target: "s2"), ctx).Ok);
+            var r = Rules.ExecuteCommand(s, Ability("s1", AbilityIds.PatchUp), ctx);
+            Assert.Equal((false, "Solo dentro de una habitación."), (r.Ok, r.Error));
+            Assert.Equal(20, mate.Arms!.Condition);
+            Assert.Equal(AbilityTargets.Self, Content.Abilities[AbilityIds.PatchUp].Target);
         }
 
         // ------------------------------------------------------------ improvements

@@ -49,6 +49,14 @@ namespace Bastion.UI.Strategy
         public TopView Top()
         {
             var c = State;
+            // The runs: the chapter and the stash's supplies, no more (no day, siege, rations nor Marea).
+            if (c.Stash != null)
+                return new TopView
+                {
+                    Chapter = StrategyText.Runs.Chapter(c.Chapter ?? 1),
+                    DayTip = Tip(StrategyText.Runs.Chapter(c.Chapter ?? 1), StrategyText.Runs.ChapterTip),
+                    Stores = { new StoreView { Id = "supplies", Value = Gears.Supplies(c.Stash).ToString(), TipName = StrategyText.Stash.Supplies, Tip = StrategyText.Sentences(StrategyText.Stash.SuppliesTip) } },
+                };
             var level = Level;
             var v = new TopView
             {
@@ -169,34 +177,15 @@ namespace Bastion.UI.Strategy
         public NavView Nav(string view)
         {
             var c = State;
-            Fresh.Load(c);
-            var news = MapNews(c);
-            News.Load(c, news.Select(n => n.key));
-            var v = new NavView { Hidden = view == "squad" || view == "debrief" };
-            var items = Tabs.ToList();
-            if (c.ActiveMission != null) items.Add(("squad", "Escuadra"));
+            // The runs' base (H2): Almacén, Soldados, Mejoras and Salir; on an expedition, its map alone (the base's tabs
+            // come back with the squad).
+            var v = new NavView { Hidden = view == "squad" || view == "debrief" || view == "runmap" };
             var promotions = c.Soldiers.Where(s => s.Owner == Slot && s.Alive && Campaign.CanSpendPoints(c, s)).ToList();
             var partner = Partner;
-            // Where this player has something new a level brought (freshViews): a building's upgrade only if one can take it.
-            var freshViews = new HashSet<string>(Fresh.Fresh(Level)
-                .Where(t => t.RaisePiece == null || c.Bastion.Pieces.Any(p => p.Piece == t.RaisePiece && (p.Level ?? 1) == t.RaiseTo - 1))
-                .Select(t => t.View));
-            foreach (var (id, label) in items)
+            foreach (var (id, label) in new[] { ("stash", StrategyText.Stash.Head), ("barracks", "Soldados"), ("upgrades", StrategyText.Runs.UpgradesHead), ("squad", StrategyText.Runs.Start2) })
             {
-                var tab = new TabView { Id = id, Label = label, On = view == id, Urgent = id == "squad" };
-                // A tab's number is only for news not looked at yet, and goes once the screen is visited.
-                if (id == "geoscape" && view != "geoscape")
-                {
-                    var unseen = news.Where(n => !News.Seen(n.key)).ToList();
-                    if (unseen.Count > 0)
-                    {
-                        tab.Count = unseen.Count.ToString();
-                        tab.CountUrgent = unseen.Any(n => n.urgent);
-                        tab.Tip = string.Join(" · ", unseen.Select(n => n.label));
-                    }
-                }
-                tab.New = freshViews.Contains(id) && tab.Count == null;
-                // Only one's own: a soldier's skills are its owner's alone, there or not (playtest 18/10 #42). No talents (Lore, C1).
+                var tab = new TabView { Id = id, Label = label, On = view == id };
+                // Only one's own: a soldier's skills are its owner's alone, there or not (playtest 18/10 #42).
                 if (id == "barracks" && promotions.Count > 0)
                 {
                     tab.Count = $"▲{promotions.Count}";

@@ -131,6 +131,18 @@ namespace Bastion.UI.Strategy
             var soldier = c.Soldiers.FirstOrDefault(s => s.Id == picked);
             if (soldier != null && pick.Draft != null && pick.Draft.Soldier == soldier.Id) v.Customizer = Customizer(soldier, pick.Draft);
             else if (soldier != null) v.Sheet = Sheet(c, soldier);
+            // The runs: the kit is Almacén's, and nobody is recruited (the free one comes alone).
+            if (c.Stash != null)
+            {
+                v.Recruit = null;
+                if (v.Sheet != null)
+                {
+                    v.Sheet.Arms.Clear();
+                    v.Sheet.Armor = null;
+                    v.Sheet.Belt.Clear();
+                    v.Sheet.Care = null;
+                }
+            }
             return v;
         }
 

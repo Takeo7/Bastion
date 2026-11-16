@@ -258,6 +258,10 @@ namespace Bastion.Engine
                     if (Looting.RoomSearched(s, room)) return "Esta habitación ya está registrada.";
                     break;
                 }
+                case AbilityIds.PatchUp:
+                    // Rebuscar (Arturo, 16/11): the room it stands in, already searched or not.
+                    if (Looting.RoomAt(s, u.Pos) == null) return "Solo dentro de una habitación.";
+                    break;
                 case AbilityIds.OpenDoor:
                     if (DoorTiles(s, u, TileKinds.Door).Count == 0) return "No hay ninguna puerta cerrada a tu lado.";
                     break;
@@ -409,7 +413,6 @@ namespace Bastion.Engine
                     return TakedownTargets(s, u);
                 case AbilityIds.Revival:
                 case AbilityIds.FirstAid:
-                case AbilityIds.PatchUp:
                     return AllyTargets(s, u, ability);
             }
             if (def.Target == Engine.AbilityTargets.Melee && Content.IsAttack(ability)) return MeleeTargets(s, u, ability).Select((o) => o.Target).ToList();
@@ -522,7 +525,7 @@ namespace Bastion.Engine
             else if (ability == AbilityIds.Suppression) noise = Content.AttackWeapon(u, AbilityIds.Shoot).Noise;
             else noise = !string.IsNullOrEmpty(def.Explosive) ? Content.Weapons[def.Explosive!].Noise : 0;
             // Sin hacer ruido (docs/FASE9.md): searching and opening boxes in silence. A silencer halves a shot's noise.
-            if (u.Mods.Quiet != 0 && (ability == AbilityIds.Search || ability == AbilityIds.SearchRoom)) return 0;
+            if (u.Mods.Quiet != 0 && (ability == AbilityIds.Search || ability == AbilityIds.SearchRoom || ability == AbilityIds.PatchUp)) return 0;
             if (ability == AbilityIds.Stone) noise += u.Mods.StoneNoise;
             if (Content.FiresPrimary(u, ability) && Content.HasMod(u, WeaponModIds.Silencer)) noise = (int)Math.Ceiling(noise / 2.0);
             return noise;

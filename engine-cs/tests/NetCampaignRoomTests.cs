@@ -29,7 +29,7 @@ namespace Bastion.Engine.Tests
         {
             if (MigrationFails) throw new KeyNotFoundException("una pieza que ya no existe");
             Migrated++;
-            c.Version = Campaign.CampaignVersion;
+            c.Version = Campaign.RunsCampaignVersion;
             return c;
         }
 
@@ -44,7 +44,8 @@ namespace Bastion.Engine.Tests
 
         public CampaignState CreateCampaign(IReadOnlyList<int> slots, Rng rng)
         {
-            return new CampaignState { Version = Campaign.CampaignVersion, Day = 1, Level = 2, Players = slots.ToList(), Soldiers = slots.SelectMany(SoldiersOf).ToList() };
+            // The version the host goes on with (SaveStore.FreshVersion); not one of runs for the engine (no stash).
+            return new CampaignState { Version = Campaign.RunsCampaignVersion, Day = 1, Level = 2, Players = slots.ToList(), Soldiers = slots.SelectMany(SoldiersOf).ToList() };
         }
 
         public void OpeningMission(CampaignState c)
@@ -68,6 +69,15 @@ namespace Bastion.Engine.Tests
             Pads++;
         }
 
+        public bool SquadOpen(CampaignState c) => c.ActiveMission != null;
+
+        public bool Regroup(CampaignState c, IReadOnlyList<int> connected) => false;
+
+        /// <summary>Soldiers handed to each slot (Runs.HandOver): what HandOver gives them, once each.</summary>
+        public Dictionary<int, int> Hands = new Dictionary<int, int>();
+
+        public int HandOver(CampaignState c, int slot, IReadOnlyList<int> connected) => Hands.Remove(slot, out var n) ? n : 0;
+
         public CampaignResult ExecuteCampaignCommand(CampaignState c, CampaignCommand cmd, int slot, IReadOnlyList<int> connected, Rng rng)
         {
             switch (cmd)
@@ -88,9 +98,12 @@ namespace Bastion.Engine.Tests
             }
         }
 
+        /// <summary>A launch with nothing to launch, as a run's fight before H3 (LaunchMission null with the launch said).</summary>
+        public bool NoMission;
+
         public (GameState state, string name)? LaunchMission(CampaignState c, Rng rng)
         {
-            if (c.ActiveMission == null) return null;
+            if (c.ActiveMission == null || NoMission) return null;
             c.MissionsFlown = (c.MissionsFlown ?? 0) + 1;
             LastMission = new GameState
             {
@@ -218,6 +231,45 @@ namespace Bastion.Engine.Tests
             Assert.Contains("s1a", state["squad"]!.Select((x) => (string)x!));
             Assert.Equal("base", (string?)Last(pepe, "room")["phase"]);
             Assert.Equal(1, rig.Campaign.Pads);
+        }
+
+        [Fact]
+        public void ALaunchWithNothingToLaunchTellsBothTheCampaignAndStaysOnTheBase()
+        {
+            // A run's fight before H3 made its missions (Gameplay, 16/11): the order said to launch, the engine had none.
+            using var rig = new Rig();
+            var (ana, pepe) = rig.Base();
+            rig.Campaign.NoMission = true;
+            rig.Say(ana, Ccmd(new { type = "launch", ready = true }));
+            rig.Say(pepe, Ccmd(new { type = "launch", ready = true }));
+            Assert.Equal("base", rig.Room.Summary().phase);
+            Assert.NotEmpty(ana.Take("campaign"));
+            Assert.NotEmpty(pepe.Take("campaign"));
+            Assert.Empty(ana.Take("snapshot"));
+            Assert.Contains("[campaña] La orden lanzaba una misión, pero no hay ninguna que lanzar.", rig.Log);
+        }
+
+        [Fact]
+        public void OneWhoJoinsARunWithoutSoldiersInItIsHandedSome()
+        {
+            // Runs.HandOver (16/11): asked for whoever is in, as they come back to the base; the campaign goes to both if
+            // anyone got any, though nobody new joined it.
+            using var rig = new Rig();
+            var (ana, pepe) = rig.Base();
+            var token = (string)JObject.Parse(File.ReadAllText(rig.SavePath))["seats"]![1]!["token"]!;
+            pepe.Close("se va");
+            rig.Room.Pump();
+            while (ana.Heard.TryDequeue(out _)) { }
+            rig.Campaign.Hands[1] = 2;
+            pepe = rig.Join("Pepe", token);
+            Assert.False(rig.Campaign.Hands.ContainsKey(1));
+            Assert.NotEmpty(ana.Take("campaign"));
+            // Back again, with soldiers in it: nothing for the partner to hear.
+            pepe.Close("se va");
+            rig.Room.Pump();
+            while (ana.Heard.TryDequeue(out _)) { }
+            rig.Join("Pepe", token);
+            Assert.Empty(ana.Take("campaign"));
         }
 
         [Fact]
@@ -380,7 +432,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(2, (int)room["savedCampaign"]!["level"]!);
             // A skirmish would lose it: not before it is finished.
             rig.Say(ana, new { t = "start" });
-            Assert.Equal("Antes, acabad la misión de la campaña que está a medias: «Continuar campaña».", (string?)ana.Take("error").Single()["message"]);
+            Assert.Equal("Antes, acabad la etapa a medias: «Continuar campaña».", (string?)ana.Take("error").Single()["message"]);
             ana.Take("snapshot");
             rig.Say(ana, new { t = "continueCampaign" });
             Assert.Equal("mission", (string?)Last(pepe, "room")["phase"]);
@@ -419,20 +471,16 @@ namespace Bastion.Engine.Tests
         {
             using var rig = new Rig();
             Directory.CreateDirectory(rig.Dir);
-            var save = new JObject { ["version"] = 6, ["seats"] = new JArray(), ["phase"] = "base", ["mode"] = "campaign", ["campaign"] = new JObject { ["version"] = 15, ["day"] = 40 }, ["rng"] = new JArray(1, 2, 3, 4) };
+            var save = new JObject { ["version"] = 6, ["seats"] = new JArray(), ["phase"] = "base", ["mode"] = "campaign", ["campaign"] = new JObject { ["version"] = SaveStore.FreshVersion - 1, ["day"] = 40 }, ["rng"] = new JArray(1, 2, 3, 4) };
             File.WriteAllText(rig.SavePath, save.ToString());
             rig.Room = rig.Make();
             Assert.Equal("lobby", rig.Room.Summary().phase);
-            Assert.True(File.Exists(Path.Combine(rig.Dir, "save.antes-0.7.json")));
-            Assert.Equal("save.antes-0.7.json", (string?)Last(rig.Join("Ana"), "room")["setAside"]);
-            // An older version of today's: migrated.
-            save["campaign"]!["version"] = 24;
-            File.WriteAllText(rig.SavePath, save.ToString());
-            rig.Room = rig.Make();
-            Assert.Equal(1, rig.Campaign.Migrated);
-            Assert.Equal("base", rig.Room.Summary().phase);
+            Assert.True(File.Exists(Path.Combine(rig.Dir, "save.antes-de-las-runs.json")));
+            Assert.Equal("save.antes-de-las-runs.json", (string?)Last(rig.Join("Ana"), "room")["setAside"]);
+            // None is migrated: the runs' first (SaveStore.FreshVersion) is the newest (Campaign.RunsCampaignVersion).
+            Assert.Equal(0, rig.Campaign.Migrated);
             // From a newer Bastión: not read, moved aside as it is.
-            save["campaign"]!["version"] = Campaign.CampaignVersion + 1;
+            save["campaign"]!["version"] = Campaign.RunsCampaignVersion + 1;
             File.WriteAllText(rig.SavePath, save.ToString());
             rig.Room = rig.Make();
             Assert.True(File.Exists(Path.Combine(rig.Dir, "save.ilegible.json")));

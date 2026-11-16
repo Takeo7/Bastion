@@ -56,19 +56,12 @@ namespace Bastion.UI.Strategy
             visits++;
             if (!string.IsNullOrEmpty(tour)) _ = TestSteps.Run(tour, step =>
             {
-                if (step == "unwalk") Bastion.Client.Settlement.Instance?.WalkAbout(false);
-                else BaseRun.Do(control, step);
+                BaseRun.Do(control, step);
                 return true;
             }, destroyCancellationToken);
-            // Walking about the clearing (Arte's): the panels off, how to walk at the bottom.
-            walkingOf = Bastion.Client.Settlement.Instance;
-            if (walkingOf != null) walkingOf.WalkingChanged += root.Walking;
             // Last: what NetLink held for the base comes in as it is listened to, and what it throws ends Start there.
             net.Message += OnMessage;
         }
-
-        /// <summary>The clearing whose walk the screens follow.</summary>
-        Bastion.Client.Settlement walkingOf;
 
         /// <summary>
         /// For tests with the app (BASTION_PESTANAS=1 with Red's BASTION_FOTOS): the first time on the base, once the
@@ -86,7 +79,7 @@ namespace Bastion.UI.Strategy
                 while (control?.State == null) await Awaitable.WaitForSecondsAsync(0.25f, ct);
                 for (var waited = 0f; root.ModalOpen && waited < 15; waited += 0.25f) await Awaitable.WaitForSecondsAsync(0.25f, ct);
                 await Awaitable.WaitForSecondsAsync(1.5f, ct);
-                var tabs = new[] { "geoscape", "engineering", "barracks", "facilities" };
+                var tabs = new[] { "stash", "barracks", "upgrades", "squad" };
                 for (var i = 0; i < tabs.Length; i++)
                 {
                     Step($"pestaña {tabs[i]}", () => control.OnTab(tabs[i]));
@@ -94,17 +87,13 @@ namespace Bastion.UI.Strategy
                     Shot(folder, $"pestana-{i + 1}-{tabs[i]}");
                     await Awaitable.WaitForSecondsAsync(0.5f, ct);
                 }
-                var c = control.State;
-                var other = c.Offers.FirstOrDefault(o => o.Id != c.ActiveMission && o.Siege != true && !o.Final);
-                if (net.Hosting && other != null)
-                {
-                    Step($"propuesta: {other.Name}", () =>
+                // The host proposes an upgrade (Mejoras), which goes to a vote with the partner here.
+                if (net.Hosting)
+                    Step("propuesta: mejora", () =>
                     {
-                        control.OnTab("geoscape");
-                        control.OnOffer(other.Id);
-                        control.OnMapAction("deploy");
+                        control.OnTab("upgrades");
+                        control.OnUpgrade(Bastion.Engine.UpgradeIds.Sight);
                     });
-                }
                 for (var waited = 0f; control.State.Proposal == null && waited < 10; waited += 0.25f) await Awaitable.WaitForSecondsAsync(0.25f, ct);
                 if (control.State.Proposal != null)
                 {
@@ -180,7 +169,6 @@ namespace Bastion.UI.Strategy
         void OnDestroy()
         {
             if (net != null) net.Message -= OnMessage;
-            if (walkingOf != null) walkingOf.WalkingChanged -= GetComponent<StrategyRoot>().Walking;
         }
 
         void OnMessage(ServerMessage m)
@@ -208,28 +196,19 @@ namespace Bastion.UI.Strategy
                 case ErrorMessage error:
                     control.Note(error.Message);
                     break;
-                case PartnerBaseCursorMessage cursor:
-                    control.PartnerCursor(cursor.Slot, cursor.Piece, cursor.X, cursor.Y, cursor.Rot);
-                    break;
             }
         }
 
-        /// <summary>Esc for the base (the board, the menu); B, Construir.</summary>
+        /// <summary>Esc for the base (the grids, the board, the menu).</summary>
         void Update()
         {
-            var keys = Keyboard.current;
             var root = GetComponent<StrategyRoot>();
             if (control == null || !root.Ready) return;
-            control.Tick();
             // F12: a capture of the screen (Red, 28/10).
-            if (keys != null && keys.f12Key.wasPressedThisFrame) Bastion.UI.App.Screenshots.Take(root.Toast);
-            // Not with Cmd or Ctrl held: the system's (Shortcuts).
-            if (keys == null || Bastion.UI.App.Shortcuts.Elsewhere(keys)) return;
-            // Walking about the clearing, Esc is the walk's (Arte's: it ends it in its LateUpdate, so Walking is still on here).
-            var walking = Bastion.Client.Settlement.Instance != null && Bastion.Client.Settlement.Instance.Walking;
-            if (keys.escapeKey.wasPressedThisFrame && !walking) control.Escape();
-            // B: in and out of Construir (screen.ts onKey), not while a name is typed.
-            else if (keys.bKey.wasPressedThisFrame && !walking && !root.Typing) control.ToggleBuild();
+            if (Bastion.Client.GameInput.Down(Bastion.Client.GameInput.Key.Screenshot)) Bastion.UI.App.Screenshots.Take(root.Toast);
+            // Not with Cmd or Ctrl held: the system's (GameInput.SystemHeld).
+            if (!Bastion.Client.GameInput.HasKeys || Bastion.Client.GameInput.SystemHeld) return;
+            if (Bastion.Client.GameInput.Down(Bastion.Client.GameInput.Key.Back)) control.Escape();
         }
     }
 }

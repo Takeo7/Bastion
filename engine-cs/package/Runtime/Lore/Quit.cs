@@ -19,10 +19,10 @@ namespace Bastion.Engine
             public const string Refuse = "Seguir";
         }
 
-        /// <summary>For the host, with the partner connected: the server stops with the app. «La partida está en tu ordenador: si sales, Ana se desconecta hasta que vuelvas a abrirla.»</summary>
+        /// <summary>For the host, with the partner connected: the server stops with the app. «Alojas tú la partida: si sales, Ana se desconecta hasta que vuelvas a abrirla.» Not «en tu ordenador»: on iOS it is an iPad or an iPhone (Lore, 7/11).</summary>
         public static string QuitHostWarning(string partner)
         {
-            return $"La partida está en tu ordenador: si sales, {partner} se desconecta hasta que vuelvas a abrirla.";
+            return $"Alojas tú la partida: si sales, {partner} se desconecta hasta que vuelvas a abrirla.";
         }
 
         /// <summary>For the guest in a mission, with the host connected: the turns go on, and an absent player's soldiers never act.</summary>

@@ -54,7 +54,7 @@ namespace Bastion.Engine.Tests
             Seats = new List<SavedSeat?> { new SavedSeat { Slot = 0, Name = "Ana", Token = "t0" }, null },
             Mode = "campaign",
             State = mission,
-            Campaign = new CampaignState { Version = Campaign.CampaignVersion, Day = day, Level = 2, Doom = 3, MissionsFlown = day - 1, Outcome = outcome, Players = new List<int> { 0 } },
+            Campaign = new CampaignState { Version = Campaign.RunsCampaignVersion, Day = day, Level = 2, Doom = 3, MissionsFlown = day - 1, Outcome = outcome, Players = new List<int> { 0 } },
         };
 
         private string[] Files() => Directory.Exists(dir) ? Directory.GetFiles(dir).Select(Path.GetFileName).OrderBy((f) => f).ToArray()! : new string[0];
@@ -150,6 +150,65 @@ namespace Bastion.Engine.Tests
             Host(again);
             Assert.Equal(1, Store(Beside($"{SaveStore.NewCampaignLabel}-2")).Peek()!.Day);
             Assert.Equal(7, Store(Beside(SaveStore.NewCampaignLabel)).Peek()!.Day);
+        }
+
+        /// <summary>A save with a campaign older than SaveStore.FreshVersion (Arturo's and Ana's on the runs' first day).</summary>
+        private void WriteOutdated(string? path = null)
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(path ?? SavePath, $"{{\"version\":6,\"seats\":[],\"phase\":\"base\",\"mode\":\"campaign\",\"campaign\":{{\"version\":{SaveStore.FreshVersion - 1},\"day\":40}}}}");
+        }
+
+        [Fact]
+        public void TheStartScreenSaysWhereTheCampaignFromBeforeTheRunsIs()
+        {
+            var aside = $"save.{SaveStore.OutdatedLabel}.json";
+            // Not hosted yet: nothing to go on with, and where it will be; looking moves nothing and says nothing.
+            WriteOutdated();
+            Assert.Null(Store().Peek());
+            Assert.Equal(aside, Store().PeekOutdated());
+            Assert.Equal(new[] { "save.json" }, Files());
+            Assert.Empty(log);
+            // Hosted: kept aside, and the room's saves (the lobby's) take over; the start screen still says where it is.
+            var room = Host(Store());
+            var ana = Join(room, "Ana");
+            Assert.Equal(aside, (string?)ana.Take("room").Last()["setAside"]);
+            Assert.Contains(aside, Files());
+            Assert.Null(Store().Peek());
+            Assert.Equal(aside, Store().PeekOutdated());
+            // A campaign of the runs: «Continuar partida», and nothing more to say.
+            Say(room, ana, new { t = "newCampaign" });
+            Assert.NotNull(Store().Peek());
+            Assert.Null(Store().PeekOutdated());
+        }
+
+        [Fact]
+        public void ANewGameOverACampaignFromBeforeTheRunsKeepsItWhereTheStartScreenSaid()
+        {
+            WriteOutdated();
+            var before = File.ReadAllText(SavePath);
+            var store = Store();
+            store.StartAfresh();
+            Host(store);
+            Assert.Equal(before, File.ReadAllText(Beside(SaveStore.OutdatedLabel)));
+            Assert.DoesNotContain(Files(), (f) => f.Contains(SaveStore.NewCampaignLabel));
+        }
+
+        [Fact]
+        public void WithNoCampaignFromBeforeTheRunsThereIsNothingToSay()
+        {
+            Assert.Null(Store().PeekOutdated());
+            Write(CampaignSave(3));
+            Assert.Null(Store().PeekOutdated());
+            Write(new SaveFile { Seats = new List<SavedSeat?> { null, null }, Mode = "skirmish" });
+            Assert.Null(Store().PeekOutdated());
+            // Without the campaign's rules the room keeps none aside either.
+            WriteOutdated();
+            Assert.Null(new SaveStore(SavePath).PeekOutdated());
+            // Only the backup is one (the room stopped between its moves): it will be kept aside too.
+            File.Delete(SavePath);
+            WriteOutdated(Beside("anterior"));
+            Assert.Equal($"save.{SaveStore.OutdatedLabel}.json", Store().PeekOutdated());
         }
 
         [Fact]

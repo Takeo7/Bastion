@@ -26,3 +26,9 @@
     font-size: 12px;
     color: var(--t-muted);
 }
+
+/* With the finger (Arturo's Duo, 8/11): the soldier's sheet takes the top left's row (Hud.uss .touch .squad), so the strip
+   goes under it, clear of the sheet and the cards beside it. */
+.touch .mini-map {
+    top: 102px;
+}

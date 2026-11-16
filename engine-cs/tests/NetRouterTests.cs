@@ -196,6 +196,24 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public async Task WithoutUpnpOnlyNatPmpIsAsked()
+        {
+            // iOS (Arturo, 7/11): no multicast without Apple's entitlement, so no UPnP search; a router with only UPnP
+            // isn't found.
+            using var igd = new FakeIgd();
+            using var ssdp = new FakeSsdp(igd.Location);
+            var places = ssdp.Places();
+            places.Upnp = false;
+            places.Pmp.Add(new IPEndPoint(IPAddress.Loopback, FreeUdpPort()));
+            var lines = new List<string>();
+            using var router = RouterPort.Open(Game, (l) => { lock (lines) lines.Add(l); }, places);
+            await Settled(router);
+            Assert.Equal(RouterState.NoRouter, router.State);
+            Assert.Empty(igd.Calls);
+            lock (lines) Assert.Contains("[router] ningún router contesta por NAT-PMP (sin UPnP: aquí no hay multidifusión)", lines);
+        }
+
+        [Fact]
         public void AddressesOffTheInternetAreTold()
         {
             foreach (var a in new[] { "10.0.0.1", "172.16.4.1", "172.31.255.1", "192.168.1.1", "100.64.0.1", "100.127.3.4", "169.254.1.1", "0.0.0.0" })

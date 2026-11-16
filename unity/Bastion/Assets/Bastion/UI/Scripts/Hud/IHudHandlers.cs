@@ -42,6 +42,10 @@ namespace Bastion.UI.Hud
         void OnFloor(int dir);
         /// <summary>The game's menu (Esc), open or closed.</summary>
         void OnMenu();
+        /// <summary>With the finger, «»» held or let go: the enemy's turn faster, or at the chosen speed (the desktop's space bar held).</summary>
+        void OnHurry(bool on);
+        /// <summary>With the finger, a half of the compass touched: the camera a quarter turn left (−1) or right (1), as Q and E.</summary>
+        void OnTurnCamera(int dir);
         /// <summary>An order on the shown soldier's backpack or tile (hud.ts onItem): the engine's `item` command.</summary>
         void OnItem(PackOrder order);
         /// <summary>A fallen soldier's rucksack taken (onTakeAll): one thing after another while they fit.</summary>
@@ -77,6 +81,8 @@ namespace Bastion.UI.Hud
         public void OnSheet(string unit) { }
         public void OnFloor(int dir) { }
         public void OnMenu() { }
+        public void OnHurry(bool on) { }
+        public void OnTurnCamera(int dir) { }
         public void OnItem(PackOrder order) { }
         public void OnTakeAll(System.Collections.Generic.List<string> ids) { }
         public void OnSwap(string take, int drop) { }
@@ -112,6 +118,8 @@ namespace Bastion.UI.Hud
         public void OnSheet(string unit) => Target.OnSheet(unit);
         public void OnFloor(int dir) => Target.OnFloor(dir);
         public void OnMenu() => Target.OnMenu();
+        public void OnHurry(bool on) => Target.OnHurry(on);
+        public void OnTurnCamera(int dir) => Target.OnTurnCamera(dir);
         public void OnItem(PackOrder order) => Target.OnItem(order);
         public void OnTakeAll(System.Collections.Generic.List<string> ids) => Target.OnTakeAll(ids);
         public void OnSwap(string take, int drop) => Target.OnSwap(take, drop);

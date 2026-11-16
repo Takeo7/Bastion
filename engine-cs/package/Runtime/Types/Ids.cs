@@ -329,6 +329,11 @@ namespace Bastion.Engine
         public const string Stick = "stick";
         /// <summary>The pistol at the side, the Armería's since 1/11 (Arturo: nobody starts with one); see Arms.Pistol.</summary>
         public const string Pistol = "pistol";
+        /// <summary>
+        /// The runs' (H0-DISENO §2): the blade every soldier starts with, a gear; it fights as the default one (WeaponIds.Knife).
+        /// Not in All nor in Content.FoundWeapons, which the campaign of before reads: its def is Content.Knife.
+        /// </summary>
+        public const string Knife = "knife";
 
         public static readonly IReadOnlyList<string> All = new[]
         {

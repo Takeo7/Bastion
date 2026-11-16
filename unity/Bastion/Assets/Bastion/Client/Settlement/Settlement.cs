@@ -48,17 +48,10 @@ namespace Bastion.Client
             // No fade left over the next scene's 3D.
             Shader.SetGlobalFloat("_StageFade", 0);
             life?.ClearAll();
-            // The figures' graphs with them, Soldados', the row's and the posts' (the camp's go with ClearAll): left, each
+            // The figures' graphs with them, Soldados' and the row's (the camp's go with ClearAll): left, each
             // stayed till the app quit (UI, 10/11: «PlayableGraph was not destroyed», FigureAnimator, leaving the base).
             showAnim?.Dispose();
             foreach (var s in standers) s.anim?.Dispose();
-            foreach (var p in postStanders.Values) p.stander.anim?.Dispose();
-            // (The pointer back, if it was walking about.)
-            if (Walking)
-            {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
-            }
         }
 
         /// <summary>The clearing as a battlefield with nobody on it: the map its siege would be fought on (clearingArt.ts clearingState).</summary>
@@ -88,7 +81,6 @@ namespace Bastion.Client
             pieceGrid = null;
             Snow = snow;
             var state = ClearingState(@base, snow);
-            ground = state;
             // (Its fill fixed, opposite the sun: clearingArt.ts aim.)
             Mood.Show(snow ? Mood.SnowDay : Mood.Day).FillOpposite = true;
             if (Map == null)
@@ -117,6 +109,12 @@ namespace Bastion.Client
 
         string shownKey;
 
+        /// <summary>The map's builder as last shown (Show): the fire pits' places, a piece's or a prop's models alone.</summary>
+        MapBuilder built;
+
+        /// <summary>The loose improvements' models (syntyManifest.ts WEAPON_PARTS scope2, silencer2): the catalog's and the gear pictures'.</summary>
+        public const string Scope = "SM_Wep_Mod_Attach_Scope_02", Silencer = "SM_Wep_Mod_Attach_Silencer_02";
+
         /// <summary>The campaign's clearing (screen.ts on each state): its base, under snow while it is still winter (Campaign.Wintry), its vehicle.</summary>
         public void Show(CampaignState campaign)
         {
@@ -124,13 +122,9 @@ namespace Bastion.Client
             // Their clothes, by the order they joined, unless they chose (wardrobe.ts setRoster).
             Dress.Roster(campaign.Soldiers);
             vehicle = Campaign.VehicleOf(campaign);
-            // A siege to fight: the Escuadra is the clearing from above, its posts (screen.ts siegeNow, shotFor).
-            SiegeNow = Campaign.ActiveOffer(campaign)?.Siege == true;
             LifeOf(campaign);
             Show(campaign.Bastion, Campaign.Wintry(campaign));
             LifeView();
-            // The posts' soldiers as this campaign has them (given before it, or dressed otherwise now).
-            if (posts.Count > 0) PostFigures(posts);
         }
 
         void MakeLata()
@@ -176,10 +170,7 @@ namespace Bastion.Client
             StepShowcase(Time.deltaTime);
             StepLineup(Time.deltaTime);
             StepFlames(Time.deltaTime);
-            StepBuild(Time.time);
             StepLife(Time.deltaTime);
-            StepWalkAbout(Time.deltaTime);
-            StepPosts(Time.deltaTime);
             // Again every frame, as ShadowFit the battle's: «Gráficos» changed here puts on another level's pipeline asset, with
             // its own 50 m.
             if (Map != null) Mood.ShadowReach(ShadowMetres);

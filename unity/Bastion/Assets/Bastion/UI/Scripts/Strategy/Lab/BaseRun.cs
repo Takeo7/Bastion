@@ -147,51 +147,6 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>The tile the test's pointer was last put on.</summary>
-        static Vector2Int pointed;
-
-        /// <summary>The test's pointer onto a tile of the clearing (kept pressed if it was): one named, or the nearest fit for the tool.</summary>
-        static bool Point(BaseController control, string[] part)
-        {
-            var clearing = Bastion.Client.Settlement.Instance;
-            var b = clearing?.Base;
-            if (b == null) return false;
-            Vector2Int? tile = null;
-            var relative = part.Length > 2 && (part[1].StartsWith("+") || part[1].StartsWith("-")) && ClearingInput.Fake != null;
-            if (part.Length > 2 && int.TryParse(part[1], out var x) && int.TryParse(part[2], out var y)) tile = relative ? pointed + new Vector2Int(x, y) : new Vector2Int(x, y);
-            else
-            {
-                // From the middle outwards: the first that fits.
-                var mid = new Vector2Int(b.Width / 2, b.Height / 2);
-                var input = control.Clearing;
-                foreach (var t in Enumerable.Range(0, b.Width * b.Height).Select(i => new Vector2Int(i % b.Width, i / b.Width)).OrderBy(t => (t - mid).sqrMagnitude))
-                {
-                    // free:<n>: room for a line of n to the east from there.
-                    var n = part.Length > 2 && int.TryParse(part[2], out var k) ? k : 1;
-                    var fits = part.Length > 1 && part[1] == "tree"
-                        ? Base.TreeAt(b, t.x, t.y) && Base.FellBlocker(b, t.x, t.y) == null
-                        : part.Length > 1 && part[1] == "post"
-                        ? input.Soldier != null && control.PostBlocker(input.Soldier, t.x, t.y) == null
-                        : input.Piece != null && (n > 1
-                            ? control.LineBlocker(input.Piece, Enumerable.Range(0, n).Select(i => new Vec2 { X = t.x + i, Y = t.y }).ToList(), input.Rot) == null
-                            : ClearingInput.PlaceAt(input.Piece, input.Rot, t) is var at && control.Blocker(input.Piece, at.x, at.y, input.Rot) == null);
-                    if (!fits) continue;
-                    tile = t;
-                    break;
-                }
-            }
-            if (tile == null)
-            {
-                Debug.LogWarning($"[base-run] ninguna casilla para {string.Join(":", part)}");
-                return false;
-            }
-            var down = ClearingInput.Fake?.down ?? false;
-            pointed = tile.Value;
-            var s = clearing.Camera.WorldToScreenPoint(clearing.TileWorld(tile.Value.x, tile.Value.y));
-            ClearingInput.Fake = (new Vector2(s.x, s.y), down);
-            Debug.Log($"[base-run] puntero en {tile.Value.x},{tile.Value.y}");
-            return false;
-        }
-
         /// <summary>The click; true when it is an order, whose answer the next step waits for.</summary>
         internal static bool Do(BaseController control, string step)
         {
@@ -204,16 +159,10 @@ namespace Bastion.UI.Strategy
             {
                 case "tab": control.OnTab(S(1)); return false;
                 case "soldier": control.OnSoldier(mine.ElementAtOrDefault(N(1))?.Id); return false;
-                case "offer": control.OnOffer(c.Offers.ElementAtOrDefault(N(1))?.Id); return false;
-                case "zone": control.OnZone(c.Regions.ElementAtOrDefault(N(1))?.Id, false); return false;
-                case "map": control.OnMapAction(S(1)); return S(1) != "squad";
                 case "recruit": control.OnRecruit(); return true;
                 case "launch": control.OnLaunch(); return true;
                 case "wait": control.OnWait(); return true;
                 case "squad": control.OnSquadToggle(mine.ElementAtOrDefault(N(1))?.Id, S(2) != "off"); return true;
-                case "armory-tab": control.OnArmoryTab(S(1)); return false;
-                case "armory-pick": control.OnArmoryPick(string.Join(":", part.Skip(1))); return false;
-                case "armory": control.OnArmoryAction(S(1), S(2)); return true;
                 case "board": control.OnBoard(); return false;
                 case "unlock": control.OnUnlock(S(1)); return true;
                 case "vote": control.OnVote(S(1) == "yes"); return true;
@@ -222,15 +171,12 @@ namespace Bastion.UI.Strategy
                 case "modal": control.OnModalButton(N(1)); return false;
                 case "continue": control.OnDebriefContinue(); return false;
                 case "customize": control.OnCustomize(); return false;
-                // The keys, as BaseSession takes them: Esc (BaseController.Escape) and B (into Construir and back).
-                // A proposal's «Ver» without a partner: the clearing's camera to a tile, or to the n-th piece of the base.
-                case "see-tile":
-                    control.SeeTileForTest(N(1), N(2));
-                    return false;
-                case "see-piece":
-                    control.SeePieceForTest(c.Bastion.Pieces.ElementAtOrDefault(N(1))?.Id);
-                    Debug.Log($"[base-run] see-piece: {c.Bastion.Pieces.ElementAtOrDefault(N(1))?.Piece}");
-                    return false;
+                // The runs (16/11): a stage, back to the base, an upgrade, a ware, on from a stop.
+                case "node": control.OnNode(S(1)); return true;
+                case "endrun": control.OnEndRun(); return true;
+                case "upgrade": control.OnUpgrade(S(1)); return true;
+                case "buy": control.OnBuy(S(1)); return true;
+                case "leave": control.OnLeaveStop(); return true;
                 case "choice":
                     control.OpenChoice(S(1));
                     Debug.Log($"[base-run] choice:{S(1)} → {control.OpenNow()}");
@@ -240,28 +186,14 @@ namespace Bastion.UI.Strategy
                     control.OnMenu();
                     if (!string.IsNullOrEmpty(S(1))) FindFirstObjectByType<StrategyRoot>().MenuPage(S(1));
                     return false;
+                // The keys, as BaseSession takes them: Esc (BaseController.Escape).
                 case "esc":
-                case "b":
-                    if (part[0] == "esc") control.Escape();
-                    else control.ToggleBuild();
+                    control.Escape();
                     Debug.Log($"[base-run] {part[0]} → {control.OpenNow()}");
                     return false;
                 case "custom-choice": control.OnCustomChoice(S(1), S(2), false); return false;
                 case "custom-color": control.OnCustomColor(S(1), S(2), false); return false;
                 case "custom": control.OnCustomAction(S(1)); return S(1) == "save" || S(1) == "copy";
-                case "take": control.OnPieceTake(S(1)); return false;
-                case "fell": control.OnFell(); return false;
-                case "walk": control.OnWalk(); return false;
-                case "turn": control.Clearing.Turn(1); return false;
-                case "point": return Point(control, part);
-                case "press":
-                case "release":
-                    if (ClearingInput.Fake is var f && f != null) ClearingInput.Fake = (f.Value.at, part[0] == "press");
-                    var hand = control.Clearing;
-                    var seen = ClearingInput.Fake is var g && g != null ? Bastion.Client.Settlement.Instance?.TileAt(g.Value.at) : null;
-                    var over = ClearingInput.Fake is var o && o != null && FindFirstObjectByType<StrategyRoot>().Over(o.Value.at);
-                    Debug.Log($"[base-run] {part[0]} en {pointed.x},{pointed.y} (TileAt: {seen}, sobre un panel: {over}): {hand.Tool} {hand.Piece ?? hand.Soldier}{(hand.Soldier != null ? $", puesto: {control.PostBlocker(hand.Soldier, pointed.x, pointed.y) ?? "sí"}" : "")}");
-                    return part[0] == "release";
                 default:
                     Debug.LogWarning($"[base-run] paso desconocido: {step}");
                     return false;

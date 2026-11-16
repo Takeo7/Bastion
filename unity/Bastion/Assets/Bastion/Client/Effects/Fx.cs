@@ -1074,6 +1074,51 @@ namespace Bastion.Client.Effects
         }
 
         /// <summary>
+        /// The Brute's roar (UnitViews.Brute Roar; Gameplay 16/11, the Chillón's scream without its rings): the dust round its
+        /// feet blown out all ways at once, low along the ground, and a faint ring of it rolling out over the floor, twice,
+        /// as the air shakes. `feet` where it stands, `size` its size over a figure's (its dust as much bigger).
+        /// </summary>
+        public void Roar(Vector3 feet, float size = 1)
+        {
+            Load();
+            var texture = TextureOf(f => f.smokeSprite);
+            float dim = Mood.IsNight ? NightPuff : 1;
+            var dust = Hex(0x9a8a72);
+            for (int i = 0; i < RoarPuffs; i++)
+            {
+                float a = (i + Rand(-0.3f, 0.3f)) * Mathf.PI * 2 / RoarPuffs;
+                var way = new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a));
+                // (Small and see-through, out from under it fast: 0.3 across at half opacity hid its legs in a cloud.)
+                var p = Sprite(feet + (way * Rand(0.3f, 0.45f) * size + Vector3.up * Rand(0.03f, 0.08f)) * T, texture, dust * dim, 0.16f * size * Rand(0.8f, 1.2f) * PuffSprite, 0.32f);
+                Spawn(p, Rand(0.8f, 1.1f), 1.8f, drag: 2.4f, velocity: way * Rand(2, 2.6f) * size + Vector3.up * Rand(0.08f, 0.18f));
+            }
+            var ring = TextureOf(f => f.shockRing);
+            for (int k = 0; k < 2; k++)
+            {
+                float late = k * 0.22f;
+                After(late, () => Decal(feet, ring, dust * dim, 0.9f * size, 0.6f, 0.4f, 3.5f));
+            }
+        }
+
+        /// <summary>How many puffs the Brute's roar blows out (Roar).</summary>
+        const int RoarPuffs = 14;
+
+        /// <summary>
+        /// Something heavy coming down on the ground at `at` (a body falling: the Brute dying, a soldier it knocks down; its
+        /// blow landing): dust thrown out low along the ground round it, `size` as much of it (1, a body's).
+        /// </summary>
+        public void Thud(Vector3 at, float size = 1)
+        {
+            var ground = new Vector3(at.x, FloorOf(at + Vector3.up * 0.1f * T), at.z);
+            Puffs(ground + Vector3.up * 0.04f * T, Hex(0x9a8a72), Mathf.Max(2, Mathf.RoundToInt(5 * size)), size: 0.2f * Mathf.Sqrt(size), spread: 0.3f * size, rise: 0.12f, away: 0.7f * size,
+                life: 1f, grow: 1.4f, opacity: 0.4f);
+        }
+
+        /// <summary>A puff of dust off a heavy foot running (the Brute's charge: UnitViews.Brute), `at` on the ground under it.</summary>
+        public void Kick(Vector3 at) =>
+            Puffs(new Vector3(at.x, FloorOf(at + Vector3.up * 0.1f * T), at.z) + Vector3.up * 0.04f * T, Hex(0x9a8a72), 1, size: 0.18f, spread: 0.15f, rise: 0.2f, away: 0.15f, life: 0.9f, grow: 1.3f, opacity: 0.35f);
+
+        /// <summary>
         /// A bite or a claw that gets in: blood spurting away from the attacker (`from`), drops of 4–9 cm falling from the
         /// chest to the ground half a metre off and gone as they land, and there a soft pool that spreads as it fades (the
         /// 3D review's L-01, 10/11: 10–21 cm balls flew up over the head and went out in the air, the pool was whole and

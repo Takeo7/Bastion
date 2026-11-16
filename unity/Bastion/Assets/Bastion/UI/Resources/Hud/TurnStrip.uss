@@ -82,3 +82,14 @@
 .player--ready .player__status {
     color: var(--t-good);
 }
+
+/* With the finger, «Ceder» by the partner (TurnStrip; only with the finger): a key of the bar's steel, a finger tall. */
+.player__pass {
+    height: 44px;
+    margin: 0 0 0 8px;
+    padding: 0 12px;
+    border-width: 0;
+    font-size: 14px;
+    color: var(--t-accent);
+    background-color: var(--m-steel);
+}

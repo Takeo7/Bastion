@@ -254,7 +254,7 @@ namespace Bastion.Engine
         public string Sex { get; } // Sexes
     }
 
-    public static class Content
+    public static partial class Content
     {
         public const int ApPerTurn = 2;
 
@@ -610,7 +610,8 @@ namespace Bastion.Engine
             [AbilityIds.Revival] = new AbilityDef { Id = AbilityIds.Revival, Name = "Espabilar", Description = "Quita a un compañero de al lado el aturdimiento, la desorientación o el pánico. Sin botiquín.", Target = AbilityTargets.Ally, Ap = 1, EndsTurn = false, Range = 1.5 },
             [AbilityIds.Restoration] = new AbilityDef { Id = AbilityIds.Restoration, Name = "Pasar visita", Description = "Cura 2 a cada compañero a 4 casillas o menos y les quita los estados alterados. Una vez por misión.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = false, Charge = ChargeIds.Restoration, Range = 4 },
             [AbilityIds.ElbowRoom] = new AbilityDef { Id = AbilityIds.ElbowRoom, Name = "Hacerse sitio", Description = "Un Tajo a cada enemigo que tengas al lado.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = false, Cooldown = 3, Weapon = AbilityWeapons.Melee },
-            [AbilityIds.PatchUp] = new AbilityDef { Id = AbilityIds.PatchUp, Name = "Apaños", Description = "Arregla 40 de estado del arma propia o de un compañero de al lado. Una vez por misión.", Target = AbilityTargets.Ally, Ap = 1, EndsTurn = false, Charge = ChargeIds.PatchUp, Range = 1.5 },
+            // Rebuscar (Arturo, 16/11; Lore's names, .dev-snapshots/lore/runs/NOMBRES.md §7): Apaños till then, when weapons wore.
+            [AbilityIds.PatchUp] = new AbilityDef { Id = AbilityIds.PatchUp, Name = "Rebuscar", Description = "Registra otra vez la habitación en la que estás, aunque ya esté registrada. Una vez por combate.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = false, Charge = ChargeIds.PatchUp, Noise = 2 },
             [AbilityIds.Mindspin] = new AbilityDef { Id = AbilityIds.Mindspin, Name = "Grito", Description = "El Chillón grita: desorienta o asusta a los soldados cercanos, y todo zombi a 16 casillas lo oye y viene.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = true, Cooldown = 3, Range = 14, Psi = true, Noise = 16 },
             [AbilityIds.Reanimate] = new AbilityDef { Id = AbilityIds.Reanimate, Name = "Despertar a un muerto", Description = "El grito del Chillón despierta un cadáver, que se levanta como Zombi.", Target = AbilityTargets.Corpse, Ap = 1, EndsTurn = true, Cooldown = 4, Range = 12, Psi = true, Noise = 8 },
             [AbilityIds.Burst] = new AbilityDef { Id = AbilityIds.Burst, Name = "Reventón", Description = "Al morir o al llegar a un soldado revienta: 3 de daño a quien tenga al lado.", Target = AbilityTargets.Self, Ap = 1, EndsTurn = true, Radius = 1.5, Explosive = WeaponIds.BloaterBurst },

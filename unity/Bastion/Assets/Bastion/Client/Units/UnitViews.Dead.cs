@@ -64,7 +64,22 @@ namespace Bastion.Client.Units
                 Bloater("Slobber", "PolygonZombieBoss_02_C", "SM_Chr_Attach_Slobber_Hair_01"),
                 Bloater("Blobber", "PolygonZombieBoss_04_A", "SM_Chr_Attach_Blobber_Hair_01"),
             },
+            // The boss of the runs' first chapter (Arturo, 16/11: «el muerto único»): Boss Zombies' Brute, its hair, its
+            // bandana and its extra; a quarter bigger than the figures (Gameplay, 16/11: out of its tile a little, no matter).
+            ["brute"] = new[] { new DeadBody { prefab = "SM_Chr_ZombieBoss_Brute_01", body = "SM_Chr_ZombieBoss_Brute_01", scale = 1.25f, keep = new[] { "SM_Chr_Attach_Brute_Hair_01", "SM_Chr_Attach_Brute_Bandana_01", "SM_Chr_Attach_Brute_Extra_01" } } },
         };
+
+        /// <summary>Labs: the body every one of the dead in the lab is drawn with (a DeadBodies key: the Brute before the engine has it), or null.</summary>
+        public static string LabBody;
+
+        /// <summary>
+        /// Labs: the kind every one of the dead in the lab moves and acts as (its gait, its lean, its size's stride: the View's
+        /// template; "brute" before the engine has it, its rules the unit's own template's), or null: its own.
+        /// </summary>
+        public static string LabKind;
+
+        /// <summary>The kind `u`'s figure moves and acts as: its template, or the lab's (LabKind) for one of the dead.</summary>
+        static string KindOf(Unit u) => LabKind != null && u.Team != Teams.Xcom ? LabKind : u.Template;
 
         /// <summary>
         /// The City Zombies among the common dead in their own clothes (Arturo, 9/11: the twenty Biblioteca proposed, «sueltos
@@ -163,7 +178,7 @@ namespace Bastion.Client.Units
 
         /// <summary>A special one's figure, dealt among its kind's (Dealt; its build and size in `view`); null if it isn't one or its prefab is missing.</summary>
         static GameObject DeadFigureOf(Unit u, View view, FigureCatalog catalog) =>
-            DeadBodies.TryGetValue(u.Template, out var bodies) ? DeadFigureOf(bodies, view, catalog) : null;
+            DeadBodies.TryGetValue(LabBody != null && u.Team != Teams.Xcom ? LabBody : u.Template, out var bodies) ? DeadFigureOf(bodies, view, catalog) : null;
 
         /// <summary>One of `bodies` (POLYGON's dead), dealt (Dealt; its build and size in `view`); null if its prefab is missing.</summary>
         static GameObject DeadFigureOf(DeadBody[] bodies, View view, FigureCatalog catalog) =>
@@ -200,28 +215,36 @@ namespace Bastion.Client.Units
         /// up and its head back are the clip's, RoarFrom to RoarTo of it over the scream's 1.03 s on the upper body, and
         /// the lean back half (DeadPose): by hand, its arms rose 20 cm and its head stayed under its hair.
         /// </summary>
-        public async Awaitable Scream(string id, CancellationToken ct = default)
+        public async Awaitable Scream(string id, CancellationToken ct = default) => await Bellow(id, ScreamIn, ScreamHold, ScreamOut, RoarFrom, RoarTo, null, ct);
+
+        /// <summary>
+        /// The scream's body (Scream; the Brute's roar, UnitViews.Brute): in over `into`, held `hold`, the roar's clip from
+        /// `from` to `to` of it over all three; `peak` once it is all the way thrown back. Done after the hold; it lets go
+        /// over `out` by itself.
+        /// </summary>
+        async Awaitable Bellow(string id, float into, float hold, float @out, float from, float to, System.Action<View> peak, CancellationToken ct)
         {
             if (!views.TryGetValue(id, out var v))
             {
-                await Awaitable.WaitForSecondsAsync(ScreamIn + ScreamHold, ct);
+                await Awaitable.WaitForSecondsAsync(into + hold, ct);
                 return;
             }
             var roar = v.anim != null ? FigureCatalog.Load()?.Clip(RoarClip) : null;
             v.roar = roar != null;
             void Roar(float t)
             {
-                if (roar != null) v.anim.Scrub(roar, RoarFrom + (RoarTo - RoarFrom) * Mathf.Clamp01(t / (ScreamIn + ScreamHold + ScreamOut)), v.scream);
+                if (roar != null) v.anim.Scrub(roar, from + (to - from) * Mathf.Clamp01(t / (into + hold + @out)), v.scream);
             }
             float t = 0;
-            for (; t < ScreamIn; t += Time.deltaTime)
+            for (; t < into; t += Time.deltaTime)
             {
-                v.scream = Mathf.SmoothStep(0, 1, t / ScreamIn);
+                v.scream = Mathf.SmoothStep(0, 1, t / into);
                 Roar(t);
                 await Awaitable.NextFrameAsync(ct);
             }
             v.scream = 1;
-            for (; t < ScreamIn + ScreamHold; t += Time.deltaTime)
+            peak?.Invoke(v);
+            for (; t < into + hold; t += Time.deltaTime)
             {
                 Roar(t);
                 await Awaitable.NextFrameAsync(ct);
@@ -231,10 +254,10 @@ namespace Bastion.Client.Units
             {
                 try
                 {
-                    for (float u = 0; u < ScreamOut && v.scream > 0; u += Time.deltaTime)
+                    for (float u = 0; u < @out && v.scream > 0; u += Time.deltaTime)
                     {
-                        v.scream = 1 - Mathf.SmoothStep(0, 1, u / ScreamOut);
-                        Roar(ScreamIn + ScreamHold + u);
+                        v.scream = 1 - Mathf.SmoothStep(0, 1, u / @out);
+                        Roar(into + hold + u);
                         await Awaitable.NextFrameAsync();
                     }
                 }
@@ -275,6 +298,8 @@ namespace Bastion.Client.Units
             ["mec"] = (0.2f, 1.7f, 0.4f, 0),
             ["bloater"] = (0.12f, 2.6f, 0.8f, 0.46f),
             ["sectoid"] = (0.38f, 1, 1, 0),
+            // (The Brute hunched as the Chillón, «como un gorila»: Gameplay, 16/11.)
+            ["brute"] = (0.38f, 1, 1, 0),
         };
 
         /// <summary>syntyFigures.ts CADENCE: steps a second of each motion (MOTION_ORDER) at its own speed, the hips' roll once a stride (π each).</summary>
@@ -301,8 +326,9 @@ namespace Bastion.Client.Units
             if (live <= 0 && k <= 0) return;
             var style = DeadStyles.TryGetValue(v.template, out var s) ? s : DeadStyles["sectoid"];
             // (With the roar's clip its own trunk goes back: the lean back halved, not bent twice. A-28, 10/11.)
-            float lean = (style.lean + style.moving * v.anim.Moving) * live - k * (v.roar ? 0.25f : 0.5f);
-            float twist = v.anim.Sway(1.7f, TwistRates) * 0.12f * style.twist * live;
+            // (Charging, the Brute's trunk further down and turned, a shoulder ahead: UnitViews.Brute's Charge.)
+            float lean = (style.lean + style.moving * v.anim.Moving) * live - k * (v.roar ? 0.25f : 0.5f) + v.charge * ChargeLean;
+            float twist = v.anim.Sway(1.7f, TwistRates) * 0.12f * style.twist * live + v.charge * ChargeTwist;
             float roll = v.anim.Sway(1.3f, RollRates) * (0.05f + v.anim.Moving * 0.08f) * style.roll * live;
             var body = v.root.rotation;
             // A turn in the body's frame (rot Z by roll, then Y by twist, then X by lean: forward is a lean over).
@@ -366,8 +392,8 @@ namespace Bastion.Client.Units
             // (Dying, let down over DeathEase as its death comes in, life: not cut in the first frame, the death's clip over
             // the whole body from then on; the 3D review's A-04, 10/11.)
             if (DeadArmsOff || v.feeding || v.chestRest is not Quaternion rest || (!v.dead && v.anim.WholeShare > 0.01f) || v.life <= 0) return;
-            // (Roaring, the arms the roar's as far as it is in: A-28.)
-            float keep = v.life * (v.roar ? 1 - v.scream : 1);
+            // (Roaring, the arms the roar's as far as it is in: A-28. The Brute's blow and its charge, theirs: UnitViews.Brute.)
+            float keep = v.life * (v.roar ? 1 - v.scream : 1) * (1 - Mathf.Max(v.smash, v.charge));
             if (keep <= 0) return;
             var chest = ChestOf(a);
             if (chest == null) return;
@@ -379,12 +405,16 @@ namespace Bastion.Client.Units
                 float sway = v.anim.Sway(1.6f, ArmRates, s) * 0.05f;
                 // (0.10.1's model x is to its left: Unity's −x.)
                 var offset = new Vector3(-s * 0.12f * (1 - 0.7f * grab), -0.02f + aim * 0.12f + sway + grab * 0.05f, 0.4f + aim * 0.08f + grab * 0.12f) * scale;
+                // (The Brute's lower, its long arms hanging forward, not held up before its chest. UnitViews.Brute.)
+                if (Heavy(v)) offset += BruteArms * scale;
                 var target = chest.position + turn * (v.root.rotation * offset);
                 var pole = v.root.rotation * new Vector3(-s * 0.8f, -0.7f, -0.3f);
                 Transform s0 = a.GetBoneTransform(upper), s1 = a.GetBoneTransform(lower), s2 = a.GetBoneTransform(hand);
                 if (s0 == null || s1 == null || s2 == null) continue;
                 var was = (s0.rotation, s1.rotation, s2.rotation);
-                Reach(a, upper, lower, hand, target, pole, SoftReach * scale, true);
+                // (The Brute's elbows bent, its hands where the offset has them: straight, its long arms a quarter bigger
+                // reached 1.3 m ahead, into a soldier on the tile beside it. UnitViews.Brute.)
+                Reach(a, upper, lower, hand, target, pole, SoftReach * scale, !Heavy(v));
                 if (keep >= 1) continue;
                 // As much of the reach as is left of its life (and of a roar), from the shoulder down (each turn in the
                 // world, the parent's first).

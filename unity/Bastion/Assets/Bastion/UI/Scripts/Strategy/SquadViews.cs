@@ -176,6 +176,9 @@ namespace Bastion.UI.Strategy
         public bool Big;
         /// <summary>A better weapon than the usual (purple).</summary>
         public bool Better;
+        /// <summary>The runs: the gear's kind and type, for Arte's picture (GearPictures) in place of the icon.</summary>
+        public string Kind;
+        public string Type;
         public string Tip;
     }
 

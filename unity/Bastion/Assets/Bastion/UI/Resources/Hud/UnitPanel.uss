@@ -197,6 +197,17 @@
     align-items: flex-end;
 }
 
+/* With the finger the sheet is up at the top (Hud.uss .touch .squad): over it the slots fell behind the players' strip
+   (Arturo's Duo, 8/11). Under the sheet instead, right of the cards' plate (SquadList: two cards of 82 a row, 186 wide). */
+.touch .unit-pack {
+    bottom: auto;
+    top: 40px;
+    left: 196px;
+    right: auto;
+    margin-bottom: 0;
+    align-items: flex-start;
+}
+
 .pack-slots {
     flex-direction: row;
     flex-shrink: 0;

@@ -23,6 +23,8 @@ namespace Bastion.UI.Start
         public static string Invite(string name) => string.IsNullOrEmpty(name)
             ? "Quien juegue contigo verá tu partida en «Partida multijugador» de su app. Si no la ve, que pulse «Unirse por dirección» y escriba:"
             : $"Quien juegue contigo verá «Unirte a la partida de {name}» en «Partida multijugador». Si no le sale, que pulse «Unirse por dirección» y escriba:";
+        /// <summary>On iOS the game isn't announced on the network (NetLink.LanBlind): the address is the only way in (Lore, 7/11).</summary>
+        public const string InviteBlind = "Quien juegue contigo tiene que escribir en «Unirse por dirección» de su app:";
         /// <summary>Each of the host's addresses, by what it is (net.ts inviteLinks of the 0.10.1).</summary>
         public const string Lan = "En tu misma red";
         /// <summary>«Con Tailscale» (Lore, 01/11: «Por internet» is the router's alone now).</summary>
@@ -65,7 +67,7 @@ namespace Bastion.UI.Start
             var internet = router == RouterState.Open ? link.Invite ?? link.Internet : null;
             if (addresses.Count == 0 && internet == null) return null;
             var name = link.LastRoom?.Players.FirstOrDefault(p => p.Slot == link.Slot)?.Name ?? link.LastName;
-            var v = new Bastion.UI.Hud.InviteView { Line = Invite(name), Copy = Copy, Copied = Copied };
+            var v = new Bastion.UI.Hud.InviteView { Line = Bastion.Client.Net.NetLink.LanBlind ? InviteBlind : Invite(name), Copy = Copy, Copied = Copied };
             for (var i = 0; i < addresses.Count; i++)
                 if (i == 0 || addresses[i].Kind == "tailscale") v.Addresses.Add((addresses[i].Kind == "tailscale" ? Tailscale : Lan, addresses[i].Address));
             if (internet != null) v.Addresses.Add((Internet, internet));
@@ -90,7 +92,7 @@ namespace Bastion.UI.Start
         public const string NewCampaignAbout = "La base compartida, de principio a fin";
         public const string Skirmish = "Escaramuza";
         public const string SkirmishAbout = "Una misión suelta, sin consecuencias";
-        public const string SkirmishBlocked = "Antes, acabad la misión de la campaña";
+        public const string SkirmishBlocked = "Antes, acabad la etapa a medias";
         public const string Back = "Volver";
         public const string AskAgain = "¿Empezar de cero?";
         public const string AskAlone = "¿Empezar sin el otro jugador?";
@@ -103,17 +105,28 @@ namespace Bastion.UI.Start
         /// <summary>«8 salidas · Nivel 3 · Marea 5/12», or the mission left half played (lobby.ts renderMain).</summary>
         public static string Saved(SavedCampaign s)
         {
+            // The runs (Red, 16/11: Chapter is 0 in a campaign of before; Lore's words, TEXTOS-GUARDADO.md).
+            if (s.Chapter > 0)
+            {
+                if (s.InMission != null) return $"Capítulo {s.Chapter} · Etapa a medias: {s.InMission}";
+                var where = s.Row == null ? "En la base" : s.Row == 0 ? "Antes de la etapa 1" : $"Etapa {s.Row} de 7";
+                return $"Capítulo {s.Chapter} · {where} · {(s.Soldiers == 1 ? "1 soldado" : $"{s.Soldiers} soldados")} · {s.Supplies} §";
+            }
             if (s.InMission != null) return $"Misión a medias: {s.InMission}";
             var outings = Lore.OutingsMark(s.Missions);
             return $"{outings.Substring(0, 1)}{outings.Substring(1).ToLowerInvariant()} · Nivel {s.Level} · {Lore.DoomName(s.Level)} {s.Doom}/12";
         }
 
         /// <summary>The saved campaign the new one replaces (renderConfirm).</summary>
-        public static string Replaces(SavedCampaign s) => $"La campaña guardada ({Lore.OutingsMark(s.Missions).ToLowerInvariant()}) se sustituye por una nueva.";
+        public static string Replaces(SavedCampaign s) => s.Chapter > 0
+            ? $"La partida guardada (capítulo {s.Chapter}, {(s.NodesPlayed == 0 ? "sin etapas jugadas" : s.NodesPlayed == 1 ? "1 etapa jugada" : $"{s.NodesPlayed} etapas jugadas")}) se sustituye por una nueva."
+            : $"La campaña guardada ({Lore.OutingsMark(s.Missions).ToLowerInvariant()}) se sustituye por una nueva.";
 
         /// <summary>A campaign from before the 0.7 kept aside (setAsideNote).</summary>
         public static string SetAside(string file)
         {
+            // The campaign from before the expeditions (Red, 16/11: save.antes-de-las-runs.json; Lore's words).
+            if ((file ?? "").Contains("antes-de-las-runs")) return $"La campaña anterior no se puede continuar con esta versión. Queda guardada aparte, en {file}. Con «Nueva campaña» empezáis otra.";
             var release = System.Text.RegularExpressions.Regex.Match(file ?? "", @"antes-(\d+\.\d+)");
             return $"Vuestra campaña anterior está guardada aparte, en {file}: {(release.Success ? $"con la {release.Groups[1].Value}" : "con esta versión")} empieza una nueva.";
         }

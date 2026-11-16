@@ -64,7 +64,7 @@ namespace Bastion.UI.Hud
                 Ui.Text(mark.Label, "edge-mark__label", el);
                 var at = mark.World;
                 el.RegisterCallback<ClickEvent>(_ => look?.Invoke(at));
-                tips.Attach(el, $"Centrar la cámara en: {mark.Name} (O)");
+                tips.Attach(el, HudText.Keyed($"Centrar la cámara en: {mark.Name}", "O"));
                 el.style.display = DisplayStyle.None;
                 shown.Add(new Shown { View = mark, El = el, Arrow = arrow });
             }

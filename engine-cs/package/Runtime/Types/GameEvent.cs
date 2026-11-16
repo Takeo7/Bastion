@@ -593,6 +593,11 @@ namespace Bastion.Engine
         public string Unit { get; set; } = "";
         public Pos Tile { get; set; } = new Pos();
         public Loot? Loot { get; set; }
+        /// <summary>A run's fight (H3): the gear found that went into the searcher's pack (onto a pile where one lies), …</summary>
+        public List<Placed>? Packed { get; set; }
+        /// <summary>… what found no room and lies at its feet, and the gear counter after it (RunFight.NextGear).</summary>
+        public List<Gear>? Floor { get; set; }
+        public int? NextGear { get; set; }
     }
 
     /// <summary>A room searched, by its id (loot.ts roomAt; docs/FASE8.md §B); what it turned up, as `searched`.</summary>
@@ -602,6 +607,44 @@ namespace Bastion.Engine
         public string Unit { get; set; } = "";
         public int Room { get; set; }
         public Loot? Loot { get; set; }
+        /// <summary>A run's fight (H3): as SearchedEvent's.</summary>
+        public List<Placed>? Packed { get; set; }
+        public List<Gear>? Floor { get; set; }
+        public int? NextGear { get; set; }
+        /// <summary>Rebuscar (AbilityIds.PatchUp): a room searched again, already searched or not.</summary>
+        public bool? Again { get; set; }
+    }
+
+    /// <summary>
+    /// A run's pack in a fight (H3, RunPack): `gear` moved by `unit`, as `action` says (ItemActions): dropped at its feet;
+    /// taken from the floor, arranged or given into a pack at x, y (onto an equal pile there, as much as it takes); put in
+    /// a kit place (`slot`), what was there going to x, y of the pack. `ap`: the actions it took (0 or 1).
+    /// </summary>
+    public sealed class GearMovedEvent : GameEvent
+    {
+        public override string T => "gearMoved";
+        public string Unit { get; set; } = "";
+        public string Gear { get; set; } = "";
+        public string Action { get; set; } = ""; // ItemActions
+        /// <summary>Give: who gets it.</summary>
+        public string? To { get; set; }
+        /// <summary>Equip: the kit place.</summary>
+        public string? Slot { get; set; } // KitSlots
+        public int? X { get; set; }
+        public int? Y { get; set; }
+        public bool? Turned { get; set; }
+        public int Ap { get; set; }
+    }
+
+    /// <summary>A run's medicine used in a fight (H3), off its pile in the pack: on `target`, who heals as `healed` says.</summary>
+    public sealed class GearUsedEvent : GameEvent
+    {
+        public override string T => "gearUsed";
+        public string Unit { get; set; } = "";
+        public string Target { get; set; } = "";
+        public string Gear { get; set; } = "";
+        /// <summary>Without spending an action: Manos de enfermero. Absent, it takes one.</summary>
+        public bool? Free { get; set; }
     }
 
     /// <summary>The backpack (docs/FASE8.md §C): a thing left on the soldier's tile, free; it becomes `dropped` l&lt;n&gt;.</summary>

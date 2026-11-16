@@ -247,6 +247,126 @@ namespace Bastion.Engine
         public override string Type => "withdraw";
     }
 
+    // ------------------------------------------------- the runs (H0-DISENO §5)
+    // Only in a run campaign (Campaign.IsRuns); in one of before, «Esa orden no existe.». Without a vote: the gear, each
+    // player's own and the shared stash, never in a fight (Gears' refusals). With a vote: the upgrades and the run's way
+    // (Runs.Propose). What each refuses: Gears.*Refusal and Runs.*Refusal, which the UI may call too.
+
+    /// <summary>
+    /// A gear to the stash or a soldier, whole: in a grid (`slot` "pack", or the stash) at `x`, `y`, `turned`; onto an
+    /// equal pile it fills it up to Content.PileOf and the rest stays where it was; onto a taken kit place they swap.
+    /// </summary>
+    public sealed class MoveGearCommand : CampaignCommand
+    {
+        public override string Type => "moveGear";
+        /// <summary>Gear.id.</summary>
+        public string Gear { get; set; } = "";
+        /// <summary>GearPlaces.Stash or a soldier's id.</summary>
+        public string To { get; set; } = "";
+        /// <summary>On a soldier: KitSlots; the stash's is its grid, whatever this says.</summary>
+        public string Slot { get; set; } = KitSlots.Pack; // KitSlots
+        public int X { get; set; }
+        public int Y { get; set; }
+        public bool Turned { get; set; }
+    }
+
+    /// <summary>Part of a pile, `count` of it, as a new gear (or onto an equal pile) where MoveGearCommand would put it.</summary>
+    public sealed class SplitGearCommand : CampaignCommand
+    {
+        public override string Type => "splitGear";
+        public string Gear { get; set; } = "";
+        public int Count { get; set; }
+        public string To { get; set; } = "";
+        public string Slot { get; set; } = KitSlots.Pack; // KitSlots
+        public int X { get; set; }
+        public int Y { get; set; }
+        public bool Turned { get; set; }
+    }
+
+    /// <summary>Thrown away: the gear is gone, with what is mounted on it.</summary>
+    public sealed class DropGearCommand : CampaignCommand
+    {
+        public override string Type => "dropGear";
+        public string Gear { get; set; } = "";
+    }
+
+    /// <summary>A loose mod (a gear of kind mod; one of its pile) mounted on a firearm, Content.ModSlots at most.</summary>
+    public sealed class MountCommand : CampaignCommand
+    {
+        public override string Type => "mount";
+        /// <summary>The mod's Gear.id.</summary>
+        public string Mod { get; set; } = "";
+        /// <summary>The weapon's Gear.id.</summary>
+        public string Weapon { get; set; } = "";
+    }
+
+    /// <summary>A mod off a weapon, into the stash: only in the base, and only if it fits.</summary>
+    public sealed class UnmountCommand : CampaignCommand
+    {
+        public override string Type => "unmount";
+        /// <summary>The weapon's Gear.id.</summary>
+        public string Weapon { get; set; } = "";
+        public string Mod { get; set; } = ""; // WeaponModIds
+    }
+
+    /// <summary>A medicine between nodes: +3 health to `soldier`, up to the most.</summary>
+    public sealed class UseGearCommand : CampaignCommand
+    {
+        public override string Type => "useGear";
+        public string Gear { get; set; } = "";
+        public string Soldier { get; set; } = "";
+    }
+
+    /// <summary>The next level of an upgrade, with the stash's supplies (a vote).</summary>
+    public sealed class UpgradeCommand : CampaignCommand
+    {
+        public override string Type => "upgrade";
+        public string Upgrade { get; set; } = ""; // UpgradeIds
+    }
+
+    /// <summary>The squad goes out: the run of the chapter open (a vote).</summary>
+    public sealed class StartRunCommand : CampaignCommand
+    {
+        public override string Type => "startRun";
+    }
+
+    /// <summary>A node of the next row in sight (a vote): a fight launches, a stop is answered.</summary>
+    public sealed class ChooseNodeCommand : CampaignCommand
+    {
+        public override string Type => "chooseNode";
+        /// <summary>RunNode.id.</summary>
+        public string Node { get; set; } = "";
+    }
+
+    /// <summary>Back to the base, which ends the run (a vote): everyone healed, each pack with what it holds.</summary>
+    public sealed class EndRunCommand : CampaignCommand
+    {
+        public override string Type => "endRun";
+    }
+
+    /// <summary>The answer to the stop (a vote): an event's option 0 or 1; a survivor's 0 yes, 1 no.</summary>
+    public sealed class AnswerStopCommand : CampaignCommand
+    {
+        public override string Type => "answerStop";
+        public int Option { get; set; }
+    }
+
+    /// <summary>A ware of the Trade, paid with the supplies in the packs of the buyer's soldiers, into `soldier`'s pack.</summary>
+    public sealed class BuyWareCommand : CampaignCommand
+    {
+        public override string Type => "buyWare";
+        /// <summary>The ware's Gear.id.</summary>
+        public string Ware { get; set; } = "";
+        public string Soldier { get; set; } = "";
+    }
+
+    /// <summary>On from the stop to the map: alone at once; with two, once both have asked (`ready` false takes it back).</summary>
+    public sealed class LeaveStopCommand : CampaignCommand
+    {
+        public override string Type => "leaveStop";
+        public bool Ready { get; set; } = true;
+    }
+
     /// <summary>protocol.ts BaseView (baseViewSchema): screens of the strategy layer, XCOM 2 style (shown to the partner).</summary>
     public static class BaseViews
     {

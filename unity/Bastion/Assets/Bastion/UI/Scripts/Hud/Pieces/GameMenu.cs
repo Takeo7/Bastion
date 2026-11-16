@@ -163,7 +163,9 @@ namespace Bastion.UI.Hud
                     entry.SetEnabled(!waiting);
                     tips?.Attach(entry, waiting ? HudText.Menu.AbandonWaitingTip : view.AbandonTip);
                 }
-                if (view.Quit) Entry(card, view.QuitLabel, () => Choose(Quit));
+                // Not with the finger: iOS apps aren't closed from inside them (Apple; Application.Quit there looks like a crash. Red, 7/11;
+                // Gameplay, 8/11: wherever the game is played with the finger, the lab's too).
+                if (view.Quit && !Bastion.Client.GameInput.Touch) Entry(card, view.QuitLabel, () => Choose(Quit));
             }
             else if (page == "settings")
             {
@@ -264,10 +266,15 @@ namespace Bastion.UI.Hud
             return b;
         }
 
-        /// <summary>An entry with its key at its right end, and its help.</summary>
+        /// <summary>An entry with its key at its right end, and its help; with the finger, no key (docs/IOS.md: the keys out).</summary>
         Button Keyed(VisualElement card, string text, string key, string tip, Action click)
         {
             var entry = Row(card, text, click);
+            if (Bastion.Client.GameInput.Touch)
+            {
+                tips?.Attach(entry, tip);
+                return entry;
+            }
             Ui.Text(key, "game-menu__key", entry).pickingMode = PickingMode.Ignore;
             tips?.Attach(entry, $"{tip} ({key})");
             return entry;

@@ -13,6 +13,12 @@
     background-color: var(--m-steel);
 }
 
+/* With the finger (docs/IOS.md, phase 2): 50 px, still past Apple's 44, so the row fits a Duo open (1001 px). */
+.touch .ability {
+    width: 50px;
+    height: 50px;
+}
+
 .ability:hover {
     background-color: var(--m-steel-hi);
     border-top-color: var(--t-accent);
@@ -208,6 +214,11 @@
     background-color: var(--m-steel);
 }
 
+/* With the finger, as tall as the keys (50 px). */
+.touch .bar-moves {
+    height: 50px;
+}
+
 .bar-moves__value {
     font-size: 28px;
     color: #7fd4fa;
@@ -294,4 +305,15 @@
     font-size: 12px;
     white-space: normal;
     color: var(--t-warn);
+}
+
+/* The finger's «»» before «Terminar turno» while the enemy plays (TouchButtons): a key of the bar, its glyph as the
+   keys' figures. */
+.touch-hurry__glyph {
+    font-size: 26px;
+    color: #8f999f;
+}
+
+.touch-hurry.ability--active .touch-hurry__glyph {
+    color: var(--t-accent);
 }

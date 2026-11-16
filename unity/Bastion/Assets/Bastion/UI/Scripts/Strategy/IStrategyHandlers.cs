@@ -48,14 +48,6 @@ namespace Bastion.UI.Strategy
         void OnUnlock(string cell);
         void OnBoardClose();
 
-        // The Armería.
-        /// <summary>items or gear.</summary>
-        void OnArmoryTab(string tab);
-        /// <summary>A row of a list (its id: «i:grenade», «f:w100»…).</summary>
-        void OnArmoryPick(string id);
-        /// <summary>buy, craft, repair, mod (its id), unmod (its id), take, give (the soldier).</summary>
-        void OnArmoryAction(string action, string arg);
-
         // Escuadra and the debrief.
         /// <summary>A soldier in or out of the squad.</summary>
         void OnSquadToggle(string id, bool on);
@@ -63,41 +55,22 @@ namespace Bastion.UI.Strategy
         void OnLaunch();
         void OnSquadBack();
         void OnSquadRecruit();
-        /// <summary>The siege's defender in hand starts by the Bastión again (#58: its post taken back).</summary>
-        void OnPostHome();
-        void OnGoMap();
         void OnDebriefContinue();
-        /// <summary>A debrief line's button (Construir), by the line's place.</summary>
-        void OnDebriefLine(int index);
 
-        // The Mapa.
-        /// <summary>A zone: its marker on the valley (`mark`, its first mission picked too) or a Nido's or an errand's row.</summary>
-        void OnZone(string id, bool mark);
-        /// <summary>A mission of the list.</summary>
-        void OnOffer(string id);
+        // Soldados' «esperar un día» (the campaign of before).
         /// <summary>«Esperar un día»: this player's key.</summary>
         void OnWait();
-        /// <summary>«Escuchar» a rumour.</summary>
-        void OnListen(string rumor);
-        /// <summary>The sheet's buttons: deploy, squad, cancel, contact.</summary>
-        void OnMapAction(string action);
 
-        // The Asentamiento.
-        /// <summary>A piece of the palette taken up, to put on the clearing.</summary>
-        void OnPieceTake(string piece);
-        /// <summary>Talar taken up.</summary>
-        void OnFell();
-        /// <summary>The piece in hand (or the axe) let go.</summary>
-        void OnBuildDrop();
-        /// <summary>The card's buttons: mend, raise, levelUp, rearm, dismantle (asks), dismantleYes, dismantleNo.</summary>
-        void OnPieceAction(string action);
-        /// <summary>The card's ✕: the piece let go.</summary>
-        void OnPieceClose();
-        /// <summary>«Andar por la base».</summary>
-        void OnWalk();
 
-        /// <summary>The pointer went over something marked «Nuevo» (its key, fresh.ts): its mark goes.</summary>
-        void OnSeen(string key);
+
+        // The runs (H1): a stage of the map to go to (a vote with two), and back to the base, which ends the expedition.
+        void OnNode(string id);
+        void OnEndRun();
+        /// <summary>The Trueque: a ware, into the chosen soldier's pack; «Seguir» from a stop (with two, once both ask).</summary>
+        void OnBuy(string ware);
+        void OnLeaveStop();
+        /// <summary>Mejoras: the next level of one (a vote with two).</summary>
+        void OnUpgrade(string id);
     }
 
     /// <summary>Nobody answers: everything is ignored (before Bind).</summary>
@@ -105,6 +78,11 @@ namespace Bastion.UI.Strategy
     {
         public static readonly NoStrategyHandlers Instance = new NoStrategyHandlers();
         public void OnTab(string view) { }
+        public void OnNode(string id) { }
+        public void OnEndRun() { }
+        public void OnBuy(string ware) { }
+        public void OnLeaveStop() { }
+        public void OnUpgrade(string id) { }
         public void OnMenu() { }
         public void OnVote(bool accept) { }
         public void OnWithdraw() { }
@@ -124,29 +102,12 @@ namespace Bastion.UI.Strategy
         public void OnCustomAction(string action) { }
         public void OnUnlock(string cell) { }
         public void OnBoardClose() { }
-        public void OnArmoryTab(string tab) { }
-        public void OnArmoryPick(string id) { }
-        public void OnArmoryAction(string action, string arg) { }
         public void OnSquadToggle(string id, bool on) { }
         public void OnLaunch() { }
         public void OnSquadBack() { }
         public void OnSquadRecruit() { }
-        public void OnPostHome() { }
-        public void OnGoMap() { }
         public void OnDebriefContinue() { }
-        public void OnDebriefLine(int index) { }
-        public void OnZone(string id, bool mark) { }
-        public void OnOffer(string id) { }
         public void OnWait() { }
-        public void OnListen(string rumor) { }
-        public void OnMapAction(string action) { }
-        public void OnPieceTake(string piece) { }
-        public void OnFell() { }
-        public void OnBuildDrop() { }
-        public void OnPieceAction(string action) { }
-        public void OnPieceClose() { }
-        public void OnWalk() { }
-        public void OnSeen(string key) { }
     }
 
     /// <summary>The handlers the pieces hold, so Bind can change who answers without making them again.</summary>
@@ -154,6 +115,11 @@ namespace Bastion.UI.Strategy
     {
         public IStrategyHandlers Target = NoStrategyHandlers.Instance;
         public void OnTab(string view) => Target.OnTab(view);
+        public void OnNode(string id) => Target.OnNode(id);
+        public void OnEndRun() => Target.OnEndRun();
+        public void OnBuy(string ware) => Target.OnBuy(ware);
+        public void OnLeaveStop() => Target.OnLeaveStop();
+        public void OnUpgrade(string id) => Target.OnUpgrade(id);
         public void OnMenu() => Target.OnMenu();
         public void OnVote(bool accept) => Target.OnVote(accept);
         public void OnWithdraw() => Target.OnWithdraw();
@@ -173,28 +139,11 @@ namespace Bastion.UI.Strategy
         public void OnCustomAction(string action) => Target.OnCustomAction(action);
         public void OnUnlock(string cell) => Target.OnUnlock(cell);
         public void OnBoardClose() => Target.OnBoardClose();
-        public void OnArmoryTab(string tab) => Target.OnArmoryTab(tab);
-        public void OnArmoryPick(string id) => Target.OnArmoryPick(id);
-        public void OnArmoryAction(string action, string arg) => Target.OnArmoryAction(action, arg);
         public void OnSquadToggle(string id, bool on) => Target.OnSquadToggle(id, on);
         public void OnLaunch() => Target.OnLaunch();
         public void OnSquadBack() => Target.OnSquadBack();
         public void OnSquadRecruit() => Target.OnSquadRecruit();
-        public void OnPostHome() => Target.OnPostHome();
-        public void OnGoMap() => Target.OnGoMap();
         public void OnDebriefContinue() => Target.OnDebriefContinue();
-        public void OnDebriefLine(int index) => Target.OnDebriefLine(index);
-        public void OnZone(string id, bool mark) => Target.OnZone(id, mark);
-        public void OnOffer(string id) => Target.OnOffer(id);
         public void OnWait() => Target.OnWait();
-        public void OnListen(string rumor) => Target.OnListen(rumor);
-        public void OnMapAction(string action) => Target.OnMapAction(action);
-        public void OnPieceTake(string piece) => Target.OnPieceTake(piece);
-        public void OnFell() => Target.OnFell();
-        public void OnBuildDrop() => Target.OnBuildDrop();
-        public void OnPieceAction(string action) => Target.OnPieceAction(action);
-        public void OnPieceClose() => Target.OnPieceClose();
-        public void OnWalk() => Target.OnWalk();
-        public void OnSeen(string key) => Target.OnSeen(key);
     }
 }

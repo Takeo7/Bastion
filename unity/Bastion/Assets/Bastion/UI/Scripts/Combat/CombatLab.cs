@@ -247,6 +247,9 @@ namespace Bastion.UI.Combat
             if (InScene)
             {
                 player = new EventPlayer(control, destroyCancellationToken);
+                // The enemy's turn on screen, as the app's session tells it (the space bar's and the finger's «»»).
+                var playing = player;
+                control.EnemyTurnPlaying = () => playing.EnemyTurnPlaying;
                 player.Load(mine);
                 control.Halt = player.SetHalted;
                 control.Busy = player.IsBusy;
@@ -655,6 +658,171 @@ namespace Bastion.UI.Combat
                                 Debug.Log($"[lab] tras {what}: {control.LabState()}");
                                 break;
                             }
+                            // «dedo=toque/0.5/0.6» (where on the screen, 0 to 1 from the bottom left), «dedo=casilla/17/12» (a tile's
+                            // middle), «dedo=largo/…», «dedo=largocasilla/x/y», «dedo=arrastre/x/y/x2/y2», «dedo=pellizco/x/y/1.5», «dedo=giro/x/y/45»:
+                            // fingers on a touch screen, for the game played with the finger (BASTION_TACTIL=1; GameInput).
+                            // «raton=17/12»: the mouse onto a tile's middle, a few frames there (the pointer's own hover), then
+                            // its click: the real pointer's way, not PackSteps' click (which sets the tile itself).
+                            // «rastro=s6/5»: where that one's feet are, every frame for 5 s, in tiles (the middles whole): whether a walk
+                            // keeps to the grid's lines (nobody walks a diagonal, 7/11). «Off» is the most both are off a middle at once:
+                            // 0 walking a line, about 0.11 in a turn's rounding (UnitViews.WalkRound), 0.5 across a diagonal.
+                            if (what.StartsWith("rastro="))
+                            {
+                                var rArgs = what.Substring(7).Split('/');
+                                var rId = rArgs[0];
+                                var rFor = rArgs.Length > 1 ? float.Parse(rArgs[1], System.Globalization.CultureInfo.InvariantCulture) : 4f;
+                                var rTiles = new List<string>();
+                                var rOff = 0f;
+                                var rOffAt = "";
+                                var rSamples = 0;
+                                for (var rUntil = Time.time + rFor; Time.time < rUntil;)
+                                {
+                                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                    var rFeet = control.BodyOf?.Invoke(rId);
+                                    if (rFeet == null) continue;
+                                    rSamples++;
+                                    var rx = rFeet.Value.x / Bastion.Client.Map.MapSpace.Tile - 0.5f;
+                                    var ry = -rFeet.Value.z / Bastion.Client.Map.MapSpace.Tile - 0.5f;
+                                    var rBoth = Mathf.Min(Mathf.Abs(rx - Mathf.Round(rx)), Mathf.Abs(ry - Mathf.Round(ry)));
+                                    if (rBoth > rOff)
+                                    {
+                                        rOff = rBoth;
+                                        rOffAt = $"{rx:0.00}/{ry:0.00}";
+                                    }
+                                    var rTile = $"{Mathf.RoundToInt(rx)}/{Mathf.RoundToInt(ry)}";
+                                    if (rTiles.Count == 0 || rTiles[rTiles.Count - 1] != rTile) rTiles.Add(rTile);
+                                }
+                                Debug.Log($"[lab] rastro {rId}: {rSamples} fotogramas, casillas {string.Join(" ", rTiles)}; fuera de las líneas, como mucho {rOff:0.00} (en {rOffAt})");
+                                break;
+                            }
+                            // «puntero=17/12»: the mouse onto a tile's middle and left there, no click (the way it draws).
+                            if (what.StartsWith("puntero="))
+                            {
+                                var xy = what.Substring(8).Split('/');
+                                var aimed = new Pos { X = int.Parse(xy[0]), Y = int.Parse(xy[1]), Z = control.Level };
+                                var spot = (Vector2)control.Rig.Camera.WorldToScreenPoint(Board.TileToWorld(control.State, aimed));
+                                for (var k = 0; k < 4; k++)
+                                {
+                                    InputSystem.QueueStateEvent(mouse, new MouseState { position = spot, delta = k == 0 ? new Vector2(1, 0) : Vector2.zero });
+                                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                }
+                                Debug.Log($"[lab] puntero {aimed.X}/{aimed.Y} en {spot.x:0},{spot.y:0}");
+                                break;
+                            }
+                            if (what.StartsWith("raton="))
+                            {
+                                var xy = what.Substring(6).Split('/');
+                                var aimed = new Pos { X = int.Parse(xy[0]), Y = int.Parse(xy[1]), Z = control.Level };
+                                var spot = (Vector2)control.Rig.Camera.WorldToScreenPoint(Board.TileToWorld(control.State, aimed));
+                                for (var k = 0; k < 4; k++)
+                                {
+                                    InputSystem.QueueStateEvent(mouse, new MouseState { position = spot, delta = k == 0 ? new Vector2(1, 0) : Vector2.zero });
+                                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                }
+                                InputSystem.QueueStateEvent(mouse, new MouseState { position = spot, buttons = 1 });
+                                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                InputSystem.QueueStateEvent(mouse, new MouseState { position = spot });
+                                Debug.Log($"[lab] raton {aimed.X}/{aimed.Y} en {spot.x:0},{spot.y:0}");
+                                break;
+                            }
+                            // «cosas»: what can be searched, opened or unboarded within 10 tiles of the picked one (0.12.6, #3).
+                            if (what == "cosas")
+                            {
+                                var cWho = control.State.Units.FirstOrDefault(x => x.Id == control.PickedId);
+                                var cFound = new List<string>();
+                                if (cWho != null)
+                                    for (var cDy = -10; cDy <= 10; cDy++)
+                                        for (var cDx = -10; cDx <= 10; cDx++)
+                                        {
+                                            var cAt = new Pos { X = cWho.Pos.X + cDx, Y = cWho.Pos.Y + cDy, Z = cWho.Pos.Z };
+                                            if (!Grid.InBounds(control.State, cAt.X, cAt.Y)) continue;
+                                            var cSpot = Looting.SearchSpot(control.State, cAt);
+                                            var cKind = Grid.KindAt(control.State, cAt);
+                                            var cBoards = Abilities.Boards(control.State, cAt);
+                                            if (cSpot != null) cFound.Add($"{cSpot}@{cAt.X}/{cAt.Y}");
+                                            if (cKind == TileKinds.Door || cKind == TileKinds.DoorOpen) cFound.Add($"{cKind}@{cAt.X}/{cAt.Y}");
+                                            if (cBoards != null) cFound.Add($"{cBoards}@{cAt.X}/{cAt.Y}");
+                                        }
+                                Debug.Log($"[lab] cosas cerca de {cWho?.Id}: {string.Join(" ", cFound)}");
+                                break;
+                            }
+                            // «respuesta=si» / «respuesta=no»: the call's card answered (its two buttons: 0.12.4, ending a soldier's turn).
+                            if (what.StartsWith("respuesta="))
+                            {
+                                control.OnCallAnswer(what.Substring(10) == "si");
+                                break;
+                            }
+                            // «ap=s1/0»: that one's actions set so (its movement stays): the bar's «Dejar a…» (0.12.4).
+                            if (what.StartsWith("ap="))
+                            {
+                                var apArgs = what.Substring(3).Split('/');
+                                foreach (var st in new[] { host, control.State, control.Shown })
+                                    if (st?.Units.FirstOrDefault(x => x.Id == apArgs[0]) is Unit apUnit) apUnit.Ap = int.Parse(apArgs[1]);
+                                control.Refresh();
+                                break;
+                            }
+                            // «botin=s1»: a backpack with piles in it (0.12.4, #3): three of an accessory, parts, medicines.
+                            if (what.StartsWith("botin="))
+                            {
+                                var item = Content.Items.Keys.First(k => Rules.Beltable(k));
+                                foreach (var st in new[] { host, control.State, control.Shown })
+                                    if (st?.Units.FirstOrDefault(x => x.Id == what.Substring(6)) is Unit lootUnit)
+                                        lootUnit.Backpack = new List<Loot> { new Loot { Item = item, Count = 3 }, new Loot { Parts = 5 }, new Loot { Medicines = 2 } };
+                                control.Refresh();
+                                Debug.Log($"[lab] botín: 3 de {item}, 5 piezas, 2 medicinas");
+                                break;
+                            }
+                            // «mando=1»: the command to that slot, as the room's CommandPassedEvent would (with BASTION_LAB_DOS=1, the partner's).
+                            if (what.StartsWith("mando="))
+                            {
+                                var to = int.Parse(what.Substring(6));
+                                foreach (var st in new[] { host, control.State, control.Shown }) if (st != null) st.Command = to;
+                                control.Refresh();
+                                Debug.Log($"[lab] el mando, a {to}");
+                                break;
+                            }
+                            if (what == "sonda" || what.StartsWith("sonda="))
+                            {
+                                // «sonda», «sonda=36»: what a click on each tile round the picked one takes (BodyUnder), at each distance of the camera (7/11).
+                                var pFlags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+                                var pBody = typeof(CombatController).GetMethod("BodyUnder", pFlags);
+                                var pMe = control.State.Units.First(x => x.Id == (string)typeof(CombatController).GetField("picked", pFlags).GetValue(control));
+                                foreach (var pFar in what.StartsWith("sonda=") ? new[] { float.Parse(what.Substring(6), System.Globalization.CultureInfo.InvariantCulture) } : new[] { 13.5f, 20f, 27f, 36f, 43f, 50f })
+                                {
+                                    typeof(CameraRig).GetField("distance", pFlags).SetValue(control.Rig, pFar);
+                                    typeof(CameraRig).GetField("desiredDistance", pFlags).SetValue(control.Rig, pFar);
+                                    for (var k = 0; k < 4; k++) await Awaitable.NextFrameAsync(destroyCancellationToken);
+                                    var pLines = new System.Text.StringBuilder();
+                                    for (var pDy = -3; pDy <= 3; pDy++)
+                                    {
+                                        for (var pDx = -3; pDx <= 3; pDx++)
+                                        {
+                                            var pTile = new Pos { X = pMe.Pos.X + pDx, Y = pMe.Pos.Y + pDy, Z = pMe.Pos.Z };
+                                            var pSpot = (Vector2)control.Rig.Camera.WorldToScreenPoint(Board.TileToWorld(control.State, pTile));
+                                            var pGot = (Unit)pBody.Invoke(control, new object[] { pSpot, pTile });
+                                            var pOn = Grid.UnitAt(control.State, pTile);
+                                            pLines.Append(pGot == null ? (pOn != null ? "?" : ".") : pGot.Id == pMe.Id ? (pDx == 0 && pDy == 0 ? "@" : "S") : pOn != null && pOn.Id == pGot.Id ? "u" : "o");
+                                        }
+                                        pLines.Append(pDy < 3 ? " | " : "");
+                                    }
+                                    var pBodies = new System.Text.StringBuilder();
+                                    foreach (var pU in control.State.Units.Where(x => x.Alive && x.Team == Teams.Xcom))
+                                        foreach (var pH in new[] { 0.3f, 0.9f, 1.5f })
+                                        {
+                                            var pAt = (Vector2)control.Rig.Camera.WorldToScreenPoint(Board.TileToWorld(control.State, pU.Pos) + Vector3.up * pH);
+                                            var pHit = (Unit)pBody.Invoke(control, new object[] { pAt, new Pos { X = -9, Y = -9, Z = 0 } });
+                                            if (pHit?.Id != pU.Id) pBodies.Append($" {pU.Id}@{pH}→{pHit?.Id ?? "-"}");
+                                        }
+                                    Debug.Log($"[lab] sonda {pMe.Id} a {pFar} m, {Screen.width}×{Screen.height}: {pLines}; figuras que no se cogen:{pBodies}");
+                                }
+                                break;
+                            }
+                            if (what.StartsWith("dedo="))
+                            {
+                                Finger(what.Substring(5));
+                                break;
+                            }
                             if (what.StartsWith("hold="))
                             {
                                 var hold = what.Substring(5).Split('/');
@@ -715,6 +883,88 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>`key` held for `seconds` (BASTION_TOQUES «hold=d/1.5»), while the other touches go on.</summary>
+        /// <summary>
+        /// Fingers on a touch screen (the lab's «dedo=…», for the game played with the finger): a tap; a long press (0.8 s);
+        /// a drag from one point to another (0.5 s); two fingers spreading by a factor or turning by degrees round a point
+        /// (0.5 s). Points are fractions of the screen from the bottom left, or a tile's middle («casilla/x/y»).
+        /// </summary>
+        async void Finger(string spec)
+        {
+            var screen = Touchscreen.current ?? InputSystem.AddDevice<Touchscreen>();
+            if (!screen.enabled) InputSystem.EnableDevice(screen);
+            // Each gesture its own fingers: one may start while another ends.
+            var first = fingerIds += 2;
+            var p = spec.Split('/');
+            float F(int i) => i < p.Length && float.TryParse(p[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
+            Vector2 At(float x, float y) => new Vector2(x * Screen.width, y * Screen.height);
+            void Put(int id, UnityEngine.InputSystem.TouchPhase phase, Vector2 at) =>
+                InputSystem.QueueStateEvent(screen, new TouchState { touchId = first + id, phase = phase, position = at });
+            async Awaitable Frames(float seconds, System.Action<float> each)
+            {
+                var from = Time.realtimeSinceStartup;
+                for (var k = Time.realtimeSinceStartup - from; k < seconds; k = Time.realtimeSinceStartup - from)
+                {
+                    each(k / seconds);
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                }
+            }
+            try
+            {
+                var kind = p[0];
+                if (kind == "toque" || kind == "casilla" || kind == "largo" || kind == "largocasilla")
+                {
+                    var at = kind.EndsWith("casilla")
+                        ? (Vector2)control.Rig.Camera.WorldToScreenPoint(Board.TileToWorld(control.State, new Pos { X = (int)F(1), Y = (int)F(2), Z = control.Level }))
+                        : At(F(1), F(2));
+                    Put(1, UnityEngine.InputSystem.TouchPhase.Began, at);
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    if (kind.StartsWith("largo")) await Frames(0.8f, _ => Put(1, UnityEngine.InputSystem.TouchPhase.Stationary, at));
+                    else await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    Put(1, UnityEngine.InputSystem.TouchPhase.Ended, at);
+                    Debug.Log($"[lab] dedo {spec} en {at.x:0},{at.y:0}");
+                }
+                else if (kind == "arrastre")
+                {
+                    Vector2 a = At(F(1), F(2)), b = At(F(3), F(4));
+                    Put(1, UnityEngine.InputSystem.TouchPhase.Began, a);
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    await Frames(0.5f, k => Put(1, UnityEngine.InputSystem.TouchPhase.Moved, Vector2.Lerp(a, b, k)));
+                    Put(1, UnityEngine.InputSystem.TouchPhase.Ended, b);
+                    Debug.Log($"[lab] dedo {spec}");
+                }
+                else if (kind == "pellizco" || kind == "giro")
+                {
+                    var mid = At(F(1), F(2));
+                    var half = Screen.height * 0.12f;
+                    var amount = F(3);
+                    Vector2 Off(float k)
+                    {
+                        if (kind == "pellizco") return new Vector2(half * Mathf.Lerp(1, amount, k), 0);
+                        var turn = Mathf.Lerp(0, amount, k) * Mathf.Deg2Rad;
+                        return new Vector2(Mathf.Cos(turn), Mathf.Sin(turn)) * half;
+                    }
+                    Put(1, UnityEngine.InputSystem.TouchPhase.Began, mid - Off(0));
+                    Put(2, UnityEngine.InputSystem.TouchPhase.Began, mid + Off(0));
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    await Frames(0.5f, k =>
+                    {
+                        Put(1, UnityEngine.InputSystem.TouchPhase.Moved, mid - Off(k));
+                        Put(2, UnityEngine.InputSystem.TouchPhase.Moved, mid + Off(k));
+                    });
+                    Put(1, UnityEngine.InputSystem.TouchPhase.Ended, mid - Off(1));
+                    Put(2, UnityEngine.InputSystem.TouchPhase.Ended, mid + Off(1));
+                    Debug.Log($"[lab] dedo {spec}");
+                }
+            }
+            catch (System.OperationCanceledException)
+            {
+                // The lab went first.
+            }
+        }
+
+        /// <summary>The lab's last finger's number (Finger: each gesture takes two more).</summary>
+        int fingerIds;
+
         async void HoldKey(Keyboard keys, Key key, float seconds)
         {
             try
@@ -823,13 +1073,16 @@ namespace Bastion.UI.Combat
         /// An order to the rules, as the host would take it; its events to this player's copy, and then either to the event
         /// player (in the scene) or straight to the capsules.
         /// </summary>
+        /// <summary>BASTION_LAB_DOS=1: the partner (slot 1) connected for the rules too, so the turn waits for them (0.12.4, the turns).</summary>
+        static readonly bool Two = System.Environment.GetEnvironmentVariable("BASTION_LAB_DOS") == "1";
+
         /// <summary>The rules' time in the lab (the host's, not this player's: the enemy's turn is worked out in it), apart in RendimientoLab.Parones.</summary>
         static readonly Unity.Profiling.ProfilerMarker MRules = new Unity.Profiling.ProfilerMarker("Bastion.Lab.Rules");
 
         void Answer(Command cmd)
         {
             CommandResult result;
-            using (MRules.Auto()) result = Rules.ExecuteCommand(host, cmd, 0, new[] { 0 }, rng);
+            using (MRules.Auto()) result = Rules.ExecuteCommand(host, cmd, 0, Two ? new[] { 0, 1 } : new[] { 0 }, rng);
             if (!result.Ok)
             {
                 Debug.Log($"[lab] orden rechazada ({cmd.Type}): {result.Error}");

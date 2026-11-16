@@ -49,6 +49,8 @@ namespace Bastion.Client.Units
             ["mec"] = (new Gait("walk", 0.8f), new Gait("walk", 0.6f)),
             ["sectoid"] = (new Gait("walk", 0.75f), new Gait("walk", 0.56f)),
             ["bloater"] = (new Gait("walk", 0.86f), new Gait("walk", 0.64f)),
+            // (The Brute as the Chillón: its hunched walk, Gameplay 16/11; its charge has its own pace, UnitViews.Brute.)
+            ["brute"] = (new Gait("walk", 0.75f), new Gait("walk", 0.56f)),
         };
 
         /// <summary>
@@ -325,6 +327,16 @@ namespace Bastion.Client.Units
             public Pos heard;
             public float hearYaw, hearClock = -1;
             public bool hearTurning;
+            /// <summary>
+            /// Knocked down (the Brute's charge: UnitViews.Brute KnockDown): alive on the floor in one of its deaths (`downId`),
+            /// `dead` meanwhile for its pose (nothing in its hands' grip, no aim), till it gets up (GetUp): Sync leaves it so.
+            /// </summary>
+            public bool down;
+            public string downId;
+            /// <summary>How far into the Brute's blow (its arms the blow's, the left fist by the right) and its charge (leaning, a shoulder ahead) it is, 0 to 1.</summary>
+            public float smash, charge;
+            /// <summary>Where the middle of the Brute's fists goes this frame through its blow (UnitViews.Brute SmashHands).</summary>
+            public Vector3 smashAt;
         }
 
         readonly Dictionary<string, View> views = new Dictionary<string, View>();
@@ -539,6 +551,8 @@ namespace Bastion.Client.Units
                 ClimbPose(v);
                 Reach(v);
                 if (v.deadKind) DeadPose(v);
+                // (The Brute's blow: its left fist by the right, after its own pose: UnitViews.Brute.)
+                if (v.smash > 0) SmashHands(v);
                 HearLead(v);
                 if (v.reachShare > 0 && v.reachFor != null && views.TryGetValue(v.reachFor, out var reached)) ReachPose(v, BodyChest(reached), v.reachShare, clock);
                 LogFigureNow(v, true);
@@ -1135,8 +1149,9 @@ namespace Bastion.Client.Units
                 }
                 if (!u.Alive && !v.dead) Lie(v);
                 if (!u.Alive && v.dead) HideDropped(v);
-                // (One felled silently lies on: its death comes in the events behind the blow, the state still has it alive.)
-                if (u.Alive && v.dead && !KeptDown(v)) Stand(v);
+                // (One felled silently lies on: its death comes in the events behind the blow, the state still has it alive. One
+                // knocked down too, till it gets up: UnitViews.Brute.)
+                if (u.Alive && v.dead && !v.down && !KeptDown(v)) Stand(v);
                 Pose(v, u);
                 Hear(v, u);
                 // (Who eats a body or reaches for it stays where it is while its tile is the same: put back on the tile's
@@ -1162,8 +1177,8 @@ namespace Bastion.Client.Units
             root.SetParent(transform, false);
             // 0.10.1: a soldier's campaign id picks the same body everywhere; a skirmish soldier's name; the enemy's id
             // (they share their template's name).
-            var view = new View { id = u.Id, template = u.Template, team = u.Team, root = root, seed = u.CampaignId ?? (u.Team == "xcom" ? u.Name : u.Id), armsKey = ArmsKey(u), oddPhase = (made++ & 1) == 1 };
-            view.deadKind = Gaits.MovesDead(u.Template);
+            var view = new View { id = u.Id, template = KindOf(u), team = u.Team, root = root, seed = u.CampaignId ?? (u.Team == "xcom" ? u.Name : u.Id), armsKey = ArmsKey(u), oddPhase = (made++ & 1) == 1 };
+            view.deadKind = Gaits.MovesDead(view.template);
             if (view.deadKind) (view.dealt, view.map) = (TurnOf(u), state?.MapId);
             // (BASTION_LOG_BULK=1: how long its figure took to make, and all of it with its weapons: a line [bulk] make.)
             var making = BulkLog ? System.Diagnostics.Stopwatch.StartNew() : null;
@@ -2075,9 +2090,11 @@ namespace Bastion.Client.Units
             if (!views.TryGetValue(id, out var v) || path.Count == 0 || state == null) return;
             // Its way taken from now for the others' straightened walks (Straighten).
             Claim(id, v.place, path);
-            // One eating gets up first (unitViews.ts moveAlong: unfeed); one reaching lets its arms down as it goes.
+            // One eating gets up first (unitViews.ts moveAlong: unfeed); one reaching lets its arms down as it goes. One
+            // knocked down too, if nothing got it up before (UnitViews.Brute: UI's GetUp as the squad's turn begins).
             v.reachFor = null;
             if (v.feeding) await GetUp(v, ct);
+            if (v.down) await GetUp(id, ct);
             var (one, two) = Gaits.Of(v.template);
             var gait = ap >= 2 ? two : one;
             // Crouched, a dash is run standing (Gaits.Rises): it gets up as it sets off, in the motions' blend, and crouches
@@ -2092,7 +2109,7 @@ namespace Bastion.Client.Units
             }
             float tile = gait.seconds / Mathf.Max(0.01f, pace);
             v.walking = true;
-            float clip = Gaits.ClipSpeed(v.template, gait) * pace;
+            float clip = Gaits.ClipSpeed(v.template, gait) * pace / Stride(v);
             float Hold(int k) => waits != null && k < waits.Count ? waits[k] : 0;
             Pos Before(int k) => k == 0 ? v.place : path[k - 1];
             // (The steps on stairs, onto a sill and off it, up and down a ladder or off an edge are their own: StepAcross.)
@@ -2502,6 +2519,12 @@ namespace Bastion.Client.Units
                 await HushedDie(v, ct);
                 return;
             }
+            // (Knocked down and killed where it lies: no fall again, its death the one it lies in. UnitViews.Brute.)
+            if (v.down)
+            {
+                await DieDown(v, ct);
+                return;
+            }
             FlashDeath(v);
             // (One eating or reaching that dies lets go of the body: it falls where it is.)
             v.feeding = false;
@@ -2520,6 +2543,8 @@ namespace Bastion.Client.Units
                     float length = v.anim.PlayWhole(death, 0.2f, true);
                     float settle = Mathf.Min(length, FigureCatalog.Load()?.Settle(chosen.id) ?? length);
                     LetGo(v, LetGoShare * settle);
+                    // (The Brute's weight: dust thrown up as it comes down. UnitViews.Brute.)
+                    if (Heavy(v)) _ = Thump(v, chosen, settle, HeavyThud);
                     if (cramped) await Tuck(v, chosen, settle, ct);
                     else await Awaitable.WaitForSecondsAsync(settle, ct);
                 }

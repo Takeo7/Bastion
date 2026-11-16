@@ -232,8 +232,8 @@ namespace Bastion.Engine
                         var streak = s.MissStreak ??= new[] { 0, 0 };
                         streak[u.Owner.Value] = ev.Result == ShotResults.Miss ? Math.Min(Aim.BadLuckMisses, streak[u.Owner.Value] + 1) : 0;
                     }
-                    // Every shot wears the weapon in the hand (docs/FASE9.md §5); half with Mantenimiento.
-                    if (Content.FiresPrimary(u, ev.Ability)) u.Arms!.Condition = Math.Max(0, Content.ConditionOf(u) - Content.WearOf(Content.AttackWeapon(u, ev.Ability).Id) / (u.Mods.Care != 0 ? 2.0 : 1.0));
+                    // Every shot wears the weapon in the hand (docs/FASE9.md §5); half with Mantenimiento. Nothing wears in a run (H3).
+                    if (s.Run == null && Content.FiresPrimary(u, ev.Ability)) u.Arms!.Condition = Math.Max(0, Content.ConditionOf(u) - Content.WearOf(Content.AttackWeapon(u, ev.Ability).Id) / (u.Mods.Care != 0 ? 2.0 : 1.0));
                     var blade = Content.Abilities[ev.Ability].Weapon == AbilityWeapons.Melee || Content.AttackWeapon(u, ev.Ability).Melee;
                     s.Blow = new Blow { Unit = u.Id, Kind = blade ? BlowKinds.Blade : BlowKinds.Gun };
                     // Each one at an enemy teaches, and more if it lands (docs/FASE10.md §3).
@@ -290,8 +290,13 @@ namespace Bastion.Engine
                     if (u.Team == Teams.Xcom && u.Automaton == null && !u.Objective && !u.Captive)
                     {
                         var at = Flights.RestingPlace(s, u.Pos);
-                        foreach (var loot in Looting.FallenGear(u)) LeaveOnFloor(s, at, loot, u.Id);
-                        u.Backpack = new List<Loot>();
+                        // A run's soldier (H3): its kit and its pack, as gear.
+                        if (u.Pack != null) RunPack.Fallen(s, u, at);
+                        else
+                        {
+                            foreach (var loot in Looting.FallenGear(u)) LeaveOnFloor(s, at, loot, u.Id);
+                            u.Backpack = new List<Loot>();
+                        }
                     }
                     break;
                 }
@@ -350,6 +355,8 @@ namespace Bastion.Engine
                     var u = UnitOf(s, ev.Unit);
                     Content.ReloadWeapon(u);
                     if (u.Mags != null) u.Mags = Math.Max(0, u.Mags.Value - 1);
+                    // A run's soldier (H3): out of its pack.
+                    if (u.Pack != null) RunPack.SpendMag(u);
                     break;
                 }
                 case ExplosiveEvent ev:
@@ -702,6 +709,8 @@ namespace Bastion.Engine
                 {
                     (s.Searched ??= new List<int>()).Add(Grid.NodeOf(s, ev.Tile));
                     if (ev.Loot != null) Stow(s, UnitOf(s, ev.Unit), ev.Loot);
+                    // A run's fight (H3): gear.
+                    if (ev.Packed != null || ev.Floor != null || ev.NextGear != null) RunLoot.Receive(s, UnitOf(s, ev.Unit), ev.Packed, ev.Floor, ev.NextGear);
                     Deed(s, ev.Unit, DeedIds.Search);
                     break;
                 }
@@ -783,11 +792,21 @@ namespace Bastion.Engine
                 }
                 case RoomSearchedEvent ev:
                 {
-                    (s.RoomsSearched ??= new List<int>()).Add(ev.Room);
+                    // Rebuscar searches a room again: listed once.
+                    var rooms = s.RoomsSearched ??= new List<int>();
+                    if (ev.Again != true || !rooms.Contains(ev.Room)) rooms.Add(ev.Room);
                     if (ev.Loot != null) Stow(s, UnitOf(s, ev.Unit), ev.Loot);
+                    // A run's fight (H3): gear.
+                    if (ev.Packed != null || ev.Floor != null || ev.NextGear != null) RunLoot.Receive(s, UnitOf(s, ev.Unit), ev.Packed, ev.Floor, ev.NextGear);
                     Deed(s, ev.Unit, DeedIds.Search);
                     break;
                 }
+                case GearMovedEvent ev:
+                    RunPack.Apply(s, ev);
+                    break;
+                case GearUsedEvent ev:
+                    RunPack.Apply(s, ev);
+                    break;
                 case LightOnEvent ev:
                     (s.Lights ??= new List<Light>()).Add(CopyLight(ev.Light));
                     break;
@@ -1071,6 +1090,8 @@ namespace Bastion.Engine
                 PackSlots = u.PackSlots,
                 Deeds = u.Deeds != null ? CopyDeeds(u.Deeds) : null,
                 RisenFrom = u.RisenFrom,
+                Pack = u.Pack != null ? Gears.CloneGrid(u.Pack) : null,
+                Kit = u.Kit != null ? Gears.ClonePlaces(u.Kit) : null,
             };
         }
 
@@ -1158,6 +1179,7 @@ namespace Bastion.Engine
                     Horde = CopyStrings(m.Horde),
                     Night = m.Night,
                     Siege = m.Siege != null ? new Siege { Hold = m.Siege.Hold } : null,
+                    Awake = m.Awake,
                 },
                 Turn = s.Turn,
                 ActiveTeam = s.ActiveTeam,
@@ -1183,6 +1205,8 @@ namespace Bastion.Engine
                 Fires = CopyList(s.Fires, (f) => new Fire { Id = f.Id, Source = f.Source, Tiles = new List<int>(f.Tiles), Turns = f.Turns }),
                 Dropped = CopyList(s.Dropped, (d) => new DroppedLoot { Id = d.Id, Pos = CopyPos(d.Pos), Loot = CloneLoot(d.Loot), From = d.From }),
                 DroppedCount = s.DroppedCount,
+                Run = s.Run != null ? new RunFight { Node = s.Run.Node, NodeKind = s.Run.NodeKind, Row = s.Run.Row, Modifier = s.Run.Modifier, FirstGear = s.Run.FirstGear, NextGear = s.Run.NextGear, Added = s.Run.Added } : null,
+                FloorGear = CopyList(s.FloorGear, (d) => new DroppedGear { Gear = Gears.CloneGear(d.Gear), Pos = CopyPos(d.Pos), From = d.From }),
                 Breakables = s.Breakables != null ? new Dictionary<int, int>(s.Breakables) : null,
                 Base = s.Base != null ? new SiegeBase { Pieces = s.Base.Pieces.Select((p) => new BasePiece { Id = p.Id, Piece = p.Piece, X = p.X, Y = p.Y, Rot = p.Rot, Size = p.Size != null ? (int[])p.Size.Clone() : null, Hp = p.Hp, Level = p.Level, Charges = p.Charges }).ToList(), Felled = CopyInts(s.Base.Felled), Level = s.Base.Level } : null,
                 Traps = CopyList(s.Traps, (t) => new Trap { Piece = t.Piece, Kind = t.Kind, Node = t.Node, Charges = t.Charges }),

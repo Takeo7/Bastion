@@ -385,6 +385,8 @@ namespace Bastion.Engine
 
         public static CampaignResult ExecuteCampaignCommand(CampaignState c, CampaignCommand cmd, CampaignContext ctx)
         {
+            // A campaign of runs (version 28) has its own commands (RunCommands.cs).
+            if (IsRuns(c)) return Runs.Execute(c, cmd, ctx);
             var result = RunCampaignCommand(c, cmd, ctx);
             if (result.Ok)
             {

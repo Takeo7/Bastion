@@ -17,6 +17,9 @@ namespace Bastion.Net
         /// <summary>When each player not connected now was heard to drop (the clock's ms).</summary>
         private readonly Dictionary<int, long> droppedAt = new Dictionary<int, long>();
 
+        /// <summary>The Trades this app's player has bought at (the run's seed and the node): one ware each (RunOrder).</summary>
+        private readonly HashSet<string> bought = new HashSet<string>();
+
         public HeardGame(IClock? clock = null)
         {
             this.clock = clock ?? new SystemClock();
@@ -91,12 +94,13 @@ namespace Bastion.Net
         /// and one fit to go (the recruit who comes when nobody is left: Arturo, 2/11), that one in; with nobody in the squad
         /// at all, a day's wait till someone heals or comes, or in a siege (it takes everyone fit by itself, and nobody can
         /// wait) the host's recruit straight into it; else its key to launch. Null: wait (one's own proposal, the partner's
-        /// event or choice).
+        /// event or choice). In a campaign of runs, RunOrder.
         /// </summary>
         public CampaignCommand? BaseOrder(int slot, bool hosting)
         {
             var c = Campaign;
             if (c == null) return null;
+            if (Engine.Campaign.IsRuns(c)) return RunOrder(c, slot, hosting);
             if (c.Proposal != null) return c.Proposal.By != slot ? new VoteCommand { Accept = true } : null;
             if (c.Event != null) return hosting ? new AnswerEventCommand { Option = Engine.Campaign.EventOptionAvailable(c, 0) || !Engine.Campaign.EventOptionAvailable(c, 1) ? 0 : 1 } : null;
             // No operation chosen (no siege comes to choose it now: Arturo, 7/11, Campaign.SiegesOn): with someone wounded, a
@@ -120,6 +124,139 @@ namespace Bastion.Net
             }
             if (c.ActiveMission != null && c.Squad.Count == 0) return !siege ? new AdvanceCommand { Ready = true } : hosting ? new RecruitCommand { Squad = true } : null;
             return new LaunchCommand { Ready = true };
+        }
+
+        /// <summary>
+        /// BaseOrder in the runs (H0-DISENO §7; Gameplay, 16/11): the partner's proposal, yes; each its soldiers' kit
+        /// (KitOrder); then, by where the run is. On the base, the host proposes going out. On the map, a medicine to one
+        /// wounded enough (MedicineOrder), then the host proposes the first node in sight. At a stop, the host answers yes
+        /// (a survivor with no bed for them, no); at a Trade each buys one ware (WareOrder); then each asks to go on, again
+        /// if the partner has gone meanwhile (alone, it counts at once). Never back before the boss: the run comes back by
+        /// itself after it, or when the squad falls. In a fight, nothing. Each order is one the engine would take now, by
+        /// its own refusals on what was heard. Null: wait.
+        /// </summary>
+        private CampaignCommand? RunOrder(CampaignState c, int slot, bool hosting)
+        {
+            if (c.Proposal != null) return c.Proposal.By != slot ? new VoteCommand { Accept = true } : null;
+            var here = Active();
+            var run = c.Run;
+            if (run?.Phase == RunPhases.Fight) return null;
+            var kit = KitOrder(c, slot, here);
+            if (kit != null) return kit;
+            if (run == null) return hosting && Runs.StartRunRefusal(c, here) == null ? new StartRunCommand() : null;
+            if (run.Phase == RunPhases.Choose)
+            {
+                var medicine = MedicineOrder(c, slot, here);
+                if (medicine != null) return medicine;
+                if (!hosting) return null;
+                var choices = RunMap.Choices(run);
+                var next = choices.FirstOrDefault((n) => RunMap.Visible(c, n)) ?? choices.FirstOrDefault();
+                return next != null && Runs.ChooseNodeRefusal(c, next.Id) == null ? new ChooseNodeCommand { Node = next.Id } : null;
+            }
+            var stop = run.Stop;
+            if (run.Phase != RunPhases.Stop || stop == null) return null;
+            if (Runs.LeaveStopRefusal(c) != null)
+            {
+                if (!hosting) return null;
+                var option = Runs.AnswerStopRefusal(c, 0) == null ? 0 : 1;
+                return Runs.AnswerStopRefusal(c, option) == null ? new AnswerStopCommand { Option = option } : null;
+            }
+            var ware = WareOrder(c, slot, here);
+            if (ware != null) return ware;
+            var asked = stop.Leaving.Length > slot && stop.Leaving[slot];
+            return asked && here.Any((p) => p != slot) ? null : new LeaveStopCommand { Ready = true };
+        }
+
+        /// <summary>The soldiers `slot` sees to: those it controls (Runs.Controls) of the squad out, or, on the base, of the one that will go.</summary>
+        private static List<CampaignSoldier> Mine(CampaignState c, int slot, IReadOnlyList<int> here)
+        {
+            var squad = c.Run?.Squad ?? c.Squad;
+            return c.Soldiers.Where((s) => s.Alive && s.Kit != null && squad.Contains(s.Id) && Runs.Controls(c, slot, here, s)).ToList();
+        }
+
+        /// <summary>Kit places a bot fills, in this order (the blade is the knife already).</summary>
+        private static readonly string[] Fills = { KitSlots.Primary, KitSlots.Pistol, KitSlots.Vest, KitSlots.Belt0, KitSlots.Belt1 };
+
+        /// <summary>
+        /// One move of `slot`'s soldiers' kit, if there's one to make: an empty place filled from the soldier's own pack or,
+        /// on the base, from the stash; on the base, then, what the pack carries for no use (weapons, vests, belt things, mods
+        /// it doesn't wear) put in the stash, and a pile of magazines and one of medicines from the stash into a pack without
+        /// any. Supplies stay in the packs, to pay at a Trade. Null if nothing is to move.
+        /// </summary>
+        private static CampaignCommand? KitOrder(CampaignState c, int slot, IReadOnlyList<int> here)
+        {
+            var atBase = c.Run == null;
+            var stash = atBase ? c.Stash?.Items.Select((p) => p.Gear).ToList() ?? new List<Gear>() : new List<Gear>();
+            CampaignCommand? Try(MoveGearCommand cmd) => Gears.MoveRefusal(c, slot, here, cmd) == null ? cmd : null;
+            var mine = Mine(c, slot, here);
+            foreach (var s in mine)
+                foreach (var place in Fills)
+                {
+                    if (Gears.InSlot(s.Kit!, place) != null) continue;
+                    foreach (var g in s.Kit!.Pack.Items.Select((p) => p.Gear).Concat(stash).Where((g) => Content.SlotTakes(place, g)))
+                    {
+                        var order = Try(new MoveGearCommand { Gear = g.Id, To = s.Id, Slot = place });
+                        if (order != null) return order;
+                    }
+                }
+            if (!atBase || c.Stash == null) return null;
+            bool Kept(Gear g) => g.Kind == GearKinds.Supplies || g.Kind == GearKinds.Medicine || g.Kind == GearKinds.Mags;
+            foreach (var s in mine)
+                foreach (var g in s.Kit!.Pack.Items.Select((p) => p.Gear).Where((g) => !Kept(g)).ToList())
+                {
+                    var spot = Gears.FirstFit(c.Stash, g);
+                    var order = spot != null ? Try(new MoveGearCommand { Gear = g.Id, To = GearPlaces.Stash, Slot = KitSlots.Pack, X = spot.X, Y = spot.Y, Turned = spot.Turned }) : null;
+                    if (order != null) return order;
+                }
+            foreach (var kind in new[] { GearKinds.Mags, GearKinds.Medicine })
+                foreach (var s in mine.Where((s) => !s.Kit!.Pack.Items.Any((p) => p.Gear.Kind == kind)))
+                {
+                    var g = stash.FirstOrDefault((x) => x.Kind == kind);
+                    var spot = g != null ? Gears.FirstFit(s.Kit!.Pack, g) : null;
+                    var order = spot != null ? Try(new MoveGearCommand { Gear = g!.Id, To = s.Id, Slot = KitSlots.Pack, X = spot.X, Y = spot.Y, Turned = spot.Turned }) : null;
+                    if (order != null) return order;
+                }
+            return null;
+        }
+
+        /// <summary>
+        /// On the map, a medicine from a pack of `slot`'s soldiers to the one of them most hurt, if it lacks at least what one
+        /// heals (Content.MedicineHeal). Null if none.
+        /// </summary>
+        private static CampaignCommand? MedicineOrder(CampaignState c, int slot, IReadOnlyList<int> here)
+        {
+            var mine = Mine(c, slot, here);
+            var hurt = mine.Select((s) => (s, lack: Runs.MaxHp(s) - Runs.HpOf(c, s))).Where((x) => x.lack >= Content.MedicineHeal)
+                .OrderByDescending((x) => x.lack).ThenBy((x) => x.s.Id, System.StringComparer.Ordinal).Select((x) => x.s).FirstOrDefault();
+            if (hurt == null) return null;
+            var medicine = mine.SelectMany((s) => s.Kit!.Pack.Items).Select((p) => p.Gear).FirstOrDefault((g) => g.Kind == GearKinds.Medicine);
+            if (medicine == null) return null;
+            var cmd = new UseGearCommand { Gear = medicine.Id, Soldier = hurt.Id };
+            return Gears.UseGearRefusal(c, slot, here, cmd) == null ? cmd : null;
+        }
+
+        /// <summary>
+        /// At a Trade, one ware for `slot` once: a firearm if one of its soldiers lacks one, else a medicine, else the
+        /// cheapest; for the first of its soldiers that can take it and pay. Null if bought already, or none can be.
+        /// </summary>
+        private CampaignCommand? WareOrder(CampaignState c, int slot, IReadOnlyList<int> here)
+        {
+            var run = c.Run!;
+            var wares = run.Stop?.Wares;
+            var key = $"{run.Seed}/{run.At}/{slot}";
+            if (wares == null || bought.Contains(key)) return null;
+            var mine = Mine(c, slot, here);
+            var unarmed = mine.Any((s) => s.Kit!.Primary == null && s.Kit.Pistol == null);
+            int Want(Ware w) => unarmed && (Content.SlotTakes(KitSlots.Primary, w.Gear) || Content.SlotTakes(KitSlots.Pistol, w.Gear)) ? 0 : w.Gear.Kind == GearKinds.Medicine ? 1 : 2;
+            foreach (var w in wares.OrderBy(Want).ThenBy((w) => w.Price).ThenBy((w) => w.Gear.Id, System.StringComparer.Ordinal))
+                foreach (var s in mine)
+                {
+                    var cmd = new BuyWareCommand { Ware = w.Gear.Id, Soldier = s.Id };
+                    if (Gears.BuyWareRefusal(c, slot, here, cmd) != null) continue;
+                    bought.Add(key);
+                    return cmd;
+                }
+            return null;
         }
     }
 }

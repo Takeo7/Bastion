@@ -97,58 +97,6 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
-        /// What building shows (Settlement.Build: clearing.ts ClearingSet's drawing) over the lab's clearing (Clearing's):
-        /// the grid and the edge band, a workshop about to go down in green with its tiles marked and the cursor round it, a
-        /// line of palisade in red, the radio picked, a proposal (a tower), the partner's piece in hand (a garden, in blue)
-        /// and two siege posts, one held. From BASTION_LOOK (28, 30, 22 unless said).
-        ///   unity/tools/captura.sh -shotOut construir.png -shotSetup Bastion.EditorTools.SettlementLab.Construir -shotSize 1600x900
-        /// </summary>
-        /// <summary>
-        /// Walking about the clearing in first person (Settlement.WalkAbout, walkAbout.ts), with Vida's soldiers out: from
-        /// where BASTION_LOOK's camera looks (28,30 unless said), on in play mode, the keys and the mouse played by
-        /// BASTION_ANDAR, its steps «ahead,side,run,mouse x,mouse y,seconds» split by ';' (the mouse in pixels a frame, y
-        /// up); unless said, it walks ahead, turns right, runs on into what stops it, looks up and down, and walks aslant.
-        /// Where it stands every half second in the log ([andar]).
-        ///   unity/tools/captura.sh -shotOut andar -shotSetup Bastion.EditorTools.SettlementLab.Andar -shotPlay -shotFrames 140 -shotFps 10
-        /// </summary>
-        public static void Andar()
-        {
-            if (Environment.GetEnvironmentVariable("BASTION_LOOK") == null) Environment.SetEnvironmentVariable("BASTION_LOOK", "28,30,22,0");
-            Vida();
-            string script = Environment.GetEnvironmentVariable("BASTION_ANDAR") ?? "1,0,0,0,0,3;0,0,0,20,0,1.5;1,0,1,0,0,3;0,0,0,0,10,1;0,0,0,0,-20,1;1,1,0,0,0,3";
-            var steps = script.Split(';').Select(k => k.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray()).ToList();
-            float started = -1, logged = -1;
-            void Go(UnityEditor.PlayModeStateChange change)
-            {
-                if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
-                UnityEditor.EditorApplication.playModeStateChanged -= Go;
-                var s = Settlement.Current;
-                s.Camera = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).FirstOrDefault(k => k.name == "Shot camera");
-                s.WalkAbout(true);
-                started = Time.time;
-                Debug.Log(FormattableString.Invariant($"[andar] on at {s.WalkAt.x:0.00},{s.WalkAt.y:0.00} facing {s.WalkYaw:0.00}: {s.Walking}"));
-                Settlement.WalkFake = () =>
-                {
-                    float t = Time.time - started;
-                    foreach (var k in steps)
-                    {
-                        if (t < k[5]) return (k[0], k[1], k[2] > 0, new Vector2(k[3], k[4]));
-                        t -= k[5];
-                    }
-                    return (0, 0, false, Vector2.zero);
-                };
-                void Log()
-                {
-                    if (!UnityEditor.EditorApplication.isPlaying || Time.time < logged + 0.5f) return;
-                    logged = Time.time;
-                    Debug.Log(FormattableString.Invariant($"[andar] {Time.time - started:0.0} s: at {s.WalkAt.x:0.00},{s.WalkAt.y:0.00} facing {s.WalkYaw:0.00}"));
-                }
-                UnityEditor.EditorApplication.update += Log;
-            }
-            UnityEditor.EditorApplication.playModeStateChanged += Go;
-        }
-
-        /// <summary>
         /// claro.html's vida(n, distance, yaw) (clearingLab.ts): the lab's clearing (Clearing's base) with BASTION_N (6)
         /// soldiers of both players out about it, vida0…, as there (the same entries, so the same places and the same
         /// seeds), from look(c, c, distance, yaw) (BASTION_LOOK, 22 unless said). In play mode, the figures made once it
@@ -327,41 +275,39 @@ namespace Bastion.EditorTools
             }
         }
 
-        public static void Construir()
+        /// <summary>
+        /// The runs' clearing behind the base's screens (Settlement.Fixed): the fixed base with those out about it (as Vida,
+        /// its env too), on the settlement's own camera at the tab's shot (BASTION_VISTA, facilities unless said: the open
+        /// shot, the fire), fitted beside the panels BASTION_PANELES gives ("x,y,w,h;…", fractions of the screen from its top
+        /// left, as UI's SetInsets; none, the screen free), at -shotSize's size.
+        ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.SettlementLab.Fondo -shotPlay -shotCamera "Shot camera"
+        ///     -shotWarm 25 -shotFrames 1 -shotSize 1440x900 -shotOut fondo.png
+        /// </summary>
+        public static void Fondo()
         {
-            if (Environment.GetEnvironmentVariable("BASTION_LOOK") == null) Environment.SetEnvironmentVariable("BASTION_LOOK", "28,30,22,0");
-            Clearing();
-            var s = Settlement.Current;
-            int c = s.Base.Width / 2;
-            s.SetBuilding(true);
-            var at = new Vector2Int(c + 1, c + 4);
-            s.Ghost(PieceIds.Workshop, 0, at, true);
-            var cells = Bastion.Engine.Base.PieceCells(PieceIds.Workshop, at.x, at.y, 0);
-            s.Marks(cells.Select(k => (new Vector2Int(k.X, k.Y), Settlement.Mark.Ok)).Concat(new[] { (new Vector2Int(c - 3, c + 8), Settlement.Mark.Amber), (new Vector2Int(c - 2, c + 8), Settlement.Mark.Amber) }).ToList());
-            int x0 = cells.Min(k => k.X), y0 = cells.Min(k => k.Y);
-            s.Outline(new RectInt(x0, y0, cells.Max(k => k.X) - x0 + 1, cells.Max(k => k.Y) - y0 + 1));
-            s.GhostLine(PieceIds.Palisade, 0, Enumerable.Range(0, 5).Select(k => new Vector2Int(c - 8 + k, c + 6)).ToList(), false);
-            s.Select(s.Base.Pieces.FirstOrDefault(p => p.Piece == PieceIds.Radio)?.Id);
-            s.SetProposal(new Settlement.PieceCursor { piece = PieceIds.Tower, x = c + 6, y = c + 6, rot = 0 });
-            s.PartnerCursor(new Settlement.PieceCursor { piece = PieceIds.Garden, x = c - 4, y = c + 9, rot = 0 }, new Color(0x4f / 255f, 0xb0 / 255f, 0xe8 / 255f));
-            s.SetPosts(new[]
+            Environment.SetEnvironmentVariable("BASTION_FIJO", "1");
+            Vida();
+            var args = Environment.GetCommandLineArgs();
+            int at = Array.IndexOf(args, "-shotSize");
+            var size = at >= 0 && at + 1 < args.Length ? args[at + 1].Split('x').Select(float.Parse).ToArray() : new[] { 1600f, 900f };
+            var panels = (Environment.GetEnvironmentVariable("BASTION_PANELES") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => p.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray())
+                .Where(r => r.Length == 4).Select(r => new Rect(r[0], r[1], r[2], r[3])).ToList();
+            void Frame(UnityEditor.PlayModeStateChange change)
             {
-                new Settlement.SiegePost { id = "p1", name = "Uno", colour = new Color(0xe8 / 255f, 0xa3 / 255f, 0x3a / 255f), x = c - 6, y = c + 3, mine = true },
-                new Settlement.SiegePost { id = "p2", name = "Dos", colour = new Color(0x4f / 255f, 0xb0 / 255f, 0xe8 / 255f), x = c - 5, y = c + 3, mine = false },
-            }, "p1");
-            Debug.Log($"[construir] the partner's name at {s.PartnerTagWorld}, post p1's at {s.PostWorld("p1")}; tile under the screen's middle {s.TileAt(new Vector2(800, 450))}");
-            // BASTION_TAPAR=1: a workshop built where La Lata stands (UI, 26/10), and the clearing shown again: it parks elsewhere (parkBus).
-            if (Environment.GetEnvironmentVariable("BASTION_TAPAR") == "1" && s.Lata != null)
-            {
-                var stood = s.Lata.transform.localPosition / MapSpace.Tile;
-                int tx = Mathf.FloorToInt(stood.x), ty = Mathf.FloorToInt(-stood.z);
-                var @base = Newtonsoft.Json.JsonConvert.DeserializeObject<BaseState>(Newtonsoft.Json.JsonConvert.SerializeObject(s.Base));
-                var put = Bastion.Engine.Base.PlacePiece(@base, PieceIds.Workshop, tx - 1, ty - 1, 1);
-                s.Ghost(null, 0, default, true);
-                s.Show(@base);
-                var now = s.Lata.transform.localPosition / MapSpace.Tile;
-                Debug.Log($"[construir] La Lata stood on tile {tx},{ty}; a workshop put at {put.X},{put.Y} turned {put.Rot}; now it stands at {now.x:0.##},{-now.z:0.##} (shown {s.Lata.gameObject.activeInHierarchy})");
+                if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
+                UnityEditor.EditorApplication.playModeStateChanged -= Frame;
+                var s = Settlement.Current;
+                if (s == null) return;
+                var shot = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).FirstOrDefault(k => k.name == "Shot camera");
+                if (shot != null) s.Camera = shot;
+                s.ScreenSize = new Vector2(size[0], size[1]);
+                s.SetInsets(panels);
+                s.SetView(Environment.GetEnvironmentVariable("BASTION_VISTA") ?? Settlement.Views.Facilities, true);
+                var p = s.Camera != null ? s.Camera.transform.position / MapSpace.Tile : Vector3.zero;
+                Debug.Log(FormattableString.Invariant($"[fondo] view {s.View}, camera at {p.x:0.0},{p.y:0.0},{-p.z:0.0} tiles, {panels.Count} panels"));
             }
+            UnityEditor.EditorApplication.playModeStateChanged += Frame;
         }
 
         public static void Clearing()
@@ -589,8 +535,6 @@ namespace Bastion.EditorTools
                 settlement.Showcase(id, look ?? campaign.Soldiers.First(s => s.Id == id).Appearance, null, false, campaign.Soldiers.First(s => s.Id == id).Name);
             else settlement.Showcase(campaign, id, look);
             var clock = System.Diagnostics.Stopwatch.StartNew();
-            settlement.SetArmory(campaign);
-            double armory = clock.Elapsed.TotalMilliseconds;
             string tab = Environment.GetEnvironmentVariable("BASTION_VISTA") ?? Settlement.Views.Barracks;
             // The row: BASTION_FILA's ids ("-" an empty place; the Escuadra of 0.10.1's reference unless said: Arturo's
             // three and a free place, seen from his side, mirrored), the debrief's from the campaign's last report.
@@ -610,11 +554,10 @@ namespace Bastion.EditorTools
             var size = new Vector2(1440, 900);
             Rect R(float x0, float y0, float x1, float y1) => new Rect(x0 / size.x, y0 / size.y, (x1 - x0) / size.x, (y1 - y0) / size.y);
             var panels = new System.Collections.Generic.List<Rect> { R(0, 0, 1440, 46), R(435, 850, 1005, 898) };
-            if (tab == Settlement.Views.Engineering) panels.AddRange(new[] { R(10, 55, 345, 335), R(1090, 60, 1428, 265) });
             if (tab == Settlement.Views.Squad) panels.AddRange(new[] { R(10, 55, 238, 235), R(1200, 55, 1428, 230), R(250, 732, 1190, 885) });
             // (The debrief's panel from 65 % of the height, as UI's: 25/10.)
             if (tab == Settlement.Views.Debrief) panels.AddRange(new[] { R(245, 585, 1195, 885) });
-            double row = clock.Elapsed.TotalMilliseconds - armory;
+            double row = clock.Elapsed.TotalMilliseconds;
             // Again, its figures made already (as in the game, where the busts made them): what the row itself costs.
             if (Environment.GetEnvironmentVariable("BASTION_FILA_OTRA") == "1" && tab == Settlement.Views.Debrief && campaign.LastReport != null)
             {
@@ -662,7 +605,7 @@ namespace Bastion.EditorTools
             settlement.SetInsets(panels);
             clock.Restart();
             settlement.SetView(tab, true);
-            Debug.Log(System.FormattableString.Invariant($"[settlement] the Armería filled in {armory:0.0} ms, the row in {row:0.0} ms, the {tab} shot in {clock.Elapsed.TotalMilliseconds:0.0} ms"));
+            Debug.Log(System.FormattableString.Invariant($"[settlement] the row in {row:0.0} ms, the {tab} shot in {clock.Elapsed.TotalMilliseconds:0.0} ms"));
             // The fill turned with the camera.
             Mood.Show(settlement.Snow ? Mood.SnowDay : Mood.Day);
             Debug.Log($"[settlement] Soldados: {id} on day {campaign.Day}, {(Campaign.Wintry(campaign) ? "winter" : "thaw")}, the camera on {settlement.View}");
@@ -803,12 +746,13 @@ namespace Bastion.EditorTools
                 async void Far()
                 {
                     while (settlement.CameraMoving) await Awaitable.NextFrameAsync();
+                    // (The clearing from above's, which UI's free look started from before the runs.)
+                    var tiles = settlement.ClearingShot().target;
+                    var at = new Vector3(tiles.x, tiles.y, -tiles.z) * MapSpace.Tile;
                     if (Environment.GetEnvironmentVariable("BASTION_LEJOS") == "1")
                     {
-                        settlement.CameraFree = true;
                         var camera = settlement.Camera;
                         float pitch = 45 * Mathf.Deg2Rad, yaw = 45 * Mathf.Deg2Rad, distance = 33.5f * MapSpace.Tile;
-                        var at = settlement.ClearingTarget;
                         camera.transform.position = at + new Vector3(Mathf.Sin(yaw) * Mathf.Cos(pitch) * distance, Mathf.Sin(pitch) * distance, -Mathf.Cos(yaw) * Mathf.Cos(pitch) * distance);
                         camera.transform.LookAt(at);
                         camera.fieldOfView = 40;
@@ -816,7 +760,7 @@ namespace Bastion.EditorTools
                     void Reach(string when)
                     {
                         var urp = (QualitySettings.renderPipeline ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline) as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
-                        Debug.Log(System.FormattableString.Invariant($"[sombras] {when}: «{QualitySettings.names[QualitySettings.GetQualityLevel()]}», the shadows to {urp?.shadowDistance:0.#} m, {urp?.shadowCascadeCount} cascades, the camera {Vector3.Distance(settlement.Camera.transform.position, settlement.ClearingTarget):0.#} m off"));
+                        Debug.Log(System.FormattableString.Invariant($"[sombras] {when}: «{QualitySettings.names[QualitySettings.GetQualityLevel()]}», the shadows to {urp?.shadowDistance:0.#} m, {urp?.shadowCascadeCount} cascades, the camera {Vector3.Distance(settlement.Camera.transform.position, at):0.#} m off"));
                     }
                     Reach("before");
                     if (Environment.GetEnvironmentVariable("BASTION_GRAFICOS") is string level && Array.IndexOf(QualitySettings.names, level) is int index && index >= 0)
@@ -1033,78 +977,6 @@ namespace Bastion.EditorTools
 
         /// <summary>A campaign saved as the server sends it (UI's SampleCampaign's way: the net's JSON).</summary>
         /// <summary>
-        /// The siege's posts with their soldiers (Settlement.SetPosts, clearingArt.ts setPosts) on UI's sample campaign: its
-        /// first soldiers on foot each on a post round the Bastión, one on a watchtower's deck if the clearing has one, in
-        /// their players' colours; the Escuadra's tab in a siege. From BASTION_LOOK (the clearing's middle, 16 unless said).
-        /// BASTION_TORRE=1: a watchtower put up first where it can stand nearest the middle, one of them on its deck;
-        /// BASTION_MARCA=1, a yellow ball where each post's name goes (PostWorld: UI's tag).
-        ///   unity/tools/captura.sh -shotOut puestos.png -shotSetup Bastion.EditorTools.SettlementLab.Puestos -shotPlay -shotFrames 1
-        /// </summary>
-        public static void Puestos()
-        {
-            string root = Path.GetFullPath(Path.Combine(Application.dataPath, "../../.."));
-            var campaign = SampleCampaign(Environment.GetEnvironmentVariable("BASTION_PARTIDA") ?? Path.Combine(root, ".dev-snapshots/ui/estrategia-0101/partida-muestra.json"));
-            int c = campaign.Bastion.Width / 2;
-            if (Environment.GetEnvironmentVariable("BASTION_TORRE") == "1")
-            {
-                var b = campaign.Bastion;
-                var spot = Enumerable.Range(0, 400).Select(k => (x: c - 10 + k % 20, y: c - 10 + k / 20))
-                    .OrderBy(q => Mathf.Abs(Mathf.Sqrt((q.x - c) * (q.x - c) + (q.y - c) * (q.y - c)) - 6))
-                    .FirstOrDefault(q => Bastion.Engine.Base.PlaceBlocker(b, PieceIds.Tower, q.x, q.y, 0) == null);
-                b.Pieces.Add(new BasePiece { Id = "torre-lab", Piece = PieceIds.Tower, X = spot.x, Y = spot.y, Rot = 0, Hp = 30, Level = 1 });
-                Debug.Log($"[puestos] a watchtower at {spot.x},{spot.y}");
-            }
-            var settlement = new GameObject("Asentamiento").AddComponent<Settlement>();
-            var camera = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).FirstOrDefault(k => k.name == "Shot camera") ?? new GameObject("Shot camera").AddComponent<Camera>();
-            settlement.Camera = camera;
-            settlement.Show(campaign.Bastion, Campaign.Wintry(campaign), MapLab.Prefabs(), MapLab.Materials());
-            var look = Environment.GetEnvironmentVariable("BASTION_LOOK")?.Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
-            Look(look != null && look.Length >= 3 ? look[0] : c, look != null && look.Length >= 3 ? look[1] : c, look != null && look.Length >= 3 ? look[2] : 16, look != null && look.Length >= 4 ? look[3] : 0);
-            // Round the Bastión, out a few tiles each way, and a deck if there is one.
-            var state = Settlement.ClearingState(campaign.Bastion, Campaign.Wintry(campaign));
-            var tiles = new System.Collections.Generic.List<Vector2Int> { new Vector2Int(c - 5, c + 2), new Vector2Int(c + 5, c - 1), new Vector2Int(c - 1, c - 6), new Vector2Int(c + 2, c + 6) };
-            // (A deck's middle: raised all round.)
-            bool Raised(int x, int y) => x >= 0 && y >= 0 && x < state.Width && y < state.Height && state.Elev[y * state.Width + x] > 0;
-            int deck = Enumerable.Range(0, state.Elev.Count).FirstOrDefault(i => state.Tiles[i] == "floor" && Enumerable.Range(0, 9).All(k => Raised(i % state.Width + k % 3 - 1, i / state.Width + k / 3 - 1)));
-            if (deck > 0) tiles.Add(new Vector2Int(deck % state.Width, deck / state.Width));
-            var colours = Content.PlayerColors;
-            void Go(UnityEditor.PlayModeStateChange change)
-            {
-                if (change != UnityEditor.PlayModeStateChange.EnteredPlayMode) return;
-                UnityEditor.EditorApplication.playModeStateChanged -= Go;
-                // (Figures made in play mode: their clips' graphs don't outlive entering it.)
-                settlement.Show(campaign);
-                settlement.SiegeNow = true;
-                settlement.SetView(Settlement.Views.Squad, true);
-                settlement.CameraFree = true;
-                var squad = campaign.Soldiers.Where(s => s.Alive && s.WoundedDays <= 0).Take(tiles.Count).ToList();
-                var posts = squad.Select((s, i) =>
-                {
-                    ColorUtility.TryParseHtmlString(colours[Mathf.Clamp(s.Owner, 0, colours.Count - 1)], out var colour);
-                    return new Settlement.SiegePost { id = s.Id, name = s.Name, colour = colour, x = tiles[i].x, y = tiles[i].y, mine = s.Owner == 0 };
-                }).ToList();
-                settlement.SetPosts(posts, null);
-                if (Environment.GetEnvironmentVariable("BASTION_MARCA") == "1")
-                    foreach (var p in posts)
-                    {
-                        var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                        UnityEngine.Object.DestroyImmediate(ball.GetComponent<Collider>());
-                        ball.name = "Etiqueta " + p.name;
-                        ball.transform.position = settlement.PostWorld(p.id) ?? Vector3.zero;
-                        ball.transform.localScale = Vector3.one * 0.25f;
-                        var m = KitMaterials.New(KitMaterials.Glowing, "Etiqueta");
-                        if (m != null) m.SetColor("_BaseColor", Color.yellow);
-                        ball.GetComponent<Renderer>().sharedMaterial = m;
-                    }
-                Look(look != null && look.Length >= 3 ? look[0] : c, look != null && look.Length >= 3 ? look[1] : c, look != null && look.Length >= 3 ? look[2] : 16, look != null && look.Length >= 4 ? look[3] : 0, camera);
-                // BASTION_LOOK's 5th: the point looked at that many storeys up (a deck).
-                if (look != null && look.Length >= 5) camera.transform.position += Vector3.up * look[4] * MapSpace.Storey;
-                Debug.Log($"[puestos] {string.Join("; ", posts.Select(p => $"{p.name} at {p.x},{p.y}{(state.Elev[p.y * state.Width + p.x] > 0 ? " (deck)" : "")}"))}");
-            }
-            UnityEditor.EditorApplication.playModeStateChanged += Go;
-        }
-
-        /// <summary>
         /// A campaign from `file` (a save, or the campaign alone), brought up to now as the game brings a save it opens
         /// (Campaign.MigrateCampaign: a base from before 28/10 with its old tracks planted); BASTION_NUEVA=seed, a new one
         /// instead (Campaign.CreateCampaign, one player).
@@ -1133,6 +1005,8 @@ namespace Bastion.EditorTools
 
         static BaseState Base()
         {
+            // BASTION_FIJO=1: the runs' fixed base (Settlement.FixedBase), as the game shows it.
+            if (Environment.GetEnvironmentVariable("BASTION_FIJO") == "1") return Settlement.FixedBase();
             string file = Environment.GetEnvironmentVariable("BASTION_BASE_FILE");
             if (file != null)
                 return Newtonsoft.Json.JsonConvert.DeserializeObject<BaseState>(File.ReadAllText(file), new Newtonsoft.Json.JsonSerializerSettings { ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver() });

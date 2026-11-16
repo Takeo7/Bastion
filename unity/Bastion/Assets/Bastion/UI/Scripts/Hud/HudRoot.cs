@@ -23,11 +23,15 @@ namespace Bastion.UI.Hud
         [SerializeField] Vector3 north = Vector3.forward;
 
         readonly HandlerRelay relay = new HandlerRelay();
+        TouchButtons touchButtons;
         VisualElement root;
         TooltipLayer tips;
         TurnStrip strip;
         SquadList squad;
         UnitPanel unit;
+        /// <summary>The runs' pack in combat (H3): its grids, one thing dragged at a time, at 40 points a cell.</summary>
+        Bastion.UI.Gear.GearBoard gear;
+        readonly Bastion.UI.Gear.GearRelay gearRelay = new Bastion.UI.Gear.GearRelay();
         ActionBar bar;
         ShotPanel shot;
         TurnActions turnActions;
@@ -76,17 +80,20 @@ namespace Bastion.UI.Hud
             root = doc.rootVisualElement.Q("hud");
             icons = Resources.Load<HudIconTable>("HudIcons");
             tips = new TooltipLayer(root);
-            strip = new TurnStrip(root, tips);
+            strip = new TurnStrip(root, tips, relay.OnPassCommand);
             // The squad's plate, bottom left (UI-COMBATE UI-01): the sheet over the cards, the backpack over the sheet's end.
             // mixta.css: one of the big plates, in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
             squadPlate = root.Q("squad-plate");
             PlateFrame.Dress(squadPlate);
             squad = new SquadList(root.Q("squad-cards"), squadPlate, relay, tips);
-            unit = new UnitPanel(root.Q("unit-panel"), root.Q("pack"), relay, tips, Icon);
+            gear = new Bastion.UI.Gear.GearBoard(root, tips, Icon, gearRelay) { Cell = 40, PictureOf = Bastion.Client.GearPictures.Of, CanThrow = false };
+            unit = new UnitPanel(root.Q("unit-panel"), root.Q("pack"), relay, tips, Icon) { Gear = gear };
             abilitiesHost = root.Q("abilities");
             bar = new ActionBar(abilitiesHost, relay, tips, Icon);
             shot = new ShotPanel(root.Q("shot-panel"), relay, tips);
             turnActions = new TurnActions(root.Q("end-slot"), root.Q("clocks"), relay, tips, Icon);
+            // With the finger, what only a key did has its button (docs/IOS.md, phase 2); the desktop has none.
+            if (Bastion.Client.GameInput.Touch) touchButtons = new TouchButtons(root, root.Q("end-slot"), relay, tips, Icon);
             // The keys' row in the screen's middle, but clear of the squad's plate when it grows (eight cards).
             actions = root.Q("actions");
             squadPlate.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
@@ -94,6 +101,7 @@ namespace Bastion.UI.Hud
             root.RegisterCallback<GeometryChangedEvent>(_ => PlaceActions());
             cards = new Cards(root.Q("cards"), relay, s => Sound?.Invoke(s));
             goal = new GoalCard(root.Q("goal"), root.Q("compass"), tips, ReopenIntro, root.Q("edge-marks"));
+            if (Bastion.Client.GameInput.Touch) goal.TurnsCamera(relay.OnTurnCamera);
             log = new Log(root.Q("log"), Icon);
             flags = new UnitFlags(root.Q("flags"), Icon);
             flags.TargetPicked += id => TargetPicked?.Invoke(id);
@@ -141,9 +149,19 @@ namespace Bastion.UI.Hud
             relay.Target = handlers ?? NoHandlers.Instance;
         }
 
+        /// <summary>Who answers the run's pack's grids (RunPack.Refusal, the item orders): the combat controller.</summary>
+        public void BindGear(Bastion.UI.Gear.IGearHandlers handlers) => gearRelay.Target = handlers;
+
+        /// <summary>Esc on the pack's grids: a dragged thing back, a thing's orders closed. Whether it took it.</summary>
+        public bool CloseGear() => gear != null && gear.Close();
+
+        /// <summary>Tests: the pack's grids (GearBoard.TestDragTo, TestPick).</summary>
+        public Bastion.UI.Gear.GearBoard Gear => gear;
+
         void LateUpdate()
         {
             if (root == null) return;
+            gear?.Tick();
             var cam = worldCamera != null ? worldCamera : Camera.main;
             if (HeadOf != null) flags.Follow(cam, HeadOf);
             edges.Follow(cam);
@@ -158,12 +176,13 @@ namespace Bastion.UI.Hud
             var width = root?.layout.width ?? float.NaN;
             var row = actions.layout.width;
             if (float.IsNaN(width) || float.IsNaN(row)) return;
-            // The plate's frame stands 8 px out of it (PlateFrame).
-            var plate = squadPlate.resolvedStyle.display == DisplayStyle.None ? 0 : squadPlate.layout.xMax + 8 + 12;
+            // The plate's frame stands 8 px out of it (PlateFrame). With the finger the plate is up on the left, out of the keys' way.
+            var plate = squadPlate.resolvedStyle.display == DisplayStyle.None || Bastion.Client.GameInput.Touch ? 0 : squadPlate.layout.xMax + 8 + 12;
             var left = Mathf.Round(Mathf.Max(width / 2, plate + row / 2));
             // The row's width changes by a pixel with where it stands (its keys snapped to whole pixels): moved for that,
-            // it was laid out again and again, the left and the width taking turns (the 0.12.9: «Layout update is
-            // struggling», hundreds a second, with the partner's cards widening the plate). Less than two pixels, it stays.
+            // it was laid out again and again in the same frame, the left and the width taking turns («Layout update is
+            // struggling», thousands a minute in every battle with the row pushed right, since before the 0.12.2; some
+            // 0.4 ms a frame). Less than two pixels, it stays.
             if (!float.IsNaN(actionsLeft) && Mathf.Abs(left - actionsLeft) < 2) return;
             actionsLeft = left;
             actions.style.left = left;
@@ -219,6 +238,9 @@ namespace Bastion.UI.Hud
 
         /// <summary>The enemies' sight's button and legend (Arturo, 5/11 #6, #9).</summary>
         public void SetSight(SightView v) => sight?.Set(v);
+
+        /// <summary>With the finger, which of its buttons show (TouchButtons); nothing at the desktop.</summary>
+        public void SetTouch(TouchView v) => touchButtons?.Set(v);
 
         /// <summary>The enemies' sight's button pressed.</summary>
         public event Action SightToggled;

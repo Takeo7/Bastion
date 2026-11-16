@@ -38,6 +38,9 @@ namespace Bastion.Engine
         public int? Mags { get; set; }
         /// <summary>Its experience lines, to fill out there (docs/FASE10.md §2).</summary>
         public MissionLines? Lines { get; set; }
+        /// <summary>A run's soldier (H3): its pack and its kit's places, copied onto the unit (Unit.Pack, Unit.Kit).</summary>
+        public GearGrid? Pack { get; set; }
+        public KitPlaces? Kit { get; set; }
     }
 
     /// <summary>MapSource's `kind`.</summary>
@@ -147,6 +150,8 @@ namespace Bastion.Engine
         public int? Vehicle { get; set; }
         /// <summary>Where defenders stand when a siege begins (campaign.ts siegePosts, by campaignId): the rest, at the spawns.</summary>
         public Dictionary<string, Vec2>? Posts { get; set; }
+        /// <summary>The runs' «horda despierta» (H3): every group alert, and a wave by an edge in the first enemy turn (MissionState.Awake).</summary>
+        public bool? Awake { get; set; }
     }
 
     public static class Setup
@@ -867,6 +872,9 @@ namespace Bastion.Engine
                     if (m.Lines != null) u.Lines = Bars.MissionLinesOf(m.Lines.Start, m.Lines.Growth, m.Lines.Bonus);
                     arm(u);
                     u.Gear = new List<string>(m.Gear);
+                    // A run's soldier (H3): its pack and its kit, its own copy.
+                    if (m.Pack != null) u.Pack = Gears.CloneGrid(m.Pack);
+                    if (m.Kit != null) u.Kit = Gears.ClonePlaces(m.Kit);
                     units.Add(u);
                 }
             }
@@ -984,6 +992,13 @@ namespace Bastion.Engine
             {
                 foreach (var u in units) if (u.Team == Teams.Xcom && u.Mags != null) u.Mags = Math.Max(u.Mags.Value, Content.Siege.Mags);
             }
+            // The runs' «horda despierta» (H3): every group alert from the start, and a wave by an edge in the first enemy turn.
+            var awake = opts.Awake == true && siege == null;
+            if (awake)
+            {
+                foreach (var pod in pods) pod.Active = true;
+                reinforcements.Add(new Reinforcement { Id = $"r{reinforcements.Count + 1}", Turn = 1, Pos = null, Units = HordeWave(difficulty), Landed = false, Horde = true });
+            }
 
             var mission = new MissionState
             {
@@ -1005,6 +1020,7 @@ namespace Bastion.Engine
                 Horde = siege == null ? HordeWave(difficulty) : null,
                 Night = opts.Night == true,
                 Siege = siege,
+                Awake = awake ? true : (bool?)null,
             };
 
             // The squad starts looking into the map (Arturo, 23/10: «los soldados aparecen mirando al revés»): towards what the

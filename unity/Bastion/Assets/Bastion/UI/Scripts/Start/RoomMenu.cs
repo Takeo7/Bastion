@@ -242,7 +242,7 @@ namespace Bastion.UI.Start
             var router = Router;
             var internet = router == RouterState.Open ? Internet : null;
             if (addresses.Count == 0 && internet == null) return;
-            Ui.Text(RoomText.Invite(players.FirstOrDefault(p => p.Slot == Slot)?.Name), "start__hint", invite);
+            Ui.Text(Bastion.Client.Net.NetLink.LanBlind ? RoomText.InviteBlind : RoomText.Invite(players.FirstOrDefault(p => p.Slot == Slot)?.Name), "start__hint", invite);
             if (addresses.Count > 0) Address(invite, addresses[0]);
             if (internet != null) Address(invite, new HostAddress { Address = internet, Kind = "internet" });
             else if (router != null && router != RouterState.Open) Ui.Text(RoomText.RouterLine(router.Value), router == RouterState.Trying ? "room__router" : "room__router room__router--off", invite);

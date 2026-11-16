@@ -21,12 +21,16 @@ namespace Bastion.UI.Hud
         string turnKey;
         string playersKey;
 
-        public TurnStrip(VisualElement root, TooltipLayer tips)
+        /// <summary>With the finger, «Ceder» by the partner (the desktop's C: TouchButtons' fellow).</summary>
+        readonly System.Action pass;
+
+        public TurnStrip(VisualElement root, TooltipLayer tips, System.Action pass = null)
         {
             turn = root.Q("turn");
             frame = root.Q("turn-frame");
             players = root.Q("players");
             this.tips = tips;
+            this.pass = pass;
         }
 
         public void SetTurn(TurnView v)
@@ -67,6 +71,15 @@ namespace Bastion.UI.Hud
                 // Who holds the command, in words beside the name, in their colour (Arturo, 7/11: «no queda claro»).
                 if (p.Command) Ui.Text(HudText.Players.Command, "player__command font-title", row).style.color = colour;
                 if (!string.IsNullOrEmpty(p.Status)) Ui.Text(p.Status, "player__status", row);
+                // With the finger, by the partner: hand the command over (Lore: «Ceder»).
+                if (v.CanPass && !p.Me && pass != null)
+                {
+                    var give = new Button(pass) { text = HudText.TouchButtons.Pass };
+                    give.AddToClassList("player__pass");
+                    give.AddToClassList("font-title");
+                    row.Add(give);
+                    tips.Attach(give, HudText.TouchButtons.PassTip);
+                }
             }
         }
     }

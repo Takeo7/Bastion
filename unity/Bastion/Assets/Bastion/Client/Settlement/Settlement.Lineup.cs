@@ -553,5 +553,11 @@ namespace Bastion.Client
             if (best != null) Debug.Log(System.FormattableString.Invariant($"[settlement] lineup of {count}: side {bestK}, shift {bestShift:0.#}, cost {bestCost:0.#}, on the lot {bestLot}; tried: {string.Join(" | ", tried)}"));
             return place = best;
         }
+
+        static void DropStander(Stander s)
+        {
+            s.anim?.Dispose();
+            if (s.root != null) DestroyNow(s.root.gameObject);
+        }
     }
 }

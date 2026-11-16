@@ -167,6 +167,8 @@ namespace Bastion.Engine
         /// </summary>
         public static int AddPlayer(CampaignState c, int slot, Rng rng)
         {
+            // A campaign of runs (version 28) hands over its own way, with kits.
+            if (IsRuns(c)) return Runs.AddPlayer(c, slot, rng);
             if (c.Players.Contains(slot)) return 0;
             c.Players = c.Players.Append(slot).OrderBy((p) => p).ToList();
             // Untouched rookies change hands, but never the reserves the commander already there

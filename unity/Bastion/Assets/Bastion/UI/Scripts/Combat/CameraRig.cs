@@ -1,5 +1,5 @@
+using Bastion.Client;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace Bastion.UI.Combat
 {
@@ -234,6 +234,9 @@ namespace Bastion.UI.Combat
         /// <summary>The right button held drags the ground; off on the clearing (playtest 20/10 #6: «solo WASD»), where a right click lets go of what is in hand.</summary>
         public bool RightDrag = true;
 
+        /// <summary>With the finger, one finger is a tool's, not the camera's (the base with something in hand): two move it.</summary>
+        public System.Func<bool> OneFingerTaken;
+
         void Update()
         {
             // The pause (Time.timeScale 0: CombatController.Halt): the camera waits where it is with the battle, whatever it
@@ -249,42 +252,42 @@ namespace Bastion.UI.Combat
             }
             var held = Held != null && Held();
             // (Not with Cmd or Ctrl held: Cmd+W, Cmd+Q, Ctrl+A are the system's.)
-            var keys = held || Bastion.UI.App.Shortcuts.Elsewhere(Keyboard.current) ? null : Keyboard.current;
-            var mouse = held ? null : Mouse.current;
-            if (keys != null)
+            var keys = !held && !GameInput.SystemHeld && GameInput.HasKeys;
+            var mouse = !held && GameInput.HasPointer;
+            if (keys)
             {
-                if (keys.qKey.wasPressedThisFrame) Rotate(-1);
-                if (keys.eKey.wasPressedThisFrame) Rotate(1);
+                if (GameInput.Down(GameInput.Key.TurnLeft)) Rotate(-1);
+                if (GameInput.Down(GameInput.Key.TurnRight)) Rotate(1);
                 var speed = 24f * dt * (distance / 36f);
                 var forward = 0f;
                 var right = 0f;
-                if (keys.wKey.isPressed || keys.upArrowKey.isPressed) forward += speed;
-                if (keys.sKey.isPressed || keys.downArrowKey.isPressed) forward -= speed;
-                if (keys.dKey.isPressed || keys.rightArrowKey.isPressed) right += speed;
-                if (keys.aKey.isPressed || keys.leftArrowKey.isPressed) right -= speed;
+                if (GameInput.Held(GameInput.Key.Forward)) forward += speed;
+                if (GameInput.Held(GameInput.Key.Backward)) forward -= speed;
+                if (GameInput.Held(GameInput.Key.Right)) right += speed;
+                if (GameInput.Held(GameInput.Key.Left)) right -= speed;
                 if (right != 0 || forward != 0)
                 {
                     TakeControl();
                     Pan(right, forward);
                 }
             }
-            if (mouse != null)
+            if (mouse)
             {
                 // With Shift or Alt the wheel changes floor (the controller's), and over the HUD it is the HUD's.
-                var wheel = mouse.scroll.ReadValue().y;
-                if (wheel != 0 && (keys == null || !keys.shiftKey.isPressed && !keys.altKey.isPressed) && (OverHud == null || !OverHud(mouse.position.ReadValue())))
+                var wheel = GameInput.Wheel.y;
+                if (wheel != 0 && (!keys || !GameInput.Shift && !GameInput.Alt) && (OverHud == null || !OverHud(GameInput.Point)))
                 {
                     TakeControl();
                     desiredDistance = Mathf.Clamp(desiredDistance * (1 - wheel * 0.001f), MinDistance, MaxDistance);
                 }
                 // The right button held drags the ground under it.
-                var at = mouse.position.ReadValue();
-                if (RightDrag && mouse.rightButton.wasPressedThisFrame)
+                var at = GameInput.Point;
+                if (RightDrag && GameInput.Pressed(GameInput.Button.Secondary))
                 {
                     dragging = true;
                     dragFrom = at;
                 }
-                if (!mouse.rightButton.isPressed) dragging = false;
+                if (!GameInput.Held(GameInput.Button.Secondary)) dragging = false;
                 if (dragging && at != dragFrom)
                 {
                     TakeControl();
@@ -292,6 +295,26 @@ namespace Bastion.UI.Combat
                     Pan(-(at.x - dragFrom.x) * scale, -(at.y - dragFrom.y) * scale);
                     dragFrom = at;
                 }
+            }
+            // The finger (GameInput, iOS; Arturo, 7/11): one finger dragged, or two, drag the ground under them; two pinch it
+            // closer or further, within the wheel's bounds; two turned TwistStep degrees turn a quarter, as Q and E. A finger
+            // on the map keeps the camera the player's (the camera never fights the player).
+            if (!held && GameInput.Touch)
+            {
+                var drag = GameInput.Drag;
+                if (drag != Vector2.zero && !(GameInput.Fingers == 1 && OneFingerTaken != null && OneFingerTaken()))
+                {
+                    TakeControl();
+                    var scale = distance / Mathf.Max(1, Screen.height) * 1.2f;
+                    Pan(-drag.x * scale, -drag.y * scale);
+                }
+                if (GameInput.Pinch != 1)
+                {
+                    TakeControl();
+                    desiredDistance = Mathf.Clamp(desiredDistance / GameInput.Pinch, MinDistance, MaxDistance);
+                }
+                if (GameInput.Twist != 0) Rotate(-GameInput.Twist);
+                if (GameInput.Busy) TakeControl();
             }
             Step(dt);
         }

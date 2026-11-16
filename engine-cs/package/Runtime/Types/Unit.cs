@@ -325,6 +325,10 @@ namespace Bastion.Engine
         public Deeds? Deeds { get; set; }
         /// <summary>A zombie risen from a soldier of the squad (its id): it keeps that soldier's `appearance` (playtest 2026-10-16).</summary>
         public string? RisenFrom { get; set; }
+        /// <summary>A run's soldier (H3): its pack, a grid of gear (Backpack stays null); absent outside the runs.</summary>
+        public GearGrid? Pack { get; set; }
+        /// <summary>A run's soldier (H3): its kit's places (RunPack keeps Arms, charges and health with them).</summary>
+        public KitPlaces? Kit { get; set; }
     }
 
     /// <summary>Unit.automaton: `{ piece: string }`.</summary>

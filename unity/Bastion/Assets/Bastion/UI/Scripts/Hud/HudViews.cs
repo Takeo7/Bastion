@@ -58,6 +58,18 @@ namespace Bastion.UI.Hud
     public sealed class PlayersView
     {
         public List<PlayerView> Players = new List<PlayerView>();
+        /// <summary>With the finger: «Ceder» by the partner (this player holds the command, the partner has something to move).</summary>
+        public bool CanPass;
+    }
+
+    /// <summary>The finger's buttons (TouchButtons): the floors where there are any, and the faster key in the enemy's turn.</summary>
+    [Serializable]
+    public sealed class TouchView
+    {
+        public bool Floors;
+        public bool CanUp;
+        public bool CanDown;
+        public bool Hurry;
     }
 
     /// <summary>One player's turn clock (the server's turnClock): how much is left, 0–1, and whether it runs now.</summary>
@@ -319,6 +331,23 @@ namespace Bastion.UI.Hud
         public List<PackTotalView> Totals = new List<PackTotalView>();
         /// <summary>What the squad carries, in words (lootSummary), on its totals.</summary>
         public string SquadTip;
+        /// <summary>The runs (H3): the pack in a grid, the kit's places, the floor and the partners beside; null, the slots of before.</summary>
+        public RunPackView Run;
+    }
+
+    /// <summary>
+    /// A run's soldier's pack in combat (H3; RunPack): its grid, its kit's places, what lies at its feet laid out in a grid,
+    /// and the partners beside it as places to give to. Things go from one to another on the grids' board (GearBoard).
+    /// </summary>
+    [Serializable]
+    public sealed class RunPackView
+    {
+        public Bastion.UI.Gear.GearGridView Pack;
+        public List<Bastion.UI.Gear.GearSlotView> Kit = new List<Bastion.UI.Gear.GearSlotView>();
+        /// <summary>What lies at its feet (GameState.FloorGear), packed into a grid four wide; null, nothing.</summary>
+        public Bastion.UI.Gear.GearGridView Floor;
+        /// <summary>The partners beside it (Slot «give», the partner's name): a thing let go on one is given.</summary>
+        public List<Bastion.UI.Gear.GearSlotView> Give = new List<Bastion.UI.Gear.GearSlotView>();
     }
 
     // -------------------------------------------------------------- actions
@@ -470,6 +499,8 @@ namespace Bastion.UI.Hud
     {
         public bool Shown;
         public List<int> Hot = new List<int>();
+        /// <summary>Its letters at the screen's edges too (a siege's); not the finger's compass of every mission.</summary>
+        public bool Edges = true;
     }
 
     // ---------------------------------------------------------------- flags

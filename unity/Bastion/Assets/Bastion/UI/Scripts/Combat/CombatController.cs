@@ -7,7 +7,7 @@ using Bastion.Engine;
 using Bastion.Net;
 using Bastion.UI.Hud;
 using UnityEngine;
-using UnityEngine.InputSystem;
+using GameInput = Bastion.Client.GameInput;
 using Grid = Bastion.Engine.Grid;
 
 namespace Bastion.UI.Combat
@@ -113,6 +113,7 @@ namespace Bastion.UI.Combat
             if (Hud != null)
             {
                 Hud.Bind(this);
+                Hud.BindGear(this);
                 Hud.Look += at => LookAt(at - Vector3.up * Board.Tile);
                 Hud.SightToggled += ToggleSight;
                 Hud.TargetPicked += PickTarget;
@@ -716,7 +717,7 @@ namespace Bastion.UI.Combat
                 Overlay.ShowEnemies(EnemyFeet());
                 // The one pointed at from the list (#11), followed as it walks; off once the pointer moves on the map (a list
                 // drawn again under it takes its leaving with it).
-                if (listPointed != null && Mouse.current is var m && m != null && m.delta.ReadValue() != Vector2.zero && Hud != null && !Hud.Over(m.position.ReadValue())) OnHoverSquad(null);
+                if (listPointed != null && GameInput.HasPointer && GameInput.PointMoved != Vector2.zero && Hud != null && !Hud.Over(GameInput.Point)) OnHoverSquad(null);
                 Overlay.ShowPointed(listPointed != null ? FeetOf(listPointed) : null);
                 // The range's islands while the pointer is on one (Arturo, 14/11).
                 Overlay.PointIslands(hover);
@@ -738,32 +739,40 @@ namespace Bastion.UI.Combat
             Overlay?.Cinematic(away || elsewhere);
             AimMarks?.Cinematic(away);
             Hud?.SetSight(SightNow());
+            // With the finger: the floors where there are any, the faster key while the enemy plays (TouchButtons).
+            if (Hud != null && Bastion.Client.GameInput.Touch)
+                Hud.SetTouch(new TouchView { Floors = MaxLevel > 0 && !Overhead, CanUp = Level < MaxLevel, CanDown = Level > 0, Hurry = EnemyTurnPlaying() });
             Marks?.Cinematic(Film || Rig != null && Rig.Away);
-            var mouse = Mouse.current;
-            if (mouse == null || Rig == null) return;
-            var at = mouse.position.ReadValue();
-            if (mouse.delta.ReadValue() != Vector2.zero) hoverHeld = false;
+            if (!GameInput.HasPointer || Rig == null) return;
+            // With the finger nothing hovers: the gestures say what it did.
+            if (GameInput.Touch)
+            {
+                FingerOnMap();
+                return;
+            }
+            var at = GameInput.Point;
+            if (GameInput.PointMoved != Vector2.zero) hoverHeld = false;
             var overHud = Hud != null && Hud.Over(at);
             // Any click or the wheel in the game lets «TU TURNO» go and does what it does (Arturo, 23/10 #8: aiming, it
             // stayed in the middle); one on the stamp itself only lets it go (Banner, with its sound).
-            if (Hud != null && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame || mouse.middleButton.wasPressedThisFrame || mouse.scroll.ReadValue().y != 0) && !Hud.OverBanner(at))
+            if (Hud != null && (GameInput.Pressed(GameInput.Button.Primary) || GameInput.Pressed(GameInput.Button.Secondary) || GameInput.Pressed(GameInput.Button.Middle) || GameInput.Wheel.y != 0) && !Hud.OverBanner(at))
                 Hud.ReleaseBanner(true);
             // A press on the map closes the backpack's menu (one on the HUD, its root: Backpack.PressedAt).
-            if (Hud != null && !overHud && (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame)) Hud.ClosePackMenu();
+            if (Hud != null && !overHud && (GameInput.Pressed(GameInput.Button.Primary) || GameInput.Pressed(GameInput.Button.Secondary))) Hud.ClosePackMenu();
             // From above (#12) a click only brings the camera down there: no pointer on a tile, no order. Marks, as in the
             // view (Arturo, 02/11 A3): Shift and the click, or the wheel's click, on the tile under the pointer (G: Keys).
             if (Overhead)
             {
                 if (!overHud && (Hud == null || !Hud.MenuOpen)) App.GameCursor.Ask(App.GameCursor.Kind.Arrow);
-                var marking = Keyboard.current != null && Keyboard.current.shiftKey.isPressed && !App.Shortcuts.Elsewhere(Keyboard.current);
-                if (!overHud && (Hud == null || !Hud.MenuOpen) && (mouse.leftButton.wasPressedThisFrame || mouse.middleButton.wasPressedThisFrame) && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), 0, out var down))
+                var marking = GameInput.Shift && !GameInput.SystemHeld;
+                if (!overHud && (Hud == null || !Hud.MenuOpen) && (GameInput.Pressed(GameInput.Button.Primary) || GameInput.Pressed(GameInput.Button.Middle)) && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), 0, out var down))
                 {
-                    if (marking || mouse.middleButton.wasPressedThisFrame) Ping(down);
+                    if (marking || GameInput.Pressed(GameInput.Button.Middle)) Ping(down);
                     else OverheadClick(down);
                 }
                 return;
             }
-            RightClick(mouse, at, overHud);
+            RightClick(at, overHud);
             if (!hoverHeld)
             {
                 var place = !overHud && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), Level, out var p) ? p : null;
@@ -776,20 +785,20 @@ namespace Bastion.UI.Combat
                 }
             }
             // (Not with Cmd or Ctrl too: a screenshot's Cmd+Mayús+4 is no signal. Red, 28/10.)
-            var shift = Keyboard.current != null && Keyboard.current.shiftKey.isPressed && !App.Shortcuts.Elsewhere(Keyboard.current);
+            var shift = GameInput.Shift && !GameInput.SystemHeld;
             if (!overHud && (Hud == null || !Hud.MenuOpen)) App.GameCursor.Ask(CursorOn(hover, shift));
             if (Hud != null && Hud.MenuOpen) return;
             // Shift and the click, or the wheel's click, mark the tile for both (playtest 19/10 #14); Shift or Alt and the wheel, the floor.
-            if (!overHud && mouse.leftButton.wasPressedThisFrame)
+            if (!overHud && GameInput.Pressed(GameInput.Button.Primary))
             {
                 if (shift) Ping();
                 else Click(at);
             }
-            if (!overHud && mouse.middleButton.wasPressedThisFrame) Ping();
+            if (!overHud && GameInput.Pressed(GameInput.Button.Middle)) Ping();
             // Shift turns the wheel sideways on a Mac (game.ts: deltaY || deltaX); a trackpad sends a burst of these, one floor a gesture.
-            var scroll = mouse.scroll.ReadValue();
+            var scroll = GameInput.Wheel;
             var wheel = scroll.y != 0 ? scroll.y : scroll.x;
-            var alt = Keyboard.current != null && Keyboard.current.altKey.isPressed;
+            var alt = GameInput.Alt;
             if ((shift || alt) && wheel != 0 && !overHud)
             {
                 if (Time.unscaledTime - lastFloorWheel > 0.3f) SetLevel(Level + (wheel > 0 ? 1 : -1));
@@ -798,6 +807,90 @@ namespace Bastion.UI.Combat
         }
 
         float lastFloorWheel = -10;
+
+        /// <summary>
+        /// The finger on the map (docs/IOS.md, phase 2; Arturo, 7/11, in Gameplay's box). Nothing hovers, so a tap on the
+        /// ground points at the tile first, with what the mouse showed on its way there (the way, the destination's note,
+        /// the grey eyes and the odds, the cover, «corre»; a door, a box, a throw's area), and a second tap on the same tile
+        /// does it, as a click. A tap on a soldier of the squad or an enemy in sight is a click at once (aiming's panel is
+        /// its own preview), and so is one on the ground while aiming or with a self ability armed (it backs out). Held: on
+        /// an enemy in sight, its sight on the ground while held and its file once let go; on one of this player's
+        /// soldiers, its sheet; on the ground, a mark for both. From above (the map), a tap brings the camera down there;
+        /// held, a mark.
+        /// </summary>
+        void FingerOnMap()
+        {
+            bool tapped = GameInput.Tapped, held = GameInput.LongPressed, letGo = GameInput.LongReleased;
+            if (!tapped && !held && !letGo) return;
+            var at = GameInput.FingerAt;
+            if (Hud != null && (tapped || held))
+            {
+                // Any tap lets «TU TURNO» go and does what it does (Arturo, 23/10 #8); one on the map closes the backpack's menu.
+                Hud.ReleaseBanner(true);
+                Hud.ClosePackMenu();
+            }
+            if (Hud != null && Hud.MenuOpen) return;
+            if (Overhead)
+            {
+                if ((tapped || held) && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), 0, out var down))
+                {
+                    if (held) Ping(down);
+                    else OverheadClick(down);
+                }
+                return;
+            }
+            var place = Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(at), Level, out var p) ? p : null;
+            if (letGo)
+            {
+                // The enemy whose sight was held on the ground: its file once let go (a right click's).
+                var seen = heldEnemy != null ? UnitById(State, heldEnemy) : null;
+                heldEnemy = null;
+                // Its sight goes with the finger (it was the finger's: Lore, «al soltar, su ficha»).
+                if (seen != null) Point(null);
+                if (seen != null && seen.Alive && Visible(seen)) ShowEnemyFile(seen);
+                if (GameInput.Logging) Debug.Log($"[dedo] suelta: {(seen != null ? $"ficha de {seen.Id}" : "nada")}");
+                return;
+            }
+            var body = place != null ? BodyUnder(at, place) : null;
+            var unit = body ?? (place != null ? Grid.UnitAt(State, place) : null);
+            if (unit != null && (!unit.Alive || (unit.Team != Teams.Xcom && !Visible(unit)))) unit = null;
+            string Where(Pos q) => q != null ? $"{q.X}/{q.Y}" : "fuera";
+            if (held)
+            {
+                if (unit != null && unit.Team == Teams.Alien)
+                {
+                    heldEnemy = unit.Id;
+                    Point(unit.Pos);
+                }
+                else if (unit != null && unit.Team == Teams.Xcom && Commands(unit)) OpenSheet(unit.Id);
+                else if (place != null) Ping(place);
+                if (GameInput.Logging) Debug.Log($"[dedo] largo en {Where(place)}: {(unit != null ? unit.Team == Teams.Alien ? $"la vista de {unit.Id}" : $"la hoja de {unit.Id}" : "marca")}");
+                return;
+            }
+            // A tap: on a soldier of the squad or an enemy in sight, a click at once; aiming or a self ability armed, too.
+            var acts = unit != null || mode == Mode.Target || mode == Mode.Self;
+            if (!acts && !Same(place, hover))
+            {
+                Point(place);
+                if (GameInput.Logging) Debug.Log($"[dedo] toque en {Where(place)}: señala");
+                return;
+            }
+            if (place != null && !Same(place, hover)) Point(place);
+            if (GameInput.Logging) Debug.Log($"[dedo] toque en {Where(place)}: hace{(unit != null ? $" ({unit.Id})" : "")}");
+            Click(at);
+        }
+
+        /// <summary>The enemy whose sight a finger holds on the ground (FingerOnMap): its file once let go.</summary>
+        string heldEnemy;
+
+        /// <summary>The finger's tile: what the pointer's tile showed (ShowWay), till the next tap.</summary>
+        void Point(Pos place)
+        {
+            hover = place;
+            ShowWay();
+            if (mode != Mode.Move) RefreshHud();
+            else RefreshFlags();
+        }
 
         /// <summary>Where the right button went down off the HUD (a drag of it moves the camera: CameraRig); null, it isn't down.</summary>
         Vector2? rightFrom;
@@ -808,15 +901,15 @@ namespace Bastion.UI.Combat
         /// (playtest 18/10 #25); elsewhere it backs out of aiming, throwing or a door. (On a known enemy the 0.10.1 opened
         /// its file: that comes with the file.)
         /// </summary>
-        void RightClick(Mouse mouse, Vector2 at, bool overHud)
+        void RightClick(Vector2 at, bool overHud)
         {
-            if (mouse.rightButton.wasPressedThisFrame && !overHud)
+            if (GameInput.Pressed(GameInput.Button.Secondary) && !overHud)
             {
                 rightFrom = at;
                 rightMoved = false;
             }
             if (rightFrom is Vector2 from && Mathf.Abs(at.x - from.x) + Mathf.Abs(at.y - from.y) > 4 * Mathf.Max(1, Screen.height / 900f)) rightMoved = true;
-            if (!mouse.rightButton.wasReleasedThisFrame || rightFrom == null) return;
+            if (!GameInput.Released(GameInput.Button.Secondary) || rightFrom == null) return;
             rightFrom = null;
             if (rightMoved || (Hud != null && Hud.MenuOpen)) return;
             // On an enemy in sight, its file (game.ts: a right click, not a drag, while moving); planning, it takes the
@@ -875,83 +968,81 @@ namespace Bastion.UI.Combat
         /// <summary>The keys (game.ts onKey), but the camera's (CameraRig: WASD, arrows, Q/E).</summary>
         void Keys()
         {
-            var k = Keyboard.current;
-            if (k == null) return;
+            if (!GameInput.HasKeys) return;
             // F12: a capture of the screen, whatever is open (Red, 28/10).
-            if (k.f12Key.wasPressedThisFrame) App.Screenshots.Take(Toast);
+            if (GameInput.Down(GameInput.Key.Screenshot)) App.Screenshots.Take(Toast);
             // Cmd or Ctrl held, the keys are the system's (a screenshot's Cmd+Mayús+4 picked the pistol: Ana, 28/10); the
             // space let go still ends «Rápida».
-            if (Bastion.UI.App.Shortcuts.Elsewhere(k))
+            if (GameInput.SystemHeld)
             {
-                if (k.spaceKey.wasReleasedThisFrame) Hurry?.Invoke(false);
+                if (GameInput.Up(GameInput.Key.Space)) Hurry?.Invoke(false);
                 return;
             }
-            var enter = k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame;
+            var enter = GameInput.Down(GameInput.Key.Confirm);
+            var escape = GameInput.Down(GameInput.Key.Back);
             // The game's menu or a question up: the keys are theirs, but Esc, which closes them.
             if (Hud != null && Hud.MenuOpen)
             {
-                if (k.escapeKey.wasPressedThisFrame) Hud.MenuBack();
-                if (k.spaceKey.wasReleasedThisFrame) Hurry?.Invoke(false);
+                if (escape) Hud.MenuBack();
+                if (GameInput.Up(GameInput.Key.Space)) Hurry?.Invoke(false);
                 return;
             }
             // A sheet or an enemy's file over the battle: only to look at; Esc or H closes it, the other keys wait.
             if (Hud != null && Hud.WindowOpen)
             {
-                if (k.escapeKey.wasPressedThisFrame || k.hKey.wasPressedThisFrame) Hud.CloseWindow();
+                if (escape || GameInput.Down(GameInput.Key.Sheet)) Hud.CloseWindow();
                 return;
             }
             // H: the picked soldier's sheet (hud.ts CONTROLS «H · clic en su nombre»).
-            if (k.hKey.wasPressedThisFrame && picked != null)
+            if (GameInput.Down(GameInput.Key.Sheet) && picked != null)
             {
                 OpenSheet(picked);
                 return;
             }
             // The mission's briefing stays until «Entendido» (playtest 14/10 #3; Ana, 20/10 #32): Intro and Space are that
             // button; Esc does nothing over it.
-            if (Hud != null && Hud.IntroOpen && (enter || k.spaceKey.wasPressedThisFrame || k.escapeKey.wasPressedThisFrame))
+            if (Hud != null && Hud.IntroOpen && (enter || GameInput.Down(GameInput.Key.Space) || escape))
             {
-                if (!k.escapeKey.wasPressedThisFrame) Hud.CloseIntro();
+                if (!escape) Hud.CloseIntro();
                 return;
             }
             // «TU TURNO» held till it is seen (#50): Intro or Esc let it go and do nothing else; any other key goes on (Arturo, 23/10 #8).
-            if ((enter || k.escapeKey.wasPressedThisFrame) && Hud != null && Hud.ReleaseBanner()) return;
+            if ((enter || escape) && Hud != null && Hud.ReleaseBanner()) return;
             // (Mayús, Ctrl, Alt and Cmd alone don't: game.ts.)
-            if (Hud != null && Bastion.UI.App.Shortcuts.AnyOther(k)) Hud.ReleaseBanner(true);
+            if (Hud != null && GameInput.AnyOtherKey) Hud.ReleaseBanner(true);
             for (var n = 0; n <= 9; n++)
             {
-                // (The Input System's keys run Digit1…Digit9, Digit0, then Mayús, Alt, Ctrl and Cmd: Digit0 + n made Mayús
-                // the 1 and left the numbers dead. Ana, 28/10.)
-                if (!k[n == 0 ? Key.Digit0 : Key.Digit1 + (n - 1)].wasPressedThisFrame) continue;
+                if (!GameInput.Number(n)) continue;
                 NumberKey(n);
                 return;
             }
-            var shift = k.shiftKey.isPressed;
-            if (k.tabKey.wasPressedThisFrame)
+            var shift = GameInput.Shift;
+            if (GameInput.Down(GameInput.Key.Cycle))
             {
                 if (mode == Mode.Target || HandArmed() != null) CycleTarget(shift ? -1 : 1);
                 else CycleUnit(shift ? -1 : 1);
             }
             // In the enemy's turn the space bar, held, plays it «Rápida» (docs/UX-RITMO.md); let go, the chosen speed.
-            var space = k.spaceKey.wasPressedThisFrame;
-            if (k.spaceKey.wasReleasedThisFrame) Hurry?.Invoke(false);
+            var space = GameInput.Down(GameInput.Key.Space);
+            if (GameInput.Up(GameInput.Key.Space)) Hurry?.Invoke(false);
             if (space && EnemyTurnPlaying() && (Hud == null || !Hud.Covering))
             {
                 Hurry?.Invoke(true);
                 space = false;
             }
             if (enter || space) ConfirmOrAttack();
-            if (k.escapeKey.wasPressedThisFrame) Escape();
-            if (k.cKey.wasPressedThisFrame) PassCommand();
+            if (escape) Escape();
+            if (GameInput.Down(GameInput.Key.Pass)) PassCommand();
             // M: the big map, open or shut (Arturo, 31/10 #12; it was all the sound off, which Ajustes' «Sonido» keeps).
-            if (k.mKey.wasPressedThisFrame) ToggleMiniMap();
+            if (GameInput.Down(GameInput.Key.Map)) ToggleMiniMap();
             // V: the enemies' sight, all of them at once, on or off (Arturo, 5/11 #6).
-            if (k.vKey.wasPressedThisFrame) ToggleSight();
-            if (k.oKey.wasPressedThisFrame) NextMark();
-            if (k.gKey.wasPressedThisFrame) Ping();
-            if (k.backspaceKey.wasPressedThisFrame) EndKey();
-            if (k.pageUpKey.wasPressedThisFrame) SetLevel(Level + 1);
-            if (k.pageDownKey.wasPressedThisFrame) SetLevel(Level - 1);
-            if (k.fKey.wasPressedThisFrame)
+            if (GameInput.Down(GameInput.Key.Sight)) ToggleSight();
+            if (GameInput.Down(GameInput.Key.NextMark)) NextMark();
+            if (GameInput.Down(GameInput.Key.Mark)) Ping();
+            if (GameInput.Down(GameInput.Key.Ready)) EndKey();
+            if (GameInput.Down(GameInput.Key.FloorUp)) SetLevel(Level + 1);
+            if (GameInput.Down(GameInput.Key.FloorDown)) SetLevel(Level - 1);
+            if (GameInput.Down(GameInput.Key.Focus))
             {
                 // A partner's moment on screen first (its notice's «Ver»), then what the partner holding the command does.
                 if (SeeMoment != null && SeeMoment()) return;
@@ -1060,7 +1151,7 @@ namespace Bastion.UI.Combat
                 return;
             }
             var key = $"{u.Id}|{tile.X},{tile.Y}";
-            if (dest.Detected && concealWarn != key)
+            if (dest.Detected && concealWarn != key && !GameInput.Touch)
             {
                 concealWarn = key;
                 Toast(ConcealWarning);
@@ -1074,12 +1165,12 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// The unit whose figure is under the pointer (BodyOf: upright, BodyLow to BodyHigh over its feet and BodyReach
-        /// round), the nearest the camera if two are; else the one on the pointer's tile. Measured in the
+        /// round), the nearest the camera if two are; else the one on the pointer's tile (the finger's: `onTile`). Measured in the
         /// world, so the same at any distance: 28 pixels round the chest went past the figure onto the tile behind it
         /// (straight up the screen, at the camera's first distance) and, further away, onto more of its neighbours, and a
         /// click there picked that one again instead of moving there (7/11, looking into Arturo's «no se puede mover en diagonal»).
         /// </summary>
-        Unit BodyUnder(Vector2 screen)
+        Unit BodyUnder(Vector2 screen, Pos onTile = null)
         {
             Unit best = null;
             var bestAlong = float.MaxValue;
@@ -1093,8 +1184,9 @@ namespace Bastion.UI.Combat
                 bestAlong = along;
                 best = u;
             }
-            if (best != null || hover == null) return best;
-            return State.Units.FirstOrDefault(u => u.Alive && Same(u.Pos, hover) && (u.Team == Teams.Xcom || Visible(u)));
+            var tile = onTile ?? hover;
+            if (best != null || tile == null) return best;
+            return State.Units.FirstOrDefault(u => u.Alive && Same(u.Pos, tile) && (u.Team == Teams.Xcom || Visible(u)));
         }
 
         /// <summary>A figure for the pointer, metres over its feet: from its shins to its neck, and BodyReach round (head and shoulders in).</summary>
@@ -1153,10 +1245,11 @@ namespace Bastion.UI.Combat
             if (u != null && hover != null && CanAct() && Commands(u))
             {
                 // A closed door beside the soldier: the click opens it, for free. The door outlined and its icon over it, as
-                // a body (Arturo, 7/11).
+                // a body (Arturo, 7/11); words only for the finger.
                 if (HandTiles(AbilityIds.OpenDoor).Any(t => Same(t, hover)))
                 {
                     searchNext = new List<(Pos, bool)> { (hover, true) };
+                    if (GameInput.Touch) Note(hover, HudText.Touch.Door);
                     return;
                 }
                 // A boarded window or door beside one with the crowbar (02/11 A11): a click takes the boards off.
@@ -1166,7 +1259,8 @@ namespace Bastion.UI.Combat
                     var what = Abilities.Boards(State, hover) == DecorKinds.DoorBoards ? "Puerta tapiada" : "Ventana tapiada";
                     // The boards outlined and the crowbar over them, greyed if it can't now (Arturo, 7/11); why, in words.
                     searchNext = new List<(Pos, bool)> { (hover, stop == null) };
-                    if (stop != null) Note(hover, $"{what} · {stop.TrimEnd('.').ToLowerInvariant()}");
+                    if (stop == null && !GameInput.Touch) return;
+                    Note(hover, stop != null ? $"{what} · {stop.TrimEnd('.').ToLowerInvariant()}" : GameInput.Touch ? HudText.Touch.Boards(what) : $"{what} · clic: quitar las tablas");
                     return;
                 }
                 // A box the squad has seen: its name, and whether it can be opened from here (docs/FASE8.md §B).
@@ -1178,6 +1272,8 @@ namespace Bastion.UI.Combat
                     if (Looting.WasSearched(State, hover)) return;
                     var reach = HandTiles(AbilityIds.Search).Any(t => Same(t, hover)) && Abilities.AbilityBlocker(State, u, AbilityIds.Search) == null;
                     searchNext = new List<(Pos, bool)> { (hover, reach) };
+                    // With the finger the first tap only points: what the second does, said (Lore, 7/11).
+                    if (GameInput.Touch && reach) Note(hover, HudText.Touch.Open(Capitalize(Lore.SearchSpots.TryGetValue(decor, out var found) ? found.Name : "el cuerpo"), "registrar"));
                     return;
                 }
                 if (decor != null)
@@ -1193,10 +1289,12 @@ namespace Bastion.UI.Combat
                     }
                     var near = HandTiles(AbilityIds.Search).Any(t => Same(t, hover));
                     var blocked = near ? Abilities.AbilityBlocker(State, u, AbilityIds.Search) : null;
+                    var verb = body ? "registrar" : "abrir";
                     // The box or the furniture outlined and the rucksack over it, lit where a click opens it (Arturo, 7/11:
-                    // not a tile on the floor); words only for why not.
+                    // not a tile on the floor); words only for why not and for the finger.
                     searchNext = new List<(Pos, bool)> { (hover, near && blocked == null) };
                     if (blocked != null) Note(hover, $"{name} · {blocked.TrimEnd('.').ToLowerInvariant()}");
+                    else if (GameInput.Touch && near) Note(hover, HudText.Touch.Open(name, verb));
                     return;
                 }
             }
@@ -1210,9 +1308,11 @@ namespace Bastion.UI.Combat
             Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
             // Running, a door or a window is heard (docs/FASE2.md): an icon under the destination, no words (Ana, 7/11 #3); the
             // fire it goes through; and at night, whether it ends in the light.
+            // With the finger, the second tap: what it does (Lore, 7/11).
+            var again = !GameInput.Touch ? null : Planning ? HudText.Touch.AgainPlan : dest.Detected ? HudText.Touch.Concealed : HudText.Touch.AgainMove;
             var heard = path != null && AbilityTexts.MoveNoise(State, u, path, dest.Run) != null;
             // Into the hidden squad's extra: that it is lost if they are seen (Gameplay, 16/11).
-            NoteWith(hover, heard ? "noise" : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover));
+            NoteWith(hover, heard ? "noise" : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
         }
 
         /// <summary>

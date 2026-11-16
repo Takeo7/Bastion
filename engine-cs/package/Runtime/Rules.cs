@@ -185,7 +185,8 @@ namespace Bastion.Engine
                     Emit(new CleansedEvent { Unit = u.Id, Target = target!.Id });
                     break;
                 case AbilityIds.PatchUp:
-                    Emit(new PatchedEvent { Unit = u.Id, Target = target!.Id, Amount = Math.Min(Content.PatchUp, 100 - Content.ConditionOf(target)) });
+                    // Rebuscar (Arturo, 16/11; Apaños till then): the room the soldier stands in, searched or not.
+                    SearchRoom(u, true);
                     break;
                 case AbilityIds.Restoration:
                     Restoration(u);
@@ -689,18 +690,45 @@ namespace Bastion.Engine
         {
             var box = Looting.SearchSpot(S, tile);
             var pistols = S.Mission.Pistols == true;
-            var loot = box == Looting.Body ? Looting.RollBody(Looting.BodyAt(S, Grid.ToPos(tile))!, Rng, pistols)
-                : box != null ? Looting.RollBox(box, Rng, u.Mags != null, pistols, S.Mission.Difficulty ?? 2, S.Mission.Night == true) : null;
+            // A run scales its supplies its own way (RunLoot.SuppliesScale).
+            var night = S.Run == null && S.Mission.Night == true;
+            var body = box == Looting.Body ? Looting.BodyAt(S, Grid.ToPos(tile))! : null;
+            var loot = body != null ? Looting.RollBody(body, Rng, pistols)
+                : box != null ? Looting.RollBox(box, Rng, u.Mags != null, pistols, S.Mission.Difficulty ?? 2, night) : null;
+            if (S.Run != null)
+            {
+                // A run's fight (H3): as gear, a vest now and then where the police or the army were.
+                var vest = box == Looting.PoliceBoot || body?.Outfit == Outfits.Police || body?.Outfit == Outfits.Military;
+                var (packed, floor, next) = FoundGear(u, loot, vest);
+                Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Packed = packed, Floor = floor, NextGear = next });
+                return;
+            }
             Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Loot = loot });
         }
 
-        /// <summary>Searches the room `u` stands in, once for the squad (docs/FASE8.md §B).</summary>
-        private void SearchRoom(Unit u)
+        /// <summary>Searches the room `u` stands in, once for the squad (docs/FASE8.md §B); `again`, Rebuscar's, searched or not.</summary>
+        private void SearchRoom(Unit u, bool again = false)
         {
             var room = Looting.RoomAt(S, u.Pos);
             if (room == null) return;
-            var loot = Looting.RollRoom(room, S.Mission.Difficulty ?? 2, Rng, S.Mission.Night == true, u.Mags != null, Looting.MarketStock(S, room), S.Mission.Pistols == true);
-            Emit(new RoomSearchedEvent { Unit = u.Id, Room = room.Id, Loot = loot });
+            var loot = Looting.RollRoom(room, S.Mission.Difficulty ?? 2, Rng, S.Run == null && S.Mission.Night == true, u.Mags != null, Looting.MarketStock(S, room), S.Mission.Pistols == true);
+            if (S.Run != null)
+            {
+                var (packed, floor, next) = FoundGear(u, loot, false);
+                Emit(new RoomSearchedEvent { Unit = u.Id, Room = room.Id, Packed = packed, Floor = floor, NextGear = next, Again = again ? true : (bool?)null });
+                return;
+            }
+            Emit(new RoomSearchedEvent { Unit = u.Id, Room = room.Id, Loot = loot, Again = again ? true : (bool?)null });
+        }
+
+        /// <summary>A run's find (H3): today's roll as gear (RunLoot), where it goes, and the gear counter after it.</summary>
+        private (List<Placed>? Packed, List<Gear>? Floor, int Next) FoundGear(Unit u, Loot? loot, bool vest)
+        {
+            var maker = new RunLoot.Maker(S.Run!.NextGear);
+            var found = RunLoot.GearOf(loot, S.Run, Rng, maker);
+            if (vest) found.AddRange(RunLoot.VestOf(Rng, maker));
+            var (packed, floor) = RunLoot.Stow(u.Pack ?? new GearGrid(), found);
+            return (packed.Count > 0 ? packed : null, floor.Count > 0 ? floor : null, maker.Next);
         }
 
         private void Hack(Unit u)
@@ -1646,6 +1674,12 @@ namespace Bastion.Engine
         /// <summary>A backpack order already checked (backpackRefusal).</summary>
         public void UseBackpack(ItemCommand cmd)
         {
+            // A run's fight (H3): the pack is a grid of gear.
+            if (S.Run != null)
+            {
+                RunPack.Act(this, cmd);
+                return;
+            }
             var u = Grid.GetUnit(S, cmd.Unit)!;
             switch (cmd.Action)
             {
@@ -2033,9 +2067,10 @@ namespace Bastion.Engine
             }
             if (cmd is ItemCommand item)
             {
-                var refusal = BackpackRefusal(s, item, ctx.Slot, ctx.Connected);
+                // A run's fight (H3): the pack is a grid of gear (RunPack).
+                var refusal = s.Run != null ? RunPack.Refusal(s, item, ctx.Slot, ctx.Connected) : BackpackRefusal(s, item, ctx.Slot, ctx.Connected);
                 if (refusal != null) return CommandResult.Failure(refusal);
-                var free = item.Action == ItemActions.Drop || item.Action == ItemActions.Take || (item.Action == ItemActions.Use && Grid.GetUnit(s, item.Unit) is Unit medic && FreeMedicine(medic));
+                var free = item.Action == ItemActions.Drop || item.Action == ItemActions.Take || item.Action == ItemActions.Arrange || (item.Action == ItemActions.Use && Grid.GetUnit(s, item.Unit) is Unit medic && FreeMedicine(medic));
                 var busyItem = free ? null : InPlay(item.Unit);
                 if (busyItem != null) return CommandResult.Failure(busyItem);
                 var holder = Grid.GetUnit(s, item.Unit)!;

@@ -18,6 +18,11 @@ namespace Bastion.Net
     /// goes (a boarded door: Arturo, 2/11), it takes the boards off with the crowbar or goes round. With nothing to do, it
     /// keeps watch or takes cover, and with nothing left for any soldier it ends its turn, movement left or not (the turn
     /// doesn't end by itself while some is left: Arturo, 5/11 #14). Deterministic: no dice of its own.
+    /// In a run's fight (H3; Gameplay, 16/11) it uses the pack: a medicine for one at half health or less, what lies at its
+    /// feet picked up, a gun in the pack put on, and the reload spends a magazine; with the gun empty and none left, the
+    /// blade. A run's Saqueo (the normal node) has no objective: the squad searches the rooms nearest by the walk, never
+    /// hunting the dead, and goes for La Lata once RunLeaveTurn comes, once one of it is at half health or less, or once no
+    /// room is left (RunLeaving). Hidden, it walks the squad's extra too (Paths with the state).
     /// </summary>
     public static class MissionBot
     {
@@ -26,6 +31,18 @@ namespace Bastion.Net
 
         /// <summary>An enemy this close (tiles) is shot at worse odds.</summary>
         public const double Close = 7;
+
+        /// <summary>A run's Saqueo: the turn the squad goes for La Lata, whatever is left to search (RunLeaving).</summary>
+        public const int RunLeaveTurn = 6;
+
+        /// <summary>A run's Saqueo: rooms farther than this many turns' walk aren't gone for (RoomGoal); with none nearer, the squad goes.</summary>
+        public const int RoomTurns = 2;
+
+        /// <summary>
+        /// A run's Saqueo: the most a room may take the squad off its way to La Lata, in tiles (RoomGoal). The squad is set down
+        /// at one end of the map and La Lata waits at the other (a farm's 72 tiles: 13,4 to 57,61), so it searches on the way.
+        /// </summary>
+        public const double RoomDetour = 8;
 
         /// <summary>The next order of `slot`, or null: nothing for it now (the partner holds the command, or it is done).</summary>
         public static Command? Next(GameState s, int slot, IReadOnlyList<int> connected)
@@ -42,8 +59,12 @@ namespace Bastion.Net
             // the walk, and in a Saqueo whether any is left to walk to.
             var walks = new Dictionary<string, Reach>();
             Reach WalksOf(Unit x) => walks.TryGetValue(x.Id, out var r) ? r : walks[x.Id] = Paths.ComputeReach(s, x, double.MaxValue, null, (o) => o.Team != x.Team);
-            var leaving = Leaving(s, WalksOf);
-            var goals = able.ToDictionary((x) => x.Id, (x) => Goal(s, x, leaving, WalksOf));
+            // A run's Saqueo: each soldier's nearest room left to search, the rooms found on the way kept for the next one.
+            var known = new Dictionary<int, LootRoom?>();
+            var rooms = new Dictionary<string, Pos?>();
+            Pos? RoomOf(Unit x) => rooms.TryGetValue(x.Id, out var r) ? r : rooms[x.Id] = RoomGoal(s, x, WalksOf(x), known);
+            var leaving = Leaving(s, WalksOf, RoomOf);
+            var goals = able.ToDictionary((x) => x.Id, (x) => Goal(s, x, leaving, WalksOf, RoomOf));
             // The soldier in play first: it is to be finished before another (Rules InPlay). Then the others, the one
             // nearest its goal first; one with nothing to do lets the next one play, and only with none left is the turn over,
             // movement left or not.
@@ -57,7 +78,7 @@ namespace Bastion.Net
                 // Left (DoneCommand), that movement was lost: of seeds 1 to 120 of the test apps' campaign, the first
                 // mission was won as often either way (23), and both 18 times so against 20, but 364 lost its siege.
                 if (u.Id == s.ActiveUnit && u.Ap <= 0 && PartnerPlays(s, slot, connected)) return new PassCommand();
-                var cmd = Choose(s, u, leaving, goals[u.Id], WalksOf(u));
+                var cmd = Choose(s, u, leaving, goals[u.Id], WalksOf(u), slot, connected);
                 if (cmd != null) return cmd;
                 // In play with nothing to do, its actions kept, it holds the others back while the partner plays (Rules
                 // InPlay): the partner's go.
@@ -79,11 +100,12 @@ namespace Bastion.Net
         /// alarm silenced; in a Saqueo, none of the dead left that a soldier can walk to (it searches nothing, and with no
         /// clock it would stay for ever: 5/11).
         /// </summary>
-        private static bool Leaving(GameState s, System.Func<Unit, Reach> walksOf)
+        private static bool Leaving(GameState s, System.Func<Unit, Reach> walksOf, System.Func<Unit, Pos?> roomOf)
         {
             var m = s.Mission;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier);
             if (m.Kind == MissionKinds.Rescue && Vip(s) is Unit vip && !vip.Captive) return true;
+            if (RunSaqueo(s)) return RunLeaving(s, roomOf);
             if (m.Kind == MissionKinds.Scavenge && m.EvacZone.Count > 0)
             {
                 var enemies = Enemies(s).Select((e) => Grid.NodeOf(s, e.Pos)).ToList();
@@ -106,7 +128,7 @@ namespace Bastion.Net
             return m.Kind == MissionKinds.Sabotage && !m.ObjectiveDone && m.ObjectiveUnit != null && Grid.GetUnit(s, m.ObjectiveUnit) is Unit u && u.Alive ? u : null;
         }
 
-        private static Command? Choose(GameState s, Unit u, bool leaving, Pos? target, Reach walks)
+        private static Command? Choose(GameState s, Unit u, bool leaving, Pos? target, Reach walks, int slot, IReadOnlyList<int> connected)
         {
             // In La Lata with the job done: the bus, once everyone is aboard who can get there. No clock hurries it: only the
             // sabotage's alarm has one now (Arturo, 5/11 #1), and it stops once the alarm is silenced (Events.CompleteObjective).
@@ -123,8 +145,13 @@ namespace Bastion.Net
                 var room = MakeRoom(s, u);
                 if (room != null) return room;
             }
-            var armed = Content.HasGun(u);
+            var armed = Armed(s, u);
             var carrier = s.Mission.Item?.Carrier == u.Id;
+            if (s.Run != null)
+            {
+                var pack = PackOrder(s, u, armed, slot, connected);
+                if (pack != null) return pack;
+            }
             if (!armed)
             {
                 var gun = PackedGun(u);
@@ -145,6 +172,13 @@ namespace Bastion.Net
             var shot = BestShot(s, u, Close);
             var nearest = Enemies(s).Select((e) => Grid.Distance(u.Pos, e.Pos)).DefaultIfEmpty(double.MaxValue).Min();
             if (shot != null && !carrier && shot.Value.hit >= 30) return shot.Value.cmd;
+            // A run's Saqueo, before going: the room it stands in, then a box, a boot or a body beside it.
+            if (RunSaqueo(s) && !leaving)
+            {
+                if (Usable(s, u, AbilityIds.SearchRoom)) return Ability(u, AbilityIds.SearchRoom);
+                var spot = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault() : null;
+                if (spot != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = spot };
+            }
             // The blade alone: a step up to one of the dead, keeping an action to strike.
             if (!armed && !carrier)
             {
@@ -156,7 +190,7 @@ namespace Bastion.Net
             {
                 var pry = Pry(s, u, goal, leaving);
                 if (pry != null) return pry;
-                var stride = Stride(u);
+                var stride = Stride(s, u);
                 var move = stride >= Paths.CostOrtho ? MoveToward(s, u, goal, stride, leaving, walks) : null;
                 if (move != null) return move;
             }
@@ -170,7 +204,7 @@ namespace Bastion.Net
         private static IEnumerable<Unit> Enemies(GameState s) => Grid.Combatants(s, Teams.Alien);
 
         /// <summary>Where `u` goes: La Lata (leaving, or carrying the item), the item, the radio, the one to free, the alarm, or the nearest enemy by the walk.</summary>
-        private static Pos? Goal(GameState s, Unit u, bool leaving, System.Func<Unit, Reach> walksOf)
+        private static Pos? Goal(GameState s, Unit u, bool leaving, System.Func<Unit, Reach> walksOf, System.Func<Unit, Pos?> roomOf)
         {
             var m = s.Mission;
             var bus = m.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).OrderBy((p) => Grid.Distance(u.Pos, p)).FirstOrDefault();
@@ -178,6 +212,7 @@ namespace Bastion.Net
             if (m.Kind == MissionKinds.Recovery && m.Item != null && m.Item.Pos != null) return m.Item.Pos;
             if (m.Kind == MissionKinds.Hack && m.Terminal != null && !m.ObjectiveDone) return m.Terminal;
             if ((Vip(s) ?? Alarm(s)) is Unit objective) return objective.Pos;
+            if (RunSaqueo(s)) return roomOf(u) ?? bus;
             return NearestEnemy(s, u, walksOf(u)) ?? bus;
         }
 
@@ -216,9 +251,9 @@ namespace Bastion.Net
         private static Command? MakeRoom(GameState s, Unit u)
         {
             var outside = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos)).ToList();
-            if (outside.Count == 0 || Paths.MoveBudget(u) <= 0) return null;
+            if (outside.Count == 0 || Paths.MoveBudget(s, u) <= 0) return null;
             double Away(Pos p) => outside.Min((o) => Grid.Distance(p, o.Pos));
-            var reach = Paths.ComputeReach(s, u, Stride(u));
+            var reach = Paths.ComputeReach(s, u, Stride(s, u));
             Destination? best = null;
             foreach (var o in Paths.Destinations(s, u, reach))
                 if (Abilities.InEvacZone(s, o.Pos) && (best == null || Away(o.Pos) > Away(best.Pos) + 1e-9 || (System.Math.Abs(Away(o.Pos) - Away(best.Pos)) < 1e-9 && o.Cost < best.Cost))) best = o;
@@ -230,14 +265,108 @@ namespace Bastion.Net
         /// The next stretch, within what is left, never a run (Paths.IsRun: all the turn's movement at once, heard; Arturo,
         /// 6/11): with all of it, a tile short; with less, the rest. Seven tiles and then one are the same eight in silence:
         /// on a bench of 90 missions with bots (6/11), 29 won so, against 25 running once the squad was seen, on the way out
-        /// or to strike.
+        /// or to strike. Hidden, with the squad's extra (Paths.ConcealedBonus, Arturo 16/11).
         /// </summary>
-        private static double Stride(Unit u)
+        private static double Stride(GameState s, Unit u)
         {
-            var left = Paths.MoveBudget(u);
-            var full = Paths.FullMoves(u);
+            var left = Paths.MoveBudget(s, u);
+            var full = Paths.FullMoves(s, u);
             return left < full ? left : full - Paths.CostOrtho;
         }
+
+        /// <summary>A run's Saqueo: the normal node (Gameplay, 16/11), no objective but to search and go.</summary>
+        private static bool RunSaqueo(GameState s) => s.Run != null && s.Mission.Kind == MissionKinds.Scavenge && s.Mission.EvacZone.Count > 0;
+
+        /// <summary>
+        /// A run's Saqueo is over for the squad: the turn RunLeaveTurn has come, one of it is at half health or less, or none
+        /// of it has a room left to search that it can walk to (`roomOf`). Hunting the dead it fell on every one (Gameplay,
+        /// 16/11: 4 of 4, with rifles too): the horde grows with the noise (Rules.HordeClock), and kept coming.
+        /// </summary>
+        private static bool RunLeaving(GameState s, System.Func<Unit, Pos?> roomOf)
+        {
+            if (s.Turn >= RunLeaveTurn) return true;
+            var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
+            return squad.Any((o) => o.Hp * 2 <= o.MaxHp) || squad.All((o) => roomOf(o) == null);
+        }
+
+        /// <summary>
+        /// The room nobody has searched (Looting.RoomAt, RoomSearched) that takes `u` least off its way to La Lata: its walk
+        /// there (`walks`, within RoomTurns of movement) less what it brings it nearer La Lata, as the crow flies, at most
+        /// RoomDetour; a tile of it. Null with none. In the country (a farm and a barn on a map of 72) it walked out four turns
+        /// for the nearest and back again with nothing. `known`: each tile's room as found, for the next soldier (a room is a
+        /// flood of its floor).
+        /// </summary>
+        private static Pos? RoomGoal(GameState s, Unit u, Reach walks, Dictionary<int, LootRoom?> known)
+        {
+            var bus = s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).ToList();
+            if (bus.Count == 0) return null;
+            double ToBus(Pos p) => bus.Min((b) => Grid.Distance(p, b));
+            var here = ToBus(u.Pos);
+            var most = RoomTurns * Paths.FullMoves(u);
+            Pos? best = null;
+            var bestDetour = double.MaxValue;
+            foreach (var kv in walks.Cost.Where((kv) => kv.Value <= most).OrderBy((kv) => kv.Value).ThenBy((kv) => kv.Key))
+            {
+                if (!known.TryGetValue(kv.Key, out var room))
+                {
+                    room = Looting.RoomAt(s, Grid.PosOf(s, kv.Key));
+                    if (room == null) known[kv.Key] = null;
+                    else foreach (var p in room.Tiles) known[Grid.NodeOf(s, p)] = room;
+                }
+                if (room == null || Looting.RoomSearched(s, room)) continue;
+                var at = Grid.PosOf(s, kv.Key);
+                var detour = (double)kv.Value / Paths.CostOrtho - (here - ToBus(at));
+                if (detour > RoomDetour || detour >= bestDetour - 1e-9) continue;
+                best = at;
+                bestDetour = detour;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Whether `u` has something to fire: a gun, and in a run rounds in it or a magazine to reload (Unit.mags, the pack's:
+        /// Gameplay, 16/11); empty with none, it goes to the blade.
+        /// </summary>
+        private static bool Armed(GameState s, Unit u)
+        {
+            if (!Content.HasGun(u)) return false;
+            return s.Run == null || u.Ammo > 0 || (u.Mags ?? 0) > 0 || (u.PistolAmmo ?? 0) > 0;
+        }
+
+        /// <summary>
+        /// What `u` does with its pack in a run's fight (RunPack), the first that the rules take (RunPack.Refusal): a medicine
+        /// on itself at half health or less; what lies at its feet picked up (free), a gun first if it has none to fire; a
+        /// gun in the pack put on if it has none to fire; with nobody near, a vest in the pack put on if it wears none.
+        /// </summary>
+        private static Command? PackOrder(GameState s, Unit u, bool armed, int slot, IReadOnlyList<int> connected)
+        {
+            if (u.Pack == null || u.Kit == null) return null;
+            Command? Try(ItemCommand cmd) => RunPack.Refusal(s, cmd, slot, connected) == null ? cmd : null;
+            var packed = u.Pack.Items.Select((p) => p.Gear).ToList();
+            if (u.Hp * 2 <= u.MaxHp && packed.FirstOrDefault((g) => g.Kind == GearKinds.Medicine) is Gear medicine)
+            {
+                var use = Try(new ItemCommand { Unit = u.Id, Action = ItemActions.Use, Gear = medicine.Id });
+                if (use != null) return use;
+            }
+            var floor = (s.FloorGear ?? new List<DroppedGear>()).Where((d) => Grid.SamePos(d.Pos, u.Pos)).Select((d) => d.Gear)
+                .OrderBy((g) => !armed && IsGunGear(g) ? 0 : 1).ThenBy((g) => g.Id, System.StringComparer.Ordinal);
+            foreach (var g in floor)
+            {
+                var take = Try(new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Gear = g.Id });
+                if (take != null) return take;
+            }
+            if (!armed && packed.FirstOrDefault(IsGunGear) is Gear gun)
+            {
+                var equip = Try(new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Gear = gun.Id });
+                if (equip != null) return equip;
+            }
+            var near = Enemies(s).Any((e) => Grid.Distance(u.Pos, e.Pos) <= Close);
+            if (!near && u.Kit.Vest == null && packed.FirstOrDefault((g) => g.Kind == GearKinds.Vest) is Gear vest) return Try(new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Gear = vest.Id });
+            return null;
+        }
+
+        /// <summary>A run's gear that fires: a weapon for the hands or the side, not a blade.</summary>
+        private static bool IsGunGear(Gear g) => Content.GearWeapon(g) is FoundWeaponDef w && w.Slot != FoundWeaponSlots.Melee;
 
         /// <summary>Whether a found weapon of `kind` fires: in the hand or at the side, not a blade.</summary>
         private static bool IsGun(string? kind) => kind != null && Content.FoundWeapons.TryGetValue(kind, out var def) && def.Slot != FoundWeaponSlots.Melee;
@@ -262,9 +391,10 @@ namespace Bastion.Net
                 if (Looting.SearchSpot(s, p) == Looting.PoliceBoot && Looting.IsSearchable(s, p)) found.Add(p);
             }
             found.AddRange((s.Dropped ?? new List<DroppedLoot>()).Where((d) => IsGun(d.Loot.Weapon)).Select((d) => d.Pos));
+            found.AddRange((s.FloorGear ?? new List<DroppedGear>()).Where((d) => IsGunGear(d.Gear)).Select((d) => d.Pos));
             if (found.Count == 0) return null;
             double Near(Unit x) => found.Min((p) => Grid.Distance(x.Pos, p));
-            var going = Grid.Combatants(s, Teams.Xcom).Where((x) => !x.Evacuated && !Content.HasGun(x) && PackedGun(x) == null && s.Mission.Item?.Carrier != x.Id)
+            var going = Grid.Combatants(s, Teams.Xcom).Where((x) => !x.Evacuated && !Armed(s, x) && PackedGun(x) == null && x.Pack?.Items.Any((p) => IsGunGear(p.Gear)) != true && s.Mission.Item?.Carrier != x.Id)
                 .OrderBy(Near).ThenBy((x) => x.Id, System.StringComparer.Ordinal).Take(found.Count);
             if (!going.Any((x) => x.Id == u.Id)) return null;
             return found.OrderBy((p) => Grid.Distance(u.Pos, p)).First();
@@ -277,11 +407,11 @@ namespace Bastion.Net
         /// </summary>
         private static Command? MoveToStrike(GameState s, Unit u)
         {
-            if (Paths.MoveBudget(u) <= 0 || !Usable(s, u, AbilityIds.Slash)) return null;
+            if (Paths.MoveBudget(s, u) <= 0 || !Usable(s, u, AbilityIds.Slash)) return null;
             var enemies = Enemies(s).ToList();
             var seen = enemies.Where((e) => Aim.TeamSees(s, u.Team, e)).ToList();
             if (seen.Count == 0) return null;
-            var reach = Paths.ComputeReach(s, u, Stride(u));
+            var reach = Paths.ComputeReach(s, u, Stride(s, u));
             Destination? best = null;
             (int hp, int crowd, double cost) bestKey = default;
             foreach (var o in Paths.Destinations(s, u, reach))
@@ -410,7 +540,7 @@ namespace Bastion.Net
             {
                 // Through it: the walk left from beyond, two steps on.
                 var beyond = Grid.Dirs8.Select((d) => Walk(new Pos { X = b.X + d.X, Y = b.Y + d.Y, Z = b.Z })).Where((w) => w != null).Select((w) => w!.Value + 2 * Paths.CostOrtho).DefaultIfEmpty(int.MaxValue).Min();
-                if (beyond < int.MaxValue && (here == null || beyond + Paths.FullMoves(u) < here)) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Pry, Tile = b };
+                if (beyond < int.MaxValue && (here == null || beyond + Paths.FullMoves(s, u) < here)) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Pry, Tile = b };
             }
             return null;
         }

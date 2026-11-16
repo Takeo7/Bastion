@@ -55,12 +55,19 @@ namespace Bastion.Net
         public int SearchMs { get; set; } = 2500;
 
         /// <summary>
-        /// This machine's: its networks' gateways for NAT-PMP, and its local network addresses for the search (not
-        /// Tailscale's: no router is there). A gateway the system doesn't say is guessed as the network's .1.
+        /// Whether UPnP is asked too, after NAT-PMP. Not on iOS (Arturo, 7/11: Apple's free account): SSDP is multicast,
+        /// which needs Apple's entitlement; NAT-PMP goes straight to the router and is asked all the same.
         /// </summary>
-        public static RouterPlaces OfThisMachine()
+        public bool Upnp { get; set; } = true;
+
+        /// <summary>
+        /// This machine's: its networks' gateways for NAT-PMP, and its local network addresses for the search (not
+        /// Tailscale's: no router is there). A gateway the system doesn't say is guessed as the network's .1. `upnp`: the
+        /// search too (not on iOS: Upnp).
+        /// </summary>
+        public static RouterPlaces OfThisMachine(bool upnp = true)
         {
-            var places = new RouterPlaces();
+            var places = new RouterPlaces { Upnp = upnp };
             var gateways = new List<IPAddress>();
             foreach (var nic in HostAddresses.Interfaces())
             {
@@ -214,7 +221,7 @@ namespace Bastion.Net
                         log($"[router] NAT-PMP en {router.Address}: {Why(e)}");
                     }
                 }
-                if (made == null)
+                if (made == null && places.Upnp)
                 {
                     List<Uri> found;
                     try
@@ -239,7 +246,7 @@ namespace Bastion.Net
                 }
                 if (made == null)
                 {
-                    log(answered ? "[router] el router no abre el puerto" : "[router] ningún router contesta por NAT-PMP ni UPnP");
+                    log(answered ? "[router] el router no abre el puerto" : places.Upnp ? "[router] ningún router contesta por NAT-PMP ni UPnP" : "[router] ningún router contesta por NAT-PMP (sin UPnP: aquí no hay multidifusión)");
                     Set(answered ? RouterState.Refused : RouterState.NoRouter, null);
                     return;
                 }

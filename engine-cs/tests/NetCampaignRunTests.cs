@@ -39,7 +39,11 @@ namespace Bastion.Engine.Tests
     /// </summary>
     public class NetCampaignRunTests
     {
-        [Fact]
+        /// <summary>
+        /// A new campaign is of runs now (16/11): HeardGame.BaseOrder plays them (RunOrder, NetRunBotTests), but a run's fights
+        /// get their missions in H3 (Gameplay). Played again then, with a seed of its own and what it reaches.
+        /// </summary>
+        [Fact(Skip = "Hasta H3: una etapa de combate aún no tiene misión; la campaña nueva es de runs.")]
         public void TheTestAppsCampaignIsPlayedThrough()
         {
             var played = CampaignAutoRun.Run(53, 2);

@@ -214,6 +214,12 @@ namespace Bastion.UI.Strategy
                     out_.Add(new Bastion.Client.Settlement.LineupEntry { SoldierId = e.Id, Colour = PlayerColor(e.Owner), Status = e.Status == ReportStatuses.Lost ? ReportStatuses.Dead : e.Status });
                 return out_;
             }
+            // The runs: La Lata's seats, the squad that goes out and the free ones.
+            if (c.Stash != null)
+            {
+                foreach (var s in RunPads()) out_.Add(s == null ? null : new Bastion.Client.Settlement.LineupEntry { SoldierId = s.Id, Colour = PlayerColor(s.Owner) });
+                return out_;
+            }
             var offer = Campaign.ActiveOffer(c);
             if (offer == null || offer.Siege == true) return out_;
             foreach (var id in Campaign.SquadPads(c))
@@ -258,6 +264,8 @@ namespace Bastion.UI.Strategy
             var c = State;
             var report = c.LastReport;
             if (report == null) return null;
+            // A stage of an expedition (H3): its own (RunDebrief).
+            if (report.Run != null) return RunDebrief(c, report);
             var v = new DebriefView { Victory = report.Victory, Result = report.Victory ? "Misión cumplida" : "Misión fracasada", Mission = report.MissionName, Continue = "Continuar" };
             v.Haul.AddRange(Haul(report));
             if (report.LevelTo > report.LevelFrom)

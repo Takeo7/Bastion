@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Bastion.Client;
+using Bastion.UI.Gear;
 using Bastion.UI.Hud;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -10,7 +11,7 @@ namespace Bastion.UI.Strategy
 {
     /// <summary>
     /// The base's screens (strategy/screen.ts of the 0.10.1; docs/UNITY-ESTRATEGIA.md): a document over the clearing or
-    /// the valley with the top strip, the proposal's plate, the tabs, the window and a short note; the screens' own
+    /// the expedition's map with the top strip, the proposal's plate, the tabs, the window and a short note; the screens' own
     /// panels go in `View`. The combat's menu and Ajustes, as they are. Driven by views (StrategyViews); the buttons go to
     /// `IStrategyHandlers`.
     /// </summary>
@@ -30,13 +31,14 @@ namespace Bastion.UI.Strategy
         GameMenu menu;
         SoldiersScreen soldiers;
         SkillBoardModal skillBoard;
-        ArmoryScreen armory;
         SquadScreen squad;
         DebriefScreen debrief;
-        MapScreen map;
-        SettlementScreen settlement;
-        ValleyMap valley;
-        ClearingLabels labels;
+        StashScreen stash;
+        RunMapScreen runMap;
+        UpgradesScreen upgrades;
+        /// <summary>The runs' grids (Almacén; the map's kits between nodes), one thing dragged at a time across them.</summary>
+        GearBoard gear;
+        readonly GearRelay gearRelay = new GearRelay();
         Label toast;
         float toastUntil;
         HudIconTable icons;
@@ -53,8 +55,8 @@ namespace Bastion.UI.Strategy
         /// <summary>A soldier's bust by id (Arte's Portraits.Soldier); null, a silhouette.</summary>
         public Func<string, Texture> PortraitOf = Portraits.Soldier;
 
-        /// <summary>A base piece's picture by id, for the Asentamiento's palette (Arte's PiecePictures).</summary>
-        public Func<string, Texture> PieceArtOf = PiecePictures.Of;
+        /// <summary>A gear's picture by kind and type, for the grids (Arte's GearPictures, 128 px a cell); null or none, the HUD's icon.</summary>
+        public Func<string, string, Texture> GearPictureOf = GearPictures.Of;
 
         /// <summary>
         /// Goes up when a bust is drawn (Portraits.Changed, once a frame at most): the screens that show busts take it into
@@ -73,9 +75,6 @@ namespace Bastion.UI.Strategy
         /// Settlement.PadWorld projected; null, off screen.
         /// </summary>
         public Func<int, int, Vector2?> PadAt;
-
-        /// <summary>The camera that shows the valley (the lab's shot camera); none, the valley's own.</summary>
-        public Camera ValleyCamera;
 
         /// <summary>The proposal's clock now (the server's deadline): its words, how much is left (0–1), hurrying; null, none.</summary>
         public Func<(string text, float left, bool hurry)?> ClockOf;
@@ -120,8 +119,6 @@ namespace Bastion.UI.Strategy
                 LightFigure = on => Settlement.Instance?.Highlight(null, on),
             };
             soldiers.Show(false);
-            armory = new ArmoryScreen(root.Q("view"), tips, Icon, relay);
-            armory.Show(false);
             squad = new SquadScreen(root.Q("view"), tips, relay, Icon) { PortraitOf = id => PortraitOf?.Invoke(id) };
             debrief = new DebriefScreen(root.Q("view"), tips, Icon, relay);
             foreach (var cards in new[] { squad.Cards, debrief.Cards })
@@ -131,12 +128,10 @@ namespace Bastion.UI.Strategy
             }
             squad.Show(false);
             debrief.Show(false);
-            // Under everything: the words by the pointer on the clearing and the names over it (the 0.10.1's, in the stage).
-            labels = new ClearingLabels(root);
-            map = new MapScreen(root.Q("view"), tips, Icon, relay);
-            map.Show(false);
-            settlement = new SettlementScreen(root.Q("view"), tips, Icon, relay) { ArtOf = id => PieceArtOf?.Invoke(id) };
-            settlement.Show(false);
+            gear = new GearBoard(root, tips, Icon, gearRelay) { PictureOf = (k, t) => GearPictureOf?.Invoke(k, t) };
+            stash = new StashScreen(root.Q("view"), tips, Icon, relay, gear);
+            runMap = new RunMapScreen(root.Q("view"), tips, Icon, relay, gear);
+            upgrades = new UpgradesScreen(root.Q("view"), tips, relay);
             skillBoard = new SkillBoardModal(root.Q("board"), relay, s => Sound?.Invoke(s), tips) { PortraitOf = id => PortraitOf?.Invoke(id) };
             toast = root.Q<Label>("toast");
             Ui.Show(toast, false);
@@ -149,8 +144,6 @@ namespace Bastion.UI.Strategy
         void OnDisable()
         {
             Portraits.Changed -= OnPicture;
-            if (watched != null) watched.MapShown -= OnMapShown;
-            watched = null;
             root = null;
         }
 
@@ -206,6 +199,15 @@ namespace Bastion.UI.Strategy
             relay.Target = handlers ?? NoStrategyHandlers.Instance;
         }
 
+        /// <summary>What the grids ask and tell (the presenter, from the engine's Gears): where a thing may go, moving it…</summary>
+        public void BindGear(IGearHandlers handlers) => gearRelay.Target = handlers;
+
+        /// <summary>Tests: the grids' board (GearBoard.TestDragTo, TestPick).</summary>
+        public GearBoard Gear => gear;
+
+        /// <summary>Esc on the grids: a dragged thing goes back, the bin's question or a thing's orders close. Whether it took it.</summary>
+        public bool CloseGear() => gear != null && gear.Close();
+
         void Update()
         {
             if (root == null) return;
@@ -215,6 +217,7 @@ namespace Bastion.UI.Strategy
                 Ui.Show(toast, false);
             }
             if (picturesChanged) Repaint();
+            gear?.Tick();
             Insets();
             var clock = ClockOf?.Invoke();
             proposal.Tick(clock?.text, clock?.left ?? 0, clock?.hurry ?? false);
@@ -245,11 +248,29 @@ namespace Bastion.UI.Strategy
         public void SetScreen(string view)
         {
             soldiers.Show(view == "barracks");
-            armory.Show(view == "engineering");
             squad.Show(view == "squad");
             debrief.Show(view == "debrief");
-            map.Show(view == "geoscape");
-            settlement.Show(view == "facilities");
+            stash.Show(view == "stash");
+            runMap.Show(view == "runmap");
+            upgrades.Show(view == "upgrades");
+            Dress();
+        }
+
+        public void SetUpgrades(UpgradesView v)
+        {
+            upgrades.Set(v);
+            Dress();
+        }
+
+        public void SetRunMap(RunMapView v)
+        {
+            runMap.Set(v);
+            Dress();
+        }
+
+        public void SetStash(StashScreenView v)
+        {
+            stash.Set(v);
             Dress();
         }
 
@@ -267,12 +288,6 @@ namespace Bastion.UI.Strategy
             Dress();
         }
 
-        public void SetArmory(ArmoryView v)
-        {
-            armory.Set(v);
-            Dress();
-        }
-
         public void SetSquad(SquadView v)
         {
             lastSquad = v;
@@ -284,12 +299,6 @@ namespace Bastion.UI.Strategy
         {
             lastDebrief = v;
             debrief.Set(v);
-            Dress();
-        }
-
-        public void SetSettlement(SettlementView v)
-        {
-            settlement.Set(v);
             Dress();
         }
 
@@ -424,18 +433,17 @@ namespace Bastion.UI.Strategy
         {
             var out_ = new List<Rect>();
             var size = root?.panel?.visualTree.layout.size ?? Vector2.zero;
-            if (settlement == null || size.x <= 0 || size.y <= 0) return out_;
+            if (size.x <= 0 || size.y <= 0) return out_;
             void Add(Rect r)
             {
                 // Laid out only: before its first layout an element's bounds are NaN.
                 if (!float.IsNaN(r.x) && !float.IsNaN(r.y) && r.width >= 4 && r.height >= 4) out_.Add(new Rect(r.x / size.x, r.y / size.y, r.width / size.x, r.height / size.y));
             }
-            foreach (var r in settlement.Plates()) Add(r);
             // The other screens' (stage.ts PANELS: the strip, the tabs, the side columns, the Escuadra's and the debrief's foot).
             foreach (var cls in ShotPanels)
                 root.Query(className: cls).ForEach(e =>
                 {
-                    if (Shown(e) && !e.ClassListContains("settle-plate")) Add(e.worldBound);
+                    if (Shown(e)) Add(e.worldBound);
                 });
             return out_;
         }
@@ -450,32 +458,6 @@ namespace Bastion.UI.Strategy
                 if (at.resolvedStyle.display == DisplayStyle.None || !at.visible) return false;
             return true;
         }
-
-        /// <summary>
-        /// Walking about the clearing (Arte's Settlement.WalkAbout; walkAbout.ts): every panel over the view hidden (stage.ts
-        /// PANELS) and, at the bottom in the middle, how to walk; all back as it ends.
-        /// </summary>
-        public void Walking(bool on)
-        {
-            if (root == null) return;
-            if (walkHint == null)
-            {
-                walkHint = Ui.Text(StrategyText.WalkHint, "walk-hint", root);
-                walkHint.pickingMode = PickingMode.Ignore;
-            }
-            root.EnableInClassList("strat--walking", on);
-        }
-
-        Label walkHint;
-
-        /// <summary>What the pointer would do on the clearing, by it (a screen point, y up): its cost, or why not (`bad`); null, none.</summary>
-        public void ClearingHint(string text, bool bad, Vector2 screen) => labels?.Hint(text, bad, screen, Settlement.Instance?.Camera);
-
-        /// <summary>The pointer moved and nothing else: the words go with it.</summary>
-        public void ClearingHintAt(Vector2 screen) => labels?.HintAt(screen, Settlement.Instance?.Camera);
-
-        /// <summary>The names over the clearing (the partner's, the siege's defenders), placed through its camera.</summary>
-        public void ClearingTags(IReadOnlyList<ClearingTag> tags) => labels?.Tags(tags, Settlement.Instance?.Camera);
 
         /// <summary>
         /// Whether the pointer is over the base's panels at a screen point (Input System coordinates, y up): then a click
@@ -505,39 +487,6 @@ namespace Bastion.UI.Strategy
             return new Vector2(p.x / Mathf.Max(1, size.x) * w, (1 - p.y / Mathf.Max(1, size.y)) * h);
         }
 
-        /// <summary>The Mapa: the valley is made the first time (its painting, the Marea's field, its camera).</summary>
-        public void SetMap(MapView v)
-        {
-            if (valley == null && v != null)
-            {
-                valley = new GameObject("Valle").AddComponent<ValleyMap>();
-                valley.transform.SetParent(transform, false);
-                valley.Build(ValleyCamera);
-            }
-            if (valley != null && !map.Bound) map.Bind(valley);
-            WatchClearing();
-            map.Set(v);
-            Dress();
-        }
-
-        /// <summary>The clearing whose fade into the Mapa and out of it says when the valley takes the screen.</summary>
-        Settlement watched;
-
-        /// <summary>
-        /// Arte's clearing, when there is one, says when the valley takes the screen: at the bottom of its fade to black
-        /// (Settlement.MapShown), the clearing's camera off or on; till then the camera that was showing stays.
-        /// </summary>
-        void WatchClearing()
-        {
-            var clearing = Settlement.Instance;
-            if (clearing == watched) return;
-            if (watched != null) watched.MapShown -= OnMapShown;
-            watched = clearing;
-            if (clearing != null) clearing.MapShown += OnMapShown;
-            map.ValleyUp(clearing != null ? clearing.MapOn : (bool?)null);
-        }
-
-        void OnMapShown(bool on) => map?.ValleyUp(on);
         public void ToggleMenu(GameMenuView v) => menu.Toggle(v);
         public void CloseMenu() => menu.Close();
         public bool MenuBack() => menu != null && menu.Back();

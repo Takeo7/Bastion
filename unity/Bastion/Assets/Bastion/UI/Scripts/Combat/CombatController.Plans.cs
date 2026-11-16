@@ -41,7 +41,7 @@ namespace Bastion.UI.Combat
             plans.Add((u.Id, MySlot, tile));
             Send(new PlanMessage { Unit = u.Id, Tile = tile });
             DrawPlans();
-            Toast($"Plan para {u.Name}: lo ve {PlayerName(State.Command)}. Otro clic ahí lo quita.");
+            Toast(Bastion.Client.GameInput.Touch ? Bastion.UI.Hud.HudText.Touch.Planned(u.Name, PlayerName(State.Command)) : $"Plan para {u.Name}: lo ve {PlayerName(State.Command)}. Otro clic ahí lo quita.");
         }
 
         void WithdrawPlan(Unit u)
@@ -174,8 +174,7 @@ namespace Bastion.UI.Combat
         /// <summary>The ground's tile under the pointer, from above (the map: the ground's storey, as a click there takes it).</summary>
         Pos GroundUnderPointer()
         {
-            var mouse = UnityEngine.InputSystem.Mouse.current;
-            return mouse != null && Rig != null && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(mouse.position.ReadValue()), 0, out var p) ? p : null;
+            return Bastion.Client.GameInput.HasPointer && Rig != null && Board.RayToPlace(State, Rig.Camera.ScreenPointToRay(Bastion.Client.GameInput.Point), 0, out var p) ? p : null;
         }
 
         /// <summary>A mark from above on `tile`, as Shift and a click there (the labs: PackSteps «marca-mapa=x/y»).</summary>

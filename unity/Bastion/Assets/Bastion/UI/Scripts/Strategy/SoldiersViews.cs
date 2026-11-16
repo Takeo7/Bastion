@@ -311,4 +311,18 @@ namespace Bastion.UI.Strategy
         public bool Editable;
         public System.Collections.Generic.List<string> Board = new System.Collections.Generic.List<string>();
     }
+
+    /// <summary>«Esperar un día»: a key of both players (advance), what is missing, why not (Soldados' «esperar», the campaign of before the runs).</summary>
+    [Serializable]
+    public sealed class WaitDayView
+    {
+        public string Label;
+        public bool Ready;
+        /// <summary>The partner has asked: the button in the accent.</summary>
+        public bool Asked;
+        public bool Enabled = true;
+        public string Why;
+        public string Note;
+        public string Tip;
+    }
 }

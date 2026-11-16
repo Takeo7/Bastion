@@ -5,12 +5,13 @@ import CoreText
 // icono-version/b-insignia.png), inside the tile, drawn at each size the system asks for. AppBuild runs it before every
 // build (AppIcon):
 //
-//   swift unity/tools/icono/icono.swift <base.png> <font.ttf> <version> <out dir> <mac|windows> <size>…
+//   swift unity/tools/icono/icono.swift <base.png> <font.ttf> <version> <out dir> <mac|windows|ios> <size>…
 //
 // The base is the 0.10.1's (packages/desktop/scripts/icon.py, on macOS's grid: the tile 823 px of 1024, 100 in from
 // the edge). Windows fills more of the square, as icon.py did (its margin 0.03), so it reads on the taskbar. Under 256
 // px the badge grows, up to the tile's whole width, so the number still reads in the Dock and the Finder; each size is
-// drawn at its own pixels, not shrunk from 1024. Writes <out dir>/icono-<size>.png.
+// drawn at its own pixels, not shrunk from 1024. iOS's is the Mac's tile alone filling the square, opaque: iOS rounds the
+// corners itself (Arturo, 7/11). Writes <out dir>/icono-<size>.png.
 
 let args = CommandLine.arguments
 
@@ -19,7 +20,7 @@ func fail(_ why: String) -> Never {
     exit(1)
 }
 
-guard args.count >= 7 else { fail("uso: icono.swift <base.png> <fuente.ttf> <versión> <carpeta> <mac|windows> <tamaño>…") }
+guard args.count >= 7 else { fail("uso: icono.swift <base.png> <fuente.ttf> <versión> <carpeta> <mac|windows|ios> <tamaño>…") }
 guard let base = NSImage(contentsOfFile: args[1]) else { fail("no se lee \(args[1])") }
 guard let fontData = NSData(contentsOfFile: args[2]), let provider = CGDataProvider(data: fontData), let face = CGFont(provider) else {
     fail("no se lee \(args[2])")
@@ -27,6 +28,7 @@ guard let fontData = NSData(contentsOfFile: args[2]), let provider = CGDataProvi
 let version = args[3]
 let out = args[4]
 let windows = args[5] == "windows"
+let ios = args[5] == "ios"
 let sizes = args[6...].map { Int($0) ?? 0 }
 if sizes.contains(where: { $0 < 16 || $0 > 1024 }) { fail("tamaños de 16 a 1024: \(args[6...].joined(separator: " "))") }
 
@@ -133,9 +135,31 @@ func draw(_ n: Int) -> NSBitmapImageRep {
     return rep
 }
 
+/// iOS's at `n` px: the Mac's drawn bigger, so that its tile comes out at `n`, and the tile cut out over ink, so no corner
+/// is left see-through (iOS's mask is the tile's own rounding, near enough).
+func fullBleed(_ n: Int) -> NSBitmapImageRep {
+    let m = Int((CGFloat(n) * 1024 / baseTile.width).rounded())
+    let mac = draw(m)
+    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: n, pixelsHigh: n, bitsPerSample: 8, samplesPerPixel: 4,
+                               hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    rep.size = NSSize(width: n, height: n)
+    NSGraphicsContext.saveGraphicsState()
+    let context = NSGraphicsContext(bitmapImageRep: rep)!
+    NSGraphicsContext.current = context
+    context.imageInterpolation = .high
+    ink.setFill()
+    NSRect(x: 0, y: 0, width: n, height: n).fill()
+    // The tile is square and centred: from the bottom, as AppKit counts, it is where it is from the top.
+    let k = CGFloat(m) / 1024
+    let from = NSRect(x: baseTile.minX * k, y: baseTile.minY * k, width: baseTile.width * k, height: baseTile.height * k)
+    mac.draw(in: NSRect(x: 0, y: 0, width: n, height: n), from: from, operation: .sourceOver, fraction: 1, respectFlipped: false, hints: nil)
+    NSGraphicsContext.restoreGraphicsState()
+    return rep
+}
+
 for n in sizes {
     let file = URL(fileURLWithPath: out).appendingPathComponent("icono-\(n).png")
-    guard let png = draw(n).representation(using: .png, properties: [:]) else { fail("no sale el png de \(n)") }
+    guard let png = (ios ? fullBleed(n) : draw(n)).representation(using: .png, properties: [:]) else { fail("no sale el png de \(n)") }
     do {
         try png.write(to: file)
     } catch {

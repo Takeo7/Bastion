@@ -1,3 +1,5 @@
+using Bastion.Client.Net;
+
 namespace Bastion.UI.Start
 {
     /// <summary>
@@ -11,6 +13,8 @@ namespace Bastion.UI.Start
 
         // The main menu (p1), in this order; «Continuar partida» only with a game saved.
         public const string Continue = "Continuar partida";
+        /// <summary>Where «Continuar partida» would be, with only a campaign from before the expeditions (NetLink.OldCampaign; Lore, 16/11).</summary>
+        public static string OldCampaign(string file) => $"La campaña anterior no se puede continuar con esta versión. Queda guardada aparte, en {file}. Con «Nueva partida» empiezas otra.";
         public const string New = "Nueva partida";
         public const string Two = "Partida multijugador";
         public const string Settings = "Ajustes";
@@ -43,7 +47,10 @@ namespace Bastion.UI.Start
         public static string Entering(string name) => $"Entrando en la partida de {name}…";
         public static string Version(string v) => $"versión {v}";
 
-        /// <summary>Under Ajustes' title, on the start screen.</summary>
-        public const string SettingsHere = "Se guardan en este ordenador.";
+        /// <summary>«iPad» or «iPhone», what this one is (SystemInfo.deviceModel: «iPad13,18», «iPhone17,1»).</summary>
+        public static string Device => UnityEngine.SystemInfo.deviceModel.StartsWith("iPhone") ? "iPhone" : "iPad";
+
+        /// <summary>«Se guardan en este ordenador» (the settings, on the base's menu and the start screen's), or on this iPad or iPhone.</summary>
+        public static string SettingsHere => NetLink.LanBlind ? $"Se guardan en este {Device}." : "Se guardan en este ordenador.";
     }
 }

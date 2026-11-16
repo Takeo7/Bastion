@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -94,6 +95,23 @@ namespace Bastion.UI.Hud
             if (!string.IsNullOrEmpty(m.Alert)) Ui.Text(m.Alert, "timer timer--urgent", host);
         }
 
+        Action<int> turnCamera;
+
+        /// <summary>
+        /// With the finger (HudRoot), the compass turns the camera, as Q and E (docs/IOS.md; Arturo, 7/11: by steps, with two
+        /// fingers or the compass): a press on its left half a quarter turn left, on its right half right. A Clickable, so a
+        /// long press for its help doesn't turn it (TooltipLayer lets the pointer go).
+        /// </summary>
+        public void TurnsCamera(Action<int> turn)
+        {
+            turnCamera = turn;
+            compass.pickingMode = PickingMode.Position;
+            compass.AddManipulator(new Clickable(e =>
+            {
+                if (e is IPointerEvent p) turnCamera(p.position.x < compass.worldBound.center.x ? -1 : 1);
+            }));
+        }
+
         /// <summary>Hidden while the arrival card is up (it shrinks into here when closed).</summary>
         public void SetWaiting(bool waiting)
         {
@@ -109,7 +127,7 @@ namespace Bastion.UI.Hud
             var shown = v != null && v.Shown;
             Ui.Show(compass, shown);
             foreach (var e in edgeDirs)
-                if (e != null) Ui.Show(e, shown);
+                if (e != null) Ui.Show(e, shown && v.Edges);
             turn = float.NaN;
             beat?.Pause();
             if (!shown) return;
@@ -121,7 +139,7 @@ namespace Bastion.UI.Hud
                 edgeDirs[i]?.EnableInClassList("cardinal--hot", hot);
                 if (hot) by.Add(HudText.Compass.Sides[i]);
             }
-            tips.Attach(compass, by.Count > 0 ? HudText.Compass.Next(Ui.List(by)) : HudText.Compass.About);
+            tips.Attach(compass, by.Count > 0 ? HudText.Compass.Next(Ui.List(by)) : turnCamera != null ? HudText.Touch.Compass : HudText.Compass.About);
             // USS has no @keyframes: the hot letters beat from here, twice a second.
             if (by.Count == 0) return;
             var on = false;

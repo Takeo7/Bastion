@@ -61,7 +61,13 @@ namespace Bastion.UI.Strategy
                 var tile = Ui.El("haul well", haul);
                 tile.EnableInClassList("haul--big", h.Big);
                 tile.EnableInClassList("haul--better", h.Better);
-                Ui.Icon(icon, h.Icon, "haul__icon", tile);
+                // Arte's picture of a run's find; else the HUD's icon.
+                if (h.Kind != null && Bastion.Client.GearPictures.Of(h.Kind, h.Type) is UnityEngine.Texture2D art)
+                {
+                    var pic = Ui.El("haul__icon haul__art", tile);
+                    pic.style.backgroundImage = new StyleBackground(art);
+                }
+                else Ui.Icon(icon, h.Icon, "haul__icon", tile);
                 Ui.Text(h.Figure, "haul__figure font-title", tile);
                 if (!string.IsNullOrEmpty(h.Tip)) tips.Attach(tile, h.Tip);
             }
@@ -80,11 +86,6 @@ namespace Bastion.UI.Strategy
                 var l = v.Lines[i];
                 var row = Ui.El("debrief-line", plate);
                 Ui.Text(StrategyText.Marked(l.Text), l.Bad ? "debrief-line__text debrief-line__text--bad" : "debrief-line__text", row);
-                if (string.IsNullOrEmpty(l.Button)) continue;
-                var index = i;
-                var b = new Button(() => handlers.OnDebriefLine(index)) { text = l.Button.ToUpperInvariant() };
-                Ui.AddClasses(b, "armory-small font-title");
-                row.Add(b);
             }
             var foot = Ui.El("debrief-foot", plate);
             if (!string.IsNullOrEmpty(v.Story)) Ui.Text(StrategyText.Marked(v.Story), "debrief-story", foot);

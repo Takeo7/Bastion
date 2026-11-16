@@ -79,6 +79,15 @@
     opacity: 0.5;
 }
 
+/* The campaign from before the expeditions, set aside: where «Continuar partida» would be (Red, 16/11). */
+.start__old {
+    max-width: 420px;
+    margin: 0 0 14px 0;
+    font-size: 15px;
+    white-space: normal;
+    color: #c4c9c0;
+}
+
 /* «Volver» of «Partida multijugador»: where the keys were, at the foot. */
 .start__back {
     position: absolute;

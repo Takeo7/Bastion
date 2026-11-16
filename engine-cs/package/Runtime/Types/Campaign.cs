@@ -249,6 +249,8 @@ namespace Bastion.Engine
         public List<string> Traits { get; set; } = new List<string>(); // TraitIds
         /// <summary>Why the fallen fell, when it wasn't in combat: 'turned', the infection won (TURNED_CAUSE; till 0.12.5).</summary>
         public string? FellCause { get; set; } // FellCauses
+        /// <summary>The runs (version 28, H0-DISENO §3): what it takes out. Null in a campaign of before.</summary>
+        public Kit? Kit { get; set; }
     }
 
     // ----------------------------------------------------------------- missions
@@ -524,6 +526,8 @@ namespace Bastion.Engine
         public bool? Fallen { get; set; } // true
         /// <summary>What a siege held left of the base: pieces broken down, pieces beaten, traps and turrets with uses spent (to mend and rearm).</summary>
         public SiegeDamage? Damage { get; set; }
+        /// <summary>A run's node (H3): what came back, who fell with what, health left, how the run ended.</summary>
+        public RunReport? Run { get; set; }
     }
 
     /// <summary>MissionReport.damage: `{ broken: number; hurt: number; spent: number }`.</summary>
@@ -710,6 +714,19 @@ namespace Bastion.Engine
         /// <summary>Tells campaigns apart in each browser (scenes already played); missing in campaigns from before it.</summary>
         public string? Uid { get; set; }
         public int NextId { get; set; }
+        // The runs (version 28, H0-DISENO §3): all null in a campaign of before.
+        /// <summary>The shared stash, 10×6 to start; each «stash» upgrade adds 2 rows. Its supplies piles are the §.</summary>
+        public GearGrid? Stash { get; set; }
+        /// <summary>Upgrades bought: UpgradeIds → level.</summary>
+        public Dictionary<string, int>? Upgrades { get; set; } // UpgradeIds → level
+        /// <summary>The chapter open, 1 to 3.</summary>
+        public int? Chapter { get; set; }
+        /// <summary>Chapters with their boss dead.</summary>
+        public int? ChaptersDone { get; set; }
+        /// <summary>The run going on; null in the base.</summary>
+        public RunState? Run { get; set; }
+        /// <summary>Nodes entered so far, fights and stops (the room numbers its save copies by it).</summary>
+        public int? NodesPlayed { get; set; }
     }
 
     /// <summary>The next siege of the base (docs/FASE12.md §11.5).</summary>

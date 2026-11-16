@@ -82,19 +82,10 @@ namespace Bastion.UI.Strategy
             if (!string.IsNullOrEmpty(v.Empty))
             {
                 Ui.Text(v.Empty, "squad-empty__text", empty);
-                var go = new Button(handlers.OnGoMap) { text = "IR AL MAPA" };
-                Ui.AddClasses(go, "btn-primary font-title");
-                empty.Add(go);
                 Draw();
                 return;
             }
             List(v.MineHead, v.MineTip, v.Mine, left, v.PostHelp);
-            if (!string.IsNullOrEmpty(v.PostHome))
-            {
-                var home = new Button(handlers.OnPostHome) { text = v.PostHome.ToUpperInvariant() };
-                Ui.AddClasses(home, "squad-back squad-post-home font-title");
-                left.Add(home);
-            }
             if (v.Partner.Count > 0) List(v.PartnerHead, v.PartnerTip, v.Partner, right);
             if (v.Ready.Count > 0)
             {

@@ -8,12 +8,13 @@ using UnityEngine;
 namespace Bastion.Client
 {
     /// <summary>
-    /// The settlement's camera, by the screen's tab (0.10.1's screen.ts shotFor and stage.ts show): the clearing from above
-    /// on the caravan (Asentamiento), the soldier by the barracks (Soldados and Personalizar: clearingArt.ts soldierShot),
-    /// the Armería's bench (armoryShot) and the squad's row (lineupShot), these two kept whole in what the screen's panels
-    /// leave free (stage.ts fitted, by SetInsets); nothing while the valley is shown (Mapa: the valley's own camera). From
-    /// one to the next it eases (0.9 s); into the Mapa and out of it, it goes through black (Stage.show), and at the bottom
-    /// of it UI's valley takes the screen or gives it back (MapShown).
+    /// The settlement's camera, by the screen's tab (0.10.1's screen.ts shotFor and stage.ts show): the fire with those sat
+    /// round it (FireShot: the runs' base with nothing open, and Mejoras), the soldier by the barracks (Soldados, Almacén and
+    /// Personalizar: clearingArt.ts soldierShot) and the squad's row (lineupShot), the fire and the row kept in what the
+    /// screen's panels leave free (stage.ts fitted, by SetInsets); nothing while UI's map of the run is shown. From one to
+    /// the next it eases (0.9 s); into the map and out of it, it goes through black (Stage.show), and at the bottom of it
+    /// UI's screen takes the screen or gives it back (MapShown). (No free look, building, walking about, siege posts nor
+    /// Armería since the runs: Arturo, 16/11.)
     /// </summary>
     public sealed partial class Settlement
     {
@@ -27,7 +28,7 @@ namespace Bastion.Client
             set => cam = value;
         }
 
-        /// <summary>The tab shown (screen.ts BaseView): geoscape, facilities, engineering, barracks, squad, debrief.</summary>
+        /// <summary>The tab shown (screen.ts BaseView): geoscape, facilities, barracks, squad, debrief.</summary>
         public string View => view;
 
         Camera cam;
@@ -38,7 +39,6 @@ namespace Bastion.Client
         {
             public const string Geoscape = "geoscape";
             public const string Facilities = "facilities";
-            public const string Engineering = "engineering";
             public const string Barracks = "barracks";
             public const string Squad = "squad";
             public const string Debrief = "debrief";
@@ -67,52 +67,8 @@ namespace Bastion.Client
         bool? changing;
         /// <summary>How black the 3D is (0 to 1: Grade.shader's _StageFade, under the panels: stage.css .stage-fade).</summary>
         float black;
-        /// <summary>
-        /// UI's camera rig has the camera (the Asentamiento's free look, and the Escuadra's in a siege, its posts: screen.ts
-        /// fixedShot none): while true the tab's shot is eased to and then left alone (nothing fits it again), and UI's rig
-        /// takes it from there once CameraMoving is false (screen.ts: «only once the stage has eased it home»); back to false,
-        /// it eases from where it is to the tab's shot.
-        /// </summary>
-        public bool CameraFree
-        {
-            get => cameraFree;
-            set
-            {
-                if (cameraFree == value) return;
-                cameraFree = value;
-                if (!value && !MapOn && placed) Go(ShotFor(view), false);
-            }
-        }
-        bool cameraFree;
-
-        /// <summary>The campaign's mission now is a siege of the base (screen.ts siegeNow): the Escuadra's shot the clearing's, for its posts.</summary>
-        public bool SiegeNow { get; set; }
-
         /// <summary>The camera is being eased to a shot (0.9 s), not yet still on it.</summary>
         public bool CameraMoving => moved < MoveSeconds;
-
-        /// <summary>What the Asentamiento's shot looks at (metres): the point over the caravan the free look starts from (UI's rig, Focus).</summary>
-        public Vector3 ClearingTarget => World(ClearingShot().target);
-
-        /// <summary>
-        /// What the free look goes to to show tile (x, y) of the clearing (clearing.ts focusTile: its middle; fractions
-        /// allowed, for a piece about to go down the middle of its footprint, x + (w − 1) / 2), on the ground, in metres as
-        /// ClearingTarget: for UI's rig (Focus, on its spring), from a proposal's «Ver».
-        /// </summary>
-        public Vector3 TileTarget(float x, float y) => World(new Vector3(x + 0.5f, 0, y + 0.5f));
-
-        /// <summary>The same for piece `id` of the base shown (clearing.ts focusPiece: the middle of its footprint); null, no such piece.</summary>
-        public Vector3? PieceTarget(string id)
-        {
-            var p = Base?.Pieces.FirstOrDefault(q => q.Id == id);
-            if (p == null) return null;
-            var cells = Bastion.Engine.Base.CellsOf(p);
-            float w = cells.Max(c => c.X) - cells.Min(c => c.X) + 1, h = cells.Max(c => c.Y) - cells.Min(c => c.Y) + 1;
-            return TileTarget(p.X + (w - 1) / 2, p.Y + (h - 1) / 2);
-        }
-
-        /// <summary>The clearing's ground (metres, x and z: its south-west corner and its size), for the free look's bounds.</summary>
-        public Rect ClearingBounds => Base == null ? new Rect() : new Rect(0, -Base.Height * MapSpace.Tile, Base.Width * MapSpace.Tile, Base.Height * MapSpace.Tile);
 
         /// <summary>The fade's each way (stage.css: opacity over 0.25 s; Stage.show waited 260 ms before changing the set).</summary>
         const float FadeSeconds = 0.26f;
@@ -197,15 +153,13 @@ namespace Bastion.Client
             {
                 case Views.Barracks:
                     return SoldierShot();
-                case Views.Engineering:
-                    return ArmoryShot();
                 case Views.Squad:
-                    // The siege's squad is the clearing from above, round the caravan (screen.ts shotFor, #58).
-                    return SiegeNow ? ClearingShot() : LineupShot();
+                    return LineupShot();
                 case Views.Debrief:
                     return LineupShot();
                 default:
-                    return ClearingShot();
+                    // The runs' open shot, the fire (Settlement.Fixed).
+                    return FireShot();
             }
         }
 
@@ -365,7 +319,7 @@ namespace Bastion.Client
         /// <summary>The panels moved (another layout, another size): a fitted tab's shot made again.</summary>
         void Refit()
         {
-            if (view == Views.Engineering || view == Views.Squad || view == Views.Debrief) Reframe();
+            if (view == Views.Squad || view == Views.Debrief || FireShown) Reframe();
         }
 
         /// <summary>
@@ -377,7 +331,7 @@ namespace Bastion.Client
         {
             foreach (var r in cleared) if (r != null) r.enabled = true;
             cleared.Clear();
-            if (Map == null || view == Views.Facilities || view == Views.Geoscape) return;
+            if (Map == null || (view == Views.Facilities && !FireShown) || view == Views.Geoscape) return;
             if (pines == null)
                 pines = Map.GetComponentsInChildren<Renderer>().Where(r =>
                 {
@@ -444,7 +398,7 @@ namespace Bastion.Client
         /// <summary>The tab's shot again, where things stand now (the base changed, La Lata parked elsewhere), easing there.</summary>
         void Reframe()
         {
-            if (!placed || view == Views.Geoscape || cameraFree) return;
+            if (!placed || view == Views.Geoscape) return;
             var shot = ShotFor(view);
             if ((shot.pos - goal.pos).sqrMagnitude < 1e-4f && (shot.target - goal.target).sqrMagnitude < 1e-4f) return;
             Go(shot, false);
@@ -494,7 +448,7 @@ namespace Bastion.Client
         /// <summary>
         /// Where the camp's things go (clearingArt.ts campPlaces): Soldados' soldier out from a side of the barracks (the
         /// caravan if there is none), the first with nothing built and no pine there and the clearest view of it, its
-        /// front first; the squad's row by La Lata (PlaceLineup); the Armería's corner by the caravan (PlaceArmory).
+        /// front first; the squad's row by La Lata (PlaceLineup); the fire of the open shot (PlaceFire).
         /// </summary>
         void CampPlaces()
         {
@@ -583,7 +537,7 @@ namespace Bastion.Client
                 soldierDistance = v.dist;
             }
             if (showcase != null) showcase.position = World(new Vector3(soldierAt.x, 0, soldierAt.y));
-            PlaceArmory(b, Free, ViewOf);
+            PlaceFire(b);
         }
 
         /// <summary>Which piece stands on each tile of the base shown (Base.PieceAt, made once a base: it is asked thousands of times).</summary>
@@ -612,9 +566,9 @@ namespace Bastion.Client
 
         void LateUpdate()
         {
-            // A fitted shot fits the new size (stage.ts resize); walking about, the camera is the walk's.
+            // A fitted shot fits the new size (stage.ts resize).
             var camera = Camera;
-            if (camera != null && !Walking)
+            if (camera != null)
             {
                 var size = new Vector2Int(camera.pixelWidth, camera.pixelHeight);
                 if (size != screenWas)
@@ -623,12 +577,11 @@ namespace Bastion.Client
                     Refit();
                 }
             }
-            if (!Walking) MoveCamera(Time.deltaTime);
+            MoveCamera(Time.deltaTime);
             StepFaceKey();
             // The soldier of Soldados lit under the pointer (Settlement.Highlight).
             StepHighlight(Time.deltaTime);
             StepFade(Time.deltaTime);
-            EndWalk();
         }
     }
 }

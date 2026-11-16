@@ -245,7 +245,8 @@ namespace Bastion.UI.Combat
             {
                 var slot = Slot(key.Id);
                 var number = slot < 0 ? "" : slot == 9 ? "0" : (slot + 1).ToString();
-                key.Hotkey = number == "" ? "" : key.Id == AbilityIds.Shoot ? $"{number} · Espacio" : number;
+                // With the finger, no keys (Lore, 7/11).
+                key.Hotkey = Bastion.Client.GameInput.Touch || number == "" ? "" : key.Id == AbilityIds.Shoot ? $"{number} · Espacio" : number;
                 bar.Add(key);
                 if (options != null) bar.AddRange(options);
             }
