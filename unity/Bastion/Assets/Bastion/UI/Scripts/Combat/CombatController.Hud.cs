@@ -41,11 +41,11 @@ namespace Bastion.UI.Combat
             else if (s.Outcome == null && (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien)) bar.Lock = HudText.Turn.EnemyLock;
             // The picked soldier's movement left, before the keys (Arturo, 5/11 #14).
             var shownUnit = u != null ? UnitById(Shown, u.Id) ?? u : null;
-            if (shownUnit != null && shownUnit.Team == Teams.Xcom && shownUnit.Automaton == null && Paths.FullMoves(shownUnit) > 0)
+            if (shownUnit != null && shownUnit.Team == Teams.Xcom && shownUnit.Automaton == null && Paths.FullMoves(Shown, shownUnit) > 0)
             {
-                bar.Moves = Paths.MoveBudget(shownUnit);
-                bar.MovesMax = Paths.FullMoves(shownUnit);
-                bar.MovesTip = HudText.Moves.Tip(bar.Moves, bar.MovesMax);
+                bar.Moves = Paths.MoveBudget(Shown, shownUnit);
+                bar.MovesMax = Paths.FullMoves(Shown, shownUnit);
+                bar.MovesTip = HudText.Moves.Tip(bar.Moves, bar.MovesMax, Paths.ConcealedBonus(Shown, shownUnit));
             }
             Hud.SetAbilities(bar);
             Hud.SetCall(CallView());
@@ -263,6 +263,11 @@ namespace Bastion.UI.Combat
             // Aiming: the other targets, each with its odds (over the shoulder, their only flag; a click there aims at it: #11).
             var options = mode == Mode.Target && modeAbility != null ? TargetOptions(modeAbility) : null;
             var attack = modeAbility != null && Content.IsAttack(modeAbility);
+            // Those the picked one can take down now, a tag over each (Golpe silencioso, Gameplay 16/11); aiming it, why not
+            // over the others beside it.
+            var quiet = QuietTargets();
+            var takedown = mode == Mode.Target && modeAbility == AbilityIds.Takedown;
+            var me = takedown ? Unit() : null;
             var carrier = v.Mission.Item?.Carrier;
             foreach (var u in v.Units)
             {
@@ -294,6 +299,7 @@ namespace Bastion.UI.Combat
                 Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data");
                 Tag(u.Captive, UnitWords.Agree(u, "CAUTIVO"), "data");
                 Tag(u.Objective, "OBJETIVO", "stun");
+                Tag(quiet.Contains(u.Id), HudText.Takedown.Tag, "quiet");
                 var would = false;
                 if (tags.TryGetValue(u.Id, out var t))
                 {
@@ -309,7 +315,13 @@ namespace Bastion.UI.Combat
                 {
                     f.Other = true;
                     f.HoverKind = "aim";
-                    f.HoverText = attack ? $"{other.Hit} %" : u.Name;
+                    f.HoverText = attack ? $"{other.Hit} %" : takedown ? HudText.Takedown.Kills : u.Name;
+                }
+                else if (me != null && f.Enemy && !f.Target && UnitById(State, u.Id) is Unit them && Aim.InMeleeReach(State, me.Pos, them.Pos) && Abilities.TakedownRefusal(State, me, them) is string no)
+                {
+                    f.Why = true;
+                    f.HoverKind = "flank";
+                    f.HoverText = no.TrimEnd('.');
                 }
                 view.Flags.Add(f);
             }
@@ -345,7 +357,8 @@ namespace Bastion.UI.Combat
             var v = Shown;
             var a = hover != null ? Grid.UnitAt(v, hover) : null;
             var who = new List<Unit>();
-            if (mode != Mode.Target && v.Outcome == null)
+            // Nor over the shoulder (0.12.26: the blow at the dead one under the pointer was played on its red, all the ground).
+            if (mode != Mode.Target && v.Outcome == null && !shoulder)
             {
                 if (a != null && a.Alive && a.Team == Teams.Alien && Marked(a)) who.Add(a);
                 else if (sightAll && CanAct()) who.AddRange(v.Units.Where(e => e.Alive && e.Team == Teams.Alien && Marked(e)));
@@ -426,7 +439,8 @@ namespace Bastion.UI.Combat
                 var share = Grid.UnitAt(v, p) is Unit there && there.Team == Teams.Xcom ? Los.ConcealShare(v, a, there, p) : Los.CoverShare(v, a, p, Teams.Xcom);
                 if (!Grid.CanStandOn(Grid.KindAt(v, p)) || !Los.InViewCone(a, p) || Los.SightOrigin(v, a.Pos, p, Los.SightTo(v, a, p) * share, Los.WindowReachOf(a.Team)) == null) continue;
                 seen.Add(p);
-                if (v.Concealed && Grid.Distance(a.Pos, p) <= Los.DetectionTo(v, a, p) * share) noticed.Add(p);
+                // Hidden, one of the dead notices only ahead of it, not beside nor behind (Los.InNoticeCone, Gameplay 16/11).
+                if (v.Concealed && Los.InNoticeCone(v, a, p) && Grid.Distance(a.Pos, p) <= Los.DetectionTo(v, a, p) * share) noticed.Add(p);
             }
             var made = (key, seen, noticed);
             sights[a.Id] = made;
@@ -494,7 +508,14 @@ namespace Bastion.UI.Combat
             var occupant = Grid.UnitAt(State, tile);
             if (occupant != null)
             {
-                if (!shoots || occupant.Team != Teams.Alien || !Visible(occupant)) return tags;
+                if (occupant.Team != Teams.Alien || !Visible(occupant)) return tags;
+                // Beside it and unaware: the Golpe silencioso's word instead of the odds (Gameplay, 16/11).
+                if (QuietLine(u, occupant) is { } quietLine)
+                {
+                    tags[occupant.Id] = (quietLine.kind, quietLine.text, null);
+                    return tags;
+                }
+                if (!shoots) return tags;
                 var shot = Aim.PreviewShot(State, u, occupant, new ShotOptions { Ability = AbilityIds.Shoot });
                 tags[occupant.Id] = shot != null ? ("aim", $"{shot.Hit} % · crít. {Math.Min(shot.Crit, shot.Hit)} %", null) : ("none", "Sin línea de tiro", null);
                 return tags;
@@ -517,6 +538,31 @@ namespace Bastion.UI.Combat
                 tags[a.Id] = ("sight", shot != null ? $"{shot.Hit} %" : null, eye);
             }
             return tags;
+        }
+
+        /// <summary>
+        /// Those the picked one can take down now (Golpe silencioso: Abilities.TakedownTargets, Gameplay 16/11), in our turn,
+        /// with the command and its key on; none, empty.
+        /// </summary>
+        HashSet<string> QuietTargets()
+        {
+            var u = Unit();
+            if (u == null || !CanAct() || !Commands(u) || u.Id == sent || !Abilities.AbilitiesOf(u).Contains(AbilityIds.Takedown) || Abilities.AbilityBlocker(State, u, AbilityIds.Takedown) != null) return new HashSet<string>();
+            return new HashSet<string>(Abilities.TakedownTargets(State, u).Select(t => t.Id));
+        }
+
+        /// <summary>
+        /// The pointer on one of the dead beside `u` that is still unaware (Paths.OnPatrol), a Zombi or a Corredor: whether the
+        /// Golpe silencioso takes it down, or why not («Te tiene delante…», the chainsaw); null, the shot's odds as for anyone.
+        /// </summary>
+        (string kind, string text)? QuietLine(Unit u, Unit t)
+        {
+            if (t.Template != TemplateIds.Zombie && t.Template != TemplateIds.Xenoid || !Aim.InMeleeReach(State, u.Pos, t.Pos) || !Paths.OnPatrol(State, t)) return null;
+            if (!Abilities.AbilitiesOf(u).Contains(AbilityIds.Takedown)) return null;
+            // The key's own why (the chainsaw, no actions) as it is; this one's, after the action's name.
+            if (Abilities.AbilityBlocker(State, u, AbilityIds.Takedown) is string off) return ("flank", off.TrimEnd('.'));
+            var no = Abilities.TakedownRefusal(State, u, t);
+            return no == null ? ("aim", HudText.Takedown.On(HudText.Takedown.Kills)) : ("flank", HudText.Takedown.On(no.TrimEnd('.')));
         }
 
         /// <summary>A crit modifier's words for `target`: the engine's «Flanqueo» on one of the dead is being in the open (#13).</summary>
@@ -614,8 +660,8 @@ namespace Bastion.UI.Combat
                     Ap = u.Ap,
                     ApMax = Math.Max(Content.ApPerTurnOf(u), u.Ap),
                     // The movement left, a piece a tile (Arturo, 5/11 #14); not a turret's.
-                    Moves = u.Automaton == null && u.Alive ? Paths.MoveBudget(u) / Paths.CostOrtho : 0,
-                    MovesMax = u.Automaton == null && u.Alive ? Paths.FullMoves(u) / Paths.CostOrtho : 0,
+                    Moves = u.Automaton == null && u.Alive ? Paths.MoveBudget(v, u) / Paths.CostOrtho : 0,
+                    MovesMax = u.Automaton == null && u.Alive ? Paths.FullMoves(v, u) / Paths.CostOrtho : 0,
                 };
                 void Tag(bool on, string text, string kind, string tip = null)
                 {
@@ -722,8 +768,8 @@ namespace Bastion.UI.Combat
             {
                 view.Stats.Add(new StatView { Kind = "hp", Tip = $"Salud {u.Hp}/{u.MaxHp}", Filled = u.Hp, Total = u.MaxHp });
                 view.Stats.Add(new StatView { Kind = "ap", Tip = $"Acciones {u.Ap}/{Content.ApPerTurnOf(u)}", Filled = u.Ap, Total = Math.Max(Content.ApPerTurnOf(u), u.Ap) });
-                if (u.Team == Teams.Xcom && u.Automaton == null && Paths.FullMoves(u) > 0)
-                    view.Stats.Add(new StatView { Kind = "moves", Tip = HudText.Moves.Tip(Paths.MoveBudget(u), Paths.FullMoves(u)), Filled = Paths.MoveBudget(u) / Paths.CostOrtho, Total = Paths.FullMoves(u) / Paths.CostOrtho });
+                if (u.Team == Teams.Xcom && u.Automaton == null && Paths.FullMoves(State, u) > 0)
+                    view.Stats.Add(new StatView { Kind = "moves", Tip = HudText.Moves.Tip(Paths.MoveBudget(State, u), Paths.FullMoves(State, u), Paths.ConcealedBonus(State, u)), Filled = Paths.MoveBudget(State, u) / Paths.CostOrtho, Total = Paths.FullMoves(State, u) / Paths.CostOrtho });
             }
             // The spare magazines after the clip (docs/FASE7.md): «+3», red at none; the enemies don't count theirs.
             if (clip > 0)
@@ -868,7 +914,8 @@ namespace Bastion.UI.Combat
             if (def.Target == AbilityTargets.Ally || !Content.IsAttack(ability))
             {
                 var friendly = def.Target == AbilityTargets.Ally;
-                var dmg = friendly ? null : Rules.AbilityDamage(State, u, ability, target);
+                // (Golpe silencioso: no roll and no figures, it kills; its panel says what it does.)
+                var dmg = friendly || ability == AbilityIds.Takedown ? null : Rules.AbilityDamage(State, u, ability, target);
                 var noise = Abilities.NoiseOf(State, u, ability);
                 var support = new ShotView
                 {

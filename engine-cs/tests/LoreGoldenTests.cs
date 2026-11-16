@@ -3105,7 +3105,11 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.", Lore.Glossary["Tablero"]);
             Assert.Equal("Cuenta los puntos gastados en el tablero: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.", Lore.Glossary["Veteranía"]);
             Assert.Equal("Los muertos que entran por los bordes. El ruido llena el medidor, en dB: a 90 se oye llegar una oleada, que entra un turno después. Salvo en la Limpieza, además, llegan unos pocos cada turno, el doble mientras suena la alarma de un Sabotaje.", Lore.Glossary["Horda"]);
-            Assert.Equal(36, Lore.Glossary.Count);
+            // Gameplay, 16/11 (0.12.26): the stealth.
+            Assert.Equal("Salvo en un Asedio, la escuadra empieza cada misión oculta: los enemigos no saben que estáis ahí. Mientras dura, cada soldado tiene 3 puntos de movimiento más, y un zombi solo nota a quien tiene delante: por detrás o por un lado, no te nota aunque estés pegado a él. Se rompe cuando un enemigo ve a un soldado o cuando atacáis, salvo con el golpe silencioso. Entonces cada soldado pierde 3 de los puntos de movimiento que le queden.", Lore.Glossary["Ocultación"]);
+            Assert.Equal("Mata siempre, sin ruido y sin romper la ocultación, a un Zombi o un Corredor que tengas al lado, si aún no está alerta y no te tiene delante. No sirve con la motosierra.", Lore.Glossary["Golpe silencioso"]);
+            Assert.Equal("Mientras la escuadra está oculta, cada soldado tiene 3 puntos más: 11. Al romperse la ocultación, pierde 3 de los que le queden ese turno.", Lore.MoveText.Rules[1]);
+            Assert.Equal(38, Lore.Glossary.Count);
             Assert.Equal("De noche", Lore.NightText.Label);
             Assert.Equal("De noche: a oscuras, tus soldados ven 10 casillas en vez de 18. Hay más zombis, y el botín vale la mitad más.", Lore.NightText.Briefing);
             Assert.Equal("Misión de noche: el botín y la recompensa valen la mitad más.", Lore.NightText.Report);

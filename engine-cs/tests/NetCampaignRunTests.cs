@@ -33,16 +33,18 @@ namespace Bastion.Engine.Tests
     /// of seeds 1 to 200, 44 win the first and only 47 and 91 both: 47. With a pod that heard something going to look
     /// though its first member is boxed in, and climbing in through windows to a noise inside (Arturo's notes of 14/11),
     /// 47 loses its first mission (of 10 seeds, 3 win the first, as 4 did before: MissionBot is no worse off); 71 wins
-    /// both, its second mission another operation: 71 (BASTION_SEMILLA=71 for the apps).
+    /// both, its second mission another operation: 71. With 3 tiles more while the squad is hidden and the dead not
+    /// noticing whoever comes up behind them then (Arturo, 16/11), 71 loses its first mission; of seeds 1 to 80, 14 win
+    /// the first and only 23 and 53 both: 53 (BASTION_SEMILLA=53 for the apps).
     /// </summary>
     public class NetCampaignRunTests
     {
         [Fact]
         public void TheTestAppsCampaignIsPlayedThrough()
         {
-            var played = CampaignAutoRun.Run(71, 2);
+            var played = CampaignAutoRun.Run(53, 2);
             Assert.Null(CampaignAutoRun.Stuck);
-            Assert.Equal(new[] { "El consultorio de Metsovo", "El polígono de Los Llanos de Ceniza" }, played.Select((m) => m.Name));
+            Assert.Equal(new[] { "El consultorio de Metsovo", "El hospital de La Vega" }, played.Select((m) => m.Name));
             Assert.All(played, (m) => Assert.Equal(Outcomes.Victory, m.Outcome));
         }
     }

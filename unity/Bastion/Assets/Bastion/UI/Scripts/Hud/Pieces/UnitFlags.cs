@@ -34,6 +34,8 @@ namespace Bastion.UI.Hud
             public float Born;
             /// <summary>A pin's: how long it stays.</summary>
             public float Seconds;
+            /// <summary>A pin's: how many pixels over its point (a mark over a unit's flag).</summary>
+            public float Lift;
         }
 
         readonly Func<string, Sprite> icon;
@@ -153,6 +155,33 @@ namespace Bastion.UI.Hud
             }
             pins.Add(new Floating { Label = label, World = world, Born = Time.time, Seconds = seconds });
         }
+
+        /// <summary>
+        /// One of the dead that heard a noise, in sight (Gameplay, 16/11: Arte turns it, but from the game's camera that is
+        /// small): the noise's loudspeaker and `text` on a dark plate ringed in `color`, over its flag, `seconds`, fading at
+        /// the end. The camera doesn't move for it.
+        /// </summary>
+        public void Heard(Vector3 head, string text, string color, float seconds)
+        {
+            var mark = Ui.El("heard", layer);
+            var box = Ui.El("heard__icon", mark);
+            var drawn = new LineIcon("noise");
+            drawn.style.flexGrow = 1;
+            box.Add(drawn);
+            var words = string.IsNullOrEmpty(text) ? null : Ui.Text(text, "heard__text", mark);
+            if (ColorUtility.TryParseHtmlString(color, out var c))
+            {
+                mark.style.borderTopColor = mark.style.borderBottomColor = mark.style.borderLeftColor = mark.style.borderRightColor = c;
+                box.style.unityBackgroundImageTintColor = c;
+                if (words != null) words.style.color = c;
+            }
+            mark.pickingMode = PickingMode.Ignore;
+            mark.Query<VisualElement>().ForEach(x => x.pickingMode = PickingMode.Ignore);
+            pins.Add(new Floating { Label = mark, World = head, Born = Time.time, Seconds = seconds, Lift = -HeardLift });
+        }
+
+        /// <summary>How far over the head a heard mark sits: clear of the unit's flag (a row of health and its eye).</summary>
+        const float HeardLift = 24;
 
         readonly List<Floating> pins = new List<Floating>();
 
@@ -314,7 +343,7 @@ namespace Bastion.UI.Hud
                     pins.RemoveAt(i);
                     continue;
                 }
-                Place(f.Label, panel, camera, f.World, 0, 1f);
+                Place(f.Label, panel, camera, f.World, f.Lift, 1f);
                 f.Label.style.opacity = t < 0.75f ? 1f : 1f - (t - 0.75f) / 0.25f;
             }
         }
@@ -372,6 +401,7 @@ namespace Bastion.UI.Hud
             el.EnableInClassList("uflag--enemy", f.Enemy);
             el.EnableInClassList("uflag--target", f.Target);
             el.EnableInClassList("uflag--other", f.Other);
+            el.EnableInClassList("uflag--why", f.Why);
             // Pointed at from the list (Arturo, 31/10 #11): an arrow over all of it, bobbing.
             if (f.Pointed) el.Add(new PointerArrow());
             // Over it, what the pointer's tile means, the odds; on a plate, kept whole near the screen's edge (KeepLinesIn).

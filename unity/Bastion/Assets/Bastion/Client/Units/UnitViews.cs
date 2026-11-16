@@ -273,6 +273,8 @@ namespace Bastion.Client.Units
             public float carry;
             /// <summary>How far its left hand is on the crowbar it pries with (Pry, PryHand; the 3D review's A-20, 10/11).</summary>
             public float pryHand;
+            /// <summary>The knife held the other way up, its point out of the fist on the little finger's side (a silent takedown: UnitViews.Takedown).</summary>
+            public bool reversed;
             /// <summary>The knife's sheath at its belt (Sheathe; the 3D review's F-07, 10/11), or null.</summary>
             public Transform sheath;
             /// <summary>What it searches (Rummage's point): where its hands go (SearchPose; the 3D review's A-18, 10/11).</summary>
@@ -543,6 +545,8 @@ namespace Bastion.Client.Units
             }
             seenBefore = seenNow;
             if (ThinLog && ++thinLogged % 60 == 0) Debug.Log($"[alternan] {Time.time:0.0} s: {seenNow} seen, {waited} waiting this frame (crowd {(thin ? "yes" : "no")}, dt {step * 1000:0.0} ms)");
+            // (A silent takedown's hands on the dead one, once both are posed: UnitViews.Takedown.)
+            StepTakedowns();
             // (The frame's own step: dt is the last figure's, with what it missed.)
             StepFlashes(step);
             StepRims();
@@ -1131,13 +1135,15 @@ namespace Bastion.Client.Units
                 }
                 if (!u.Alive && !v.dead) Lie(v);
                 if (!u.Alive && v.dead) HideDropped(v);
-                if (u.Alive && v.dead) Stand(v);
+                // (One felled silently lies on: its death comes in the events behind the blow, the state still has it alive.)
+                if (u.Alive && v.dead && !KeptDown(v)) Stand(v);
                 Pose(v, u);
                 Hear(v, u);
                 // (Who eats a body or reaches for it stays where it is while its tile is the same: put back on the tile's
-                // middle at every event, it went on eating a tile off the body, Ana's #7 of 1/11.)
+                // middle at every event, it went on eating a tile off the body, Ana's #7 of 1/11. A body too: one killed
+                // eating had slid from the body it ate to its tile's middle once dead.)
                 bool still = was != null && was.X == u.Pos.X && was.Y == u.Pos.Y && was.Z == u.Pos.Z;
-                if (!(still && (v.feeding || v.reachFor != null))) v.root.position = MapSpace.StandAt(view, v.place);
+                if (!(still && (v.feeding || v.reachFor != null || v.dead))) v.root.position = MapSpace.StandAt(view, v.place);
                 int node = Bastion.Engine.Grid.NodeOf(view, u.Pos);
                 // (A body that has got up as one of the dead, Reanimate, is gone: the engine keeps it, Reanimated.)
                 bool shown = !u.Alive && u.Reanimated ? false
@@ -2440,7 +2446,8 @@ namespace Bastion.Client.Units
         /// <summary>Hit: 1.5 a critical, 1 a hit, 0.4 a graze.</summary>
         public async Awaitable HitReact(string id, float strength, CancellationToken ct = default)
         {
-            if (!views.TryGetValue(id, out var v)) return;
+            // (Felled silently, it is falling already: no hit, no flash of one, no knock. UnitViews.Takedown.)
+            if (!views.TryGetValue(id, out var v) || Hushed(v)) return;
             FlashHit(v);
             if (v.anim != null)
             {
@@ -2489,6 +2496,12 @@ namespace Bastion.Client.Units
         public async Awaitable Die(string id, CancellationToken ct = default)
         {
             if (!views.TryGetValue(id, out var v)) return;
+            // (Felled silently, its fall began as the blow landed: waited for, not begun again. UnitViews.Takedown.)
+            if (Hushed(v))
+            {
+                await HushedDie(v, ct);
+                return;
+            }
             FlashDeath(v);
             // (One eating or reaching that dies lets go of the body: it falls where it is.)
             v.feeding = false;

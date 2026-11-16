@@ -102,8 +102,9 @@ namespace Bastion.Client.Units
         /// syntyFigures.ts deathFor: `v`'s death for its last blow. Those that fall away from it (within Fits; at arm's length
         /// the doubling up one too; for a shot to the head one to the head if any), else the nearest that way; one of them with
         /// room, picked by its id; else whichever has room and reaches least; else the one that reaches least, `cramped`.
+        /// Only those `allowed` lets (a silent takedown's: not the one doubled up round a blow), if any.
         /// </summary>
-        Death DeathFor(View v, out bool cramped)
+        Death DeathFor(View v, out bool cramped, System.Func<Death, bool> allowed = null)
         {
             cramped = false;
             var deaths = Anims.Deaths(v.build);
@@ -113,7 +114,8 @@ namespace Bastion.Client.Units
             float scale = Figures.CharacterScale * v.size;
             bool Room(int k) => RoomToFall(v, deaths[k].falls, deaths[k].reach * SyntyScale * scale);
             int Least(IEnumerable<int> ks) => ks.Aggregate((a, b) => deaths[b].reach < deaths[a].reach ? b : a);
-            var all = Enumerable.Range(0, deaths.Count).ToList();
+            var all = Enumerable.Range(0, deaths.Count).Where(k => allowed == null || allowed(deaths[k])).ToList();
+            if (all.Count == 0) all = Enumerable.Range(0, deaths.Count).ToList();
             var fits = all;
             if (from is float way)
             {

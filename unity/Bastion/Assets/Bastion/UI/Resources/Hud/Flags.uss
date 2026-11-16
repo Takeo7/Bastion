@@ -201,6 +201,16 @@
     display: none;
 }
 
+/* Beside the one aiming, why not (the Golpe silencioso's «te ha visto»: Gameplay, 16/11): its line alone, as the others'. */
+.flags-layer--close .uflag--why {
+    display: flex;
+}
+
+.flags-layer--close .uflag--why .uflag__row,
+.flags-layer--close .uflag--why .uflag__name {
+    display: none;
+}
+
 .uflag__hover--pick {
     padding: 1px 7px;
     border-width: 1px;
@@ -307,6 +317,31 @@
 
 .tile-note--icon .tile-note__text {
     margin-left: 5px;
+}
+
+/* One of the dead in sight that heard a noise (Gameplay, 16/11: its turn is small from the game's camera): the noise's
+   loudspeaker and «?» over its flag a moment, on a dark plate ringed in the noise's colour (set from C#). */
+.heard {
+    position: absolute;
+    left: 0;
+    top: 0;
+    flex-direction: row;
+    align-items: center;
+    padding: 1px 6px;
+    background-color: rgba(14, 16, 18, 0.9);
+    border-width: 2px;
+    border-radius: 3px;
+}
+
+.heard__icon {
+    width: 20px;
+    height: 20px;
+}
+
+.heard__text {
+    margin-left: 3px;
+    font-size: 17px;
+    -unity-font-style: bold;
 }
 
 /* Tags that stay over the map (overlays.ts break-bar, pack-tag): under the flags, gone over the shoulder. */

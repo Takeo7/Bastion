@@ -37,6 +37,8 @@ namespace Bastion.UI.Combat
             {
                 shoulder = on;
                 if (on) Debug.Log($"[hombro] plano de {close.Value.attacker} a {close.Value.target}");
+                // The pointer's enemy's sight off over the shoulder, back after (ShowVision).
+                ShowVision();
             }
             if (!on && veiled.Count == 0) return;
             var eye = on ? camera.transform.position : Vector3.zero;

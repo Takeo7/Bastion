@@ -165,6 +165,9 @@ namespace Bastion.Engine
                 case AbilityIds.Claw:
                     MeleeAttack(u, melee!, ability);
                     break;
+                case AbilityIds.Takedown:
+                    Takedown(u, target!);
+                    break;
                 case AbilityIds.ElbowRoom:
                     // Hacerse sitio (docs/FASE9.md): a Slash at every enemy alongside, without a step.
                     foreach (var t in Abilities.BesideEnemies(S, u))
@@ -326,6 +329,33 @@ namespace Bastion.Engine
             // Shots on someone else's move (overwatch, suppression, covering fire) are heard on their own; the rest with their ability.
             if (reaction && attacker.Alive) MakeNoise(preview.Origin, weapon.Noise, attacker);
             return result;
+        }
+
+        /// <summary>
+        /// Golpe silencioso (Arturo, 16/11: with a blade, «por detrás de un zombi que no te ha visto», it always kills, and
+        /// silently; whom, Abilities.TakedownRefusal): no roll, it dies. A blade's blow all the same, through the same events (the
+        /// shot, a hit at 100 with no roll, its damage, the death), so the kill counts and teaches as one; but it makes no
+        /// noise (AbilityDef.noise 0), doesn't give the squad away and doesn't wake its pod. Whoever else sees it does what
+        /// the rules have them do after any order (AfterXcomAction).
+        /// </summary>
+        private void Takedown(Unit u, Unit target)
+        {
+            Emit(new ShotEvent
+            {
+                Unit = u.Id,
+                Target = target.Id,
+                Ability = AbilityIds.Takedown,
+                From = Engine.Events.CopyPos(u.Pos),
+                Result = ShotResults.Hit,
+                Chance = 100,
+                Roll = 0,
+            });
+            // All it has left, through any armour.
+            Damage(target, target.Hp, 0, u, target.Armor);
+            if (!target.Alive) AfterKill(u, target, AbilityIds.Takedown, u.Pos);
+            // Segundo aliento, as after any kill with the blade.
+            if (!target.Alive && Content.HasPerk(u, PerkIds.SecondWind) && u.Alive && u.Hp < u.MaxHp) Emit(new HealedEvent { Unit = u.Id, Target = u.Id, Amount = 1 });
+            CheckOutcome();
         }
 
         /// <summary>Implacable and Death From Above give an action back after a kill, once per turn.</summary>
@@ -702,7 +732,7 @@ namespace Bastion.Engine
         {
             var segment = new List<Pos>();
             var pendingAp = ap >= 2 ? 1 : 0;
-            int? pendingMoves = ap >= 2 ? Paths.MoveBudget(u) : ap == 1 ? Math.Min(Paths.CostAlong(S, u, u.Pos, path), Paths.MoveBudget(u)) : (int?)null;
+            int? pendingMoves = ap >= 2 ? Paths.MoveBudget(S, u) : ap == 1 ? Math.Min(Paths.CostAlong(S, u, u.Pos, path), Paths.MoveBudget(S, u)) : (int?)null;
             bool? pendingRun = run ? true : (bool?)null;
             void Flush()
             {
@@ -937,20 +967,25 @@ namespace Bastion.Engine
         }
 
         /// <summary>The first soldier an alien standing on `p` would spot (`facing`: the dead see ahead of them, the way they walk).</summary>
+        /// <remarks>Hidden, not one behind or beside one of the dead (Los.InNoticeCone; Arturo, 16/11).</remarks>
         public Unit? SpottedFrom(Unit u, Pos p, double? facing = null)
         {
             var face = facing ?? u.Facing;
-            return Grid.Combatants(S, Teams.Xcom).Find((soldier) => Los.InViewCone(u, soldier.Pos, p, face) && Los.SightOrigin(S, p, soldier.Pos, NoticeRange(u, soldier.Pos, soldier, p), Los.WindowReachOf(u.Team)) != null);
+            return Grid.Combatants(S, Teams.Xcom).Find((soldier) => Los.InNoticeCone(S, u, soldier.Pos, p, face) && Los.SightOrigin(S, p, soldier.Pos, NoticeRange(u, soldier.Pos, soldier, p), Los.WindowReachOf(u.Team)) != null);
         }
 
         /// <summary>The member of `pod` that would notice an XCOM soldier standing on `p`, if any.</summary>
+        /// <remarks>
+        /// Hidden, one of the dead doesn't notice a soldier come up behind or beside it, out of its cone (Los.InNoticeCone;
+        /// Arturo, 16/11: «por detrás de un zombi que no te ha visto»): only ahead of it, however close.
+        /// </remarks>
         private Unit? Noticer(Pod pod, Pos p, Unit? who = null)
         {
             foreach (var id in pod.UnitIds)
             {
                 var m = Grid.GetUnit(S, id);
                 if (m == null || !m.Alive) continue;
-                if (Los.InViewCone(m, p) && Los.SightOrigin(S, m.Pos, p, NoticeRange(m, p, who), Los.WindowReachOf(m.Team)) != null) return m;
+                if (Los.InNoticeCone(S, m, p) && Los.SightOrigin(S, m.Pos, p, NoticeRange(m, p, who), Los.WindowReachOf(m.Team)) != null) return m;
             }
             return null;
         }
@@ -1083,7 +1118,7 @@ namespace Bastion.Engine
             var members = pod.UnitIds.Select((id) => Grid.GetUnit(S, id)).Where((m) => m != null && m.Alive).Select((m) => m!).ToList();
             if (members.Any((m) => !Content.Templates[m.Template].Undead)) return null;
             var prey = !string.IsNullOrEmpty(why.Unit) ? Grid.GetUnit(S, why.Unit!) : null;
-            var woken = members.Where((m) => m.Id == why.By || (prey != null && Los.InViewCone(m, prey.Pos) && Los.SightOrigin(S, m.Pos, prey.Pos, NoticeRange(m, prey.Pos), Los.WindowReachOf(m.Team)) != null)).Select((m) => m.Id).ToList();
+            var woken = members.Where((m) => m.Id == why.By || (prey != null && Los.InNoticeCone(S, m, prey.Pos) && Los.SightOrigin(S, m.Pos, prey.Pos, NoticeRange(m, prey.Pos), Los.WindowReachOf(m.Team)) != null)).Select((m) => m.Id).ToList();
             return woken.Count == 0 || woken.Count == members.Count ? null : woken;
         }
 
@@ -1575,7 +1610,7 @@ namespace Bastion.Engine
             var live = Grid.GetUnit(S, u.Id);
             if (live != null && live.Alive && !live.Evacuated && Paths.HasTurnLeft(live))
             {
-                var spent = live.Ap < apBefore || (movesBefore != null && Paths.MoveBudget(live) < movesBefore);
+                var spent = live.Ap < apBefore || (movesBefore != null && Paths.MoveBudget(S, live) < movesBefore);
                 if (spent && S.ActiveUnit != live.Id) Emit(new UnitActiveEvent { Unit = live.Id });
                 return;
             }
@@ -2035,12 +2070,13 @@ namespace Bastion.Engine
                 // A place without its level is on the ground (docs/FASE6-PLAN.md).
                 var to = Grid.ToPos(move.To);
                 // Within the movement it has left, apart from its actions (Arturo, 5/11 #14): in stretches, before and after acting.
-                var movesBefore = Paths.MoveBudget(unit);
+                // Hidden, 3 tiles more (Paths.ConcealedBonus), and a run is all of it.
+                var movesBefore = Paths.MoveBudget(s, unit);
                 if (movesBefore <= 0) return CommandResult.Failure("No le queda movimiento.");
                 var reach = Paths.ComputeReach(s, unit, movesBefore);
                 var path = Paths.BuildPath(s, unit, reach, to);
                 if (path == null) return CommandResult.Failure("No le queda movimiento para llegar ahí.");
-                var run = Paths.IsRun(unit, reach.Cost.Get(Grid.NodeOf(s, to), 0));
+                var run = Paths.IsRun(s, unit, reach.Cost.Get(Grid.NodeOf(s, to), 0));
                 sim.PassCommand(ctx.Slot);
                 sim.MoveAlong(unit, path, 1, run);
                 // Running is heard (docs/FASE2.md): the whole turn's movement at once (Paths.IsRun).
@@ -2070,6 +2106,15 @@ namespace Bastion.Engine
                     break;
                 case AbilityTargets.Melee:
                 {
+                    // Golpe silencioso: its own targets, and why not each (Abilities.TakedownRefusal).
+                    if (command.Ability == AbilityIds.Takedown)
+                    {
+                        var refusal = Abilities.TakedownRefusal(s, unit, target);
+                        if (refusal != null) return CommandResult.Failure(refusal);
+                        sim.PassCommand(ctx.Slot);
+                        sim.Perform(unit, command.Ability, target: target);
+                        break;
+                    }
                     var option = Content.IsAttack(command.Ability) ? Abilities.MeleeTargets(s, unit, command.Ability).Find((o) => o.Target.Id == command.Target) : null;
                     if (option == null) return CommandResult.Failure("No puede alcanzar a ese enemigo este turno.");
                     sim.PassCommand(ctx.Slot);

@@ -42,6 +42,12 @@ unity/tools/sonido.sh
   - `CombatSound.Reload(at, rifle)` elige la del fusil salvo con la pistola en la mano (`UnitViews.PistolInHand`). Si la carpeta aún no la tiene, usa `reload`. Cambiar de arma desde la mochila sigue con `reload`.
   - `SoundCheck.Combate` toca las dos y falla si falta `reload.rifle`.
   - Para añadirla a una carpeta ya generada: `node unity/tools/sonido/generar.mjs --efectos reload.rifle`.
+- **El golpe silencioso** (16/11, para la 0.12.26; lo eligió Arturo). Es un arma blanca por la espalda de un zombi que no te ve: Arte hace el golpe y UI lo reproduce. En el motor es un `ShotEvent` con `Ability` «takedown».
+  - `melee.takedown`, de `recetas.ts`: un golpe sordo, corto y bajo, sin el silbido del tajo. Lleva el golpe del cuerpo (de 85 a 42 Hz), el golpe ahogado en la carne y un toque hacia los 320 Hz, porque los altavoces de un portátil o de un móvil apenas dan nada por debajo de 200 Hz. Nivel −8 dB, tres variantes.
+  - Medido (16/11): por encima de 1 kHz casi no tiene nada (unos 28 dB menos que el resto del sonido). Al sonar queda unos 7,5 dB por debajo de `melee.sword` en los 100 ms más fuertes, y unos 11 dB por encima de 200 Hz, que es lo que dan los altavoces pequeños.
+  - `CombatSound.Takedown(at)` lo toca sin el `melee.swing` de antes. Si la carpeta aún no lo tiene, toca el tajo de cuchillo (`melee.sword`) a 0,4.
+  - `SoundCheck.Combate` lo toca, y después un tajo de cuchillo para compararlo; falla si falta la receta.
+  - Para añadirlo a una carpeta ya generada: `node unity/tools/sonido/generar.mjs --efectos melee.takedown`.
 - **Los propios** (Arte, 1/11, el molotov de la #10 de Arturo): ni el banco de la 0.10.1 ni los paquetes que tenemos traen fuego, así que `node unity/tools/sonido/propios.mjs` los sintetiza, con su propio azar fijo, como originales WAV en `assets-src/sonido/` (`propio-…`):
   - el golpe de llama: un golpe a 60 Hz, un soplo de ruido que sube de 250 a 900 Hz y baja, rumor y algún chasquido;
   - el crepitar: chasquidos sueltos sobre un rumor suave desde 70 Hz, 8 s con el final fundido en el principio.

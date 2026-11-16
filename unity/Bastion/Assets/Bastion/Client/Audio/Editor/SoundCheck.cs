@@ -11,8 +11,9 @@ namespace Bastion.Client.Audio.EditorTools
     /// in batchmode, with the game's mixer and manifest. With BASTION_SONIDO_TRAZA=1 each sound goes to the log
     /// («[sonido] … melee.pan grabados/…»). It plays a blow with each melee weapon, by the id Content.AttackWeapon gives for
     /// a soldier carrying it at the belt (the knife and the machete too, to compare). Then the Hinchado: its steps (its
-    /// growl is now and then), its death and its burst; and the reloads, the rifle's and the pistol's. It fails if any of
-    /// their groups has no takes, or the rifle's reload no recipe, and quits Unity:
+    /// growl is now and then), its death and its burst; the reloads, the rifle's and the pistol's; and the silent
+    /// takedown, with a knife's cut after it to hear how far under it is. It fails if any of their groups has no takes, or
+    /// the rifle's reload or the takedown no recipe, and quits Unity:
     ///   QUIT=0 BASTION_SONIDO_TRAZA=1 unity/tools/unity.sh -executeMethod Bastion.Client.Audio.EditorTools.SoundCheck.Combate
     /// </summary>
     public static class SoundCheck
@@ -88,7 +89,14 @@ namespace Bastion.Client.Audio.EditorTools
                 await Seconds(1.5);
                 sfx.Reload(at);
                 await Seconds(1.5);
-                code = missing.Count == 0 && rifle ? 0 : 1;
+                // The silent takedown (recetas.ts, 16/11), then a knife's cut.
+                var takedown = Sound.Exists("melee.takedown");
+                Debug.Log(takedown ? "[prueba] golpe silencioso, y un tajo de cuchillo para compararlo" : "[prueba] sin la receta del golpe silencioso (melee.takedown)");
+                sfx.Takedown(at);
+                await Seconds(1);
+                sfx.Melee("sword", at);
+                await Seconds(1);
+                code = missing.Count == 0 && rifle && takedown ? 0 : 1;
             }
             catch (Exception e)
             {

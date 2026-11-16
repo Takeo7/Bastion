@@ -236,10 +236,44 @@ namespace Bastion.Engine
             return (int)Math.Round((Content.Templates[u.Template].Mobility + u.Mods.Mobility) * CostOrtho);
         }
 
+        /// <summary>
+        /// `u`'s movement a turn as the rules count it now: FullMoves, and while the squad is hidden what it walks more
+        /// (ConcealedBonus). What the squad's moves take and the reach it is shown come from it (MoveBudget, IsRun and
+        /// SpendsAll with the state); FullMoves(u) alone is without it, as the dead's always are.
+        /// </summary>
+        public static int FullMoves(GameState s, Unit u)
+        {
+            return FullMoves(u) + ConcealedBonus(s, u);
+        }
+
+        /// <summary>
+        /// What the hidden squad walks more a turn, in path cost (Arturo, 16/11: «Cuando estas oculto que tengas más movimiento
+        /// y que cuando dejes de estarlo tengas lo normal»; Content.ConcealedMobility, 3 tiles): while GameState.concealed,
+        /// for each of the squad's own that walks (Sneaks). 0 for anyone else, and once the squad is found: then each loses
+        /// it from what it has left (Events, concealmentBroken).
+        /// </summary>
+        public static int ConcealedBonus(GameState s, Unit u)
+        {
+            return s.Concealed && Sneaks(u) ? Content.ConcealedMobility * CostOrtho : 0;
+        }
+
+        /// <summary>One of the squad's own that walks (ConcealedBonus): not a turret, a captive, the objective, nor anyone of the other side.</summary>
+        public static bool Sneaks(Unit u)
+        {
+            return u.Team == Teams.Xcom && Content.Templates[u.Template].Team == Teams.Xcom && !u.Captive && !u.Objective && u.Automaton == null && FullMoves(u) > 0;
+        }
+
         /// <summary>The movement `u` has left this turn, in path cost: Unit.moves, or all of it (null: none spent yet).</summary>
+        /// <remarks>Without the hidden squad's extra (ConcealedBonus): for the squad, MoveBudget(s, u).</remarks>
         public static int MoveBudget(Unit u)
         {
             return u.Moves ?? FullMoves(u);
+        }
+
+        /// <summary>MoveBudget with the hidden squad's extra: all of FullMoves(s, u) while none is spent.</summary>
+        public static int MoveBudget(GameState s, Unit u)
+        {
+            return u.Moves ?? FullMoves(s, u);
         }
 
         /// <summary>
@@ -248,16 +282,31 @@ namespace Bastion.Engine
         /// the turn). It is heard, and the client draws it at a run. Spending it all in stretches doesn't run, but teaches
         /// Forma física all the same (SpendsAll).
         /// </summary>
+        /// <remarks>Without the hidden squad's extra: for the squad, IsRun(s, u, cost).</remarks>
         public static bool IsRun(Unit u, double cost)
         {
             return MoveBudget(u) >= FullMoves(u) && SpendsAll(u, cost);
         }
 
+        /// <summary>IsRun with the hidden squad's extra: hidden, a run is all of its 11 tiles at once.</summary>
+        public static bool IsRun(GameState s, Unit u, double cost)
+        {
+            return MoveBudget(s, u) >= FullMoves(s, u) && SpendsAll(s, u, cost);
+        }
+
         /// <summary>Whether a move of `cost` spends the turn's movement, less than a tile of it left: that teaches Forma física (Arturo, 5/11).</summary>
+        /// <remarks>Without the hidden squad's extra: for the squad, SpendsAll(s, u, cost).</remarks>
         public static bool SpendsAll(Unit u, double cost)
         {
             var left = MoveBudget(u);
             return FullMoves(u) > 0 && left >= CostOrtho && left - cost < CostOrtho;
+        }
+
+        /// <summary>SpendsAll with the hidden squad's extra.</summary>
+        public static bool SpendsAll(GameState s, Unit u, double cost)
+        {
+            var left = MoveBudget(s, u);
+            return FullMoves(s, u) > 0 && left >= CostOrtho && left - cost < CostOrtho;
         }
 
         /// <summary>
@@ -503,7 +552,7 @@ namespace Bastion.Engine
             if (fire == null || !path.Take(path.Count - 1).Any((p) => fire.Contains(Grid.NodeOf(s, p)))) return null;
             // The tile it was asked to go to stays allowed: whoever ends on a fire chose it.
             fire.Remove(end);
-            var budget = MoveBudget(u);
+            var budget = MoveBudget(s, u);
             var round = ComputeReach(s, u, budget, reach.Origin, null, fire);
             return round.Cost.Has(end) ? Trace(s, round, start, end) : null;
         }

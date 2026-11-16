@@ -94,6 +94,7 @@ namespace Bastion.UI.Combat
         {
             [AbilityIds.Revival] = "Quita el aturdimiento, la desorientación y el pánico",
             [AbilityIds.Suppression] = "−50 de puntería al objetivo hasta tu próximo turno; si se mueve, le disparas",
+            [AbilityIds.Takedown] = HudText.Takedown.Effect,
         };
 
         /// <summary>A blade that reaches further than alongside (the rake: Content.ReachOf), in words.</summary>

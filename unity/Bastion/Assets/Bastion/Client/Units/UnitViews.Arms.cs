@@ -863,6 +863,9 @@ namespace Bastion.Client.Units
                 // edge towards the knuckles: along the fingers, with the hand hanging back, its point was on the floor behind.
                 // The 3D review's A-24 b1, 10/11.)
                 if (Guarding(v) && GuardOf(v) == "sword" && across.sqrMagnitude > 1e-6f) Seat(v.weapon, art, palm, Quaternion.LookRotation(across, -fingers));
+                // (The knife the other way up for a silent takedown, UnitViews.Takedown: out of the fist on the little finger's
+                // side, its back towards the wrist; brought down from above, its point goes in first.)
+                else if (v.reversed && across.sqrMagnitude > 1e-6f) Seat(v.weapon, art, palm, Quaternion.LookRotation(-across, -fingers));
                 else Seat(v.weapon, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
             }
             // Two-handed (the chainsaw): the left hand on its other grip, the elbow out to the left and down.

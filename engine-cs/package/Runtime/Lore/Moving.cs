@@ -20,12 +20,13 @@ namespace Bastion.Engine
             public static readonly IReadOnlyList<string> Rules = new[]
             {
                 $"Cada turno, un soldado tiene {Content.ApPerTurn} acciones ({Content.ApPerTurn + 1} desde Veterano) y {Content.SoldierMobility} puntos de movimiento. Cada casilla cuesta un punto, y nadie se mueve en diagonal.",
+                $"Mientras la escuadra está oculta, cada soldado tiene {Content.ConcealedMobility} puntos más: {Content.SoldierMobility + Content.ConcealedMobility}. Al romperse la ocultación, pierde {Content.ConcealedMobility} de los que le queden ese turno.",
                 $"Moverse no gasta acciones, y el movimiento se reparte en tramos, antes y después de actuar: mover 3, disparar y mover los {Content.SoldierMobility - 3} que quedan.",
                 "Correr es gastar todo el movimiento de una vez, en un solo tramo, y se oye. Repartido en tramos, no se corre.",
                 "Forma física se llena con el tramo que gasta todo el movimiento, de una vez o tras otros tramos.",
                 "Solo Vigilancia (también la de cuerpo a cuerpo), Nadie pasa, Cubrirse y Esconderse acaban el turno, y gastan también el movimiento que quede.",
                 "Un soldado sigue en juego mientras le queden acciones o movimiento. Para dejarlo antes, termina su turno: pierde lo que le quede.",
-                "Con el compañero, se juega un soldado cada vez: el mando pasa al otro cuando el tuyo ya no tiene nada o terminas su turno.",
+                "Entre dos jugadores, se juega un soldado cada vez: el mando pasa al otro cuando el tuyo ya no tiene nada o terminas su turno.",
                 "El turno acaba solo cuando nadie tiene acciones ni movimiento. Si no, pulsa «Terminar turno».",
                 $"Un zombi tiene {Content.UndeadActions} acción y {Content.ZombieMobility} puntos de movimiento: un mordisco por turno.",
             };

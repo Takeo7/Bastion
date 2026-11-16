@@ -29,7 +29,7 @@ namespace Bastion.UI.Combat
         public bool Armed => mode == Mode.Target || HandArmed() != null;
 
         /// <summary>What is armed and open, for the lab's log.</summary>
-        public string LabState() => $"{(Unit() is Unit me ? $"{me.Id} acciones {me.Ap}, movimiento {Bastion.UI.Hud.HudText.Moves.Tiles(Paths.MoveBudget(me))} de {Bastion.UI.Hud.HudText.Moves.Tiles(Paths.FullMoves(me))} en {me.Pos.X}/{me.Pos.Y}, " : "")}cobertura {(CoverMatters() ? "sí" : "no")} (disparan: {string.Join(" ", Shown.Units.Where(u => u.Alive && u.Team == Teams.Alien && Shoots(u)).Select(u => u.Template + (Visible(u) ? "*" : "")).Distinct())}), modo {mode} {modeAbility ?? "-"}, blanco {targetId ?? "-"}, menú de la barra {(Hud != null && Hud.AbilityMenuOpen ? "abierto" : "cerrado")}, menú {(Hud != null && Hud.MenuOpen ? "abierto" : "cerrado")}; barra: {string.Join(" ", BarKeys().Select(v => $"{v.Id}{(v.Menu != null ? "<" + v.Menu : "")}{(v.Enabled ? "" : "(off)")}"))}";
+        public string LabState() => $"{(Unit() is Unit me ? $"{me.Id} acciones {me.Ap}, movimiento {Bastion.UI.Hud.HudText.Moves.Tiles(Paths.MoveBudget(State, me))} de {Bastion.UI.Hud.HudText.Moves.Tiles(Paths.FullMoves(State, me))} en {me.Pos.X}/{me.Pos.Y}, " : "")}cobertura {(CoverMatters() ? "sí" : "no")} (disparan: {string.Join(" ", Shown.Units.Where(u => u.Alive && u.Team == Teams.Alien && Shoots(u)).Select(u => u.Template + (Visible(u) ? "*" : "")).Distinct())}), modo {mode} {modeAbility ?? "-"}, blanco {targetId ?? "-"}, menú de la barra {(Hud != null && Hud.AbilityMenuOpen ? "abierto" : "cerrado")}, menú {(Hud != null && Hud.MenuOpen ? "abierto" : "cerrado")}; barra: {string.Join(" ", BarKeys().Select(v => $"{v.Id}{(v.Menu != null ? "<" + v.Menu : "")}{(v.Enabled ? "" : "(off)")}"))}";
         string modeAbility;
         string targetId;
         /// <summary>By hand: the tile picked among those within reach (the pointer, Tab or a click).</summary>
@@ -92,6 +92,9 @@ namespace Bastion.UI.Combat
             if (u == null || ability == null) return new List<TargetOption>();
             var s = State;
             var def = Content.Abilities[ability];
+            // Golpe silencioso (Gameplay, 16/11): not an attack, no roll; those it kills for sure, from where it stands.
+            if (ability == AbilityIds.Takedown)
+                return Abilities.TakedownTargets(s, u).Select(t => new TargetOption { Unit = t, Hit = 100 }).ToList();
             if (def.Target == AbilityTargets.Melee && Content.IsAttack(ability))
                 return Abilities.MeleeTargets(s, u, ability)
                     .Select(o => new TargetOption { Unit = o.Target, Tile = o.Tile, Hit = Aim.PreviewShot(s, u, o.Target, new ShotOptions { Ability = ability, From = o.Tile })?.Hit ?? 0 })
@@ -114,6 +117,7 @@ namespace Bastion.UI.Combat
             if (u == null || ability == null) return false;
             var s = State;
             var def = Content.Abilities[ability];
+            if (ability == AbilityIds.Takedown) return Abilities.TakedownTargets(s, u).Count > 0;
             // Abilities.MeleeTargets with the reach before the sight: it walks every soldier's line to every enemy on the map
             // first, and only those beside count (7/11).
             if (def.Target == AbilityTargets.Melee && Content.IsAttack(ability))
@@ -605,7 +609,7 @@ namespace Bastion.UI.Combat
                 // Who, pointed out (Arturo, 15/11): their cards, and the picked one's actions and movement if it is one of them.
                 var picked = Unit();
                 var left = picked != null && Commands(picked) && Paths.HasTurnLeft(picked);
-                Hud?.PointOut(left && picked.Ap > 0, left && Paths.MoveBudget(picked) >= Paths.CostOrtho, MyUnits().Where(Paths.HasTurnLeft).Select(x => x.Id).ToList());
+                Hud?.PointOut(left && picked.Ap > 0, left && Paths.MoveBudget(State, picked) >= Paths.CostOrtho, MyUnits().Where(Paths.HasTurnLeft).Select(x => x.Id).ToList());
                 RefreshHud();
                 return;
             }
@@ -763,7 +767,7 @@ namespace Bastion.UI.Combat
                 {
                     warnedLeft = playing.Id;
                     warnedUntil = Time.time + 4;
-                    var budget = Paths.MoveBudget(playing);
+                    var budget = Paths.MoveBudget(State, playing);
                     var moves = budget >= Paths.CostOrtho;
                     endQuestion = Bastion.UI.Hud.HudText.EndTurn.Left(ShortName(playing), playing.Ap, moves ? Bastion.UI.Hud.HudText.Moves.Tiles(budget) : null);
                     Toast(endQuestion);

@@ -363,6 +363,9 @@ namespace Bastion.UI.Hud
         /// <summary>A tag over a point for a while (whose ping it is), on a plate of `color`.</summary>
         public void Pin(Vector3 world, string text, string color, float seconds = 4) => flags.Pin(world, text, color, seconds);
 
+        /// <summary>One of the dead in sight that heard a noise: a mark over its head a moment (UnitFlags.Heard).</summary>
+        public void Heard(Vector3 head, string color, float seconds = 2) => flags.Heard(head, HudText.Noise.Heard, color, seconds);
+
         /// <summary>The shot over the shoulder: only the target's flag stays.</summary>
         public void SetCloseShot(bool on) => flags.SetCloseShot(on);
 

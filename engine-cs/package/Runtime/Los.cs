@@ -404,7 +404,9 @@ namespace Bastion.Engine
                 if (!a.Alive || !Content.HostileTo(a, u) || a.Objective || a.Captive) continue;
                 if (Content.Templates[a.Template].Sight <= 0) continue;
                 var range = (s.Concealed ? DetectionTo(s, a, at) : SightTo(s, a, at)) * ConcealShare(s, a, u, at);
-                if (InViewCone(a, at) && SightOrigin(s, a.Pos, at, range, WindowReachOf(a.Team)) != null) out_.Add(a);
+                // The squad's, as the rules notice them (InNoticeCone: hidden, not by one of the dead it is behind).
+                var cone = u.Team == Teams.Xcom ? InNoticeCone(s, a, at) : InViewCone(a, at);
+                if (cone && SightOrigin(s, a.Pos, at, range, WindowReachOf(a.Team)) != null) out_.Add(a);
             }
             return out_;
         }
@@ -430,8 +432,37 @@ namespace Bastion.Engine
             var dx = p.X - at.X;
             var dy = p.Y - at.Y;
             if (Js.Hypot(dx, dy) <= AwareRange) return true;
-            var off = Math.Abs(((Js.Atan2(dy, dx) - face.Value + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+            return Ahead(dx, dy, face.Value);
+        }
+
+        /// <summary>
+        /// Whether `p` lies ahead of `viewer` from `from`, in its VIEW_CONE proper: InViewCone without AWARE_RANGE, so whoever
+        /// is close beside or behind it is out of it. The squad, and an enemy with no facing, look all round.
+        /// </summary>
+        public static bool AheadOf(Unit viewer, Pos p, Pos? from = null, double? facing = null)
+        {
+            var at = from ?? viewer.Pos;
+            var face = facing ?? viewer.Facing;
+            if (viewer.Team == Teams.Xcom || face == null) return true;
+            return Ahead(p.X - at.X, p.Y - at.Y, face.Value);
+        }
+
+        /// <summary>Whether the way (dx, dy) is within VIEW_CONE of `face`.</summary>
+        private static bool Ahead(int dx, int dy, double face)
+        {
+            var off = Math.Abs(((Js.Atan2(dy, dx) - face + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
             return off <= (ViewCone / 2) * (Math.PI / 180);
+        }
+
+        /// <summary>
+        /// Whether `viewer` has a soldier of the squad on `p` in its field of view, to notice it (Rules: Noticer, SpottedFrom,
+        /// Perceivers; Watchers): InViewCone, but while the squad is hidden one of the dead doesn't notice whoever is close
+        /// beside or behind it, out of its cone (AWARE_RANGE doesn't count): only ahead of it (AheadOf). Arturo, 16/11, the
+        /// Golpe silencioso: «por detrás de un zombi que no te ha visto». Once the squad is found, InViewCone, as before.
+        /// </summary>
+        public static bool InNoticeCone(GameState s, Unit viewer, Pos p, Pos? from = null, double? facing = null)
+        {
+            return s.Concealed && Content.Templates[viewer.Template].Undead ? AheadOf(viewer, p, from, facing) : InViewCone(viewer, p, from, facing);
         }
 
         /// <summary>The way from `a` to `b`, as a facing (radians); null when they are the same tile.</summary>

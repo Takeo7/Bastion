@@ -148,6 +148,17 @@ namespace Bastion.Client.Audio
             At($"melee.{kind}", at);
         }
 
+        /// <summary>
+        /// The silent takedown (Arturo, 16/11; ShotEvent's «takedown»), at Arte's blow, with whatever weapon: one dull blow,
+        /// short and low, with no swing's whoosh before it (recetas.ts melee.takedown, some 7 dB under a knife's cut). A
+        /// folder generated before it: the knife's cut, soft.
+        /// </summary>
+        public void Takedown(Vector3? at)
+        {
+            if (Sound.Exists("melee.takedown")) At("melee.takedown", at, spread: 0.06f);
+            else At("melee.sword", at, 0.4f);
+        }
+
         // ------------------------------------------------------------ explosives
 
         public void Throw(Vector3? at) => At("grenade.throw", at);

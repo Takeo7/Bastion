@@ -48,6 +48,8 @@ namespace Bastion.UI.EditorTools
         // Esconderse (Ana's #1 of 1/11): a hood, Dark Fantasy HUD's «stealthy»; its dotted figure («invisible») is thin on a
         // key and says unseen, not seen from half as far.
         const string Hood = "ICON_DarkFantasy_Status_Stealthy_01_Clean";
+        // Golpe silencioso (Gameplay, 16/11): Dark Fantasy HUD's dagger, a stab, apart from the Tajo's blades and Codazo's knife.
+        const string Dagger = "ICON_DarkFantasy_Inventory_Daggers_01_Clean";
         const string Reload = "ICON_ModernMenus_Reload_01_Clean";
         const string FastForward = "ICON_ModernMenus_FastForward_01_Clean";
         const string Settings = "ICON_ModernMenus_Settings_01_Clean";
@@ -83,7 +85,7 @@ namespace Bastion.UI.EditorTools
             ("shoot", Rifle), ("weapon:rifle", Rifle), ("weapon:pistol", Pistol), ("weapon:shotgun", Shotgun),
             ("weapon:sniper", Sniper), ("weapon:cannon", MachineGun), ("pistol", Pistol),
             ("weapon:pan", Pan), ("weapon:bat", Bat), ("weapon:crowbar", Crowbar), ("weapon:chainsaw", Chainsaw),
-            ("slash", Blades), ("overwatchMelee", Blade), ("stone", Rock), ("overwatch", Target),
+            ("slash", Blades), ("takedown", Dagger), ("overwatchMelee", Blade), ("stone", Rock), ("overwatch", Target),
             ("hunker", Helmet), ("hide", Hood), ("pry", Crowbar), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
             ("launch", Launcher), ("smoke", Smoke), ("flashbang", Flashbang), ("firstAid", Healing),
             ("evac", Vehicle), ("evacAccept", Vehicle), ("evacRefuse", Time), ("abandonRefuse", Time),

@@ -55,7 +55,7 @@ namespace Bastion.UI.Combat
                 Kind = "leave",
                 Kicker = "",
                 Title = busy.Name,
-                Text = HudText.Done.State(busy.Name, busy.Ap, Paths.MoveBudget(busy)) + " " + HudText.Done.Stakes(to),
+                Text = HudText.Done.State(busy.Name, busy.Ap, Paths.MoveBudget(State, busy)) + " " + HudText.Done.Stakes(to),
                 Accept = HudText.Done.Yes,
                 Refuse = HudText.Done.No(busy.Name),
             };
@@ -128,6 +128,8 @@ namespace Bastion.UI.Combat
             {
                 var id = list[i];
                 var def = Content.Abilities[id];
+                // Golpe silencioso only with one to take down (Gameplay, 16/11): no key otherwise.
+                if (id == AbilityIds.Takedown && !HasTargets(id)) continue;
                 // The chainsaw's blows are its fuel's (Content.RunsChainsaw): shown as the grenades' are.
                 int? charge = def.Charge != null ? AbilityTexts.Charge(u, def.Charge) : Content.RunsChainsaw(u, id) ? AbilityTexts.Charge(u, ChargeIds.Fuel) : (int?)null;
                 string reason;

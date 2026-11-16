@@ -26,4 +26,22 @@ export const UNITY_SOUNDS: Record<string, SoundDef> = {
       click(0.8, 2400, 0.8);
     },
   },
+  // The silent takedown (Arturo, 16/11; the 0.12.26): from behind, on one of the dead that doesn't see it coming, with a
+  // blade or a blunt weapon (Arte's blow: the knife into the nape, the throat cut, the blow on the nape). A dull blow,
+  // short and low, with no whoosh of a swing and no ring: the body's thump and the blow muffled in flesh, nothing over
+  // 1 kHz to speak of, and well under a melee hit (melee.sword), so that it reads as done without a sound.
+  'melee.takedown': {
+    bus: 'sfx',
+    dur: 0.35,
+    level: -8,
+    variants: 3,
+    reverb: 0.03,
+    build: (s: Synth) => {
+      s.to(s.amp(s.osc('sine', [[0, s.vary(85)], [0.11, 42]], 0, 0.25), hit(0, 0.004, 0.13, 1)));
+      s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', s.vary(600), 0.7), hit(0.002, 0.003, 0.08, 0.9)));
+      // The knock into flesh, a few hundred Hz: a laptop's or a phone's speakers give little under 200 Hz.
+      s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(320), 1.4), hit(0.004, 0.003, 0.07, 1.8)));
+      s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 300), hit(0.03, 0.02, 0.12, 0.25)));
+    },
+  },
 };

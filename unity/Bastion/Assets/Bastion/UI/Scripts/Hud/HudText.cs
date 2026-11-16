@@ -280,6 +280,27 @@ namespace Bastion.UI.Hud
             public const string All = "Toda la escuadra queda al descubierto.";
         }
 
+        /// <summary>Golpe silencioso (Gameplay, 16/11; Lore's words).</summary>
+        public static class Takedown
+        {
+            public const string Name = "Golpe silencioso";
+            /// <summary>Over each of the dead the picked one can take down now.</summary>
+            public const string Tag = "GOLPE SILENCIOSO";
+            /// <summary>Over the one aimed at, or pointed at beside it.</summary>
+            public const string Kills = "Lo mata sin ruido";
+            /// <summary>The aim panel's: what it does.</summary>
+            public const string Effect = "Lo mata de un golpe y sin ruido. Su grupo no se entera. No rompe la ocultación.";
+            /// <summary>The pointer on one beside: «Golpe silencioso · Lo mata sin ruido», «Golpe silencioso · Ya está alerta» (Lore: a «·», not a second «:»).</summary>
+            public static string On(string line) => $"{Name} · {line}";
+        }
+
+        /// <summary>Noises (EventPlayer.PlayNoise).</summary>
+        public static class Noise
+        {
+            /// <summary>Over each of the dead in sight that heard one, after the noise's loudspeaker (Gameplay, 16/11; Lore: they heard something, but haven't seen you).</summary>
+            public const string Heard = "?";
+        }
+
         /// <summary>Throwing (CombatController.ThrowNote).</summary>
         public static class Throw
         {
@@ -291,9 +312,14 @@ namespace Bastion.UI.Hud
         {
             /// <summary>«5», «6,5» (a diagonal step costs a tile and a half).</summary>
             public static string Tiles(int cost) => cost % 2 == 0 ? (cost / 2).ToString() : $"{cost / 2},5";
+            /// <summary>A tile only the hidden squad's extra reaches (Gameplay, 16/11; Lore's words: concealment breaks by an attack too).</summary>
+            public const string Hidden = "Con el movimiento extra de la ocultación: si se rompe, se pierde";
             /// <summary>«/8», after the movement left on the bar (Ana, 7/11 #7).</summary>
             public static string Of(int cost) => $"/{Tiles(cost)}";
-            public static string Tip(int left, int full) => $"Movimiento: le quedan {Tiles(left)} de {Tiles(full)} puntos. Cada casilla cuesta 1. Moverse no gasta acciones, y el movimiento se reparte en tramos, antes y después de actuar. Gastarlo todo de una vez, en un solo tramo, es correr, y se oye.";
+            /// <summary>`hidden`: the hidden squad's extra in it (Paths.ConcealedBonus, Gameplay 16/11), said after; 0, none.</summary>
+            public static string Tip(int left, int full, int hidden = 0) => $"Movimiento: le quedan {Tiles(left)} de {Tiles(full)} puntos. Cada casilla cuesta 1. Moverse no gasta acciones, y el movimiento se reparte en tramos, antes y después de actuar. Gastarlo todo de una vez, en un solo tramo, es correr, y se oye.{(hidden > 0 ? " " + HiddenTip(hidden) : "")}";
+            /// <summary>The hidden squad's extra, on the movement's help (Gameplay, 16/11; Lore's words).</summary>
+            public static string HiddenTip(int extra) => $"Mientras la escuadra está oculta, tiene {Tiles(extra)} puntos de más. Al romperse la ocultación, pierde {Tiles(extra)} de los que le queden.";
             public const string Stat = "Movimiento";
         }
 

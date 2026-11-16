@@ -355,6 +355,11 @@ Button:disabled {
     color: #9fe08a;
 }
 
+/* One of the dead the picked one can take down now (Golpe silencioso, Gameplay 16/11): the hidden band's mint. */
+.tag--quiet {
+    color: #6fe8bc;
+}
+
 .tag--in-play {
     color: var(--t-accent);
 }

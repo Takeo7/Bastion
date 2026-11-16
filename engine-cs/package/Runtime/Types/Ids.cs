@@ -211,13 +211,15 @@ namespace Bastion.Engine
         public const string Hide = "hide";
         /// <summary>The crowbar's (Arturo, 2/11): the boards off a window or a door beside it (Abilities.BoardedBeside).</summary>
         public const string Pry = "pry";
+        /// <summary>Golpe silencioso (Arturo, 16/11): the blade at one of the dead beside it that hasn't seen it, no roll, no noise (Rules.Takedown).</summary>
+        public const string Takedown = "takedown";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             Shoot, Pistol, Slash, StunLance, Overwatch, Hunker, Reload, Grenade, Launch, Missiles, Evac, Hack, Search,
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
-            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry,
+            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry, Takedown,
         };
     }
 

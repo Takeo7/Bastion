@@ -192,8 +192,9 @@ namespace Bastion.Engine
                     if (last != null) u.Pos = CopyPos(last);
                     u.Ap = Math.Max(0, u.Ap - ev.Ap);
                     // What it walked off its movement (Arturo, 5/11 #14); all of it, Forma física learns (below).
-                    var spentAll = ev.Moves != null && Paths.SpendsAll(u, ev.Moves.Value);
-                    if (ev.Moves != null) u.Moves = Math.Max(0, Paths.MoveBudget(u) - ev.Moves.Value);
+                    // With what the hidden squad walks more (Paths.ConcealedBonus).
+                    var spentAll = ev.Moves != null && Paths.SpendsAll(s, u, ev.Moves.Value);
+                    if (ev.Moves != null) u.Moves = Math.Max(0, Paths.MoveBudget(s, u) - ev.Moves.Value);
                     // What the squad finds on the way: the buildings it walks into, and where it stops, those it looks into.
                     if (Los.IsViewer(u, Teams.Xcom)) for (var k = 0; k < ev.Path.Count; k++) Buildings.Discover(s, ev.Path[k], k == ev.Path.Count - 1);
                     EndSuppression(s, u);
@@ -605,8 +606,18 @@ namespace Bastion.Engine
                     break;
                 }
                 case ConcealmentBrokenEvent _:
+                {
+                    // What the hidden squad walked more goes with it (Arturo, 16/11: «que cuando dejes de estarlo tengas lo
+                    // normal»; Paths.ConcealedBonus): each soldier loses it from what it has left this turn, never below nothing.
+                    // One that hasn't moved (null) has its own movement, all of it.
+                    foreach (var u in s.Units)
+                    {
+                        var extra = Paths.ConcealedBonus(s, u);
+                        if (u.Moves != null && extra > 0) u.Moves = Math.Max(0, u.Moves.Value - extra);
+                    }
                     s.Concealed = false;
                     break;
+                }
                 case CommandPassedEvent ev:
                     s.Command = ev.To;
                     s.ActiveUnit = null;

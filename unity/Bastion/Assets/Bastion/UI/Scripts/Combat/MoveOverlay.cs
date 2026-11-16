@@ -6,10 +6,14 @@ using Grid = Bastion.Engine.Grid;
 
 namespace Bastion.UI.Combat
 {
-    /// <summary>A tile the picked soldier can end its move on (game.ts reach): one for the dash, one where the squad would be noticed, one on fire.</summary>
+    /// <summary>A tile the picked soldier can end its move on (game.ts reach): one of the second band, one where the squad would be noticed, one on fire.</summary>
     public sealed class MoveTile
     {
         public Pos Pos;
+        /// <summary>
+        /// The second band: since 16/11, a tile reached only with the hidden squad's extra movement, lost if the squad is
+        /// found (Gameplay; the dash's before, Arturo 5/11 #13).
+        /// </summary>
         public bool Dash;
         /// <summary>Only got to running: the whole turn's movement at once, in one stretch (Paths.IsRun; Arturo, 6/11), and heard.</summary>
         public bool Run;
@@ -43,9 +47,10 @@ namespace Bastion.UI.Combat
     public sealed class MoveOverlay : MonoBehaviour
     {
         static readonly Color32 WalkFill = Hex(0x3aa8e6);
-        static readonly Color32 DashFill = Hex(0x9a4a2c);
+        /// <summary>The second band's: mint, the movement the hidden squad has more (Gameplay, 16/11; the dash's rust before).</summary>
+        static readonly Color32 DashFill = Hex(0x2fa880);
         static readonly Color32 WalkEdge = Hex(0x7fd4fa);
-        static readonly Color32 DashEdge = Hex(0xc4704a);
+        static readonly Color32 DashEdge = Hex(0x6fe8bc);
         static readonly Color32 PlanTint = Hex(0xb4bec6);
         /// <summary>The brightest the ground goes under a line (overlays.ts SHADE).</summary>
         static readonly Color32 Shade = Hex(0x56606a);
@@ -56,7 +61,7 @@ namespace Bastion.UI.Combat
 
         /// <summary>The pointer's ring planning without the command (on a reachable tile only: Ana, Arturo 01/11 #1).</summary>
         public static readonly Color32 PlanRing = PlanTint;
-        /// <summary>The pointer's ring on a tile one action away, on one for the dash (TileLook.ringColors).</summary>
+        /// <summary>The pointer's ring on a tile of the first band, on one of the second (the hidden squad's extra).</summary>
         public static readonly Color32 WalkRing = WalkEdge;
         public static readonly Color32 DashRing = DashEdge;
         /// <summary>The pointer's ring on a tile where the squad would be noticed.</summary>

@@ -2,7 +2,7 @@
 
 Quién hace qué en Bastión, qué archivos toca cada uno y en qué está ahora. Lo mantiene **Gameplay**, que coordina. Antes de tocar un archivo de otro rol, se le pregunta por mensaje.
 
-## Roles hoy (Unity, desde el 23/10; puesto al día el 10/11)
+## Roles hoy (Unity, desde el 23/10; puesto al día el 16/11)
 
 | Rol | Sesión | Hace | Sus archivos |
 |---|---|---|---|
@@ -12,6 +12,7 @@ Quién hace qué en Bastión, qué archivos toca cada uno y en qué está ahora.
 | **UI** | UI | El HUD, el control y la cámara del combate, las pantallas de estrategia, el inicio y los Ajustes, lo táctil | `unity/Bastion/Assets/Bastion/UI/`, `Client/Input/`, `docs/UNITY-UI.md`, `docs/UNITY-ESTRATEGIA.md` |
 | **Red** | Networking | La sala, la conexión, el guardado, las apps (Mac, Windows, iOS), la firma y el sonido | `engine-cs/package/Runtime/Net/`, sus pruebas (`Net*Tests.cs`), `Assets/Bastion/Client/Net/` (con `Editor/AppBuild.cs`), `Client/Audio/`, `unity/tools/ios.sh`, `sonido.sh`, `docs/FIRMA.md`, `docs/IOS.md`, `docs/UNITY-SONIDO.md` |
 | **Biblioteca** | Biblioteca de assets | La web local de recursos de Arturo ([BIBLIOTECA.md](BIBLIOTECA.md)) | `unity/tools/biblioteca/` |
+| **Producto** | Producto | Piensa con Arturo qué lleva el juego y pasa lo decidido a Gameplay, que lo reparte | Ningún archivo de código; sus notas, en `.dev-snapshots/producto/` |
 
 - **Escenas:** un solo dueño por archivo `.unity`. Partida es de Arte; Inicio, de UI.
 - **Unity, de uno en uno:** `unity.sh` y `captura.sh` llevan un cerrojo; quien llega espera.

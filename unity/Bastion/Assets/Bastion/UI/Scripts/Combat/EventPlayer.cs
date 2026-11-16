@@ -2753,6 +2753,16 @@ namespace Bastion.UI.Combat
             {
                 await Wait(cam() ? 0.2f : 0.05f);
                 if (CameraRig.Logging) Debug.Log($"[camara] accion close={(control.Rig != null ? control.Rig.Closeness : 0):0.00}");
+                // The silent takedown (Arturo, 16/11): Red's one dull blow at Arte's, with no swing's whoosh before it nor a cut's.
+                var silent = e.Ability == AbilityIds.Takedown;
+                if (silent)
+                {
+                    // Arte's blow from behind (UnitViews.Takedown), waited for as a Lunge till it lands: then Red's dull blow,
+                    // no arc and no flash of a hit (the dead one already falling).
+                    await units.Takedown(shooter.Id, target.Id, () => control.Sfx.Takedown(chest), stop);
+                    await Wait(0.05f);
+                    return;
+                }
                 control.Sfx.Melee("swing", Chest(shooter.Id), Content.AttackWeapon(shooter, e.Ability).Id);
                 var stun = e.Ability == AbilityIds.StunLance;
                 await units.Lunge(shooter.Id, target.Id, Fells(e) && units.CanFeed(shooter.Id, target.Id), () =>
@@ -3058,6 +3068,11 @@ namespace Bastion.UI.Combat
             var ours = by?.Team == Teams.Xcom;
             var scream = by != null && lastUsed?.unit == by.Id && lastUsed?.ability == AbilityIds.Mindspin;
             if (ours || IsVisible(e.Tile.X, e.Tile.Y)) control.AimMarks?.Noise(V, e.Tile, (float)e.Radius, MoveOverlay.Hex(ours ? 0xffc93a : scream ? 0xc58cff : 0xff6b5a));
+            // Those in sight that heard it, marked a moment over their heads in the ring's colour (Gameplay, 16/11: Arte turns
+            // them, but from the game's camera that is small); the camera stays where it is.
+            var units = Units;
+            foreach (var a in e.Heard.Select(Unit).Where(a => a != null && a.Alive && control.Visible(a) && (units == null || units.Drawn(a.Id))))
+                Hud?.Heard(Head(a.Id), ours ? "#ffc93a" : scream ? "#c58cff" : "#ff6b5a");
             var fresh = e.Heard.Select(Unit).Where(a => a != null && a.Alive && a.Heard == null && !control.Visible(a)).ToList();
             if (fresh.Count == 0 || by == null) return;
             if (!ours)

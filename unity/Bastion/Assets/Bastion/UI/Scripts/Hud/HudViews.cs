@@ -502,6 +502,11 @@ namespace Bastion.UI.Hud
         /// instead (Arturo, 5/11 #11).
         /// </summary>
         public bool Other;
+        /// <summary>
+        /// Beside the one aiming and not a target of it, with why not on its hover line (the Golpe silencioso's «te ha visto»:
+        /// Gameplay, 16/11): over the shoulder that line stays, as another target's odds, without the click.
+        /// </summary>
+        public bool Why;
         /// <summary>Its card in the list under the pointer: an arrow over it points it out (Arturo, 31/10 #11).</summary>
         public bool Pointed;
     }

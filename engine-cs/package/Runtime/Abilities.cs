@@ -29,6 +29,8 @@ namespace Bastion.Engine
                 var second = !string.IsNullOrEmpty(u.Arms.Primary) && u.Arms.Pistol != false;
                 if (second && pistol < 0) list.Insert(list.IndexOf(AbilityIds.Slash) + 1, AbilityIds.Pistol);
                 if (!second && pistol >= 0) list.RemoveAt(pistol);
+                // Golpe silencioso beside the Tajo (Arturo, 16/11): the squad's blade, whichever (TakedownRefusal).
+                if (u.Team == Teams.Xcom && !list.Contains(AbilityIds.Takedown)) list.Insert(list.IndexOf(AbilityIds.Slash) + 1, AbilityIds.Takedown);
             }
             // Nobody throws grenades without having carried some (docs/FASE9.md §4): the squad's come only from the belt.
             if (u.Team == Teams.Xcom && !u.Charges.ContainsKey(ChargeIds.Grenade) && list.Contains(AbilityIds.Grenade)) list.RemoveAt(list.IndexOf(AbilityIds.Grenade));
@@ -228,6 +230,10 @@ namespace Bastion.Engine
                 case AbilityIds.ElbowRoom:
                     if (BesideEnemies(s, u).Count == 0) return "No tienes ningún enemigo al lado.";
                     break;
+                case AbilityIds.Takedown:
+                    // Anything but silent (Gameplay, 16/11).
+                    if (u.Arms?.Melee == FoundWeaponIds.Chainsaw) return "Con la motosierra no hay golpe silencioso.";
+                    break;
                 case AbilityIds.Hack:
                     if (s.Mission.Terminal == null) return "No hay ningún equipo que arreglar en esta misión.";
                     if (s.Mission.ObjectiveDone) return "El equipo ya está en marcha.";
@@ -295,6 +301,31 @@ namespace Bastion.Engine
             return s.Units.Where((t) => Hostile(u, t) && Aim.TeamSees(s, u.Team, t) && Aim.InReachOf(s, u, u.Pos, t.Pos))
                 .Select((t) => new MeleeOption { Target = t, Tile = u.Pos, Path = new List<Pos>() })
                 .ToList();
+        }
+
+        /// <summary>
+        /// Golpe silencioso (Arturo, 16/11: with a blade, «por detrás de un zombi que no te ha visto», it always kills, and
+        /// silently): why `u` can't take `t` down, or null if it can. Only one of the dead alongside it already, no step (the
+        /// blade's reach, Aim.InMeleeReach), a Zombi or a Corredor (not the Hinchado, the Acorazado nor the Chillón),
+        /// still unaware (its pod not woken: Paths.OnPatrol), and not seeing `u` now: `u` out of its cone proper, behind or
+        /// beside it (Los.AheadOf: close by doesn't count here), or out of its sight (Los.CanSee). The chainsaw, never
+        /// (AbilityBlocker).
+        /// </summary>
+        public static string? TakedownRefusal(GameState s, Unit u, Unit? t)
+        {
+            if (t == null || !Hostile(u, t)) return "Objetivo fuera de alcance o sin línea de visión.";
+            if (!Aim.InMeleeReach(s, u.Pos, t.Pos)) return "Tiene que estar a tu lado.";
+            if (t.Template != TemplateIds.Zombie && t.Template != TemplateIds.Xenoid) return "Solo contra Zombis y Corredores.";
+            if (!Aim.TeamSees(s, u.Team, t)) return "Objetivo fuera de alcance o sin línea de visión.";
+            if (!Paths.OnPatrol(s, t)) return "Ya está alerta.";
+            if (Los.AheadOf(t, u.Pos) && Los.CanSee(s, t, u)) return "Te tiene delante: ponte detrás o a un lado.";
+            return null;
+        }
+
+        /// <summary>Whom `u` can take down now (Golpe silencioso: TakedownRefusal).</summary>
+        public static List<Unit> TakedownTargets(GameState s, Unit u)
+        {
+            return s.Units.Where((t) => Hostile(u, t) && TakedownRefusal(s, u, t) == null).ToList();
         }
 
         /// <summary>Statuses Revival and Restoration remove.</summary>
@@ -374,6 +405,8 @@ namespace Bastion.Engine
                     return s.Units.Where((t) => Hostile(u, t) && Grid.Distance(u.Pos, t.Pos) <= (def.Range ?? 0) && Los.CanSee(s, u, t) && PsiChance(t, s) > 0).ToList();
                 case AbilityIds.Reanimate:
                     return CorpseTargets(s, u);
+                case AbilityIds.Takedown:
+                    return TakedownTargets(s, u);
                 case AbilityIds.Revival:
                 case AbilityIds.FirstAid:
                 case AbilityIds.PatchUp:

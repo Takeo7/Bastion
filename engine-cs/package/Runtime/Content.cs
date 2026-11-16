@@ -542,6 +542,9 @@ namespace Bastion.Engine
             [AbilityIds.Pistol] = new AbilityDef { Id = AbilityIds.Pistol, Name = "Pistola", Description = "Dispara la pistola, sin gastar las balas del arma principal.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Secondary },
             // An action, like a shot (playtest 16/10): the turn goes on.
             [AbilityIds.Slash] = new AbilityDef { Id = AbilityIds.Slash, Name = "Tajo", Description = "Golpea a un enemigo que tengas al lado. Ignora la cobertura. La katana, la espada y la motosierra golpean a todos los que tengas al lado, y el rastrillo llega a dos casillas.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
+            // Arturo, 16/11: with a blade, from behind one of the dead that hasn't seen you, it always kills, silently; only a
+            // Zombi or a Corredor, never with the chainsaw (Abilities.TakedownRefusal). No roll, no noise (Rules.Takedown).
+            [AbilityIds.Takedown] = new AbilityDef { Id = AbilityIds.Takedown, Name = "Golpe silencioso", Description = "Mata de un golpe y sin ruido a un Zombi o un Corredor que tengas al lado, si aún no está alerta y no te tiene delante. No rompe la ocultación. No sirve con la motosierra.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee, Noise = 0 },
             [AbilityIds.StunLance] = new AbilityDef { Id = AbilityIds.StunLance, Name = "Red y porra", Description = "Atrapa con la red y golpea con la porra: aturde.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = true, Weapon = AbilityWeapons.Melee },
             // An action, and the turn goes on: with two, a bite and a step, or two bites (playtest 16/10 #21).
             [AbilityIds.Claw] = new AbilityDef { Id = AbilityIds.Claw, Name = "Mordisco", Description = "Muerde a quien tiene al lado.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
@@ -786,6 +789,13 @@ namespace Bastion.Engine
         /// </summary>
         public const int SoldierMobility = 8;
         public const int ZombieMobility = 5;
+        /// <summary>
+        /// What the squad walks more a turn while it is hidden, in tiles (Arturo, 16/11: «Cuando estas oculto que tengas más
+        /// movimiento y que cuando dejes de estarlo tengas lo normal», 3 more): a soldier 11 tiles, not 8. Once the squad is
+        /// found, each soldier loses them from what it has left that turn (Events, concealmentBroken), and has its own after.
+        /// Paths.ConcealedBonus.
+        /// </summary>
+        public const int ConcealedMobility = 3;
 
         private static UnitTemplate Soldier(
             string id,

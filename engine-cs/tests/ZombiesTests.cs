@@ -165,8 +165,8 @@ namespace Bastion.Engine.Tests
             // A wall between the street and the yard, open at the far end.
             var s = StateFrom(new[] { "....................", "....................", "###################.", "...................." });
             s.Concealed = true;
-            // A run: the whole turn's movement in one go, 8 tiles (Arturo, 5/11 #14).
-            var runner = AddUnit(s, "s1", TemplateIds.Rookie, 5, 1);
+            // A run: the whole turn's movement in one go, 8 tiles (Arturo, 5/11 #14); 11 with the squad hidden (Arturo, 16/11).
+            var runner = AddUnit(s, "s1", TemplateIds.Rookie, 2, 1);
             // A partner still to act: the squad's turn goes on.
             AddUnit(s, "s2", TemplateIds.Rookie, 5, 0);
             var z1 = AddUnit(s, "a1", TemplateIds.Zombie, 13, 3);
@@ -174,7 +174,7 @@ namespace Bastion.Engine.Tests
             PodOf(s, "p1", false, z1, z2);
             var events = Exec(s, Move("s1", 13, 1));
             Assert.True(events.Ok);
-            Assert.Equal((2, 0), (runner.Ap, Paths.MoveBudget(runner)));
+            Assert.Equal((2, 0), (runner.Ap, Paths.MoveBudget(s, runner)));
             var noise = Of<NoiseEvent>(events.Events!);
             Assert.Single(noise);
             SameNoise(noise[0], P(13, 1), Louder(Content.Noise.Dash), "s1", "a1", "a2");

@@ -37,6 +37,8 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: a56e1099b67682e40ade6019de67b2c6, type: 3}
   - Id: slash
     Sprite: {fileID: 21300000, guid: c54c4970ee93e2545a8cbffd087741f0, type: 3}
+  - Id: takedown
+    Sprite: {fileID: 21300000, guid: 745fe88411361ff44be5a109cc3ef64b, type: 3}
   - Id: overwatchMelee
     Sprite: {fileID: 21300000, guid: 7f43c38336b908e428cac2195ddc57d7, type: 3}
   - Id: stone

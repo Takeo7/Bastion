@@ -406,7 +406,7 @@ namespace Bastion.UI.Combat
             if (current != null && Commands(current) && (Paths.HasTurnLeft(current) || !CanAct())) return;
             var next = mineInPlay ?? MyUnits().FirstOrDefault(x => x.Ap > 0) ?? MyUnits().FirstOrDefault(Paths.HasTurnLeft) ?? (current != null && Commands(current) ? current : MyUnits().FirstOrDefault());
             if (CameraRig.Logging && next?.Id != current?.Id)
-                Debug.Log($"[cámara] cambio de soldado: {current?.Id ?? "ninguno"} → {next?.Id ?? "ninguno"} ({(current == null ? $"elegido «{picked}»" : $"acciones {current.Ap}, movimiento {Paths.MoveBudget(current)}, manda {Commands(current)}")}, órdenes {CanAct()})");
+                Debug.Log($"[cámara] cambio de soldado: {current?.Id ?? "ninguno"} → {next?.Id ?? "ninguno"} ({(current == null ? $"elegido «{picked}»" : $"acciones {current.Ap}, movimiento {Paths.MoveBudget(State, current)}, manda {Commands(current)}")}, órdenes {CanAct()})");
             picked = next?.Id;
             if (next != null && current != null && next.Id != current.Id && CanAct())
             {
@@ -554,10 +554,10 @@ namespace Bastion.UI.Combat
             var u = Unit();
             // The movement it has left, apart from its actions (Arturo, 5/11 #14): one reach, in sky blue (#13).
             // (Less than a step is none: Paths.HasTurnLeft, 0.12.16.)
-            var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && Paths.MoveBudget(u) >= Paths.CostOrtho && WaitingFor(u.Id) == null && !Busy(u.Id) && u.Id != sent;
+            var moving = mode == Mode.Move && u != null && CanAct() && Commands(u) && Paths.MoveBudget(State, u) >= Paths.CostOrtho && WaitingFor(u.Id) == null && !Busy(u.Id) && u.Id != sent;
             using (MRefreshReach.Auto())
             {
-                reach = moving ? Paths.ComputeReach(State, u, Paths.MoveBudget(u)) : null;
+                reach = moving ? Paths.ComputeReach(State, u, Paths.MoveBudget(State, u)) : null;
                 tiles = reach != null ? Tiles(u) : null;
             }
             // Without the command the range is still shown, fainter: it is for planning (#35). Only the floor shown's, and of
@@ -650,15 +650,25 @@ namespace Bastion.UI.Combat
         List<MoveTile> Tiles(Unit u)
         {
             var watchers = State.Concealed ? State.Units.Where(a => a.Alive && a.Team == Teams.Alien && Visible(a)).ToList() : new List<Unit>();
+            var keep = Kept(u);
             return Paths.Destinations(State, u, reach).Select(d => new MoveTile
             {
                 Pos = d.Pos,
-                Run = Paths.IsRun(u, d.Cost),
-                Detected = watchers.Any(a => Los.InViewCone(a, d.Pos) && Los.SightOrigin(State, a.Pos, d.Pos, Los.DetectionTo(State, a, d.Pos) * Los.ConcealShare(State, a, u, d.Pos), Los.WindowReachOf(a.Team)) != null),
+                // Only with the hidden squad's extra (Gameplay, 16/11): the second band, lost if the squad is found.
+                Dash = d.Cost > keep,
+                Run = Paths.IsRun(State, u, d.Cost),
+                Detected = watchers.Any(a => Los.InNoticeCone(State, a, d.Pos) && Los.SightOrigin(State, a.Pos, d.Pos, Los.DetectionTo(State, a, d.Pos) * Los.ConcealShare(State, a, u, d.Pos), Los.WindowReachOf(a.Team)) != null),
                 // As shown, not as the engine has it already: a molotov's fire marks the reach once it has caught on screen.
                 Fire = Burning.At(Shown, d.Pos),
             }).ToList();
         }
+
+        /// <summary>
+        /// How much of `u`'s movement left it keeps if the squad is found (Gameplay, 16/11: hidden, each soldier walks
+        /// Content.ConcealedMobility tiles more, Paths.ConcealedBonus, and loses them from what is left as the squad is
+        /// seen): all of it in the open.
+        /// </summary>
+        int Kept(Unit u) => Paths.ConcealedBonus(State, u) is var extra && extra > 0 ? Math.Max(0, Paths.MoveBudget(State, u) - extra) : int.MaxValue;
 
         /// <summary>
         /// Someone standing in the way: the reach's border takes them in and doesn't ring them (Ana, 21/10 #18). Not a thing
@@ -1012,6 +1022,15 @@ namespace Bastion.UI.Combat
             {
                 // Without the command nothing is armed to wait for it (Arturo, 5/11 #15).
                 if (planning) return;
+                // One of the dead the Golpe silencioso takes down, nothing else armed: the click arms it, and again (on its
+                // tile as on its body) it strikes (Gameplay, 16/11: hidden, «es lo que el jugador quiere casi siempre»).
+                var quietly = mode == Mode.Target && modeAbility == AbilityIds.Takedown;
+                if ((mode == Mode.Move || quietly) && BarView(AbilityIds.Takedown)?.Enabled == true && TargetOptions(AbilityIds.Takedown).Any(o => o.Unit.Id == enemy.Id))
+                {
+                    if (quietly && targetId == enemy.Id) ConfirmTarget();
+                    else EnterTarget(AbilityIds.Takedown, enemy.Id);
+                    return;
+                }
                 var attack = AbilityTexts.PrimaryAttacks.FirstOrDefault(id => BarView(id)?.Enabled == true && TargetOptions(id).Any(o => o.Unit.Id == enemy.Id));
                 if (attack != null) EnterTarget(attack, enemy.Id);
                 else Toast("No puede atacar a ese enemigo desde aquí.");
@@ -1034,7 +1053,7 @@ namespace Bastion.UI.Combat
                 return;
             }
             var dest = tiles?.FirstOrDefault(t => Same(t.Pos, tile));
-            if (dest == null || !reach.Cost.TryGetValue(Grid.NodeOf(State, tile), out var cost) || cost > Paths.MoveBudget(u)) return;
+            if (dest == null || !reach.Cost.TryGetValue(Grid.NodeOf(State, tile), out var cost) || cost > Paths.MoveBudget(State, u)) return;
             if (planning)
             {
                 TogglePlan(u, tile);
@@ -1186,13 +1205,14 @@ namespace Bastion.UI.Combat
             if (enemy != null && (enemy.Team != Teams.Alien || !Visible(enemy))) enemy = null;
             if (enemy != null || u == null || dest == null) return;
             var path = Paths.BuildPath(State, u, reach, hover);
-            Overlay?.ShowPath(State, u.Pos, path, false, Planning);
+            Overlay?.ShowPath(State, u.Pos, path, dest.Dash, Planning);
             Overlay?.ShowCover(State, CoverMatters() ? hover : null);
-            Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : MoveOverlay.WalkRing);
+            Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
             // Running, a door or a window is heard (docs/FASE2.md): an icon under the destination, no words (Ana, 7/11 #3); the
             // fire it goes through; and at night, whether it ends in the light.
             var heard = path != null && AbilityTexts.MoveNoise(State, u, path, dest.Run) != null;
-            NoteWith(hover, heard ? "noise" : null, FireNote(path), LitNote(hover));
+            // Into the hidden squad's extra: that it is lost if they are seen (Gameplay, 16/11).
+            NoteWith(hover, heard ? "noise" : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover));
         }
 
         /// <summary>
