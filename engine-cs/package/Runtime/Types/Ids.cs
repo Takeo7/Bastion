@@ -38,10 +38,12 @@ namespace Bastion.Engine
         public const string Sectoid = "sectoid";
         public const string Zombie = "zombie";
         public const string Bloater = "bloater";
+        /// <summary>El Toro (H6, .dev-snapshots/gameplay/runs/H6-TORO.md): chapter 1's boss, the Brute of Boss Zombies.</summary>
+        public const string Brute = "brute";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Trooper, Officer, Xenoid, Lancer, Mec, Sectoid, Zombie, Bloater,
+            Trooper, Officer, Xenoid, Lancer, Mec, Sectoid, Zombie, Bloater, Brute,
         };
     }
 
@@ -89,6 +91,7 @@ namespace Bastion.Engine
         public const string Sectoid = AlienIds.Sectoid;
         public const string Zombie = AlienIds.Zombie;
         public const string Bloater = AlienIds.Bloater;
+        public const string Brute = AlienIds.Brute;
         // ObjectiveId.
         public const string Relay = ObjectiveIds.Relay;
         public const string Vip = ObjectiveIds.Vip;
@@ -98,7 +101,7 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> All = new[]
         {
             Assault, Grenadier, Sharpshooter, Specialist, Rookie, Trooper, Officer, Xenoid, Lancer, Mec, Sectoid, Zombie,
-            Bloater, Relay, Vip, Turret,
+            Bloater, Relay, Vip, Turret, Brute,
         };
     }
 
@@ -213,13 +216,20 @@ namespace Bastion.Engine
         public const string Pry = "pry";
         /// <summary>Golpe silencioso (Arturo, 16/11): the blade at one of the dead beside it that hasn't seen it, no roll, no noise (Rules.Takedown).</summary>
         public const string Takedown = "takedown";
+        // El Toro's (H6).
+        /// <summary>«Mazazo»: a blow of 6 with both fists, a melee attack.</summary>
+        public const string Pound = "pound";
+        /// <summary>«Embestida»: a run in a straight line at a soldier, who is knocked down (Sim.Charge).</summary>
+        public const string Charge = "charge";
+        /// <summary>«Rugido»: on first sight, every group on the map wakes and comes to him; once.</summary>
+        public const string Roar = "roar";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             Shoot, Pistol, Slash, StunLance, Overwatch, Hunker, Reload, Grenade, Launch, Missiles, Evac, Hack, Search,
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
-            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry, Takedown,
+            Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry, Takedown, Pound, Charge, Roar,
         };
     }
 
@@ -272,10 +282,12 @@ namespace Bastion.Engine
         /// <summary>The chainsaw's: a blow each (Content.ChainsawFuel).</summary>
         public const string Fuel = "fuel";
         public const string Molotov = "molotov";
+        /// <summary>El Toro's roar: once a fight (H6).</summary>
+        public const string Roar = "roar";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Grenade, Missiles, Smoke, Flashbang, FirstAid, Restoration, PatchUp, Fuel, Molotov,
+            Grenade, Missiles, Smoke, Flashbang, FirstAid, Restoration, PatchUp, Fuel, Molotov, Roar,
         };
     }
 

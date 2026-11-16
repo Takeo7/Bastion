@@ -196,6 +196,16 @@ namespace Bastion.Engine
         public Siege? Siege { get; set; }
         /// <summary>The runs' «horda despierta» (H3): every group alert from the start, and a wave by an edge in the first enemy turn.</summary>
         public bool? Awake { get; set; }
+        /// <summary>A run's Asedio (H5): La Lata comes on this turn; till then it takes nobody, and the waves come every two turns.</summary>
+        public int? HoldUntil { get; set; }
+        /// <summary>A run's Travesía (H5): the edge the horde comes in by, the squad's start's (Sim.ChooseDropZone's sides).</summary>
+        public int? HordeSide { get; set; }
+        /// <summary>A run's Sigilo (H5): the item, unseen. Seen (concealment broken), a big wave comes at once by the edges.</summary>
+        public bool? Stealth { get; set; }
+        /// <summary>A run's Guarida (H5): the reward's box on this tile, its guard round it; it must be opened to win.</summary>
+        public Pos? Lair { get; set; }
+        /// <summary>A boss's fight (H6): its unit; it must be dead to win.</summary>
+        public string? Boss { get; set; }
     }
 
     /// <summary>MissionState.evacBus: `{ tiles: Vec2[]; heading: number }`.</summary>

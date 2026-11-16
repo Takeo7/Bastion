@@ -746,4 +746,39 @@ namespace Bastion.Engine
         public override string T => "fireOut";
         public string Id { get; set; } = "";
     }
+
+    // ---------------------------------------------------------------- El Toro (H6)
+
+    /// <summary>El Toro roars on first sight: every group on the map wakes, and comes to him.</summary>
+    public sealed class RoaredEvent : GameEvent
+    {
+        public override string T => "roared";
+        public string Unit { get; set; } = "";
+    }
+
+    /// <summary>
+    /// El Toro's charge: the run along `path` (tiles, the last beside the soldier); `target`, the soldier it crashes into,
+    /// null if the line was cut before. Both its actions.
+    /// </summary>
+    public sealed class ChargedEvent : GameEvent
+    {
+        public override string T => "charged";
+        public string Unit { get; set; } = "";
+        public List<Pos> Path { get; set; } = new List<Pos>();
+        public string? Target { get; set; }
+    }
+
+    /// <summary>A soldier knocked down where it stands (Unit.Down): no overwatch, −20 of defence till it gets up.</summary>
+    public sealed class KnockedDownEvent : GameEvent
+    {
+        public override string T => "knockedDown";
+        public string Unit { get; set; } = "";
+    }
+
+    /// <summary>A soldier gets up as the squad's turn begins, before anything: one of its actions.</summary>
+    public sealed class GotUpEvent : GameEvent
+    {
+        public override string T => "gotUp";
+        public string Unit { get; set; } = "";
+    }
 }

@@ -329,6 +329,11 @@ namespace Bastion.Engine
         public GearGrid? Pack { get; set; }
         /// <summary>A run's soldier (H3): its kit's places (RunPack keeps Arms, charges and health with them).</summary>
         public KitPlaces? Kit { get; set; }
+        /// <summary>
+        /// Knocked down by El Toro's charge (H6): on the ground till the squad's next turn begins (gotUp, which costs one of
+        /// its actions); meanwhile −20 of defence and no overwatch. Absent, standing.
+        /// </summary>
+        public bool? Down { get; set; }
     }
 
     /// <summary>Unit.automaton: `{ piece: string }`.</summary>

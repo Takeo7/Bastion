@@ -108,7 +108,6 @@ namespace Bastion.Engine.Tests
                     // Never two stops in a row on a way, the Refuge of row 6 too.
                     if (NodeKinds.IsStop(n.Kind)) Assert.All(n.Next, (id) => Assert.False(NodeKinds.IsStop(Get(map, id).Kind), $"seed {seed}: {n.Id}"));
                 }
-                Assert.DoesNotContain(map, (n) => RunMap.NewSpecials.Contains(n.Kind));
                 Assert.DoesNotContain(map, (n) => n.Row == RunMap.NodeRows && NodeKinds.IsStop(n.Kind));
             }
             double Share(params string[] kinds) => kinds.Sum((k) => counts.TryGetValue(k, out var n) ? n : 0) / (double)middle;
@@ -118,6 +117,8 @@ namespace Bastion.Engine.Tests
             Assert.InRange(Share(NodeKinds.Stops.ToArray()), 0.10, 0.30);
             Assert.All(NodeKinds.Stops, (k) => Assert.True(counts.ContainsKey(k), k));
             Assert.All(RunMap.Specials, (k) => Assert.True(counts.ContainsKey(k), k));
+            // H5's four too.
+            Assert.All(RunMap.NewSpecials, (k) => Assert.True(counts.ContainsKey(k), k));
         }
 
         [Fact]
@@ -143,6 +144,7 @@ namespace Bastion.Engine.Tests
         {
             var fights = 0;
             var modified = 0;
+            var roadside = 0;
             foreach (var (seed, map) in Maps(2))
             {
                 foreach (var n in map)
@@ -160,6 +162,9 @@ namespace Bastion.Engine.Tests
                     // The site is what the map will be.
                     Assert.Equal(n.Site, Places.Of(RunMap.MapOf(n)!));
                     if (n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss) Assert.Equal(Places.Factory, n.Site);
+                    // No service area in the first two rows; later, yes.
+                    if (n.Row <= RunMap.EarlyRows) Assert.NotEqual(Places.Roadside, n.Site);
+                    else if (n.Site == Places.Roadside) roadside++;
                     if (n.Row == 1 || n.Kind == NodeKinds.Boss) Assert.Null(n.Modifier);
                     else
                     {
@@ -173,6 +178,7 @@ namespace Bastion.Engine.Tests
                 }
             }
             Assert.InRange(modified / (double)fights, 0.22, 0.38);
+            Assert.True(roadside > 0);
             Assert.Equal(1, RunMap.DifficultyOf(2, 1));
             Assert.Equal(3, RunMap.DifficultyOf(7, 1));
             Assert.Equal(5, RunMap.DifficultyOf(7, 3));

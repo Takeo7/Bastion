@@ -20,11 +20,15 @@ namespace Bastion.Engine
         public const int Sight = 2;
 
         /// <summary>
-        /// The specials drawn on the maps: today's objectives. The new ones (NewSpecials: hold, crossing, stealth, elite)
-        /// join this list in H5, once their rules are there.
+        /// The specials drawn on the maps: today's objectives, and since H5 the four new ones (NewSpecials: Asedio,
+        /// Travesía, Sigilo, Guarida).
         /// </summary>
-        public static readonly IReadOnlyList<string> Specials = new[] { NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Hack, NodeKinds.Rescue };
-        /// <summary>H5's: not on any map yet.</summary>
+        public static readonly IReadOnlyList<string> Specials = new[]
+        {
+            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Hack, NodeKinds.Rescue,
+            NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite,
+        };
+        /// <summary>H5's four, on the maps since their rules are there (they are in Specials too).</summary>
         public static readonly IReadOnlyList<string> NewSpecials = new[] { NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite };
 
         /// <summary>What a node of rows 2–5 is, in percent: normal 45, special 25, stops 30 (Refuge 10, Trade 8, Event 7, Survivor 5).</summary>
@@ -37,6 +41,9 @@ namespace Bastion.Engine
             (NodeKinds.Event, 7),
             (NodeKinds.Survivor, 5),
         };
+
+        /// <summary>Rows with no service area: the first fights, made with knives only.</summary>
+        public const int EarlyRows = 2;
 
         /// <summary>Fights from row 2 with a modifier, in percent.</summary>
         public const int ModifierChance = 30;
@@ -87,6 +94,9 @@ namespace Bastion.Engine
                 if (n.Row >= 2 && n.Kind != NodeKinds.Boss && rng.Int(100) < ModifierChance) n.Modifier = rng.Pick(Modifiers.All);
                 n.Seed = (int)Math.Floor(rng.Next() * 2147483648.0);
                 n.Site = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss ? Places.Factory : Weighted(rng, SiteMix);
+                // No service area in rows 1–2 (Red, 16/11: a long walk to La Lata with knives only): the countryside, drawn
+                // as it was so the rest of the map stays the same.
+                if (n.Site == Places.Roadside && n.Row <= EarlyRows) n.Site = Places.Country;
                 // A town or a city is the map's seed's (Places.OldTownSeed): the site says the one it will be.
                 if (n.Site == Places.Town) n.Site = Places.Of(MapOf(n)!);
             }

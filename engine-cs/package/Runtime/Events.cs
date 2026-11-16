@@ -285,6 +285,9 @@ namespace Bastion.Engine
                         }
                     }
                     if (s.Mission.Kind == MissionKinds.Sabotage && s.Mission.ObjectiveUnit == u.Id) CompleteObjective(s);
+                    // A boss's fight (H6): him dead, the way home is open.
+                    if (!string.IsNullOrEmpty(s.Mission.Boss) && s.Mission.Boss == u.Id) CompleteObjective(s);
+                    u.Down = null;
                     // A soldier leaves what it carried where it fell, for another to take (Arturo, 18/10 #49); off a flight of stairs
                     // at its nearer end, where one can stop (flights.ts).
                     if (u.Team == Teams.Xcom && u.Automaton == null && !u.Objective && !u.Captive)
@@ -711,6 +714,8 @@ namespace Bastion.Engine
                     if (ev.Loot != null) Stow(s, UnitOf(s, ev.Unit), ev.Loot);
                     // A run's fight (H3): gear.
                     if (ev.Packed != null || ev.Floor != null || ev.NextGear != null) RunLoot.Receive(s, UnitOf(s, ev.Unit), ev.Packed, ev.Floor, ev.NextGear);
+                    // A run's Guarida (H5): its box open.
+                    if (s.Mission.Lair != null && Grid.SameTile(s.Mission.Lair, ev.Tile)) CompleteObjective(s);
                     Deed(s, ev.Unit, DeedIds.Search);
                     break;
                 }
@@ -804,6 +809,32 @@ namespace Bastion.Engine
                 case GearMovedEvent ev:
                     RunPack.Apply(s, ev);
                     break;
+                // El Toro (H6).
+                case RoaredEvent _:
+                    break;
+                case ChargedEvent ev:
+                {
+                    var u = UnitOf(s, ev.Unit);
+                    if (ev.Path.Count > 0) u.Pos = CopyPos(ev.Path[ev.Path.Count - 1]);
+                    var t = !string.IsNullOrEmpty(ev.Target) ? Grid.GetUnit(s, ev.Target!) : null;
+                    if (t != null) u.Facing = Los.FacingTo(u.Pos, t.Pos) ?? u.Facing;
+                    break;
+                }
+                case KnockedDownEvent ev:
+                {
+                    var u = UnitOf(s, ev.Unit);
+                    u.Down = true;
+                    u.Overwatch = false;
+                    u.KillZone = false;
+                    break;
+                }
+                case GotUpEvent ev:
+                {
+                    var u = UnitOf(s, ev.Unit);
+                    u.Down = null;
+                    u.Ap = Math.Max(0, u.Ap - 1);
+                    break;
+                }
                 case GearUsedEvent ev:
                     RunPack.Apply(s, ev);
                     break;
@@ -1092,6 +1123,7 @@ namespace Bastion.Engine
                 RisenFrom = u.RisenFrom,
                 Pack = u.Pack != null ? Gears.CloneGrid(u.Pack) : null,
                 Kit = u.Kit != null ? Gears.ClonePlaces(u.Kit) : null,
+                Down = u.Down,
             };
         }
 
@@ -1180,6 +1212,11 @@ namespace Bastion.Engine
                     Night = m.Night,
                     Siege = m.Siege != null ? new Siege { Hold = m.Siege.Hold } : null,
                     Awake = m.Awake,
+                    HoldUntil = m.HoldUntil,
+                    HordeSide = m.HordeSide,
+                    Stealth = m.Stealth,
+                    Lair = CopyPosOrNull(m.Lair),
+                    Boss = m.Boss,
                 },
                 Turn = s.Turn,
                 ActiveTeam = s.ActiveTeam,

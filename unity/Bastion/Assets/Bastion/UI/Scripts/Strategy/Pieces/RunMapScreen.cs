@@ -147,6 +147,13 @@ namespace Bastion.UI.Strategy
                     badge.pickingMode = PickingMode.Ignore;
                     IconIn(badge, n.ModifierIcon, "rnode__mod-icon");
                 }
+                // An event's (H4), on the other side, ringed: it comes from the way, not from the stage.
+                if (!n.Hidden && !string.IsNullOrEmpty(n.AddedIcon))
+                {
+                    var badge = Ui.El("rnode__mod rnode__mod--added rnode__mod--" + (n.AddedId ?? "x"), el);
+                    badge.pickingMode = PickingMode.Ignore;
+                    IconIn(badge, n.AddedIcon, "rnode__mod-icon");
+                }
                 if (!n.Hidden) Name(p, side, n.Name, open ? "rnode__name rnode__name--open" : "rnode__name");
                 if (n.At) Here(p, side);
                 var node = n;

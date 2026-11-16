@@ -1,6 +1,6 @@
 #nullable enable
-// The runs' texts: Lore's since 16/11 (the names read from Lore/); only the events' tables are still «Lore: provisional»,
-// until H4 takes Lore.RunEvents. The rules don't read them; the refusals, the proposals and the log do.
+// The runs' texts: Lore's since 16/11 (the names read from Lore/; the Sucesos are Lore.RunEvents, and Events is left
+// empty for whoever still looks there). The rules don't read them; the refusals, the proposals and the log do.
 using System.Collections.Generic;
 
 namespace Bastion.Engine
@@ -73,16 +73,19 @@ namespace Bastion.Engine
         public static string UpgradeText(string id, int price) => $"hacer la mejora «{UpgradeNames[id]}» ({price} §)";
         public static string StartRunText(int chapter) => $"salir de expedición al capítulo {chapter}";
         public static string ChooseNodeText(RunNode n) => $"elegir la etapa «{FightName(n)}»";
-        public static string AnswerText(StopState stop, int option) => stop.Survivor != null ? $"{(option == 0 ? "aceptar" : "no aceptar")} a {stop.Survivor.Name}" /* Lore, after H4: «que se una {name}», «que no se una {name}» (RunsStopTests) */ : $"elegir «{EventOption(stop.Event ?? "", option)}»";
+        public static string AnswerText(StopState stop, int option) => stop.Survivor != null ? $"{(option == 0 ? "que se una" : "que no se una")} {stop.Survivor.Name}" : $"elegir «{EventOption(stop.Event ?? "", option)}»";
         public static string Upgraded(string id, int level) => $"Nueva mejora: {UpgradeNames[id]}, nivel {level}.";
         public static string RunStarted(int chapter) => $"Sale la escuadra: expedición al capítulo {chapter}.";
         public static string ChapterDone(int chapter) => $"Capítulo {chapter} superado. La escuadra vuelve a la base.";
-        public static string SurvivorJoins(string name) => $"{name} se une al Bastión.";
+        /// <summary>Someone joins (a Rescate, a Superviviente, a Suceso): with the squad, or at the base when it goes full (`inSquad` false).</summary>
+        public static string SurvivorJoins(string name, bool inSquad = true) => inSquad ? $"{name} se une a la escuadra." : $"{name} se une al Bastión y espera en la base: la escuadra va completa.";
         public static string Recruit(string name) => $"{name} se une al Bastión como recluta: no quedaban soldados vivos.";
         public const string Wiped = "Cae toda la escuadra. Lo que llevaban se pierde.";
         public static string Reward(int supplies, int lost) => lost > 0 ? $"La recompensa: {supplies} §. No caben {lost} §, y se quedan allí." : $"La recompensa: {supplies} §.";
         /// <summary>A fight's name, for the room and the map's card: what the node is, and where.</summary>
         public static string FightName(RunNode n) => n.Site != null && Places.Names.TryGetValue(n.Site, out var site) ? $"{NodeNames[n.Kind]} · {site}" : NodeNames[n.Kind];
+        /// <summary>The same with the chapter's boss by name (H6, Lore.StageName): «El Toro · Fábrica».</summary>
+        public static string FightName(RunNode n, int chapter) => n.Site != null && Places.Names.TryGetValue(n.Site, out var site) ? $"{Lore.StageName(n.Kind, chapter)} · {site}" : Lore.StageName(n.Kind, chapter);
 
         // ------------------------------------------------------------------ names
 
@@ -92,23 +95,18 @@ namespace Bastion.Engine
         /// <summary>The upgrades' names, by UpgradeIds: Lore's.</summary>
         public static readonly IReadOnlyDictionary<string, string> UpgradeNames = Lore.UpgradeNames;
 
-        /// <summary>An event's title and its two options, by Content.RunEvents' id.</summary>
+        /// <summary>An event's title and its two options, by Content.RunEvents' id: none here any more (Lore.RunEvents has them).</summary>
         public static readonly IReadOnlyDictionary<string, (string Title, string Option0, string Option1)> Events = new Dictionary<string, (string Title, string Option0, string Option1)>
         {
-            ["cache"] = ("Un escondite", "Cogerlo", "Dejarlo"), // Lore: provisional
-            ["wreck"] = ("Un coche volcado", "Registrarlo", "Seguir"), // Lore: provisional
         };
 
         /// <summary>What happened, by StopState.outcome.</summary>
         public static readonly IReadOnlyDictionary<string, string> Outcomes = new Dictionary<string, string>
         {
-            ["refuge.rest"] = "La escuadra descansa. Todos curados.", // Lore: provisional
-            ["cache.take"] = "Dentro hay 20 §.", // Lore: provisional
-            ["cache.leave"] = "Lo dejáis donde está.", // Lore: provisional
-            ["wreck.search"] = "Hay una medicina, pero alguien se corta.", // Lore: provisional
-            ["wreck.leave"] = "Seguís sin pararos.", // Lore: provisional
-            ["survivor.yes"] = "Se une a la escuadra.", // Lore: provisional
-            ["survivor.no"] = "Sigue su camino.", // Lore: provisional
+            ["refuge.rest"] = "La escuadra descansa, y todos se curan del todo.",
+            ["survivor.yes"] = "Se une a la escuadra.",
+            ["survivor.base"] = "Se une al Bastión y espera en la base: la escuadra va completa.",
+            ["survivor.no"] = "Sigue su camino.",
         };
 
         public static string EventOption(string id, int option)

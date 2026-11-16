@@ -59,8 +59,16 @@ namespace Bastion.UI.Strategy
                         nv.ModifierId = n.Modifier;
                         nv.Modifier = StrategyText.Runs.ModifierName(n.Modifier);
                         nv.ModifierIcon = ModifierIcon(n.Modifier);
-                        var said = StrategyText.Runs.ModifierLine(n.Modifier);
-                        nv.Card.Add($"{nv.Modifier}: {char.ToLowerInvariant(said[0])}{said.Substring(1)}");
+                        nv.Card.Add(ModifierCard(n.Modifier));
+                    }
+                    // What an event left (H4): on the stage it went to, or, still waiting (RunState.Pending), on the fights
+                    // that can be chosen now, one of which takes it.
+                    var added = n.Added ?? (choices.Contains(n.Id) && RunMap.IsFight(n.Kind) ? run.Pending : null);
+                    if (added != null)
+                    {
+                        nv.AddedId = added;
+                        nv.AddedIcon = ModifierIcon(added);
+                        nv.Card.Add(ModifierCard(added) + StrategyText.Runs.ByEvent);
                     }
                 }
                 else nv.Card.Add(StrategyText.Runs.Unseen);
@@ -169,7 +177,7 @@ namespace Bastion.UI.Strategy
                             v.Options.Add(new StopOptionView { Index = i, Label = i == 0 ? StrategyText.Runs.Join : StrategyText.Runs.NoJoin, Why = Runs.AnswerStopRefusal(c, i) });
                     break;
             }
-            if (stop.Outcome != null) v.Outcome = RunTexts.Outcomes.TryGetValue(stop.Outcome, out var said) ? said : stop.Outcome;
+            if (stop.Outcome != null || stop.Result != null) v.Outcome = StopOutcome(stop);
             // With two: who has asked to go on.
             var asked = stop.Leaving != null && Slot >= 0 && Slot < stop.Leaving.Length && stop.Leaving[Slot];
             var partner = Partner;
@@ -188,12 +196,28 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
-        /// <summary>An event's option in short, by its button (Lore.RunEventEffects with Content.RunEvents' figures).</summary>
+        /// <summary>«Horda despierta: todos los zombis…»: a modifier's name and its line, for a stage's card.</summary>
+        static string ModifierCard(string modifier)
+        {
+            var said = StrategyText.Runs.ModifierLine(modifier);
+            return $"{StrategyText.Runs.ModifierName(modifier)}: {char.ToLowerInvariant(said[0])}{said.Substring(1)}";
+        }
+
+        /// <summary>An event's option in short, by its button (Lore.RunEventEffects with Content.RunEvents' figures, H4).</summary>
         static string EventShort(string id, int option)
         {
             if (!Content.RunEvents.TryGetValue(id, out var e) || option >= e.Options.Count) return null;
             var o = e.Options[option];
-            return Lore.RunEventEffects(supplies: o.Supplies, hurtOne: o.Hp < 0 ? -o.Hp : 0, gearKind: o.Medicine > 0 ? GearKinds.Medicine : null, gearCount: o.Medicine);
+            return Lore.RunEventEffects(o.Supplies, o.HurtOne, o.HurtAll, o.HealAll, o.GearKind, o.GearType, o.GearCount, o.Modifier, o.Survivor, o.SurvivorHalf);
+        }
+
+        /// <summary>What happened at the stop (H4: StopState.Result, Lore's line with who it fell to and who joined); else the engine's.</summary>
+        static string StopOutcome(StopState stop)
+        {
+            var r = stop.Result;
+            if (r != null && Lore.RunEvents.TryGetValue(r.Event, out var told) && r.Option >= 0 && r.Option < told.Options.Count)
+                return told.Options[r.Option].Result(r.SoldierName, r.SurvivorName) + (r.Lost == true ? " " + Lore.RunEventLost : "");
+            return stop.Outcome != null && RunTexts.Outcomes.TryGetValue(stop.Outcome, out var said) ? said : stop.Outcome;
         }
 
         /// <summary>A stage's icon by kind: the missions' own for today's objectives, Synty's map signs for the rest.</summary>

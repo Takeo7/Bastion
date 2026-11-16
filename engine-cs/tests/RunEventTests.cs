@@ -193,6 +193,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(before + 1, c.Soldiers.Count);
             var s = c.Soldiers.Last();
             Assert.Equal((s.Id, s.Name), (stop.Result!.Survivor, stop.Result.SurvivorName));
+            Assert.True(stop.Result.InSquad);
             Assert.Contains(s.Id, c.Run!.Squad);
             Assert.Equal((Runs.MaxHp(s) + 1) / 2, c.Run.Hp[s.Id]);
             Assert.Equal(FoundWeaponIds.Knife, s.Kit!.Melee!.Type);
@@ -202,6 +203,7 @@ namespace Bastion.Engine.Tests
             Ok(d, new AnswerStopCommand { Option = 0 });
             var t = d.Soldiers.Last();
             Assert.Equal(t.Id, other.Result!.Survivor);
+            Assert.False(other.Result.InSquad);
             Assert.DoesNotContain(t.Id, d.Run!.Squad);
             Assert.Equal(Modifiers.Night, d.Run.Pending);
             var (e, _) = At("radio", seats: 1);

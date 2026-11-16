@@ -32,6 +32,8 @@ namespace Bastion.Client.Audio
         /// </summary>
         private const float BloaterVoiceRate = 0.75f;
         private const float BloaterDeathRate = 0.85f;
+        /// <summary>El Toro's voice: the Hinchado's recordings, deeper still (a body 1.25 times a man's).</summary>
+        private const float BullVoiceRate = 0.62f;
         /// <summary>
         /// Its burst, a little louder than a grenade (Ana, 20 p1): the blast 2 dB up and deeper, the splatter over it. In
         /// Unity's mix (29/10), 2–3 dB more over its first second than the grenade's, by the take, and 1 dB more at the peak.
@@ -209,6 +211,12 @@ namespace Bastion.Client.Audio
         public void Step(Unit u, Vector3? at)
         {
             var t = u.Template;
+            // El Toro's feet, walking or charging: heavy (recetas.ts boss.step), and no growl as it goes (it roars once).
+            if (t == AlienIds.Brute && Sound.Exists("boss.step"))
+            {
+                At("boss.step", at, spread: 0.08f);
+                return;
+            }
             // The Hinchado's own, wet and heavy; the rest as in the 0.10.1.
             if (t != "bloater" || !Recorded("bloater.step", at, 0.8f, spread: 0.06f))
                 At(t == "mec" ? "step.mec" : t == "zombie" ? "step.drag" : "step", at, t == "sectoid" || t == "xenoid" ? 0.6f : 1, spread: 0.1f);
@@ -244,6 +252,38 @@ namespace Bastion.Client.Audio
                 if (!nearest.bloater || !Recorded("bloater.voice", nearest.at, 0.8f, spread: 0.08f, rate: BloaterVoiceRate)) Recorded("zombie.growl", nearest.at, 0.8f, spread: 0.08f);
             });
         }
+
+        // ------------------------------------------------------------ El Toro (H6)
+
+        /// <summary>
+        /// El Toro's roar (RoaredEvent, once a fight, on seeing the squad): the Hinchado's recorded voice deeper (BullVoiceRate)
+        /// over a growl of its own (recetas.ts boss.roar); without either, the dead's moan, deep.
+        /// </summary>
+        public void Roar(Vector3? at)
+        {
+            var voice = Recorded("bloater.voice", at, 1, spread: 0.04f, rate: BullVoiceRate);
+            if (Sound.Exists("boss.roar")) At("boss.roar", at, voice ? 0.8f : 1, spread: 0.04f);
+            else if (!voice) At(Pick("zombie.moan", "death.zombie"), at, 1, rate: 0.6f);
+        }
+
+        /// <summary>
+        /// The charge's end (ChargedEvent with a target), as its body meets the soldier: its whole weight, the loudest of its
+        /// sounds (recetas.ts boss.impact). Its run is its steps (Step); the soldier's fall, KnockedDown.
+        /// </summary>
+        public void ChargeHit(Vector3? at) => At(Pick("boss.impact", "impact.flesh"), at, spread: 0.05f);
+
+        /// <summary>Mazazo (the «pound» attack): both fists down, at Arte's blow (recetas.ts boss.pound); the swing before it, if any, Melee's.</summary>
+        public void Pound(Vector3? at) => At(Pick("boss.pound", "melee.sword"), at, spread: 0.06f);
+
+        /// <summary>A soldier knocked down (KnockedDownEvent): the body on the ground, its kit after it (recetas.ts body.down), and their grunt.</summary>
+        public void KnockedDown(Unit u, Vector3? at)
+        {
+            At(Pick("body.down", "impact.flesh"), at, spread: 0.06f);
+            Recorded($"soldier.pain.{(u.Appearance?.Sex == "f" ? "f" : "m")}", at, 0.8f, 0.05, 0.02f);
+        }
+
+        /// <summary>A soldier getting up (GotUpEvent): their kit shifting, quiet.</summary>
+        public void GotUp(Vector3? at) => At("hunker", at, 0.6f);
 
         /// <summary>A soldier hurt: a scream when the dead bite, a grunt otherwise; by their sex, never the same take twice running.</summary>
         public void Hurt(Unit u, Vector3? at, bool bitten = false)
@@ -322,6 +362,13 @@ namespace Bastion.Client.Audio
             var t = u.Template;
             var name = Machine(u) ? "death.robot" : t == "sectoid" ? "death.sectoid" : t == "xenoid" ? "death.runner" : t == "zombie" || t == "mec" || t == "bloater" ? "death.zombie" : u.Team == Teams.Alien ? "death.advent" : "death.human";
             // The Acorazado falls as the dead do, heavier; the Hinchado gurgles its own as it goes (its burst follows).
+            // El Toro: the dead's fall, deeper, and its body hitting the ground after it.
+            if (t == AlienIds.Brute)
+            {
+                if (!Recorded("bloater.death", at, 1, rate: BullVoiceRate)) At("death.zombie", at, rate: 0.7f);
+                At(Pick("boss.impact", "grenade.land"), at, 0.8f, 0.45);
+                return;
+            }
             if (t != "bloater" || !Recorded("bloater.death", at, 0.9f, rate: BloaterDeathRate)) At(name, at, rate: t == "mec" ? 0.85f : 1);
             if (u.Team != Teams.Xcom) return;
             Recorded($"soldier.scream.{(u.Appearance?.Sex == "f" ? "f" : "m")}", at, spread: 0.02f);

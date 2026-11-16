@@ -89,6 +89,22 @@ namespace Bastion.Engine.Tests
             return s;
         }
 
+        /// <summary>
+        /// El Toro's stage (H6), launched as the room does it, for CombatLab: the factory, the squad of the full base at its
+        /// start, him and his group unaware (MissionState.boss names him).
+        /// </summary>
+        public static GameState Boss()
+        {
+            var c = Full();
+            var run = Start(c);
+            var node = RunMap.Choices(run).First((n) => RunMap.IsFight(n.Kind));
+            node.Kind = NodeKinds.Boss;
+            node.Site = Places.Factory;
+            node.Modifier = null;
+            Agree(c, new ChooseNodeCommand { Node = node.Id });
+            return Runs.Launch(c, new Rng(7))!.Value.State;
+        }
+
         private static void Save(string name, CampaignState c)
         {
             Directory.CreateDirectory(Dir);
@@ -183,6 +199,7 @@ namespace Bastion.Engine.Tests
             GoTo(survivor, NodeKinds.Survivor);
             Save("superviviente.json", survivor);
             Save("combate-mochila.json", Combat());
+            Save("toro.json", Boss());
         }
     }
 }

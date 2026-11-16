@@ -48,6 +48,27 @@ unity/tools/sonido.sh
   - `CombatSound.Takedown(at)` lo toca sin el `melee.swing` de antes. Si la carpeta aún no lo tiene, toca el tajo de cuchillo (`melee.sword`) a 0,4.
   - `SoundCheck.Combate` lo toca, y después un tajo de cuchillo para compararlo; falla si falta la receta.
   - Para añadirlo a una carpeta ya generada: `node unity/tools/sonido/generar.mjs --efectos melee.takedown`.
+- **El Toro** (16/11, H6 de las expediciones; `.dev-snapshots/gameplay/runs/H6-TORO.md`): el jefe del capítulo 1. Sus sonidos se hacen sin bajar nada nuevo: la voz grabada del Hinchado, más grave, y recetas de `recetas.ts`. UI los engancha a los sucesos.
+  - **Rugido** (`roared`): `CombatSound.Roar(at)` toca `bloater.voice` a 0,62 con `boss.roar` debajo. `boss.roar` es una garganta sintetizada de 1,8 s: sierra distorsionada de 68 a 92 y a 52 Hz, el raspado del aliento entre 450 y 950 Hz, y un fondo a 46 Hz. Nivel +1 dB.
+  - **Pasos** (al andar y en la embestida): `CombatSound.Step` con la plantilla `brute` toca `boss.step`, un golpe pesado con un toque hacia los 300 Hz. No gruñe al andar: ruge una vez. Nivel −4 dB.
+  - **Choque de la embestida** (`charged` con objetivo): `CombatSound.ChargeHit(at)` toca `boss.impact`, el más fuerte de todos. Nivel +2 dB.
+  - **Mazazo** (`pound`): `CombatSound.Pound(at)` toca `boss.pound`: los dos puños, con 25 ms entre uno y otro. El silbido de antes, si lo hay, es `Melee("swing")`. Nivel +1 dB.
+  - **Tumbado** (`knockedDown`): `CombatSound.KnockedDown(soldado, at)` toca `body.down`, el cuerpo contra el suelo y el equipo después, y el quejido del soldado. Nivel −3 dB.
+  - **Levantarse** (`gotUp`): `CombatSound.GotUp(at)` toca `hunker` a 0,6.
+  - **Su muerte:** la muerte del Hinchado a 0,62 y, a los 0,45 s, `boss.impact` a 0,8, el cuerpo contra el suelo.
+  - **Medido (16/11), con el nivel aplicado,** por encima de 200 Hz, que es lo que dan los altavoces de un portátil o de un móvil:
+    - los pasos quedan 2 dB por encima de los de un soldado;
+    - el choque, como una explosión;
+    - el mazazo, como un tajo (`melee.sword`).
+
+    Para que pesara lo que se oye, el golpe grave lleva poco volumen. El banco iguala el total, y con el grave fuerte los medios se quedaban 4 dB más bajos.
+  - **Si la carpeta no tiene las recetas:**
+    - el mazazo suena como un tajo;
+    - el choque, como un impacto en carne;
+    - la caída del soldado, como un impacto en carne;
+    - el rugido, solo con la voz grabada, o con el gemido de zombi más grave si tampoco está.
+  - `SoundCheck.Combate` los toca en orden (rugido, pasos, choque, tumbado, levantarse, mazazo con un tajo detrás y muerte) y falla si falta alguna receta.
+  - Para añadirlos a una carpeta ya generada: `node unity/tools/sonido/generar.mjs --efectos boss.roar,boss.step,boss.impact,boss.pound,body.down`.
 - **Los propios** (Arte, 1/11, el molotov de la #10 de Arturo): ni el banco de la 0.10.1 ni los paquetes que tenemos traen fuego, así que `node unity/tools/sonido/propios.mjs` los sintetiza, con su propio azar fijo, como originales WAV en `assets-src/sonido/` (`propio-…`):
   - el golpe de llama: un golpe a 60 Hz, un soplo de ruido que sube de 250 a 900 Hz y baja, rumor y algún chasquido;
   - el crepitar: chasquidos sueltos sobre un rumor suave desde 70 Hz, 8 s con el final fundido en el principio.

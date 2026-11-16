@@ -12,8 +12,10 @@ namespace Bastion.Client.Audio.EditorTools
     /// («[sonido] … melee.pan grabados/…»). It plays a blow with each melee weapon, by the id Content.AttackWeapon gives for
     /// a soldier carrying it at the belt (the knife and the machete too, to compare). Then the Hinchado: its steps (its
     /// growl is now and then), its death and its burst; the reloads, the rifle's and the pistol's; and the silent
-    /// takedown, with a knife's cut after it to hear how far under it is. It fails if any of their groups has no takes, or
-    /// the rifle's reload or the takedown no recipe, and quits Unity:
+    /// takedown, with a knife's cut after it to hear how far under it is; and El Toro (H6): its roar, its steps into the
+    /// charge's crash and the soldier knocked down, the soldier getting up, its pound with a knife's cut after it, and its
+    /// death. It fails if any of their groups has no takes, or the rifle's reload, the takedown or one of El Toro's no
+    /// recipe, and quits Unity:
     ///   QUIT=0 BASTION_SONIDO_TRAZA=1 unity/tools/unity.sh -executeMethod Bastion.Client.Audio.EditorTools.SoundCheck.Combate
     /// </summary>
     public static class SoundCheck
@@ -96,7 +98,30 @@ namespace Bastion.Client.Audio.EditorTools
                 await Seconds(1);
                 sfx.Melee("sword", at);
                 await Seconds(1);
-                code = missing.Count == 0 && rifle && takedown ? 0 : 1;
+                // El Toro (recetas.ts, H6): the roar; four steps into the charge's crash, the soldier down; up; the pound, a knife's cut; its death.
+                var bull = new[] { "boss.roar", "boss.step", "boss.impact", "boss.pound", "body.down" }.Where((n) => !Sound.Exists(n)).ToList();
+                Debug.Log(bull.Count == 0 ? "[prueba] El Toro: rugido, embestida, tumbado, levantarse, mazazo (y un tajo) y muerte" : $"[prueba] El Toro sin receta: {string.Join(", ", bull)}");
+                var toro = new Unit { Id = "a2", Template = AlienIds.Brute, Team = Teams.Alien };
+                var down = new Unit { Id = "s2", Template = TemplateIds.Rookie, Team = Teams.Xcom, Appearance = new Appearance { Sex = "m" } };
+                sfx.Roar(at);
+                await Seconds(2.5);
+                for (var i = 0; i < 4; i++)
+                {
+                    sfx.Step(toro, at);
+                    await Seconds(0.14);
+                }
+                sfx.ChargeHit(at);
+                sfx.KnockedDown(down, at);
+                await Seconds(1.5);
+                sfx.GotUp(at);
+                await Seconds(1);
+                sfx.Pound(at);
+                await Seconds(1);
+                sfx.Melee("sword", at);
+                await Seconds(1);
+                sfx.Death(toro, at);
+                await Seconds(2);
+                code = missing.Count == 0 && rifle && takedown && bull.Count == 0 ? 0 : 1;
             }
             catch (Exception e)
             {

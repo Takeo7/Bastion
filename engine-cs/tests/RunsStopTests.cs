@@ -149,6 +149,8 @@ namespace Bastion.Engine.Tests
             Ok(d, new AnswerStopCommand { Option = 0 });
             Assert.Contains(other, d.Soldiers);
             Assert.DoesNotContain(other.Id, d.Run.Squad);
+            Assert.Equal("survivor.base", d.Run.Stop!.Outcome);
+            Assert.Equal(RunTexts.SurvivorJoins(other.Name, false), d.Log[0].Text);
             // No.
             var e = Solo();
             GoTo(e, NodeKinds.Survivor);
@@ -168,7 +170,7 @@ namespace Bastion.Engine.Tests
             var stop = c.Run!.Stop!;
             var name = stop.Survivor!.Name;
             Ok(c, new AnswerStopCommand { Option = 1 }, 1, Both);
-            Assert.Equal($"no aceptar a {name}", c.Proposal!.Text);
+            Assert.Equal($"que no se una {name}", c.Proposal!.Text);
             Assert.Null(stop.Outcome);
             Ok(c, new VoteCommand { Accept = true }, 0, Both);
             Assert.Equal("survivor.no", stop.Outcome);

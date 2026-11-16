@@ -425,8 +425,9 @@ namespace Bastion.Client.Units
         /// <summary>
         /// The soldier the Brute's charge knocks down (Gameplay, 16/11: on the floor till the squad's next turn begins, getting
         /// up costs it an action): down in one of its deaths (DeathFor: away from `from`, where the Brute hit it from; room for
-        /// it, else the least of them, tucked in), in quickly (KnockIn), shoved a little further that way (KnockShove), dust as
-        /// it hits the floor; no death's flash. It lies there alive (View.down, `dead` for its pose: Sync leaves it so) till
+        /// it, else the least of them), in quickly (KnockIn), tucked into its own tile (Tuck: the engine leaves it there, Gameplay
+        /// 16/11, «cae en su casilla»; thrown its death's reach away it lay a tile and more off it, where the ring and the next
+        /// blow were not), dust as it hits the floor; no death's flash. It lies there alive (View.down, `dead` for its pose: Sync leaves it so) till
         /// GetUp. Resolved once it lies still. Hit meanwhile, its flash only; killed, it dies where it lies (DieDown).
         /// </summary>
         public async Awaitable KnockDown(string id, Vector3 from, CancellationToken ct = default)
@@ -458,38 +459,17 @@ namespace Bastion.Client.Units
             float length = v.anim.PlayWhole(death, KnockIn, true);
             float settle = Mathf.Min(length, FigureCatalog.Load()?.Settle(chosen.id) ?? length);
             _ = Thump(v, chosen, settle, KnockThud);
-            if (cramped) await Tuck(v, chosen, settle, ct);
-            else await Shove(v, from, settle, ct);
+            await Tuck(v, chosen, settle, ct);
         }
 
-        /// <summary>
-        /// Knocked down: the death's way in (seconds: a death's own is 0.2, from a shot; a charge throws it at once), how far
-        /// the body is shoved on away from the blow over how long (tiles, seconds; not with no room: Tuck), and the dust as it
-        /// hits the floor (Fx.Thud's size).
-        /// </summary>
-        const float KnockIn = 0.08f, KnockShove = 0.22f, KnockShoveTime = 0.35f, KnockThud = 0.8f;
-
-        /// <summary>The body on its root shoved away from `from` (KnockShove over KnockShoveTime, easing), held there; `seconds` in all.</summary>
-        static async Awaitable Shove(View v, Vector3 from, float seconds, CancellationToken ct)
-        {
-            var away = v.root.position - from;
-            away.y = 0;
-            away = away.sqrMagnitude > 1e-6f ? away.normalized * KnockShove * MapSpace.Tile : Vector3.zero;
-            for (float t = 0; t < seconds; t += Time.deltaTime)
-            {
-                if (v.body == null || !v.down) return;
-                float u = Mathf.Min(1, t / KnockShoveTime);
-                v.body.localPosition = v.root.InverseTransformVector(away * (1 - (1 - u) * (1 - u)));
-                await Awaitable.NextFrameAsync(ct);
-            }
-            if (v.body != null && v.down) v.body.localPosition = v.root.InverseTransformVector(away);
-        }
+        /// <summary>Knocked down: the death's way in (seconds: a death's own is 0.2, from a shot; a charge throws it at once), and the dust as it hits the floor (Fx.Thud's size).</summary>
+        const float KnockIn = 0.08f, KnockThud = 0.8f;
 
         /// <summary>
         /// One knocked down gets up (Gameplay, 16/11: as the squad's next turn begins; it costs it an action): out of the death
         /// it went down in played backwards, as one of the dead rises out of its body (Reanimate; its drop given time, the 3D
         /// review's A-26), KnockUpShare of the clip, between KnockUpLeast and KnockUpMost seconds, back from where it was
-        /// shoved onto its tile; then as it stands, its weapon held again, crouched or on watch if the state has it so.
+        /// tucked to its tile's middle; then as it stands, its weapon held again, crouched or on watch if the state has it so.
         /// Resolved once it stands. Nothing if it isn't down.
         /// </summary>
         public async Awaitable GetUp(string id, CancellationToken ct = default)

@@ -704,6 +704,12 @@ namespace Bastion.UI.Strategy
         {
             if (chosen != null) runsChosen = chosen;
             var scene = System.Environment.GetEnvironmentVariable("BASTION_RUNS_ESCENA");
+            // «respondido»: the sample's event answered with its first option, by Anja, as the engine leaves it (H4).
+            if (scene == "respondido" && p.State.Run?.Stop is Bastion.Engine.StopState stop && stop.Event != null)
+            {
+                stop.Result = new Bastion.Engine.EventResult { Event = stop.Event, Option = 0, Soldier = "c1", SoldierName = "Anja" };
+                stop.Outcome = stop.Event + ".0";
+            }
             // «parte»: a stage's report made up over the sample: things found, a reward of which some didn't fit, one fallen.
             if (scene == "parte" && p.State.LastReport == null)
             {
@@ -723,7 +729,7 @@ namespace Bastion.UI.Strategy
                     },
                 };
             }
-            var view = p.State.Run != null && scene == null ? "runmap" : scene == "parte" ? "debrief" : scene == "mejoras" ? "upgrades" : scene == "salir" ? "squad" : scene == "soldados" ? "barracks" : "stash";
+            var view = p.State.Run != null && (scene == null || scene == "respondido") ? "runmap" : scene == "parte" ? "debrief" : scene == "mejoras" ? "upgrades" : scene == "salir" ? "squad" : scene == "soldados" ? "barracks" : "stash";
             root.SetTop(p.Top());
             root.SetNav(p.Nav(view));
             root.SetScreen(view);

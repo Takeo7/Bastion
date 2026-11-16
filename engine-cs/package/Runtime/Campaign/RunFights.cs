@@ -29,29 +29,46 @@ namespace Bastion.Engine
             return c.Run?.Hands != null && c.Run.Hands.TryGetValue(s.Id, out var hand) ? hand : s.Owner;
         }
 
-        /// <summary>The mission a node is: a normal one, a Saqueo (no objective, out on La Lata); the boss, for now, a Limpieza (H6).</summary>
+        /// <summary>
+        /// The mission a node is: a normal one, a Saqueo (no objective, out on La Lata); the five of before, theirs; an
+        /// Asedio, a Travesía and a Guarida, Saqueos with their own rules (MissionOptions.HoldUntil, Crossing, Guard); a
+        /// Sigilo, a Recuperación unseen (Stealth); the boss, a Saqueo with him to kill (Boss).
+        /// </summary>
         public static string MissionKindOf(string node)
         {
             switch (node)
             {
-                case NodeKinds.Normal:
-                    return MissionKinds.Scavenge;
                 case NodeKinds.Elimination:
                 case NodeKinds.Recovery:
                 case NodeKinds.Sabotage:
                 case NodeKinds.Hack:
                 case NodeKinds.Rescue:
                     return node;
+                case NodeKinds.Stealth:
+                    return MissionKinds.Recovery;
                 default:
-                    // TODO(H5): hold, crossing, stealth and elite; TODO(H6): the boss. Meanwhile, a Limpieza.
-                    return MissionKinds.Elimination;
+                    return MissionKinds.Scavenge;
             }
         }
 
-        /// <summary>The boss's for now (H6 brings the real one): a heavy group on top of the Limpieza's.</summary>
-        private static List<string> BossPod()
+        /// <summary>The boss's group (H6, H6-TORO.md): El Toro, four of the dead and a Corredor; one of the dead more a difficulty past the first.</summary>
+        public static List<string> BossPod(int difficulty)
         {
-            return new List<string> { TemplateIds.Mec, TemplateIds.Xenoid, TemplateIds.Bloater, TemplateIds.Zombie, TemplateIds.Zombie };
+            var pod = new List<string> { TemplateIds.Brute, TemplateIds.Zombie, TemplateIds.Zombie, TemplateIds.Zombie, TemplateIds.Zombie, TemplateIds.Xenoid };
+            for (var d = 1; d < difficulty; d++) pod.Add(TemplateIds.Zombie);
+            return pod;
+        }
+
+        /// <summary>A boss beaten (H6): 150 § and a good weapon.</summary>
+        public const int BossReward = 150;
+
+        /// <summary>
+        /// What a stage is about, in a line, for its sheet on the map (Lore.StageLine with this engine's figures): the
+        /// sabotage's alarm, the turn La Lata comes on an Asedio, a Guarida's guard.
+        /// </summary>
+        public static string StageLine(RunNode n)
+        {
+            return Lore.StageLine(n.Kind, alarm: n.Kind == NodeKinds.Sabotage ? Alarms.Factory : null, holdTurns: n.Kind == NodeKinds.Hold ? Setup.HoldTurns : (int?)null, guard: n.Kind == NodeKinds.Elite ? Setup.GuardOf(n.Seed ?? 0) : null);
         }
 
         /// <summary>La Lata as big as the seats the squad has (Campaign.VehicleSeats: 4, 6 or 8).</summary>
@@ -131,12 +148,13 @@ namespace Bastion.Engine
             var kind = MissionKindOf(node.Kind);
             var difficulty = Math.Max(1, Math.Min(4, node.Difficulty));
             var living = kind == MissionKinds.Rescue;
-            var pods = Setup.MissionPods(difficulty, kind, living);
-            if (node.Kind == NodeKinds.Boss) pods.Add(BossPod());
+            var boss = node.Kind == NodeKinds.Boss;
+            // The boss's group alone (it isn't scaled: there is one Toro).
+            var pods = boss ? new List<List<string>> { BossPod(difficulty) } : Setup.PodsFor(map, Setup.MissionPods(difficulty, kind, living));
             var squad = run.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id)).Where((s) => s != null && s.Alive && s.Kit != null).Select((s) => SquadMemberOf(c, s!)).ToList();
             var seed = Math.Abs(node.Seed ?? 0);
             var alarm = kind == MissionKinds.Sabotage ? Alarms.Factory : null;
-            var name = RunTexts.FightName(node);
+            var name = RunTexts.FightName(node, run.Chapter);
             var state = Setup.CreateMission(new MissionOptions
             {
                 Map = map,
@@ -144,7 +162,7 @@ namespace Bastion.Engine
                 Rng = rng,
                 Kind = kind,
                 Squad = squad,
-                Pods = Setup.PodsFor(map, pods),
+                Pods = pods,
                 Difficulty = difficulty,
                 Living = living ? true : (bool?)null,
                 CampaignMission = new CampaignMission { Id = node.Id, Name = name },
@@ -158,6 +176,12 @@ namespace Bastion.Engine
                 // Pistols are counted: searches turn them up too.
                 Pistols = true,
                 Vehicle = VehicleOf(c),
+                // The runs' stages (H5, H6).
+                HoldUntil = node.Kind == NodeKinds.Hold ? Setup.HoldTurns : (int?)null,
+                Crossing = node.Kind == NodeKinds.Crossing ? true : (bool?)null,
+                Stealth = node.Kind == NodeKinds.Stealth ? true : (bool?)null,
+                Guard = node.Kind == NodeKinds.Elite ? Setup.GuardOf(seed) : null,
+                Boss = boss ? TemplateIds.Brute : null,
             });
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
             return (state, name);
@@ -169,7 +193,7 @@ namespace Bastion.Engine
         /// The one a Rescate brought out, a soldier now (Runs.NewSoldier): by their name, of whoever has fewest soldiers;
         /// into the squad with the health they had if there is a seat, else waiting at the base. Null with no bed for them.
         /// </summary>
-        private static CampaignSoldier? Rescued(CampaignState c, Unit vip, Rng rng)
+        private static CampaignSoldier? Rescued(CampaignState c, Unit vip, Rng rng, RunReport report)
         {
             var owner = Campaign.RunsNeediest(c);
             if (c.Soldiers.Count((s) => s.Owner == owner && s.Alive) >= Campaign.SoldierCap(c)) return null;
@@ -177,12 +201,14 @@ namespace Bastion.Engine
             s.Name = vip.Name;
             s.Appearance = Appearances.DefaultAppearance(owner, null, Campaign.SexOfPerson(vip.Name) ?? s.Appearance.Sex, s.Id, s.Appearance.Wardrobe);
             var run = c.Run!;
-            if (run.Squad.Count < SeatsOf(c))
+            var inSquad = run.Squad.Count < SeatsOf(c);
+            if (inSquad)
             {
                 run.Squad.Add(s.Id);
                 run.Hp[s.Id] = Math.Max(1, Math.Min(MaxHp(s), vip.Hp));
             }
-            Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name), LogTones.Good);
+            report.InSquad = inSquad;
+            Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name, inSquad), LogTones.Good);
             return s;
         }
 
@@ -297,10 +323,35 @@ namespace Bastion.Engine
                 EndRun(c, rng, RunTexts.Wiped);
                 return report;
             }
-            // A special won with its objective: its reward, into the packs while there is room.
-            if (victory && RunMap.Specials.Concat(RunMap.NewSpecials).Contains(node.Kind))
+            // What a stage won gives, into the packs while there is room: a special's reward (a Sigilo's doubled unseen,
+            // halved seen; a Guarida's was in its box), the boss's 150 § and a good weapon (H5, H6).
+            int? won = null;
+            if (victory && node.Kind == NodeKinds.Boss) won = BossReward;
+            else if (victory && node.Kind != NodeKinds.Elite && RunMap.Specials.Concat(RunMap.NewSpecials).Contains(node.Kind))
             {
-                var reward = rng.Range(RewardMin, RewardMax);
+                won = rng.Range(RewardMin, RewardMax);
+                if (node.Kind == NodeKinds.Stealth)
+                {
+                    report.Run.Unseen = mission.Concealed;
+                    won = mission.Concealed ? won * 2 : (won + 1) / 2;
+                }
+            }
+            if (won != null && node.Kind == NodeKinds.Boss)
+            {
+                var maker = new RunLoot.Maker(c.NextId);
+                var prize = RunLoot.GoodWeapon(rng, maker);
+                c.NextId = maker.Next;
+                foreach (var g in prize)
+                {
+                    var into = home.FirstOrDefault((s) => Gears.CanStow(s.Kit!.Pack, g));
+                    if (into != null) Gears.Stow(into.Kit!.Pack, g);
+                    else report.Run.PrizeLost = true;
+                }
+                report.Run.Prize = prize.Select(Gears.CloneGear).ToList();
+            }
+            if (won != null)
+            {
+                var reward = won.Value;
                 var left = 0;
                 foreach (var pile in Enumerable.Range(0, (reward + 99) / 100).Select((i) => Gears.NewGear(c, GearKinds.Supplies, null, Math.Min(100, reward - i * 100))).ToList())
                 {
@@ -322,7 +373,7 @@ namespace Bastion.Engine
             if (victory && node.Kind == NodeKinds.Rescue)
             {
                 var vip = mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.ObjectiveUnit && u.Template == TemplateIds.Vip);
-                if (vip != null && vip.Evacuated) report.Run.Joined = Rescued(c, vip, rng)?.Id;
+                if (vip != null && vip.Evacuated) report.Run.Joined = Rescued(c, vip, rng, report.Run)?.Id;
             }
             if (node.Kind == NodeKinds.Boss)
             {

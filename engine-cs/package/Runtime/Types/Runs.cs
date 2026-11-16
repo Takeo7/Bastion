@@ -140,9 +140,10 @@ namespace Bastion.Engine
         /// <summary>The soldier «a uno» fell to ({Nombre}), id and name.</summary>
         public string? Soldier { get; set; }
         public string? SoldierName { get; set; }
-        /// <summary>Who joined ({Superviviente}), id and name.</summary>
+        /// <summary>Who joined ({Superviviente}), id and name, and whether into the squad (false: at the base, no seat).</summary>
         public string? Survivor { get; set; }
         public string? SurvivorName { get; set; }
+        public bool? InSquad { get; set; }
         /// <summary>What was won fitted in no pack: lost there.</summary>
         public bool? Lost { get; set; }
     }
@@ -267,6 +268,13 @@ namespace Bastion.Engine
         public string? Ended { get; set; } // RunEnds
         /// <summary>A Rescate won with the one held out (H4): the soldier they are now (CampaignSoldier.id).</summary>
         public string? Joined { get; set; }
+        /// <summary>Whether they came into the squad; false, waiting at the base (no seat).</summary>
+        public bool? InSquad { get; set; }
+        /// <summary>A Sigilo (H5): unseen (its reward doubled) or seen (halved).</summary>
+        public bool? Unseen { get; set; }
+        /// <summary>The boss (H6): the weapon it gave besides the §, and whether it found no room and was lost.</summary>
+        public List<Gear>? Prize { get; set; }
+        public bool? PrizeLost { get; set; }
     }
 
     /// <summary>RunReport.fallen: a soldier who fell, and the gear lost with them.</summary>

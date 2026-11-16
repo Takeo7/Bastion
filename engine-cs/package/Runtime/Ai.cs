@@ -922,6 +922,26 @@ namespace Bastion.Engine
                 Js.Sort(seen, ByDistance(s, u.Pos));
                 if (seen.Count > 0) sighting.Prey = seen[0].Id;
 
+                // El Toro (H6): a roar the first time he sees them; his charge whenever it's ready and a soldier is on a line;
+                // otherwise as the dead, with his Mazazo. He never runs.
+                if (abilities.Contains(AbilityIds.Charge))
+                {
+                    if (seen.Count > 0 && Usable(AbilityIds.Roar))
+                    {
+                        sim.Perform(u, AbilityIds.Roar);
+                        continue;
+                    }
+                    if (Usable(AbilityIds.Charge))
+                    {
+                        var charges = Toro.ChargeTargets(s, u);
+                        if (charges.Count > 0)
+                        {
+                            sim.Perform(u, AbilityIds.Charge, target: charges[0].Target);
+                            return;
+                        }
+                    }
+                }
+
                 if (screamer)
                 {
                     // The Chillón: a scream at whoever it sees (one a turn for the whole horde), or a corpse raised.

@@ -144,6 +144,9 @@ namespace Bastion.UI.Strategy
             public static string RewardLost(int lost) => $"De la recompensa, {lost} suministros no cabían en las mochilas y se han quedado allí.";
 
             /// <summary>«Rafael ha caído. Se pierden con él el fusil y 2 granadas.»</summary>
+            /// <summary>A Rescate won (H4): who was held out joins (Lore to confirm).</summary>
+            public static string JoinedLine(string name) => $"<b>{name}</b> se une a la escuadra.";
+
             public static string FallenLine(string name, IList<string> lost) => lost.Count == 0
                 ? $"<b>{name}</b> ha caído."
                 : $"<b>{name}</b> ha caído. Se pierde lo que llevaba: {Ui.List(lost)}.";
@@ -157,6 +160,8 @@ namespace Bastion.UI.Strategy
             public const string Swap = "Cambiar";
             public const string Leave = "Seguir";
             public const string Unseen = "Aún no se ve qué hay.";
+            /// <summary>After a modifier an event left on a stage (Lore to confirm).</summary>
+            public const string ByEvent = " (por un suceso del camino)";
             public static string Site(string place) => $"Sitio: {place}.";
             public static string Difficulty(int d) => $"Dificultad {d}.";
 

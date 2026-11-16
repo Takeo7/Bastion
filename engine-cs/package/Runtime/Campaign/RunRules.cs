@@ -474,19 +474,21 @@ namespace Bastion.Engine
             if (stop.Survivor != null)
             {
                 var s = stop.Survivor;
+                var inSquad = false;
                 if (option == 0)
                 {
                     c.Soldiers.Add(s);
                     // With them at once if there's a seat, at full health; else they wait at the base.
-                    if (run.Squad.Count < SeatsOf(c))
+                    inSquad = run.Squad.Count < SeatsOf(c);
+                    if (inSquad)
                     {
                         run.Squad.Add(s.Id);
                         run.Hp[s.Id] = MaxHp(s);
                     }
                     stop.Survivor = null;
-                    Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name), LogTones.Good);
+                    Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name, inSquad), LogTones.Good);
                 }
-                stop.Outcome = option == 0 ? "survivor.yes" : "survivor.no";
+                stop.Outcome = option != 0 ? "survivor.no" : inSquad ? "survivor.yes" : "survivor.base";
                 return;
             }
             Event(c, option, rng);
@@ -551,14 +553,16 @@ namespace Bastion.Engine
                 var s = NewSoldier(c, Campaign.RunsNeediest(c), rng);
                 var max = MaxHp(s);
                 // With them at once if there's a seat; else they wait at the base.
-                if (run.Squad.Count < SeatsOf(c))
+                var inSquad = run.Squad.Count < SeatsOf(c);
+                if (inSquad)
                 {
                     run.Squad.Add(s.Id);
                     run.Hp[s.Id] = o.SurvivorHalf ? Math.Max(1, (max + 1) / 2) : max;
                 }
                 result.Survivor = s.Id;
                 result.SurvivorName = s.Name;
-                Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name), LogTones.Good);
+                result.InSquad = inSquad;
+                Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name, inSquad), LogTones.Good);
             }
             result.Lost = lost ? true : (bool?)null;
             stop.Result = result;

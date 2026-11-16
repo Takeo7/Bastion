@@ -65,6 +65,28 @@ namespace Bastion.Engine
             return out_;
         }
 
+        /// <summary>The good weapons a Guarida's box and a boss give (H5, H6): one of these, with its improvement.</summary>
+        public static readonly IReadOnlyList<string> GoodWeapons = new[] { FoundWeaponIds.ScopedRifle, FoundWeaponIds.HuntingRifle };
+
+        /// <summary>One of GoodWeapons at random, mounted as found (FoundWeaponDef.Mod).</summary>
+        public static List<Gear> GoodWeapon(Rng rng, Maker maker)
+        {
+            var kind = rng.Pick(GoodWeapons);
+            var mod = Content.FoundWeapons[kind].Mod;
+            return maker.Make(GearKinds.Weapon, kind, 1, mod != null ? new List<string> { mod } : null);
+        }
+
+        /// <summary>A Guarida's box (H5): 80–120 § and a good weapon.</summary>
+        public const int LairMin = 80;
+        public const int LairMax = 120;
+
+        public static List<Gear> LairOf(Rng rng, Maker maker)
+        {
+            var found = maker.Make(GearKinds.Supplies, null, rng.Range(LairMin, LairMax));
+            found.AddRange(GoodWeapon(rng, maker));
+            return found;
+        }
+
         /// <summary>A vest now and then (VestChance; a heavy one in HeavyIn), where the police or the army left one.</summary>
         public static List<Gear> VestOf(Rng rng, Maker maker)
         {

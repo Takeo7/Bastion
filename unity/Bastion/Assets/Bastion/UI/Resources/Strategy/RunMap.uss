@@ -149,6 +149,14 @@
     border-color: #111416;
 }
 
+/* An event's modifier: on the left, ringed in white. */
+.rnode__mod--added {
+    right: auto;
+    left: -6px;
+    border-width: 2px;
+    border-color: #ffffff;
+}
+
 .rnode__mod--storm {
     background-color: #46505a;
 }

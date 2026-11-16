@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Bastion.Engine;
@@ -48,19 +49,22 @@ namespace Bastion.Engine.Tests
             Assert.Equal((false, error), (r.Ok, r.Error));
         }
 
-        /// <summary>A joint decision with both here: `by` proposes, the other accepts. What the vote gave.</summary>
-        public static CampaignResult Agree(CampaignState c, CampaignCommand cmd, int by = 0)
+        /// <summary>A joint decision with both here: `by` proposes, the other accepts, the dice rolled from `seed`. What the vote gave.</summary>
+        public static CampaignResult Agree(CampaignState c, CampaignCommand cmd, int by = 0, int seed = 7)
         {
-            Ok(c, cmd, by, Both);
+            Ok(c, cmd, by, Both, seed);
             Assert.NotNull(c.Proposal);
-            return Ok(c, new VoteCommand { Accept = true }, 1 - by, Both);
+            return Ok(c, new VoteCommand { Accept = true }, 1 - by, Both, seed);
         }
 
-        /// <summary>A run going out with the squad there is (alone, or both agreeing).</summary>
-        public static RunState Start(CampaignState c)
+        /// <summary>
+        /// A run going out with the squad there is (alone, or both agreeing). The run's dice from `seed`: its map and all it
+        /// draws (7, as every command here, unless told).
+        /// </summary>
+        public static RunState Start(CampaignState c, int seed = 7)
         {
-            if (c.Players.Count > 1) Agree(c, new StartRunCommand());
-            else Ok(c, new StartRunCommand());
+            if (c.Players.Count > 1) Agree(c, new StartRunCommand(), 0, seed);
+            else Ok(c, new StartRunCommand(), 0, Zero, seed);
             return c.Run!;
         }
 
@@ -87,6 +91,35 @@ namespace Bastion.Engine.Tests
             }
             var cmd = new ChooseNodeCommand { Node = n.Id };
             return c.Players.Count > 1 ? Agree(c, cmd) : Ok(c, cmd);
+        }
+
+        /// <summary>
+        /// A campaign alone at a node of row 1 made `kind` (a sabotage and the boss in a factory), its fight launched as the
+        /// room does it (H3): the campaign and the mission.
+        /// </summary>
+        public static (CampaignState C, GameState S) LaunchAt(string kind, int seed = 1, Action<CampaignState>? before = null, Action<RunNode>? node = null)
+        {
+            var c = Solo(seed);
+            before?.Invoke(c);
+            var run = Start(c);
+            var n = RunMap.Choices(run)[0];
+            n.Kind = kind;
+            n.Modifier = null;
+            if (kind == NodeKinds.Sabotage || kind == NodeKinds.Boss) n.Site = Places.Factory;
+            node?.Invoke(n);
+            Assert.True(Ok(c, new ChooseNodeCommand { Node = n.Id }).Launch);
+            var launched = new Bastion.Net.EngineCampaignRules().LaunchMission(c, new Rng(seed + 100));
+            Assert.NotNull(launched);
+            return (c, launched!.Value.state);
+        }
+
+        /// <summary>A launched fight over as it stands, folded into the run as the room does it: the report.</summary>
+        public static MissionReport EndFight(CampaignState c, GameState s, string outcome, string reason)
+        {
+            s.Outcome = outcome;
+            s.OutcomeReason = reason;
+            new Bastion.Net.EngineCampaignRules().ApplyMissionResult(c, s, new Rng(9));
+            return c.LastReport!;
         }
 
         /// <summary>The soldiers of the run's squad.</summary>

@@ -38,7 +38,7 @@ namespace Bastion.Engine.Tests
             Assert.True(r.Launch);
             var launched = new EngineCampaignRules().LaunchMission(c, new Rng(seed + 100));
             Assert.NotNull(launched);
-            Assert.Equal(RunTexts.FightName(n), launched!.Value.name);
+            Assert.Equal(RunTexts.FightName(n, c.Run!.Chapter), launched!.Value.name);
             return (c, launched.Value.state);
         }
 
@@ -99,7 +99,11 @@ namespace Bastion.Engine.Tests
                 [NodeKinds.Sabotage] = MissionKinds.Sabotage,
                 [NodeKinds.Hack] = MissionKinds.Hack,
                 [NodeKinds.Rescue] = MissionKinds.Rescue,
-                [NodeKinds.Boss] = MissionKinds.Elimination,
+                [NodeKinds.Hold] = MissionKinds.Scavenge,
+                [NodeKinds.Crossing] = MissionKinds.Scavenge,
+                [NodeKinds.Stealth] = MissionKinds.Recovery,
+                [NodeKinds.Elite] = MissionKinds.Scavenge,
+                [NodeKinds.Boss] = MissionKinds.Scavenge,
             };
             foreach (var e in expected)
             {
@@ -108,7 +112,7 @@ namespace Bastion.Engine.Tests
                 Assert.Equal(c.Run!.At, s.Run!.Node);
                 Assert.Equal(e.Key, s.Run.NodeKind);
                 Assert.Equal((c.NextId, c.NextId), (s.Run.FirstGear, s.Run.NextGear));
-                Assert.Equal(RunTexts.FightName(RunMap.Node(c.Run, c.Run.At)!), s.MapName);
+                Assert.Equal(RunTexts.FightName(RunMap.Node(c.Run, c.Run.At)!, c.Run.Chapter), s.MapName);
                 Assert.Equal(true, s.Mission.Pistols);
                 Assert.All(s.Units.Where((u) => u.CampaignId != null), (u) =>
                 {
@@ -118,7 +122,7 @@ namespace Bastion.Engine.Tests
                     Assert.Equal(FoundWeaponIds.Knife, u.Kit!.Melee!.Type);
                     Assert.Null(u.Arms!.Melee);
                 });
-                if (e.Key == NodeKinds.Boss) Assert.Contains(s.Units, (u) => u.Template == TemplateIds.Mec);
+                if (e.Key == NodeKinds.Boss) Assert.Equal(s.Mission.Boss, s.Units.Single((u) => u.Template == TemplateIds.Brute).Id);
             }
         }
 
@@ -675,12 +679,14 @@ namespace Bastion.Engine.Tests
             Assert.True(joined.Alive);
             Assert.Equal(FoundWeaponIds.Knife, joined.Kit!.Melee!.Type);
             Assert.Contains(joined.Id, c.Run!.Squad);
+            Assert.True(report.Run.InSquad);
             Assert.Equal(2, c.Run.Hp[joined.Id]);
             // No seat: at the base.
             var (d, t) = Fight(NodeKinds.Rescue, seed: 3);
             t.Units.Single((u) => u.Id == t.Mission.ObjectiveUnit).Evacuated = true;
             var waits = End(d, t, Outcomes.Victory, EndReasons.Objective);
             Assert.NotNull(waits.Run!.Joined);
+            Assert.False(waits.Run.InSquad);
             Assert.DoesNotContain(waits.Run.Joined, d.Run!.Squad);
             // Not out: nobody.
             var (e, u2) = Fight(NodeKinds.Rescue, seed: 3);
@@ -823,14 +829,15 @@ namespace Bastion.Engine.Tests
                     InSlot(c, s, KitSlots.Vest, GearKinds.Vest, VestIds.Vest);
                     RunsHelpers.InPack(c, s, GearKinds.Mags, null, 0, 0, 5);
                 }
-                Start(c);
+                // Each seed its own map.
+                Start(c, seed);
                 for (var step = 0; step < 3 && c.Run != null; step++)
                 {
                     var choices = RunMap.Choices(c.Run);
                     var n = choices.FirstOrDefault((x) => RunMap.IsFight(x.Kind)) ?? choices[0];
-                    // TODO(Red): MissionBot hunts every one of the dead in a Saqueo before leaving, and the horde never stops
-                    // coming: it falls on every normal node. A Limpieza it can win.
-                    if (n.Kind == NodeKinds.Normal) n.Kind = NodeKinds.Elimination;
+                    // TODO(Red): MissionBot plays a Saqueo now (normal nodes), but not an Asedio's late La Lata, a
+                    // Travesía, a Guarida's box or El Toro. Those, a Limpieza.
+                    if (n.Kind == NodeKinds.Hold || n.Kind == NodeKinds.Crossing || n.Kind == NodeKinds.Elite || n.Kind == NodeKinds.Boss) n.Kind = NodeKinds.Elimination;
                     Ok(c, new ChooseNodeCommand { Node = n.Id });
                     if (c.Run.Phase == RunPhases.Stop)
                     {

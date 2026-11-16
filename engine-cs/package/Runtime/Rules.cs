@@ -36,7 +36,7 @@ namespace Bastion.Engine
     /// Mutable simulation over a GameState. Every change goes through `emit`, which
     /// applies the event and records it for broadcasting.
     /// </summary>
-    public sealed class Sim
+    public sealed partial class Sim
     {
         /// <summary>Reinforcements drop this far (in tiles) from the nearest soldier.</summary>
         private const int DropMin = 7;
@@ -163,7 +163,15 @@ namespace Bastion.Engine
                 case AbilityIds.Slash:
                 case AbilityIds.StunLance:
                 case AbilityIds.Claw:
+                case AbilityIds.Pound:
                     MeleeAttack(u, melee!, ability);
+                    break;
+                // El Toro's (H6).
+                case AbilityIds.Charge:
+                    Charge(u, target!);
+                    break;
+                case AbilityIds.Roar:
+                    Roar(u);
                     break;
                 case AbilityIds.Takedown:
                     Takedown(u, target!);
@@ -688,6 +696,14 @@ namespace Bastion.Engine
         /// <summary>Opens the loot box on `tile` (docs/FASE8.md §B): always what it is marked for; a car's boot, or a body (Arturo, 2/11).</summary>
         private void Search(Unit u, Pos tile)
         {
+            // A run's Guarida (H5): its box, the reward.
+            if (S.Run != null && S.Mission.Lair != null && Grid.SameTile(S.Mission.Lair, tile))
+            {
+                var maker = new RunLoot.Maker(S.Run.NextGear);
+                var (inPack, onFloor) = RunLoot.Stow(u.Pack ?? new GearGrid(), RunLoot.LairOf(Rng, maker));
+                Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Packed = inPack.Count > 0 ? inPack : null, Floor = onFloor.Count > 0 ? onFloor : null, NextGear = maker.Next });
+                return;
+            }
             var box = Looting.SearchSpot(S, tile);
             var pistols = S.Mission.Pistols == true;
             // A run scales its supplies its own way (RunLoot.SuppliesScale).
@@ -1035,7 +1051,10 @@ namespace Bastion.Engine
         /// <summary>What gave the squad away (an Exposure: a concealmentBroken event without its tag).</summary>
         public void BreakConcealment(string reason, string? unit = null, string? by = null, double? range = null)
         {
-            if (S.Concealed) Emit(new ConcealmentBrokenEvent { Reason = reason, Unit = unit, By = by, Range = range });
+            if (!S.Concealed) return;
+            Emit(new ConcealmentBrokenEvent { Reason = reason, Unit = unit, By = by, Range = range });
+            // A run's Sigilo seen (H5): the horde at once.
+            if (S.Mission.Stealth == true) StealthSpotted();
         }
 
         // ----------------------------------------------------------------- noise
@@ -1327,7 +1346,7 @@ namespace Bastion.Engine
         /// siege's wave comes in by its side, alert, looking at the soldier nearest
         /// (docs/FASE12.md §4): it goes for the soldiers (ai.ts takeZombieTurn).
         /// </summary>
-        public void LandReinforcements(int turn)
+        public void LandReinforcements(int turn, ICollection<string>? only = null)
         {
             var siege = S.Mission.Siege;
             var list = S.Mission.Reinforcements;
@@ -1335,6 +1354,8 @@ namespace Bastion.Engine
             {
                 var r = list[ri];
                 if (r.Landed || (r.Horde != true && r.Pos == null) || r.Turn > turn || Over) continue;
+                // Only these (a Sigilo seen, H5: its wave now, the rest at their turn).
+                if (only != null && !only.Contains(r.Id)) continue;
                 var zone = r.Horde == true ? ChooseDropZone(r.Units.Count, true, r.Side) : ChooseDropZoneAround(r.Pos!, r.Units.Count);
                 // No edge free today, or no room for all of them round a flare: they come next turn. Nobody lands on anyone.
                 if (zone == null || zone.Count < r.Units.Count) continue;
@@ -1385,7 +1406,7 @@ namespace Bastion.Engine
             // Not in a Limpieza (Arturo, 29/10): there only the noise brings them, or the map would never be cleared.
             if (few != 0 && m.Kind != MissionKinds.Elimination)
             {
-                var r = new Reinforcement { Id = $"r{m.Reinforcements.Count + 1}", Turn = turn + 1, Pos = null, Units = Enumerable.Repeat(TemplateIds.Zombie, few).ToList(), Landed = false, Horde = true, Trickle = true };
+                var r = new Reinforcement { Id = $"r{m.Reinforcements.Count + 1}", Turn = turn + 1, Pos = null, Units = Enumerable.Repeat(TemplateIds.Zombie, few).ToList(), Landed = false, Horde = true, Trickle = true, Side = m.HordeSide };
                 Emit(new ReinforcementsIncomingEvent { R = r });
             }
             // And a whole wave now and then, sooner the more noise the squad makes.
@@ -1393,7 +1414,7 @@ namespace Bastion.Engine
             var due = (int)Math.Floor((double)Rules.HordeClock(m) / Content.Horde.Wave);
             if (due <= sent) return;
             // Heard coming: they're in by an edge at the end of the next enemy turn, and nobody knows where.
-            var wave = new Reinforcement { Id = $"r{S.Mission.Reinforcements.Count + 1}", Turn = turn + 1, Pos = null, Units = new List<string>(m.Horde), Landed = false, Horde = true };
+            var wave = new Reinforcement { Id = $"r{S.Mission.Reinforcements.Count + 1}", Turn = turn + 1, Pos = null, Units = new List<string>(m.Horde), Landed = false, Horde = true, Side = m.HordeSide };
             Emit(new ReinforcementsIncomingEvent { R = wave });
         }
 
@@ -1459,7 +1480,7 @@ namespace Bastion.Engine
             if (m.EvacDone == true)
             {
                 var someoneOut = s.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated);
-                var won = someoneOut && (m.Kind == MissionKinds.Scavenge || m.ObjectiveDone);
+                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone);
                 End(won ? Outcomes.Victory : Outcomes.Defeat, won ? EndReasons.Objective : EndReasons.Abandoned);
                 return;
             }
@@ -1493,7 +1514,7 @@ namespace Bastion.Engine
             foreach (var u in squad.Where(Boards).ToList()) Emit(new EvacuatedEvent { Unit = u.Id });
             foreach (var u in squad.Where((o) => !Boards(o)).ToList()) Emit(new LeftBehindEvent { Unit = u.Id });
             var m = S.Mission;
-            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (m.Kind == MissionKinds.Scavenge || m.ObjectiveDone);
+            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone);
             if (timeUp && !won) Emit(new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Timer });
             else CheckOutcome();
         }
@@ -1597,6 +1618,8 @@ namespace Bastion.Engine
             foreach (var l in (S.Lights ?? new List<Light>()).ToList()) if (l.Turns != null && l.Turns <= 1) Emit(new LightOffEvent { Id = l.Id });
             foreach (var f in (S.Fires ?? new List<Fire>()).ToList()) if (f.Turns != null && f.Turns <= 1) Emit(new FireOutEvent { Id = f.Id });
             Emit(new TurnBeganEvent { Team = Teams.Xcom, Turn = turn + 1, Command = OpeningCommander(turn + 1) });
+            // Knocked down by El Toro (H6): up first, for one of the actions.
+            GetUp();
             CheckOutcome();
         }
 
@@ -1744,7 +1767,7 @@ namespace Bastion.Engine
         }
     }
 
-    public static class Rules
+    public static partial class Rules
     {
         /// <summary>Everything the squad does makes this much more noise than its table says (Ana, 23/10: «un 15 % más de ruido»).</summary>
         public const double SquadLouder = 1.15;
@@ -2043,6 +2066,8 @@ namespace Bastion.Engine
                 if (u == null || !u.Alive || u.Team != Teams.Xcom || u.Captive) return CommandResult.Failure("Esa unidad no puede evacuar.");
                 if (!Content.CommandsFor(ctx.Slot, u.Owner, ctx.Connected)) return CommandResult.Failure("Es de la escuadra del otro jugador.");
                 if (!Abilities.InEvacZone(s, u.Pos)) return CommandResult.Failure("Solo desde el autobús, en la zona de evacuación.");
+                // A run's Asedio (H5): La Lata isn't here yet.
+                if (s.Mission.HoldUntil != null && s.Turn < s.Mission.HoldUntil) return CommandResult.Failure($"La Lata llega en el turno {s.Mission.HoldUntil}."); // Lore: provisional
                 if (s.EvacCall?.By == ctx.Slot) return CommandResult.Failure("Ya has pedido evacuar: falta que conteste el otro jugador.");
                 sim.CallEvac(ctx.Slot, u);
                 return CommandResult.Success(sim.Events);
@@ -2232,7 +2257,7 @@ namespace Bastion.Engine
             if (m.Kind == MissionKinds.Elimination) return false;
             var aboard = s.Units.Where((u) => u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(s, u.Pos)).ToList();
             if (aboard.Count == 0) return false;
-            if (m.Kind == MissionKinds.Scavenge || m.ObjectiveDone) return true;
+            if (Rules.FreeExit(m) || m.ObjectiveDone) return true;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier) && aboard.Any((u) => u.Id == m.Item!.Carrier);
             if (m.Kind == MissionKinds.Rescue) return !string.IsNullOrEmpty(m.ObjectiveUnit) && aboard.Any((u) => u.Id == m.ObjectiveUnit);
             return false;

@@ -168,8 +168,13 @@ namespace Bastion.Net
             var alarm = Alarm(s);
             var silence = alarm != null ? BestShot(s, u, double.MaxValue, alarm.Id) : null;
             if (silence != null && silence.Value.hit >= 15) return silence.Value.cmd;
-            // Only what is close is shot at: a shot is heard, and draws more of them (docs/FASE2.md).
-            var shot = BestShot(s, u, Close);
+            // The silent takedown (Arturo, 16/11): one of the dead beside it that hasn't seen it, killed for sure and unheard.
+            var unaware = Usable(s, u, AbilityIds.Takedown) ? Abilities.TakedownTargets(s, u).OrderBy((t) => t.Id, System.StringComparer.Ordinal).FirstOrDefault() : null;
+            if (unaware != null) return Ability(u, AbilityIds.Takedown, unaware.Id);
+            // Only what is close is shot at: a shot is heard, and draws more of them (docs/FASE2.md). In a run, on the way
+            // out, only what stands beside it: it stood fighting by La Lata till the horde had it (a Saqueo, 16/11).
+            var going = s.Run != null && leaving;
+            var shot = BestShot(s, u, going ? 1.5 : Close);
             var nearest = Enemies(s).Select((e) => Grid.Distance(u.Pos, e.Pos)).DefaultIfEmpty(double.MaxValue).Min();
             if (shot != null && !carrier && shot.Value.hit >= 30) return shot.Value.cmd;
             // A run's Saqueo, before going: the room it stands in, then a box, a boot or a body beside it.
@@ -179,8 +184,8 @@ namespace Bastion.Net
                 var spot = Usable(s, u, AbilityIds.Search) ? Looting.SearchableTiles(s, u).FirstOrDefault() : null;
                 if (spot != null) return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = spot };
             }
-            // The blade alone: a step up to one of the dead, keeping an action to strike.
-            if (!armed && !carrier)
+            // The blade alone: a step up to one of the dead, keeping an action to strike (not on a run's way out).
+            if (!armed && !carrier && !going)
             {
                 var close = MoveToStrike(s, u);
                 if (close != null) return close;

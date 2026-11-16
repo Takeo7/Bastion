@@ -259,6 +259,8 @@ namespace Bastion.Engine
             if (cover == 1) mods.Add(new Modifier { Label = "Cobertura baja", Value = -Content.LowCoverBonus });
             if (cover == 2) mods.Add(new Modifier { Label = "Cobertura alta", Value = -Content.HighCoverBonus });
             if (target.Hunkered) mods.Add(new Modifier { Label = "Cubriéndose", Value = -Content.HunkerDefense });
+            // On the ground, knocked down by El Toro (H6).
+            if (target.Down == true) mods.Add(new Modifier { Label = "Tumbado", Value = Toro.DownDefense }); // Lore: provisional
             if (target.Aided != 0) mods.Add(new Modifier { Label = "Atendido", Value = -target.Aided });
             if (!weapon.Melee && shooter.Mods.SmokeSight == 0 && s.Smoke.Any((c) => Grid.Distance(c.Pos, target.Pos) <= c.Radius && Grid.SameSpace(s, c.Pos, target.Pos))) mods.Add(new Modifier { Label = "Humo", Value = -Content.SmokeDefense });
 

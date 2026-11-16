@@ -70,13 +70,13 @@ namespace Bastion.Engine
         // ------------------------------------------------------------- the runs' gear
 
         /// <summary>The knife every soldier of a run starts with (FoundWeaponIds.Knife): it fights as the default blade.</summary>
-        public static readonly FoundWeaponDef Knife = new FoundWeaponDef { Id = FoundWeaponIds.Knife, Name = "Cuchillo", Find = "un cuchillo", Weapon = WeaponIds.Knife, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 0 }; // Lore: provisional
+        public static readonly FoundWeaponDef Knife = new FoundWeaponDef { Id = FoundWeaponIds.Knife, Name = "Cuchillo", Find = "un cuchillo", Weapon = WeaponIds.Knife, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 0 };
 
         /// <summary>The vests: armour is a thing to carry now (PLAN-RUNS §3.5).</summary>
         public static readonly IReadOnlyDictionary<string, VestDef> Vests = new Dictionary<string, VestDef>
         {
-            [VestIds.Vest] = new VestDef { Id = VestIds.Vest, Name = "Chaleco", Hp = 2, Armor = 0 }, // Lore: provisional
-            [VestIds.HeavyVest] = new VestDef { Id = VestIds.HeavyVest, Name = "Chaleco pesado", Hp = 4, Armor = 1 }, // Lore: provisional
+            [VestIds.Vest] = new VestDef { Id = VestIds.Vest, Name = "Chaleco antibalas", Hp = 2, Armor = 0 },
+            [VestIds.HeavyVest] = new VestDef { Id = VestIds.HeavyVest, Name = "Chaleco con placas", Hp = 4, Armor = 1 },
         };
 
         /// <summary>What goes on the belt in a run (Gameplay, 16/11): the vest, the earplugs and the special rounds of before don't.</summary>

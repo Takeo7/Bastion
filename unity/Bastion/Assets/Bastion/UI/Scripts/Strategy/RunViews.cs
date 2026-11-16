@@ -108,6 +108,9 @@ namespace Bastion.UI.Strategy
         public string ModifierIcon;
         /// <summary>Modifiers: night, storm, awake (its badge's colour).</summary>
         public string ModifierId;
+        /// <summary>One an event left (H4: RunNode.Added, or RunState.Pending on the fights to choose): a second badge.</summary>
+        public string AddedId;
+        public string AddedIcon;
         /// <summary>One it can go to, but can't now (ChooseNodeRefusal); null, it can.</summary>
         public string Why;
         /// <summary>Its card on hover after the name: what it is, where, how hard, its modifier.</summary>

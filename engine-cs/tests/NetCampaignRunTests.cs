@@ -35,20 +35,19 @@ namespace Bastion.Engine.Tests
     /// 47 loses its first mission (of 10 seeds, 3 win the first, as 4 did before: MissionBot is no worse off); 71 wins
     /// both, its second mission another operation: 71. With 3 tiles more while the squad is hidden and the dead not
     /// noticing whoever comes up behind them then (Arturo, 16/11), 71 loses its first mission; of seeds 1 to 80, 14 win
-    /// the first and only 23 and 53 both: 53 (BASTION_SEMILLA=53 for the apps).
+    /// the first and only 23 and 53 both: 53 (BASTION_SEMILLA=53 for the apps). With the runs (Arturo, 16/11), its first two
+    /// fights: the first row is always a Saqueo, and the squad sets out with four knives between two players; MissionBot
+    /// searches on the way and goes for La Lata (a services area, La Lata 50 tiles off, is seldom won so). Of seeds 1 to 56,
+    /// 19, 21, 28, 38, 47 and 49 won both: 19 (BASTION_SEMILLA=19 for the apps).
     /// </summary>
     public class NetCampaignRunTests
     {
-        /// <summary>
-        /// A new campaign is of runs now (16/11): HeardGame.BaseOrder plays them (RunOrder, NetRunBotTests), but a run's fights
-        /// get their missions in H3 (Gameplay). Played again then, with a seed of its own and what it reaches.
-        /// </summary>
-        [Fact(Skip = "Hasta H3: una etapa de combate aún no tiene misión; la campaña nueva es de runs.")]
+        [Fact]
         public void TheTestAppsCampaignIsPlayedThrough()
         {
-            var played = CampaignAutoRun.Run(53, 2);
+            var played = CampaignAutoRun.Run(19, 2);
             Assert.Null(CampaignAutoRun.Stuck);
-            Assert.Equal(new[] { "El consultorio de Metsovo", "El hospital de La Vega" }, played.Select((m) => m.Name));
+            Assert.Equal(new[] { "Saqueo · Ciudad", "Saqueo · Ciudad" }, played.Select((m) => m.Name));
             Assert.All(played, (m) => Assert.Equal(Outcomes.Victory, m.Outcome));
         }
     }

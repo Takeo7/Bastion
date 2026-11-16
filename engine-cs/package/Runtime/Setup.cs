@@ -152,9 +152,19 @@ namespace Bastion.Engine
         public Dictionary<string, Vec2>? Posts { get; set; }
         /// <summary>The runs' «horda despierta» (H3): every group alert, and a wave by an edge in the first enemy turn (MissionState.Awake).</summary>
         public bool? Awake { get; set; }
+        /// <summary>A run's Asedio (H5): La Lata on this turn, waves every two turns before it (MissionState.HoldUntil).</summary>
+        public int? HoldUntil { get; set; }
+        /// <summary>A run's Travesía (H5): the squad starts at the far end from La Lata, the horde behind it.</summary>
+        public bool? Crossing { get; set; }
+        /// <summary>A run's Sigilo (H5): a recovery that must stay unseen (MissionState.Stealth).</summary>
+        public bool? Stealth { get; set; }
+        /// <summary>A run's Guarida (H5): the guard's template; the reward's box in its room (MissionState.Lair).</summary>
+        public string? Guard { get; set; } // TemplateIds
+        /// <summary>A boss's fight (H6): the first unit of its template in the groups is the one to kill (MissionState.Boss).</summary>
+        public string? Boss { get; set; } // TemplateIds
     }
 
-    public static class Setup
+    public static partial class Setup
     {
         /// <summary>What a skirmish soldier carries in the hand (docs/FASE9.md §6): one of these, at random.</summary>
         private static readonly IReadOnlyList<string> SkirmishArms = new[] { FoundWeaponIds.AssaultRifle, FoundWeaponIds.PumpShotgun, FoundWeaponIds.PrecisionRifle, FoundWeaponIds.MachineGun };
@@ -807,6 +817,8 @@ namespace Bastion.Engine
             if (opts.Night == true && opts.Map.Kind != MapSourceKinds.Base) plan.Add(NightPod(difficulty));
             var layout = MissionLayout(opts.Map, kind, plan.Select((p) => p.Count).ToList(), opts.ItemOutdoors == true, opts.CampaignMission?.Story == 1, opts.CampaignMission?.Story == 2, opts.Alarm);
             if (opts.Vehicle != null) FitVehicle(layout, opts.Vehicle.Value);
+            // A run's Travesía (H5): the squad at the far end from La Lata.
+            if (opts.Crossing == true) FarSpawns(layout);
             // A map that can't host the objective falls back to elimination.
             var objectiveMissing =
                 (kind == MissionKinds.Recovery && layout.Item == null) ||
@@ -949,6 +961,8 @@ namespace Bastion.Engine
                 }
                 if (pod.UnitIds.Count > 0) pods.Add(pod);
             }
+            // A run's Guarida (H5): the reward's box in a room, its guard and group round it.
+            var lair = !string.IsNullOrEmpty(opts.Guard) ? PlaceLair(layout, opts.Guard!, units, pods, ref alienIndex) : null;
             // Over the patrols, the lone dead that wait where they stand, in the houses and round the corners (Ana and Arturo, 22/10).
             if (layout.Siege != true && opts.Map.Kind == MapSourceKinds.Generated && plan.Any((members) => members.Any((t) => Content.Templates[t].Undead)))
             {
@@ -992,6 +1006,8 @@ namespace Bastion.Engine
             {
                 foreach (var u in units) if (u.Team == Teams.Xcom && u.Mags != null) u.Mags = Math.Max(u.Mags.Value, Content.Siege.Mags);
             }
+            // A run's Asedio (H5): waves every two turns till La Lata comes.
+            if (opts.HoldUntil != null && siege == null) reinforcements.AddRange(HoldWaves(difficulty, opts.HoldUntil.Value, reinforcements.Count + 1));
             // The runs' «horda despierta» (H3): every group alert from the start, and a wave by an edge in the first enemy turn.
             var awake = opts.Awake == true && siege == null;
             if (awake)
@@ -1021,6 +1037,12 @@ namespace Bastion.Engine
                 Night = opts.Night == true,
                 Siege = siege,
                 Awake = awake ? true : (bool?)null,
+                // The runs' stages (H5, H6).
+                HoldUntil = siege == null ? opts.HoldUntil : null,
+                HordeSide = opts.Crossing == true && layout.Spawns.Count > 0 ? StartSide(layout) : (int?)null,
+                Stealth = opts.Stealth == true && kind == MissionKinds.Recovery ? true : (bool?)null,
+                Lair = lair,
+                Boss = !string.IsNullOrEmpty(opts.Boss) ? units.FirstOrDefault((u) => u.Template == opts.Boss)?.Id : null,
             };
 
             // The squad starts looking into the map (Arturo, 23/10: «los soldados aparecen mirando al revés»): towards what the

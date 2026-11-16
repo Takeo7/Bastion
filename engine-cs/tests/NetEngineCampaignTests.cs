@@ -123,16 +123,22 @@ namespace Bastion.Engine.Tests
 
         private static JToken CampaignSent(MemoryEnd player) => player.Take("campaign").Last()["state"]!;
 
-        /// <summary>
-        /// The room's tests with a mission of the campaign: they launched an operation of before, and a new campaign is of
-        /// runs now (16/11), whose fights get their missions in H3 (Gameplay). Played again then, from a node's.
-        /// </summary>
-        private const string UntilH3 = "Hasta H3: una etapa de combate aún no tiene misión (EngineCampaignRules.LaunchMission).";
 
         private static object Ccmd(object cmd) => new { t = "ccmd", cmd };
 
         /// <summary>The ids of the run's nodes in `row`, as both heard them.</summary>
         private static List<string> RowOf(JToken campaign, int row) => campaign["run"]!["nodes"]!.Where((n) => (int)n["row"]! == row).Select((n) => (string)n["id"]!).ToList();
+
+        /// <summary>Ana and Pepe out on a run, by Ana's proposals and Pepe's yes, and into the fight of the first row's first node.</summary>
+        private static void GoOut(Host host, MemoryEnd ana, MemoryEnd pepe)
+        {
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            var node = RowOf(CampaignSent(ana), 1).First();
+            host.Say(ana, Ccmd(new { type = "chooseNode", node }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            Assert.Equal("mission", host.Room.Summary().phase);
+        }
 
         [Fact]
         public void TwoCommandersGoOutOnARunAndChooseTheirWay()
@@ -348,7 +354,7 @@ namespace Bastion.Engine.Tests
         /// down, a bad mission left and «Continuar campaña»): the squad's turn waits for them as for one whose laptop went to
         /// sleep (AwayGraceMs), and both hear how long; past that, it ends as after any drop.
         /// </summary>
-        [Theory(Skip = UntilH3)]
+        [Theory]
         [InlineData("save")]
         [InlineData("continue")]
         public void AMissionOpenedAgainLeavesThePartnersSoldiersToTheOneHere(string how)
@@ -357,9 +363,7 @@ namespace Bastion.Engine.Tests
             var ana = host.Join("Ana");
             var pepe = host.Join("Pepe");
             host.Say(ana, new { t = "newCampaign" });
-            host.Say(ana, Ccmd(new { type = "launch", ready = true }));
-            host.Say(pepe, Ccmd(new { type = "launch", ready = true }));
-            Assert.Equal("mission", host.Room.Summary().phase);
+            GoOut(host, ana, pepe);
             // Ana's soldiers all down, as the save keeps it.
             host.Say(ana, new { t = "backToMenu" });
             var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
@@ -413,7 +417,7 @@ namespace Bastion.Engine.Tests
 
         private static List<JObject> Players(JObject room) => ((JArray)room["players"]!).Cast<JObject>().ToList();
 
-        [Theory(Skip = UntilH3)]
+        [Theory]
         [InlineData(MissionKinds.Recovery, null)]
         [InlineData(MissionKinds.Sabotage, 7)]
         public void AMissionSavedBeforeIsBroughtUpToDate(string kind, int? clock)
@@ -424,8 +428,7 @@ namespace Bastion.Engine.Tests
             var ana = host.Join("Ana");
             var pepe = host.Join("Pepe");
             host.Say(ana, new { t = "newCampaign" });
-            host.Say(ana, Ccmd(new { type = "launch", ready = true }));
-            host.Say(pepe, Ccmd(new { type = "launch", ready = true }));
+            GoOut(host, ana, pepe);
             host.Say(ana, new { t = "backToMenu" });
             var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
             var save = store.Load()!;
