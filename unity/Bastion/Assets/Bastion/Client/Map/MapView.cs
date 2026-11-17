@@ -461,8 +461,9 @@ namespace Bastion.Client.Map
             if (roofs != null) roofs.gameObject.SetActive(true);
             var cutaway = GetComponent<Cutaway>();
             if (cutaway != null) cutaway.Focus.level = Level;
-            // The fog is the storey in view's.
-            Fog.Current?.Refog();
+            // The fog is the storey in view's, at once: faded from the other storey's, a storey not yet found showed for its
+            // 0.35 s (UI, 17/11: going down from the police station's first floor, the ground's furniture and cells).
+            Fog.Current?.Refog(true);
         }
 
         void OnDestroy()
