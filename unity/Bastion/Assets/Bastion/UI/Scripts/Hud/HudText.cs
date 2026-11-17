@@ -161,6 +161,26 @@ namespace Bastion.UI.Hud
             public const string DockTip = "Ver la misión";
             public const string Victory = "MISIÓN CUMPLIDA";
             public const string Defeat = "MISIÓN FRACASADA";
+            /// <summary>
+            /// A stage's end on an expedition (Lore, L5, 17/11), as its report says it (StrategyText.Runs.Ended): who comes
+            /// home (won, the living; lost, those out in La Lata) gives the title; the button goes on with the expedition, or
+            /// back to the base when it ends (nobody home, or the boss's stage).
+            /// </summary>
+            public const string StageWon = "ETAPA SUPERADA";
+            public const string ChapterWon = "CAPÍTULO SUPERADO";
+            public const string StageShort = "SIN LA RECOMPENSA";
+            public static string BossStands(string boss) => $"{boss.ToUpperInvariant()} SIGUE EN PIE";
+            public const string SquadLost = "ESCUADRA PERDIDA";
+            public const string SquadLostLine = "Lo que llevaban se pierde, y la expedición acaba.";
+            public const string StageAbandoned = "Etapa abandonada";
+            /// <summary>What a stage that is a Saqueo underneath brings home: found there and aboard La Lata.</summary>
+            public const string Haul = "Botín a salvo: ";
+            public const string NoHaul = "No habéis encontrado nada";
+            public static string HaulMore(int n) => $"{n} más";
+            public const string RunToBase = "VOLVER A LA BASE";
+            public const string RunReturning = "VOLVIENDO A LA BASE…";
+            public const string RunGoOn = "SEGUIR LA EXPEDICIÓN";
+            public const string RunGoingOn = "SIGUIENDO LA EXPEDICIÓN…";
             public const string ToBase = "VOLVER A LA BASE";
             public const string Returning = "VOLVIENDO AL BASTIÓN…";
             public const string Again = "OTRA IGUAL (MAPA NUEVO)";

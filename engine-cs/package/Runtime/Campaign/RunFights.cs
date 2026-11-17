@@ -295,7 +295,7 @@ namespace Bastion.Engine
                 Reason = mission.OutcomeReason ?? EndReasons.Wiped,
                 Squad = new List<ReportSoldier>(),
                 Night = mission.Mission.Night == true ? true : (bool?)null,
-                Run = new RunReport { Node = node?.Id ?? fight?.Node ?? "", NodeKind = node?.Kind ?? fight?.NodeKind ?? "" },
+                Run = new RunReport { Node = node?.Id ?? fight?.Node ?? "", NodeKind = node?.Kind ?? fight?.NodeKind ?? "", Stage = c.NodesPlayed ?? 0 },
             };
             c.LastReport = report;
             if (run == null || node == null || fight == null || run.Phase != RunPhases.Fight) return report;

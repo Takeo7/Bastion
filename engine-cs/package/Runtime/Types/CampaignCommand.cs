@@ -378,7 +378,18 @@ namespace Bastion.Engine
         public const string Facilities = "facilities";
         public const string Squad = "squad";
         public const string Debrief = "debrief";
+        // The runs' base (H2, UI's BaseController): Almacén, Mejoras and the map of the stages.
+        public const string Stash = "stash";
+        public const string Upgrades = "upgrades";
+        public const string RunMap = "runmap";
 
-        public static readonly IReadOnlyList<string> All = new[] { Hub, Geoscape, Research, Engineering, Barracks, Facilities, Squad, Debrief };
+        /// <summary>The 0.10.1's, TypeScript's (engine-cs/golden/campaign/tables.json).</summary>
+        public static readonly IReadOnlyList<string> Before = new[] { Hub, Geoscape, Research, Engineering, Barracks, Facilities, Squad, Debrief };
+
+        /// <summary>
+        /// Every screen a player can be on in the base, the ones the room passes to the partner (Room, BaseViewMessage): the
+        /// 0.10.1's and the runs'. Without the runs' (G12, R4 on 17/11), Almacén, Mejoras and the map got «Mensaje no válido.».
+        /// </summary>
+        public static readonly IReadOnlyList<string> All = new[] { Hub, Geoscape, Research, Engineering, Barracks, Facilities, Squad, Debrief, Stash, Upgrades, RunMap };
     }
 }

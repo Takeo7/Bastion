@@ -87,9 +87,9 @@ namespace Bastion.UI.Start
         };
 
         // The main page and a new campaign's question (lobby.ts renderMain, renderConfirm).
-        public const string Continue = "Continuar campaña";
-        public const string NewCampaign = "Nueva campaña";
-        public const string NewCampaignAbout = "La base compartida, de principio a fin";
+        public const string Continue = "Continuar partida";
+        public const string NewCampaign = "Nueva partida";
+        public const string NewCampaignAbout = "Expediciones desde una base compartida";
         public const string Skirmish = "Escaramuza";
         public const string SkirmishAbout = "Una misión suelta, sin consecuencias";
         public const string SkirmishBlocked = "Antes, acabad la etapa a medias";
@@ -126,7 +126,7 @@ namespace Bastion.UI.Start
         public static string SetAside(string file)
         {
             // The campaign from before the expeditions (Red, 16/11: save.antes-de-las-runs.json; Lore's words).
-            if ((file ?? "").Contains("antes-de-las-runs")) return $"La campaña anterior no se puede continuar con esta versión. Queda guardada aparte, en {file}. Con «Nueva campaña» empezáis otra.";
+            if ((file ?? "").Contains("antes-de-las-runs")) return $"La campaña anterior no se puede continuar con esta versión. Queda guardada aparte, en {file}. Con «Nueva partida» empezáis la de las expediciones.";
             var release = System.Text.RegularExpressions.Regex.Match(file ?? "", @"antes-(\d+\.\d+)");
             return $"Vuestra campaña anterior está guardada aparte, en {file}: {(release.Success ? $"con la {release.Groups[1].Value}" : "con esta versión")} empieza una nueva.";
         }

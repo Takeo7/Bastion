@@ -80,6 +80,8 @@ namespace Bastion.Net
             public Seat? Seat;
             /// <summary>It sent a hello, taken or refused (HelloMs no longer runs for it, SeatlessMs does).</summary>
             public bool Said;
+            /// <summary>The kinds of message turned away from it that red.log has told (Refused): each once.</summary>
+            public HashSet<string>? Refused;
 
             public Link(IConnection socket)
             {
@@ -457,6 +459,7 @@ namespace Bastion.Net
             if (!valid)
             {
                 Send(link.Socket, new ErrorMessage { Message = "Mensaje no válido." });
+                Refused(link, msg);
                 return;
             }
             if (msg is ReportMessage report)
@@ -701,13 +704,51 @@ namespace Bastion.Net
 
         private static bool UnitId(string? id) => Id(id);
 
-        private static bool Spot(Pos? p) => p != null && p.Z >= 0 && p.Z <= 3;
+        /// <summary>A tile's level: up to the highest the engine stands anyone on (Grid.TopLevel; Gameplay's G13, 17/11).</summary>
+        private static bool Spot(Pos? p) => p != null && p.Z >= 0 && p.Z <= Grid.TopLevel;
 
         /// <summary>A line from an app for red.log: how its screen draws comes tagged `[rend name]`; the address stands in for a missing one.</summary>
         private void Report(IConnection socket, string line)
         {
             var text = (line.Length > ReportMax ? line.Substring(0, ReportMax) : line).Replace('\r', ' ').Replace('\n', ' ');
             store.Log(Regex.IsMatch(text, @"^\[rend[ \]]") ? Regex.Replace(text, @"^\[rend\]", $"[rend {socket.Peer}]") : $"[app {socket.Peer}] {text}");
+        }
+
+        /// <summary>Kinds of message turned away that red.log tells for one connection, at most.</summary>
+        private const int RefusedMax = 8;
+
+        /// <summary>
+        /// A message turned away (Valid), in red.log too: R4 (17/11) found the runs' tabs turned away, and only the screen
+        /// said so, «Mensaje no válido.», where no test reads. Only from a player in their seat (one without could fill
+        /// red.log), each kind once for the connection, RefusedMax at most; its kind, never what it carried, but for a base
+        /// screen's name, cut short.
+        /// </summary>
+        private void Refused(Link link, ClientMessage? msg)
+        {
+            if (link.Seat == null || link.Seat.Socket != link.Socket) return;
+            string Cut(string? s) => s == null ? "-" : (s.Length > 24 ? s.Substring(0, 24) + "…" : s).Replace('\r', ' ').Replace('\n', ' ');
+            string kind;
+            switch (msg)
+            {
+                case null:
+                    kind = "ilegible";
+                    break;
+                case BaseViewMessage v:
+                    kind = $"baseView «{Cut(v.View)}»";
+                    break;
+                case CmdMessage c:
+                    kind = $"cmd {c.Cmd?.Type ?? "-"}";
+                    break;
+                case CampaignCmdMessage c:
+                    kind = $"ccmd {c.Cmd?.Type ?? "-"}";
+                    break;
+                default:
+                    kind = msg.T;
+                    break;
+            }
+            link.Refused ??= new HashSet<string>();
+            if (link.Refused.Count >= RefusedMax || !link.Refused.Add(kind)) return;
+            store.Log($"[sala] {link.Seat.Name}: mensaje no válido ({kind})");
         }
 
         /// <summary>Why a hello is asked for the room's key (KeyGiven): what the refusal without one says.</summary>

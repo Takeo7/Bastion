@@ -167,7 +167,7 @@ namespace Bastion.UI.Strategy
 
         // ------------------------------------------------------------- the tabs
 
-        static readonly (string view, string label)[] Tabs = { ("geoscape", "Mapa"), ("engineering", "Armería"), ("barracks", "Soldados"), ("facilities", "Asentamiento") };
+        static readonly (string view, string label)[] Tabs = { (BaseViews.Geoscape, "Mapa"), (BaseViews.Engineering, "Armería"), (BaseViews.Barracks, "Soldados"), (BaseViews.Facilities, "Asentamiento") };
 
         /// <summary>
         /// The tabs (renderNav): Escuadra with a mission chosen; a number for the news this player hasn't looked at yet
@@ -179,14 +179,14 @@ namespace Bastion.UI.Strategy
             var c = State;
             // The runs' base (H2): Almacén, Soldados, Mejoras and Salir; on an expedition, its map alone (the base's tabs
             // come back with the squad).
-            var v = new NavView { Hidden = view == "squad" || view == "debrief" || view == "runmap" };
+            var v = new NavView { Hidden = view == BaseViews.Squad || view == BaseViews.Debrief || view == BaseViews.RunMap };
             var promotions = c.Soldiers.Where(s => s.Owner == Slot && s.Alive && Campaign.CanSpendPoints(c, s)).ToList();
             var partner = Partner;
-            foreach (var (id, label) in new[] { ("stash", StrategyText.Stash.Head), ("barracks", "Soldados"), ("upgrades", StrategyText.Runs.UpgradesHead), ("squad", StrategyText.Runs.Start2) })
+            foreach (var (id, label) in new[] { (BaseViews.Stash, StrategyText.Stash.Head), (BaseViews.Barracks, "Soldados"), (BaseViews.Upgrades, StrategyText.Runs.UpgradesHead), (BaseViews.Squad, StrategyText.Runs.Start2) })
             {
                 var tab = new TabView { Id = id, Label = label, On = view == id };
                 // Only one's own: a soldier's skills are its owner's alone, there or not (playtest 18/10 #42).
-                if (id == "barracks" && promotions.Count > 0)
+                if (id == BaseViews.Barracks && promotions.Count > 0)
                 {
                     tab.Count = $"▲{promotions.Count}";
                     tab.Tip = string.Join(" · ", promotions.Select(s => $"{s.Name}: puntos por gastar en el tablero"));

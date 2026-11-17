@@ -176,8 +176,8 @@ namespace Bastion.UI.Strategy
             var c = State;
             var partner = Partner;
             var offer = Campaign.ActiveOffer(c);
-            if (c.Proposal != null || offer == null || partner == null || !partner.Connected || !c.LaunchReady[partner.Slot] || c.LaunchReady[Slot] || view == "debrief") return null;
-            var here = view == "squad";
+            if (c.Proposal != null || offer == null || partner == null || !partner.Connected || !c.LaunchReady[partner.Slot] || c.LaunchReady[Slot] || view == BaseViews.Debrief) return null;
+            var here = view == BaseViews.Squad;
             if (here && offer.Siege != true) return null;
             return new WaitingView
             {
@@ -213,7 +213,7 @@ namespace Bastion.UI.Strategy
         {
             var c = State;
             var def = c.Event != null ? Campaign.EventDef(c) : null;
-            if (def == null || view == "debrief") return null;
+            if (def == null || view == BaseViews.Debrief) return null;
             var proposed = c.Proposal?.Action as EventAction;
             var kicker = c.Event == CampaignEventIds.Finale ? "Decisión final"
                 : c.Event == CampaignEventIds.Quest && c.QuestEvent != null && Quests.QuestDefs.TryGetValue(c.QuestEvent, out var q) ? $"Encargo · {q.Title}"

@@ -79,7 +79,7 @@ namespace Bastion.UI.Strategy
                 while (control?.State == null) await Awaitable.WaitForSecondsAsync(0.25f, ct);
                 for (var waited = 0f; root.ModalOpen && waited < 15; waited += 0.25f) await Awaitable.WaitForSecondsAsync(0.25f, ct);
                 await Awaitable.WaitForSecondsAsync(1.5f, ct);
-                var tabs = new[] { "stash", "barracks", "upgrades", "squad" };
+                var tabs = new[] { BaseViews.Stash, BaseViews.Barracks, BaseViews.Upgrades, BaseViews.Squad };
                 for (var i = 0; i < tabs.Length; i++)
                 {
                     Step($"pestaña {tabs[i]}", () => control.OnTab(tabs[i]));
@@ -91,7 +91,7 @@ namespace Bastion.UI.Strategy
                 if (net.Hosting)
                     Step("propuesta: mejora", () =>
                     {
-                        control.OnTab("upgrades");
+                        control.OnTab(BaseViews.Upgrades);
                         control.OnUpgrade(Bastion.Engine.UpgradeIds.Sight);
                     });
                 for (var waited = 0f; control.State.Proposal == null && waited < 10; waited += 0.25f) await Awaitable.WaitForSecondsAsync(0.25f, ct);
@@ -105,7 +105,7 @@ namespace Bastion.UI.Strategy
                     // (The shot is taken as the frame ends: a tab opened in it would be in it.)
                     await Awaitable.WaitForSecondsAsync(0.5f, ct);
                 }
-                Step("pestaña barracks", () => control.OnTab("barracks"));
+                Step("pestaña barracks", () => control.OnTab(BaseViews.Barracks));
             }
             catch (OperationCanceledException)
             {

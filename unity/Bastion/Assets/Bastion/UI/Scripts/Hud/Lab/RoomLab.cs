@@ -9,7 +9,8 @@ namespace Bastion.UI.Hud
     /// <summary>
     /// The room menu with a made-up room, for captures without a network (HudShots.Room): Arturo hosting and in, Ana
     /// still to come, two addresses to give her. BASTION_SALA: «campana», a saved campaign (as the sample's: 8 outings,
-    /// level 3, Marea 5); «pregunta», its «Nueva campaña» asked; «escaramuza», the skirmish's sheet. BASTION_SALA_ROUTER:
+    /// level 3, Marea 5); «pregunta», its «Nueva campaña» asked; «escaramuza», the skirmish's sheet. BASTION_SALA_APARTE=1:
+    /// the campaign of before set aside, its line. BASTION_SALA_ROUTER:
     /// the router's state (trying, open, norouter, shared, refused), open with 83.45.12.7:41391 and its key; BASTION_SALA_ABIERTO=1,
     /// the other addresses unfolded, to see them all.
     /// </summary>
@@ -30,6 +31,8 @@ namespace Bastion.UI.Hud
             };
             var which = System.Environment.GetEnvironmentVariable("BASTION_SALA") ?? "";
             if (which == "campana" || which == "pregunta") room.SavedCampaign = new SavedCampaign { Chapter = 1, Row = 3, Soldiers = 4, Supplies = 245, NodesPlayed = 7 };
+            // BASTION_SALA_APARTE=1: the campaign of before the runs set aside (Red's room, 16/11), its line under the choices.
+            if (System.Environment.GetEnvironmentVariable("BASTION_SALA_APARTE") == "1") room.SetAside = "save.antes-de-las-runs.json";
             var router = System.Environment.GetEnvironmentVariable("BASTION_SALA_ROUTER") switch
             {
                 "trying" => RouterState.Trying,

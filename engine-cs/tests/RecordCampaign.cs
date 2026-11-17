@@ -65,7 +65,7 @@ namespace Bastion.Engine.Tests
                     ["events"] = J(CampaignEventIds.All),
                     ["quests"] = J(QuestIds.All),
                     ["traits"] = J(TraitIds.All),
-                    ["baseViews"] = J(BaseViews.All),
+                    ["baseViews"] = J(BaseViews.Before),
                 },
             });
             output.WriteLine(Recording.Report(file, Recording.Write(file, text, raw, Recording.Node(raw), fresh)));

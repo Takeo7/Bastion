@@ -10,7 +10,7 @@ namespace Bastion.UI.Strategy
 {
     /// <summary>
     /// The base's orders through a real room, in one app (HudShots.BaseRed, with BASTION_ANFITRION hosting it on
-    /// BASTION_DATOS): once in the lobby it opens a new campaign; on the base, the base's screens (StrategyRoot and
+    /// BASTION_DATOS): once in the lobby it opens a new campaign (BASTION_CONTINUAR=1: goes on with the one saved there); on the base, the base's screens (StrategyRoot and
     /// BaseSession, as AppFlow mounts them) and, one at a time, the clicks of BASTION_PASOS (comma-separated), each
     /// after the host's answer to the one before. The steps: tab:&lt;view&gt;, soldier:&lt;n&gt; (one's own, in order),
     /// offer:&lt;n&gt;, zone:&lt;n&gt;, map:&lt;action&gt;, recruit, launch, wait, squad:&lt;n&gt;:on|off, armory-tab:&lt;tab&gt;,
@@ -52,6 +52,14 @@ namespace Bastion.UI.Strategy
             if (phase == RoomPhases.Lobby && !asked && net.Slot >= 0)
             {
                 asked = true;
+                // BASTION_CONTINUAR=1: the campaign saved in BASTION_DATOS (save.json), as «Continuar partida» (U8, 17/11:
+                // a save of Red's two-app pass, played on from where it was).
+                if (System.Environment.GetEnvironmentVariable("BASTION_CONTINUAR") == "1")
+                {
+                    Debug.Log("[base-run] continuar la partida guardada");
+                    net.Send(new ContinueCampaignMessage());
+                    return;
+                }
                 Debug.Log("[base-run] nueva campaña");
                 net.Send(new NewCampaignMessage());
                 return;

@@ -23,7 +23,7 @@ namespace Bastion.UI.Strategy
         readonly StrategyRoot root;
         readonly Action<ClientMessage> send;
         readonly StrategyPresenter p;
-        string view = "barracks";
+        string view = BaseViews.Barracks;
         readonly SoldiersPick soldiers = new SoldiersPick();
         /// <summary>The soldier whose skill board is open; null, closed.</summary>
         string board;
@@ -128,14 +128,14 @@ namespace Bastion.UI.Strategy
             // A mission chosen by either player sends both to the hangar; a finished one to the debrief. A new campaign
             // opens there too, under its premise, with its first operation chosen (Ana, 7/11 #20: it came up on Soldados),
             // whatever state came before it.
-            if (c.ActiveMission != null && (prev?.ActiveMission == null || premise != null)) SetView("squad");
-            else if (prev?.ActiveMission != null && c.ActiveMission == null && view == "squad") SetView("geoscape");
-            if (ReportPending(c) && view != "debrief") SetView("debrief");
+            if (c.ActiveMission != null && (prev?.ActiveMission == null || premise != null)) SetView(BaseViews.Squad);
+            else if (prev?.ActiveMission != null && c.ActiveMission == null && view == BaseViews.Squad) SetView(BaseViews.Geoscape);
+            if (ReportPending(c) && view != BaseViews.Debrief) SetView(BaseViews.Debrief);
             // The runs: on an expedition, its map; back from one, Almacén.
             if (c.Stash != null)
             {
-                if (c.Run != null && view != "runmap" && view != "debrief") SetView("runmap");
-                else if (c.Run == null && (view == "runmap" || view == "geoscape" || view == "engineering" || view == "facilities")) SetView("stash");
+                if (c.Run != null && view != BaseViews.RunMap && view != BaseViews.Debrief) SetView(BaseViews.RunMap);
+                else if (c.Run == null && (view == BaseViews.RunMap || view == BaseViews.Geoscape || view == BaseViews.Engineering || view == BaseViews.Facilities)) SetView(BaseViews.Stash);
             }
             if (!viewSent) SetView(view);
             Render();
@@ -204,23 +204,23 @@ namespace Bastion.UI.Strategy
             root.SetScreen(view);
             switch (view)
             {
-                case "barracks":
+                case BaseViews.Barracks:
                     root.SetSoldiers(p.Soldiers(soldiers));
                     break;
-                case "squad":
+                case BaseViews.Squad:
                     root.SetSquad(p.State.Stash != null ? p.RunSquad() : p.Squad());
                     break;
-                case "upgrades":
+                case BaseViews.Upgrades:
                     root.SetUpgrades(p.Upgrades());
                     break;
-                case "debrief":
+                case BaseViews.Debrief:
                     root.SetDebrief(p.Debrief());
                     break;
-                case "stash":
+                case BaseViews.Stash:
                     stash = p.StashScreen(soldiers.Soldier);
                     root.SetStash(stash);
                     break;
-                case "runmap":
+                case BaseViews.RunMap:
                     root.SetRunMap(p.Expedition(soldiers.Soldier));
                     break;
             }
@@ -233,9 +233,9 @@ namespace Bastion.UI.Strategy
             var clearing = Settlement.Instance;
             if (clearing == null) return;
             // Soldados' soldier on the clearing, as Personalizar's draft has them while it is open.
-            if (view == "barracks") clearing.Showcase(p.State, soldiers.Soldier, soldiers.Draft?.Look);
+            if (view == BaseViews.Barracks) clearing.Showcase(p.State, soldiers.Soldier, soldiers.Draft?.Look);
             // Almacén's chosen soldier between its plates, as in Soldados.
-            if (view == "stash") clearing.Showcase(p.State, stash?.Kit?.Soldier, null);
+            if (view == BaseViews.Stash) clearing.Showcase(p.State, stash?.Kit?.Soldier, null);
             // The squad by La Lata (the debrief's while it is to be read): only if it changed.
             var report = ReportPending(p.State);
             var (mirror, halves) = p.LineupSides(report);
@@ -243,7 +243,7 @@ namespace Bastion.UI.Strategy
             // Back from a mission: La Lata up its track (screen.ts arrive), the first time the clearing is shown after the
             // debrief (screen.ts go: fixed shots too, as Soldados; in the debrief it stands parked behind the row; the Mapa
             // is the valley's).
-            if (arriving && view != "debrief" && view != "geoscape")
+            if (arriving && view != BaseViews.Debrief && view != BaseViews.Geoscape)
             {
                 arriving = false;
                 clearing.Arrive();
@@ -270,7 +270,7 @@ namespace Bastion.UI.Strategy
                     Kind = "endrun", Kicker = StrategyText.Runs.Head(c.Run.Chapter), Title = StrategyText.Runs.EndAsk, Text = StrategyText.Runs.BackTip,
                     Buttons = { StrategyText.Runs.Back, StrategyText.Runs.EndNo },
                 };
-            return p.End() ?? p.Event(view) ?? (alerts.Count > 0 && view != "debrief" ? alerts[0] : null);
+            return p.End() ?? p.Event(view) ?? (alerts.Count > 0 && view != BaseViews.Debrief ? alerts[0] : null);
         }
 
         /// <summary>
@@ -286,8 +286,12 @@ namespace Bastion.UI.Strategy
             return read == null || !read.Contains(ReportKey(c));
         }
 
-        /// <summary>A report's key, read once: in the runs, by the stage and how many the campaign has played (the names repeat).</summary>
-        static string ReportKey(CampaignState c) => c.LastReport is MissionReport r ? r.Run != null ? $"run:{c.NodesPlayed}:{r.Run.Node}:{r.MissionName}" : $"{r.Day}:{r.MissionName}:{r.Victory}" : "";
+        /// <summary>
+        /// A report's key, read once: in the runs, by the stage it was (RunReport.Stage: the names and the nodes' ids repeat
+        /// from one expedition to the next). Not the campaign's NodesPlayed now, which a stop chosen after it moves on: the
+        /// same report came up again over the stop, to both (R4, 17/11). Reports of before Stage keep the old key.
+        /// </summary>
+        static string ReportKey(CampaignState c) => c.LastReport is MissionReport r ? r.Run != null ? $"run:{r.Run.Stage ?? c.NodesPlayed}:{r.Run.Node}:{r.MissionName}" : $"{r.Day}:{r.MissionName}:{r.Victory}" : "";
 
         /// <summary>To a tab (screen.ts go): its news seen, the board and what was in hand put away, the partner told.</summary>
         void SetView(string to)
@@ -298,6 +302,10 @@ namespace Bastion.UI.Strategy
             Settlement.Instance?.SetView(ClearingView(view));
             Bastion.Client.Audio.UiSounds.View(view);
             viewSent = true;
+            // The room takes the engine's screens alone (Room.Valid: BaseViews.All); the lab never goes through it, so one
+            // outside them is said here (R4, 17/11: Almacén, Mejoras and the map came back «Mensaje no válido.»). Every tab
+            // is a BaseViews constant, none written by hand.
+            if (!BaseViews.All.Contains(view)) Debug.LogWarning($"[base] vista fuera de BaseViews.All: {view}");
             send(new BaseViewMessage { View = view });
         }
 
@@ -305,7 +313,7 @@ namespace Bastion.UI.Strategy
         /// The clearing's shot for a tab (Arte, 16/11): Almacén's chosen soldier as Soldados', the map of an expedition the
         /// valley's (the clearing's camera off), the others as they are.
         /// </summary>
-        static string ClearingView(string view) => view == "stash" ? "barracks" : view == "runmap" ? "geoscape" : view == "upgrades" ? "facilities" : view;
+        static string ClearingView(string view) => view == BaseViews.Stash ? BaseViews.Barracks : view == BaseViews.RunMap ? BaseViews.Geoscape : view == BaseViews.Upgrades ? BaseViews.Facilities : view;
 
         void Go(string to)
         {
@@ -413,7 +421,7 @@ namespace Bastion.UI.Strategy
         /// <summary>The plate's keys: a vote, or a bite's treatment's (its own command: Arturo, 01/11 #8).</summary>
         public void OnVote(bool accept) => Order(new VoteCommand { Accept = accept });
         public void OnWithdraw() => Order(new WithdrawCommand());
-        public void OnWaitingGo() => Go("squad");
+        public void OnWaitingGo() => Go(BaseViews.Squad);
         /// <summary>An event's option; in the runs, a stop's answer (AnswerStopCommand: a vote with two).</summary>
         public void OnOption(int index) => Order(p.State?.Run?.Stop != null ? (CampaignCommand)new AnswerStopCommand { Option = index } : new AnswerEventCommand { Option = index });
 
@@ -423,18 +431,18 @@ namespace Bastion.UI.Strategy
             switch (p.State?.Proposal?.Action)
             {
                 case BuyUpgradeAction _:
-                    Go("upgrades");
+                    Go(BaseViews.Upgrades);
                     break;
                 case StartRunAction _:
-                    Go("squad");
+                    Go(BaseViews.Squad);
                     break;
                 case ChooseNodeAction _:
                 case EndRunAction _:
                 case AnswerStopAction _:
-                    Go("runmap");
+                    Go(BaseViews.RunMap);
                     break;
                 case RecruitAction _:
-                    Go("barracks");
+                    Go(BaseViews.Barracks);
                     break;
             }
         }
@@ -667,7 +675,7 @@ namespace Bastion.UI.Strategy
             else Order(new LaunchCommand { Ready = !p.State.LaunchReady[p.Slot] });
         }
 
-        public void OnSquadBack() => Go(p.State?.Stash != null ? "stash" : "barracks");
+        public void OnSquadBack() => Go(p.State?.Stash != null ? BaseViews.Stash : BaseViews.Barracks);
 
         /// <summary>Mejoras: the next level (with two, proposed).</summary>
         public void OnUpgrade(string id) => Order(new UpgradeCommand { Upgrade = id });
@@ -682,7 +690,7 @@ namespace Bastion.UI.Strategy
             var c = p.State;
             if (c?.LastReport != null) LocalMarks.Write(LocalMarks.Key("seenReport", c), new[] { ReportKey(c) });
             p.Joined = null;
-            Go(c?.Run != null ? "runmap" : c?.Stash != null ? "stash" : "squad");
+            Go(c?.Run != null ? BaseViews.RunMap : c?.Stash != null ? BaseViews.Stash : BaseViews.Squad);
         }
 
         /// <summary>Soldados' «Esperar un día» (the campaign of before the runs).</summary>
@@ -707,7 +715,7 @@ namespace Bastion.UI.Strategy
                 quitting = leaving = endingRun = false;
                 Render();
             }
-            else if (view == "barracks" && root.CloseSoldierChoice()) return;
+            else if (view == BaseViews.Barracks && root.CloseSoldierChoice()) return;
             else if (soldiers.Draft != null)
             {
                 CloseDraft();

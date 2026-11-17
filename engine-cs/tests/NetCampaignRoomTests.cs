@@ -506,11 +506,30 @@ namespace Bastion.Engine.Tests
             rig.Say(ana, new { t = "baseCursor", piece = "muro", x = 4, y = 7, rot = 1 });
             Assert.Equal("Mensaje no válido.", (string?)ana.Take("error").Single()["message"]);
             Assert.Empty(pepe.Take("baseCursor"));
+            // red.log tells each kind turned away once (R4, 17/11: only the screen said so).
+            rig.Say(ana, new { t = "baseView", view = "teleporter" });
+            Assert.Equal(new[] { "[sala] Ana: mensaje no válido (baseView «teleporter»)", "[sala] Ana: mensaje no válido (baseCursor)" }, rig.Log.Where((l) => l.StartsWith("[sala]")));
             // Back in, the partner's screen is told again.
             pepe.Close("wifi");
             rig.Room.Pump();
             var again = rig.Join("Pepe");
             Assert.Equal("barracks", (string?)again.Take("baseView").Single()["view"]);
+        }
+
+        [Fact]
+        public void EveryScreenOfTheRunsBaseGoesToThePartner()
+        {
+            // The ones the base screen sends (UI's BaseController.SetView): Almacén, Mejoras and the map were refused with
+            // «Mensaje no válido.» till G12 (R4, 17/11), at each tab and on going out to the map, alone too.
+            using var rig = new Rig();
+            var (ana, pepe) = rig.Base();
+            foreach (var view in new[] { "stash", "barracks", "upgrades", "squad", "runmap", "debrief", "geoscape" })
+            {
+                rig.Say(ana, new { t = "baseView", view });
+                Assert.Empty(ana.Take("error"));
+                Assert.Equal(view, (string?)pepe.Take("baseView").Single()["view"]);
+            }
+            Assert.DoesNotContain(rig.Log, (l) => l.StartsWith("[sala]"));
         }
 
         [Fact]

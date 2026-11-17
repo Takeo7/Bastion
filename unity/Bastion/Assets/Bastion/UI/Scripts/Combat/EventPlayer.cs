@@ -3440,7 +3440,8 @@ namespace Bastion.UI.Combat
                 case MissionKinds.Sabotage: success = "Ya no suena"; break;
                 case MissionKinds.Hack: success = "Equipo en marcha"; break;
                 case MissionKinds.Rescue: success = vip != null ? $"{vip}, a salvo" : "La persona retenida, a salvo"; break;
-                case MissionKinds.Scavenge: success = loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
+                // (On an expedition, every stage that is a Saqueo underneath: normal, Asedio, Travesía, Guarida, the boss's.)
+                case MissionKinds.Scavenge: success = s.Run != null ? RunHaul(s) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
                 default: success = "No queda ninguno en pie"; break;
             }
             string why;
@@ -3457,7 +3458,7 @@ namespace Bastion.UI.Combat
                     why = s.Mission.EvacZone.Count == 0 ? Lore.TimeText.TimeUp : s.Units.Any(u => u.Team == Teams.Xcom && u.Evacuated) ? Lore.TimeText.LostOnTime : Lore.TimeText.LeftEmpty;
                     break;
                 case "abandoned":
-                    why = s.Mission.EvacDone == true ? (s.Mission.Kind == MissionKinds.Elimination ? Lore.EvacText.Retreat : Lore.EvacText.WithoutObjective) : "Misión abandonada";
+                    why = s.Mission.EvacDone == true ? (s.Mission.Kind == MissionKinds.Elimination ? Lore.EvacText.Retreat : Lore.EvacText.WithoutObjective) : s.Run != null ? HudText.Mission.StageAbandoned : "Misión abandonada";
                     break;
                 case "objectiveLost":
                     why = vip != null ? $"{vip} ha muerto" : "La persona retenida ha muerto";
@@ -3472,7 +3473,70 @@ namespace Bastion.UI.Combat
             var line = s.CampaignMission != null
                 ? why
                 : string.Join(" · ", new[] { head, Count(killed, "abatido", "abatidos"), lost > 0 ? Count(lost, "baja", "bajas") : "sin bajas", left > 0 ? (left == 1 ? "1 se quedó fuera" : $"{left} se quedaron fuera") : "" }.Where(x => x != ""));
+            if (s.Run != null)
+            {
+                Hud.SetOutcome(RunOutcome(s, outcome == "victory", line));
+                return;
+            }
             Hud.SetOutcome(new OutcomeView { Victory = outcome == "victory", Line = line, Campaign = s.CampaignMission != null, Siege = siege });
         }
+
+        /// <summary>
+        /// An expedition's stage at its end (Lore, L5, 17/11; R4: it said «MISIÓN CUMPLIDA» and «VOLVER A LA BASE» to go on to
+        /// the map), as its report will say it (StrategyText.Runs.Ended): who comes home (won, the living; lost, those out in
+        /// La Lata) gives the title; nobody, the squad lost and the expedition over, as the boss's stage ends it, won or not.
+        /// The button goes on with the expedition or back to the base.
+        /// </summary>
+        static OutcomeView RunOutcome(GameState s, bool won, string line)
+        {
+            var home = s.Units.Count(u => u.Team == Teams.Xcom && u.CampaignId != null && (won ? !Fell(u) : u.Evacuated));
+            var boss = s.Run.NodeKind == NodeKinds.Boss;
+            var bossName = s.Mission.Boss != null ? s.Units.FirstOrDefault(u => u.Id == s.Mission.Boss)?.Name : null;
+            var v = new OutcomeView { Victory = won, Line = line, Campaign = true };
+            if (home == 0)
+            {
+                v.Title = HudText.Mission.SquadLost;
+                v.Line = HudText.Mission.SquadLostLine;
+            }
+            else if (won) v.Title = boss ? HudText.Mission.ChapterWon : HudText.Mission.StageWon;
+            else v.Title = boss && bossName != null ? HudText.Mission.BossStands(bossName) : HudText.Mission.StageShort;
+            var ends = home == 0 || boss;
+            v.Back = ends ? HudText.Mission.RunToBase : HudText.Mission.RunGoOn;
+            v.Going = ends ? HudText.Mission.RunReturning : HudText.Mission.RunGoingOn;
+            return v;
+        }
+
+        /// <summary>
+        /// What a stage that is a Saqueo underneath brings home (Lore, L5, 17/11): what was found out there (an id past
+        /// RunFight.FirstGear, as RunFights.ApplyFight's Found) on those still standing; the § first, then three things and
+        /// how many more. Not Looting.BroughtBack, the missions' of before (their backpacks, empty here: R4 said «Volvéis con
+        /// las mochilas vacías» with 13 § aboard).
+        /// </summary>
+        static string RunHaul(GameState s)
+        {
+            var found = new List<Bastion.Engine.Gear>();
+            foreach (var u in s.Units.Where(u => u.Team == Teams.Xcom && u.CampaignId != null && !Fell(u)))
+            {
+                if (u.Pack != null) found.AddRange(u.Pack.Items.Select(p => p.Gear));
+                if (u.Kit != null)
+                    foreach (var slot in KitSlots.All)
+                        if (Gears.InSlot(u.Kit, slot) is Bastion.Engine.Gear g) found.Add(g);
+            }
+            found = found.Where(g => g != null && GearNumber(g.Id) > s.Run.FirstGear).ToList();
+            var list = new List<string>();
+            var supplies = found.Where(g => g.Kind == GearKinds.Supplies).Sum(g => g.Count);
+            if (supplies > 0) list.Add(Lore.GearA(GearKinds.Supplies, null, supplies));
+            foreach (var same in found.Where(g => g.Kind != GearKinds.Supplies).GroupBy(g => (g.Kind, g.Type)))
+                list.Add(Lore.GearA(same.Key.Kind, same.Key.Type, same.Sum(g => Math.Max(1, g.Count))));
+            if (list.Count == 0) return HudText.Mission.NoHaul;
+            if (list.Count > 4) list = list.Take(3).Append(HudText.Mission.HaulMore(list.Count - 3)).ToList();
+            return HudText.Mission.Haul + Ui.List(list);
+        }
+
+        /// <summary>Fallen out there, or left behind (RunFights.ApplyFight's Fell).</summary>
+        static bool Fell(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0) || u.Lost == true;
+
+        /// <summary>The number of a gear's id («g17»: 17), or 0 (RunFights.GearNumber).</summary>
+        static int GearNumber(string id) => id != null && id.Length > 1 && int.TryParse(id.Substring(1), out var n) ? n : 0;
     }
 }

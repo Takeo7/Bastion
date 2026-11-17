@@ -79,15 +79,15 @@ namespace Bastion.UI.Strategy
             {
                 var def = Base.Pieces[id];
                 if (id == PieceIds.Caravan || Base.Retired.Contains(id)) continue;
-                if (def.Level == level) out_.Add(new Thing { Key = $"piece:{id}", View = "facilities" });
+                if (def.Level == level) out_.Add(new Thing { Key = $"piece:{id}", View = BaseViews.Facilities });
                 if (def.Kind == PieceKinds.Building)
                     foreach (var to in new[] { 2, 3 })
-                        if (Progression.UpgradeLevel(def.Level, to) == level) out_.Add(new Thing { Key = $"raise:{id}:{to}", View = "facilities", RaisePiece = id, RaiseTo = to });
+                        if (Progression.UpgradeLevel(def.Level, to) == level) out_.Add(new Thing { Key = $"raise:{id}:{to}", View = BaseViews.Facilities, RaisePiece = id, RaiseTo = to });
             }
             // Only the belt's: the Armería shows nothing else (Ana, 23/10 #39).
-            foreach (var item in Content.Items.Values) if (item.Level == level && item.Slot == ItemSlots.Utility) out_.Add(new Thing { Key = $"item:{item.Id}", View = "engineering" });
-            foreach (var pair in ArmorLevels) if (pair.Value == level && pair.Value > 1) out_.Add(new Thing { Key = $"armor:{pair.Key}", View = "engineering" });
-            foreach (var def in Progression.Crafts.Values) if (def.Kind != CraftKinds.Armor && CraftLevel(def) == level && level > 1) out_.Add(new Thing { Key = $"craft:{def.Id}", View = "engineering" });
+            foreach (var item in Content.Items.Values) if (item.Level == level && item.Slot == ItemSlots.Utility) out_.Add(new Thing { Key = $"item:{item.Id}", View = BaseViews.Engineering });
+            foreach (var pair in ArmorLevels) if (pair.Value == level && pair.Value > 1) out_.Add(new Thing { Key = $"armor:{pair.Key}", View = BaseViews.Engineering });
+            foreach (var def in Progression.Crafts.Values) if (def.Kind != CraftKinds.Armor && CraftLevel(def) == level && level > 1) out_.Add(new Thing { Key = $"craft:{def.Id}", View = BaseViews.Engineering });
             return out_;
         }
 

@@ -651,6 +651,10 @@ namespace Bastion.UI.Hud
         public string Line;
         public bool Campaign;
         public bool Siege;
+        /// <summary>An expedition's stage (L5, 17/11): its title, its button and the button's words while it goes; null, the mission's.</summary>
+        public string Title;
+        public string Back;
+        public string Going;
     }
 
     // ----------------------------------------------------------------- menu

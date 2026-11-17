@@ -430,7 +430,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(ids["events"]!.Values<string>(), CampaignEventIds.All);
             Assert.Equal(ids["quests"]!.Values<string>(), QuestIds.All);
             Assert.Equal(ids["traits"]!.Values<string>(), TraitIds.All);
-            Assert.Equal(ids["baseViews"]!.Values<string>(), BaseViews.All);
+            Assert.Equal(ids["baseViews"]!.Values<string>(), BaseViews.Before);
             Assert.Equal(ids["facilities"]!.Values<string>(), Campaign.Facilities.Keys);
         }
     }

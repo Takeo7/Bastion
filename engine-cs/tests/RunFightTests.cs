@@ -666,6 +666,21 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void AReportKeepsItsStageWhenAStopFollows()
+        {
+            // UI, U8 (17/11): the base told one debrief from the next by NodesPlayed, which the stop chosen after it raises,
+            // and the same debrief came back unread at the stop.
+            var (c, s) = Fight();
+            var played = c.NodesPlayed;
+            var report = End(c, s, Outcomes.Victory, EndReasons.Objective);
+            Assert.Equal(played, report.Run!.Stage);
+            Assert.True(GoTo(c, NodeKinds.Trade).Ok);
+            Assert.Equal(played + 1, c.NodesPlayed);
+            Assert.Same(report, c.LastReport);
+            Assert.Equal(played, c.LastReport!.Run!.Stage);
+        }
+
+        [Fact]
         public void TheOneRescuedJoins()
         {
             var (c, s) = Fight(NodeKinds.Rescue, seed: 3, before: (x) => x.Upgrades![UpgradeIds.Squad] = 1);

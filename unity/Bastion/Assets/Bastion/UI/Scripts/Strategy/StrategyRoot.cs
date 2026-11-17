@@ -247,12 +247,12 @@ namespace Bastion.UI.Strategy
         /// </summary>
         public void SetScreen(string view)
         {
-            soldiers.Show(view == "barracks");
-            squad.Show(view == "squad");
-            debrief.Show(view == "debrief");
-            stash.Show(view == "stash");
-            runMap.Show(view == "runmap");
-            upgrades.Show(view == "upgrades");
+            soldiers.Show(view == Bastion.Engine.BaseViews.Barracks);
+            squad.Show(view == Bastion.Engine.BaseViews.Squad);
+            debrief.Show(view == Bastion.Engine.BaseViews.Debrief);
+            stash.Show(view == Bastion.Engine.BaseViews.Stash);
+            runMap.Show(view == Bastion.Engine.BaseViews.RunMap);
+            upgrades.Show(view == Bastion.Engine.BaseViews.Upgrades);
             Dress();
         }
 

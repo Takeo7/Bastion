@@ -25,6 +25,8 @@ namespace Bastion.UI.Hud
         VisualElement outcome;
         Button back;
         bool returning;
+        /// <summary>The button's words while the report goes (an expedition's: «SIGUIENDO LA EXPEDICIÓN…»).</summary>
+        string going = HudText.Mission.Returning;
 
         public Cards(VisualElement host, IHudHandlers handlers, Action<string> sound)
         {
@@ -148,13 +150,14 @@ namespace Bastion.UI.Hud
             // Stamped on the report as it appears, a moment after (hud.ts); not again as it is redrawn.
             if (!was) sound?.Invoke("stamp.outcome");
             outcome = Ui.El("card panel outcome " + (v.Victory ? "outcome--victory" : "outcome--defeat"), host);
-            Ui.Text(v.Victory ? HudText.Mission.Victory : HudText.Mission.Defeat, "outcome__title font-title", outcome);
+            Ui.Text(v.Title ?? (v.Victory ? HudText.Mission.Victory : HudText.Mission.Defeat), "outcome__title font-title", outcome);
             if (!string.IsNullOrEmpty(v.Line)) Ui.Text(v.Line, "card__text outcome__line", outcome);
             var actions = Ui.El("card__actions", outcome);
             PlateFrame.Dress(outcome);
             if (v.Campaign)
             {
-                back = new Button(ReturnToBase) { text = HudText.Mission.ToBase };
+                going = v.Going ?? HudText.Mission.Returning;
+                back = new Button(ReturnToBase) { text = v.Back ?? HudText.Mission.ToBase };
                 back.AddToClassList("btn-primary");
                 actions.Add(back);
                 Slant.Dress(back);
@@ -187,7 +190,7 @@ namespace Bastion.UI.Hud
             returning = true;
             if (back == null) return;
             back.SetEnabled(false);
-            back.text = HudText.Mission.Returning;
+            back.text = going;
         }
     }
 }

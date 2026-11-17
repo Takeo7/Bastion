@@ -278,6 +278,12 @@ namespace Bastion.Engine
         /// <summary>The boss (H6): the weapon it gave besides the §, and whether it found no room and was lost.</summary>
         public List<Gear>? Prize { get; set; }
         public bool? PrizeLost { get; set; }
+        /// <summary>
+        /// The fight's number among the campaign's nodes (CampaignState.NodesPlayed when it was fought), which a stop after it
+        /// doesn't change: what tells apart two reports of the same node and outcome (UI's BaseController.ReportKey, U8, 17/11).
+        /// Null in the reports from before it.
+        /// </summary>
+        public int? Stage { get; set; }
     }
 
     /// <summary>RunReport.fallen: a soldier who fell, and the gear lost with them.</summary>

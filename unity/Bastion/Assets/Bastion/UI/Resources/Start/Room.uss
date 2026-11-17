@@ -129,6 +129,40 @@
     margin-bottom: 8px;
 }
 
+/*
+ * A choice: its name big, what it does small under it; and a line of help (how to join, the campaign set aside). Start.uss
+ * had them till the 0.12.24's start screen, which no longer uses them; the room still does (U7, 17/11: unstyled, the line
+ * of the campaign set aside ran out of the panel, a lit choice's name white on white).
+ */
+.start__choice {
+    padding: 10px 14px;
+    align-items: flex-start;
+}
+
+.start__choice-title {
+    font-size: 20px;
+    letter-spacing: 2px;
+}
+
+.btn-primary .start__choice-title,
+.btn-primary .start__choice-about {
+    color: var(--t-primary-ink);
+}
+
+.start__choice-about {
+    font-size: 12px;
+    white-space: normal;
+    -unity-text-align: upper-left;
+    margin-top: 2px;
+}
+
+.start__hint {
+    font-size: 12px;
+    white-space: normal;
+    color: var(--t-muted);
+    margin-bottom: 4px;
+}
+
 .room__ask-kicker {
     font-size: 12px;
     letter-spacing: 2px;

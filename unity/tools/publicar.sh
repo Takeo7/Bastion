@@ -116,14 +116,18 @@ probar() {
     faults=$(grep -c "Exception" "$data/Player.log")
     layout=$(grep -c "Layout update is struggling" "$data/Player.log")
     done_=$(grep -c "\[prueba\] medir: $mode terminado" "$data/red.log" 2>/dev/null)
-    echo "== app, $mode: salida $code · excepciones $faults · avisos de layout $layout"
+    # A message of the app's that the room refused (Room logs it: «[sala] Ana: mensaje no válido (baseView «stash»)»); the
+    # 0.13.0's Almacén was refused at each tab, and only the screen said so (G12, G13, 17/11).
+    refused=$(grep -c "\[sala\]" "$data/red.log" 2>/dev/null)
+    echo "== app, $mode: salida $code · excepciones $faults · avisos de layout $layout · rechazos de la sala ${refused:-0}"
     grep -h "\[prueba\] medir" "$data/red.log"
+    grep -h "\[sala\]" "$data/red.log" 2>/dev/null | head -8
     grep -h "\[rend Medida\] combate" "$data/red.log" | grep -oE "[0-9]+ tir(ón|ones)" | awk '{s+=$1} END {print "tirones en combate: " s+0}'
-    if [ $code != 0 ] || [ "$faults" != 0 ] || [ "$layout" != 0 ] || [ "${done_:-0}" = 0 ]; then appFaults=1; fi
+    if [ $code != 0 ] || [ "$faults" != 0 ] || [ "$layout" != 0 ] || [ "${done_:-0}" = 0 ] || [ "${refused:-0}" != 0 ]; then appFaults=1; fi
   done
 
   if [ "$closeFaults" != 0 ] || [ $appFaults != 0 ]; then
-    echo "NO está para publicar: mirar las excepciones de arriba."
+    echo "NO está para publicar: mirar arriba las excepciones, los avisos y los rechazos de la sala."
     exit 1
   fi
   tree_state > "$mark"

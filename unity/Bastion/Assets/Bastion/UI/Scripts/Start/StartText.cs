@@ -14,7 +14,7 @@ namespace Bastion.UI.Start
         // The main menu (p1), in this order; «Continuar partida» only with a game saved.
         public const string Continue = "Continuar partida";
         /// <summary>Where «Continuar partida» would be, with only a campaign from before the expeditions (NetLink.OldCampaign; Lore, 16/11).</summary>
-        public static string OldCampaign(string file) => $"La campaña anterior no se puede continuar con esta versión. Queda guardada aparte, en {file}. Con «Nueva partida» empiezas otra.";
+        public static string OldCampaign(string file) => $"La campaña anterior no se puede continuar con esta versión. Queda guardada aparte, en {file}. Con «Nueva partida» empiezas la de las expediciones.";
         public const string New = "Nueva partida";
         public const string Two = "Partida multijugador";
         public const string Settings = "Ajustes";
