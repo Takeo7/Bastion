@@ -105,7 +105,7 @@ namespace Bastion.UI.Combat
         void Awake()
         {
             if (BodyOf == null) BodyOf = id => Figures.FeetOf(id) is Transform t ? t.position : (Vector3?)null;
-            if (Visible == null) Visible = u => u.Team == Teams.Xcom || seen.Contains(u.Id);
+            if (Visible == null) Visible = u => (u.Team == Teams.Xcom && !Unfound(u)) || seen.Contains(u.Id);
         }
 
         void Start()
@@ -176,7 +176,13 @@ namespace Bastion.UI.Combat
         /// yet, nor on a storey the cut hides; Ana, 7/11 #14: the model and its marks never apart). No figures (the labs),
         /// by sight alone.
         /// </summary>
-        bool Marked(Unit u) => (Visible?.Invoke(u) ?? true) && (u.Team == Teams.Xcom || Bastion.Client.Units.UnitViews.Current?.Drawn(u.Id) != false);
+        bool Marked(Unit u) => (Visible?.Invoke(u) ?? true) && !Unfound(u) && (u.Team == Teams.Xcom || Bastion.Client.Units.UnitViews.Current?.Drawn(u.Id) != false);
+
+        /// <summary>
+        /// Of the squad's side but not shown yet (N2, 17/11): a run's survivor till someone of the squad finds them
+        /// (Rules.SurvivorShown on the state seen). No flag, no name, no pointer and no beam over them till then.
+        /// </summary>
+        public bool Unfound(Unit u) => !Rules.SurvivorShown(Shown, u);
 
         void Toast(string text)
         {
@@ -1177,7 +1183,7 @@ namespace Bastion.UI.Combat
             var ray = Rig.Camera.ScreenPointToRay(screen);
             foreach (var u in State.Units)
             {
-                if (!u.Alive || (u.Team != Teams.Xcom && !Visible(u))) continue;
+                if (!u.Alive || (u.Team != Teams.Xcom && !Visible(u)) || Unfound(u)) continue;
                 var w = FeetOf(u.Id);
                 if (w == null) continue;
                 if (RayToSegment(ray, w.Value + Vector3.up * BodyLow, w.Value + Vector3.up * BodyHigh, out var along) > BodyReach || along >= bestAlong) continue;
@@ -1186,7 +1192,7 @@ namespace Bastion.UI.Combat
             }
             var tile = onTile ?? hover;
             if (best != null || tile == null) return best;
-            return State.Units.FirstOrDefault(u => u.Alive && Same(u.Pos, tile) && (u.Team == Teams.Xcom || Visible(u)));
+            return State.Units.FirstOrDefault(u => u.Alive && Same(u.Pos, tile) && (u.Team == Teams.Xcom || Visible(u)) && !Unfound(u));
         }
 
         /// <summary>A figure for the pointer, metres over its feet: from its shins to its neck, and BodyReach round (head and shoulders in).</summary>

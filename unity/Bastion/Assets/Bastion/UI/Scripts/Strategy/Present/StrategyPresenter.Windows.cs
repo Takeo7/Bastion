@@ -254,6 +254,24 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>
+        /// A save of the 0.13.0 brought up to the 2 seats (N4, Arturo 17/11: «que se entienda al cargar»): Lore's note the
+        /// engine logged as it did (Campaign.MigrateRuns, Lore.SeatsReset), once on this machine as a window, since the
+        /// runs' base has no diary to read it in. Null if there is none or it was seen.
+        /// </summary>
+        public StrategyModalView SeatsReset()
+        {
+            var c = State;
+            if (c.Stash == null) return null;
+            var said = Lore.SeatsReset(0).TrimEnd('.');
+            var note = c.Log.FirstOrDefault(e => e.Text != null && e.Text.StartsWith(said, System.StringComparison.Ordinal));
+            if (note == null) return null;
+            var key = LocalMarks.Key("seenSeatsReset", c);
+            if (LocalMarks.Read(key) != null) return null;
+            LocalMarks.Write(key, new[] { "1" });
+            return new StrategyModalView { Kind = "alert", Kicker = Lore.Bus.Name, Text = note.Text, Buttons = { "Entendido" } };
+        }
+
+        /// <summary>
         /// The windows for what happened between two states (collectAlerts): a page of the diary for each level bought,
         /// with what it brought; of what the campaign logged as a pop-up, only the siege (Ana, 21/10 #26, #28). The most
         /// important first. The controller queues them and shows one at a time.

@@ -72,6 +72,12 @@ namespace Bastion.Client.Map
         /// <summary>A frame waited for UnitViews' sight of the state as it is now (SightOf), rather than working it out again.</summary>
         bool waited;
         int[] seenInside = Array.Empty<int>();
+        /// <summary>
+        /// The buildings someone of the squad sees into from beside a window now (N1, B: the engine's Buildings.SidePeeks):
+        /// their roof off and the walls facing the camera down, as for the selected soldier by a wall, so that those rows
+        /// are seen from the game's camera; the rest of their inside stays the fog's, not found.
+        /// </summary>
+        int[] peeked = Array.Empty<int>();
         /// <summary>On a map that is one building (H9): the nodes found (Buildings.FoundTiles), and the buildings with any; null and none on any other.</summary>
         HashSet<int> found;
         bool[] known = Array.Empty<bool>();
@@ -221,6 +227,7 @@ namespace Bastion.Client.Map
                     if (visible[k] && (found == null || found.Contains(k))) seen.Add(plan.At(new Vec2 { X = k % area % s.Width, Y = k % area / s.Width }));
                 seen.Remove(-1);
                 seenInside = seen.ToArray();
+                peeked = Bastion.Engine.Buildings.SidePeeks(s).Select(i => plan.At(new Vec2 { X = i % s.Width, Y = i / s.Width })).Where(b => b >= 0).Distinct().ToArray();
                 known = new bool[n];
                 if (found != null)
                     foreach (int k in found)
@@ -231,6 +238,13 @@ namespace Bastion.Client.Map
             // A map that is one building, found room by room (H7, the hospital).
             bool inside = Bastion.Engine.Buildings.ByRoom(s);
             if (!roofs) foreach (int b in seenInside) Mark(b, 0);
+            if (!roofs)
+                foreach (int b in peeked)
+                {
+                    Mark(b, 0);
+                    Mark(b, 1);
+                    Aim(b, 0, false);
+                }
             // Opens building b for something inside it on storey `level`: what stands above off, the walls facing the camera down.
             void Within(int x, int y, int level, bool keen = false)
             {

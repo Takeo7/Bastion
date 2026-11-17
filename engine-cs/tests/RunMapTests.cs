@@ -112,8 +112,9 @@ namespace Bastion.Engine.Tests
             }
             double Share(params string[] kinds) => kinds.Sum((k) => counts.TryGetValue(k, out var n) ? n : 0) / (double)middle;
             output.WriteLine($"Filas 2–5: normal {Share(NodeKinds.Normal):P1}, especiales {Share(RunMap.Specials.ToArray()):P1}, paradas {Share(NodeKinds.Stops.ToArray()):P1} ({string.Join(", ", NodeKinds.Stops.Select((k) => $"{k} {Share(k):P1}"))})");
-            Assert.InRange(Share(NodeKinds.Normal), 0.40, 0.65);
-            Assert.InRange(Share(RunMap.Specials.ToArray()), 0.20, 0.40);
+            // The Rescates kept in reach (N3) are normal fights made Rescates.
+            Assert.InRange(Share(NodeKinds.Normal), 0.30, 0.65);
+            Assert.InRange(Share(RunMap.Specials.ToArray()), 0.20, 0.45);
             Assert.InRange(Share(NodeKinds.Stops.ToArray()), 0.10, 0.30);
             Assert.All(NodeKinds.Stops, (k) => Assert.True(counts.ContainsKey(k), k));
             Assert.All(RunMap.Specials, (k) => Assert.True(counts.ContainsKey(k), k));
@@ -135,6 +136,27 @@ namespace Bastion.Engine.Tests
                         next = next.SelectMany((id) => Get(map, id).Next).Where(seen.Add).ToList();
                     }
                     Assert.True(seen.Any((id) => Get(map, id).Kind == NodeKinds.Trade), $"seed {seed}: no Trade from {start.Id}");
+                }
+            }
+        }
+
+        [Fact]
+        public void ARescueInReachFromEveryStartAndNoSurvivor()
+        {
+            // N3 (17/11): recruits come only from a Rescate, so one is in reach from every start in rows 2–4; the
+            // Superviviente stop is gone.
+            foreach (var (seed, map) in Maps())
+            {
+                Assert.DoesNotContain(map, (n) => n.Kind == Campaign.OldSurvivorStop);
+                foreach (var start in map.Where((n) => n.Row == 1))
+                {
+                    var seen = new HashSet<string>();
+                    var next = new List<string> { start.Id };
+                    while (next.Count > 0)
+                    {
+                        next = next.SelectMany((id) => Get(map, id).Next).Where(seen.Add).ToList();
+                    }
+                    Assert.True(seen.Any((id) => Get(map, id).Kind == NodeKinds.Rescue && Get(map, id).Row <= RunMap.RescueLastRow), $"seed {seed}: no Rescate from {start.Id}");
                 }
             }
         }

@@ -11,7 +11,8 @@ namespace Bastion.Client
     /// The squad leaving (0.10.1's clearingArt.ts depart and board, without its climbing in: Arturo, 31/10, his #1): the
     /// row, its guns slung, runs to La Lata's doors, one after another, and each fades out beside its doorway as it gets
     /// there, as one boarding it in a battle does (each doorway's doors opening as its first comes and shutting behind its
-    /// last; into the 4×4 each by a door of its own); then La Lata goes, the camera turning after it as it does.
+    /// last; into the 4×4 each by a door of its own); then La Lata goes, the camera turning after it as it does. Onto the
+    /// motorbike (N5, Arturo 17/11), each runs to beside its seat and gets on, and rides off on it in sight (MountUp).
     /// </summary>
     public sealed partial class Settlement
     {
@@ -64,7 +65,8 @@ namespace Bastion.Client
                 if (standers.Count > 0 && Lata.Shown)
                 {
                     float began = Time.time;
-                    await Board(ct);
+                    // (Onto the motorbike only if it is built: without its model nobody could sit on it.)
+                    await (Lata.IsBike && Lata.Seat(0) != null ? MountUp(ct) : Board(ct));
                     Debug.Log($"[settlement] {standers.Count} aboard La Lata ({Lata.Vehicle}) in {Time.time - began:0.00} s");
                 }
                 // Given again (the debrief, the next mission's), the row is made again.
@@ -274,6 +276,110 @@ namespace Bastion.Client
             }
             foreach (var p in plans) if (p.s.root != null) p.s.root.gameObject.SetActive(false);
         }
+
+        /// <summary>
+        /// The row onto the motorbike (N5): its guns slung, each of the first two runs to beside its seat (LaLata.MountSpot,
+        /// on the side nearer it), slowing to a walk and turned along it at the end, and gets on over UnitViews.MountSeconds
+        /// (as one in a battle: UnitViews.Ride), sat on it; any more than its seats fade out where they stand. Done once
+        /// both are on it; from then on they ride it (Ride, as StepLineup steps the row).
+        /// </summary>
+        async Awaitable MountUp(CancellationToken ct)
+        {
+            var standing = standers.Where(s => s.root != null && s.root.gameObject.activeInHierarchy).ToList();
+            if (standing.Count == 0) return;
+            foreach (var s in standing) Sling(s);
+            // The nearest to each seat on it, the rider's first.
+            var riders = new List<Stander>();
+            for (int k = 0; k < Lata.Seats; k++)
+            {
+                var spot = Lata.MountSpot(k, Lata.transform.position);
+                var pick = standing.Where(s => !riders.Contains(s)).OrderBy(s => spot == null ? 0 : (s.root.position - spot.Value).sqrMagnitude).FirstOrDefault();
+                if (pick == null) break;
+                pick.seat = k;
+                pick.mounted = -1;
+                riders.Add(pick);
+            }
+            var left = standing.Where(s => !riders.Contains(s)).ToList();
+            var from = riders.ToDictionary(s => s, s => s.root.position);
+            var to = riders.ToDictionary(s => s, s => Lata.MountSpot(s.seat, s.root.position) ?? s.root.position);
+            var run = riders.ToDictionary(s => s, s => Vector3.Distance(from[s], to[s]) / (BoardSpeed * MapSpace.Tile) + BoardEase);
+            var delay = riders.ToDictionary(s => s, s => riders.IndexOf(s) * BoardStagger);
+            var motion = new Dictionary<Stander, string>();
+            void Move(Stander s, string m, float speed = 1)
+            {
+                if (motion.TryGetValue(s, out var was) && was == m) return;
+                motion[s] = m;
+                s.anim?.Motion(m, speed);
+            }
+            float now = 0;
+            while (!ct.IsCancellationRequested && (riders.Any(s => s.mounted < 1) || left.Any(s => s.root != null && s.root.gameObject.activeSelf)))
+            {
+                float dt = Time.deltaTime;
+                now += dt;
+                foreach (var s in riders)
+                {
+                    if (s.root == null) continue;
+                    float since = now - delay[s];
+                    if (since <= 0 || s.mounted >= 0) continue;
+                    var way = to[s] - from[s];
+                    way.y = 0;
+                    if (since < run[s])
+                    {
+                        // Picking up speed, turned the way it goes; its last BoardEase walking, turned along La Lata.
+                        float k = Mathf.SmoothStep(0, 1, since / run[s]);
+                        s.root.position = Vector3.Lerp(from[s], to[s], k);
+                        bool end = since > run[s] - BoardEase;
+                        Move(s, end ? "walk" : "run");
+                        var look = end ? Lata.transform.forward : way;
+                        if (look.sqrMagnitude > 1e-6f) s.yaw = TurnToward(s.yaw, Mathf.Atan2(look.x, -look.z), end ? BoardTurnEnd : BoardTurn);
+                        continue;
+                    }
+                    s.root.position = to[s];
+                    Move(s, "idle");
+                    s.anim?.CampLoop(FigureCatalog.Load()?.Clip("sitChair"));
+                    s.mounted = 0;
+                    s.mountFrom = s.root.position;
+                    s.mountTurn = s.root.rotation;
+                }
+                foreach (var s in riders) if (s.mounted >= 0) s.mounted = Mathf.Min(1, s.mounted + dt / UnitViews.MountSeconds);
+                foreach (var s in left)
+                {
+                    if (s.root == null || !s.root.gameObject.activeSelf) continue;
+                    float k = 1 - now / UnitViews.BoardSeconds;
+                    FadeOut(s, k);
+                }
+                await Awaitable.NextFrameAsync(ct);
+            }
+        }
+
+        /// <summary>
+        /// One on the motorbike, after its pose (StepLineup): getting on (its hips up over the seat and onto it, turned to
+        /// its nose, as `mounted` goes; UnitViews.Ride's way), or on it, where its seat is as it stands and drives off; out
+        /// of sight once it has gone.
+        /// </summary>
+        void Ride(Stander s)
+        {
+            if (Lata == null || s.root == null || s.mounted < 0) return;
+            var seat = Lata.Seat(s.seat);
+            if (seat == null) return;
+            if (s.mounted >= 1 && !Lata.Shown)
+            {
+                if (s.root.gameObject.activeSelf) s.root.gameObject.SetActive(false);
+                return;
+            }
+            var (at, facing) = seat.Value;
+            float k = Mathf.SmoothStep(0, 1, s.mounted);
+            s.root.rotation = Quaternion.Slerp(s.mountTurn, facing, k);
+            var hips = s.animator != null ? s.animator.GetBoneTransform(HumanBodyBones.Hips) : null;
+            var off = hips != null ? hips.position - s.root.position : Vector3.up * 0.65f;
+            s.root.position = Vector3.Lerp(s.mountFrom, at - off, k) + Vector3.up * (Mathf.Sin(Mathf.PI * k) * MountHop);
+            // (The rider's hands on the grips: its gun is slung already, as all who board.)
+            if (s.seat == 0 && Lata.Grips() is var (left, right)) UnitViews.RiderHands(s.animator, left, right, k);
+            if (s.slung) KeepSlung(s);
+        }
+
+        /// <summary>How high the hips go over the way getting on (metres; UnitViews.Ride's).</summary>
+        const float MountHop = 0.15f;
 
         /// <summary>
         /// One of the row at `now` of the boarding: running to its place in its doorway's line (picking up speed, turning to

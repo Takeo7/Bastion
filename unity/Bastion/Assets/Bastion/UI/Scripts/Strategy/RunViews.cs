@@ -113,6 +113,8 @@ namespace Bastion.UI.Strategy
         public string AddedIcon;
         /// <summary>A special map (the hospital, the offices…: Arturo, 17/11): its place's drawing as a third badge; null, none.</summary>
         public string SiteIcon;
+        /// <summary>A line under its name, in red: a Rescate with no seat left in La Lata (N2, 17/11: Lore.RescueNoSeatTag).</summary>
+        public string Warn;
         /// <summary>One it can go to, but can't now (ChooseNodeRefusal); null, it can.</summary>
         public string Why;
         /// <summary>Its card on hover after the name: what it is, where, how hard, its modifier.</summary>
@@ -150,8 +152,6 @@ namespace Bastion.UI.Strategy
         public string Purse;
         /// <summary>Whose pack a ware goes into («Va a la mochila de Rafael»: the soldier chosen on the right).</summary>
         public string For;
-        /// <summary>The survivor's lines (name, class, health, what they're good at).</summary>
-        public List<string> Survivor = new List<string>();
         /// <summary>«Seguir»; on, this player has asked; why not yet (answer first); the partner awaited.</summary>
         public string Leave;
         public bool LeaveOn;

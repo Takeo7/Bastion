@@ -269,7 +269,7 @@ namespace Bastion.Engine.Tests
                     Runs.NodeCleared(row3, new Rng(row));
                     continue;
                 }
-                if (run.Stop!.Outcome == null && (n.Kind == NodeKinds.Event || n.Kind == NodeKinds.Survivor)) Agree(row3, new AnswerStopCommand { Option = 1 });
+                if (run.Stop!.Outcome == null && n.Kind == NodeKinds.Event) Agree(row3, new AnswerStopCommand { Option = 1 });
                 Ok(row3, new LeaveStopCommand(), 0, Both);
                 Ok(row3, new LeaveStopCommand(), 1, Both);
             }
@@ -282,9 +282,6 @@ namespace Bastion.Engine.Tests
             var ev = Full();
             GoTo(ev, NodeKinds.Event);
             Save("suceso.json", ev);
-            var survivor = Full();
-            GoTo(survivor, NodeKinds.Survivor);
-            Save("superviviente.json", survivor);
             Save("combate-mochila.json", Combat());
             Save("toro.json", Boss());
             Save("hospital.json", Hospital());

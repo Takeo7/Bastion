@@ -188,7 +188,7 @@ namespace Bastion.Net
         {
             (UpgradeIds.Squad, 1), (UpgradeIds.Mend, 1), (UpgradeIds.Pack, 1), (UpgradeIds.Squad, 2), (UpgradeIds.Pack, 2),
             (UpgradeIds.Sight, 1), (UpgradeIds.Haggle, 1), (UpgradeIds.Stash, 1), (UpgradeIds.Sight, 2), (UpgradeIds.Stash, 2),
-            (UpgradeIds.Stash, 3),
+            (UpgradeIds.Stash, 3), (UpgradeIds.Squad, 3),
         };
 
         /// <summary>On the base, the next upgrade of Upgrades not bought yet, proposed once the stash can pay it. Null: saving, or all bought.</summary>

@@ -96,15 +96,53 @@ namespace Bastion.Engine
         /// <summary>
         /// The same for a rescue: «Llegad hasta la Dra. Irina Sokolova» while still
         /// held, «Llevad a la Dra. Irina Sokolova a La Lata», «La Dra. Irina Sokolova,
-        /// en La Lata: que suba el resto», «…, a salvo». `phase`: "captive", "loose", "aboard" or "out".
+        /// en La Lata: que suba el resto», «…, a salvo». `phase`: "captive", "loose", "aboard" or "out"; in an
+        /// expedition's Rescate (Arturo, 17/11), "search" till someone sees them in the marked zone, "talk" till someone
+        /// talks to them, and "dead" if they die: the stage goes on as a Saqueo, without a recruit.
         /// </summary>
         public static string VipObjective(string vip, string phase)
         {
             var who = Titled(vip);
             if (phase == "captive") return $"Llegad hasta {who}";
+            if (phase == "search") return "Buscad a quien pide ayuda en la zona marcada";
+            if (phase == "talk") return $"Hablad con {who}";
+            if (phase == "dead") return $"Sin recluta: registrad lo que queráis y salid {Bus.In}";
             if (phase == "loose") return $"Llevad {(who.StartsWith("el ") ? $"al {who.Substring(3)}" : $"a {who}")} {Bus.To}";
             var who_ = Capital(who);
             return phase == "aboard" ? $"{who_}, {Bus.In}: que suba el resto" : $"{who_}, a salvo";
+        }
+
+        /// <summary>
+        /// A Rescate's survivor in an expedition (Arturo, 17/11): a soldier beside them talks to them (Hablar), they say
+        /// yes, and they join the squad with a knife, under the player who talked to them. Lore's words, Content's action.
+        /// </summary>
+        public static class TalkText
+        {
+            /// <summary>The action, and its help.</summary>
+            public const string Action = "Hablar";
+            public const string Help = "Pregunta a quien pide ayuda si se viene, desde una casilla de al lado. Se une a tu escuadra con un cuchillo, y le das tú las órdenes.";
+            /// <summary>The soldier's question and the survivor's answer, said over their heads; the float once joined.</summary>
+            public const string Ask = "¿Te vienes?";
+            public const string Yes = "Sí. Vámonos de aquí.";
+            public const string Float = "SE UNE";
+
+            /// <summary>The log line: «Marta Gil se une a la escuadra, a las órdenes de Ana.»; alone, without the player.</summary>
+            public static string Joined(string name, string? player = null)
+            {
+                return string.IsNullOrEmpty(player) ? $"{name} se une a la escuadra." : $"{name} se une a la escuadra, a las órdenes de {player}.";
+            }
+
+            /// <summary>The float over them when first seen (a Rescate's, SurvivorFoundEvent) or found searching (one of every six maps).</summary>
+            public const string SeenFloat = "CON VIDA";
+            /// <summary>The log when a soldier of the squad first sees a Rescate's survivor (SurvivorFoundEvent's `by`).</summary>
+            public static string Spotted(string who) => $"{who} ve a alguien con vida.";
+            /// <summary>The log when a search turns up a survivor on any map (Arturo, 17/11: one of every six, without warning).</summary>
+            public static string Found(string who) => $"Al registrar, {who} encuentra a alguien con vida.";
+            /// <summary>
+            /// The log when the survivor dies (Arturo, 17/11: the stage goes on, without a recruit). `name` null while
+            /// nobody has seen them.
+            /// </summary>
+            public static string Died(string? name = null) => $"{(string.IsNullOrEmpty(name) ? "Quien pedía ayuda" : name)} ha muerto. La etapa sigue, sin recluta.";
         }
 
         /// <summary>A sabotage's objective strip, by what sounds: «Apagad la sirena del coche patrulla».</summary>

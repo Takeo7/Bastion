@@ -26,18 +26,17 @@ namespace Bastion.Engine
         public const string Refuge = "refuge";
         public const string Trade = "trade";
         public const string Event = "event";
-        public const string Survivor = "survivor";
         public const string Boss = "boss";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Normal, Elimination, Recovery, Sabotage, Hack, Rescue, Hold, Crossing, Stealth, Elite, Refuge, Trade, Event, Survivor, Boss,
+            Normal, Elimination, Recovery, Sabotage, Hack, Rescue, Hold, Crossing, Stealth, Elite, Refuge, Trade, Event, Boss,
         };
 
         /// <summary>The stops: no fight, the squad answers them on the map.</summary>
-        public static readonly IReadOnlyList<string> Stops = new[] { Refuge, Trade, Event, Survivor };
+        public static readonly IReadOnlyList<string> Stops = new[] { Refuge, Trade, Event };
 
-        public static bool IsStop(string kind) => kind == Refuge || kind == Trade || kind == Event || kind == Survivor;
+        public static bool IsStop(string kind) => kind == Refuge || kind == Trade || kind == Event;
     }
 
     /// <summary>RunNode.modifier: what makes a fight harder (and richer), seen before choosing it.</summary>
@@ -72,6 +71,11 @@ namespace Bastion.Engine
         public string? Added { get; set; } // Modifiers
         /// <summary>Rows 1–2: 1, 3–4: 2, 5 and the boss: 3; +1 per chapter after the first.</summary>
         public int Difficulty { get; set; }
+        /// <summary>
+        /// A Rescate with Cuervos (N2, Arturo 17/11: «a veces»): the survivor their prisoner, groups of the living round
+        /// them (RunMap.GuardedRescue); null, hidden alone among the dead. Lore.StageLine's `crows`.
+        /// </summary>
+        public bool? Guarded { get; set; }
     }
 
     /// <summary>RunState.phase.</summary>
@@ -119,9 +123,7 @@ namespace Bastion.Engine
         public List<Ware>? Wares { get; set; }
         /// <summary>Event: its id (Content.RunEvents; Lore's texts by the same id).</summary>
         public string? Event { get; set; }
-        /// <summary>Survivor: who asks to come.</summary>
-        public CampaignSoldier? Survivor { get; set; }
-        /// <summary>What happened once answered (an event's or a survivor's), as an outcome id ("refuge.rest", "survivor.yes"…); null till then.</summary>
+        /// <summary>What happened once answered (an event's), as an outcome id ("refuge.rest", "herido.0"…); null till then.</summary>
         public string? Outcome { get; set; }
         /// <summary>Who has asked to go on (LeaveStopCommand), by slot: with two, it counts when both have.</summary>
         public bool[] Leaving { get; set; } = new bool[2]; // [boolean, boolean]: by Slot.
@@ -137,16 +139,15 @@ namespace Bastion.Engine
     {
         public string Event { get; set; } = "";
         public int Option { get; set; }
-        /// <summary>
-        /// The soldier «a uno» fell to ({Nombre}), id and name. At a Survivor stop (Event "survivor"), who asked to come,
-        /// answered yes or no; InSquad, whether into the squad (null: not taken in).
-        /// </summary>
+        /// <summary>The soldier «a uno» fell to ({Nombre}), id and name.</summary>
         public string? Soldier { get; set; }
         public string? SoldierName { get; set; }
         /// <summary>Who joined ({Superviviente}), id and name, and whether into the squad (false: at the base, no seat).</summary>
         public string? Survivor { get; set; }
         public string? SurvivorName { get; set; }
         public bool? InSquad { get; set; }
+        /// <summary>The node an event made a Rescate (N2, RunEventOption.Rescue), its id.</summary>
+        public string? Rescue { get; set; }
         /// <summary>What was won fitted in no pack: lost there.</summary>
         public bool? Lost { get; set; }
     }
@@ -269,8 +270,13 @@ namespace Bastion.Engine
         public int? RewardLost { get; set; }
         /// <summary>The run ended with the fight (RunEnds); null, it goes on.</summary>
         public string? Ended { get; set; } // RunEnds
-        /// <summary>A Rescate won with the one held out (H4): the soldier they are now (CampaignSoldier.id).</summary>
+        /// <summary>A survivor brought out on La Lata (H4, N2: a Rescate's or one loose): the soldier they are now (CampaignSoldier.id).</summary>
         public string? Joined { get; set; }
+        /// <summary>
+        /// The run ended with the fight and gave recruits for nothing (Runs.NobodyLeft, a player left with nobody): their
+        /// ids. For the line of whoever comes into the room after it (Red, N9). Null: none.
+        /// </summary>
+        public List<string>? Recruits { get; set; }
         /// <summary>Whether they came into the squad; false, waiting at the base (no seat).</summary>
         public bool? InSquad { get; set; }
         /// <summary>A Sigilo (H5): unseen (its reward doubled) or seen (halved).</summary>

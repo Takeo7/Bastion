@@ -16,9 +16,12 @@ namespace Bastion.Engine
             public const string Name = "Expedición";
             public const string Stage = "Etapa";
             public const string Chapter = "Capítulo";
-            /// <summary>The button that starts one (StartRunCommand): «Expedición» is long for a button.</summary>
-            public const string Start = "Salir";
-            public static string StartHelp(int chapter) => $"Sale la escuadra: empieza una expedición del capítulo {chapter}.";
+            /// <summary>
+            /// The button that starts one (StartRunCommand), and the base's tab of it: «Expedición» is long for a button.
+            /// «Partir», not «Salir» (Arturo, 18/11, T8: it looked like quitting the game).
+            /// </summary>
+            public const string Start = "Partir";
+            public static string StartHelp(int chapter) => $"Parte la escuadra: empieza una expedición del capítulo {chapter}.";
             /// <summary>The button that ends one, back to the base.</summary>
             public const string Return = "Volver a la base";
             public const string ReturnHelp = "Acaba la expedición. Todos se curan, y lo que llevan las mochilas se guarda.";
@@ -44,7 +47,6 @@ namespace Bastion.Engine
             [NodeKinds.Refuge] = "Refugio",
             [NodeKinds.Trade] = "Trueque",
             [NodeKinds.Event] = "Suceso",
-            [NodeKinds.Survivor] = "Superviviente",
             [NodeKinds.Boss] = "Jefe",
         };
 
@@ -83,9 +85,10 @@ namespace Bastion.Engine
 
         /// <summary>
         /// What is done at a stage, in one line, for its sheet on the map. The figures and names when known: the item to
-        /// bring back, the alarm (Alarms), the turn La Lata comes on a Hold, the guard of a Guarida (a template).
+        /// bring back, the alarm (Alarms), the turn La Lata comes on a Hold, the guard of a Guarida (a template); a Rescate
+        /// with Cuervos round the survivor (`crows`; Arturo, 17/11: some are held by them, others hide alone).
         /// </summary>
-        public static string StageLine(string kind, string? item = null, string? alarm = null, int? holdTurns = null, string? guard = null)
+        public static string StageLine(string kind, string? item = null, string? alarm = null, int? holdTurns = null, string? guard = null, bool crows = false)
         {
             var item_ = item ?? DefaultItem;
             switch (kind)
@@ -101,7 +104,8 @@ namespace Bastion.Engine
                 case NodeKinds.Hack:
                     return $"Poned en marcha el equipo y volved {Bus.To}. Si falla, salta la alarma.";
                 case NodeKinds.Rescue:
-                    return $"Sacad con vida a la persona atrapada y volved {Bus.To}. Se une a vosotros.";
+                    // Arturo, 17/11: the survivor is in a marked zone, found and talked to (Hablar), and joins.
+                    return $"{(crows ? "Los Cuervos retienen a alguien" : "Alguien con vida se esconde")} en una zona marcada del mapa. Llegad a su lado y habladle: se une a la escuadra. Volved todos {Bus.To}.";
                 case NodeKinds.Hold:
                     return $"Aguantad hasta que llegue {Bus.Name}{(holdTurns != null ? $", en el turno {holdTurns}" : "")}. Llegan oleadas, cada vez mayores.";
                 case NodeKinds.Crossing:
@@ -116,13 +120,27 @@ namespace Bastion.Engine
                     return "Alguien cambia lo que tiene por suministros.";
                 case NodeKinds.Event:
                     return "Algo pasa por el camino. Elegid qué hacer.";
-                case NodeKinds.Survivor:
-                    return "Alguien pide unirse a vosotros. Decidís si se une.";
                 case NodeKinds.Boss:
                     return $"El final del capítulo. Matadlo y salid {Bus.In}.";
                 default:
                     throw new ArgumentException($"Unknown stage kind: {kind}");
             }
+        }
+
+        /// <summary>
+        /// A Rescate's sheet when the squad fills La Lata (Arturo, 17/11): the map warns before going in. Its chip, short.
+        /// </summary>
+        public const string RescueNoSeat = "No hay plaza libre " + Bus.In + ". Al salir, quien no quepa se queda fuera, y se pierde.";
+        public const string RescueNoSeatTag = "Sin plaza libre";
+
+        /// <summary>
+        /// Said once when a save of the 0.13.0 is loaded (Arturo, 17/11): the seats go back to 2, and what «Más plazas» cost
+        /// is in the stash (`refund`, in §; 0 when it was never done).
+        /// </summary>
+        public static string SeatsReset(int refund)
+        {
+            const string seats = "Ahora toda expedición sale con 2 plazas, en moto. La mejora «Más plazas» vuelve a empezar";
+            return refund > 0 ? $"{seats}, y los {refund} § que costó están en el almacén." : $"{seats}.";
         }
 
         /// <summary>
@@ -211,7 +229,8 @@ namespace Bastion.Engine
             switch (id)
             {
                 case UpgradeIds.Squad:
-                    return $"Salen {next} soldados en vez de {now}.";
+                    // With the transport it brings (Arturo, 17/11: 2 on the motorbike, then 4, 6 and 8).
+                    return $"Salen {next} soldados en vez de {now}, en {RunTransport(next).A}.";
                 case UpgradeIds.Stash:
                     return "El almacén tiene 2 filas más.";
                 case UpgradeIds.Pack:

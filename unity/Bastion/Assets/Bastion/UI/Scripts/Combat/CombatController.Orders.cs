@@ -697,14 +697,25 @@ namespace Bastion.UI.Combat
 
         // ------------------------------------------------------- evacuation
 
-        /// <summary>What leaving now costs, for Lore's words: a Limpieza, the objective, and who would stay outside.</summary>
-        Lore.EvacSituation EvacSituation(GameState s)
+        /// <summary>
+        /// What leaving now costs, for Lore's words: a Limpieza, the objective, who would stay outside, and who is in the
+        /// zone without a seat in a run's La Lata (N2: Rules.NoSeat, of MissionState.Seats).
+        /// </summary>
+        Lore.EvacSituation EvacSituation(GameState s) => Situation(s);
+
+        /// <summary>
+        /// Lore.EvacSituation of `s` (the event player's too): outside, and the bitten with no Cuarentena to go to (playtest
+        /// 15/10 #13), they stay; a run's survivor still waiting to be talked to is nobody's yet, not one who stays (N2).
+        /// </summary>
+        public static Lore.EvacSituation Situation(GameState s)
         {
+            var waiting = Abilities.Waiting(s);
             return new Lore.EvacSituation(
                 s.Mission.Kind == MissionKinds.Elimination,
                 Rules.EvacWins(s),
-                // Outside, and the bitten with no Cuarentena to go to (playtest 15/10 #13): they stay too.
-                s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && !Abilities.InEvacZone(s, x.Pos)).Select(x => x.Name).ToList());
+                s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && x.Id != waiting?.Id && !Abilities.InEvacZone(s, x.Pos)).Select(x => x.Name).ToList(),
+                Rules.NoSeat(s).Select(x => x.Name).ToList(),
+                s.Mission.Seats ?? 0);
         }
 
         /// <summary>Our soldiers in the bus, on the state orders go by.</summary>

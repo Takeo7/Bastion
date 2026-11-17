@@ -149,12 +149,12 @@ namespace Bastion.UI.Combat
             var beacons = new List<(Pos, int)>();
             if (m.Terminal != null && !m.ObjectiveDone) beacons.Add((m.Terminal, 0x54d1ff));
             var objective = UnitById(v, m.ObjectiveUnit);
-            if (objective != null && objective.Alive && !m.ObjectiveDone) beacons.Add((objective.Pos, objective.Team == Teams.Alien ? 0xff4a6a : 0x4dff9a));
+            if (objective != null && objective.Alive && !m.ObjectiveDone && !Unfound(objective)) beacons.Add((objective.Pos, objective.Team == Teams.Alien ? 0xff4a6a : 0x4dff9a));
             var item = m.Item != null && m.Item.Carrier == null && m.Item.Evacuated != true ? m.Item.Pos : null;
             // A siege's breaches: an orange beam each, and an arrow a side at the screen's edge (CombatController.Siege).
             var breaches = new EdgeMarksView();
             BreachMarks(v, beacons, breaches);
-            Marks?.Show(v, m.EvacZone, beacons, item, m.Reinforcements.Where(r => r.Pos != null && !r.Landed).Select(r => r.Pos).ToList());
+            Marks?.Show(v, m.EvacZone, beacons, item, m.Reinforcements.Where(r => r.Pos != null && !r.Landed).Select(r => r.Pos).ToList(), SearchZone(v));
             if (Hud == null) return;
             Hud.SetWorldTags(WorldTags(v));
             // Where to go, the ring's arrow (UI-COMBATE UI-06): the objective, else the evacuation, as the O key's.
@@ -178,6 +178,17 @@ namespace Bastion.UI.Combat
             Hud.SetEdgeMarks(view);
         }
 
+        /// <summary>
+        /// A run's Rescate (N2, 17/11): the circle where the survivor is to be looked for, while nobody of the squad has
+        /// seen them (MissionState.SearchArea); null once found, dead or anywhere else.
+        /// </summary>
+        SearchArea SearchZone(GameState v)
+        {
+            var area = v.Mission.SearchArea;
+            var vip = UnitById(v, v.Mission.ObjectiveUnit);
+            return area != null && vip != null && vip.Alive && Unfound(vip) ? area : null;
+        }
+
         /// <summary>Where the squad has to go (game.ts missionMarks): the objective while it is still to do, else the evacuation's middle.</summary>
         List<(string kind, string name, Pos pos)> MissionGoals()
         {
@@ -191,7 +202,9 @@ namespace Bastion.UI.Combat
                 if (m.Kind == MissionKinds.Sabotage || m.Kind == MissionKinds.Rescue)
                 {
                     var target = UnitById(s, m.ObjectiveUnit);
-                    if (target != null && target.Alive && (m.Kind == MissionKinds.Sabotage || target.Captive)) goal = target.Pos;
+                    // A run's survivor not found yet: the middle of the zone to look in (N2), not where they are.
+                    if (SearchZone(s) is SearchArea look) goal = new Pos { X = look.Center.X, Y = look.Center.Y };
+                    else if (target != null && target.Alive && (m.Kind == MissionKinds.Sabotage || target.Captive)) goal = target.Pos;
                 }
             }
             if (goal != null) return new List<(string, string, Pos)> { ("objective", "Objetivo", goal) };
@@ -646,7 +659,7 @@ namespace Bastion.UI.Combat
         /// The squad's cards (hud.ts setSquad; UI-COMBATE UI-02): this player's soldiers (Arturo, 01/11), the fallen and the
         /// gone too, then the partner's (Ana, 7/11 #12: a card with their name and bust each, which takes the camera there;
         /// picked, only while this player commands them); not a siege's turrets (their flags say how they are). Each bust
-        /// on its owner's colour.
+        /// on its owner's colour. A run's survivor only once they join, among the soldiers of whoever talked to them (N2).
         /// </summary>
         SquadView SquadView(GameState v, string inPlay)
         {
@@ -712,7 +725,7 @@ namespace Bastion.UI.Combat
         /// Whether `u` has a card under the sheet: a soldier of the squad's, this player's (or one with no owner, alone) or
         /// the partner's (Ana, 7/11 #12); a living one or not.
         /// </summary>
-        bool OnCard(Unit u) => u.Team == Teams.Xcom && u.Automaton == null;
+        bool OnCard(Unit u) => u.Team == Teams.Xcom && u.Automaton == null && !(Shown.Run != null && u.Captive && u.Owner == null);
 
         /// <summary>What a recovery carries out: the chapter's own name for it, or the default (game.ts recoveryItem).</summary>
         string RecoveryItem() => Shown.CampaignMission?.Item ?? Lore.DefaultItem;
@@ -853,7 +866,13 @@ namespace Bastion.UI.Combat
                 {
                     var vip = UnitById(s, m.ObjectiveUnit);
                     var who = vip?.Name ?? "la persona retenida";
-                    objective = m.ObjectiveDone ? Lore.VipObjective(who, "out")
+                    // A run's (N2, 17/11): looked for in the marked zone till someone sees them, then talked to (Hablar);
+                    // dead, the stage goes on without a recruit. Lore's phases.
+                    var run = s.Run != null && vip != null;
+                    objective = run && !vip.Alive && !vip.Evacuated ? Lore.VipObjective(who, "dead")
+                        : m.ObjectiveDone ? Lore.VipObjective(who, "out")
+                        : run && Unfound(vip) ? Lore.VipObjective(who, "search")
+                        : run && vip.Captive ? Lore.VipObjective(who, "talk")
                         : vip != null && vip.Alive && !vip.Captive && Abilities.InEvacZone(s, vip.Pos) ? Lore.VipObjective(who, "aboard")
                         : vip != null && vip.Captive ? Lore.VipObjective(who, "captive")
                         : Lore.VipObjective(who, "loose");
@@ -888,6 +907,9 @@ namespace Bastion.UI.Combat
                 objective = m.ObjectiveDone ? HudText.Mission.LairOpen : HudText.Mission.Lair;
                 tip = Lore.StageLine(NodeKinds.Elite);
             }
+            // A run's Rescate (N2): its line of the stage, with the Cuervos when they hold the survivor.
+            else if (s.Run != null && m.Kind == MissionKinds.Rescue)
+                tip = Lore.StageLine(NodeKinds.Rescue, crows: m.Guarded == true);
             else if (s.Run?.NodeKind == NodeKinds.Crossing)
             {
                 objective = HudText.Mission.Crossing;

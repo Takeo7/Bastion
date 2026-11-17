@@ -568,7 +568,8 @@ namespace Bastion.Engine
             [AbilityIds.Grenade] = new AbilityDef { Id = AbilityIds.Grenade, Name = "Granada", Description = "Lanza una granada: daña a todos en el área, destruye cobertura y abre boquetes en las paredes. Arriba hunde el suelo donde cae, y quien esté encima cae.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Charge = ChargeIds.Grenade, Range = 10, Radius = 2.5, Explosive = WeaponIds.FragGrenade },
             [AbilityIds.Launch] = new AbilityDef { Id = AbilityIds.Launch, Name = "Lanzagranadas", Description = "Dispara una granada más lejos y con más radio. También abre boquetes en las paredes y, arriba, hunde el suelo donde cae.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Charge = ChargeIds.Grenade, Range = 14, Radius = 3.5, Explosive = WeaponIds.FragGrenade },
             [AbilityIds.Missiles] = new AbilityDef { Id = AbilityIds.Missiles, Name = "Granada del chaleco", Description = "Le estalla una granada que aún cuelga del chaleco. También abre boquetes en las paredes y, arriba, hunde el suelo.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Charge = ChargeIds.Missiles, Range = 15, Radius = 2.5, Explosive = WeaponIds.MicroMissiles },
-            [AbilityIds.Evac] = new AbilityDef { Id = AbilityIds.Evac, Name = "Evacuar", Description = "Desde La Lata, pide salir. Si el otro jugador acepta, salen los que estén dentro y los de fuera se pierden. En la Limpieza es una retirada: la misión se pierde.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false },
+            // Lore's, N8 (17/11): who doesn't fit is lost too (N2).
+            [AbilityIds.Evac] = new AbilityDef { Id = AbilityIds.Evac, Name = "Evacuar", Description = "Desde La Lata, pide salir. Si el otro jugador acepta, salen los que estén dentro y quepan, y los demás se pierden. En la Limpieza es una retirada: la misión se pierde.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false },
             [AbilityIds.Hack] = new AbilityDef
             {
                 Id = AbilityIds.Hack,
@@ -630,6 +631,8 @@ namespace Bastion.Engine
             // Arturo, 1/11: before the grenades, and the 3×3 for 2 turns. On the ground only, where fires burn (Burning).
             [AbilityIds.Molotov] = new AbilityDef { Id = AbilityIds.Molotov, Name = "Cóctel molotov", Description = "Lanza un cóctel molotov: arde un cuadrado de 3×3 casillas durante 2 turnos. Quita 1 de salud a quien esté dentro al caer, a quien entre y a quien acabe el turno dentro, también a los tuyos. Solo se lanza a la calle o a una planta baja.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Charge = ChargeIds.Molotov, Range = 10, Radius = 1.5, Noise = 10 },
             [AbilityIds.FirstAid] = new AbilityDef { Id = AbilityIds.FirstAid, Name = "Botiquín", Description = "Cura 4 de salud a uno mismo o a un compañero de al lado.", Target = AbilityTargets.Ally, Ap = 1, EndsTurn = false, Charge = ChargeIds.FirstAid, Range = 1.5 },
+            // A run's Rescate (N2): one action, from beside the survivor; Lore's texts (N8).
+            [AbilityIds.Talk] = new AbilityDef { Id = AbilityIds.Talk, Name = Lore.TalkText.Action, Description = Lore.TalkText.Help, Target = AbilityTargets.Self, Ap = 1, EndsTurn = false },
         };
 
         /// <summary>Base chance of fixing the objective terminal (Arreglar); Investigar's bars add to it.</summary>

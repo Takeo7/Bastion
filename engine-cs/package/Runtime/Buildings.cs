@@ -174,7 +174,72 @@ namespace Bastion.Engine
             if (plan.Of.Length == 0) return false;
             var seen = new HashSet<int>();
             if (viewers != null) foreach (var v in viewers) seen.UnionWith(Found(s, plan, v, true));
-            return HiddenIn(s, plan, Known(s), seen, p, i);
+            return HiddenIn(s, plan, Known(s), seen, p, i) && !SideSeen(s, p, viewers);
+        }
+
+        // ------------------------------------------------- from beside a window (N1)
+
+        /// <summary>How many rows behind a window glass the squad sees from beside it, against the wall (N1, B).</summary>
+        public const int SideRows = 2;
+
+        /// <summary>
+        /// What a squad member on `p` sees from beside a window (N1, Arturo 17/11, cuadro 22, B: «solo un poco»): standing
+        /// outside, on the ground, against a building's wall right beside one of its ground-floor windows (on the tile next to
+        /// the one before it), the building's tiles one and two rows behind the glass, two to either side, that its line of
+        /// sight reaches (Los.SightOrigin, the squad's window reach). Shown, not found: gone when it leaves (Hidden, Veil).
+        /// Ground tile indices.
+        /// </summary>
+        public static List<int> SideStrip(GameState s, Pos p)
+        {
+            var strip = new List<int>();
+            var storeys = s.Storeys;
+            if (storeys == null || p.Z != 0 || !Grid.InBounds(s, p.X, p.Y) || storeys[Grid.TileIndex(s, p.X, p.Y)] > 0) return strip;
+            bool Room(int x, int y) => Grid.InBounds(s, x, y) && storeys[Grid.TileIndex(s, x, y)] > 0 && !Shut(s.Tiles[Grid.TileIndex(s, x, y)]);
+            foreach (var d in Grid.Dirs4)
+            {
+                // `d` into the wall it stands against: a plain wall there, not a window (before one, Found's peek).
+                int wx = p.X + d.X, wy = p.Y + d.Y;
+                if (!Grid.InBounds(s, wx, wy) || s.Tiles[Grid.TileIndex(s, wx, wy)] != TileKinds.Wall || storeys[Grid.TileIndex(s, wx, wy)] <= 0) continue;
+                foreach (var t in new[] { new Vec2 { X = d.Y, Y = -d.X }, new Vec2 { X = -d.Y, Y = d.X } })
+                {
+                    int x = wx + t.X, y = wy + t.Y;
+                    if (!Grid.InBounds(s, x, y) || !Grid.IsWindow(s.Tiles[Grid.TileIndex(s, x, y)]) || !Room(x + d.X, y + d.Y)) continue;
+                    for (var k = 1; k <= SideRows; k++)
+                    {
+                        for (var j = -2; j <= 2; j++)
+                        {
+                            int qx = x + d.X * k + t.X * j, qy = y + d.Y * k + t.Y * j;
+                            if (!Room(qx, qy)) continue;
+                            var i = Grid.TileIndex(s, qx, qy);
+                            if (strip.Contains(i)) continue;
+                            if (Los.SightOrigin(s, p, new Pos { X = qx, Y = qy, Z = 0 }, Los.ViewReach(s), Los.WindowSightReach) != null) strip.Add(i);
+                        }
+                    }
+                }
+            }
+            return strip;
+        }
+
+        /// <summary>
+        /// Every tile the squad sees from beside a window now (SideStrip of each of its members on the ground): for the
+        /// client's fog and cutaway (Arte, N1). Not found; a building found is as before.
+        /// </summary>
+        public static HashSet<int> SidePeeks(GameState s)
+        {
+            var all = new HashSet<int>();
+            if (s.Mission?.Siege != null || s.Storeys == null || ByRoom(s)) return all;
+            foreach (var u in s.Units) if (Los.IsViewer(u, Teams.Xcom) && u.Pos.Z == 0) all.UnionWith(SideStrip(s, u.Pos));
+            return all;
+        }
+
+        /// <summary>Whether `p` is in the strip one of the squad (or of `viewers`) sees from beside a window, near it.</summary>
+        private static bool SideSeen(GameState s, Pos p, IEnumerable<Pos>? viewers)
+        {
+            if (p.Z != 0 || ByRoom(s)) return false;
+            var i = Grid.TileIndex(s, p.X, p.Y);
+            var near = s.Units.Where((u) => Los.IsViewer(u, Teams.Xcom)).Select((u) => u.Pos).Concat(viewers ?? new Pos[0])
+                .Where((v) => v.Z == 0 && Math.Max(Math.Abs(v.X - p.X), Math.Abs(v.Y - p.Y)) <= SideRows + 2);
+            return near.Any((v) => SideStrip(s, v).Contains(i));
         }
 
         /// <summary>Hidden, with the plan, what is found and what the viewers find from where they stand at hand.</summary>
@@ -226,12 +291,14 @@ namespace Bastion.Engine
             var known = Known(s);
             var seen = new HashSet<int>();
             foreach (var u in s.Units) if (Los.IsViewer(u, Teams.Xcom)) seen.UnionWith(Found(s, plan, u.Pos, true));
+            var side = SidePeeks(s);
             var area = s.Width * s.Height;
             for (var node = 0; node < mask.Length; node++)
             {
                 if (!mask[node]) continue;
                 int i = node % area, z = node / area;
                 if (s.Storeys[i] <= 0 || z >= s.Storeys[i]) continue;
+                if (z == 0 && side.Contains(i)) continue;
                 if (HiddenIn(s, plan, known, seen, Grid.PosOf(s, node), i)) mask[node] = false;
             }
         }

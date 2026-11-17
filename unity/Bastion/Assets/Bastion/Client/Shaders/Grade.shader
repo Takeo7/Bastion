@@ -6,7 +6,9 @@
 // draws: UI's valley, as 0.10.1's geoscape MAP_MOOD). Graded or not, the 3D faded to black by _StageFade (the
 // settlement's change into the Mapa and out of it: stage.css .stage-fade, a black layer under the panels, so on the
 // display's values). A full-screen pass of the renderers, after URP's post (GradeMake); URP's own tone mapping is none
-// and its grading HDR, so what comes in is still the lit picture.
+// and its grading HDR, so what comes in is still the lit picture. The _Cine globals (T7, Arturo 18/11: a more cinematic
+// look, five ways to try: Editor's CineLab) are 0 in the game, and then nothing of them is done: a filmic tone curve
+// over the Neutral, light shafts from the sun, a colour fringe at the edges, grain, bars.
 Shader "Bastion/Grade"
 {
     SubShader
@@ -39,6 +41,21 @@ Shader "Bastion/Grade"
             float _GradeGain;
             float _StageFade;
             float _GradePlain;
+            // T7's looks (CineLab), 0 in the game: the filmic curve's share (ACES, Narkowicz's fit, over the Neutral), the
+            // grain, the fringe at the edges, the bars' height kept (2.39:1 on 16:9 is 0.744), the light shafts (strength,
+            // threshold, decay, length), the sun on the screen (uv; z 1 if it is ahead of the camera) and the shafts' tint.
+            float _CineCurve;
+            float _CineGrain;
+            float _CineAberration;
+            float _CineBars;
+            float4 _CineRays;
+            float4 _CineSun;
+            float4 _CineRaysTint;
+
+            float3 Aces(float3 x)
+            {
+                return saturate(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14));
+            }
 
             float3 Neutral(float3 color)
             {
@@ -63,7 +80,32 @@ Shader "Bastion/Grade"
                 half4 source = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);
                 // (On display values, as the CSS layer's opacity: linear, to the 2.2.)
                 if (_GradeOn < 0.5 || _GradePlain > 0.5) return half4(source.rgb * pow(saturate(1.0 - _StageFade), 2.2), source.a);
-                float3 c = LinearToSRGB(saturate(Neutral(source.rgb * _GradeExposure)));
+                float3 hdr = source.rgb;
+                // (T7's: a colour fringe out at the edges, red in and blue out; light shafts from the sun, the bright along
+                // the way to it.)
+                if (_CineAberration > 0.0)
+                {
+                    float2 edge = (uv - 0.5) * _CineAberration * dot(uv - 0.5, uv - 0.5) * 4.0;
+                    hdr.r = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv - edge).r;
+                    hdr.b = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + edge).b;
+                }
+                if (_CineRays.x > 0.0 && _CineSun.z > 0.5)
+                {
+                    float2 step = (_CineSun.xy - uv) * _CineRays.w / 24.0;
+                    float2 at = uv;
+                    float fall = 1.0, shafts = 0.0;
+                    for (int i = 0; i < 24; i++)
+                    {
+                        at += step;
+                        float3 s = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, at).rgb;
+                        shafts += max(dot(s, float3(0.2126, 0.7152, 0.0722)) - _CineRays.y, 0.0) * fall;
+                        fall *= _CineRays.z;
+                    }
+                    hdr += _CineRaysTint.rgb * shafts * _CineRays.x / 24.0;
+                }
+                float3 toned = Neutral(hdr * _GradeExposure);
+                if (_CineCurve > 0.0) toned = lerp(toned, Aces(hdr * _GradeExposure), _CineCurve);
+                float3 c = LinearToSRGB(saturate(toned));
                 float luma = dot(c, float3(0.299, 0.587, 0.114));
                 // The more vivid colours, none in the darkest: the fog of war's and the night's shade stay as they are.
                 float vivid = smoothstep(0.08, 0.24, luma);
@@ -79,6 +121,9 @@ Shader "Bastion/Grade"
                 float2 d = uv - 0.5;
                 c *= 1.0 - _GradeLook.z * dot(d, d) * 2.0;
                 c *= saturate(1.0 - _StageFade);
+                // (T7's grain, on the display's values, less in the light; and the bars.)
+                if (_CineGrain > 0.0) c += (GenerateHashedRandomFloat(uint3(input.positionCS.xy, (uint)(_Time.y * 24.0))) - 0.5) * _CineGrain * (1.0 - 0.6 * luma);
+                if (_CineBars > 0.0 && abs(uv.y - 0.5) > _CineBars * 0.5) c = 0;
                 // A dither of half a step of 255 where the picture is written out in 8 bits (on the display values): the
                 // fog of war's dark, smooth mist came out in rings of one step each. The review of 10/11, L-16.
                 c += (InterleavedGradientNoise(input.positionCS.xy, 0) - 0.5) / 255.0;

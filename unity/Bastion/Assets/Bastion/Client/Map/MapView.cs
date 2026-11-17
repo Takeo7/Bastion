@@ -155,6 +155,14 @@ namespace Bastion.Client.Map
         public Awaitable LataDeparts(System.Threading.CancellationToken ct = default)
         {
             if (Lata == null || lataWay == null) return Done();
+            // (The motorbike only once those boarding are on it: they walk to it and get on in sight, UnitViews.Ride.)
+            if (Lata.IsBike && Units.UnitViews.Current != null && Units.UnitViews.Current.Mounting) return OnceMounted(ct);
+            return Go(ct);
+        }
+
+        /// <summary>LataDeparts itself, waiting for nobody.</summary>
+        Awaitable Go(System.Threading.CancellationToken ct)
+        {
             // Out of the fog while it goes (the 3D review's E-07, 10/11): over tiles seen, seen before and never seen at once,
             // the fog cut it into lit and dark pieces.
             Lata.OutOfFog(true);
@@ -163,6 +171,20 @@ namespace Bastion.Client.Map
             _ = RunOver(ct);
             return going;
         }
+
+        /// <summary>
+        /// LataDeparts once nobody is getting on the motorbike any more, MountWait seconds at most: then it goes whatever (not
+        /// LataDeparts again, which would wait again: on a map whose catalog lacked its model it waited for good, UI 18/11).
+        /// </summary>
+        async Awaitable OnceMounted(System.Threading.CancellationToken ct)
+        {
+            for (float waited = 0; waited < MountWait && Units.UnitViews.Current != null && Units.UnitViews.Current.Mounting && !ct.IsCancellationRequested; waited += Time.deltaTime)
+                await Awaitable.NextFrameAsync(ct);
+            if (Lata != null && lataWay != null) await Go(ct);
+        }
+
+        /// <summary>How long La Lata waits at most for those getting on the motorbike (s): a walk of a few tiles and getting on.</summary>
+        const float MountWait = 6;
 
         /// <summary>
         /// The cars of the map its way out passes beside or through (E-07, 10/11: a parked taxi seemed grazed): each one whose

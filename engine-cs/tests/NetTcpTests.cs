@@ -131,45 +131,6 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
-        public async Task TwoLiveEndsKeepEachOtherAlive()
-        {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
-            listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            var raw = new TcpClient();
-            await raw.ConnectAsync("127.0.0.1", port);
-            // Beating every 50 ms, a second of nothing for dead. Both ends share this process: held up together (the pool
-            // once 1.3 s late, with the whole suite twice at once), neither may take the other for gone on waking, before
-            // reading what waits (TcpConnection.BeatLoop); the second covers one end held up while the other isn't.
-            var server = new TcpConnection(await listener.AcceptTcpClientAsync(), 1024, 1024, heartbeatMs: 50, deadAfterMs: 1000);
-            var client = new TcpConnection(raw, 1024, 1024, heartbeatMs: 50, deadAfterMs: 1000);
-            var serverClosed = ClosedOf(server);
-            var clientClosed = ClosedOf(client);
-            server.Start();
-            client.Start();
-            // How late the thread pool, which the connections' loops run on, was at its worst meanwhile: if they are
-            // taken for gone, whether the machine held them up or the heartbeat failed.
-            var watch = Stopwatch.StartNew();
-            long worst = 0;
-            var probe = Task.Run(async () =>
-            {
-                while (watch.ElapsedMilliseconds < 3000)
-                {
-                    var before = watch.ElapsedMilliseconds;
-                    await Task.Delay(10).ConfigureAwait(false);
-                    worst = Math.Max(worst, watch.ElapsedMilliseconds - before - 10);
-                }
-            });
-            // Three times the dead time with nothing to say but the heartbeat: both still open.
-            await Task.Delay(3000);
-            await probe;
-            string Why(Task<string> closed) => closed.IsCompleted ? $"closed «{closed.Result}»; the pool was up to {worst} ms late" : "";
-            Assert.False(serverClosed.IsCompleted || clientClosed.IsCompleted, $"server: {Why(serverClosed)} · client: {Why(clientClosed)}");
-            client.Close("fin");
-            listener.Stop();
-        }
-
-        [Fact]
         public async Task AConnectionLostAsItComesLeavesThePortTakingOthers()
         {
             // The first connection fails as it comes (here its listener throws; in the game, a socket reset before its
@@ -262,6 +223,72 @@ namespace Bastion.Engine.Tests
             var started = Stopwatch.StartNew();
             await Assert.ThrowsAnyAsync<Exception>(() => TcpConnection.ConnectAsync("127.0.0.1", port, 1000, CancellationToken.None));
             Assert.True(started.ElapsedMilliseconds < 5000, $"{started.ElapsedMilliseconds} ms");
+        }
+
+        /// <summary>
+        /// Alone, after the rest (TimeBudgets): with every test at once, both ends were taken for gone once (17/11, G5b).
+        /// Both share this process, and a pool flooded with work that blocks holds up what is queued behind it: flooding it
+        /// on purpose (Red, .dev-snapshots/red/tcp-flake), one end's beat woke 2.4 s late with its pings unwritten, and
+        /// the other, on time, rightly took it for gone. Between two machines, each is held up alone.
+        /// </summary>
+        [Collection(TimeBudgets.Name)]
+        public class Alone
+        {
+            [Fact]
+            public async Task TwoLiveEndsKeepEachOtherAlive()
+            {
+                var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                var raw = new TcpClient();
+                await raw.ConnectAsync("127.0.0.1", port);
+                // Beating every 50 ms, a second of nothing for dead. Both ends share this process: held up together (the
+                // pool once 1.3 s late, with the whole suite twice at once), neither may take the other for gone on waking,
+                // before reading what waits (TcpConnection.BeatLoop); the second covers one end held up while the other isn't.
+                var server = new TcpConnection(await listener.AcceptTcpClientAsync(), 1024, 1024, heartbeatMs: 50, deadAfterMs: 1000);
+                var client = new TcpConnection(raw, 1024, 1024, heartbeatMs: 50, deadAfterMs: 1000);
+                var serverClosed = ClosedOf(server);
+                var clientClosed = ClosedOf(client);
+                server.Start();
+                client.Start();
+                // How late the thread pool, which the connections' loops run on, was at its worst meanwhile: its timers,
+                // and the work queued behind the rest (a socket's reading, a semaphore's waiter). If they are taken for
+                // gone, whether the machine held them up or the heartbeat failed.
+                var watch = Stopwatch.StartNew();
+                long timers = 0;
+                long queued = 0;
+                var probe = Task.Run(async () =>
+                {
+                    while (watch.ElapsedMilliseconds < 3000)
+                    {
+                        var before = watch.ElapsedMilliseconds;
+                        await Task.Delay(10).ConfigureAwait(false);
+                        timers = Math.Max(timers, watch.ElapsedMilliseconds - before - 10);
+                    }
+                });
+                var queue = new Thread(() =>
+                {
+                    while (watch.ElapsedMilliseconds < 3000)
+                    {
+                        using var ran = new ManualResetEventSlim();
+                        var before = watch.ElapsedMilliseconds;
+                        ThreadPool.UnsafeQueueUserWorkItem((_) => ran.Set(), null);
+                        ran.Wait();
+                        queued = Math.Max(queued, watch.ElapsedMilliseconds - before);
+                        Thread.Sleep(10);
+                    }
+                }) { IsBackground = true };
+                queue.Start();
+                // Three times the dead time with nothing to say but the heartbeat: both still open.
+                await Task.Delay(3000);
+                await probe;
+                queue.Join();
+                string Why(Task<string> closed, TcpConnection end) => closed.IsCompleted ? $"closed «{closed.Result}»: {end.Beats()}" : "open";
+                Assert.False(serverClosed.IsCompleted || clientClosed.IsCompleted,
+                    $"server {Why(serverClosed, server)} · client {Why(clientClosed, client)} · the pool's timers up to {timers} ms late, its queue {queued} ms");
+                client.Close("fin");
+                listener.Stop();
+            }
         }
     }
 }

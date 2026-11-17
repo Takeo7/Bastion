@@ -510,6 +510,21 @@ namespace Bastion.Engine
             new Vehicle("Autobús", "el autobús", "un autobús", false, "El de línea de Atalaya, con la chapa que Teo le soldó. La Lata de verdad."),
         };
 
+        /// <summary>The expeditions' first transport (Arturo, 17/11: every expedition starts with 2 seats, on a motorbike).</summary>
+        public static readonly Vehicle Moto = new Vehicle("Moto", "la moto", "una moto", true, "Dos plazas: quien conduce y quien va detrás.");
+
+        /// <summary>
+        /// La Lata in an expedition by its seats (Runs.Seats: 2, 4, 6, 8): the motorbike, the 4×4, the van and the bus. The
+        /// truck's 7 seats are only the old campaign's.
+        /// </summary>
+        public static Vehicle RunTransport(int seats)
+        {
+            if (seats <= 2) return Moto;
+            if (seats <= 4) return Vehicles[0];
+            if (seats <= 6) return Vehicles[1];
+            return Vehicles[3];
+        }
+
         /// <summary>`VEHICLES[tier] ?? VEHICLES[1]`.</summary>
         private static Vehicle VehicleOf(int tier)
         {

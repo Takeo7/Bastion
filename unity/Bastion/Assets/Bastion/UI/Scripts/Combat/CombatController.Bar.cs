@@ -81,9 +81,12 @@ namespace Bastion.UI.Combat
             var m = State.Mission;
             // A door's key only while there is one to open or close beside the soldier (they come last, so no hotkey moves).
             bool Door(string id) => (id != AbilityIds.OpenDoor && id != AbilityIds.CloseDoor) || Abilities.DoorTiles(State, u, id == AbilityIds.OpenDoor ? "door" : "doorOpen").Count > 0;
+            // Hablar only while a run's survivor waits and has been seen (N2, 17/11): the engine lists it for everyone.
+            var waiting = Abilities.Waiting(State);
+            bool Talk(string id) => id != AbilityIds.Talk || (waiting != null && !Unfound(waiting));
             // Leaving is the bar's own action (EvacActions), for any of ours in the bus: never the soldier's.
             return Abilities.AbilitiesOf(u)
-                .Where(id => id != AbilityIds.Evac && (id != AbilityIds.Hack || (m.Terminal != null && !m.ObjectiveDone)) && (id != AbilityIds.Search || HasSpots) && Door(id))
+                .Where(id => id != AbilityIds.Evac && (id != AbilityIds.Hack || (m.Terminal != null && !m.ObjectiveDone)) && (id != AbilityIds.Search || HasSpots) && Door(id) && Talk(id))
                 .ToList();
         }
 

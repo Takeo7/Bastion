@@ -104,7 +104,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(40, Content.Haggled(40, false));
             Assert.Equal(32, Content.Haggled(40, true));
             Assert.Equal(12, Content.Haggled(15, true));
-            Assert.Equal(new[] { 150, 300 }, Content.UpgradePrices[UpgradeIds.Squad]);
+            Assert.Equal(new[] { 40, 150, 300 }, Content.UpgradePrices[UpgradeIds.Squad]);
             Assert.Equal(new[] { 80, 160, 240 }, Content.UpgradePrices[UpgradeIds.Stash]);
             Assert.All(UpgradeIds.All, (id) => Assert.True(Content.UpgradePrices.ContainsKey(id)));
         }

@@ -66,6 +66,11 @@ namespace Bastion.Client.Map
         /// (who stands in the doorway of a building not found shows: the engine's Buildings.Hidden).
         /// </summary>
         readonly HashSet<int> spotted = new HashSet<int>();
+        /// <summary>
+        /// The ground tiles the squad sees now from beside a window (N1, B, Arturo 17/11: «solo un poco»; the engine's
+        /// Buildings.SidePeeks): in sight though their building isn't found, and not kept once nobody is there.
+        /// </summary>
+        HashSet<int> peeks = new HashSet<int>();
         /// <summary>A siege's by day (Home): by tile, the base and its clearing, seen from the start; null on any other map.</summary>
         bool[] home;
         /// <summary>
@@ -405,6 +410,7 @@ namespace Bastion.Client.Map
             lights = Night ? Los.LitMask(seen) : null;
             using (ViewMarker.Auto()) view = Los.TeamView(seen, "xcom");
             using (CloseMarker.Auto()) Close(seen);
+            peeks = Bastion.Engine.Buildings.SidePeeks(seen);
             spotted.Clear();
             foreach (var u in seen.Units)
             {
@@ -455,8 +461,11 @@ namespace Bastion.Client.Map
                 bool inSight = node < visible.Length && visible[node];
                 bool seen = inSight || (node < view.Length && view[node]) || (node < explored.Length && explored[node]);
                 // (A building nobody has been in: nothing of its inside, though its tiles be in sight through a window; but
-                // the tile an enemy in sight stands on, while it is, with its ring and its shadow: Gameplay, 28/10.)
-                if (Closed(levels[i], i) && !spotted.Contains(node)) inSight = seen = false;
+                // the tile an enemy in sight stands on, while it is, with its ring and its shadow: Gameplay, 28/10; and the
+                // rows one sees from beside a window, against the wall, while one is there: N1.)
+                bool peek = levels[i] == 0 && peeks.Contains(i);
+                if (peek) inSight = seen = true;
+                else if (Closed(levels[i], i) && !spotted.Contains(node)) inSight = seen = false;
                 sightTo[i] = inSight && !shut[i] ? 1 : 0;
                 litTo[i] = lights != null && node < lights.Length && lights[node] ? 1 : 0;
                 knownTo[i] = seen && !shut[i] ? 1 : 0;

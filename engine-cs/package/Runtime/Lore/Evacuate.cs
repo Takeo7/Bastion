@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Bastion.Engine
 {
@@ -11,20 +12,25 @@ namespace Bastion.Engine
         /// the bus, the other answers, and whoever is outside when it leaves is lost.
         /// `clearing`: a Limpieza, where leaving is a retreat that loses the mission;
         /// `ready`: the objective is done (always so in a Saqueo); `left`: who would
-        /// stay outside.
+        /// stay outside; `noSeat`: who is in the zone but has no seat, of `seats`
+        /// (Arturo, 17/11: a Rescate's survivor takes one, and whoever doesn't fit is lost).
         /// </summary>
         public sealed class EvacSituation
         {
-            public EvacSituation(bool clearing, bool ready, IReadOnlyList<string> left)
+            public EvacSituation(bool clearing, bool ready, IReadOnlyList<string> left, IReadOnlyList<string>? noSeat = null, int seats = 0)
             {
                 Clearing = clearing;
                 Ready = ready;
                 Left = left;
+                NoSeat = noSeat ?? new string[0];
+                Seats = seats;
             }
 
             public bool Clearing { get; }
             public bool Ready { get; }
             public IReadOnlyList<string> Left { get; }
+            public IReadOnlyList<string> NoSeat { get; }
+            public int Seats { get; }
         }
 
         /// <summary>What leaving now costs, in a sentence or two: the mission, and who stays outside.</summary>
@@ -36,11 +42,16 @@ namespace Bastion.Engine
                     ? "El objetivo no está cumplido: si salís ahora, la misión se pierde."
                     : "";
             var @out = o.Left.Count == 0
-                ? "Estáis todos dentro."
+                ? o.NoSeat.Count == 0 ? "Estáis todos dentro." : ""
                 : o.Left.Count == 1
                     ? $"{o.Left[0]} se quedaría fuera, y se perdería."
                     : $"{JoinAnd(o.Left)} se quedarían fuera, y se perderían.";
-            return lose.Length > 0 ? $"{lose} {@out}" : @out;
+            var seat = o.NoSeat.Count == 0
+                ? ""
+                : o.NoSeat.Count == 1
+                    ? $"Solo caben {o.Seats}: {o.NoSeat[0]} se quedaría fuera, y se perdería."
+                    : $"Solo caben {o.Seats}: {JoinAnd(o.NoSeat)} se quedarían fuera, y se perderían.";
+            return string.Join(" ", new[] { lose, @out, seat }.Where((x) => x.Length > 0));
         }
 
         /// <summary>The prompt on reaching the bus: its title, its text, and its two buttons.</summary>
@@ -60,12 +71,15 @@ namespace Bastion.Engine
             public string Wait { get; }
         }
 
-        /// <summary>The prompt on reaching the bus: leave or wait. `partner`: who has to accept, or null when playing alone.</summary>
+        /// <summary>
+        /// The prompt on reaching the bus: leave or wait. `partner`: who has to accept, or null when playing alone.
+        /// «Evacuar», the bar's verb, not «Salir» (Arturo, 18/11, T8: a «Salir» alone looked like quitting the game).
+        /// </summary>
         public static EvacPromptText EvacPrompt(EvacSituation o, string? partner)
         {
-            var title = o.Clearing ? "Retirada" : o.Ready ? $"Salir {Bus.In}" : "Salir sin el objetivo";
+            var title = o.Clearing ? "Retirada" : o.Ready ? $"Evacuar {Bus.In}" : "Evacuar sin el objetivo";
             var text = !string.IsNullOrEmpty(partner) ? $"{EvacStakes(o)} {partner} tiene que aceptar." : EvacStakes(o);
-            return new EvacPromptText(title, text, o.Clearing ? "Retirarse" : !string.IsNullOrEmpty(partner) ? "Pedir salir" : "Salir", "Esperar");
+            return new EvacPromptText(title, text, o.Clearing ? "Retirarse" : !string.IsNullOrEmpty(partner) ? "Pedir evacuar" : "Evacuar", "Esperar");
         }
 
         /// <summary>The partner's notice: its title, its text, and its two buttons.</summary>
@@ -89,9 +103,9 @@ namespace Bastion.Engine
         public static EvacAskText EvacAsk(string who, EvacSituation o)
         {
             return new EvacAskText(
-                o.Clearing ? $"{who} pide retirarse" : $"{who} pide salir",
+                o.Clearing ? $"{who} pide retirarse" : $"{who} pide evacuar",
                 EvacStakes(o),
-                o.Clearing ? "Retirarse" : "Salir",
+                o.Clearing ? "Retirarse" : "Evacuar",
                 "Esperar");
         }
 
@@ -113,6 +127,12 @@ namespace Bastion.Engine
             return @out.Count > 0 ? $"{Bus.Name} sale con {JoinAnd(@out)}." : $"{Bus.Name} sale sin nadie.";
         }
 
+        /// <summary>The log line as it leaves without those who didn't fit (Arturo, 17/11): «No caben todos: Marta Gil se queda fuera.»</summary>
+        public static string EvacNoSeatLine(IReadOnlyList<string> noSeat)
+        {
+            return noSeat.Count == 1 ? $"No caben todos: {noSeat[0]} se queda fuera." : $"No caben todos: {JoinAnd(noSeat)} se quedan fuera.";
+        }
+
         /// <summary>The words for evacuating that don't depend on who.</summary>
         public static class EvacText
         {
@@ -120,7 +140,7 @@ namespace Bastion.Engine
             public const string Lapsed = "Nadie ha contestado: la petición de salir caduca con el turno.";
             /// <summary>The evacuation notice's kicker, and the EVACUAR button's tooltip.</summary>
             public const string Kicker = Bus.Name;
-            public const string ButtonTip = "Salir " + Bus.In + ": quien esté fuera cuando salga se pierde";
+            public const string ButtonTip = "Evacuar " + Bus.In + ": quien esté fuera cuando salga, o no quepa, se pierde";
             /// <summary>The debrief's status of someone left outside (`lost`).</summary>
             public const string Lost = "Se quedó fuera";
             /// <summary>The mission's end when the bus left early: a Limpieza abandoned, or any other without its objective.</summary>
@@ -136,7 +156,7 @@ namespace Bastion.Engine
         public static class TimeText
         {
             /// <summary>At the start of the last turn: the strip's alert and the log.</summary>
-            public const string LastTurn = "Último turno: " + Bus.Name + " sale al acabarlo, con quien esté en la zona de evacuación.";
+            public const string LastTurn = "Último turno: " + Bus.Name + " sale al acabarlo, con quien esté en la zona de evacuación y quepa.";
             public const string LastTurnFloat = "ÚLTIMO TURNO";
             /// <summary>Log, as it leaves on time.</summary>
             public const string Departs = Bus.Name + " no espera más.";
@@ -196,10 +216,10 @@ namespace Bastion.Engine
             public const string Stay = Bus.Name + " no sale todavía: seguís en la misión.";
         }
 
-        /// <summary>The notice to the partner: «Ana pide salir: «Aceptar evacuación» o «Esperar», en tu barra.»</summary>
+        /// <summary>The notice to the partner: «Ana pide evacuar: «Aceptar evacuación» o «Esperar», en tu barra.»</summary>
         public static string EvacBarNotice(string who)
         {
-            return $"{who} pide salir: «{EvacBar.Accept}» o «{EvacBar.Wait}», en tu barra.";
+            return $"{who} pide evacuar: «{EvacBar.Accept}» o «{EvacBar.Wait}», en tu barra.";
         }
 
         /// <summary>

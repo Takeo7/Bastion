@@ -661,8 +661,18 @@ namespace Bastion.Engine
                     var vip = UnitOf(s, ev.Unit);
                     vip.Captive = false;
                     vip.Owner = ev.Owner;
+                    // A run's survivor (N2): one of the squad now, with their actions and their walk this turn already.
+                    if (s.Run != null)
+                    {
+                        vip.Ap = Content.ApPerTurnOf(vip);
+                        vip.Moves = null;
+                        s.Mission.SurvivorFound = true;
+                    }
                     break;
                 }
+                case SurvivorFoundEvent _:
+                    s.Mission.SurvivorFound = true;
+                    break;
                 case ReinforcementsIncomingEvent ev:
                 {
                     var list = s.Mission.Reinforcements;
@@ -1221,6 +1231,11 @@ namespace Bastion.Engine
                     Lair = CopyPosOrNull(m.Lair),
                     Boss = m.Boss,
                     Inside = m.Inside,
+                    Seats = m.Seats,
+                    SearchArea = m.SearchArea != null ? new SearchArea { Center = CopyVec(m.SearchArea.Center), Radius = m.SearchArea.Radius } : null,
+                    SurvivorFound = m.SurvivorFound,
+                    Survivor = m.Survivor,
+                    Guarded = m.Guarded,
                 },
                 Turn = s.Turn,
                 ActiveTeam = s.ActiveTeam,

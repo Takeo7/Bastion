@@ -83,7 +83,7 @@ namespace Bastion.Engine.Tests
             var back = Json.Read<CampaignState>(json);
             Assert.Equal(json, Json.Write(back));
             var o = JObject.Parse(json);
-            Assert.Equal(28, (int)o["version"]!);
+            Assert.Equal(Campaign.RunsCampaignVersion, (int)o["version"]!);
             Assert.Equal(10, (int)o["stash"]!["w"]!);
             Assert.Equal("knife", (string)o["soldiers"]![0]!["kit"]!["melee"]!["type"]!);
             Assert.Equal(JTokenType.Null, o["soldiers"]![0]!["kit"]!["belt"]![0]!.Type);

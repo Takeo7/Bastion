@@ -66,7 +66,8 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void OnTheBaseTheSuppliesGoToTheStashAndPayTheUpgradesInTurn()
         {
-            var c = Solo();
+            // As a game starts it: 2 seats (N4).
+            var c = Campaign.CreateRunsCampaign(Zero, new Rng(1));
             var s = Soldier(c);
             var kept = InStash(c, GearKinds.Supplies, null, 0, 0, 90);
             InPack(c, s, GearKinds.Supplies, null, 0, 0, 70);
@@ -82,10 +83,20 @@ namespace Bastion.Engine.Tests
             }
             Assert.Equal(Content.PileOf(GearKinds.Supplies, null), kept.Count);
             Assert.Equal((160, 0), (Runs.StashSupplies(c), Gears.Supplies(s.Kit!.Pack)));
-            // More soldiers out (150) first; then saving for the mending (120), out meanwhile.
+            // More soldiers out (40) first; then the mending (120), and then saving, out meanwhile.
             Assert.Equal(UpgradeIds.Squad, Assert.IsType<UpgradeCommand>(next).Upgrade);
             Ok(c, next!, 0, Zero);
-            Assert.Equal((1, 10), (Runs.Level(c, UpgradeIds.Squad), Runs.StashSupplies(c)));
+            Assert.Equal((1, 120), (Runs.Level(c, UpgradeIds.Squad), Runs.StashSupplies(c)));
+            // Its soldiers into the seats it bought.
+            next = heard.BaseOrder(0, true);
+            while (next is SquadCommand)
+            {
+                Ok(c, next, 0, Zero);
+                next = heard.BaseOrder(0, true);
+            }
+            Assert.Equal(4, c.Squad.Count);
+            Assert.Equal(UpgradeIds.Mend, Assert.IsType<UpgradeCommand>(next).Upgrade);
+            Ok(c, next!, 0, Zero);
             Assert.IsType<StartRunCommand>(heard.BaseOrder(0, true));
         }
 

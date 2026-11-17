@@ -162,6 +162,8 @@ namespace Bastion.UI.Strategy
                     IconIn(badge, n.AddedIcon, "rnode__mod-icon");
                 }
                 if (!n.Hidden) Name(p, side, n.Name, open ? "rnode__name rnode__name--open" : "rnode__name");
+                // A Rescate with no seat left (N2): said under its name, before choosing it.
+                if (!n.Hidden && !string.IsNullOrEmpty(n.Warn)) Name(p + new Vector2(0, 15), side, n.Warn, "rnode__name rnode__warn");
                 if (n.At) Here(p, side);
                 var node = n;
                 var card = node.Card.FindAll(l => !string.IsNullOrEmpty(l));

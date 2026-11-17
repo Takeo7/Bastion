@@ -23,6 +23,8 @@ namespace Bastion.Client.Units
 
         /// <summary>Where each weapon rides (syntyFigures.ts CARRIES): the main one, the pistol, the blade.</summary>
         const string MainCarry = "weapon", SidearmCarry = "sidearm", BeltCarry = "belt", SlungCarry = "slung";
+        /// <summary>Nothing in the hands (Draw): every weapon where it rides, the main gun on the back (the motorbike's rider: UnitViews.Ride).</summary>
+        const string EmptyHands = "";
 
         /// <summary>The holster this far below the hip (syntyFigures.ts HOLSTER_DROP); the blade out from the hips this way and this far (BELT_OUT, without a body to keep off).</summary>
         const float HolsterDrop = 0.15f, BeltOutBy = 0.13f;
@@ -262,8 +264,11 @@ namespace Bastion.Client.Units
         /// </summary>
         static void Draw(View v, string which)
         {
-            if (!v.carried.ContainsKey(which)) which = MainCarry;
-            if (!v.carried.ContainsKey(which)) which = v.carried.Keys.FirstOrDefault();
+            if (which != EmptyHands)
+            {
+                if (!v.carried.ContainsKey(which)) which = MainCarry;
+                if (!v.carried.ContainsKey(which)) which = v.carried.Keys.FirstOrDefault();
+            }
             var was = v.drawn;
             v.drawn = which;
             bool pistolOnly = PistolMain(v) && !v.carried.ContainsKey(SidearmCarry);

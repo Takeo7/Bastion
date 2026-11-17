@@ -55,9 +55,14 @@ namespace Bastion.Engine
         public int GearCount { get; set; }
         /// <summary>What the next fight chosen takes, besides its own (Modifiers).</summary>
         public string? Modifier { get; set; } // Modifiers
-        /// <summary>Someone joins the squad (a new soldier with a knife); with SurvivorHalf, at half health.</summary>
+        /// <summary>
+        /// Someone joined the squad (a new soldier with a knife); with SurvivorHalf, at half health. None does since N2 (Arturo,
+        /// 17/11: recruits only by a Rescate): kept false till UI's stop plate stops reading them.
+        /// </summary>
         public bool Survivor { get; set; }
         public bool SurvivorHalf { get; set; }
+        /// <summary>A fight of the next row becomes a Rescate, its survivor hidden alone (N2: «herido» and «radio»; Lore.RunEventEffects's rescue).</summary>
+        public bool Rescue { get; set; }
 
         /// <summary>H0's, derived, while UI reads it (StrategyPresenter.Expedition): the health one loses, negative.</summary>
         public int Hp => -HurtOne;
@@ -201,7 +206,8 @@ namespace Bastion.Engine
         /// <summary>Each upgrade's price in §, level by level (H0-DISENO §3): its count is how many levels it has.</summary>
         public static readonly IReadOnlyDictionary<string, IReadOnlyList<int>> UpgradePrices = new Dictionary<string, IReadOnlyList<int>>
         {
-            [UpgradeIds.Squad] = new[] { 150, 300 },
+            // 2→4 cheap (N4, 17/11: without it no survivor of a Rescate fits with two players), then as before.
+            [UpgradeIds.Squad] = new[] { 40, 150, 300 },
             [UpgradeIds.Stash] = new[] { 80, 160, 240 },
             [UpgradeIds.Pack] = new[] { 100, 200 },
             [UpgradeIds.Mend] = new[] { 120 },
@@ -258,13 +264,13 @@ namespace Bastion.Engine
         {
             ["farmacia"] = Event("farmacia", new RunEventOption { GearKind = GearKinds.Item, GearType = ItemIds.FirstAid, GearCount = 1, HurtOne = 2 }, new RunEventOption()),
             ["gasolinera"] = Event("gasolinera", new RunEventOption { Supplies = 25, Modifier = Modifiers.Awake }, new RunEventOption()),
-            ["herido"] = Event("herido", new RunEventOption { Survivor = true, SurvivorHalf = true }, new RunEventOption { Supplies = -15, GearKind = GearKinds.Weapon, GearType = FoundWeaponIds.Pistol, GearCount = 1 }),
+            ["herido"] = Event("herido", new RunEventOption { Rescue = true }, new RunEventOption { Supplies = -15, GearKind = GearKinds.Weapon, GearType = FoundWeaponIds.Pistol, GearCount = 1 }),
             ["campamento"] = Event("campamento", new RunEventOption { HealAll = 2, Modifier = Modifiers.Night }, new RunEventOption { Supplies = 15 }),
             ["puente"] = Event("puente", new RunEventOption { HurtOne = 3 }, new RunEventOption { Modifier = Modifiers.Storm }),
             ["caja-atada"] = Event("caja-atada", new RunEventOption { GearKind = GearKinds.Item, GearType = ItemIds.FragGrenade, GearCount = 2, HurtOne = 2 }, new RunEventOption()),
             ["perro"] = Event("perro", new RunEventOption { Supplies = -5, GearKind = GearKinds.Item, GearType = ItemIds.FirstAid, GearCount = 1 }, new RunEventOption()),
             ["control"] = Event("control", new RunEventOption { Supplies = -30 }, new RunEventOption { HurtAll = 2 }),
-            ["radio"] = Event("radio", new RunEventOption { Survivor = true, Modifier = Modifiers.Night }, new RunEventOption { Supplies = 20 }),
+            ["radio"] = Event("radio", new RunEventOption { Rescue = true, Modifier = Modifiers.Night }, new RunEventOption { Supplies = 20 }),
             ["supermercado"] = Event("supermercado", new RunEventOption { Supplies = 30, HurtAll = 1 }, new RunEventOption { Supplies = 10 }),
         };
 

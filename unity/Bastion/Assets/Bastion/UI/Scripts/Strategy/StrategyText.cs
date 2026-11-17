@@ -96,8 +96,6 @@ namespace Bastion.UI.Strategy
             public const string PurseAfter = ".";
 
             public static string For(string name) => $"Lo que cambies va a la mochila de {name}.";
-            public const string Join = "Que se una";
-            public const string NoJoin = "Que no";
             public static string Waiting(string partner) => $"Esperando a {partner}.";
             public static string TheyWait(string partner) => $"{partner} quiere seguir.";
 
@@ -115,6 +113,8 @@ namespace Bastion.UI.Strategy
             // Salir (Lore: «Salir», its help «Sale la escuadra: empieza una expedición del capítulo {n}.»).
             public const string Start2 = Lore.ExpeditionText.Start;
             public static string StartTip(int chapter) => Lore.ExpeditionText.StartHelp(chapter);
+            /// <summary>La Lata as the seats make it (N4, 17/11; Lore.RunTransport): «La Lata es **una moto**: 2 plazas.»</summary>
+            public static string Transport(int seats) => $"{Lore.Bus.Name} es **{Lore.RunTransport(seats).A}**: {seats} plazas.";
             public const string BackToStash = "Volver al Almacén";
             public const string SquadTip = "Pulsa un soldado para meterlo o sacarlo. El equipo se cambia en el Almacén.";
             public static string SquadTipTwo(string partner) => $"Pulsa un soldado para meterlo o sacarlo. Los de {partner} los elige {partner}. El equipo se cambia en el Almacén.";

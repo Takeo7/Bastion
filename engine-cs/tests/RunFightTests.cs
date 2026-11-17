@@ -683,7 +683,7 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void TheOneRescuedJoins()
         {
-            var (c, s) = Fight(NodeKinds.Rescue, seed: 3, before: (x) => x.Upgrades![UpgradeIds.Squad] = 1);
+            var (c, s) = Fight(NodeKinds.Rescue, seed: 3, before: (x) => x.Upgrades![UpgradeIds.Squad] = 2);
             Assert.Equal(MissionKinds.Rescue, s.Mission.Kind);
             var vip = s.Units.Single((u) => u.Id == s.Mission.ObjectiveUnit);
             vip.Hp = 2;
@@ -856,7 +856,7 @@ namespace Bastion.Engine.Tests
                     Ok(c, new ChooseNodeCommand { Node = n.Id });
                     if (c.Run.Phase == RunPhases.Stop)
                     {
-                        if (c.Run.Stop!.Outcome == null && (n.Kind == NodeKinds.Event || n.Kind == NodeKinds.Survivor)) Ok(c, new AnswerStopCommand { Option = 1 });
+                        if (c.Run.Stop!.Outcome == null && n.Kind == NodeKinds.Event) Ok(c, new AnswerStopCommand { Option = 1 });
                         Ok(c, new LeaveStopCommand());
                         continue;
                     }

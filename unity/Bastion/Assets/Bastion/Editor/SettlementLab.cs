@@ -930,6 +930,26 @@ namespace Bastion.EditorTools
 
         static void MakeEscuadra()
         {
+            // BASTION_RUNS_MUESTRA=name: one of Gameplay's runs samples (.dev-snapshots/gameplay/runs/muestras/name.json, or a
+            // path), its squad by La Lata on the runs' fixed clearing, its seats' vehicle, as BaseController shows them (T6).
+            if (Environment.GetEnvironmentVariable("BASTION_RUNS_MUESTRA") is string sample && sample.Length > 0)
+            {
+                string path = sample.StartsWith("/") ? sample : Path.Combine(Application.dataPath, "../../../.dev-snapshots/gameplay/runs/muestras", sample + ".json");
+                var runs = Bastion.Net.Json.Read<CampaignState>(File.ReadAllText(path));
+                Bastion.Client.Units.Dress.Roster(runs.Soldiers);
+                Bastion.Client.Units.SquadTint.ColourOf = slot => slot == 0 ? "#e8a33a" : "#4fb0e8";
+                var clearing = new GameObject("Asentamiento").AddComponent<Settlement>();
+                clearing.Camera = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None).FirstOrDefault(c => c.name == "Shot camera") ?? new GameObject("Shot camera").AddComponent<Camera>();
+                clearing.FitShots = false;
+                clearing.SetVehicle(Bastion.Engine.Runs.VehicleOf(runs));
+                clearing.ShowFixed();
+                var squad = (runs.Squad ?? new System.Collections.Generic.List<string>()).Select(id => runs.Soldiers.Find(x => x.Id == id)).Where(x => x != null).ToList();
+                clearing.SetLineup(runs, squad.Select(x => new Settlement.LineupEntry { SoldierId = x.Id, Colour = x.Owner == 0 ? "#e8a33a" : "#4fb0e8", Status = "ok" }).ToList(), false, true);
+                clearing.SetView(Settlement.Views.Squad, true);
+                Mood.Show(Mood.Day);
+                Debug.Log($"[settlement] runs sample {sample}: {squad.Count} in the squad, vehicle {Bastion.Engine.Runs.VehicleOf(runs)}");
+                return;
+            }
             if (Environment.GetEnvironmentVariable("BASTION_TINTE") == "1") Bastion.Client.Units.SquadTint.On = true;
             int n = int.TryParse(Environment.GetEnvironmentVariable("BASTION_N"), out int k) ? k : 6;
             bool debrief = Environment.GetEnvironmentVariable("BASTION_INFORME") == "1";

@@ -6,15 +6,28 @@ using Xunit;
 
 namespace Bastion.Engine.Tests
 {
-    /// <summary>The runs' tests (H0): campaigns of version 28, gear laid by hand, a run at the node wanted.</summary>
+    /// <summary>The runs' tests (H0): campaigns of runs, gear laid by hand, a run at the node wanted.</summary>
     public static class RunsHelpers
     {
         public static readonly int[] Both = { 0, 1 };
         public static readonly int[] Zero = { 0 };
 
-        public static CampaignState Solo(int seed = 1) => Campaign.CreateRunsCampaign(new[] { 0 }, new Rng(seed));
+        /// <summary>
+        /// A new campaign alone with 4 seats, as they were before N4 (17/11): the «squad» upgrade's first level, and everyone
+        /// in the squad. Campaign.CreateRunsCampaign is the one a game starts with (2 seats).
+        /// </summary>
+        public static CampaignState Solo(int seed = 1) => Seats4(Campaign.CreateRunsCampaign(new[] { 0 }, new Rng(seed)));
 
-        public static CampaignState Two(int seed = 1) => Campaign.CreateRunsCampaign(Both, new Rng(seed));
+        /// <summary>The same with two players: 2 soldiers each, all going out.</summary>
+        public static CampaignState Two(int seed = 1) => Seats4(Campaign.CreateRunsCampaign(Both, new Rng(seed)));
+
+        /// <summary>The «squad» upgrade at its first level (4 seats) and the squad that would go out with them.</summary>
+        public static CampaignState Seats4(CampaignState c)
+        {
+            (c.Upgrades ??= new Dictionary<string, int>())[UpgradeIds.Squad] = 1;
+            c.Squad = Runs.DefaultSquad(c, c.Players);
+            return c;
+        }
 
         /// <summary>The `nth` living soldier of `owner`.</summary>
         public static CampaignSoldier Soldier(CampaignState c, int owner = 0, int nth = 0) => c.Soldiers.Where((s) => s.Owner == owner && s.Alive).ElementAt(nth);

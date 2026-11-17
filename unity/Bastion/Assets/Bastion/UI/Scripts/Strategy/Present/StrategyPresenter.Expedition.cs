@@ -52,6 +52,12 @@ namespace Bastion.UI.Strategy
                     nv.Stop = NodeKinds.IsStop(n.Kind);
                     // Its line with what is known of it (Runs.StageLine: the alarm, the Asedio's turn, the Guarida's guard).
                     nv.Card.Add(Runs.StageLine(n));
+                    // A Rescate with La Lata full (N2, 17/11): whoever doesn't fit is lost when it leaves, said before choosing it.
+                    if (n.Kind == NodeKinds.Rescue && !Runs.SeatFree(c))
+                    {
+                        nv.Card.Add(Lore.RescueNoSeat);
+                        nv.Warn = Lore.RescueNoSeatTag;
+                    }
                     // A special map (H7, H9: not one of the six places a fight is in otherwise): its mark (Arturo, 17/11).
                     if (n.Site != null && !OrdinaryPlaces.Contains(n.Site) && Bastion.UI.Hud.LineIcon.Has("place:" + n.Site)) nv.SiteIcon = "place:" + n.Site;
                     if (!nv.Stop)
@@ -172,20 +178,6 @@ namespace Bastion.UI.Strategy
                                 Why = Runs.AnswerStopRefusal(c, i),
                             });
                     break;
-                case NodeKinds.Survivor:
-                    var who = stop.Survivor;
-                    if (who != null)
-                    {
-                        v.Title = who.Name;
-                        v.Survivor.Add(StrategyText.Stash.Health(Runs.MaxHp(who), Runs.MaxHp(who)));
-                    }
-                    // Answered, the engine keeps who it was in the result (Gameplay, 16/11): the title stays theirs.
-                    else if (stop.Result is EventResult said && said.Event == NodeKinds.Survivor && !string.IsNullOrEmpty(said.SoldierName))
-                        v.Title = said.SoldierName;
-                    if (stop.Outcome == null)
-                        for (var i = 0; i < 2; i++)
-                            v.Options.Add(new StopOptionView { Index = i, Label = i == 0 ? StrategyText.Runs.Join : StrategyText.Runs.NoJoin, Why = Runs.AnswerStopRefusal(c, i) });
-                    break;
             }
             if (stop.Outcome != null || stop.Result != null) v.Outcome = StopOutcome(stop);
             // With two: who has asked to go on.
@@ -218,7 +210,8 @@ namespace Bastion.UI.Strategy
         {
             if (!Content.RunEvents.TryGetValue(id, out var e) || option >= e.Options.Count) return null;
             var o = e.Options[option];
-            return Lore.RunEventEffects(o.Supplies, o.HurtOne, o.HurtAll, o.HealAll, o.GearKind, o.GearType, o.GearCount, o.Modifier, o.Survivor, o.SurvivorHalf);
+            // (No recruit from an event any more: «herido» and «radio» mark a Rescate ahead, N3.)
+            return Lore.RunEventEffects(o.Supplies, o.HurtOne, o.HurtAll, o.HealAll, o.GearKind, o.GearType, o.GearCount, o.Modifier, rescue: o.Rescue);
         }
 
         /// <summary>What happened at the stop (H4: StopState.Result, Lore's line with who it fell to and who joined); else the engine's.</summary>

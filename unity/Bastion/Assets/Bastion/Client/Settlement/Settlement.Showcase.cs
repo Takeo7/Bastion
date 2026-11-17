@@ -51,7 +51,7 @@ namespace Bastion.Client
                 Showcase((string)null, null, null, false);
                 return;
             }
-            var arms = Campaign.SoldierArms(campaign, s);
+            var arms = ArmsOf(campaign, s);
             Showcase(s.Id, look ?? s.Appearance, s.Alive ? arms.Primary : null, !s.Alive, s.Name, SquadTint.ColourOf(s.Owner), UnitViews.CarriesPistol(arms));
         }
 

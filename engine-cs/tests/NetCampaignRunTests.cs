@@ -39,16 +39,17 @@ namespace Bastion.Engine.Tests
     /// fights: the first row is always a Saqueo, and the squad sets out with four knives between two players; MissionBot
     /// searches on the way and goes for La Lata (a services area, La Lata 50 tiles off, is seldom won so). Of seeds 1 to 56,
     /// 19, 21, 28, 38, 47 and 49 won both: 19 (BASTION_SEMILLA=19 for the apps). With the hospital only inside on the map
-    /// (Gameplay, 16/11), 19's first fight is a Saqueo in the hospital, won too.
+    /// (Gameplay, 16/11), 19's first fight is a Saqueo in the hospital, won too. With 2 seats (N4) and the dead biting whoever
+    /// walks past them (T20, 18/11), 19 loses its second; of seeds 1 to 80, 29 win both: 7 (BASTION_SEMILLA=7 for the apps).
     /// </summary>
     public class NetCampaignRunTests
     {
         [Fact]
         public void TheTestAppsCampaignIsPlayedThrough()
         {
-            var played = CampaignAutoRun.Run(19, 2);
+            var played = CampaignAutoRun.Run(7, 2);
             Assert.Null(CampaignAutoRun.Stuck);
-            Assert.Equal(new[] { "Saqueo · Hospital", "Saqueo · Ciudad" }, played.Select((m) => m.Name));
+            Assert.Equal(new[] { "Saqueo · Camping", "Saqueo · Campo" }, played.Select((m) => m.Name));
             Assert.All(played, (m) => Assert.Equal(Outcomes.Victory, m.Outcome));
         }
     }

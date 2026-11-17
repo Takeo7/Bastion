@@ -21,10 +21,16 @@ namespace Bastion.UI.Combat
 
         static readonly Color32 Evac = MoveOverlay.Hex(0x4dff9a);
         static readonly Color32 Flare = MoveOverlay.Hex(0xff4a3a);
+        /// <summary>
+        /// A run's Rescate's zone to look in (N2): white, apart from the evacuation's green (Mixta: no amber, the orange is a
+        /// player's; Ana, 7/11 #6).
+        /// </summary>
+        static readonly Color32 Search = MoveOverlay.Hex(0xffffff);
 
         readonly MeshBuilder build = new MeshBuilder();
         MeshFilter zone;
         Material zoneMaterial;
+        MeshFilter search;
         MeshFilter beams;
         MeshFilter flares;
         Material flareRing;
@@ -40,6 +46,7 @@ namespace Bastion.UI.Combat
             shown.SetParent(transform, false);
             zone = Layer("Evacuación", 3097, false);
             zoneMaterial = zone.GetComponent<MeshRenderer>().sharedMaterial;
+            search = Layer("Búsqueda", 3096, false);
             beams = Layer("Balizas", 3108, false);
             flares = Layer("Bengalas", 3098, false);
             flareRings = Layer("Bengalas (anillos)", 3099, false);
@@ -97,6 +104,32 @@ namespace Bastion.UI.Combat
             }
         }
 
+        /// <summary>
+        /// A run's Rescate's zone (N2, 17/11): its ground tiles washed faintly, those whose middle is within the circle, and
+        /// the circle itself drawn round them, on the ground floor.
+        /// </summary>
+        void SearchZone(GameState s, SearchArea area)
+        {
+            build.Clear();
+            if (area != null)
+            {
+                var r = (float)area.Radius;
+                var inset = 0.02f * T;
+                var reach = Mathf.CeilToInt(r);
+                for (var y = area.Center.Y - reach; y <= area.Center.Y + reach; y++)
+                    for (var x = area.Center.X - reach; x <= area.Center.X + reach; x++)
+                    {
+                        if (!Bastion.Engine.Grid.InBounds(s, x, y) || (x - area.Center.X) * (x - area.Center.X) + (y - area.Center.Y) * (y - area.Center.Y) > r * r) continue;
+                        var floor = Board.TileToWorld(s, new Pos { X = x, Y = y }).y + 0.012f * T;
+                        var a = Board.Corner(x, y, floor);
+                        build.Flat(a.x + inset, a.z - inset, a.x + T - inset, a.z - T + inset, floor, new Color32(Search.r, Search.g, Search.b, 0x14));
+                    }
+                var middle = Board.TileToWorld(s, new Pos { X = area.Center.X, Y = area.Center.Y });
+                build.Arc(middle + Vector3.up * (0.03f * T), (r + 0.4f) * T, (r + 0.5f) * T, 0, Mathf.PI * 2, 96, new Color32(Search.r, Search.g, Search.b, 0xc8));
+            }
+            search.sharedMesh = build.Build(search.sharedMesh);
+        }
+
         float flareSpread = 1;
         readonly List<Vector3> flareAt = new List<Vector3>();
         Vector3 coreAt;
@@ -109,14 +142,17 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// The marks for `s`: the evacuation zone's tiles, beams (where and in what colour), the loose item's tile, and the
-        /// flares where more are coming. Nothing is made again unless one of them changed.
+        /// The marks for `s`: the evacuation zone's tiles, beams (where and in what colour), the loose item's tile, the
+        /// flares where more are coming, and a run's Rescate's zone to look in (`area`, N2). Nothing is made again unless one
+        /// of them changed.
         /// </summary>
-        public void Show(GameState s, IList<Vec2> evac, IList<(Pos at, int color)> beacons, Pos item, IList<Pos> flaresAt)
+        public void Show(GameState s, IList<Vec2> evac, IList<(Pos at, int color)> beacons, Pos item, IList<Pos> flaresAt, SearchArea area = null)
         {
-            var now = string.Join(";", evac.Select(p => $"{p.X},{p.Y}")) + "|" + string.Join(";", beacons.Select(b => $"{b.at.X},{b.at.Y},{b.at.Z},{b.color}")) + "|" + (item != null ? $"{item.X},{item.Y},{item.Z}" : "") + "|" + string.Join(";", flaresAt.Select(p => $"{p.X},{p.Y}"));
+            var now = string.Join(";", evac.Select(p => $"{p.X},{p.Y}")) + "|" + string.Join(";", beacons.Select(b => $"{b.at.X},{b.at.Y},{b.at.Z},{b.color}")) + "|" + (item != null ? $"{item.X},{item.Y},{item.Z}" : "") + "|" + string.Join(";", flaresAt.Select(p => $"{p.X},{p.Y}"))
+                + "|" + (area != null ? $"{area.Center.X},{area.Center.Y},{area.Radius}" : "");
             if (now == key) return;
             key = now;
+            SearchZone(s, area);
             // The zone: a square on each tile, a little short of its edges.
             build.Clear();
             var inset = 0.02f * T;

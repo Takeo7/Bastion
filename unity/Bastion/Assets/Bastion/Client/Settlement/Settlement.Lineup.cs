@@ -76,9 +76,24 @@ namespace Bastion.Client
             public Quaternion slingTurn;
             /// <summary>Its body's renderers on Bastion/FigureFade, fading out into La Lata (FadeOut); null till then.</summary>
             public List<SkinnedMeshRenderer> fading;
+            /// <summary>
+            /// On the motorbike (MountUp, Ride): its seat (−1 none), how far through getting on (−1 not yet, then 0 to 1),
+            /// and where and how it stood as it began to.
+            /// </summary>
+            public int seat = -1;
+            public float mounted = -1;
+            public Vector3 mountFrom;
+            public Quaternion mountTurn;
         }
 
         readonly List<Stander> standers = new List<Stander>();
+
+        /// <summary>
+        /// A soldier's weapons as the clearing draws them: a run's, its kit's (Runs.SquadMemberOf: the pistol only if its kit
+        /// has one; Arturo's T6 of 18/11, «si todos empiezan con cuchillo ¿por qué aparecen con pistolas en la base?»: the
+        /// campaign's Armería said nothing of the pistol, which reads as carrying one); else the Armería's, as before.
+        /// </summary>
+        internal static Arms ArmsOf(CampaignState c, CampaignSoldier s) => Campaign.IsRuns(c) ? Runs.SquadMemberOf(c, s).Arms : Campaign.SoldierArms(c, s);
 
         /// <summary>
         /// The row (null entries: an empty place), in order, left to right as its camera sees them, the first ceil(n / 2)
@@ -170,7 +185,7 @@ namespace Bastion.Client
         static string Who(CampaignState c, LineupEntry e)
         {
             var s = c?.Soldiers?.FirstOrDefault(x => x.Id == e.SoldierId);
-            return Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { e.SoldierId, e.Colour, e.Status, s?.Appearance, s != null ? Campaign.SoldierArms(c, s)?.Primary : null });
+            return Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { e.SoldierId, e.Colour, e.Status, s?.Appearance, s != null ? ArmsOf(c, s)?.Primary : null, s != null && UnitViews.CarriesPistol(ArmsOf(c, s)) });
         }
 
         /// <summary>The row's figures by who each is (Who), kept from one row to the next.</summary>
@@ -224,7 +239,7 @@ namespace Bastion.Client
                 stander.animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 // The Armería's gun, or the pistol where there is none (syntyFigures.ts armamentOf), at rest by the thigh; with
                 // no pistol either (Arturo, 1/11), empty-handed.
-                var arms = Campaign.SoldierArms(campaign, s);
+                var arms = ArmsOf(campaign, s);
                 string primary = arms?.Primary;
                 stander.gun = primary == null ? UnitViews.CarriesPistol(arms) ? UnitViews.Pistol(holder, catalog) : null : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(primary)), holder, catalog, out _);
                 stander.pistol = primary == null && stander.gun != null;
@@ -246,7 +261,12 @@ namespace Bastion.Client
         /// <summary>The row's breath: each in its pose, facing its camera, its gun in its hands.</summary>
         void StepLineup(float dt)
         {
-            foreach (var s in standers) StepStander(s, dt);
+            foreach (var s in standers)
+            {
+                StepStander(s, dt);
+                // (One on the motorbike: on its seat, after its pose, its slung gun with it.)
+                if (s.seat >= 0) Ride(s);
+            }
         }
 
         /// <summary>One standing: its turn (three's yaw), its clips on by `dt`, its gun in its hands or on its back.</summary>

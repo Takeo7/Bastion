@@ -31,16 +31,46 @@ namespace Bastion.Engine
         /// <summary>H5's four, on the maps since their rules are there (they are in Specials too).</summary>
         public static readonly IReadOnlyList<string> NewSpecials = new[] { NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite };
 
-        /// <summary>What a node of rows 2–5 is, in percent: normal 45, special 25, stops 30 (Refuge 10, Trade 8, Event 7, Survivor 5).</summary>
+        /// <summary>
+        /// What a node of rows 2–5 is, in percent: normal 50, special 25, stops 25 (Refuge 10, Trade 8, Event 7). The
+        /// Superviviente's 5 went to the normal ones (N3, 17/11).
+        /// </summary>
         private static readonly IReadOnlyList<(string Kind, int Weight)> Mix = new[]
         {
-            (NodeKinds.Normal, 45),
+            (NodeKinds.Normal, 50),
             ("special", 25),
             (NodeKinds.Refuge, 10),
             (NodeKinds.Trade, 8),
             (NodeKinds.Event, 7),
-            (NodeKinds.Survivor, 5),
         };
+
+        /// <summary>
+        /// The rows a Rescate is kept in reach in from every start (RescueInReach; N3, 17/11: recruits come only from a
+        /// Rescate, and drawn as a special there was none to reach in two chapters of three).
+        /// </summary>
+        public const int RescueLastRow = 4;
+
+        /// <summary>
+        /// Rescates with Cuervos (N2, Arturo 17/11: «a veces»; Producto: few and not at the start): from this row, one in
+        /// GuardedOdds by the map's seed. The rest, and those an event marks, the survivor hidden alone.
+        /// </summary>
+        public const int GuardedFrom = 3;
+        public const int GuardedOdds = 3;
+
+        /// <summary>A survivor loose on a fight's map (N2, Arturo 17/11): one in LooseOdds, by the map's seed.</summary>
+        public const int LooseOdds = 6;
+
+        /// <summary>A number of the map's seed for a draw of its own (the hospital's is the seed itself, HospitalOdds).</summary>
+        private static uint SeedDraw(int seed, uint salt) => unchecked(((uint)Math.Abs(seed) ^ salt) * 2654435761u) >> 16;
+
+        /// <summary>Whether a Rescate drawn on the map has Cuervos (RunNode.Guarded): from GuardedFrom, one in GuardedOdds.</summary>
+        public static bool GuardedRescue(RunNode n) => n.Kind == NodeKinds.Rescue && n.Row >= GuardedFrom && n.Seed != null && SeedDraw(n.Seed.Value, 0xc0e5) % GuardedOdds == 0;
+
+        /// <summary>
+        /// Whether a fight's map has a survivor loose on it (N2): one in LooseOdds of the fights that aren't a Rescate (whose
+        /// survivor is sure) nor the boss, by the map's seed; no mark on the map, nor where to look.
+        /// </summary>
+        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Boss && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
 
         /// <summary>Rows with no service area: the first fights, made with knives only.</summary>
         public const int EarlyRows = 2;
@@ -123,6 +153,7 @@ namespace Bastion.Engine
                 }
             }
             TradeInReach(rng, rows, all);
+            RescueInReach(rng, rows, all);
             foreach (var n in all.Where((x) => IsFight(x.Kind)))
             {
                 if (n.Row >= 2 && n.Kind != NodeKinds.Boss && rng.Int(100) < ModifierChance) n.Modifier = rng.Pick(Modifiers.All);
@@ -135,6 +166,7 @@ namespace Bastion.Engine
                 if (n.Site == Places.Town) n.Site = Places.Of(MapOf(n)!);
                 // The special maps (H7, H9), by the map's seed: nothing else drawn changes.
                 if (hospitals) n.Site = SpecialFor(n) ?? n.Site;
+                if (GuardedRescue(n)) n.Guarded = true;
             }
             return all;
         }
@@ -227,6 +259,28 @@ namespace Bastion.Engine
                 var stops = ahead[missing[0]].Where((x) => NodeKinds.IsStop(x.Kind)).ToList();
                 if (stops.Count == 0) return;
                 rng.Pick(stops).Kind = NodeKinds.Trade;
+            }
+        }
+
+        /// <summary>
+        /// A Rescate in reach from wherever the run starts (N3): while a row-1 node has none ahead in rows 2–RescueLastRow,
+        /// a normal fight there becomes one, the one ahead of the most of those starts; with none, another special does. A
+        /// stop (the Trade with them) stays.
+        /// </summary>
+        private static void RescueInReach(Rng rng, List<List<RunNode>> rows, List<RunNode> all)
+        {
+            var ahead = rows[0].ToDictionary((n) => n, (n) => Ahead(n, all).Where((x) => x.Row <= RescueLastRow).ToList());
+            while (true)
+            {
+                var missing = rows[0].Where((n) => !ahead[n].Any((x) => x.Kind == NodeKinds.Rescue)).ToList();
+                if (missing.Count == 0) return;
+                var near = missing.SelectMany((n) => ahead[n]).Distinct().ToList();
+                var fights = near.Where((x) => x.Kind == NodeKinds.Normal).ToList();
+                if (fights.Count == 0) fights = near.Where((x) => IsFight(x.Kind)).ToList();
+                var reach = fights.Select((x) => (Node: x, Starts: missing.Count((n) => ahead[n].Contains(x)))).ToList();
+                if (reach.Count == 0) return;
+                var most = reach.Max((x) => x.Starts);
+                rng.Pick(reach.Where((x) => x.Starts == most).Select((x) => x.Node).ToList()).Kind = NodeKinds.Rescue;
             }
         }
 

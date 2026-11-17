@@ -168,5 +168,90 @@ namespace Bastion.Engine
         {
             return m.Kind == MissionKinds.Scavenge && m.Lair == null && string.IsNullOrEmpty(m.Boss);
         }
+
+        /// <summary>
+        /// Whether `o`, one of the dead, bites `u` of the squad going past it on `step` (T20, Arturo 18/11): hostile, beside it
+        /// within a blade's reach, and seeing it there (its view cone, all round this close: Los.AwareRange; and its line of
+        /// sight, as an overwatch's). Not `u`'s last tile: the walk's (Sim.PassBiters).
+        /// </summary>
+        public static bool PassBite(GameState s, Unit o, Unit u, Pos step)
+        {
+            return o.Alive && u.Team == Teams.Xcom && Content.HostileTo(o, u) && Content.Templates[o.Template].Undead
+                && Aim.InMeleeReach(s, o.Pos, step) && Los.InViewCone(o, step)
+                && Los.SightOrigin(s, o.Pos, step, Los.SightTo(s, o, step), Los.WindowReachOf(o.Team)) != null;
+        }
+
+        /// <summary>
+        /// Where on `path` (the tiles `u` walks, as Paths.BuildPath gives them) an enemy the squad sees now would react (T20,
+        /// for the path drawn before moving): a bite going past one of the dead (PassBite, never on the last tile), a shot or
+        /// a blade of whoever keeps watch, a shot of whoever suppresses it; each once, at the first tile it would. Without
+        /// dice: whether it hits is the reaction's roll. Nothing of an enemy out of the squad's sight, nor with Shadowstep.
+        /// </summary>
+        public static List<PathReaction> ReactionsAlong(GameState s, Unit u, IReadOnlyList<Pos>? path)
+        {
+            var out_ = new List<PathReaction>();
+            if (path == null || path.Count == 0 || u.Team != Teams.Xcom || Content.HasPerk(u, PerkIds.Shadowstep)) return out_;
+            var seen = Los.VisibleEnemies(s, Teams.Xcom);
+            var done = new HashSet<string>();
+            for (var i = 0; i < path.Count; i++)
+            {
+                var step = path[i];
+                foreach (var o in seen)
+                {
+                    if (done.Contains(o.Id) || !o.Alive || !Content.HostileTo(o, u)) continue;
+                    string? kind = null;
+                    if (i < path.Count - 1 && PassBite(s, o, u, step)) kind = PathReactions.Bite;
+                    else if (o.Overwatch && !(o.KillZone && o.ReactedTo.Contains(u.Id)) && (o.WatchMelee == true ? Aim.InMeleeReach(s, o.Pos, step) : Content.LoadedFor(o, AbilityIds.Shoot) && Los.SightOrigin(s, o.Pos, step, Los.SightTo(s, o, step), Los.WindowReachOf(o.Team)) != null)) kind = PathReactions.Watch;
+                    else if (o.Suppressing == u.Id && Content.LoadedFor(o, AbilityIds.Shoot)) kind = PathReactions.Suppress;
+                    if (kind == null) continue;
+                    done.Add(o.Id);
+                    out_.Add(new PathReaction { Index = i, Tile = Events.CopyPos(step), Unit = o.Id, Kind = kind });
+                }
+            }
+            return out_;
+        }
+
+        /// <summary>
+        /// A run's Rescate (N2): won as a Saqueo, getting out on La Lata, whatever became of the survivor; brought out, they
+        /// join (RunFights.Rescued).
+        /// </summary>
+        public static bool RunsRescue(GameState s)
+        {
+            return s.Run != null && s.Mission.Kind == MissionKinds.Rescue;
+        }
+
+        /// <summary>
+        /// A run's survivor not yet found that `u` of the squad sees from `from` (N2; MissionState.Survivor): in its line of sight and not hidden
+        /// in a building the squad hasn't found (Buildings.Hidden, as an enemy would be). Null otherwise.
+        /// </summary>
+        public static Unit? SurvivorSeen(GameState s, Unit u, Pos from)
+        {
+            if (s.Mission.SurvivorFound == true || u.Team != Teams.Xcom || u.Captive) return null;
+            var vip = Abilities.Waiting(s);
+            if (vip == null || Buildings.Hidden(s, vip.Pos, new[] { from })) return null;
+            return Los.SightOrigin(s, from, vip.Pos, Los.SightTo(s, u, vip.Pos), Los.WindowReachOf(Teams.Xcom)) != null ? vip : null;
+        }
+
+        /// <summary>
+        /// Whether a unit is shown to the players (N2): a run's survivor only once found; everyone else, as ever. For the
+        /// client's figures and the HUD.
+        /// </summary>
+        public static bool SurvivorShown(GameState s, Unit u)
+        {
+            return !(s.Run != null && u.Id == s.Mission.Survivor && s.Mission.SurvivorFound != true);
+        }
+
+        /// <summary>
+        /// Who is in La Lata's zone now and wouldn't fit if it left (N2): past MissionState.Seats, the squad's own first and
+        /// the one who joined on the map last, each in the order they stand in the state. Empty with no seats counted
+        /// (outside the runs) or room for all. The evacuation's prompt names them (Lore.EvacSituation's noSeat).
+        /// </summary>
+        public static List<Unit> NoSeat(GameState s)
+        {
+            var seats = s.Mission.Seats;
+            if (seats == null) return new List<Unit>();
+            var aboard = s.Units.Where((u) => u.Alive && u.Team == Teams.Xcom && !u.Objective && !u.Captive && u.Automaton == null && Abilities.InEvacZone(s, u.Pos)).ToList();
+            return aboard.Where((u) => u.CampaignId != null).Concat(aboard.Where((u) => u.CampaignId == null)).Skip(seats.Value).ToList();
+        }
     }
 }

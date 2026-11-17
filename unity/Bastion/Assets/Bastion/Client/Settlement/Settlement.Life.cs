@@ -89,7 +89,7 @@ namespace Bastion.Client
                 Colour = SquadTint.ColourOf(s.Owner),
                 Appearance = s.Appearance,
                 // (weaponTier is 1 for all: progression.ts.)
-                Gear = new LifeGear { Weapon = 1, Armor = armor, Arms = Campaign.SoldierArms(c, s) },
+                Gear = new LifeGear { Weapon = 1, Armor = armor, Arms = ArmsOf(c, s) },
                 Seed = s.Id,
             }).ToList();
         }

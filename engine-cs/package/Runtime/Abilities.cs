@@ -43,7 +43,7 @@ namespace Bastion.Engine
             if (u.Team == Teams.Xcom && !u.Captive && Content.Templates[u.Template].Team == Teams.Xcom)
             {
                 // Evacuating is the squad's, by the bus (the `evac` command, docs/PRUEBA-2026-10-14.md P1), not one soldier's ability.
-                if (u.Template != TemplateIds.Vip) list.AddRange(new[] { AbilityIds.Hack, AbilityIds.Search, AbilityIds.SearchRoom, AbilityIds.OpenDoor, AbilityIds.CloseDoor });
+                if (u.Template != TemplateIds.Vip) list.AddRange(new[] { AbilityIds.Hack, AbilityIds.Search, AbilityIds.SearchRoom, AbilityIds.OpenDoor, AbilityIds.CloseDoor, AbilityIds.Talk });
                 // The crowbar takes the boards off a window (Arturo, 2/11).
                 if (u.Arms?.Melee == FoundWeaponIds.Crowbar) list.Add(AbilityIds.Pry);
                 // Esconderse beside Cubrirse (Ana's #1 of 1/11).
@@ -67,6 +67,30 @@ namespace Bastion.Engine
         public static bool InEvacZone(GameState s, Pos p)
         {
             return p.Z == 0 && s.Mission.EvacZone.Any((z) => Grid.SameTile(z, p));
+        }
+
+        /// <summary>
+        /// A run's survivor still waiting to be talked to (N2: a Rescate's, or one loose on the map; MissionState.Survivor),
+        /// alive and captive. Null elsewhere, and once they joined. Outside the runs a VIP is freed by walking up to them,
+        /// as before.
+        /// </summary>
+        public static Unit? Waiting(GameState s)
+        {
+            if (s.Run == null || string.IsNullOrEmpty(s.Mission.Survivor)) return null;
+            var vip = Grid.GetUnit(s, s.Mission.Survivor!);
+            return vip != null && vip.Alive && vip.Captive ? vip : null;
+        }
+
+        /// <summary>
+        /// Whom `u` can talk to from `from` (its own tile by default): the survivor waiting (Waiting) on a tile beside it,
+        /// on its floor, reached as a box beside one is searched (no wall between). Null if nobody.
+        /// </summary>
+        public static Unit? TalkTarget(GameState s, Unit u, Pos? from = null)
+        {
+            from ??= u.Pos;
+            var vip = Waiting(s);
+            if (vip == null || u.Team != Teams.Xcom || u.Captive || u.Id == vip.Id) return null;
+            return Aim.Adjacent(from, vip.Pos) && from.Z == vip.Pos.Z && Looting.ReachesToSearch(s, from, vip.Pos) ? vip : null;
         }
 
         /// <summary>Hack from a tile beside the terminal, on its floor.</summary>
@@ -233,6 +257,10 @@ namespace Bastion.Engine
                 case AbilityIds.Takedown:
                     // Anything but silent (Gameplay, 16/11).
                     if (u.Arms?.Melee == FoundWeaponIds.Chainsaw) return "Con la motosierra no hay golpe silencioso.";
+                    break;
+                case AbilityIds.Talk:
+                    if (Waiting(s) == null) return "No hay nadie con quien hablar.";
+                    if (TalkTarget(s, u) == null) return "Ponte al lado de quien pide ayuda.";
                     break;
                 case AbilityIds.Hack:
                     if (s.Mission.Terminal == null) return "No hay ningún equipo que arreglar en esta misión.";

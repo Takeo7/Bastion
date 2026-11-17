@@ -96,8 +96,13 @@ namespace Bastion.UI.Strategy
             var prev = p.State ?? Before;
             Before = null;
             p.State = c;
-            // The runs: the same fixed clearing every time, nothing built on it (Arte, 16/11).
-            if (c.Stash != null) Settlement.Instance?.ShowFixed();
+            // The runs: the same fixed clearing every time, nothing built on it (Arte, 16/11); La Lata the one the seats give,
+            // as in the fight (Runs.VehicleOf; N6, 17/11: else the clearing's own, the bus), before it is drawn.
+            if (c.Stash != null)
+            {
+                Settlement.Instance?.SetVehicle(Runs.VehicleOf(c));
+                Settlement.Instance?.ShowFixed();
+            }
             else Settlement.Instance?.Show(c);
             Portraits.Know(c);
             // The draft's own bust, drawn again over what Know just put back.
@@ -116,7 +121,11 @@ namespace Bastion.UI.Strategy
             if (prev != null) alerts.AddRange(p.Alerts(prev));
             // A commander left with nobody alive gets a recruit (Campaign.NobodyLeft; Arturo, 2/11): its line in the debrief
             // back from the mission, or a note when it came with a day gone by (the base shows no log of its own).
-            if (prev != null && p.FreeRecruit(prev) is string joined)
+            var joined = prev != null ? p.FreeRecruit(prev) : null;
+            // Whoever came in after the stage has no campaign of before it to tell the recruit by, or one with them in it
+            // already (Red's N9, 17/11: a seat taken after the squad fell): the recruits its report names.
+            if (joined == null && p.Joined == null && ReportPending(c)) joined = p.ReportRecruits();
+            if (joined != null)
             {
                 if (ReportPending(c)) p.Joined = joined;
                 else root.Toast(joined);
@@ -125,6 +134,8 @@ namespace Bastion.UI.Strategy
             if (prev != null && c.Day > prev.Day) Bastion.Client.Audio.UiSounds.Play("tick");
             var premise = p.Premise();
             if (premise != null) alerts.Insert(0, premise);
+            // A save of the 0.13.0 down to 2 seats, said once (N4).
+            if (p.SeatsReset() is StrategyModalView seats) alerts.Add(seats);
             // A mission chosen by either player sends both to the hangar; a finished one to the debrief. A new campaign
             // opens there too, under its premise, with its first operation chosen (Ana, 7/11 #20: it came up on Soldados),
             // whatever state came before it.

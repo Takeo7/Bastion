@@ -306,6 +306,19 @@ namespace Bastion.UI.Strategy
             return came == null ? null : c.Log.FirstOrDefault(e => e.Text.Contains(came.Name))?.Text;
         }
 
+        /// <summary>
+        /// The recruits a stage's report names (RunReport.Recruits: the squad fallen, or back without the boss; Red's N9,
+        /// 17/11), each with the line the log has for them (RunTexts.Recruit, as FreeRecruit finds it), one a line; null if none.
+        /// </summary>
+        public string ReportRecruits()
+        {
+            var c = State;
+            var ids = c.LastReport?.Run?.Recruits;
+            if (ids == null || ids.Count == 0) return null;
+            var lines = ids.Select(id => c.Soldiers.FirstOrDefault(s => s.Id == id)).Where(s => s != null).Select(s => RunTexts.Recruit(s.Name)).ToList();
+            return lines.Count > 0 ? string.Join("\n", lines) : null;
+        }
+
         /// <summary>«Desbloquea: Sala de mapas · Mina.» (unlocksText).</summary>
         static string UnlocksText(int level)
         {

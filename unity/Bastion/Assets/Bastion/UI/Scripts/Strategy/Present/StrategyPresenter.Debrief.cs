@@ -37,7 +37,8 @@ namespace Bastion.UI.Strategy
                 v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.FallenLine(f.Name, f.Lost.Select(g => Lore.GearThe(g.Kind, g.Type, g.Count)).ToList()), Bad = true });
             if (run.Joined != null && c.Soldiers.FirstOrDefault(x => x.Id == run.Joined) is CampaignSoldier rescued)
                 v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.JoinedLine(rescued.Name) });
-            if (Joined != null) v.Lines.Add(new DebriefLineView { Text = Joined });
+            // (One a line: whoever came in late has them all from the report, ReportRecruits.)
+            if (Joined != null) foreach (var line in Joined.Split('\n')) v.Lines.Add(new DebriefLineView { Text = line });
             foreach (var e in ReportOrder(c, report))
             {
                 var card = ReportCard(c, report, e);

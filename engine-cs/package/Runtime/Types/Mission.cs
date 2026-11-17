@@ -217,6 +217,32 @@ namespace Bastion.Engine
         /// area + tile).
         /// </summary>
         public bool? Inside { get; set; }
+        /// <summary>
+        /// A run's La Lata (N2, N4): how many it takes when it leaves (Runs.SeatsOf); who is in its zone past them is lost
+        /// (Rules.NoSeat). Null: everyone in the zone, as before the runs.
+        /// </summary>
+        public int? Seats { get; set; }
+        /// <summary>
+        /// A run's Rescate (N2): where the survivor is to be looked for, a circle round somewhere near them (they are in it,
+        /// not at its middle). Null elsewhere.
+        /// </summary>
+        public SearchArea? SearchArea { get; set; }
+        /// <summary>
+        /// A run's survivor in this fight (N2), the unit's id: a Rescate's (also MissionState.ObjectiveUnit), or one loose on
+        /// any map (RunMap.LooseSurvivor). Captive and nobody's till talked to (AbilityIds.Talk). Null: none.
+        /// </summary>
+        public string? Survivor { get; set; }
+        /// <summary>A run's Rescate with Cuervos (RunNode.Guarded): the survivor their prisoner.</summary>
+        public bool? Guarded { get; set; }
+        /// <summary>A run's Rescate (N2): someone of the squad has seen the survivor (SurvivorFoundEvent); till then they aren't shown.</summary>
+        public bool? SurvivorFound { get; set; }
+    }
+
+    /// <summary>MissionState.searchArea (N2): a circle on the ground floor.</summary>
+    public sealed class SearchArea
+    {
+        public Vec2 Center { get; set; } = new Vec2();
+        public double Radius { get; set; }
     }
 
     /// <summary>MissionState.evacBus: `{ tiles: Vec2[]; heading: number }`.</summary>

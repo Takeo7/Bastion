@@ -164,6 +164,15 @@ namespace Bastion.Engine
         public string? Boss { get; set; } // TemplateIds
         /// <summary>A run's normal node (Gameplay, 16/11): La Lata near the squad (GenOptions.EvacNear).</summary>
         public bool? EvacNear { get; set; }
+        /// <summary>
+        /// A run's Rescate (N2): the survivor at the objective, a recruit with a knife (RunFights.SurvivorOf), captive till
+        /// talked to, in a circle to look in (MissionState.SearchArea). Without it, the VIP of before (VipName).
+        /// </summary>
+        public SquadMember? Survivor { get; set; }
+        /// <summary>A run's La Lata's seats (MissionState.Seats, N2): who doesn't fit is lost.</summary>
+        public int? Seats { get; set; }
+        /// <summary>A run's Rescate with Cuervos (RunNode.Guarded, MissionState.Guarded): the survivor their prisoner.</summary>
+        public bool? Guarded { get; set; }
     }
 
     public static partial class Setup
@@ -369,8 +378,70 @@ namespace Bastion.Engine
             return MissionTurns(kind, 36 + 48 * ((double)route / Route48 - 0.75));
         }
 
-        /// <summary>How long La Lata is at each stage (campaign.ts VEHICLE_SEATS: the 4×4, the van, the lorry, the bus), in tiles, as Arte draws it.</summary>
-        private static readonly IReadOnlyList<int> VehicleLength = new[] { 3, 4, 6, 9 };
+        /// <summary>A run's Rescate's circle to look in (N2): this wide, round a place at most half of it from the survivor.</summary>
+        public const double SearchRadius = 5;
+
+        /// <summary>The circle round somewhere near the survivor on `spot`, within the map: they are in it, seldom at its middle.</summary>
+        private static SearchArea SearchAreaOf(MissionLayout layout, Vec2 spot, Rng rng)
+        {
+            var reach = (int)Math.Floor(SearchRadius / 2);
+            var x = Math.Max(0, Math.Min(layout.Width - 1, spot.X - reach + rng.Int(2 * reach + 1)));
+            var y = Math.Max(0, Math.Min(layout.Height - 1, spot.Y - reach + rng.Int(2 * reach + 1)));
+            return new SearchArea { Center = new Vec2 { X = x, Y = y }, Radius = SearchRadius };
+        }
+
+        /// <summary>
+        /// A run's survivor (N2) made a unit on `at` from what RunFights.SurvivorOf drew: nobody's and captive, without a
+        /// move or an action till talked to.
+        /// </summary>
+        public static Unit SurvivorUnit(string id, SquadMember m, Pos at)
+        {
+            var u = MemberUnit(id, m, at);
+            u.Owner = null;
+            u.Captive = true;
+            u.Ap = 0;
+            u.Moves = 0;
+            return u;
+        }
+
+        /// <summary>
+        /// A squad member made a unit on `at` (a campaign's soldier, its arms, stats, pack and kit); a run's survivor too
+        /// (N2), with no campaign id till they join.
+        /// </summary>
+        private static Unit MemberUnit(string id, SquadMember m, Pos at)
+        {
+            var u = MakeUnit(id, m.Template, m.Name, m.Owner, at, null);
+            var arm = Armed(u, m.Arms, m.Mags);
+            u.Rank = m.Rank;
+            u.Ap = Content.ApPerTurnOf(u);
+            u.Perks = new List<string>(m.Perks);
+            u.Mods = Content.AddMods(m.Mods, new UnitMods());
+            u.MaxHp = m.MaxHp;
+            u.Hp = m.Hp;
+            u.Charges = new Dictionary<string, int>(m.Charges);
+            u.CampaignId = string.IsNullOrEmpty(m.CampaignId) ? null : m.CampaignId;
+            u.Nickname = m.Nickname;
+            u.Appearance = m.Appearance != null ? CopyAppearance(m.Appearance) : null;
+            u.WeaponTier = m.WeaponTier;
+            u.ArmorTier = m.ArmorTier;
+            if (!string.IsNullOrEmpty(m.WeaponName)) u.WeaponName = m.WeaponName;
+            u.Will = m.Will;
+            u.Armor = m.Armor;
+            if (m.PackSlots != null && m.PackSlots != 0) u.PackSlots = m.PackSlots;
+            if (m.Lines != null) u.Lines = Bars.MissionLinesOf(m.Lines.Start, m.Lines.Growth, m.Lines.Bonus);
+            arm(u);
+            u.Gear = new List<string>(m.Gear);
+            // A run's soldier (H3): its pack and its kit, its own copy.
+            if (m.Pack != null) u.Pack = Gears.CloneGrid(m.Pack);
+            if (m.Kit != null) u.Kit = Gears.ClonePlaces(m.Kit);
+            return u;
+        }
+
+        /// <summary>
+        /// How long La Lata is at each stage (campaign.ts VEHICLE_SEATS: the 4×4, the van, the lorry, the bus; and the runs'
+        /// motorbike, Runs.Moto, N4), in tiles, as Arte draws it.
+        /// </summary>
+        private static readonly IReadOnlyList<int> VehicleLength = new[] { 3, 4, 6, 9, 2 };
 
         /// <summary>
         /// The place the map keeps for the bus cut to La Lata's length (Arte, 20/10): its nose where it was, what is behind
@@ -869,31 +940,7 @@ namespace Bastion.Engine
                         spare.RemoveAt(0);
                     }
                     at ??= layout.Spawns[i];
-                    var u = MakeUnit($"s{i + 1}", m.Template, m.Name, m.Owner, Grid.Ground(at), null);
-                    var arm = Armed(u, m.Arms, m.Mags);
-                    u.Rank = m.Rank;
-                    u.Ap = Content.ApPerTurnOf(u);
-                    u.Perks = new List<string>(m.Perks);
-                    u.Mods = Content.AddMods(m.Mods, new UnitMods());
-                    u.MaxHp = m.MaxHp;
-                    u.Hp = m.Hp;
-                    u.Charges = new Dictionary<string, int>(m.Charges);
-                    u.CampaignId = m.CampaignId;
-                    u.Nickname = m.Nickname;
-                    u.Appearance = m.Appearance != null ? CopyAppearance(m.Appearance) : null;
-                    u.WeaponTier = m.WeaponTier;
-                    u.ArmorTier = m.ArmorTier;
-                    if (!string.IsNullOrEmpty(m.WeaponName)) u.WeaponName = m.WeaponName;
-                    u.Will = m.Will;
-                    u.Armor = m.Armor;
-                    if (m.PackSlots != null && m.PackSlots != 0) u.PackSlots = m.PackSlots;
-                    if (m.Lines != null) u.Lines = Bars.MissionLinesOf(m.Lines.Start, m.Lines.Growth, m.Lines.Bonus);
-                    arm(u);
-                    u.Gear = new List<string>(m.Gear);
-                    // A run's soldier (H3): its pack and its kit, its own copy.
-                    if (m.Pack != null) u.Pack = Gears.CloneGrid(m.Pack);
-                    if (m.Kit != null) u.Kit = Gears.ClonePlaces(m.Kit);
-                    units.Add(u);
+                    units.Add(MemberUnit($"s{i + 1}", m, Grid.Ground(at)));
                 }
             }
             else
@@ -935,9 +982,15 @@ namespace Bastion.Engine
                 units.Add(relay);
                 objectiveUnit = "relay";
             }
+            SearchArea? searchArea = null;
             if (kind == MissionKinds.Rescue && layout.ObjectiveSpot != null)
             {
-                var vip = MakeUnit("vip", TemplateIds.Vip, opts.VipName ?? rng.Pick(VipNames), null, Grid.Ground(layout.ObjectiveSpot), null);
+                // A run's survivor (N2): a recruit with a knife, nobody's till talked to; the VIP of before otherwise.
+                var vip = opts.Survivor != null ? SurvivorUnit("vip", opts.Survivor, Grid.Ground(layout.ObjectiveSpot)) : MakeUnit("vip", TemplateIds.Vip, opts.VipName ?? rng.Pick(VipNames), null, Grid.Ground(layout.ObjectiveSpot), null);
+                if (opts.Survivor != null)
+                {
+                    searchArea = SearchAreaOf(layout, layout.ObjectiveSpot, new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x5ea7c4))));
+                }
                 vip.Captive = true;
                 vip.Ap = 0;
                 // Nor movement: on the first turn there is no TurnBegan to take it away (review of 10/11, #12).
@@ -1066,6 +1119,10 @@ namespace Bastion.Engine
                 Lair = lair,
                 Boss = !string.IsNullOrEmpty(opts.Boss) ? units.FirstOrDefault((u) => u.Template == opts.Boss)?.Id : null,
                 Inside = oneBuilding ? true : (bool?)null,
+                Seats = opts.Seats,
+                SearchArea = searchArea,
+                Survivor = searchArea != null ? objectiveUnit : null,
+                Guarded = searchArea != null && opts.Guarded == true ? true : (bool?)null,
             };
 
             // The squad starts looking into the map (Arturo, 23/10: «los soldados aparecen mirando al revés»): towards what the

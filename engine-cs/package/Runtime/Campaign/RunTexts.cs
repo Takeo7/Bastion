@@ -57,7 +57,7 @@ namespace Bastion.Engine
 
         public static string Missing(int supplies) => $"Faltan {supplies} §.";
         public static string Seats(int seats) => $"Solo salen {seats} soldados.";
-        public static string PerPlayer(int limit) => $"Máximo {limit} soldados por jugador.";
+        public static string PerPlayer(int limit) => limit == 1 ? "Solo sale un soldado por jugador." : $"Máximo {limit} soldados por jugador.";
         public static string NotThere(Gear g) => $"{Capital(The(g))} no va en ese hueco.";
         public static string SwapNoRoom(Gear old, Gear moved) => $"{Capital(The(old))} no cabe donde estaba {The(moved)}.";
         public static string SplitCount(int count) => count == 2 ? "Solo se puede partir 1." : $"Se parten de 1 a {count - 1}.";
@@ -71,13 +71,13 @@ namespace Bastion.Engine
         public const string RunEnded = "La escuadra vuelve a la base, y todos se curan.";
 
         public static string UpgradeText(string id, int price) => $"hacer la mejora «{UpgradeNames[id]}» ({price} §)";
-        public static string StartRunText(int chapter) => $"salir de expedición al capítulo {chapter}";
+        public static string StartRunText(int chapter) => $"partir de expedición al capítulo {chapter}";
         public static string ChooseNodeText(RunNode n) => $"elegir la etapa «{FightName(n)}»";
-        public static string AnswerText(StopState stop, int option) => stop.Survivor != null ? $"{(option == 0 ? "que se una" : "que no se una")} {stop.Survivor.Name}" : $"elegir «{EventOption(stop.Event ?? "", option)}»";
+        public static string AnswerText(StopState stop, int option) => $"elegir «{EventOption(stop.Event ?? "", option)}»";
         public static string Upgraded(string id, int level) => $"Nueva mejora: {UpgradeNames[id]}, nivel {level}.";
-        public static string RunStarted(int chapter) => $"Sale la escuadra: expedición al capítulo {chapter}.";
+        public static string RunStarted(int chapter) => $"Parte la escuadra: expedición al capítulo {chapter}.";
         public static string ChapterDone(int chapter) => $"Capítulo {chapter} superado. La escuadra vuelve a la base.";
-        /// <summary>Someone joins (a Rescate, a Superviviente, a Suceso): with the squad, or at the base when it goes full (`inSquad` false).</summary>
+        /// <summary>Someone joins (a Rescate, a Suceso): with the squad, or at the base when it goes full (`inSquad` false).</summary>
         public static string SurvivorJoins(string name, bool inSquad = true) => inSquad ? $"{name} se une a la escuadra." : $"{name} se une al Bastión y espera en la base: la escuadra va completa.";
         public static string Recruit(string name) => $"{name} se une al Bastión como recluta: no quedaban soldados vivos.";
         public const string Wiped = "Cae toda la escuadra. Lo que llevaban se pierde.";
@@ -104,9 +104,6 @@ namespace Bastion.Engine
         public static readonly IReadOnlyDictionary<string, string> Outcomes = new Dictionary<string, string>
         {
             ["refuge.rest"] = "La escuadra descansa, y todos se curan del todo.",
-            ["survivor.yes"] = "Se une a la escuadra.",
-            ["survivor.base"] = "Se une al Bastión y espera en la base: la escuadra va completa.",
-            ["survivor.no"] = "Sigue su camino.",
         };
 
         public static string EventOption(string id, int option)

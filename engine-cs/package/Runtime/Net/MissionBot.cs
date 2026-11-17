@@ -106,6 +106,8 @@ namespace Bastion.Net
             var m = s.Mission;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier);
             if (m.Kind == MissionKinds.Rescue && Vip(s) is Unit vip && !vip.Captive) return true;
+            // A run's Rescate with the survivor fallen: a Saqueo to get out of (N2, Gameplay 17/11).
+            if (m.Kind == MissionKinds.Rescue && s.Run != null && Vip(s) == null) return true;
             if (s.Run != null)
             {
                 // A run's Asedio and Travesía: La Lata from the start, where the Asedio holds till it comes; a Guarida, once
@@ -173,6 +175,8 @@ namespace Bastion.Net
             if (u.Ammo <= 0 && Usable(s, u, AbilityIds.Reload)) return Ability(u, AbilityIds.Reload);
             // The job, where it is a thing to do: the radio fixed from beside it, the alarm hit at any fair odds.
             if (Usable(s, u, AbilityIds.Hack)) return Ability(u, AbilityIds.Hack);
+            // A run's survivor beside it: talked to, and they join (N2, Gameplay 17/11).
+            if (Usable(s, u, AbilityIds.Talk)) return Ability(u, AbilityIds.Talk);
             var alarm = Alarm(s);
             var silence = alarm != null ? BestShot(s, u, double.MaxValue, alarm.Id) : null;
             if (silence != null && silence.Value.hit >= 15) return silence.Value.cmd;

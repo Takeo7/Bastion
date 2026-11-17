@@ -147,11 +147,11 @@ namespace Bastion.Engine.Tests
             var ana = host.Join("Ana");
             var pepe = host.Join("Pepe");
             host.Say(ana, new { t = "newCampaign" });
-            // A campaign of runs (16/11): two soldiers each, with their knives, all going out.
+            // A campaign of runs (16/11): two soldiers each, with their knives; one each going out, on the motorbike's two seats (N4).
             var c = CampaignSent(pepe);
             Assert.Equal(Campaign.RunsCampaignVersion, (int)c["version"]!);
             Assert.Equal(new[] { 0, 1 }, c["players"]!.Select((x) => (int)x));
-            Assert.Equal(4, c["squad"]!.Count());
+            Assert.Equal(2, c["squad"]!.Count());
             Assert.All(c["soldiers"]!, (s) => Assert.Equal(FoundWeaponIds.Knife, (string?)s["kit"]!["melee"]!["type"]));
             // Out, by Ana's proposal and Pepe's yes.
             host.Say(ana, Ccmd(new { type = "startRun" }));
@@ -199,13 +199,13 @@ namespace Bastion.Engine.Tests
             host.Say(ana, new { t = "newCampaign" });
             var token = (string)pepe.Take("welcome").Single()["token"]!;
             int Theirs(CampaignState c, int slot) => c.Squad.Count((id) => c.Soldiers.Single((s) => s.Id == id).Owner == slot);
-            Assert.Equal((2, 2), (Theirs(host.Saved(), 0), Theirs(host.Saved(), 1)));
+            Assert.Equal((1, 1), (Theirs(host.Saved(), 0), Theirs(host.Saved(), 1)));
             pepe.Close("se va");
             host.Room.Pump();
             Assert.Equal((2, 0), (Theirs(host.Saved(), 0), Theirs(host.Saved(), 1)));
             Assert.Equal(2, CampaignSent(ana)["squad"]!.Count());
             pepe = host.Join("Pepe", token);
-            Assert.Equal((2, 2), (Theirs(host.Saved(), 0), Theirs(host.Saved(), 1)));
+            Assert.Equal((1, 1), (Theirs(host.Saved(), 0), Theirs(host.Saved(), 1)));
             // Out, the squad stays as it went.
             host.Say(ana, Ccmd(new { type = "startRun" }));
             host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
@@ -215,18 +215,18 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void APartnerJoiningARunUnderWayIsHandedHalfTheSquad()
         {
-            // Runs.HandOver (16/11): Ana went out alone with her four; Pepe, coming, takes two of them till the run ends, and
-            // gets two of his own on the base.
+            // Runs.HandOver (16/11): Ana went out alone with two of her four (the motorbike's seats, N4); Pepe, coming, takes
+            // one of them till the run ends, and gets two of his own on the base.
             using var host = new Host();
             var ana = host.Join("Ana");
             host.Say(ana, new { t = "newCampaign" });
             host.Say(ana, Ccmd(new { type = "startRun" }));
             var squad = host.Saved().Run!.Squad;
-            Assert.Equal(4, squad.Count);
+            Assert.Equal(2, squad.Count);
             var pepe = host.Join("Pepe");
             var c = CampaignSent(pepe);
             var hands = ((JObject)c["run"]!["hands"]!).Properties().ToDictionary((p) => p.Name, (p) => (int)p.Value);
-            Assert.Equal(2, hands.Count);
+            Assert.Single(hands);
             Assert.All(hands, (h) => Assert.Equal(1, h.Value));
             Assert.All(hands.Keys, (id) => Assert.Contains(id, squad));
             Assert.Equal(2, c["soldiers"]!.Count((s) => (int)s["owner"]! == 1));
@@ -393,7 +393,7 @@ namespace Bastion.Engine.Tests
             host.Advance(Room.AwayGraceMs + 2000);
             s = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
             Assert.Equal((turn, Teams.Xcom, 0), (s.Turn, s.ActiveTeam, s.Command));
-            Assert.DoesNotContain(ana.Take("events").SelectMany((m) => m["events"]!), (e) => (string?)e["type"] == "turnBegan");
+            Assert.DoesNotContain(ana.Take("events").SelectMany((m) => m["events"]!), (e) => (string?)e["t"] == "turnBegan");
             if (how == "continue")
             {
                 // Pepe comes: the turn is still the squad's, and the command goes to Pepe, from Ana with nobody of Ana's own to move
@@ -442,6 +442,275 @@ namespace Bastion.Engine.Tests
             var s = ana.Take("snapshot").Last()["state"]!.ToObject<GameState>(Json.Serializer)!;
             Assert.Equal(clock, s.Mission.TurnsLeft);
             Assert.All(Grid.Combatants(s, Teams.Xcom), (u) => Assert.Equal(Paths.FullMoves(u), Paths.MoveBudget(u)));
+        }
+
+        /// <summary>The state of the mission as `player` last heard it whole.</summary>
+        private static GameState SnapshotOf(MemoryEnd player) => player.Take("snapshot").Last()["state"]!.ToObject<GameState>(Json.Serializer)!;
+
+        /// <summary>The room opened again on its save (the host closed and continued), both back in by their tokens.</summary>
+        private static (MemoryEnd ana, MemoryEnd pepe) Reopen(Host host, string anaToken, string pepeToken)
+        {
+            host.Room = host.Make();
+            return (host.Join("Ana", anaToken), host.Join("Pepe", pepeToken));
+        }
+
+        /// <summary>
+        /// N9 (Red, 17/11): a survivor (N2) through the room, two players and the motorbike's two seats: a Rescate's, and one
+        /// loose in a Saqueo (RunMap.LooseSurvivor). Nobody's till talked to; then the talker's on both screens, the
+        /// partner's orders for them turned away; theirs still after the partner comes back and after the host closes and
+        /// continues; the partner's to order with the talker gone.
+        /// </summary>
+        [Theory]
+        [InlineData(NodeKinds.Rescue)]
+        [InlineData(NodeKinds.Normal)]
+        public void TheSurvivorIsTheTalkersOnBothScreensAndStaysSo(string kind)
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            Assert.Equal(2, host.Saved().Run!.Squad.Count);
+            // The first row's first node made that kind (as RunsHelpers.GoTo) in the save, a Saqueo on a map with a survivor
+            // loose (its seed), and the host opens it again.
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            var n = RunMap.Choices(save.Campaign!.Run!)[0];
+            n.Kind = kind;
+            n.Modifier = null;
+            if (n.Seed == null)
+            {
+                n.Seed = 4242 + n.Row;
+                n.Site = Places.Country;
+            }
+            if (kind != NodeKinds.Rescue)
+            {
+                while (!RunMap.LooseSurvivor(n)) n.Seed++;
+            }
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            host.Say(ana, Ccmd(new { type = "chooseNode", node = n.Id }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            Assert.Equal("mission", host.Room.Summary().phase);
+            var s = SnapshotOf(pepe);
+            Assert.Equal(kind == NodeKinds.Rescue ? MissionKinds.Rescue : MissionKinds.Scavenge, s.Mission.Kind);
+            var id = s.Mission.Survivor!;
+            Assert.Equal(kind == NodeKinds.Rescue ? id : null, s.Mission.ObjectiveUnit);
+            var vip = s.Units.Single((u) => u.Id == id);
+            Assert.True(vip.Captive);
+            Assert.Null(vip.Owner);
+            Assert.Equal(new[] { 0, 1 }, s.Units.Where((u) => u.Team == Teams.Xcom && u.CampaignId != null).Select((u) => u.Owner ?? -1).OrderBy((o) => o));
+            // Whoever has the command, their soldier beside the survivor (as the save keeps it), and the host opens it again.
+            var talker = s.Command ?? 0;
+            var partner = 1 - talker;
+            Assert.Equal(id, SnapshotOf(ana).Mission.Survivor);
+            save = store.Load()!;
+            var by = save.State!.Units.First((u) => u.Team == Teams.Xcom && u.CampaignId != null && u.Owner == talker);
+            by.Pos = Beside(save.State, save.State.Units.Single((u) => u.Id == id));
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            var players = new[] { ana, pepe };
+            foreach (var p in players) p.Take("events");
+            host.Say(players[talker], new { t = "cmd", cmd = new { type = "ability", unit = by.Id, ability = AbilityIds.Talk } });
+            Assert.Empty(players[talker].Take("rejected"));
+            // Both hear it: the survivor is the talker's.
+            foreach (var p in players)
+            {
+                var rescued = p.Take("events").SelectMany((m) => m["events"]!).Single((e) => (string?)e["t"] == "vipRescued");
+                Assert.Equal((id, by.Id, talker), ((string?)rescued["unit"], (string?)rescued["by"], (int?)rescued["owner"]));
+            }
+            // The partner, given the command, can't order them.
+            host.Say(players[talker], new { t = "cmd", cmd = new { type = "pass" } });
+            var to = Beside(new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!, vip);
+            host.Say(players[partner], new { t = "cmd", cmd = new { type = "move", unit = id, to } });
+            Assert.Equal("Es de la escuadra del otro jugador.", (string?)players[partner].Take("rejected").Single()["message"]);
+            // The partner back: the survivor the talker's.
+            players[partner].Close("se va");
+            host.Room.Pump();
+            players[partner] = host.Join(partner == 0 ? "Ana" : "Pepe", partner == 0 ? anaToken : pepeToken);
+            var back = SnapshotOf(players[partner]).Units.Single((u) => u.Id == id);
+            Assert.Equal((false, (int?)talker), (back.Captive, back.Owner));
+            // The host closed and continued: the same.
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            players = new[] { ana, pepe };
+            foreach (var p in players)
+            {
+                var again = SnapshotOf(p).Units.Single((u) => u.Id == id);
+                Assert.Equal((false, (int?)talker), (again.Captive, again.Owner));
+            }
+            // The talker gone, the partner orders them.
+            players[talker].Close("se va");
+            host.Room.Pump();
+            host.Advance(Room.ReconnectGraceMs + 2000);
+            players[partner].Take("rejected");
+            host.Say(players[partner], new { t = "cmd", cmd = new { type = "move", unit = id, to } });
+            Assert.Empty(players[partner].Take("rejected"));
+            var moved = new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!.Units.Single((u) => u.Id == id);
+            Assert.Equal((to.X, to.Y, to.Z), (moved.Pos.X, moved.Pos.Y, moved.Pos.Z));
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
+        }
+
+        /// <summary>The campaign as `player` last heard it whole.</summary>
+        private static CampaignState CampaignOf(MemoryEnd player) => CampaignSent(player).ToObject<CampaignState>(Json.Serializer)!;
+
+        /// <summary>The save's campaign changed by `change` and written as it is, with the version it is given: not brought up to date on the way.</summary>
+        private static void Rewrite(Host host, Action<CampaignState> change)
+        {
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            change(save.Campaign!);
+            store.Save(save);
+        }
+
+        /// <summary>
+        /// N9 (Red, 17/11): a save of the 0.13.0 (campaign version 28) with the «squad» upgrade at its 6 seats, opened by the
+        /// host (N4, Arturo's cuadro 23): down to 2 seats, one each, and the 150 § it cost in the stash, the same to both;
+        /// opened again, nothing paid twice.
+        /// </summary>
+        [Fact]
+        public void ASaveOfTheFirstRunsComesDownToTwoSeatsOnceForBoth()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            var had = 0;
+            Rewrite(host, (c) =>
+            {
+                c.Version = Campaign.FirstRunsVersion;
+                (c.Upgrades ??= new Dictionary<string, int>())[UpgradeIds.Squad] = 1;
+                c.Squad = c.Soldiers.Select((x) => x.Id).ToList();
+                had = Runs.StashSupplies(c);
+            });
+            Assert.Equal(Campaign.FirstRunsVersion, (int)JObject.Parse(File.ReadAllText(host.SavePath))["campaign"]!["version"]!);
+            for (var open = 0; open < 2; open++)
+            {
+                (ana, pepe) = Reopen(host, anaToken, pepeToken);
+                host.Say(ana, new { t = "continueCampaign" });
+                Assert.Equal("base", host.Room.Summary().phase);
+                foreach (var p in new[] { ana, pepe })
+                {
+                    var c = CampaignOf(p);
+                    Assert.Equal((Campaign.RunsCampaignVersion, 0, 2), (c.Version, Runs.Level(c, UpgradeIds.Squad), Runs.SeatsOf(c)));
+                    Assert.Equal(had + 150, Runs.StashSupplies(c));
+                    Assert.Single(c.Log, (e) => e.Text == Lore.SeatsReset(150));
+                    Assert.Equal(new[] { 0, 1 }, c.Squad.Select((id) => c.Soldiers.Single((x) => x.Id == id).Owner).OrderBy((o) => o));
+                }
+            }
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
+        }
+
+        /// <summary>
+        /// N9 (Red, 17/11): a save of the 0.13.0 with a run under way, its four out on the 4 seats it had for nothing: opened
+        /// by the host, the run goes on with the four to its end (Migration.MigrateRuns), and both fight with them.
+        /// </summary>
+        [Fact]
+        public void ARunOfTheFirstRunsUnderWayGoesOnWithItsFour()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            // Out with four, as the 0.13.0 went (the 4 seats of now's first upgrade), and saved as the 0.13.0 had it.
+            Rewrite(host, (c) => (c.Upgrades ??= new Dictionary<string, int>())[UpgradeIds.Squad] = 1);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            var squad = host.Saved().Run!.Squad;
+            Assert.Equal(4, squad.Count);
+            Rewrite(host, (c) =>
+            {
+                c.Version = Campaign.FirstRunsVersion;
+                c.Upgrades!.Remove(UpgradeIds.Squad);
+            });
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            var run = CampaignOf(pepe);
+            Assert.Equal((Campaign.RunsCampaignVersion, 2), (run.Version, Runs.SeatsOf(run)));
+            Assert.Equal(squad, run.Run!.Squad);
+            var node = RowOf(CampaignSent(ana), 1).First();
+            host.Say(ana, Ccmd(new { type = "chooseNode", node }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            Assert.Equal("mission", host.Room.Summary().phase);
+            foreach (var p in new[] { ana, pepe })
+            {
+                var s = SnapshotOf(p);
+                var soldiers = s.Units.Where((u) => u.Team == Teams.Xcom && u.CampaignId != null).ToList();
+                Assert.Equal(squad.OrderBy((id) => id), soldiers.Select((u) => u.CampaignId!).OrderBy((id) => id));
+                Assert.Equal(new[] { 0, 0, 1, 1 }, soldiers.Select((u) => u.Owner ?? -1).OrderBy((o) => o));
+            }
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
+        }
+
+        /// <summary>
+        /// N9 (Red, 17/11; R4's c2): Pepe's last soldier falls with the whole squad while he is away, and he comes into the room
+        /// after the end, before the base. What he gets is the stage over and the campaign with his recruit, and the report
+        /// says who it is (RunReport.Recruits), the line his screen can't make by comparing (BaseController.FreeRecruit).
+        /// </summary>
+        [Fact]
+        public void WhoComesAfterTheSquadFellHearsOfTheirRecruit()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            // Pepe's soldier who stays at the base, gone before: his only one is the one going out.
+            Rewrite(host, (c) =>
+            {
+                foreach (var x in c.Soldiers.Where((x) => x.Owner == 1 && !c.Squad.Contains(x.Id))) x.Alive = false;
+            });
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            GoOut(host, ana, pepe);
+            // Pepe goes; Ana leaves the fight as it is, and the save has the whole squad down.
+            pepe.Close("se va");
+            host.Room.Pump();
+            host.Say(ana, new { t = "backToMenu" });
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            foreach (var u in save.State!.Units.Where((u) => u.Team == Teams.Xcom))
+            {
+                u.Alive = false;
+                u.Hp = 0;
+            }
+            save.Phase = RoomPhases.Mission;
+            store.Save(save);
+            host.Room = host.Make();
+            ana = host.Join("Ana", anaToken);
+            host.Advance(2000);
+            Assert.Equal("mission", host.Room.Summary().phase);
+            Assert.Equal((Outcomes.Defeat, EndReasons.Wiped), (store.Load()!.State!.Outcome, store.Load()!.State!.OutcomeReason));
+            // Pepe comes now: the stage over, and his recruit in the report and in the log.
+            pepe = host.Join("Pepe", pepeToken);
+            Assert.Equal(Outcomes.Defeat, SnapshotOf(pepe).Outcome);
+            var c = CampaignOf(pepe);
+            Assert.Null(c.Run);
+            var recruit = c.Soldiers.Single((x) => x.Id == c.LastReport!.Run!.Recruits!.Single());
+            Assert.Equal((1, true), (recruit.Owner, recruit.Alive));
+            Assert.Contains(c.Log, (e) => e.Text == RunTexts.Recruit(recruit.Name));
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
+        }
+
+        /// <summary>A free tile beside `who`, on their floor, one can stand on and reach them from (as RunRescueTests'), the nearest the map's first.</summary>
+        private static Pos Beside(GameState s, Unit who)
+        {
+            foreach (var d in Grid.Dirs8)
+            {
+                var p = new Pos { X = who.Pos.X + d.X, Y = who.Pos.Y + d.Y, Z = who.Pos.Z };
+                if (Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null && Looting.ReachesToSearch(s, p, who.Pos)) return p;
+            }
+            throw new InvalidOperationException("nowhere beside them");
         }
 
         [Fact]

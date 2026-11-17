@@ -1,7 +1,7 @@
 #nullable enable
 // The runs (.dev-snapshots/gameplay/runs/H0-DISENO.md §3–5; new in C#): the base's numbers and upgrades, who controls
 // which soldier, health in a run, the squad that goes out, and what each joint decision of the runs refuses and does:
-// going out, choosing a node, going back, the stops (Refuge, Trade, Event, Survivor; H4 brings their real contents)
+// going out, choosing a node, going back, the stops (Refuge, Trade, Event; H4 brings their real contents; N3 took the Survivor out)
 // and the upgrades. The commands that reach them are in RunCommands.cs; the gear's, in Gears.
 using System;
 using System.Collections.Generic;
@@ -20,8 +20,11 @@ namespace Bastion.Engine
         /// <summary>A pack at the start, 4×3; each «pack» level adds a row.</summary>
         public const int PackW = 4;
         public const int PackH = 3;
-        /// <summary>Soldiers who go out, by «squad» level.</summary>
-        public static readonly IReadOnlyList<int> Seats = new[] { 4, 6, 8 };
+        /// <summary>
+        /// Soldiers who go out, by «squad» level: from 2, on the motorbike (N4, Arturo 17/11: «se empieza con 2»; with two
+        /// players, one each), to 4, 6 and 8.
+        /// </summary>
+        public static readonly IReadOnlyList<int> Seats = new[] { 2, 4, 6, 8 };
         /// <summary>Health the «mend» upgrade gives everyone after each node.</summary>
         public const int MendHeal = 2;
         /// <summary>Chapters in the game (only the first in this version).</summary>
@@ -50,10 +53,21 @@ namespace Bastion.Engine
             return c.Stash != null ? Gears.Supplies(c.Stash) : 0;
         }
 
-        /// <summary>Soldiers who go out: 4, 6 or 8.</summary>
+        /// <summary>Soldiers who go out: 2, 4, 6 or 8.</summary>
         public static int SeatsOf(CampaignState c)
         {
             return Seats[Math.Min(Level(c, UpgradeIds.Squad), Seats.Count - 1)];
+        }
+
+        /// <summary>
+        /// Whether La Lata has a seat the squad doesn't fill (N2): with none, a Rescate's survivor won't fit on the way out
+        /// unless one of the squad falls, and the map says so before going in (Lore.RescueNoSeat). The run's squad standing,
+        /// or on the base the one that would go out.
+        /// </summary>
+        public static bool SeatFree(CampaignState c)
+        {
+            var squad = c.Run?.Squad ?? c.Squad;
+            return squad.Count((id) => c.Soldiers.Any((s) => s.Id == id && s.Alive)) < SeatsOf(c);
         }
 
         /// <summary>Most soldiers each player takes: half the seats with the partner here, all of them alone (as Campaign.SquadLimit).</summary>
@@ -382,7 +396,7 @@ namespace Bastion.Engine
 
         // ----------------------------------------------------------------- stops
 
-        /// <summary>What a stop holds on arrival: the Refuge heals, the Trade sets out its wares, an event or a survivor waits.</summary>
+        /// <summary>What a stop holds on arrival: the Refuge heals, the Trade sets out its wares, an event waits.</summary>
         private static StopState MakeStop(CampaignState c, RunNode n, Rng rng)
         {
             var run = c.Run!;
@@ -398,9 +412,6 @@ namespace Bastion.Engine
                     break;
                 case NodeKinds.Event:
                     stop.Event = PickEvent(run);
-                    break;
-                case NodeKinds.Survivor:
-                    stop.Survivor = NewSoldier(c, Campaign.RunsNeediest(c), rng, join: false);
                     break;
             }
             return stop;
@@ -455,8 +466,8 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// Why the stop can't be answered so (AnswerStopCommand): only an event or a survivor, once, 0 or 1; `node`, the stop
-        /// the answer was given at (a vote left over from another is refused).
+        /// Why the stop can't be answered so (AnswerStopCommand): only an event, once, 0 or 1; `node`, the stop the answer
+        /// was given at (a vote left over from another is refused).
         /// </summary>
         public static string? AnswerStopRefusal(CampaignState c, int option, string? node = null)
         {
@@ -464,49 +475,21 @@ namespace Bastion.Engine
             if (run == null || run.Phase != RunPhases.Stop || run.Stop == null) return RunTexts.NotAtStop;
             if (node != null && node != run.At) return RunTexts.StaleAnswer;
             var kind = RunMap.Node(run, run.At)?.Kind;
-            if (kind != NodeKinds.Event && kind != NodeKinds.Survivor) return RunTexts.NothingToAnswer;
+            if (kind != NodeKinds.Event) return RunTexts.NothingToAnswer;
             if (run.Stop.Outcome != null) return RunTexts.Answered;
             if (option != 0 && option != 1) return RunTexts.NoOption;
-            var survivor = run.Stop.Survivor;
-            if (survivor != null && option == 0 && c.Soldiers.Count((s) => s.Owner == survivor.Owner && s.Alive) >= Campaign.SoldierCap(c)) return RunTexts.NoBeds;
-            // An event's option (H4): what it costs, from the squad's packs; someone who joins, a bed for them.
+            // An event's option (H4): what it costs, from the squad's packs.
             if (run.Stop.Event != null && Content.RunEvents.TryGetValue(run.Stop.Event, out var def) && option < def.Options.Count)
             {
                 var o = def.Options[option];
                 var have = Standing(c).Sum((s) => Gears.Supplies(s.Kit!.Pack));
                 if (o.Supplies < 0 && have < -o.Supplies) return Lore.RunEventShort(-o.Supplies - have);
-                var owner = Campaign.RunsNeediest(c);
-                if (o.Survivor && c.Soldiers.Count((s) => s.Owner == owner && s.Alive) >= Campaign.SoldierCap(c)) return RunTexts.NoBeds;
             }
             return null;
         }
 
         private static void AnswerStop(CampaignState c, int option, Rng rng)
         {
-            var run = c.Run!;
-            var stop = run.Stop!;
-            if (stop.Survivor != null)
-            {
-                var s = stop.Survivor;
-                var inSquad = false;
-                if (option == 0)
-                {
-                    c.Soldiers.Add(s);
-                    // With them at once if there's a seat, at full health; else they wait at the base.
-                    inSquad = run.Squad.Count < SeatsOf(c);
-                    if (inSquad)
-                    {
-                        run.Squad.Add(s.Id);
-                        run.Hp[s.Id] = MaxHp(s);
-                    }
-                    stop.Survivor = null;
-                    Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name, inSquad), LogTones.Good);
-                }
-                stop.Outcome = option != 0 ? "survivor.no" : inSquad ? "survivor.yes" : "survivor.base";
-                // Who it was, after the answer too (UI, 16/11: the screen lost them): as an event's result.
-                stop.Result = new EventResult { Event = NodeKinds.Survivor, Option = option, Soldier = s.Id, SoldierName = s.Name, InSquad = option == 0 ? inSquad : (bool?)null };
-                return;
-            }
             Event(c, option, rng);
         }
 
@@ -564,35 +547,37 @@ namespace Bastion.Engine
             if (o.Supplies > 0) Give(GearKinds.Supplies, null, o.Supplies);
             if (o.GearKind != null && o.GearCount > 0) Give(o.GearKind, o.GearType, o.GearCount);
             if (o.Modifier != null) run.Pending = o.Modifier;
-            if (o.Survivor)
-            {
-                var s = NewSoldier(c, Campaign.RunsNeediest(c), rng);
-                var max = MaxHp(s);
-                // With them at once if there's a seat; else they wait at the base.
-                var inSquad = run.Squad.Count < SeatsOf(c);
-                if (inSquad)
-                {
-                    run.Squad.Add(s.Id);
-                    run.Hp[s.Id] = o.SurvivorHalf ? Math.Max(1, (max + 1) / 2) : max;
-                }
-                result.Survivor = s.Id;
-                result.SurvivorName = s.Name;
-                result.InSquad = inSquad;
-                Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name, inSquad), LogTones.Good);
-            }
+            // Someone out there (N2: «herido», «radio»): a fight of the next row becomes a Rescate, the survivor alone.
+            if (o.Rescue) result.Rescue = MarkRescue(run)?.Id;
             result.Lost = lost ? true : (bool?)null;
             stop.Result = result;
             stop.Outcome = $"{def.Id}.{option}";
             if (Lore.RunEvents.TryGetValue(def.Id, out var told)) Campaign.RunsLog(c, told.Options[option].Result(result.SoldierName, result.SurvivorName) + (lost ? $" {Lore.RunEventLost}" : ""));
         }
 
-        /// <summary>Why the squad can't go on from the stop (LeaveStopCommand): an event or a survivor is answered first.</summary>
+        /// <summary>
+        /// A fight the stop leads to made a Rescate without Cuervos (N2, an event's RunEventOption.Rescue): a normal one if
+        /// there is, else another special; none if one already is, or nothing it leads to is a fight. Which.
+        /// </summary>
+        private static RunNode? MarkRescue(RunState run)
+        {
+            var next = RunMap.Node(run, run.At)?.Next.Select((id) => RunMap.Node(run, id)).Where((n) => n != null).Select((n) => n!).ToList() ?? new List<RunNode>();
+            if (next.Any((n) => n.Kind == NodeKinds.Rescue)) return null;
+            var fights = next.Where((n) => RunMap.IsFight(n.Kind) && n.Kind != NodeKinds.Boss).ToList();
+            var n = fights.FirstOrDefault((x) => x.Kind == NodeKinds.Normal) ?? fights.FirstOrDefault();
+            if (n == null) return null;
+            n.Kind = NodeKinds.Rescue;
+            n.Guarded = null;
+            return n;
+        }
+
+        /// <summary>Why the squad can't go on from the stop (LeaveStopCommand): an event is answered first.</summary>
         public static string? LeaveStopRefusal(CampaignState c)
         {
             var run = c.Run;
             if (run == null || run.Phase != RunPhases.Stop || run.Stop == null) return RunTexts.NotAtStop;
             var kind = RunMap.Node(run, run.At)?.Kind;
-            return (kind == NodeKinds.Event || kind == NodeKinds.Survivor) && run.Stop.Outcome == null ? RunTexts.AnswerFirst : null;
+            return kind == NodeKinds.Event && run.Stop.Outcome == null ? RunTexts.AnswerFirst : null;
         }
 
         /// <summary>On to the map: alone at once; with the partner here, once both have asked (as the launch of before).</summary>

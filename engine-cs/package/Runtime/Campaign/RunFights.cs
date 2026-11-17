@@ -74,16 +74,28 @@ namespace Bastion.Engine
         /// </summary>
         public static string StageLine(RunNode n)
         {
-            return Lore.StageLine(n.Kind, alarm: n.Kind == NodeKinds.Sabotage ? AlarmOf(n) : null, holdTurns: n.Kind == NodeKinds.Hold ? Setup.HoldTurns : (int?)null, guard: n.Kind == NodeKinds.Elite ? Setup.GuardOf(n.Seed ?? 0) : null);
+            return Lore.StageLine(n.Kind, alarm: n.Kind == NodeKinds.Sabotage ? AlarmOf(n) : null, holdTurns: n.Kind == NodeKinds.Hold ? Setup.HoldTurns : (int?)null, guard: n.Kind == NodeKinds.Elite ? Setup.GuardOf(n.Seed ?? 0) : null, crows: n.Guarded == true);
         }
 
-        /// <summary>La Lata as big as the seats the squad has (Campaign.VehicleSeats: 4, 6 or 8).</summary>
-        private static int VehicleOf(CampaignState c)
+        /// <summary>
+        /// La Lata as big as the seats the squad has: 2 the motorbike (Moto), 4 the 4×4, 6 the van, 8 the bus
+        /// (Campaign.VehicleSeats; the lorry's 7 never). The fight's and the base's (UI's BaseController, N6 on 17/11:
+        /// Escuadra showed the bus).
+        /// </summary>
+        public static int VehicleOf(CampaignState c)
         {
             var seats = SeatsOf(c);
+            if (seats <= MotoSeats) return Moto;
             var tier = Campaign.VehicleSeats.ToList().FindIndex((n) => n >= seats);
             return tier >= 0 ? tier : Campaign.VehicleSeats.Count - 1;
         }
+
+        /// <summary>
+        /// The motorbike's vehicle (N4, N5): after the four of the campaign of before (Campaign.VehicleSeats), so theirs keep
+        /// their numbers. Two seats: who rides and who sits behind.
+        /// </summary>
+        public const int Moto = 4;
+        public const int MotoSeats = 2;
 
         /// <summary>
         /// A run's soldier going into a fight (Setup.SquadMember): its weapons from its kit (with their mods, no wear), the
@@ -153,10 +165,13 @@ namespace Bastion.Engine
             if (node == null || map == null) return null;
             var kind = MissionKindOf(node.Kind);
             var difficulty = Math.Max(1, Math.Min(4, node.Difficulty));
-            var living = kind == MissionKinds.Rescue;
             var boss = node.Kind == NodeKinds.Boss;
+            // A Rescate's survivor hides among the dead, as on a Saqueo; now and then the Cuervos' prisoner, two of their bands
+            // and two groups of the dead round them, as a Rescate was before (N2, Arturo 17/11: «a veces»; RunNode.Guarded).
+            var rescue = kind == MissionKinds.Rescue;
+            var guarded = rescue && node.Guarded == true;
             // The boss's group alone (it isn't scaled: there is one Toro).
-            var pods = boss ? new List<List<string>> { BossPod(difficulty) } : Setup.PodsFor(map, Setup.MissionPods(difficulty, kind, living));
+            var pods = boss ? new List<List<string>> { BossPod(difficulty) } : Setup.PodsFor(map, Setup.MissionPods(difficulty, rescue && !guarded ? MissionKinds.Scavenge : kind, guarded));
             var squad = run.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id)).Where((s) => s != null && s.Alive && s.Kit != null).Select((s) => SquadMemberOf(c, s!)).ToList();
             var seed = Math.Abs(node.Seed ?? 0);
             var alarm = kind == MissionKinds.Sabotage ? AlarmOf(node) : null;
@@ -170,9 +185,12 @@ namespace Bastion.Engine
                 Squad = squad,
                 Pods = pods,
                 Difficulty = difficulty,
-                Living = living ? true : (bool?)null,
                 CampaignMission = new CampaignMission { Id = node.Id, Name = name },
-                VipName = kind == MissionKinds.Rescue ? Setup.VipNames[seed % Setup.VipNames.Count] : null,
+                Living = guarded ? true : (bool?)null,
+                Guarded = guarded ? true : (bool?)null,
+                Survivor = rescue ? SurvivorOf(c, node) : null,
+                // Never fewer than the squad that went out (a run of the 0.13.0's, with 4, under way when its seats went to 2).
+                Seats = Math.Max(SeatsOf(c), squad.Count),
                 Alarm = alarm,
                 ObjectiveName = alarm != null ? Lore.AlarmNames[alarm] : null,
                 // The node's own modifier, and the one an event left for it (H4).
@@ -193,6 +211,8 @@ namespace Bastion.Engine
             });
             // Nothing to search out of everyone's reach (Red, R3 17/11: a police car walled in).
             Setup.OnlyWithinReach(state);
+            // One in RunMap.LooseOdds of the other fights, a survivor loose on the map, unmarked (N2, Arturo 17/11).
+            if (RunMap.LooseSurvivor(node)) PlaceLoose(state, SurvivorOf(c, node), new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x10057))));
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
             return (state, name);
         }
@@ -200,16 +220,71 @@ namespace Bastion.Engine
         // ------------------------------------------------------------ the result
 
         /// <summary>
-        /// The one a Rescate brought out, a soldier now (Runs.NewSoldier): by their name, of whoever has fewest soldiers;
-        /// into the squad with the health they had if there is a seat, else waiting at the base. Null with no bed for them.
+        /// A Rescate's survivor (N2) as they wait on the map: a recruit with a knife and nothing else, a soldier's name
+        /// (Lore, N8: not a VIP's), drawn from the node's seed so the fight and its end agree; nobody's yet, and not among
+        /// the campaign's soldiers (nothing of `c` changes).
         /// </summary>
-        private static CampaignSoldier? Rescued(CampaignState c, Unit vip, Rng rng, RunReport report)
+        public static SquadMember SurvivorOf(CampaignState c, RunNode node)
         {
-            var owner = Campaign.RunsNeediest(c);
-            if (c.Soldiers.Count((s) => s.Owner == owner && s.Alive) >= Campaign.SoldierCap(c)) return null;
-            var s = NewSoldier(c, owner, rng);
+            var s = Campaign.RunsSurvivor(c, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x5a17))), SurvivorLines(node));
+            var member = SquadMemberOf(c, s);
+            member.CampaignId = "";
+            member.Pack = null;
+            member.Kit = null;
+            member.Mags = 0;
+            return member;
+        }
+
+        /// <summary>How far by the walk from the squad's start a loose survivor waits, at least (N2): not at the door.</summary>
+        public const int LooseFrom = 12 * Paths.CostOrtho;
+
+        /// <summary>
+        /// A survivor loose on the map (N2): on a ground-floor tile inside a building (a map that is one building: any of
+        /// its rooms), free, walked to from the squad's start and past LooseFrom of it, out of La Lata's zone; drawn from
+        /// `rng`. Nobody's and captive (Setup.SurvivorUnit), MissionState.Survivor. None placed if there is no such tile.
+        /// </summary>
+        public static Unit? PlaceLoose(GameState s, SquadMember member, Rng rng)
+        {
+            var from = s.Units.FirstOrDefault((u) => u.Team == Teams.Xcom && u.CampaignId != null);
+            if (from == null || s.Storeys == null) return null;
+            var reach = Paths.ComputeReach(s, from, 1_000_000, ignore: (_) => true);
+            var spots = new List<Pos>();
+            for (var i = 0; i < s.Width * s.Height; i++)
+            {
+                var p = new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
+                if (s.Storeys[i] <= 0 || Abilities.InEvacZone(s, p) || Grid.UnitAt(s, p) != null || !Flights.CanStopAt(s, p)) continue;
+                if (!reach.Cost.TryGetValue(Grid.NodeOf(s, p), out var walk) || walk < LooseFrom) continue;
+                if (s.Mission.OutOfReach?.Contains(i) == true) continue;
+                spots.Add(p);
+            }
+            if (spots.Count == 0) return null;
+            var u = Setup.SurvivorUnit("survivor", member, rng.Pick(spots));
+            s.Units.Add(u);
+            s.Mission.Survivor = u.Id;
+            return u;
+        }
+
+        /// <summary>The survivor's bars (Bars.RecruitSkills), from the node's seed: the same in the fight and once joined.</summary>
+        private static SkillLines SurvivorLines(RunNode node) => Bars.RecruitSkills(new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x11e5))));
+
+        /// <summary>
+        /// The one a Rescate brought out, a soldier now (Runs.NewSoldier): by their name and look and bars, of whoever talked
+        /// to them (N2), or the partner if they have no bed; into the squad with the health they had (they got a seat on La
+        /// Lata, Rules.NoSeat). Null with no bed for them.
+        /// </summary>
+        private static CampaignSoldier? Rescued(CampaignState c, RunNode node, Unit vip, Rng rng, RunReport report)
+        {
+            bool Bed(int p) => c.Soldiers.Count((s) => s.Owner == p && s.Alive) < Campaign.SoldierCap(c);
+            var talker = vip.Owner ?? Campaign.RunsNeediest(c);
+            int? owner = Bed(talker) ? talker : c.Players.Where((p) => p != talker && Bed(p)).Select((p) => (int?)p).FirstOrDefault();
+            if (owner == null) return null;
+            var s = NewSoldier(c, owner.Value, rng);
             s.Name = vip.Name;
-            s.Appearance = Appearances.DefaultAppearance(owner, null, Campaign.SexOfPerson(vip.Name) ?? s.Appearance.Sex, s.Id, s.Appearance.Wardrobe);
+            var lines = SurvivorLines(node);
+            s.Skills = lines.Skills;
+            s.Growth = lines.Growth;
+            // As they looked on the map, in their player's colours.
+            s.Appearance = Appearances.DefaultAppearance(owner.Value, null, vip.Appearance?.Sex ?? Campaign.SexOfPerson(vip.Name) ?? s.Appearance.Sex, Campaign.RunsSurvivorLook(vip.Name), s.Appearance.Wardrobe);
             var run = c.Run!;
             var inSquad = run.Squad.Count < SeatsOf(c);
             if (inSquad)
@@ -220,6 +295,18 @@ namespace Bastion.Engine
             report.InSquad = inSquad;
             Campaign.RunsLog(c, RunTexts.SurvivorJoins(s.Name, inSquad), LogTones.Good);
             return s;
+        }
+
+        /// <summary>
+        /// The recruits a run's end gives (Runs.NobodyLeft: a player left with nobody gets one with a knife), by id; null with
+        /// none. RunReport.recruits (Red, N9: the line for whoever comes into the room after it).
+        /// </summary>
+        private static List<string>? Recruited(CampaignState c, Action end)
+        {
+            var had = new HashSet<string>(c.Soldiers.Select((s) => s.Id));
+            end();
+            var came = c.Soldiers.Where((s) => !had.Contains(s.Id)).Select((s) => s.Id).ToList();
+            return came.Count > 0 ? came : null;
         }
 
         /// <summary>The number of a gear's id ("g17": 17), or 0.</summary>
@@ -349,12 +436,20 @@ namespace Bastion.Engine
             var home = run.Squad.Select((id) => c.Soldiers.First((s) => s.Id == id)).Where((s) => s.Kit != null).ToList();
             report.Run.Found = home.SelectMany((s) => AllOf(s.Kit!)).Where((g) => GearNumber(g.Id) > fight.FirstGear).Select(Gears.CloneGear).ToList();
 
+            // A survivor brought out on La Lata (H4, N2: a Rescate's or one loose on the map): they join, with a knife and the
+            // health they had; the squad fallen
+            // round them too.
+            if (!string.IsNullOrEmpty(mission.Mission.Survivor))
+            {
+                var vip = mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.Survivor);
+                if (vip != null && vip.Evacuated) report.Run.Joined = Rescued(c, node, vip, rng, report.Run)?.Id;
+            }
             // The squad fell: the run is over, and what they carried with it.
             if (fought > 0 && standing == 0)
             {
                 report.Run.Ended = RunEnds.Wiped;
                 if (Tuning.IsSet) Salvage(c, mission);
-                EndRun(c, rng, RunTexts.Wiped);
+                report.Run.Recruits = Recruited(c, () => EndRun(c, rng, RunTexts.Wiped));
                 return report;
             }
             // What a stage won gives, into the packs while there is room: a special's reward (a Sigilo's doubled unseen,
@@ -403,12 +498,6 @@ namespace Bastion.Engine
                 report.Run.RewardLost = left > 0 ? left : (int?)null;
                 Campaign.RunsLog(c, RunTexts.Reward(reward, left), LogTones.Good);
             }
-            // A Rescate won with the one held out (H4): they join, with a knife and the health they had.
-            if (victory && node.Kind == NodeKinds.Rescue)
-            {
-                var vip = mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.ObjectiveUnit && u.Template == TemplateIds.Vip);
-                if (vip != null && vip.Evacuated) report.Run.Joined = Rescued(c, vip, rng, report.Run)?.Id;
-            }
             if (node.Kind == NodeKinds.Boss)
             {
                 if (victory)
@@ -419,7 +508,7 @@ namespace Bastion.Engine
                 else
                 {
                     report.Run.Ended = RunEnds.Returned;
-                    EndRun(c, rng);
+                    report.Run.Recruits = Recruited(c, () => EndRun(c, rng));
                 }
                 return report;
             }

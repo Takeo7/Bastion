@@ -1304,7 +1304,9 @@ namespace Bastion.EditorTools
                         Debug.Log($"[combat] {Time.time:0.00} s: fires; muzzle {units.Muzzle(soldier.Id):F2}, feet {units.Feet(soldier.Id):F2}; {units.Stance(soldier.Id)}");
                         units.Highlight(null);
                         int aim = await units.RaiseWeapon(soldier.Id, at);
-                        for (int shot = 0; shot < 2; shot++)
+                        // (BASTION_DISPAROS=n: so many shots, 2 unless said; one, a bolt-action's worked bolt seen whole: T14.)
+                        int shots = int.TryParse(Environment.GetEnvironmentVariable("BASTION_DISPAROS"), out int n) ? n : 2;
+                        for (int shot = 0; shot < shots; shot++)
                         {
                             var from = units.Muzzle(soldier.Id);
                             fx.MuzzleFlash(from, Fx.Hex(0xffd27a));
@@ -2596,7 +2598,7 @@ namespace Bastion.EditorTools
         /// <summary>
         /// La Lata at a mission's evacuation (mapView.ts placeBus, evacBus.ts): a recorded mission with its bay (BASTION_MAP,
         /// step2/city-11-scavenge unless said), as the campaign's vehicle BASTION_VEHICULO (0 the 4×4, 1 the van, 2 the lorry,
-        /// 3 the bus, as unless said), the camera on its bay as the game puts it when it goes (16 tiles off; BASTION_DIST
+        /// 3 the bus, as unless said; 4 the motorbike), the camera on its bay as the game puts it when it goes (16 tiles off; BASTION_DIST
         /// another). BASTION_IR=1, in play mode: it goes (MapView.LataDeparts) from the first frame of a strip. BASTION_SUBEN=1,
         /// a strip in edit mode instead: the squad on the zone, all boarding at once 0.3 s in (UnitViews.Board, as UI's event
         /// player does: Arturo, 31/10, his #1), and La Lata going once they have (made in play mode, the figures weren't drawn).
@@ -2696,7 +2698,8 @@ namespace Bastion.EditorTools
                     boarded = true;
                     foreach (var u in squad) units.Board(u.Id);
                 }
-                if (!going && time >= 0.3f + UnitViews.BoardSeconds)
+                // (Onto the motorbike they walk and get on first: UnitViews.Ride; in the game MapView.LataDeparts waits by frames.)
+                if (!going && time >= 0.3f + UnitViews.BoardSeconds && !units.Mounting)
                 {
                     going = true;
                     _ = MapView.Current.LataDeparts();

@@ -73,6 +73,50 @@ namespace Bastion.Engine
             }
         }
 
+        /// <summary>
+        /// What a weapon is good for, in one line, for its sheet on hover (Arturo, 18/11, T4: «para saber cuál es mejor que
+        /// otra»), by the weapon it fires as (WeaponIds): the figures go under it, by WeaponLabels. A long blade's sweep and
+        /// the rake's reach are MeleeLine's. Null for the enemies' and the base's.
+        /// </summary>
+        public static string? WeaponLine(string weapon)
+        {
+            switch (weapon)
+            {
+                case WeaponIds.Rifle:
+                    return "Para todo: suma puntería de cerca y no la pierde de lejos.";
+                case WeaponIds.Shotgun:
+                    return "Mucho daño de cerca. Desde doce casillas, pierde puntería.";
+                case WeaponIds.Cannon:
+                    return "Mucho daño, de cerca y de lejos, pero hace mucho ruido y el cargador es corto.";
+                case WeaponIds.Sniper:
+                    return "Para lejos: de cerca pierde mucha puntería. Cada disparo gasta las dos acciones.";
+                case WeaponIds.Pistol:
+                    return "Poco daño, pero es el arma de fuego que menos se oye.";
+                case WeaponIds.Knife:
+                    return "Con el que empiezan todos. Poco daño, y casi no se oye.";
+                case WeaponIds.Sword:
+                    return "Acierta mucho y casi no se oye.";
+                case WeaponIds.Pan:
+                    return "Acierta bastante, pero hace poco daño y el golpe se oye.";
+                case WeaponIds.Bat:
+                    return "Buen daño, y se oye poco.";
+                case WeaponIds.Crowbar:
+                    return "Cada golpe quita 1 de blindaje. Con ella se quitan las tablas de puertas y ventanas.";
+                case WeaponIds.Chainsaw:
+                    return "La que más daño hace, y la que más se oye.";
+                case WeaponIds.Katana:
+                    return "La mejor hoja: mucho daño, acierta mucho y casi no se oye.";
+                case WeaponIds.Longsword:
+                    return "Buen daño, y acierta bastante.";
+                case WeaponIds.Rake:
+                    return "Hace poco daño, pero llega más lejos.";
+                case WeaponIds.Stick:
+                    return "El que menos daño hace, pero casi nunca falla.";
+                default:
+                    return null;
+            }
+        }
+
         /// <summary>A figure of the card, in words: «4 balas», «2 acciones», «12 casillas»; the blade «No gasta». `what`: "clip", "actions" or "noise".</summary>
         public static string WeaponFigure(string what, int n, bool melee = false)
         {

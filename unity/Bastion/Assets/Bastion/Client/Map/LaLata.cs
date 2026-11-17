@@ -10,8 +10,10 @@ namespace Bastion.Client.Map
     /// La Lata, the squad's vehicle (0.10.1's strategy/mula.ts and game/evacBus.ts). Before it is La Mula it is one of
     /// Apocalypse's vehicles with its own armour (playtest 18/10, #45; GameState.vehicle): 0 the 4×4 with bars on its
     /// windows and spikes on its nose, 1 the TV van with its dish on the roof (its back doors swing open), 2 the army lorry
-    /// under its canvas; 3 La Mula, POLYGON Town's bus with Apocalypse's steel plates over its windows and on its roof. Its
-    /// wheels turn, its doors open and shut, its headlights glow while it drives.
+    /// under its canvas; 3 La Mula, POLYGON Town's bus with Apocalypse's steel plates over its windows and on its roof;
+    /// 4 Apocalypse's rigged motorbike, with its saddlebags, its rack and its caged headlight (N5, Arturo 17/11: a new
+    /// expedition's two seats; La Lata too), the two aboard seen on it (Seat). Its wheels turn, its doors open and shut,
+    /// its headlights glow while it drives.
     /// Parked (Park), it goes along its nose gathering speed and is gone (Depart), and comes back backing in, slowing to a
     /// stop (Arrive); each moves on with the game's time, or with a strip's step (IShotStep).
     /// Its places are 0.10.1's, in tiles of its world (x east, z south, its heading from +z towards +x); its model is
@@ -20,7 +22,9 @@ namespace Bastion.Client.Map
     public sealed class LaLata : MonoBehaviour, IShotStep
     {
         /// <summary>The prefabs each vehicle is built from (MapArt.ModelKey's form), for the game's catalog (MapCatalogMake).</summary>
-        public static readonly string[] Bodies = { "apocalypse:SM_Veh_Car_Medium_01", "apocalypse:SM_Veh_NewsVan_01", "apocalypse:SM_Veh_Army_Truck_01", "town:SM_Veh_Bus_01" };
+        public static readonly string[] Bodies = { "apocalypse:SM_Veh_Car_Medium_01", "apocalypse:SM_Veh_NewsVan_01", "apocalypse:SM_Veh_Army_Truck_01", "town:SM_Veh_Bus_01", "apocalypse:SM_Veh_Motorbike_Apoco_01" };
+        /// <summary>The motorbike's number (GameState.vehicle).</summary>
+        public const int Bike = 4;
         /// <summary>La Mula's plates (mula.ts MULA_MODELS): plain, with a slit to see through, and the roof's.</summary>
         const string Plate = "apocalypse:SM_Veh_Attach_Plating_01", PlateSlit = "apocalypse:SM_Veh_Attach_Plating_10", PlateRoof = "apocalypse:SM_Veh_Attach_Plating_05";
         public static IEnumerable<string> Models => Bodies.Concat(new[] { Plate, PlateSlit, PlateRoof });
@@ -31,8 +35,10 @@ namespace Bastion.Client.Map
         const float LightsStanding = 0.2f, LightsDay = 2.6f, LightsNight = 1.3f;
         const float Tile = MapSpace.Tile;
 
-        /// <summary>0 4×4, 1 van, 2 lorry, 3 the bus.</summary>
+        /// <summary>0 4×4, 1 van, 2 lorry, 3 the bus, 4 the motorbike.</summary>
         public int Vehicle { get; private set; } = 3;
+        /// <summary>Whether it is the motorbike: no doors, those aboard ride it in sight (Seat).</summary>
+        public bool IsBike => Vehicle == Bike;
         /// <summary>Its length and width, in tiles (once built; the bus's until then).</summary>
         public float Length => built ? size.z / Tile : 7;
         public float Width => built ? size.x / Tile : 1.7f;
@@ -102,7 +108,7 @@ namespace Bastion.Client.Map
 
         void Build(int vehicle, Func<string, GameObject> prefabOf)
         {
-            Vehicle = Mathf.Clamp(vehicle, 0, 3);
+            Vehicle = Mathf.Clamp(vehicle, 0, Bodies.Length - 1);
             var prefab = prefabOf(Bodies[Vehicle]);
             if (prefab == null)
             {
@@ -196,7 +202,57 @@ namespace Bastion.Client.Map
                 foreach (float x in new[] { box.max.x, box.min.x })
                     foreach (var (from, to, _) in CarDoors)
                         doorCentres.Add(Body(new Vector3(x, 0.5f * Tile, box.min.z + size.z * (from + to) / 2)));
+            else if (IsBike)
+                // Where one gets on, beside its seat on its left (−x, its stand's side), the rider's first.
+                foreach (var seat in BikeSeats) doorCentres.Add(Body(new Vector3(box.min.x - BikeBeside * Tile, 0.5f * Tile, seat.z)));
             else if (Vehicle < 3) doorCentres.Add(Body(new Vector3(box.center.x, 0.6f * Tile, box.min.z)));
+        }
+
+        /// <summary>
+        /// The motorbike's two seats, the rider's and the one behind's: where their hips go, on its body as Build centres it
+        /// (metres; nose +z, its floor 0), over its seat's top along its middle (MotoLab: 1.01 and 1.06 at 1.05 and 0.55 m
+        /// from its back, a hand's breadth over that for the seat of the trousers).
+        /// </summary>
+        static readonly Vector3[] BikeSeats = { new Vector3(0, 1.13f, -0.45f), new Vector3(0, 1.18f, -0.95f) };
+        /// <summary>How far off its side one stands to get on (tiles).</summary>
+        const float BikeBeside = 0.3f;
+
+        /// <summary>How many it carries in sight (the motorbike's two); the others take theirs in, out of sight.</summary>
+        public int Seats => IsBike ? BikeSeats.Length : 0;
+
+        /// <summary>
+        /// Where one gets on seat `k`, in the world: on the ground beside it, on the side nearer `near` (its left, Doorways'
+        /// place for it, if the same); null if there is no such seat.
+        /// </summary>
+        public Vector3? MountSpot(int k, Vector3 near)
+        {
+            if (!IsBike || body == null || k < 0 || k >= BikeSeats.Length) return null;
+            var left = body.transform.TransformPoint(new Vector3(box.min.x - BikeBeside * Tile, 0, BikeSeats[k].z));
+            var right = body.transform.TransformPoint(new Vector3(box.max.x + BikeBeside * Tile, 0, BikeSeats[k].z));
+            return (right - near).sqrMagnitude < (left - near).sqrMagnitude - 1e-4f ? right : left;
+        }
+
+        /// <summary>
+        /// The motorbike's handlebar grips in the world now, where the rider's hands go (UnitViews.RiderHands): its ends a
+        /// hand's width in (MotoLab.Medidas: the ends at ±0.47, 1.40 up, 0.13 along); null if it isn't a motorbike built.
+        /// </summary>
+        public (Vector3 left, Vector3 right)? Grips()
+        {
+            if (!IsBike || body == null) return null;
+            return (body.transform.TransformPoint(new Vector3(-BikeGrip.x, BikeGrip.y, BikeGrip.z)), body.transform.TransformPoint(BikeGrip));
+        }
+
+        /// <summary>The right grip's middle, on its body (metres); the left one mirrored.</summary>
+        static readonly Vector3 BikeGrip = new Vector3(0.39f, 1.40f, 0.13f);
+
+        /// <summary>
+        /// Seat `k`'s place and way in the world now (where the hips of the one on it go, its body facing its nose), as it
+        /// stands or drives; null if there is no such seat.
+        /// </summary>
+        public (Vector3 at, Quaternion facing)? Seat(int k)
+        {
+            if (!IsBike || body == null || k < 0 || k >= BikeSeats.Length) return null;
+            return (body.transform.TransformPoint(BikeSeats[k]), body.transform.rotation);
         }
 
         /// <summary>
@@ -356,6 +412,11 @@ namespace Bastion.Client.Map
             lights.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
             Glow(LightsStanding);
             bool bus = Vehicle == 3;
+            if (IsBike)
+            {
+                BikeLamp();
+                return;
+            }
             var lamp = bus ? new Vector3(0.28f, 0.14f, 0.05f) : new Vector3(0.2f, 0.1f, 0.04f);
             // The others by their own body, not its armour, bars and spikes, nor its wheels (the 3D review's E-06, 10/11: by
             // the whole box they hung in the air before the 4×4's spikes and the van's bars, mula.ts's own place for them).
@@ -385,6 +446,27 @@ namespace Bastion.Client.Map
             }
             Debug.Log(FormattableString.Invariant($"[lata] ({Vehicle}) lamps at z {front:0.00} (body {own.max.z:0.00}, with its armour {box.max.z:0.00})"));
         }
+
+        /// <summary>
+        /// The motorbike's one headlight, in its cage: a round glow a little in from the cage's front, its middle at its
+        /// height (MotoLab.Medidas: the cage's face at 0.66 m along it, from 1.05 to 1.30 m up), narrow and thin.
+        /// </summary>
+        void BikeLamp()
+        {
+            var o = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            o.name = "Faro";
+            DestroyNow(o.GetComponent<Collider>());
+            o.transform.SetParent(body.transform, false);
+            o.transform.localRotation = Quaternion.Euler(90, 0, 0);
+            o.transform.localScale = new Vector3(BikeLampWide, 0.01f, BikeLampWide);
+            o.transform.localPosition = new Vector3(0, 1.18f, 0.66f - 0.02f);
+            var r = o.GetComponent<MeshRenderer>();
+            r.sharedMaterial = lights;
+            r.shadowCastingMode = ShadowCastingMode.Off;
+        }
+
+        /// <summary>The motorbike's headlight across (metres).</summary>
+        const float BikeLampWide = 0.17f;
 
         /// <summary>
         /// How far in from its body's front a lamp sits when its mesh can't be read, in tiles; and how much of a lamp's depth

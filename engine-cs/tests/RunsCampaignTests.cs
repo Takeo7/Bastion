@@ -18,7 +18,7 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void ANewCampaignAlone()
         {
-            var c = Solo();
+            var c = Campaign.CreateRunsCampaign(Zero, new Rng(1));
             Assert.Equal(Campaign.RunsCampaignVersion, c.Version);
             Assert.True(Campaign.IsRuns(c));
             Assert.Equal(4, c.Soldiers.Count);
@@ -44,7 +44,10 @@ namespace Bastion.Engine.Tests
             Assert.Equal(0, c.NodesPlayed);
             Assert.Null(c.Run);
             Assert.Empty(c.Upgrades!);
-            Assert.Equal(c.Soldiers.Select((s) => s.Id), c.Squad);
+            // Two seats, on the motorbike (N4): the first two go out.
+            Assert.Equal(2, Runs.SeatsOf(c));
+            Assert.Equal(Runs.Moto, Runs.VehicleOf(c));
+            Assert.Equal(c.Soldiers.Take(2).Select((s) => s.Id), c.Squad);
             Assert.NotNull(c.Uid);
             Assert.Equal(RunTexts.Welcome, c.Log[0].Text);
             // Nothing of the campaign of before.
@@ -55,12 +58,29 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void ANewCampaignOfTwo()
         {
-            var c = Two();
+            var c = Campaign.CreateRunsCampaign(Both, new Rng(1));
             Assert.Equal(2, c.Soldiers.Count((s) => s.Owner == 0));
             Assert.Equal(2, c.Soldiers.Count((s) => s.Owner == 1));
-            Assert.Equal(4, c.Squad.Count);
+            // Two seats, one each (N4, Arturo 17/11).
+            Assert.Equal(new[] { 0, 1 }, c.Squad.Select((id) => c.Soldiers.First((s) => s.Id == id).Owner).OrderBy((o) => o));
+            Assert.Equal(1, Runs.SquadLimit(c, Both));
+            Assert.Equal(2, Runs.SquadLimit(c, Zero));
             // The same seed, the same campaign.
-            Assert.Equal(Bastion.Net.Json.Write(Two()), Bastion.Net.Json.Write(c));
+            Assert.Equal(Bastion.Net.Json.Write(Campaign.CreateRunsCampaign(Both, new Rng(1))), Bastion.Net.Json.Write(c));
+        }
+
+        [Fact]
+        public void TheSeatsAndTheirVehicles()
+        {
+            // 2 the motorbike, 4 the 4×4, 6 the van, 8 the bus (N4); 2→4 for 40 §.
+            var c = Campaign.CreateRunsCampaign(Zero, new Rng(1));
+            var seen = new List<(int, int, int?)>();
+            for (var level = 0; level < 4; level++)
+            {
+                (c.Upgrades ??= new Dictionary<string, int>())[UpgradeIds.Squad] = level;
+                seen.Add((Runs.SeatsOf(c), Runs.VehicleOf(c), Runs.NextPrice(c, UpgradeIds.Squad)));
+            }
+            Assert.Equal(new[] { (2, Runs.Moto, (int?)40), (4, 0, 150), (6, 1, 300), (8, 3, (int?)null) }, seen);
         }
 
         [Fact]
@@ -149,7 +169,7 @@ namespace Bastion.Engine.Tests
             Ok(c, new SquadCommand { Soldier = extra.Id, On = true }, 0, Zero);
             Assert.Equal(3, c.Squad.Count((id) => c.Soldiers.First((s) => s.Id == id).Owner == 0));
             // Six seats with the upgrade.
-            c.Upgrades![UpgradeIds.Squad] = 1;
+            c.Upgrades![UpgradeIds.Squad] = 2;
             Assert.Equal(6, Runs.SeatsOf(c));
             Assert.Equal(3, Runs.SquadLimit(c, Both));
             // Not once out.

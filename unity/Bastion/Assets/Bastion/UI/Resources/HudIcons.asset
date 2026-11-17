@@ -119,6 +119,8 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 0ab0f1e374cb9c94fb86717589066fdf, type: 3}
   - Id: stunLance
     Sprite: {fileID: 21300000, guid: 40ba9a55860952f49bea9a9054d931b5, type: 3}
+  - Id: talk
+    Sprite: {fileID: 21300000, guid: e6fe9fe71762a4449964f9c2beaa3a46, type: 3}
   - Id: stat:hp
     Sprite: {fileID: 21300000, guid: a2a2d4f75f093f9448023644345123a9, type: 3}
   - Id: stat:ap
@@ -227,8 +229,6 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 9a8a25ac41ae7e64fb90860519393128, type: 3}
   - Id: node:event
     Sprite: {fileID: 21300000, guid: 3539a6b2f29c5834289c701192890dc9, type: 3}
-  - Id: node:survivor
-    Sprite: {fileID: 21300000, guid: f9e239e5e941199459589501966ef323, type: 3}
   - Id: node:awake
     Sprite: {fileID: 21300000, guid: aa8a4a25bd52f88448a9dd47771ce382, type: 3}
   - Id: tab:stash

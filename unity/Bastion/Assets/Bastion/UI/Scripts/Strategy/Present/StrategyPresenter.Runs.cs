@@ -43,7 +43,8 @@ namespace Bastion.UI.Strategy
 
         /// <summary>
         /// La Lata's seats in the runs (Runs.SeatsOf): the first commander's half, then the second's, each with their own of
-        /// the squad and the rest free (null); alone, the squad and the free ones.
+        /// the squad and the rest free (null); alone, or with the partner away, the squad and the free ones (as
+        /// Runs.SquadLimit: N4, 17/11, with 2 seats the one here took both and the cards showed one of them).
         /// </summary>
         List<CampaignSoldier> RunPads()
         {
@@ -51,7 +52,7 @@ namespace Bastion.UI.Strategy
             var seats = Runs.SeatsOf(c);
             var squad = c.Squad.Select(id => c.Soldiers.FirstOrDefault(s => s.Id == id)).Where(s => s != null && s.Alive).ToList();
             var pads = new List<CampaignSoldier>();
-            if (c.Players.Count < 2)
+            if (c.Players.Count < 2 || Connected.Count < 2)
             {
                 pads.AddRange(squad.Take(seats));
                 while (pads.Count < seats) pads.Add(null);
@@ -81,7 +82,8 @@ namespace Bastion.UI.Strategy
                 MineHead = $"Tus soldados · {myCount}/{limit}",
                 MineTip = partner != null ? StrategyText.Runs.SquadTipTwo(partner.Name) : StrategyText.Runs.SquadTip,
                 Title = StrategyText.Runs.Head(chapter),
-                Briefing = StrategyText.Runs.StartTip(chapter),
+                // And La Lata as the seats make it (N4, 17/11: the motorbike first, Lore.RunTransport).
+                Briefing = StrategyText.Runs.StartTip(chapter) + " " + StrategyText.Runs.Transport(Runs.SeatsOf(c)),
             };
             foreach (var s in c.Soldiers.Where(s => s.Owner == Slot && s.Alive)) v.Mine.Add(RunRow(s));
             var theirs = c.Soldiers.Where(s => s.Owner != Slot && s.Alive).ToList();

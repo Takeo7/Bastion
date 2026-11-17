@@ -125,59 +125,69 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
-        public void ASurvivorJoinsOrGoes()
+        public void ASurvivorStopOfThe0130IsARefugeOnceLoaded()
         {
+            // N3 (17/11): the Superviviente stop is gone; a 0.13.0 save at one (version 28) rests there instead. Its seats go
+            // to 2 (N4, cuadro 23), the run under way going on with the squad that went.
             var c = Solo();
-            c.Upgrades![UpgradeIds.Squad] = 1;
-            GoTo(c, NodeKinds.Survivor);
-            var stop = c.Run!.Stop!;
-            var survivor = stop.Survivor!;
-            Assert.Equal(FoundWeaponIds.Knife, survivor.Kit!.Melee!.Type);
-            Assert.DoesNotContain(survivor, c.Soldiers);
-            Refused(RunTexts.AnswerFirst, c, new LeaveStopCommand());
-            Ok(c, new AnswerStopCommand { Option = 0 });
-            Assert.Contains(survivor, c.Soldiers);
-            Assert.Contains(survivor.Id, c.Run.Squad);
-            Assert.Equal(Runs.MaxHp(survivor), c.Run.Hp[survivor.Id]);
-            Assert.Null(stop.Survivor);
-            Assert.Equal("survivor.yes", stop.Outcome);
-            // Who it was, after the answer too.
-            Assert.Equal((NodeKinds.Survivor, 0, survivor.Id, survivor.Name, (bool?)true), (stop.Result!.Event, stop.Result.Option, stop.Result.Soldier, stop.Result.SoldierName, stop.Result.InSquad));
-            Assert.Equal(RunTexts.SurvivorJoins(survivor.Name), c.Log[0].Text);
-            // No seat: to the base.
+            GoTo(c, NodeKinds.Refuge);
+            // 4 seats as the 0.13.0 had them, with no upgrade.
+            c.Upgrades!.Remove(UpgradeIds.Squad);
+            var run = c.Run!;
+            var at = RunMap.Node(run, run.At)!;
+            at.Kind = Campaign.OldSurvivorStop;
+            var ahead = run.Nodes.First((n) => n.Row == 3);
+            ahead.Kind = Campaign.OldSurvivorStop;
+            run.Stop = new StopState();
+            var hurt = Squad(c)[0];
+            run.Hp[hurt.Id] = 1;
+            c.Version = Campaign.FirstRunsVersion;
+            var back = Campaign.MigrateCampaign(Bastion.Net.Json.Read<CampaignState>(Bastion.Net.Json.Write(c))!);
+            Assert.Equal(Campaign.RunsCampaignVersion, back.Version);
+            Assert.Equal((0, 2), (Runs.Level(back, UpgradeIds.Squad), Runs.SeatsOf(back)));
+            Assert.Equal(4, back.Run!.Squad.Count);
+            Assert.Equal(Lore.SeatsReset(0), back.Log[0].Text);
+            Assert.DoesNotContain(back.Run!.Nodes, (n) => n.Kind == Campaign.OldSurvivorStop);
+            Assert.Equal(NodeKinds.Refuge, RunMap.Node(back.Run, ahead.Id)!.Kind);
+            Assert.Equal("refuge.rest", back.Run.Stop!.Outcome);
+            Assert.Equal(Runs.MaxHp(hurt), back.Run.Hp[hurt.Id]);
+            Assert.Null(Runs.LeaveStopRefusal(back));
+            // Once up to date, as it is.
+            Assert.Same(back, Campaign.MigrateCampaign(back));
+            Assert.Equal(0, Runs.Level(back, UpgradeIds.Squad));
+        }
+
+        [Fact]
+        public void The0130sSeatsArePaidBack()
+        {
+            // 8 seats bought in the 0.13.0 (150 + 300 §): down to 2, the 450 § in the stash; the squad on the base, one each.
+            var c = Two();
+            c.Upgrades![UpgradeIds.Squad] = 2;
+            c.Version = Campaign.FirstRunsVersion;
+            var had = Runs.StashSupplies(c);
+            var back = Campaign.MigrateCampaign(c);
+            Assert.Equal((0, 2), (Runs.Level(back, UpgradeIds.Squad), Runs.SeatsOf(back)));
+            Assert.Equal(had + 450, Runs.StashSupplies(back));
+            Assert.Equal(Lore.SeatsReset(450), back.Log[0].Text);
+            Assert.Equal(new[] { 0, 1 }, back.Squad.Select((id) => back.Soldiers.First((s) => s.Id == id).Owner).OrderBy((o) => o));
+            // 6 seats: 150 §.
             var d = Solo();
-            GoTo(d, NodeKinds.Survivor);
-            var other = d.Run!.Stop!.Survivor!;
-            Ok(d, new AnswerStopCommand { Option = 0 });
-            Assert.Contains(other, d.Soldiers);
-            Assert.DoesNotContain(other.Id, d.Run.Squad);
-            Assert.Equal("survivor.base", d.Run.Stop!.Outcome);
-            Assert.Equal((other.Id, other.Name, (bool?)false), (d.Run.Stop.Result!.Soldier, d.Run.Stop.Result.SoldierName, d.Run.Stop.Result.InSquad));
-            Assert.Equal(RunTexts.SurvivorJoins(other.Name, false), d.Log[0].Text);
-            // No.
-            var e = Solo();
-            GoTo(e, NodeKinds.Survivor);
-            var gone = e.Run!.Stop!.Survivor!;
-            Ok(e, new AnswerStopCommand { Option = 1 });
-            Assert.DoesNotContain(gone, e.Soldiers);
-            Assert.Equal("survivor.no", e.Run.Stop.Outcome);
-            Assert.Equal((1, gone.Id, gone.Name, (bool?)null), (e.Run.Stop.Result!.Option, e.Run.Stop.Result.Soldier, e.Run.Stop.Result.SoldierName, e.Run.Stop.Result.InSquad));
-            Ok(e, new LeaveStopCommand());
-            Assert.Equal(RunPhases.Choose, e.Run.Phase);
+            d.Version = Campaign.FirstRunsVersion;
+            Assert.Equal(150, Runs.StashSupplies(Campaign.MigrateCampaign(d)));
         }
 
         [Fact]
         public void WithBothTheAnswerIsVotedAndBothLeave()
         {
             var c = Two();
-            GoTo(c, NodeKinds.Survivor);
+            GoTo(c, NodeKinds.Event);
             var stop = c.Run!.Stop!;
-            var name = stop.Survivor!.Name;
+            stop.Event = "radio";
             Ok(c, new AnswerStopCommand { Option = 1 }, 1, Both);
-            Assert.Equal($"que no se una {name}", c.Proposal!.Text);
+            Assert.Equal(RunTexts.AnswerText(stop, 1), c.Proposal!.Text);
             Assert.Null(stop.Outcome);
             Ok(c, new VoteCommand { Accept = true }, 0, Both);
-            Assert.Equal("survivor.no", stop.Outcome);
+            Assert.Equal("radio.1", stop.Outcome);
             // One asks: waits for the other; one takes it back.
             Ok(c, new LeaveStopCommand(), 0, Both);
             Assert.Equal(new[] { true, false }, stop.Leaving);

@@ -81,10 +81,10 @@ namespace Bastion.Engine.Tests
                     Same(before, c, $"{n.Kind} chosen");
                     if (c.Run.Phase == RunPhases.Stop)
                     {
-                        if (c.Run.Stop!.Outcome == null && (n.Kind == NodeKinds.Event || n.Kind == NodeKinds.Survivor))
+                        if (c.Run.Stop!.Outcome == null && n.Kind == NodeKinds.Event)
                         {
-                            // A survivor taken in; an event's second answer (the first may cost what the squad hasn't got).
-                            var answer = Order(new AnswerStopCommand { Option = n.Kind == NodeKinds.Survivor ? 0 : 1 });
+                            // An event's second answer (the first may cost what the squad hasn't got).
+                            var answer = Order(new AnswerStopCommand { Option = 1 });
                             Assert.True(answer.Ok, $"{n.Kind}: {answer.Error}");
                         }
                         var left = Order(new LeaveStopCommand { Ready = true });

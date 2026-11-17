@@ -410,6 +410,8 @@ namespace Bastion.Engine
     {
         public override string T => "leftBehind";
         public string Unit { get; set; } = "";
+        /// <summary>In the zone, but there was no seat for them (N2, Rules.NoSeat): Lore.EvacNoSeatLine.</summary>
+        public bool? NoSeat { get; set; }
     }
 
     /// <summary>`decor`: what it is to look like from now on (a breached wall), turned `facing` (DIRS4; north if none); without it, the decor stays.</summary>
@@ -511,12 +513,24 @@ namespace Bastion.Engine
     }
 
     /// <summary>A soldier reached the VIP, who now follows that player's orders.</summary>
+    /// <summary>
+    /// The VIP freed by `by` (outside the runs, walking up to them); in a run's Rescate, the survivor talked to by `by`
+    /// (AbilityIds.Talk, N2): they join, `owner`'s to command, with their actions at once.
+    /// </summary>
     public sealed class VipRescuedEvent : GameEvent
     {
         public override string T => "vipRescued";
         public string Unit { get; set; } = "";
         public string By { get; set; } = "";
         public int? Owner { get; set; } // Slot
+    }
+
+    /// <summary>A run's Rescate (N2): `by` of the squad has seen the survivor, `unit`; from now they are shown (MissionState.SurvivorFound).</summary>
+    public sealed class SurvivorFoundEvent : GameEvent
+    {
+        public override string T => "survivorFound";
+        public string Unit { get; set; } = "";
+        public string By { get; set; } = "";
     }
 
     /// <summary>Flare: reinforcements will land here at the end of the next alien turn.</summary>
@@ -780,5 +794,25 @@ namespace Bastion.Engine
     {
         public override string T => "gotUp";
         public string Unit { get; set; } = "";
+    }
+
+    /// <summary>What reacts to a walk (Rules.ReactionsAlong, T20).</summary>
+    public static class PathReactions
+    {
+        /// <summary>One of the dead beside the way, that sees the soldier going past (Rules.PassBite).</summary>
+        public const string Bite = "bite";
+        /// <summary>Whoever keeps watch (Overwatch, the gun's or the blade's).</summary>
+        public const string Watch = "watch";
+        /// <summary>Whoever suppresses the soldier.</summary>
+        public const string Suppress = "suppress";
+    }
+
+    /// <summary>An enemy that would react to a walk (Rules.ReactionsAlong): on the path's tile `index`, `unit`, how.</summary>
+    public sealed class PathReaction
+    {
+        public int Index { get; set; }
+        public Pos Tile { get; set; } = new Pos();
+        public string Unit { get; set; } = "";
+        public string Kind { get; set; } = ""; // PathReactions
     }
 }

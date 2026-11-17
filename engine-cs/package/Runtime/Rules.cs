@@ -246,6 +246,13 @@ namespace Bastion.Engine
                 case AbilityIds.Hack:
                     Hack(u);
                     break;
+                case AbilityIds.Talk:
+                {
+                    // A run's Rescate (N2): they join, the talker's player's to command.
+                    var vip = Abilities.TalkTarget(S, u)!;
+                    Emit(new VipRescuedEvent { Unit = vip.Id, By = u.Id, Owner = u.Owner });
+                    break;
+                }
                 case AbilityIds.Search:
                     Search(u, tile!);
                     break;
@@ -255,6 +262,7 @@ namespace Bastion.Engine
                 case AbilityIds.OpenDoor:
                 case AbilityIds.CloseDoor:
                     Emit(new TileChangedEvent { Pos = Engine.Events.CopyPos(tile!), Kind = ability == AbilityIds.OpenDoor ? TileKinds.DoorOpen : TileKinds.Door });
+                    if (ability == AbilityIds.OpenDoor && Rules.SurvivorSeen(S, u, u.Pos) is Unit found) Emit(new SurvivorFoundEvent { Unit = found.Id, By = u.Id });
                     break;
                 case AbilityIds.RunAndGun:
                     break;
@@ -792,7 +800,7 @@ namespace Bastion.Engine
 
             var origin = Engine.Events.CopyPos(u.Pos);
             var patrolling = Paths.OnPatrol(S, u);
-            // The dead a soldier ran past and that tried to bite it, once each a walk (RunPastBite).
+            // The dead a soldier went past and that tried to bite it, once each a walk (PassBiters).
             var bitAt = new HashSet<string>();
             // Who a patrol walking up or down a flight of stairs saw: it stops once off it.
             Unit? sighted = null;
@@ -847,7 +855,8 @@ namespace Bastion.Engine
                     Flush();
                     Emit(new ItemPickedEvent { Unit = u.Id });
                 }
-                if (u.Team == Teams.Xcom && !u.Captive)
+                // Outside the runs; in them, the survivor is talked to (N2, AbilityIds.Talk).
+                if (u.Team == Teams.Xcom && !u.Captive && S.Run == null)
                 {
                     // Beside the VIP, on its level (a floor between them keeps them apart).
                     var vip = S.Units.Find((o) => o.Alive && o.Captive && Aim.Adjacent(o.Pos, step) && o.Pos.Z == step.Z);
@@ -856,6 +865,12 @@ namespace Bastion.Engine
                         Flush();
                         Emit(new VipRescuedEvent { Unit = vip.Id, By = u.Id, Owner = u.Owner });
                     }
+                }
+                // A run's survivor seen for the first time (N2): shown from now on.
+                if (Rules.SurvivorSeen(S, u, step) is Unit found)
+                {
+                    Flush();
+                    Emit(new SurvivorFoundEvent { Unit = found.Id, By = u.Id });
                 }
                 // A patrolling pod that walks into sight of the squad stops and takes cover; on a flight of stairs, once off it.
                 var spotted = sighted ?? (patrolling ? SpottedFrom(u, step, Los.FacingTo(i != 0 ? path[i - 1] : u.Pos, step) ?? u.Facing) : null);
@@ -880,7 +895,7 @@ namespace Bastion.Engine
                         !(o.KillZone && o.ReactedTo.Contains(u.Id)) &&
                         (o.WatchMelee == true ? Aim.InMeleeReach(S, o.Pos, step) : Loaded(o) && Watches(o, step))).ToList();
                 var suppressors = shadow ? new List<Unit>() : S.Units.Where((o) => o.Alive && Content.HostileTo(o, u) && o.Suppressing == u.Id && Loaded(o)).ToList();
-                var biters = shadow ? new List<Unit>() : RunPastBiters(u, step, run && i < path.Count - 1, bitAt);
+                var biters = shadow ? new List<Unit>() : PassBiters(u, step, i < path.Count - 1, bitAt);
                 var noticing = u.Team == Teams.Xcom ? PodsNoticing(step, u) : new List<string>();
                 if (reactors.Count == 0 && suppressors.Count == 0 && biters.Count == 0 && noticing.Count == 0) continue;
 
@@ -910,21 +925,15 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// The dead a soldier runs past (Arturo's notes of 15/11: «darle una posibilidad de intentar morder al soldado que
-        /// pasa corriendo; el intento podría acertar o fallar»): on a run (Paths.IsRun, the whole turn's movement at once),
-        /// each of the dead alongside a tile it crosses, not the one it stops on, with nothing between them, tries a bite
-        /// once in the walk, as a reaction (Aim's reaction penalty, so it may miss). Walking past, never.
+        /// The dead a soldier goes past (Arturo's notes of 15/11, on a run; 18/11, T20: «cuando pasas al lado de un zombi
+        /// siempre que te vea, no solo cuando corras»): walking or running, each of the dead alongside a tile it crosses (not
+        /// the one it stops on: `passing`) that sees it there (Rules.PassBite) tries a bite once in the walk, as a reaction
+        /// (Aim's reaction penalty, so it may miss), as hard as on a run before.
         /// </summary>
-        private List<Unit> RunPastBiters(Unit u, Pos step, bool running, HashSet<string> tried)
+        private List<Unit> PassBiters(Unit u, Pos step, bool passing, HashSet<string> tried)
         {
-            if (!running || u.Team != Teams.Xcom) return new List<Unit>();
-            var biters = S.Units.Where((o) =>
-                o.Alive &&
-                Content.HostileTo(o, u) &&
-                Content.Templates[o.Template].Undead &&
-                !tried.Contains(o.Id) &&
-                Aim.InMeleeReach(S, o.Pos, step) &&
-                Los.LineClear(S, o.Pos, step)).ToList();
+            if (!passing || u.Team != Teams.Xcom) return new List<Unit>();
+            var biters = S.Units.Where((o) => !tried.Contains(o.Id) && Rules.PassBite(S, o, u, step)).ToList();
             foreach (var b in biters) tried.Add(b.Id);
             return biters;
         }
@@ -1474,7 +1483,8 @@ namespace Bastion.Engine
                 return;
             }
             var target = !string.IsNullOrEmpty(m.ObjectiveUnit) ? Grid.GetUnit(s, m.ObjectiveUnit!) : null;
-            if (m.Kind == MissionKinds.Rescue && target != null && !target.Alive && !target.Evacuated)
+            // In a run the fight goes on as a Saqueo, only the recruit lost (N2, Gameplay 17/11).
+            if (m.Kind == MissionKinds.Rescue && target != null && !target.Alive && !target.Evacuated && s.Run == null)
             {
                 End(Outcomes.Defeat, EndReasons.ObjectiveLost);
                 return;
@@ -1484,7 +1494,7 @@ namespace Bastion.Engine
             if (m.EvacDone == true)
             {
                 var someoneOut = s.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated);
-                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone);
+                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s));
                 End(won ? Outcomes.Victory : Outcomes.Defeat, won ? EndReasons.Objective : EndReasons.Abandoned);
                 return;
             }
@@ -1514,11 +1524,13 @@ namespace Bastion.Engine
         {
             Emit(new EvacDepartedEvent());
             var squad = S.Units.Where((o) => o.Alive && o.Team == Teams.Xcom).ToList();
-            bool Boards(Unit o) => Abilities.InEvacZone(S, o.Pos);
+            // In the zone and with a seat (N2: a run's La Lata takes MissionState.Seats; who doesn't fit is lost).
+            var noSeat = Rules.NoSeat(S);
+            bool Boards(Unit o) => Abilities.InEvacZone(S, o.Pos) && !noSeat.Contains(o);
             foreach (var u in squad.Where(Boards).ToList()) Emit(new EvacuatedEvent { Unit = u.Id });
-            foreach (var u in squad.Where((o) => !Boards(o)).ToList()) Emit(new LeftBehindEvent { Unit = u.Id });
+            foreach (var u in squad.Where((o) => !Boards(o)).ToList()) Emit(new LeftBehindEvent { Unit = u.Id, NoSeat = noSeat.Contains(u) ? true : (bool?)null });
             var m = S.Mission;
-            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone);
+            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S));
             if (timeUp && !won) Emit(new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Timer });
             else CheckOutcome();
         }
@@ -2261,7 +2273,7 @@ namespace Bastion.Engine
             if (m.Kind == MissionKinds.Elimination) return false;
             var aboard = s.Units.Where((u) => u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(s, u.Pos)).ToList();
             if (aboard.Count == 0) return false;
-            if (Rules.FreeExit(m) || m.ObjectiveDone) return true;
+            if (Rules.FreeExit(m) || m.ObjectiveDone || RunsRescue(s)) return true;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier) && aboard.Any((u) => u.Id == m.Item!.Carrier);
             if (m.Kind == MissionKinds.Rescue) return !string.IsNullOrEmpty(m.ObjectiveUnit) && aboard.Any((u) => u.Id == m.ObjectiveUnit);
             return false;

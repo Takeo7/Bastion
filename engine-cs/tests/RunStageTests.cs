@@ -70,8 +70,9 @@ namespace Bastion.Engine.Tests
                 }
                 var (_, s) = LaunchAt(NodeKinds.Crossing, node: Map);
                 var (_, plain) = LaunchAt(NodeKinds.Normal, node: Map);
-                var squad = s.Units.Where((u) => u.Team == Teams.Xcom).Select((u) => (Vec2)u.Pos).ToList();
-                var plainSquad = plain.Units.Where((u) => u.Team == Teams.Xcom).Select((u) => (Vec2)u.Pos).ToList();
+                // The squad, not a survivor loose on the map (N2).
+                var squad = s.Units.Where((u) => u.Team == Teams.Xcom && u.CampaignId != null).Select((u) => (Vec2)u.Pos).ToList();
+                var plainSquad = plain.Units.Where((u) => u.Team == Teams.Xcom && u.CampaignId != null).Select((u) => (Vec2)u.Pos).ToList();
                 Assert.Equal(MissionKinds.Scavenge, s.Mission.Kind);
                 Assert.True(Gap(squad, s.Mission.EvacZone) >= Gap(plainSquad, plain.Mission.EvacZone), $"seed {seed}");
                 Assert.True(Gap(squad, s.Mission.EvacZone) >= Math.Max(s.Width, s.Height) / 2, $"seed {seed}: {Gap(squad, s.Mission.EvacZone)}");

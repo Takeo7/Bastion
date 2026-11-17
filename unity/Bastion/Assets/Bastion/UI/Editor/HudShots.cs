@@ -365,6 +365,27 @@ namespace Bastion.UI.EditorTools
             };
         }
 
+        /// <summary>
+        /// In «Partida», the battle through a real room in this app: the HUD and the real CombatSession as AppFlow mounts
+        /// them, and BaseRun hosting (BASTION_ANFITRION, BASTION_DATOS, BASTION_PUERTO; BASTION_CONTINUAR=1 goes on with the
+        /// save there) for the room's snapshot, as whoever sits down in a mission gets it (N9, 17/11: a stage already over).
+        /// BaseRun's mission steps (abandon, tobase) work here too.
+        /// </summary>
+        public static void PartidaRed()
+        {
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                var hud = new GameObject("HUD");
+                hud.AddComponent<UIDocument>().panelSettings = Panel();
+                var root = hud.AddComponent<HudRoot>();
+                hud.AddComponent<Bastion.UI.Combat.CombatSession>().Hud = root;
+                var run = new GameObject("BaseRun");
+                run.AddComponent<UIDocument>().panelSettings = Panel();
+                run.AddComponent<Bastion.UI.Strategy.BaseRun>();
+            };
+        }
+
         static void CombatScene(string arm, bool toShot = false)
         {
             var camera = new GameObject("Shot camera").AddComponent<Camera>();

@@ -223,6 +223,11 @@ namespace Bastion.Engine
         public const string Charge = "charge";
         /// <summary>«Rugido»: on first sight, every group on the map wakes and comes to him; once.</summary>
         public const string Roar = "roar";
+        /// <summary>
+        /// «Hablar» (N2, Arturo 17/11): to a run's Rescate's survivor from beside them; they join, the talker's to command
+        /// (Abilities.TalkTarget, Rules: VipRescuedEvent).
+        /// </summary>
+        public const string Talk = "talk";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
@@ -230,6 +235,7 @@ namespace Bastion.Engine
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
             Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry, Takedown, Pound, Charge, Roar,
+            Talk,
         };
     }
 

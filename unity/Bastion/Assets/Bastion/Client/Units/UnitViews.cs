@@ -229,6 +229,18 @@ namespace Bastion.Client.Units
             public bool veiled;
             /// <summary>Gone into La Lata (Board): fading out, then out of sight for good.</summary>
             public bool boarded;
+            /// <summary>
+            /// On the motorbike (UnitViews.Ride): its seat (−1 none), how far through getting on (−1 still walking to its
+            /// side, then 0 to 1), and where and how it stood as it began to get on.
+            /// </summary>
+            public int seat = -1;
+            public float mounted = -1;
+            /// <summary>The camp loop a run's survivor waits in (UnitViews.Survivor), or null.</summary>
+            public string survivorClip;
+            /// <summary>Seconds since a bolt-action gun fired, its bolt being worked (UnitViews.Bolt); −1 none.</summary>
+            public float bolt = -1;
+            public Vector3 mountFrom;
+            public Quaternion mountTurn;
             /// <summary>A shot's kick to play (Recoil) as its step begins.</summary>
             public bool recoil;
             /// <summary>
@@ -541,6 +553,8 @@ namespace Bastion.Client.Units
                 }
                 PistolKick(v, dt);
                 v.anim?.Step(dt);
+                // (One on the motorbike, or on its way to it: UnitViews.Ride.)
+                Ride(v, dt);
                 LandFeet(v, dt);
                 bool dropping = Drop(v, dt);
                 if (v.aim > 0 && v.inHand == Held.Rifle)
@@ -567,6 +581,7 @@ namespace Bastion.Client.Units
                 Look(v);
                 Support(v, dt);
                 PistolSupport(v);
+                WorkBolt(v, dt);
                 SearchPose(v);
                 ClimbPose(v);
                 Reach(v);
@@ -1155,7 +1170,12 @@ namespace Bastion.Client.Units
             var seen = new HashSet<string>();
             foreach (var u in view.Units)
             {
-                if (u.Evacuated) continue;
+                // (Aboard La Lata, gone; but one on the motorbike rides it in sight: its view kept, UnitViews.Ride.)
+                if (u.Evacuated)
+                {
+                    if (views.TryGetValue(u.Id, out var rider) && rider.seat >= 0) seen.Add(u.Id);
+                    continue;
+                }
                 seen.Add(u.Id);
                 bool made = false;
                 if (!views.TryGetValue(u.Id, out var v))
@@ -1167,6 +1187,8 @@ namespace Bastion.Client.Units
                 if (made && u.Alive && u.Down == true) LieDownNow(v);
                 // (One La Lata threw stays as it came down: alive to the rules, the mission over.)
                 if (v.runOver) continue;
+                // (One on its way onto the motorbike or on it: where it is and how it sits are its own, UnitViews.Ride.)
+                if (v.seat >= 0) continue;
                 var was = v.place;
                 v.place = new Pos { X = u.Pos.X, Y = u.Pos.Y, Z = u.Pos.Z };
                 // (Caged in a police cell: by its bars, pressed to them. UnitViews.Bars.)
@@ -1196,10 +1218,15 @@ namespace Bastion.Client.Units
                     && Mathf.Abs(Mathf.DeltaAngle(v.root.eulerAngles.y, YawOf(facing))) > 2) TurnTo(v, YawOf(facing));
                 int node = Bastion.Engine.Grid.NodeOf(view, u.Pos);
                 // (A body that has got up as one of the dead, Reanimate, is gone: the engine keeps it, Reanimated.)
+                // (Ours always; but a run's survivor only once the squad has found it, as the rules have it: N2, Gameplay's
+                // contract, B; UI 17/11. Not by sight alone: in a building not found it isn't found through a window.)
                 bool shown = !u.Alive && u.Reanimated ? false
-                    : v.boarded ? v.fade > 0 : u.Team == "xcom" || revealed.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
-                // An enemy coming into sight fades in (not on the first look at the map: what is there at the start just is).
-                if (shown && !v.root.gameObject.activeSelf && v.synced && u.Team != "xcom" && u.Alive) StartFade(v, FadeIn);
+                    : v.boarded ? v.fade > 0
+                    : u.Team == "xcom" ? Bastion.Engine.Rules.SurvivorShown(view, u)
+                    : revealed.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
+                // An enemy coming into sight fades in (not on the first look at the map: what is there at the start just is);
+                // the survivor too as it is found.
+                if (shown && !v.root.gameObject.activeSelf && v.synced && (u.Team != "xcom" || u.Id == view.Mission?.Survivor) && u.Alive) StartFade(v, FadeIn);
                 if (v.root.gameObject.activeSelf != shown) v.root.gameObject.SetActive(shown);
                 v.synced = true;
             }
@@ -1279,6 +1306,8 @@ namespace Bastion.Client.Units
         void Pose(View v, Unit u)
         {
             if (v.anim == null || v.dead) return;
+            // (A run's survivor waiting to be talked to: its own way, UnitViews.Survivor.)
+            if (SurvivorPose(v, u)) return;
             bool hidden = u.Hidden == true && u.Alive;
             bool crouched = u.Hunkered || u.Captive || hidden || (u.Team == "xcom" && u.Alive && state != null && state.Concealed);
             bool slumped = u.Team == "xcom" && u.Alive && u.Hp * 2 <= u.MaxHp;
@@ -1687,7 +1716,12 @@ namespace Bastion.Client.Units
         /// </summary>
         public void Recoil(string id)
         {
-            if (views.TryGetValue(id, out var v) && v.weapon != null && (v.inHand == Held.Rifle || v.inHand == Held.Pistol)) v.recoil = true;
+            if (views.TryGetValue(id, out var v) && v.weapon != null && (v.inHand == Held.Rifle || v.inHand == Held.Pistol))
+            {
+                v.recoil = true;
+                // (A bolt-action gun: its bolt worked after the kick, UnitViews.Bolt.)
+                if (BoltInHand(v)) v.bolt = 0;
+            }
         }
 
         /// <summary>
@@ -1726,12 +1760,14 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// Into La Lata (Arturo, 31/10, his #1: nobody seen climbing in): turned to it, faded out where it stands by its
-        /// door over BoardSeconds (dithered, as the veil), then out of sight. UI's event player waits for it.
+        /// door over BoardSeconds (dithered, as the veil), then out of sight. UI's event player waits for it. Onto the
+        /// motorbike, in sight: walked to its side and sat on it (Mount; MapView.LataDeparts waits for that).
         /// </summary>
         public void Board(string id)
         {
             if (!views.TryGetValue(id, out var v)) return;
             v.boarded = true;
+            if (Mount(v)) return;
             if (Map.MapView.Current?.LataAt is Vector3 lata) Face(id, lata);
             v.fadeGoal = 0;
             v.fadeRate = 1 / BoardSeconds;

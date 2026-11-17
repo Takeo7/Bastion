@@ -40,7 +40,7 @@ namespace Bastion.Engine.Tests
                 // Each option says itself by its button, with Content's figures.
                 foreach (var o in e.Options)
                 {
-                    var said = Lore.RunEventEffects(o.Supplies, o.HurtOne, o.HurtAll, o.HealAll, o.GearKind, o.GearType, o.GearCount, o.Modifier, o.Survivor, o.SurvivorHalf);
+                    var said = Lore.RunEventEffects(o.Supplies, o.HurtOne, o.HurtAll, o.HealAll, o.GearKind, o.GearType, o.GearCount, o.Modifier, o.Survivor, o.SurvivorHalf, o.Rescue);
                     Assert.False(string.IsNullOrEmpty(said));
                     if (o.GearKind != null) Assert.True(Content.IsGear(o.GearKind, o.GearType), $"{e.Id}: {o.GearKind} {o.GearType}");
                     if (o.Modifier != null) Assert.Contains(o.Modifier, Modifiers.All);
@@ -49,7 +49,9 @@ namespace Bastion.Engine.Tests
             // A few of SUCESOS.md's figures.
             Assert.Equal(-30, Content.RunEvents["control"].Options[0].Supplies);
             Assert.Equal((Modifiers.Awake, 25), (Content.RunEvents["gasolinera"].Options[0].Modifier!, Content.RunEvents["gasolinera"].Options[0].Supplies));
-            Assert.True(Content.RunEvents["herido"].Options[0].SurvivorHalf);
+            // Nobody joins by an event any more: a Rescate ahead (N2).
+            Assert.True(Content.RunEvents["herido"].Options[0].Rescue);
+            Assert.All(Content.RunEvents.Values.SelectMany((e) => e.Options), (o) => Assert.False(o.Survivor));
             Assert.Equal((GearKinds.Item, ItemIds.FragGrenade, 2), (Content.RunEvents["caja-atada"].Options[0].GearKind!, Content.RunEvents["caja-atada"].Options[0].GearType!, Content.RunEvents["caja-atada"].Options[0].GearCount));
         }
 
@@ -184,31 +186,36 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
-        public void SomeoneJoins()
+        public void SomeoneOutThereMakesARescateAhead()
         {
-            // With a seat: in the squad, at half health.
-            var (c, stop) = At("herido", seats: 1);
+            // «Alguien herido» (N2, Arturo 17/11): nobody joins; a fight the stop leads to becomes a Rescate, alone.
+            var (c, stop) = At("herido");
+            var run = c.Run!;
+            var next = RunMap.Node(run, run.At)!.Next.Select((id) => RunMap.Node(run, id)!).ToList();
+            foreach (var n in next)
+            {
+                n.Kind = NodeKinds.Normal;
+                n.Guarded = true;
+            }
             var before = c.Soldiers.Count;
             Ok(c, new AnswerStopCommand { Option = 0 });
-            Assert.Equal(before + 1, c.Soldiers.Count);
-            var s = c.Soldiers.Last();
-            Assert.Equal((s.Id, s.Name), (stop.Result!.Survivor, stop.Result.SurvivorName));
-            Assert.True(stop.Result.InSquad);
-            Assert.Contains(s.Id, c.Run!.Squad);
-            Assert.Equal((Runs.MaxHp(s) + 1) / 2, c.Run.Hp[s.Id]);
-            Assert.Equal(FoundWeaponIds.Knife, s.Kit!.Melee!.Type);
-            Assert.Equal(Lore.RunEvents["herido"].Options[0].Result(null, s.Name), c.Log[0].Text);
-            // At full health, and the night for the next fight; without a seat, at the base.
+            Assert.Equal(before, c.Soldiers.Count);
+            var marked = RunMap.Node(run, stop.Result!.Rescue)!;
+            Assert.Contains(marked, next);
+            Assert.Equal((NodeKinds.Rescue, (bool?)null), (marked.Kind, marked.Guarded));
+            Assert.Single(next, (n) => n.Kind == NodeKinds.Rescue);
+            // «La radio»: the same, and the night for it.
             var (d, other) = At("radio");
+            foreach (var id in RunMap.Node(d.Run!, d.Run!.At)!.Next) RunMap.Node(d.Run, id)!.Kind = NodeKinds.Normal;
             Ok(d, new AnswerStopCommand { Option = 0 });
-            var t = d.Soldiers.Last();
-            Assert.Equal(t.Id, other.Result!.Survivor);
-            Assert.False(other.Result.InSquad);
-            Assert.DoesNotContain(t.Id, d.Run!.Squad);
-            Assert.Equal(Modifiers.Night, d.Run.Pending);
-            var (e, _) = At("radio", seats: 1);
+            Assert.Equal(NodeKinds.Rescue, RunMap.Node(d.Run!, other.Result!.Rescue)!.Kind);
+            Assert.Equal(Modifiers.Night, d.Run!.Pending);
+            // One there already: no other.
+            var (e, third) = At("radio");
+            var ahead = RunMap.Node(e.Run!, e.Run!.At)!.Next.Select((id) => RunMap.Node(e.Run, id)!).ToList();
+            ahead[0].Kind = NodeKinds.Rescue;
             Ok(e, new AnswerStopCommand { Option = 0 });
-            Assert.Equal(Runs.MaxHp(e.Soldiers.Last()), e.Run!.Hp[e.Soldiers.Last().Id]);
+            Assert.Null(third.Result!.Rescue);
         }
 
         [Fact]

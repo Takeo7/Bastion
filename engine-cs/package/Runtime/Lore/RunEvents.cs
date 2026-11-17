@@ -57,7 +57,8 @@ namespace Bastion.Engine
                 new RunChoiceText("Sacarla con la bomba", (_, _) => "La bomba hace ruido, y se oye lejos."),
                 new RunChoiceText("Dejarla", (_, _) => "Seguís sin hacer ruido.")),
             ["herido"] = new RunEventText("Alguien herido", "Junto a la carretera, alguien con una pierna vendada levanta la mano. Lleva una pistola.",
-                new RunChoiceText("Que venga con vosotros", (_, survivor) => $"{survivor} se une a la escuadra."),
+                // Arturo, 17/11: recruits come only from a Rescate; this one marks one ahead.
+                new RunChoiceText("Que os espere más adelante", (_, _) => "Le indicáis una casa del camino. Allí esperará a que paséis."),
                 new RunChoiceText("Cambiarle la pistola por suministros", (_, _) => "Os da la pistola y se va cojeando.")),
             ["campamento"] = new RunEventText("El campamento", "Un campamento vacío junto al río. Las tiendas siguen montadas.",
                 new RunChoiceText("Descansar un rato", (_, _) => "Descansáis, y se os hace tarde."),
@@ -75,7 +76,7 @@ namespace Bastion.Engine
                 new RunChoiceText("Darles lo que piden", (_, _) => "Cuentan los suministros y apartan la barrera."),
                 new RunChoiceText("Pasar a la fuerza", (_, _) => "Hay tiros antes de que se retiren.")),
             ["radio"] = new RunEventText("La radio", "En un coche patrulla, la radio aún tiene batería. Por un canal, alguien pide ayuda.",
-                new RunChoiceText("Ir a buscar a quien llama", (_, survivor) => $"Llegáis cuando ya oscurece. {survivor} se une a la escuadra."),
+                new RunChoiceText("Contestar", (_, _) => "Os dice dónde se esconde: está en el camino."),
                 new RunChoiceText("Quitar la batería", (_, _) => "La radio se calla.")),
             ["supermercado"] = new RunEventText("El supermercado", "Un supermercado con las puertas reventadas. Dentro está oscuro.",
                 new RunChoiceText("Entrar todos", (_, _) => "Hay muertos entre los pasillos. Salís cargados, y con algún golpe."),
@@ -86,7 +87,7 @@ namespace Bastion.Engine
         /// An option in short, by its button and after its line (Content.RunEvents' figures): «+25 § · La siguiente etapa, con
         /// la horda despierta», «+1 botiquín · −2 de salud a uno», «Nada».
         /// </summary>
-        public static string RunEventEffects(int supplies = 0, int hurtOne = 0, int hurtAll = 0, int healAll = 0, string? gearKind = null, string? gearType = null, int gearCount = 0, string? modifier = null, bool survivor = false, bool survivorHalf = false)
+        public static string RunEventEffects(int supplies = 0, int hurtOne = 0, int hurtAll = 0, int healAll = 0, string? gearKind = null, string? gearType = null, int gearCount = 0, string? modifier = null, bool survivor = false, bool survivorHalf = false, bool rescue = false)
         {
             var parts = new List<string>();
             if (supplies != 0) parts.Add($"{(supplies > 0 ? "+" : "−")}{Math.Abs(supplies)} §");
@@ -95,9 +96,13 @@ namespace Bastion.Engine
             if (hurtOne > 0) parts.Add($"−{hurtOne} de salud a uno");
             if (hurtAll > 0) parts.Add($"−{hurtAll} de salud a todos");
             if (survivor) parts.Add(survivorHalf ? "Se une alguien, con la mitad de su salud" : "Se une alguien");
+            if (rescue) parts.Add(RescueAhead);
             if (modifier != null) parts.Add(NextStageWith(modifier));
             return parts.Count == 0 ? "Nada" : string.Join(" · ", parts);
         }
+
+        /// <summary>An option that marks a Rescate in the next row (Arturo, 17/11), in short.</summary>
+        public const string RescueAhead = "Una de las siguientes etapas, un Rescate";
 
         /// <summary>An option the squad can't afford: «Faltan 20 §.», as in the Trueque.</summary>
         public static string RunEventShort(int missing)

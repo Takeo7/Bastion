@@ -198,6 +198,11 @@ namespace Bastion.UI.Combat
             }
             // A fresh mission opens with its briefing (main.ts: seq 0), once the veil is off (it waits for it: game.ts).
             if (state.Seq == 0) _ = IntroAfterVeil();
+            // A mission already over (Red's N9, 17/11): whoever sits down after the end, or comes back having missed it,
+            // gets the whole state with its end and never plays MissionEndedEvent, which puts the card up. Up from the
+            // state, then; not again for whoever has it up. (Not by the state before: the events are on it as they come,
+            // so an end heard and not yet played, which this Load drops from the queue, would leave no card.)
+            if (state.Outcome != null && !player.OutcomeShown) player.ShowOutcome(state.Outcome, state.OutcomeReason);
         }
 
         /// <summary>The map built: the loading veil goes once two frames of it are drawn (game.ts raiseVeil).</summary>

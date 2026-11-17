@@ -250,6 +250,7 @@ namespace Bastion.UI.Combat
                 case ExplosiveEvent _: return 0.6f;
                 case HackedEvent _: return 0.8f;
                 case VipRescuedEvent _: return 0.5f;
+                case SurvivorFoundEvent _: return 0.5f;
                 case SuppressedEvent _: return 0.6f;
                 case CleansedEvent _: return 0.4f;
                 case RefundEvent _: return 0.4f;
@@ -1657,7 +1658,7 @@ namespace Bastion.UI.Combat
 
         Unit Unit(string id) => id == null ? null : V.Units.FirstOrDefault(x => x.Id == id);
 
-        bool ShownToSquad(Unit u) => u.Team == Teams.Xcom || control.Visible(u);
+        bool ShownToSquad(Unit u) => (u.Team == Teams.Xcom && !control.Unfound(u)) || control.Visible(u);
 
         /// <summary>Whether the squad sees tile (x, y) (mapView.isVisible).</summary>
         bool IsVisible(int x, int y) => sight != null && Grid.InBounds(V, x, y) && sight[y * V.Width + x];
@@ -1704,6 +1705,10 @@ namespace Bastion.UI.Combat
             if (units.Count == 1) return dead ? "un zombi" : "un enemigo";
             return $"{units.Count} {(dead ? "zombis" : "enemigos")}";
         }
+
+        /// <summary>How long the question and the answer of Hablar stay over their heads (N2), and the survivor's plate (a grey, nobody's colour).</summary>
+        const float AskPin = 1.4f, YesPin = 2.2f;
+        const string SurvivorPin = "#8c969c";
 
         string PlayerColor(int slot) => control.Players.FirstOrDefault(p => p.Slot == slot)?.Color ?? Content.PlayerColors[slot];
         string PlayerName(int? slot) => control.Players.FirstOrDefault(p => p.Slot == slot)?.Name ?? "el otro jugador";
@@ -1969,6 +1974,10 @@ namespace Bastion.UI.Combat
                         if (!ShownToSquad(u) && !ShownToSquad(killer)) return;
                         Log($"{Capitalize(AnEnemy(killer))} acaba con {AnEnemy(u)}.", "#e8d8c0");
                     }
+                    // A run's survivor (N2), a Rescate's or one loose on any map: the stage goes on without a recruit; nameless if
+                    // nobody had seen them.
+                    else if (V.Run != null && u.Id == SurvivorOf(V))
+                        Log(Lore.TalkText.Died(control.Unfound(u) ? null : u.Name), "#ff6b5a");
                     else Log(u.Team == Teams.Xcom ? $"{u.Name} ha caído en combate" : $"{u.Name} eliminado", u.Team == Teams.Xcom ? "#ff6b5a" : "#54d1ff");
                     if (!ShownToSquad(u)) return;
                     // One of ours falling with no attack framed first (the fire, a blast): close on them (#21).
@@ -2403,7 +2412,9 @@ namespace Bastion.UI.Combat
                 }
                 case EvacDepartedEvent _:
                 {
-                    var aboard = v.Units.Where(u => u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(v, u.Pos)).ToList();
+                    // In the zone and with a seat, as the engine boards them (DepartEvac): who doesn't fit in a run's La Lata stays (N2).
+                    var noSeat = Rules.NoSeat(v);
+                    var aboard = v.Units.Where(u => u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(v, u.Pos) && !noSeat.Contains(u)).ToList();
                     // Leaving in the enemy turn is leaving on time (playtest 18/10 #8): nobody asked for it.
                     if (v.ActiveTeam == Teams.Alien)
                     {
@@ -2442,7 +2453,8 @@ namespace Bastion.UI.Combat
                 {
                     var u = Unit(lb.Unit);
                     Float(Chest(u.Id), "SE QUEDA FUERA", "callout");
-                    Log(Lore.LeftBehindLine(u.Name), "#ff8a78");
+                    // In the zone but with no seat in a run's La Lata (N2): said so, not as one who didn't get there.
+                    Log(lb.NoSeat == true ? Lore.EvacNoSeatLine(new[] { u.Name }) : Lore.LeftBehindLine(u.Name), "#ff8a78");
                     await Wait(0.6f);
                     return;
                 }
@@ -2548,9 +2560,37 @@ namespace Bastion.UI.Combat
                     if (units != null) Loose(units.LowerWeapon(u.Id, aim, stop));
                     return;
                 }
+                // A run's survivor seen (N2, 17/11): in a Rescate's zone, or turned up by a search on any map (one of six).
+                case SurvivorFoundEvent found:
+                {
+                    var vip = Unit(found.Unit);
+                    var finder = Unit(found.By)?.Name ?? "";
+                    Look(Feet(vip.Id));
+                    Float(Chest(vip.Id), Lore.TalkText.SeenFloat, "heal");
+                    Log(V.Mission.SearchArea != null ? Lore.TalkText.Spotted(finder) : Lore.TalkText.Found(finder), "#6dff9a");
+                    control.Refresh();
+                    await Wait(0.9f);
+                    return;
+                }
                 case VipRescuedEvent vr:
                 {
                     var vip = Unit(vr.Unit);
+                    // A run's survivor talked to (Hablar, N2): the soldier's question over them, the answer over the survivor,
+                    // then «SE UNE»; theirs to command from now, the player said in the log only with two (Lore).
+                    if (V.Run != null && Unit(vr.By) is Unit asker)
+                    {
+                        Look(Feet(vip.Id));
+                        // One after the other, not both up at once: from the game's camera their heads are close.
+                        Hud?.Pin(Head(asker.Id) + Vector3.up * 0.35f, Lore.TalkText.Ask, PlayerColor(asker.Owner ?? vr.Owner ?? control.MySlot), AskPin);
+                        await Wait(AskPin + 0.15f);
+                        Hud?.Pin(Head(vip.Id) + Vector3.up * 0.35f, Lore.TalkText.Yes, SurvivorPin, YesPin);
+                        await Wait(1.3f);
+                        Float(Chest(vip.Id), Lore.TalkText.Float, "heal");
+                        Log(Lore.TalkText.Joined(vip.Name, control.Players.Count > 1 ? PlayerName(vr.Owner) : null), "#6dff9a");
+                        control.Sfx.Rescue();
+                        await Wait(0.6f);
+                        return;
+                    }
                     Look(Feet(vip.Id));
                     Float(Chest(vip.Id), UnitWords.Agree(vip, "RESCATADO"), "heal");
                     Log($"{vip.Name} se une a la escuadra", "#6dff9a");
@@ -3343,10 +3383,7 @@ namespace Bastion.UI.Combat
 
         string RecoveryItem() => V.CampaignMission?.Item ?? Lore.DefaultItem;
 
-        Lore.EvacSituation Situation(GameState s) => new Lore.EvacSituation(
-            s.Mission.Kind == MissionKinds.Elimination,
-            Rules.EvacWins(s),
-            s.Units.Where(x => x.Alive && x.Team == Teams.Xcom && !Abilities.InEvacZone(s, x.Pos)).Select(x => x.Name).ToList());
+        static Lore.EvacSituation Situation(GameState s) => CombatController.Situation(s);
 
         // ------------------------------------------------------- the partner's moments
 
@@ -3412,6 +3449,9 @@ namespace Bastion.UI.Combat
 
         // ------------------------------------------------------- the end
 
+        /// <summary>Whether the end's card is up (ShowOutcome): a whole state that comes after it doesn't put it up again (CombatSession.Load).</summary>
+        public bool OutcomeShown { get; private set; }
+
         /// <summary>
         /// The mission's end (game.ts showOutcome): won or lost, and one line with why, the haul, those killed, the losses
         /// and who stayed outside.
@@ -3419,6 +3459,7 @@ namespace Bastion.UI.Combat
         public void ShowOutcome(string outcome, string reason)
         {
             if (Hud == null) return;
+            OutcomeShown = outcome != null;
             if (outcome == null)
             {
                 Hud.SetOutcome(null);
@@ -3439,9 +3480,12 @@ namespace Bastion.UI.Combat
                 case MissionKinds.Recovery: success = $"{Capitalize(RecoveryItem())} a salvo"; break;
                 case MissionKinds.Sabotage: success = "Ya no suena"; break;
                 case MissionKinds.Hack: success = "Equipo en marcha"; break;
+                // An expedition's Rescate is a Saqueo too (N2, 17/11): what was found; and first, if the survivor got out in La
+                // Lata, that they join (Lore's line). Left without a seat, or dead, the log has said so.
+                case MissionKinds.Rescue when s.Run != null: success = RunJoined(s) + RunHaul(s); break;
                 case MissionKinds.Rescue: success = vip != null ? $"{vip}, a salvo" : "La persona retenida, a salvo"; break;
                 // (On an expedition, every stage that is a Saqueo underneath: normal, Asedio, Travesía, Guarida, the boss's.)
-                case MissionKinds.Scavenge: success = s.Run != null ? RunHaul(s) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
+                case MissionKinds.Scavenge: success = s.Run != null ? RunJoined(s) + RunHaul(s) : loot != null ? Lore.Scavenge.Success : Lore.Scavenge.EmptyHanded; break;
                 default: success = "No queda ninguno en pie"; break;
             }
             string why;
@@ -3531,6 +3575,20 @@ namespace Bastion.UI.Combat
             if (list.Count == 0) return HudText.Mission.NoHaul;
             if (list.Count > 4) list = list.Take(3).Append(HudText.Mission.HaulMore(list.Count - 3)).ToList();
             return HudText.Mission.Haul + Ui.List(list);
+        }
+
+        /// <summary>A run's survivor in this fight (N2): one loose on any map (MissionState.Survivor), or the Rescate's.</summary>
+        static string SurvivorOf(GameState s) => s.Mission.Survivor ?? (s.Mission.Kind == MissionKinds.Rescue ? s.Mission.ObjectiveUnit : null);
+
+        /// <summary>
+        /// A run's survivor brought out in La Lata (N2): Lore's line that they join, before what was found, as the card's
+        /// lines go (a headline, no stop, parts by « · »: Lore, 17/11); else nothing.
+        /// </summary>
+        static string RunJoined(GameState s)
+        {
+            var id = SurvivorOf(s);
+            var joined = id != null ? s.Units.FirstOrDefault(u => u.Id == id && u.Evacuated) : null;
+            return joined != null ? Lore.TalkText.Joined(joined.Name).TrimEnd('.') + " · " : "";
         }
 
         /// <summary>Fallen out there, or left behind (RunFights.ApplyFight's Fell).</summary>

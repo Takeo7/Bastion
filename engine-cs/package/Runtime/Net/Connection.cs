@@ -66,6 +66,14 @@ namespace Bastion.Net
         private long heardAt;
         private long pending;
         private int closed;
+        // What Beats tells: pings queued, frames written and read, when last, how late the beat woke at worst, and how
+        // long this end took itself for held up when it last looked.
+        private long pings;
+        private long written;
+        private long writtenAt = -1;
+        private long read;
+        private long worstLate;
+        private long heldMs;
 
         public string Peer { get; }
         public event Action<string>? Message;
@@ -194,6 +202,7 @@ namespace Bastion.Net
                         return;
                     }
                     Volatile.Write(ref heardAt, clock.ElapsedMilliseconds);
+                    Interlocked.Increment(ref read);
                     var p = packet.Value;
                     if ((p.Flags & Frame.Ping) != 0) Enqueue(Frame.Control(Frame.Pong));
                     else if ((p.Flags & Frame.Pong) == 0 && Volatile.Read(ref closed) == 0) Message?.Invoke(Frame.Decode(p, maxText));
@@ -217,6 +226,8 @@ namespace Bastion.Net
                     {
                         await stream.WriteAsync(frame, 0, frame.Length, cancel.Token).ConfigureAwait(false);
                         Interlocked.Add(ref pending, -frame.Length);
+                        Interlocked.Increment(ref written);
+                        Volatile.Write(ref writtenAt, clock.ElapsedMilliseconds);
                     }
                     // Closed from this end: once the last of it is out, the socket can go.
                     if (Volatile.Read(ref closed) != 0 && outgoing.IsEmpty)
@@ -257,11 +268,14 @@ namespace Bastion.Net
                     // pings went late. A beat adds two beats' time to the silence at most, so a peer gone quiet is still
                     // found, only later. (A test with both ends in one process once lost them for 1.3 s.)
                     held += Math.Max(0, now - slept - 2 * beat);
+                    if (now - slept - beat > Volatile.Read(ref worstLate)) Volatile.Write(ref worstLate, now - slept - beat);
+                    Volatile.Write(ref heldMs, held);
                     if (now - heard - held > deadAfterMs && !Unread())
                     {
                         Shut("no responde", false);
                         return;
                     }
+                    Interlocked.Increment(ref pings);
                     Enqueue(Frame.Control(Frame.Ping));
                 }
             }
@@ -269,6 +283,19 @@ namespace Bastion.Net
             {
                 /* closed */
             }
+        }
+
+        /// <summary>
+        /// How its heartbeat went, for a test that finds it closed: the pings it queued, the frames it wrote and read and
+        /// how long ago the last of each, how late its beat woke at worst, and how long it took itself for held up.
+        /// </summary>
+        public string Beats()
+        {
+            var now = clock.ElapsedMilliseconds;
+            var wrote = Volatile.Read(ref writtenAt);
+            return $"{Interlocked.Read(ref pings)} pings queued, {Interlocked.Read(ref written)} frames written (last "
+                + (wrote < 0 ? "never" : $"{now - wrote} ms ago") + $"), {Interlocked.Read(ref read)} read (last {now - Volatile.Read(ref heardAt)} ms ago), "
+                + $"{Interlocked.Read(ref pending)} bytes waiting to go, the beat up to {Volatile.Read(ref worstLate)} ms late, {Volatile.Read(ref heldMs)} ms held";
         }
 
         /// <summary>Bytes from the other end waiting to be read (the reading was held up while they came): it is there.</summary>

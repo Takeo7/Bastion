@@ -216,13 +216,19 @@ namespace Bastion.UI.Strategy
             v.Nodes.Add(N("n4-0", 4, 0, 4, "hold", "node:hold"));
             v.Nodes.Add(N("n4-1", 4, 1, 4, "normal", "kind:scavenge"));
             v.Nodes.Add(N("n4-2", 4, 2, 4, "elite", "node:elite"));
-            v.Nodes.Add(N("n4-3", 4, 3, 4, "survivor", "node:survivor", true));
+            v.Nodes.Add(N("n4-3", 4, 3, 4, "event", "node:event", true));
             for (var c = 0; c < 3; c++) v.Nodes.Add(new RunNodeView { Id = $"n5-{c}", Row = 5, Col = c, Cols = 3, Hidden = true, Card = { StrategyText.Runs.Unseen } });
             v.Nodes.Add(new RunNodeView { Id = "n6-0", Row = 6, Col = 0, Cols = 1, Hidden = true, Card = { StrategyText.Runs.Unseen } });
             v.Nodes.Add(N("n7-0", 7, 0, 1, "boss", "node:boss"));
             var byId = v.Nodes.ToDictionary(n => n.Id);
             byId["n1-1"].Done = true;
             byId["n2-1"].Done = byId["n2-1"].At = true;
+            // BASTION_SIN_PLAZA=1: La Lata full, the Rescate's warning under its name and on its card (N7, 17/11).
+            if (System.Environment.GetEnvironmentVariable("BASTION_SIN_PLAZA") == "1")
+            {
+                byId["n2-0"].Warn = EngineLore.RescueNoSeatTag;
+                byId["n2-0"].Card.Add(EngineLore.RescueNoSeat);
+            }
             foreach (var id in new[] { "n3-0", "n3-1" }) byId[id].Open = true;
             byId["n3-0"].ModifierId = "night";
             byId["n3-0"].Modifier = StrategyText.Runs.ModifierName("night");
@@ -250,7 +256,7 @@ namespace Bastion.UI.Strategy
             return v;
         }
 
-        /// <summary>«parada-trueque», «parada-suceso», «parada-suceso-hecho», «parada-superviviente», «parada-refugio»: the stop over the map.</summary>
+        /// <summary>«parada-trueque», «parada-suceso», «parada-suceso-hecho», «parada-refugio»: the stop over the map.</summary>
         static StopView Stop(string which)
         {
             var leave = new StopView { Leave = StrategyText.Runs.Leave };
@@ -281,17 +287,6 @@ namespace Bastion.UI.Strategy
                         leave.LeaveWhy = "Antes hay que responder.";
                     }
                     else leave.Outcome = "La bomba hace ruido, y se oye lejos. En la siguiente etapa, horda despierta.";
-                    break;
-                case "parada-superviviente":
-                    leave.Kind = "survivor";
-                    leave.Kicker = StrategyText.Runs.NodeName("survivor");
-                    leave.Title = "Lucía Prieto";
-                    leave.Text = StrategyText.Runs.NodeLine("survivor");
-                    leave.Survivor.Add("Novata · 10 de salud");
-                    leave.Survivor.Add("Lleva un cuchillo y nada más.");
-                    leave.Options.Add(new StopOptionView { Index = 0, Label = "Que se una" });
-                    leave.Options.Add(new StopOptionView { Index = 1, Label = "Que no" });
-                    leave.LeaveWhy = "Antes hay que responder.";
                     break;
                 case "parada-refugio":
                     leave.Kind = "refuge";
@@ -695,7 +690,7 @@ namespace Bastion.UI.Strategy
 
         /// <summary>
         /// «runs-…»: one of Gameplay's samples (.dev-snapshots/gameplay/runs/muestras/<name>.json: base-vacia, base-llena,
-        /// mapa-fila3, trueque, suceso, superviviente) through the presenter, as player 0; the grids with the engine's own
+        /// mapa-fila3, trueque, suceso; or genrescate's, by its path: .dev-snapshots/ui/unity/runs/n7/lab) through the presenter, as player 0; the grids with the engine's own
         /// rules, its moves applied here (RunsGear). BASTION_RUNS_ESCENA: almacen, else the map (with its stop) in a run.
         /// </summary>
         void RunsSample(string which)
@@ -904,7 +899,13 @@ namespace Bastion.UI.Strategy
             var clearing = Bastion.Client.Settlement.Instance;
             if (clearing != null)
             {
-                clearing.Show(p.State);
+                // The runs as BaseController shows them: the fixed clearing and the seats' La Lata.
+                if (p.State.Stash != null)
+                {
+                    clearing.SetVehicle(Bastion.Engine.Runs.VehicleOf(p.State));
+                    clearing.ShowFixed();
+                }
+                else clearing.Show(p.State);
                 var (mirror, halves) = p.LineupSides(screen == "debrief");
                 clearing.SetLineup(p.State, p.Lineup(screen == "debrief"), mirror, halves);
                 clearing.SetView(screen, true);

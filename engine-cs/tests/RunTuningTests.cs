@@ -26,7 +26,7 @@ namespace Bastion.Engine.Tests
         public void TodaysWithNoneSet()
         {
             Assert.False(Runs.Tuning.IsSet);
-            var c = Solo();
+            var c = Campaign.CreateRunsCampaign(Zero, new Rng(1));
             Assert.Equal(Content.UpgradePrices[UpgradeIds.Squad][0], Runs.NextPrice(c, UpgradeIds.Squad));
             var run = new RunFight { Row = 1 };
             Assert.Equal(1, RunLoot.SuppliesScale(run));
@@ -39,7 +39,7 @@ namespace Bastion.Engine.Tests
             Runs.Tuning.Set(Variant());
             try
             {
-                var c = Solo();
+                var c = Campaign.CreateRunsCampaign(Zero, new Rng(1));
                 Assert.Equal(120, Runs.NextPrice(c, UpgradeIds.Squad));
                 Assert.Equal(80, Runs.NextPrice(c, UpgradeIds.Mend));
                 // Only the first level, only those given.
@@ -114,7 +114,7 @@ namespace Bastion.Engine.Tests
                 if (i % 2 == 0) Runs.Tuning.Set(Variant());
                 try
                 {
-                    seen[i] = Task.Run(() => Runs.NextPrice(Solo(), UpgradeIds.Squad)).Result;
+                    seen[i] = Task.Run(() => Runs.NextPrice(Campaign.CreateRunsCampaign(Zero, new Rng(1)), UpgradeIds.Squad)).Result;
                 }
                 finally
                 {

@@ -205,6 +205,12 @@
     color: #ffffff;
 }
 
+/* A Rescate with no seat left in La Lata (N2, 17/11): «Sin plaza libre» under its name, in the danger's red. */
+.rnode__warn {
+    font-size: 11px;
+    color: var(--t-danger);
+}
+
 .rnode__here {
     position: absolute;
     width: 160px;
