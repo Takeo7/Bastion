@@ -14,8 +14,9 @@ namespace Bastion.Client.Audio.EditorTools
     /// growl is now and then), its death and its burst; the reloads, the rifle's and the pistol's; and the silent
     /// takedown, with a knife's cut after it to hear how far under it is; and El Toro (H6): its roar, its steps into the
     /// charge's crash and the soldier knocked down, the soldier getting up, its pound with a knife's cut after it, and its
-    /// death. It fails if any of their groups has no takes, or the rifle's reload, the takedown or one of El Toro's no
-    /// recipe, and quits Unity:
+    /// death; and the bed inside a building (R5), then the town's again. It fails if any of their groups has no takes, or
+    /// the rifle's reload, the takedown or one of El Toro's no recipe, or the bed inside isn't in the sound folder, and
+    /// quits Unity:
     ///   QUIT=0 BASTION_SONIDO_TRAZA=1 unity/tools/unity.sh -executeMethod Bastion.Client.Audio.EditorTools.SoundCheck.Combate
     /// </summary>
     public static class SoundCheck
@@ -121,7 +122,14 @@ namespace Bastion.Client.Audio.EditorTools
                 await Seconds(1);
                 sfx.Death(toro, at);
                 await Seconds(2);
-                code = missing.Count == 0 && rifle && takedown && bull.Count == 0 ? 0 : 1;
+                // The bed inside a building (interior.ts, R5): a map that is one building plays it; one out of doors, its biome's.
+                var inside = Ambience.Has(CombatSound.InsideBed);
+                Debug.Log(inside ? "[prueba] ambiente de interior, y luego el de la ciudad" : "[prueba] sin el ambiente de interior (ambience.inside)");
+                sfx.Start(new GameState { Biome = "city", Mission = new MissionState { Inside = true } }, false);
+                await Seconds(4);
+                sfx.Start(new GameState { Biome = "city" }, false);
+                await Seconds(3);
+                code = missing.Count == 0 && rifle && takedown && bull.Count == 0 && inside ? 0 : 1;
             }
             catch (Exception e)
             {

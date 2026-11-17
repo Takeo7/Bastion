@@ -82,7 +82,14 @@ namespace Bastion.Client.Map
                     if (length == (id == "tractor" ? 3 : 6)) fit = MapArt.FootprintOf(id);
                     break;
                 case "container":
-                    id = Pick("container", r);
+                    // A shed's (H9, its mark on the block's first tile): Apocalypse's, its length the block's, along it.
+                    id = ContainerMarked(floor, x0, y0);
+                    if (id != null)
+                    {
+                        fit = new MapArt.Footprint { fit = length };
+                        yaw = (bw >= bh ? 0 : -90) + (facing == 1 || facing == 2 ? 180 : 0);
+                    }
+                    else id = Pick("container", r);
                     break;
                 case "waterTower":
                     id = "waterTower";

@@ -2655,6 +2655,415 @@
    "fbx": "SM_Veh_Car_Medium_01",
    "fit": 1.95,
    "yaw": 1
+  },
+  "inComputer": {
+   "pack": "office",
+   "fbx": "SM_Prop_Computer_Setup_01",
+   "yaw": 2
+  },
+  "inComputer2": {
+   "pack": "office",
+   "fbx": "SM_Prop_Computer_Setup_02",
+   "yaw": 2
+  },
+  "inChair": {
+   "pack": "office",
+   "fbx": "SM_Prop_Chair_02",
+   "yaw": 2
+  },
+  "inChair2": {
+   "pack": "office",
+   "fbx": "SM_Prop_Chair_03",
+   "yaw": 2
+  },
+  "inFilingLow": {
+   "pack": "office",
+   "fbx": "SM_Prop_Cabinets_02",
+   "yaw": 2
+  },
+  "inMeeting": {
+   "pack": "office",
+   "fbx": "SM_Prop_Table_Conference_01"
+  },
+  "inMeeting2": {
+   "pack": "office",
+   "fbx": "SM_Prop_Table_Conference_02"
+  },
+  "inMeeting3": {
+   "pack": "office",
+   "fbx": "SM_Prop_Table_Conference_03"
+  },
+  "inCooler": {
+   "pack": "office",
+   "fbx": "SM_Prop_WaterCooler_01",
+   "yaw": 2
+  },
+  "inCopier": {
+   "pack": "office",
+   "fbx": "SM_Prop_Photocopier_01",
+   "yaw": 2
+  },
+  "inCopier2": {
+   "pack": "office",
+   "fbx": "SM_Prop_Photocopier_02",
+   "yaw": 2
+  },
+  "inWhiteboard": {
+   "pack": "office",
+   "fbx": "SM_Prop_Whiteboard_02",
+   "fit": 0.95,
+   "yaw": 2
+  },
+  "inPlant": {
+   "pack": "police",
+   "fbx": "SM_Prop_Pot_Plant_01",
+   "fit": 0.85
+  },
+  "inPlant2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Pot_Plant_02",
+   "fit": 0.8
+  },
+  "inPlant3": {
+   "pack": "police",
+   "fbx": "SM_Prop_Pot_Plant_03"
+  },
+  "inPlant4": {
+   "pack": "police",
+   "fbx": "SM_Prop_Pot_Plant_04"
+  },
+  "corpseWorker": {
+   "pack": "apocalypse",
+   "fbx": "SK_Chr_OfficeWorker_Female_01",
+   "fit": 0.92
+  },
+  "corpseWorker2": {
+   "pack": "apocalypse",
+   "fbx": "SK_Chr_OfficeWorker_Male_01",
+   "fit": 0.92
+  },
+  "inShelves": {
+   "pack": "military",
+   "fbx": "SM_Prop_Shelves_03",
+   "fit": 1,
+   "stretch": true,
+   "tall": 1.35
+  },
+  "inShelvesLow": {
+   "pack": "military",
+   "fbx": "SM_Prop_Shelves_02",
+   "fit": 1,
+   "stretch": true
+  },
+  "inShelfBox": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CardboardBox_01",
+   "fit": 0.36
+  },
+  "inShelfBox2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CardboardBox_02",
+   "fit": 0.36
+  },
+  "inShelfBox3": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_CardboardBox_04",
+   "fit": 0.32
+  },
+  "inPallet2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Pallet_02"
+  },
+  "inPallet3": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Pallet_03"
+  },
+  "inForklift": {
+   "pack": "gang",
+   "fbx": "SM_Veh_Forklift_01",
+   "fit": 1.7,
+   "yaw": 2
+  },
+  "inWorkbench": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Workbench_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 1
+  },
+  "inContainer": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Shipping_Container_02",
+   "fit": 4
+  },
+  "inContainer2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Shipping_Container_03",
+   "fit": 4
+  },
+  "inLockers": {
+   "pack": "military",
+   "fbx": "SM_Prop_Lockers_01",
+   "fit": 1,
+   "stretch": true,
+   "thick": 0.85,
+   "yaw": 2
+  },
+  "inVice": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Vice_01"
+  },
+  "inToolbox": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_ToolBox_01"
+  },
+  "inToolboard": {
+   "pack": "town",
+   "fbx": "SM_Prop_ToolBoard_01_Combined",
+   "fit": 0.9
+  },
+  "inDrill": {
+   "pack": "construction",
+   "fbx": "SM_Tool_Drill_01"
+  },
+  "inGrinder": {
+   "pack": "construction",
+   "fbx": "SM_Tool_Angle_Grinder_01"
+  },
+  "poDesk": {
+   "pack": "police",
+   "fbx": "SM_Prop_Desk_01",
+   "fit": 0.95,
+   "thick": 1.45
+  },
+  "poDesk2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Desk_02",
+   "fit": 0.95,
+   "thick": 1.45
+  },
+  "poDesk3": {
+   "pack": "police",
+   "fbx": "SM_Prop_Desk_03",
+   "fit": 0.95,
+   "thick": 1.45
+  },
+  "poMonitor": {
+   "pack": "police",
+   "fbx": "SM_Prop_Monitor_01",
+   "fit": 0.36
+  },
+  "poComputer": {
+   "pack": "police",
+   "fbx": "SM_Prop_Computer_01",
+   "fit": 0.3
+  },
+  "poKeyboard": {
+   "pack": "police",
+   "fbx": "SM_Prop_Keyboard_01",
+   "fit": 0.3
+  },
+  "poChair": {
+   "pack": "police",
+   "fbx": "SM_Prop_Chair_01",
+   "fit": 0.48
+  },
+  "poChair2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Chair_02",
+   "fit": 0.36
+  },
+  "poChair3": {
+   "pack": "police",
+   "fbx": "SM_Prop_Chair_03",
+   "fit": 0.44
+  },
+  "poChair4": {
+   "pack": "police",
+   "fbx": "SM_Prop_Chair_04",
+   "fit": 0.25
+  },
+  "poFiling": {
+   "pack": "police",
+   "fbx": "SM_Prop_Filing_Cabinet_01"
+  },
+  "poFiling2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Filing_Cabinet_02",
+   "fit": 0.95,
+   "stretch": true
+  },
+  "poLocker": {
+   "pack": "police",
+   "fbx": "SM_Prop_Weapon_Locker_01"
+  },
+  "poLocker2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Weapon_Locker_02"
+  },
+  "poRack": {
+   "pack": "police",
+   "fbx": "SM_Prop_Weapon_Rack_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "poRackGuns": {
+   "pack": "police",
+   "fbx": "SM_Prop_Weapon_Rack_01_Insert_01"
+  },
+  "poShelf": {
+   "pack": "police",
+   "fbx": "SM_Prop_Shelf_04",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "poShelfIn": {
+   "pack": "police",
+   "fbx": "SM_Prop_Shelf_04_Insert_01"
+  },
+  "poShelfIn2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Shelf_04_Insert_02"
+  },
+  "poShelfIn3": {
+   "pack": "police",
+   "fbx": "SM_Prop_Shelf_04_Insert_03"
+  },
+  "poVending": {
+   "pack": "police",
+   "fbx": "SM_Prop_Vending_Machine_01",
+   "yaw": 2
+  },
+  "poVendingIn": {
+   "pack": "police",
+   "fbx": "SM_Prop_Vending_Machine_01_Insert_01"
+  },
+  "poCooler": {
+   "pack": "police",
+   "fbx": "SM_Prop_WaterCooler_01",
+   "yaw": 2
+  },
+  "poGunCase": {
+   "pack": "police",
+   "fbx": "SM_Prop_Gun_Case_01",
+   "yaw": 2
+  },
+  "poGunCase2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Gun_Case_02",
+   "yaw": 2
+  },
+  "poGunCase3": {
+   "pack": "police",
+   "fbx": "SM_Prop_Gun_Case_03",
+   "fit": 0.95,
+   "yaw": 2
+  },
+  "poAmmo": {
+   "pack": "police",
+   "fbx": "SM_Prop_Ammo_Case_01",
+   "yaw": 2
+  },
+  "poCellToilet": {
+   "pack": "police",
+   "fbx": "SM_Prop_Sink_Toilet_01",
+   "yaw": 2
+  },
+  "poBunk": {
+   "pack": "police",
+   "fbx": "SM_Prop_Bed_01",
+   "yaw": 2
+  },
+  "poSeating": {
+   "pack": "police",
+   "fbx": "SM_Prop_Seating_01",
+   "yaw": 2
+  },
+  "poBench2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Bench_02",
+   "yaw": 2
+  },
+  "poBench3": {
+   "pack": "police",
+   "fbx": "SM_Prop_Bench_03",
+   "yaw": 2
+  },
+  "poWhiteboard": {
+   "pack": "police",
+   "fbx": "SM_Prop_Whiteboard_01"
+  },
+  "poCork": {
+   "pack": "police",
+   "fbx": "SM_Prop_Corkboard_01"
+  },
+  "poCork2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Corkboard_02"
+  },
+  "poCorkIn": {
+   "pack": "police",
+   "fbx": "SM_Prop_Corkboard_Insert_01"
+  },
+  "poCorkIn2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Corkboard_Insert_02"
+  },
+  "poCorkIn3": {
+   "pack": "police",
+   "fbx": "SM_Prop_Corkboard_Insert_03"
+  },
+  "poEvidenceBox": {
+   "pack": "police",
+   "fbx": "SM_Prop_Box_01",
+   "yaw": 2
+  },
+  "poBag": {
+   "pack": "police",
+   "fbx": "SM_Prop_Evidence_Bag_01"
+  },
+  "poBag2": {
+   "pack": "police",
+   "fbx": "SM_Prop_Evidence_Bag_02"
+  },
+  "poBag3": {
+   "pack": "police",
+   "fbx": "SM_Prop_Evidence_Bag_03"
+  },
+  "poTable": {
+   "pack": "police",
+   "fbx": "SM_Prop_Table_01",
+   "fit": 0.9,
+   "yaw": 2
+  },
+  "poSideTable": {
+   "pack": "police",
+   "fbx": "SM_Prop_Table_04",
+   "fit": 0.85,
+   "stretch": true,
+   "yaw": 2
+  },
+  "poPolygraph": {
+   "pack": "police",
+   "fbx": "SM_Prop_Polygraph_01",
+   "yaw": 2
+  },
+  "poRecorder": {
+   "pack": "police",
+   "fbx": "SM_Prop_Recorder_01",
+   "yaw": 2
+  },
+  "corpseOfficer": {
+   "pack": "apocalypse",
+   "fbx": "SK_Chr_PoliceOfficer_Male_01",
+   "fit": 0.92
+  },
+  "corpseOfficer2": {
+   "pack": "apocalypse",
+   "fbx": "SK_Chr_PoliceOfficer_Female_01",
+   "fit": 0.92
   }
  },
  "sets": {

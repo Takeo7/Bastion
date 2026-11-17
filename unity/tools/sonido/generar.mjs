@@ -3,12 +3,12 @@
 // interface's WAVs as they are, and manifiesto.json with every file's hash. Out of git: Unity's AppBuild checks the
 // folder against the manifest.
 //
-//   node unity/tools/sonido/generar.mjs [--salida <dir>] [--comprobar | --grabados | --efectos <receta,…>]
+//   node unity/tools/sonido/generar.mjs [--salida <dir>] [--comprobar | --grabados | --efectos <receta,…> | --vivos <pieza,…>]
 //
 // --comprobar generates again into a temporary folder and compares: the recordings and the interface byte for byte;
 // what Chromium renders, sample by sample, one bit apart at most (its offline render varies that much between runs).
 // --grabados redoes only the recordings (and their part of the manifest) in a folder already generated; --efectos, only
-// those synthesised recipes (a new one of recetas.ts, a change to one).
+// those synthesised recipes (a new one of recetas.ts, a change to one); --vivos, only those live pieces («ambience.inside»).
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -30,6 +30,8 @@ const PIECES = [
   { kind: 'ambience', name: 'facility', seconds: 240, seed: 23 },
   { kind: 'ambience', name: 'base', seconds: 240, seed: 24 },
   { kind: 'ambience', name: 'geo', seconds: 240, seed: 25 },
+  // interior.ts's, for a map that is one building (R5, 17/11).
+  { kind: 'ambience', name: 'inside', seconds: 240, seed: 26 },
 ];
 
 const args = process.argv.slice(2);
@@ -249,8 +251,35 @@ function effectsOnly(out, names) {
   }
 }
 
+/**
+ * Only the live pieces `names` («ambience.inside»), into a folder already generated (interior.ts's bed, 17/11): as
+ * effectsOnly, the rest not rendered again.
+ */
+function piecesOnly(out, names) {
+  const file = join(out, 'manifiesto.json');
+  if (!existsSync(file)) throw new Error(`No hay ${file}: genera primero todo.`);
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  const list = PIECES.filter((p) => names.includes(`${p.kind}.${p.name}`));
+  if (list.length !== names.length) throw new Error(`Piezas que no hay: ${names.filter((n) => !PIECES.some((p) => `${p.kind}.${p.name}` === n)).join(', ')}`);
+  const page = bundle();
+  try {
+    const made = electron(page, 'renderPieces', [join(out, 'vivos'), list]);
+    for (const [name, v] of Object.entries(made)) {
+      v.file = join('vivos', v.file);
+      manifest.archivos[v.file] = { sha256: createHash('sha256').update(readFileSync(join(out, v.file))).digest('hex'), exacto: false };
+      manifest.vivos[name] = v;
+    }
+    manifest.archivos = Object.fromEntries(Object.keys(manifest.archivos).sort().map((f) => [f, manifest.archivos[f]]));
+    writeFileSync(file, JSON.stringify(manifest, null, 1) + '\n');
+    console.log(`vivos: ${Object.keys(made).join(', ')} → ${join(out, 'vivos')}`);
+  } finally {
+    rmSync(page, { recursive: true, force: true });
+  }
+}
+
 const out = resolve(option('--salida') ?? DEFAULT_OUT);
 if (flag('--comprobar')) compare(out);
 else if (flag('--grabados')) recordingsOnly(out);
 else if (flag('--efectos')) effectsOnly(out, (option('--efectos') ?? '').split(',').filter(Boolean));
+else if (flag('--vivos')) piecesOnly(out, (option('--vivos') ?? '').split(',').filter(Boolean));
 else generate(out);

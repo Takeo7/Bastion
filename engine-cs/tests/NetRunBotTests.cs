@@ -8,7 +8,7 @@ namespace Bastion.Engine.Tests
 {
     /// <summary>
     /// What the test apps' bots do out of a fight in the runs (HeardGame.BaseOrder, H0-DISENO §7; Gameplay, 16/11): go out,
-    /// take the first node in sight, never back before the boss, answer a stop yes and buy something at a Trade; and see to
+    /// take the first node in sight, back before the boss only with the squad broken, answer a stop yes and buy something at a Trade; and see to
     /// their soldiers' kit, so they don't go out with the knife for ever. Each order one the engine takes.
     /// </summary>
     public class NetRunBotTests
@@ -64,6 +64,32 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void OnTheBaseTheSuppliesGoToTheStashAndPayTheUpgradesInTurn()
+        {
+            var c = Solo();
+            var s = Soldier(c);
+            var kept = InStash(c, GearKinds.Supplies, null, 0, 0, 90);
+            InPack(c, s, GearKinds.Supplies, null, 0, 0, 70);
+            var heard = Heard(c, 0);
+            // Onto the stash's pile first, then the rest where it fits.
+            var onto = Assert.IsType<MoveGearCommand>(Done(heard, c, 0, Zero));
+            Assert.Equal((GearPlaces.Stash, 0, 0), (onto.To, onto.X, onto.Y));
+            var next = heard.BaseOrder(0, true);
+            while (next is MoveGearCommand)
+            {
+                Ok(c, next, 0, Zero);
+                next = heard.BaseOrder(0, true);
+            }
+            Assert.Equal(Content.PileOf(GearKinds.Supplies, null), kept.Count);
+            Assert.Equal((160, 0), (Runs.StashSupplies(c), Gears.Supplies(s.Kit!.Pack)));
+            // More soldiers out (150) first; then saving for the mending (120), out meanwhile.
+            Assert.Equal(UpgradeIds.Squad, Assert.IsType<UpgradeCommand>(next).Upgrade);
+            Ok(c, next!, 0, Zero);
+            Assert.Equal((1, 10), (Runs.Level(c, UpgradeIds.Squad), Runs.StashSupplies(c)));
+            Assert.IsType<StartRunCommand>(heard.BaseOrder(0, true));
+        }
+
+        [Fact]
         public void OnTheMapTheHostChoosesTheFirstNodeInSight()
         {
             var c = Solo();
@@ -72,6 +98,33 @@ namespace Bastion.Engine.Tests
             var choose = Assert.IsType<ChooseNodeCommand>(Done(heard, c, 0, Zero));
             Assert.Equal(RunMap.Choices(new RunState { Nodes = run.Nodes })[0].Id, choose.Node);
             Assert.Equal(1, c.NodesPlayed);
+        }
+
+        [Fact]
+        public void BackToTheBaseOnceTheSquadIsBroken()
+        {
+            var c = Solo();
+            var run = Start(c);
+            var heard = Heard(c, 0);
+            Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true));
+            // After a fight, one of four fallen and the rest hurt, but over half their health: on.
+            var first = RunMap.Choices(run)[0];
+            run.Path.Add(first.Id);
+            run.At = first.Id;
+            var squad = Squad(c);
+            Assert.Equal(4, squad.Count);
+            squad[0].Alive = false;
+            run.Squad.Remove(squad[0].Id);
+            foreach (var s in squad.Skip(1)) run.Hp[s.Id] = Runs.MaxHp(s) / 2 + 1;
+            Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true));
+            // At half their health, back; as with two of four fallen.
+            foreach (var s in squad.Skip(1)) run.Hp[s.Id] = Runs.MaxHp(s) / 2;
+            Assert.IsType<EndRunCommand>(heard.BaseOrder(0, true));
+            foreach (var s in squad.Skip(1)) run.Hp[s.Id] = Runs.MaxHp(s);
+            squad[1].Alive = false;
+            run.Squad.Remove(squad[1].Id);
+            Assert.IsType<EndRunCommand>(Done(heard, c, 0, Zero));
+            Assert.Null(c.Run);
         }
 
         [Fact]

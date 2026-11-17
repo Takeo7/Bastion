@@ -67,7 +67,10 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> All = new[] { Floor, Office, LoadingBay, Lockers };
     }
 
-    /// <summary>A factory shed's marks (H9 §2): shelving stands tall and blocks (a `high` tile under it).</summary>
+    /// <summary>
+    /// A factory shed's marks (H9 §2): shelving stands tall and blocks (a `high` tile under it); crates and drums along its
+    /// walls and in its loading bay, a container (2 × 4) where it fits (Mapgen.ShedOnly).
+    /// </summary>
     public static class ShedDetailKinds
     {
         public const string Shelving = "shelving";
@@ -251,6 +254,11 @@ namespace Bastion.Engine
         /// <summary>A DIRS4 index.</summary>
         public int Facing { get; set; }
         public int? Variant { get; set; }
+        /// <summary>
+        /// How many tiles it covers from its own (X, Y), along the line across its facing (facing north or south, along x;
+        /// east or west, along y): an office's meeting table, 2 (Arte, 17/11: Office's are 4 m long). Null: one.
+        /// </summary>
+        public int? Length { get; set; }
     }
 
     /// <summary>
@@ -288,7 +296,7 @@ namespace Bastion.Engine
             var rooms = new List<InteriorRoom>();
             foreach (var r in Rooms) rooms.Add(new InteriorRoom { X = r.X, Y = r.Y, W = r.W, H = r.H, Z = r.Z, Use = r.Use });
             var dressing = new List<InteriorDetail>();
-            foreach (var d in Dressing) dressing.Add(new InteriorDetail { Kind = d.Kind, X = d.X, Y = d.Y, Z = d.Z, Facing = d.Facing, Variant = d.Variant });
+            foreach (var d in Dressing) dressing.Add(new InteriorDetail { Kind = d.Kind, X = d.X, Y = d.Y, Z = d.Z, Facing = d.Facing, Variant = d.Variant, Length = d.Length });
             return new InteriorSite { Kind = Kind, X = X, Y = Y, W = W, H = H, Rooms = rooms, Dressing = dressing };
         }
     }

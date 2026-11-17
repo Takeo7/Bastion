@@ -72,6 +72,9 @@ namespace Bastion.Client.Map
         /// <summary>A frame waited for UnitViews' sight of the state as it is now (SightOf), rather than working it out again.</summary>
         bool waited;
         int[] seenInside = Array.Empty<int>();
+        /// <summary>On a map that is one building (H9): the nodes found (Buildings.FoundTiles), and the buildings with any; null and none on any other.</summary>
+        HashSet<int> found;
+        bool[] known = Array.Empty<bool>();
         bool[] visible;
         /// <summary>
         /// Things on a storey of a building (furniture, a sign, what stands on a roof), turned off while it hides them; a
@@ -113,6 +116,8 @@ namespace Bastion.Client.Map
             tracked.Clear();
             fixtures.Clear();
             seenFor = null;
+            found = null;
+            known = new bool[size];
             boxes = plan == null ? Array.Empty<Bounds>() : plan.Buildings.Select(b =>
             {
                 var box = new Bounds();
@@ -209,10 +214,17 @@ namespace Bastion.Client.Map
                 visible = shared ?? Los.TeamVisibility(s, "xcom");
                 var seen = new HashSet<int>();
                 int area = s.Width * s.Height;
+                // (On a map that is one building, H9, only what is found: its roof seen from the strip, or a room not found
+                // seen into through a loading bay's opening, took the shed's roof off over an inside all dark.)
+                found = Bastion.Engine.Buildings.ByRoom(s) ? Bastion.Engine.Buildings.FoundTiles(s) : null;
                 for (int k = 0; k < visible.Length; k++)
-                    if (visible[k]) seen.Add(plan.At(new Vec2 { X = k % area % s.Width, Y = k % area / s.Width }));
+                    if (visible[k] && (found == null || found.Contains(k))) seen.Add(plan.At(new Vec2 { X = k % area % s.Width, Y = k % area / s.Width }));
                 seen.Remove(-1);
                 seenInside = seen.ToArray();
+                known = new bool[n];
+                if (found != null)
+                    foreach (int k in found)
+                        if (k % area < plan.Owner.Length && plan.Owner[k % area] >= 0 && plan.Owner[k % area] < n) known[plan.Owner[k % area]] = true;
             }
             bool close = focus.Close;
             bool roofs = focus.roofs || close;
@@ -271,7 +283,9 @@ namespace Bastion.Client.Map
                 return (tx, ty, point);
             }
             // The cursor first: the storey under it is the one the player looks at in that building.
-            if (focus.hover != null && !roofs)
+            // (On a map that is one building, H9, not over what is not found yet: the pointer over the shed from the strip
+            // took its front down onto an inside all dark. Over what is found, or out of doors, as ever.)
+            if (focus.hover != null && !roofs && (found == null || plan.At(new Vec2 { X = focus.hover.X, Y = focus.hover.Y }) < 0 || found.Contains((focus.hover.Z * s.Height + focus.hover.Y) * s.Width + focus.hover.X)))
             {
                 var p = focus.hover;
                 Within(p.X, p.Y, p.Z, true);
@@ -318,6 +332,8 @@ namespace Bastion.Client.Map
                     float gx = eye.x + look.x * t, gz = eye.z + look.z * t;
                     foreach (var b in plan.Buildings)
                     {
+                        // (A building of a map that is one building, H9: only once something of it is found.)
+                        if (found != null && (b.index >= known.Length || !known[b.index])) continue;
                         float dx = Mathf.Max(Mathf.Max(b.x0 - gx, 0), gx - b.x1 - 1);
                         float dz = Mathf.Max(Mathf.Max(b.y0 - gz, 0), gz - b.y1 - 1);
                         if (dx * dx + dz * dz < ZoomRadius * ZoomRadius) Mark(b.index, 0);

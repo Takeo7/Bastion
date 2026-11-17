@@ -15,9 +15,11 @@ namespace Bastion.Engine
         public const int HeavyIn = 5;
 
         /// <summary>What a row and a modifier make the supplies: ×(1 + 0.25·(row − 1)), ×1.5 with any modifier (an event's too).</summary>
+        /// <remarks>A bench's multiplier too (Runs.Tuning.SuppliesScale), when one is set.</remarks>
         public static double SuppliesScale(RunFight run)
         {
-            return (1 + 0.25 * (run.Row - 1)) * (run.Modifier != null || run.Added != null ? 1.5 : 1);
+            var scale = (1 + 0.25 * (run.Row - 1)) * (run.Modifier != null || run.Added != null ? 1.5 : 1);
+            return Runs.Tuning.IsSet ? scale * Runs.Tuning.Current.SuppliesScale : scale;
         }
 
         /// <summary>New gear for a fight: its ids go on from the fight's counter (RunFight.NextGear), which `Next` keeps.</summary>

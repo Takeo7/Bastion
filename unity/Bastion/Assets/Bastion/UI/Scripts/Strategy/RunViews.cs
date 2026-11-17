@@ -111,6 +111,8 @@ namespace Bastion.UI.Strategy
         /// <summary>One an event left (H4: RunNode.Added, or RunState.Pending on the fights to choose): a second badge.</summary>
         public string AddedId;
         public string AddedIcon;
+        /// <summary>A special map (the hospital, the offices…: Arturo, 17/11): its place's drawing as a third badge; null, none.</summary>
+        public string SiteIcon;
         /// <summary>One it can go to, but can't now (ChooseNodeRefusal); null, it can.</summary>
         public string Why;
         /// <summary>Its card on hover after the name: what it is, where, how hard, its modifier.</summary>

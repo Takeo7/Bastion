@@ -1613,7 +1613,7 @@ namespace Bastion.EditorTools
 
         /// <summary>The packs' folders in Assets/Synty, by MapArt.json's pack names.</summary>
         /// <summary>Packs found last by a model's name alone (Prefabs): imported after the rest, with models of the others' names.</summary>
-        static readonly string[] LatePacks = { "PolygonShops", "PolygonGangWarfare", "PolygonPalmCity" };
+        static readonly string[] LatePacks = { "PolygonShops", "PolygonGangWarfare", "PolygonPalmCity", "PolygonPoliceStation", "PolygonMapsPlaza" };
 
         internal static readonly Dictionary<string, string> PackFolders = new Dictionary<string, string>
         {
@@ -1621,6 +1621,8 @@ namespace Bastion.EditorTools
             ["military"] = "PolygonMilitary", ["construction"] = "PolygonConstruction", ["farm"] = "PolygonFarm", ["nature"] = "PolygonNature",
             ["alpine"] = "PolygonNatureBiomes", ["industrial"] = "PolygonMapsMilitaryWarehouse", ["woodland"] = "PolygonMapsWoodlandApocalypse",
             ["dog"] = "PolygonDog", ["shops"] = "PolygonShops", ["gang"] = "PolygonGangWarfare", ["simple"] = "SimpleForestAnimal", ["cats"] = "SimpleCats",
+            // (The runs' indoor maps, 17/11: late too, Office's desks and chairs have their names.)
+            ["police"] = "PolygonPoliceStation", ["plaza"] = "PolygonMapsPlaza",
         };
 
         /// <summary>

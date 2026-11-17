@@ -1206,8 +1206,10 @@ namespace Bastion.Engine
             var s = S;
             var soldiers = Grid.Combatants(s, Teams.Xcom);
             if (soldiers.Count == 0) return null;
+            // Never into a police station's cell (H9): nobody could go in to finish them.
             bool Free(int x, int y) =>
-                Grid.InBounds(s, x, y) && Flights.CanStopAt(s, new Pos { X = x, Y = y, Z = 0 }) && Js.At(s.Elev, Grid.TileIndex(s, x, y), 0) == 0 && Grid.UnitAt(s, new Pos { X = x, Y = y, Z = 0 }) == null;
+                Grid.InBounds(s, x, y) && Flights.CanStopAt(s, new Pos { X = x, Y = y, Z = 0 }) && Js.At(s.Elev, Grid.TileIndex(s, x, y), 0) == 0 && Grid.UnitAt(s, new Pos { X = x, Y = y, Z = 0 }) == null &&
+                (s.Interiors == null || InteriorSite.UseAt(s, new Pos { X = x, Y = y, Z = 0 }) != PoliceUses.Cells);
             bool[] Sides(int x, int y, int band) => new[] { y < band, x >= s.Width - band, y >= s.Height - band, x < band };
             bool Middle(int along, int span) => along >= span / 4.0 && along < (span * 3) / 4.0;
             // In a siege, never in a glade the pines close off: only where the way to the squad is open, or opened by breaking what was built.

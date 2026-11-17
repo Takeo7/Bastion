@@ -26,7 +26,17 @@ namespace Bastion.EditorTools
         {
             ["apocalypse"] = "PolygonApocalypse_01_A", ["town"] = "PolygonTown_01_A", ["city"] = "PolygonCity_01_A", ["office"] = "PolygonOffice_01_A",
             ["woodland"] = "PolygonApocalypse_01_A", ["shops"] = "PolygonShops_Mat_01_A", ["gang"] = "PolygonGangWarfare_01_A",
+            ["police"] = "PolygonPoliceStation_01_A",
         };
+
+        /// <summary>
+        /// The packs whose models are looked up in their own folder (`pack:model`): other packs have models of their names
+        /// (Shops', Gang Warfare's, Police Station's SM_Bld_Base_Wall_01…).
+        /// </summary>
+        static readonly System.Collections.Generic.HashSet<string> OwnFolder = new System.Collections.Generic.HashSet<string> { "shops", "gang", "police" };
+
+        /// <summary>Whether a Synty material is Police Station's (its walls' bricks and plaster have names any pack could have: Wall_03, Wall_Brick_02).</summary>
+        static bool Police(Material synty) => AssetDatabase.GetAssetPath(synty).StartsWith("Assets/Synty/PolygonPoliceStation/");
 
         /// <summary>
         /// Shops' materials painted all over in the building's outer colour (the shops' render, phase 2 of #3; the offices'
@@ -42,10 +52,11 @@ namespace Bastion.EditorTools
         /// <summary>
         /// How a pack's material takes the building's colours (Bastion/Building's _Dye): Shops' (phase 2 of #3, the shops'
         /// facings) none, its brick and atlas as they are, but those Painted all over in the building's outer colour; Gang
-        /// Warfare's (phase 4, the halls) none, its colours its atlas's; every other pack's as Town's atlas (its top quarter).
+        /// Warfare's (phase 4, the halls) none, its colours its atlas's; Police Station's (H9 §3) none, its brick, plaster and
+        /// atlas as they are (the atlas's top quarter is its signs); every other pack's as Town's atlas (its top quarter).
         /// </summary>
         static float DyeOf(Material synty) =>
-            synty.name.StartsWith("PolygonGangWarfare_") ? 2 : !synty.name.StartsWith("PolygonShops_") ? 0 : Painted.ContainsKey(synty.name) ? 1 : 2;
+            synty.name.StartsWith("PolygonGangWarfare_") || Police(synty) ? 2 : !synty.name.StartsWith("PolygonShops_") ? 0 : Painted.ContainsKey(synty.name) ? 1 : 2;
 
         public static void Run()
         {
@@ -77,8 +88,8 @@ namespace Bastion.EditorTools
                 // (A facing's piece is another's model with its brick swapped: pieces-json.mts `as`, `swap`.)
                 var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{Folder}/{(string)p.Value["as"] ?? p.Name}.fbx");
                 string pack = (string)p.Value["pack"];
-                // (Shops' and Gang Warfare's by their own folders: other packs have models of their names.)
-                var synty = prefabOf(pack == "shops" || pack == "gang" ? $"{pack}:{p.Value["fbx"]}" : (string)p.Value["fbx"]);
+                // (Shops', Gang Warfare's and Police Station's by their own folders: other packs have models of their names.)
+                var synty = prefabOf(OwnFolder.Contains(pack) ? $"{pack}:{p.Value["fbx"]}" : (string)p.Value["fbx"]);
                 if (model == null || synty == null)
                 {
                     missing.Add(p.Name + (model == null ? " (not cut)" : " (no Synty model)"));
@@ -118,7 +129,8 @@ namespace Bastion.EditorTools
             if (synty == null) return null;
             if (made.TryGetValue(synty, out var own)) return own;
             if (synty.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.Transparent) return made[synty] = synty;
-            own = MaterialAsset(synty.name, false);
+            // (Police Station's under its pack's name: theirs are any pack's, Wall_03.)
+            own = MaterialAsset(Police(synty) && !synty.name.StartsWith("PolygonPoliceStation_") ? "PolygonPoliceStation_" + synty.name : synty.name, false);
             own.SetTexture("_BaseMap", Atlas(synty));
             own.SetColor("_BaseColor", synty.HasProperty("_BaseColor") ? synty.GetColor("_BaseColor") : Color.white);
             // One painted in the building's colour, brought to Town's siding (189, 194, 191 on average; a colour as sRGB: Unity

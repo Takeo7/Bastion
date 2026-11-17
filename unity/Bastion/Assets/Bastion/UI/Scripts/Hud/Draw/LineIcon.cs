@@ -87,6 +87,61 @@ namespace Bastion.UI.Hud
                 pen.Curve(18.6f, 2, 20.6f, 1.8f, 21.8f, 3.2f);
                 pen.Stroke();
             },
+            // The special maps (H7, H9; Arturo, 17/11: a mark on their stage on the runs' map). The hospital: a block with its
+            // cross on the front.
+            ["place:hospital"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (4, 21.5f), (4, 5.5f), (20, 5.5f), (20, 21.5f));
+                pen.Line(12, 9, 12, 17);
+                pen.Line(8, 13, 16, 13);
+            },
+            // The offices: a tall block, its windows in rows, its door.
+            ["place:offices"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (6, 21.5f), (6, 2.5f), (18, 2.5f), (18, 21.5f));
+                foreach (var y in new[] { 6.5f, 10.5f, 14.5f })
+                {
+                    pen.Dot(9.5f, y, 1);
+                    pen.Dot(14.5f, y, 1);
+                }
+                pen.Lines(true, false, (10.5f, 21.5f), (10.5f, 18), (13.5f, 18), (13.5f, 21.5f));
+            },
+            // The shed: one gable over the whole of it, and its big roller door.
+            ["place:shed"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (3, 21.5f), (3, 10.5f), (12, 4.5f), (21, 10.5f), (21, 21.5f));
+                pen.Lines(true, false, (7.5f, 21.5f), (7.5f, 13), (16.5f, 13), (16.5f, 21.5f));
+                pen.Line(7.5f, 16, 16.5f, 16);
+                pen.Line(7.5f, 18.8f, 16.5f, 18.8f);
+            },
+            // The police station: its pediment over the front, and a badge on it.
+            ["place:police"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (2.5f, 9.5f), (12, 4), (21.5f, 9.5f));
+                pen.Lines(true, false, (4.5f, 21.5f), (4.5f, 9.5f));
+                pen.Lines(true, false, (19.5f, 21.5f), (19.5f, 9.5f));
+                pen.Lines(true, true, (12, 11.5f), (15.5f, 12.5f), (15, 16.8f), (12, 19.2f), (9, 16.8f), (8.5f, 12.5f));
+            },
+            // The shopping centre (Places.Plaza, «plaza»: Lore, 17/11): a shop front under its scalloped awning, its door.
+            ["place:plaza"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (4, 21.5f), (4, 9), (20, 9), (20, 21.5f));
+                pen.Lines(true, false, (3, 9), (6, 12.5f), (9, 9), (12, 12.5f), (15, 9), (18, 12.5f), (21, 9));
+                pen.Lines(true, false, (10, 21.5f), (10, 16), (14, 16), (14, 21.5f));
+            },
+            // The camping («camping»): a tent, its flap open, its pole over the top.
+            ["place:camping"] = pen =>
+            {
+                pen.Line(2, 21.5f, 22, 21.5f);
+                pen.Lines(true, false, (3, 21.5f), (12, 5.5f), (21, 21.5f));
+                pen.Lines(true, false, (9, 21.5f), (12, 14), (15, 21.5f));
+                pen.Line(12, 5.5f, 12, 2.5f);
+            },
             // The service area: a fuel pump, its window and its hose.
             ["place:roadside"] = pen =>
             {

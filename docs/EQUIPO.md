@@ -1,18 +1,18 @@
 # Equipo y reparto
 
-Quién hace qué en Bastión, qué archivos toca cada uno y en qué está ahora. Lo mantiene **Gameplay**, que coordina. Antes de tocar un archivo de otro rol, se le pregunta por mensaje.
+Quién hace qué en Bastión, qué archivos toca cada uno y en qué está ahora. Lo mantiene **Producto**, que coordina desde el 17/11 (Arturo: «deberías ser tú el que orqueste y no Gameplay ahora»). Antes de tocar un archivo de otro rol, se le pregunta por mensaje.
 
 ## Roles hoy (Unity, desde el 23/10; puesto al día el 16/11)
 
 | Rol | Sesión | Hace | Sus archivos |
 |---|---|---|---|
-| **Gameplay** (coordina) | Gameplay | Las reglas y la campaña, el reparto del trabajo, la revisión, las versiones y estos documentos | `engine-cs/package/Runtime/` (menos `Lore/` y `Net/`), `engine-cs/tests/` (menos las de red y las de textos), `engine-cs/golden/`, `unity/tools/publicar.sh`, `copia.sh`, `.github/`, `CLAUDE.md`, `docs/UNITY.md`, `TRASPASO.md`, `EQUIPO.md` |
+| **Producto** (coordina) | Producto | Piensa con Arturo qué lleva el juego y le lleva las decisiones al cuadro; planifica las tareas y las encarga a cada rol; revisa lo entregado; hace los commits y publica. No programa | `.dev-snapshots/producto/` (el encargo `RUNS.md` y el tablero `TABLERO.md`), `CLAUDE.md`, `docs/EQUIPO.md` |
+| **Gameplay** | Gameplay | Las reglas y la campaña; las pruebas largas (bancos de bots, la copia limpia) cuando Producto las pide; los documentos técnicos | `engine-cs/package/Runtime/` (menos `Lore/` y `Net/`), `engine-cs/tests/` (menos las de red y las de textos), `engine-cs/golden/`, `unity/tools/publicar.sh`, `copia.sh`, `.github/`, `docs/UNITY.md`, `TRASPASO.md` |
 | **Lore** | Lore | El mundo y todos los textos que se ven, las notas de cada versión | `engine-cs/package/Runtime/Lore/`, los textos (no la lógica) del resto del motor y de la interfaz, `docs/LORE.md`, `docs/NOTAS-*.md`, `README.md` |
 | **Arte** | Arte | Lo que se ve en 3D: figuras, animaciones, armas, mapas, la base, luz, efectos y el rendimiento | `unity/Bastion/Assets/Bastion/Client/` (menos `Net/`, `Audio/` e `Input/`), `Assets/Bastion/Editor/` (los laboratorios), `unity/tools/unity.sh`, `captura.sh`, `importar-synty.sh`, `docs/UNITY-ARTE.md` |
 | **UI** | UI | El HUD, el control y la cámara del combate, las pantallas de estrategia, el inicio y los Ajustes, lo táctil | `unity/Bastion/Assets/Bastion/UI/`, `Client/Input/`, `docs/UNITY-UI.md`, `docs/UNITY-ESTRATEGIA.md` |
 | **Red** | Networking | La sala, la conexión, el guardado, las apps (Mac, Windows, iOS), la firma y el sonido | `engine-cs/package/Runtime/Net/`, sus pruebas (`Net*Tests.cs`), `Assets/Bastion/Client/Net/` (con `Editor/AppBuild.cs`), `Client/Audio/`, `unity/tools/ios.sh`, `sonido.sh`, `docs/FIRMA.md`, `docs/IOS.md`, `docs/UNITY-SONIDO.md` |
 | **Biblioteca** | Biblioteca de assets | La web local de recursos de Arturo ([BIBLIOTECA.md](BIBLIOTECA.md)) | `unity/tools/biblioteca/` |
-| **Producto** | Producto | Piensa con Arturo qué lleva el juego y pasa lo decidido a Gameplay, que lo reparte | Ningún archivo de código; sus notas, en `.dev-snapshots/producto/` |
 
 - **Escenas:** un solo dueño por archivo `.unity`. Partida es de Arte; Inicio, de UI.
 - **Unity, de uno en uno:** `unity.sh` y `captura.sh` llevan un cerrojo; quien llega espera.
@@ -39,7 +39,8 @@ Sesiones abiertas (2026-10-14), todas con Remote Control para seguirlas desde cl
 
 - Nada de Prettier ni formateadores: el código está formateado a mano.
 - Ediciones exactas y pequeñas en archivos compartidos, nunca reescribir un archivo entero de otro.
-- Nadie hace commit sin avisar a Gameplay, que agrupa y sube.
+- Nadie hace commit: los hace Producto al cerrar cada hito, tras preguntar a los roles si lo suyo está para guardar (desde el 17/11; antes, Gameplay).
+- Cada rol da el parte a Producto: al acabar una tarea del tablero, una línea con lo hecho, lo que se desvía y dónde está su LEEME con capturas o medidas. Las decisiones de gusto (aspecto, nombres, reglas que se notan al jugar) van a Producto antes de hacerlas; Producto las lleva al cuadro de Arturo.
 - Conversión de Synty: `tools/synty/convert.ts` siempre con ids explícitos, nunca una pasada completa (borra lo que no está en el manifiesto y podría llevarse lo nuevo de otro agente).
 - Cada uno prueba con su propio servidor:
 

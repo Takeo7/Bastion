@@ -473,6 +473,12 @@ namespace Bastion.Client.Map
             foreach (var b in plan.Buildings)
             {
                 if (b.kind == BuildingKinds.Ruin) continue;
+                // A camping's caravan: its model's own floor and roof (MapBuilder.Caravans).
+                if (b.trailer != null)
+                {
+                    b.top = b.@base + Caravans.TopOf(s, b);
+                    continue;
+                }
                 var looks = BuildingLooks.Of(b);
                 // The floor runs to the walls' middle lines (the outer half of a wall tile is the street's).
                 double x0 = b.x0 + 0.5, x1 = b.x1 + 0.5, z0 = b.y0 + 0.5, z1 = b.y1 + 0.5, y = b.@base + 0.004;
@@ -938,7 +944,7 @@ namespace Bastion.Client.Map
                 }
                 return @out;
             }
-            if (b.pitched == PitchedKinds.Barn || b.kind == BuildingKinds.Ruin) return @out;
+            if (b.pitched == PitchedKinds.Barn || b.kind == BuildingKinds.Ruin || b.trailer != null) return @out;
             double y = b.@base + Storey * b.storeys + 0.04;
             if (b.radio)
             {

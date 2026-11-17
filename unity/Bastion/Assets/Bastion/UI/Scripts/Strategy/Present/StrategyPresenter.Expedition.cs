@@ -41,7 +41,9 @@ namespace Bastion.UI.Strategy
                     Hidden = !seen,
                     Done = path.Contains(n.Id), At = run.At == n.Id,
                     Open = choices.Contains(n.Id),
-                    Boss = n.Kind == NodeKinds.Boss,
+                    // Only once seen: hidden, the boss's is a «?» like the rest, not bigger nor red (Arturo, 17/11: unseen
+                    // till the squad is near, as the far rows).
+                    Boss = seen && n.Kind == NodeKinds.Boss,
                 };
                 if (seen)
                 {
@@ -50,9 +52,13 @@ namespace Bastion.UI.Strategy
                     nv.Stop = NodeKinds.IsStop(n.Kind);
                     // Its line with what is known of it (Runs.StageLine: the alarm, the Asedio's turn, the Guarida's guard).
                     nv.Card.Add(Runs.StageLine(n));
+                    // A special map (H7, H9: not one of the six places a fight is in otherwise): its mark (Arturo, 17/11).
+                    if (n.Site != null && !OrdinaryPlaces.Contains(n.Site) && Bastion.UI.Hud.LineIcon.Has("place:" + n.Site)) nv.SiteIcon = "place:" + n.Site;
                     if (!nv.Stop)
                     {
                         if (n.Site != null && Places.Names.TryGetValue(n.Site, out var place)) nv.Card.Add(StrategyText.Runs.Site(place));
+                        // A special map's line under it (Lore, 17/11): only inside, and what its searches give more of.
+                        if (n.Site != null && Lore.SiteLine(n.Site) is string special) nv.Card.Add(special);
                         nv.Card.Add(StrategyText.Runs.Difficulty(n.Difficulty));
                     }
                     if (n.Modifier != null)
@@ -216,6 +222,9 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>What happened at the stop (H4: StopState.Result, Lore's line with who it fell to and who joined); else the engine's.</summary>
+        /// <summary>The places a fight goes to on its own; any other is a special map with its mark.</summary>
+        static readonly HashSet<string> OrdinaryPlaces = new HashSet<string> { Places.City, Places.Town, Places.Estate, Places.Factory, Places.Roadside, Places.Country };
+
         static string StopOutcome(StopState stop)
         {
             var r = stop.Result;

@@ -193,7 +193,10 @@ namespace Bastion.EditorTools
             return list;
         }
 
-        /// <summary>The vests (VestIds), 2×2: Sidekick torsos alone, without the skin (Sidekick's figures face +z), upright from the front.</summary>
+        /// <summary>
+        /// The vests (VestIds), 2×2: Sidekick torsos alone, without the skin (Sidekick's figures face +z), upright from the front.
+        /// (Not Police Station's bulletproof vest, 17/11: it hangs on a coat hanger of the same mesh.)
+        /// </summary>
         static IEnumerable<Thing> Vests()
         {
             yield return Torso("vest_vest", "SK_APOC_SURV_06_10TORS_HU01", "ApocalypseSurvivor_02");

@@ -3143,7 +3143,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Solo por dentro: se descubre sala a sala. Registrando, salen más suministros y accesorios de arma.", Lore.SiteLine(Places.Offices));
             Assert.Equal("Solo por dentro: la nave se ve entera nada más entrar. Registrando, salen más cargadores, accesorios de arma y suministros.", Lore.SiteLine(Places.Shed));
             Assert.Equal("Solo por dentro: se descubre sala a sala. Registrando, salen más armas, cargadores y chalecos.", Lore.SiteLine(Places.Police));
-            Assert.All(new[] { Places.Hospital, Places.Offices, Places.Shed, Places.Police, Places.Plaza }, (p) => Assert.NotNull(Lore.SiteLine(p)));
+            Assert.All(new[] { Places.Hospital, Places.Offices, Places.Shed, Places.Police, Places.Plaza, Places.Camping }, (p) => Assert.NotNull(Lore.SiteLine(p)));
             Assert.All(new[] { Places.City, Places.Town, Places.Estate, Places.Factory, Places.Roadside, Places.Country }, (p) => Assert.Null(Lore.SiteLine(p)));
             Assert.Equal("Mal tiempo", Lore.ModifierName(Modifiers.Storm));
             Assert.Equal("Ventisca", Lore.ModifierName(Modifiers.Storm, snow: true));
@@ -3164,6 +3164,14 @@ namespace Bastion.Engine.Tests
             Assert.Equal("los tapones", Lore.GearThe(GearKinds.Item, ItemIds.MindShield));
             Assert.Equal("2 medicinas", Lore.GearThe(GearKinds.Medicine, null, 2));
             Assert.Equal("35 §", Lore.GearThe(GearKinds.Supplies, null, 35));
+            // Brought into a sentence for the first time (UI's search line, «Anja encuentra…»).
+            Assert.Equal("una granada", Lore.GearA(GearKinds.Item, ItemIds.FragGrenade));
+            Assert.Equal("un fusil de cerrojo", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.HuntingRifle));
+            Assert.Equal("una escopeta", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.PumpShotgun));
+            Assert.Equal("unos tapones", Lore.GearA(GearKinds.Item, ItemIds.MindShield));
+            Assert.Equal("un silenciador", Lore.GearA(GearKinds.Mod, WeaponModIds.Silencer));
+            Assert.Equal("2 medicinas", Lore.GearA(GearKinds.Medicine, null, 2));
+            Assert.Equal("117 §", Lore.GearA(GearKinds.Supplies, null, 117));
             Assert.Equal("De noche", Lore.NightText.Label);
             Assert.Equal("De noche: a oscuras, tus soldados ven 10 casillas en vez de 18. Hay más zombis, y el botín vale la mitad más.", Lore.NightText.Briefing);
             Assert.Equal("Misión de noche: el botín y la recompensa valen la mitad más.", Lore.NightText.Report);

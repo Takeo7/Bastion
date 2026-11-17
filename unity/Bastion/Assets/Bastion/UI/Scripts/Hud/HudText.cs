@@ -443,12 +443,19 @@ namespace Bastion.UI.Hud
         {
             public const string Nothing = "Nada";
 
-            /// <summary>«Anja encuentra una granada y 12 §. No le cabe en la mochila: el chaleco, que queda en el suelo.»</summary>
-            public static string Line(string who, System.Collections.Generic.IList<string> into, System.Collections.Generic.IList<string> left)
+            /// <summary>
+            /// Lore's (17/11), each thing with its indefinite article (Lore.GearA): «Anja encuentra una granada y 117 §.»; «Anja
+            /// encuentra 117 §. También hay un fusil de cerrojo, pero no le cabe en la mochila: queda en el suelo.»; «Anja
+            /// encuentra un fusil de cerrojo, pero no le cabe en la mochila: queda en el suelo.» `many`: what is left on the
+            /// floor is more than one thing, or a pile of more than one («no le caben», «quedan»).
+            /// </summary>
+            public static string Line(string who, System.Collections.Generic.IList<string> into, System.Collections.Generic.IList<string> left, bool many = false)
             {
                 if (into.Count == 0 && left.Count == 0) return $"{who} no encuentra nada.";
-                var line = into.Count > 0 ? $"{who} encuentra {Ui.List(into)}." : $"{who} encuentra {Ui.List(left)}, pero no le cabe en la mochila: queda en el suelo.";
-                if (into.Count > 0 && left.Count > 0) line += $" No le cabe en la mochila: {Ui.List(left)}, que queda en el suelo.";
+                var fits = many ? "no le caben en la mochila: quedan en el suelo" : "no le cabe en la mochila: queda en el suelo";
+                if (into.Count == 0) return $"{who} encuentra {Ui.List(left)}, pero {fits}.";
+                var line = $"{who} encuentra {Ui.List(into)}.";
+                if (left.Count > 0) line += $" También hay {Ui.List(left)}, pero {fits}.";
                 return line;
             }
         }

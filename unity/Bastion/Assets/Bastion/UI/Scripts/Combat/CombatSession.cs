@@ -184,7 +184,7 @@ namespace Bastion.UI.Combat
             // with this very state the first change after a load (a boot searched, app 0.12.0) was already in it and drew nothing.
             Bastion.Client.Battlefield.Current?.Show(Events.CloneState(state));
             player.Load(state);
-            if (state.Outcome == null) control.Sfx.Start(state.Biome, !state.Concealed);
+            if (state.Outcome == null) control.Sfx.Start(state, !state.Concealed);
             control.Sfx.Siren(() => control.View);
             Snapshot?.Invoke(state);
             control.Refresh();
@@ -192,7 +192,8 @@ namespace Bastion.UI.Combat
             if (first)
             {
                 var (kicker, title) = control.VeilWords();
-                App.AppFlow.VeilWords(kicker, title, state.MapName);
+                // A stage's name has its place already («Saqueo · Oficinas», the map's name too): no line of it again.
+                App.AppFlow.VeilWords(kicker, title, state.Run != null ? null : state.MapName);
                 _ = LiftVeil();
             }
             // A fresh mission opens with its briefing (main.ts: seq 0), once the veil is off (it waits for it: game.ts).

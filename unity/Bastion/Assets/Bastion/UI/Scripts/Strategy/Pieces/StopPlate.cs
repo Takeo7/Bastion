@@ -41,7 +41,10 @@ namespace Bastion.UI.Strategy
             key = k;
             Root.Clear();
             if (v == null) return;
-            Ui.Text((v.Kicker ?? "").ToUpperInvariant(), "runstop__kicker font-title", Root);
+            // The small line over the title only when it says something else (Arturo, 17/11: «TRUEQUE / Trueque» said it
+            // twice); a Suceso's or a Superviviente's name under its kind keeps it.
+            if (!string.IsNullOrEmpty(v.Kicker) && !string.Equals(v.Kicker, v.Title, System.StringComparison.OrdinalIgnoreCase))
+                Ui.Text(v.Kicker.ToUpperInvariant(), "runstop__kicker font-title", Root);
             Ui.Text(v.Title ?? "", "runstop__title font-title", Root);
             if (!string.IsNullOrEmpty(v.Text)) Ui.Text(v.Text, "runstop__text", Root);
             foreach (var l in v.Survivor) Ui.Text(l, "runstop__line", Root);

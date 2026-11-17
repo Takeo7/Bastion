@@ -275,11 +275,29 @@ namespace Bastion.Engine
             }
             var lockers = CornerRoom(c, footprint, !right, rng);
             for (var u = 0; u < lockers.W - 1; u++) Put(c, V(lockers.X + u + (right ? 1 : 0), lockers.Y + lockers.H - 1), TileKinds.High, new Look(DecorKinds.Cabinet, 0));
-            // A forklift on the loading floor, by a side wall; a container (2 × 4, Arte 17/11) at the back, between the corner
-            // rooms, where it fits.
+            // A forklift on the loading floor, by a side wall.
             foreach (var u in new[] { 1, inner.W - 2 }) if (Put(c, V(inner.X + u, inner.Y + 1), TileKinds.High, new Look(DecorKinds.Forklift, 2))) break;
+            // A container (2 × 4, Arte 17/11) in the middle of the floor, the shelves cleared round it (no room was ever
+            // left for it between them: Arte, 17/11).
             var box = TilesIn(Rect(0, 0, 4, 2)).Select((q) => P(q.X, q.Y, TileKinds.High, new Look(DecorKinds.Container, 1))).ToList();
-            for (var u = 6; u + 4 <= inner.W - 6; u += 3) if (Group(c, V(inner.X + u, inner.Y + inner.H - 3), box)) break;
+            var spot = V(inner.X + inner.W / 2 - 2, inner.Y + inner.H / 2 - 1);
+            foreach (var p in TilesIn(Rect(spot.X - 1, spot.Y - 1, 6, 4)))
+            {
+                if (c.Get(p.X, p.Y) != TileKinds.High && c.Get(p.X, p.Y) != TileKinds.Low) continue;
+                c.Force(p.X, p.Y, TileKinds.Floor);
+                c.Decor[c.I(p.X, p.Y)] = 0;
+            }
+            Group(c, spot, box);
+            // Crates and drums in turn along the side walls, between the loading bay and the corner rooms; in the loading bay's
+            // corners, pallets and a crate or a drum.
+            var lows = new[] { DecorKinds.Crates, DecorKinds.Drums };
+            var turn = 0;
+            foreach (var u in new[] { 0, inner.W - 1 })
+            {
+                for (var v = 4; v < inner.H - 6; v += 4) if (Put(c, V(inner.X + u, inner.Y + v), TileKinds.Low, new Look(lows[turn % 2], u == 0 ? 1 : 3))) turn++;
+                Put(c, V(inner.X + u, inner.Y), TileKinds.Low, new Look(lows[turn++ % 2], 2));
+                Put(c, V(inner.X + (u == 0 ? 1 : u - 1), inner.Y), TileKinds.Low, new Look(DecorKinds.Pallets, 2));
+            }
             hall.InteriorKind = InteriorKinds.Shed;
             hall.InteriorRooms = new List<InteriorRoom>
             {
@@ -360,9 +378,10 @@ namespace Bastion.Engine
         /// The police station only inside (H9 §3), a building of its own on a plan of its own (inside, 16 × 22, the front on
         /// the north):
         /// the lobby (reception, its benches and a vending machine) behind the double main door, the counter (a wall with a
-        /// window of two, its door) and the duty office behind it; a corridor of two to the back door and the yard; down its
-        /// west side 3–5 cells of 2 × 3 (a bed and a toilet, their front of bars onto the corridor, solid walls between:
-        /// Arturo, 17/11) and the toilets after them; down its east side the armoury (racks, a locker, the cases and the best
+        /// window of two, its door) and the duty office behind it; a corridor of four to the back door and the yard; down its
+        /// west side, against the outer wall, 3–5 cells of 2 × 3 (a bed and a toilet, their front of bars onto the corridor,
+        /// solid walls between: Arturo, 17/11; the last one a row deeper where it meets the back wall) and the toilets after
+        /// them; every wall one tile thick (Arte, 17/11); down its east side the armoury (racks, a locker, the cases and the best
         /// box), the evidence room (shelves), the interrogation room (its table), the lockers and the kitchen. One storey or
         /// two (offices up there; its stairs in a corner of the lobby). Two patrol cars on the strip, cover only (Arte: no
         /// boot to open). The cells are solid while the map is made (nothing joins them to the rest) and turn to floor and
@@ -419,10 +438,12 @@ namespace Bastion.Engine
             Door(6, 6, 0);
             rooms.Add(Room(Area(0, 0, 10, 6), PoliceUses.Reception));
             rooms.Add(Room(Area(11, 0, 5, 6), PoliceUses.Office));
-            // The corridor's walls, its cells to the west and its rooms to the east.
+            // The corridor's walls: to the west the cells' fronts and the walls between them, to the east the rooms'. Every wall
+            // one tile thick (Arte, 17/11: a thicker one the client can't draw): the cells' backs are the outer wall, and the
+            // corridor is four wide alongside them, the cell block's hall.
             for (var iy = 7; iy < 22; iy++)
             {
-                Wall(5, iy);
+                Wall(3, iy);
                 Wall(8, iy);
             }
             var cells = rng.Range(3, 5);
@@ -431,28 +452,27 @@ namespace Bastion.Engine
             for (var k = 0; k < cells; k++)
             {
                 var y0 = 7 + 3 * k;
-                for (var iy = y0; iy < y0 + 3 && iy < 22; iy++)
-                {
-                    Wall(0, iy);
-                    Wall(1, iy);
-                }
-                for (var ix = 2; ix < 5 && y0 + 2 < 22; ix++) Wall(ix, y0 + 2);
+                // The last one against the back wall: a row deeper, no wall of its own there.
+                var deep = y0 + 2 >= 21 ? 22 - y0 : 2;
+                if (deep == 2 && y0 + 2 < 22) for (var ix = 0; ix < 3; ix++) Wall(ix, y0 + 2);
                 // A bed along its back, a toilet by it; the rest solid till the end.
-                var bed = new[] { At(2, y0), At(2, y0 + 1) };
+                var bed = new[] { At(0, y0), At(0, y0 + 1) };
                 foreach (var p in bed) c.Force(p.X, p.Y, TileKinds.Low);
                 DressObject(c, bed, DecorKinds.Bed, 2);
-                Thing(3, y0, TileKinds.Low, DecorKinds.Wc, 1);
-                foreach (var p in new[] { At(3, y0 + 1), At(4, y0), At(4, y0 + 1) }) c.Force(p.X, p.Y, TileKinds.High);
-                b.Cells.Add(Area(2, y0, 3, 2));
-                b.Bars.Add(At(5, y0));
-                b.Bars.Add(At(5, y0 + 1));
-                rooms.Add(Room(Area(2, y0, 3, 2), PoliceUses.Cells));
+                Thing(1, y0, TileKinds.Low, DecorKinds.Wc, 1);
+                foreach (var p in TilesIn(Area(0, y0, 3, deep))) if (c.Get(p.X, p.Y) == TileKinds.Floor) c.Force(p.X, p.Y, TileKinds.High);
+                b.Cells.Add(Area(0, y0, 3, deep));
+                // No window round a cell (the outer wall is its back): nobody climbs in from the yard.
+                foreach (var p in TilesIn(Inset(Area(0, y0, 3, deep), -1))) if (Grid.IsWindow(c.Get(p.X, p.Y))) c.Force(p.X, p.Y, TileKinds.Wall);
+                b.Bars.Add(At(3, y0));
+                b.Bars.Add(At(3, y0 + 1));
+                rooms.Add(Room(Area(0, y0, 3, deep), PoliceUses.Cells));
             }
             var below = 7 + 3 * cells;
             if (below + 1 < 22)
             {
-                var bath = Area(0, below, 5, 22 - below);
-                Door(5, below, 3);
+                var bath = Area(0, below, 3, 22 - below);
+                Door(3, below, 3);
                 FurnishRoom(c, bath, rng, Furnishes.Home, global::Bastion.Engine.HomeUses.Bath);
                 rooms.Add(Room(bath, PoliceUses.Hygiene));
             }
@@ -1064,7 +1084,7 @@ namespace Bastion.Engine
         /// not through doors (as Buildings finds them on a map that is one building). On the ground floor, the one behind the
         /// main door is the reception (a big one, open plan, its reception the part within three tiles of the door); a
         /// corridor elsewhere is no room of these. Of the rest, a big one (30 tiles or more) is open plan; the biggest of the
-        /// middling, the meeting room, the others offices; the small ones (9 or fewer), in turn the toilets, the kitchen and
+        /// middling with two desks side by side, the meeting room, the others offices; the small ones (9 or fewer), in turn the toilets, the kitchen and
         /// the store. A storey with three offices or more and no small room makes its last two the toilets and the kitchen.
         /// The stairs, a rect of their own on the flight, in the room they stand in.
         /// </summary>
@@ -1110,7 +1130,10 @@ namespace Bastion.Engine
                 var rooms = parts.Select((p) => (Part: p, R: Bounds(p))).ToList();
                 bool Thin((List<Vec2> Part, Rect R) r) => Math.Min(r.R.W, r.R.H) <= 2 && r.Part.Count >= 6;
                 bool AtDoor((List<Vec2> Part, Rect R) r) => z == 0 && entrance != null && r.Part.Any((p) => Math.Abs(p.X - entrance.X) + Math.Abs(p.Y - entrance.Y) == 1);
-                var middling = rooms.Where((r) => !Thin(r) && !AtDoor(r) && r.Part.Count > 9 && r.Part.Count < 30).OrderByDescending((r) => r.Part.Count).ThenBy((r) => r.R.Y).ThenBy((r) => r.R.X).ToList();
+                // The meeting room: the biggest of the middling with two desks side by side, its table (Arte, 17/11: two tiles).
+                bool Desk(Vec2 p) => Decor.DecorOf(DecorOn(decor, levels, z, p.Y * FW + p.X))?.Kind == DecorKinds.Desk;
+                bool Paired(List<Vec2> part) => part.Any((p) => Desk(p) && Decor.DecorOf(DecorOn(decor, levels, z, p.Y * FW + p.X))!.Facing % 2 is var f && Desk(V(p.X + (f == 0 ? 1 : 0), p.Y + (f == 0 ? 0 : 1))));
+                var middling = rooms.Where((r) => !Thin(r) && !AtDoor(r) && r.Part.Count > 9 && r.Part.Count < 30 && Paired(r.Part)).OrderByDescending((r) => r.Part.Count).ThenBy((r) => r.R.Y).ThenBy((r) => r.R.X).ToList();
                 var small = 0;
                 var storey = new List<InteriorRoom>();
                 foreach (var r in rooms.OrderBy((x) => x.R.Y).ThenBy((x) => x.R.X))
@@ -1185,11 +1208,13 @@ namespace Bastion.Engine
             var kept = new HashSet<int>(keep.Select((p) => p.Y * FW + p.X));
             var bounds = Rect(site.X, site.Y, site.W, site.H);
             var shed = site.Kind == InteriorKinds.Shed;
-            void Mark(string kind, int z, Vec2 p, int facing, bool floor = true)
+            void Mark(string kind, int z, Vec2 p, int facing, bool floor = true, int? length = null)
             {
-                out_.Add(new InteriorDetail { Kind = kind, X = p.X, Y = p.Y, Z = z, Facing = facing });
+                out_.Add(new InteriorDetail { Kind = kind, X = p.X, Y = p.Y, Z = z, Facing = facing, Length = length });
                 if (floor) marked.Add(z * area + p.Y * FW + p.X);
             }
+            // A meeting table's second tile, taken with its first.
+            var paired = new HashSet<int>();
             bool FreeFloor(int z, Vec2 p)
             {
                 if (!InRect(bounds, p)) return false;
@@ -1262,9 +1287,19 @@ namespace Bastion.Engine
                     }
                     else
                     {
+                        if (look.Kind == DecorKinds.Desk && use == OfficeUses.Meeting && paired.Contains(z * area + i)) continue;
+                        // A meeting table, two desks side by side across their facing: one mark, its length 2 (Arte, 17/11).
+                        var next = Add(p, look.Facing % 2 == 0 ? V(1, 0) : V(0, 1));
+                        var pair = look.Kind == DecorKinds.Desk && use == OfficeUses.Meeting && InRect(bounds, next) && Decor.DecorOf(DecorOn(decor, levels, z, next.Y * FW + next.X))?.Kind == DecorKinds.Desk;
+                        if (pair)
+                        {
+                            paired.Add(z * area + next.Y * FW + next.X);
+                            Mark(OfficeDetailKinds.MeetingTable, z, p, look.Facing, false, 2);
+                            continue;
+                        }
                         if (look.Kind == DecorKinds.Desk)
                         {
-                            kind = use == OfficeUses.Meeting ? OfficeDetailKinds.MeetingTable : OfficeDetailKinds.Desk;
+                            kind = OfficeDetailKinds.Desk;
                             if (kind == OfficeDetailKinds.Desk)
                             {
                                 if (rng.Next() < 0.7) Mark(OfficeDetailKinds.Computer, z, p, look.Facing, false);

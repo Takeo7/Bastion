@@ -88,6 +88,11 @@ namespace Bastion.Client.Map
         /// BuildingPlan.Facings); null on any other. Absent in 0.10.1.
         /// </summary>
         public string facing;
+        /// <summary>
+        /// A camping's caravan (runs, H9 §5: Caravans.DoorSide), the side its door is on (DIRS4): drawn whole as Apocalypse's
+        /// mobile home (MapBuilder.Caravans), not of kit pieces nor with a roof of its own; null on any other.
+        /// </summary>
+        public int? trailer;
     }
 
     /// <summary>Which tiles make which building: walls round a floor, at ground level.</summary>
@@ -106,7 +111,11 @@ namespace Bastion.Client.Map
         /// <summary>A siege's watchtower (docs/FASE12.md §10): a deck on legs, the guard tower's own (mapView); the ground shows under it.</summary>
         public const byte RaisedTower = 4;
 
-        static readonly HashSet<string> Wallish = new HashSet<string> { TileKinds.Wall, TileKinds.Door, TileKinds.DoorOpen, TileKinds.Window, TileKinds.WindowBroken };
+        /// <summary>
+        /// What makes a building's walls; bars too (H9 §3, a police station's cells' fronts: sight and fire go through, nobody
+        /// does; laid as walls between rooms, WallLayout's «policeBars» kit). No map had bars before.
+        /// </summary>
+        static readonly HashSet<string> Wallish = new HashSet<string> { TileKinds.Wall, TileKinds.Door, TileKinds.DoorOpen, TileKinds.Window, TileKinds.WindowBroken, TileKinds.Bars };
         /// <summary>BuildingPlan.before: what a tile was when the map was built.</summary>
         const int WasWall = 1;
         const int WasSlab = 2;
@@ -410,7 +419,9 @@ namespace Bastion.Client.Map
             }
             FrameBlocks();
             if (s.Biome == Biomes.Wilds) FindRuins();
+            Police();
             foreach (var b in Buildings) b.pitched = PitchedOf(s, b);
+            foreach (var b in Buildings) b.trailer = Caravans.DoorSide(s, b);
             Facings();
             for (int k = 0; k <= (s.Levels?.Count ?? 0); k++)
             {
@@ -449,6 +460,8 @@ namespace Bastion.Client.Map
             bool Touch(Building a, Building b) => a.x0 <= b.x1 + 1 && b.x0 <= a.x1 + 1 && a.y0 <= b.y1 + 1 && b.y0 <= a.y1 + 1;
             foreach (var b in Buildings)
             {
+                // (A police station's, its own already: Police.)
+                if (b.facing != null) continue;
                 // (A hospital or a clinic, of concrete as a city's offices: of the house's kit, its weatherboards, it read as a
                 // big house, not a hospital; Gameplay, 16/11, the runs' hospital.)
                 if (b.kind == BuildingKinds.Medical && !Siege)
@@ -468,6 +481,25 @@ namespace Bastion.Client.Map
                 int pick = shop ? (k < 0.25 ? 0 : k < 0.5 ? 1 : k < 0.7 ? 2 : 3) : office ? (k < 0.6 ? 0 : 1) : order == HallFacings.Brick ? (k < 0.5 ? 0 : k < 0.75 ? 1 : 2) : (int)Math.Floor(k * 4);
                 for (int n = 1; n < order.Length && Buildings.Any(o => o != b && o.facing == order[pick] && Touch(o, b)); n++) pick = (pick + 1) % order.Length;
                 b.facing = order[pick];
+            }
+        }
+
+        /// <summary>
+        /// Each police station (H9 §3, the runs' comisaría: the engine's InteriorSite of kind «police», its bounds its walls')
+        /// of POLYGON Police Station's brick (PoliceFacings, WallLayout's «police» kit), and an office to the rest of the plan:
+        /// its counter and desks don't make it a shop (a shop's front, sign and awning). Its walls are a tile thick (the
+        /// engine's, Arte 17/11: ThePoliceStationsWallsAreOneTileThick).
+        /// </summary>
+        void Police()
+        {
+            var stations = S.Interiors?.Where((i) => i.Kind == InteriorKinds.Police).ToList();
+            if (stations == null || stations.Count == 0 || Siege) return;
+            foreach (var b in Buildings)
+            {
+                if (b.kind == BuildingKinds.Ruin || b.frame || !stations.Any((i) => b.x0 >= i.X && b.y0 >= i.Y && b.x1 < i.X + i.W && b.y1 < i.Y + i.H)) continue;
+                b.kind = BuildingKinds.Office;
+                b.market = null;
+                b.facing = PoliceFacings.Brick;
             }
         }
 

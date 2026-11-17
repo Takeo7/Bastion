@@ -128,11 +128,12 @@ namespace Bastion.Net
 
         /// <summary>
         /// BaseOrder in the runs (H0-DISENO §7; Gameplay, 16/11): the partner's proposal, yes; each its soldiers' kit
-        /// (KitOrder); then, by where the run is. On the base, the host proposes going out. On the map, a medicine to one
+        /// (KitOrder); then, by where the run is. On the base, each puts its soldiers alive in the squad while there are seats,
+        /// then the host proposes an upgrade it can pay (UpgradeOrder), else going out. On the map, a medicine to one
         /// wounded enough (MedicineOrder), then the host proposes the first node in sight. At a stop, the host answers yes
         /// (a survivor with no bed for them, no); at a Trade each buys one ware (WareOrder); then each asks to go on, again
-        /// if the partner has gone meanwhile (alone, it counts at once). Never back before the boss: the run comes back by
-        /// itself after it, or when the squad falls. In a fight, nothing. Each order is one the engine would take now, by
+        /// if the partner has gone meanwhile (alone, it counts at once). Back to the base before the boss only when the squad
+        /// is broken (Homeward); else the run comes back by itself after it, or when the squad falls. In a fight, nothing. Each order is one the engine would take now, by
         /// its own refusals on what was heard. Null: wait.
         /// </summary>
         private CampaignCommand? RunOrder(CampaignState c, int slot, bool hosting)
@@ -143,12 +144,24 @@ namespace Bastion.Net
             if (run?.Phase == RunPhases.Fight) return null;
             var kit = KitOrder(c, slot, here);
             if (kit != null) return kit;
-            if (run == null) return hosting && Runs.StartRunRefusal(c, here) == null ? new StartRunCommand() : null;
+            if (run == null)
+            {
+                // Its soldiers alive into the squad while there are seats (a recruit after a wipe stayed out: R2, 17/11).
+                foreach (var s in c.Soldiers.Where((x) => x.Owner == slot && x.Alive && !c.Squad.Contains(x.Id)))
+                {
+                    var join = new SquadCommand { Soldier = s.Id, On = true };
+                    if (Runs.SquadRefusal(c, slot, here, join) == null) return join;
+                }
+                if (!hosting) return null;
+                return UpgradeOrder(c) ?? (Runs.StartRunRefusal(c, here) == null ? new StartRunCommand() : null);
+            }
             if (run.Phase == RunPhases.Choose)
             {
                 var medicine = MedicineOrder(c, slot, here);
                 if (medicine != null) return medicine;
                 if (!hosting) return null;
+                if (run.Path.Count == 0) wentOut[run.Seed] = run.Squad.Count;
+                if (Homeward(c, run)) return Runs.EndRunRefusal(c) == null ? new EndRunCommand() : null;
                 var choices = RunMap.Choices(run);
                 var next = choices.FirstOrDefault((n) => RunMap.Visible(c, n)) ?? choices.FirstOrDefault();
                 return next != null && Runs.ChooseNodeRefusal(c, next.Id) == null ? new ChooseNodeCommand { Node = next.Id } : null;
@@ -167,6 +180,41 @@ namespace Bastion.Net
             return asked && here.Any((p) => p != slot) ? null : new LeaveStopCommand { Ready = true };
         }
 
+        /// <summary>
+        /// The upgrades the bots save for, each to its level, in this order (Red, 17/11, for H8's bench: what helps the squad
+        /// most against El Toro first): more soldiers out, mending after each node, a bigger pack, then the rest.
+        /// </summary>
+        private static readonly (string Upgrade, int Level)[] Upgrades =
+        {
+            (UpgradeIds.Squad, 1), (UpgradeIds.Mend, 1), (UpgradeIds.Pack, 1), (UpgradeIds.Squad, 2), (UpgradeIds.Pack, 2),
+            (UpgradeIds.Sight, 1), (UpgradeIds.Haggle, 1), (UpgradeIds.Stash, 1), (UpgradeIds.Sight, 2), (UpgradeIds.Stash, 2),
+            (UpgradeIds.Stash, 3),
+        };
+
+        /// <summary>On the base, the next upgrade of Upgrades not bought yet, proposed once the stash can pay it. Null: saving, or all bought.</summary>
+        private static CampaignCommand? UpgradeOrder(CampaignState c)
+        {
+            var next = Upgrades.FirstOrDefault((u) => Runs.Level(c, u.Upgrade) < u.Level);
+            return next.Upgrade != null && Runs.UpgradeRefusal(c, next.Upgrade) == null ? new UpgradeCommand { Upgrade = next.Upgrade } : null;
+        }
+
+        /// <summary>How many went out on each run (its seed) this app saw start: so that Homeward knows how many fell.</summary>
+        private readonly Dictionary<int, int> wentOut = new Dictionary<int, int>();
+
+        /// <summary>
+        /// Whether the squad goes back to the base from the map (Red, 17/11, for H8's bench: as a careful player would, with
+        /// what it found): after a fight, once half of those who went out have fallen (half the seats, if this app didn't see
+        /// it go out), or those left have half their health or less. Back, all are healed and the packs come home.
+        /// </summary>
+        private bool Homeward(CampaignState c, RunState run)
+        {
+            if (run.Path.Count == 0) return false;
+            var left = run.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id)).Where((s) => s != null && s.Alive).Select((s) => s!).ToList();
+            var went = wentOut.TryGetValue(run.Seed, out var n) ? n : Runs.SeatsOf(c);
+            if (left.Count * 2 <= went) return true;
+            return left.Sum((s) => Runs.HpOf(c, s)) * 2 <= left.Sum(Runs.MaxHp);
+        }
+
         /// <summary>The soldiers `slot` sees to: those it controls (Runs.Controls) of the squad out, or, on the base, of the one that will go.</summary>
         private static List<CampaignSoldier> Mine(CampaignState c, int slot, IReadOnlyList<int> here)
         {
@@ -180,8 +228,9 @@ namespace Bastion.Net
         /// <summary>
         /// One move of `slot`'s soldiers' kit, if there's one to make: an empty place filled from the soldier's own pack or,
         /// on the base, from the stash; on the base, then, what the pack carries for no use (weapons, vests, belt things, mods
-        /// it doesn't wear) put in the stash, and a pile of magazines and one of medicines from the stash into a pack without
-        /// any. Supplies stay in the packs, to pay at a Trade. Null if nothing is to move.
+        /// it doesn't wear) and the supplies (Red, 17/11: the upgrades are paid from the stash's) put in the stash, and a pile
+        /// of magazines and one of medicines from the stash into a pack without any. A Trade is paid with what the run finds.
+        /// Null if nothing is to move.
         /// </summary>
         private static CampaignCommand? KitOrder(CampaignState c, int slot, IReadOnlyList<int> here)
         {
@@ -200,11 +249,12 @@ namespace Bastion.Net
                     }
                 }
             if (!atBase || c.Stash == null) return null;
-            bool Kept(Gear g) => g.Kind == GearKinds.Supplies || g.Kind == GearKinds.Medicine || g.Kind == GearKinds.Mags;
+            bool Kept(Gear g) => g.Kind == GearKinds.Medicine || g.Kind == GearKinds.Mags;
             foreach (var s in mine)
                 foreach (var g in s.Kit!.Pack.Items.Select((p) => p.Gear).Where((g) => !Kept(g)).ToList())
                 {
-                    var spot = Gears.FirstFit(c.Stash, g);
+                    // Supplies onto a pile of them with room first, so the stash's few rows hold them.
+                    var spot = c.Stash.Items.FirstOrDefault((p) => Gears.SamePile(p.Gear, g) && Gears.Room(p.Gear) > 0) ?? Gears.FirstFit(c.Stash, g);
                     var order = spot != null ? Try(new MoveGearCommand { Gear = g.Id, To = GearPlaces.Stash, Slot = KitSlots.Pack, X = spot.X, Y = spot.Y, Turned = spot.Turned }) : null;
                     if (order != null) return order;
                 }

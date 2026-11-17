@@ -146,9 +146,24 @@ namespace Bastion.Engine
         }
 
         /// <summary>Adjacent and on the same level: a blade can't reach someone on the roof above, or on the storey above.</summary>
+        /// <remarks>Across a police cell's bars too (AcrossBars; Arturo, 17/11): the caged bite through them, and are struck so.</remarks>
         public static bool InMeleeReach(GameState s, Pos a, Pos b)
         {
-            return Adjacent(a, b) && Grid.HeightAt(s, a) == Grid.HeightAt(s, b);
+            return (Adjacent(a, b) || AcrossBars(s, a, b)) && Grid.HeightAt(s, a) == Grid.HeightAt(s, b);
+        }
+
+        /// <summary>
+        /// Whether `a` and `b` have only a line of bars between them (H9: TileKinds.Bars, a tile): on one storey, straight
+        /// across it, two tiles apart (not a diagonal), the bars' tile in the middle. A blow, a bite and the Golpe silencioso
+        /// reach across it (InMeleeReach); nobody walks through.
+        /// </summary>
+        public static bool AcrossBars(GameState s, Pos a, Pos b)
+        {
+            if (a.Z != b.Z) return false;
+            int dx = b.X - a.X, dy = b.Y - a.Y;
+            if (!((Math.Abs(dx) == 2 && dy == 0) || (Math.Abs(dy) == 2 && dx == 0))) return false;
+            var mid = new Pos { X = a.X + dx / 2, Y = a.Y + dy / 2, Z = a.Z };
+            return Grid.InBounds(s, mid.X, mid.Y) && Grid.KindAt(s, mid) == TileKinds.Bars;
         }
 
         /// <summary>

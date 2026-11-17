@@ -39,6 +39,8 @@ namespace Bastion.Engine
         {
             if (!Content.UpgradePrices.TryGetValue(upgrade, out var prices)) return null;
             var level = Level(c, upgrade);
+            // A bench's first price (Tuning).
+            if (level == 0 && Tuning.IsSet && Tuning.Current.UpgradePrices != null && Tuning.Current.UpgradePrices.TryGetValue(upgrade, out var first)) return first;
             return level < prices.Count ? prices[level] : (int?)null;
         }
 
@@ -148,15 +150,27 @@ namespace Bastion.Engine
         public static bool NobodyLeft(CampaignState c, Rng rng)
         {
             if (c.Outcome != null || c.Run != null) return false;
-            var came = false;
+            var came = new List<CampaignSoldier>();
             foreach (var owner in c.Players)
             {
                 if (c.Soldiers.Any((s) => s.Owner == owner && s.Alive)) continue;
                 var s = NewSoldier(c, owner, rng);
                 Campaign.RunsLog(c, RunTexts.Recruit(s.Name), LogTones.Good);
-                came = true;
+                came.Add(s);
             }
-            return came;
+            // A bench's (Tuning.Wipe): recruits till the seats are full, in turn to whoever has fewest; with a pistol each.
+            if (came.Count > 0 && Tuning.IsSet && Tuning.Current.Wipe != Tuning.Wipes.One)
+            {
+                while (c.Players.Count > 0 && c.Soldiers.Count((s) => s.Alive) < SeatsOf(c))
+                {
+                    var owner = c.Players.OrderBy((p) => c.Soldiers.Count((s) => s.Owner == p && s.Alive)).ThenBy((p) => p).First();
+                    var s = NewSoldier(c, owner, rng);
+                    Campaign.RunsLog(c, RunTexts.Recruit(s.Name), LogTones.Good);
+                    came.Add(s);
+                }
+                if (Tuning.Current.Wipe == Tuning.Wipes.FillPistol) foreach (var s in came) s.Kit!.Pistol = Gears.NewGear(c, GearKinds.Weapon, FoundWeaponIds.Pistol);
+            }
+            return came.Count > 0;
         }
 
         /// <summary>

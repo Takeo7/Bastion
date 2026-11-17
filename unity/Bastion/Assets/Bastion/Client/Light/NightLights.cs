@@ -64,6 +64,11 @@ namespace Bastion.Client
         /// <summary>The map's fires among them (GameState.fires): their flames are FireView's, no ball of glow.</summary>
         readonly HashSet<string> flamesOwn = new HashSet<string>();
         float time;
+        /// <summary>The camping's fires (Map.CampFire.Of) of the state they were looked for in.</summary>
+        Bastion.Engine.GameState campFor;
+        List<Vector3> campFires = new List<Vector3>();
+        /// <summary>A camp fire's light's reach, as an engine light's radius (tiles: its range 2.6 times it).</summary>
+        const float CampFireRadius = 3;
         Material glowMaterial, burnMaterial, haloMaterial;
         Texture2D haloTexture;
 
@@ -276,6 +281,20 @@ namespace Bastion.Client
                     burning[l.Id] = (at, flare ? Flare : Fire, (float)l.Radius, 0, flare, null);
                     if (mapFire) flamesOwn.Add(l.Id);
                 }
+            // The camping's fire (runs, H9 §5: its `firePit` marks, Map.CampFire's flames) burns the whole mission, as a map's.
+            if (s != campFor)
+            {
+                campFor = s;
+                campFires = Map.CampFire.Of(s);
+            }
+            foreach (var at in campFires)
+            {
+                string id = $"hoguera {at.x:0.0},{at.z:0.0}";
+                now.Add(id);
+                if (burning.ContainsKey(id)) continue;
+                burning[id] = (at + Vector3.up * 0.7f * MapTile, Fire, CampFireRadius, 0, false, null);
+                flamesOwn.Add(id);
+            }
             foreach (string id in burning.Keys.ToList())
             {
                 var b = burning[id];
@@ -320,6 +339,8 @@ namespace Bastion.Client
             }
             // On a map that is one building (H7, the hospital), its rooms' ceiling lights too (Ceiling), among the street lights.
             var inside = s != null && Bastion.Engine.Buildings.ByRoom(s) ? Ceiling(s) : null;
+            // The camping's caravans found (runs, H9 §5), a ceiling's light in each, as the hospital's rooms (CaravanLights).
+            if (s != null && Map.Caravans.Any(s)) inside = (inside ?? new List<Glow>()).Concat(CaravanLights(s)).ToList();
             var candidates = inside == null || inside.Count == 0 ? lamps : lamps.Concat(inside).ToList();
             if (inside != null && inside.Count > 0 && camera != null)
             {
@@ -336,12 +357,14 @@ namespace Bastion.Client
                 var l = candidates[i];
                 if (l.power < 0)
                 {
-                    // A ceiling's (Ceiling): cold, all round, under the ceiling, nearer than a street light's.
+                    // A ceiling's (Ceiling): cold, all round, under the ceiling, nearer than a street light's; a hall's
+                    // (power −2: a shed's floor, H9) higher up, stronger and further.
+                    bool hall = l.power < -1.5f;
                     light.enabled = true;
                     if (light.type != LightType.Point) light.type = LightType.Point;
                     light.color = CeilingLight.gamma;
-                    light.intensity = CeilingPower * Unity;
-                    light.range = CeilingReach * MapTile;
+                    light.intensity = (hall ? HallPower : CeilingPower) * Unity;
+                    light.range = (hall ? HallReach : CeilingReach) * MapTile;
                     light.transform.position = l.at;
                     continue;
                 }
@@ -377,6 +400,37 @@ namespace Bastion.Client
         static readonly Color CeilingLight = new Color(0.78f, 0.9f, 1.0f);
         /// <summary>How strong, how far it reaches (tiles), how high over its storey's floor (tiles: a storey is 2.3, the cut walls 0.95), how far apart in a room (tiles).</summary>
         const float CeilingPower = 7, CeilingReach = 5, CeilingHigh = 1.6f, CeilingApart = 4;
+        /// <summary>
+        /// A room this big (tiles) is a hall (H9, the shed's floor: one room of some 400 tiles found at once): its lights are
+        /// a warehouse's high bays, so far apart (tiles) that the six real ones light most of what the camera takes in, as
+        /// high, as strong and as far as these. With the hospital's, the shed by night was lit only round where it looked.
+        /// </summary>
+        const float HallRoom = 150, HallPower = 14, HallReach = 9, HallHigh = 2.4f, HallApart = 7;
+
+        /// <summary>
+        /// A light under the roof of each of the camping's caravans the squad has found (runs, H9 §5; Map.Caravans.Rooms), in
+        /// its room's middle: a ceiling's (power −1, CeilingLight). Worked out again when what is found changes.
+        /// </summary>
+        List<Glow> CaravanLights(Bastion.Engine.GameState s)
+        {
+            if (s == caravansFor && s.Seq == caravansSeq && caravanLights != null) return caravanLights;
+            caravansFor = s;
+            caravansSeq = s.Seq;
+            caravanLights = new List<Glow>();
+            var found = Bastion.Engine.Buildings.FoundTiles(s);
+            foreach (var r in Map.Caravans.Rooms(s))
+            {
+                bool any = false;
+                for (int y = r.Y; y < r.Y + r.H && !any; y++)
+                    for (int x = r.X; x < r.X + r.W && !any; x++) any = found.Contains(y * s.Width + x);
+                if (any) caravanLights.Add(new Glow { at = Map.MapSpace.World(r.X + (r.W - 1) / 2f, r.Y + (r.H - 1) / 2f) + Vector3.up * CeilingHigh * MapTile, power = -1 });
+            }
+            return caravanLights;
+        }
+
+        List<Glow> caravanLights;
+        Bastion.Engine.GameState caravansFor;
+        int caravansSeq;
 
         List<Glow> ceiling;
         Bastion.Engine.GameState ceilingFor;
@@ -402,16 +456,17 @@ namespace Bastion.Client
             {
                 if (room.Count == 0 || room[0] / area != storey || !known.Contains(room[0])) continue;
                 var tiles = room.Select(node => new Vector2(node % area % s.Width, node % area / s.Width)).ToList();
+                bool hall = tiles.Count >= HallRoom;
                 var middle = tiles.Aggregate(Vector2.zero, (a, b) => a + b) / tiles.Count;
                 var lit = new List<Vector2> { tiles.OrderBy(p => (p - middle).sqrMagnitude).First() };
                 while (true)
                 {
                     var far = tiles.OrderByDescending(p => lit.Min(q => (p - q).sqrMagnitude)).First();
-                    if (lit.Min(q => (far - q).magnitude) < CeilingApart) break;
+                    if (lit.Min(q => (far - q).magnitude) < (hall ? HallApart : CeilingApart)) break;
                     lit.Add(far);
                 }
                 foreach (var p in lit)
-                    ceiling.Add(new Glow { at = Map.MapSpace.World(p.x, p.y, storey) + Vector3.up * (CeilingHigh * MapTile), power = -1 });
+                    ceiling.Add(new Glow { at = Map.MapSpace.World(p.x, p.y, storey) + Vector3.up * ((hall ? HallHigh : CeilingHigh) * MapTile), power = hall ? -2 : -1 });
             }
             return ceiling;
         }

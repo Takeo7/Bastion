@@ -893,6 +893,13 @@ namespace Bastion.UI.Combat
                 objective = HudText.Mission.Crossing;
                 tip = Lore.StageLine(NodeKinds.Crossing);
             }
+            // A Sigilo (H5): its Recuperación's, unseen while the squad is hidden (Lore's words, StageLine; the pass of 17/11:
+            // the card said the Recuperación's alone); its rule, the double unseen and the half seen, the tip.
+            else if (m.Stealth == true)
+            {
+                if (s.Concealed && m.Item?.Evacuated != true) objective += " sin que os vean";
+                tip = Lore.StageLine(NodeKinds.Stealth, RecoveryItem());
+            }
             return new MissionView
             {
                 Label = s.Run != null ? Bastion.UI.Strategy.StrategyText.Runs.NodeName(s.Run.NodeKind) : MissionName(m.Kind),
@@ -1198,9 +1205,13 @@ namespace Bastion.UI.Combat
             return (Kicker(), cm?.Name ?? (s.Mission.Siege != null ? Lore.SiegeText.Name : MissionName(s.Mission.Kind)));
         }
 
-        /// <summary>The briefing's kicker: the operation's, the story chapter's, or what kind of fight it is.</summary>
+        /// <summary>
+        /// The briefing's kicker: the operation's, the story chapter's, or what kind of fight it is; a stage of an
+        /// expedition, «EXPEDICIÓN · ETAPA 3» (the row of the map: it said the old campaign's «MISIÓN EN CURSO»).
+        /// </summary>
         string Kicker()
         {
+            if (State.Run is RunFight run) return $"{Lore.ExpeditionText.Name} · {Lore.ExpeditionText.Stage} {run.Row}".ToUpperInvariant();
             var cm = State.CampaignMission;
             var chapter = cm?.Story;
             if (chapter == 1) return "";

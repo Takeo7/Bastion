@@ -1124,6 +1124,7 @@ namespace Bastion.Engine
                 Pack = u.Pack != null ? Gears.CloneGrid(u.Pack) : null,
                 Kit = u.Kit != null ? Gears.ClonePlaces(u.Kit) : null,
                 Down = u.Down,
+                Caged = u.Caged,
             };
         }
 

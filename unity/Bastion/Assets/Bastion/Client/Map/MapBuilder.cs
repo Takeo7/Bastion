@@ -430,7 +430,11 @@ namespace Bastion.Client.Map
                 Beyond();
             }
             using (MapLoad.Time("furnish")) Furnish();
-            using (MapLoad.Time("dressing")) Dressing();
+            using (MapLoad.Time("dressing"))
+            {
+                Dressing();
+                Fitted();
+            }
             using (MapLoad.Time("night")) Night();
             // A winter's map: the snow on what faces up (snow.ts).
             if (Mood.Snowy(s))
@@ -509,9 +513,10 @@ namespace Bastion.Client.Map
         /// </summary>
         void Woods(HashSet<long> only)
         {
-            if (pieces == null) return;
-            bool PieceAt(int i) => pieces.at[i] >= 0;
-            foreach (var p in BaseWoods.Pines(s, PieceAt, i => pieces.yard.Has(i)).Concat(BaseWoods.Stumps(s, PieceAt)))
+            // (And the camping's, a clearing in the pinar: runs, H9 §5.)
+            if (pieces == null && !BaseWoods.Pinar(s)) return;
+            bool PieceAt(int i) => pieces != null && pieces.at[i] >= 0;
+            foreach (var p in BaseWoods.Pines(s, PieceAt, i => pieces != null && pieces.yard.Has(i)).Concat(BaseWoods.Stumps(s, PieceAt)))
             {
                 if (only != null && !only.Contains(Key(p.z, p.tile))) continue;
                 var o = PlaceGame(props[p.z], p.id, p.matrix);
@@ -532,14 +537,17 @@ namespace Bastion.Client.Map
         {
             DestroyNow(beyond);
             beyond = null;
-            if (pieces == null || ground?.Map == null) return;
+            if ((pieces == null && !BaseWoods.Pinar(s)) || ground?.Map == null) return;
             beyond = new GameObject("Bosque");
             beyond.transform.SetParent(root, false);
             var flip = Matrix4x4.Scale(new Vector3(1, 1, -1));
             var parts = new Dictionary<string, List<(Mesh mesh, int sub, Material material, Matrix4x4 local)>>();
             var lots = new Dictionary<(int x, int z, Material material), List<CombineInstance>>();
             int near = 0, far = 0;
-            foreach (var p in BaseWoods.Wood(terrain, ground.Map, id => Measure(id).top))
+            // (The camping's ways out are its yard's, ground 3: the road the bus leaves by, the paths the dead come in by.)
+            var wood = pieces != null ? BaseWoods.Wood(terrain, ground.Map, id => Measure(id).top)
+                : BaseWoods.Wood(terrain, i => terrain.Ground != null && i < terrain.Ground.Count && terrain.Ground[i] == 3, id => Measure(id).top);
+            foreach (var p in wood)
             {
                 if (!p.far)
                 {
@@ -1033,6 +1041,7 @@ namespace Bastion.Client.Map
                 WallLayout layout;
                 using (Marks[3].Auto()) layout = WallLayout.Of(terrain, plan);
                 using (Marks[4].Auto()) wallsView?.Lay(layout);
+                CampDoors();
             }
             // What stood on a changed tile goes, and every tile it stood on is made again.
             var redo = new HashSet<long>(changed);
@@ -1058,7 +1067,11 @@ namespace Bastion.Client.Map
             }
             using (Marks[6].Auto()) Parapets();
             using (Marks[9].Auto()) Furnish();
-            using (Marks[10].Auto()) Dressing();
+            using (Marks[10].Auto())
+            {
+                Dressing();
+                Fitted();
+            }
             using (Marks[11].Auto()) Night();
             using (Marks[7].Auto())
             {
@@ -1218,6 +1231,7 @@ namespace Bastion.Client.Map
                 foreach (var r in BuildingSurfaces.RoofProps(b, (x, y) => BuildingSurfaces.DeckAt(plan, b, x, y)))
                     Cutaway.Current?.Track(PlaceGame(parent, r.id, Matrix4x4.Translate(new Vector3((float)r.x, (float)r.y, (float)r.z)) * Pieces.RotationY((float)r.yaw)), b.index, b.storeys);
             }
+            Camping();
         }
 
         /// <summary>How many slabs have been blown through (BuildingPlan.Holed).</summary>
@@ -1389,8 +1403,8 @@ namespace Bastion.Client.Map
             }
             if (Block(k, i, look, tiles, decor, done)) return;
             if (Fountain(k, i, look, tiles, decor, done)) return;
-            // The base's pines are its own (Woods).
-            if (pieces != null && tile == "high" && look.Kind == DecorKinds.Tree) return;
+            // The base's pines are its own (Woods), and the camping's.
+            if ((pieces != null || BaseWoods.Pinar(s)) && tile == "high" && look.Kind == DecorKinds.Tree) return;
             if (look.Kind == "part") return;
             // A boarded doorway: its door the walls' (Doors), the planks over it.
             if (look.Kind == DecorKinds.DoorBoards)
@@ -1408,7 +1422,9 @@ namespace Bastion.Client.Map
             }
             bool low = tile == "low";
             string set = MapArt.DecorSet(look.Kind, low, s.Biome, s.Site);
-            if (set == null) return;
+            // (A mark of a map that is one building says what this furniture is, H9: a forklift, a workbench, which 0.10.1 drew not.)
+            bool marked = Marked(k, i);
+            if (set == null && !marked) return;
             int x = i % s.Width, y = i / s.Width;
             float cx = x + 0.5f, cz = y + 0.5f;
             int turn = MapArt.Facing.Contains(look.Kind) ? (4 - look.Facing) % 4 : Mathf.FloorToInt(MapArt.Hash(x, y, 2) * 4);
@@ -1435,6 +1451,8 @@ namespace Bastion.Client.Map
                 BarricadeWindow(k, i, x, y, floor, look.Facing);
                 return;
             }
+            if (marked && Furniture(k, i, low, floor)) return;
+            if (set == null) return;
             if (Stacked(k, i, look, low, turn, floor)) return;
             if (Furnished(k, i, look, low, turn, floor)) return;
             var ids = MapArt.Set(set);
@@ -1880,6 +1898,9 @@ namespace Bastion.Client.Map
             bool burning = thing.Kind == "carFront" && floor == 0 && s.Fires?.Any(f => f.Source == thing.Anchor) == true;
             // The police car of the campaign's first mission (MissionState.PoliceCar, Arturo 1/11: its two pistols to search for).
             bool police = thing.Kind == "carFront" && floor == 0 && s.Mission?.PoliceCar != null && s.Mission.PoliceCar.Contains(thing.Anchor);
+            // A police station's bench and cell bunk, as their marks say (H9 §3, MapBuilder.Police.cs).
+            var marked = PoliceThing(parent, thing, floor);
+            if (marked != null) return marked;
             switch (thing.Kind)
             {
                 case "carFront":

@@ -251,6 +251,29 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// A bench's (Tuning): when the whole squad fell, what of theirs comes back to the stash: a share of the § they
+        /// carried (dropped where they fell, or still on them) and their firearms, while the stash has room.
+        /// </summary>
+        private static void Salvage(CampaignState c, GameState mission)
+        {
+            var t = Tuning.Current;
+            if (c.Stash == null || (t.SalvageSupplies <= 0 && !t.SalvageFirearms)) return;
+            var squad = new HashSet<string>(mission.Units.Where((u) => u.CampaignId != null && u.Team == Teams.Xcom).Select((u) => u.Id));
+            var carried = (mission.FloorGear ?? new List<DroppedGear>()).Where((d) => d.From != null && squad.Contains(d.From)).Select((d) => d.Gear)
+                .Concat(mission.Units.Where((u) => squad.Contains(u.Id)).SelectMany((u) => (u.Pack?.Items.Select((p) => p.Gear) ?? Enumerable.Empty<Gear>()).Concat(u.Kit != null ? KitSlots.All.Select((slot) => Gears.InSlot(u.Kit, slot)).Where((g) => g != null).Select((g) => g!) : Enumerable.Empty<Gear>())))
+                .ToList();
+            var supplies = (int)Js.Round(carried.Where((g) => g.Kind == GearKinds.Supplies).Sum((g) => g.Count) * t.SalvageSupplies);
+            while (supplies > 0)
+            {
+                var pile = Math.Min(supplies, Content.PileOf(GearKinds.Supplies, null));
+                if (Gears.Stow(c.Stash, Gears.NewGear(c, GearKinds.Supplies, null, pile)) > 0) break;
+                supplies -= pile;
+            }
+            if (!t.SalvageFirearms) return;
+            foreach (var g in carried.Where((g) => g.Kind == GearKinds.Weapon && Content.GearWeapon(g) is FoundWeaponDef w && w.Slot != FoundWeaponSlots.Melee).ToList()) Gears.Stow(c.Stash, Gears.CloneGear(g));
+        }
+
+        /// <summary>
         /// A run's fight folded back into the run (the room's ApplyMissionResult for a run campaign), once: what each
         /// soldier comes back with and its health; the fallen dead for good, their gear lost unless another took it up; the
         /// bars, as missions of before taught them; a special won, its reward into the packs; and then the run: back to the
@@ -328,6 +351,7 @@ namespace Bastion.Engine
             if (fought > 0 && standing == 0)
             {
                 report.Run.Ended = RunEnds.Wiped;
+                if (Tuning.IsSet) Salvage(c, mission);
                 EndRun(c, rng, RunTexts.Wiped);
                 return report;
             }

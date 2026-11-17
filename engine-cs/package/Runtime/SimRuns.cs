@@ -119,6 +119,47 @@ namespace Bastion.Engine
 
     public static partial class Rules
     {
+        /// <summary>The cell a caged one is in (H9): its room's tiles; none if it is in no cell.</summary>
+        private static List<Pos> CellOf(GameState s, Unit u)
+        {
+            foreach (var site in s.Interiors ?? new List<InteriorSite>())
+            {
+                foreach (var r in site.Rooms.Where((r) => r.Use == PoliceUses.Cells && r.Z == u.Pos.Z))
+                {
+                    if (u.Pos.X < r.X || u.Pos.Y < r.Y || u.Pos.X >= r.X + r.W || u.Pos.Y >= r.Y + r.H) continue;
+                    return Enumerable.Range(r.Y, r.H).SelectMany((y) => Enumerable.Range(r.X, r.W).Select((x) => new Pos { X = x, Y = y, Z = r.Z })).ToList();
+                }
+            }
+            return new List<Pos>();
+        }
+
+        /// <summary>The tiles of a caged one's cell just inside its bars, where it stands to bite (H9; Arturo, 17/11).</summary>
+        public static List<Pos> CagedFront(GameState s, Unit u)
+        {
+            return CellOf(s, u).Where((p) => Grid.Dirs4.Any((d) => Grid.InBounds(s, p.X + d.X, p.Y + d.Y) && Grid.KindAt(s, new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = p.Z }) == TileKinds.Bars)).ToList();
+        }
+
+        /// <summary>
+        /// The tiles a caged one can reach from its bars (H9; for the bots, Networking): those across them, straight, from any
+        /// tile of its cell just inside them (Aim.AcrossBars). Only there is it dangerous. None if `u` is not caged.
+        /// </summary>
+        public static List<Pos> CagedReach(GameState s, Unit u)
+        {
+            var out_ = new List<Pos>();
+            if (u.Caged != true) return out_;
+            foreach (var p in CagedFront(s, u))
+            {
+                foreach (var d in Grid.Dirs4)
+                {
+                    var bar = new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = p.Z };
+                    var q = new Pos { X = p.X + 2 * d.X, Y = p.Y + 2 * d.Y, Z = p.Z };
+                    if (!Grid.InBounds(s, q.X, q.Y) || Grid.KindAt(s, bar) != TileKinds.Bars || !Grid.IsWalkable(Grid.KindAt(s, q))) continue;
+                    if (!out_.Any((o) => Grid.SamePos(o, q))) out_.Add(q);
+                }
+            }
+            return out_;
+        }
+
         /// <summary>
         /// Whether getting out on La Lata is all a mission asks (a Saqueo); not a Guarida's (its box to open) nor a boss's
         /// (him to kill), which are Saqueos with an objective (H5, H6).

@@ -165,6 +165,27 @@
     background-color: #8a2a20;
 }
 
+/* A special map's mark (the hospital, the offices…): its place's line drawing, low on the right, steel blue. */
+.rnode__site {
+    position: absolute;
+    right: -8px;
+    bottom: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: #9db4c2;
+    background-color: #24343e;
+    justify-content: center;
+    align-items: center;
+}
+
+.rnode__site-icon {
+    width: 18px;
+    height: 18px;
+    -unity-background-image-tint-color: #ffffff;
+}
+
 .rnode__mod-icon {
     width: 16px;
     height: 16px;

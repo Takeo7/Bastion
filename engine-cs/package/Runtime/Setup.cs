@@ -755,6 +755,8 @@ namespace Bastion.Engine
             var taken = new HashSet<int>(units.Select((u) => At(u.Pos.X, u.Pos.Y)));
             // Nobody waits on fire.
             foreach (var f in layout.Fires ?? new List<Fire>()) taken.UnionWith(f.Tiles);
+            // Nor in a police station's cell (H9): nobody goes in to finish them (Networking, R1: a Limpieza never won).
+            foreach (var r in (layout.Interiors ?? new List<InteriorSite>()).SelectMany((x) => x.Rooms).Where((r) => r.Use == PoliceUses.Cells)) for (var y = r.Y; y < r.Y + r.H; y++) for (var x = r.X; x < r.X + r.W; x++) taken.Add(At(x, y));
             var inside = new List<Vec2>();
             var corners = new List<Vec2>();
             var diagonals = new[] { (1, 1), (1, -1), (-1, 1), (-1, -1) };
@@ -973,7 +975,11 @@ namespace Bastion.Engine
             if (layout.Siege != true && opts.Map.Kind == MapSourceKinds.Generated && plan.Any((members) => members.Any((t) => Content.Templates[t].Undead)))
             {
                 // Drawn from the map's own seed, so the rest of the mission is as it was.
-                var spots = LurkerSpots(layout, units, Lurkers[Math.Min(difficulty, Lurkers.Count - 1)], new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x2f6b))), Sites.IndoorsOnly(opts.Map.Site));
+                // On the maps of H9 out of doors, as many as their ground holds (Places.WalkShare).
+                var lone = Lurkers[Math.Min(difficulty, Lurkers.Count - 1)];
+                var place = Places.Of(opts.Map, opts.CampaignMission?.Story);
+                if (place != null && Places.WalkShare.TryGetValue(place, out var walk)) lone = Math.Max(1, (int)Js.Round(lone * walk));
+                var spots = LurkerSpots(layout, units, lone, new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x2f6b))), Sites.IndoorsOnly(opts.Map.Site));
                 for (var k = 0; k < spots.Count; k++)
                 {
                     var id = $"a{++alienIndex}";
@@ -986,6 +992,8 @@ namespace Bastion.Engine
             }
             // On a map that is one building, the dead over its storeys (H7), on a seed of their own.
             if (oneBuilding) UpstairsDead(layout, units, pods, new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x75707374))));
+            // The caged of a police station (H9; Arturo, 17/11), on a seed of their own.
+            CagedDead(layout, units, pods, ref alienIndex, new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0xca9ed))));
             // The dead in plain clothes that start inside a clinic or a hospital wear its patients' gowns (Arturo, 9/11: the patients
             // of Horror Asylum); a uniform stays a uniform.
             foreach (var site in layout.Medical ?? new List<MedicalSite>())

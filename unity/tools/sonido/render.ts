@@ -1,12 +1,14 @@
 // The 0.10.1's sound, rendered offline to WAV for Unity (Red; docs/UNITY-SONIDO.md): the synthesised effects of
 // sounds.ts as bank.ts renders them (and recetas.ts's, made for Unity), and the score of music.ts and the beds of ambience.ts as they play live, on a
-// clock of their own. Runs in a hidden Electron page with Node (main.js), which writes the files.
+// clock of their own (and interior.ts's bed, made for Unity, as «inside»). Runs in a hidden Electron page with Node
+// (main.js), which writes the files.
 import { SOUNDS, LOOP_SEAM, type SoundDef } from '../../../packages/client/src/audio/sounds';
 import { Synth } from '../../../packages/client/src/audio/synth';
 import { audio } from '../../../packages/client/src/audio/engine';
 import { music } from '../../../packages/client/src/audio/music';
 import { ambience } from '../../../packages/client/src/audio/ambience';
 import { UNITY_SOUNDS } from './recetas';
+import { interior } from './interior';
 
 const RATE = 44100;
 
@@ -196,6 +198,7 @@ async function live(kind: 'music' | 'ambience', name: string, seconds: number, s
   // music.ts keeps its interval while it exists: the last piece's, on the last clock. Each piece starts its own.
   (music as any).timer = 0;
   if (kind === 'music') music.play(name as any, 0.01);
+  else if (name === 'inside') interior.play('inside', 0.01);
   else ambience.play(name as any, 0.01);
   due();
   const stop = (t: number): void => {
@@ -209,6 +212,7 @@ async function live(kind: 'music' | 'ambience', name: string, seconds: number, s
   const buf = await off.startRendering();
   // Silence after: the next piece starts from nothing.
   if (kind === 'music') music.play(null, 0.01);
+  else if (name === 'inside') interior.play(null, 0.01);
   else ambience.play(null, 0.01);
   const a = WARM * RATE;
   const n = Math.floor(seconds * RATE);

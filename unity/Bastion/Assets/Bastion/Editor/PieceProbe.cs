@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -8,12 +9,15 @@ namespace Bastion.EditorTools
     /// How Unity imports the building kits' FBX (their axes and units against the FBX's, which 0.10.1's piece boxes are
     /// in): each model's nodes and each mesh's box in the model's frame.
     /// unity/tools/unity.sh -executeMethod Bastion.EditorTools.PieceProbe.Run -quit
+    /// BASTION_PIEZAS_RUTAS=a.fbx,b.fbx: those models instead (paths, or a folder's models matching a name's start: Assets/Synty/
+    /// PolygonPoliceStation/Models/SM_Bld_*, the runs' indoor maps of 17/11).
     /// </summary>
     public static class PieceProbe
     {
         public static void Run()
         {
-            foreach (string path in new[]
+            var asked = System.Environment.GetEnvironmentVariable("BASTION_PIEZAS_RUTAS")?.Split(',').SelectMany(Expand).ToArray();
+            foreach (string path in asked ?? new[]
             {
                 "Assets/Synty/PolygonTown/Models/SM_Bld_House_ExteriorWall_GroundFloor_01.fbx",
                 "Assets/Synty/PolygonTown/Models/SM_Bld_House_ExteriorWall_GroundFloor_Corner_01.fbx",
@@ -42,6 +46,14 @@ namespace Bastion.EditorTools
                     Debug.Log($"[pieces]   {filter.name}: local pos {filter.transform.localPosition} rot {filter.transform.localEulerAngles} scale {filter.transform.localScale}; mesh {filter.sharedMesh.bounds.min:F3}..{filter.sharedMesh.bounds.max:F3}; in the model {b.min:F3}..{b.max:F3}; materials {string.Join(",", filter.GetComponent<Renderer>().sharedMaterials.Select(x => x != null ? x.name : "-"))}");
                 }
             }
+        }
+
+        /// <summary>A path as asked: itself, or the models of its folder whose names start as its last part does before a '*'.</summary>
+        static IEnumerable<string> Expand(string path)
+        {
+            if (!path.EndsWith("*")) return new[] { path };
+            string folder = System.IO.Path.GetDirectoryName(path), start = System.IO.Path.GetFileName(path).TrimEnd('*');
+            return System.IO.Directory.Exists(folder) ? System.IO.Directory.GetFiles(folder, start + "*.fbx").OrderBy(f => f) : new string[0];
         }
     }
 }

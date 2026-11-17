@@ -418,13 +418,28 @@ namespace Bastion.Client.Audio
 
         // ------------------------------------------------------------ music and ambience
 
+        /// <summary>The bed of a map that is one building (interior.ts: the tubes, the air plant, the vents; R5, Arturo 17/11).</summary>
+        public const string InsideBed = "inside";
+
+        /// <summary>
+        /// The ambience of the map and the music for how things stand: its biome's bed («city», «wilds», «facility»), or
+        /// InsideBed on a map that is one building (MissionState.inside: the hospital, the offices, the police station, the
+        /// shed), the biome's while the sound folder doesn't have it yet.
+        /// </summary>
+        public void Start(GameState s, bool contact)
+        {
+            Start(s.Biome, contact, s.Mission.Inside == true && Ambience.Has(InsideBed) ? InsideBed : s.Biome);
+        }
+
         /// <summary>The ambience of the map («city», «wilds», «facility») and the music for how things stand.</summary>
-        public void Start(string biome, bool contact)
+        public void Start(string biome, bool contact) => Start(biome, contact, biome);
+
+        private void Start(string biome, bool contact, string bed)
         {
             // A transmission left open at take-off lets the music up (0.10.1 closed the radio as the squad left).
             UiSounds.ReleaseRadio();
             softGround = biome == "wilds";
-            Ambience.Play(biome);
+            Ambience.Play(bed);
             Mood(contact ? "tense" : "calm");
         }
 

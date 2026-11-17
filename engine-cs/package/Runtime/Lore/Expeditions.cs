@@ -146,8 +146,7 @@ namespace Bastion.Engine
                     return $"{ByRoom} Registrando, salen más armas, cargadores y chalecos.";
                 case Places.Plaza:
                     return "Al aire libre: una plaza con tiendas alrededor, y por sus escaparates se ve dentro. Registrando, salen más suministros y cosas para el cinturón, y en la farmacia, medicinas.";
-                // H9 §5, before its Places id: «camping», as UI reads it.
-                case "camping":
+                case Places.Camping:
                     return "Al aire libre: un claro cerrado por el pinar, con tiendas de campaña y caravanas en las que se puede entrar. Registrando, sale de todo un poco.";
                 default:
                     return null;

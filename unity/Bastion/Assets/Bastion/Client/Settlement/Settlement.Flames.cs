@@ -16,8 +16,8 @@ namespace Bastion.Client
         /// A fire's flames: how many licks, how tall at most and how far out from its middle (tiles), their colours
         /// (yellower than fire looks: past white the tone mapping turns a saturated orange pink), and how bright (to bloom).
         /// </summary>
-        const int FlameLicks = 6;
-        const float FlameTall = 0.42f, FlameOut = 0.13f, FlameGlow = 1.3f;
+        internal const int FlameLicks = 6;
+        internal const float FlameTall = 0.42f, FlameOut = 0.13f, FlameGlow = 1.3f;
         static readonly int[] FlameColours = { 0xffb030, 0xffd050, 0xff9a20, 0xffe080 };
 
         sealed class Lick
@@ -83,8 +83,11 @@ namespace Bastion.Client
             Debug.Log($"[settlement] {fires.Count} fires lit: {key}");
         }
 
-        /// <summary>Bastion/FxUnlit, opaque, in each colour: three's basic material, its colour in linear times the glow.</summary>
-        static Material[] FlameMaterials(FxArt art)
+        /// <summary>
+        /// Bastion/FxUnlit, opaque, in each colour: three's basic material, its colour in linear times the glow. (The camping's
+        /// fire's too: Map.CampFire.)
+        /// </summary>
+        internal static Material[] FlameMaterials(FxArt art)
         {
             if (flameMaterials != null && flameMaterials[0] != null) return flameMaterials;
             var shader = art.unlit != null ? art.unlit : Shader.Find("Bastion/FxUnlit");

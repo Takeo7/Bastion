@@ -65,6 +65,23 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// A gear brought into a sentence for the first time («Anja encuentra…»), with «un»/«una»: «una granada», «un fusil de
+        /// cerrojo», «unos tapones», «2 granadas». The supplies, with their figure: «117 §».
+        /// </summary>
+        public static string GearA(string kind, string? type, int count = 1)
+        {
+            if (kind == GearKinds.Supplies) return $"{count} §";
+            var words = WordsOf(kind, type);
+            if (count > 1) return $"{count} {words.Many}";
+            var the = words.The;
+            if (the.StartsWith("el ")) return "un " + the.Substring(3);
+            if (the.StartsWith("la ")) return "una " + the.Substring(3);
+            if (the.StartsWith("los ")) return "unos " + the.Substring(4);
+            if (the.StartsWith("las ")) return "unas " + the.Substring(4);
+            return the;
+        }
+
+        /// <summary>
         /// The words of a gear: those of what piles, or a weapon's and a vest's from Content (one to a place, never more:
         /// its «many» is only the name again). A weapon is feminine when Content finds «una» of it.
         /// </summary>

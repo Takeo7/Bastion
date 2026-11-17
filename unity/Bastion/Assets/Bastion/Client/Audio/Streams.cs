@@ -127,12 +127,16 @@ namespace Bastion.Client.Audio
 
     /// <summary>
     /// The ambience under everything (ambience.ts): the town, the outskirts, the plant, the Bastión outside, the globe
-    /// («city», «wilds», «facility», «base», «geo»), rendered from 0.10.1 (Generado/vivos); one fades into the next. Main thread.
+    /// («city», «wilds», «facility», «base», «geo»), rendered from 0.10.1 (Generado/vivos), and inside a building («inside»,
+    /// interior.ts, made for Unity); one fades into the next. Main thread.
     /// </summary>
     public static class Ambience
     {
         private static string? running;
         private static Streamed? playing;
+
+        /// <summary>Whether the sound folder has `bed` (a bed new since it was generated may not be there yet).</summary>
+        public static bool Has(string bed) => SoundPlayer.Instance?.manifest?.pieces.ContainsKey($"ambience.{bed}") == true;
 
         /// <summary>ambience.ts play: to `bed` (null: none), fading over `fade` seconds.</summary>
         public static void Play(string? bed, double fade = 2)

@@ -23,6 +23,8 @@ namespace Bastion.Engine.Tests
             public string? Reason;
             public int Turns;
             public int Orders;
+            /// <summary>In the runs, the node it was fought at (RunState.at at its launch).</summary>
+            public string? Node;
         }
 
         /// <summary>Why a run stopped short (stuck on the base or in a mission), or null.</summary>
@@ -37,8 +39,13 @@ namespace Bastion.Engine.Tests
         /// <summary>Steps for the whole run: two missions take some 100 to 120.</summary>
         public const int MaxSteps = 2_000;
 
-        /// <summary>Up to `missions` missions of a new campaign with the room's Rng at `seed`; `say`, a line for each step.</summary>
-        public static List<Mission> Run(int seed, int missions, Action<string>? say = null)
+        /// <summary>
+        /// Up to `missions` missions of a new campaign with the room's Rng at `seed`; `say`, a line for each step. For the
+        /// long benches (RunBench): `watch` sees the host's campaign at each step, `ended` each mission once back on the
+        /// base with it, and `done` stops the run on the base; `steps`, the most steps.
+        /// </summary>
+        public static List<Mission> Run(int seed, int missions, Action<string>? say = null, Action<CampaignState>? watch = null,
+            Action<Mission, CampaignState>? ended = null, Func<CampaignState, bool>? done = null, int steps = MaxSteps)
         {
             var dir = Path.Combine(Path.GetTempPath(), "bastion-autocampana-" + Guid.NewGuid().ToString("N"));
             try
@@ -53,7 +60,7 @@ namespace Bastion.Engine.Tests
                 var refused = new List<string>();
                 int still = 0;
                 string? was = null;
-                for (int step = 0; step < MaxSteps; step++)
+                for (int step = 0; step < steps; step++)
                 {
                     foreach (var p in players)
                         while (p.End.Heard.TryDequeue(out var text))
@@ -66,6 +73,7 @@ namespace Bastion.Engine.Tests
                     var phase = heard.Room?.Phase;
                     // Nothing moving for a while: said, and the run stops.
                     var c = heard.Campaign;
+                    if (c != null) watch?.Invoke(c);
                     var where = $"{phase} · día {c?.Day} · acontecimiento {c?.Event ?? "-"} · propuesta {(c?.Proposal != null ? $"{c.Proposal.Action.Type} de {c.Proposal.By}" : "-")} · llaves {string.Join(",", c?.LaunchReady ?? new bool[0])} · operación {c?.ActiveMission ?? "-"} · seq {heard.Mission?.Seq}"
                         + (c?.Stash != null ? $" · expedición {c.Run?.Phase ?? "-"} {c.Run?.At ?? "-"} · etapas {c.NodesPlayed} · objetos {Gears.All(c).Count()}" : "");
                     still = where == was ? still + 1 : 0;
@@ -81,9 +89,10 @@ namespace Bastion.Engine.Tests
                         if (now != null)
                         {
                             say?.Invoke($"vuelta a la base tras «{now.Name}»");
+                            if (c != null) ended?.Invoke(now, c);
                             now = null;
                         }
-                        if (played.Count >= missions) return played;
+                        if (played.Count >= missions || c != null && done?.Invoke(c) == true) return played;
                         // Lost, the squad gone or the dead at the gates: over, not stuck (an event may still be pending).
                         if (c?.Outcome != null)
                         {
@@ -100,7 +109,7 @@ namespace Bastion.Engine.Tests
                     if (phase != RoomPhases.Mission || heard.Mission == null) continue;
                     if (now == null)
                     {
-                        now = new Mission { Name = heard.Mission.CampaignMission?.Name ?? heard.Mission.MapName };
+                        now = new Mission { Name = heard.Mission.CampaignMission?.Name ?? heard.Mission.MapName, Node = c?.Run?.At };
                         played.Add(now);
                         say?.Invoke($"misión «{now.Name}»");
                     }
@@ -132,7 +141,7 @@ namespace Bastion.Engine.Tests
                         Say(room, p, new JObject { ["t"] = "cmd", ["cmd"] = JObject.Parse(Json.Write(cmd)) });
                     }
                 }
-                Stuck = $"sin acabar en {MaxSteps} pasos · {was}";
+                Stuck = $"sin acabar en {steps} pasos · {was}";
                 say?.Invoke("atascada: " + Stuck);
                 return played;
             }

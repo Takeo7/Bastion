@@ -134,6 +134,15 @@ namespace Bastion.Client.Map
         public static readonly string[] Sheet = { BrownSheet, RedSheet, GreenSheet, BlueSheet };
     }
 
+    /// <summary>
+    /// A police station's facing (H9 §3, the runs' comisaría; BuildingPlan.Police): POLYGON Police Station's tan brick, its
+    /// plaster inside (WallLayout's «police» kit).
+    /// </summary>
+    public static class PoliceFacings
+    {
+        public const string Brick = "Comisaria";
+    }
+
     /// <summary>A shop's facing (BuildingPlan.Facings, BuildingLooks.Facing): what its walls are of.</summary>
     public static class ShopFacings
     {
@@ -323,6 +332,8 @@ namespace Bastion.Client.Map
             [ShopFacings.Red] = 0x7c4a3e, [ShopFacings.White] = 0xc4c2bc, [ShopFacings.Coloured] = 0xa8927c, [OfficeFacings.Concrete] = 0x9a9a96,
             [HallFacings.RedBrick] = 0x583c30, [HallFacings.BrownBrick] = 0x79756b, [HallFacings.Block] = 0x7b7b7b,
             [HallFacings.BrownSheet] = 0x746050, [HallFacings.RedSheet] = 0x815346, [HallFacings.GreenSheet] = 0x4a5f49, [HallFacings.BlueSheet] = 0x5f6e7b,
+            // (The police station's: its brick's texture on average, Brick_02.)
+            [PoliceFacings.Brick] = 0x978977,
         };
 
         /// <summary>The colours of building b, as tints of the patches they go on (buildings.ts looksOf).</summary>

@@ -112,15 +112,29 @@ namespace Bastion.Engine
 
         // ---------------------------------------------------------------- Guarida
 
+        /// <summary>A Guarida's box from La Lata, on foot (Networking, R2: opened at the far end, the squad never got back): 15 to 25.</summary>
+        public static readonly IReadOnlyList<int> LairWalk = new[] { 15, 25 };
+
         /// <summary>
-        /// Where a Guarida's box goes (H5): a tile of floor inside a building, the farthest from the squad's start, with
-        /// floor all round it, so that it can be opened from any side; anywhere on the ground with none indoors. Null with
-        /// nowhere at all.
+        /// Where a Guarida's box goes (H5): a tile of floor inside a building (a room), with floor all round it, so that it
+        /// can be opened from any side; anywhere on the ground with none indoors. At mid distance from La Lata (LairWalk on
+        /// foot, the nearer its middle the better: Gameplay, 17/11); with no La Lata, the farthest from the squad's start, as
+        /// it was. Null with nowhere at all.
         /// </summary>
         private static Vec2? LairSpot(MissionLayout layout)
         {
             var w = layout.Width;
             var steps = StepsFrom(layout, layout.Spawns.Select((p) => p.Y * w + p.X));
+            var evac = layout.EvacZone.Count > 0 ? StepsFrom(layout, layout.EvacZone.Select((z) => z.Y * w + z.X).Where((i) => i >= 0 && i < layout.Tiles.Count)) : null;
+            var mid = (LairWalk[0] + LairWalk[1]) / 2.0;
+            double Score(int i)
+            {
+                if (evac == null) return -steps[i];
+                var n = evac[i];
+                if (n < 0) return 1e6;
+                var off = n < LairWalk[0] ? LairWalk[0] - n : n > LairWalk[1] ? n - LairWalk[1] : 0;
+                return off * 100 + Math.Abs(n - mid);
+            }
             var taken = new HashSet<int>(layout.Pods.SelectMany((p) => p.Tiles).Select((p) => p.Y * w + p.X).Concat(layout.EvacZone.Select((p) => p.Y * w + p.X)));
             bool Open(int i) => Grid.Dirs4.All((d) =>
             {
@@ -134,7 +148,7 @@ namespace Bastion.Engine
                 {
                     if (steps[i] <= 0 || taken.Contains(i) || layout.Tiles[i] != TileKinds.Floor || !Open(i)) continue;
                     if (indoors && !(layout.Ground != null && i < layout.Ground.Count && layout.Ground[i] == 2)) continue;
-                    if (best < 0 || steps[i] > steps[best]) best = i;
+                    if (best < 0 || Score(i) < Score(best)) best = i;
                 }
                 return best >= 0 ? best : (int?)null;
             }
@@ -281,6 +295,34 @@ namespace Bastion.Engine
                     break;
                 }
                 if (!placed) count[0] += g.Units.Count;
+            }
+        }
+
+        /// <summary>
+        /// The caged (H9; Arturo, 17/11: «los encerrados van hacia las verjas»): one of the dead in about half a police
+        /// station's cells, one at least, in every node (a Limpieza too: they come to the bars and are struck through them).
+        /// Each a group of its own, awake from the start, on the first floor tile of its cell. The lone dead and the waves
+        /// keep out of the cells still.
+        /// </summary>
+        private static void CagedDead(MissionLayout layout, List<Unit> units, List<Pod> pods, ref int alienIndex, Rng rng)
+        {
+            var cells = (layout.Interiors ?? new List<InteriorSite>()).SelectMany((x) => x.Rooms).Where((r) => r.Use == PoliceUses.Cells).ToList();
+            if (cells.Count == 0) return;
+            var held = cells.Where((_) => rng.Int(2) == 0).ToList();
+            if (held.Count == 0) held.Add(cells[rng.Int(cells.Count)]);
+            var w = layout.Width;
+            var k = 0;
+            foreach (var r in held)
+            {
+                var spot = Enumerable.Range(r.Y, r.H).SelectMany((y) => Enumerable.Range(r.X, r.W).Select((x) => new Pos { X = x, Y = y, Z = r.Z }))
+                    .FirstOrDefault((p) => layout.Tiles[p.Y * w + p.X] == TileKinds.Floor && !units.Any((u) => Grid.SamePos(u.Pos, p)));
+                if (spot == null) continue;
+                var id = $"a{++alienIndex}";
+                var pod = new Pod { Id = $"c{++k}", Active = true, UnitIds = new List<string> { id }, Patrol = new List<Pos>(), PatrolIndex = 0 };
+                var u = MakeUnit(id, TemplateIds.Zombie, Content.Templates[TemplateIds.Zombie].Name, null, spot, pod.Id);
+                u.Caged = true;
+                units.Add(u);
+                pods.Add(pod);
             }
         }
 

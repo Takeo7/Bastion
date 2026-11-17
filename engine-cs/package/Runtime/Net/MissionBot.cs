@@ -490,8 +490,13 @@ namespace Bastion.Net
         private static Command? MoveToward(GameState s, Unit u, Pos goal, double cost, bool bus, Reach walks)
         {
             var reach = Paths.ComputeReach(s, u, cost);
-            // Where it ends up matters as much as how near: beside the dead it is bitten in their turn.
-            var enemies = Enemies(s).ToList();
+            // Where it ends up matters as much as how near: beside the dead it is bitten in their turn. Those of a group still
+            // asleep, only while searching a Saqueo or on the way to a Guarida's box or El Toro: on the way to an objective or
+            // to La Lata they were kept clear of for ever, in one building where they never come out (R1, 17/11: Limpiezas
+            // of 1000 turns in the hospital and the police station, the squad waiting a few tiles off; a radio fixed in the
+            // offices and La Lata never reached).
+            var careful = !bus && !Bold(s.Mission);
+            var enemies = Enemies(s).Where((e) => careful || !Asleep(s, e)).ToList();
             // El Toro's charge ready (or by the next turn): his lines are kept out of (H6).
             var bull = Bull(s);
             var charging = bull != null && (!bull.Cooldowns.TryGetValue(AbilityIds.Charge, out var wait) || wait <= 1);
@@ -537,6 +542,13 @@ namespace Bastion.Net
             if (best == null || Paths.BuildPath(s, u, reach, best.Pos) == null) return null;
             return new MoveCommand { Unit = u.Id, To = best.Pos };
         }
+
+        /// <summary>A mission whose objective has to be reached, past whoever sleeps by it: the objectives of before (a Sigilo is a Recuperación).</summary>
+        private static bool Bold(MissionState m) => m.Kind == MissionKinds.Elimination || m.Kind == MissionKinds.Hack || m.Kind == MissionKinds.Recovery
+            || m.Kind == MissionKinds.Rescue || m.Kind == MissionKinds.Sabotage;
+
+        /// <summary>One of the dead in a group not woken yet (Pod.active).</summary>
+        private static bool Asleep(GameState s, Unit e) => e.PodId != null && s.Pods.Any((p) => p.Id == e.PodId && !p.Active);
 
         /// <summary>The places of the way to `end` in `walks`, from the first step on (Paths.BuildPath, but to a place taken too: one of the dead).</summary>
         private static List<int> Way(GameState s, Reach walks, Pos end)

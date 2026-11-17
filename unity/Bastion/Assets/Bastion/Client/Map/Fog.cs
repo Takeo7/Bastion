@@ -33,8 +33,8 @@ namespace Bastion.Client.Map
         static readonly Color Lamp = new Color(1.0f, 0.55f, 0.22f) * 0.6f;
         /// <summary>How thick the low mist is at most (MIST_LEVELS: 0, 0.35, 0.6; Arturo chose it dense).</summary>
         public float mist = 0.6f;
-        /// <summary>What parts a building's rooms (BETWEEN_ROOMS).</summary>
-        static readonly HashSet<string> BetweenRooms = new HashSet<string> { "wall", "door", "doorOpen", "window", "windowBroken", "roof" };
+        /// <summary>What parts a building's rooms (BETWEEN_ROOMS); a police station's cells' bars too (H9 §3: each cell its own room).</summary>
+        static readonly HashSet<string> BetweenRooms = new HashSet<string> { "wall", "door", "doorOpen", "window", "windowBroken", "roof", "bars" };
 
         static readonly int FogMap = Shader.PropertyToID("_FogMap"), FogShell = Shader.PropertyToID("_FogShell"), FogSize = Shader.PropertyToID("_FogSize"),
             FogUnknown = Shader.PropertyToID("_FogUnknown"), FogHaze = Shader.PropertyToID("_FogHaze"), FogMistTint = Shader.PropertyToID("_FogMistTint"),
@@ -200,6 +200,8 @@ namespace Bastion.Client.Map
                 shells.Add(shell);
             }
             for (int i = 0; i < n; i++) shellPixels[i].r = (byte)Mathf.Clamp(storeys[i] * 32, 0, 255);
+            // (A camping's caravan, runs, H9 §5: its roof begins under a storey, at its eaves: Caravans.FogStoreys.)
+            foreach (int i in Caravans.Tiles(s)) if (i < n) shellPixels[i].r = (byte)Mathf.RoundToInt(Caravans.FogStoreys * 32);
             if (Bastion.Engine.Buildings.ByRoom(s)) OutOfPlay(s);
         }
 
@@ -253,8 +255,8 @@ namespace Bastion.Client.Map
                 closed[i] = false;
                 if (open || storeys[i] <= 0) continue;
                 string t = s.Tiles[i];
-                if (t != "wall" && t != "window" && t != "windowBroken") closed[i] = !found.Contains(i);
-                // A wall or a window: closed while every building it stands by is.
+                if (t != "wall" && t != "window" && t != "windowBroken" && t != "bars") closed[i] = !found.Contains(i);
+                // A wall or a window (or a cell's bars): closed while every building it stands by is.
                 else closed[i] = !Beside(i).Any(j => storeys[j] > 0 && found.Contains(j));
             }
         }
@@ -280,7 +282,8 @@ namespace Bastion.Client.Map
                     bool shut = false;
                     if (storeys[i] > z && t != null)
                     {
-                        if (t != "wall" && t != "window" && t != "windowBroken" && t != "door" && t != "doorOpen") shut = !found.Contains(node);
+                        // (A cell's bars, H9 §3, as a window: no room's, seen with the corridor or the cell beside them.)
+                        if (t != "wall" && t != "window" && t != "windowBroken" && t != "door" && t != "doorOpen" && t != "bars") shut = !found.Contains(node);
                         else shut = !Beside(i).Any(j => storeys[j] > z && found.Contains(z * area + j));
                     }
                     closedNodes[node] = shut;

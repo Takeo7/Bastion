@@ -69,6 +69,26 @@ unity/tools/sonido.sh
     - el rugido, solo con la voz grabada, o con el gemido de zombi más grave si tampoco está.
   - `SoundCheck.Combate` los toca en orden (rugido, pasos, choque, tumbado, levantarse, mazazo con un tajo detrás y muerte) y falla si falta alguna receta.
   - Para añadirlos a una carpeta ya generada: `node unity/tools/sonido/generar.mjs --efectos boss.roar,boss.step,boss.impact,boss.pound,body.down`.
+- **El ambiente de interior** (17/11, R5 de las expediciones; Arturo: «Sí, ambiente de interior»). Los ambientes de la 0.10.1 son todos de fuera: viento, tráfico, hojas. Dentro de un edificio sonaba el de la calle.
+  - **Dónde suena:** en los mapas de un solo edificio (`MissionState.inside`): hospital, oficinas, comisaría y nave. El centro comercial sigue con el de ciudad y el camping con el de campo, porque son al aire libre.
+  - **Cómo es:** `unity/tools/sonido/interior.ts`, «ambience.inside», 240 s con la semilla 26. Se hace con los mismos medios que `ambience.ts` (su `Kit`, copiado, porque no se exporta).
+    - Siempre: el zumbido de los fluorescentes, a 100 Hz y sus armónicos hasta 900 Hz; el rumor de las máquinas del edificio, por debajo de 160 Hz; el aire de las rejillas, hacia 900 Hz.
+    - De vez en cuando: un tubo que parpadea (cada 9–22 s), una puerta o un golpe lejos (cada 12–30 s) y una gota (cada 5–14 s).
+  - **Medido (17/11), en dB:**
+
+    | Ambiente | Total | Más de 200 Hz | Más de 1 kHz | Por el mezclador de Unity |
+    |---|---|---|---|---|
+    | interior | −23,3 | −29,3 | −42,0 | −31,0 |
+    | ciudad | −20,9 | −28,7 | −42,3 | −29,1 |
+    | fábrica | −20,7 | −28,2 | −49,2 | −28,2 |
+    | campo | −24,5 | −26,7 | −35,4 | −31,6 |
+
+    - Las tres primeras columnas son el RMS del archivo. La última, la salida en dBFS con los volúmenes del juego (`mezcla/`, 17 s de cada uno).
+    - El de interior queda 2 dB por debajo de la ciudad, al nivel del campo, y casi igual que la ciudad por encima de 200 Hz, que es lo que dan los altavoces pequeños.
+    - Los picos agudos (gotas y parpadeos) quedan en −17,5 dB, como los pájaros del campo (−18,1).
+  - **En el juego:** `CombatSound.Start(estado, contacto)` lo elige con `Ambience.Has("inside")`. Si la carpeta aún no lo tiene, suena el del bioma. `CombatSession` le pasa el estado.
+  - `SoundCheck.Combate` lo toca y después el de la ciudad. Falla si falta.
+  - Para añadirlo a una carpeta ya generada: `node unity/tools/sonido/generar.mjs --vivos ambience.inside`. `--vivos <pieza,…>` rehace solo esas piezas vivas, como `--efectos`.
 - **Los propios** (Arte, 1/11, el molotov de la #10 de Arturo): ni el banco de la 0.10.1 ni los paquetes que tenemos traen fuego, así que `node unity/tools/sonido/propios.mjs` los sintetiza, con su propio azar fijo, como originales WAV en `assets-src/sonido/` (`propio-…`):
   - el golpe de llama: un golpe a 60 Hz, un soplo de ruido que sube de 250 a 900 Hz y baja, rumor y algún chasquido;
   - el crepitar: chasquidos sueltos sobre un rumor suave desde 70 Hz, 8 s con el final fundido en el principio.

@@ -188,6 +188,76 @@ namespace Bastion.Engine.Tests
             Assert.True(Los.CanSee(t, u, z));
         }
 
+        [Fact]
+        public void ThePoliceStationsWallsAreOneTileThick()
+        {
+            // Arte, 17/11: a wall two tiles thick the client can't draw. Nowhere four walls in a square, on any storey.
+            for (var seed = 1; seed <= 40; seed++)
+            {
+                var (_, s) = At(Places.Police, NodeKinds.Normal, seed);
+                var site = s.Interiors!.Single();
+                for (var z = 0; z <= (s.Levels?.Count ?? 0); z++)
+                {
+                    string? KindAt(int x, int y) => z == 0 ? s.Tiles[y * s.Width + x] : s.Levels![z - 1].Tiles[y * s.Width + x];
+                    for (var y = site.Y; y < site.Y + site.H - 1; y++)
+                    {
+                        for (var x = site.X; x < site.X + site.W - 1; x++)
+                        {
+                            var thick = new[] { (x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1) }.All((p) => KindAt(p.Item1, p.Item2) == TileKinds.Wall);
+                            Assert.False(thick, $"seed {seed}, storey {z}: a thick wall at {x},{y}");
+                        }
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        public void EveryShedMarkTurnsUp()
+        {
+            // Arte, 17/11: in seeds 1–160 no container, crate nor drum ever came. Over seeds, every kind of the contract.
+            var kinds = new HashSet<string>();
+            var containers = 0;
+            for (var seed = 1; seed <= 30; seed++)
+            {
+                var (_, s) = At(Places.Shed, NodeKinds.Normal, seed);
+                var marks = s.Interiors!.Single().Dressing;
+                kinds.UnionWith(marks.Select((d) => d.Kind));
+                if (marks.Any((d) => d.Kind == ShedDetailKinds.Container)) containers++;
+            }
+            Assert.Empty(ShedDetailKinds.All.Except(kinds));
+            // A container in most sheds.
+            Assert.True(containers >= 25, $"{containers} of 30");
+        }
+
+        [Fact]
+        public void AMeetingTableIsTwoTiles()
+        {
+            // Arte, 17/11: Office's meeting tables are 4 m long. One mark over two desks, its length 2, along across its facing.
+            var tables = 0;
+            for (var seed = 1; seed <= 40; seed++)
+            {
+                var (_, s) = At(Places.Offices, NodeKinds.Normal, seed);
+                var site = s.Interiors!.Single();
+                foreach (var d in site.Dressing.Where((x) => x.Kind == OfficeDetailKinds.MeetingTable))
+                {
+                    tables++;
+                    Assert.Equal(2, d.Length);
+                    var next = d.Facing % 2 == 0 ? (d.X + 1, d.Y) : (d.X, d.Y + 1);
+                    foreach (var (x, y) in new[] { (d.X, d.Y), next })
+                    {
+                        var i = y * s.Width + x;
+                        var code = d.Z == 0 ? s.Decor![i] : s.Levels![d.Z - 1].Decor![i];
+                        Assert.Equal(DecorKinds.Desk, Decor.DecorOf(code)?.Kind);
+                    }
+                    // In the meeting room.
+                    Assert.Contains(site.Rooms, (r) => r.Use == OfficeUses.Meeting && r.Z == d.Z && d.X >= r.X && d.Y >= r.Y && d.X < r.X + r.W && d.Y < r.Y + r.H);
+                }
+                // Every meeting room has its table.
+                foreach (var r in site.Rooms.Where((x) => x.Use == OfficeUses.Meeting)) Assert.Contains(site.Dressing, (x) => x.Kind == OfficeDetailKinds.MeetingTable && x.Z == r.Z && x.X >= r.X && x.Y >= r.Y && x.X < r.X + r.W && x.Y < r.Y + r.H);
+            }
+            Assert.True(tables > 0);
+        }
+
         // -------------------------------------------------------------- room by room
 
         [Fact]
@@ -379,6 +449,224 @@ namespace Bastion.Engine.Tests
                 Assert.True(spot.X >= zone.X && spot.Y >= zone.Y && spot.X < zone.X + zone.W && spot.Y < zone.Y + zone.H, $"seed {seed}: {spot.X},{spot.Y}");
                 Assert.Contains(s.Decor!, (d) => Decor.DecorOf(d)?.Kind == DecorKinds.SirenCar);
             }
+        }
+
+        // ------------------------------------------------------------------ balance
+
+        /// <summary>The dead at the start to the 100 tiles one reaches on foot (Networking's measure, R1).</summary>
+        public static double Density(GameState s)
+        {
+            var u = s.Units.First((x) => x.Team == Teams.Xcom && x.CampaignId != null);
+            var walk = Paths.ComputeReach(s, u, 1_000_000, ignore: (_) => true).Cost.Count;
+            return 100.0 * s.Units.Count((x) => x.Team == Teams.Alien && x.Alive) / walk;
+        }
+
+        [Fact]
+        public void ThePlazaAsDenseAsACityTheCampingAsATown()
+        {
+            // Networking, R1 (17/11): half a city's dead on a quarter of its ground; now by the ground (Places.WalkShare).
+            double Mean(string site, int[] seeds, int difficulty) => seeds.Average((seed) => Density(LaunchAt(NodeKinds.Normal, node: (n) =>
+            {
+                n.Site = site;
+                n.Seed = seed;
+                n.Difficulty = difficulty;
+            }).S));
+            foreach (var d in new[] { 1, 2, 3 })
+            {
+                var plaza = Mean(Places.Plaza, new[] { 11, 12, 13, 14 }, d);
+                var city = Mean(Places.City, new[] { 3, 4, 5, 9 }, d);
+                var camping = Mean(Places.Camping, new[] { 11, 12, 13, 14 }, d);
+                var town = Mean(Places.Town, new[] { 0, 1, 2, 6 }, d);
+                Assert.InRange(plaza / city, 0.8, 1.2);
+                Assert.InRange(camping / town, 0.75, 1.25);
+            }
+        }
+
+        /// <summary>Steps on foot from La Lata to the nearest tile beside the Guarida's box (on the ground, every way); -1 if none.</summary>
+        private static int ToTheBox(GameState s)
+        {
+            var box = s.Mission.Lair!;
+            var steps = Enumerable.Repeat(-1, s.Width * s.Height).ToArray();
+            var queue = new Queue<int>();
+            foreach (var z in s.Mission.EvacZone)
+            {
+                var i = (int)z.Y * s.Width + (int)z.X;
+                if (steps[i] >= 0) continue;
+                steps[i] = 0;
+                queue.Enqueue(i);
+            }
+            while (queue.Count > 0)
+            {
+                var i = queue.Dequeue();
+                int x = i % s.Width, y = i / s.Width;
+                if (Math.Max(Math.Abs(x - box.X), Math.Abs(y - box.Y)) == 1) return steps[i];
+                foreach (var d in Grid.Dirs8)
+                {
+                    if (Paths.StepCost(s, x, y, d.X, d.Y) == null) continue;
+                    var j = (y + d.Y) * s.Width + x + d.X;
+                    if (steps[j] >= 0) continue;
+                    steps[j] = steps[i] + 1;
+                    queue.Enqueue(j);
+                }
+            }
+            return -1;
+        }
+
+        [Fact]
+        public void AGuaridasBoxAtMidDistanceFromLaLata()
+        {
+            // Networking, R2 (17/11): at the far end, the box was opened and the squad never got back. Now some 15–25 on foot
+            // from La Lata, still in a room.
+            var walks = new List<int>();
+            foreach (var site in new[] { Places.Town, Places.City, Places.Estate, Places.Factory, Places.Roadside, Places.Country, Places.Hospital, Places.Offices, Places.Shed, Places.Police })
+            {
+                foreach (var seed in new[] { 11, 12, 13 })
+                {
+                    var (_, s) = At(site, NodeKinds.Elite, seed);
+                    var box = s.Mission.Lair!;
+                    Assert.Equal(2, s.Ground![Grid.TileIndex(s, box.X, box.Y)]);
+                    var w = ToTheBox(s);
+                    Assert.True(w > 0, $"{site} {seed}: the box out of reach");
+                    walks.Add(w);
+                }
+            }
+            Assert.True(walks.Count((w) => w >= Setup.LairWalk[0] - 4 && w <= Setup.LairWalk[1] + 6) >= walks.Count * 3 / 4, string.Join(", ", walks));
+        }
+
+        [Fact]
+        public void OnlyTheCagedInACell()
+        {
+            // Arturo, 17/11: the cells hold dead again, the caged, in every node (a Limpieza too); awake from the start. Nobody
+            // else in a cell (the lone dead, Networking's seed 4), nor the waves.
+            var caged = 0;
+            foreach (var kind in new[] { NodeKinds.Elimination, NodeKinds.Normal, NodeKinds.Hold, NodeKinds.Stealth, NodeKinds.Elite })
+            {
+                for (var seed = 1; seed <= 12; seed++)
+                {
+                    var (_, s) = At(Places.Police, kind, seed);
+                    var cells = s.Interiors!.Single().Rooms.Where((r) => r.Use == PoliceUses.Cells).ToList();
+                    bool InCell(Pos p) => cells.Any((r) => p.Z == r.Z && p.X >= r.X && p.Y >= r.Y && p.X < r.X + r.W && p.Y < r.Y + r.H);
+                    var inCells = s.Units.Where((u) => u.Team == Teams.Alien && InCell(u.Pos)).ToList();
+                    Assert.NotEmpty(inCells);
+                    Assert.All(inCells, (u) => Assert.True(u.Caged));
+                    Assert.All(inCells, (u) => Assert.True(s.Pods.Single((p) => p.Id == u.PodId).Active));
+                    Assert.All(s.Units.Where((u) => u.Caged == true), (u) => Assert.True(InCell(u.Pos)));
+                    caged += inCells.Count;
+                    var sim = Step2Helpers.NewSim(s);
+                    sim.CallHorde(1);
+                    foreach (var r in s.Mission.Reinforcements) r.Turn = Math.Min(r.Turn, 1);
+                    sim.LandReinforcements(1);
+                    Assert.All(s.Units.Where((u) => u.Team == Teams.Alien && InCell(u.Pos)), (u) => Assert.True(u.Caged));
+                }
+            }
+            Assert.True(caged > 60);
+        }
+
+        /// <summary>A police station with a caged one: the state, it, a soldier and the tile across its bars the soldier goes to.</summary>
+        private static (GameState S, Unit Caged, Unit Soldier, Pos Across) Cage(string kind = NodeKinds.Normal, int seed = 3)
+        {
+            var (_, s) = At(Places.Police, kind, seed);
+            var caged = s.Units.First((u) => u.Caged == true);
+            var reach = Rules.CagedReach(s, caged);
+            Assert.NotEmpty(reach);
+            var across = reach.Last();
+            var soldier = Squad(s)[0];
+            var there = Grid.UnitAt(s, across);
+            if (there != null && there != soldier) there.Pos = soldier.Pos;
+            soldier.Pos = across;
+            return (s, caged, soldier, across);
+        }
+
+        [Fact]
+        public void ACagedOneComesToTheBars()
+        {
+            var (s, caged, soldier, across) = Cage();
+            // At the back of its cell to begin with, out of anyone's reach.
+            Assert.DoesNotContain(Rules.CagedFront(s, caged), (p) => Grid.SamePos(p, caged.Pos) && Aim.AcrossBars(s, p, across));
+            // The squad heard (or seen through the bars): to the bars, across from the soldier, and a bite.
+            caged.Heard = across;
+            var sim = Step2Helpers.NewSim(s);
+            Ai.TakeAlienTurn(sim, caged);
+            Assert.True(Aim.AcrossBars(s, caged.Pos, soldier.Pos), $"{caged.Pos.X},{caged.Pos.Y} / {across.X},{across.Y}");
+            Assert.Contains(sim.Events.OfType<AbilityUsedEvent>(), (e) => e.Unit == caged.Id && e.Ability == AbilityIds.Claw);
+            // What a bot fears of it: only the tiles across its bars.
+            Assert.All(Rules.CagedReach(s, caged), (q) => Assert.Contains(Rules.CagedFront(s, caged), (p) => Aim.AcrossBars(s, p, q)));
+            Assert.Empty(Rules.CagedReach(s, soldier));
+            // Perceiving nobody, to its bars all the same.
+            var (t, alone, mate, _) = Cage(NodeKinds.Normal, 5);
+            mate.Pos = new Pos { X = 0, Y = 0 };
+            alone.Heard = null;
+            Ai.TakeAlienTurn(Step2Helpers.NewSim(t), alone);
+            Assert.Contains(Rules.CagedFront(t, alone), (p) => Grid.SamePos(p, alone.Pos));
+        }
+
+        [Fact]
+        public void MeleeThroughTheBarsBothWays()
+        {
+            var (s, caged, soldier, across) = Cage();
+            caged.Heard = across;
+            Ai.TakeAlienTurn(Step2Helpers.NewSim(s), caged);
+            Assert.True(Aim.InMeleeReach(s, caged.Pos, soldier.Pos));
+            Assert.True(Aim.InMeleeReach(s, soldier.Pos, caged.Pos));
+            // Still no way through.
+            Assert.Null(Paths.StepCost(s, soldier.Pos.X, soldier.Pos.Y, Math.Sign(caged.Pos.X - soldier.Pos.X), Math.Sign(caged.Pos.Y - soldier.Pos.Y)));
+            // The soldier's knife through the bars.
+            soldier.Ap = 2;
+            s.Command = 0;
+            s.ActiveUnit = null;
+            var r = Step2Helpers.Exec(s, Step2Helpers.Ability(soldier.Id, AbilityIds.Slash, caged.Id));
+            Assert.True(r.Ok, r.Error);
+            Assert.Contains(r.Events!.OfType<AbilityUsedEvent>(), (e) => e.Unit == soldier.Id && e.Ability == AbilityIds.Slash);
+        }
+
+        [Fact]
+        public void TakedownThroughTheBarsWhenAllowed()
+        {
+            var (s, caged, soldier, across) = Cage();
+            caged.Heard = across;
+            Ai.TakeAlienTurn(Step2Helpers.NewSim(s), caged);
+            // Awake, as the caged are: no.
+            Assert.Equal("Ya está alerta.", Abilities.TakedownRefusal(s, soldier, caged));
+            // Unaware and its back to the bars: yes, through them; facing them: no.
+            s.Pods.Single((p) => p.Id == caged.PodId).Active = false;
+            caged.Heard = null;
+            caged.Facing = Los.FacingTo(soldier.Pos, caged.Pos) ?? caged.Facing;
+            Assert.Null(Abilities.TakedownRefusal(s, soldier, caged));
+            caged.Facing = Los.FacingTo(caged.Pos, soldier.Pos) ?? caged.Facing;
+            Assert.NotNull(Abilities.TakedownRefusal(s, soldier, caged));
+        }
+
+        [Fact]
+        public void APoliceLimpiezaWithKnivesIsWon()
+        {
+            // Networking, R1: a Limpieza with one of the dead in a cell never ended. Now it comes to its bars and dies there.
+            var (_, s) = At(Places.Police, NodeKinds.Elimination, 4);
+            Assert.Equal(MissionKinds.Elimination, s.Mission.Kind);
+            var caged = s.Units.Where((u) => u.Caged == true).ToList();
+            Assert.NotEmpty(caged);
+            var sim = Step2Helpers.NewSim(s);
+            foreach (var z in s.Units.Where((u) => u.Team == Teams.Alien && u.Alive && u.Caged != true).ToList()) sim.Damage(z, 99, 0);
+            Assert.Null(s.Outcome);
+            var soldier = Squad(s)[0];
+            Assert.Equal(FoundWeaponIds.Knife, soldier.Kit?.Melee?.Type);
+            foreach (var z in caged)
+            {
+                var across = Rules.CagedReach(s, z).First((q) => Grid.UnitAt(s, q) == null || Grid.UnitAt(s, q) == soldier);
+                soldier.Pos = across;
+                z.Heard = across;
+                Ai.TakeAlienTurn(Step2Helpers.NewSim(s), z);
+                Assert.True(Aim.AcrossBars(s, z.Pos, soldier.Pos));
+                for (var blow = 0; blow < 40 && z.Alive; blow++)
+                {
+                    soldier.Ap = 2;
+                    soldier.Hp = Math.Max(soldier.Hp, 1);
+                    s.Command = 0;
+                    s.ActiveUnit = null;
+                    Assert.True(Step2Helpers.Exec(s, Step2Helpers.Ability(soldier.Id, AbilityIds.Slash, z.Id), blow + 1).Ok);
+                }
+                Assert.False(z.Alive);
+            }
+            Assert.Equal(Outcomes.Victory, s.Outcome);
         }
 
         // ------------------------------------------------------------- what they give

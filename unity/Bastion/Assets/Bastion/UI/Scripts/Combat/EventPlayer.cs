@@ -3311,14 +3311,27 @@ namespace Bastion.UI.Combat
         /// </summary>
         void FoundGear(Vector3 at, string who, List<Placed> packed, List<Bastion.Engine.Gear> floor)
         {
+            // The supplies in one figure each, however many piles they went into (the pass of 17/11: «65 §, 35 § y 17 §»).
+            static List<Bastion.Engine.Gear> Merged(IEnumerable<Bastion.Engine.Gear> gear)
+            {
+                var list = gear.ToList();
+                var supplies = list.Where(g => g.Kind == GearKinds.Supplies).Sum(g => g.Count);
+                var rest = list.Where(g => g.Kind != GearKinds.Supplies).ToList();
+                if (supplies > 0) rest.Insert(0, new Bastion.Engine.Gear { Kind = GearKinds.Supplies, Count = supplies });
+                return rest;
+            }
+            var inPack = Merged((packed ?? new List<Placed>()).Select(p => p.Gear));
+            var onFloor = Merged(floor ?? new List<Bastion.Engine.Gear>());
+            // Over it the names as on the tiles («Fusil de cerrojo · 117 §»); in the log, inside a sentence, as found: with
+            // their indefinite article (Lore.GearA, 17/11: «un fusil de cerrojo»; it said «Fusil de cerrojo» mid-sentence).
             string Name(Bastion.Engine.Gear g) => g.Kind == GearKinds.Supplies ? Lore.GearThe(g.Kind, g.Type, g.Count) : Lore.GearName(g.Kind, g.Type, g.Count);
-            var into = (packed ?? new List<Placed>()).Select(p => Name(p.Gear)).ToList();
-            var left = (floor ?? new List<Bastion.Engine.Gear>()).Select(Name).ToList();
-            var all = into.Concat(left).ToList();
+            var into = inPack.Select(g => Lore.GearA(g.Kind, g.Type, g.Count)).ToList();
+            var left = onFloor.Select(g => Lore.GearA(g.Kind, g.Type, g.Count)).ToList();
+            var all = inPack.Concat(onFloor).Select(Name).ToList();
             var weapon = (packed ?? new List<Placed>()).Select(p => p.Gear).Concat(floor ?? new List<Bastion.Engine.Gear>()).Any(g => g.Kind == GearKinds.Weapon);
             Float(at, all.Count == 0 ? HudText.Found.Nothing : string.Join(" · ", all.Take(3)) + (all.Count > 3 ? " …" : ""), weapon ? "callout" : all.Count > 0 ? "heal" : "info");
             if (all.Count > 0) control.Sfx.Found(at);
-            Log(HudText.Found.Line(who, into, left), weapon ? "#ffd23a" : all.Count > 0 ? "#6dff9a" : null);
+            Log(HudText.Found.Line(who, into, left, onFloor.Count > 1 || onFloor.Any(g => g.Count > 1)), weapon ? "#ffd23a" : all.Count > 0 ? "#6dff9a" : null);
         }
 
         /// <summary>Which edge of the map a tile is nearest to, as the radio says it (the map's top row is the north).</summary>

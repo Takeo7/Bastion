@@ -128,6 +128,21 @@ if wanted "$@"; then
   rm -rf "$project/Assets/Synty/SimpleCats/Scenes" "$project/Assets/Synty/SimpleCats/Scenes.meta"
   rm -f "$project/Assets/Synty/SimpleCats/Prefabs/SC_Prop_"* "$project/Assets/Synty/SimpleCats/Models/SM_Prop_"* "$project/Assets/Synty/SimpleCats/Materials/Ground.mat"*
 fi
+# The runs' indoor maps (Arturo, 17/11): Police Station, its own folder without its people (Characters.fbx, the
+# SM_Chr_ attachments and their prefabs: the game's people are Sidekick's); and Shopping Plaza Map, its own folder, the
+# open plaza's glass shop fronts, railings and displays (it wants Shops, already in), not the PolygonGeneric each brings.
+name=POLYGON_Police_Station_Unity_2022_3_v1_1_3
+if wanted "$@"; then
+  echo "== $name (su carpeta, sin personajes)"
+  python3 -I "$tools/upkg-extract.py" --under Assets/Synty/PolygonPoliceStation "$synty/POLYGON - Police Station/Unity/$name.unitypackage" "$project" || failed=1
+  rm -rf "$project/Assets/Synty/PolygonPoliceStation/Prefabs/Characters" "$project/Assets/Synty/PolygonPoliceStation/Prefabs/Characters.meta"
+  rm -f "$project/Assets/Synty/PolygonPoliceStation/Models/Characters.fbx"* "$project/Assets/Synty/PolygonPoliceStation/Models/SM_Chr_"*
+fi
+name=POLYGON_Shopping_Plaza_Map_Unity_2022_3_v1_0_4
+if wanted "$@"; then
+  echo "== $name (su carpeta)"
+  python3 -I "$tools/upkg-extract.py" --under Assets/Synty/PolygonMapsPlaza "$synty/POLYGON - Shopping Plaza Map/Unity/$name.unitypackage" "$project" || failed=1
+fi
 # The HUD's icons (UI): four INTERFACE packs, only their sprites and textures (no prefabs, scripts or samples: the HUD
 # is UI Toolkit, not their uGUI). Dark Fantasy's for the life bars (Ana's #8, 29/10).
 for p in "INTERFACE - Apocalypse HUD/Unity/INTERFACE_Apocalypse_HUD_Unity_2022_3_v1_1_1.unitypackage" \

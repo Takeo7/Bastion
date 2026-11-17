@@ -184,10 +184,10 @@ namespace Bastion.UI.Gear
             {
                 var (weapon, _) = Find(m.Onto);
                 var w = Where(m.Onto);
-                if (weapon == null || weapon.Kind != "weapon") return "Las mejoras van en un arma";
+                if (weapon == null || weapon.Kind != "weapon") return "Los accesorios van en un arma";
                 if (!w.mine) return "No es tuyo";
                 if (weapon.Mods.Contains(t.Type)) return $"Ya lleva {t.Name.ToLowerInvariant()}";
-                return weapon.Mods.Count >= 2 ? "Ya lleva dos mejoras" : null;
+                return weapon.Mods.Count >= 2 ? "Ya lleva dos accesorios" : null;
             }
             var whole = m.Count <= 0 || m.Count >= t.Count;
             var soldier = m.To == "stash" ? null : soldiers.FirstOrDefault(s => s.Id == m.To);
@@ -341,7 +341,7 @@ namespace Bastion.UI.Gear
             H = t.H,
             Count = t.Count,
             Pile = t.Pile,
-            Tip = $"{t.Name}{(t.Pile > 1 ? $" · {t.Count} de {t.Pile}" : "")}\nOcupa {t.W}×{t.H}{(t.Mods.Count > 0 ? "\nMejoras: " + string.Join(", ", t.Mods) : "")}",
+            Tip = $"{t.Name}{(t.Pile > 1 ? $" · {t.Count} de {t.Pile}" : "")}\nOcupa {t.W}×{t.H}{(t.Mods.Count > 0 ? "\nAccesorios: " + string.Join(", ", t.Mods) : "")}",
         };
 
         GearGridView View(Grid g, string owner, string slot, bool mine, int rows = 0) => new GearGridView

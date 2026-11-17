@@ -19,7 +19,7 @@ Antes de nada, lee [docs/UNITY.md](docs/UNITY.md) (estado del port, lo que falta
   - los originales de Synty viven en `assets-src/`, que no se sube; todos los paquetes están en el disco externo, en `/Volumes/4T_White/50_INBOX/Synty`;
   - la conversión (`packages/client/tools/synty/convert.ts`, con Blender) se lanza siempre con ids explícitos, nunca entera.
 - **Opciones rechazadas:** no se vuelven a proponer (vóxel, Expediente, Holotáctico, Viñeta, CRT…). Se construye sobre lo elegido.
-- **Coordinación:** la sesión Gameplay reparte el trabajo por roles y revisa; nadie reescribe un archivo de otro rol. Los cambios en archivos ajenos son exactos y pequeños.
+- **Coordinación:** la sesión Producto planifica las tareas, las reparte por roles, revisa, hace los commits y publica (Arturo, 17/11; hasta entonces, Gameplay). El tablero está en `.dev-snapshots/producto/TABLERO.md`. Las pruebas largas las pasa Gameplay. Nadie reescribe un archivo de otro rol. Los cambios en archivos ajenos son exactos y pequeños.
 - **Ritmo del combate:** cada acción se ve entera antes de pasar a la siguiente. La cámara nunca pelea con el jugador.
 - **Rendimiento:** ≤4,2 ms por fotograma en «alto» en el PC de referencia (Windows, RTX 3090); en el Mac, «medio» a ≥30 fps. La telemetría va a `red.log`, en la carpeta de datos de la app (en el Mac, `~/Library/Application Support/Bastion-Unity/Bastion/`; con `BASTION_DATOS`, en esa carpeta).
 

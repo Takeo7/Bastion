@@ -51,6 +51,13 @@ namespace Bastion.Client.Map
         /// has it all (clearingArt.ts fadeBeyond), so the eye never reaches its end (playtest 22/10 #30).
         /// </summary>
         public const int Reach = 31;
+
+        /// <summary>
+        /// Whether a map stands in the base's pinar, its pines drawn as the base's (Pines, Wood): the base's own (GameState.base),
+        /// and the runs' camping (H9 §5: a clearing in it, InteriorKinds.Camping).
+        /// </summary>
+        public static bool Pinar(GameState s) =>
+            s.Base != null || (s.Interiors != null && s.Interiors.Exists(i => i != null && i.Kind == InteriorKinds.Camping));
         /// <summary>Out to here (BASE_WOOD_NEAR) its pines are the map's (their crowns fade over what is looked at); further, instanced and plain.</summary>
         public const double Near = 5;
         /// <summary>
@@ -422,15 +429,15 @@ namespace Bastion.Client.Map
 
         /// <summary>
         /// The base's own pines (mapView.ts dressed, 'basePines'): on each tile of high cover whose decor is a tree, on the
-        /// ground and on each storey, a pine of BasePines (hash(x, y, 1)) off the grid, of its own size and turn. None but on
-        /// the base's map (GameState.base). `pieceAt`: a piece of the base stands on tile i (basePieces.ts pieceMap: at[i] >= 0;
-        /// all of them are drawn, DRAWN); `yard`: tile i is the Bastion's yard (pieceMap's yard): on the ground those tiles are
-        /// the pieces' own, nothing else drawn there.
+        /// ground and on each storey, a pine of BasePines (hash(x, y, 1)) off the grid, of its own size and turn. None but in
+        /// the pinar (Pinar: the base's map, the camping's). `pieceAt`: a piece of the base stands on tile i (basePieces.ts
+        /// pieceMap: at[i] >= 0; all of them are drawn, DRAWN); `yard`: tile i is the Bastion's yard (pieceMap's yard): on the
+        /// ground those tiles are the pieces' own, nothing else drawn there.
         /// </summary>
         public static List<WoodPlacement> Pines(GameState s, Func<int, bool> pieceAt, Func<int, bool> yard)
         {
             var @out = new List<WoodPlacement>();
-            if (s.Base == null) return @out;
+            if (!Pinar(s)) return @out;
             int w = s.Width, h = s.Height;
             for (int y = 0; y < h; y++)
             {
@@ -502,7 +509,7 @@ namespace Bastion.Client.Map
         /// (Base.FreshBase), so the edge and the wood beyond read as one wood; the tracks' ways left open, and the mouths of
         /// the ways through the pines (Mouth). In 0.10.1's order (y, then x, from the far corner north-west), no shadows. Out
         /// to Near, as the map's pines (addSyntyId); past it `far` (instanced), and past Far every one FarPine, as tall as
-        /// the one it stands for, in proportion. None but on the base's map.
+        /// the one it stands for, in proportion. None but in the pinar (Pinar).
         /// `street`: tile i is track (the map's GroundMap kind Street; ground.ts made from basePieces.ts terrainOf, which
         /// reads the base's tracks, ground 3, as 1: from the state as it is they would be Yard, and no way left open).
         /// `tall`: how tall a pine stands as placed (its parts' boxes' top: 0.10.1's topOf), for the pines of BasePines past Far.
@@ -510,7 +517,7 @@ namespace Bastion.Client.Map
         public static List<WoodPlacement> Wood(GameState s, Func<int, bool> street, Func<string, double> tall)
         {
             var @out = new List<WoodPlacement>();
-            if (s.Base == null) return @out;
+            if (!Pinar(s)) return @out;
             int w = s.Width, h = s.Height;
             var decor = s.Decor;
             // The share of the band along the edge (but its tracks) that stands in pines.

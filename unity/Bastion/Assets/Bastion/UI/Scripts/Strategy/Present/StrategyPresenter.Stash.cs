@@ -99,7 +99,7 @@ namespace Bastion.UI.Strategy
         /// <summary>Its name, one of it (Lore.GearName: «Granada», «Medicina», «Fusil de cerrojo»).</summary>
         public static string GearName(Engine.Gear g) => Lore.GearName(g.Kind, g.Type);
 
-        static string ModName(string mod) => mod != null && Content.WeaponMods.TryGetValue(mod, out var m) ? m.Name : "Mejora";
+        static string ModName(string mod) => mod != null && Content.WeaponMods.TryGetValue(mod, out var m) ? m.Name : "Accesorio";
 
         /// <summary>The HUD's icon while Arte's picture is missing; the supplies, our crate «§».</summary>
         /// <summary>A gear's HUD icon, for the debrief's tiles.</summary>

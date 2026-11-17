@@ -683,6 +683,79 @@ MonoBehaviour:
     model: {fileID: 919132149155446097, guid: 37463ea06051e4acdb2a10108c524e49, type: 3}
     materials:
     - {fileID: 2100000, guid: 30c6d00ff063f4cec97abc5e5685b819, type: 2}
+  - id: policeWall
+    model: {fileID: 919132149155446097, guid: ee4f20c9cfbd94f4889b276cc60c5cb1, type: 3}
+    materials:
+    - {fileID: 2100000, guid: f18b90b6eff164a7d862e5f0ac27ce28, type: 2}
+    - {fileID: 2100000, guid: 370dd576027214e80a42747d4fe7bd83, type: 2}
+  - id: policeWindowWall
+    model: {fileID: 919132149155446097, guid: 9d1d7dc2366224ee680dfd1dc07f1384, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+    - {fileID: 2100000, guid: 370dd576027214e80a42747d4fe7bd83, type: 2}
+    - {fileID: 2100000, guid: f18b90b6eff164a7d862e5f0ac27ce28, type: 2}
+  - id: policeDoorWall
+    model: {fileID: 919132149155446097, guid: 921bb2e547fe34df7bd1f334bf8fe545, type: 3}
+    materials:
+    - {fileID: 2100000, guid: f18b90b6eff164a7d862e5f0ac27ce28, type: 2}
+    - {fileID: 2100000, guid: 370dd576027214e80a42747d4fe7bd83, type: 2}
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeDoor
+    model: {fileID: 919132149155446097, guid: 13ab5568f63944938a5b2e9ddaccf505, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeLintel
+    model: {fileID: 919132149155446097, guid: 159ad5e7156a945f79144113867fe52a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: f18b90b6eff164a7d862e5f0ac27ce28, type: 2}
+    - {fileID: 2100000, guid: 370dd576027214e80a42747d4fe7bd83, type: 2}
+  - id: policeCorner
+    model: {fileID: 919132149155446097, guid: 8c794ecab230c4567a54659b45f66a9a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: f18b90b6eff164a7d862e5f0ac27ce28, type: 2}
+    - {fileID: 2100000, guid: f18b90b6eff164a7d862e5f0ac27ce28, type: 2}
+  - id: policeCrown
+    model: {fileID: 919132149155446097, guid: ff771854e99a54103b507853b07f96ab, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policePlinth
+    model: {fileID: 919132149155446097, guid: df9203d5a318d40b2a5a5aea3ebc1bb9, type: 3}
+    materials:
+    - {fileID: 2100000, guid: f980f11b7b99a4865a78ae25fe715e7b, type: 2}
+  - id: policeBars
+    model: {fileID: 919132149155446097, guid: 8996c44cb80e54aaea23fc0dadc6c4d5, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeBarsStart
+    model: {fileID: 919132149155446097, guid: adc8c00762f4042c9b02ef16f84466c8, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeBarsEnd
+    model: {fileID: 919132149155446097, guid: 189b2afd051404488a7c7e5ce54d8509, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeBarsDoorWall
+    model: {fileID: 919132149155446097, guid: 2a495dcd467b94465b4c32f75fa5e2fc, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeBarsDoor
+    model: {fileID: 919132149155446097, guid: 1025407d4aa3c4c1f9c67a05903d7111, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeBarsPost
+    model: {fileID: 919132149155446097, guid: 1085a52caaa834a1ab6dfdacbdb42e7a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeBarsLintel
+    model: {fileID: 919132149155446097, guid: d74f41618690c46478147fa08eac3e90, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+  - id: policeCounter
+    model: {fileID: 919132149155446097, guid: 33cd6a3ef8e094167a7de230668b6e0a, type: 3}
+    materials:
+    - {fileID: 2100000, guid: b409a3aee140b41cd9eaa1ea6f024f00, type: 2}
+    - {fileID: 2100000, guid: 370dd576027214e80a42747d4fe7bd83, type: 2}
+    - {fileID: 2100000, guid: 370dd576027214e80a42747d4fe7bd83, type: 2}
   glass: {fileID: 2100000, guid: 9687b2ff7e4e8407aa956c2583503912, type: 2}
   floors: {fileID: 2100000, guid: c1928889cb8a747748a8f362da8429e7, type: 2}
   roofs: {fileID: 2100000, guid: e380eff6d4dd44b708eb5651b762e997, type: 2}

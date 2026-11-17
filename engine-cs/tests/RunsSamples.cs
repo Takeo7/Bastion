@@ -121,6 +121,63 @@ namespace Bastion.Engine.Tests
             return Runs.Launch(c, new Rng(7))!.Value.State;
         }
 
+        /// <summary>A Sigilo just launched (H5; for UI, 17/11): in a town, the squad hidden, MissionState.Stealth.</summary>
+        public static GameState Stealth()
+        {
+            var c = Full();
+            var run = Start(c);
+            var node = RunMap.Choices(run).First((n) => RunMap.IsFight(n.Kind));
+            node.Kind = NodeKinds.Stealth;
+            node.Site = Places.Town;
+            node.Seed = 1;
+            node.Modifier = null;
+            Agree(c, new ChooseNodeCommand { Node = node.Id });
+            var s = Runs.Launch(c, new Rng(7))!.Value.State;
+            Assert.Equal((NodeKinds.Stealth, true, true), (s.Run!.NodeKind, s.Mission.Stealth == true, s.Concealed));
+            return s;
+        }
+
+        /// <summary>
+        /// A search that fills the pack (for UI, 17/11: FoundGear's «what didn't fit»): a Guarida just launched, `s1` beside
+        /// its box (unopened; it always gives: 80–120 supplies and a good weapon, RunLoot.LairOf), its pack full but for one
+        /// cell, so a pile goes in and the rest to the floor.
+        /// </summary>
+        public static GameState Search()
+        {
+            var c = Full();
+            var run = Start(c);
+            var node = RunMap.Choices(run).First((n) => RunMap.IsFight(n.Kind));
+            node.Kind = NodeKinds.Elite;
+            node.Site = Places.Town;
+            node.Seed = 1;
+            node.Modifier = null;
+            Agree(c, new ChooseNodeCommand { Node = node.Id });
+            var s = Runs.Launch(c, new Rng(7))!.Value.State;
+            var u = s.Units.Single((x) => x.Id == "s1");
+            var box = s.Mission.Lair!;
+            // Beside it, on a tile one stops on (a guard there steps to where the soldier was).
+            var side = Grid.Dirs8.Select((d) => new Pos { X = box.X + d.X, Y = box.Y + d.Y, Z = 0 }).First((p) => Flights.CanStopAt(s, p) && Looting.ReachesToSearch(s, p, box));
+            var there = Grid.UnitAt(s, side);
+            if (there != null) there.Pos = u.Pos;
+            u.Pos = side;
+            u.Facing = Los.FacingTo(u.Pos, box) ?? u.Facing;
+            Assert.Contains(Looting.SearchableTiles(s, u), (p) => Grid.SameTile(p, box));
+            // Its pack full of medicines but for its last cell.
+            var pack = u.Pack!;
+            var free = Enumerable.Range(0, pack.H).SelectMany((y) => Enumerable.Range(0, pack.W).Select((x) => (x, y))).Where((p) => Gears.At(pack, p.x, p.y) == null).ToList();
+            foreach (var (x, y) in free.Take(free.Count - 1)) pack.Items.Add(new Placed { Gear = new Gear { Id = $"g{++s.Run!.NextGear}", Kind = GearKinds.Medicine, Count = 1 }, X = x, Y = y });
+            Assert.Single(Enumerable.Range(0, pack.H).SelectMany((y) => Enumerable.Range(0, pack.W).Select((x) => (x, y))).Where((p) => Gears.At(pack, p.x, p.y) == null));
+            // Searched (on a copy): some of it in the pack, the rest on the floor.
+            var copy = Json.Read<GameState>(Json.Write(s));
+            copy.Command = 0;
+            var r = Step2Helpers.Exec(copy, Step2Helpers.Ability(u.Id, AbilityIds.Search, tile: box));
+            Assert.True(r.Ok, r.Error);
+            var found = r.Events!.OfType<SearchedEvent>().Single();
+            Assert.NotEmpty(found.Packed ?? new List<Placed>());
+            Assert.NotEmpty(found.Floor ?? new List<Gear>());
+            return s;
+        }
+
         /// <summary>A normal node at the hospital only inside (H7, Sites.Hospital), just launched: for Arte and UI.</summary>
         public static GameState Hospital()
         {
@@ -231,8 +288,8 @@ namespace Bastion.Engine.Tests
             Save("combate-mochila.json", Combat());
             Save("toro.json", Boss());
             Save("hospital.json", Hospital());
-            // The offices with a corridor (seed 14) and the shed (H9).
-            Save("oficinas.json", Inside(Places.Offices, 14));
+            // The offices with a corridor and a meeting room, its table of two (seed 1), and the shed (H9).
+            Save("oficinas.json", Inside(Places.Offices, 1));
             Save("nave.json", Inside(Places.Shed, 11));
             // The police station of two storeys (seed 12).
             Save("comisaria.json", Inside(Places.Police, 12));
@@ -240,6 +297,9 @@ namespace Bastion.Engine.Tests
             Save("plaza.json", Inside(Places.Plaza, 11));
             // The camping (seed 11): out of doors.
             Save("camping.json", Inside(Places.Camping, 11));
+            // For UI (17/11): a Sigilo just launched; a search whose find doesn't all fit.
+            Save("sigilo.json", Stealth());
+            Save("registro.json", Search());
         }
     }
 }

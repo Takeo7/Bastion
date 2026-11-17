@@ -334,6 +334,11 @@ namespace Bastion.Engine
         /// its actions); meanwhile −20 of defence and no overwatch. Absent, standing.
         /// </summary>
         public bool? Down { get; set; }
+        /// <summary>
+        /// One of the dead caged in a police station's cell (H9; Arturo, 17/11): never asleep, it goes to its bars and bites
+        /// through them (Aim.AcrossBars); who it can reach, Rules.CagedReach. Absent, free.
+        /// </summary>
+        public bool? Caged { get; set; }
     }
 
     /// <summary>Unit.automaton: `{ piece: string }`.</summary>

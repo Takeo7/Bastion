@@ -21,12 +21,12 @@ namespace Bastion.Engine
         public const string PileFull = "Esa pila está llena.";
         public const string SlotTaken = "Ese hueco está ocupado.";
         public const string NotAPile = "Eso no se parte.";
-        public const string NotAMod = "Eso no es una mejora.";
+        public const string NotAMod = "Eso no es un accesorio.";
         public const string NotAWeapon = "Eso no es un arma.";
-        public const string ModsOnGuns = "Solo las armas de fuego llevan mejoras.";
-        public const string ModOn = "Ya la lleva puesta.";
-        public const string ModOff = "No la lleva puesta.";
-        public const string UnmountAtBase = "Las mejoras se quitan en la base.";
+        public const string ModsOnGuns = "Solo las armas de fuego llevan accesorios.";
+        public const string ModOn = "El arma ya lleva ese accesorio.";
+        public const string ModOff = "El arma no lleva ese accesorio.";
+        public const string UnmountAtBase = "Los accesorios se quitan en la base.";
         public const string StashFull = "No cabe en el almacén.";
         public const string NotUsable = "Eso no se usa así.";
         public const string BetweenNodes = "Solo entre etapas.";
@@ -61,7 +61,7 @@ namespace Bastion.Engine
         public static string NotThere(Gear g) => $"{Capital(The(g))} no va en ese hueco.";
         public static string SwapNoRoom(Gear old, Gear moved) => $"{Capital(The(old))} no cabe donde estaba {The(moved)}.";
         public static string SplitCount(int count) => count == 2 ? "Solo se puede partir 1." : $"Se parten de 1 a {count - 1}.";
-        public static string ModsFull(int slots) => $"Lleva ya {slots} mejoras: quita una antes.";
+        public static string ModsFull(int slots) => $"Lleva ya {slots} accesorios: quita uno antes.";
         public static string PackFull(string name) => $"No cabe en la mochila de {name}.";
 
         // ---------------------------------------------------------- proposals, log

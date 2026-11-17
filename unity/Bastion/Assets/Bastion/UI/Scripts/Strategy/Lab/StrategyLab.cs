@@ -642,7 +642,7 @@ namespace Bastion.UI.Strategy
         /// </summary>
         void PlaceDrawings()
         {
-            Drawings("place:", new[] { Bastion.Engine.Places.City, Bastion.Engine.Places.Town, Bastion.Engine.Places.Estate, Bastion.Engine.Places.Factory, Bastion.Engine.Places.Roadside, Bastion.Engine.Places.Country }.Select(id => (id, Bastion.Engine.Places.Names[id])));
+            Drawings("place:", new[] { Bastion.Engine.Places.City, Bastion.Engine.Places.Town, Bastion.Engine.Places.Estate, Bastion.Engine.Places.Factory, Bastion.Engine.Places.Roadside, Bastion.Engine.Places.Country, Bastion.Engine.Places.Hospital, Bastion.Engine.Places.Offices, Bastion.Engine.Places.Shed, Bastion.Engine.Places.Police, Bastion.Engine.Places.Plaza, Bastion.Engine.Places.Camping }.Select(id => (id, Bastion.Engine.Places.Names.TryGetValue(id, out var name) ? name : id)));
         }
 
         void WeatherDrawings()
@@ -708,6 +708,8 @@ namespace Bastion.UI.Strategy
             root.BindGear(gear);
             runsShow = id => Show(p, id);
             Show(p, null);
+            // BASTION_ESTRATEGIA_LUGARES=1: the places' drawings, the special maps' too, in a strip (Arturo, 17/11).
+            if (System.Environment.GetEnvironmentVariable("BASTION_ESTRATEGIA_LUGARES") == "1") PlaceDrawings();
         }
 
         System.Action<string> runsShow;

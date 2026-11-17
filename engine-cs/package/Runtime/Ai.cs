@@ -862,6 +862,12 @@ namespace Bastion.Engine
         /// </summary>
         public static void TakeZombieTurn(Sim sim, Unit u)
         {
+            // Caged in a police cell (H9): to its bars, and a bite through them.
+            if (u.Caged == true)
+            {
+                CagedTurn(sim, u);
+                return;
+            }
             var sighting = new Sighting();
             ZombieActions(sim, u, sighting);
             if (!u.Alive || sim.Over) return;
@@ -878,6 +884,37 @@ namespace Bastion.Engine
                 var there = Foes(sim.S, u).Any((e) => e.Id == was.Id);
                 sim.Emit(new HuntingEvent { Unit = u.Id, Target = there && missed < HuntTurns ? was.Id : null, Missed = missed });
             }
+        }
+
+        /// <summary>
+        /// A caged one's turn (H9; Arturo, 17/11: «van hacia las verjas y pueden atacarte si estás cac»): never asleep, it
+        /// goes to the tile of its cell just inside the bars nearest the closest of the living it sees through them, or where
+        /// it heard something; perceiving nobody, to its bars all the same (the first of them), so that none stays out of
+        /// reach at the back. Then it bites whoever is across the bars from it (Aim.AcrossBars), the weakest first.
+        /// </summary>
+        private static void CagedTurn(Sim sim, Unit u)
+        {
+            var s = sim.S;
+            var front = Rules.CagedFront(s, u);
+            if (front.Count == 0) return;
+            var seen = Grid.Combatants(s, Teams.Xcom).Where((e) => Los.CanSee(s, u, e)).ToList();
+            Js.Sort(seen, (a, b) => Order(Farness(s, u.Pos, a.Pos) - Farness(s, u.Pos, b.Pos)) != 0 ? Order(Farness(s, u.Pos, a.Pos) - Farness(s, u.Pos, b.Pos)) : IdOrder(a.Id, b.Id));
+            var toward = seen.Count > 0 ? seen[0].Pos : u.Heard;
+            var spot = toward != null ? front.OrderBy((p) => Farness(s, p, toward)).ThenBy((p) => p.Y).ThenBy((p) => p.X).First() : front.OrderBy((p) => p.Y).ThenBy((p) => p.X).First();
+            if (!Grid.SamePos(u.Pos, spot))
+            {
+                var reach = Paths.ComputeReach(s, u, Paths.CostPerAp(u));
+                var path = Paths.BuildPath(s, u, reach, spot);
+                if (path != null) sim.MoveAlong(u, path, 1);
+            }
+            if (!u.Alive || sim.Over) return;
+            var abilities = Abilities.AbilitiesOf(u);
+            var bite = new[] { AbilityIds.Claw, AbilityIds.Pound }.FirstOrDefault((a) => abilities.Contains(a));
+            if (bite == null || Abilities.AbilityBlocker(s, u, bite) != null) return;
+            var beside = Abilities.MeleeTargets(s, u, bite).Where((o) => o.Path.Count == 0).ToList();
+            if (beside.Count == 0) return;
+            Js.Sort(beside, (a, b) => a.Target.Hp - b.Target.Hp != 0 ? a.Target.Hp - b.Target.Hp : IdOrder(a.Target.Id, b.Target.Id));
+            sim.Perform(u, bite, melee: beside[0]);
         }
 
         /// <summary>Whom one of the dead saw this turn: the nearest of the living, the last time it saw any (takeZombieTurn).</summary>

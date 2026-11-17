@@ -148,6 +148,13 @@ namespace Bastion.UI.Strategy
                     IconIn(badge, n.ModifierIcon, "rnode__mod-icon");
                 }
                 // An event's (H4), on the other side, ringed: it comes from the way, not from the stage.
+                // A special map: its place's drawing, low on the right, apart from the modifiers' (Arturo, 17/11).
+                if (!n.Hidden && !string.IsNullOrEmpty(n.SiteIcon))
+                {
+                    var site = Ui.El("rnode__site", el);
+                    site.pickingMode = PickingMode.Ignore;
+                    IconIn(site, n.SiteIcon, "rnode__site-icon");
+                }
                 if (!n.Hidden && !string.IsNullOrEmpty(n.AddedIcon))
                 {
                     var badge = Ui.El("rnode__mod rnode__mod--added rnode__mod--" + (n.AddedId ?? "x"), el);

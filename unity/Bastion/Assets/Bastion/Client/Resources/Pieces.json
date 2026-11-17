@@ -3868,6 +3868,394 @@
     "PolygonGangWarfare_01_A": "PolygonGangWarfare_04_A"
    },
    "src": "unity/Bastion/Assets/Synty/PolygonGangWarfare/Models/SM_Bld_Wall_Metal_01.fbx"
+  },
+  "policeWall": {
+   "pack": "police",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/Base/SM_Bld_Base_Wall_01.fbx"
+  },
+  "policeWindowWall": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Window_Large_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     0.259,
+     -50,
+     -0.02
+    ],
+    [
+     2.241,
+     50,
+     50
+    ]
+   ],
+   "squeeze": 0.6306760847628659,
+   "drop": [
+    "Glass"
+   ],
+   "renderer": "SM_Bld_Wall_Window_Large_01",
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Window_Large_01.fbx"
+  },
+  "policeDoorWall": {
+   "pack": "police",
+   "fbx": "SM_Bld_Base_Wall_Door_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "swap": {
+    "PolygonPoliceStation_01_A": "Wall_03",
+    "Wall_03": "PolygonPoliceStation_01_A"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/Base/SM_Bld_Base_Wall_Door_01.fbx"
+  },
+  "policeDoor": {
+   "pack": "police",
+   "fbx": "SM_Bld_Door_01",
+   "centre": [
+    0.5,
+    0
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "parts": true,
+   "leaf": "SM_Bld_Door_01",
+   "drop": [
+    "Glass"
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Door_01.fbx"
+  },
+  "policeLintel": {
+   "pack": "police",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.43
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/Base/SM_Bld_Base_Wall_01.fbx"
+  },
+  "policeCorner": {
+   "pack": "police",
+   "fbx": "SM_Bld_Base_Wall_01",
+   "centre": [
+    0.1125,
+    0
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.225,
+     50,
+     50
+    ]
+   ],
+   "fill": true,
+   "swap": {
+    "Wall_03": "Wall_Brick_02"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/Base/SM_Bld_Base_Wall_01.fbx"
+  },
+  "policeCrown": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Trim_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "base": -2.52,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Trim_01.fbx"
+  },
+  "policePlinth": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Block_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     0.1,
+     -50
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Block_01.fbx"
+  },
+  "policeBars": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Cell_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Cell_01.fbx"
+  },
+  "policeBarsStart": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Cell_01",
+   "centre": [
+    0.625,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     1.25,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Cell_01.fbx"
+  },
+  "policeBarsEnd": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Cell_01",
+   "centre": [
+    1.875,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1.25,
+     -50,
+     -0.02
+    ],
+    [
+     2.5,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Cell_01.fbx"
+  },
+  "policeBarsDoorWall": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Door_Cell_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Door_Cell_01.fbx"
+  },
+  "policeBarsDoor": {
+   "pack": "police",
+   "fbx": "SM_Bld_Door_04",
+   "centre": [
+    0.482,
+    -0.027
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "parts": true,
+   "leaf": "SM_Bld_Door_04",
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Door_04.fbx"
+  },
+  "policeBarsPost": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Cell_01",
+   "centre": [
+    0.025,
+    0
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     0.05,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Cell_01.fbx"
+  },
+  "policeBarsLintel": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Door_Cell_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.03
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Door_Cell_01.fbx"
+  },
+  "policeCounter": {
+   "pack": "police",
+   "fbx": "SM_Bld_Wall_Reception_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "x",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "drop": [
+    "Glass"
+   ],
+   "renderer": "SM_Bld_Wall_Reception_01",
+   "swap": {
+    "Wall_Brick_02": "Wall_03"
+   },
+   "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Reception_01.fbx"
   }
  }
 }

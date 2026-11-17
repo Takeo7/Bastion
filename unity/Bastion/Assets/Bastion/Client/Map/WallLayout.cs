@@ -45,6 +45,11 @@ namespace Bastion.Client.Map
             /// brick stopped short of each corner and of the door, the concrete between showing, toothed).
             /// </summary>
             public float facingOut;
+            /// <summary>
+            /// Seen through and never cut down on the storey in view (a cell's bars, H9 §3: what they'd hide is in sight
+            /// anyway), as a façade's upper storey goes: it fades only above the storey in view (WallsView's cut ON_ROOF).
+            /// </summary>
+            public bool seeThrough;
 
             public Kit With(string[] wall = null, string[] window = null, string[] door = null, string[] lintel = null, bool noLeaf = false, float storey = 0, float[] glass = null,
                 float facingOut = -1)
@@ -162,6 +167,37 @@ namespace Bastion.Client.Map
                     lintel = new[] { "sheetLintel" + facing }, post = "sheetCorner" + facing, postAlong = 1, postSquare = true, thick = Thick, storey = 3,
                     glass = new[] { KitTile, 1.073f, 1.473f, 0.071f }, shardsAt = -0.085f,
                 };
+            // A police station's (H9 §3, the runs' comisaría: PoliceFacings): POLYGON Police Station's walls, 2.5 m modules and
+            // 3 m a storey, its tan brick outside and plaster in, 0.225 m thick as Shops' (thickened as any wall). Its plain
+            // wall a tile from the middle; its tall window of four panes (2 m across, 2.3 m tall) its frame squeezed to a tile,
+            // the pane its glass (1.2 m across once squeezed, 2.31 m tall, its middle 1.47 m up); its door a tile round the
+            // doorway (a metre wide, as its leaves) and a leaf apart, the one with a window and a vent; the lintel and the
+            // corner, as Shops'. Along the top of its top storey, the pack's olive moulding; at the foot of the ground floor,
+            // the outer half of its dark brick footing, but under its doors.
+            kits[PoliceKit] = new Kit
+            {
+                wall = new[] { "policeWall" }, window = new[] { "policeWindowWall" }, door = new[] { "policeDoorWall", "policeDoor" },
+                lintel = new[] { "policeLintel" }, post = "policeCorner", postAlong = 1, postSquare = true, thick = Thick, storey = 3,
+                glass = new[] { 1.2f, 2.308f, 1.471f, 0f }, crown = "policeCrown", plinth = "policePlinth",
+            };
+            // Its walls of their own inside: a cell's front of bars (TileKinds.Bars; the pack's, 0.13 m thick, as they are, seen
+            // through and never cut down), its two tiles the pack's two halves, each with its post at its end of the front (a
+            // tile between two others a tile from the middle; one alone, its post where the front stops); and the reception's
+            // counter (the pack's wall with its counter, its glass and the desk on the office's side, all its plaster; not
+            // thickened, or the desk would stand a metre deep), its pane the glass over it. The barred door's wall, its leaf and
+            // the bars over a gap are cut and ready, unused: nobody goes into the cells (Arturo, 17/11).
+            kits[BarsKit] = new Kit
+            {
+                wall = new[] { "policeBars" }, window = new[] { "policeBars" }, door = new[] { "policeBarsDoorWall", "policeBarsDoor" },
+                lintel = new[] { "policeBarsLintel" }, post = "policeBarsPost", postAlong = 1, thick = 1, storey = 3,
+                glass = new[] { 0.89f, 1.48f, 1.45f, -0.03f }, seeThrough = true,
+            };
+            kits[CounterKit] = new Kit
+            {
+                wall = new[] { "roomWall" }, window = new[] { "policeCounter" }, door = new[] { "roomDoorWall" }, lintel = new[] { "roomLintel" },
+                post = "houseCorner", postAlong = 1, postSquare = true, thick = 1, storey = 3,
+                glass = new[] { KitTile, 0.944f, 1.583f, 0.006f },
+            };
             return new Dictionary<string, Kit>(kits)
             {
                 [KitIds.House] = house, [KitIds.Bunker] = bunker, [KitIds.Brick] = brick, [KitIds.Fence] = fence,
@@ -179,10 +215,19 @@ namespace Bastion.Client.Map
         static string ShopKit(string facing) => "shop" + facing;
         static string OfficeKit(string facing) => "office" + facing;
         static string HallKit(string facing) => "hall" + facing;
+        /// <summary>A police station's kit (PoliceFacings.Brick), and its own inner walls': its cells' bars, its reception's counter (H9 §3).</summary>
+        public const string PoliceKit = "police", BarsKit = "policeBars", CounterKit = "policeCounter";
+
+        /// <summary>
+        /// A police station's counter (H9 §3: «a wall with its window between the lobby and the office»), by storey and tile
+        /// (level · w · h + tile): the side the lobby is on (DIRS4). The engine's mark (PoliceDetailKinds.Counter, on the
+        /// window's first tile, facing the lobby) and the windows in a row with it (Counters).
+        /// </summary>
+        readonly Dictionary<int, int> counters = new Dictionary<int, int>();
 
         /// <summary>The kit building `bd`'s outer walls are of: a shop's, an office's or a hall's its facing's, any other's its own; a wall of nobody's, the map's.</summary>
         string KitIdOf(Building bd) => bd == null ? plan.LooseKit : BuildingLooks.Facing(bd) is string facing
-            ? (bd.kind == BuildingKinds.Office || bd.kind == BuildingKinds.Medical ? OfficeKit(facing) : bd.kind == BuildingKinds.Hall || bd.kind == BuildingKinds.Barn ? HallKit(facing) : ShopKit(facing)) : bd.kit;
+            ? (facing == PoliceFacings.Brick ? PoliceKit : bd.kind == BuildingKinds.Office || bd.kind == BuildingKinds.Medical ? OfficeKit(facing) : bd.kind == BuildingKinds.Hall || bd.kind == BuildingKinds.Barn ? HallKit(facing) : ShopKit(facing)) : bd.kit;
 
         /// <summary>
         /// Whether `level` is building bd's top storey, the one its cornice runs along: laid from its own tiles (a building of
@@ -220,11 +265,11 @@ namespace Bastion.Client.Map
 
         /// <summary>
         /// The pieces with no cap: a doorway's, the lintels over them, a gate's leaves, the wire along a fence's top and a
-        /// fence's mesh, which is seen through.
+        /// fence's mesh, which is seen through; a cell's bars, so too.
         /// </summary>
         static readonly HashSet<string> NoCap = new HashSet<string>(
             Kits.Values.Append(Between).SelectMany(k => k.door.Concat(k.lintel).Concat(new[] { k.leaf, k.top, k.crown, k.plinth }.Where(id => id != null)))
-                .Concat(new[] { "fenceWall", "fenceColumn", "gateLeaf", "gateLeafFar" }));
+                .Concat(new[] { "fenceWall", "fenceColumn", "gateLeaf", "gateLeafFar", "policeBars", "policeBarsStart", "policeBarsEnd", "policeBarsPost" }));
 
         /// <summary>Shop signs and how long each is (tiles): the long ones are scaled down to fit over a door.</summary>
         static readonly Dictionary<string, float> Signs = new Dictionary<string, float> { ["signShop"] = 1.7f, ["signFood"] = 2.2f, ["signMarket"] = 2.64f, ["signDiner"] = 1.97f };
@@ -311,11 +356,11 @@ namespace Bastion.Client.Map
         /// <summary>A list of pieces: the first one in the building's colours.</summary>
         void PutAll(string[] ids, float x, float z, float @base, Vec2 o, bool between, int b, Kit kit, bool open = false, bool roof = false, bool otherHinge = false)
         {
-            for (int k = 0; k < ids.Length; k++) Put(ids[k], x, z, @base, o, between, b, thick: kit.thick, tint: k == 0, open: open, roof: roof, otherHinge: otherHinge);
+            for (int k = 0; k < ids.Length; k++) Put(ids[k], x, z, @base, o, between, b, thick: kit.thick, tint: k == 0, open: open, roof: roof || kit.seeThrough, otherHinge: otherHinge);
         }
 
         void Post(Kit kit, float x, float z, float @base, Vec2 o, bool between, int b, bool roof = false) =>
-            Put(kit.post, x, z, @base, o, between, b, along: kit.postAlong, thick: kit.thick, square: kit.postSquare, tint: kit.postTint, roof: roof, cap: true);
+            Put(kit.post, x, z, @base, o, between, b, along: kit.postAlong, thick: kit.thick, square: kit.postSquare, tint: kit.postTint, roof: roof || kit.seeThrough, cap: true);
 
         /// <summary>
         /// A window pane at (x, z), `base` its storey's floor (upper storeys' go with the roof); `broken`, what is left of it
@@ -466,6 +511,7 @@ namespace Bastion.Client.Map
             IList<string> groundTiles = plan.Shut.Contains((byte)1) ? s.Tiles.Select((t, i) => plan.Shut[i] != 0 ? TileKinds.Floor : t).ToList() : (IList<string>)s.Tiles;
             var dirs = Bastion.Engine.Grid.Dirs4;
 
+            Counters();
             // Each building's first door on its outline (in tile order): where its sign goes.
             var signDoor = new Dictionary<int, int>();
             foreach (var bd in plan.Buildings)
@@ -728,6 +774,8 @@ namespace Bastion.Client.Map
             if (loose && (level > 0 || (!IsWallLike(kind) && !broken) || plan.Massive[i] != 0 || plan.Out[i] != 0)) return;
             if (level == 0 && plan.Massive[i] != 0) return;
             var building = loose ? null : plan.Buildings[b];
+            // (A camping's caravan is its model whole: MapBuilder.Caravans.)
+            if (building?.trailer != null) return;
             float @base = building != null ? building.@base + level * Storey : (i < s.Elev.Count ? s.Elev[i] : 0) * Storey;
             var outerKit = KitOf(building);
             float cx = x + 0.5f, cz = y + 0.5f;
@@ -791,11 +839,15 @@ namespace Bastion.Client.Map
                 // Along x unless the wall runs north–south (a lone tile follows the floor beside it).
                 int run = nsConn || (!ewConn && plan.Interior(b, x - 1, y) && plan.Interior(b, x + 1, y)) ? 1 : 0;
                 var (o, between, other) = Facing(run, 0, 0, b);
-                bool front = level == 0 && !between && kind != TileKinds.Wall && kind != TileKinds.Low && shopFront(building, x, y);
-                var kit = between && building?.kind != BuildingKinds.Medical ? Between : front ? Kits[KitIds.ShopFront] : outerKit;
+                var along = run == 0 ? new Vec2 { X = 1, Y = 0 } : new Vec2 { X = 0, Y = 1 };
+                // A police station's own (H9 §3): a cell's front of bars; the reception's counter, its face to the lobby.
+                bool bars = kind == TileKinds.Bars;
+                int counter = counters.TryGetValue(level * w * h + i, out int lobby) ? lobby : -1;
+                if (counter >= 0) o = dirs[counter];
+                bool front = level == 0 && !between && kind != TileKinds.Wall && kind != TileKinds.Low && !bars && shopFront(building, x, y);
+                var kit = bars ? Kits[BarsKit] : counter >= 0 ? Kits[CounterKit] : between && building?.kind != BuildingKinds.Medical ? Between : front ? Kits[KitIds.ShopFront] : outerKit;
                 bool shuttered = false;
                 if (kit == outerKit) (kit, shuttered) = LookOf(building, kit);
-                var along = run == 0 ? new Vec2 { X = 1, Y = 0 } : new Vec2 { X = 0, Y = 1 };
                 if (!loose) Storeys(cx, cz, x, y, o, between, b, other);
                 if (IsDoor(kind) && loose && plan.Siege)
                 {
@@ -872,7 +924,7 @@ namespace Bastion.Client.Map
                     else PutAll(kit.window, cx, cz, @base, o, between, b, kit);
                     if (shuttered) Put("houseShutters", cx, cz, @base, o, between, b, thick: kit.thick);
                     // (A broken one, what is left of its glass: before, none, and it looked as a whole one. Arturo's play-test of 14/11.)
-                    Pane(between ? KitIds.House : front ? KitIds.ShopFront : KitIdOf(building), cx, cz, @base, o, b, false, between, kind == TileKinds.WindowBroken);
+                    Pane(counter >= 0 ? CounterKit : between ? KitIds.House : front ? KitIds.ShopFront : KitIdOf(building), cx, cz, @base, o, b, false, between, kind == TileKinds.WindowBroken);
                 }
                 else if (broken)
                 {
@@ -890,6 +942,7 @@ namespace Bastion.Client.Map
                     {
                         if (garage.first) Put("houseGarage", garage.x, garage.z, @base, o, between, b, thick: kit.thick, tint: true);
                     }
+                    else if (bars) PutAll(new[] { BarsOf(x, y, o) }, cx, cz, @base, o, between, b, kit);
                     else PutAll(kit.wall, cx, cz, @base, o, between, b, kit);
                     if (level == 0 && !between && building != null && shutters.TryGetValue(i, out float width)) shutter(building, cx, cz, @base, o, width, 0.75f);
                 }
@@ -920,7 +973,7 @@ namespace Bastion.Client.Map
                 int next = OwnerAt((y + d.Y) * w + x + d.X);
                 int bb = !loose && next >= 0 && next != b && IsWallLike(At(x + d.X, y + d.Y)) ? next : b;
                 var (o, between, other) = Facing(run, d.X, d.Y, bb);
-                var kit = between && building?.kind != BuildingKinds.Medical ? Between : bb == b ? outerKit : KitOf(BuildingOf(bb));
+                var kit = kind == TileKinds.Bars ? Kits[BarsKit] : between && building?.kind != BuildingKinds.Medical ? Between : bb == b ? outerKit : KitOf(BuildingOf(bb));
                 float ax = cx + d.X * 0.25f, az = cz + d.Y * 0.25f;
                 // On a corner's outside (its face away from the other arm), a facing runs on round it to meet the other's.
                 int bend = Enumerable.Range(0, 4).FirstOrDefault(j => j != k && conn[j]);
@@ -928,7 +981,7 @@ namespace Bastion.Client.Map
                 for (int n = 0; n < kit.wall.Length; n++)
                 {
                     float r = n > 0 ? reach : 0;
-                    Put(kit.wall[n], ax - d.X * r / 2, az - d.Y * r / 2, @base, o, between, bb, along: 0.5f + r, thick: kit.thick, tint: n == 0, tall: broken ? BreachHeight : 1);
+                    Put(kit.wall[n], ax - d.X * r / 2, az - d.Y * r / 2, @base, o, between, bb, along: 0.5f + r, thick: kit.thick, tint: n == 0, tall: broken ? BreachHeight : 1, roof: kit.seeThrough);
                 }
                 if (broken) for (int n = 0; n < kit.lintel.Length; n++) Put(kit.lintel[n], ax, az, @base, o, between, bb, along: 0.5f, thick: kit.thick, tint: n == 0);
                 if (!loose) Storeys(ax, az, x, y, o, between, bb, other, 0.5f, d, reach);
@@ -939,10 +992,52 @@ namespace Bastion.Client.Map
             if (arms == 2)
             {
                 var (o, between, _) = Facing(0, conn[1] ? 1 : -1, 0, b);
-                Post(between && building?.kind != BuildingKinds.Medical ? Between : outerKit, cx, cz, @base, o, between, b);
+                Post(kind == TileKinds.Bars ? Kits[BarsKit] : between && building?.kind != BuildingKinds.Medical ? Between : outerKit, cx, cz, @base, o, between, b);
                 if (building != null && !building.leveled && !between)
                     for (int n = 1; n < building.storeys; n++) Post(outerKit, cx, cz, @base + n * Storey, o, false, b, true);
             }
+        }
+
+        /// <summary>
+        /// Each police station's counter (H9 §3; WallLayout.counters): the engine's mark on the counter window's first tile,
+        /// facing the lobby, and the windows in a row with it along its wall (its glass is two tiles).
+        /// </summary>
+        void Counters()
+        {
+            counters.Clear();
+            if (s.Interiors == null) return;
+            var dirs = Bastion.Engine.Grid.Dirs4;
+            foreach (var site in s.Interiors.Where((i) => i.Kind == InteriorKinds.Police))
+                foreach (var mark in site.Dressing.Where((d) => d.Kind == PoliceDetailKinds.Counter))
+                {
+                    if (mark.Facing < 0 || mark.Facing > 3) continue;
+                    var lobby = dirs[mark.Facing];
+                    level = mark.Z;
+                    layer = level > 0 ? (s.Levels != null && level - 1 < s.Levels.Count ? s.Levels[level - 1].Tiles : null) : s.Tiles;
+                    // Along the wall: across the way to the lobby.
+                    int ax = lobby.Y != 0 ? 1 : 0, ay = lobby.X != 0 ? 1 : 0;
+                    foreach (int side in new[] { 1, -1 })
+                        for (int k = side > 0 ? 0 : -1; ; k += side)
+                        {
+                            int x = mark.X + ax * k, y = mark.Y + ay * k;
+                            string t = At(x, y);
+                            if (t != TileKinds.Window && t != TileKinds.WindowBroken) break;
+                            counters[level * w * h + y * w + x] = mark.Facing;
+                        }
+                }
+            level = 0;
+            layer = null;
+        }
+
+        /// <summary>
+        /// Which half of the pack's bars tile (x, y) of a cell's front takes, its outer face to `o`: the first of the front (its
+        /// post at the front's end that way: a piece's −x is the model's start, along (o.y, −o.x)) or the last, or a tile from
+        /// the middle between two others (H9 §3: each front two tiles, the pack's piece whole over them).
+        /// </summary>
+        string BarsOf(int x, int y, Vec2 o)
+        {
+            bool before = At(x - o.Y, y + o.X) == TileKinds.Bars, after = At(x + o.Y, y - o.X) == TileKinds.Bars;
+            return before && after ? "policeBars" : !before ? "policeBarsStart" : "policeBarsEnd";
         }
 
         /// <summary>

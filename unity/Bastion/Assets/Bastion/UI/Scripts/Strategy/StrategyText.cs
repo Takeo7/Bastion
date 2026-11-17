@@ -38,14 +38,6 @@ namespace Bastion.UI.Strategy
             public static string PartnerHere(string name) => $"{name} está aquí";
         }
 
-        /// <summary>The soldier's sheet: the heads' and the veterancy's help (screen.ts renderSheet's titles).</summary>
-        public static class Sheet
-        {
-            public const string ArmsTip = "Las armas salen de la Armería: allí se arreglan y se les ponen mejoras";
-            public const string BeltTip = "Dos huecos para cualquier accesorio. Se compran en la Armería; si el soldado cae, se pierden";
-            public const string RankTip = "La veteranía sube con los puntos gastados en el tablero: un rango cada 5.";
-        }
-
         /// <summary>The skill board: its points' help.</summary>
         public static class Board
         {

@@ -57,9 +57,21 @@ namespace Bastion.Engine
             [Offices] = 0.3,
             [Shed] = 0.3,
             [Police] = 0.35,
-            // A square and ten shops, out of doors.
-            [Plaza] = 0.5,
-            [Camping] = 0.5,
+            // Out of doors (H9): a city's and a town's by the ground one walks (WalkShare).
+            [Plaza] = 1 * 0.25,
+            [Camping] = 0.7 * 0.27,
+        };
+
+        /// <summary>
+        /// The ground one walks on the maps of H9 out of doors against a city's or a town's (some 3000 tiles): the plaza some
+        /// 770, the camping some 790 (Networking, R1, 17/11: with half a city's dead they had twice its dead to the 100
+        /// tiles, and the plaza killed everyone by turn 10). Their dead go by it: the plaza as a city, the camping as a town
+        /// (DeadShare), their lone dead too (Setup.Lurkers).
+        /// </summary>
+        public static readonly IReadOnlyDictionary<string, double> WalkShare = new Dictionary<string, double>
+        {
+            [Plaza] = 0.25,
+            [Camping] = 0.27,
         };
 
         /// <summary>
