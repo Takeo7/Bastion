@@ -576,6 +576,18 @@ namespace Bastion.Engine
                 }
             }
             var pick = BestOf(options, (o) => o.Cost);
+            // Near (GenOptions.EvacNear): with the bus standing, the walk no longer than NearMost (Mapgen.WalkWith).
+            if (near)
+            {
+                pick = null;
+                foreach (var o in options.OrderBy((o) => o.Cost).Take(NearTries))
+                {
+                    var walk = WalkWith(c, o.Zone, o.Tiles);
+                    if (walk < 0 || walk > NearMost) continue;
+                    pick = o;
+                    break;
+                }
+            }
             if (pick == null) return null;
             var chosen = pick.Value;
             void Clear(Vec2 p)

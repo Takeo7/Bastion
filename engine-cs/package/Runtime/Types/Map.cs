@@ -38,6 +38,8 @@ namespace Bastion.Engine
     /// console:      objective terminal — indestructible full-cover object.
     /// roof:         a storey's slab nobody stands on (a pitched roof, a roof with no way up):
     ///               only on GameState.levels.
+    /// bars:         a wall of bars (H9, a police station's cells): sight and fire go through, nobody does; no
+    ///               cover. Solid for rooms (a cell is its own) and looked into as through a window.
     /// </summary>
     public static class TileKinds
     {
@@ -52,10 +54,11 @@ namespace Bastion.Engine
         public const string Ladder = "ladder";
         public const string Console = "console";
         public const string Roof = "roof";
+        public const string Bars = "bars";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Floor, Wall, High, Low, Door, DoorOpen, Window, WindowBroken, Ladder, Console, Roof,
+            Floor, Wall, High, Low, Door, DoorOpen, Window, WindowBroken, Ladder, Console, Roof, Bars,
         };
     }
 
@@ -328,6 +331,22 @@ namespace Bastion.Engine
         /// in a city. Not in All: the campaign's own missions never go there.
         /// </summary>
         public const string Hospital = "hospital";
+        /// <summary>The offices only inside (H9 §1): a city's office block (Mapgen.OfficesOnly). Not in All.</summary>
+        public const string Offices = "offices";
+        /// <summary>The shed only inside (H9 §2): a factory's main shed (Mapgen.ShedOnly), in a facility. Not in All.</summary>
+        public const string Shed = "shed";
+        /// <summary>The police station only inside (H9 §3): a building of its own (Mapgen.PoliceOnly), in a city. Not in All.</summary>
+        public const string Police = "police";
+        /// <summary>The shopping plaza (H9 §4): a square, its shops round it, out of doors (Mapgen.PlazaMap), in a city. Not in All.</summary>
+        public const string Plaza = "plaza";
+        /// <summary>The camping (H9 §5): a clearing in the pines, out of doors (Mapgen.CampingMap), in the wilds. Not in All.</summary>
+        public const string Camping = "camping";
+
+        /// <summary>A map that is one building (MissionState.Inside): the hospital, the offices, the shed, the police station.</summary>
+        public static bool IsInside(string? site) => site == Hospital || site == Offices || site == Shed || site == Police;
+
+        /// <summary>The maps that are one building of H9: the dead start indoors only (the hospital's as it was).</summary>
+        public static bool IndoorsOnly(string? site) => site == Offices || site == Shed || site == Police;
 
         public static readonly IReadOnlyList<string> All = new[] { Roadside, Industrial };
     }

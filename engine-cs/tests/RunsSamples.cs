@@ -55,6 +55,8 @@ namespace Bastion.Engine.Tests
             var c = Full();
             var run = Start(c);
             var node = RunMap.Choices(run).First((n) => RunMap.IsFight(n.Kind));
+            // In the country as it was (H9 would make it the camping).
+            if (node.Site == Places.Camping) node.Site = Places.Country;
             Agree(c, new ChooseNodeCommand { Node = node.Id });
             var s = Runs.Launch(c, new Rng(5))!.Value.State;
             var squad = s.Units.Where((u) => u.CampaignId != null).ToList();
@@ -100,6 +102,20 @@ namespace Bastion.Engine.Tests
             var node = RunMap.Choices(run).First((n) => RunMap.IsFight(n.Kind));
             node.Kind = NodeKinds.Boss;
             node.Site = Places.Factory;
+            node.Modifier = null;
+            Agree(c, new ChooseNodeCommand { Node = node.Id });
+            return Runs.Launch(c, new Rng(7))!.Value.State;
+        }
+
+        /// <summary>A normal node at a map that is one building (H9: Places.Offices, Places.Shed) on map seed `seed`, just launched: for Arte and UI.</summary>
+        public static GameState Inside(string place, int seed)
+        {
+            var c = Full();
+            var run = Start(c);
+            var node = RunMap.Choices(run).First((n) => RunMap.IsFight(n.Kind));
+            node.Kind = NodeKinds.Normal;
+            node.Site = place;
+            node.Seed = seed;
             node.Modifier = null;
             Agree(c, new ChooseNodeCommand { Node = node.Id });
             return Runs.Launch(c, new Rng(7))!.Value.State;
@@ -215,6 +231,15 @@ namespace Bastion.Engine.Tests
             Save("combate-mochila.json", Combat());
             Save("toro.json", Boss());
             Save("hospital.json", Hospital());
+            // The offices with a corridor (seed 14) and the shed (H9).
+            Save("oficinas.json", Inside(Places.Offices, 14));
+            Save("nave.json", Inside(Places.Shed, 11));
+            // The police station of two storeys (seed 12).
+            Save("comisaria.json", Inside(Places.Police, 12));
+            // The shopping plaza (seed 11): out of doors.
+            Save("plaza.json", Inside(Places.Plaza, 11));
+            // The camping (seed 11): out of doors.
+            Save("camping.json", Inside(Places.Camping, 11));
         }
     }
 }

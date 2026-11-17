@@ -52,6 +52,8 @@ namespace Bastion.Engine
             // Windows are holes in a wall: they never stop a line of sight...
             [TileKinds.Window] = 0,
             [TileKinds.WindowBroken] = 0,
+            // Bars (H9): sight and fire go through, and they cover nobody.
+            [TileKinds.Bars] = 0,
         };
 
         /// <summary>...but whoever stands beside one is protected by the wall around it.</summary>

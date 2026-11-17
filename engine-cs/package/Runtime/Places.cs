@@ -16,6 +16,15 @@ namespace Bastion.Engine
         public const string Country = "country";
         /// <summary>The hospital only inside (H7; Sites.Hospital).</summary>
         public const string Hospital = "hospital";
+        /// <summary>The offices and the shed only inside (H9; Sites.Offices, Sites.Shed).</summary>
+        public const string Offices = "offices";
+        public const string Shed = "shed";
+        /// <summary>The police station only inside (H9; Sites.Police).</summary>
+        public const string Police = "police";
+        /// <summary>The shopping plaza (H9; Sites.Plaza).</summary>
+        public const string Plaza = "plaza";
+        /// <summary>The camping (H9; Sites.Camping): Lore.SiteLine reads this id.</summary>
+        public const string Camping = "camping";
 
         public static readonly IReadOnlyDictionary<string, string> Names = new Dictionary<string, string>
         {
@@ -25,8 +34,12 @@ namespace Bastion.Engine
             [Factory] = "Fábrica",
             [Roadside] = "Área de servicio",
             [Country] = "Campo",
-            // Lore: provisional
             [Hospital] = "Hospital",
+            [Offices] = "Oficinas",
+            [Shed] = "Nave",
+            [Police] = "Comisaría",
+            [Plaza] = "Centro comercial",
+            [Camping] = "Camping",
         };
 
         /// <summary>How many of the dead a place holds, as a share of what a city holds (Arturo, 31/10): the city as it was.</summary>
@@ -40,6 +53,13 @@ namespace Bastion.Engine
             [Country] = 0.5,
             // One building, the dead on its ground floor (H7): fewer than a town's.
             [Hospital] = 0.35,
+            // One building each (H9), smaller than the hospital.
+            [Offices] = 0.3,
+            [Shed] = 0.3,
+            [Police] = 0.35,
+            // A square and ten shops, out of doors.
+            [Plaza] = 0.5,
+            [Camping] = 0.5,
         };
 
         /// <summary>
@@ -68,11 +88,14 @@ namespace Bastion.Engine
         public static string? Of(MapSource map, int? story = null)
         {
             if (map.Kind != MapSourceKinds.Generated) return null;
-            if (map.Biome == Biomes.Facility) return Factory;
-            if (map.Biome == Biomes.Wilds) return map.Site == Sites.Roadside ? Roadside : Country;
+            if (map.Biome == Biomes.Facility) return map.Site == Sites.Shed ? Shed : Factory;
+            if (map.Biome == Biomes.Wilds) return map.Site == Sites.Roadside ? Roadside : map.Site == Sites.Camping ? Camping : Country;
             if (map.Biome != Biomes.City) return null;
             if (map.Site == Sites.Industrial) return Estate;
             if (map.Site == Sites.Hospital) return Hospital;
+            if (map.Site == Sites.Offices) return Offices;
+            if (map.Site == Sites.Police) return Police;
+            if (map.Site == Sites.Plaza) return Plaza;
             var grid = story == 1 || story == 2 || !string.IsNullOrEmpty(map.Medical);
             return !grid && OldTownSeed(map.Seed ?? 0) ? Town : City;
         }

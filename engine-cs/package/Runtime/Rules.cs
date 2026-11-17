@@ -742,6 +742,8 @@ namespace Bastion.Engine
         {
             var maker = new RunLoot.Maker(S.Run!.NextGear);
             var found = RunLoot.GearOf(loot, S.Run, Rng, maker);
+            // The offices' and the shed's own, on a find (H9).
+            if (found.Count > 0) found.AddRange(RunLoot.SiteExtra(S.Site, S.Run, Rng, maker, InteriorSite.UseAt(S, u.Pos)));
             if (vest) found.AddRange(RunLoot.VestOf(Rng, maker));
             var (packed, floor) = RunLoot.Stow(u.Pack ?? new GearGrid(), found);
             return (packed.Count > 0 ? packed : null, floor.Count > 0 ? floor : null, maker.Next);

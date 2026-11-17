@@ -34,7 +34,7 @@ namespace Bastion.Engine
 
         private static bool Shut(string? kind)
         {
-            return kind == TileKinds.Wall || kind == TileKinds.Window || kind == TileKinds.WindowBroken;
+            return kind == TileKinds.Wall || kind == TileKinds.Window || kind == TileKinds.WindowBroken || kind == TileKinds.Bars;
         }
 
         private static bool IsDoor(string? kind)

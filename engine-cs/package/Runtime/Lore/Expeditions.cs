@@ -126,6 +126,38 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// What a special map is like (Arturo, 17/11), for the stage's sheet under «Sitio:»: one building only inside, found
+        /// room by room (Sites.IsInside, BuildingRooms), or out of doors as it is; and what a search finds more of there
+        /// (RunLoot.SiteExtra; the hospital's, its furniture). Null for the six places of always. A weapon's mods are
+        /// «accesorios», as they were: the base's «mejoras» are another thing.
+        /// </summary>
+        public static string? SiteLine(string place)
+        {
+            switch (place)
+            {
+                case Places.Hospital:
+                    return $"{ByRoom} Registrando, salen más medicinas y botiquines.";
+                case Places.Offices:
+                    return $"{ByRoom} Registrando, salen más suministros y accesorios de arma.";
+                case Places.Shed:
+                    // The shed's floor is one room, found whole (ShedUses.Floor).
+                    return "Solo por dentro: la nave se ve entera nada más entrar. Registrando, salen más cargadores, accesorios de arma y suministros.";
+                case Places.Police:
+                    return $"{ByRoom} Registrando, salen más armas, cargadores y chalecos.";
+                case Places.Plaza:
+                    return "Al aire libre: una plaza con tiendas alrededor, y por sus escaparates se ve dentro. Registrando, salen más suministros y cosas para el cinturón, y en la farmacia, medicinas.";
+                // H9 §5, before its Places id: «camping», as UI reads it.
+                case "camping":
+                    return "Al aire libre: un claro cerrado por el pinar, con tiendas de campaña y caravanas en las que se puede entrar. Registrando, sale de todo un poco.";
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>A map that is one building, found room by room, for SiteLine.</summary>
+        private const string ByRoom = "Solo por dentro: se descubre sala a sala.";
+
+        /// <summary>
         /// A modifier by name (Modifiers). The bad weather by the one it is, «Tormenta» or «Ventisca» (`snow`: the map
         /// has snow); while it isn't known, «Mal tiempo».
         /// </summary>

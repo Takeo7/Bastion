@@ -3139,6 +3139,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Recuperad la carga y volved a La Lata.", Lore.StageLine(NodeKinds.Recovery));
             Assert.Equal("Aguantad hasta que llegue La Lata, en el turno 8. Llegan oleadas, cada vez mayores.", Lore.StageLine(NodeKinds.Hold, holdTurns: 8));
             Assert.Equal("Un Acorazado y su grupo guardan la mejor caja del capítulo.", Lore.StageLine(NodeKinds.Elite, guard: TemplateIds.Mec));
+            // The special maps (H9, Arturo 17/11): their line under «Sitio:» on the sheet; nothing for the six places of always.
+            Assert.Equal("Solo por dentro: se descubre sala a sala. Registrando, salen más suministros y accesorios de arma.", Lore.SiteLine(Places.Offices));
+            Assert.Equal("Solo por dentro: la nave se ve entera nada más entrar. Registrando, salen más cargadores, accesorios de arma y suministros.", Lore.SiteLine(Places.Shed));
+            Assert.Equal("Solo por dentro: se descubre sala a sala. Registrando, salen más armas, cargadores y chalecos.", Lore.SiteLine(Places.Police));
+            Assert.All(new[] { Places.Hospital, Places.Offices, Places.Shed, Places.Police, Places.Plaza }, (p) => Assert.NotNull(Lore.SiteLine(p)));
+            Assert.All(new[] { Places.City, Places.Town, Places.Estate, Places.Factory, Places.Roadside, Places.Country }, (p) => Assert.Null(Lore.SiteLine(p)));
             Assert.Equal("Mal tiempo", Lore.ModifierName(Modifiers.Storm));
             Assert.Equal("Ventisca", Lore.ModifierName(Modifiers.Storm, snow: true));
             Assert.Equal("De noche", Lore.ModifierName(Modifiers.Night));

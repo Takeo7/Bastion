@@ -43,18 +43,23 @@ namespace Bastion.Engine
         private static readonly IReadOnlyList<int> RoadsideSize = new[] { 64, 72 };
 
         /// <summary>Whether a generated map is a town laid out on a plan (townPlan.ts): a city but the industrial estate.</summary>
-        private static bool IsTown(string biome, string? site = null) => biome == Biomes.City && site != Sites.Industrial && site != Sites.Hospital;
+        private static bool IsTown(string biome, string? site = null) => biome == Biomes.City && site != Sites.Industrial && site != Sites.Hospital && site != Sites.Offices && site != Sites.Police && site != Sites.Plaza;
         /// <summary>Whether a generated map is the industrial estate, on a plan too (estate).</summary>
         private static bool IsEstate(string biome, string? site = null) => biome == Biomes.City && site == Sites.Industrial;
 
         /// <summary>A generated map's size before it is turned (generateLayout may transpose it).</summary>
         public static (int Width, int Height) GeneratedSize(string biome, string? site = null, bool hospital = false)
         {
-            // The country (docs/MAPAS.md §4.8, phase 5): the outskirts 72, the service area 64 × 72.
+            // The country (docs/MAPAS.md §4.8, phase 5): the outskirts 72, the service area 64 × 72; the camping (H9) its own.
+            if (biome == Biomes.Wilds && site == Sites.Camping) return (CampingSize, CampingSize);
             if (biome == Biomes.Wilds) return site == Sites.Roadside ? (RoadsideSize[0], RoadsideSize[1]) : (CountrySize, CountrySize);
             if (IsEstate(biome, site)) return (EstateSize, EstateSize);
-            // The hospital only inside (H7).
+            // The hospital only inside (H7); the offices and the shed (H9).
             if (biome == Biomes.City && site == Sites.Hospital) return HospitalOnlySize;
+            if (biome == Biomes.City && site == Sites.Offices) return OfficesOnlySize;
+            if (biome == Biomes.Facility && site == Sites.Shed) return ShedOnlySize;
+            if (biome == Biomes.City && site == Sites.Police) return PoliceOnlySize;
+            if (biome == Biomes.City && site == Sites.Plaza) return (PlazaSize, PlazaSize);
             if (biome == Biomes.Facility) return (FactorySize, FactorySize);
             if (!IsTown(biome, site)) return (GenSize, GenSize);
             return hospital ? (HospitalSize[0], HospitalSize[1]) : (TownSize, TownSize);
@@ -243,6 +248,13 @@ namespace Bastion.Engine
             public readonly List<FramePiece> Frame = new List<FramePiece>();
             /// <summary>A town's block courtyards (docs/MAPAS.md §5.4), for MissionLayout.courtyards.</summary>
             public readonly List<Rect> Courtyards = new List<Rect>();
+            /// <summary>A shopping plaza's (H9 §4, PlazaMap): its square and its shops, for its site at the end (PlazaSite).</summary>
+            public Rect? Square;
+            public List<PlazaShop>? Shops;
+            /// <summary>A camping's (H9 §5, CampingMap): its clearing's bounds, its parts by use, its marks (canvas frame).</summary>
+            public Rect? Clearing;
+            public List<(Rect R, string Use)>? CampParts;
+            public List<(Vec2 At, string Kind, int Facing)>? CampMarks;
             /// <summary>Straight ways out to the edge the bus may leave by (a street, a track's last stretch), and the roads in line with them.</summary>
             public List<Entry> Exits = new List<Entry>(); // { road: PlanRoad; side: number }[]: townPlan.ts Entry.
             public List<PlanRoad> Lines = new List<PlanRoad>();
@@ -680,6 +692,16 @@ namespace Bastion.Engine
             public const string Clinic = "clinic";
         }
 
+        /// <summary>A shopping plaza's shop (PlazaMap): its outline, its room, its use, its door and the side its front looks to.</summary>
+        private sealed class PlazaShop
+        {
+            public Rect Outer = Rect(0, 0, 0, 0);
+            public Rect Room = Rect(0, 0, 0, 0);
+            public string Use = "";
+            public Vec2 Door = V(0, 0);
+            public int Front;
+        }
+
         private sealed class Building
         {
             public Rect Outer = Rect(0, 0, 0, 0);
@@ -714,6 +736,14 @@ namespace Bastion.Engine
             /// </summary>
             public Rect? HouseHall;
             public Rect? HouseStairs;
+            /// <summary>A map that is one building (H9: InteriorKinds): its rooms the builder knows (the shed's), and its main door.</summary>
+            public string? InteriorKind;
+            public List<InteriorRoom>? InteriorRooms;
+            public Vec2? InteriorEntrance;
+            /// <summary>A police station's cells (solid while the map is made, floor at the end), their fronts (bars at the end), its counter's window.</summary>
+            public List<Rect>? Cells;
+            public List<Vec2>? Bars;
+            public Vec2? Counter;
         }
 
         // ------------------------------------------------------------ shared types

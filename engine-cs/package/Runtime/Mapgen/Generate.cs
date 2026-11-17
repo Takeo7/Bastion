@@ -74,8 +74,13 @@ namespace Bastion.Engine
         private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> SiteNames = new Dictionary<string, IReadOnlyList<string>>
         {
             [Sites.Roadside] = new[] { "Área de servicio del Pinar", "El aserradero viejo", "Motel Los Abetos", "La gasolinera del alto" },
-            // The hospital only inside (H7). Lore: provisional
+            // The hospital only inside (H7); the maps of H9 (Lore, 17/11).
             [Sites.Hospital] = new[] { "Hospital comarcal", "Hospital de San Rafael", "Hospital Santa Lucía", "Hospital del Ensanche" },
+            [Sites.Offices] = new[] { "Oficinas Torrealta", "Gestoría Romero", "Seguros del Norte", "Asesoría Valcárcel" },
+            [Sites.Shed] = new[] { "Nave de Transportes Lucena", "Almacenes Briz", "Nave 7", "Logística del Cierzo" },
+            [Sites.Police] = new[] { "Comisaría del Centro", "Comisaría del Puerto", "Comisaría Norte", "Comisaría de la Estación" },
+            [Sites.Plaza] = new[] { "Centro comercial Los Arcos", "Centro comercial La Fuente", "Galerías del Sol", "Centro comercial El Paseo" },
+            [Sites.Camping] = new[] { "Camping Los Pinos", "Camping El Remanso", "Camping del Embalse", "Camping La Hoya" },
             [Sites.Industrial] = new[] { "Polígono Este", "Los muelles de carga", "Naves del Sur", "Polígono Norte" },
         };
 
@@ -117,7 +122,9 @@ namespace Bastion.Engine
             var hospital = biome == Biomes.City && ((kind == MissionKinds.Rescue && opts.Hospital == true) || opts.Medical == MedicalSiteKinds.Hospital);
             // A scenario only where it belongs: the service area in the wilds, the industrial estate in a city.
             // The hospital only inside (H7), in a city.
-            var site = (opts.Site == Sites.Roadside && biome == Biomes.Wilds) || (opts.Site == Sites.Industrial && biome == Biomes.City) || (opts.Site == Sites.Hospital && biome == Biomes.City) ? opts.Site : null;
+            var site = (opts.Site == Sites.Roadside && biome == Biomes.Wilds) || (opts.Site == Sites.Industrial && biome == Biomes.City) || (opts.Site == Sites.Hospital && biome == Biomes.City) ||
+                (opts.Site == Sites.Offices && biome == Biomes.City) || (opts.Site == Sites.Shed && biome == Biomes.Facility) || (opts.Site == Sites.Police && biome == Biomes.City) ||
+                (opts.Site == Sites.Plaza && biome == Biomes.City) || (opts.Site == Sites.Camping && biome == Biomes.Wilds) ? opts.Site : null;
             var (W, H) = GeneratedSize(biome, site, hospital);
             var c = new Canvas(W, H);
             // The finished map is mirrored and/or transposed, so the squad may start in any corner.
@@ -137,7 +144,8 @@ namespace Bastion.Engine
             var style = PickStyle(rng);
             style.TownKind = Places.TownKindSeed(opts.Seed);
             (Rect Objective, bool Inside)? compound = null;
-            if (biome == Biomes.Facility) compound = Facility(c, rng, style, role);
+            // (The shed only inside, H9: the factory's main shed alone, ShedOnly.)
+            if (biome == Biomes.Facility && site != Sites.Shed) compound = Facility(c, rng, style, role);
             (Rect Objective, TownPlan Plan)? built = null;
             if (IsTown(biome, site)) built = Town(c, rng, style, role, clinic, hospital, ward, Places.OldTownSeed(opts.Seed));
             else if (IsEstate(biome, site)) built = Estate(c, rng, style, role);
@@ -146,6 +154,10 @@ namespace Bastion.Engine
             if (compound != null) objRect = compound.Value.Objective;
             else if (built != null) objRect = built.Value.Objective;
             else if (site == Sites.Hospital) objRect = HospitalOnly(c, rng, style);
+            else if (site == Sites.Offices) objRect = OfficesOnly(c, rng, style);
+            else if (site == Sites.Shed) objRect = ShedOnly(c, rng, style);
+            else if (site == Sites.Police) objRect = PoliceOnly(c, rng, style);
+            else if (site == Sites.Plaza) objRect = PlazaMap(c, rng, style);
             else if (biome == Biomes.City)
             {
                 // `{ ...style, industrial: site === 'industrial' }`: a copy.
@@ -164,6 +176,7 @@ namespace Bastion.Engine
                 };
                 objRect = City(c, rng, cityStyle, role, clinic, hospital, ward);
             }
+            else if (site == Sites.Camping) objRect = CampingMap(c, rng, style, kind);
             else if (site == Sites.Roadside) objRect = Roadside(c, rng, style, role);
             else objRect = Wilds(c, rng, style, role);
             ThinClutter(c, opts.Seed);
@@ -183,8 +196,8 @@ namespace Bastion.Engine
                 postSpots.Add(V(sq.X + inward.X * 8, sq.Y + inward.Y * 8));
             }
             else postSpots = new List<Vec2> { V(8, 3), V(3, 8), V(8, 8) };
-            // None on the hospital's strip (H7): the squad comes in at its door.
-            if (site != Sites.Hospital) foreach (var at in postSpots) if (Bare(at)) GroupNear(c, at, rng, posts, 1, 0, 5);
+            // None on the hospital's strip (H7), the offices' nor the shed's (H9): the squad comes in at its door.
+            if (!Sites.IsInside(site)) foreach (var at in postSpots) if (Bare(at)) GroupNear(c, at, rng, posts, 1, 0, 5);
 
             var evacZone = new List<Vec2>();
             BusPlace? townBus = null;
@@ -215,6 +228,9 @@ namespace Bastion.Engine
             {
                 // The hospital's on its strip (H7); an expedition's normal node (EvacNear), near the squad.
                 if (site == Sites.Hospital) evacZone = HospitalEvac(c);
+                else if (site == Sites.Offices || site == Sites.Shed || site == Sites.Police) evacZone = StripEvac(c, site == Sites.Shed ? ShedStrip : site == Sites.Police ? PoliceStrip : OfficesStrip);
+                else if (site == Sites.Plaza) evacZone = PlazaEvac(c);
+                else if (site == Sites.Camping) evacZone = CampingEvac(c);
                 if (opts.EvacNear == true && evacZone.Count == 0) evacZone = NearEvac(c);
                 // In a facility entered from the apron the evac is inside the fence (a yard by the far wall).
                 var top = compound != null && !compound.Value.Inside ? FacilityInside : 0;
@@ -370,7 +386,8 @@ namespace Bastion.Engine
             var podSpread = Math.Max(11, (int)Js.Round(sideLength / 4.5));
             var candidates = Shuffle(
                 Enumerable.Range(0, c.Tiles.Count).Select((i) => V(i % c.Width, (int)Math.Floor((double)i / c.Width))).Where(
-                    (p) => Standable(p) && Dist(p, squadCenter) >= podGap).ToList(),
+                    // On the maps that are one building of H9, indoors only: the strip is the squad's.
+                    (p) => Standable(p) && Dist(p, squadCenter) >= podGap && (!Sites.IndoorsOnly(site) || c.GroundAt(p.X, p.Y) == Indoor)).ToList(),
                 rng);
             bool Spread(Vec2 p, int gap) => anchors.All((a) => Dist(a, p) >= gap);
             foreach (var size in opts.PodSizes)
@@ -628,6 +645,12 @@ namespace Bastion.Engine
             foreach (var h in homes) h.Dressing = HomeDressing.DressHome(h, FW, tiles, decor, levels, opts.Seed, reserved, furnisher.Strew);
             // Each storey's flood fill, as it was: what was joined is joined still, or none of it stands.
             if (!Furnishing.JoinedAsBefore(before, Furnishing.StoreyPieces(map))) furnisher.Undo();
+            // A map that is one building (H9): its rooms by use and its marks, on what stands now.
+            var interiors = c.Buildings.Where((b) => b.InteriorKind != null).Select((b) => InteriorOf(b, T, FW, tiles, decor, levels, storeys, opts.Seed, reserved)).ToList();
+            // A shopping plaza (H9 §4): its shops and its marks.
+            if (c.Shops != null) interiors.Add(PlazaSite(c, T, FW, tiles, decor, opts.Seed, reserved));
+            // A camping (H9 §5): its parts and its marks.
+            if (c.CampParts != null) interiors.Add(CampingSite(c, T));
             // A group of the dead where something now stands starts on the nearest free tile instead, its round too.
             var outPods = pods.Select((p) => (Tiles: p.Tiles.Select(T).ToList(), Patrol: p.Patrol.Select(T).ToList())).ToList();
             var held = new JsSet<int>(spawns.Select(T).Concat(outPods.SelectMany((p) => p.Tiles)).Select((p) => p.Y * FW + p.X));
@@ -672,6 +695,7 @@ namespace Bastion.Engine
                 Elev = elev,
                 Ground = ground,
                 Medical = medical.Count > 0 ? medical : null,
+                Interiors = interiors.Count > 0 ? interiors : null,
                 Homes = homes.Count > 0 ? homes : null,
                 Pitched = pitched.Count > 0 ? pitched : null,
                 // A car whose nose is no longer a car's (a way cut through it after) is no wreck. A mirror turns it the other way.

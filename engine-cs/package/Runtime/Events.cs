@@ -1179,6 +1179,7 @@ namespace Bastion.Engine
                 Tiles = new List<string>(s.Tiles),
                 Elev = new List<int>(s.Elev),
                 Ground = CopyInts(s.Ground),
+                Interiors = CopyList(s.Interiors, (x) => x.Copy()),
                 Medical = CopyList(s.Medical, (x) => new MedicalSite { X = x.X, Y = x.Y, W = x.W, H = x.H, Wear = x.Wear, Kind = x.Kind, Rooms = CopyList(x.Rooms, (r) => new MedicalRoom { X = r.X, Y = r.Y, W = r.W, H = r.H, Z = r.Z, Use = r.Use }), Dressing = CopyList(x.Dressing, CloneDetail) }),
                 Pitched = CopyList(s.Pitched, (p) => new PitchedRoof { X = p.X, Y = p.Y, W = p.W, H = p.H, Kind = p.Kind }),
                 Homes = CopyList(s.Homes, (x) => new HomeSite { X = x.X, Y = x.Y, W = x.W, H = x.H, Wear = x.Wear, Rooms = x.Rooms.Select((r) => new HomeRoom { X = r.X, Y = r.Y, W = r.W, H = r.H, Z = r.Z, Use = r.Use }).ToList(), Dressing = CopyList(x.Dressing, CloneDetail) }),

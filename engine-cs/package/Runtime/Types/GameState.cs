@@ -26,6 +26,8 @@ namespace Bastion.Engine
         public List<int>? Ground { get; set; } // GroundKind: 0–4 (Map.cs)
         /// <summary>Clinical finishes stay attached to the building after furniture is destroyed.</summary>
         public List<MedicalSite>? Medical { get; set; }
+        /// <summary>A map that is one building (H9: the offices, the shed): its rooms by use and its marks for Arte.</summary>
+        public List<InteriorSite>? Interiors { get; set; }
         /// <summary>The houses, their rooms by use and how worn (playtest 2026-10-18, #15).</summary>
         public List<HomeSite>? Homes { get; set; }
         /// <summary>The buildings with a pitched roof nobody stands on (houses and barns; Arte, 1/11). Missing on older saves.</summary>

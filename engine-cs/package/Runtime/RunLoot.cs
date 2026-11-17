@@ -65,6 +65,55 @@ namespace Bastion.Engine
             return out_;
         }
 
+        /// <summary>
+        /// What a map that is one building gives more when a search finds something (H9-INTERIORES.md, «lo que más da cada
+        /// uno»): half the time, one of its own: the offices, supplies or a weapon's improvement; the shed, a magazine, an
+        /// improvement or supplies; the police station, a weapon (a pistol or a shotgun), a magazine or a vest; the plaza,
+        /// supplies or a belt's thing, and in its pharmacy (`use`, the room searched: ShopUses) medicines; the camping, a
+        /// little of everything. Nothing anywhere else (the hospital's medicines come from its furniture already).
+        /// </summary>
+        public static List<Gear> SiteExtra(string? site, RunFight run, Rng rng, Maker maker, string? use = null)
+        {
+            var out_ = new List<Gear>();
+            if (site != Sites.Offices && site != Sites.Shed && site != Sites.Police && site != Sites.Plaza && site != Sites.Camping) return out_;
+            if (rng.Int(2) != 0) return out_;
+            // The camping: a little of everything (its food is supplies, GearOf).
+            if (site == Sites.Camping)
+            {
+                var roll = rng.Int(5);
+                if (roll == 0) out_.AddRange(maker.Make(GearKinds.Supplies, null, Math.Max(1, (int)Js.Round(rng.Range(5, 12) * SuppliesScale(run)))));
+                else if (roll == 1) out_.AddRange(maker.Make(GearKinds.Medicine, null));
+                else if (roll == 2) out_.AddRange(maker.Make(GearKinds.Item, rng.Pick(Content.BeltItems)));
+                else if (roll == 3) out_.AddRange(maker.Make(GearKinds.Mags, null));
+                else out_.AddRange(maker.Make(GearKinds.Mod, rng.Pick(WeaponModIds.All)));
+                return out_;
+            }
+            if (site == Sites.Plaza)
+            {
+                if (use == ShopUses.Pharmacy) out_.AddRange(maker.Make(GearKinds.Medicine, null, rng.Range(1, 2)));
+                else if (rng.Int(2) == 0) out_.AddRange(maker.Make(GearKinds.Supplies, null, Math.Max(1, (int)Js.Round(rng.Range(5, 12) * SuppliesScale(run)))));
+                else out_.AddRange(maker.Make(GearKinds.Item, rng.Pick(Content.BeltItems)));
+                return out_;
+            }
+            if (site == Sites.Police)
+            {
+                var roll = rng.Int(3);
+                if (roll == 0) out_.AddRange(maker.Make(GearKinds.Weapon, rng.Pick(PoliceWeapons)));
+                else if (roll == 1) out_.AddRange(maker.Make(GearKinds.Mags, null));
+                else out_.AddRange(VestOf(rng, maker));
+                return out_;
+            }
+            var pick = rng.Int(site == Sites.Offices ? 2 : 3);
+            var what = site == Sites.Offices ? (pick == 0 ? GearKinds.Supplies : GearKinds.Mod) : pick == 0 ? GearKinds.Mags : pick == 1 ? GearKinds.Mod : GearKinds.Supplies;
+            if (what == GearKinds.Supplies) out_.AddRange(maker.Make(GearKinds.Supplies, null, Math.Max(1, (int)Js.Round(rng.Range(5, 12) * SuppliesScale(run)))));
+            else if (what == GearKinds.Mod) out_.AddRange(maker.Make(GearKinds.Mod, rng.Pick(WeaponModIds.All)));
+            else out_.AddRange(maker.Make(GearKinds.Mags, null));
+            return out_;
+        }
+
+        /// <summary>What a police station gives of weapons (SiteExtra): its own.</summary>
+        public static readonly IReadOnlyList<string> PoliceWeapons = new[] { FoundWeaponIds.Pistol, FoundWeaponIds.PumpShotgun };
+
         /// <summary>The good weapons a Guarida's box and a boss give (H5, H6): one of these, with its improvement.</summary>
         public static readonly IReadOnlyList<string> GoodWeapons = new[] { FoundWeaponIds.ScopedRifle, FoundWeaponIds.HuntingRifle };
 

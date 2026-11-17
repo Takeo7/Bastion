@@ -468,7 +468,7 @@ namespace Bastion.Engine
             return SearchSpot(s, p) != null && !WasSearched(s, p);
         }
 
-        private static readonly HashSet<string> Solid = new HashSet<string> { TileKinds.Wall, TileKinds.Door, TileKinds.Window, TileKinds.WindowBroken };
+        private static readonly HashSet<string> Solid = new HashSet<string> { TileKinds.Wall, TileKinds.Door, TileKinds.Window, TileKinds.WindowBroken, TileKinds.Bars };
 
         /// <summary>Whether a soldier on `from` reaches `p` with the hands: beside it, at its height, and not round a wall's corner.</summary>
         public static bool ReachesToSearch(GameState s, Pos from, Pos at)

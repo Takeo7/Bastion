@@ -52,6 +52,30 @@ namespace Bastion.Engine
         public const bool HospitalSites = true;
         public const int HospitalOdds = 5;
 
+        /// <summary>
+        /// The special maps (H7, H9: H9-INTERIORES.md), all together one fight in HospitalOdds (Arturo, 17/11), by the map's
+        /// seed, each where a place like it was: the offices, the hospital, the police station and the plaza for a town or a
+        /// city, the shed for an estate or a factory, the camping for the country, in turn by the seed. Never the boss; a
+        /// Sabotaje and a Travesía only on one out of doors (the plaza, the camping; Gameplay, 16/11: a Travesía's far end
+        /// makes no sense in one building). Null: as drawn.
+        /// </summary>
+        public static string? SpecialFor(RunNode n)
+        {
+            if (n.Seed == null || n.Kind == NodeKinds.Boss) return null;
+            var seed = Math.Abs(n.Seed.Value);
+            if (seed % HospitalOdds != 0) return null;
+            var outdoors = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Crossing;
+            var town = n.Site == Places.Town || n.Site == Places.City;
+            // A sabotage (its place always a factory) on the plaza; a Travesía in a town or a city on the plaza too.
+            var like = n.Kind == NodeKinds.Sabotage ? new[] { Places.Plaza, Places.Camping }
+                : outdoors ? (town ? new[] { Places.Plaza } : n.Site == Places.Country ? new[] { Places.Camping } : new string[0])
+                : town ? new[] { Places.Offices, Places.Hospital, Places.Police, Places.Plaza }
+                : n.Site == Places.Estate || n.Site == Places.Factory ? new[] { Places.Shed }
+                : n.Site == Places.Country ? new[] { Places.Camping }
+                : new string[0];
+            return like.Length > 0 ? like[seed / HospitalOdds % like.Length] : null;
+        }
+
         /// <summary>Fights from row 2 with a modifier, in percent.</summary>
         public const int ModifierChance = 30;
 
@@ -109,9 +133,8 @@ namespace Bastion.Engine
                 if (n.Site == Places.Roadside && n.Row <= EarlyRows) n.Site = Places.Country;
                 // A town or a city is the map's seed's (Places.OldTownSeed): the site says the one it will be.
                 if (n.Site == Places.Town) n.Site = Places.Of(MapOf(n)!);
-                // The hospital only inside (H7), by the map's seed: nothing else drawn changes. No Travesía there (Gameplay,
-                // 16/11: its far end makes no sense in one building); an Asedio, yes.
-                if (hospitals && n.Kind != NodeKinds.Crossing && (n.Site == Places.Town || n.Site == Places.City) && Math.Abs(n.Seed.Value) % HospitalOdds == 0) n.Site = Places.Hospital;
+                // The special maps (H7, H9), by the map's seed: nothing else drawn changes.
+                if (hospitals) n.Site = SpecialFor(n) ?? n.Site;
             }
             return all;
         }
@@ -230,12 +253,12 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// Whether both players see what a node is: the engine says, so both see the same. One not seen is drawn dark. The
-        /// boss, always, from the start (Gameplay, 16/11, as in Slay the Spire), whatever the sight.
+        /// Whether both players see what a node is: the engine says, so both see the same. One not seen is drawn dark; the
+        /// boss too, till it is in sight (Arturo, 17/11: not always seen).
         /// </summary>
         public static bool Visible(CampaignState c, RunNode n)
         {
-            return n.Row <= VisibleRows(c) || n.Kind == NodeKinds.Boss;
+            return n.Row <= VisibleRows(c);
         }
 
         /// <summary>The map a fight is played on: its site and its seed (null for a stop).</summary>
@@ -253,6 +276,16 @@ namespace Bastion.Engine
                     return MapSource.Generated(Biomes.Wilds, seed, Sites.Roadside);
                 case Places.Hospital:
                     return MapSource.Generated(Biomes.City, seed, Sites.Hospital);
+                case Places.Offices:
+                    return MapSource.Generated(Biomes.City, seed, Sites.Offices);
+                case Places.Shed:
+                    return MapSource.Generated(Biomes.Facility, seed, Sites.Shed);
+                case Places.Police:
+                    return MapSource.Generated(Biomes.City, seed, Sites.Police);
+                case Places.Plaza:
+                    return MapSource.Generated(Biomes.City, seed, Sites.Plaza);
+                case Places.Camping:
+                    return MapSource.Generated(Biomes.Wilds, seed, Sites.Camping);
                 case Places.Country:
                     return MapSource.Generated(Biomes.Wilds, seed);
                 default:

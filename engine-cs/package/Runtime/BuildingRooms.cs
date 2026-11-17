@@ -87,7 +87,7 @@ namespace Bastion.Engine
                 for (var w = 0; w < area; w++)
                 {
                     var kind = KindOn(s, z, w);
-                    if ((kind != TileKinds.Window && kind != TileKinds.WindowBroken && kind != TileKinds.DoorOpen) || !Inside(z, w)) continue;
+                    if ((kind != TileKinds.Window && kind != TileKinds.WindowBroken && kind != TileKinds.DoorOpen && kind != TileKinds.Bars) || !Inside(z, w)) continue;
                     int x = w % s.Width, y = w / s.Width;
                     foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                     {

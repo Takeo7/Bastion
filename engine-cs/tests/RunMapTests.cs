@@ -161,7 +161,9 @@ namespace Bastion.Engine.Tests
                     Assert.Contains(n.Site, Places.Names.Keys);
                     // The site is what the map will be.
                     Assert.Equal(n.Site, Places.Of(RunMap.MapOf(n)!));
-                    if (n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss) Assert.Equal(Places.Factory, n.Site);
+                    // A sabotage in a factory, or on the plaza that stands for it (H9); the boss, in a factory.
+                    if (n.Kind == NodeKinds.Boss) Assert.Equal(Places.Factory, n.Site);
+                    if (n.Kind == NodeKinds.Sabotage) Assert.Contains(n.Site, new[] { Places.Factory, Places.Plaza, Places.Camping });
                     // No service area in the first two rows; later, yes.
                     if (n.Row <= RunMap.EarlyRows) Assert.NotEqual(Places.Roadside, n.Site);
                     else if (n.Site == Places.Roadside) roadside++;

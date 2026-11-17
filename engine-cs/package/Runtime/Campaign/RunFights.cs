@@ -63,12 +63,18 @@ namespace Bastion.Engine
         public const int BossReward = 150;
 
         /// <summary>
+        /// A sabotage's alarm by its place (Lore, 17/11): on the shopping plaza a patrol car's siren, on the camping an
+        /// ambulance's (in its quarantine), in a factory its own.
+        /// </summary>
+        public static string AlarmOf(RunNode n) => n.Site == Places.Plaza ? Alarms.Police : n.Site == Places.Camping ? Alarms.Ambulance : Alarms.Factory;
+
+        /// <summary>
         /// What a stage is about, in a line, for its sheet on the map (Lore.StageLine with this engine's figures): the
         /// sabotage's alarm, the turn La Lata comes on an Asedio, a Guarida's guard.
         /// </summary>
         public static string StageLine(RunNode n)
         {
-            return Lore.StageLine(n.Kind, alarm: n.Kind == NodeKinds.Sabotage ? Alarms.Factory : null, holdTurns: n.Kind == NodeKinds.Hold ? Setup.HoldTurns : (int?)null, guard: n.Kind == NodeKinds.Elite ? Setup.GuardOf(n.Seed ?? 0) : null);
+            return Lore.StageLine(n.Kind, alarm: n.Kind == NodeKinds.Sabotage ? AlarmOf(n) : null, holdTurns: n.Kind == NodeKinds.Hold ? Setup.HoldTurns : (int?)null, guard: n.Kind == NodeKinds.Elite ? Setup.GuardOf(n.Seed ?? 0) : null);
         }
 
         /// <summary>La Lata as big as the seats the squad has (Campaign.VehicleSeats: 4, 6 or 8).</summary>
@@ -153,7 +159,7 @@ namespace Bastion.Engine
             var pods = boss ? new List<List<string>> { BossPod(difficulty) } : Setup.PodsFor(map, Setup.MissionPods(difficulty, kind, living));
             var squad = run.Squad.Select((id) => c.Soldiers.FirstOrDefault((s) => s.Id == id)).Where((s) => s != null && s.Alive && s.Kit != null).Select((s) => SquadMemberOf(c, s!)).ToList();
             var seed = Math.Abs(node.Seed ?? 0);
-            var alarm = kind == MissionKinds.Sabotage ? Alarms.Factory : null;
+            var alarm = kind == MissionKinds.Sabotage ? AlarmOf(node) : null;
             var name = RunTexts.FightName(node, run.Chapter);
             var state = Setup.CreateMission(new MissionOptions
             {

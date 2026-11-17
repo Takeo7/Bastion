@@ -17,7 +17,7 @@ namespace Bastion.Engine
         /// <summary>Defence a soldier on the ground loses (Unit.Down).</summary>
         public const int DownDefense = 20;
 
-        private static readonly HashSet<string> Solid = new HashSet<string> { TileKinds.Wall, TileKinds.Door, TileKinds.Window, TileKinds.WindowBroken };
+        private static readonly HashSet<string> Solid = new HashSet<string> { TileKinds.Wall, TileKinds.Door, TileKinds.Window, TileKinds.WindowBroken, TileKinds.Bars };
 
         /// <summary>
         /// The tiles of a charge from `u` at `t`: a straight line one of eight ways, t on it no more than ChargeRun + 1 tiles

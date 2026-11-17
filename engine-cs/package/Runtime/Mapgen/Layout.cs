@@ -17,6 +17,8 @@ namespace Bastion.Engine
         /// <summary>What the floor of each tile is (procedural maps only).</summary>
         public List<int>? Ground { get; set; } // GroundKind: 0–4 (Map.cs)
         public List<MedicalSite>? Medical { get; set; }
+        /// <summary>A map that is one building (H9: the offices, the shed): its rooms by use and its marks.</summary>
+        public List<InteriorSite>? Interiors { get; set; }
         /// <summary>The houses' rooms by use (playtest 2026-10-18, #15).</summary>
         public List<HomeSite>? Homes { get; set; }
         /// <summary>The buildings with a pitched roof (GameState.pitched; procedural maps only).</summary>
@@ -96,7 +98,7 @@ namespace Bastion.Engine
         /// <summary>A sabotage's alarm (playtest 2026-10-15, #14): a patrol car or an ambulance takes a second tile, its nose.</summary>
         public string? Alarm { get; set; } // Alarms
         /// <summary>
-        /// La Lata near (an expedition's normal node; Gameplay, 16/11): on the squad's half of the map at a moderate walk
+        /// La Lata near (an expedition's normal node; Gameplay, 16/11; Arturo, 17/11): on the squad's half of the map at mid walk
         /// from where it comes in (Mapgen.NearWalk), where the map allows. Null: where the map puts it.
         /// </summary>
         public bool? EvacNear { get; set; }

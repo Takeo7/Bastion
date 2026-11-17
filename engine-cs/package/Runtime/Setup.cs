@@ -740,7 +740,8 @@ namespace Bastion.Engine
         /// building's outer corner (one of its tiles diagonal to theirs, none beside), so one may be right there as the squad
         /// turns it. Never near where the squad starts, the bus or each other. On maps with buildings only.
         /// </summary>
-        private static List<(Pos Pos, double Facing)> LurkerSpots(MissionLayout layout, IReadOnlyList<Unit> units, int count, Rng rng)
+        /// <remarks>`indoors` (the offices and the shed, H9): none at the corners out of doors (the strip is the squad's).</remarks>
+        private static List<(Pos Pos, double Facing)> LurkerSpots(MissionLayout layout, IReadOnlyList<Unit> units, int count, Rng rng, bool indoors = false)
         {
             var w = layout.Width;
             var h = layout.Height;
@@ -765,7 +766,7 @@ namespace Bastion.Engine
                     if (tiles[i] != TileKinds.Floor || Js.At(layout.Elev, i, 0) != 0 || (layout.Ground != null && i < layout.Ground.Count && layout.Ground[i] == 4) || taken.Contains(i)) continue;
                     if (Near(x, y, layout.Spawns, LurkerClear) || Near(x, y, layout.EvacZone, LurkerBus) || Near(x, y, dead, LurkerPodGap)) continue;
                     if (Built(x, y)) inside.Add(new Vec2 { X = x, Y = y });
-                    else if (!Grid.Dirs4.Any((d) => Built(x + d.X, y + d.Y)) && diagonals.Count((dd) => Built(x + dd.Item1, y + dd.Item2)) == 1) corners.Add(new Vec2 { X = x, Y = y });
+                    else if (!indoors && !Grid.Dirs4.Any((d) => Built(x + d.X, y + d.Y)) && diagonals.Count((dd) => Built(x + dd.Item1, y + dd.Item2)) == 1) corners.Add(new Vec2 { X = x, Y = y });
                 }
             }
             var out_ = new List<(Pos Pos, double Facing)>();
@@ -945,8 +946,8 @@ namespace Bastion.Engine
 
             var pods = new List<Pod>();
             var alienIndex = 0;
-            // A map that is one building (H7, the hospital only inside).
-            var oneBuilding = opts.Map.Kind == MapSourceKinds.Generated && opts.Map.Site == Sites.Hospital;
+            // A map that is one building (H7, the hospital only inside; H9, the offices and the shed).
+            var oneBuilding = opts.Map.Kind == MapSourceKinds.Generated && Sites.IsInside(opts.Map.Site);
             // From difficulty 2, one group of the living posted upstairs, where the map has room for it (decision 7 in docs/FASE6-PLAN.md).
             var perch = layout.Perch ?? new List<Pos>();
             var perched = difficulty >= 2 ? plan.FindIndex((members) => members.Count > 0 && members.Count <= perch.Count && members.All((t) => !Content.Templates[t].Undead)) : -1;
@@ -972,7 +973,7 @@ namespace Bastion.Engine
             if (layout.Siege != true && opts.Map.Kind == MapSourceKinds.Generated && plan.Any((members) => members.Any((t) => Content.Templates[t].Undead)))
             {
                 // Drawn from the map's own seed, so the rest of the mission is as it was.
-                var spots = LurkerSpots(layout, units, Lurkers[Math.Min(difficulty, Lurkers.Count - 1)], new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x2f6b))));
+                var spots = LurkerSpots(layout, units, Lurkers[Math.Min(difficulty, Lurkers.Count - 1)], new Rng(unchecked((uint)((opts.Map.Seed ?? 0) ^ 0x2f6b))), Sites.IndoorsOnly(opts.Map.Site));
                 for (var k = 0; k < spots.Count; k++)
                 {
                     var id = $"a{++alienIndex}";
@@ -1089,6 +1090,7 @@ namespace Bastion.Engine
                 Elev = new List<int>(layout.Elev),
                 Ground = layout.Ground != null ? new List<int>(layout.Ground) : null,
                 Medical = layout.Medical?.Select(CopyMedical).ToList(),
+                Interiors = layout.Interiors?.Select((x) => x.Copy()).ToList(),
                 Homes = layout.Homes?.Select(CopyHome).ToList(),
                 Pitched = layout.Pitched?.Select((p) => new PitchedRoof { X = p.X, Y = p.Y, W = p.W, H = p.H, Kind = p.Kind }).ToList(),
                 Markets = layout.Markets?.Select((m) => new MarketSite { X = m.X, Y = m.Y, W = m.W, H = m.H, Front = m.Front, Stock = m.Stock }).ToList(),

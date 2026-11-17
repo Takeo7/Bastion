@@ -287,9 +287,10 @@ namespace Bastion.Engine.Tests
         {
             // On since 16/11 (Arte's camera and walls, UI's pass).
             Assert.True(RunMap.HospitalSites);
-            var off = Enumerable.Range(0, 60).Select((seed) => RunMap.Generate(1, seed, false)).ToList();
+            // (300 maps: since H9 the hospital shares a town's or a city's fights with three more.)
+            var off = Enumerable.Range(0, 300).Select((seed) => RunMap.Generate(1, seed, false)).ToList();
             Assert.DoesNotContain(off.SelectMany((m) => m), (n) => n.Site == Places.Hospital);
-            var on = Enumerable.Range(0, 60).Select((seed) => RunMap.Generate(1, seed, true)).ToList();
+            var on = Enumerable.Range(0, 300).Select((seed) => RunMap.Generate(1, seed, true)).ToList();
             var hospitals = on.SelectMany((m) => m).Where((n) => n.Site == Places.Hospital).ToList();
             Assert.NotEmpty(hospitals);
             // Normal nodes and specials both; never a sabotage nor the boss.
@@ -298,11 +299,12 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(hospitals, (n) => n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss || n.Kind == NodeKinds.Crossing);
             // An Asedio, yes (Gameplay, 16/11); a Travesía, never.
             Assert.Contains(hospitals, (n) => n.Kind == NodeKinds.Hold);
-            // Nothing else changes: a hospital where a town or a city was.
+            // Nothing else changes: a hospital where a town or a city was (H9: or another special map, RunMap.SpecialFor).
             for (var k = 0; k < off.Count; k++)
             {
                 Assert.Equal(off[k].Select((n) => (n.Id, n.Kind, n.Seed, n.Modifier)), on[k].Select((n) => (n.Id, n.Kind, n.Seed, n.Modifier)));
-                foreach (var (a, b) in off[k].Zip(on[k], (a, b) => (a, b))) if (a.Site != b.Site) Assert.True(b.Site == Places.Hospital && (a.Site == Places.Town || a.Site == Places.City));
+                foreach (var (a, b) in off[k].Zip(on[k], (a, b) => (a, b))) Assert.Equal(RunMap.SpecialFor(a) ?? a.Site, b.Site);
+                Assert.All(on[k].Where((n) => n.Site == Places.Hospital), (n) => Assert.Contains(off[k].Single((x) => x.Id == n.Id).Site, new[] { Places.Town, Places.City }));
             }
             Assert.Equal("Saqueo · Hospital", RunTexts.FightName(new RunNode { Kind = NodeKinds.Normal, Site = Places.Hospital }, 1));
         }
