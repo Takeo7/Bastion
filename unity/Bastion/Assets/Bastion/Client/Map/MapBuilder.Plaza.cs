@@ -13,9 +13,10 @@ namespace Bastion.Client.Map
     /// cameras), Shops' clothes racks and shelving (stocked by what the shop sells: televisions and consoles; balls, helmets
     /// and weights; toys), the square's planters as Shopping Plaza's beds with a bush. Scenery (PlazaScenery): mannequins
     /// (Apocalypse's; a sports shop's Shops'), the cinema's lobby (a big popcorn bucket, its films' posters on the wall, the
-    /// projector by the ceiling, sofas), broken glass on the floor (Apocalypse's shards); out of doors an awning on its
-    /// poles before each door, each shop's sign over its front (Shops' big letters by what it sells) and two billboards by
-    /// the street. Its fronts are WallLayout's («plaza» kit); its café's stools and coffee machine HomeFurnishing's.
+    /// projector by the ceiling, sofas), broken glass on the floor (Apocalypse's shards); out of doors each shop's sign over
+    /// its front (Shops' big letters by what it sells) and two billboards by the street. Its fronts are WallLayout's («plaza»
+    /// kit), and the awning over each door with them (Arturo, 17/11: the towns' wall awning, not the mark's own); its café's
+    /// stools and coffee machine HomeFurnishing's.
     /// </summary>
     public sealed partial class MapBuilder
     {
@@ -23,8 +24,27 @@ namespace Bastion.Client.Map
         static readonly HashSet<string> PlazaOnFurniture = new HashSet<string>
         {
             PlazaDetailKinds.DisplayCase, PlazaDetailKinds.RingDisplay, PlazaDetailKinds.WatchDisplay, PlazaDetailKinds.ClothesRack, PlazaDetailKinds.Shelf,
-            PlazaDetailKinds.Counter, PlazaDetailKinds.Planter,
+            PlazaDetailKinds.Counter, PlazaDetailKinds.Planter, ToyShelf, ToyBin, LobbyBench, TicketBooth,
         };
+
+        /// <summary>
+        /// The toy shop's and the cinema lobby's own marks (Producto's G11, 17/11; the engine's PlazaDetailKinds names): a shelf
+        /// of toys against the wall (high cover), a crate of toys (low), the lobby's row of seats (low), the ticket booth
+        /// against the wall (high).
+        /// </summary>
+        const string ToyShelf = PlazaDetailKinds.ToyShelf, ToyBin = PlazaDetailKinds.ToyBin, LobbyBench = PlazaDetailKinds.LobbyBench, TicketBooth = PlazaDetailKinds.TicketBooth;
+        static readonly HashSet<string> PlazaPieces = new HashSet<string> { ToyShelf, ToyBin, LobbyBench, TicketBooth };
+
+        /// <summary>
+        /// A plaza's own piece on tile i (H9 G11, Mapgen.ShopPieces: a cover tile with no decor, its mark on it; or a toy shop's
+        /// shelf its toy shelf), drawn before the decor is looked at (Decor); false if none is there.
+        /// </summary>
+        bool PlazaPiece(int k, int i, bool low, float floor)
+        {
+            if (k != 0 || PlazaSite == null) return false;
+            var marks = MarksOn(k, i);
+            return marks != null && marks.Any(d => PlazaPieces.Contains(d.Kind)) && PlazaFurniture(k, i, low, floor, marks);
+        }
 
         /// <summary>
         /// Each shop's sign by what it sells (Shops' big letters; the pharmacy's Military's cross); the cinema has none of
@@ -36,11 +56,14 @@ namespace Bastion.Client.Map
             [ShopUses.Sports] = "pzSignGym", [ShopUses.Cafe] = "pzSignCafe", [ShopUses.Toys] = "pzSignGame",
         };
 
-        /// <summary>The same in Spanish, of Shops' letters one by one (a lab's choice: BASTION_PLAZA_LETRAS=1, to show Arturo); the cinema's always.</summary>
+        /// <summary>
+        /// The same in Spanish, of Shops' letters one by one (a lab's choice: BASTION_PLAZA_LETRAS=1, to show Arturo); the
+        /// cinema's and the empty one's always, in English like Synty's signs (Arturo, 17/11: the whole mall in one tongue).
+        /// </summary>
         static readonly Dictionary<string, string> PlazaWords = new Dictionary<string, string>
         {
             [ShopUses.Jewellery] = "JOYERIA", [ShopUses.Clothes] = "ROPA", [ShopUses.Electronics] = "ELECTRONICA", [ShopUses.Pharmacy] = "FARMACIA",
-            [ShopUses.Sports] = "DEPORTES", [ShopUses.Cafe] = "CAFE", [ShopUses.Toys] = "JUGUETES", [ShopUses.Cinema] = "CINE", [ShopUses.Empty] = "SE ALQUILA",
+            [ShopUses.Sports] = "DEPORTES", [ShopUses.Cafe] = "CAFE", [ShopUses.Toys] = "JUGUETES", [ShopUses.Cinema] = "CINEMA", [ShopUses.Empty] = "FOR RENT",
         };
 
 #if UNITY_EDITOR
@@ -57,7 +80,7 @@ namespace Bastion.Client.Map
         {
             [ShopUses.Electronics] = new[] { "pzTv", "pzLaptop", "pzLaptop2", "pzConsole", "pzCamera" },
             [ShopUses.Sports] = new[] { "pzBasketball", "pzSoccer", "pzHelmet", "pzDumbbell", "pzKettlebell", "pzSkateboard" },
-            [ShopUses.Toys] = new[] { "pzBear", "pzBlocks", "pzBlocks2", "pzTrain", "pzSamurai", "pzBear" },
+            [ShopUses.Toys] = new[] { "pzBear", "pzBlocks", "pzBlocks2", "pzTrain", "pzSamurai", "pzBear", "pzToyBox", "pzToyDuck", "pzToyChicken" },
         };
 
         /// <summary>Shops' clothes racks hung with clothes (its 03, 07 and 08; the rest bare rails, or a table).</summary>
@@ -67,6 +90,8 @@ namespace Bastion.Client.Map
 
         /// <summary>Shops' shelving's boards (Basic_01 and _03, m: 0.40, 1.09, 1.76 and 0.43, 1.04, 1.71), in tiles.</summary>
         static readonly float[] PlazaBoards = { 0.02f, 0.71f, 1.16f };
+        /// <summary>The toy shelf's boards (Shops' Basic_01 as it stands: 0.40, 1.09 and 1.76 m) and its top (1.89 m), in tiles.</summary>
+        static readonly float[] ToyShelfBoards = { 0.265f, 0.725f, 1.17f, 1.255f };
 
         /// <summary>The map's shopping plaza, or null.</summary>
         InteriorSite PlazaSite => s.Interiors?.FirstOrDefault(i => i != null && i.Kind == InteriorKinds.Plaza);
@@ -88,7 +113,8 @@ namespace Bastion.Client.Map
         bool PlazaFurniture(int k, int i, bool low, float floor, List<InteriorDetail> marks)
         {
             if (k != 0 || marks == null || PlazaSite == null) return false;
-            var mark = marks.FirstOrDefault(d => PlazaOnFurniture.Contains(d.Kind));
+            // (G11's pieces first: a shelf of a toy shop with no wall free is its toy shelf too.)
+            var mark = marks.FirstOrDefault(d => PlazaPieces.Contains(d.Kind)) ?? marks.FirstOrDefault(d => PlazaOnFurniture.Contains(d.Kind));
             if (mark == null) return false;
             int x = i % s.Width, y = i / s.Width;
             float cx = x + 0.5f, cz = y + 0.5f, T = MapSpace.Tile;
@@ -172,6 +198,60 @@ namespace Bastion.Client.Map
                         if (R(4 + n) < full) OnTop(goods, R(8 + n) < 0.5f ? 1 : 2, PlazaBoards[n] + 0.01f, 0.14f, 0.5f, 60 + n * 10);
                     return true;
                 }
+                case ToyShelf:
+                {
+                    // Shops' shelving (1.89 m, 0.89 m deep) against its wall, every board and its top stocked with toys.
+                    Put("pzToyShelf", cx - front.X * 0.08f, 0, cz - front.Y * 0.08f, yaw);
+                    var toys = PlazaGoods[ShopUses.Toys];
+                    for (int n = 0; n < ToyShelfBoards.Length; n++) OnTop(toys, 3, ToyShelfBoards[n] + 0.01f, 0.08f, 0.62f, 200 + n * 10);
+                    return true;
+                }
+                case ToyBin:
+                {
+                    // Apocalypse's open crate (0.76 m) without its lid, heaped to the brim with toys, one fallen beside it.
+                    var crate = Put("pzToyBin", cx, 0, cz, yaw + (R(1) - 0.5f) * 30);
+                    if (crate != null)
+                        foreach (var r in crate.GetComponentsInChildren<Renderer>(true))
+                            if (r.name.Contains("Lid")) r.gameObject.SetActive(false);
+                    var toys = PlazaGoods[ShopUses.Toys];
+                    for (int n = 0; n < 5; n++)
+                    {
+                        float a = R(10 + n) * Mathf.PI * 2, d = n == 0 ? 0 : 0.12f;
+                        Put(toys[Mathf.FloorToInt(R(20 + n) * toys.Length) % toys.Length], cx + Mathf.Cos(a) * d, 0.4f + R(30 + n) * 0.06f, cz + Mathf.Sin(a) * d, R(40 + n) * 360);
+                    }
+                    float fall = R(50) * Mathf.PI * 2;
+                    Put(R(51) < 0.5f ? "pzBear" : "pzToyDuck", cx + Mathf.Cos(fall) * 0.38f, 0, cz + Mathf.Sin(fall) * 0.38f, R(52) * 360);
+                    return true;
+                }
+                case LobbyBench:
+                    // Shops' row of three seats (0.94 m), along the tile.
+                    Put("pzLobbyBench", cx, 0, cz, yaw + (R(1) - 0.5f) * 6);
+                    return true;
+                case TicketBooth:
+                {
+                    // Shops' glass booth against its wall (a tile across, 0.88 m deep, 1.8 m tall), «TICKETS» over its glass in
+                    // Shops' letters, and before it two of Shops' queue posts with their belt, inside the tile.
+                    float back = 0.5f - PlazaWallFace - 0.88f / T / 2;
+                    Put("pzTicketBooth", cx - front.X * back, 0, cz - front.Y * back, yaw);
+                    // (Its letters a quarter of their size, on its front's top edge: out from the tile's middle by its front's place.)
+                    const string Word = "TICKETS";
+                    float size = 0.27f, gap = 0.025f, width = Word.Sum(c => (LetterWide.TryGetValue(c, out var lw) ? lw : 0.4f) * size) + gap * (Word.Length - 1);
+                    float from = -width / 2, ahead = 0.88f / T / 2 - back + 0.02f;
+                    foreach (char c in Word)
+                    {
+                        float lw = (LetterWide.TryGetValue(c, out var v) ? v : 0.4f) * size;
+                        float u = (from + lw / 2) / T;
+                        var letter = Put($"pzL{c}", cx + front.X * ahead + front.Y * u, 1.8f / T, cz + front.Y * ahead - front.X * u, yaw);
+                        if (letter != null) letter.transform.localScale = Vector3.one * size;
+                        from += lw + gap;
+                    }
+                    // (The posts 0.6 tiles apart, the belt between them at 0.85 m, the queue's way along the booth.)
+                    float post = 0.4f;
+                    for (int n = -1; n <= 1; n += 2) Put("pzQueuePost", cx + front.X * post + side.x * n * 0.3f, 0, cz + front.Y * post + side.y * n * 0.3f, yaw);
+                    var belt = Put("pzQueueBelt", cx + front.X * post, 0.85f / T, cz + front.Y * post, yaw + 90);
+                    if (belt != null) belt.transform.localScale = new Vector3(1, 1, 0.6f);
+                    return true;
+                }
                 case PlazaDetailKinds.Planter:
                 {
                     // Shopping Plaza's bed, a bush in it (the square's planters are low cover).
@@ -209,8 +289,9 @@ namespace Bastion.Client.Map
         /// The plaza's scenery (its marks not on furniture), on the ground floor, each where its tile still is what it was
         /// laid on: a mannequin standing (one in six knocked over), the cinema's big popcorn bucket, posters on the wall
         /// behind, the projector up under the ceiling, a sofa (its back to the wall by one), broken glass flat on the floor; out
-        /// of doors the awning over the double door, the sign over the front, a billboard on a wall by the street. What hangs
-        /// on a building goes with it in the cutaway (Cutaway.Track, TrackFixture). Made again whole when the map changes.
+        /// of doors the sign over the front, a billboard on a wall by the street (the awning mark is the walls': WallLayout's
+        /// PlazaDoor). What hangs on a building goes with it in the cutaway (Cutaway.Track, TrackFixture). Made again whole when
+        /// the map changes.
         /// </summary>
         void PlazaScenery()
         {
@@ -293,9 +374,6 @@ namespace Bastion.Client.Map
                         }
                         break;
                     }
-                    case PlazaDetailKinds.Awning:
-                        PlazaAwning(d, front, side, R);
-                        break;
                     case PlazaDetailKinds.ShopSign:
                         PlazaSign(d, front, b, use);
                         break;
@@ -327,52 +405,6 @@ namespace Bastion.Client.Map
             var d = Bastion.Engine.Grid.Dirs4[(facing + 2) % 4];
             int qx = x + d.X, qy = y + d.Y;
             return qx >= 0 && qy >= 0 && qx < s.Width && qy < s.Height && BuildingPlan.IsWallLike(s.Tiles[qy * s.Width + qx]);
-        }
-
-        /// <summary>
-        /// The awning before a shop's door (its mark on the tile out from the pair's first door, facing out): Shopping Plaza's
-        /// sail (a triangle: its base 6.9 m, its point 8.9 m from it) brought down to the double door, its point on the front
-        /// over the middle of the pair and its base out, 3.3 m along and 2 m from the wall, a pole under each of its two
-        /// corners there; its underside 2.8 m up, under the top of the glass. It goes with its shop in the cutaway, as a sign.
-        /// </summary>
-        void PlazaAwning(InteriorDetail d, Vec2 front, Vector2 side, System.Func<int, float> R)
-        {
-            float T = MapSpace.Tile;
-            // The door behind it and its partner along the wall: the middle of the two.
-            int dx = d.X - front.X, dy = d.Y - front.Y;
-            float mx = dx + 0.5f, mz = dy + 0.5f;
-            foreach (int way in new[] { -1, 1 })
-            {
-                int px = dx + (int)side.x * way, py = dy + (int)side.y * way;
-                string t = px >= 0 && py >= 0 && px < s.Width && py < s.Height ? s.Tiles[py * s.Width + px] : null;
-                if (t != TileKinds.Door && t != TileKinds.DoorOpen) continue;
-                mx += side.x * way * 0.5f;
-                mz += side.y * way * 0.5f;
-                break;
-            }
-            int b = plan != null && dy * s.Width + dx < plan.Owner.Length ? plan.Owner[dy * s.Width + dx] : -1;
-            float yaw = YawOf(d.Facing);
-            const float Along = 3.3f, Out = 2f, Under = 2.8f, Thick = 0.28f;
-            float wall = 0.5f + PlazaWallFace;
-            // (A quarter turn: its point, along its x as placed, to the wall; its base, along its z, along the wall.)
-            var cover = Place(props[0], "pzAwning", new Vector3((mx + front.X * (wall + Out / T / 2)) * T, Under, -(mz + front.Y * (wall + Out / T / 2)) * T), yaw + 90);
-            if (cover != null)
-            {
-                var box = BoundsIn(cover, cover.transform);
-                cover.transform.localScale = new Vector3(Out / Mathf.Max(box.size.x, 0.01f), Thick / Mathf.Max(box.size.y, 0.01f), Along / Mathf.Max(box.size.z, 0.01f));
-                plazaScenery.Add(cover);
-                if (b >= 0) Cutaway.Current?.Track(cover, b, 0, true, new Vector2(front.X, front.Y));
-            }
-            foreach (int way in new[] { -1, 1 })
-            {
-                float reach = wall + Out / T - 0.08f, aside = (Along / T / 2 - 0.08f) * way;
-                var pole = Place(props[0], "pzAwningPole", new Vector3((mx + front.X * reach + side.x * aside) * T, 0, -(mz + front.Y * reach + side.y * aside) * T), yaw);
-                if (pole == null) continue;
-                var box = BoundsIn(pole, pole.transform);
-                pole.transform.localScale = new Vector3(1, (Under + Thick * 0.5f) / Mathf.Max(box.size.y, 0.01f), 1);
-                plazaScenery.Add(pole);
-                if (b >= 0) Cutaway.Current?.Track(pole, b, 0, true, new Vector2(front.X, front.Y));
-            }
         }
 
         /// <summary>

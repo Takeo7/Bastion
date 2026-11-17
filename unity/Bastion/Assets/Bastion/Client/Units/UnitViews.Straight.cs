@@ -124,7 +124,8 @@ namespace Bastion.Client.Units
         /// </summary>
         Way Straighten(View v, Pos from, IReadOnlyList<Pos> path, int k, int m, IReadOnlyList<bool> passes)
         {
-            if (StraightOff || state == null || from == null || m - k < 2) return null;
+            // (Nor one caged: a step or two in its cell, its end pressed to its bars, UnitViews.Bars.)
+            if (StraightOff || state == null || from == null || m - k < 2 || v.caged) return null;
             for (int n = k; n < m; n++)
                 if (passes != null && n < passes.Count && passes[n]) return null;
             var clock = StraightLog ? System.Diagnostics.Stopwatch.StartNew() : null;

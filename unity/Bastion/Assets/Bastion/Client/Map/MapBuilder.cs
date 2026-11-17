@@ -434,6 +434,7 @@ namespace Bastion.Client.Map
             {
                 Dressing();
                 Fitted();
+                CampScenery();
             }
             using (MapLoad.Time("night")) Night();
             // A winter's map: the snow on what faces up (snow.ts).
@@ -1067,6 +1068,7 @@ namespace Bastion.Client.Map
             {
                 Dressing();
                 Fitted();
+                CampScenery();
             }
             using (Marks[11].Auto()) Night();
             using (Marks[7].Auto())
@@ -1383,6 +1385,8 @@ namespace Bastion.Client.Map
             if (k == 0 && pieces != null && ((pieces.at[i] >= 0 && BasePieces.Drawn.Contains(pieces.spots[pieces.at[i]].piece.Piece)) || pieces.yard.Has(i))) return;
             // A siege's barricade: its sandbags as worn as it is (DrawSiege).
             if (k == 0 && tile == "low" && s.Mission?.Siege != null && BasePieces.MadeAs(s, i % s.Width, i / s.Width) == 'b') return;
+            // (A shopping plaza's own pieces, H9 G11: a cover tile with no decor, its mark says what it is: MapBuilder.Plaza.)
+            if (PlazaPiece(k, i, tile == "low", floor)) return;
             var look = Bastion.Engine.Decor.DecorOf(decor[i]);
             if (look == null) return;
             // An object over several tiles: one model over all of them, from its anchor (mapView.ts drawThing).

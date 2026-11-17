@@ -1109,7 +1109,8 @@ namespace Bastion.Client.Map
         /// A shopping plaza's double door (H9 §4, two tiles; the «plaza» kit): on the pair's first tile (the model's start,
         /// −x along the wall: (o.y, −o.x)) the frame's first half and its leaf hinged at the doorway's start, on the second
         /// the other half and its leaf hinged at its end, so they open apart; each with its transom's glass, and its leaf's
-        /// while it is shut (a pane does not swing).
+        /// while it is shut (a pane does not swing). Over the two, the towns' wall awning in the shop's colour (Arturo, 17/11:
+        /// BuildingLooks.ShopAwning), its ends at the pair's ends, as Awning lays a run of openings.
         /// </summary>
         void PlazaDoor(int x, int y, float cx, float cz, float @base, Vec2 o, int b, bool open)
         {
@@ -1119,6 +1120,11 @@ namespace Bastion.Client.Map
             void Glass(string id, float along) => Pane(id, cx + o.Y * along, cz - o.X * along, @base, o, b, false);
             Glass(PlazaTransomKit, way * PlazaTransomAt);
             if (!open) Glass(PlazaLeafKit, way * PlazaLeafAt);
+            string style = BuildingLooks.ShopAwning(BuildingOf(b));
+            if (style == null) return;
+            bool last = !IsDoor(At(x + o.Y, y - o.X));
+            Put($"awning{style}{(first ? "EndL" : "MidL")}", cx, cz, @base, o, false, b, thick: 1);
+            Put($"awning{style}{(last ? "EndR" : "MidR")}", cx, cz, @base, o, false, b, thick: 1);
         }
 
         /// <summary>plan.Owner at index i as JS reads it: past either end, none.</summary>

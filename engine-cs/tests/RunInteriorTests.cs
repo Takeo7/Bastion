@@ -368,6 +368,99 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void APlazasShopsHoldOnlyWhatTheirUseNeeds()
+        {
+            // Arte, 17/11: a town shop's furniture was left in the plaza's (cafe tables in the toy shop and the cinema, a reading
+            // table in the empty one, drinks fridges in clothes and electronics), and a closed window's boards against a wall.
+            foreach (var seed in Seeds.Concat(new[] { 1, 2, 3, 4, 5 }))
+            {
+                var (_, s) = At(Places.Plaza, NodeKinds.Normal, seed);
+                var site = s.Interiors!.Single();
+                foreach (var shop in site.Rooms)
+                {
+                    var allowed = shop.Use == ShopUses.Empty ? new string[0]
+                        : shop.Use == ShopUses.Cinema ? new[] { DecorKinds.Counter }
+                        : shop.Use == ShopUses.Cafe ? new[] { DecorKinds.Counter, DecorKinds.CafeTable }
+                        : shop.Use == ShopUses.Pharmacy ? new[] { DecorKinds.Counter, DecorKinds.MedicalShelf }
+                        : new[] { DecorKinds.Counter, DecorKinds.Shelf };
+                    for (var y = shop.Y; y < shop.Y + shop.H; y++)
+                    {
+                        for (var x = shop.X; x < shop.X + shop.W; x++)
+                        {
+                            var i = y * s.Width + x;
+                            var kind = Decor.DecorOf(s.Decor![i])?.Kind;
+                            if (s.Tiles[i] == TileKinds.Floor) Assert.True(kind == null, $"seed {seed}, {shop.Use}: {kind} on the floor at {x},{y}");
+                            // (And the loot boxes, laid after: what is searched, not furniture; and the toy shop's and the lobby's
+                            // own pieces, no decor but their marks.)
+                            else Assert.True(allowed.Contains(kind) || Looting.LootBoxes.Contains(kind) || (kind == null && site.Dressing.Any((d) => (d.X, d.Y) == (x, y) && Pieces.Contains(d.Kind))), $"seed {seed}, {shop.Use}: {s.Tiles[i]} {kind} at {x},{y}");
+                        }
+                    }
+                    // A shop that sells has its counter or its shelves still: what its marks stand on.
+                    if (shop.Use != ShopUses.Empty) Assert.Contains(site.Dressing, (d) => d.X >= shop.X && d.Y >= shop.Y && d.X < shop.X + shop.W && d.Y < shop.Y + shop.H && s.Tiles[d.Y * s.Width + d.X] != TileKinds.Floor);
+                }
+                // No boards anywhere in the shops: none left against a closed window's wall.
+                Assert.DoesNotContain(site.Rooms.SelectMany((r) => Enumerable.Range(r.Y, r.H).SelectMany((y) => Enumerable.Range(r.X, r.W).Select((x) => y * s.Width + x))), (i) => Decor.DecorOf(s.Decor![i])?.Kind == DecorKinds.WindowBarricade);
+            }
+        }
+
+        private static readonly string[] Pieces = { PlazaDetailKinds.ToyShelf, PlazaDetailKinds.ToyBin, PlazaDetailKinds.LobbyBench, PlazaDetailKinds.TicketBooth };
+
+        [Fact]
+        public void TheToyShopAndTheLobbyFurnished()
+        {
+            // Producto, 17/11 (Arte's names): the toy shop two or three of toyShelf (against a wall, high) and toyBin (on the
+            // floor, low), one of each at least; the cinema's lobby one or two lobbyBench (low) and a ticketBooth against a
+            // wall (high). Each on its own tile of cover, with no decor; the shop's floor all of a piece from inside its door.
+            foreach (var seed in Seeds.Concat(new[] { 1, 2, 3, 4, 5 }))
+            {
+                var (_, s) = At(Places.Plaza, NodeKinds.Normal, seed);
+                var site = s.Interiors!.Single();
+                foreach (var use in new[] { ShopUses.Toys, ShopUses.Cinema })
+                {
+                    var room = site.Rooms.Single((r) => r.Use == use);
+                    bool In(int x, int y) => x >= room.X && y >= room.Y && x < room.X + room.W && y < room.Y + room.H;
+                    var mine = site.Dressing.Where((d) => In(d.X, d.Y) && Pieces.Contains(d.Kind)).ToList();
+                    if (use == ShopUses.Toys)
+                    {
+                        Assert.InRange(mine.Count, 2, 3);
+                        Assert.Contains(mine, (d) => d.Kind == PlazaDetailKinds.ToyShelf);
+                        Assert.Contains(mine, (d) => d.Kind == PlazaDetailKinds.ToyBin);
+                    }
+                    else
+                    {
+                        Assert.InRange(mine.Count((d) => d.Kind == PlazaDetailKinds.LobbyBench), 1, 2);
+                        Assert.Single(mine, (d) => d.Kind == PlazaDetailKinds.TicketBooth);
+                    }
+                    Assert.All(mine, (d) => Assert.Contains(d.Kind, use == ShopUses.Toys ? new[] { PlazaDetailKinds.ToyShelf, PlazaDetailKinds.ToyBin } : new[] { PlazaDetailKinds.LobbyBench, PlazaDetailKinds.TicketBooth }));
+                    foreach (var d in mine)
+                    {
+                        var i = d.Y * s.Width + d.X;
+                        var high = d.Kind == PlazaDetailKinds.ToyShelf || d.Kind == PlazaDetailKinds.TicketBooth;
+                        Assert.Equal(high ? TileKinds.High : TileKinds.Low, s.Tiles[i]);
+                        Assert.Equal(0, s.Decor![i]);
+                        // Against a wall, its back to it.
+                        if (high) Assert.Equal(TileKinds.Wall, s.Tiles[(d.Y - Grid.Dirs4[d.Facing].Y) * s.Width + d.X - Grid.Dirs4[d.Facing].X]);
+                        Assert.Single(site.Dressing, (x) => (x.X, x.Y) == (d.X, d.Y));
+                    }
+                    // A free way: every floor tile of the shop joined to the others.
+                    var floor = Enumerable.Range(room.Y, room.H).SelectMany((y) => Enumerable.Range(room.X, room.W).Select((x) => (X: x, Y: y))).Where((p) => s.Tiles[p.Y * s.Width + p.X] == TileKinds.Floor).ToList();
+                    var seen = new HashSet<(int, int)> { (floor[0].X, floor[0].Y) };
+                    var todo = new Queue<(int X, int Y)>(new[] { floor[0] });
+                    while (todo.Count > 0)
+                    {
+                        var q = todo.Dequeue();
+                        foreach (var dd in Grid.Dirs4)
+                        {
+                            var n = (q.X + dd.X, q.Y + dd.Y);
+                            if (In(n.Item1, n.Item2) && s.Tiles[n.Item2 * s.Width + n.Item1] == TileKinds.Floor && seen.Add(n)) todo.Enqueue(n);
+                        }
+                    }
+                    Assert.Equal(floor.Count, seen.Count);
+                }
+            }
+        }
+
+        [Fact]
         public void APlazaTakesATravesia()
         {
             // Out of doors: a Travesía and a Sabotaje may go there (H9), and only there, of the special maps.
@@ -866,6 +959,28 @@ namespace Bastion.Engine.Tests
                     Assert.All(inside, (q) => Assert.Equal(TileKinds.Floor, KindAt(q.Item1, q.Item2)));
                 }
                 sizes.Add(Math.Max(area.W, area.H));
+                // The quarantine tent (Arte, 17/11): 5 × 4 or 4 × 5, its short side the way its mark faces, the gate's.
+                var mark = s.Interiors!.Single().Dressing.Single((d) => d.Kind == CampDetailKinds.TentMilitary && d.Variant == 1);
+                var tent = new HashSet<(int, int)> { (mark.X, mark.Y) };
+                var todo = new Queue<(int X, int Y)>(new[] { (mark.X, mark.Y) });
+                while (todo.Count > 0)
+                {
+                    var q = todo.Dequeue();
+                    foreach (var d in Grid.Dirs4)
+                    {
+                        var n = (q.X + d.X, q.Y + d.Y);
+                        if (n.Item1 >= area.X && n.Item2 >= area.Y && n.Item1 < area.X + area.W && n.Item2 < area.Y + area.H && KindAt(n.Item1, n.Item2) == TileKinds.High && tent.Add(n)) todo.Enqueue(n);
+                    }
+                }
+                var w = tent.Max((t) => t.Item1) - tent.Min((t) => t.Item1) + 1;
+                var h = tent.Max((t) => t.Item2) - tent.Min((t) => t.Item2) + 1;
+                Assert.Equal(20, tent.Count);
+                Assert.Equal(mark.Facing % 2 == 1 ? (5, 4) : (4, 5), (w, h));
+                // Its door's side toward the gate.
+                var gx = gate.Average((p) => p.Item1);
+                var gy = gate.Average((p) => p.Item2);
+                var face = Grid.Dirs4[mark.Facing];
+                Assert.True(face.X * (gx - (tent.Min((t) => t.Item1) + tent.Max((t) => t.Item1)) / 2.0) + face.Y * (gy - (tent.Min((t) => t.Item2) + tent.Max((t) => t.Item2)) / 2.0) > 0, $"seed {seed}");
             }
             // Both military tents drawn: the area as wide as each asks.
             Assert.Equal(2, sizes.Count);
@@ -885,9 +1000,10 @@ namespace Bastion.Engine.Tests
                 Assert.Null(light.Turns);
                 s.Mission.Night = true;
                 var by = Grid.Dirs4.Select((d) => new Pos { X = pit.X + d.X, Y = pit.Y + d.Y, Z = 0 }).First((p) => Grid.KindAt(s, p) == TileKinds.Floor);
-                var dark = new Pos { X = pit.X, Y = pit.Y + 4 * Math.Sign(s.Height / 2 - pit.Y + 0.5), Z = 0 };
                 Assert.True(Los.IsLit(s, by));
-                Assert.False(Los.IsLit(s, dark));
+                // Its light no further than a street light's; a tile 4 off in the dark (another fire of the map may light some).
+                Assert.All(light.Tiles!, (n) => Assert.True(Grid.Distance(Grid.PosOf(s, n), light.Tile) <= Content.Night.StreetLight));
+                var dark = Grid.Dirs8.Select((d) => new Pos { X = pit.X + 4 * d.X, Y = pit.Y + 4 * d.Y, Z = 0 }).First((p) => Grid.InBounds(s, p.X, p.Y) && !Los.IsLit(s, p));
                 // One of the dead by the fire: seen by a soldier as by day; out of its light, from no further than at night.
                 var soldier = Squad(s)[0];
                 Assert.Equal(Los.SightOf(soldier), Los.SightTo(s, soldier, by));

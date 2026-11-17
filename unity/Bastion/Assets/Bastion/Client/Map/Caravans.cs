@@ -10,8 +10,8 @@ namespace Bastion.Client.Map
     /// <summary>
     /// The camping's caravans (runs, H9 §5, CampUses.Trailer: a building of 4 × 8 or 4 × 9 tiles, its one room of 2 × 6 or
     /// 2 × 7, its door on a long side) as Apocalypse's mobile homes, not of kit pieces (WallLayout and the roofs leave them
-    /// out): its shell (its walls inside and out, its floor and roof) and its glass; inside, the engine's furniture as in
-    /// any house. Fitted as every building's walls stand, on its wall tiles' middle lines (across, about 1.5 times its own
+    /// out): its shell (its walls inside and out, its floor and roof) and its glass; inside, the pack's furniture, each
+    /// piece the engine marks where it marks it (Furnish). Fitted as every building's walls stand, on its wall tiles' middle lines (across, about 1.5 times its own
     /// width; along, its ends on its end walls'), sunk to its floor, turned so its doorway is on the engine's door's side,
     /// mirrored or not so that it is nearest the door (the engine lays its door and windows where the model has them:
     /// Mapgen.TrailerOpenings, Arte's template of 17/11; CampingLab.Remolques measured the models). Each doorway its leaf (the model's inside door): the
@@ -32,6 +32,12 @@ namespace Bastion.Client.Map
             /// <summary>Its inside (the pack's: sofa, kitchen, a table with benches, the bed), and the box (x0, x1, z0, z1) of what is left out of it (its partitions).</summary>
             public string inside;
             public Vector4 noPartition;
+            /// <summary>
+            /// Its pieces the engine marks (its boxes, x0, x1, z0, z1; Mapgen.TrailerInside, Arte's template of 17/11): each drawn
+            /// only with its mark in the caravan. The rest of the inside (against the walls, no cover: the kitchen and the
+            /// chest of the six's, the sofa, the tall cupboard) always.
+            /// </summary>
+            public (string mark, Vector4 box)[] marked;
             public float halfWide, z0, z1, floor, eaves, top;
             public int doorSide;
             public float[] doors;
@@ -47,12 +53,18 @@ namespace Bastion.Client.Map
             {
                 name = "SM_Bld_Trailer_01", shell = "SM_Bld_Trailer_01", glass = "SM_Bld_Trailer_Glass_01", leaf = "SM_Bld_Trailer_Interior_Door_01",
                 inside = "SM_Bld_Trailer_Interior_01", noPartition = new Vector4(-1.5f, 1.5f, -3.55f, -1.17f),
+                marked = new[] { (CampDetailKinds.TrailerBed, new Vector4(-1.49f, 0.08f, -4.53f, -2.61f)), (CampDetailKinds.TrailerTable, new Vector4(-1.52f, -0.3f, -0.16f, 1.88f)) },
                 halfWide = 1.53f, z0 = -4.52f, z1 = 4.56f, floor = 0.7f, eaves = 3.3f, top = 3.91f, doorSide = -1, doors = new[] { -1.68f, 2.58f },
             },
             new Model
             {
                 name = "SM_Bld_Trailer_02", shell = "SM_Bld_Trailer_02", glass = "SM_Bld_Trailer_Glass_02", leaf = "SM_Bld_Trailer_Interior_Door_02",
                 inside = "SM_Bld_Trailer_Interior_02", noPartition = new Vector4(-1.52f, 0.19f, -3.22f, -1.13f),
+                marked = new[]
+                {
+                    (CampDetailKinds.TrailerBed, new Vector4(-1.51f, 0.66f, -5.64f, -4.01f)), (CampDetailKinds.TrailerDrawers, new Vector4(-1.51f, 0.08f, -3.68f, -3.14f)),
+                    (CampDetailKinds.TrailerCounter, new Vector4(-1.51f, 0.24f, -1.18f, 2.91f)), (CampDetailKinds.TrailerTable, new Vector4(-1.54f, -0.32f, 2.86f, 4.9f)),
+                },
                 halfWide = 1.5f, z0 = -5.62f, z1 = 5.0f, floor = 0.7f, eaves = 2.95f, top = 3.73f, doorSide = 1, doors = new[] { -2.63f },
             },
         };
@@ -200,6 +212,18 @@ namespace Bastion.Client.Map
         /// <summary>How tall caravan b stands over its floor (tiles: Building.top, the cutaway's box).</summary>
         public static float TopOf(GameState s, Building b) => FitOf(s, b, b.trailer ?? 1).top;
 
+        /// <summary>The top of both models' mattresses (the prefab's metres).</summary>
+        const float BedTop = 1.34f;
+
+        /// <summary>The middle of the top of caravan b's bed, its mattress's (0.10.1's tiles: x, up, z): what lies on it (MapBuilder.CampScenery). Null without its bed (no trailerBed mark in it).</summary>
+        public static Vector3? BedOf(GameState s, Building b)
+        {
+            if (!MarksIn(s, b).Contains(CampDetailKinds.TrailerBed)) return null;
+            var fit = FitOf(s, b, b.trailer ?? 1);
+            var bed = fit.model.marked.First(m => m.mark == CampDetailKinds.TrailerBed).box;
+            return fit.tiles.MultiplyPoint3x4(new Vector3((bed.x + bed.y) / 2, BedTop, (bed.z + bed.w) / 2));
+        }
+
         /// <summary>The materials, found once: Apocalypse's atlas in Bastion/Building (the bunker's pieces'), and the windows' glass.</summary>
         static Material shell, glass;
 
@@ -278,7 +302,10 @@ namespace Bastion.Client.Map
                 Add(glassBatch, panes, Matrix4x4.identity, fit, b, lit);
                 Draw(o.transform, "Cristales", glassBatch.Make($"Caravana {b.x0},{b.y0} cristales"), glass, false);
             }
-            if (Inside == "ancho" || Inside == "aparte") Furnish(o.transform, fit, b, missing);
+            // Its inside, the pack's (Arturo, 17/11), where the engine marks its furniture (Mapgen.TrailerInside); in an older
+            // save, the engine's furniture as a house's. The labs' BASTION_CARAVANA_INTERIOR, whatever the marks.
+            var marks = MarksIn(s, b);
+            if (marks.Count > 0 || Inside == "ancho" || Inside == "aparte") Furnish(o.transform, fit, b, missing, marks);
             var view = o.AddComponent<CaravanView>();
             view.Set(fit, b, PartOf(model, model.leaf, missing));
             view.Doors(s);
@@ -298,7 +325,7 @@ namespace Bastion.Client.Map
         /// stands above the eaves the roof's (into `roofBatch` if given); what stands within ShellNear of a wall's plane that
         /// wall's; the rest inside. `each`: a triangle's own place in the prefab (a piece of the inside), or null to leave it out.
         /// </summary>
-        static void Add(Batch batch, Part part, Matrix4x4 placed, Fit fit, Building b, float lit, Batch roofBatch = null, Func<int, Matrix4x4?> each = null)
+        static void Add(Batch batch, Part part, Matrix4x4 placed, Fit fit, Building b, float lit, Batch roofBatch = null, Func<int, Matrix4x4?> each = null, Func<int, bool> free = null)
         {
             var model = fit.model;
             var world = Matrix4x4.Scale(new Vector3(MapSpace.Tile, MapSpace.Tile, -MapSpace.Tile)) * fit.tiles;
@@ -311,11 +338,12 @@ namespace Bastion.Client.Map
             var p = part.positions;
             var t = part.triangles;
             var poly = new List<Corner>(3);
+            bool loose = false;
             void Emit(List<Corner> corners, Vector3 c)
             {
                 Vector4 cut, more;
                 var into = batch;
-                if (c.y > model.eaves - 0.05f)
+                if (c.y > model.eaves - 0.05f && !loose)
                 {
                     into = roofBatch ?? batch;
                     cut = new Vector4(b.index + 1, OnRoof, OnRoof, floorM);
@@ -325,7 +353,7 @@ namespace Bastion.Client.Map
                 {
                     float toSide = model.halfWide - Mathf.Abs(c.x), toEnd = hl - Mathf.Abs(c.z - cz);
                     Vector2 outward = Vector2.zero;
-                    if (Mathf.Min(toSide, toEnd) < ShellNear) outward = toSide <= toEnd ? fit.A * fit.flipA * Mathf.Sign(c.x) : fit.L * fit.flipL * Mathf.Sign(c.z - cz);
+                    if (Mathf.Min(toSide, toEnd) < ShellNear && !loose) outward = toSide <= toEnd ? fit.A * fit.flipA * Mathf.Sign(c.x) : fit.L * fit.flipL * Mathf.Sign(c.z - cz);
                     cut = new Vector4(b.index + 1, outward.x, outward.y, floorM);
                     more = new Vector4(0, 0, lit, 0);
                 }
@@ -339,6 +367,7 @@ namespace Bastion.Client.Map
             for (int k = 0; k + 2 < t.Length; k += 3)
             {
                 poly.Clear();
+                loose = free != null && free(k / 3);
                 // (A triangle of its own place, `each`'s: a piece of the inside kept to its proportions; null, left out.)
                 var at = inPrefab;
                 var turnAt = turnPrefab;
@@ -371,7 +400,7 @@ namespace Bastion.Client.Map
         static readonly string Inside = Environment.GetEnvironmentVariable("BASTION_CARAVANA_INTERIOR");
 
         /// <summary>The pack's inside of building b's caravan (Inside), with the inside door shut where it stands.</summary>
-        static void Furnish(Transform parent, Fit fit, Building b, ICollection<string> missing)
+        static void Furnish(Transform parent, Fit fit, Building b, ICollection<string> missing, HashSet<string> marks)
         {
             var model = fit.model;
             var inside = PartOf(model, model.inside, missing);
@@ -388,11 +417,50 @@ namespace Bastion.Client.Map
             }
             bool Partition(Bounds box) =>
                 box.min.x >= model.noPartition.x && box.max.x <= model.noPartition.y && box.min.z >= model.noPartition.z && box.max.z <= model.noPartition.w;
-            var kept = boxes.Select(box => Partition(box) ? (Matrix4x4?)null : Kept(box)).ToArray();
+            // A piece the engine marks, without its mark here (in the labs, with none at all, every piece).
+            bool Unmarked(Bounds box) =>
+                marks.Count > 0 && model.marked.Any(m => !marks.Contains(m.mark) && box.min.x >= m.box.x && box.max.x <= m.box.y && box.min.z >= m.box.z && box.max.z <= m.box.w);
+            // The tall cupboard (and its lintel and door): in the room, it goes down with any wall that does, lidded.
+            bool Tall(Bounds box) => box.min.y < model.floor + 0.2f && box.max.y > model.eaves - 0.6f && !Partition(box);
+            var kept = boxes.Select(box => Partition(box) || Unmarked(box) ? (Matrix4x4?)null : Kept(box)).ToArray();
+            var free = boxes.Select(box => Tall(box) || (box.min.y > 2.5f && box.size.x < 0.2f)).ToArray();
             var batch = new Batch();
-            Add(batch, inside, Matrix4x4.identity, fit, b, 0, null, tri => kept[island[tri]]);
-            if (door != null) Add(batch, door, Matrix4x4.identity, fit, b, 0, null, _ => Kept(door.box));
+            Add(batch, inside, Matrix4x4.identity, fit, b, 0, null, tri => kept[island[tri]], tri => free[island[tri]]);
+            if (door != null) Add(batch, door, Matrix4x4.identity, fit, b, 0, null, _ => Kept(door.box), _ => true);
+            foreach (var box in boxes.Where(box => Tall(box) && box.size.x > 0.3f && box.size.z > 0.3f))
+                Lid(batch, fit, b, Kept(box), box);
             Draw(parent, "Dentro", batch.Make($"Caravana {b.x0},{b.y0} dentro"), shell, true);
+        }
+
+        /// <summary>The kinds of the engine's marks inside caravan b (trailerBed, trailerTable…: GameState.Interiors' camping).</summary>
+        static HashSet<string> MarksIn(GameState s, Building b)
+        {
+            var kinds = new HashSet<string>();
+            foreach (var site in s.Interiors ?? new List<InteriorSite>())
+                if (site?.Kind == InteriorKinds.Camping && site.Dressing != null)
+                    foreach (var d in site.Dressing)
+                        if (d.Kind.StartsWith("trailer") && d.Kind != CampDetailKinds.Trailer && d.X > b.x0 && d.X < b.x1 && d.Y > b.y0 && d.Y < b.y1) kinds.Add(d.Kind);
+            return kinds;
+        }
+
+        /// <summary>
+        /// A lid over a tall piece of the inside (its box in the prefab, `placed` as the piece is), a wall's cap: plain grey,
+        /// and down with the piece to where the cut takes it (BuildingCut.hlsl's cap). The pack's cupboard has none: cut
+        /// open, it was a hollow box.
+        /// </summary>
+        static void Lid(Batch batch, Fit fit, Building b, Matrix4x4 placed, Bounds box)
+        {
+            var world = Matrix4x4.Scale(new Vector3(MapSpace.Tile, MapSpace.Tile, -MapSpace.Tile)) * fit.tiles * placed;
+            var cut = new Vector4(b.index + 1, 0, 0, b.@base * MapSpace.Tile);
+            var more = new Vector4(0, 1, 0, 0);
+            float y = box.max.y - 0.01f;
+            var corners = new[] { new Vector3(box.min.x, y, box.min.z), new Vector3(box.max.x, y, box.min.z), new Vector3(box.max.x, y, box.max.z), new Vector3(box.min.x, y, box.max.z) };
+            var up = world.inverse.transpose.MultiplyVector(Vector3.up).normalized;
+            var p = corners.Select(q => world.MultiplyPoint3x4(q)).ToArray();
+            // (Its front up, as Unity winds a face seen from above: clockwise.)
+            bool upward = Vector3.Cross(p[1] - p[0], p[2] - p[0]).y > 0;
+            foreach (var tri in upward ? new[] { new[] { 0, 1, 2 }, new[] { 0, 2, 3 } } : new[] { new[] { 0, 2, 1 }, new[] { 0, 3, 2 } })
+                foreach (int n in tri) batch.Add(p[n], up, Vector2.zero, cut, more);
         }
 
         /// <summary>A part's pieces that share no corner (welded by place, a millimetre): each triangle's piece, each piece's box in the prefab.</summary>

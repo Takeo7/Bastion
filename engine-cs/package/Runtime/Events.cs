@@ -1207,6 +1207,7 @@ namespace Bastion.Engine
                     Alarm = m.Alarm,
                     Pistols = m.Pistols,
                     PoliceCar = CopyInts(m.PoliceCar),
+                    OutOfReach = CopyInts(m.OutOfReach),
                     Reinforcements = m.Reinforcements.Select(CopyReinforcement).ToList(),
                     Difficulty = m.Difficulty,
                     Noise = m.Noise,

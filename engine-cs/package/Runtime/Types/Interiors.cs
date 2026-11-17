@@ -188,11 +188,16 @@ namespace Bastion.Engine
         public const string Planter = "planter";
         public const string BrokenGlass = "brokenGlass";
         public const string Billboard = "billboard";
+        /// <summary>The toy shop's and the cinema lobby's own pieces (Producto, 17/11), each on its tile of cover: a shelf of toys against a wall (high), a bin or stand of toys (low), a bench (low), the ticket booth against a wall (high).</summary>
+        public const string ToyShelf = "toyShelf";
+        public const string ToyBin = "toyBin";
+        public const string LobbyBench = "lobbyBench";
+        public const string TicketBooth = "ticketBooth";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             DisplayCase, RingDisplay, WatchDisplay, ClothesRack, Mannequin, Shelf, Counter, Till, Popcorn, Projector, MoviePoster, Sofa, Awning, ShopSign,
-            Planter, BrokenGlass, Billboard,
+            Planter, BrokenGlass, Billboard, ToyShelf, ToyBin, LobbyBench, TicketBooth,
         };
     }
 

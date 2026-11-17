@@ -408,6 +408,8 @@ namespace Bastion.Client.Units
                 // (The Brute's lower, its long arms hanging forward, not held up before its chest. UnitViews.Brute.)
                 if (Heavy(v)) offset += BruteArms * scale;
                 var target = chest.position + turn * (v.root.rotation * offset);
+                // (Caged by its bars: each hand out between them, as far as it faces them and is by them. UnitViews.Bars.)
+                if (v.cage != null && v.barsArms > 0) target = Vector3.Lerp(target, CagedHand(v, s, target.y), v.barsArms);
                 var pole = v.root.rotation * new Vector3(-s * 0.8f, -0.7f, -0.3f);
                 Transform s0 = a.GetBoneTransform(upper), s1 = a.GetBoneTransform(lower), s2 = a.GetBoneTransform(hand);
                 if (s0 == null || s1 == null || s2 == null) continue;

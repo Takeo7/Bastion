@@ -207,7 +207,7 @@ namespace Bastion.Net
                 var close = MoveToStrike(s, u);
                 if (close != null) return close;
             }
-            var goal = (!armed && !leaving ? GunGoal(s, u) : null) ?? target;
+            var goal = (!armed && !leaving ? GunGoal(s, u, walks) : null) ?? target;
             if (goal != null && !(leaving && Abilities.InEvacZone(s, u.Pos)))
             {
                 var pry = Pry(s, u, goal, leaving);
@@ -216,6 +216,12 @@ namespace Bastion.Net
                 var move = stride >= Paths.CostOrtho ? MoveToward(s, u, goal, stride, leaving, walks) : null;
                 if (move != null) return move;
             }
+            // On a run's way out with no step to take, what is near is shot after all: the horde stood in the way to La Lata,
+            // four tiles off, and the squad waited for it for ever (R3, 17/11: a Guarida in the hospital, 700 turns).
+            if (going && !carrier && BestShot(s, u, Close) is (Command, int) way && way.hit >= 30) return way.cmd;
+            // And with nothing to shoot, a step on regardless of the danger: inside, the horde at the door can't be seen,
+            // and the blade alone waited by it for ever (R3: the offices' radio, 3000 turns).
+            if (going && goal != null && !Abilities.InEvacZone(s, u.Pos) && Stride(s, u) >= Paths.CostOrtho && MoveToward(s, u, goal, Stride(s, u), leaving, walks, reckless: true) is Command push) return push;
             if (shot != null && shot.Value.hit >= 15) return shot.Value.cmd;
             if (Usable(s, u, AbilityIds.Overwatch) && nearest <= Close * 2) return Ability(u, AbilityIds.Overwatch);
             if (Usable(s, u, AbilityIds.OverwatchMelee) && nearest <= Close) return Ability(u, AbilityIds.OverwatchMelee);
@@ -444,18 +450,22 @@ namespace Bastion.Net
 
         /// <summary>
         /// Where a soldier without a gun may find one: the boots of police cars still shut (MissionState.PoliceCar, a gun
-        /// one time in three), or a gun on the floor. Only as many go as there are, the nearest to them; null for the rest.
+        /// one time in three), or a gun on the floor; only those `walks` (its walks past the dead) gets to, a boot from a
+        /// tile beside it (R3, 17/11: a boot walled in, in a town's Limpieza, kept the last soldier going to and fro by it
+        /// for ever). Only as many go as there are, the nearest to them; null for the rest.
         /// </summary>
-        private static Pos? GunGoal(GameState s, Unit u)
+        private static Pos? GunGoal(GameState s, Unit u, Reach walks)
         {
+            bool Walked(Pos p) => walks.Cost.ContainsKey(Grid.NodeOf(s, p));
             var found = new List<Pos>();
             foreach (var i in s.Mission.PoliceCar ?? new List<int>())
             {
                 var p = new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 };
-                if (Looting.SearchSpot(s, p) == Looting.PoliceBoot && Looting.IsSearchable(s, p)) found.Add(p);
+                if (Looting.SearchSpot(s, p) != Looting.PoliceBoot || !Looting.IsSearchable(s, p)) continue;
+                if (Grid.Dirs8.Any((d) => Grid.InBounds(s, p.X + d.X, p.Y + d.Y) && Walked(new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = p.Z }))) found.Add(p);
             }
-            found.AddRange((s.Dropped ?? new List<DroppedLoot>()).Where((d) => IsGun(d.Loot.Weapon)).Select((d) => d.Pos));
-            found.AddRange((s.FloorGear ?? new List<DroppedGear>()).Where((d) => IsGunGear(d.Gear)).Select((d) => d.Pos));
+            found.AddRange((s.Dropped ?? new List<DroppedLoot>()).Where((d) => IsGun(d.Loot.Weapon) && Walked(d.Pos)).Select((d) => d.Pos));
+            found.AddRange((s.FloorGear ?? new List<DroppedGear>()).Where((d) => IsGunGear(d.Gear) && Walked(d.Pos)).Select((d) => d.Pos));
             if (found.Count == 0) return null;
             double Near(Unit x) => found.Min((p) => Grid.Distance(x.Pos, p));
             var going = Grid.Combatants(s, Teams.Xcom).Where((x) => !x.Evacuated && !Armed(s, x) && PackedGun(x) == null && x.Pack?.Items.Any((p) => IsGunGear(p.Gear)) != true && s.Mission.Item?.Carrier != x.Id)
@@ -505,7 +515,7 @@ namespace Bastion.Net
         /// the crow flies and then along the way round. The walk is the way there, from the soldier: the walk back from the
         /// goal goes down drops the soldier can't climb, and one stood still under one.
         /// </remarks>
-        private static Command? MoveToward(GameState s, Unit u, Pos goal, double cost, bool bus, Reach walks)
+        private static Command? MoveToward(GameState s, Unit u, Pos goal, double cost, bool bus, Reach walks, bool reckless = false)
         {
             var reach = Paths.ComputeReach(s, u, cost);
             // Where it ends up matters as much as how near: beside the dead it is bitten in their turn. Those of a group still
@@ -521,7 +531,7 @@ namespace Bastion.Net
             // El Toro's charge ready (or by the next turn): his lines are kept out of (H6).
             var bull = Bull(s);
             var charging = bull != null && (!bull.Cooldowns.TryGetValue(AbilityIds.Charge, out var wait) || wait <= 1);
-            double Danger(Pos p) => enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0) + (caged.Contains(Grid.NodeOf(s, p)) ? 4 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
+            double Danger(Pos p) => reckless ? 0 : enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0) + (caged.Contains(Grid.NodeOf(s, p)) ? 4 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
             var stops = Paths.Destinations(s, u, reach);
             Destination? best = null;
             var end = WayTo(s, walks, goal, bus);

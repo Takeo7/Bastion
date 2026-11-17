@@ -331,5 +331,45 @@ namespace Bastion.Engine
         {
             return Math.Abs(seed) % 2 == 0 ? TemplateIds.Mec : TemplateIds.Sectoid;
         }
+
+        /// <summary>
+        /// A run's fight (Red, R3 17/11): what there is to search that no soldier gets beside on foot from the squad is out of
+        /// reach (MissionState.OutOfReach: never a spot to search), and no such car is a police car. A town's outline shuts up
+        /// the ground nobody can get to (Mapgen's SealPockets) but not what stands on it, so a lot's cars were left whole in its
+        /// wall. Not mended there: the step recordings' maps would change.
+        /// </summary>
+        public static void OnlyWithinReach(GameState s)
+        {
+            var soldier = s.Units.FirstOrDefault((u) => u.Team == Teams.Xcom && u.Alive && !u.Evacuated);
+            if (soldier == null) return;
+            var reach = new HashSet<int>(Paths.ComputeReach(s, soldier, 1_000_000, ignore: (_) => true).Cost.Keys);
+            var area = s.Width * s.Height;
+            var out_ = new List<int>();
+            for (var z = 0; z <= (s.Levels?.Count ?? 0); z++)
+            {
+                for (var i = 0; i < area; i++)
+                {
+                    var p = new Pos { X = i % s.Width, Y = i / s.Width, Z = z };
+                    if (Looting.SearchSpot(s, p) == null) continue;
+                    var beside = Grid.Dirs8.Any((d) =>
+                    {
+                        var from = new Pos { X = p.X + d.X, Y = p.Y + d.Y, Z = z };
+                        return Grid.InBounds(s, from.X, from.Y) && reach.Contains(Grid.NodeOf(s, from)) && Looting.ReachesToSearch(s, from, p);
+                    });
+                    if (!beside) out_.Add(Grid.NodeOf(s, p));
+                }
+            }
+            if (out_.Count == 0) return;
+            s.Mission.OutOfReach = out_;
+            var police = s.Mission.PoliceCar ?? new List<int>();
+            var kept = new List<int>();
+            for (var k = 0; k + 1 < police.Count; k += 2)
+            {
+                if (out_.Contains(police[k + 1])) continue;
+                kept.Add(police[k]);
+                kept.Add(police[k + 1]);
+            }
+            s.Mission.PoliceCar = kept.Count > 0 ? kept : null;
+        }
     }
 }

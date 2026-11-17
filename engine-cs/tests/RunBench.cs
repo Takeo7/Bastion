@@ -145,11 +145,16 @@ namespace Bastion.Engine.Tests
 
         private static string SiteName(string site) => site == Places.Town ? "Pueblo o ciudad" : Places.Names[site];
 
-        /// <summary>R1: every stage a site can be, on the new maps and the three they stand in for, with rifles and with knives.</summary>
+        /// <summary>
+        /// R1: every stage a site can be, on the new maps and the three they stand in for, with rifles and with knives. Only
+        /// some sites with BASTION_BANCO_SITIOS (Places ids, «plaza,police»).
+        /// </summary>
         [BenchFact]
         public void R1TheNewMaps()
         {
-            var jobs = (from site in Sites from kind in Kinds where Drawn(site, kind) from rifles in new[] { true, false } from seed in Seeds select (site, kind, rifles, seed)).ToList();
+            var only = Environment.GetEnvironmentVariable("BASTION_BANCO_SITIOS")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var sites = only != null && only.Length > 0 ? Sites.Where((x) => only.Contains(x)).ToArray() : Sites;
+            var jobs = (from site in sites from kind in Kinds where Drawn(site, kind) from rifles in new[] { true, false } from seed in Seeds select (site, kind, rifles, seed)).ToList();
             var clock = Stopwatch.StartNew();
             var fights = new Fight[jobs.Count];
             Parallel.For(0, jobs.Count, new ParallelOptions { MaxDegreeOfParallelism = 4 }, (i) => fights[i] = Play(jobs[i].site, jobs[i].kind, jobs[i].rifles, jobs[i].seed));
@@ -160,7 +165,7 @@ namespace Bastion.Engine.Tests
                 lines.Add("");
                 lines.Add("| Sitio | " + string.Join(" | ", Kinds.Select((k) => KindNames[k])) + " |");
                 lines.Add("|---|" + string.Concat(Kinds.Select((_) => "---|")));
-                foreach (var site in Sites)
+                foreach (var site in sites)
                 {
                     var cells = Kinds.Select((k) =>
                     {
@@ -181,7 +186,7 @@ namespace Bastion.Engine.Tests
             lines.Add("");
             lines.Add("| Sitio | Fusiles: § | objetos | caídos | Cuchillos: § | objetos | caídos |");
             lines.Add("|---|---|---|---|---|---|---|");
-            foreach (var site in Sites)
+            foreach (var site in sites)
             {
                 string Of(bool rifles)
                 {
@@ -306,6 +311,7 @@ namespace Bastion.Engine.Tests
                 steps: 60_000);
             ch.Missions = played.Count;
             ch.Stuck = CampaignAutoRun.Stuck;
+            if (CampaignAutoRun.StuckMission != null) File.WriteAllText(Path.Combine(BenchFactAttribute.Folder!, $"atasco-{seed}.json"), CampaignAutoRun.StuckMission);
             ch.Seconds = clock.Elapsed.TotalSeconds;
             return ch;
         }

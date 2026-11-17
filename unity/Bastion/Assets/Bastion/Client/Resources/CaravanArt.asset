@@ -19,12 +19,10 @@ MonoBehaviour:
   - SM_Prop_Tent_Long_01
   - SM_Prop_Sleeping_Bag_01
   - SM_Prop_Sleeping_Bag_Rolled_01
-  - SM_Prop_Toilet_Portable_01
   - SM_Prop_Camp_Chair_01
   - SM_Prop_WashingLine_01
   - SM_Prop_FirePit_01
   - SM_Bld_Military_Tent_01
-  - SM_Bld_Military_Tent_02
   - SM_Bld_Quarantine_Tent_01
   - SM_Prop_Cooler_01
   models:
@@ -34,11 +32,9 @@ MonoBehaviour:
   - {fileID: 1634334837478312, guid: 2bc2a52c2b77dbc4a8c2058c5e0e0d89, type: 3}
   - {fileID: 1304215742492940, guid: d06389c47b933e8439add707caa92991, type: 3}
   - {fileID: 1849830538105032, guid: 9888cc354f0db164e83fb93f855fbc36, type: 3}
-  - {fileID: 1517131511816440, guid: 13ecd99e37f89f0429739686453e7080, type: 3}
   - {fileID: 1459058126935912, guid: 3d004b72f7b50e448a300b56635c9728, type: 3}
   - {fileID: 1332903101755578, guid: 0716ed259079ad149b8bd8b4642f75f6, type: 3}
   - {fileID: 1649974113805406, guid: e877b3ac2d64d404f94a9bc0bfb94891, type: 3}
   - {fileID: 1701099956834092, guid: 2490389000c4d66458dc1948a5f79bdb, type: 3}
-  - {fileID: 1175484862471660, guid: fefb4994d6b6f2e4084e64622072b823, type: 3}
   - {fileID: 1223674719005576, guid: d0521494728afa040a7ee397dac54d07, type: 3}
   - {fileID: 1698631261183650, guid: 64ec8930c2042bf43ba1fb401a50c560, type: 3}

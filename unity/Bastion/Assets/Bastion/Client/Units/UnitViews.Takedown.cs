@@ -36,6 +36,10 @@ namespace Bastion.Client.Units
             public float clipAt, release;
             /// <summary>This frame's (for the labs): where the left palm goes and is, where the blade goes and what of it is there.</summary>
             public Vector3 grabAt, palm, nape, contact;
+            /// <summary>Across a cell's bars (UnitViews.Bars): the bars from its side, where the dead one stood and how far it is drawn back onto them (m, as the hand has the head).</summary>
+            public BarsLine line;
+            public Vector3 targetHome;
+            public float pull;
         }
 
         readonly Dictionary<View, TakingDown> takingDown = new Dictionary<View, TakingDown>();
@@ -231,20 +235,35 @@ namespace Bastion.Client.Units
             }
             // Turned a moment first if it has its back to it, not walking in backwards; else it turns as it sets off.
             for (float w = 0; TurnLeft(v) > SilentTurnLeft && w < SilentTurnWait; w += Time.deltaTime) await Awaitable.NextFrameAsync(ct);
-            // The blade from the belt (with only a blade, the one in its hands); the knife the other way up in the fist.
+            // (Across a cell's bars, Aim.AcrossBars: up to the bars, the left hand in between them to the head and the blade
+            // driven in between them to the nape, not from above (it would go through them); the dead one drawn back onto
+            // them as the hand has the head. UnitViews.Bars.)
+            var bars = t != null ? Across(v, t) : null;
+            td.line = bars;
+            v.through = bars;
+            if (bars != null)
+            {
+                td.targetHome = t.root.position;
+                td.pull = Mathf.Max(0, bars.Depth(t.root.position) - TakeHold);
+                t.barsHeld = true;
+            }
+            // The blade from the belt (with only a blade, the one in its hands); the knife the other way up in the fist (not
+            // through bars: a thrust, its point ahead).
             var art = v.arts.TryGetValue(v.carried.ContainsKey(BeltCarry) ? BeltCarry : MainCarry, out var a) ? a : null;
-            td.edge = EdgeOf(art);
-            v.reversed = td.edge == Edge.Point;
+            td.edge = bars != null ? Edge.Point : EdgeOf(art);
+            v.reversed = bars == null && td.edge == Edge.Point;
             Draw(v, BeltCarry);
             AtRest(v, SilentDraw);
-            td.release = ReleaseOf(Contact(v, td.edge) is var (fist, into) ? Vector3.Distance(fist, into) : 0.25f);
+            td.release = bars != null ? KnifeStroke.release : ReleaseOf(Contact(v, td.edge) is var (fist, into) ? Vector3.Distance(fist, into) : 0.25f);
+            float raise = bars != null ? TakeRaise : SilentRaise;
             // Up from its crouch for one standing, down to it for one low (Pose leaves it so till it is done: risen).
-            bool low = t != null && Low(t);
+            bool low = bars == null && t != null && Low(t);
             v.risen = true;
             v.crouched = low;
             string walk = low ? "crouchWalk" : "walk";
-            // (To where its body is, not its tile: a dead one's idle sways its hips 20 cm about its root.)
-            Vector3 To() => t != null && t.root != null ? Reach(v.root.position, low ? NeckAt(t) : BodyAt(t), low ? SilentLowGap : GapOf(v, t), SilentMost) : Vector3.zero;
+            // (To where its body is, not its tile: a dead one's idle sways its hips 20 cm about its root. Through bars, up to them.)
+            Vector3 Up() => bars.normal * Mathf.Max(0, -bars.Depth(v.root.position) - TakeGap);
+            Vector3 To() => bars != null ? Up() : t != null && t.root != null ? Reach(v.root.position, low ? NeckAt(t) : BodyAt(t), low ? SilentLowGap : GapOf(v, t), SilentMost) : Vector3.zero;
             var to = To();
             float distance = Flat(to);
             float step = distance > 0.02f ? Mathf.Clamp(distance / SilentPace + SilentEase, SilentStepLeast, SilentStepMost) : 0;
@@ -254,7 +273,7 @@ namespace Bastion.Client.Units
             float Along(float u) => r <= 0 ? u : u < r ? top * u * u / (2 * r) : u > 1 - r ? 1 - top * (1 - u) * (1 - u) / (2 * r) : top * (u - r / 2);
             float prep = Mathf.Max(SilentPrep, step), raised = prep + SilentHold, hit = raised + SilentStroke, letGo = hit + SilentIn;
             float back = letGo + SilentLetGo * 0.5f, outFrom = letGo, end = Mathf.Max(back + step, outFrom + StrokeOut) + 0.05f;
-            var clip = FigureCatalog.Load()?.Clip(ChopStroke.clip);
+            var clip = FigureCatalog.Load()?.Clip(bars != null ? KnifeStroke.clip : ChopStroke.clip);
             if (step > 0) v.anim.Motion(walk, pace);
             else v.anim.Motion(IdleOf(v));
             bool there = step <= 0, homeward = false, home = step <= 0, struck = false;
@@ -286,9 +305,9 @@ namespace Bastion.Client.Units
                 if (clip != null)
                 {
                     float release = td.release;
-                    float at = s < prep ? SilentRaise * Mathf.SmoothStep(0, 1, s / prep)
-                        : s < raised ? SilentRaise
-                        : s < hit ? SilentRaise + (release - SilentRaise) * Sq((s - raised) / SilentStroke)
+                    float at = s < prep ? raise * Mathf.SmoothStep(0, 1, s / prep)
+                        : s < raised ? raise
+                        : s < hit ? raise + (release - raise) * Sq((s - raised) / SilentStroke)
                         : release + (s - hit) * SilentInRate;
                     float share = Mathf.Clamp01(Mathf.Min(s / 0.2f, (outFrom + StrokeOut - s) / StrokeOut));
                     v.anim.Scrub(share > 0 ? clip : null, Mathf.Clamp(at, 0, clip.length), share, true);
@@ -316,8 +335,10 @@ namespace Bastion.Client.Units
         /// <summary>Done (or cut short): the stroke's clip off, the body back on its root, the knife held as ever and put away, the main weapon in hand, crouched again if the state has it so.</summary>
         void Undo(View v, bool crouched)
         {
+            if (takingDown.TryGetValue(v, out var td) && td.target != null) td.target.barsHeld = false;
             takingDown.Remove(v);
             v.reversed = false;
+            v.through = null;
             if (v.root == null) return;
             v.anim?.Scrub(null, 0, 0, true);
             if (v.body != null) v.body.localPosition = new Vector3(0, 0, -v.back * MapSpace.Tile);
@@ -484,6 +505,10 @@ namespace Bastion.Client.Units
                 var td = pair.Value;
                 if (v.root == null || v.body == null) continue;
                 v.body.localPosition = v.root.InverseTransformVector(td.offset);
+                // (Through bars, the dead one drawn back onto them by its head as the hand has it, kept there once the blade
+                // is in: UnitViews.Bars.)
+                if (td.line != null && td.target?.root != null && !td.target.dead)
+                    td.target.root.position = td.targetHome - td.line.normal * (td.pull * td.grab);
                 var a = v.animator;
                 var za = td.target?.animator;
                 // (Not stepped this frame, unseen: its pose is last frame's, laid on already.)
@@ -504,6 +529,9 @@ namespace Bastion.Client.Units
                 if (!td.held) td.nape = Vector3.Lerp(neck.position, head.position, NapeUp) + toward * NapeOut * size;
                 Lean(v, SilentLean * td.lean);
                 Upright(v, SilentTilt);
+                // (Through bars, its trunk kept off them before the hands go in between them: tipped back after, they came
+                // away from the head and the nape. UnitViews.Bars.)
+                if (td.line != null) KeepBehind(v, td.line, -SoldierClear);
                 Grab(v, td, skull, toward);
                 Lay(v, td);
             }
@@ -592,7 +620,8 @@ namespace Bastion.Client.Units
             var ahead = td.nape - (v.root.position + td.offset);
             ahead.y = 0;
             ahead = ahead.sqrMagnitude > 1e-6f ? ahead.normalized : v.root.forward;
-            var into = Quaternion.AngleAxis(PitchOf(td.edge), Vector3.Cross(Vector3.up, ahead)) * ahead;
+            // (Through bars, nearly level: in between them, UnitViews.Bars.)
+            var into = Quaternion.AngleAxis(td.line != null ? ThroughPitch : PitchOf(td.edge), Vector3.Cross(Vector3.up, ahead)) * ahead;
             var turn = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(way / reach, into), td.lay);
             // (The grip in the hand's frame, where the fist goes, and so where the hand goes turned so.)
             var grip = Quaternion.Inverse(hand.rotation) * (fist - hand.position);

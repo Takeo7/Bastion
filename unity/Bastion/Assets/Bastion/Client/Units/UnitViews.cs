@@ -337,6 +337,25 @@ namespace Bastion.Client.Units
             public float smash, charge;
             /// <summary>Where the middle of the Brute's fists goes this frame through its blow (UnitViews.Brute SmashHands).</summary>
             public Vector3 smashAt;
+            /// <summary>
+            /// Caged in a police cell (Unit.Caged; UnitViews.Bars): the bars it stands pressed to (null: none beside it), seen
+            /// from its side; how far its arms are out between them (0 to 1); a lunge into them going on, or held by a takedown
+            /// through them (KeepToBars leaves it be then).
+            /// </summary>
+            public bool caged;
+            public BarsLine cage;
+            public float barsArms;
+            public bool barsLunge, barsHeld;
+            /// <summary>
+            /// Reaching through bars now (a blow or a takedown across them: UnitViews.Bars), seen from its side; null none. A
+            /// blow's: where its point is driven to (the dead one's chest), and how far (0 to 1, about the blow).
+            /// </summary>
+            public BarsLine through;
+            public Vector3 throughAt;
+            public float throughShare;
+            /// <summary>Grabbed through bars by one caged (its bite: LungeThrough), seen from its side, and when: its HitReact jerks it towards them (Yank).</summary>
+            public BarsLine grabbed;
+            public float grabbedAt = -1;
         }
 
         readonly Dictionary<string, View> views = new Dictionary<string, View>();
@@ -484,6 +503,7 @@ namespace Bastion.Client.Units
                 v.reachShare = Mathf.MoveTowards(v.reachShare, v.reachFor != null && !v.dead ? 1 : 0, dt / ReachBlend);
                 v.life = Mathf.MoveTowards(v.life, v.dead ? 0 : 1, dt / DeathEase);
                 KeepToBody(v, dt);
+                KeepToBars(v, dt);
                 bool seen = eye == null || (v.root.gameObject.activeInHierarchy && !cut && !gone && GeometryUtility.TestPlanesAABB(frustum, new Bounds(v.root.position + Vector3.up * SeenBox.y / 2, SeenBox)));
                 if (!seen)
                 {
@@ -561,6 +581,8 @@ namespace Bastion.Client.Units
             if (ThinLog && ++thinLogged % 60 == 0) Debug.Log($"[alternan] {Time.time:0.0} s: {seenNow} seen, {waited} waiting this frame (crowd {(thin ? "yes" : "no")}, dt {step * 1000:0.0} ms)");
             // (A silent takedown's hands on the dead one, once both are posed: UnitViews.Takedown.)
             StepTakedowns();
+            // (The caged by their bars and whoever reaches through bars, kept off them, last: UnitViews.Bars.)
+            StepBars();
             // (The frame's own step: dt is the last figure's, with what it missed.)
             StepFlashes(step);
             StepRims();
@@ -1093,9 +1115,9 @@ namespace Bastion.Client.Units
         /// <summary>Whether a soldier can lean out from `from` without its figure going through anything.</summary>
         public bool ClearFor(Pos from, string id) => true;
 
-        /// <summary>Whether `killer` would eat `victim` as it dies (a feeder of the dead, close enough).</summary>
+        /// <summary>Whether `killer` would eat `victim` as it dies (a feeder of the dead, close enough; never one caged, behind its bars: UnitViews.Bars).</summary>
         public bool CanFeed(string killer, string victim) =>
-            views.TryGetValue(killer, out var k) && views.TryGetValue(victim, out var v) && Feeders.Contains(k.template) && !k.dead
+            views.TryGetValue(killer, out var k) && views.TryGetValue(victim, out var v) && Feeders.Contains(k.template) && !k.dead && !k.caged
             && Vector3.Distance(k.root.position, v.root.position) < 2.5f * MapSpace.Tile;
 
         // ------------------------------------------------------------ the state seen
@@ -1147,6 +1169,9 @@ namespace Bastion.Client.Units
                 if (v.runOver) continue;
                 var was = v.place;
                 v.place = new Pos { X = u.Pos.X, Y = u.Pos.Y, Z = u.Pos.Z };
+                // (Caged in a police cell: by its bars, pressed to them. UnitViews.Bars.)
+                v.caged = u.Caged == true;
+                v.cage = CageOf(v, v.place);
                 // A weapon from the backpack taken in hand (the engine's weaponEquipped): Equip.
                 if (u.Alive && !v.deadKind && v.anim != null && ArmsKey(u) != v.armsKey)
                 {
@@ -1164,7 +1189,11 @@ namespace Bastion.Client.Units
                 // middle at every event, it went on eating a tile off the body, Ana's #7 of 1/11. A body too: one killed
                 // eating had slid from the body it ate to its tile's middle once dead.)
                 bool still = was != null && was.X == u.Pos.X && was.Y == u.Pos.Y && was.Z == u.Pos.Z;
-                if (!(still && (v.feeding || v.reachFor != null || v.dead))) v.root.position = MapSpace.StandAt(view, v.place);
+                // (One caged by its bars too: it keeps pressed to them by itself, KeepToBars.)
+                if (!(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
+                // (Turned as the state has it, by its bars: the caged one's TurnedEvent, which UI's event player leaves to the view.)
+                if (v.cage != null && u.Alive && u.Facing is double facing && !v.walking && !v.barsLunge && !v.barsHeld && v.yawTo == null
+                    && Mathf.Abs(Mathf.DeltaAngle(v.root.eulerAngles.y, YawOf(facing))) > 2) TurnTo(v, YawOf(facing));
                 int node = Bastion.Engine.Grid.NodeOf(view, u.Pos);
                 // (A body that has got up as one of the dead, Reanimate, is gone: the engine keeps it, Reanimated.)
                 bool shown = !u.Alive && u.Reanimated ? false
@@ -2096,6 +2125,8 @@ namespace Bastion.Client.Units
             if (!views.TryGetValue(id, out var v) || path.Count == 0 || state == null) return;
             // Its way taken from now for the others' straightened walks (Straighten).
             Claim(id, v.place, path);
+            // (One caged, to its bars: those it ends by from now, its trunk and arms kept off them as it comes. UnitViews.Bars.)
+            if (v.caged) v.cage = CageOf(v, path[path.Count - 1]);
             // One eating gets up first (unitViews.ts moveAlong: unfeed); one reaching lets its arms down as it goes. One
             // knocked down too, if nothing got it up before (UnitViews.Brute: UI's GetUp as the squad's turn begins).
             v.reachFor = null;
@@ -2148,6 +2179,8 @@ namespace Bastion.Client.Units
                 for (int n = k; n < m; n++)
                 {
                     var at = MapSpace.StandAt(state, path[n]);
+                    // (One caged ends pressed to its bars, facing them: UnitViews.Bars.)
+                    if (n == path.Count - 1) at = StandOf(v, path[n], at, true);
                     if (passes != null && n < passes.Count && passes[n] && n + 1 < path.Count && Flat(Before(n), path[n]) && Flat(path[n], path[n + 1]))
                     {
                         float dx = path[n + 1].X - Before(n).X, dz = path[n + 1].Y - Before(n).Y, length = Mathf.Sqrt(dx * dx + dz * dz);
@@ -2206,7 +2239,7 @@ namespace Bastion.Client.Units
                 if (legs != 1 && m < path.Count) v.anim?.Motion(gait.motion, clip);
                 k = m;
             }
-            v.root.position = MapSpace.StandAt(state, path[path.Count - 1]);
+            v.root.position = StandOf(v, path[path.Count - 1], MapSpace.StandAt(state, path[path.Count - 1]), true);
             walkingOn.Remove(id);
             v.walking = false;
             v.onSill = false;
@@ -2417,6 +2450,13 @@ namespace Bastion.Client.Units
             if (views.TryGetValue(target, out var t)) Face(id, t.root.position);
             // A blow at arm's length, from where it lunges from (unitViews.ts lunge: struck).
             if (t != null && views.TryGetValue(id, out var striker)) StruckBy(t, striker.root.position, true);
+            // (Across a cell's bars, Aim.AcrossBars: one of the dead's lunge into the bars, its arms out between them, eating
+            // nobody through them. A living one's blow goes through Strike, Swing. UnitViews.Bars.)
+            if (t != null && views.TryGetValue(id, out var lunger) && lunger.deadKind && Across(lunger, t) is BarsLine bars)
+            {
+                await LungeThrough(lunger, t, bars, onHit, ct);
+                return;
+            }
             // The dead lunge as Mixamo's zombie headbutts, over their upper body, from HeadbuttLead into it (its blow 0.45 s in
             // lands on lunge's own, 0.34 s: WindUp and StrokeTime); one that kills
             // and eats takes the body by the neck and bites (FEED_CLIPS bite), and holds on to it for Feed.
@@ -2471,6 +2511,15 @@ namespace Bastion.Client.Units
         {
             // (Felled silently, it is falling already: no hit, no flash of one, no knock. UnitViews.Takedown.)
             if (!views.TryGetValue(id, out var v) || Hushed(v)) return;
+            // (Grabbed through bars by one caged a moment ago: jerked towards them as well, and back before the next Sync.
+            // UnitViews.Bars.)
+            var yank = TakeYank(v) is BarsLine pull ? Yank(v, pull, ct) : null;
+            await HitReactNow(v, strength, ct);
+            if (yank != null) await yank;
+        }
+
+        async Awaitable HitReactNow(View v, float strength, CancellationToken ct)
+        {
             FlashHit(v);
             if (v.anim != null)
             {
@@ -2668,7 +2717,7 @@ namespace Bastion.Client.Units
         /// beside the body's (the eight round it, on its storey), with a place left by the body.
         /// </summary>
         public bool CanJoinFeed(string id, string victim) =>
-            views.TryGetValue(id, out var v) && views.TryGetValue(victim, out var body) && Feeders.Contains(v.template) && !v.dead && !v.feeding
+            views.TryGetValue(id, out var v) && views.TryGetValue(victim, out var body) && Feeders.Contains(v.template) && !v.dead && !v.feeding && !v.caged
             && v.place != null && body.place != null && v.place.Z == body.place.Z
             && Mathf.Max(Mathf.Abs(v.place.X - body.place.X), Mathf.Abs(v.place.Y - body.place.Y)) <= 1 && FreePlaces(victim).Count > 0;
 

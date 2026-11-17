@@ -7,7 +7,8 @@ namespace Bastion.Client.Map
     /// The camping (runs, H9 §5): its caravans (Building.trailer), each Apocalypse's mobile home whole (Caravans.Make) on the
     /// ground storey, in place of the walls and roof a building of kit pieces has (WallLayout and BuildingSurfaces leave them
     /// out), which the cutaway, the fog and the night take as any building of the plan; and its fire lit (CampFire). Its
-    /// trees and its edge are a country map's (Arturo, 17/11: not the base's pinar).
+    /// tents and the rest of its marks out of doors, CampScenery's. Its trees and its edge are a country map's (Arturo,
+    /// 17/11: not the base's pinar).
     /// </summary>
     public sealed partial class MapBuilder
     {

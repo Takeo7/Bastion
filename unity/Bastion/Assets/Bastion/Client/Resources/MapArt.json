@@ -3159,15 +3159,6 @@
    "fbx": "SM_Prop_Couch_01",
    "yaw": 2
   },
-  "pzAwning": {
-   "pack": "plaza",
-   "fbx": "SM_Prop_Awning_Cover_01",
-   "yaw": 2
-  },
-  "pzAwningPole": {
-   "pack": "plaza",
-   "fbx": "SM_Prop_Awning_Pole_01"
-  },
   "pzPlanter": {
    "pack": "plaza",
    "fbx": "SM_Env_Plant_Bed_01_Small_01",
@@ -3352,6 +3343,11 @@
   "pzLJ": {
    "pack": "shops",
    "fbx": "SM_Sign_3dText_Letter_J",
+   "yaw": 2
+  },
+  "pzLK": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_K",
    "yaw": 2
   },
   "pzLL": {
@@ -3619,6 +3615,56 @@
    "pack": "shops",
    "fbx": "SM_Prop_Clothes_Sweater_Set_01",
    "yaw": 2
+  },
+  "pzToyShelf": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Shelf_Basic_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "pzToyBin": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Crate_Open_01",
+   "yaw": 1
+  },
+  "pzLobbyBench": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Bench_09",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "pzTicketBooth": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Booth_01",
+   "fit": 1,
+   "stretch": true,
+   "thick": 0.6,
+   "yaw": 2
+  },
+  "pzQueuePost": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Queue_Barrier_Post_01",
+   "yaw": 2
+  },
+  "pzQueueBelt": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Queue_Barrier_Belt_01",
+   "yaw": 2
+  },
+  "pzToyBox": {
+   "pack": "police",
+   "fbx": "SM_Prop_Toy_01",
+   "yaw": 2
+  },
+  "pzToyDuck": {
+   "pack": "dog",
+   "fbx": "SM_Prop_Toy_Duck_01"
+  },
+  "pzToyChicken": {
+   "pack": "dog",
+   "fbx": "SM_Prop_Toy_Chicken_01"
   }
  },
  "sets": {

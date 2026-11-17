@@ -191,6 +191,8 @@ namespace Bastion.Engine
                 // A normal node's La Lata near the squad (Gameplay, 16/11): far was for the Travesía.
                 EvacNear = node.Kind == NodeKinds.Normal ? true : (bool?)null,
             });
+            // Nothing to search out of everyone's reach (Red, R3 17/11: a police car walled in).
+            Setup.OnlyWithinReach(state);
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
             return (state, name);
         }

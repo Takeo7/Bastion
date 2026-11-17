@@ -318,10 +318,15 @@ namespace Bastion.Client.Map
         /// </summary>
         public static string ShopAwning(Building b)
         {
+            // (A shopping plaza's shop, always one, over its door: its own, BuildingPlan.Plaza.)
+            if (b.plaza != null) return b.awning;
             if (b.kind != BuildingKinds.Shop || Facing(b) == null) return null;
             double k = BuildingPlan.Hash(b.x0, b.y0, 37);
             return k < 0.25 ? "Red" : k < 0.5 ? "Blue" : k < 0.7 ? "Maroon" : null;
         }
+
+        /// <summary>POLYGON Shops' three awnings' colours (WallLayout.Awning's pieces, awning«colour»…).</summary>
+        public static readonly string[] AwningColours = { "Red", "Blue", "Maroon" };
 
         /// <summary>
         /// A brick, concrete or sheet metal facing's parapet and trim, its own colour (a render's or stone's is its paint, as

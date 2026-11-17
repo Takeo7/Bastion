@@ -195,28 +195,28 @@ namespace Bastion.EditorTools
             }
         }
 
-        /// <summary>The prefabs the game's caravans are drawn from (Map.Caravans), in Resources/CaravanArt.asset.</summary>
+        /// <summary>The prefabs the game's camping is drawn from (Map.Caravans, MapBuilder.CampScenery), in Resources/CaravanArt.asset.</summary>
         static readonly string[] Drawn =
         {
             Trailers[0], Trailers[1],
-            // The camping's marks that MapArt has no prop for (Map.CampMarks).
+            // The camping's marks out of doors, the packs' prefabs whole (MapBuilder.CampScenery: their fronts +z, as Medidas
+            // measured them; the toilets and the dead are MapArt's).
             "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Tent_Dome_01.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Tent_Long_01.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Sleeping_Bag_01.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Sleeping_Bag_Rolled_01.prefab",
-            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Toilet_Portable_01.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Camp_Chair_01.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_WashingLine_01.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_FirePit_01.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Buildings/SM_Bld_Military_Tent_01.prefab",
-            "Assets/Synty/PolygonApocalypse/Prefabs/Buildings/SM_Bld_Military_Tent_02.prefab",
             "Assets/Synty/PolygonApocalypse/Prefabs/Buildings/SM_Bld_Quarantine_Tent_01.prefab",
             "Assets/Synty/PolygonTown/Prefabs/Props/SM_Prop_Cooler_01.prefab",
         };
 
         /// <summary>
         /// Makes Resources/CaravanArt.asset (Bastion.Client.Map.CaravanArt): the mobile homes the camping's caravans are drawn
-        /// from, their FBX imported readable (the game reads their meshes into its own). Run it again when they change:
+        /// from and its marks' models, their FBX imported readable (the game reads the caravans' meshes into its own, and
+        /// joins the rest as the catalog's: MapBuilder.Still). Run it again when they change:
         ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.CampingLab.MakeArt -quit
         /// </summary>
         public static void MakeArt()

@@ -700,6 +700,8 @@ namespace Bastion.Engine
             public string Use = "";
             public Vec2 Door = V(0, 0);
             public int Front;
+            /// <summary>Its own pieces' marks (ShopPieces): where, what, facing (a DIRS4 index).</summary>
+            public List<(Vec2 At, string Kind, int Facing)> Marks = new List<(Vec2 At, string Kind, int Facing)>();
         }
 
         private sealed class Building

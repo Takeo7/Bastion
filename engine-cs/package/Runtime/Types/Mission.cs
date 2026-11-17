@@ -183,6 +183,11 @@ namespace Bastion.Engine
         /// the boot holds a gun more often (Looting.PoliceBoot). In the 0.11.5 and the 0.11.6, the first mission's one.
         /// </summary>
         public List<int>? PoliceCar { get; set; }
+        /// <summary>
+        /// A run's fight (Red, R3 17/11): what there is to search that nobody gets to on foot, by node (a car a town's outline
+        /// walled in with its lot): never a spot to search (Looting.SearchSpot). Missing: nothing.
+        /// </summary>
+        public List<int>? OutOfReach { get; set; }
         public List<Reinforcement> Reinforcements { get; set; } = new List<Reinforcement>();
         /// <summary>1–4, for the loot tables (missing in missions saved before searching: 2).</summary>
         public int? Difficulty { get; set; }

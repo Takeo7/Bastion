@@ -30,6 +30,9 @@ namespace Bastion.Engine.Tests
         /// <summary>Why a run stopped short (stuck on the base or in a mission), or null.</summary>
         [ThreadStatic] public static string? Stuck;
 
+        /// <summary>The mission as the host heard it when it stuck (its JSON), for a probe to play on from there; or null.</summary>
+        [ThreadStatic] public static string? StuckMission;
+
         /// <summary>
         /// A mission still on after so many turns is stuck too: of seeds 1 to 50 (1/11), the longest one won took 19 (a
         /// siege). One the bot can't end, such as a siege with a dead that never comes, used to run all the steps: 25 minutes.
@@ -57,6 +60,7 @@ namespace Bastion.Engine.Tests
                 var played = new List<Mission>();
                 Mission? now = null;
                 Stuck = null;
+                StuckMission = null;
                 var refused = new List<string>();
                 int still = 0;
                 string? was = null;
@@ -128,6 +132,7 @@ namespace Bastion.Engine.Tests
                     if (heard.Mission.Turn > MaxTurns)
                     {
                         Stuck = $"«{now.Name}» sin acabar en el turno {heard.Mission.Turn} · {where}";
+                        StuckMission = Json.Write(heard.Mission);
                         say?.Invoke("atascada: " + Stuck);
                         return played;
                     }

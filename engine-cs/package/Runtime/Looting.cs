@@ -269,6 +269,7 @@ namespace Bastion.Engine
         {
             var p = Grid.ToPos(at);
             if (!Grid.InBounds(s, p.X, p.Y)) return null;
+            if (s.Mission.OutOfReach != null && s.Mission.OutOfReach.Contains(Grid.NodeOf(s, p))) return null;
             if (BodyAt(s, p) != null) return Body;
             var decor = DecorLayer(s, p.Z);
             if (decor == null) return null;

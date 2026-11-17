@@ -1375,11 +1375,19 @@ namespace Bastion.Client.Units
             Draw(v, BeltCarry);
             if (guarded) Guard(v, 0.1f);
             else AtRest(v, 0.1f);
-            var stroke = StrokeOf(v);
+            // (Across a cell's bars, Aim.AcrossBars: up to the bars as it winds up and a thrust in between them, whatever the
+            // blade: a swing or a blow from above would go through them. UnitViews.Bars.)
+            var bars = target != null ? Across(v, target) : null;
+            var stroke = bars != null ? KnifeStroke : StrokeOf(v);
             var clip = FigureCatalog.Load()?.Clip(stroke.clip);
             var home = v.root.position;
             var toward = Vector3.zero;
-            if (target != null)
+            if (bars != null)
+            {
+                toward = bars.normal * Mathf.Max(0, -bars.Depth(home) - StrikeGap);
+                toward.y = 0;
+            }
+            else if (target != null)
             {
                 var gap = target.root.position - home;
                 gap.y = 0;
@@ -1388,27 +1396,50 @@ namespace Bastion.Client.Units
                 toward = gap.normalized * tiles * MapSpace.Tile;
             }
             bool hit = false;
-            float total = WindUp + StrokeTime + Back;
+            // (Through the bars, held at them while the point is in, ThroughHold: UnitViews.Bars.)
+            float stay = bars != null ? ThroughHold : 0;
+            float total = WindUp + StrokeTime + stay + Back;
             // (Out of the stroke over StrokeOut, from where it began going out before, not in 0.15 s from the most bent of
             // its follow-through: the 3D review's A-08, 10/11.)
             float over = stroke.end + StrokeOut - 0.15f;
-            for (float t = 0; t < Mathf.Max(total, over); t += Time.deltaTime)
+            v.through = bars;
+            try
             {
-                if (clip != null && v.anim != null)
+                for (float t = 0; t < Mathf.Max(total, over); t += Time.deltaTime)
                 {
-                    float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (over - t) / StrokeOut));
-                    v.anim.Scrub(t < over ? clip : null, Mathf.Clamp(stroke.ClipTime(t), 0, clip.length), share, true);
+                    if (clip != null && v.anim != null)
+                    {
+                        float share = Mathf.Clamp01(Mathf.Min(t / 0.06f, (over - t) / StrokeOut));
+                        v.anim.Scrub(t < over ? clip : null, Mathf.Clamp(stroke.ClipTime(t), 0, clip.length), share, true);
+                    }
+                    // (Through the bars, the point driven on into the dead one's chest about the blow, as far as the arm goes:
+                    // StepBars. UnitViews.Bars.)
+                    if (bars != null)
+                    {
+                        float l = stroke.lets;
+                        v.throughShare = t < l - ThroughIn ? 0 : t < l ? Mathf.SmoothStep(0, 1, (t - l + ThroughIn) / ThroughIn) : t < l + ThroughHold ? 1
+                            : 1 - Mathf.SmoothStep(0, 1, (t - l - ThroughHold) / ThroughOut);
+                        v.throughAt = target.root != null ? Bone(target.id, HumanBodyBones.UpperChest) ?? Bone(target.id, HumanBodyBones.Chest) ?? target.root.position + Vector3.up * 1.3f : v.throughAt;
+                    }
+                    // (Up to the bars over the wind-up and the stroke, a metre or so: no lunge of 0.14 s.)
+                    if (bars != null && t < WindUp + StrokeTime) v.root.position = home + toward * Mathf.SmoothStep(0, 1, t / (WindUp + StrokeTime));
+                    else if (t < WindUp) v.root.position = home;
+                    else if (t < WindUp + StrokeTime) v.root.position = home + toward * ((t - WindUp) / StrokeTime);
+                    else if (t < WindUp + StrokeTime + stay) v.root.position = home + toward;
+                    else if (t < total) v.root.position = home + toward * (1 - (t - WindUp - StrokeTime - stay) / Back);
+                    else v.root.position = home;
+                    if (!hit && t >= stroke.lets)
+                    {
+                        hit = true;
+                        onHit?.Invoke();
+                    }
+                    await Awaitable.NextFrameAsync(ct);
                 }
-                if (t < WindUp) v.root.position = home;
-                else if (t < WindUp + StrokeTime) v.root.position = home + toward * ((t - WindUp) / StrokeTime);
-                else if (t < total) v.root.position = home + toward * (1 - (t - WindUp - StrokeTime) / Back);
-                else v.root.position = home;
-                if (!hit && t >= stroke.lets)
-                {
-                    hit = true;
-                    onHit?.Invoke();
-                }
-                await Awaitable.NextFrameAsync(ct);
+            }
+            finally
+            {
+                v.through = null;
+                v.throughShare = 0;
             }
             if (!hit) onHit?.Invoke();
             v.anim?.Scrub(null, 0, 0, true);

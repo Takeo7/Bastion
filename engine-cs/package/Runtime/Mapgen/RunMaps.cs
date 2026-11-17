@@ -633,19 +633,20 @@ namespace Bastion.Engine
                     var p = LocalPt(r, front, u, 0);
                     if (c.Get(p.X, p.Y) == TileKinds.Wall) c.Force(p.X, p.Y, TileKinds.Window);
                 }
-                // What is inside, by its use.
-                void Clear()
+                // What is inside, by its use. Every shop emptied first (Arte, 17/11: a town shop's furniture was left, cafe tables
+                // in the toy shop, a closed window's boards against a wall), but a shop that sells keeps the counter and the shelves
+                // a shop is given: what its marks stand on (PlazaSite).
+                var sells = use != ShopUses.Empty && use != ShopUses.Cinema && use != ShopUses.Cafe;
+                foreach (var p in TilesIn(inner))
                 {
-                    foreach (var p in TilesIn(inner))
-                    {
-                        if (c.Keep[c.I(p.X, p.Y)] && c.Get(p.X, p.Y) == TileKinds.Floor) continue;
-                        c.Force(p.X, p.Y, TileKinds.Floor);
-                        c.Decor[c.I(p.X, p.Y)] = 0;
-                    }
-                    c.Objects.RemoveAll((o) => o.Any((t) => InRect(inner, V(t.I % c.Width, t.I / c.Width))));
+                    if (c.Keep[c.I(p.X, p.Y)] && c.Get(p.X, p.Y) == TileKinds.Floor) continue;
+                    var kept = Decor.DecorOf(c.Decor[c.I(p.X, p.Y)])?.Kind;
+                    if (sells && (kept == DecorKinds.Counter || kept == DecorKinds.Shelf)) continue;
+                    c.Force(p.X, p.Y, TileKinds.Floor);
+                    c.Decor[c.I(p.X, p.Y)] = 0;
                 }
+                c.Objects.RemoveAll((o) => o.Any((t) => InRect(inner, V(t.I % c.Width, t.I / c.Width))));
                 var back = Opposite(front);
-                if (use == ShopUses.Empty || use == ShopUses.Cinema || use == ShopUses.Cafe) Clear();
                 if (use == ShopUses.Cinema)
                 {
                     // The lobby: its counter across the back.
@@ -661,6 +662,8 @@ namespace Bastion.Engine
                 {
                     foreach (var p in TilesIn(inner)) if (Decor.DecorOf(c.Decor[c.I(p.X, p.Y)])?.Kind == DecorKinds.Shelf) c.Dress(p, DecorKinds.MedicalShelf, Decor.DecorOf(c.Decor[c.I(p.X, p.Y)])!.Facing);
                 }
+                // (On a rng of their own off the map's, which they leave as it was: what comes after stays where it was.)
+                var extra = ShopPieces(c, new Rng(unchecked((int)(rng.State[0] ^ 0x70b1))), inner, use, front, Add(LocalPt(r, front, door, 0), Grid.Dirs4[back]));
                 // Looted: an empty shop's glass broken, and now and then another's.
                 if (use == ShopUses.Empty || rng.Next() < 0.25)
                 {
@@ -671,12 +674,93 @@ namespace Bastion.Engine
                         c.Force(pane.X, pane.Y, TileKinds.WindowBroken);
                     }
                 }
-                c.Shops.Add(new PlazaShop { Outer = r, Room = inner, Use = use, Door = LocalPt(r, front, door, 0), Front = front });
+                c.Shops.Add(new PlazaShop { Outer = r, Room = inner, Use = use, Door = LocalPt(r, front, door, 0), Front = front, Marks = extra });
             }
             c.Squad = V(mid, PlazaSize - 4);
             c.SquadSide = 2;
             foreach (var p in TilesIn(Rect(c.Squad.X - 2, c.Squad.Y - 2, 5, 5))) c.Reserve(p.X, p.Y);
             return ring;
+        }
+
+        /// <summary>
+        /// The toy shop's and the cinema lobby's own pieces (Producto, 17/11; Arte's names, PlazaDetailKinds), once the town
+        /// shop's furniture is gone: each a tile of cover with its mark and no decor (Arte draws it from the mark), facing into
+        /// the shop. The toy shop two or three: a toyShelf against a wall (high: a 1.7 m shelf), a toyBin on the floor clear of
+        /// the walls if it can be (low), the third either; with no wall left for a toyShelf, one of the shop's shelves becomes
+        /// it. The lobby one or two lobbyBench clear of the walls (low), facing its counter, and
+        /// a ticketBooth against a side wall nearest the front (high). Never on the tile inside the door, and none that cuts
+        /// off any of the shop's floor from it.
+        /// </summary>
+        private static List<(Vec2 At, string Kind, int Facing)> ShopPieces(Canvas c, Rng rng, Rect inner, string use, int front, Vec2 inside)
+        {
+            var out_ = new List<(Vec2 At, string Kind, int Facing)>();
+            if (use != ShopUses.Toys && use != ShopUses.Cinema) return out_;
+            var back = Opposite(front);
+            // The wall it stands against (a DIRS4 index), if any: a wall, not glass nor a door.
+            int? WallBy(Vec2 p) => Grid.Dirs4.Select((d, k) => (d, k)).Where((x) => c.Get(p.X + x.d.X, p.Y + x.d.Y) == TileKinds.Wall).Select((x) => (int?)x.k).FirstOrDefault();
+            bool Clear(Vec2 p) => Grid.Dirs4.All((d) => InRect(inner, Add(p, d)));
+            bool Through()
+            {
+                var seen = new HashSet<(int, int)> { (inside.X, inside.Y) };
+                var todo = new Queue<Vec2>(new[] { inside });
+                while (todo.Count > 0)
+                {
+                    var q = todo.Dequeue();
+                    foreach (var d in Grid.Dirs4)
+                    {
+                        var n = Add(q, d);
+                        if (InRect(inner, n) && c.Get(n.X, n.Y) == TileKinds.Floor && seen.Add((n.X, n.Y))) todo.Enqueue(n);
+                    }
+                }
+                return TilesIn(inner).All((p) => c.Get(p.X, p.Y) != TileKinds.Floor || seen.Contains((p.X, p.Y)));
+            }
+            bool Piece(IEnumerable<Vec2> spots, string kind, string tile, Func<Vec2, int> facing)
+            {
+                foreach (var p in spots)
+                {
+                    if (c.Get(p.X, p.Y) != TileKinds.Floor || c.Decor[c.I(p.X, p.Y)] != 0 || c.Keep[c.I(p.X, p.Y)] || Dist(p, inside) < 2) continue;
+                    c.Force(p.X, p.Y, tile);
+                    if (!Through())
+                    {
+                        c.Force(p.X, p.Y, TileKinds.Floor);
+                        continue;
+                    }
+                    out_.Add((p, kind, facing(p)));
+                    return true;
+                }
+                return false;
+            }
+            var tiles = TilesIn(inner).ToList();
+            if (use == ShopUses.Toys)
+            {
+                var kinds = new[] { PlazaDetailKinds.ToyShelf, PlazaDetailKinds.ToyBin, rng.Int(2) == 0 ? PlazaDetailKinds.ToyShelf : PlazaDetailKinds.ToyBin }.Take(rng.Range(2, 3));
+                foreach (var kind in kinds)
+                {
+                    if (kind == PlazaDetailKinds.ToyShelf) Piece(Shuffle(tiles.Where((p) => WallBy(p) != null).ToList(), rng), kind, TileKinds.High, (p) => Opposite(WallBy(p)!.Value));
+                    // A bin clear of the walls if it can be, else by one.
+                    else Piece(Shuffle(tiles.Where(Clear).ToList(), rng).Concat(Shuffle(tiles.Where((p) => !Clear(p)).ToList(), rng)), kind, TileKinds.Low, (_) => front);
+                }
+                // A small shop with no wall left for one: a shop's shelf of its own turned into a toyShelf (as high), so that
+                // there are two at least, one of each kind.
+                foreach (var p in tiles)
+                {
+                    if (out_.Count >= 2 && out_.Any((x) => x.Kind == PlazaDetailKinds.ToyShelf)) break;
+                    var shelf = Decor.DecorOf(c.Decor[c.I(p.X, p.Y)]);
+                    if (shelf == null || shelf.Kind != DecorKinds.Shelf) continue;
+                    c.Decor[c.I(p.X, p.Y)] = 0;
+                    out_.Add((p, PlazaDetailKinds.ToyShelf, shelf.Facing));
+                }
+            }
+            else
+            {
+                var benches = rng.Range(1, 2);
+                for (var k = 0; k < benches; k++) Piece(Shuffle(tiles.Where(Clear).ToList(), rng), PlazaDetailKinds.LobbyBench, TileKinds.Low, (_) => back);
+                // By a side wall, the nearest to the front first.
+                var depth = DepthOf(inner, front);
+                var side = Enumerable.Range(0, depth).SelectMany((d) => new[] { LocalPt(inner, front, 0, d), LocalPt(inner, front, SideLen(inner, front) - 1, d) });
+                Piece(side.Where((p) => WallBy(p) != null), PlazaDetailKinds.TicketBooth, TileKinds.High, (p) => Opposite(WallBy(p)!.Value));
+            }
+            return out_;
         }
 
         /// <summary>
@@ -775,6 +859,8 @@ namespace Bastion.Engine
                     else if (look.Kind == DecorKinds.Shelf || look.Kind == DecorKinds.MedicalShelf) kind = shop.Use == ShopUses.Clothes ? PlazaDetailKinds.ClothesRack : shop.Use == ShopUses.Jewellery ? PlazaDetailKinds.DisplayCase : PlazaDetailKinds.Shelf;
                     if (kind != null) Mark(kind, p, look.Facing, false);
                 }
+                // Its own pieces (ShopPieces), on their tiles.
+                foreach (var (at, kind, facing) in shop.Marks) Mark(kind, T(at), Way(at, Add(at, Grid.Dirs4[facing])), false);
                 // Scenery inside, by its use.
                 switch (shop.Use)
                 {
@@ -906,7 +992,7 @@ namespace Bastion.Engine
             // The military or quarantine area, fenced, its gate to the camp (west); as wide as its tents ask, the quarantine one
             // off the fence and its gate (Arte, 17/11: with the military tent of 6 it stood on both).
             var big = rng.Int(2) == 0 ? 4 : 6;
-            var zone = Rect(cx + 3, cy - 9, big + 8, 9);
+            var zone = Rect(cx + 3, cy - 9, big + 9, 9);
             // A way round its fence where it reaches the trees (the paths as they were): nothing left behind it for the way
             // through (Connect) to open the fence to.
             foreach (var p in TilesIn(Inset(zone, -1))) if (c.In(p.X, p.Y) && c.Get(p.X, p.Y) != TileKinds.Floor) Opened(Rect(p.X, p.Y, 1, 1), Open);
@@ -918,7 +1004,9 @@ namespace Bastion.Engine
                 if (edge && !gate && Put(c, p, TileKinds.Low, new Look(DecorKinds.Fence, p.Y == zone.Y || p.Y == zone.Y + zone.H - 1 ? 0 : 1))) c.Reserve(p.X, p.Y);
             }
             var military = Rect(zone.X + zone.W - 1 - big, zone.Y + 1, big, Math.Min(big, zone.H - 3));
-            var quarantine = Rect(military.X - 5, zone.Y + 1, 4, 5);
+            // The quarantine tent 5 × 4, its door on a short side, the west one, to the gate as its mark faces (Arte, 17/11: the
+            // model's, SM_Bld_Quarantine_Tent_01); a tile clear of the military one and of the gate's.
+            var quarantine = Rect(military.X - 6, zone.Y + 1, 5, 4);
             Block(military, TileKinds.High);
             Block(quarantine, TileKinds.High);
             Mark(V(military.X, military.Y), CampDetailKinds.TentMilitary, 3);

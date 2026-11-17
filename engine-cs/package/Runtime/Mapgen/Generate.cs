@@ -614,6 +614,8 @@ namespace Bastion.Engine
             {
                 var siteKind = b.Ruined ? null : b.Furnish == Furnishes.Barn || (biome == Biomes.Wilds && b.Hall) ? "barn" : b.Hall && b.Furnish == Furnishes.Store ? "hall" : b.Furnish == Furnishes.Shop ? "shop" : null;
                 if (siteKind == null) continue;
+                // A shopping plaza's shops are furnished by their use (PlazaMap), not by a town shop's trade (Arte, 17/11).
+                if (c.Shops != null && c.Shops.Any((sh) => sh.Outer.X == b.Outer.X && sh.Outer.Y == b.Outer.Y && sh.Outer.W == b.Outer.W && sh.Outer.H == b.Outer.H)) continue;
                 var a = T(V(b.Outer.X, b.Outer.Y));
                 var z = T(V(b.Outer.X + b.Outer.W - 1, b.Outer.Y + b.Outer.H - 1));
                 sites.Add(new FurnishSite { Kind = siteKind, X = Math.Min(a.X, z.X), Y = Math.Min(a.Y, z.Y), W = Math.Abs(a.X - z.X) + 1, H = Math.Abs(a.Y - z.Y) + 1 });

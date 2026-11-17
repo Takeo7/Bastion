@@ -77,6 +77,8 @@ namespace Bastion.Client.Map
         bool[] explored, shut;
         bool[] visible, view, lights;
         readonly List<Shell> shells = new List<Shell>();
+        /// <summary>A camping's tents, each its block's tiles (MapBuilder.TentBlocks); none on any other map.</summary>
+        List<int[]> tents = new List<int[]>();
         GameState last;
         int width, height;
         float time;
@@ -124,6 +126,7 @@ namespace Bastion.Client.Map
             // façade's next tile read half its building's, and its face took the inside's fog: tall blocks went dark whole.)
             Remake(ref shellMap, "Niebla de los edificios", FilterMode.Point);
             Shells(s);
+            tents = MapBuilder.TentBlocks(s);
             closed = new bool[n];
             all = false;
             Close(s);
@@ -461,6 +464,14 @@ namespace Bastion.Client.Map
                 float storey = levels[i] > 0 ? levels[i] : (i < s.Elev.Count ? s.Elev[i] : 0);
                 pixels[i].a = (byte)Mathf.Clamp(Mathf.RoundToInt(storey / 8 * 255), 0, 255);
             }
+            // (A camping's tent, runs, H9 §5: a big one high cover all through, its middle never in sight; seen whole when any
+            // of it is, as a room.)
+            if (floor == 0)
+                foreach (var tent in tents)
+                {
+                    if (tent.Any(i => sightTo[i] > 0)) foreach (int i in tent) sightTo[i] = knownTo[i] = 1;
+                    else if (tent.Any(i => knownTo[i] > 0)) foreach (int i in tent) knownTo[i] = 1;
+                }
             Rooms(s, levels);
             // A building's roof: in sight when any of the street along it is, seen when any of it was.
             foreach (var shell in shells)

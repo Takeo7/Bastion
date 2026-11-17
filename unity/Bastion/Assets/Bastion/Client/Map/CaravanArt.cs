@@ -4,10 +4,11 @@ using UnityEngine;
 namespace Bastion.Client.Map
 {
     /// <summary>
-    /// The camping's caravans' models for the game (runs, H9 §5: Apocalypse's mobile homes, each its shell, glass, skirt and
-    /// inside): Resources/CaravanArt.asset, made by Bastion.EditorTools.CampingLab.MakeArt, which also makes their meshes
-    /// readable (MapBuilder.Caravans reads them into meshes of its own). Apart from MapCatalog: the packs' own prefabs whole,
-    /// which MapCatalog's names (`pack:fbx`) would take for Extra's shell alone.
+    /// The camping's models for the game (runs, H9 §5: Apocalypse's mobile homes, each its shell, glass, skirt and inside;
+    /// the tents, chairs and the rest of its marks, MapBuilder.CampScenery): Resources/CaravanArt.asset, made by
+    /// Bastion.EditorTools.CampingLab.MakeArt, which also makes their meshes readable (MapBuilder.Caravans reads the caravans'
+    /// into meshes of its own). Apart from MapCatalog: the packs' own prefabs whole, which MapCatalog's names (`pack:fbx`)
+    /// would take for Extra's shell alone.
     /// </summary>
     public sealed class CaravanArt : ScriptableObject
     {

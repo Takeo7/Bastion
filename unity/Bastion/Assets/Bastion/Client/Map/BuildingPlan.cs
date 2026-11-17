@@ -95,9 +95,11 @@ namespace Bastion.Client.Map
         public int? trailer;
         /// <summary>
         /// A shopping plaza's shop (runs, H9 §4: BuildingPlan.Plaza), what it sells (ShopUses): its front Shopping Plaza's
-        /// glass (WallLayout's «plaza» kit), its sign, awning and furniture its marks' (MapBuilder.Plaza); null on any other.
+        /// glass (WallLayout's «plaza» kit), its sign and furniture its marks' (MapBuilder.Plaza); null on any other.
         /// </summary>
         public string plaza;
+        /// <summary>A shopping plaza's shop's awning over its door, its colour (BuildingLooks.AwningColours; BuildingPlan.Plaza); null on any other.</summary>
+        public string awning;
     }
 
     /// <summary>Which tiles make which building: walls round a floor, at ground level.</summary>
@@ -528,6 +530,19 @@ namespace Bastion.Client.Map
                 b.medicalWear = null;
                 b.market = null;
                 b.plaza = room.Use;
+            }
+            // Each one's awning over its door (Arturo, 17/11: the towns' wall awning, a colour a shop): picked by the building
+            // as a town shop's is (BuildingLooks.ShopAwning's number), but never like that of a shop beside it: the next one
+            // then. Red and maroon read alike from the game's camera: neither beside the other, if it can be.
+            bool Touch(Building a, Building b) => a.x0 <= b.x1 + 1 && b.x0 <= a.x1 + 1 && a.y0 <= b.y1 + 1 && b.y0 <= a.y1 + 1;
+            bool Warm(string c) => c != "Blue";
+            var colours = BuildingLooks.AwningColours;
+            foreach (var b in Buildings.Where((b) => b.plaza != null))
+            {
+                var beside = Buildings.Where((o) => o != b && o.awning != null && Touch(o, b)).Select((o) => o.awning).ToList();
+                int first = (int)Math.Floor(Hash(b.x0, b.y0, 37) * colours.Length);
+                var turn = Enumerable.Range(0, colours.Length).Select((n) => colours[(first + n) % colours.Length]).ToList();
+                b.awning = turn.FirstOrDefault((c) => !beside.Any((o) => Warm(o) == Warm(c))) ?? turn.FirstOrDefault((c) => !beside.Contains(c)) ?? turn[0];
             }
         }
 
