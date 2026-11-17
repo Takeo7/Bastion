@@ -4256,6 +4256,87 @@
     "Wall_Brick_02": "Wall_03"
    },
    "src": "unity/Bastion/Assets/Synty/PolygonPoliceStation/Models/SM_Bld_Wall_Reception_01.fbx"
+  },
+  "plazaGlass": {
+   "pack": "plaza",
+   "fbx": "SM_Bld_Base_Wall_Glass_Half_01",
+   "centre": [
+    0.625,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "drop": [
+    "01_Glass"
+   ],
+   "renderer": "SM_Bld_Base_Wall_Glass_Half_01",
+   "src": "unity/Bastion/Assets/Synty/PolygonMapsPlaza/Models/SM_Bld_Base_Wall_Glass_Half_01.fbx"
+  },
+  "plazaDoorStart": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Glass_Door_Double_01",
+   "centre": [
+    0.625,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     0,
+     -50,
+     -0.02
+    ],
+    [
+     1.25,
+     50,
+     50
+    ]
+   ],
+   "parts": true,
+   "drop": [
+    "01_Glass",
+    "_L_Glass",
+    "_R_Glass",
+    "01_R"
+   ],
+   "leaf": "SM_Bld_Wall_Glass_Door_Double_01_L",
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Glass_Door_Double_01.fbx"
+  },
+  "plazaDoorEnd": {
+   "pack": "shops",
+   "fbx": "SM_Bld_Wall_Glass_Door_Double_01",
+   "centre": [
+    1.875,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     1.25,
+     -50,
+     -0.02
+    ],
+    [
+     2.5,
+     50,
+     50
+    ]
+   ],
+   "parts": true,
+   "drop": [
+    "01_Glass",
+    "_L_Glass",
+    "_R_Glass",
+    "01_L"
+   ],
+   "leaf": "SM_Bld_Wall_Glass_Door_Double_01_R",
+   "hingeFar": true,
+   "src": "unity/Bastion/Assets/Synty/PolygonShops/Models/SM_Bld_Wall_Glass_Door_Double_01.fbx"
   }
  }
 }

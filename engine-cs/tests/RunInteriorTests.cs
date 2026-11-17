@@ -585,6 +585,7 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(Rules.CagedFront(s, caged), (p) => Grid.SamePos(p, caged.Pos) && Aim.AcrossBars(s, p, across));
             // The squad heard (or seen through the bars): to the bars, across from the soldier, and a bite.
             caged.Heard = across;
+            caged.Ap = 2;
             var sim = Step2Helpers.NewSim(s);
             Ai.TakeAlienTurn(sim, caged);
             Assert.True(Aim.AcrossBars(s, caged.Pos, soldier.Pos), $"{caged.Pos.X},{caged.Pos.Y} / {across.X},{across.Y}");
@@ -596,6 +597,7 @@ namespace Bastion.Engine.Tests
             var (t, alone, mate, _) = Cage(NodeKinds.Normal, 5);
             mate.Pos = new Pos { X = 0, Y = 0 };
             alone.Heard = null;
+            alone.Ap = 2;
             Ai.TakeAlienTurn(Step2Helpers.NewSim(t), alone);
             Assert.Contains(Rules.CagedFront(t, alone), (p) => Grid.SamePos(p, alone.Pos));
         }
@@ -653,7 +655,10 @@ namespace Bastion.Engine.Tests
             {
                 var across = Rules.CagedReach(s, z).First((q) => Grid.UnitAt(s, q) == null || Grid.UnitAt(s, q) == soldier);
                 soldier.Pos = across;
+                // (Its bite tells: the soldier, whole for each of them.)
+                soldier.Hp = soldier.MaxHp;
                 z.Heard = across;
+                z.Ap = 2;
                 Ai.TakeAlienTurn(Step2Helpers.NewSim(s), z);
                 Assert.True(Aim.AcrossBars(s, z.Pos, soldier.Pos));
                 for (var blow = 0; blow < 40 && z.Alive; blow++)
@@ -662,11 +667,236 @@ namespace Bastion.Engine.Tests
                     soldier.Hp = Math.Max(soldier.Hp, 1);
                     s.Command = 0;
                     s.ActiveUnit = null;
-                    Assert.True(Step2Helpers.Exec(s, Step2Helpers.Ability(soldier.Id, AbilityIds.Slash, z.Id), blow + 1).Ok);
+                    var r = Step2Helpers.Exec(s, Step2Helpers.Ability(soldier.Id, AbilityIds.Slash, z.Id), seed: blow + 1);
+                    Assert.True(r.Ok, r.Error);
                 }
                 Assert.False(z.Alive);
             }
             Assert.Equal(Outcomes.Victory, s.Outcome);
+        }
+
+        [Fact]
+        public void TheCaravansAsTheirModels()
+        {
+            // Arte, 17/11: counted along the room from the end nearest the door. A room of 6: on the door's side a window at 0,
+            // the door at 1, a window at 3, the rest wall; its other side wall; the end by the door wall, the far end windows.
+            // A room of 7: window 0, door 1, window 6; its other side wall; both ends windows.
+            var seen = new HashSet<int>();
+            for (var seed = 1; seed <= 20; seed++)
+            {
+                var (_, s) = At(Places.Camping, NodeKinds.Normal, seed);
+                string KindAt(int x, int y) => s.Tiles[y * s.Width + x];
+                // Three to five of them still (away from La Lata), and three pitches at least.
+                Assert.InRange(s.Interiors!.Single().Rooms.Count((r) => r.Use == CampUses.Trailer), 3, 5);
+                Assert.True(s.Interiors!.Single().Rooms.Count((r) => r.Use == CampUses.Pitch) >= 3, $"seed {seed}");
+                foreach (var r in s.Interiors!.Single().Rooms.Where((x) => x.Use == CampUses.Trailer))
+                {
+                    var alongX = r.W > r.H;
+                    var len = Math.Max(r.W, r.H);
+                    seen.Add(len);
+                    // The two long sides and the two ends, outside the room, as lists from one end to the other.
+                    List<string> Side(int k) => Enumerable.Range(0, len).Select((i) => alongX ? KindAt(r.X + i, k == 0 ? r.Y - 1 : r.Y + r.H) : KindAt(k == 0 ? r.X - 1 : r.X + r.W, r.Y + i)).ToList();
+                    List<string> End(int k) => Enumerable.Range(0, 2).Select((j) => alongX ? KindAt(k == 0 ? r.X - 1 : r.X + r.W, r.Y + j) : KindAt(r.X + j, k == 0 ? r.Y - 1 : r.Y + r.H)).ToList();
+                    var sides = new[] { Side(0), Side(1) };
+                    var doorSide = sides.Single((x) => x.Contains(TileKinds.Door));
+                    var other = sides.Single((x) => !x.Contains(TileKinds.Door));
+                    // From the end nearest the door: the door at 1.
+                    var near = doorSide.IndexOf(TileKinds.Door) == 1 ? 0 : 1;
+                    var line = near == 0 ? doorSide : Enumerable.Reverse(doorSide).ToList();
+                    Assert.Equal(TileKinds.Door, line[1]);
+                    var windows = len == 6 ? new[] { 0, 3 } : new[] { 0, 6 };
+                    for (var i = 0; i < len; i++) if (i != 1) Assert.Equal(windows.Contains(i) ? TileKinds.Window : TileKinds.Wall, line[i]);
+                    Assert.All(other, (k) => Assert.Equal(TileKinds.Wall, k));
+                    Assert.All(End(near), (k) => Assert.Equal(len == 7 ? TileKinds.Window : TileKinds.Wall, k));
+                    Assert.All(End(1 - near), (k) => Assert.Equal(TileKinds.Window, k));
+                }
+            }
+            Assert.Equal(new[] { 6, 7 }, seen.OrderBy((x) => x));
+        }
+
+        /// <summary>
+        /// A caravan's room in the map's frame, as Arte counts it: (i, side) to its tile, i along the room from the end nearest
+        /// the door, side 0 the door's long side and side 1 the other; and its length.
+        /// </summary>
+        private static (Func<int, int, (int X, int Y)> Tile, int Len) TrailerFrame(GameState s, InteriorRoom r)
+        {
+            string KindAt(int x, int y) => s.Tiles[y * s.Width + x];
+            var alongX = r.W > r.H;
+            var len = Math.Max(r.W, r.H);
+            // The door's long side: the one with the door in the wall outside it.
+            bool DoorOn(int k) => Enumerable.Range(0, len).Any((i) => (alongX ? KindAt(r.X + i, k == 0 ? r.Y - 1 : r.Y + r.H) : KindAt(k == 0 ? r.X - 1 : r.X + r.W, r.Y + i)) == TileKinds.Door);
+            var doorSide = DoorOn(0) ? 0 : 1;
+            var door = Enumerable.Range(0, len).First((i) => (alongX ? KindAt(r.X + i, doorSide == 0 ? r.Y - 1 : r.Y + r.H) : KindAt(doorSide == 0 ? r.X - 1 : r.X + r.W, r.Y + i)) == TileKinds.Door);
+            int Along(int i) => door == 1 ? i : len - 1 - i;
+            int Across(int side) => (side == 0) == (doorSide == 0) ? 0 : 1;
+            return ((i, side) => alongX ? (r.X + Along(i), r.Y + Across(side)) : (r.X + Across(side), r.Y + Along(i)), len);
+        }
+
+        [Fact]
+        public void TheCaravansInsideAsSyntys()
+        {
+            // Arte, 17/11: Synty's interior. A room of 6: the bed at 0 on side 0, the booth table over 3 and 4 on side 0. A room of
+            // 7: the bed at 0 across both sides, the drawers at 1 on side 1, the counter at 5 and the table at 6 on side 1. All
+            // low cover, the rest bare floor, no wall inside; the door's tile free and the room all of a piece.
+            var seen = new HashSet<int>();
+            var corpses = 0;
+            for (var seed = 1; seed <= 20; seed++)
+            {
+                var (_, s) = At(Places.Camping, NodeKinds.Normal, seed);
+                var site = s.Interiors!.Single();
+                foreach (var r in site.Rooms.Where((x) => x.Use == CampUses.Trailer))
+                {
+                    var (tile, len) = TrailerFrame(s, r);
+                    seen.Add(len);
+                    var pieces = len == 6
+                        ? new[] { (CampDetailKinds.TrailerBed, new[] { (0, 0) }), (CampDetailKinds.TrailerTable, new[] { (3, 0), (4, 0) }) }
+                        : new[] { (CampDetailKinds.TrailerBed, new[] { (0, 0), (0, 1) }), (CampDetailKinds.TrailerDrawers, new[] { (1, 1) }), (CampDetailKinds.TrailerCounter, new[] { (5, 1) }), (CampDetailKinds.TrailerTable, new[] { (6, 1) }) };
+                    var low = pieces.SelectMany((x) => x.Item2).Select((q) => tile(q.Item1, q.Item2)).ToHashSet();
+                    for (var i = 0; i < len; i++)
+                    {
+                        for (var side = 0; side < 2; side++)
+                        {
+                            var (x, y) = tile(i, side);
+                            Assert.Equal(low.Contains((x, y)) ? TileKinds.Low : TileKinds.Floor, s.Tiles[y * s.Width + x]);
+                            Assert.Equal(0, s.Decor![y * s.Width + x]);
+                        }
+                    }
+                    var inRoom = site.Dressing.Where((d) => d.X >= r.X && d.Y >= r.Y && d.X < r.X + r.W && d.Y < r.Y + r.H).ToList();
+                    foreach (var (kind, tiles) in pieces)
+                    {
+                        // One mark a piece, from its first tile, as long as it is across its facing.
+                        var d = Assert.Single(inRoom, (x) => x.Kind == kind);
+                        Assert.Equal(tiles.Length > 1 ? tiles.Length : (int?)null, d.Length);
+                        var covered = Enumerable.Range(0, d.Length ?? 1).Select((k) => d.Facing % 2 == 0 ? (d.X + k, d.Y) : (d.X, d.Y + k)).ToHashSet();
+                        Assert.True(covered.SetEquals(tiles.Select((q) => tile(q.Item1, q.Item2))), $"seed {seed}: {kind}");
+                    }
+                    // A dead camper now and then, on the bed.
+                    foreach (var d in inRoom.Where((x) => x.Kind == CampDetailKinds.CorpseCamper))
+                    {
+                        Assert.Equal(tile(0, 0), (d.X, d.Y));
+                        corpses++;
+                    }
+                    Assert.Equal(pieces.Length + inRoom.Count((x) => x.Kind == CampDetailKinds.CorpseCamper), inRoom.Count);
+                    // The door's tile free, and from it every free tile of the room.
+                    var at = tile(1, 0);
+                    Assert.Equal(TileKinds.Floor, s.Tiles[at.Y * s.Width + at.X]);
+                    var reach = new HashSet<(int, int)> { at };
+                    var todo = new Queue<(int X, int Y)>(new[] { at });
+                    while (todo.Count > 0)
+                    {
+                        var q = todo.Dequeue();
+                        foreach (var dd in Grid.Dirs4)
+                        {
+                            var n = (q.X + dd.X, q.Y + dd.Y);
+                            if (n.Item1 < r.X || n.Item2 < r.Y || n.Item1 >= r.X + r.W || n.Item2 >= r.Y + r.H || s.Tiles[n.Item2 * s.Width + n.Item1] != TileKinds.Floor || !reach.Add(n)) continue;
+                            todo.Enqueue(n);
+                        }
+                    }
+                    Assert.Equal(2 * len - low.Count, reach.Count);
+                }
+            }
+            Assert.Equal(new[] { 6, 7 }, seen.OrderBy((x) => x));
+            Assert.True(corpses > 0);
+        }
+
+        [Fact]
+        public void TheInterrogationTableIsOneTileWithTwoChairs()
+        {
+            // Arte, 17/11: two tables side by side read as one long table with four chairs.
+            foreach (var seed in Seeds)
+            {
+                var (_, s) = At(Places.Police, NodeKinds.Normal, seed);
+                var site = s.Interiors!.Single();
+                var room = site.Rooms.Single((r) => r.Use == PoliceUses.Interrogation);
+                bool In(InteriorDetail d) => d.Z == room.Z && d.X >= room.X && d.Y >= room.Y && d.X < room.X + room.W && d.Y < room.Y + room.H;
+                var table = Assert.Single(site.Dressing, (d) => d.Kind == PoliceDetailKinds.InterrogationTable);
+                Assert.True(In(table));
+                Assert.Null(table.Length);
+                Assert.Equal(TileKinds.Low, s.Tiles[table.Y * s.Width + table.X]);
+                Assert.Equal(1, Enumerable.Range(room.Y, room.H).SelectMany((y) => Enumerable.Range(room.X, room.W).Select((x) => y * s.Width + x)).Count((i) => Decor.DecorOf(s.Decor![i])?.Kind == DecorKinds.Table));
+                // A chair in front of it and one behind, along its facing, on the floor, facing each other across it.
+                var chairs = site.Dressing.Where((d) => d.Kind == PoliceDetailKinds.InterrogationChair).ToList();
+                Assert.Equal(2, chairs.Count);
+                foreach (var way in new[] { table.Facing, (table.Facing + 2) % 4 })
+                {
+                    var at = (table.X + Grid.Dirs4[way].X, table.Y + Grid.Dirs4[way].Y);
+                    var chair = Assert.Single(chairs, (d) => (d.X, d.Y) == at);
+                    Assert.True(In(chair));
+                    Assert.Equal((way + 2) % 4, chair.Facing);
+                    Assert.Equal(TileKinds.Floor, s.Tiles[chair.Y * s.Width + chair.X]);
+                    Assert.DoesNotContain(site.Dressing, (d) => d != chair && d.Z == chair.Z && (d.X, d.Y) == at);
+                }
+            }
+        }
+
+        [Fact]
+        public void LaLataNeverOnACaravan()
+        {
+            // Arte, 17/11: in seed 11 La Lata's zone took a caravan's corner.
+            for (var seed = 1; seed <= 30; seed++)
+            {
+                var (_, s) = At(Places.Camping, NodeKinds.Normal, seed);
+                var caravans = s.Interiors!.Single().Rooms.Where((r) => r.Use == CampUses.Trailer).Select((r) => (X: r.X - 1, Y: r.Y - 1, W: r.W + 2, H: r.H + 2)).ToList();
+                bool OnOne(int x, int y) => caravans.Any((r) => x >= r.X && y >= r.Y && x < r.X + r.W && y < r.Y + r.H);
+                Assert.All(s.Mission.EvacZone, (z) => Assert.False(OnOne((int)z.X, (int)z.Y), $"seed {seed}: La Lata's zone at {z.X},{z.Y}"));
+                Assert.All(s.Mission.EvacBus!.Tiles, (z) => Assert.False(OnOne((int)z.X, (int)z.Y), $"seed {seed}: the bus at {z.X},{z.Y}"));
+            }
+        }
+
+        [Fact]
+        public void TheQuarantineTentOffTheFence()
+        {
+            // Arte, 17/11: with the military tent of 6 the quarantine one stood on the fence and its gate.
+            var sizes = new HashSet<int>();
+            for (var seed = 1; seed <= 30; seed++)
+            {
+                var (_, s) = At(Places.Camping, NodeKinds.Normal, seed);
+                var area = s.Interiors!.Single().Rooms.Single((r) => r.Use == CampUses.Military);
+                string KindAt(int x, int y) => s.Tiles[y * s.Width + x];
+                var ring = Enumerable.Range(area.X - 1, area.W + 2).SelectMany((x) => new[] { (x, area.Y - 1), (x, area.Y + area.H) })
+                    .Concat(Enumerable.Range(area.Y, area.H).SelectMany((y) => new[] { (area.X - 1, y), (area.X + area.W, y) })).ToList();
+                // The fence whole but its gate of two; no tent on it.
+                var gate = ring.Where((p) => KindAt(p.Item1, p.Item2) == TileKinds.Floor).ToList();
+                Assert.Equal(2, gate.Count);
+                Assert.All(ring.Except(gate), (p) => Assert.Equal(TileKinds.Low, KindAt(p.Item1, p.Item2)));
+                // The gate free inside.
+                foreach (var (x, y) in gate)
+                {
+                    var inside = new[] { (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1) }.Where((q) => q.Item1 >= area.X && q.Item2 >= area.Y && q.Item1 < area.X + area.W && q.Item2 < area.Y + area.H).ToList();
+                    Assert.All(inside, (q) => Assert.Equal(TileKinds.Floor, KindAt(q.Item1, q.Item2)));
+                }
+                sizes.Add(Math.Max(area.W, area.H));
+            }
+            // Both military tents drawn: the area as wide as each asks.
+            Assert.Equal(2, sizes.Count);
+        }
+
+        [Fact]
+        public void TheCampfireLightsAtNight()
+        {
+            // Arturo, 17/11: the fire pit is one of the map's lights, as a street light: at night, whoever stands by it is seen
+            // from afar, soldiers and the dead alike.
+            foreach (var seed in Seeds)
+            {
+                var (_, s) = At(Places.Camping, NodeKinds.Normal, seed);
+                var pit = s.Interiors!.Single().Dressing.Single((d) => d.Kind == CampDetailKinds.FirePit);
+                var light = Assert.Single(s.Lights!, (l) => l.Tile.X == pit.X && l.Tile.Y == pit.Y);
+                Assert.Equal(Content.Night.StreetLight, light.Radius);
+                Assert.Null(light.Turns);
+                s.Mission.Night = true;
+                var by = Grid.Dirs4.Select((d) => new Pos { X = pit.X + d.X, Y = pit.Y + d.Y, Z = 0 }).First((p) => Grid.KindAt(s, p) == TileKinds.Floor);
+                var dark = new Pos { X = pit.X, Y = pit.Y + 4 * Math.Sign(s.Height / 2 - pit.Y + 0.5), Z = 0 };
+                Assert.True(Los.IsLit(s, by));
+                Assert.False(Los.IsLit(s, dark));
+                // One of the dead by the fire: seen by a soldier as by day; out of its light, from no further than at night.
+                var soldier = Squad(s)[0];
+                Assert.Equal(Los.SightOf(soldier), Los.SightTo(s, soldier, by));
+                Assert.True(Los.SightTo(s, soldier, dark) < Los.SightOf(soldier));
+                // A soldier by the fire: noticed by the dead as by day; out of its light, from half as far.
+                var zombie = s.Units.First((u) => u.Team == Teams.Alien && u.Template == TemplateIds.Zombie);
+                Assert.Equal(Content.Templates[TemplateIds.Zombie].Detection * Content.Weather.SightOf(s.Weather), Los.DetectionTo(s, zombie, by));
+                Assert.True(Los.DetectionTo(s, zombie, dark) < Los.DetectionTo(s, zombie, by));
+            }
         }
 
         // ------------------------------------------------------------- what they give

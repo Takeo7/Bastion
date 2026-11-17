@@ -98,6 +98,9 @@ namespace Bastion.Client.Map
         {
             ["containerBlue"] = ("Shipping_Container_", "Shipping_Container_03"),
             ["containerOrange"] = ("Shipping_Container_", "Shipping_Container_05"),
+            // A shopping plaza's cinema's posters and its billboards (H9 §4): Shopping Plaza's other films and ads.
+            ["poster2"] = ("Poster_", "Poster_02"), ["poster3"] = ("Poster_", "Poster_03"), ["poster4"] = ("Poster_", "Poster_04"),
+            ["billboard2"] = ("Billboard_Horizontal_", "Billboard_Horizontal_02"), ["billboard3"] = ("Billboard_Horizontal_", "Billboard_Horizontal_03"),
         };
 
         /// <summary>

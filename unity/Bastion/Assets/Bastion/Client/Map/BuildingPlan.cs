@@ -93,6 +93,11 @@ namespace Bastion.Client.Map
         /// mobile home (MapBuilder.Caravans), not of kit pieces nor with a roof of its own; null on any other.
         /// </summary>
         public int? trailer;
+        /// <summary>
+        /// A shopping plaza's shop (runs, H9 §4: BuildingPlan.Plaza), what it sells (ShopUses): its front Shopping Plaza's
+        /// glass (WallLayout's «plaza» kit), its sign, awning and furniture its marks' (MapBuilder.Plaza); null on any other.
+        /// </summary>
+        public string plaza;
     }
 
     /// <summary>Which tiles make which building: walls round a floor, at ground level.</summary>
@@ -420,6 +425,7 @@ namespace Bastion.Client.Map
             FrameBlocks();
             if (s.Biome == Biomes.Wilds) FindRuins();
             Police();
+            Plaza();
             foreach (var b in Buildings) b.pitched = PitchedOf(s, b);
             foreach (var b in Buildings) b.trailer = Caravans.DoorSide(s, b);
             Facings();
@@ -500,6 +506,28 @@ namespace Bastion.Client.Map
                 b.kind = BuildingKinds.Office;
                 b.market = null;
                 b.facing = PoliceFacings.Brick;
+            }
+        }
+
+        /// <summary>
+        /// Each shop of a shopping plaza (runs, H9 §4: the engine's InteriorSite of kind «plaza», its rooms the shops, each
+        /// with its use) a shop whatever its floor says (a pharmacy's medical shelves made it a clinic, an empty one's bare
+        /// floor a house), of the house's kit so it takes a shop's facing, and what it sells (Building.plaza).
+        /// </summary>
+        void Plaza()
+        {
+            var plazas = S.Interiors?.Where((i) => i.Kind == InteriorKinds.Plaza).ToList();
+            if (plazas == null || plazas.Count == 0 || Siege) return;
+            foreach (var b in Buildings)
+            {
+                if (b.kind == BuildingKinds.Ruin || b.frame) continue;
+                var room = plazas.SelectMany((p) => p.Rooms).FirstOrDefault((r) => r.Z == 0 && r.X > b.x0 && r.Y > b.y0 && r.X + r.W - 1 < b.x1 && r.Y + r.H - 1 < b.y1);
+                if (room == null) continue;
+                b.kind = BuildingKinds.Shop;
+                b.kit = KitIds.House;
+                b.medicalWear = null;
+                b.market = null;
+                b.plaza = room.Use;
             }
         }
 

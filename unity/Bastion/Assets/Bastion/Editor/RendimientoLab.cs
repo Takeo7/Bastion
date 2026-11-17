@@ -16,7 +16,8 @@ namespace Bastion.EditorTools
     /// units), «asedio» (the Bastion's siege with a wave of 60 dead in the clearing), «fuego» (city-3-elimination, its two
     /// fires, under a storm), «campo» (wilds-5-recovery, its pines), «poligono» (a city's industrial estate, seed 11),
     /// «hospital», «oficinas», «nave» and «comisaria» (the runs' maps that are one building, H7 and H9: a save of each, or the samples),
-    /// «camping» (H9, out of doors: a save, or the sample); each
+    /// «camping» (H9, out of doors: a save, or the sample), «plaza» (H9, out of doors: a save, or the sample) and «pueblo» (a town
+    /// of the generator's, city 7, a Saqueo, to set the plaza against); each
     /// as the game draws it (its units, its fog as the squad sees, its animals, its weather),
     /// the game's camera over the enemy at each of BASTION_DISTANCIAS (24 and 33.5 tiles, the farthest), at each of
     /// BASTION_CALIDAD (Medio, Alto), 1920×1080, in each of BASTION_VARIANTES in turns three times, the least of each (frames
@@ -112,6 +113,18 @@ namespace Bastion.EditorTools
                     path = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../../../.dev-snapshots/gameplay/runs/muestras/camping.json"));
                     return Bastion.Net.Json.Read<GameState>(System.IO.File.ReadAllText(path));
                 }
+                // (H9: the shopping plaza, out of doors, its glass fronts and its shops' marks: BASTION_PLAZA a save of it, {"state": …};
+                // else Gameplay's sample, a bare state, just launched, the squad on the south street. And a town of the
+                // generator's to set it against, its old town of the same size and kind: «pueblo».)
+                case "plaza":
+                {
+                    var path = Environment.GetEnvironmentVariable("BASTION_PLAZA");
+                    if (!string.IsNullOrEmpty(path)) return MapLab.Golden(path);
+                    path = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../../../.dev-snapshots/gameplay/runs/muestras/plaza.json"));
+                    return Bastion.Net.Json.Read<GameState>(System.IO.File.ReadAllText(path));
+                }
+                case "pueblo":
+                    return MapLab.Generated("city", 7, "scavenge", null);
                 case "fuego":
                 {
                     var s = MapLab.Golden("../step2/city-3-elimination");

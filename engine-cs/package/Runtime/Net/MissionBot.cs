@@ -247,11 +247,28 @@ namespace Bastion.Net
         /// </summary>
         private static Pos? NearestEnemy(GameState s, Unit u, Reach walks)
         {
-            var enemies = Enemies(s).ToList();
-            int Walk(Unit e) => walks.Cost.TryGetValue(Grid.NodeOf(s, e.Pos), out var w) ? w : int.MaxValue;
-            var walked = enemies.Where((e) => Walk(e) < int.MaxValue).OrderBy(Walk).ThenBy((e) => e.Id, System.StringComparer.Ordinal).FirstOrDefault();
-            return (walked ?? enemies.OrderBy((e) => Grid.Distance(u.Pos, e.Pos)).ThenBy((e) => e.Id, System.StringComparer.Ordinal).FirstOrDefault())?.Pos;
+            int Walk(Pos p) => walks.Cost.TryGetValue(Grid.NodeOf(s, p), out var w) ? w : int.MaxValue;
+            // The caged (H9) are none to go for but in a Limpieza, and there by the tile across their bars nearest by the
+            // walk, where the blade reaches them (Rules.CagedReach); never their own, behind the bars.
+            var targets = Enemies(s).Where((e) => e.Caged != true).Select((e) => (e.Id, At: e.Pos)).ToList();
+            if (Hunting(s))
+                foreach (var e in Enemies(s).Where((e) => e.Caged == true))
+                {
+                    var spot = Rules.CagedReach(s, e).OrderBy(Walk).ThenBy((p) => Grid.Distance(u.Pos, p)).FirstOrDefault();
+                    if (spot != null) targets.Add((e.Id, spot));
+                }
+            var walked = targets.Where((t) => Walk(t.At) < int.MaxValue).OrderBy((t) => Walk(t.At)).ThenBy((t) => t.Id, System.StringComparer.Ordinal).Select((t) => t.At).FirstOrDefault();
+            return walked ?? targets.OrderBy((t) => Grid.Distance(u.Pos, t.At)).ThenBy((t) => t.Id, System.StringComparer.Ordinal).Select((t) => t.At).FirstOrDefault();
         }
+
+        /// <summary>A Limpieza: every one of the dead to kill, the caged too (H9).</summary>
+        private static bool Hunting(GameState s) => s.Mission.Kind == MissionKinds.Elimination;
+
+        /// <summary>
+        /// One of the dead `u` has reason to fight: any free one; a caged one (H9) only in a Limpieza, or when it reaches `u`
+        /// across its bars. Kept off otherwise: a shot is heard, and at its bars it bites.
+        /// </summary>
+        private static bool Worth(GameState s, Unit u, Unit e) => e.Caged != true || Hunting(s) || Rules.CagedReach(s, e).Any((p) => Grid.SamePos(p, u.Pos));
 
         /// <summary>
         /// Whether all the squad not gone is in La Lata, but for any that can't walk there from where it is (walled off, no
@@ -342,7 +359,7 @@ namespace Bastion.Net
             if (s.Turn >= RunLeaveTurn || (s.RoomsSearched?.Count ?? 0) >= RoomsWanted) return true;
             var squad = Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated).ToList();
             if (squad.Any((o) => o.Hp * 2 <= o.MaxHp)) return true;
-            var near = Enemies(s).Count((e) => Aim.TeamSees(s, Teams.Xcom, e) && squad.Any((o) => Grid.Distance(o.Pos, e.Pos) <= ThreatNear));
+            var near = Enemies(s).Count((e) => e.Caged != true && Aim.TeamSees(s, Teams.Xcom, e) && squad.Any((o) => Grid.Distance(o.Pos, e.Pos) <= ThreatNear));
             return near >= ThreatMany || squad.All((o) => roomOf(o) == null);
         }
 
@@ -407,7 +424,7 @@ namespace Bastion.Net
                 var equip = Try(new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Gear = gun.Id });
                 if (equip != null) return equip;
             }
-            var near = Enemies(s).Any((e) => Grid.Distance(u.Pos, e.Pos) <= Close);
+            var near = Enemies(s).Any((e) => e.Caged != true && Grid.Distance(u.Pos, e.Pos) <= Close);
             if (!near && u.Kit.Vest == null && packed.FirstOrDefault((g) => g.Kind == GearKinds.Vest) is Gear vest) return Try(new ItemCommand { Unit = u.Id, Action = ItemActions.Equip, Gear = vest.Id });
             return null;
         }
@@ -456,7 +473,8 @@ namespace Bastion.Net
         {
             if (Paths.MoveBudget(s, u) <= 0 || !Usable(s, u, AbilityIds.Slash)) return null;
             var enemies = Enemies(s).ToList();
-            var seen = enemies.Where((e) => Aim.TeamSees(s, u.Team, e)).ToList();
+            // A caged one in a Limpieza even unseen: where it is, it stays (its cell shows only from right in front of the bars).
+            var seen = enemies.Where((e) => e.Caged != true ? Aim.TeamSees(s, u.Team, e) : Hunting(s)).ToList();
             if (seen.Count == 0) return null;
             var reach = Paths.ComputeReach(s, u, Stride(s, u));
             Destination? best = null;
@@ -496,11 +514,14 @@ namespace Bastion.Net
             // of 1000 turns in the hospital and the police station, the squad waiting a few tiles off; a radio fixed in the
             // offices and La Lata never reached).
             var careful = !bus && !Bold(s.Mission);
-            var enemies = Enemies(s).Where((e) => careful || !Asleep(s, e)).ToList();
+            var enemies = Enemies(s).Where((e) => e.Caged != true && (careful || !Asleep(s, e))).ToList();
+            // The caged (H9), only on the tiles across their bars: nowhere else can they bite. Not in a Limpieza, where those
+            // tiles are where the squad has to stand to kill them.
+            var caged = new HashSet<int>(Hunting(s) ? Enumerable.Empty<int>() : Enemies(s).Where((e) => e.Caged == true).SelectMany((e) => Rules.CagedReach(s, e)).Select((p) => Grid.NodeOf(s, p)));
             // El Toro's charge ready (or by the next turn): his lines are kept out of (H6).
             var bull = Bull(s);
             var charging = bull != null && (!bull.Cooldowns.TryGetValue(AbilityIds.Charge, out var wait) || wait <= 1);
-            double Danger(Pos p) => enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
+            double Danger(Pos p) => enemies.Sum((e) => Grid.Distance(p, e.Pos) <= 2.5 ? 4 : Grid.Distance(p, e.Pos) <= 5 ? 1.5 : 0) + (caged.Contains(Grid.NodeOf(s, p)) ? 4 : 0) + (charging && InChargeLine(bull!, p) ? 6 : 0);
             var stops = Paths.Destinations(s, u, reach);
             Destination? best = null;
             var end = WayTo(s, walks, goal, bus);
@@ -617,7 +638,7 @@ namespace Bastion.Net
                 if (!abilities.Contains(a) || !Usable(s, u, a)) continue;
                 foreach (var t in Abilities.AbilityTargets(s, u, a))
                 {
-                    if (Grid.Distance(u.Pos, t.Pos) > within || (at != null && t.Id != at)) continue;
+                    if (Grid.Distance(u.Pos, t.Pos) > within || (at != null && t.Id != at) || !Worth(s, u, t)) continue;
                     var p = Aim.PreviewShot(s, u, t, new ShotOptions { Ability = a });
                     if (p != null && (best == null || p.Hit > best.Value.hit)) best = (Ability(u, a, t.Id), p.Hit);
                 }

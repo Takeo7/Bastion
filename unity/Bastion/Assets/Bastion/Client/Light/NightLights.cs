@@ -64,11 +64,6 @@ namespace Bastion.Client
         /// <summary>The map's fires among them (GameState.fires): their flames are FireView's, no ball of glow.</summary>
         readonly HashSet<string> flamesOwn = new HashSet<string>();
         float time;
-        /// <summary>The camping's fires (Map.CampFire.Of) of the state they were looked for in.</summary>
-        Bastion.Engine.GameState campFor;
-        List<Vector3> campFires = new List<Vector3>();
-        /// <summary>A camp fire's light's reach, as an engine light's radius (tiles: its range 2.6 times it).</summary>
-        const float CampFireRadius = 3;
         Material glowMaterial, burnMaterial, haloMaterial;
         Texture2D haloTexture;
 
@@ -272,7 +267,9 @@ namespace Bastion.Client
                 {
                     // A map's fire (GameState.fires, 1/11) burns the whole mission, its light without turns; its flames are
                     // FireView's, so no glowing ball, and it is a fire whatever its radius (a Bengala's is 3 too).
-                    bool mapFire = s.Fires != null && s.Fires.Any(f => f.Id == l.Id);
+                    // The camping's fire too (runs, H9 §5: the engine's light without turns on its `firePit` mark, 17/11): its
+                    // flames are Map.CampFire's, not a street light's (StreetDressing leaves it out).
+                    bool mapFire = (s.Fires != null && s.Fires.Any(f => f.Id == l.Id)) || (l.Turns == null && Map.CampFire.At(s, l.Tile));
                     if (l.Turns == null && !mapFire) continue;
                     now.Add(l.Id);
                     if (burning.ContainsKey(l.Id)) continue;
@@ -281,20 +278,6 @@ namespace Bastion.Client
                     burning[l.Id] = (at, flare ? Flare : Fire, (float)l.Radius, 0, flare, null);
                     if (mapFire) flamesOwn.Add(l.Id);
                 }
-            // The camping's fire (runs, H9 §5: its `firePit` marks, Map.CampFire's flames) burns the whole mission, as a map's.
-            if (s != campFor)
-            {
-                campFor = s;
-                campFires = Map.CampFire.Of(s);
-            }
-            foreach (var at in campFires)
-            {
-                string id = $"hoguera {at.x:0.0},{at.z:0.0}";
-                now.Add(id);
-                if (burning.ContainsKey(id)) continue;
-                burning[id] = (at + Vector3.up * 0.7f * MapTile, Fire, CampFireRadius, 0, false, null);
-                flamesOwn.Add(id);
-            }
             foreach (string id in burning.Keys.ToList())
             {
                 var b = burning[id];
@@ -313,8 +296,35 @@ namespace Bastion.Client
                 }
                 burning[id] = b;
             }
+            // Then the street lights nearest the point the camera looks at.
+            var camera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+            var focus = Vector3.zero;
+            if (camera != null)
+            {
+                var ray = camera.transform.forward;
+                float t = ray.y < -0.01f ? -camera.transform.position.y / ray.y : 0;
+                focus = camera.transform.position + ray * t;
+            }
+            // On a map that is one building (H7, the hospital), its rooms' ceiling lights too (Ceiling), among the street lights.
+            var inside = s != null && Bastion.Engine.Buildings.ByRoom(s) ? Ceiling(s) : null;
+            // The camping's caravans found (runs, H9 §5), a warm lamp in each (CaravanLights).
+            if (s != null && Map.Caravans.Any(s)) inside = (inside ?? new List<Glow>()).Concat(CaravanLights(s)).ToList();
+            var candidates = inside == null || inside.Count == 0 ? lamps : lamps.Concat(inside).ToList();
+            if (inside != null && inside.Count > 0 && camera != null)
+            {
+                // (Where the camera looks on the storey in view's floor, not the ground's.)
+                var ray = camera.transform.forward;
+                float floorY = ceilingStorey * Map.MapSpace.Storey;
+                float t = ray.y < -0.01f ? (floorY - camera.transform.position.y) / ray.y : 0;
+                focus = camera.transform.position + ray * t;
+            }
             int n = 0;
-            foreach (var b in burning.Values)
+            // (On a map that is one building, a fire or a flare is ranked with the rooms' lights by how near it is: the police
+            // station's two fires, in the strip and the yard, took two of the six by night, its armoury and evidence room dark.)
+            float Off(Vector3 at) => (at.x - focus.x) * (at.x - focus.x) + (at.z - focus.z) * (at.z - focus.z);
+            var fires = inside == null || inside.Count == 0 ? burning.Values.ToList()
+                : burning.Values.Where(b => candidates.Count(c => Off(c.at) < Off(b.at)) < pool.Length).ToList();
+            foreach (var b in fires)
             {
                 if (n >= pool.Length) break;
                 var light = pool[n++];
@@ -328,28 +338,6 @@ namespace Bastion.Client
                 // A fire's light over its flames, not in them.
                 light.transform.position = b.flare ? b.at : b.at + Vector3.up * 0.55f * MapTile;
             }
-            // Then the street lights nearest the point the camera looks at.
-            var camera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
-            var focus = Vector3.zero;
-            if (camera != null)
-            {
-                var ray = camera.transform.forward;
-                float t = ray.y < -0.01f ? -camera.transform.position.y / ray.y : 0;
-                focus = camera.transform.position + ray * t;
-            }
-            // On a map that is one building (H7, the hospital), its rooms' ceiling lights too (Ceiling), among the street lights.
-            var inside = s != null && Bastion.Engine.Buildings.ByRoom(s) ? Ceiling(s) : null;
-            // The camping's caravans found (runs, H9 §5), a ceiling's light in each, as the hospital's rooms (CaravanLights).
-            if (s != null && Map.Caravans.Any(s)) inside = (inside ?? new List<Glow>()).Concat(CaravanLights(s)).ToList();
-            var candidates = inside == null || inside.Count == 0 ? lamps : lamps.Concat(inside).ToList();
-            if (inside != null && inside.Count > 0 && camera != null)
-            {
-                // (Where the camera looks on the storey in view's floor, not the ground's.)
-                var ray = camera.transform.forward;
-                float floorY = ceilingStorey * Map.MapSpace.Storey;
-                float t = ray.y < -0.01f ? (floorY - camera.transform.position.y) / ray.y : 0;
-                focus = camera.transform.position + ray * t;
-            }
             var nearest = Enumerable.Range(0, candidates.Count).OrderBy(i => (candidates[i].at.x - focus.x) * (candidates[i].at.x - focus.x) + (candidates[i].at.z - focus.z) * (candidates[i].at.z - focus.z)).Take(pool.Length - n).ToList();
             foreach (int i in nearest)
             {
@@ -358,13 +346,13 @@ namespace Bastion.Client
                 if (l.power < 0)
                 {
                     // A ceiling's (Ceiling): cold, all round, under the ceiling, nearer than a street light's; a hall's
-                    // (power −2: a shed's floor, H9) higher up, stronger and further.
-                    bool hall = l.power < -1.5f;
+                    // (power −2: a shed's floor, H9) higher up, stronger and further; a caravan's lamp (power −3, CaravanLights) warm.
+                    bool hall = l.power < -1.5f && l.power > -2.5f, lamp = l.power < -2.5f;
                     light.enabled = true;
                     if (light.type != LightType.Point) light.type = LightType.Point;
-                    light.color = CeilingLight.gamma;
-                    light.intensity = (hall ? HallPower : CeilingPower) * Unity;
-                    light.range = (hall ? HallReach : CeilingReach) * MapTile;
+                    light.color = (lamp ? CaravanLamp : CeilingLight).gamma;
+                    light.intensity = (lamp ? CaravanPower : hall ? HallPower : CeilingPower) * Unity;
+                    light.range = (lamp ? CaravanReach : hall ? HallReach : CeilingReach) * MapTile;
                     light.transform.position = l.at;
                     continue;
                 }
@@ -400,6 +388,8 @@ namespace Bastion.Client
         static readonly Color CeilingLight = new Color(0.78f, 0.9f, 1.0f);
         /// <summary>How strong, how far it reaches (tiles), how high over its storey's floor (tiles: a storey is 2.3, the cut walls 0.95), how far apart in a room (tiles).</summary>
         const float CeilingPower = 7, CeilingReach = 5, CeilingHigh = 1.6f, CeilingApart = 4;
+        /// <summary>A room this long (tiles) with one light (Ceiling) has two, along it: the police station's armoury, 4 × 7.</summary>
+        const float LongRoom = 6;
         /// <summary>
         /// A room this big (tiles) is a hall (H9, the shed's floor: one room of some 400 tiles found at once): its lights are
         /// a warehouse's high bays, so far apart (tiles) that the six real ones light most of what the camera takes in, as
@@ -408,8 +398,15 @@ namespace Bastion.Client
         const float HallRoom = 150, HallPower = 14, HallReach = 9, HallHigh = 2.4f, HallApart = 7;
 
         /// <summary>
-        /// A light under the roof of each of the camping's caravans the squad has found (runs, H9 §5; Map.Caravans.Rooms), in
-        /// its room's middle: a ceiling's (power −1, CeilingLight). Worked out again when what is found changes.
+        /// A caravan's lamp (Arturo, 17/11: warm, a lamp's, not the hospital's tube): its colour (linear), how strong, how far
+        /// it reaches and how high over the floor (tiles: a lamp on a table or a shelf, lower than a ceiling's).
+        /// </summary>
+        static readonly Color CaravanLamp = new Color(1.0f, 0.66f, 0.36f);
+        const float CaravanPower = 6, CaravanReach = 4.5f, CaravanHigh = 1.2f;
+
+        /// <summary>
+        /// A lamp lit in each of the camping's caravans the squad has found (runs, H9 §5; Map.Caravans.Rooms), in its room's
+        /// middle (power −3, CaravanLamp). Worked out again when what is found changes.
         /// </summary>
         List<Glow> CaravanLights(Bastion.Engine.GameState s)
         {
@@ -423,7 +420,7 @@ namespace Bastion.Client
                 bool any = false;
                 for (int y = r.Y; y < r.Y + r.H && !any; y++)
                     for (int x = r.X; x < r.X + r.W && !any; x++) any = found.Contains(y * s.Width + x);
-                if (any) caravanLights.Add(new Glow { at = Map.MapSpace.World(r.X + (r.W - 1) / 2f, r.Y + (r.H - 1) / 2f) + Vector3.up * CeilingHigh * MapTile, power = -1 });
+                if (any) caravanLights.Add(new Glow { at = Map.MapSpace.World(r.X + (r.W - 1) / 2f, r.Y + (r.H - 1) / 2f) + Vector3.up * CaravanHigh * MapTile, power = -3 });
             }
             return caravanLights;
         }
@@ -464,6 +461,24 @@ namespace Bastion.Client
                     var far = tiles.OrderByDescending(p => lit.Min(q => (p - q).sqrMagnitude)).First();
                     if (lit.Min(q => (far - q).magnitude) < (hall ? HallApart : CeilingApart)) break;
                     lit.Add(far);
+                }
+                // A long room lit by one light in its middle (an armoury, an evidence room: 4 × 7) had its ends dark, and what
+                // stands along its walls there: two, each in the middle of a half of it along its length.
+                if (!hall && lit.Count == 1)
+                {
+                    float x0 = tiles.Min(p => p.x), x1 = tiles.Max(p => p.x), y0 = tiles.Min(p => p.y), y1 = tiles.Max(p => p.y);
+                    bool alongX = x1 - x0 >= y1 - y0;
+                    if ((alongX ? x1 - x0 : y1 - y0) + 1 >= LongRoom)
+                    {
+                        float cut = alongX ? (x0 + x1) / 2 : (y0 + y1) / 2;
+                        lit.Clear();
+                        foreach (bool first in new[] { true, false })
+                        {
+                            var half = tiles.Where(p => ((alongX ? p.x : p.y) <= cut) == first).ToList();
+                            var mid = half.Aggregate(Vector2.zero, (a, b) => a + b) / half.Count;
+                            lit.Add(half.OrderBy(p => (p - mid).sqrMagnitude).First());
+                        }
+                    }
                 }
                 foreach (var p in lit)
                     ceiling.Add(new Glow { at = Map.MapSpace.World(p.x, p.y, storey) + Vector3.up * ((hall ? HallHigh : CeilingHigh) * MapTile), power = hall ? -2 : -1 });

@@ -128,6 +128,8 @@ namespace Bastion.Engine
         public const string EvidenceShelf = "evidenceShelf";
         public const string EvidenceBag = "evidenceBag";
         public const string InterrogationTable = "interrogationTable";
+        /// <summary>On the floor at each side of the interrogation table (one tile), along its facing, facing it (Arte, 17/11).</summary>
+        public const string InterrogationChair = "interrogationChair";
         public const string Polygraph = "polygraph";
         public const string LockerRow = "lockerRow";
         public const string VendingMachine = "vendingMachine";
@@ -140,6 +142,7 @@ namespace Bastion.Engine
         {
             CellBed, CellToilet, Counter, Bench, Desk, DeskChair, Computer, FilingCabinet, Whiteboard, WeaponLocker, WeaponRack, GunCase, AmmoCase,
             EvidenceShelf, EvidenceBag, InterrogationTable, Polygraph, LockerRow, VendingMachine, CorpseOfficer, BloodPool, Corkboard, WaterCooler,
+            InterrogationChair,
         };
     }
 
@@ -226,8 +229,13 @@ namespace Bastion.Engine
         public const string Clothesline = "clothesline";
         public const string Cooler = "cooler";
         public const string CorpseCamper = "corpseCamper";
+        /// <summary>Inside a caravan (Synty's, Arte's template of 17/11): on low tiles, a piece each; the bed and a booth table may be two tiles (InteriorDetail.Length).</summary>
+        public const string TrailerBed = "trailerBed";
+        public const string TrailerTable = "trailerTable";
+        public const string TrailerCounter = "trailerCounter";
+        public const string TrailerDrawers = "trailerDrawers";
 
-        public static readonly IReadOnlyList<string> All = new[] { TentDome, TentLong, TentMilitary, Trailer, FirePit, CampChair, SleepingBag, ToiletPortable, Clothesline, Cooler, CorpseCamper };
+        public static readonly IReadOnlyList<string> All = new[] { TentDome, TentLong, TentMilitary, Trailer, FirePit, CampChair, SleepingBag, ToiletPortable, Clothesline, Cooler, CorpseCamper, TrailerBed, TrailerTable, TrailerCounter, TrailerDrawers };
     }
 
     /// <summary>A room of an InteriorSite: its rect (walls not included), its storey and its use (OfficeUses, ShedUses, PoliceUses, ShopUses, CampUses).</summary>

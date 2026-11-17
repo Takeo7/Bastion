@@ -611,6 +611,8 @@ namespace Bastion.Client.Map
             {
                 bool library = b.kind == BuildingKinds.Hall && b.look < 0.3;
                 if (b.kind != BuildingKinds.Shop && !library) continue;
+                // (A shopping plaza's shops are dressed by their marks, MapBuilder.Plaza; its café as a café still: H9 §4.)
+                if (b.plaza != null && b.plaza != ShopUses.Cafe) continue;
                 string trade = library ? ShopTrades.Books : ShopTradeIn(s, b);
                 for (int z = 0; z <= (s.Levels?.Count ?? 0); z++)
                 {

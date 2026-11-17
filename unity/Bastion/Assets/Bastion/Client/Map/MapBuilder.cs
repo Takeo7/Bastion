@@ -513,10 +513,9 @@ namespace Bastion.Client.Map
         /// </summary>
         void Woods(HashSet<long> only)
         {
-            // (And the camping's, a clearing in the pinar: runs, H9 §5.)
-            if (pieces == null && !BaseWoods.Pinar(s)) return;
-            bool PieceAt(int i) => pieces != null && pieces.at[i] >= 0;
-            foreach (var p in BaseWoods.Pines(s, PieceAt, i => pieces != null && pieces.yard.Has(i)).Concat(BaseWoods.Stumps(s, PieceAt)))
+            if (pieces == null) return;
+            bool PieceAt(int i) => pieces.at[i] >= 0;
+            foreach (var p in BaseWoods.Pines(s, PieceAt, i => pieces.yard.Has(i)).Concat(BaseWoods.Stumps(s, PieceAt)))
             {
                 if (only != null && !only.Contains(Key(p.z, p.tile))) continue;
                 var o = PlaceGame(props[p.z], p.id, p.matrix);
@@ -537,17 +536,14 @@ namespace Bastion.Client.Map
         {
             DestroyNow(beyond);
             beyond = null;
-            if ((pieces == null && !BaseWoods.Pinar(s)) || ground?.Map == null) return;
+            if (pieces == null || ground?.Map == null) return;
             beyond = new GameObject("Bosque");
             beyond.transform.SetParent(root, false);
             var flip = Matrix4x4.Scale(new Vector3(1, 1, -1));
             var parts = new Dictionary<string, List<(Mesh mesh, int sub, Material material, Matrix4x4 local)>>();
             var lots = new Dictionary<(int x, int z, Material material), List<CombineInstance>>();
             int near = 0, far = 0;
-            // (The camping's ways out are its yard's, ground 3: the road the bus leaves by, the paths the dead come in by.)
-            var wood = pieces != null ? BaseWoods.Wood(terrain, ground.Map, id => Measure(id).top)
-                : BaseWoods.Wood(terrain, i => terrain.Ground != null && i < terrain.Ground.Count && terrain.Ground[i] == 3, id => Measure(id).top);
-            foreach (var p in wood)
+            foreach (var p in BaseWoods.Wood(terrain, ground.Map, id => Measure(id).top))
             {
                 if (!p.far)
                 {
@@ -1403,8 +1399,8 @@ namespace Bastion.Client.Map
             }
             if (Block(k, i, look, tiles, decor, done)) return;
             if (Fountain(k, i, look, tiles, decor, done)) return;
-            // The base's pines are its own (Woods), and the camping's.
-            if ((pieces != null || BaseWoods.Pinar(s)) && tile == "high" && look.Kind == DecorKinds.Tree) return;
+            // The base's pines are its own (Woods).
+            if (pieces != null && tile == "high" && look.Kind == DecorKinds.Tree) return;
             if (look.Kind == "part") return;
             // A boarded doorway: its door the walls' (Doors), the planks over it.
             if (look.Kind == DecorKinds.DoorBoards)

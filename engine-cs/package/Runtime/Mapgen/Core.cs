@@ -254,7 +254,7 @@ namespace Bastion.Engine
             /// <summary>A camping's (H9 §5, CampingMap): its clearing's bounds, its parts by use, its marks (canvas frame).</summary>
             public Rect? Clearing;
             public List<(Rect R, string Use)>? CampParts;
-            public List<(Vec2 At, string Kind, int Facing)>? CampMarks;
+            public List<(Vec2 At, string Kind, int Facing, int Length)>? CampMarks;
             /// <summary>Straight ways out to the edge the bus may leave by (a street, a track's last stretch), and the roads in line with them.</summary>
             public List<Entry> Exits = new List<Entry>(); // { road: PlanRoad; side: number }[]: townPlan.ts Entry.
             public List<PlanRoad> Lines = new List<PlanRoad>();

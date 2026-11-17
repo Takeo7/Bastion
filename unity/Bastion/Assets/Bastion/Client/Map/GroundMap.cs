@@ -90,6 +90,9 @@ namespace Bastion.Client.Map
             var wilds = s.Biome == Biomes.Wilds;
             // The forest road and the stop's yards: tarmac, the road with a town street's centre line.
             var tarmac = wilds && s.Site == Sites.Roadside;
+            // The camping's tracks (H9: the road in, La Lata's widening, the paths) are the engine's ground 3: a dirt track
+            // there, not a yard's tarmac (Arte, Arturo 17/11), and not furrows where one tile wide (IsStreet is ground 1's).
+            var dirt = wilds && s.Site == Sites.Camping;
             var siege = s.Mission?.Siege != null;
             Data = new byte[w * h * 4];
             Kinds = new byte[w * h];
@@ -102,7 +105,7 @@ namespace Bastion.Client.Map
                     int i = y * w + x;
                     int e = Elev(i);
                     // A siege's watchtowers stand on the ground: their decks are the guard tower's own.
-                    byte kind = outline[i] == Water + 1 ? Water : e > 0 && !siege ? (wilds ? Hill : Roof) : GroundAt(i) == 2 ? Indoor : GroundAt(i) == 3 || outline[i] == Yard + 1 ? Yard : IsStreet(x, y) ? Street : Open;
+                    byte kind = outline[i] == Water + 1 ? Water : e > 0 && !siege ? (wilds ? Hill : Roof) : GroundAt(i) == 2 ? Indoor : GroundAt(i) == 3 && dirt ? Street : GroundAt(i) == 3 || outline[i] == Yard + 1 ? Yard : IsStreet(x, y) ? Street : Open;
                     int axis = 0;
                     double offset = 0;
                     // A one-tile strip in the wilds is a furrow of a field, not the track.

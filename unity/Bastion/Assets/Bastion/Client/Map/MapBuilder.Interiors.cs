@@ -78,7 +78,7 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>Whether tile i of storey k has a mark that Furniture draws.</summary>
-        bool Marked(int k, int i) => MarksOn(k, i)?.Any(d => DrawnHere.Contains(d.Kind)) == true;
+        bool Marked(int k, int i) => MarksOn(k, i)?.Any(d => DrawnHere.Contains(d.Kind)) == true || PlazaMarked(k, i);
 
         /// <summary>A mark of `kind` on tile (x, y) of storey k.</summary>
         InteriorDetail MarkAt(int k, int x, int y, string kind) =>
@@ -94,6 +94,8 @@ namespace Bastion.Client.Map
         bool Furniture(int k, int i, bool low, float floor)
         {
             var marks = MarksOn(k, i);
+            // (A shopping plaza's, its own: MapBuilder.Plaza.)
+            if (PlazaFurniture(k, i, low, floor, marks)) return true;
             var mark = marks?.FirstOrDefault(d => DrawnHere.Contains(d.Kind));
             if (mark == null) return false;
             if (OfPolice(mark)) return PoliceFurniture(k, i, mark, marks, low, floor);
@@ -320,6 +322,8 @@ namespace Bastion.Client.Map
         /// </summary>
         void Fitted()
         {
+            // (A shopping plaza's scenery, its own: MapBuilder.Plaza.)
+            PlazaScenery();
             if ((s.Interiors == null || s.Interiors.Count == 0) && fitted.Count == 0) return;
             long drawnFrom = s.Interiors == null ? 0 : FittedKey();
             if (drawnFrom == fittedKey && fitted.All(o => o != null)) return;

@@ -35,7 +35,8 @@ namespace Bastion.Client.Map
             var output = new List<FrameArt.Dressing>();
             int w = s.Width, h = s.Height;
             // On a map with a base, none: its lights are its floodlights (BasePieces; mapView.ts `fixed`).
-            var lamps = s.Base != null ? new List<Pos>() : s.Lights?.Where(l => l.Turns == null).Select(l => l.Tile).ToList();
+            // (Nor on the camping's fire, a light of the engine's: its flames and its light are CampFire's and NightLights', 17/11.)
+            var lamps = s.Base != null ? new List<Pos>() : s.Lights?.Where(l => l.Turns == null && !CampFire.At(s, l.Tile)).Select(l => l.Tile).ToList();
             // The engine's lights: a street light on each, near the kerb, its arm over the road; by a facility's yard (no
             // street beside it), over the yard. One with neither beside it isn't drawn, and is logged (the 3D review's E-09,
             // 10/11: by the furrows of a ploughed field it stood in the middle of it, facing north; the engine no longer

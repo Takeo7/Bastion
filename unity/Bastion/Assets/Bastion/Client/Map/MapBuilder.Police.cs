@@ -9,10 +9,11 @@ namespace Bastion.Client.Map
     /// The runs' police station (H9 §3, .dev-snapshots/gameplay/runs/H9-INTERIORES.md; PoliceDetailKinds): POLYGON Police
     /// Station's furniture on the engine's marks, as the offices' and the shed's (MapBuilder.Interiors.cs). On furniture
     /// (PoliceFurniture, from Furniture): desks with a monitor, a tower and a keyboard, filing cabinets, weapon lockers, gun
-    /// racks with their rifles, gun and ammunition cases, evidence shelving with its boxes, the interrogation tables with
-    /// their chairs, the vending machine, the cells' steel toilets, Military's lockers. Over two tiles (PoliceThing, from
-    /// Thing): the lobby's benches, the cells' bunks. On the floor (PoliceFitted, from Fitted): the chairs at the desks, the
-    /// boards hung on the wall (a whiteboard, a corkboard with its papers), the water cooler, evidence bags, the polygraph on
+    /// racks with their rifles, gun and ammunition cases, evidence shelving with its boxes, the interrogation tables,
+    /// the vending machine, the cells' steel toilets, Military's lockers. Over two tiles (PoliceThing, from
+    /// Thing): the lobby's benches, the cells' bunks. On the floor (PoliceFitted, from Fitted): the chairs at the desks and at
+    /// the interrogation tables, the boards (a corkboard with its papers hung on the wall; a whiteboard hung on an outer wall, Office's on its feet by a
+    /// partition), the water cooler, evidence bags, the polygraph on
     /// its table, a dead officer (CorpseBake's, Sidekick's Modern Police). A counter's mark adds nothing: the wall with its
     /// window is the kit's (WallLayout.Counters); the kitchen and the washrooms are a house's (their decor), the blood the
     /// offices' (Fitted).
@@ -198,13 +199,9 @@ namespace Bastion.Client.Map
                     return true;
                 }
                 case PoliceDetailKinds.InterrogationTable:
-                {
-                    // A table, a chair on each side of it along the way it faces, pulled out.
+                    // The table alone: its chairs are marks of their own, one either side (interrogationChair, PoliceFitted).
                     Stand("poTable", 0, 0, 0, (R(0) - 0.5f) * 4);
-                    for (int n = -1; n <= 1; n += 2)
-                        Stand("poChair3", n * 0.42f, (R(1 + n) - 0.5f) * 0.2f, 0, (n > 0 ? 0 : 180) + (R(3 + n) - 0.5f) * 30);
                     return true;
-                }
                 case PoliceDetailKinds.VendingMachine:
                 {
                     if (low) return false;
@@ -263,9 +260,11 @@ namespace Bastion.Client.Map
         const float BunkUp = 0.25f;
 
         /// <summary>
-        /// A police station's mark on the floor (Fitted's), each where its tile is floor still: the chairs at the desks
-        /// pushed in and askew (one in eight knocked over), a whiteboard or a corkboard hung on the wall behind it (going with
-        /// that wall in the cutaway, as the clinics' signs), the water cooler against it, evidence bags by a box, the polygraph
+        /// A police station's mark on the floor (Fitted's), each where its tile is floor still: an interrogation table's chair
+        /// pulled in to it; the chairs at the desks
+        /// pushed in and askew (one in eight knocked over), a corkboard hung on the wall behind it (going with that wall in the
+        /// cutaway, as the clinics' signs), a whiteboard as well on an outer wall and on its feet by a partition, the water
+        /// cooler against it, evidence bags by a box, the polygraph
         /// on a table against the wall with its chair, a dead officer. False for those Fitted draws as the offices' (blood).
         /// </summary>
         bool PoliceFitted(InteriorDetail d, int i, int k, int b)
@@ -282,6 +281,13 @@ namespace Bastion.Client.Map
                 if (o != null) fitted.Add(Tracked(o, i, k));
                 return o;
             }
+            // Whether the wall behind it is one of the building's outer walls (a partition drops whenever the building is cut).
+            bool Outer()
+            {
+                var site = s.Interiors.FirstOrDefault(p => p?.Kind == InteriorKinds.Police && p.Dressing != null && p.Dressing.Contains(d));
+                int wx = d.X - front.X, wy = d.Y - front.Y;
+                return site != null && (wx <= site.X || wy <= site.Y || wx >= site.X + site.W - 1 || wy >= site.Y + site.H - 1);
+            }
             // Hung on the wall behind it, its bottom `up` tiles over the floor: it goes with that wall in the cutaway.
             GameObject Hang(string id, float up)
             {
@@ -289,10 +295,7 @@ namespace Bastion.Client.Map
                 var at = new Vector3((cx - front.X * back) * T, floor + up * T, -(cz - front.Y * back) * T);
                 var o = Place(props[k], id, at, YawOf(d.Facing));
                 if (o == null) return null;
-                var site = s.Interiors.FirstOrDefault(p => p?.Kind == InteriorKinds.Police && p.Dressing != null && p.Dressing.Contains(d));
-                int wx = d.X - front.X, wy = d.Y - front.Y;
-                bool outside = site != null && (wx <= site.X || wy <= site.Y || wx >= site.X + site.W - 1 || wy >= site.Y + site.H - 1);
-                if (b >= 0) Cutaway.Current?.TrackFixture(o, b, k, outside ? new Vector2(-front.X, -front.Y) : Vector2.zero);
+                if (b >= 0) Cutaway.Current?.TrackFixture(o, b, k, Outer() ? new Vector2(-front.X, -front.Y) : Vector2.zero);
                 fitted.Add(o);
                 return o;
             }
@@ -312,7 +315,10 @@ namespace Bastion.Client.Map
                     return true;
                 }
                 case PoliceDetailKinds.Whiteboard:
-                    if (WallAt(k, d.X - front.X, d.Y - front.Y)) Hang("poWhiteboard", 0.62f);
+                    // On an outer wall the pack's, hung; on a partition, which drops whenever the building is cut and took
+                    // the board with it, Office's on its feet before it, as the offices' (Producto, 17/11).
+                    if (WallAt(k, d.X - front.X, d.Y - front.Y) && Outer()) Hang("poWhiteboard", 0.62f);
+                    else Stand("inWhiteboard", 0.3f, (R(0) - 0.5f) * 0.1f, 0, (R(1) - 0.5f) * 6);
                     return true;
                 case PoliceDetailKinds.Corkboard:
                     if (WallAt(k, d.X - front.X, d.Y - front.Y))
@@ -320,6 +326,10 @@ namespace Bastion.Client.Map
                         var board = Hang(R(0) < 0.5f ? "poCork" : "poCork2", 0.62f);
                         if (R(1) < 0.85f) Insert(board, new[] { "poCorkIn", "poCorkIn2", "poCorkIn3" }[Mathf.FloorToInt(R(2) * 3) % 3]);
                     }
+                    return true;
+                case PoliceDetailKinds.InterrogationChair:
+                    // The pack's plain chair, as the table's, pulled in to it, face to face with the other.
+                    Stand("poChair3", -0.32f, (R(0) - 0.5f) * 0.12f, 0, (R(1) - 0.5f) * 16);
                     return true;
                 case PoliceDetailKinds.WaterCooler:
                     Stand("poCooler", Back(k, d.X, d.Y, d.Facing, (float)Measure("poCooler").z), (R(0) - 0.5f) * 0.3f, 0, (R(1) - 0.5f) * 10);

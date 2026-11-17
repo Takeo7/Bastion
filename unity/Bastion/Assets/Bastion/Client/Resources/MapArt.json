@@ -2834,72 +2834,86 @@
    "pack": "police",
    "fbx": "SM_Prop_Desk_01",
    "fit": 0.95,
-   "thick": 1.45
+   "thick": 1.45,
+   "yaw": 2
   },
   "poDesk2": {
    "pack": "police",
    "fbx": "SM_Prop_Desk_02",
    "fit": 0.95,
-   "thick": 1.45
+   "thick": 1.45,
+   "yaw": 2
   },
   "poDesk3": {
    "pack": "police",
    "fbx": "SM_Prop_Desk_03",
    "fit": 0.95,
-   "thick": 1.45
+   "thick": 1.45,
+   "yaw": 2
   },
   "poMonitor": {
    "pack": "police",
    "fbx": "SM_Prop_Monitor_01",
-   "fit": 0.36
+   "fit": 0.36,
+   "yaw": 2
   },
   "poComputer": {
    "pack": "police",
    "fbx": "SM_Prop_Computer_01",
-   "fit": 0.3
+   "fit": 0.3,
+   "yaw": 2
   },
   "poKeyboard": {
    "pack": "police",
    "fbx": "SM_Prop_Keyboard_01",
-   "fit": 0.3
+   "fit": 0.3,
+   "yaw": 2
   },
   "poChair": {
    "pack": "police",
    "fbx": "SM_Prop_Chair_01",
-   "fit": 0.48
+   "fit": 0.48,
+   "yaw": 2
   },
   "poChair2": {
    "pack": "police",
    "fbx": "SM_Prop_Chair_02",
-   "fit": 0.36
+   "fit": 0.36,
+   "yaw": 2
   },
   "poChair3": {
    "pack": "police",
    "fbx": "SM_Prop_Chair_03",
-   "fit": 0.44
+   "fit": 0.44,
+   "yaw": 2
   },
   "poChair4": {
    "pack": "police",
    "fbx": "SM_Prop_Chair_04",
-   "fit": 0.25
+   "fit": 0.25,
+   "yaw": 2
   },
   "poFiling": {
    "pack": "police",
-   "fbx": "SM_Prop_Filing_Cabinet_01"
+   "fbx": "SM_Prop_Filing_Cabinet_01",
+   "yaw": 2
   },
   "poFiling2": {
    "pack": "police",
    "fbx": "SM_Prop_Filing_Cabinet_02",
    "fit": 0.95,
-   "stretch": true
+   "stretch": true,
+   "yaw": 2
   },
   "poLocker": {
    "pack": "police",
-   "fbx": "SM_Prop_Weapon_Locker_01"
+   "fbx": "SM_Prop_Weapon_Locker_01",
+   "yaw": 2
   },
   "poLocker2": {
    "pack": "police",
-   "fbx": "SM_Prop_Weapon_Locker_02"
+   "fbx": "SM_Prop_Weapon_Locker_02",
+   "yaw": 2
   },
   "poRack": {
    "pack": "police",
@@ -2968,8 +2982,7 @@
   },
   "poCellToilet": {
    "pack": "police",
-   "fbx": "SM_Prop_Sink_Toilet_01",
-   "yaw": 2
+   "fbx": "SM_Prop_Sink_Toilet_01"
   },
   "poBunk": {
    "pack": "police",
@@ -2993,15 +3006,18 @@
   },
   "poWhiteboard": {
    "pack": "police",
-   "fbx": "SM_Prop_Whiteboard_01"
+   "fbx": "SM_Prop_Whiteboard_01",
+   "yaw": 2
   },
   "poCork": {
    "pack": "police",
-   "fbx": "SM_Prop_Corkboard_01"
+   "fbx": "SM_Prop_Corkboard_01",
+   "yaw": 2
   },
   "poCork2": {
    "pack": "police",
-   "fbx": "SM_Prop_Corkboard_02"
+   "fbx": "SM_Prop_Corkboard_02",
+   "yaw": 2
   },
   "poCorkIn": {
    "pack": "police",
@@ -3064,6 +3080,545 @@
    "pack": "apocalypse",
    "fbx": "SK_Chr_PoliceOfficer_Female_01",
    "fit": 0.92
+  },
+  "pzCase": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Display_Case_Half_01",
+   "fit": 0.95,
+   "stretch": true,
+   "yaw": 2
+  },
+  "pzCaseTall": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Display_Case_02",
+   "yaw": 2
+  },
+  "pzRing": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Ring_Display_01"
+  },
+  "pzRing2": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Ring_Display_02",
+   "yaw": 2
+  },
+  "pzRing3": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Ring_Display_03",
+   "yaw": 2
+  },
+  "pzNecklace": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Necklace_Display_01",
+   "yaw": 2
+  },
+  "pzNecklace2": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Necklace_Display_02",
+   "yaw": 2
+  },
+  "pzWatch": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Watch_Display_01",
+   "yaw": 2
+  },
+  "pzPopcorn": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Popcorn_01"
+  },
+  "pzProjector": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Projector_01",
+   "yaw": 2
+  },
+  "pzPoster": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Poster_Movie_01",
+   "yaw": 2
+  },
+  "pzPoster2": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Poster_Movie_01",
+   "yaw": 2,
+   "atlas": "poster2"
+  },
+  "pzPoster3": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Poster_Movie_01",
+   "yaw": 2,
+   "atlas": "poster3"
+  },
+  "pzPoster4": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Poster_Movie_01",
+   "yaw": 2,
+   "atlas": "poster4"
+  },
+  "pzCouch": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Couch_01",
+   "yaw": 2
+  },
+  "pzAwning": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Awning_Cover_01",
+   "yaw": 2
+  },
+  "pzAwningPole": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Awning_Pole_01"
+  },
+  "pzPlanter": {
+   "pack": "plaza",
+   "fbx": "SM_Env_Plant_Bed_01_Small_01",
+   "fit": 0.98
+  },
+  "pzBillboard": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Billboard_01",
+   "yaw": 2,
+   "origin": true
+  },
+  "pzBillboardFace": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Billboard_Sign_01",
+   "yaw": 2,
+   "origin": true
+  },
+  "pzBillboardFace2": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Billboard_Sign_01",
+   "yaw": 2,
+   "origin": true,
+   "atlas": "billboard2"
+  },
+  "pzBillboardFace3": {
+   "pack": "plaza",
+   "fbx": "SM_Prop_Billboard_Sign_01",
+   "yaw": 2,
+   "origin": true,
+   "atlas": "billboard3"
+  },
+  "pzRack3": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Clothes_Rack_03",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "pzRack7": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Clothes_Rack_07",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "pzRack8": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Clothes_Rack_08",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "pzShelf": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Shelf_Basic_01",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "pzShelf2": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Shelf_Basic_03",
+   "fit": 1,
+   "stretch": true,
+   "yaw": 2
+  },
+  "pzTill1": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Cash_Register_01",
+   "yaw": 2
+  },
+  "pzTill2": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Cash_Register_02",
+   "yaw": 2
+  },
+  "pzTill3": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Cash_Register_03",
+   "yaw": 2
+  },
+  "pzTill4": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Cash_Register_04",
+   "yaw": 2
+  },
+  "pzTill5": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Cash_Register_05",
+   "yaw": 2
+  },
+  "pzTill6": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Shop_Cash_Register_06",
+   "yaw": 2
+  },
+  "pzMannequinSport": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Mannequin_Sports_Male_01",
+   "yaw": 2
+  },
+  "pzMannequinSport2": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Mannequin_Sports_Female_01",
+   "yaw": 2
+  },
+  "pzSignClothing": {
+   "pack": "shops",
+   "fbx": "SM_Sign_Large_Clothing_01",
+   "yaw": 2
+  },
+  "pzSignStyle": {
+   "pack": "shops",
+   "fbx": "SM_Sign_Large_Style_01",
+   "yaw": 2
+  },
+  "pzSignTech": {
+   "pack": "shops",
+   "fbx": "SM_Sign_Large_Tech_01",
+   "yaw": 2
+  },
+  "pzSignGym": {
+   "pack": "shops",
+   "fbx": "SM_Sign_Large_Gym_01",
+   "yaw": 2
+  },
+  "pzSignCafe": {
+   "pack": "shops",
+   "fbx": "SM_Sign_Large_Cafe_01",
+   "yaw": 2
+  },
+  "pzSignGame": {
+   "pack": "shops",
+   "fbx": "SM_Sign_Large_Game_01",
+   "yaw": 2
+  },
+  "pzSignZone": {
+   "pack": "shops",
+   "fbx": "SM_Sign_Large_Zone_01",
+   "yaw": 2
+  },
+  "pzSignMedical": {
+   "pack": "military",
+   "fbx": "SM_Prop_Sign_Medical_01",
+   "yaw": 2
+  },
+  "pzLA": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_A",
+   "yaw": 2
+  },
+  "pzLC": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_C",
+   "yaw": 2
+  },
+  "pzLD": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_D",
+   "yaw": 2
+  },
+  "pzLE": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_E",
+   "yaw": 2
+  },
+  "pzLF": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_F",
+   "yaw": 2
+  },
+  "pzLG": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_G",
+   "yaw": 2
+  },
+  "pzLI": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_I",
+   "yaw": 2
+  },
+  "pzLJ": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_J",
+   "yaw": 2
+  },
+  "pzLL": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_L",
+   "yaw": 2
+  },
+  "pzLM": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_M",
+   "yaw": 2
+  },
+  "pzLN": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_N",
+   "yaw": 2
+  },
+  "pzLO": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_O",
+   "yaw": 2
+  },
+  "pzLP": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_P",
+   "yaw": 2
+  },
+  "pzLQ": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_Q",
+   "yaw": 2
+  },
+  "pzLR": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_R",
+   "yaw": 2
+  },
+  "pzLS": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_S",
+   "yaw": 2
+  },
+  "pzLT": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_T",
+   "yaw": 2
+  },
+  "pzLU": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_U",
+   "yaw": 2
+  },
+  "pzLY": {
+   "pack": "shops",
+   "fbx": "SM_Sign_3dText_Letter_Y",
+   "yaw": 2
+  },
+  "pzMannequin1": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Male_01",
+   "yaw": 1
+  },
+  "pzMannequin2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Male_02",
+   "yaw": 1
+  },
+  "pzMannequin3": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Male_03",
+   "yaw": 1
+  },
+  "pzMannequin4": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Male_04",
+   "yaw": 1
+  },
+  "pzMannequin5": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Male_05",
+   "yaw": 1
+  },
+  "pzMannequin6": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Male_06",
+   "yaw": 1
+  },
+  "pzMannequinF1": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Female_01",
+   "yaw": 1
+  },
+  "pzMannequinF2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Female_02",
+   "yaw": 1
+  },
+  "pzMannequinF3": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Female_03",
+   "yaw": 1
+  },
+  "pzMannequinF4": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Female_04",
+   "yaw": 1
+  },
+  "pzMannequinF5": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Female_05",
+   "yaw": 1
+  },
+  "pzMannequinF6": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Mannequin_Female_06",
+   "yaw": 1
+  },
+  "pzShard1": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_01",
+   "yaw": 1
+  },
+  "pzShard2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_02",
+   "yaw": 1
+  },
+  "pzShard3": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_03",
+   "yaw": 1
+  },
+  "pzShard4": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_04",
+   "yaw": 1
+  },
+  "pzShard5": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_05",
+   "yaw": 1
+  },
+  "pzShard6": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_06",
+   "yaw": 1
+  },
+  "pzShard7": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_07",
+   "yaw": 1
+  },
+  "pzShard8": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_08",
+   "yaw": 1
+  },
+  "pzShard9": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_09",
+   "yaw": 1
+  },
+  "pzShard10": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_10",
+   "yaw": 1
+  },
+  "pzShard11": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Glass_Shard_11",
+   "yaw": 1
+  },
+  "pzTv": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Computer_TV_01",
+   "fit": 0.55,
+   "yaw": 2
+  },
+  "pzLaptop": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Computer_Laptop_01",
+   "yaw": 2
+  },
+  "pzLaptop2": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Computer_Laptop_02",
+   "yaw": 2
+  },
+  "pzConsole": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Computer_Gaming_Console_01",
+   "yaw": 2
+  },
+  "pzCamera": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Computer_Camera_DSLR_01",
+   "yaw": 2
+  },
+  "pzBasketball": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Sport_Basketball_01"
+  },
+  "pzSoccer": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Sport_Soccer_Ball_01"
+  },
+  "pzHelmet": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Sport_Helmet_01",
+   "yaw": 2
+  },
+  "pzSkateboard": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Sport_Skateboard_01",
+   "yaw": 2
+  },
+  "pzDumbbell": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Gym_Dumbbell_01",
+   "yaw": 2
+  },
+  "pzKettlebell": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Gym_Kettle_Bell_01"
+  },
+  "pzBear": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Toy_Bear_01",
+   "yaw": 1
+  },
+  "pzBlocks": {
+   "pack": "town",
+   "fbx": "SM_Prop_ToyBlock_01"
+  },
+  "pzBlocks2": {
+   "pack": "town",
+   "fbx": "SM_Prop_ToyBlock_02"
+  },
+  "pzTrain": {
+   "pack": "town",
+   "fbx": "SM_Prop_ToyTrain_01",
+   "yaw": 2
+  },
+  "pzSamurai": {
+   "pack": "gang",
+   "fbx": "SM_Prop_Toy_Samurai_Full_Painted_01",
+   "yaw": 2
+  },
+  "pzClothesShirt": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Clothes_Shirt_Set_01",
+   "yaw": 2
+  },
+  "pzClothesJacket": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Clothes_Jacket_Set_01",
+   "yaw": 2
+  },
+  "pzClothesBlouse": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Clothes_Blouse_Set_01",
+   "yaw": 2
+  },
+  "pzClothesSweater": {
+   "pack": "shops",
+   "fbx": "SM_Prop_Clothes_Sweater_Set_01",
+   "yaw": 2
   }
  },
  "sets": {

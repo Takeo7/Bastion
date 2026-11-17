@@ -11,10 +11,11 @@ namespace Bastion.Client.Map
     /// The camping's caravans (runs, H9 §5, CampUses.Trailer: a building of 4 × 8 or 4 × 9 tiles, its one room of 2 × 6 or
     /// 2 × 7, its door on a long side) as Apocalypse's mobile homes, not of kit pieces (WallLayout and the roofs leave them
     /// out): its shell (its walls inside and out, its floor and roof) and its glass; inside, the engine's furniture as in
-    /// any house. Fitted as every building's walls stand, on its wall tiles' middle lines (across, 1.45 times its own
-    /// width), sunk to its floor, turned so its doorway is on the engine's door's side; along it, stretched so a doorway
-    /// falls on the engine's door's tile where its ends allow (CampingLab.Remolques measured the models, 17/11). Each
-    /// doorway its leaf (the model's inside door): the engine's door's open or shut as its tile, the others shut. In
+    /// any house. Fitted as every building's walls stand, on its wall tiles' middle lines (across, about 1.5 times its own
+    /// width; along, its ends on its end walls'), sunk to its floor, turned so its doorway is on the engine's door's side,
+    /// mirrored or not so that it is nearest the door (the engine lays its door and windows where the model has them:
+    /// Mapgen.TrailerOpenings, Arte's template of 17/11; CampingLab.Remolques measured the models). Each doorway its leaf (the model's inside door): the
+    /// engine's door's open or shut as its tile, the others shut. In
     /// Bastion/Building with each triangle's cut, as the pieces' (BuildingCut.hlsl): what stands above its eaves fades with
     /// its roof; a wall (its window, its door) drops with the walls that face the camera.
     /// </summary>
@@ -28,11 +29,12 @@ namespace Bastion.Client.Map
         internal sealed class Model
         {
             public string name, shell, glass, leaf;
+            /// <summary>Its inside (the pack's: sofa, kitchen, a table with benches, the bed), and the box (x0, x1, z0, z1) of what is left out of it (its partitions).</summary>
+            public string inside;
+            public Vector4 noPartition;
             public float halfWide, z0, z1, floor, eaves, top;
             public int doorSide;
             public float[] doors;
-            /// <summary>Its windows on its doors' wall, from and to along it (their frames' outer edges, where no cut may fall).</summary>
-            public Vector2[] windows;
         }
 
         /// <summary>
@@ -44,14 +46,14 @@ namespace Bastion.Client.Map
             new Model
             {
                 name = "SM_Bld_Trailer_01", shell = "SM_Bld_Trailer_01", glass = "SM_Bld_Trailer_Glass_01", leaf = "SM_Bld_Trailer_Interior_Door_01",
+                inside = "SM_Bld_Trailer_Interior_01", noPartition = new Vector4(-1.5f, 1.5f, -3.55f, -1.17f),
                 halfWide = 1.53f, z0 = -4.52f, z1 = 4.56f, floor = 0.7f, eaves = 3.3f, top = 3.91f, doorSide = -1, doors = new[] { -1.68f, 2.58f },
-                windows = new[] { new Vector2(-4.08f, -2.65f), new Vector2(0.4f, 1.28f) },
             },
             new Model
             {
                 name = "SM_Bld_Trailer_02", shell = "SM_Bld_Trailer_02", glass = "SM_Bld_Trailer_Glass_02", leaf = "SM_Bld_Trailer_Interior_Door_02",
+                inside = "SM_Bld_Trailer_Interior_02", noPartition = new Vector4(-1.52f, 0.19f, -3.22f, -1.13f),
                 halfWide = 1.5f, z0 = -5.62f, z1 = 5.0f, floor = 0.7f, eaves = 2.95f, top = 3.73f, doorSide = 1, doors = new[] { -2.63f },
-                windows = new[] { new Vector2(-4.78f, -3.84f), new Vector2(3.05f, 4.32f) },
             },
         };
 
@@ -129,7 +131,7 @@ namespace Bastion.Client.Map
         /// <summary>
         /// How a model stands on building b: from the prefab's metres to 0.10.1's tiles (x east, y up, z south), the model, its
         /// axes and how tall it stands (tiles); which of its doorways is the engine's door, and the stretch of its door's
-        /// wall that is moved along it (Shift) to bring that doorway onto the door's tile.
+        /// the engine's door's tile.
         /// </summary>
         public sealed class Fit
         {
@@ -137,27 +139,11 @@ namespace Bastion.Client.Map
             public Matrix4x4 tiles;
             public int doorway;
             public Vec2 door;
-            public float top, sy;
+            public float top, sy, kA;
             public Vector2 A, L;
             public float flipA, flipL;
-            /// <summary>
-            /// The door's wall moved along (the prefab's z): the doorway's stretch [from − half, from + half] by `by`, what lies
-            /// between it and where it goes the other way by its width; none if `by` is 0.
-            /// </summary>
-            public float from, by, half;
-
-            /// <summary>How far a piece of the door's wall whose middle is at `z` (the prefab's) is moved along.</summary>
-            public float Shift(float z)
-            {
-                if (by == 0) return 0;
-                if (z >= from - half && z <= from + half) return by;
-                if (by > 0 && z > from + half && z < from + by + half) return -2 * half;
-                if (by < 0 && z < from - half && z > from + by - half) return 2 * half;
-                return 0;
-            }
-
-            /// <summary>Where its stretch is cut: the planes along it (the prefab's z).</summary>
-            public float[] Cuts => by == 0 ? new float[0] : new[] { from - half, from + half, by > 0 ? from + by + half : from + by - half };
+            /// <summary>How far (m, the prefab's) its doorway's middle is from the engine's door's (0: on it, as the engine lays it).</summary>
+            public float miss;
         }
 
         /// <summary>Building b's fit (DoorSide's `side`).</summary>
@@ -174,34 +160,23 @@ namespace Bastion.Client.Map
             var out_ = Bastion.Engine.Grid.Dirs4[side];
             float flipA = Mathf.Sign(Vector2.Dot(new Vector2(out_.X, out_.Y), A)) * model.doorSide;
             if (flipA == 0) flipA = 1;
-            // Along: its ends on its end walls' middle lines (k tiles a metre), mirrored or not, and the doorway that has the
-            // least way to go to the door, its stretch cut where no window is.
+            // Along: its ends on its end walls' middle lines (k tiles a metre), mirrored or not as puts a doorway nearest the
+            // door (on it, as the engine lays it).
             float k = (end - start) / (model.z1 - model.z0);
-            float bestFlip = 1, bestBy = 0, bestHalf = DoorwayHalf, cost = float.MaxValue;
+            float bestFlip = 1, miss = 0;
             int bestDoor = 0;
             var door = DoorOf(s, b, side);
             if (door != null)
             {
                 float T = Vector2.Dot(new Vector2(door.X + 0.5f, door.Y + 0.5f), L);
+                miss = float.MaxValue;
                 foreach (float flip in new[] { 1f, -1f })
                 {
                     float e0 = flip > 0 ? model.z0 : -model.z1;
                     float target = flip * ((T - (start + 0.5f)) / k + e0);
                     for (int d = 0; d < model.doors.Length; d++)
-                    {
-                        float by = Mathf.Abs(target - model.doors[d]) < 0.02f ? 0 : target - model.doors[d];
-                        foreach (float half in new[] { DoorwayHalf, DoorwayHalf + 0.1f, DoorwayHalf + 0.2f, DoorwayHalf - 0.05f })
-                        {
-                            var fit = new Fit { from = model.doors[d], by = by, half = half };
-                            bool inside = fit.Cuts.All(c => c > model.z0 + 0.2f && c < model.z1 - 0.2f);
-                            bool clear = fit.Cuts.All(c => !model.windows.Any(w => c > w.x - 0.12f && c < w.y + 0.12f));
-                            float score = Mathf.Abs(by) + (inside ? 0 : 100) + (clear ? 0 : 10);
-                            if (score < cost - 1e-4f) (cost, bestFlip, bestBy, bestHalf, bestDoor) = (score, flip, by, half, d);
-                            if (clear) break;
-                        }
-                    }
+                        if (Mathf.Abs(target - model.doors[d]) < miss - 1e-4f) (miss, bestFlip, bestDoor) = (Mathf.Abs(target - model.doors[d]), flip, d);
                 }
-                if (cost >= 100) bestBy = 0;
             }
             float kA = halfAcross / model.halfWide;
             float e0Best = bestFlip > 0 ? model.z0 : -model.z1;
@@ -217,13 +192,10 @@ namespace Bastion.Client.Map
             m.SetColumn(3, new Vector4(origin.x, b.@base + Lift - model.floor * sy, origin.y, 1));
             return new Fit
             {
-                model = model, tiles = m, doorway = bestDoor, door = door, top = (model.top - model.floor) * sy + Lift, sy = sy, A = A, L = L, flipA = flipA,
-                flipL = bestFlip, from = model.doors[bestDoor], by = bestBy, half = bestHalf,
+                model = model, tiles = m, doorway = bestDoor, door = door, top = (model.top - model.floor) * sy + Lift, sy = sy, kA = kA, A = A, L = L, flipA = flipA,
+                flipL = bestFlip, miss = miss,
             };
         }
-
-        /// <summary>Half the stretch of wall moved with a doorway (m, the prefab's): its frame, a hand's width either side.</summary>
-        const float DoorwayHalf = 0.62f;
 
         /// <summary>How tall caravan b stands over its floor (tiles: Building.top, the cutaway's box).</summary>
         public static float TopOf(GameState s, Building b) => FitOf(s, b, b.trailer ?? 1).top;
@@ -297,15 +269,16 @@ namespace Bastion.Client.Map
             // the roof's shade over it by day, all dark.)
             var shellBatch = new Batch();
             var roofBatch = new Batch();
-            Add(shellBatch, body, Matrix4x4.identity, fit, b, 0, true, roofBatch);
+            Add(shellBatch, body, Matrix4x4.identity, fit, b, 0, roofBatch);
             Draw(o.transform, "Casco", shellBatch.Make($"Caravana {b.x0},{b.y0}"), shell, true);
             Draw(o.transform, "Techo", roofBatch.Make($"Caravana {b.x0},{b.y0} techo"), shell, false);
             if (panes != null)
             {
                 var glassBatch = new Batch();
-                Add(glassBatch, panes, Matrix4x4.identity, fit, b, lit, true);
+                Add(glassBatch, panes, Matrix4x4.identity, fit, b, lit);
                 Draw(o.transform, "Cristales", glassBatch.Make($"Caravana {b.x0},{b.y0} cristales"), glass, false);
             }
+            if (Inside == "ancho" || Inside == "aparte") Furnish(o.transform, fit, b, missing);
             var view = o.AddComponent<CaravanView>();
             view.Set(fit, b, PartOf(model, model.leaf, missing));
             view.Doors(s);
@@ -313,22 +286,19 @@ namespace Bastion.Client.Map
             return o;
         }
 
-        /// <summary>A corner as it is cut: its place and normal in the prefab, its uv.</summary>
+        /// <summary>A corner: its place and normal in the prefab, its uv.</summary>
         struct Corner
         {
             public Vector3 p, n;
             public Vector2 uv;
-
-            public static Corner Lerp(Corner a, Corner b, float t) =>
-                new Corner { p = Vector3.Lerp(a.p, b.p, t), n = Vector3.Lerp(a.n, b.n, t), uv = Vector2.Lerp(a.uv, b.uv, t) };
         }
 
         /// <summary>
         /// Part `part`'s triangles into `batch`, placed by `placed` (in the prefab's frame) and the fit, each with its cut: what
-        /// stands above the eaves the roof's; what stands within ShellNear of a wall's plane that wall's; the rest inside. On
-        /// the door's wall (`moved`), cut where its stretch is and moved along with it (Fit.Shift).
+        /// stands above the eaves the roof's (into `roofBatch` if given); what stands within ShellNear of a wall's plane that
+        /// wall's; the rest inside. `each`: a triangle's own place in the prefab (a piece of the inside), or null to leave it out.
         /// </summary>
-        static void Add(Batch batch, Part part, Matrix4x4 placed, Fit fit, Building b, float lit, bool moved, Batch roofBatch = null)
+        static void Add(Batch batch, Part part, Matrix4x4 placed, Fit fit, Building b, float lit, Batch roofBatch = null, Func<int, Matrix4x4?> each = null)
         {
             var model = fit.model;
             var world = Matrix4x4.Scale(new Vector3(MapSpace.Tile, MapSpace.Tile, -MapSpace.Tile)) * fit.tiles;
@@ -338,11 +308,9 @@ namespace Bastion.Client.Map
             bool mirrored = (world * inPrefab).determinant < 0;
             float floorM = b.@base * MapSpace.Tile;
             float cz = (model.z0 + model.z1) / 2, hl = (model.z1 - model.z0) / 2;
-            float wallX = model.doorSide * model.halfWide;
-            var cuts = moved ? fit.Cuts : new float[0];
             var p = part.positions;
             var t = part.triangles;
-            var poly = new List<Corner>(8);
+            var poly = new List<Corner>(3);
             void Emit(List<Corner> corners, Vector3 c)
             {
                 Vector4 cut, more;
@@ -361,7 +329,6 @@ namespace Bastion.Client.Map
                     cut = new Vector4(b.index + 1, outward.x, outward.y, floorM);
                     more = new Vector4(0, 0, lit, 0);
                 }
-                // (A fan: the cut pieces are convex.)
                 for (int k = 1; k + 1 < corners.Count; k++)
                     foreach (int n in mirrored ? new[] { k + 1, k, 0 } : new[] { 0, k, k + 1 })
                     {
@@ -372,65 +339,104 @@ namespace Bastion.Client.Map
             for (int k = 0; k + 2 < t.Length; k += 3)
             {
                 poly.Clear();
+                // (A triangle of its own place, `each`'s: a piece of the inside kept to its proportions; null, left out.)
+                var at = inPrefab;
+                var turnAt = turnPrefab;
+                if (each != null)
+                {
+                    var own = each(k / 3);
+                    if (own == null) continue;
+                    at = own.Value * inPrefab;
+                    turnAt = at.inverse.transpose;
+                }
                 for (int n = 0; n < 3; n++)
                 {
                     int i = t[k + n];
                     poly.Add(new Corner
                     {
-                        p = inPrefab.MultiplyPoint3x4(p[i]), n = turnPrefab.MultiplyVector(i < part.normals.Length ? part.normals[i] : Vector3.up).normalized,
+                        p = at.MultiplyPoint3x4(p[i]), n = turnAt.MultiplyVector(i < part.normals.Length ? part.normals[i] : Vector3.up).normalized,
                         uv = i < part.uvs.Length ? part.uvs[i] : Vector2.zero,
                     });
                 }
-                var c = (poly[0].p + poly[1].p + poly[2].p) / 3;
-                bool onWall = cuts.Length > 0 && Mathf.Abs(c.x - wallX) < 0.3f && c.y < model.eaves - 0.05f;
-                if (!onWall)
-                {
-                    Emit(poly, c);
-                    continue;
-                }
-                // The door's wall: cut at the stretch's planes, each piece moved as its middle says.
-                var pieces = new List<List<Corner>> { new List<Corner>(poly) };
-                foreach (float plane in cuts)
-                {
-                    var next = new List<List<Corner>>();
-                    foreach (var piece in pieces)
-                    {
-                        var below = new List<Corner>();
-                        var above = new List<Corner>();
-                        for (int n = 0; n < piece.Count; n++)
-                        {
-                            var a = piece[n];
-                            var e = piece[(n + 1) % piece.Count];
-                            float da = a.p.z - plane, de = e.p.z - plane;
-                            (da < 0 ? below : above).Add(a);
-                            if ((da < 0) != (de < 0))
-                            {
-                                var mid = Corner.Lerp(a, e, da / (da - de));
-                                below.Add(mid);
-                                above.Add(mid);
-                            }
-                        }
-                        if (below.Count >= 3) next.Add(below);
-                        if (above.Count >= 3) next.Add(above);
-                    }
-                    pieces = next;
-                }
-                foreach (var piece in pieces)
-                {
-                    var middle = Vector3.zero;
-                    foreach (var q in piece) middle += q.p;
-                    middle /= piece.Count;
-                    float by = fit.Shift(middle.z);
-                    if (by != 0)
-                        for (int n = 0; n < piece.Count; n++)
-                        {
-                            var q = piece[n];
-                            q.p.z += by;
-                            piece[n] = q;
-                        }
-                    Emit(piece, middle + new Vector3(0, 0, by));
-                }
+                Emit(poly, (poly[0].p + poly[1].p + poly[2].p) / 3);
             }
+        }
+
+        /// <summary>
+        /// BASTION_CARAVANA_INTERIOR (the labs, for Arturo's choice of 17/11: the pack's inside instead of the engine's
+        /// furniture): «ancho», the pack's inside widened with its caravan; «aparte», each piece of it kept to its own
+        /// proportions (as tall and as long as its caravan is stretched), standing against the wall it is nearer, but those
+        /// that go from wall to wall. Its partitions (Model.noPartition) left out.
+        /// </summary>
+        static readonly string Inside = Environment.GetEnvironmentVariable("BASTION_CARAVANA_INTERIOR");
+
+        /// <summary>The pack's inside of building b's caravan (Inside), with the inside door shut where it stands.</summary>
+        static void Furnish(Transform parent, Fit fit, Building b, ICollection<string> missing)
+        {
+            var model = fit.model;
+            var inside = PartOf(model, model.inside, missing);
+            var door = PartOf(model, model.leaf, missing);
+            if (inside == null) return;
+            var (island, boxes) = Islands(inside);
+            // Across, pressed back to as wide as it is long (its widening undone), against its wall.
+            float squeeze = fit.sy / fit.kA;
+            Matrix4x4 Kept(Bounds box)
+            {
+                if (Inside != "aparte" || box.size.x > 1.4f * model.halfWide) return Matrix4x4.identity;
+                float wall = box.center.x < 0 ? -model.halfWide : model.halfWide;
+                return Matrix4x4.Translate(new Vector3(wall, 0, 0)) * Matrix4x4.Scale(new Vector3(squeeze, 1, 1)) * Matrix4x4.Translate(new Vector3(-wall, 0, 0));
+            }
+            bool Partition(Bounds box) =>
+                box.min.x >= model.noPartition.x && box.max.x <= model.noPartition.y && box.min.z >= model.noPartition.z && box.max.z <= model.noPartition.w;
+            var kept = boxes.Select(box => Partition(box) ? (Matrix4x4?)null : Kept(box)).ToArray();
+            var batch = new Batch();
+            Add(batch, inside, Matrix4x4.identity, fit, b, 0, null, tri => kept[island[tri]]);
+            if (door != null) Add(batch, door, Matrix4x4.identity, fit, b, 0, null, _ => Kept(door.box));
+            Draw(parent, "Dentro", batch.Make($"Caravana {b.x0},{b.y0} dentro"), shell, true);
+        }
+
+        /// <summary>A part's pieces that share no corner (welded by place, a millimetre): each triangle's piece, each piece's box in the prefab.</summary>
+        static (int[] island, List<Bounds> boxes) Islands(Part part)
+        {
+            var v = part.positions;
+            var key = new int[v.Length];
+            var at = new Dictionary<Vector3Int, int>();
+            for (int k = 0; k < v.Length; k++)
+            {
+                var q = Vector3Int.RoundToInt(v[k] * 1000);
+                if (!at.TryGetValue(q, out int id)) at[q] = id = at.Count;
+                key[k] = id;
+            }
+            var parent = Enumerable.Range(0, at.Count).ToArray();
+            int Find(int a)
+            {
+                while (parent[a] != a) a = parent[a] = parent[parent[a]];
+                return a;
+            }
+            var t = part.triangles;
+            for (int k = 0; k + 2 < t.Length; k += 3)
+            {
+                int a = Find(key[t[k]]);
+                parent[Find(key[t[k + 1]])] = a;
+                parent[Find(key[t[k + 2]])] = Find(a);
+            }
+            var island = new int[t.Length / 3];
+            var index = new Dictionary<int, int>();
+            var boxes = new List<Bounds>();
+            for (int k = 0; k + 2 < t.Length; k += 3)
+            {
+                int root = Find(key[t[k]]);
+                if (!index.TryGetValue(root, out int n))
+                {
+                    index[root] = n = boxes.Count;
+                    boxes.Add(new Bounds(part.local.MultiplyPoint3x4(v[t[k]]), Vector3.zero));
+                }
+                island[k / 3] = n;
+                var box = boxes[n];
+                for (int c = 0; c < 3; c++) box.Encapsulate(part.local.MultiplyPoint3x4(v[t[k + c]]));
+                boxes[n] = box;
+            }
+            return (island, boxes);
         }
 
         /// <summary>How near a wall's plane (m, the model's) a triangle is that wall's.</summary>
@@ -448,8 +454,8 @@ namespace Bastion.Client.Map
             float wide = box.size.z, x = model.doorSide * (model.halfWide - 0.02f);
             for (int d = 0; d < model.doors.Length; d++)
             {
-                // Shut: its middle onto its doorway's (as its wall is moved: Fit.Shift), in the wall's plane.
-                float z = model.doors[d] + fit.Shift(model.doors[d]);
+                // Shut: its middle onto its doorway's, in the wall's plane.
+                float z = model.doors[d];
                 var shut = Matrix4x4.Translate(new Vector3(x - box.center.x, 0, z - box.center.z));
                 var placed = shut;
                 if (open && d == fit.doorway)
@@ -458,7 +464,7 @@ namespace Bastion.Client.Map
                     var hinge = new Vector3(x, 0, z - wide / 2);
                     placed = Matrix4x4.Translate(hinge) * Matrix4x4.Rotate(Quaternion.Euler(0, -model.doorSide * 90, 0)) * Matrix4x4.Translate(-hinge) * shut;
                 }
-                Add(batch, leaf, placed, fit, b, 0, false);
+                Add(batch, leaf, placed, fit, b, 0);
             }
             return batch.Make($"Caravana {b.x0},{b.y0} puertas");
         }
@@ -484,7 +490,7 @@ namespace Bastion.Client.Map
                 var p = fit.tiles.MultiplyPoint3x4(new Vector3(x, fit.model.floor + 1, z));
                 return new Vec2 { X = Mathf.FloorToInt(p.x), Y = Mathf.FloorToInt(p.z) };
             }
-            var doors = fit.model.doors.Select((z, d) => { var t = TileOf(fit.model.doorSide * fit.model.halfWide * 1.05f, z + fit.Shift(z)); return $"{t.X},{t.Y}{(d == fit.doorway ? "*" : "")}"; });
+            var doors = fit.model.doors.Select((z, d) => { var t = TileOf(fit.model.doorSide * fit.model.halfWide * 1.05f, z); return $"{t.X},{t.Y}{(d == fit.doorway ? "*" : "")}"; });
             var windows = new List<string>();
             if (panes != null)
             {
@@ -492,8 +498,7 @@ namespace Bastion.Client.Map
                 for (int k = 0; k + 2 < t.Length; k += 3)
                 {
                     var c = (panes.local.MultiplyPoint3x4(panes.positions[t[k]]) + panes.local.MultiplyPoint3x4(panes.positions[t[k + 1]]) + panes.local.MultiplyPoint3x4(panes.positions[t[k + 2]])) / 3;
-                    bool onDoors = Mathf.Abs(c.x - fit.model.doorSide * fit.model.halfWide) < 0.3f;
-                    var w = TileOf(c.x * 1.05f, c.z * 1.01f + (onDoors ? fit.Shift(c.z) : 0));
+                    var w = TileOf(c.x * 1.05f, c.z * 1.01f);
                     string at = $"{w.X},{w.Y}";
                     if (!windows.Contains(at)) windows.Add(at);
                 }
@@ -505,7 +510,7 @@ namespace Bastion.Client.Map
                     string t = BuildingPlan.TileAt(s, x, y);
                     if (t == TileKinds.Window || t == TileKinds.WindowBroken || t == TileKinds.Door || t == TileKinds.DoorOpen) engine.Add($"{x},{y} {t}");
                 }
-            Debug.Log($"[caravana] {b.x0},{b.y0}–{b.x1},{b.y1} {fit.model.name}, door side {b.trailer}, along ×{fit.flipL} {fit.sy * MapSpace.Tile:0.00} m a metre, its doorway moved {fit.by:0.00} m (cut at {string.Join(" ", fit.Cuts.Select(c => c.ToString("0.00")))}); doorways {string.Join(" ", doors)}; windows {string.Join(" ", windows)}; the engine's {string.Join("; ", engine)}");
+            Debug.Log($"[caravana] {b.x0},{b.y0}–{b.x1},{b.y1} {fit.model.name}, door side {b.trailer}, along ×{fit.flipL} {fit.sy * MapSpace.Tile:0.00} m a metre, its doorway's middle {fit.miss:0.00} m (the model's) off the door's; doorways {string.Join(" ", doors)}; windows {string.Join(" ", windows)}; the engine's {string.Join("; ", engine)}");
         }
 
         /// <summary>A mesh put together a corner at a time, with Bastion/Building's channels (WallsView's: colours white, the cut, the storey).</summary>

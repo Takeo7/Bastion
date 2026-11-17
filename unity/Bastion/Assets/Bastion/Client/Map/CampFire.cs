@@ -9,8 +9,8 @@ namespace Bastion.Client.Map
     /// <summary>
     /// The camping's fires lit (runs, H9 §5: each `firePit` mark of GameState.Interiors' camping, the stones its marks draw):
     /// the clearing's flames (Settlement.Flames: a few licks of Particle FX's flame, each flickering on its own, turning
-    /// slowly), the same licks and colours. Its light by night is NightLights' (CampFires). Stepped in the labs' strips
-    /// too (IShotStep).
+    /// slowly), the same licks and colours. Its light by night is the engine's (GameState.lights, on its tile: NightLights
+    /// takes it as a fire's, At). Stepped in the labs' strips too (IShotStep).
     /// </summary>
     public sealed class CampFire : MonoBehaviour, IShotStep
     {
@@ -34,6 +34,11 @@ namespace Bastion.Client.Map
                     if (d.Kind == CampDetailKinds.FirePit) list.Add(MapSpace.TileToWorld(s, new Pos { X = d.X, Y = d.Y, Z = d.Z }));
             return list;
         }
+
+        /// <summary>Whether place `p` of state `s` is a camp fire's (a `firePit` mark): its light, the engine's, is the fire's (NightLights), no street light (StreetDressing).</summary>
+        public static bool At(GameState s, Pos p) =>
+            p != null && s?.Interiors != null && s.Interiors.Exists(site => site?.Kind == InteriorKinds.Camping && site.Dressing != null
+                && site.Dressing.Exists(d => d.Kind == CampDetailKinds.FirePit && d.X == p.X && d.Y == p.Y && d.Z == p.Z));
 
         /// <summary>The fires of state `s` lit under `parent`; null if it has none, or no flame to light them with.</summary>
         public static CampFire Make(Transform parent, GameState s)

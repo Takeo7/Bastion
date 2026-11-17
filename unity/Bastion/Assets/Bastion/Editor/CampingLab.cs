@@ -169,8 +169,50 @@ namespace Bastion.EditorTools
             }
         }
 
+        /// <summary>
+        /// The camping's other models (its marks: tents, chairs, sleeping bags, toilets, washing lines, coolers, the fire):
+        /// each prefab's box as it stands (metres; its front, the side its doorway or seat looks to, by eye in the pictures).
+        ///   BASTION_PREFABS=path,… unity/tools/unity.sh -executeMethod Bastion.EditorTools.CampingLab.Medidas -quit
+        /// </summary>
+        public static void Medidas()
+        {
+            foreach (string item in (Environment.GetEnvironmentVariable("BASTION_PREFABS") ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string path = item.Trim().StartsWith("Assets/") ? item.Trim() : $"Assets/Synty/{item.Trim()}.prefab";
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab == null)
+                {
+                    Debug.Log($"[camping] missing {path}");
+                    continue;
+                }
+                var made = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                made.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                var renderers = made.GetComponentsInChildren<Renderer>();
+                var box = renderers.Length > 0 ? renderers[0].bounds : new Bounds();
+                foreach (var r in renderers.Skip(1)) box.Encapsulate(r.bounds);
+                Debug.Log($"[camping] {Path.GetFileNameWithoutExtension(path)}: box {box.min:F2}–{box.max:F2}, size {box.size:F2}, {renderers.Length} renderers ({string.Join(", ", renderers.Select(r => r.name))})");
+                UnityEngine.Object.DestroyImmediate(made);
+            }
+        }
+
         /// <summary>The prefabs the game's caravans are drawn from (Map.Caravans), in Resources/CaravanArt.asset.</summary>
-        static readonly string[] Drawn = { Trailers[0], Trailers[1] };
+        static readonly string[] Drawn =
+        {
+            Trailers[0], Trailers[1],
+            // The camping's marks that MapArt has no prop for (Map.CampMarks).
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Tent_Dome_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Tent_Long_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Sleeping_Bag_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Sleeping_Bag_Rolled_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Toilet_Portable_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_Camp_Chair_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_WashingLine_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Props/SM_Prop_FirePit_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Buildings/SM_Bld_Military_Tent_01.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Buildings/SM_Bld_Military_Tent_02.prefab",
+            "Assets/Synty/PolygonApocalypse/Prefabs/Buildings/SM_Bld_Quarantine_Tent_01.prefab",
+            "Assets/Synty/PolygonTown/Prefabs/Props/SM_Prop_Cooler_01.prefab",
+        };
 
         /// <summary>
         /// Makes Resources/CaravanArt.asset (Bastion.Client.Map.CaravanArt): the mobile homes the camping's caravans are drawn

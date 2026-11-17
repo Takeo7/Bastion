@@ -26,14 +26,14 @@ namespace Bastion.EditorTools
         {
             ["apocalypse"] = "PolygonApocalypse_01_A", ["town"] = "PolygonTown_01_A", ["city"] = "PolygonCity_01_A", ["office"] = "PolygonOffice_01_A",
             ["woodland"] = "PolygonApocalypse_01_A", ["shops"] = "PolygonShops_Mat_01_A", ["gang"] = "PolygonGangWarfare_01_A",
-            ["police"] = "PolygonPoliceStation_01_A",
+            ["police"] = "PolygonPoliceStation_01_A", ["plaza"] = "PolygonShops_Mat_01_A",
         };
 
         /// <summary>
         /// The packs whose models are looked up in their own folder (`pack:model`): other packs have models of their names
-        /// (Shops', Gang Warfare's, Police Station's SM_Bld_Base_Wall_01…).
+        /// (Shops', Gang Warfare's, Police Station's SM_Bld_Base_Wall_01…; Shopping Plaza's glass walls are Shops' too, H9 §4).
         /// </summary>
-        static readonly System.Collections.Generic.HashSet<string> OwnFolder = new System.Collections.Generic.HashSet<string> { "shops", "gang", "police" };
+        static readonly System.Collections.Generic.HashSet<string> OwnFolder = new System.Collections.Generic.HashSet<string> { "shops", "gang", "police", "plaza" };
 
         /// <summary>Whether a Synty material is Police Station's (its walls' bricks and plaster have names any pack could have: Wall_03, Wall_Brick_02).</summary>
         static bool Police(Material synty) => AssetDatabase.GetAssetPath(synty).StartsWith("Assets/Synty/PolygonPoliceStation/");

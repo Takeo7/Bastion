@@ -390,17 +390,24 @@ namespace Bastion.Engine
                     (p) => Standable(p) && Dist(p, squadCenter) >= podGap && (!Sites.IndoorsOnly(site) || c.GroundAt(p.X, p.Y) == Indoor)).ToList(),
                 rng);
             bool Spread(Vec2 p, int gap) => anchors.All((a) => Dist(a, p) >= gap);
+            // A group round its anchor; on the maps that are one building, of those indoors only (a group by the back door
+            // spilled out into the police station's yard).
+            List<Vec2> PodAt(Vec2 p, int size)
+            {
+                var all = Cluster(c, reach, p, size, taken);
+                return Sites.IndoorsOnly(site) ? all.Where((q) => c.GroundAt(q.X, q.Y) == Indoor).ToList() : all;
+            }
             foreach (var size in opts.PodSizes)
             {
                 var anchor = candidates.FirstOrDefault((p) => Standable(p) && Spread(p, podSpread)) ?? candidates.FirstOrDefault((p) => Standable(p) && Spread(p, 6)) ?? candidates.FirstOrDefault(Standable);
                 if (anchor == null) break;
-                if (Cluster(c, reach, anchor, size, taken).Count < size)
+                if (PodAt(anchor, size).Count < size)
                 {
-                    anchor = candidates.FirstOrDefault((p) => Standable(p) && Spread(p, 3) && Cluster(c, reach, p, size, taken).Count >= size);
+                    anchor = candidates.FirstOrDefault((p) => Standable(p) && Spread(p, 3) && PodAt(p, size).Count >= size);
                     if (anchor == null) break;
                 }
                 var found = anchor;
-                var members = Cluster(c, reach, found, size, taken);
+                var members = PodAt(found, size);
                 foreach (var p in members) taken.Add(c.I(p.X, p.Y));
                 anchors.Add(found);
                 var waypoints = Shuffle(candidates.Where((p) => Dist(p, found) >= 7 && Dist(p, squadCenter) >= 12).ToList(), rng).Take(2).ToList();
@@ -728,7 +735,7 @@ namespace Bastion.Engine
                 {
                     var q = T(p);
                     return new LayoutLight { X = q.X, Y = q.Y, Radius = plan != null ? TownLight.Radius : (double?)null };
-                }).ToList(),
+                }).Concat(CampFireLights(c, T)).ToList(),
                 Spawns = spawns.Select(T).ToList(),
                 Pods = outPods.Select((p) => new PodSpot
                 {

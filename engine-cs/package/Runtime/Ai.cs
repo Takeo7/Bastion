@@ -908,6 +908,14 @@ namespace Bastion.Engine
                 if (path != null) sim.MoveAlong(u, path, 1);
             }
             if (!u.Alive || sim.Over) return;
+            // Pressed to its bars, it looks out through them (toward whom it goes after, if the bars face two ways).
+            var bars = Grid.Dirs4.Where((d) => Grid.InBounds(s, u.Pos.X + d.X, u.Pos.Y + d.Y) && Grid.KindAt(s, new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z }) == TileKinds.Bars).ToList();
+            if (bars.Count > 0)
+            {
+                var d = toward != null ? bars.OrderBy((b) => Farness(s, new Pos { X = u.Pos.X + 2 * b.X, Y = u.Pos.Y + 2 * b.Y, Z = u.Pos.Z }, toward)).First() : bars[0];
+                var facing = Js.Atan2(d.Y, d.X);
+                if (u.Facing == null || facing != u.Facing.Value) sim.Emit(new TurnedEvent { Unit = u.Id, Facing = facing });
+            }
             var abilities = Abilities.AbilitiesOf(u);
             var bite = new[] { AbilityIds.Claw, AbilityIds.Pound }.FirstOrDefault((a) => abilities.Contains(a));
             if (bite == null || Abilities.AbilityBlocker(s, u, bite) != null) return;

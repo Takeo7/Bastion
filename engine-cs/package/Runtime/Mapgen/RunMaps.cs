@@ -491,7 +491,8 @@ namespace Bastion.Engine
             Thing(12, 8, TileKinds.Low, DecorKinds.LootWeapons, 0);
             for (var iy = 12; iy < 15; iy++) Thing(15, iy, TileKinds.High, DecorKinds.Shelf, 3);
             foreach (var ix in new[] { 11, 12, 13 }) Thing(ix, 14, TileKinds.High, DecorKinds.Shelf, 0);
-            foreach (var ix in new[] { 12, 13 }) Thing(ix, 17, TileKinds.Low, DecorKinds.Table, 0);
+            // The interrogation table: one tile, a chair at each side of it (Arte, 17/11: two side by side read as one long table).
+            Thing(12, 17, TileKinds.Low, DecorKinds.Table, 0);
             foreach (var iy in new[] { 20, 21 }) Thing(11, iy, TileKinds.High, DecorKinds.Cabinet, 3);
             var kitchen = Area(13, 20, 3, 2);
             FurnishRoom(c, kitchen, rng, Furnishes.Home, global::Bastion.Engine.HomeUses.Kitchen);
@@ -889,7 +890,9 @@ namespace Bastion.Engine
             Opened(Rect(0, cy, cx - R + 3, 2), Yard);
             Opened(Rect(cx + R - 3, cy - 4, c.Width - (cx + R - 3), 2), Yard);
             var parts = new List<(Rect R, string Use)>();
-            var marks = new List<(Vec2 At, string Kind, int Facing)>();
+            var marks = new List<(Vec2 At, string Kind, int Facing, int Length)>();
+            // A mark, of one tile unless said (InteriorDetail.Length).
+            void Mark(Vec2 at, string kind, int facing, int length = 1) => marks.Add((at, kind, facing, length));
             // What the camp stands, kept: nothing clears it (the bus's way out, a way linked through).
             void Block(Rect r, string tile)
             {
@@ -900,8 +903,13 @@ namespace Bastion.Engine
                 }
             }
             bool Room(Rect r) => TilesIn(r).All((p) => c.In(p.X, p.Y) && c.Get(p.X, p.Y) == TileKinds.Floor && c.Free(p.X, p.Y));
-            // The military or quarantine area, fenced, its gate to the camp (west).
-            var zone = Rect(cx + 3, cy - 9, 12, 9);
+            // The military or quarantine area, fenced, its gate to the camp (west); as wide as its tents ask, the quarantine one
+            // off the fence and its gate (Arte, 17/11: with the military tent of 6 it stood on both).
+            var big = rng.Int(2) == 0 ? 4 : 6;
+            var zone = Rect(cx + 3, cy - 9, big + 8, 9);
+            // A way round its fence where it reaches the trees (the paths as they were): nothing left behind it for the way
+            // through (Connect) to open the fence to.
+            foreach (var p in TilesIn(Inset(zone, -1))) if (c.In(p.X, p.Y) && c.Get(p.X, p.Y) != TileKinds.Floor) Opened(Rect(p.X, p.Y, 1, 1), Open);
             Opened(zone, Open);
             foreach (var p in TilesIn(zone))
             {
@@ -909,37 +917,46 @@ namespace Bastion.Engine
                 var gate = p.X == zone.X && (p.Y == zone.Y + 4 || p.Y == zone.Y + 5);
                 if (edge && !gate && Put(c, p, TileKinds.Low, new Look(DecorKinds.Fence, p.Y == zone.Y || p.Y == zone.Y + zone.H - 1 ? 0 : 1))) c.Reserve(p.X, p.Y);
             }
-            var big = rng.Int(2) == 0 ? 4 : 6;
-            var military = Rect(zone.X + zone.W - 1 - big, zone.Y + 1, big, Math.Min(big, zone.H - 2));
+            var military = Rect(zone.X + zone.W - 1 - big, zone.Y + 1, big, Math.Min(big, zone.H - 3));
             var quarantine = Rect(military.X - 5, zone.Y + 1, 4, 5);
             Block(military, TileKinds.High);
             Block(quarantine, TileKinds.High);
-            marks.Add((V(military.X, military.Y), CampDetailKinds.TentMilitary, 3));
-            marks.Add((V(quarantine.X, quarantine.Y), CampDetailKinds.TentMilitary, 3));
+            Mark(V(military.X, military.Y), CampDetailKinds.TentMilitary, 3);
+            Mark(V(quarantine.X, quarantine.Y), CampDetailKinds.TentMilitary, 3);
             parts.Add((Inset(zone, 1), CampUses.Military));
-            // The caravans, to the west, where the clearing has room: their door on their east side.
+            // The caravans, to the west first, then to the south, where the clearing has room: their door on their east side.
             var caravans = rng.Range(3, 5);
             var built = 0;
-            foreach (var at in Enumerable.Range(0, 4).SelectMany((row) => Enumerable.Range(0, 3).Select((col) => V(cx - 16 + 5 * col, cy - 12 + 5 * row))))
+            // Tried a tile apart, from the west, the first that fits: a way of a tile round each (the one before's door may give
+            // onto it). Not by La Lata's turning place (Arte, 17/11: its zone took a caravan's corner), on the fire pit's ground,
+            // across the west path, by the fenced area nor on the way in from the south.
+            bool Overlap(Rect a, Rect b) => a.X < b.X + b.W && b.X < a.X + a.W && a.Y < b.Y + b.H && b.Y < a.Y + a.H;
+            var away = new[] { Inset(turning, -1), Rect(cx - 2, cy - 2, 5, 5), Rect(0, cy, cx - R + 3, 2), Inset(zone, -1), Rect(cx - 1, cy + 3, 4, R) };
+            var deep = rng.Int(2) == 0 ? 8 : 9;
+            foreach (var at in Enumerable.Range(cx - 16, 29).SelectMany((x) => Enumerable.Range(cy - 14, 27).Select((y) => V(x, y))))
             {
                 if (built >= caravans) break;
-                var deep = rng.Int(2) == 0 ? 8 : 9;
                 var r = Rect(at.X, at.Y, 4, deep);
-                if (!Room(Inset(r, -1))) continue;
+                if (!Room(r) || !TilesIn(Inset(r, -1)).All((p) => c.In(p.X, p.Y) && c.Get(p.X, p.Y) == TileKinds.Floor) || away.Any((a) => Overlap(Inset(r, -1), a))) continue;
                 built++;
-                var b = MakeBuilding(c, r, rng, Plans.Open, 1, style, Furnishes.Home);
+                // Bare: what is inside is Synty's interior (Arturo, 17/11), not a house's furniture.
+                var b = MakeBuilding(c, r, rng, Plans.Open, 1, style, Furnishes.Bare);
                 b.Storeys = 1;
                 b.Flat = true;
                 b.Skylit = true;
+                TrailerOpenings(c, r);
+                TrailerInside(c, r, rng, Mark);
+                foreach (var p in TilesIn(r)) c.Reserve(p.X, p.Y);
                 parts.Add((Inset(r, 1), CampUses.Trailer));
-                marks.Add((V(r.X, r.Y), CampDetailKinds.Trailer, 1));
+                Mark(V(r.X, r.Y), CampDetailKinds.Trailer, 1);
+                deep = rng.Int(2) == 0 ? 8 : 9;
             }
             // The fire pit in the middle, chairs round it.
             var fire = V(cx, cy);
             Opened(Rect(cx - 2, cy - 2, 5, 5), Open);
             Block(Rect(fire.X, fire.Y, 1, 1), TileKinds.Low);
-            marks.Add((fire, CampDetailKinds.FirePit, 0));
-            foreach (var s in new[] { 0, 1, 2, 3 }) marks.Add((V(fire.X + 2 * Grid.Dirs4[s].X, fire.Y + 2 * Grid.Dirs4[s].Y), CampDetailKinds.CampChair, Opposite(s)));
+            Mark(fire, CampDetailKinds.FirePit, 0);
+            foreach (var s in new[] { 0, 1, 2, 3 }) Mark(V(fire.X + 2 * Grid.Dirs4[s].X, fire.Y + 2 * Grid.Dirs4[s].Y), CampDetailKinds.CampChair, Opposite(s));
             parts.Add((Rect(cx - 2, cy - 2, 5, 5), CampUses.FirePit));
             // The portable toilets, a row of three.
             var toilets = Rect(cx - 4, cy - 12, 5, 1);
@@ -949,28 +966,34 @@ namespace Bastion.Engine
                 {
                     var p = V(toilets.X + k, toilets.Y);
                     Block(Rect(p.X, p.Y, 1, 1), TileKinds.High);
-                    marks.Add((p, CampDetailKinds.ToiletPortable, 2));
+                    Mark(p, CampDetailKinds.ToiletPortable, 2);
                 }
                 parts.Add((toilets, CampUses.Toilets));
             }
-            // The pitches, to the south-east and the north-west: a tent each, what campers leave round it.
-            foreach (var at in new[] { V(cx + 3, cy + 3), V(cx + 9, cy + 3), V(cx + 3, cy + 9), V(cx + 9, cy + 9), V(cx - 9, cy - 16 + 3), V(cx + 3, cy - 16 + 1) })
+            // The pitches, to the south-east and the north-west: a tent each, what campers leave round it. Where the caravans
+            // left fewer than three, the first free ground for more, off the paths, the turning place and the way in.
+            var pitches = 0;
+            var slots = new[] { V(cx + 3, cy + 3), V(cx + 9, cy + 3), V(cx + 3, cy + 9), V(cx + 9, cy + 9), V(cx - 9, cy - 16 + 3), V(cx + 3, cy - 16 + 1) };
+            var more = TilesIn(Rect(cx - R, cy - R, 2 * R + 1, 2 * R + 1)).Where((p) => !away.Any((a) => Overlap(Rect(p.X, p.Y, 5, 5), a)) && TilesIn(Rect(p.X, p.Y, 5, 5)).All((q) => c.In(q.X, q.Y) && c.GroundAt(q.X, q.Y) != Yard));
+            foreach (var (at, k) in slots.Concat(more).Select((p, k) => (p, k)))
             {
+                if (k >= slots.Length && pitches >= 3) break;
                 var pitch = Rect(at.X, at.Y, 5, 5);
                 if (!Room(pitch)) continue;
+                pitches++;
                 var dome = rng.Int(2) == 0;
                 var tent = Rect(pitch.X + 1, pitch.Y + 1, 2, dome ? 2 : 3);
                 Block(tent, TileKinds.Low);
-                marks.Add((V(tent.X, tent.Y), dome ? CampDetailKinds.TentDome : CampDetailKinds.TentLong, 2));
+                Mark(V(tent.X, tent.Y), dome ? CampDetailKinds.TentDome : CampDetailKinds.TentLong, 2);
                 var free = TilesIn(pitch).Where((p) => !InRect(tent, p)).ToList();
                 foreach (var kindOf in new[] { CampDetailKinds.CampChair, CampDetailKinds.SleepingBag, CampDetailKinds.Cooler, CampDetailKinds.Clothesline })
                 {
                     if (kindOf != CampDetailKinds.CampChair && rng.Next() < 0.4) continue;
                     var p = free[rng.Int(free.Count)];
                     free.Remove(p);
-                    marks.Add((p, kindOf, rng.Int(4)));
+                    Mark(p, kindOf, rng.Int(4));
                 }
-                if (rng.Next() < 0.3) marks.Add((free[rng.Int(free.Count)], CampDetailKinds.CorpseCamper, rng.Int(4)));
+                if (rng.Next() < 0.3) Mark(free[rng.Int(free.Count)], CampDetailKinds.CorpseCamper, rng.Int(4));
                 parts.Add((pitch, CampUses.Pitch));
             }
             c.Clearing = Rect(cx - R - 2, cy - R, 2 * R + 5, 2 * R + 1);
@@ -984,6 +1007,71 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// A caravan's walls as its model's (Arte, 17/11; the room along y, its door side the east), counted along the room
+        /// from the end nearest the door: a room of 6, on the door's side a window at 0, the door at 1, a window at 3, the
+        /// rest wall; its other side wall; the end by the door wall, the far end windows. A room of 7: on the door's side a
+        /// window at 0, the door at 1, a window at 6; its other side wall; both ends windows. What stood inside the door, gone.
+        /// </summary>
+        private static void TrailerOpenings(Canvas c, Rect r)
+        {
+            var len = r.H - 2;
+            foreach (var p in TilesIn(r)) if (!InRect(Inset(r, 1), p)) c.Force(p.X, p.Y, TileKinds.Wall);
+            void Window(int x, int y) => c.Force(x, y, TileKinds.Window);
+            var side = r.X + r.W - 1;
+            Window(side, r.Y + 1);
+            Window(side, r.Y + 1 + (len == 6 ? 3 : 6));
+            var door = V(side, r.Y + 2);
+            var inside = V(side - 1, r.Y + 2);
+            c.Force(inside.X, inside.Y, TileKinds.Floor);
+            c.Decor[c.I(inside.X, inside.Y)] = 0;
+            Opening(c, door, 1, TileKinds.Door);
+            foreach (var x in new[] { r.X + 1, r.X + 2 })
+            {
+                Window(x, r.Y + r.H - 1);
+                if (len == 7) Window(x, r.Y);
+            }
+        }
+
+        /// <summary>
+        /// A caravan's inside as Synty's (Arte's template, 17/11; the room along y, its door side the east), counted along the
+        /// room from the end nearest the door, side 0 the door's long side and side 1 the other: no wall inside, its pieces
+        /// low cover with a mark each (no decor: Arte draws them), every other tile bare floor. A room of 6: the bed at 0 on
+        /// side 0, the booth table over 3 and 4 on side 0. A room of 7: the bed at 0 across both sides, the drawers at 1 on
+        /// side 1 (the door's tile, across from them, free), the kitchen counter at 5 and the booth table at 6, on side 1.
+        /// Each faces into the room, its back to the wall it stands against (the beds to the end by the door). Now and then
+        /// a dead camper on the bed.
+        /// </summary>
+        private static void TrailerInside(Canvas c, Rect r, Rng rng, Action<Vec2, string, int, int> mark)
+        {
+            var len = r.H - 2;
+            Vec2 At(int i, int side) => V(side == 0 ? r.X + 2 : r.X + 1, r.Y + 1 + i);
+            foreach (var p in TilesIn(Inset(r, 1)))
+            {
+                c.Force(p.X, p.Y, TileKinds.Floor);
+                c.Decor[c.I(p.X, p.Y)] = 0;
+            }
+            void Piece(string kind, int facing, params Vec2[] tiles)
+            {
+                foreach (var p in tiles) c.Force(p.X, p.Y, TileKinds.Low);
+                // From its first tile (the least x or y), along the line across its facing.
+                mark(tiles.OrderBy((p) => p.X).ThenBy((p) => p.Y).First(), kind, facing, tiles.Length);
+            }
+            if (len == 6)
+            {
+                Piece(CampDetailKinds.TrailerBed, 2, At(0, 0));
+                Piece(CampDetailKinds.TrailerTable, 3, At(3, 0), At(4, 0));
+            }
+            else
+            {
+                Piece(CampDetailKinds.TrailerBed, 2, At(0, 1), At(0, 0));
+                Piece(CampDetailKinds.TrailerDrawers, 1, At(1, 1));
+                Piece(CampDetailKinds.TrailerCounter, 1, At(5, 1));
+                Piece(CampDetailKinds.TrailerTable, 1, At(6, 1));
+            }
+            if (rng.Next() < 0.3) mark(At(0, 0), CampDetailKinds.CorpseCamper, 2, 1);
+        }
+
+        /// <summary>
         /// The camping's La Lata (H9 §5): at the road's turning place, beside the road (its bus on it, driving off up it), the
         /// deepest spot with the bus's room; else anywhere in the turning place.
         /// </summary>
@@ -992,8 +1080,23 @@ namespace Bastion.Engine
             var cx = c.Width / 2;
             var cy = c.Height / 2 + 1;
             var turning = Rect(cx - 4, cy - ClearingRadius + 1, 9, 6);
-            var centres = TilesIn(turning).OrderBy((p) => Math.Abs(Math.Abs(p.X - cx) - 3)).ThenByDescending((p) => p.Y).ThenBy((p) => p.X);
+            // On free open ground only: never over a caravan (Arte, 17/11).
+            bool Fits(Vec2 p) => TilesIn(Rect(p.X - 1, p.Y - 1, 3, 3)).All((q) => c.In(q.X, q.Y) && c.Get(q.X, q.Y) == TileKinds.Floor && c.Free(q.X, q.Y) && c.GroundAt(q.X, q.Y) != Indoor);
+            var centres = TilesIn(turning).Where(Fits).OrderBy((p) => Math.Abs(Math.Abs(p.X - cx) - 3)).ThenByDescending((p) => p.Y).ThenBy((p) => p.X);
             return FirstEvac(c, centres);
+        }
+
+        /// <summary>
+        /// The camping's fire pit lights round it at night as a street light does (Arturo, 17/11: Content.Night.StreetLight, the
+        /// layout's lights' radius when none is given), last of the map's lights: whoever stands by it is seen from afar.
+        /// </summary>
+        private static IEnumerable<LayoutLight> CampFireLights(Canvas c, Func<Vec2, Vec2> T)
+        {
+            return (c.CampMarks ?? new List<(Vec2 At, string Kind, int Facing, int Length)>()).Where((m) => m.Kind == CampDetailKinds.FirePit).Select((m) =>
+            {
+                var q = T(m.At);
+                return new LayoutLight { X = q.X, Y = q.Y };
+            });
         }
 
         /// <summary>The camping's site (H9 §5) in the map's own frame: its bounds (the clearing), its parts by use, its marks.</summary>
@@ -1013,12 +1116,16 @@ namespace Bastion.Engine
                 var t = Turned(r);
                 site.Rooms.Add(new InteriorRoom { X = t.X, Y = t.Y, W = t.W, H = t.H, Z = 0, Use = use });
             }
-            foreach (var (at, kind, facing) in c.CampMarks!)
+            foreach (var (at, kind, facing, length) in c.CampMarks!)
             {
                 var a = T(at);
                 var b = T(Add(at, Grid.Dirs4[facing]));
                 var f = Math.Max(0, FindIndex(Grid.Dirs4, (d) => d.X == b.X - a.X && d.Y == b.Y - a.Y));
-                site.Dressing.Add(new InteriorDetail { Kind = kind, X = a.X, Y = a.Y, Z = 0, Facing = f, Variant = kind == CampDetailKinds.TentMilitary && site.Dressing.Any((d) => d.Kind == CampDetailKinds.TentMilitary) ? 1 : (int?)null });
+                // A piece over more than one tile: from the first of them in the map's frame, as the turn left it.
+                var across = Grid.Dirs4[(facing + 1) % 4];
+                var end = T(V(at.X + (length - 1) * Math.Abs(across.X), at.Y + (length - 1) * Math.Abs(across.Y)));
+                var first = V(Math.Min(a.X, end.X), Math.Min(a.Y, end.Y));
+                site.Dressing.Add(new InteriorDetail { Kind = kind, X = first.X, Y = first.Y, Z = 0, Facing = f, Variant = kind == CampDetailKinds.TentMilitary && site.Dressing.Any((d) => d.Kind == CampDetailKinds.TentMilitary) ? 1 : (int?)null, Length = length > 1 ? length : (int?)null });
             }
             return site;
         }
@@ -1281,7 +1388,16 @@ namespace Bastion.Engine
                         else if (look.Kind == DecorKinds.Crates && use == PoliceUses.Armory) kind = (p.X + p.Y) % 2 == 0 ? PoliceDetailKinds.GunCase : PoliceDetailKinds.AmmoCase;
                         else if (look.Kind == DecorKinds.Bench) kind = PoliceDetailKinds.Bench;
                         else if (look.Kind == DecorKinds.DrinksFridge) kind = PoliceDetailKinds.VendingMachine;
-                        else if (look.Kind == DecorKinds.Table && use == PoliceUses.Interrogation) kind = PoliceDetailKinds.InterrogationTable;
+                        else if (look.Kind == DecorKinds.Table && use == PoliceUses.Interrogation)
+                        {
+                            kind = PoliceDetailKinds.InterrogationTable;
+                            // Its two chairs on the floor, in front of it and behind it along its facing, facing each other across it.
+                            foreach (var s in new[] { look.Facing, Opposite(look.Facing) })
+                            {
+                                var q = Add(p, Grid.Dirs4[s]);
+                                if (FreeFloor(z, q)) Mark(PoliceDetailKinds.InterrogationChair, z, q, Opposite(s));
+                            }
+                        }
                         else if (look.Kind == DecorKinds.Bed && use == PoliceUses.Cells) kind = PoliceDetailKinds.CellBed;
                         else if (look.Kind == DecorKinds.Wc && use == PoliceUses.Cells) kind = PoliceDetailKinds.CellToilet;
                     }
