@@ -1534,6 +1534,7 @@
   "machete": {
    "fbx": "SM_Wep_Melee_Machete_01",
    "melee": true,
+   "fist": 0.045,
    "size": 0.72,
    "grip": [
     0.0,
@@ -1630,6 +1631,7 @@
   "bat": {
    "fbx": "SM_Wep_Bat_Wood_01",
    "melee": true,
+   "fist": 0.04,
    "size": 0.8,
    "grip": [
     0.0,
@@ -1640,6 +1642,8 @@
   "crowbar": {
    "fbx": "apocalypse:SM_Wep_Crowbar_01",
    "melee": true,
+   "roll": 180,
+   "fist": 0.025,
    "size": 0.65,
    "grip": [
     0,
@@ -1651,6 +1655,7 @@
   "chainsaw": {
    "fbx": "SM_Wep_ChainSaw_01",
    "melee": true,
+   "alone": true,
    "size": 0.75,
    "grip": [
     -0.06,
@@ -1667,6 +1672,8 @@
   "katana": {
    "fbx": "apocalypse:SM_Wep_Katana_01",
    "melee": true,
+   "trail": 0.15,
+   "fist": 0.03,
    "size": 1.3,
    "slung": true,
    "grip": [
@@ -1678,6 +1685,8 @@
   "longsword": {
    "fbx": "gang:SM_Wep_Sword_02",
    "melee": true,
+   "trail": 0.15,
+   "fist": 0.03,
    "size": 1.15,
    "grip": [
     0.0,
@@ -1694,6 +1703,7 @@
   "rake": {
    "fbx": "farm:SM_Prop_Tool_Rake_01",
    "melee": true,
+   "trail": 0.35,
    "size": 1,
    "grip": [
     0,
@@ -1716,6 +1726,7 @@
   "stick": {
    "fbx": "apocalypse:SM_Item_Stick_01",
    "melee": true,
+   "fist": 0.025,
    "size": 1.4,
    "grip": [
     0.0,

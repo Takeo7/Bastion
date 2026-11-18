@@ -556,6 +556,16 @@ namespace Bastion.UI.Strategy
             Render();
         }
 
+        /// <summary>
+        /// That soldier's board over the expedition's map, a stop or the stage's report (U10, Arturo 18/11: «mejorar las
+        /// habilidades de los soldados entre etapas»): one's own to learn on, the partner's to look at (SkillBoard).
+        /// </summary>
+        public void OnBoardFor(string soldier)
+        {
+            board = soldier;
+            Render();
+        }
+
         // Personalizar (screen.ts customizer).
         public void OnCustomName(string name, string nickname)
         {

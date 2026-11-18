@@ -628,6 +628,27 @@ namespace Bastion.UI.Combat
                                 }
                                 break;
                             }
+                            // «boton=Controles»: the first button with those words (any case), pressed as its own (the menu's tabs); «boton=.clase», by its class.
+                            if (what.StartsWith("boton="))
+                            {
+                                var words = what.Substring(6);
+                                foreach (var doc in FindObjectsByType<UnityEngine.UIElements.UIDocument>(FindObjectsSortMode.None))
+                                {
+                                    if (doc.rootVisualElement == null) continue;
+                                    // («boton=.touch-btn--search»: by its class, a button with no words.)
+                                    var button = UnityEngine.UIElements.UQueryExtensions.Query<UnityEngine.UIElements.Button>(doc.rootVisualElement).ToList()
+                                        .FirstOrDefault(b => words.StartsWith(".") ? b.ClassListContains(words.Substring(1)) : string.Equals(b.text, words, System.StringComparison.OrdinalIgnoreCase));
+                                    if (button == null) continue;
+                                    using (var e = UnityEngine.UIElements.NavigationSubmitEvent.GetPooled())
+                                    {
+                                        e.target = button;
+                                        button.SendEvent(e);
+                                    }
+                                    Debug.Log($"[lab] botón «{words}» pulsado");
+                                    break;
+                                }
+                                break;
+                            }
                             if (what.StartsWith("ayuda="))
                             {
                                 Hud?.PinTip(what.Substring("ayuda=".Length));
@@ -680,6 +701,23 @@ namespace Bastion.UI.Combat
                             if (what.StartsWith("girar="))
                             {
                                 if (float.TryParse(what.Substring(6), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var degrees)) control.Rig?.Turn(degrees);
+                                break;
+                            }
+                            // «medir=120/con»: the next 120 frames timed, real time (the game's goes at the shots' rate), and the
+                            // main thread's and the graphics card's (FrameTimingManager), as «[medida] con: …» (U11: Shift held).
+                            if (what.StartsWith("medir="))
+                            {
+                                Measure(what.Substring(6));
+                                break;
+                            }
+                            // «niebla=todo»: the whole map explored, as if the squad had seen it all (U11: the most Shift marks).
+                            if (what == "niebla=todo")
+                            {
+                                Bastion.Client.Map.Fog.Current?.SeeAll();
+                                // (SeeAll is what is in sight; what has been seen, Fog's own, filled too.)
+                                if (typeof(Bastion.Client.Map.Fog).GetField("explored", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(Bastion.Client.Map.Fog.Current) is bool[] seenAll)
+                                    for (var k = 0; k < seenAll.Length; k++) seenAll[k] = true;
+                                control.Refresh();
                                 break;
                             }
                             if (what.StartsWith("key="))
@@ -1000,6 +1038,46 @@ namespace Bastion.UI.Combat
 
         /// <summary>The lab's last finger's number (Finger: each gesture takes two more).</summary>
         int fingerIds;
+
+        /// <summary>«medir=frames/label»: those frames' real times, and the main thread's and the GPU's as Unity times them, in the log.</summary>
+        async void Measure(string spec)
+        {
+            var p = spec.Split('/');
+            var count = int.TryParse(p[0], out var n) ? n : 120;
+            var label = p.Length > 1 ? p[1] : "";
+            var real = new List<double>();
+            var cpu = new List<double>();
+            var gpu = new List<double>();
+            var timings = new FrameTiming[1];
+            try
+            {
+                var last = Time.realtimeSinceStartupAsDouble;
+                for (var i = 0; i < count; i++)
+                {
+                    await Awaitable.NextFrameAsync(destroyCancellationToken);
+                    var now = Time.realtimeSinceStartupAsDouble;
+                    real.Add((now - last) * 1000);
+                    last = now;
+                    FrameTimingManager.CaptureFrameTimings();
+                    if (FrameTimingManager.GetLatestTimings(1, timings) > 0)
+                    {
+                        if (timings[0].cpuMainThreadFrameTime > 0) cpu.Add(timings[0].cpuMainThreadFrameTime);
+                        if (timings[0].gpuFrameTime > 0) gpu.Add(timings[0].gpuFrameTime);
+                    }
+                }
+            }
+            catch (System.OperationCanceledException)
+            {
+                return;
+            }
+            string Of(List<double> v)
+            {
+                if (v.Count == 0) return "—";
+                var sorted = v.OrderBy(x => x).ToList();
+                return $"media {v.Average():0.00}, mediana {sorted[sorted.Count / 2]:0.00}, p95 {sorted[(int)(sorted.Count * 0.95)]:0.00}, máx {sorted[sorted.Count - 1]:0.00} ms";
+            }
+            Debug.Log($"[medida] {label}: {real.Count} fotogramas; real {Of(real)}; hilo principal {Of(cpu)}; gpu {Of(gpu)}");
+        }
 
         async void HoldKey(Keyboard keys, Key key, float seconds)
         {

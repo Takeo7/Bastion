@@ -627,7 +627,11 @@ namespace Bastion.Engine
         /// some houses two; halls, kiosks, motels and everything out of town, one.
         /// Every tile of a building (walls, doors, windows, the inside) gets its
         /// storeys; a wall two buildings share, the taller one's. Rolled on a seed of
-        /// their own, so nothing else in the layout moves.
+        /// their own, so nothing else in the layout moves. A ruin (Blocks.Ruin) none:
+        /// no roof, nothing to find in it, it is seen and walked as the open ground
+        /// (G14, Arturo 18/11: «en casas que están en ruinas no se aplica lo de las
+        /// casas, se ven normal»); its walls still stand (their tiles), as a yard's do.
+        /// A wall it shares with a whole building keeps that one's.
         /// </summary>
         private static List<int> StoreysOf(Canvas c, List<int> heights)
         {
@@ -635,6 +639,7 @@ namespace Bastion.Engine
             for (var j = 0; j < c.Buildings.Count; j++)
             {
                 var b = c.Buildings[j];
+                if (b.Ruined) continue;
                 foreach (var p in TilesIn(b.Outer)) if (c.In(p.X, p.Y)) out_[c.I(p.X, p.Y)] = Math.Max(out_[c.I(p.X, p.Y)], heights[j]);
             }
             return out_;

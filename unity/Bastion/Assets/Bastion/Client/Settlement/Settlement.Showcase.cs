@@ -33,6 +33,10 @@ namespace Bastion.Client
         /// <summary>For the labs: the soldier facing their camera, without their sway (to set beside 0.10.1's at the same turn).</summary>
         public static bool SwayOff;
 
+        /// <summary>For the labs: the soldier looked at, its body's animator and what it holds.</summary>
+        public Animator ShowcaseAnimator => showAnimator;
+        public Transform ShowcaseHeld => showGun;
+
         /// <summary>For the labs: how far their pistol arm is turned out of the thigh (radians).</summary>
         public float ShowcaseSpread => showSpread.Out;
         float showTime;

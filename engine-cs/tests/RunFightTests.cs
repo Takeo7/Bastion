@@ -534,6 +534,43 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
+        public void AFallenComradesGearIsTakenFromBeside()
+        {
+            // G16 (Arturo, 18/11: «registrar el cuerpo de mis aliados caídos y recuperar lo que llevaban»): from beside the
+            // body, as far as Registrar reaches, free as from on it; taken, off the floor; what doesn't fit stays there.
+            var (_, s) = Fight();
+            var (a, b) = Pair(s);
+            var rifle = Made(s, GearKinds.Weapon, FoundWeaponIds.AssaultRifle);
+            b.Kit!.Primary = rifle;
+            var med = InPack(s, b, GearKinds.Medicine, null, 0, 0, 3);
+            Events.ApplyEvent(s, new DiedEvent { Unit = b.Id });
+            Assert.False(Grid.SamePos(a.Pos, b.Pos));
+            Assert.Contains(RunPack.FloorInReach(s, a), (d) => d.Gear.Id == rifle.Id);
+            var ap = a.Ap;
+            var take = Exec(s, Item(a, ItemActions.Take, rifle.Id));
+            Assert.True(take.Ok, take.Error);
+            Assert.Contains(a.Pack!.Items, (p) => p.Gear.Id == rifle.Id);
+            Assert.DoesNotContain(s.FloorGear!, (d) => d.Gear.Id == rifle.Id);
+            Assert.Equal(ap, a.Ap);
+            // A full pack: the medicine stays where it fell.
+            for (var y = 0; y < a.Pack.H; y++) for (var x = 0; x < a.Pack.W; x++) if (Gears.At(a.Pack, x, y) == null) InPack(s, a, GearKinds.Mags, null, x, y, 5);
+            Refused(RunPack.Texts.NoRoom, s, Item(a, ItemActions.Take, med.Id));
+            Assert.Contains(s.FloorGear!, (d) => d.Gear.Id == med.Id && d.From == b.Id);
+            // What nobody fell with (dropped), only from on it, as before.
+            var dropped = Made(s, GearKinds.Medicine, null, 1);
+            s.FloorGear!.Add(new DroppedGear { Gear = dropped, Pos = Events.CopyPos(b.Pos) });
+            Refused(RunPack.Texts.NotHere, s, Item(a, ItemActions.Take, dropped.Id));
+            Assert.DoesNotContain(RunPack.FloorInReach(s, a), (d) => d.Gear.Id == dropped.Id);
+            // Two off, without Gancho: not.
+            a.Pack.Items.Clear();
+            var two = Enumerable.Range(0, s.Width * s.Height).Select((i) => new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 })
+                .First((p) => Math.Max(Math.Abs(p.X - b.Pos.X), Math.Abs(p.Y - b.Pos.Y)) == 2 && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null);
+            a.Pos = two;
+            Assert.Equal(0, a.Mods.SearchReach);
+            Refused(RunPack.Texts.NotHere, s, Item(a, ItemActions.Take, med.Id));
+        }
+
+        [Fact]
         public void WhatIsLeftOnTheBelt()
         {
             var u = new Unit { Kit = new KitPlaces(), Charges = new Dictionary<string, int>() };

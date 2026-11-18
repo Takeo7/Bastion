@@ -1558,10 +1558,13 @@ namespace Bastion.UI.Combat
         {
             var call = V.EvacCall;
             var floorBefore = new HashSet<string>((V.Dropped ?? new List<DroppedLoot>()).Select(d => d.Id));
+            var gearBefore = e is DiedEvent ? new HashSet<string>((V.FloorGear ?? new List<DroppedGear>()).Select(d => d.Gear.Id)) : null;
             if (!applied) Apply(r, e);
             if (e is PodSplitEvent split) splitFrom[split.Into] = split.Pod;
-            // A soldier falls and their rucksack stays on the floor (#49), said once.
+            // A soldier falls and their rucksack stays on the floor (#49), said once; in a run, all they carried, on their
+            // body (RunPack.Fallen; U12, Lore's line).
             if (e is DiedEvent died && (V.Dropped ?? new List<DroppedLoot>()).Any(d => d.From == died.Unit && !floorBefore.Contains(d.Id)) && Unit(died.Unit) is Unit fallen) Log(Lore.FallenPackLine(fallen.Name), "#ff8a78");
+            else if (e is DiedEvent fell && (V.FloorGear ?? new List<DroppedGear>()).Any(d => d.From == fell.Unit && !gearBefore.Contains(d.Gear.Id)) && Unit(fell.Unit) is Unit kit) Log(Lore.FallenKitLine(kit.Name), "#ff8a78");
             // A find with the backpack full stays on the floor (docs/FASE8.md §C).
             if ((e is SearchedEvent || e is RoomSearchedEvent) && by == control.MySlot)
             {

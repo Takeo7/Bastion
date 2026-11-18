@@ -510,12 +510,17 @@ namespace Bastion.Engine
             var ground = Enumerable.Repeat(0, FW * FH).ToList();
             var decor = Enumerable.Repeat(0, FW * FH).ToList();
             var storeys = Enumerable.Repeat(0, FW * FH).ToList();
+            // The ruins' tiles (G14): no storeys, but where the lone dead wait as before (MissionLayout.Ruins). Those that
+            // stood a storey till then: a town's (Towns, a plot's gutted house) had none already.
+            var ruined = new HashSet<int>(c.Buildings.Where((b, j) => b.Ruined && j < heights.Count && heights[j] > 0).SelectMany((b) => TilesIn(b.Outer)).Where((p) => c.In(p.X, p.Y)).Select((p) => c.I(p.X, p.Y)));
+            var ruins = new List<int>();
             for (var y = 0; y < H; y++)
             {
                 for (var x = 0; x < W; x++)
                 {
                     var q = T(V(x, y));
                     var i = c.I(x, y);
+                    if (ruined.Contains(i)) ruins.Add(q.Y * FW + q.X);
                     tiles[q.Y * FW + q.X] = c.Tiles[i];
                     elev[q.Y * FW + q.X] = c.Elev[i];
                     ground[q.Y * FW + q.X] = c.Ground[i];
@@ -725,6 +730,7 @@ namespace Bastion.Engine
                 Markets = markets.Count > 0 ? markets : null,
                 Decor = decor,
                 Storeys = storeys,
+                Ruins = ruins.Count > 0 ? ruins.OrderBy((i) => i).ToList() : null,
                 Levels = levels.Count > 0 ? levels : null,
                 Perch = upper.Perch.Count > 0
                     ? upper.Perch.Select((p) =>

@@ -77,7 +77,8 @@ namespace Bastion.UI.Combat
                 var where = parts[1].TrimEnd('!', '~');
                 var spot = where.Split('@');
                 var place = spot[0].Split('/');
-                var xy = spot.Length > 1 ? spot[1].Split(',') : new[] { "0", "0" };
+                // (Or «@1;0»: BASTION_TOQUES splits its steps at the commas.)
+                var xy = spot.Length > 1 ? spot[1].Split(',', ';') : new[] { "0", "0" };
                 var done = board.TestDragTo(parts[0], place[0], place.Length > 1 ? place[1] : null, int.Parse(xy[0]), int.Parse(xy[1]), parts[1].Contains("~"), parts[1].EndsWith("!"));
                 Debug.Log($"[mochila] arrastra {arg}: {(done ? "hecho" : "no está")}");
                 return done;

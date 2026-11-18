@@ -53,6 +53,109 @@ namespace Bastion.UI.Combat
         static bool IsBodyOrBoot(string spot) => spot == Looting.Body || spot == Looting.CarBoot || spot == Looting.PoliceBoot;
 
         /// <summary>
+        /// Whether a click on `tile` searches it now: within `u`'s hands (HandTiles) and nothing stops it. A body is one only
+        /// then; elsewhere its tile is a tile like any other (Arturo, 18/11, U9: «solo cuando estás al lado»).
+        /// </summary>
+        bool SearchesAt(Unit u, Pos tile) => HandTiles(AbilityIds.Search).Any(t => Same(t, tile)) && Abilities.AbilityBlocker(State, u, AbilityIds.Search) == null;
+
+        /// <summary>
+        /// One of the squad fallen on `tile` whose things still lie there (U12, Arturo 18/11: «registrar el cuerpo de mis
+        /// aliados caídos y recuperar lo que llevaban»; RunPack.Fallen leaves them there, From it): searched as a body is,
+        /// the pack opened on them. Null: nobody, or nothing left.
+        /// </summary>
+        static Unit FallenWithGear(GameState s, Pos tile)
+        {
+            if (s?.FloorGear == null || tile == null) return null;
+            foreach (var d in s.FloorGear)
+                if (d.From != null && Bastion.Engine.Grid.SamePos(d.Pos, tile) && UnitById(s, d.From) is Unit u && !u.Alive && !u.Evacuated && u.Team == Teams.Xcom) return u;
+            return null;
+        }
+
+        /// <summary>Whether `u` takes what a fallen comrade left on `tile` now: from beside its body (RunPack.InReach, G16) and its figure there.</summary>
+        bool TakesFromFallen(Unit u, Pos tile) => (State.FloorGear ?? new List<DroppedGear>()).Any(d => d.From != null && Same(d.Pos, tile) && RunPack.InReach(State, u, d)) && StandsWhereSeen(u);
+
+        /// <summary>Whether `u`'s figure stands where the game has it: not still walking there (what is seen goes behind the game while it plays).</summary>
+        bool StandsWhereSeen(Unit u) => UnitById(Shown, u.Id) is Unit seen && Same(seen.Pos, u.Pos);
+
+        /// <summary>
+        /// Shift held (U11, Arturo 18/11: «al mantener el shift pulsado, se resalte todo lo looteable»): everything to search
+        /// the squad has seen, outlined with its rucksack, in place of what the pointer or Registrar marks (ShowWay). Not while
+        /// an action is watched, when the marks hide.
+        /// </summary>
+        bool lootAll;
+
+        /// <summary>With the finger, the rucksack's button on (OnSearchAll): as Mayús held, till another tap.</summary>
+        bool searchTouch;
+
+        /// <summary>From above (M), the narrowest a mark is drawn (pixels), and the line round the things (Arturo, 18/11, cuadro 55).</summary>
+        const float MapMarkPixels = 24;
+        const float MapOutline = 3.5f;
+
+        /// <summary>Shift pressed or let go (Update): the marks made again in the same frame.</summary>
+        void LootAllKey()
+        {
+            var held = Bastion.Client.GameInput.Touch ? searchTouch : Bastion.Client.GameInput.HasKeys && Bastion.Client.GameInput.Shift && !Bastion.Client.GameInput.SystemHeld;
+            var on = held && !Film && !(Rig != null && Rig.Away);
+            if (on == lootAll) return;
+            lootAll = on;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            ShowWay();
+            // What the press costs, once: the marks and their lines made (a car's copy each).
+            if (on) Debug.Log($"[mayús] {searchMarks.Count} marcas en {watch.Elapsed.TotalMilliseconds:0.0} ms");
+        }
+
+        /// <summary>
+        /// Everything to search the squad has seen (U11): the bodies, the boots and the boxes not searched yet
+        /// (Looting.SearchSpot), explored (the fog's, as the boxes' marks) and not inside a building not found (FoundInside),
+        /// on the storeys up to the one in view; lit what the picked one can search now from where it stands. Doors and
+        /// boards are not loot.
+        /// </summary>
+        List<(Pos at, bool lit)> AllToSearch()
+        {
+            var s = State;
+            var list = new List<(Pos, bool)>();
+            if (s == null || !HasSpots) return list;
+            var u = Unit();
+            var can = u != null && CanAct() && Commands(u) && StandsWhereSeen(u);
+            var fog = Bastion.Client.Map.Fog.Current;
+            var found = FoundInside();
+            var area = s.Width * s.Height;
+            var top = Mathf.Min(Level, s.Levels?.Count ?? 0);
+            var taken = new HashSet<int>();
+            void Add(Pos p)
+            {
+                var node = Bastion.Engine.Grid.NodeOf(s, p);
+                if (!taken.Add(node) || Looting.WasSearched(s, p)) return;
+                if (fog != null && !fog.Explored(node)) return;
+                if (node < found.Length && !found[node]) return;
+                list.Add((p, can && SearchesAt(u, p)));
+            }
+            // The bodies by their units; the rest only where something stands (Low or High), not every tile through
+            // SearchSpot (it looks for a body among all the units at each: 12 ms over a city, 7/11).
+            foreach (var a in s.Units)
+                if (!a.Alive && a.Pos.Z <= top && Looting.SearchSpot(s, a.Pos) == Looting.Body) Add(a.Pos);
+            // The squad's fallen with their things still there (U12), lit where a click opens the pack on them.
+            foreach (var d in s.FloorGear ?? new List<DroppedGear>())
+                if (d.From != null && d.Pos.Z <= top && FallenWithGear(s, d.Pos) != null)
+                {
+                    var node = Bastion.Engine.Grid.NodeOf(s, d.Pos);
+                    if (taken.Contains(node) || (fog != null && !fog.Explored(node)) || (node < found.Length && !found[node])) continue;
+                    taken.Add(node);
+                    list.Add((d.Pos, can && TakesFromFallen(u, d.Pos)));
+                }
+            for (var z = 0; z <= top; z++)
+                for (var i = 0; i < area; i++)
+                {
+                    var p = new Pos { X = i % s.Width, Y = i / s.Width, Z = z };
+                    var kind = Bastion.Engine.Grid.KindAt(s, p);
+                    if (kind != TileKinds.Low && kind != TileKinds.High) continue;
+                    var spot = Looting.SearchSpot(s, p);
+                    if (spot != null && spot != Looting.Body) Add(p);
+                }
+            return list;
+        }
+
+        /// <summary>
         /// What a click on a thing does, as its icon (Arturo, 7/11): the boards off (the crowbar), a door opened or shut
         /// (LineIcon's), else searched (the rucksack).
         /// </summary>
@@ -90,7 +193,7 @@ namespace Bastion.UI.Combat
                 // Over the thing's top (Arte's SearchOutline.TopOf: a box's lid, a door's leaf, the furniture against a
                 // window), else at the height each kind had.
                 var spot = Looting.SearchSpot(v, at);
-                var high = spot == Looting.Body ? SearchBodyHeight : spot == Looting.CarBoot || spot == Looting.PoliceBoot ? SearchBootHeight : LootMarkHeight;
+                var high = spot == Looting.Body || FallenWithGear(v, at) != null ? SearchBodyHeight : spot == Looting.CarBoot || spot == Looting.PoliceBoot ? SearchBootHeight : LootMarkHeight;
                 var world = Board.TileToWorld(v, at, high * Board.Tile);
                 if (Bastion.Client.Units.SearchOutline.TopOf(v, at) is float top) world.y = top + SearchOverTop;
                 list.Add(new WorldTagView

@@ -346,6 +346,8 @@ namespace Bastion.UI.Hud
             public const string FloorUp = "Subir de planta";
             public const string FloorDown = "Bajar de planta";
             public const string Hurry = "Mantenlo pulsado: el turno enemigo va más rápido";
+            /// <summary>The rucksack's button (U11; Lore, 18/11).</summary>
+            public const string Search = "Resaltar lo que queda por registrar, hasta que lo vuelvas a tocar";
             public const string Pass = "Ceder";
             public const string PassTip = "Ceder el mando";
         }

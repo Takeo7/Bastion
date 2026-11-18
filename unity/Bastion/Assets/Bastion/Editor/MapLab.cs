@@ -653,6 +653,82 @@ namespace Bastion.EditorTools
         });
 
         /// <summary>
+        /// A2 (Arturo, 18/11: «¿esta estructura qué es?»): the ruins (BuildingPlan.FindRuins) of the wilds' missions of seeds
+        /// 1 to BASTION_SEMILLAS (30) and BASTION_TIPO (scavenge): each one's bounds, how many of its tiles are wall, and the
+        /// decor on and by it ([ruina]), to pick some to look at.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.Ruinas -quit
+        /// </summary>
+        public static void Ruinas()
+        {
+            int seeds = int.TryParse(Environment.GetEnvironmentVariable("BASTION_SEMILLAS"), out int n) ? n : 30;
+            string kind = Environment.GetEnvironmentVariable("BASTION_TIPO") ?? MissionKinds.Scavenge;
+            for (int seed = 1; seed <= seeds; seed++)
+            {
+                GameState state;
+                try { state = Generated(Biomes.Wilds, seed, kind); }
+                catch (Exception e)
+                {
+                    Debug.Log($"[ruina] seed {seed}: {e.Message}");
+                    continue;
+                }
+                var plan = new BuildingPlan(state);
+                foreach (var b in plan.Buildings.Where(b => b.kind == BuildingKinds.Ruin))
+                {
+                    int walls = 0;
+                    var decor = new Dictionary<string, int>();
+                    for (int y = Math.Max(0, b.y0 - 2); y <= Math.Min(state.Height - 1, b.y1 + 2); y++)
+                        for (int x = Math.Max(0, b.x0 - 2); x <= Math.Min(state.Width - 1, b.x1 + 2); x++)
+                        {
+                            int i = y * state.Width + x;
+                            if (state.Tiles[i] == TileKinds.Wall && x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) walls++;
+                            string d = Bastion.Engine.Decor.DecorOf(state.Decor[i])?.Kind;
+                            if (d != null) decor[d] = decor.TryGetValue(d, out int c) ? c + 1 : 1;
+                        }
+                    Debug.Log($"[ruina] seed {seed} ({state.Width}×{state.Height}): {b.x0},{b.y0}–{b.x1},{b.y1} ({b.x1 - b.x0 + 1}×{b.y1 - b.y0 + 1}), {walls} wall tiles; by it: {string.Join(", ", decor.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value}"))}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// A2a (Arturo, 18/11: the hill «que se vea maciza»): the hills (raised ground, GameState.Elev) of the wilds' missions of
+        /// seeds 1 to BASTION_SEMILLAS (12) and BASTION_TIPO (scavenge): each one's bounds, tiles and ladders ([colina]).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.Colinas -quit
+        /// </summary>
+        public static void Colinas()
+        {
+            int seeds = int.TryParse(Environment.GetEnvironmentVariable("BASTION_SEMILLAS"), out int n) ? n : 12;
+            string kind = Environment.GetEnvironmentVariable("BASTION_TIPO") ?? MissionKinds.Scavenge;
+            for (int seed = 1; seed <= seeds; seed++)
+            {
+                var state = Generated(Biomes.Wilds, seed, kind);
+                int w = state.Width, h = state.Height;
+                var seen = new bool[w * h];
+                for (int start = 0; start < w * h; start++)
+                {
+                    if (seen[start] || state.Elev[start] <= 0) continue;
+                    var tiles = new List<int> { start };
+                    seen[start] = true;
+                    for (int k = 0; k < tiles.Count; k++)
+                        foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                        {
+                            int x = tiles[k] % w + dx, y = tiles[k] / w + dy;
+                            if (x < 0 || y < 0 || x >= w || y >= h || seen[y * w + x] || state.Elev[y * w + x] <= 0) continue;
+                            seen[y * w + x] = true;
+                            tiles.Add(y * w + x);
+                        }
+                    var ladders = new List<string>();
+                    foreach (int i in tiles)
+                        foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                        {
+                            int x = i % w + dx, y = i / w + dy;
+                            if (x >= 0 && y >= 0 && x < w && y < h && state.Tiles[y * w + x] == TileKinds.Ladder) ladders.Add($"{x},{y}");
+                        }
+                    Debug.Log($"[colina] seed {seed}: {tiles.Min(i => i % w)},{tiles.Min(i => i / w)}–{tiles.Max(i => i % w)},{tiles.Max(i => i / w)}, {tiles.Count} tiles, up {tiles.Max(i => state.Elev[i])}; ladders at {string.Join(" ", ladders.Distinct())}; tiles on it: {string.Join(", ", tiles.GroupBy(i => state.Tiles[i]).Select(g => $"{g.Key} {g.Count()}"))}");
+                }
+            }
+        }
+
+        /// <summary>
         /// The floors' and roofs' faces with no normal (a polygon's first three corners in a line: the shader's NaN black,
         /// and the bloom spreads it over the screen; the 0.11.3's square houses, 1/11), in each map of BASTION_MAP (the
         /// goldens of step1 if not said; a saved game's file by its path too).

@@ -126,9 +126,21 @@ namespace Bastion.UI.Strategy
                     Color = own ? null : PlayerColor(s.Owner),
                     Hp = run.Hp.TryGetValue(s.Id, out var hp) ? hp : max, HpMax = max,
                     Tip = StrategyText.Stash.Health(run.Hp.TryGetValue(s.Id, out var left) ? left : max, max) + (own ? "" : " · " + StrategyText.Stash.Whose(PlayerName(s.Owner))),
+                    // A cell to learn now, as Soldados marks it (U10): only one's own, who can spend it.
+                    Points = s.Owner == Slot && Campaign.CanSpendPoints(c, s), PointsTip = "Puntos por gastar en el tablero",
                 });
             }
-            if (pick != null) v.Kit = Kit(pick, mine.Contains(pick));
+            if (pick != null)
+            {
+                v.Kit = Kit(pick, mine.Contains(pick));
+                // Its board between stages (U10): Soldados' key; on one's own, its points and pressing for them (the
+                // partner's, only to look at: neither, Producto 18/11).
+                var own = pick.Owner == Slot;
+                var points = own ? Bars.PointsLeft(pick.Skills, pick.Board) : 0;
+                v.Kit.Board = "Tablero de habilidades";
+                v.Kit.BoardPoints = points > 0 ? $"{points} {(points == 1 ? "punto" : "puntos")} por gastar" : null;
+                v.Kit.BoardPulse = own && Campaign.CanSpendPoints(c, pick);
+            }
             v.Stop = Stop(run, pick != null && mine.Contains(pick) ? pick : mine.FirstOrDefault(), mine);
             return v;
         }

@@ -809,8 +809,12 @@ namespace Bastion.UI.Combat
             Hud?.SetSight(SightNow());
             // With the finger: the floors where there are any, the faster key while the enemy plays (TouchButtons).
             if (Hud != null && Bastion.Client.GameInput.Touch)
-                Hud.SetTouch(new TouchView { Floors = MaxLevel > 0 && !Overhead, CanUp = Level < MaxLevel, CanDown = Level > 0, Hurry = EnemyTurnPlaying() });
+                Hud.SetTouch(new TouchView { Floors = MaxLevel > 0 && !Overhead, CanUp = Level < MaxLevel, CanDown = Level > 0, Hurry = EnemyTurnPlaying(), Search = searchTouch });
             Marks?.Cinematic(Film || Rig != null && Rig.Away);
+            // From above, marks and lines no smaller than one reads (cuadro 55); in the view, as the world has them.
+            Hud?.SetTagFloor(Overhead ? MapMarkPixels : 0);
+            Bastion.Client.Units.SearchOutline.Width = Overhead ? MapOutline : 2;
+            LootAllKey();
             if (!GameInput.HasPointer || Rig == null) return;
             // With the finger nothing hovers: the gestures say what it did.
             if (GameInput.Touch)
@@ -1208,11 +1212,19 @@ namespace Bastion.UI.Combat
                 CancelMode();
                 return;
             }
+            // A fallen comrade's body beside, its things still there: the pack opened on them (U12).
+            if (FallenWithGear(State, tile) != null && TakesFromFallen(u, tile))
+            {
+                Hud?.OpenPockets();
+                return;
+            }
             // A closed door beside the soldier: the click opens it, for free (playtest 13/10 #2). Furniture beside: it searches it (18/10 #29).
             // A boarded window beside, with the crowbar: the boards come off (02/11 A11).
             foreach (var id in new[] { AbilityIds.OpenDoor, AbilityIds.Search, AbilityIds.Pry })
             {
                 if (!HandTiles(id).Any(t => Same(t, tile))) continue;
+                // A body that can't be searched now is walked to like any other tile (U9).
+                if (id == AbilityIds.Search && Looting.SearchSpot(State, tile) == Looting.Body && !SearchesAt(u, tile)) continue;
                 var view = BarView(id);
                 if (view?.Enabled == true) UseDoor(id, tile);
                 else if (view?.Reason != null) Toast(view.Reason);
@@ -1298,7 +1310,8 @@ namespace Bastion.UI.Combat
             // tags over the map made again once, after.
             searchNext = null;
             ShowWayMarks();
-            ShowSearchMarks(searchNext);
+            // Shift held: everything to search instead (U11).
+            ShowSearchMarks(lootAll ? AllToSearch() : searchNext);
         }
 
         void ShowWayMarks()
@@ -1346,14 +1359,27 @@ namespace Bastion.UI.Combat
                     Note(hover, stop != null ? $"{what} · {stop.TrimEnd('.').ToLowerInvariant()}" : GameInput.Touch ? HudText.Touch.Boards(what) : $"{what} · clic: quitar las tablas");
                     return;
                 }
+                // A fallen comrade's body with its things still there, beside (U12): outlined, the rucksack over it, and a click
+                // opens the pack on what it carried (taken from there, free: G16). From further, a tile like any other (U9).
+                if (FallenWithGear(State, hover) is Unit fallen && TakesFromFallen(u, hover))
+                {
+                    searchNext = new List<(Pos, bool)> { (hover, true) };
+                    // «El cuerpo de Chiara · toca otra vez: registrar» (Lore, 18/11).
+                    if (GameInput.Touch) Note(hover, HudText.Touch.Open(Lore.FallenBody(fallen.Name), "registrar"));
+                    return;
+                }
                 // A box the squad has seen: its name, and whether it can be opened from here (docs/FASE8.md §B).
                 var decor = HasSpots ? Looting.SearchSpot(State, hover) : null;
+                // A body only where a click searches it (U9, Arturo 18/11): from further, beside it without the means, or
+                // searched, its tile is a tile like any other (the way there, its ring and its cover; below). And only once
+                // the figure is there, not while it still walks to it (Producto, 18/11).
+                if (decor == Looting.Body && (!SearchesAt(u, hover) || !StandsWhereSeen(u))) decor = null;
                 // A body or a car's boot: the thing itself outlined and a rucksack over it, no frame on the tile and no
                 // words (Arturo, 5/11 #12); lit where a click searches it. Searched, nothing.
                 if (decor != null && IsBodyOrBoot(decor))
                 {
                     if (Looting.WasSearched(State, hover)) return;
-                    var reach = HandTiles(AbilityIds.Search).Any(t => Same(t, hover)) && Abilities.AbilityBlocker(State, u, AbilityIds.Search) == null;
+                    var reach = SearchesAt(u, hover);
                     searchNext = new List<(Pos, bool)> { (hover, reach) };
                     // With the finger the first tap only points: what the second does, said (Lore, 7/11).
                     if (GameInput.Touch && reach) Note(hover, HudText.Touch.Open(Capitalize(Lore.SearchSpots.TryGetValue(decor, out var found) ? found.Name : "el cuerpo"), "registrar"));

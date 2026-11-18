@@ -16,6 +16,7 @@ namespace Bastion.UI.Hud
         readonly VisualElement up;
         readonly VisualElement down;
         readonly VisualElement hurry;
+        readonly VisualElement search;
         readonly IHudHandlers handlers;
         string key;
         bool hurrying;
@@ -31,6 +32,9 @@ namespace Bastion.UI.Hud
             Ui.Text("▲", "touch-btn__glyph", up);
             down = Ring(root, "touch-btn--down", () => handlers.OnFloor(-1), tips, HudText.TouchButtons.FloorDown);
             Ui.Text("▼", "touch-btn__glyph", down);
+            // Mayús's, with the finger (U11, Arturo 18/11 cuadro 55): the rucksack, a tap on and another off, lit while on.
+            search = Ring(root, "touch-btn--search", handlers.OnSearchAll, tips, HudText.TouchButtons.Search);
+            Ui.Icon(icon, "search", "touch-btn__icon", search);
             // As the bar's keys, before «Terminar turno»: held, the enemy's turn faster; let go, the chosen speed.
             hurry = new VisualElement();
             hurry.AddToClassList("ability");
@@ -55,6 +59,7 @@ namespace Bastion.UI.Hud
             Ui.Show(down, v != null && v.Floors);
             up.SetEnabled(v != null && v.CanUp);
             down.SetEnabled(v != null && v.CanDown);
+            search.EnableInClassList("touch-btn--on", v != null && v.Search);
             var shown = v != null && v.Hurry;
             Ui.Show(hurry, shown);
             if (!shown) Hurry(false);

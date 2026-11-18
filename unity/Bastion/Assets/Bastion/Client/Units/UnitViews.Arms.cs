@@ -919,13 +919,15 @@ namespace Bastion.Client.Units
                 little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
             if (hand == null || index == null || little == null || middle == null) return;
             Fist(a);
-            var palm = Vector3.Lerp(hand.position, middle.position, 0.6f);
-            var fingers = (middle.position - hand.position).normalized;
-            var across = Vector3.ProjectOnPlane(index.position - little.position, fingers);
-            Seat(blade, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : root.up));
-            if (art?.two != null && art.two.Length >= 3)
+            if (InFist(a, RestLay) is var (at, turn)) Seat(blade, art, at, turn, true, 1);
+            // (One carried at the trail, the rake, or by its back handle, the chainsaw: in the right hand alone.)
+            if (art?.two != null && art.two.Length >= 3 && art.trail <= 0 && !art.alone)
+            {
                 Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, blade.TransformPoint(new Vector3(art.two[0], art.two[1], art.two[2])),
                     root.TransformDirection(new Vector3(-1, -0.7f, 0)), 0.02f);
+                // (Closed on it: it lay open over the chainsaw's front handle.)
+                Fist(a, true);
+            }
         }
 
         /// <summary>
@@ -1003,6 +1005,10 @@ namespace Bastion.Client.Units
             var fingers = (middle.position - hand.position).normalized;
             var across = Vector3.ProjectOnPlane(index.position - little.position, fingers);
             var art = v.arts.TryGetValue(v.drawn, out var a2) ? a2 : null;
+            // (How far it is carried at the trail: all the way at rest, none on guard or through a stroke.)
+            // (A sword crouched, by its pommel's end as it fights: by the guard, the handle behind the fist lay against the wrist.)
+            bool rest = !v.striking && !Guarding(v) && !(v.crouched && art?.two == null);
+            v.trail = dt > 0 ? Mathf.MoveTowards(v.trail, rest ? 1 : 0, dt / TrailEase) : rest ? 1 : 0;
             // On guard low across the body (the rake, the chainsaw: GuardOf "low"), held as a rifle between the hands: its
             // grip in the right palm, its second grip towards the left (the left hand reached onto it below).
             var leftHand = a.GetBoneTransform(HumanBodyBones.LeftHand);
@@ -1025,6 +1031,8 @@ namespace Bastion.Client.Units
                 var grip = new Vector3(art.grip[0], art.grip[1], art.grip[2]);
                 var two = new Vector3(art.two[0], art.two[1], art.two[2]);
                 var dirModel = (two - grip).normalized;
+                // (From the trail, the right hand back along it to its grip: WeaponArt.trail, eased.)
+                if (art.trail > 0 && v.trail > 0 && art.along != null && art.along.Length >= 3) grip += new Vector3(art.along[0], art.along[1], art.along[2]).normalized * (art.trail * v.trail);
                 var upModel = Mathf.Abs(dirModel.z) < 0.9f ? Vector3.forward : Vector3.up;
                 var dirWorld = leftPalm - palm;
                 if (dirWorld.sqrMagnitude > 1e-6f && dirModel.sqrMagnitude > 1e-6f)
@@ -1041,21 +1049,147 @@ namespace Bastion.Client.Units
                 // shin, and swung up it stood before the face.)
                 // (One-handed only: the rake, between both hands, went 10 cm into the trunk turned so.)
                 v.carry = Mathf.MoveTowards(v.carry, v.walking && !v.striking && !Guarding(v) && art?.two == null ? 1 : 0, dt / CarryEase);
-                if (v.carry > 0) fingers = Carried(v, fingers);
-                // (On a sword's guard, out of the fist on the thumb's side, up and ahead as Sword Combat's guard holds it, its
-                // edge towards the knuckles: along the fingers, with the hand hanging back, its point was on the floor behind.
-                // The 3D review's A-24 b1, 10/11.)
-                if (Guarding(v) && GuardOf(v) == "sword" && across.sqrMagnitude > 1e-6f) Seat(v.weapon, art, palm, Quaternion.LookRotation(across, -fingers));
+                // (How it lies in the fist: across it at rest, RestLay; on a sword's guard square out of it on the thumb's
+                // side, up and ahead as Sword Combat's guard holds it, its edge towards the knuckles, the 3D review's A-24 b1,
+                // 10/11; through a stroke StrokeLay, on along the arm as the strokes' clips were fitted. Eased, LayRate.)
+                float lay = Guarding(v) && GuardOf(v) == "sword" ? 0 : v.striking || Guarding(v) ? StrokeLay : v.restLay;
+                v.lay = dt > 0 ? Mathf.MoveTowards(v.lay, lay, LayRate * dt) : lay;
+                // (Through a stroke the wrist bent to the little finger's side, WristBend at most, as a hand thrusts or cuts:
+                // with StrokeLay the blade is on along the forearm, as the strokes' clips were fitted, round a closed fist.)
+                float bend = WristBend * Mathf.InverseLerp(RestLay, StrokeLay, v.lay);
+                if (bend > 0 && across.sqrMagnitude > 1e-6f)
+                {
+                    hand.rotation = Quaternion.AngleAxis(-bend, Vector3.Cross(fingers, across).normalized) * hand.rotation;
+                    Fist(a);
+                }
                 // (The knife the other way up for a silent takedown, UnitViews.Takedown: out of the fist on the little finger's
                 // side, its back towards the wrist; brought down from above, its point goes in first.)
-                else if (v.reversed && across.sqrMagnitude > 1e-6f) Seat(v.weapon, art, palm, Quaternion.LookRotation(-across, -fingers));
-                else Seat(v.weapon, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : v.root.up));
+                if (v.reversed && across.sqrMagnitude > 1e-6f) Seat(v.weapon, art, InFist(a, 0)?.at ?? palm, Quaternion.LookRotation(-across, -fingers));
+                else if (InFist(a, v.lay) is var (at, turn))
+                {
+                    // (At rest the forearm turned so that it runs on ahead and a little down, whatever way the clip has
+                    // the hand: crouched, the palm back, it hung from the fist to the floor. Producto, 18/11.)
+                    // (Not on a sword's guard, eased: there it is square out of the fist, up and ahead.)
+                    bool swordGuard = Guarding(v) && GuardOf(v) == "sword";
+                    v.swordGuard = dt > 0 ? Mathf.MoveTowards(v.swordGuard, swordGuard ? 1 : 0, dt / LowEase) : swordGuard ? 1 : 0;
+                    float still = (1 - Mathf.InverseLerp(RestLay, StrokeLay, v.lay)) * (1 - v.carry) * (1 - v.swordGuard);
+                    // (No further down than keeps its tip off the floor: a long one, crouched.)
+                    float most = BladeLine(v) is var (from, tip) && Vector3.Distance(from, tip) > 1e-3f
+                        ? Mathf.Asin(Mathf.Clamp01((at.y - v.root.position.y - TipOffFloor) / Vector3.Distance(from, tip))) * Mathf.Rad2Deg : 90;
+                    // (Crouched, out to its right too, past the thigh: ahead it went through it, 11 cm with the bat.)
+                    v.low = dt > 0 ? Mathf.MoveTowards(v.low, v.crouched ? 1 : 0, dt / LowEase) : v.crouched ? 1 : 0;
+                    var ahead = Quaternion.AngleAxis(Mathf.Lerp(AheadOut, LowOut, v.low), Vector3.up) * AheadWay(v.root, Mathf.Min(AheadDown, most));
+                    if (still > 0 && Ahead(hand, fingers, turn * Vector3.forward, ahead, still) && InFist(a, v.lay) is var (at2, turn2)) (at, turn) = (at2, turn2);
+                    // (And how it lies in the fist at rest, by the way the hand is then: square across it runs so far off
+                    // AheadWay towards the fingers or away from them; RestLay at most, RestLayLeast at least. With the arm
+                    // hanging, RestLay; crouched, the hand back and down, the least.)
+                    if (InFist(a, 0) is var (_, square))
+                    {
+                        v.restLay = Mathf.Clamp(Mathf.Atan2(Vector3.Dot(ahead, -(square * Vector3.up)), Vector3.Dot(ahead, square * Vector3.forward)) * Mathf.Rad2Deg, RestLayLeast, RestLay);
+                    }
+                    // (What is left to that way, the hand turned as far as it goes, the wrist's: WristMost degrees at most, and
+                    // all of what keeps its tip off the floor.)
+                    var runs = turn * Vector3.forward;
+                    if (still > 0)
+                    {
+                        Quaternion.FromToRotation(runs, ahead).ToAngleAxis(out float off, out var about);
+                        float steep = Mathf.Asin(Mathf.Clamp(-runs.y, -1, 1)) * Mathf.Rad2Deg;
+                        var spin = Quaternion.AngleAxis(Mathf.Min(off, Mathf.Max(WristMost, steep - most)) * still, about);
+                        at = hand.position + spin * (at - hand.position);
+                        hand.rotation = spin * hand.rotation;
+                        turn = spin * turn;
+                    }
+                    if (v.carry > 0)
+                    {
+                        var way = Carried(v, turn * Vector3.forward);
+                        turn = Quaternion.LookRotation(way, Vector3.ProjectOnPlane(turn * Vector3.up, way));
+                    }
+                    Seat(v.weapon, art, at, turn, true, v.trail);
+                }
             }
             // Two-handed (the chainsaw): the left hand on its other grip, the elbow out to the left and down.
-            if (art?.two != null && art.two.Length >= 3)
-                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, v.weapon.TransformPoint(new Vector3(art.two[0], art.two[1], art.two[2])),
-                    v.root.TransformDirection(new Vector3(-1, -0.7f, 0)), 0.02f);
+            // (At rest in the right hand alone, WeaponArt.trail or alone: the left one onto it as it goes on guard or strikes.)
+            bool alone = art != null && (art.trail > 0 || art.alone);
+            if (art?.two != null && art.two.Length >= 3 && (!alone || v.trail < 1))
+            {
+                var onto = v.weapon.TransformPoint(new Vector3(art.two[0], art.two[1], art.two[2]));
+                if (alone && leftHand != null) onto = Vector3.Lerp(onto, leftHand.position, Mathf.SmoothStep(0, 1, v.trail));
+                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, onto, v.root.TransformDirection(new Vector3(-1, -0.7f, 0)), 0.02f);
+                if (!alone || v.trail < 0.5f) Fist(a, true);
+            }
         }
+
+        /// <summary>
+        /// A1 (Arturo, 18/11: the knife came out under the fist straight down, a continuation of the forearm, no handle to be
+        /// seen): how a handle lies in the right fist, in degrees from square across the palm (out on the thumb's side, the
+        /// pommel on the little finger's) towards the fingers' way: at rest, with the arm hanging, ahead and that far under
+        /// the level; through a stroke; and how fast it turns from one to the other (degrees a second).
+        /// </summary>
+        static readonly float RestLay = Tried("BASTION_AGARRE", 1)?.x ?? 38, StrokeLay = Tried("BASTION_AGARRE_GOLPE", 2)?.x ?? 60;
+        const float LayRate = 100;
+        /// <summary>How far the wrist bends to the little finger's side through a stroke (degrees).</summary>
+        static readonly float WristBend = Tried("BASTION_AGARRE_GOLPE", 2)?.y ?? 25;
+        /// <summary>
+        /// Where the middle of a handle is in the closed fist, from the wrist, in lengths of the wrist to the middle knuckle:
+        /// along the fingers, into the palm's side, and towards the index.
+        /// </summary>
+        static readonly Vector3 FistAt = Tried("BASTION_AGARRE_EN") ?? new Vector3(0.8f, 0.3f, 0);
+
+        /// <summary>
+        /// A handle in `a`'s closed right fist, `lay` degrees from square across the palm: where its middle goes and its turn
+        /// (forward the way it runs out on the thumb's side, up its back, away from the knuckles: an edge towards them).
+        /// </summary>
+        static (Vector3 at, Quaternion turn)? InFist(Animator a, float lay)
+        {
+            Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal),
+                little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (hand == null || index == null || little == null || middle == null) return null;
+            var fingers = middle.position - hand.position;
+            float length = fingers.magnitude;
+            var across = Vector3.ProjectOnPlane(index.position - little.position, fingers);
+            if (length < 1e-5f || across.sqrMagnitude < 1e-10f) return null;
+            fingers /= length;
+            across.Normalize();
+            var palmward = Vector3.Cross(fingers, across);
+            float r = lay * Mathf.Deg2Rad;
+            var way = across * Mathf.Cos(r) + fingers * Mathf.Sin(r);
+            return (hand.position + (fingers * FistAt.x + palmward * FistAt.y + across * FistAt.z) * length, Quaternion.LookRotation(way, across * Mathf.Sin(r) - fingers * Mathf.Cos(r)));
+        }
+
+        /// <summary>
+        /// The right forearm turned about the fingers' way (`fingers`) so that what the fist holds, running `way`, runs on
+        /// ahead of `root` and AheadDown degrees under the level as nearly as that turn allows, TwistMost degrees at most,
+        /// `k` of it; true if it turned.
+        /// </summary>
+        static bool Ahead(Transform hand, Vector3 fingers, Vector3 way, Vector3 want, float k)
+        {
+            Vector3 from = Vector3.ProjectOnPlane(way, fingers), to = Vector3.ProjectOnPlane(want, fingers);
+            // (The fingers themselves ahead: no turn about them brings it nearer; eased out as they come to it.)
+            k *= Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.2f, 0.5f, to.magnitude));
+            if (k <= 0 || from.sqrMagnitude < 0.01f) return false;
+            float angle = Mathf.Clamp(Vector3.SignedAngle(from, to, fingers), -TwistMost, TwistMost) * k;
+            if (Mathf.Abs(angle) < 0.5f) return false;
+            hand.rotation = Quaternion.AngleAxis(angle, fingers) * hand.rotation;
+            return true;
+        }
+
+        const float AheadDown = 25, TwistMost = 80, RestLayLeast = -30, WristMost = 35;
+        /// <summary>Crouched: how far out to its right a blade at rest runs (degrees), and the seconds it takes to come to it.</summary>
+        const float LowOut = 40, LowEase = 0.3f;
+        /// <summary>Standing: how far out to its right it runs, as the arm hanging has it (degrees; straight ahead, the pan's dish went 7 cm into the thigh).</summary>
+        const float AheadOut = 22;
+        /// <summary>How high over the floor a blade's tip is kept at rest (metres).</summary>
+        const float TipOffFloor = 0.08f;
+
+        /// <summary>Ahead of `root` and `degrees` under the level: the way a blade at rest runs, as nearly as the hand allows.</summary>
+        static Vector3 AheadWay(Transform root, float degrees)
+        {
+            float down = degrees * Mathf.Deg2Rad;
+            return root.forward * Mathf.Cos(down) - Vector3.up * Mathf.Sin(down);
+        }
+
+        /// <summary>Seconds the hand takes along a shaft between where it carries it at the trail and where it fights with it (WeaponArt.trail).</summary>
+        const float TrailEase = 0.25f;
 
         /// <summary>How far out a low guard holds its weapon's grip past «Rifle Lowered»'s right hand (metres, of a figure's scale 1).</summary>
         const float LowAhead = 0.13f;
@@ -1170,11 +1304,16 @@ namespace Bastion.Client.Units
         /// `model` (`art`'s) with its grip at `at` and the way it runs from there along `turn`'s forward, its top (+y) towards
         /// `turn`'s up (WeaponArt grip and along; without them, as the knife and the machete: its origin, +z).
         /// </summary>
-        static void Seat(Transform model, WeaponArt art, Vector3 at, Quaternion turn)
+        static void Seat(Transform model, WeaponArt art, Vector3 at, Quaternion turn, bool fist = false, float trail = 0)
         {
             var along = art?.along != null && art.along.Length >= 3 ? new Vector3(art.along[0], art.along[1], art.along[2]) : Vector3.forward;
+            // (In the fist, turned about the way it runs by WeaponArt.roll: the crowbar's hook away from the wrist.)
+            if (fist && art != null && art.roll != 0) turn *= Quaternion.AngleAxis(art.roll, Vector3.forward);
             model.rotation = turn * Quaternion.Inverse(Quaternion.LookRotation(along, Mathf.Abs(along.normalized.y) > 0.9f ? Vector3.forward : Vector3.up));
             var grip = art?.grip != null && art.grip.Length >= 3 ? new Vector3(art.grip[0], art.grip[1], art.grip[2]) : Vector3.zero;
+            // (`fist`: where the fist closes on it, WeaponArt.fist on along it from its grip.)
+            // (And `trail` of WeaponArt.trail further: carried at the trail.)
+            if (fist && art != null) grip += along.normalized * (art.fist + art.trail * trail);
             model.position = at - (model.TransformPoint(grip) - model.position);
         }
 
@@ -1253,6 +1392,17 @@ namespace Bastion.Client.Units
             {
                 var d = tip - hips.position;
                 parts.Add(FormattableString.Invariant($"tip={Vector3.Dot(d, v.root.forward):0.00},{d.y:0.00}"));
+                // (A1, 18/11: the way it runs, the fingers' and from the little finger to the index, in the root's frame: right, up, ahead.)
+                if (BladeLine(v) is var (from, to) && a.GetBoneTransform(HumanBodyBones.RightHand) is Transform bh && a.GetBoneTransform(HumanBodyBones.RightMiddleProximal) is Transform bm
+                    && a.GetBoneTransform(HumanBodyBones.RightIndexProximal) is Transform bi && a.GetBoneTransform(HumanBodyBones.RightLittleProximal) is Transform bl)
+                {
+                    string In(Vector3 w)
+                    {
+                        var l = v.root.InverseTransformDirection(w.normalized);
+                        return FormattableString.Invariant($"{l.x:0.00}/{l.y:0.00}/{l.z:0.00}");
+                    }
+                    parts.Add($"way={In(to - from)} fingers={In(bm.position - bh.position)} across={In(bi.position - bl.position)} lay={v.lay.ToString("0", CultureInfo.InvariantCulture)}");
+                }
             }
             if (left is Vector3 l)
             {

@@ -269,6 +269,30 @@ namespace Bastion.Engine.Tests
             Assert.Equal(0, d.Soldiers.Single((x) => x.Id == theirs.Run!.Joined).Owner);
         }
 
+        [Fact]
+        public void TheRecruitLearnsBetweenStagesToo()
+        {
+            // G15 (Arturo, 18/11): the survivor brought out, a soldier of the squad, learns a cell of the board on the map,
+            // and the next stage's fighter has it.
+            var (c, s) = Rescue(level: 2);
+            var vip = Survivor(s);
+            var u = Squaddies(s)[0];
+            u.Pos = Beside(s, vip);
+            Assert.True(Exec(s, Ability(u.Id, AbilityIds.Talk)).Ok);
+            Aboard(s, Squaddies(s).Concat(new[] { vip }));
+            var report = EndFight(c, s, Outcomes.Victory, EndReasons.Objective);
+            var joined = c.Soldiers.Single((x) => x.Id == report.Run!.Joined);
+            Assert.Contains(joined.Id, c.Run!.Squad);
+            var skills = Bars.NoSkills();
+            skills[SkillIds.Shooting] = Bars.BarsCost(1);
+            joined.Skills = skills;
+            Ok(c, new UnlockCommand { Soldier = joined.Id, Cell = "steadyHand" }, joined.Owner);
+            Assert.True(GoTo(c, NodeKinds.Normal).Launch);
+            var next = new Bastion.Net.EngineCampaignRules().LaunchMission(c, new Rng(77))!.Value.state;
+            var plain = Bars.FighterStatsOf(joined.Skills, joined.Growth, new string[0]).Mods.GunAim;
+            Assert.Equal(plain + 3, next.Units.Single((x) => x.CampaignId == joined.Id).Mods.GunAim);
+        }
+
         /// <summary>A map seed past `from` whose normal fight has a survivor loose on it (RunMap.LooseSurvivor).</summary>
         private static int LooseSeed(int from = 1)
         {

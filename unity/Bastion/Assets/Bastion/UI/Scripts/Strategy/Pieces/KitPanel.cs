@@ -22,6 +22,7 @@ namespace Bastion.UI.Strategy
         readonly Label head;
         readonly Label name;
         readonly Label line;
+        readonly VisualElement foot;
         readonly Label note;
         readonly VisualElement pack;
         readonly VisualElement[] holders = new VisualElement[6];
@@ -46,6 +47,9 @@ namespace Bastion.UI.Strategy
             chooser = Ui.El("stash-chooser", Root);
             name = Ui.Text("", "stash-name font-title", Root);
             line = Ui.Text("", "stash-line muted", Root);
+            // Soldados' «Tablero de habilidades» between stages under the chosen one's name (U10, Arturo 18/11 cuadro 56:
+            // «B»), and its points to spend.
+            foot = Ui.El("skill-foot kit-board", Root);
             var places = Ui.El("stash-places", Root);
             // The primary on its own; the melee weapon and the pistol; the vest and the belt's two.
             var row1 = Ui.El("stash-row", places);
@@ -78,6 +82,7 @@ namespace Bastion.UI.Strategy
             if (kit == null)
             {
                 Ui.Show(note, false);
+                Ui.Show(foot, false);
                 return;
             }
             name.text = (kit.Name ?? "").ToUpperInvariant();
@@ -91,6 +96,17 @@ namespace Bastion.UI.Strategy
             if (kit.Pack != null) board.SetGrid(pack, kit.Pack);
             note.text = kit.Note ?? "";
             Ui.Show(note, !string.IsNullOrEmpty(kit.Note));
+            foot.Clear();
+            Ui.Show(foot, kit.Board != null);
+            if (kit.Board != null)
+            {
+                var id = kit.Soldier;
+                var open = new Button(() => handlers.OnBoardFor(id)) { text = kit.Board.ToUpperInvariant() };
+                Ui.AddClasses(open, "skill-board font-title");
+                open.EnableInClassList("skill-board--pulse", kit.BoardPulse);
+                foot.Add(open);
+                if (!string.IsNullOrEmpty(kit.BoardPoints)) Ui.Text(kit.BoardPoints, "skill-foot__points font-title", foot);
+            }
         }
 
         /// <summary>A bust came (StrategyRoot.Repaint): the tabs drawn again with it, the grids left as they are.</summary>
@@ -133,6 +149,12 @@ namespace Bastion.UI.Strategy
                 {
                     var shape = Ui.El("stash-tab__silhouette", bust);
                     shape.style.backgroundImage = new StyleBackground(silhouette);
+                }
+                // A cell to learn now (U10): Soldados' «▲» on the bust, a mark only (the board is the key under the name).
+                if (s.Points)
+                {
+                    var mark = Ui.Text("▲", "soldier-tile__points font-title", face);
+                    tips.Attach(mark, s.PointsTip);
                 }
                 Ui.Text(s.Name, "stash-tab__label", b).pickingMode = PickingMode.Ignore;
                 if (s.HpMax > 0)

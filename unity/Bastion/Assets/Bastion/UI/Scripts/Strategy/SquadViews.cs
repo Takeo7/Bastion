@@ -135,6 +135,8 @@ namespace Bastion.UI.Strategy
         public string Recruit;
         public bool RecruitEnabled = true;
         public string Tip;
+        /// <summary>The stage's report (U10): «1 punto por gastar», a key to the soldier's board; null, none.</summary>
+        public string Learn;
     }
 
     [Serializable]

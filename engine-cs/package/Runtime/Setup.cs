@@ -820,7 +820,9 @@ namespace Bastion.Engine
             var storeys = layout.Storeys;
             if (storeys == null || count <= 0) return new List<(Pos, double)>();
             int At(int x, int y) => y * w + x;
-            bool Built(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && Js.At(storeys, At(x, y), 0) > 0;
+            // A ruin as a building (G14): its storeys gone, the dead wait in it and round its corners as before.
+            var ruins = new HashSet<int>(layout.Ruins ?? new List<int>());
+            bool Built(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && (Js.At(storeys, At(x, y), 0) > 0 || ruins.Contains(At(x, y)));
             bool Near(int x, int y, IEnumerable<Vec2> ps, double d) => ps.Any((p) => Js.Hypot(p.X - x, p.Y - y) < d);
             var dead = units.Where((u) => u.Team == Teams.Alien).Select((u) => (Vec2)u.Pos).ToList();
             var taken = new HashSet<int>(units.Select((u) => At(u.Pos.X, u.Pos.Y)));

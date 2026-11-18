@@ -246,12 +246,27 @@ namespace Bastion.UI.Hud
         const float MarkPixels = 64;
         string tagsKey;
 
+        /// <summary>
+        /// Over the map seen from above (M), the narrowest a mark at the map's scale is drawn, in pixels; 0, as the world has
+        /// it (Arturo, 18/11, cuadro 55: Mayús on the map, the rucksack still told and two cars side by side apart).
+        /// </summary>
+        public float TagFloor;
+
+        /// <summary>What the tags were last placed for (Follow): the camera, its lens, the screen, the floor; frames left to place them again.</summary>
+        Matrix4x4 tagsCamera;
+        float tagsLens;
+        Vector2 tagsScreen;
+        float tagsFloor;
+        int tagsDirty;
+
         /// <summary>The tags over the map (WorldTagView), made again only when they change.</summary>
         public void SetTags(List<WorldTagView> list)
         {
             var key = list == null ? "" : string.Join("|", list.ConvertAll(Ui.Key));
             if (key == tagsKey) return;
             tagsKey = key;
+            // (Placed again two frames: a new one's size is only known once laid out.)
+            tagsDirty = 2;
             foreach (var t in tags) t.el.RemoveFromHierarchy();
             tags.Clear();
             if (list == null) return;
@@ -376,19 +391,33 @@ namespace Bastion.UI.Hud
                 }
                 f.Label.style.opacity = t < 0.7f ? 1f : 1f - (t - 0.7f) / 0.3f;
             }
-            foreach (var t in tags)
+            // The tags stay where they were while nothing moved (their places in the world never do): forty-odd marks with
+            // Mayús on the map cost 1.6 ms a frame placed again each frame (U11, Producto 18/11).
+            var lens = camera.orthographic ? camera.orthographicSize : camera.fieldOfView;
+            var screen = panel.visualTree.layout.size;
+            if (camera.transform.localToWorldMatrix != tagsCamera || lens != tagsLens || screen != tagsScreen || TagFloor != tagsFloor)
             {
-                if (t.size <= 0)
+                (tagsCamera, tagsLens, tagsScreen, tagsFloor) = (camera.transform.localToWorldMatrix, lens, screen, TagFloor);
+                tagsDirty = 2;
+            }
+            if (tagsDirty > 0)
+            {
+                tagsDirty--;
+                foreach (var t in tags)
                 {
-                    Place(t.el, panel, camera, t.world, 0, 1f);
-                    continue;
+                    if (t.size <= 0)
+                    {
+                        Place(t.el, panel, camera, t.world, 0, 1f);
+                        continue;
+                    }
+                    // At the map's scale (lootMarks.ts SIZE): its width in the world across the screen, wherever the camera
+                    // is; from above, never narrower than TagFloor.
+                    Place(t.el, panel, camera, t.world, 0, 0.5f);
+                    var a = camera.WorldToViewportPoint(t.world);
+                    var b = camera.WorldToViewportPoint(t.world + camera.transform.right * t.size);
+                    var k = Mathf.Max(Mathf.Abs(b.x - a.x) * panel.visualTree.layout.width, TagFloor) / MarkPixels;
+                    t.el.style.scale = new Scale(new Vector3(k, k, 1));
                 }
-                // At the map's scale (lootMarks.ts SIZE): its width in the world across the screen, wherever the camera is.
-                Place(t.el, panel, camera, t.world, 0, 0.5f);
-                var a = camera.WorldToViewportPoint(t.world);
-                var b = camera.WorldToViewportPoint(t.world + camera.transform.right * t.size);
-                var k = Mathf.Abs(b.x - a.x) * panel.visualTree.layout.width / MarkPixels;
-                t.el.style.scale = new Scale(new Vector3(k, k, 1));
             }
             // Under the tile, a little below its middle (the web's margin-top: 30px); near the edge, slid in to be read whole.
             if (note != null) Place(note, panel, camera, noteAt, 30, 0, true);

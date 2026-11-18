@@ -51,6 +51,9 @@ namespace Bastion.Engine
                     return Vote(c, m, ctx);
                 case UnlockCommand m:
                 {
+                    // Between stages, at a stop too; not with a fight going on (G15, Producto 18/11): the fighter was made
+                    // at its launch, and what it carries comes back over the kit when it ends (KitBack).
+                    if (c.Run?.Phase == RunPhases.Fight) return CampaignResult.Failure(RunTexts.LearnInFight);
                     var result = Campaign.RunsBaseCommand(c, cmd, ctx);
                     // «Todo cabe» (H3): a row more in the pack at once.
                     var s = c.Soldiers.FirstOrDefault((x) => x.Id == m.Soldier);

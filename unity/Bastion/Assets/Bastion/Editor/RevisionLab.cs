@@ -338,6 +338,14 @@ namespace Bastion.EditorTools
                     : side == "entero" ? new Vector3(1.3f, 1.1f, 3.1f) : side == "espalda" ? new Vector3(1.9f, 1.35f, -1.5f) : new Vector3(1.5f, 1.45f, 2.1f);
                 near.transform.position = feet + turn * from;
                 near.transform.LookAt(feet + Vector3.up * (side == "entero" ? 0.9f : 1.15f) + (side == "der" ? turn * new Vector3(0, 0, 0.7f) : side == "espalda" ? turn * new Vector3(0, 0, -0.2f) : Vector3.zero));
+                // (BASTION_LADO=perfil: square from its right, 4.4 m off, on a point half a metre ahead of its middle: the whole
+                // of it and of a long blade ahead of it, 720×600. A1, 18/11: which way a blade runs from the fist.)
+                bool profile = side == "perfil";
+                if (profile)
+                {
+                    near.transform.position = feet + turn * new Vector3(4.4f, 1.0f, 0.5f);
+                    near.transform.LookAt(feet + Vector3.up * 0.9f + turn * new Vector3(0, 0, 0.5f));
+                }
                 // (BASTION_LADO=mano: 0.7 m off the right hand, from its right and a little in front, on it.)
                 if (side == "mano")
                 {
@@ -348,7 +356,7 @@ namespace Bastion.EditorTools
                 string a = System.IO.Path.Combine(folder, art + "-cerca"), b = System.IO.Path.Combine(folder, art + "-juego");
                 System.IO.Directory.CreateDirectory(a);
                 System.IO.Directory.CreateDirectory(b);
-                Shots.Render(near, 480, 600, System.IO.Path.Combine(a, $"f{frame:000}.png"));
+                Shots.Render(near, profile ? 720 : 480, 600, System.IO.Path.Combine(a, $"f{frame:000}.png"));
                 // (BASTION_HOMBROS=1: the shoulder and the face close, into folder/<art>-perfil, square from its right, and
                 // folder/<art>-frente, from ahead and to its right, folder/<art>-izq, from its left and ahead, and
                 // folder/<art>-detras, from behind its right shoulder; on a point between its head and chest, 0.25 m ahead;
@@ -607,10 +615,75 @@ namespace Bastion.EditorTools
             return (deepest, at);
         }
 
+        static readonly Dictionary<Animator, List<Segment>> profilesOf = new Dictionary<Animator, List<Segment>>();
+
+        /// <summary>
+        /// A1 (Producto, 18/11: «lo más hondo que entra en mano, muslo y suelo»): how deep `model`, held in `a`'s right hand,
+        /// goes (cm) into that hand's bones (the palm's, wrist to each knuckle, 1.3 cm thick at a figure's scale 1, and the
+        /// fingers', 0.9), into the thighs and into the rest of the body (Into's profile, its vertices within a fist of the
+        /// palms left out), and under `floor` (the feet's height).
+        /// </summary>
+        internal static string IntoParts(Animator a, Transform model, float floor)
+        {
+            if (a == null || !a.isHuman || model == null) return "-";
+            if (!profilesOf.TryGetValue(a, out var profile))
+            {
+                var body = a.GetComponentsInChildren<SkinnedMeshRenderer>().Where(r => r.enabled && r.gameObject.activeInHierarchy && r.sharedMesh != null).ToList();
+                profilesOf[a] = profile = Profile(a, body);
+            }
+            float scale = a.transform.lossyScale.y * Bastion.Client.Units.Figures.CharacterScale;
+            var capsules = new List<(Vector3 a, Vector3 b, float r)>();
+            var wrist = a.GetBoneTransform(HumanBodyBones.RightHand);
+            for (var b = HumanBodyBones.RightThumbProximal; b <= HumanBodyBones.RightLittleDistal; b++)
+            {
+                var t = a.GetBoneTransform(b);
+                if (t == null) continue;
+                int joint = (b - HumanBodyBones.RightThumbProximal) % 3;
+                bool thumb = b <= HumanBodyBones.RightThumbDistal;
+                if (joint == 0 && !thumb && wrist != null) capsules.Add((wrist.position, t.position, 0.013f * scale));
+                var next = joint < 2 ? a.GetBoneTransform(b + 1) : null;
+                var end = next != null ? next.position : t.position + (t.position - t.parent.position).normalized * 0.02f * scale;
+                capsules.Add((t.position, end, 0.009f * scale));
+            }
+            var palms = new List<Vector3>();
+            foreach (var (hand, knuckle) in new[] { (HumanBodyBones.RightHand, HumanBodyBones.RightMiddleProximal), (HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal) })
+                if (a.GetBoneTransform(hand) is Transform h) palms.Add(a.GetBoneTransform(knuckle) is Transform k ? Vector3.Lerp(h.position, k.position, 0.6f) : h.position);
+            float inHand = 0, inThigh = 0, inBody = 0, under = 0;
+            string where = "-";
+            foreach (var mf in model.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null || !mf.gameObject.activeInHierarchy || mf.name.StartsWith("marca")) continue;
+                var vv = Readable(mf.sharedMesh);
+                int stride = Mathf.Max(1, vv.Length / 600);
+                var m = mf.transform.localToWorldMatrix;
+                for (int i = 0; i < vv.Length; i += stride)
+                {
+                    var p = m.MultiplyPoint3x4(vv[i]);
+                    under = Mathf.Max(under, floor - p.y);
+                    foreach (var (c0, c1, r) in capsules)
+                    {
+                        var d = c1 - c0;
+                        float t = d.sqrMagnitude > 1e-10f ? Mathf.Clamp01(Vector3.Dot(p - c0, d) / d.sqrMagnitude) : 0;
+                        inHand = Mathf.Max(inHand, r - Vector3.Distance(p, c0 + d * t));
+                    }
+                    if (palms.Any(q => (q - p).sqrMagnitude < 0.1f * 0.1f)) continue;
+                    foreach (var seg in profile)
+                    {
+                        if (!Place(seg, p, out int band, out int sector, out float dist)) continue;
+                        float r = seg.radius[band, sector];
+                        if (r <= 0 || dist >= r) continue;
+                        if (seg.bone.name.Contains("UpperLeg") || seg.bone == a.GetBoneTransform(HumanBodyBones.RightUpperLeg) || seg.bone == a.GetBoneTransform(HumanBodyBones.LeftUpperLeg)) inThigh = Mathf.Max(inThigh, r - dist);
+                        else if (r - dist > inBody) (inBody, where) = (r - dist, seg.bone.name);
+                    }
+                }
+            }
+            return FormattableString.Invariant($"mano={inHand * 100:0.0} muslo={inThigh * 100:0.0} otro={inBody * 100:0.0}@{where} suelo={under * 100:0.0}");
+        }
+
         static readonly Dictionary<Mesh, Vector3[]> readable = new Dictionary<Mesh, Vector3[]>();
 
         /// <summary>A mesh's vertices even when it isn't imported Read/Write (in play mode those come back empty): through a copy CombineMeshes makes.</summary>
-        static Vector3[] Readable(Mesh mesh)
+        internal static Vector3[] Readable(Mesh mesh)
         {
             if (readable.TryGetValue(mesh, out var vv)) return vv;
             vv = mesh.isReadable ? mesh.vertices : Array.Empty<Vector3>();
@@ -820,6 +893,9 @@ namespace Bastion.EditorTools
                         var (u, art) = row[k];
                         string into = depth ? " " + IntoReport(u.Id) : "";
                         Debug.Log(FormattableString.Invariant($"[cuerpo] {Time.time:0.000} {now} {art} {units.GripReport(u.Id)}{into}"));
+                        // (A1, 18/11: what is in its hand, by parts.)
+                        if (depth && units.transform.Find(u.Id)?.GetComponentInChildren<Animator>() is Animator rig && units.CarriedForLab(u.Id).FirstOrDefault(c => c.drawn).model is Transform held)
+                            Debug.Log(FormattableString.Invariant($"[partes] {Time.time:0.000} {now} {art} {IntoParts(rig, held, units.Feet(u.Id).y)}"));
                         if (stroke) Debug.Log(FormattableString.Invariant($"[golpe] {Time.time:0.000} {now} {art} {Blow(u.Id, dead[k].Id)}"));
                         if (stroke && Environment.GetEnvironmentVariable("BASTION_STANCE") == "1") Debug.Log(FormattableString.Invariant($"[capas] {Time.time:0.000} {art} {units.Stance(u.Id)}"));
                     }
@@ -874,6 +950,15 @@ namespace Bastion.EditorTools
                     units.Sync(state);
                     await Awaitable.WaitForSecondsAsync(1.6f);
                     foreach (var (u, _) in row) u.Overwatch = false;
+                    units.Sync(state);
+                    // (A1, 18/11: crouched too, the blade in the hand.)
+                    now = "levantado";
+                    await Awaitable.WaitForSecondsAsync(0.8f);
+                    now = "agachado";
+                    foreach (var (u, _) in row) u.Hunkered = true;
+                    units.Sync(state);
+                    await Awaitable.WaitForSecondsAsync(1.6f);
+                    foreach (var (u, _) in row) u.Hunkered = false;
                     units.Sync(state);
                     now = "fin";
                     await Awaitable.WaitForSecondsAsync(0.8f);

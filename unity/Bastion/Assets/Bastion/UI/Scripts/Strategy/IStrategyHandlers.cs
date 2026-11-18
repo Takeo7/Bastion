@@ -33,6 +33,8 @@ namespace Bastion.UI.Strategy
         void OnPick(string pick, string option);
         /// <summary>«Tablero de habilidades»: the board.</summary>
         void OnBoard();
+        /// <summary>That soldier's board, from the expedition's map, its stops and the stage's report (U10).</summary>
+        void OnBoardFor(string soldier);
 
         // Personalizar.
         void OnCustomName(string name, string nickname);
@@ -96,6 +98,7 @@ namespace Bastion.UI.Strategy
         public void OnCare(int index) { }
         public void OnPick(string pick, string option) { }
         public void OnBoard() { }
+        public void OnBoardFor(string soldier) { }
         public void OnCustomName(string name, string nickname) { }
         public void OnCustomChoice(string group, string id, bool preview) { }
         public void OnCustomColor(string part, string color, bool preview) { }
@@ -133,6 +136,7 @@ namespace Bastion.UI.Strategy
         public void OnCare(int index) => Target.OnCare(index);
         public void OnPick(string pick, string option) => Target.OnPick(pick, option);
         public void OnBoard() => Target.OnBoard();
+        public void OnBoardFor(string soldier) => Target.OnBoardFor(soldier);
         public void OnCustomName(string name, string nickname) => Target.OnCustomName(name, nickname);
         public void OnCustomChoice(string group, string id, bool preview) => Target.OnCustomChoice(group, id, preview);
         public void OnCustomColor(string part, string color, bool preview) => Target.OnCustomColor(part, color, preview);

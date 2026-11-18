@@ -458,6 +458,7 @@ namespace Bastion.UI.Hud
         public void OnFloor(int dir) => hud.Toast(dir > 0 ? "Subir de planta" : "Bajar de planta");
         public void OnMenu() => hud.Toast("Menú");
         public void OnHurry(bool on) { }
+        public void OnSearchAll() { }
         public void OnTurnCamera(int dir) { }
         public void OnItem(PackOrder order) => hud.Toast($"Mochila: {order.Action} {order.Index} {order.Id} {order.To}");
         public void OnTakeAll(System.Collections.Generic.List<string> ids) => hud.Toast($"Coger {ids.Count}");

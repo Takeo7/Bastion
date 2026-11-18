@@ -40,6 +40,12 @@ namespace Bastion.UI.Strategy
         public string Tip;
         /// <summary>In a run, the health left and the most (Run.Hp, Runs.MaxHp); 0, none shown.</summary>
         public int Hp, HpMax;
+        /// <summary>
+        /// Between stages (U10, Arturo 18/11): one of this player's with a cell it can learn now (Missions.CanSpendPoints),
+        /// Soldados' «▲» on its bust.
+        /// </summary>
+        public bool Points;
+        public string PointsTip;
     }
 
     /// <summary>A soldier's kit (Kit): its six places and its pack.</summary>
@@ -56,6 +62,13 @@ namespace Bastion.UI.Strategy
         public GearGridView Pack;
         /// <summary>On the partner's: whose it is and that it can't be touched.</summary>
         public string Note;
+        /// <summary>
+        /// Between stages (U10): Soldados' «Tablero de habilidades» under the name, its points to spend, pressing for
+        /// them if one's own; null, none (Almacén).
+        /// </summary>
+        public string Board;
+        public string BoardPoints;
+        public bool BoardPulse;
     }
 
     /// <summary>

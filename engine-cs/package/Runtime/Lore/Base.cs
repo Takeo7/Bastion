@@ -571,6 +571,21 @@ namespace Bastion.Engine
             return $"{who} cae. Su mochila se queda en el suelo, con sus armas.";
         }
 
+        /// <summary>
+        /// A run's soldier fell (U12, G16; RunPack.Fallen): its kit and its pack stay with its body, and another takes them
+        /// from its tile or beside it (RunPack.InReach). Said only if something stayed.
+        /// </summary>
+        public static string FallenKitLine(string who)
+        {
+            return $"{who} cae. Lo que llevaba se queda en su cuerpo y se puede registrar.";
+        }
+
+        /// <summary>A run's fallen comrade's body, by its first name, for the finger's note (U12): «El cuerpo de Chiara».</summary>
+        public static string FallenBody(string who)
+        {
+            return $"El cuerpo de {who.Split(' ')[0]}";
+        }
+
         public static string FallenPackMark(string who)
         {
             return $"MOCHILA DE {who.Split(' ')[0].ToUpperInvariant()}";

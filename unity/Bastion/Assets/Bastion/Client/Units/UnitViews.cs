@@ -302,6 +302,16 @@ namespace Bastion.Client.Units
             public float search;
             /// <summary>How far a blade in its hand is carried out of the way as it moves (HoldBlade; the 3D review's H-1, 10/11).</summary>
             public float carry;
+            /// <summary>How a blade lies in its fist now (HoldBlade: degrees from square across the palm towards the fingers' way; A1, 18/11).</summary>
+            public float lay = 38;
+            /// <summary>How it lies there at rest as the hand is now (HoldBlade: less than the arm hanging's when the hand is turned back, crouched).</summary>
+            public float restLay = 38;
+            /// <summary>How far crouched it is for what its fist holds (HoldBlade: eased, 1 crouched).</summary>
+            public float low;
+            /// <summary>How far on a sword's guard its fist is (HoldBlade: eased).</summary>
+            public float swordGuard;
+            /// <summary>How far a long two-handed one is carried at the trail (HoldBlade, WeaponArt.trail: 1 at rest, 0 on guard and striking).</summary>
+            public float trail = 1;
             /// <summary>How far its left hand is on the crowbar it pries with (Pry, PryHand; the 3D review's A-20, 10/11).</summary>
             public float pryHand;
             /// <summary>The knife held the other way up, its point out of the fist on the little finger's side (a silent takedown: UnitViews.Takedown).</summary>

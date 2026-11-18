@@ -57,6 +57,23 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Whether `u` can take `left` up from where it stands (ItemActions.Take, free): what lies on its tile; and what a
+        /// fallen comrade left (DroppedGear.From) from beside its body as well, as far as Registrar reaches, past nothing
+        /// solid (Looting.ReachesToOpen; Gancho two off): G16, Arturo 18/11, «registrar el cuerpo de mis aliados caídos».
+        /// </summary>
+        public static bool InReach(GameState s, Unit u, DroppedGear left)
+        {
+            if (Grid.SamePos(left.Pos, u.Pos)) return true;
+            return left.From != null && left.Pos.Z == u.Pos.Z && Looting.ReachesToOpen(s, u.Pos, left.Pos, 1 + Math.Max(0, u.Mods.SearchReach));
+        }
+
+        /// <summary>What `u` can take up now (InReach): the client's floor beside the pack.</summary>
+        public static List<DroppedGear> FloorInReach(GameState s, Unit u)
+        {
+            return (s.FloorGear ?? new List<DroppedGear>()).Where((d) => InReach(s, u, d)).ToList();
+        }
+
+        /// <summary>
         /// Where `g` goes in `grid`: at x, y (onto the equal pile lying there if it has room, or laid there if it fits); without
         /// them, onto an equal pile that takes it all, where it first fits, or onto one that takes some. Null: nowhere.
         /// </summary>
@@ -132,7 +149,7 @@ namespace Bastion.Engine
             if (cmd.Action == ItemActions.Take)
             {
                 var left = OnFloor(s, id);
-                if (left == null || !Grid.SamePos(left.Pos, u.Pos)) return Texts.NotHere;
+                if (left == null || !InReach(s, u, left)) return Texts.NotHere;
                 return Spot(u.Pack, left.Gear, cmd.X, cmd.Y, cmd.Turned) == null ? (cmd.X != null ? Texts.NoRoomThere : Texts.NoRoom) : null;
             }
             var placed = InPack(u, id);

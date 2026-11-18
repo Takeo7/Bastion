@@ -72,6 +72,8 @@ namespace Bastion.UI.Hud
         public bool CanUp;
         public bool CanDown;
         public bool Hurry;
+        /// <summary>The rucksack's button on (U11): everything to search shown, as Mayús held.</summary>
+        public bool Search;
     }
 
     /// <summary>One player's turn clock (the server's turnClock): how much is left, 0–1, and whether it runs now.</summary>

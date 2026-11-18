@@ -739,3 +739,11 @@
     -unity-background-image-tint-color: #ffffff;
     -unity-background-scale-mode: scale-to-fit;
 }
+
+/* The stage's report (U10): a soldier's key to its board, under what it learnt. */
+.lineup-card__learn {
+    height: 24px;
+    margin-top: 6px;
+    padding: 0 8px;
+    font-size: 11px;
+}

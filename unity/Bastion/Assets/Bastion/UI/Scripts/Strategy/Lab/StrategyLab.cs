@@ -1052,6 +1052,7 @@ namespace Bastion.UI.Strategy
         public void OnCare(int index) => Debug.Log("[estrategia] care " + index);
         public void OnPick(string pick, string option) => Debug.Log($"[estrategia] pick {pick} {option}");
         public void OnBoard() => Debug.Log("[estrategia] board");
+        public void OnBoardFor(string soldier) => Debug.Log($"[estrategia] board {soldier}");
         public void OnCustomName(string name, string nickname) => Debug.Log($"[estrategia] name {name} «{nickname}»");
         public void OnCustomChoice(string group, string id, bool preview) => Debug.Log($"[estrategia] choice {group} {id} {preview}");
         public void OnCustomColor(string part, string color, bool preview) => Debug.Log($"[estrategia] color {part} {color} {preview}");

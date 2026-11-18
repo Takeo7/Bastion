@@ -30,6 +30,7 @@ namespace Bastion.Engine
         public const string StashFull = "No cabe en el almacén.";
         public const string NotUsable = "Eso no se usa así.";
         public const string BetweenNodes = "Solo entre etapas.";
+        public const string LearnInFight = "Se aprende entre etapas, no en combate.";
         public const string FullHealth = "No le falta salud.";
         public const string NotInSquad = "No está en la escuadra.";
         public const string NoRun = "No hay ninguna expedición en marcha.";

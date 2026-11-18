@@ -37,7 +37,8 @@ namespace Bastion.UI.Combat
             var belt = RunPack.BeltLeft(u);
             for (var i = 0; i < 2; i++)
                 view.Kit.Add(new GearSlotView { Owner = u.Id, Slot = i == 0 ? KitSlots.Belt0 : KitSlots.Belt1, Label = "", W = 1, H = 1, Gear = i < belt.Length && belt[i] != null ? StrategyPresenter.Item(belt[i]) : null, Mine = live });
-            var underfoot = (v.FloorGear ?? new List<DroppedGear>()).Where(d => Grid.SamePos(d.Pos, u.Pos)).ToList();
+            // What lies at its feet, and what a fallen comrade beside left (G16, U12: from beside its body, as Registrar).
+            var underfoot = RunPack.FloorInReach(v, u);
             if (underfoot.Count > 0)
             {
                 var laid = new GearGrid { W = 4, H = 16 };

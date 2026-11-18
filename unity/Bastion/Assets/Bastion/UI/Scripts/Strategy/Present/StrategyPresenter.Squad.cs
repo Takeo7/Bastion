@@ -427,6 +427,12 @@ namespace Bastion.UI.Strategy
             }
             var points = (e.Bars ?? new List<BarFilled>()).Sum(b => b.Growth.Count);
             if (points > 0) v.Learned.Add(new LearnedView { Kind = "point", Count = points });
+            // In an expedition, one's own with a cell to learn now: its board from here (U10; Soldados' words).
+            if (s != null && s.Alive && s.Owner == Slot && c.Run != null && Campaign.CanSpendPoints(c, s))
+            {
+                var left = Bars.PointsLeft(s.Skills, s.Board);
+                v.Learn = $"{left} {(left == 1 ? "punto" : "puntos")} por gastar";
+            }
             return v;
         }
     }

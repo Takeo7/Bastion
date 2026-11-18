@@ -37,6 +37,19 @@ namespace Bastion.Client.Units
         static Color askedLit, askedFar;
         static readonly Dictionary<(Color, bool), Material> materials = new Dictionary<(Color, bool), Material>();
 
+        /// <summary>The line's width now (pixels): Line, or more over the map seen from above (UI's U11, Arturo 18/11).</summary>
+        public static float Width
+        {
+            get => width;
+            set
+            {
+                if (Mathf.Approximately(width, value)) return;
+                width = value;
+                foreach (var m in materials.Values) if (m != null) m.SetFloat("_Line", width);
+            }
+        }
+        static float width = Line;
+
         /// <summary>
         /// The lines round the bodies and cars on `marks`' tiles (each `lit` or `far`), and none round any other: what was
         /// shown and is still asked stays as it is. An empty list (or none), every line off.
@@ -50,7 +63,7 @@ namespace Bastion.Client.Units
                 foreach (var (at, on) in marks)
                 {
                     if (at == null) continue;
-                    var body = Looting.BodyAt(s, at);
+                    var body = Looting.BodyAt(s, at) ?? FallenAt(s, at);
                     int car = body == null ? CarAt(s, at) : -1;
                     // (Anything else, by its tile: what MapView draws there, if anything.)
                     string key = body != null ? "u " + body.Id : car >= 0 ? "c " + car : $"t {at.Z},{at.X},{at.Y}";
@@ -128,10 +141,18 @@ namespace Bastion.Client.Units
         public static float? TopOf(GameState s, Pos at)
         {
             if (s == null || at == null) return null;
-            var body = Looting.BodyAt(s, at);
+            var body = Looting.BodyAt(s, at) ?? FallenAt(s, at);
             if (body == null) return MapView.Current?.TopOf(at);
             var renderers = UnitViews.Current?.BodyRenderers(body.Id)?.Where(r => r != null).ToList();
             return renderers != null && renderers.Count > 0 ? renderers.Max(r => r.bounds.max.y) : (float?)null;
+        }
+
+        /// <summary>One of the squad fallen on `at` whose things still lie there (RunPack.Fallen; UI's U12): its body outlined as an enemy's is.</summary>
+        static Unit FallenAt(GameState s, Pos at)
+        {
+            foreach (var d in s.FloorGear ?? new List<DroppedGear>())
+                if (d.From != null && Bastion.Engine.Grid.SamePos(d.Pos, at) && s.Units.FirstOrDefault(u => u.Id == d.From) is Unit u && !u.Alive && !u.Evacuated && u.Team == Teams.Xcom) return u;
+            return null;
         }
 
         /// <summary>The anchor of the car over ground tile `at` (Decor.ObjectAt: its nose's tile), or −1.</summary>
@@ -165,7 +186,7 @@ namespace Bastion.Client.Units
             m.SetFloat("_Tint", 0);
             m.SetFloat("_Base", 0);
             m.SetFloat("_Rim", 0);
-            m.SetFloat("_Line", Line);
+            m.SetFloat("_Line", width);
             m.SetColor("_LineColor", colour);
             if (through)
             {

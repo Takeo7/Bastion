@@ -29,6 +29,11 @@ namespace Bastion.Engine
         public List<int>? Decor { get; set; }
         /// <summary>Storeys of the building each tile belongs to, 0 outside (procedural maps only; GameState.storeys).</summary>
         public List<int>? Storeys { get; set; }
+        /// <summary>
+        /// The tiles of the buildings left in ruins (Mapgen's Blocks.Ruin; G14): no storeys, seen and walked as the open
+        /// ground, but where the lone dead wait as they did when they counted as buildings (Setup.LurkerSpots). Not played.
+        /// </summary>
+        public List<int>? Ruins { get; set; }
         /// <summary>The storeys above the ground (GameState.levels; docs/FASE6-PLAN.md).</summary>
         public List<Level>? Levels { get; set; }
         /// <summary>A few places together on an upper floor, by a window and far from the squad, for a group of the living posted up there (decision 7).</summary>

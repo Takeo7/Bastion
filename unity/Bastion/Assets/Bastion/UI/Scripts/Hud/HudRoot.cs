@@ -237,6 +237,8 @@ namespace Bastion.UI.Hud
         public void SetCompass(CompassView v) => goal.SetCompass(v);
         public void SetFlags(FlagsView v) => flags.Set(v);
         public void SetWorldTags(System.Collections.Generic.List<WorldTagView> v) => flags.SetTags(v);
+        /// <summary>The narrowest a mark at the map's scale is drawn (pixels; 0, as the world has it): from above (M), U11.</summary>
+        public void SetTagFloor(float pixels) => flags.TagFloor = pixels;
         public void SetEdgeMarks(EdgeMarksView v) => edges.Set(v);
 
         /// <summary>Where the mission's goal lies, for the ring's arrow (UI-06); null, none.</summary>
@@ -395,6 +397,8 @@ namespace Bastion.UI.Hud
 
         /// <summary>The backpack's pockets shown or hidden, as its mark's click (the labs: PackSteps «pack»).</summary>
         public void TogglePockets() => unit.TogglePockets();
+        /// <summary>The pockets open (a click on a fallen comrade's body beside: what it carried, at its feet; U12).</summary>
+        public void OpenPockets() => unit.OpenPockets();
 
         /// <summary>A tag over a point for a while (whose ping it is), on a plate of `color`.</summary>
         public void Pin(Vector3 world, string text, string color, float seconds = 4) => flags.Pin(world, text, color, seconds);

@@ -1016,6 +1016,13 @@ namespace Bastion.UI.Combat
         public void OnFloor(int dir) => SetLevel(Level + dir);
         public void OnMenu() => ToggleMenu();
         public void OnHurry(bool on) => Hurry?.Invoke(on);
+
+        /// <summary>The rucksack's button, with the finger (U11, Arturo 18/11 cuadro 55): a tap shows everything to search, another hides it.</summary>
+        public void OnSearchAll()
+        {
+            searchTouch = !searchTouch;
+            LootAllKey();
+        }
         public void OnTurnCamera(int dir) => Rig?.Rotate(dir);
     }
 }

@@ -218,3 +218,18 @@
     right: 24px;
     bottom: 344px;
 }
+
+/* The rucksack's button (U11, Arturo 18/11 cuadro 55): left of the floors', always there; on, lit in the marks' bone. */
+.touch-btn--search {
+    right: 84px;
+    bottom: 284px;
+}
+
+.touch-btn--on {
+    border-radius: 26px;
+    background-color: rgba(243, 236, 220, 0.18);
+}
+
+.touch-btn--on .touch-btn__icon {
+    -unity-background-image-tint-color: #f3ecdc;
+}

@@ -135,6 +135,14 @@ namespace Bastion.UI.Strategy
                 }
                 if (!string.IsNullOrEmpty(l.Tip)) tips.Attach(tag, l.Tip);
             }
+            // The stage's report (U10): what it can learn now, a key to its board.
+            if (!string.IsNullOrEmpty(v.Learn))
+            {
+                var id = v.Id;
+                var learn = new Button(() => handlers.OnBoardFor(id)) { text = "▲ " + v.Learn.ToUpperInvariant() };
+                Ui.AddClasses(learn, "skill-board skill-board--pulse lineup-card__learn font-title");
+                card.Add(learn);
+            }
             if (!string.IsNullOrEmpty(v.Tip)) tips.Attach(card, v.Tip);
             return card;
         }

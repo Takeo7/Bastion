@@ -543,6 +543,9 @@ namespace Bastion.Engine.Tests
             Assert.Equal("MOCHILA DE ANA", Lore.FallenPackMark("Ana"));
             Assert.Equal("Registrar la mochila de Ana", Lore.FallenPackAction("Ana"));
             Assert.Equal("Mateo recoge lo que llevaba Ana: un fusil de asalto.", Lore.FallenPackTakenLine("Mateo", "Ana", "un fusil de asalto"));
+            Assert.Equal("Chiara Rossi cae. Lo que llevaba se queda en su cuerpo y se puede registrar.", Lore.FallenKitLine("Chiara Rossi"));
+            Assert.Equal("El cuerpo de Chiara", Lore.FallenBody("Chiara Rossi"));
+            Assert.Equal("El cuerpo de Ana", Lore.FallenBody("Ana"));
             Assert.Equal("Los muertos van a por cualquier vivo, también a por ellos, y el tiroteo los atrae.", Lore.LivingTip);
             Assert.Equal("Ya están aquí.", Lore.BaseSiegeText.Here);
             Assert.Equal("Salen del pinar y no dejan de salir. Coged las armas.", Lore.BaseSiegeText.Arrival);

@@ -21,6 +21,8 @@ namespace Bastion.UI.Combat
             ("Retroceso", "Terminar turno"),
             // Signalling (playtest 19/10 #14): Shift and a click, G, or the wheel's click.
             ("Mayús + clic · G · clic con la rueda", Lore.SettingsText.PingControls),
+            // Shift held, everything to search (U11; Lore's words, 18/11).
+            ("Mantener Mayús", "Resaltar lo que queda por registrar; en claro, lo que el soldado elegido alcanza desde donde está"),
             ("H · clic en su nombre", "Hoja del soldado: tablero, estadísticas y lo que lleva"),
             ("Q / E", "Girar la cámara"),
             ("Rueda", "Acercar o alejar"),
@@ -59,6 +61,8 @@ namespace Bastion.UI.Combat
             ("Una marca del borde", "Centrar la cámara en ella"),
             ("«Mapa»", "Mapa"),
             ("El ojo", "Vista de los zombis: lo que ve cada uno"),
+            // The rucksack's button (U11; Lore's words, 18/11).
+            ("El botón de la mochila", "Resaltar lo que queda por registrar, hasta otro toque; en claro, lo que el soldado elegido alcanza desde donde está"),
             ("» mantenido", "Ver más rápido el turno enemigo"),
             ("«Cancelar»", "Cancelar lo elegido"),
             ("≡", "Abrir este menú y pausar la partida"),

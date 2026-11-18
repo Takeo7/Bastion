@@ -42,6 +42,7 @@ namespace Bastion.UI.Hud
         public Bastion.UI.Gear.GearBoard Gear { set => backpack.Gear = value; }
         /// <summary>The pockets shown or hidden, as the backpack's mark's click does (the labs: PackSteps «pack»).</summary>
         public void TogglePockets() => backpack.Pockets = !backpack.Pockets;
+        public void OpenPockets() => backpack.Pockets = true;
         public void OpenSwap(string unit, string id) => backpack.OpenSwap(unit, id);
         public bool ClosePackMenu() => backpack.Close();
         public void PressedAt(VisualElement target) => backpack.PressedAt(target);

@@ -55,6 +55,22 @@ namespace Bastion.Client.Units
         public float[] along;
         public float[] two;
         public bool slung;
+        /// <summary>
+        /// A blade's (A1, 18/11): how far on along it from its grip the middle of the fist closes (metres, unscaled; AgarreLab's
+        /// Mangos): the bat's knob and the crowbar's hook out of the fist under the little finger, the fingers inside the
+        /// machete's bow, the hand by the guard of the swords. Its grip is still where it hangs from at the belt.
+        /// </summary>
+        public float fist;
+        /// <summary>
+        /// At rest the fist this much further on along it (metres, unscaled), and it slides back to fight with it (A1): the
+        /// rake, two-handed, carried at the trail in the right hand alone, about its balance; the swords, by the guard
+        /// (Producto, 18/11: held by the pommel's end at rest they read as picked up by the tip of the handle). And a blade's
+        /// turn about the way it runs, in the fist (degrees: the crowbar's hook away from the wrist).
+        /// </summary>
+        public float trail;
+        public float roll;
+        /// <summary>A two-handed one's (the chainsaw; A1): at rest in the right hand alone, by its back handle (the left one did not reach its front handle by the right leg).</summary>
+        public bool alone;
         /// <summary>Its blow: "chop", from above (macheteChop: the pan, the crowbar); none, the knife's stab or the machete's swing across.</summary>
         public string stroke;
         /// <summary>

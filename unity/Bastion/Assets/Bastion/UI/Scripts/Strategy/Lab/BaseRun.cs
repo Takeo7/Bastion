@@ -14,7 +14,7 @@ namespace Bastion.UI.Strategy
     /// BaseSession, as AppFlow mounts them) and, one at a time, the clicks of BASTION_PASOS (comma-separated), each
     /// after the host's answer to the one before. The steps: tab:&lt;view&gt;, soldier:&lt;n&gt; (one's own, in order),
     /// offer:&lt;n&gt;, zone:&lt;n&gt;, map:&lt;action&gt;, recruit, launch, wait, squad:&lt;n&gt;:on|off, armory-tab:&lt;tab&gt;,
-    /// armory-pick:&lt;id&gt;, armory:&lt;action&gt;[:&lt;arg&gt;], board, unlock:&lt;cell&gt;, vote:yes|no, withdraw, option:&lt;n&gt;,
+    /// armory-pick:&lt;id&gt;, armory:&lt;action&gt;[:&lt;arg&gt;], board, tablero:&lt;soldier&gt;, unlock:&lt;cell&gt;, vote:yes|no, withdraw, option:&lt;n&gt;,
     /// modal:&lt;n&gt;, continue, customize, custom-choice:&lt;group&gt;:&lt;id&gt;, custom-color:&lt;part&gt;:&lt;#hex&gt;,
     /// custom:&lt;action&gt;, choice:&lt;hand|belt|…&gt; (a choice of the sheet opened), esc and b (the keys), menu[:settings] (the base's menu, on a page), see-tile:&lt;x&gt;:&lt;y&gt; and see-piece:&lt;n&gt; (a proposal's «Ver»); on the clearing take:&lt;piece&gt;, fell, walk, turn, point:free[:&lt;n&gt;]|tree|post|&lt;x&gt;:&lt;y&gt;|+&lt;dx&gt;:+&lt;dy&gt;
     /// (the pointer there: free, the nearest tile where the piece in hand fits, or a line of n of it to the east; post,
@@ -32,6 +32,7 @@ namespace Bastion.UI.Strategy
 
         readonly Queue<string> steps = new Queue<string>();
         bool asked;
+        float pauseUntil;
         GameObject screens;
         BaseSession session;
         object waitingFor;
@@ -88,6 +89,15 @@ namespace Bastion.UI.Strategy
             waitingFor = null;
             waited = -1;
             if (steps.Count == 0 || steps.Peek() == "abandon" || steps.Peek() == "tobase") return;
+            // «pausa:20»: twenty seconds of the wall's clock before the next step (the partner's console client, U10).
+            if (Time.realtimeSinceStartup < pauseUntil) return;
+            if (steps.Peek().StartsWith("pausa:"))
+            {
+                var pause = steps.Dequeue();
+                pauseUntil = Time.realtimeSinceStartup + float.Parse(pause.Substring(6), System.Globalization.CultureInfo.InvariantCulture);
+                Debug.Log($"[base-run] {pause}");
+                return;
+            }
             var step = steps.Dequeue();
             Debug.Log($"[base-run] {step}");
             if (Do(control, step))
@@ -109,6 +119,7 @@ namespace Bastion.UI.Strategy
             }
             if (!battle)
             {
+                Debug.Log("[base-run] en la misión: las pantallas de la base, fuera");
                 battle = true;
                 over = false;
                 tookOff = null;
@@ -172,6 +183,10 @@ namespace Bastion.UI.Strategy
                 case "wait": control.OnWait(); return true;
                 case "squad": control.OnSquadToggle(mine.ElementAtOrDefault(N(1))?.Id, S(2) != "off"); return true;
                 case "board": control.OnBoard(); return false;
+                // «tablero:c1»: that one's board from the expedition's map, a stop or the report (U10's keys).
+                case "tablero": control.OnBoardFor(S(1)); return false;
+                // «estado»: what is open now, in the log (U10's test with two).
+                case "estado": Debug.Log($"[base-run] estado: {control.OpenNow()}"); return false;
                 case "unlock": control.OnUnlock(S(1)); return true;
                 case "vote": control.OnVote(S(1) == "yes"); return true;
                 case "withdraw": control.OnWithdraw(); return true;

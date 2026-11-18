@@ -44,6 +44,8 @@ namespace Bastion.UI.Hud
         void OnMenu();
         /// <summary>With the finger, «»» held or let go: the enemy's turn faster, or at the chosen speed (the desktop's space bar held).</summary>
         void OnHurry(bool on);
+        /// <summary>The rucksack's button (only with the finger, U11): everything to search shown, or not, a tap each.</summary>
+        void OnSearchAll();
         /// <summary>With the finger, a half of the compass touched: the camera a quarter turn left (−1) or right (1), as Q and E.</summary>
         void OnTurnCamera(int dir);
         /// <summary>An order on the shown soldier's backpack or tile (hud.ts onItem): the engine's `item` command.</summary>
@@ -82,6 +84,7 @@ namespace Bastion.UI.Hud
         public void OnFloor(int dir) { }
         public void OnMenu() { }
         public void OnHurry(bool on) { }
+        public void OnSearchAll() { }
         public void OnTurnCamera(int dir) { }
         public void OnItem(PackOrder order) { }
         public void OnTakeAll(System.Collections.Generic.List<string> ids) { }
@@ -119,6 +122,7 @@ namespace Bastion.UI.Hud
         public void OnFloor(int dir) => Target.OnFloor(dir);
         public void OnMenu() => Target.OnMenu();
         public void OnHurry(bool on) => Target.OnHurry(on);
+        public void OnSearchAll() => Target.OnSearchAll();
         public void OnTurnCamera(int dir) => Target.OnTurnCamera(dir);
         public void OnItem(PackOrder order) => Target.OnItem(order);
         public void OnTakeAll(System.Collections.Generic.List<string> ids) => Target.OnTakeAll(ids);
