@@ -189,14 +189,27 @@ namespace Bastion.Engine.Tests
                 "......",
                 "...h..",
                 "......",
+                "...h..",
             });
             var u = AddUnit(s, "s1", TemplateIds.Assault, 1, 1);
+            // (One of the dead, for the mission to go on after the first.)
+            AddUnit(s, "a1", TemplateIds.Zombie, 5, 3);
             s.Decor = Enumerable.Repeat(0, s.Width * s.Height).ToList();
             s.Decor[Grid.TileIndex(s, 3, 1)] = Decor.DecorCode(DecorKinds.LootWeapons);
+            s.Decor[Grid.TileIndex(s, 3, 3)] = Decor.DecorCode(DecorKinds.LootFood);
             Assert.Empty(Looting.SearchableTiles(s, u));
+            Assert.False(Abilities.CanTargetTile(s, u, AbilityIds.Search, new Pos { X = 3, Y = 1, Z = 0 }));
             u.Mods = Content.AddMods(u.Mods, new UnitMods { SearchReach = 1 });
-            var tile = Assert.Single(Looting.SearchableTiles(s, u));
-            Assert.Equal((3, 1), (tile.X, tile.Y));
+            Assert.Equal(new[] { (3, 1), (3, 3) }, Looting.SearchableTiles(s, u).Select((t) => (t.X, t.Y)).OrderBy((t) => t.Y));
+            // The order goes through too (UI, 18/11: refused past the ability's 1.5), straight and on the diagonal (2.83).
+            foreach (var (x, y) in new[] { (3, 1), (3, 3) })
+            {
+                var at = new Pos { X = x, Y = y, Z = 0 };
+                Assert.True(Abilities.CanTargetTile(s, u, AbilityIds.Search, at), $"{x},{y}");
+                var r = Exec(s, new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = at });
+                Assert.True(r.Ok, r.Error);
+                Assert.False(Looting.IsSearchable(s, at));
+            }
         }
 
         [Fact(DisplayName = "T2 › Armero: accessories twice as often")]

@@ -156,6 +156,55 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
+        /// What the picked one searches with a click now from where it stands, lit, with no pointer (U14, Arturo 18/11, cuadro
+        /// 64: «todo lo que tiene al lado»): the bodies, boots, boxes and furniture within Registrar's reach (Looting.
+        /// SearchableTiles: beside, two off with Gancho) while nothing stops it, and a fallen comrade's things beside, taken for
+        /// free (G16) with no actions left too (Producto, 18/11). Doors and boards only under the pointer. Only while BesideQuiet,
+        /// on the storeys up to the one in view.
+        /// </summary>
+        List<(Pos at, bool lit)> BesideToSearch()
+        {
+            var list = new List<(Pos at, bool lit)>();
+            var u = Unit();
+            if (u == null || !BesideQuiet(u)) return list;
+            if (HasSpots && Abilities.AbilityBlocker(State, u, AbilityIds.Search) == null)
+                foreach (var t in Looting.SearchableTiles(State, u))
+                    if (t.Z <= Level) list.Add((t, true));
+            foreach (var d in State.FloorGear ?? new List<DroppedGear>())
+                if (d.From != null && d.Pos.Z <= Level && !list.Any(m => Same(m.at, d.Pos)) && FallenWithGear(State, d.Pos) != null && RunPack.InReach(State, u, d))
+                    list.Add((d.Pos, true));
+            return list;
+        }
+
+        /// <summary>
+        /// Whether what `u` has beside it is marked now (BesideToSearch), as its walking range is (Refresh: Producto, 18/11, «a
+        /// la vez que el área de andar»): ours to command, in our turn with the command (not planning) and nobody else of ours
+        /// to finish first (WaitingFor), moving (not aiming, throwing, by hand or getting off La Lata), its order on its way
+        /// or its events still seen (sent, Busy) no more and its figure where the game has it; not over a shoulder, nor from
+        /// above (M), where a click brings the camera down and searches nothing (Producto, 18/11; with Mayús, as there). The
+        /// partner's actions and the dead's answers to its own don't take them away, as they don't take the range.
+        /// </summary>
+        bool BesideQuiet(Unit u) =>
+            State != null && mode == Mode.Move && !AlightArmed() && CanAct() && Commands(u) && HasCommand() && WaitingFor(u.Id) == null
+            && u.Id != sent && !Busy(u.Id) && StandsWhereSeen(u) && !Film && !(Rig != null && (Rig.Away || Rig.Overhead));
+
+        /// <summary>The soldier whose things beside are marked (BesideTick); null, none.</summary>
+        string besideFor;
+
+        /// <summary>
+        /// Each frame (Update): the marks beside come as the figure gets there and its action ends, and go as it starts walking
+        /// or acting, or the map is seen from above; made again only then (ShowWay), as Mayús's.
+        /// </summary>
+        void BesideTick()
+        {
+            var u = Unit();
+            var now = u != null && BesideQuiet(u) ? u.Id : null;
+            if (now == besideFor) return;
+            besideFor = now;
+            ShowWay();
+        }
+
+        /// <summary>
         /// What a click on a thing does, as its icon (Arturo, 7/11): the boards off (the crowbar), a door opened or shut
         /// (LineIcon's), else searched (the rucksack).
         /// </summary>

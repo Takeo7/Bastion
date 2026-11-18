@@ -815,6 +815,7 @@ namespace Bastion.UI.Combat
             Hud?.SetTagFloor(Overhead ? MapMarkPixels : 0);
             Bastion.Client.Units.SearchOutline.Width = Overhead ? MapOutline : 2;
             LootAllKey();
+            BesideTick();
             if (!GameInput.HasPointer || Rig == null) return;
             // With the finger nothing hovers: the gestures say what it did.
             if (GameInput.Touch)
@@ -1310,8 +1311,17 @@ namespace Bastion.UI.Combat
             // tags over the map made again once, after.
             searchNext = null;
             ShowWayMarks();
-            // Shift held: everything to search instead (U11).
-            ShowSearchMarks(lootAll ? AllToSearch() : searchNext);
+            // Shift held: everything to search instead (U11). Else what the picked one searches from where it stands, with
+            // no pointer (U14), and what the pointer marks besides.
+            if (lootAll)
+            {
+                ShowSearchMarks(AllToSearch());
+                return;
+            }
+            var marks = BesideToSearch();
+            foreach (var m in searchNext ?? new List<(Pos at, bool lit)>())
+                if (!marks.Any(b => Same(b.at, m.at))) marks.Add(m);
+            ShowSearchMarks(marks);
         }
 
         void ShowWayMarks()

@@ -465,8 +465,9 @@ namespace Bastion.Engine
             var tile = Grid.ToPos(at);
             var def = Content.Abilities[ability];
             if (def.Target != Engine.AbilityTargets.Tile || !Grid.InBounds(s, tile.X, tile.Y)) return false;
-            if (Grid.Distance(u.Pos, tile) > AbilityRange(u, ability)) return false;
+            // Search's reach is ReachesToOpen's: beside it, or two tiles off with Gancho (T2), past its 1.5 (UI, 18/11).
             if (ability == AbilityIds.Search) return Looting.IsSearchable(s, tile) && Looting.ReachesToOpen(s, u.Pos, tile, 1 + Math.Max(0, u.Mods.SearchReach));
+            if (Grid.Distance(u.Pos, tile) > AbilityRange(u, ability)) return false;
             if (ability == AbilityIds.OpenDoor || ability == AbilityIds.CloseDoor) return DoorTiles(s, u, ability == AbilityIds.OpenDoor ? TileKinds.Door : TileKinds.DoorOpen).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Smash) return BreakablesBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Pry) return BoardedBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
