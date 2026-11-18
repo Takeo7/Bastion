@@ -349,6 +349,9 @@ namespace Bastion.Client.Map
         /// </summary>
         PieceMap pieces;
         GameState terrain;
+
+        /// <summary>The ground's cover kept off `tiles` (indices: GroundView.ClearCover), made again where that changed.</summary>
+        public void ClearCover(IReadOnlyCollection<int> tiles) => ground?.ClearCover(tiles);
         /// <summary>The pieces as drawn, and each one's look (BasePieces.PieceKey) when they were: drawn again when one changes.</summary>
         readonly List<GameObject> pieceArt = new List<GameObject>();
         string piecesDrawn;

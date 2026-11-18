@@ -103,6 +103,7 @@ namespace Bastion.Client
             Lata?.Snowy(snow);
             Park();
             CampPlaces();
+            ShowcaseGrassOff();
             LifeBase();
             Reframe();
         }
@@ -161,6 +162,7 @@ namespace Bastion.Client
             MakeLata();
             Park();
             CampPlaces();
+            ShowcaseGrassOff();
             LifeBase();
             Reframe();
         }

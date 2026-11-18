@@ -569,6 +569,33 @@ namespace Bastion.Client
             PlaceFire(b);
         }
 
+        /// <summary>
+        /// No grass between Soldados' camera and its soldier (T1, Producto 18/11: in Personalizar the tufts went over the legs and
+        /// huge leaves stood before the camera): the ground's cover kept off the tiles within ShowcaseClearWidth of the line from
+        /// half a tile before the soldier to a tile behind the camera (Personalizar's shot is on it, nearer).
+        /// </summary>
+        void ShowcaseGrassOff()
+        {
+            if (built == null || Base == null) return;
+            var b = Base;
+            var clear = new List<int>();
+            var dir = soldierView.sqrMagnitude > 1e-6f ? soldierView.normalized : new Vector2(0, 1);
+            float far = soldierDistance + 1;
+            int x0 = Mathf.FloorToInt(Mathf.Min(soldierAt.x, soldierAt.x + dir.x * far) - ShowcaseClearWidth - 1), x1 = Mathf.CeilToInt(Mathf.Max(soldierAt.x, soldierAt.x + dir.x * far) + ShowcaseClearWidth + 1);
+            int z0 = Mathf.FloorToInt(Mathf.Min(soldierAt.y, soldierAt.y + dir.y * far) - ShowcaseClearWidth - 1), z1 = Mathf.CeilToInt(Mathf.Max(soldierAt.y, soldierAt.y + dir.y * far) + ShowcaseClearWidth + 1);
+            for (int z = Mathf.Max(0, z0); z <= Mathf.Min(b.Height - 1, z1); z++)
+                for (int x = Mathf.Max(0, x0); x <= Mathf.Min(b.Width - 1, x1); x++)
+                {
+                    var d = new Vector2(x + 0.5f, z + 0.5f) - soldierAt;
+                    float along = Vector2.Dot(d, dir), across = Mathf.Abs(d.x * dir.y - d.y * dir.x);
+                    if (along >= 0.5f && along <= far && across <= ShowcaseClearWidth) clear.Add(z * b.Width + x);
+                }
+            built.ClearCover(clear);
+        }
+
+        /// <summary>How far either side of the line from Soldados' soldier to its camera the grass is kept off (tiles).</summary>
+        const float ShowcaseClearWidth = 1.3f;
+
         /// <summary>Which piece stands on each tile of the base shown (Base.PieceAt, made once a base: it is asked thousands of times).</summary>
         BasePiece[] pieceGrid;
         BaseState gridOf;

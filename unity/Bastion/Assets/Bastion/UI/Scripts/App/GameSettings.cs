@@ -19,6 +19,7 @@ namespace Bastion.UI.App
         const string CapKey = "bastion.fpsCap";
         const string CounterKey = "bastion.showFps";
         const string TintKey = "bastion.squadTint";
+        const string CinemaKey = "bastion.cinematic";
         const string InterfaceKey = "bastion.uiScale";
         const string AutoKey = "bastion.autoQuality";
         const string AutoTakenKey = "bastion.autoTaken";
@@ -169,6 +170,22 @@ namespace Bastion.UI.App
             }
         }
 
+        /// <summary>
+        /// «Aspecto de película» (Arte's T7, 18/11: Bastion.Client.Cinematic, the grade, the haze and the blurred
+        /// background; on by default). BASTION_SIN_CINE=1 turns it off for the labs' «before» without keeping it.
+        /// </summary>
+        public static bool Cinematic
+        {
+            get => Environment.GetEnvironmentVariable("BASTION_SIN_CINE") != "1" && PlayerPrefs.GetInt(CinemaKey, 1) == 1;
+            set
+            {
+                if (Cinematic == value) return;
+                PlayerPrefs.SetInt(CinemaKey, value ? 1 : 0);
+                Bastion.Client.Cinematic.On = value;
+                Changed?.Invoke();
+            }
+        }
+
         /// <summary>For a capture (BASTION_INTERFAZ=1.3): the size as if it were so, never kept; and in the editor, the only way it applies.</summary>
         static readonly float? InterfaceForTest = float.TryParse(Environment.GetEnvironmentVariable("BASTION_INTERFAZ"), NumberStyles.Float, CultureInfo.InvariantCulture, out var f) && Array.IndexOf(InterfaceSizes, f) >= 0 ? f : (float?)null;
 
@@ -283,6 +300,8 @@ namespace Bastion.UI.App
             Bastion.Client.Map.GroundCover.Density = ShownLevel == 0 ? 0.3f : ShownLevel == 1 ? 0.6f : 1f;
             // «Ropa con el color del jugador» for Arte's figures, in the battle and on the base.
             Bastion.Client.Units.SquadTint.On = SquadTint;
+            // «Aspecto de película», Arte's (the mood shown now applied again if it changed).
+            Bastion.Client.Cinematic.On = Cinematic;
             ApplyInterface();
             if (Application.isEditor)
             {
@@ -408,6 +427,7 @@ namespace Bastion.UI.App
         public const string CapId = "fpsCap";
         public const string CounterId = "showFps";
         public const string TintId = "squadTint";
+        public const string CinemaId = "cinematic";
         public const string InterfaceId = "uiScale";
         public const string AutoId = "autoQuality";
         public const string RouterId = "routerPort";
@@ -532,6 +552,15 @@ namespace Bastion.UI.App
                 Choices = new System.Collections.Generic.List<string> { "Altos", "Medios", "Bajos" },
                 On = 2 - Level,
             },
+            // Arte's look (T7, 18/11), Lore's words; «Sí» first as «Mostrar FPS».
+            new Hud.SettingView
+            {
+                Id = CinemaId,
+                Label = "Aspecto de película",
+                About = "Más contraste y colores algo más oscuros, más bruma a lo lejos de día y el fondo desenfocado. No cambia las reglas ni lo que se ve del combate. Con gráficos «Bajos», sin desenfoque.",
+                Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
+                On = Cinematic ? 0 : 1,
+            },
             new Hud.SettingView
             {
                 Id = CapId,
@@ -606,6 +635,7 @@ namespace Bastion.UI.App
             else if (id == CapId) FpsCap = Caps[Mathf.Clamp((int)value, 0, Caps.Length - 1)];
             else if (id == CounterId) ShowFps = value == 0;
             else if (id == TintId) SquadTint = value == 1;
+            else if (id == CinemaId) Cinematic = value == 0;
             else if (id == AutoId) AutoQuality = value == 0;
             else if (id == InterfaceId) InterfaceSize = InterfaceSizes[Mathf.Clamp((int)value, 0, InterfaceSizes.Length - 1)];
             else if (id == RouterId)

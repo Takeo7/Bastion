@@ -42,7 +42,8 @@ namespace Bastion.EditorTools
     ///   MaterialPropertyBlocks, the palette's, the tint's and the fade's, which keep a renderer out of the SRP Batcher),
     ///   horneadas (each skinned body baked into a still mesh where it stands: drawn the same, nothing skinned; measured
     ///   last, as fusion, for it can't be undone).
-    ///   And T7's cinematic looks (CineLab): cine-0 (the game's, as juego), cine-A1, cine-A2… each over it.
+    ///   And T7's cinematic looks (CineLab): cine-0 (the game's, as juego), cine-A1, cine-A2… each over it; and the one
+    ///   built (Cinematic): cine (on) and sincine (off).
     /// Each frame's time, and of it the camera.Render call alone (the CPU's: culling, the passes, the draws handed on; the
     /// rest is waiting for the GPU). And the figures' step on the CPU (UnitViews, ms for a 60th of a second, the least of
     /// 60), all of them and only those seen (UnitViews.CullOutOfPlay); how many renderers and materials each figure and
@@ -347,6 +348,12 @@ namespace Bastion.EditorTools
                     // (T7: a cinematic look of CineLab's over the game's, «cine-A1»…; «cine-0», the game's as it is, to set them
                     // against. Once one has been, the rest go back to the game's.)
                     CineLab.Fixed = variant.StartsWith("cine-") ? variant.Substring(5) : CineLab.Fixed == null ? null : "0";
+                    // (T7 built: «cine», the game's cinematic look on, «sincine» off; Mood follows the camera only in play.)
+                    if (variant == "cine" || variant == "sincine")
+                    {
+                        Bastion.Client.Cinematic.On = variant == "cine";
+                        Bastion.Client.Cinematic.Follow(camera);
+                    }
                     renderer.Update();
                     bool plus = variant == "forward" || variant == "residente" || variant == "oclusion";
                     renderer.FindProperty("m_RenderingMode").intValue = plus ? 2 : mode;

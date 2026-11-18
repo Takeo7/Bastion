@@ -264,16 +264,17 @@ namespace Bastion.Client
             // default sky, and the windows went pale where 0.10.1's are dark).
             RenderSettings.reflectionIntensity = 0;
             // The haze (three's FogExp2, its density a tile): Unity's in metres.
+            // (Thicker and warmer by day with the cinematic look: Cinematic, T7.)
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = Hex(m.haze);
-            RenderSettings.fogDensity = m.hazeDensity / Map.MapSpace.Tile;
+            RenderSettings.fogColor = Cinematic.HazeColourOf(Hex(m.haze), m.night);
+            RenderSettings.fogDensity = Cinematic.HazeOf(m.hazeDensity, m.night) / Map.MapSpace.Tile;
             // (After the haze: Follow thins it for a camera far off the ground.)
             Follow();
             foreach (var camera in FindObjectsByType<Camera>(FindObjectsSortMode.None))
             {
                 camera.clearFlags = CameraClearFlags.SolidColor;
-                camera.backgroundColor = Hex(m.haze);
+                camera.backgroundColor = Cinematic.HazeColourOf(Hex(m.haze), m.night);
             }
             // The grade (Grade.shader), as globals: display values, after the tone mapping.
             var v = VividLevels[VividDefault];
@@ -286,8 +287,10 @@ namespace Bastion.Client
             Shader.SetGlobalVector("_LightGround", Hex(m.groundLight).linear * k);
             Shader.SetGlobalVector("_LightSun", Hex(m.sun).linear * (m.sunIntensity / Mathf.PI));
             Shader.SetGlobalVector("_LightSunFrom", new Vector3(m.sunFrom.x, m.sunFrom.y, -m.sunFrom.z).normalized);
-            Shader.SetGlobalFloat("_GradeExposure", m.exposure);
-            Shader.SetGlobalVector("_GradeLook", new Vector4(m.saturation, m.contrast, m.vignette, 0));
+            // (A little darker, more contrast and the film's curve with the cinematic look: Cinematic, T7.)
+            Shader.SetGlobalFloat("_GradeExposure", Cinematic.ExposureOf(m.exposure));
+            Shader.SetGlobalVector("_GradeLook", new Vector4(m.saturation, Cinematic.ContrastOf(m.contrast), m.vignette, 0));
+            Shader.SetGlobalFloat("_CineCurve", Cinematic.CurveNow);
             Shader.SetGlobalVector("_GradeShadowTint", m.shadowTint);
             Shader.SetGlobalVector("_GradeHighlightTint", m.highlightTint);
             Shader.SetGlobalVector("_GradeLift", m.lift);
@@ -314,8 +317,10 @@ namespace Bastion.Client
             {
                 float far = camera != null && camera.transform.forward.y < -0.05f ? -camera.transform.position.y / camera.transform.forward.y : 0;
                 float k = Mathf.Lerp(1, HazeNear / Mathf.Max(far, HazeNear), Mathf.InverseLerp(HazeFrom, HazeFull, far));
-                RenderSettings.fogDensity = Now.hazeDensity / Map.MapSpace.Tile * k;
+                RenderSettings.fogDensity = Cinematic.HazeOf(Now.hazeDensity, Now.night) / Map.MapSpace.Tile * k;
             }
+            // The cinematic look's blur on where the camera looks now, and its bloom (T7).
+            Cinematic.Follow(camera);
             if (fill == null) return;
             if (FillOpposite && Now != null)
             {
@@ -328,6 +333,12 @@ namespace Bastion.Client
         }
 
         void LateUpdate() => Follow();
+
+        /// <summary>The mood shown now applied again (the cinematic look turned on or off in Ajustes).</summary>
+        public void Reapply()
+        {
+            if (Now != null) Apply(Now);
+        }
 
         public void ShotStep(float dt) => Follow();
     }

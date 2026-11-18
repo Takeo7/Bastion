@@ -248,7 +248,8 @@ namespace Bastion.Engine
             switch (vehicle)
             {
                 case Moto:
-                    return new[] { (-0.5, -1.5), (-0.5, 1.5) };
+                    // Within its own place, two wide, beside its back half (Arte, 18/11: from outside it, one was 3,2 m off).
+                    return new[] { (-0.5, -0.5), (-0.5, 0.5) };
                 case 0:
                     return new[] { (0.11, -1.5), (0.11, 1.5), (-0.51, -1.5), (-0.51, 1.5) };
                 case 1:
@@ -261,10 +262,45 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Where each vehicle's doors are (Arte's MotoLab.Puertas, 18/11), as DoorsOf: along it from its middle, and out from
+        /// its middle line (+ to `side`). The motorbike's seats; the 4×4's four doors; the van's back doors; the bus's two.
+        /// </summary>
+        private static IReadOnlyList<(double Along, double Out)> DoorPointsOf(int vehicle)
+        {
+            switch (vehicle)
+            {
+                case Moto:
+                    return new[] { (-0.45, -0.62), (-0.45, 0.62) };
+                case 0:
+                    return new[] { (0.11, -0.79), (0.11, 0.79), (-0.51, -0.79), (-0.51, 0.79) };
+                case 1:
+                    // Its back doors open out: where one stands to get in, the two tiles right behind it.
+                    return new[] { (-2.5, -0.5), (-2.5, 0.5) };
+                case 3:
+                    return new[] { (2.96, 0.86), (-0.38, 0.86) };
+                default:
+                    return new (double, double)[0];
+            }
+        }
+
+        /// <summary>
+        /// What lies about that a door's tile is cleared of (Arte, 18/11: the van's block cut by a portaloo): one-tile things
+        /// that grow or lie about, as the map's own dead ends are opened (Mapgen's Soft), and a building site's portaloo.
+        /// </summary>
+        private static readonly HashSet<string> ClearedForLaLata = new HashSet<string>
+        {
+            DecorKinds.Tree, DecorKinds.Bush, DecorKinds.Rock, DecorKinds.StreetTree, DecorKinds.Bollard, DecorKinds.Planter, DecorKinds.Bin, DecorKinds.Fence,
+            DecorKinds.Wire, DecorKinds.Crates, DecorKinds.Barricade, DecorKinds.Pallets, DecorKinds.Drums, DecorKinds.Rubble, DecorKinds.Pylon,
+        };
+
+        /// <summary>
         /// La Lata's zone cut to its seats (T21, Arturo 18/11: «solo la cantidad de huecos que hay y que estén donde
-        /// corresponda con el vehículo, de sus puertas»): MissionState.Seats tiles, by its doors (DoorsOf); where a door's
-        /// tile can't be stood on, the nearest free one within two; short of them, the free tiles nearest the vehicle. Who
-        /// doesn't fit finds no tile (Rules.NoSeat as well). Without seats or the vehicle's place, as it was.
+        /// corresponda con el vehículo, de sus puertas»): MissionState.Seats tiles, by its doors as drawn (DoorsOf), the
+        /// motorbike's within its own place, made ground, one each side, and what lies about on the others cleared
+        /// (ClearedForLaLata). If one of them can't be stood on, or would stand apart, the zone is grown instead from the
+        /// vehicle, a free tile touching it or the zone at a time, the nearest to its doors (DoorPointsOf): one piece against
+        /// the vehicle, by its doors, never round what is in the way (Producto and Arte, 18/11). Who doesn't fit finds no tile
+        /// (Rules.NoSeat as well). Without seats or the vehicle's place, as it was.
         /// </summary>
         public static void SeatZone(GameState s)
         {
@@ -281,35 +317,72 @@ namespace Bastion.Engine
             var chosen = new List<Vec2>();
             bool Free(Vec2 p) => Grid.InBounds(s, p.X, p.Y) && !bus.Tiles.Any((t) => t.X == p.X && t.Y == p.Y) && !chosen.Any((t) => t.X == p.X && t.Y == p.Y)
                 && Flights.CanStopAt(s, new Pos { X = p.X, Y = p.Y, Z = 0 });
+            // Against the vehicle or a tile of the zone already chosen (any of the eight ways).
+            bool Next(Vec2 a, Vec2 b) => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y)) == 1;
+            bool Touches(Vec2 p) => bus.Tiles.Any((t) => Next(t, p)) || chosen.Any((t) => Next(t, p));
+            int ToVehicle(Vec2 p) => bus.Tiles.Min((t) => Math.Max(Math.Abs(t.X - p.X), Math.Abs(t.Y - p.Y)));
+            IEnumerable<Vec2> Touching()
+            {
+                var seen = new HashSet<(int, int)>();
+                foreach (var t in bus.Tiles.Concat(chosen).ToList())
+                {
+                    foreach (var d in Grid.Dirs8)
+                    {
+                        var p = new Vec2 { X = t.X + d.X, Y = t.Y + d.Y };
+                        if (seen.Add((p.X, p.Y)) && Free(p)) yield return p;
+                    }
+                }
+            }
             Vec2 At(double along, double out_) => new Vec2 { X = (int)Math.Floor(cx + d.X * along + o.X * out_ * side + 0.5), Y = (int)Math.Floor(cy + d.Y * along + o.Y * out_ * side + 0.5) };
+            void Ground(Vec2 p)
+            {
+                var i = Grid.TileIndex(s, p.X, p.Y);
+                s.Tiles[i] = TileKinds.Floor;
+                if (s.Decor != null && i < s.Decor.Count) s.Decor[i] = 0;
+            }
+            // The doors' tiles as drawn (DoorsOf): the motorbike's made ground; what lies about on the others, cleared.
+            var spec = new List<Vec2>();
             foreach (var (along, out_) in DoorsOf(s.Vehicle ?? 3))
             {
-                if (chosen.Count >= seats.Value) break;
                 var door = At(along, out_);
-                if (Free(door))
+                if (!Grid.InBounds(s, door.X, door.Y)) continue;
+                var at = Grid.TileIndex(s, door.X, door.Y);
+                var inPlace = bus.Tiles.Any((t) => t.X == door.X && t.Y == door.Y);
+                if (s.Vehicle == Moto && inPlace && (s.Elev.Count <= at || s.Elev[at] == 0)) Ground(door);
+                else if (!inPlace && s.Decor != null && (s.Tiles[at] == TileKinds.Low || s.Tiles[at] == TileKinds.High) && Decor.ObjectAt(s.Decor, s.Width, at) is DecorObject thing && ClearedForLaLata.Contains(thing.Kind))
                 {
-                    chosen.Add(door);
-                    continue;
+                    foreach (var j in thing.Tiles) Ground(new Vec2 { X = j % s.Width, Y = j / s.Width });
                 }
-                var near = new List<Vec2>();
-                for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) near.Add(new Vec2 { X = door.X + dx, Y = door.Y + dy });
-                // The nearest to the door, and of those the nearest to the vehicle: the zone stays round it.
-                int ToVehicle(Vec2 p) => bus.Tiles.Min((t) => Math.Max(Math.Abs(t.X - p.X), Math.Abs(t.Y - p.Y)));
-                var other = near.Where(Free).OrderBy((p) => Math.Max(Math.Abs(p.X - door.X), Math.Abs(p.Y - door.Y))).ThenBy(ToVehicle).ThenBy((p) => Math.Abs(p.X - door.X) + Math.Abs(p.Y - door.Y)).FirstOrDefault();
-                if (other != null) chosen.Add(other);
+                spec.Add(door);
             }
-            // Short of tiles (a door walled in; a run of before with more of the squad than seats): the free ones nearest it,
-            // its old zone's first.
-            if (chosen.Count < seats.Value)
+            // All of them free, each against the vehicle or one before it: as drawn.
+            bool Usable(Vec2 p) => Free(p) || (s.Vehicle == Moto && bus.Tiles.Any((t) => t.X == p.X && t.Y == p.Y) && Flights.CanStopAt(s, new Pos { X = p.X, Y = p.Y, Z = 0 }));
+            foreach (var door in spec.Take(seats.Value))
             {
-                var around = new List<Vec2>();
-                for (var y = (int)cy - 6; y <= (int)cy + 6; y++) for (var x = (int)cx - 6; x <= (int)cx + 6; x++) around.Add(new Vec2 { X = x, Y = y });
-                var old = m.EvacZone.ToList();
-                foreach (var p in around.Where((p) => Grid.InBounds(s, p.X, p.Y)).OrderBy((p) => old.Any((t) => t.X == p.X && t.Y == p.Y) ? 0 : 1).ThenBy((p) => Js.Hypot(p.X - cx, p.Y - cy)).ThenBy((p) => p.Y).ThenBy((p) => p.X))
+                if (!Usable(door) || !Touches(door))
                 {
-                    if (chosen.Count >= seats.Value) break;
-                    if (Free(p)) chosen.Add(p);
+                    chosen.Clear();
+                    break;
                 }
+                chosen.Add(door);
+            }
+            // Otherwise (a door's tile walled or stood on; Arte, 18/11: a camping's portaloo in the van's block), and for the
+            // seats past them (a run of before with more of the squad than seats): grown from the vehicle, a free tile
+            // touching it or the zone at a time, the nearest to one of its doors (DoorPointsOf), so the zone stays one piece by
+            // the doors and never goes round what is in the way.
+            var points = DoorPointsOf(s.Vehicle ?? 3).Select((p) => (X: cx + d.X * p.Along + o.X * p.Out * side, Y: cy + d.Y * p.Along + o.Y * p.Out * side)).ToList();
+            if (points.Count == 0) points.Add((cx, cy));
+            double ToDoor(Vec2 p) => points.Min((q) => Js.Hypot(p.X - q.X, p.Y - q.Y));
+            // Ties: the one further out from the vehicle, by the doors' side (behind the van, not along it).
+            var mx = points.Average((q) => q.X);
+            var my = points.Average((q) => q.Y);
+            var reach = Js.Hypot(mx - cx, my - cy);
+            var (ox, oy) = reach > 0 ? (mx + (mx - cx) / reach, my + (my - cy) / reach) : (mx, my);
+            while (chosen.Count < seats.Value)
+            {
+                var next = Touching().OrderBy((p) => Math.Round(ToDoor(p), 6)).ThenBy((p) => Js.Hypot(p.X - ox, p.Y - oy)).ThenBy((p) => p.Y).ThenBy((p) => p.X).FirstOrDefault();
+                if (next == null) break;
+                chosen.Add(next);
             }
             if (chosen.Count > 0) m.EvacZone = chosen;
         }

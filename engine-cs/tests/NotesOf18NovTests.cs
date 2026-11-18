@@ -55,39 +55,53 @@ namespace Bastion.Engine.Tests
             Assert.Equal(Bastion.Net.Json.Write(whole), Bastion.Net.Json.Write(stepped));
         }
 
-        [Fact(DisplayName = "T21 › La Lata's zone: as many tiles as seats, by the vehicle, free")]
+        [Fact(DisplayName = "T21 › La Lata's zone: as many tiles as seats, free, one piece against the vehicle")]
         public void AsManyTilesAsSeatsByTheVehicle()
         {
             var maps = 0;
             foreach (var level in new[] { 0, 1, 2, 3 })
             {
-                foreach (var (site, seed) in new[] { (Places.Town, 3), (Places.Country, 5), (Places.Factory, 7), (Places.Estate, 9), (Places.Hospital, 11), (Places.Police, 12), (Places.Plaza, 11), (Places.Camping, 11) })
+                foreach (var site in new[] { Places.Town, Places.City, Places.Country, Places.Factory, Places.Estate, Places.Roadside, Places.Hospital, Places.Offices, Places.Shed, Places.Police, Places.Plaza, Places.Camping })
                 {
-                    var (c, s) = LaunchAt(NodeKinds.Normal, seed, before: (x) =>
+                    for (var seed = 1; seed <= 6; seed++)
                     {
-                        x.Upgrades![UpgradeIds.Squad] = level;
-                        x.Squad = Runs.DefaultSquad(x, x.Players);
-                    }, node: (n) => { n.Site = site; n.Seed = seed; });
-                    var seats = Runs.SeatsOf(c);
-                    Assert.Equal(seats, s.Mission.Seats);
-                    Assert.Equal(Runs.VehicleOf(c), s.Vehicle);
-                    var bus = s.Mission.EvacBus;
-                    if (bus == null) continue;
-                    maps++;
-                    var zone = s.Mission.EvacZone;
-                    Assert.Equal(seats, zone.Count);
-                    Assert.Equal(seats, zone.Select((z) => (z.X, z.Y)).Distinct().Count());
-                    foreach (var z in zone)
-                    {
-                        var p = new Pos { X = z.X, Y = z.Y, Z = 0 };
-                        Assert.True(Flights.CanStopAt(s, p), $"{site} {seed} {level}: {z.X},{z.Y}");
-                        Assert.DoesNotContain(bus.Tiles, (t) => t.X == z.X && t.Y == z.Y);
-                        // Beside the vehicle: the van's six behind it go three deep, and a door walled in one more.
-                        Assert.True(bus.Tiles.Min((t) => Math.Max(Math.Abs(t.X - z.X), Math.Abs(t.Y - z.Y))) <= 4, $"{site} {seed} {level}: {z.X},{z.Y}");
+                        var (c, s) = LaunchAt(NodeKinds.Normal, seed, before: (x) =>
+                        {
+                            x.Upgrades![UpgradeIds.Squad] = level;
+                            x.Squad = Runs.DefaultSquad(x, x.Players);
+                        }, node: (n) => { n.Site = site; n.Seed = seed * 101 + level; });
+                        var seats = Runs.SeatsOf(c);
+                        var at = $"{site} {seed} {level}";
+                        Assert.Equal(seats, s.Mission.Seats);
+                        Assert.Equal(Runs.VehicleOf(c), s.Vehicle);
+                        var bus = s.Mission.EvacBus;
+                        if (bus == null) continue;
+                        maps++;
+                        var zone = s.Mission.EvacZone;
+                        Assert.True(seats == zone.Count, $"{at}: {zone.Count} tiles");
+                        Assert.Equal(seats, zone.Select((z) => (z.X, z.Y)).Distinct().Count());
+                        foreach (var z in zone) Assert.True(Flights.CanStopAt(s, new Pos { X = z.X, Y = z.Y, Z = 0 }), $"{at}: {z.X},{z.Y}");
+                        // One piece against the vehicle: every tile reached from it through the zone, the eight ways.
+                        var reached = new HashSet<(int, int)>();
+                        var frontier = bus.Tiles.Select((t) => (t.X, t.Y)).ToList();
+                        while (frontier.Count > 0)
+                        {
+                            frontier = zone.Where((z) => !reached.Contains((z.X, z.Y)) && frontier.Any((f) => Math.Max(Math.Abs(f.X - z.X), Math.Abs(f.Y - z.Y)) <= 1)).Select((z) => (z.X, z.Y)).ToList();
+                            foreach (var f in frontier) reached.Add(f);
+                        }
+                        Assert.True(reached.Count == zone.Count, $"{at}: {string.Join(" ", zone.Select((z) => $"{z.X},{z.Y}"))} from {string.Join(" ", bus.Tiles.Select((t) => $"{t.X},{t.Y}"))}");
+                        if (s.Vehicle == Runs.Moto)
+                        {
+                            // Within its place, one each side of it.
+                            Assert.All(zone, (z) => Assert.Contains(bus.Tiles, (t) => t.X == z.X && t.Y == z.Y));
+                            var d = Grid.Dirs4[bus.Heading];
+                            Assert.Equal(2, zone.Select((z) => z.X * -d.Y + z.Y * d.X).Distinct().Count());
+                        }
+                        else Assert.All(zone, (z) => Assert.DoesNotContain(bus.Tiles, (t) => t.X == z.X && t.Y == z.Y));
                     }
                 }
             }
-            Assert.True(maps >= 20, $"{maps}");
+            Assert.True(maps >= 200, $"{maps}");
         }
 
         [Fact(DisplayName = "T2 › playing alone, what asks for the other player's soldier takes any comrade")]

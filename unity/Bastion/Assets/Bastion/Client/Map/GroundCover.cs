@@ -103,6 +103,12 @@ namespace Bastion.Client.Map
             this.parts = parts ?? new PropParts();
         }
 
+        /// <summary>
+        /// Tiles (indices) where nothing of it grows, besides the state's own reasons: the base's Soldados shot, between its
+        /// camera and the soldier (Settlement.ShowcaseGrassOff; T1, Producto 18/11: tufts over the legs and huge leaves before it).
+        /// </summary>
+        public HashSet<int> Clear = new HashSet<int>();
+
         /// <summary>All of `s`'s cover under `parent`.</summary>
         public void Build(GameState s, GroundMap ground, Transform parent)
         {
@@ -232,7 +238,7 @@ namespace Bastion.Client.Map
                 for (int x = 0; x < w; x++)
                 {
                     int i = y * w + x;
-                    if (s.Tiles[i] != TileKinds.Floor || (taken != null && taken[i]) || (only != null && !only.Contains(ChunkOf(x, y)))) continue;
+                    if (s.Tiles[i] != TileKinds.Floor || (taken != null && taken[i]) || Clear.Contains(i) || (only != null && !only.Contains(ChunkOf(x, y)))) continue;
                     int e = Elev(x, y);
                     // A siege's watchtower deck is planks: nothing grows on it.
                     if (e != 0 && siege) continue;

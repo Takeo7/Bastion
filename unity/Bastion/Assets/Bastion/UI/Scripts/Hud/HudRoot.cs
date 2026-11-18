@@ -380,6 +380,9 @@ namespace Bastion.UI.Hud
             return over != null;
         }
 
+        /// <summary>That element's help pinned open (a row of Ajustes, for the labs).</summary>
+        public void PinTip(VisualElement target) => tips?.Pin(target);
+
         /// <summary>One short line on the tile under the pointer, or none (null).</summary>
         public void SetNote(Vector3? world, string text, string icon = null) => flags.SetNote(world, text, icon);
 

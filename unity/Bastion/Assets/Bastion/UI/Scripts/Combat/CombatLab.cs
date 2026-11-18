@@ -593,6 +593,33 @@ namespace Bastion.UI.Combat
                         default:
                             // «ayuda=horde» the help of the first element of that class pinned open (TooltipLayer.Pin), whatever
                             // the editor's own pointer does.
+                            // «elige=Aspecto de película/No»: that row of Ajustes (open) set to that choice, as its button would
+                            // (as «autono»); «fila=Aspecto de película»: the row's help pinned open.
+                            if (what.StartsWith("elige=") || what.StartsWith("fila="))
+                            {
+                                var pick = what.Substring(what.IndexOf('=') + 1).Split('/');
+                                foreach (var doc in FindObjectsByType<UnityEngine.UIElements.UIDocument>(FindObjectsSortMode.None))
+                                {
+                                    if (doc.rootVisualElement == null) continue;
+                                    var row = UnityEngine.UIElements.UQueryExtensions.Query(doc.rootVisualElement, className: "setting").ToList()
+                                        .FirstOrDefault(r => UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Label>(r, className: "setting__name")?.text == pick[0].ToUpperInvariant());
+                                    if (row == null) continue;
+                                    if (pick.Length < 2)
+                                    {
+                                        Hud?.PinTip(row);
+                                        break;
+                                    }
+                                    var choice = UnityEngine.UIElements.UQueryExtensions.Query<UnityEngine.UIElements.Button>(row, className: "setting__choice").ToList().FirstOrDefault(b => b.text == pick[1]);
+                                    if (choice == null) continue;
+                                    using (var e = UnityEngine.UIElements.NavigationSubmitEvent.GetPooled())
+                                    {
+                                        e.target = choice;
+                                        choice.SendEvent(e);
+                                    }
+                                    Debug.Log($"[lab] {pick[0]}: {pick[1]} (cine {Bastion.Client.Cinematic.On}, guardado {App.GameSettings.Cinematic})");
+                                }
+                                break;
+                            }
                             if (what.StartsWith("ayuda="))
                             {
                                 Hud?.PinTip(what.Substring("ayuda=".Length));

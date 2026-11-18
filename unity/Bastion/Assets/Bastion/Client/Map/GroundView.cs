@@ -92,6 +92,18 @@ namespace Bastion.Client.Map
         /// The map brought to `next` (the same map: a door, cover blown away; MapBuilder.Update knows which tiles changed):
         /// what each tile is worked out again whole (a few thousand tiles, a texel each) and the texture refilled.
         /// </summary>
+        /// <summary>The cover kept off `tiles` (indices; GroundCover.Clear), made again where that changed.</summary>
+        public void ClearCover(IReadOnlyCollection<int> tiles)
+        {
+            if (cover == null || s == null || map == null) return;
+            var next = new HashSet<int>(tiles ?? (IReadOnlyCollection<int>)System.Array.Empty<int>());
+            if (next.SetEquals(cover.Clear)) return;
+            var changed = new HashSet<int>(cover.Clear);
+            changed.UnionWith(next);
+            cover.Clear = next;
+            cover.Rebuild(s, map, changed);
+        }
+
         public void Rebuild(GameState next, IReadOnlyCollection<int> changed)
         {
             if (plane == null) return;
