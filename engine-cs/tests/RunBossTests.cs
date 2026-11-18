@@ -186,6 +186,7 @@ namespace Bastion.Engine.Tests
             var z = s.Mission.EvacZone[0];
             u.Pos = new Pos { X = z.X, Y = z.Y, Z = 0 };
             s.Command = 0;
+            Events.ApplyEvent(s, new BoardedEvent { Unit = u.Id });
             Assert.True(Exec(s, new EvacCommand { Unit = u.Id }).Ok);
             Assert.Equal((Outcomes.Defeat, EndReasons.Abandoned), (s.Outcome, s.OutcomeReason));
             // Him dead, then out: won, his reward, the chapter done.
@@ -197,6 +198,7 @@ namespace Bastion.Engine.Tests
             var zone = t.Mission.EvacZone[0];
             w.Pos = new Pos { X = zone.X, Y = zone.Y, Z = 0 };
             t.Command = 0;
+            Events.ApplyEvent(t, new BoardedEvent { Unit = w.Id });
             Assert.True(Exec(t, new EvacCommand { Unit = w.Id }).Ok);
             Assert.Equal(Outcomes.Victory, t.Outcome);
             var report = EndFight(d, t, t.Outcome!, t.OutcomeReason!);

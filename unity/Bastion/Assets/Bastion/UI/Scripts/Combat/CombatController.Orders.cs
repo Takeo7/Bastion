@@ -733,10 +733,11 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// Ours who can ask La Lata to go, on the state orders go by: inside it (T24, Unit.Aboard), or in its zone (without a
-        /// seat, in a run; anywhere in it, out of one).
+        /// Ours who can ask La Lata to go, on the state orders go by: in a run, only those inside it (T24, Unit.Aboard; the
+        /// engine's too, Gameplay 18/11: those waiting on its tiles get in by themselves as it comes); out of one, anyone in
+        /// its zone.
         /// </summary>
-        List<Unit> MineAboard() => State.Units.Where(x => Commands(x) && (x.Aboard == true || (x.Alive && Abilities.InEvacZone(State, x.Pos)))).ToList();
+        List<Unit> MineAboard() => State.Units.Where(x => Commands(x) && (x.Aboard == true || (x.Alive && (State.Run == null || State.Mission.Seats == null) && Abilities.InEvacZone(State, x.Pos)))).ToList();
 
         // ------------------------------------------------------- La Lata (T24)
 

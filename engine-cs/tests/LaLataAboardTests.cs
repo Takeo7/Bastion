@@ -331,5 +331,65 @@ namespace Bastion.Engine.Tests
             Assert.True(Exec(s, new AbilityCommand { Unit = first.Id, Ability = AbilityIds.Alight, Tile = Rules.AlightTiles(s)[0] }).Ok);
             Assert.Equal(before + 1, Rules.OpenTiles(s).Count);
         }
+
+        [Fact]
+        public void InAnAsedioWhoWaitsOnItsTilesGetsInWhenItComes()
+        {
+            // Red, 18/11 (N9-A-DOS): La Lata come, those on its tiles get in by themselves; all in, it goes.
+            var (_, s) = Fight(kind: NodeKinds.Hold);
+            var squad = Squaddies(s);
+            var zone = Rules.OpenTiles(s);
+            Assert.True(zone.Count >= squad.Count);
+            for (var i = 0; i < squad.Count; i++) squad[i].Pos = new Pos { X = zone[i].X, Y = zone[i].Y, Z = 0 };
+            foreach (var e in s.Units.Where((u) => u.Team == Teams.Alien)) e.Alive = false;
+            s.Turn = s.Mission.HoldUntil!.Value - 1;
+            var sim = NewSim(s);
+            sim.RunAlienTurn();
+            Assert.Equal(s.Mission.HoldUntil, s.Turn);
+            Assert.All(squad, (u) => Assert.True(u.Aboard == true || u.Evacuated));
+            Assert.Contains(sim.Events, (e) => e is BoardedEvent);
+            Assert.Equal(Outcomes.Victory, s.Outcome);
+        }
+
+        [Fact]
+        public void EvacuarOnlyFromInside()
+        {
+            // Producto, 18/11: in a run, only one in La Lata calls it, whatever the stage.
+            var (_, s) = Fight();
+            var squad = Squaddies(s);
+            var open = Rules.OpenTiles(s)[0];
+            squad[0].Pos = new Pos { X = open.X, Y = open.Y, Z = 0 };
+            var r = Exec(s, new EvacCommand { Unit = squad[0].Id });
+            Assert.False(r.Ok);
+            Assert.Equal("Solo desde dentro de " + Lore.Bus.Name + ".", r.Error);
+            Assert.True(WalkIn(s, squad[1], 1).Ok);
+            var ok = Exec(s, new EvacCommand { Unit = squad[1].Id });
+            Assert.True(ok.Ok, ok.Error);
+            Assert.Equal(Outcomes.Victory, s.Outcome);
+        }
+
+        [Fact]
+        public void ASurvivorNobodyTalkedToIsntLeftBehind()
+        {
+            // Red, 18/11: a loose survivor never talked to stays where they were when La Lata goes; nobody of the squad lost.
+            var seed = 1;
+            while (!RunMap.LooseSurvivor(new RunNode { Kind = NodeKinds.Normal, Row = 1, Seed = seed })) seed++;
+            var (_, s) = LaunchAt(NodeKinds.Normal, 1, before: (c) =>
+            {
+                c.Upgrades![UpgradeIds.Squad] = 1;
+                c.Squad = Runs.DefaultSquad(c, c.Players);
+            }, node: (n) => { n.Seed = seed; n.Site = Places.Town; });
+            var loose = s.Units.Single((u) => u.Id == s.Mission.Survivor);
+            Assert.True(loose.Captive);
+            var squad = Squaddies(s);
+            for (var i = 0; i < squad.Count; i++)
+            {
+                var r = WalkIn(s, squad[i], i);
+                Assert.True(r.Ok, r.Error);
+                if (i == squad.Count - 1) Assert.DoesNotContain(Of<LeftBehindEvent>(r.Events), (e) => e.Unit == loose.Id);
+            }
+            Assert.Equal(Outcomes.Victory, s.Outcome);
+            Assert.Null(loose.Lost);
+        }
     }
 }

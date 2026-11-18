@@ -850,6 +850,95 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
         }
 
+        /// <summary>
+        /// T24 in an Asedio (Red, 18/11; Producto's decision on Red's finding): one of the squad waiting on a tile of La Lata's
+        /// zone as it comes gets in by itself at the turn's start, and both hear it; still aboard after the partner comes
+        /// back. The partner's, out, can't ask to leave from out there («Solo desde dentro de La Lata.»); walked onto the tile
+        /// left open it gets in, and with everyone in La Lata goes, on both screens.
+        /// </summary>
+        [Fact]
+        public void InAnAsedioWhoWaitsOnItsTileGetsInAsItComesOnBothScreens()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            var n = RunMap.Choices(save.Campaign!.Run!)[0];
+            n.Kind = NodeKinds.Hold;
+            n.Modifier = null;
+            if (n.Seed == null)
+            {
+                n.Seed = 4242 + n.Row;
+                n.Site = Places.Country;
+            }
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            host.Say(ana, Ccmd(new { type = "chooseNode", node = n.Id }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            Assert.Equal("mission", host.Room.Summary().phase);
+            var s = SnapshotOf(pepe);
+            var comes = s.Mission.HoldUntil!.Value;
+            Assert.False(Rules.LaLataHere(s));
+            // The turn before it comes: Ana's on one of its tiles, Pepe's beside the other, the dead near them gone.
+            save = store.Load()!;
+            var st = save.State!;
+            var zone = st.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).ToList();
+            Assert.Equal(2, zone.Count);
+            var mine = st.Units.Single((u) => u.Team == Teams.Xcom && u.CampaignId != null && u.Owner == 0);
+            var theirs = st.Units.Single((u) => u.Team == Teams.Xcom && u.CampaignId != null && u.Owner == 1);
+            mine.Pos = zone[0];
+            theirs.Pos = NextToZone(st, zone[1]);
+            foreach (var z in st.Units.Where((u) => u.Alive && u.Team == Teams.Alien && Grid.Distance(u.Pos, zone[0]) < 12))
+            {
+                z.Alive = false;
+                z.Hp = 0;
+            }
+            st.Turn = comes - 1;
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            var players = new[] { ana, pepe };
+            foreach (var p in players) p.Take("events");
+            foreach (var slot in new[] { 0, 1 }) host.Say(players[slot], new { t = "cmd", cmd = new { type = "endTurn", ready = true } });
+            for (var i = 0; i < 60 && !(SavedState(host).Turn >= comes && SavedState(host).ActiveTeam == Teams.Xcom); i++) host.Advance(1000);
+            var come = SavedState(host);
+            Assert.Equal((comes, Teams.Xcom, (string?)null), (come.Turn, come.ActiveTeam, come.Outcome));
+            Assert.True(Rules.LaLataHere(come));
+            // In by itself as it came: both hear it; it is aboard, the partner's still out, and La Lata waits.
+            foreach (var p in players) Assert.Equal(mine.Id, (string?)Heard(p, "boarded").Single()["unit"]);
+            Assert.Equal((true, true), (come.Units.Single((u) => u.Id == mine.Id).Aboard == true, come.Units.Single((u) => u.Id == theirs.Id).Alive));
+            Assert.NotEqual(true, come.Mission.EvacDone);
+            // The partner back: aboard.
+            players[1].Close("se va");
+            host.Room.Pump();
+            players[1] = host.Join("Pepe", pepeToken);
+            Assert.Equal(true, SnapshotOf(players[1]).Units.Single((u) => u.Id == mine.Id).Aboard);
+            // The partner's, out: no asking to leave from there; onto the tile left open, in, and La Lata goes.
+            if (SavedState(host).Command == 0) host.Say(players[0], new { t = "cmd", cmd = new { type = "pass" } });
+            Assert.NotEqual(0, SavedState(host).Command);
+            players[1].Take("rejected");
+            host.Say(players[1], new { t = "cmd", cmd = new { type = "evac", unit = theirs.Id } });
+            Assert.Equal("Solo desde dentro de La Lata.", (string?)players[1].Take("rejected").Single()["message"]);
+            var open = Rules.OpenTiles(SavedState(host)).Single();
+            host.Say(players[1], new { t = "cmd", cmd = new { type = "move", unit = theirs.Id, to = new Pos { X = open.X, Y = open.Y, Z = 0 } } });
+            Assert.Empty(players[1].Take("rejected"));
+            host.Advance(1000);
+            foreach (var p in players)
+            {
+                var events = p.Take("events").SelectMany((m) => m["events"]!).ToList();
+                Assert.Equal(new[] { theirs.Id }, events.Where((e) => (string?)e["t"] == "boarded").Select((e) => (string?)e["unit"]));
+                Assert.Single(events, (e) => (string?)e["t"] == "evacDeparted");
+                Assert.Equal(Outcomes.Victory, (string?)events.Single((e) => (string?)e["t"] == "missionEnded")["outcome"]);
+            }
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
+        }
+
         /// <summary>A free tile beside `who`, on their floor, one can stand on and reach them from (as RunRescueTests'), the nearest the map's first.</summary>
         private static Pos Beside(GameState s, Unit who)
         {

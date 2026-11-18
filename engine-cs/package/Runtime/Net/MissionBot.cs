@@ -146,7 +146,9 @@ namespace Bastion.Net
         {
             // In La Lata with the job done: the bus, once everyone is aboard who can get there. No clock hurries it: only the
             // sabotage's alarm has one now (Arturo, 5/11 #1), and it stops once the alarm is silenced (Events.CompleteObjective).
-            if (leaving && Abilities.InEvacZone(s, u.Pos) && BusHere(s))
+            // Not in a run: there it is asked from inside La Lata only (T24; the first lines of Next), and one standing in its
+            // zone gets in on its next walk.
+            if (s.Run == null && leaving && Abilities.InEvacZone(s, u.Pos) && BusHere(s))
             {
                 var all = AllAboard(s);
                 // The one with the item aboard and the dead on it: now, with whoever is in.

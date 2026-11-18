@@ -149,6 +149,12 @@ namespace Bastion.UI.Hud
             box.schedule.Execute(Place);
         }
 
+        /// <summary>
+        /// An element tips stay clear of, going up over it (the picked one's sheet over the cards: Producto, 18/11, a bust's
+        /// help lay on it and both read mixed); not for its own.
+        /// </summary>
+        public VisualElement KeepClear;
+
         void Place()
         {
             if (over == null) return;
@@ -159,6 +165,11 @@ namespace Bastion.UI.Hud
             var screen = layer.layout;
             var x = Mathf.Clamp(t.center.x - size.x / 2, Gap, Mathf.Max(Gap, screen.width - size.x - Gap));
             var y = t.yMin - size.y - Gap;
+            if (KeepClear != null && KeepClear.resolvedStyle.display != DisplayStyle.None && KeepClear.panel != null && !KeepClear.Contains(over))
+            {
+                var c = KeepClear.worldBound;
+                if (x < c.xMax && x + size.x > c.xMin && y < c.yMax && y + size.y > c.yMin) y = c.yMin - size.y - Gap;
+            }
             if (y < Gap) y = t.yMax + Gap;
             box.style.left = x;
             box.style.top = y;

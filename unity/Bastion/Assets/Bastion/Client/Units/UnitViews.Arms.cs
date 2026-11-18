@@ -669,12 +669,13 @@ namespace Bastion.Client.Units
                     else if (v.inHand == Held.Rifle) Steady(v, dt);
                     // A straight-stocked one tucked under the arm away from the aim, the hands to it (UnitViews.Tuck, T22): eased
                     // in and out with the aim, a reload and a busy left hand, over the clips' own hold.
-                    // (Not in the battle yet: there the stock went 5–14 cm into the right arm by CombatLab.Agarres' table, 18/11.
-                    // BASTION_TUCK_COMBATE=1, for the labs, till it is right.)
+                    // (BASTION_TUCK_COMBATE=0, the labs' «before»: the clips' own hold all through.)
                     if (TuckInBattle && v.inHand == Held.Rifle && v.arts.TryGetValue(v.drawn, out var stocked) && Tucks(stocked))
                     {
-                        bool away = !v.dead && v.reload <= 0 && !busy;
-                        v.tuck = Mathf.MoveTowards(v.tuck, away ? 1 - v.up : 0, dt / TuckEase);
+                        // (Only upright and away from any aim: aimed, on watch, picking a target, crouched or hidden, the clips'
+                        // own; part way under the arm there, the stock went through it. CombatLab.Agarres' table, 18/11.)
+                        bool away = !v.dead && v.reload <= 0 && !busy && !Up(v) && v.up <= 0 && !v.crouched && !v.hidden;
+                        v.tuck = Mathf.MoveTowards(v.tuck, away ? 1 : 0, dt / TuckEase);
                         if (v.tuck > 0) HoldTucked(v.animator, v.weapon, v.root, stocked, Mathf.SmoothStep(0, 1, v.tuck));
                     }
                     else v.tuck = 0;
@@ -846,6 +847,18 @@ namespace Bastion.Client.Units
             }
             var palm = art?.palm != null && art.palm.Length >= 3 ? new Vector3(art.palm[0], art.palm[1], art.palm[2]) : Vector3.zero;
             Hold(a, gun, root, false, ref grip, palm);
+            // The right hand down onto its pistol grip (`art`.hand), the elbow as the clip has it, and closed round it, the
+            // index along the trigger guard.
+            if (art?.hand != null && art.hand.Length >= 3 && a != null && a.isHuman && a.GetBoneTransform(HumanBodyBones.RightHand) is Transform rightHand
+                && a.GetBoneTransform(HumanBodyBones.RightMiddleProximal) is Transform rightKnuckle && a.GetBoneTransform(HumanBodyBones.RightUpperArm) is Transform rightShoulder
+                && a.GetBoneTransform(HumanBodyBones.RightLowerArm) is Transform rightElbow)
+            {
+                var onto = gun.TransformPoint(new Vector3(art.hand[0], art.hand[1], art.hand[2]));
+                for (int pass = 0; pass < 2; pass++)
+                    Reach(a, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
+                        rightHand.position + (onto - Vector3.Lerp(rightHand.position, rightKnuckle.position, 0.6f)), rightElbow.position - rightShoulder.position, 0.005f);
+                Fist(a, TriggerIndex, TriggerOthers);
+            }
             if (SupportOff || a == null || !a.isHuman || !LeftOnto(a, gun, art, 1)) return;
             // Closed round it from below (seen close in Personalizar, the clip's open hand hung under the handguard): the palm
             // up against it, the fingers across to its far side; turned at the wrist, put back on it, turned again (the reach
@@ -917,7 +930,7 @@ namespace Bastion.Client.Units
         /// <summary>Steady's: how slowly the barrel's rise follows the hands, how long it takes to come in or go (seconds), its least and most rise (degrees).</summary>
         const float SteadySeconds = 0.25f, SteadyEase = 0.2f, SteadyLow = -30, SteadyHigh = 8;
 
-        static readonly bool TuckInBattle = Environment.GetEnvironmentVariable("BASTION_TUCK_COMBATE") == "1";
+        static readonly bool TuckInBattle = Environment.GetEnvironmentVariable("BASTION_TUCK_COMBATE") != "0";
 
         /// <summary>How far the left hand's fingers bend round a handguard (degrees: the first joint, the second).</summary>
         static readonly Vector2 HandguardBend = new Vector2(55, 50);
@@ -1197,6 +1210,7 @@ namespace Bastion.Client.Units
             // barrel's rise over the level, F-19's «up»; the muzzle's height over the feet, A-07's «muzzleY».)
             if (v.inHand == Held.Rifle)
             {
+                parts.Add(FormattableString.Invariant($"tuck={v.tuck:0.00}"));
                 if (v.grip is Quaternion g && a.GetBoneTransform(HumanBodyBones.RightHand) is Transform rh) parts.Add($"rigid={Deg(Quaternion.Angle(Quaternion.Inverse(rh.rotation) * w.rotation, g))}");
                 parts.Add($"up={Deg(Mathf.Asin(Mathf.Clamp(w.forward.y, -1, 1)) * Mathf.Rad2Deg)}");
             }

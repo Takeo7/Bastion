@@ -100,6 +100,8 @@ namespace Bastion.EditorTools
             bool marks = Environment.GetEnvironmentVariable("BASTION_MARCAS") == "1";
             int every = int.TryParse(Environment.GetEnvironmentVariable("BASTION_CADA"), out int n) && n > 0 ? n : 1;
             string now = "inicio";
+            // (BASTION_DENSO=1: the penetration every frame all through, for the ways between postures.)
+            bool always = Environment.GetEnvironmentVariable("BASTION_DENSO") == "1";
             bool dense = false;
             float lastDepth = -1;
             int frame = 0;
@@ -111,7 +113,7 @@ namespace Bastion.EditorTools
                     // (After the frame's Update, UnitViews' step among them: the pose this frame drew. End of frame never comes in batchmode.)
                     await Awaitable.NextFrameAsync();
                     if (++frame % every != 0) continue;
-                    bool depth = dense || Time.time - lastDepth >= 0.099f;
+                    bool depth = always || dense || Time.time - lastDepth >= 0.099f;
                     if (depth) lastDepth = Time.time;
                     foreach (var (u, art) in row)
                     {
@@ -119,7 +121,9 @@ namespace Bastion.EditorTools
                         string into = depth ? " " + IntoReport(u.Id) : "";
                         Debug.Log(FormattableString.Invariant($"[agarre] {Time.time:0.000} {now} {art} {units.GripReport(u.Id)}{into}"));
                     }
-                    Film(row, frame / every, now);
+                    // (BASTION_HOMBRO=1: the camera over the shoulder too, all through, on a point five tiles ahead.)
+                    if (Environment.GetEnvironmentVariable("BASTION_HOMBRO") == "1") Film(row, frame / every, now, id => Ahead(row.First(r => r.u.Id == id).u));
+                    else Film(row, frame / every, now);
                 }
             }
             async Awaitable All(Func<Unit, Awaitable> act)

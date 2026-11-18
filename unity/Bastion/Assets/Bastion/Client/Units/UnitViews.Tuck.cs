@@ -15,26 +15,43 @@ namespace Bastion.Client.Units
     public sealed partial class UnitViews
     {
         /// <summary>The muzzle under the level and to the left of ahead (degrees), and the gun's cant (its top towards the body's left).</summary>
-        const float TuckDown = 27, TuckLeft = 26, TuckCant = 12;
+        static readonly float TuckDown = Tried("BASTION_TUCK_ANG")?.x ?? 27, TuckLeft = Tried("BASTION_TUCK_ANG")?.y ?? 26, TuckCant = 12;
         /// <summary>
         /// Where the butt goes from the right shoulder's joint, in the root's frame (metres of a figure at scale 1; to its
         /// right, up, ahead): under the arm, between it and the ribs, the butt plate behind the elbow. (In the hollow of the
         /// shoulder, tried on 18/11, the stock went into the chest and the right arm crossed over it.)
         /// </summary>
-        static readonly Vector3 TuckAt = Tried() ?? new Vector3(0.035f, -0.17f, -0.1f);
+        static readonly Vector3 TuckAt = Tried() ?? new Vector3(0.07f, -0.215f, -0.1f);
 
-        /// <summary>BASTION_TUCK=x,y,z: another place for the butt, for the labs' search (CombatLab.Agarres' table).</summary>
-        static Vector3? Tried()
+        /// <summary>
+        /// Which way the right elbow goes, in the root's frame (to its right, up, ahead): out from the body, to leave the butt
+        /// room under the arm (back and down by the ribs, the stock was 5–14 cm into the upper arm: CombatLab.Agarres, 18/11).
+        /// </summary>
+        static readonly Vector3 TuckElbow = Tried("BASTION_TUCK_CODO") ?? new Vector3(1f, 0.1f, -0.3f);
+
+        /// <summary>BASTION_TUCK=x,y,z, BASTION_TUCK_CODO=x,y,z: another place for the butt, another way for the elbow, for the labs' search (CombatLab.Agarres' table).</summary>
+        static Vector3? Tried(string name = "BASTION_TUCK") => Tried(name, 3) is Vector4 v ? (Vector3)v : (Vector3?)null;
+
+        /// <summary>BASTION_TUCK_PASO=seconds,x,y,z: the way in and out (TuckEase, TuckRound).</summary>
+        static Vector4? Tried(string name, int count)
         {
-            var parts = System.Environment.GetEnvironmentVariable("BASTION_TUCK")?.Split(',');
-            if (parts == null || parts.Length < 3) return null;
-            float F(int i) => float.Parse(parts[i], System.Globalization.CultureInfo.InvariantCulture);
-            return new Vector3(F(0), F(1), F(2));
+            var parts = System.Environment.GetEnvironmentVariable(name)?.Split(',');
+            if (parts == null || parts.Length < count) return null;
+            float F(int i) => i < count ? float.Parse(parts[i], System.Globalization.CultureInfo.InvariantCulture) : 0;
+            return new Vector4(F(0), F(1), F(2), F(3));
         }
         /// <summary>The left arm reaches this share of its length at most; the handguard's point slid back to it, no nearer the grip than this (metres, unscaled).</summary>
-        const float TuckReach = 0.97f, TuckForeLeast = 0.34f;
+        const float TuckReach = 0.97f;
+        static readonly float TuckForeLeast = Tried("BASTION_TUCK_ANG")?.z ?? 0.34f;
         /// <summary>Seconds a gun takes to come under the arm or leave it (aiming, reloading, the left hand busy).</summary>
-        const float TuckEase = 0.25f;
+        static readonly float TuckEase = Tried("BASTION_TUCK_PASO", 4)?.x ?? 0.18f;
+        /// <summary>
+        /// Part way there the gun goes under the arm, not through it: off by this at the middle of the way, in the root's frame
+        /// (metres of a figure at scale 1; to its right, up, ahead). (Straight from the clips' hold to under the arm, the stock
+        /// crossed the upper arm 14–17 cm deep for three or four frames of 30 a second; so, 4–6, what it is at rest: lab/paso.sh
+        /// in Arte's T22 notes, 18/11.)
+        /// </summary>
+        static readonly Vector3 TuckRound = Tried("BASTION_TUCK_PASO", 4) is Vector4 r ? new Vector3(r.y, r.z, r.w) : new Vector3(0, -0.18f, 0);
 
         /// <summary>Whether `art` is held tucked (its tuck points given).</summary>
         public static bool Tucks(WeaponArt art) => art?.tuck != null && art.tuck.Length >= 9;
@@ -57,7 +74,9 @@ namespace Bastion.Client.Units
             var turn = Quaternion.AngleAxis(TuckCant, way) * Quaternion.LookRotation(way, root.up);
             var at = shoulderR.position + root.TransformDirection(TuckAt) * scale;
             // (From where the clips' own hold has it, `k` of the way.)
-            gun.SetPositionAndRotation(Vector3.Lerp(gun.position, at - turn * (butt * model), k), Quaternion.Slerp(gun.rotation, turn, k));
+            // (And round the arm in between: TuckRound.)
+            var round = root.TransformDirection(TuckRound) * (scale * Mathf.Sin(k * Mathf.PI));
+            gun.SetPositionAndRotation(Vector3.Lerp(gun.position, at - turn * (butt * model), k) + round, Quaternion.Slerp(gun.rotation, turn, k));
             way = gun.forward;
             LastTuckDown = Mathf.Asin(Mathf.Clamp(-gun.forward.y, -1, 1)) * Mathf.Rad2Deg;
             // The left hand's place on the handguard: as far along as its arm reaches.
@@ -68,7 +87,7 @@ namespace Bastion.Client.Units
             // the right. (Facing down on its top, the wood showed under the knuckles: «la mano encima», Producto, 18/11.)
             // (On edge at its side, the fingers straight down, half the hand hung under the stock as a flat blade: Producto,
             // 18/11.)
-            Grasp(a, false, k, gun.TransformPoint(grip), (way * 0.8f - gun.up * 0.6f).normalized, (-gun.right * 0.97f - gun.up * 0.24f).normalized, root.TransformDirection(new Vector3(0.75f, -0.35f, -0.9f)));
+            Grasp(a, false, k, gun.TransformPoint(grip), (way * 0.8f - gun.up * 0.6f).normalized, (-gun.right * 0.97f - gun.up * 0.24f).normalized, root.TransformDirection(TuckElbow));
             // The left under the handguard: the palm up against it, the fingers across to its far side.
             Grasp(a, true, k, gun.TransformPoint(fore), gun.right, gun.up, root.TransformDirection(new Vector3(-0.8f, -0.7f, 0.1f)));
             // (The fingers once it is mostly there: in between, the clips' own.)
@@ -120,6 +139,13 @@ namespace Bastion.Client.Units
                 var along0 = middle.position - hand.position;
                 var palm0 = Vector3.Cross(along0, index.position - little.position) * (left ? -1 : 1);
                 if (along0.sqrMagnitude > 1e-8f && palm0.sqrMagnitude > 1e-8f) want = Quaternion.Slerp(Quaternion.LookRotation(along0, Vector3.ProjectOnPlane(palm0, along0)), want, k);
+            }
+            // (And the elbow's side: part way, the arm swung whole to `pole` went through a gun not yet there, 17 cm deep the
+            // frame a reload ended. CombatLab.Agarres, 18/11.)
+            if (k < 1 && a.GetBoneTransform(B(HumanBodyBones.RightUpperArm, HumanBodyBones.LeftUpperArm)) is Transform upper && a.GetBoneTransform(B(HumanBodyBones.RightLowerArm, HumanBodyBones.LeftLowerArm)) is Transform lower)
+            {
+                var own = Vector3.ProjectOnPlane(lower.position - upper.position, hand.position - upper.position);
+                if (own.sqrMagnitude > 1e-8f && pole.sqrMagnitude > 1e-8f) pole = Vector3.Slerp(own.normalized, pole.normalized, k);
             }
             for (int pass = 0; pass < 3; pass++)
             {

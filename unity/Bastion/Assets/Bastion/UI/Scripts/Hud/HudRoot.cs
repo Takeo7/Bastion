@@ -89,6 +89,8 @@ namespace Bastion.UI.Hud
             squad = new SquadList(root.Q("squad-cards"), squadPlate, relay, tips) { Icons = Icon };
             gear = new Bastion.UI.Gear.GearBoard(root, tips, Icon, gearRelay) { Cell = 40, PictureOf = Bastion.Client.GearPictures.Of, CanThrow = false };
             unit = new UnitPanel(root.Q("unit-panel"), root.Q("pack"), relay, tips, Icon) { Gear = gear };
+            // A bust's help over the picked one's sheet, not on it (Producto, 18/11).
+            tips.KeepClear = root.Q("unit-panel");
             abilitiesHost = root.Q("abilities");
             bar = new ActionBar(abilitiesHost, relay, tips, Icon);
             shot = new ShotPanel(root.Q("shot-panel"), relay, tips);

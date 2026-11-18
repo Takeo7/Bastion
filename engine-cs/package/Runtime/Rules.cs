@@ -1559,7 +1559,8 @@ namespace Bastion.Engine
         public void DepartEvac(bool timeUp = false)
         {
             Emit(new EvacDepartedEvent());
-            var squad = S.Units.Where((o) => o.Alive && o.Team == Teams.Xcom).ToList();
+            // A run's survivor nobody talked to isn't of the squad: they stay where they were, not left behind (T24; Red, 18/11).
+            var squad = S.Units.Where((o) => o.Alive && o.Team == Teams.Xcom && !(S.Run != null && o.Captive)).ToList();
             // In the zone and with a seat (N2: a run's La Lata takes MissionState.Seats; who doesn't fit is lost).
             var noSeat = Rules.NoSeat(S);
             bool Boards(Unit o) => Abilities.InEvacZone(S, o.Pos) && !noSeat.Contains(o);
@@ -1672,6 +1673,15 @@ namespace Bastion.Engine
             Emit(new TurnBeganEvent { Team = Teams.Xcom, Turn = turn + 1, Command = OpeningCommander(turn + 1) });
             // Knocked down by El Toro (H6): up first, for one of the actions.
             GetUp();
+            // An Asedio's La Lata come (T24; Red, 18/11): whoever waits on a tile of it gets in, as many as its seats.
+            if (S.Mission.HoldUntil == turn + 1)
+            {
+                foreach (var u in S.Units.Where((x) => x.Team == Teams.Xcom).ToList())
+                {
+                    if (Over) break;
+                    if (Rules.Boards(S, u)) Emit(new BoardedEvent { Unit = u.Id });
+                }
+            }
             CheckOutcome();
         }
 
@@ -2120,12 +2130,13 @@ namespace Bastion.Engine
             if (cmd is EvacCommand evac)
             {
                 var u = Grid.GetUnit(s, evac.Unit);
-                // From inside La Lata too (T24).
+                // A run's, only from inside La Lata (T24; Producto, 18/11: as its help says, whatever the stage).
                 if (u == null || !(u.Alive || u.Aboard == true) || u.Team != Teams.Xcom || u.Captive) return CommandResult.Failure("Esa unidad no puede evacuar.");
                 if (!Content.CommandsFor(ctx.Slot, u.Owner, ctx.Connected)) return CommandResult.Failure("Es de la escuadra del otro jugador.");
-                if (u.Aboard != true && !Abilities.InEvacZone(s, u.Pos)) return CommandResult.Failure("Solo desde el autobús, en la zona de evacuación.");
                 // A run's Asedio (H5): La Lata isn't here yet.
                 if (s.Mission.HoldUntil != null && s.Turn < s.Mission.HoldUntil) return CommandResult.Failure($"La Lata llega en el turno {s.Mission.HoldUntil}."); // Lore: provisional
+                if (s.Run != null && s.Mission.Seats != null && u.Aboard != true) return CommandResult.Failure("Solo desde dentro de " + Lore.Bus.Name + ".");
+                if (u.Aboard != true && !Abilities.InEvacZone(s, u.Pos)) return CommandResult.Failure("Solo desde el autobús, en la zona de evacuación.");
                 if (s.EvacCall?.By == ctx.Slot) return CommandResult.Failure("Ya has pedido evacuar: falta que conteste el otro jugador.");
                 sim.CallEvac(ctx.Slot, u);
                 return CommandResult.Success(sim.Events);

@@ -81,6 +81,14 @@ namespace Bastion.Client.Units
         /// its handguard's underside where the left does (AgarreLab.Perfil's profiles). None: the clips' own hold.
         /// </summary>
         public float[] tuck;
+        /// <summary>
+        /// A pistol-gripped long gun's, away from a battle (UnitViews.HoldAtRest, T22): where the middle of the right palm goes
+        /// on it once it is placed (its model's frame, unscaled: the middle of its pistol grip, by AgarreLab.Perfil's
+        /// profiles), the hand closed round it. None: where `palm` has it. (Seen at real size in Personalizar, the assault
+        /// rifle's grip showed behind the heel of the hand, and the machine gun's whole and empty under it: its `palm` has the
+        /// gun 8 cm ahead in the hands, for its stock and the chest.)
+        /// </summary>
+        public float[] hand;
     }
 
     /// <summary>

@@ -26,6 +26,8 @@ namespace Bastion.Engine.Tests
             u.Ap = 2;
             s.Command = 0;
             s.ActiveUnit = null;
+            // In La Lata: a run's Evacuar only from inside (T24). Before an Asedio's comes, nobody is.
+            if (s.Mission.HoldUntil == null || s.Turn >= s.Mission.HoldUntil) Events.ApplyEvent(s, new BoardedEvent { Unit = u.Id });
             return Exec(s, new EvacCommand { Unit = u.Id });
         }
 

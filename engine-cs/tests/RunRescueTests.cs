@@ -45,7 +45,11 @@ namespace Bastion.Engine.Tests
         {
             var free = s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).Where((p) => Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null).ToList();
             var i = 0;
-            foreach (var u in units) u.Pos = free[i++];
+            foreach (var u in units)
+            {
+                u.Pos = free[i++];
+                Events.ApplyEvent(s, new BoardedEvent { Unit = u.Id });
+            }
         }
 
         /// <summary>A Rescate launched with the «squad» upgrade at `level` (null: as the helpers have it, 4 seats).</summary>
