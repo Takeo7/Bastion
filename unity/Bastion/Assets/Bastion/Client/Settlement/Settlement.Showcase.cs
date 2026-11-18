@@ -210,7 +210,7 @@ namespace Bastion.Client
                 for (float left = dt; left > 1e-5f; left -= 0.1f) showAnim.Step(Mathf.Min(0.1f, left));
                 if (showPistol)
                 {
-                    UnitViews.HoldPistol(showAnimator, showGun, showFigure, 0, ref showGrip);
+                    UnitViews.HoldPistolAtRest(showAnimator, showGun, showFigure, ref showGrip);
                     showSpread.Apply(showAnimator, showAnim, showGun, dt);
                 }
                 else if (showBlade) UnitViews.HoldBladeAtRest(showAnimator, showGun, showFigure, showArt);

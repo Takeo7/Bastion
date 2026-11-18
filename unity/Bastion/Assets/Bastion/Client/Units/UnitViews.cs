@@ -246,6 +246,8 @@ namespace Bastion.Client.Units
             public string survivorClip;
             /// <summary>Seconds since a bolt-action gun fired, its bolt being worked (UnitViews.Bolt); −1 none.</summary>
             public float bolt = -1;
+            /// <summary>Seconds into the loading of a straight-stocked gun (UnitViews.Tuck's Loading, T25); −1, none.</summary>
+            public float load = -1;
             public Vector3 mountFrom;
             public Quaternion mountTurn;
             /// <summary>A shot's kick to play (Recoil) as its step begins.</summary>

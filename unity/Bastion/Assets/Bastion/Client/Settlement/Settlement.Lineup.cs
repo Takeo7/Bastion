@@ -304,7 +304,7 @@ namespace Bastion.Client
             else if (s.slung) KeepSlung(s);
             else if (s.pistol)
             {
-                UnitViews.HoldPistol(s.animator, s.gun, s.root, 0, ref s.grip);
+                UnitViews.HoldPistolAtRest(s.animator, s.gun, s.root, ref s.grip);
                 s.spread.Apply(s.animator, s.anim, s.gun, dt);
             }
             else UnitViews.HoldAtRest(s.animator, s.gun, s.root, s.art, ref s.grip);

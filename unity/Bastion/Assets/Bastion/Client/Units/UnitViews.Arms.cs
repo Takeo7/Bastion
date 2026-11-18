@@ -674,9 +674,12 @@ namespace Bastion.Client.Units
                     {
                         // (Only upright and away from any aim: aimed, on watch, picking a target, crouched or hidden, the clips'
                         // own; part way under the arm there, the stock went through it. CombatLab.Agarres' table, 18/11.)
-                        bool away = !v.dead && v.reload <= 0 && !busy && !Up(v) && v.up <= 0 && !v.crouched && !v.hidden;
+                        // (And loading, whatever its posture: Loading, T25.)
+                        bool loading = v.load >= 0 && !v.dead;
+                        bool away = !v.dead && (loading || (v.reload <= 0 && !busy && !Up(v) && v.up <= 0 && !v.crouched && !v.hidden));
                         v.tuck = Mathf.MoveTowards(v.tuck, away ? 1 : 0, dt / TuckEase);
-                        if (v.tuck > 0) HoldTucked(v.animator, v.weapon, v.root, stocked, Mathf.SmoothStep(0, 1, v.tuck));
+                        var (work, right) = loading ? Loading(v.load, stocked) : (0, default);
+                        if (v.tuck > 0) HoldTucked(v.animator, v.weapon, v.root, stocked, Mathf.SmoothStep(0, 1, v.tuck), work, loading ? right : (Vector3?)null);
                     }
                     else v.tuck = 0;
                     break;
@@ -754,6 +757,36 @@ namespace Bastion.Client.Units
 
         /// <summary>HoldPistol(View) for any figure: `a`'s right hand on `pistol`, `root` its upright, aimed `aim` (0–1), `grip` its turn learnt in the hand.</summary>
         public static void HoldPistol(Animator a, Transform pistol, Transform root, float aim, ref Quaternion? grip) => HoldPistol(a, pistol, root, aim, ref grip, null);
+
+        /// <summary>
+        /// The pistol at rest away from a battle (the base: Soldados, Personalizar, the row; T22, Producto 18/11: seen close
+        /// from the front, the pistol hung by the wrist and the fingers beside it): as HoldPistol not aimed, and then its
+        /// grip's middle (PistolGripMiddle) into the closed fist, not its origin on the palm, which left the grip out behind
+        /// the heel of the hand.
+        /// </summary>
+        public static void HoldPistolAtRest(Animator a, Transform pistol, Transform root, ref Quaternion? grip)
+        {
+            HoldPistol(a, pistol, root, 0, ref grip, null);
+            if (a == null || pistol == null || !a.isHuman) return;
+            Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal),
+                little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (hand == null || index == null || little == null || middle == null) return;
+            // The hand turned at the wrist onto its grip: the knuckles along the barrel, the palm against the grip's right side
+            // (the rest's clip has the palm turned out, and the pistol lay on the back of the hand).
+            var along = middle.position - hand.position;
+            var palm = Vector3.Cross(along, index.position - little.position);
+            if (along.sqrMagnitude < 1e-8f || palm.sqrMagnitude < 1e-8f) return;
+            var want = Quaternion.LookRotation(pistol.forward, Vector3.ProjectOnPlane(-pistol.right, pistol.forward));
+            hand.rotation = want * Quaternion.Inverse(Quaternion.LookRotation(along, Vector3.ProjectOnPlane(palm, along))) * hand.rotation;
+            var inFist = Vector3.Lerp(hand.position, middle.position, 0.6f) - pistol.right * (PistolInFist * Figures.CharacterScale);
+            pistol.position = inFist - pistol.TransformVector(PistolGripMiddle);
+        }
+
+        /// <summary>The middle of the pistol's grip in its own frame (metres, unscaled: AgarreLab.Perfil), and how far in from the palm the fist's middle is (metres of a figure at scale 1).</summary>
+        static readonly Vector3 PistolGripMiddle = LabVector("BASTION_PISTOLA") ?? new Vector3(0, -0.05f, -0.02f);
+        static readonly float PistolInFist = 0.02f;
+
+        static Vector3? LabVector(string name) => Tried(name);
 
         /// <summary>
         /// The same, aimed at `at` (the review of 9/11): laid on the line from the palm to it as it is aimed, not level
@@ -1788,6 +1821,23 @@ namespace Bastion.Client.Units
             if (v.anim == null || clip == null || (v.inHand != Held.Rifle && !pistol))
             {
                 await Awaitable.WaitForSecondsAsync(ReloadSeconds, ct);
+                return;
+            }
+            // (A straight-stocked one: no clip, the bolt worked and the rounds in from above with the gun low. Loading, T25.)
+            if (!pistol && TuckInBattle && v.drawn != null && v.arts.TryGetValue(v.drawn, out var stocked) && Tucks(stocked))
+            {
+                try
+                {
+                    for (float t = 0; t < LoadSeconds; t += Time.deltaTime)
+                    {
+                        v.load = t;
+                        await Awaitable.NextFrameAsync(ct);
+                    }
+                }
+                finally
+                {
+                    v.load = -1;
+                }
                 return;
             }
             to = Mathf.Min(to, clip.length);
