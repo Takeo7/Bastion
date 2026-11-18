@@ -205,6 +205,12 @@ namespace Bastion.Client.Map
     public sealed partial class MapBuilder
     {
         GameState s;
+        /// <summary>
+        /// The tiles searched as they were drawn last (GameState.Searched then). The state the map was built from may be
+        /// the game's own, changed in place as its events go (UI's view): by the first Update its list already had what was
+        /// searched since, and the furniture searched then stayed as it was (UI's U15, 18/11).
+        /// </summary>
+        HashSet<int> searchedDrawn = new HashSet<int>();
         readonly Func<string, GameObject> prefabOf;
         readonly Func<string, Material> materialOf;
         readonly Transform root;
@@ -216,6 +222,7 @@ namespace Bastion.Client.Map
         public MapBuilder(GameState state, Transform root, Func<string, GameObject> prefabOf, Func<string, Material> materialOf = null)
         {
             s = state;
+            searchedDrawn = new HashSet<int>(state.Searched ?? new List<int>());
             this.root = root;
             this.prefabOf = prefabOf;
             this.materialOf = materialOf;
@@ -1254,7 +1261,6 @@ namespace Bastion.Client.Map
                     h = h * 31 + d.Z * 7919 + i;
                     h = h * 31 + (i < tiles.Count ? tiles[i]?.GetHashCode() ?? 1 : 0);
                     h = h * 31 + (i < decor.Count ? decor[i] : -1);
-                    if (d.Kind == "medicalSupplies") h = h * 31 + (int)PieceOf(d.Z, i);
                     // (The wall behind, only for what hangs on it: Dressing's `wall`.)
                     if (d.Kind == "wallCross" || d.Kind == "cautionSign" || d.Kind == "safeSign" || d.Kind == "wallBlood")
                         h = h * 31 + (wi >= 0 && wi < tiles.Count ? tiles[wi]?.GetHashCode() ?? 1 : 0);
@@ -1313,8 +1319,9 @@ namespace Bastion.Client.Map
                 if (body && tile != "floor") continue;
                 if (scatter && tile != "floor" && tile != "low" && tile != "high") continue;
                 if (!scatter && !bed && !body && !wall && tile != "low" && tile != "high") continue;
-                // (G19: nothing left on a cart searched, nor on one empty from the start.)
-                if (d.Kind == "medicalSupplies" && look?.Kind == "medicalCart" && PieceOf(d.Z, i) is Piece.Searched or Piece.Empty) continue;
+                // (G19: what lies on a cart searched one by one is the cart's, drawn with it while it holds something
+                // (Clinical): searching it makes its tile again, not the whole dressing, 58 ms in the hospital.)
+                if (d.Kind == "medicalSupplies" && look?.Kind == "medicalCart" && PieceOf(d.Z, i) != Piece.None) continue;
                 var normal = Bastion.Engine.Grid.Dirs4[d.Facing];
                 int wx = d.X - normal.X, wy = d.Y - normal.Y, wi = wy * s.Width + wx;
                 if (wall && (wx < 0 || wy < 0 || wx >= s.Width || wy >= s.Height || wi >= tiles.Count || tiles[wi] != "wall")) continue;
@@ -1420,9 +1427,13 @@ namespace Bastion.Client.Map
         /// that changed), and the storeys' floors if a slab was blown through. How many tiles were made again; -1 if `next` has
         /// other storeys (build it whole).
         /// </summary>
+        /// <summary>BASTION_PIEZAS_LOG=1: each Update, what was searched since and what it took ([piezas] lines; G19).</summary>
+        internal static readonly bool PiecesLog = Environment.GetEnvironmentVariable("BASTION_PIEZAS_LOG") == "1";
+
         public int Update(GameState next)
         {
             int levels = 1 + (next.Levels?.Count ?? 0);
+            if (PiecesLog) Debug.Log($"[piezas] update: searched {s.Searched?.Count ?? -1} to {next.Searched?.Count ?? -1}, the same state {ReferenceEquals(s, next)}, the same list {ReferenceEquals(s.Searched, next.Searched)}, levels {levels} of {Storeys.Length}");
             if (levels != Storeys.Length || next.Width != s.Width || next.Height != s.Height) return -1;
             var changed = new HashSet<long>();
             // (Whether a wall, a window or a door changed: else the walls are as they were, and aren't laid again.)
@@ -1443,8 +1454,12 @@ namespace Bastion.Client.Map
             // Searched since (mapView.ts searchedSeen): the furniture opened, its contents before it, a car's boot up; a
             // room searched, its supermarket's shelves as stocked as they are now.
             int area = next.Width * next.Height;
-            foreach (int place in (next.Searched ?? new List<int>()).Except(s.Searched ?? new List<int>()))
+            foreach (int place in (next.Searched ?? new List<int>()).Where(place => !searchedDrawn.Contains(place)).ToList())
+            {
+                searchedDrawn.Add(place);
                 if (place / area < levels) changed.Add(Key(place / area, place % area));
+                if (PiecesLog) Debug.Log($"[piezas] searched since: node {place} (storey {place / area}, tile {place % area % next.Width},{place % area / next.Width}), pieces {(next.Mission?.Pieces == null ? "none" : next.Mission.Pieces.Contains(place) ? "in" : "out")}, on it {(onTile.TryGetValue(Key(place / area, place % area), out var there) ? there.Count : 0)}");
+            }
             if ((next.RoomsSearched?.Count ?? 0) != (s.RoomsSearched?.Count ?? 0))
                 foreach (var m in next.Markets ?? new List<MarketSite>())
                     for (int y = m.Y; y < m.Y + m.H; y++)
@@ -1516,6 +1531,7 @@ namespace Bastion.Client.Map
                 }
                 SeparatePileups();
                 Woods(redo);
+                if (PiecesLog) foreach (long key in redo) Debug.Log($"[piezas] made again: storey {key >> 32}, tile {(int)(uint)key % s.Width},{(int)(uint)key / s.Width}: {(onTile.TryGetValue(key, out var now) ? now.Count(o => o != null) : 0)} on it now");
             }
             using (Marks[8].Auto())
                 if (snow != null) SnowCover.Mark(root, plan, s, GroundPlane());
@@ -1928,7 +1944,10 @@ namespace Bastion.Client.Map
             double wear = owner >= 0 && owner < plan.Buildings.Count ? plan.Buildings[owner].medicalWear ?? 0 : 0;
             float yaw = (4 - look.Facing) % 4 * (Mathf.PI / 2) + (MapArt.Hash(x, y, 19) - 0.5f) * (float)wear * 0.7f;
             var at = Matrix4x4.TRS(new Vector3(x + 0.5f, floor / MapSpace.Tile, y + 0.5f), Quaternion.AngleAxis(yaw * Mathf.Rad2Deg, Vector3.up), Vector3.one);
-            var o = Shapes($"Mueble {look.Kind}", props[k], faces.Select(f => (f, at)), Resources.Load<Material>("FrameShape"), true);
+            var shapes = faces.Select(f => (f, at));
+            // (What its dressing lays on a cart, MedicalDressing's supplies at 0.60, with it while it holds something.)
+            if (look.Kind == "medicalCart" && piece == Piece.Full) shapes = shapes.Concat(MedicalDetails.Of("medicalSupplies").Select(f => (f, at * Matrix4x4.Translate(new Vector3(0, 0.60f, 0)))));
+            var o = Shapes($"Mueble {look.Kind}", props[k], shapes, Resources.Load<Material>("FrameShape"), true);
             Own(o, k, new[] { i });
             if (look.Kind == "medicalCart" && !open) Own(PlaceGame(props[k], "clinicalKit", at * Matrix4x4.Translate(new Vector3(-0.08f, 0.59f, -0.03f))), k, new[] { i });
         }

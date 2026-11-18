@@ -305,7 +305,9 @@ namespace Bastion.Client.Map
         public int Rebuild(GameState state)
         {
             if (builder == null) return -1;
+            var clock = MapBuilder.PiecesLog ? System.Diagnostics.Stopwatch.StartNew() : null;
             int redone = builder.Update(state);
+            if (clock != null) Debug.Log($"[piezas] rebuild: {redone} tiles made again in {clock.Elapsed.TotalMilliseconds:0.0} ms, frame {Time.frameCount}");
             if (redone < 0)
             {
                 int level = Level;
