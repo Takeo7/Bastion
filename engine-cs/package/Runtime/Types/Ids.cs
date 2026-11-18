@@ -290,10 +290,12 @@ namespace Bastion.Engine
         public const string Molotov = "molotov";
         /// <summary>El Toro's roar: once a fight (H6).</summary>
         public const string Roar = "roar";
+        /// <summary>De un vistazo (T2): a room searched without an action, once a fight.</summary>
+        public const string QuickLook = "quickLook";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Grenade, Missiles, Smoke, Flashbang, FirstAid, Restoration, PatchUp, Fuel, Molotov, Roar,
+            Grenade, Missiles, Smoke, Flashbang, FirstAid, Restoration, PatchUp, Fuel, Molotov, Roar, QuickLook,
         };
     }
 

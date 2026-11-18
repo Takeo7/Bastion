@@ -82,6 +82,7 @@ namespace Bastion.UI.Combat
             control.CloseFocus = () => player.CloseFocus;
             control.ActingFocus = () => player.Acting;
             control.Busy = player.IsBusy;
+            control.Playing = () => player.Busy;
             control.EnemyTurnPlaying = () => player.EnemyTurnPlaying;
             control.Hurry = player.SetHurry;
             control.Halt = player.SetHalted;

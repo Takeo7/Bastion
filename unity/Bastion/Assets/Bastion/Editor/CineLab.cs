@@ -17,7 +17,8 @@ namespace Bastion.EditorTools
     ///      bleach bypass.
     ///   B, foco de cámara: URP's bokeh depth of field on where the camera looks; the background soft, a miniature
     ///      (tilt-shift), the cinema's bars.
-    ///   C, atmósfera y luz: the haze thicker with distance, light shafts from the sun, haloes round the lights by night.
+    ///   C, atmósfera y luz: the haze thicker with distance, the shadows of clouds going over (a cookie on the sun:
+    ///      light shafts, Grade's _CineRays, don't show from the game's camera, the sun behind it), haloes round the lights.
     ///   D, película analógica: grain, a colour fringe at the edges, halation (a red bloom); 35 mm, 16 mm, documentary.
     ///   E, claroscuro: the light itself; deep shadows, the golden hour, a blue night.
     /// How: before each frame (RenderPipelineManager.beginContextRendering) the look asked for over what Mood last set
@@ -40,11 +41,17 @@ namespace Bastion.EditorTools
             // Light shafts: strength, threshold, decay, length; their tint.
             public Vector4 rays;
             public Color raysTint = new Color(1f, 0.85f, 0.65f);
+            // The clouds' shadows: how much of the sun they take (0 none), their size (metres a tile of the pattern), how
+            // fast they go (metres a second).
+            public float clouds, cloudSize = 60, cloudSpeed = 1.5f;
             // URP's bloom over the volume's (intensity added, threshold and scatter if set, tint), depth of field (aperture
             // f-number, focal length in mm; 0 none).
             public float bloom, bloomThreshold, bloomScatter;
             public Color bloomTint = Color.white;
             public float aperture, focal;
+            // Gaussian depth of field instead (cheaper, the far only): where its blur begins and is whole, metres beyond the
+            // focus; its most radius.
+            public float gaussFrom, gaussTo, gaussRadius;
             // Light: the sun's intensity (times) and colour (times), its height (degrees; 0 as it is), the ambient (times,
             // per channel), the haze's density (times) and colour (times).
             public float sun = 1, sunHeight;
@@ -58,11 +65,12 @@ namespace Bastion.EditorTools
             new Look { id = "A1", name = "Fílmica suave", curve = 0.6f, exposure = 0.92f, contrast = 1.06f, bloom = 0.15f },
             new Look { id = "A2", name = "Naranja y azul", curve = 0.8f, exposure = 0.9f, contrast = 1.12f, saturation = 1.05f, shadowTint = new Vector3(0.86f, 0.98f, 1.1f), highlightTint = new Vector3(1.08f, 1f, 0.86f), bloom = 0.15f },
             new Look { id = "A3", name = "Blanqueado", curve = 0.8f, exposure = 0.95f, contrast = 1.25f, saturation = 0.55f, highlightTint = new Vector3(1f, 1.01f, 1.04f), lift = new Vector3(-0.015f, -0.015f, -0.01f) },
-            new Look { id = "B1", name = "Fondo desenfocado", aperture = 4f, focal = 70 },
-            new Look { id = "B2", name = "Miniatura", aperture = 1.4f, focal = 135, saturation = 1.1f, contrast = 1.05f },
+            new Look { id = "B1", name = "Fondo desenfocado", gaussFrom = 4, gaussTo = 22, gaussRadius = 1.5f },
+            // (URP's bokeh at its widest: anything less barely blurs from 24 tiles off.)
+            new Look { id = "B2", name = "Miniatura", aperture = 1f, focal = 300, saturation = 1.1f, contrast = 1.05f },
             new Look { id = "B3", name = "Bandas de cine", bars = 0.744f, aperture = 5.6f, focal = 60, curve = 0.4f },
             new Look { id = "C1", name = "Bruma de distancia", haze = 2.4f, hazeColour = new Vector3(1.05f, 1f, 0.92f), contrast = 0.97f },
-            new Look { id = "C2", name = "Rayos de sol", rays = new Vector4(1.6f, 0.7f, 0.95f, 0.85f), bloom = 0.15f, curve = 0.4f },
+            new Look { id = "C2", name = "Sombras de nubes", clouds = 0.5f, cloudSize = 70, cloudSpeed = 1.5f },
             new Look { id = "C3", name = "Halos", bloom = 0.9f, bloomThreshold = 0.6f, bloomScatter = 0.78f, bloomTint = new Color(1f, 0.86f, 0.7f) },
             new Look { id = "D1", name = "35 mm", grain = 0.035f, curve = 0.4f, aberration = 0.004f },
             new Look { id = "D2", name = "16 mm", grain = 0.085f, aberration = 0.014f, saturation = 0.88f, bloom = 0.5f, bloomThreshold = 0.7f, bloomTint = new Color(1f, 0.45f, 0.35f), curve = 0.5f },
@@ -122,6 +130,7 @@ namespace Bastion.EditorTools
             Post(look, camera);
             Lighting(look);
             Rays(look, camera);
+            Clouds(look);
         }
 
         static Vector4 Base(string name)
@@ -179,14 +188,15 @@ namespace Bastion.EditorTools
             bloom.threshold.Override(look.bloomThreshold > 0 ? look.bloomThreshold : threshold);
             bloom.scatter.Override(look.bloomScatter > 0 ? look.bloomScatter : scatter);
             bloom.tint.Override(look.bloomTint);
-            depth.active = look.aperture > 0;
-            depth.mode.Override(DepthOfFieldMode.Bokeh);
+            depth.active = look.aperture > 0 || look.gaussTo > 0;
+            depth.mode.Override(look.gaussTo > 0 ? DepthOfFieldMode.Gaussian : DepthOfFieldMode.Bokeh);
             depth.focusDistance.Override(Focus(camera));
+            depth.gaussianStart.Override(Focus(camera) + look.gaussFrom);
+            depth.gaussianEnd.Override(Focus(camera) + Mathf.Max(look.gaussTo, look.gaussFrom + 1));
+            depth.gaussianMaxRadius.Override(look.gaussRadius > 0 ? look.gaussRadius : 1);
+            depth.highQualitySampling.Override(true);
             depth.aperture.Override(Mathf.Max(1, look.aperture));
             depth.focalLength.Override(Mathf.Max(1, look.focal));
-            var stack = VolumeManager.instance.stack?.GetComponent<DepthOfField>();
-            var data = camera != null ? camera.GetComponent<UniversalAdditionalCameraData>() : null;
-            if (look.aperture > 0 && Time.frameCount % 20 == 0) Debug.Log(FormattableString.Invariant($"[cine-dbg] dof own active {depth.active} mode {depth.mode.value}; stack {(stack != null ? stack.IsActive() + " " + stack.mode.value + " f " + stack.focusDistance.value + " ap " + stack.aperture.value : "none")}; camera {(camera != null ? camera.name : "none")} post {data?.renderPostProcessing} layer {data?.volumeLayerMask.value} trigger {data?.volumeTrigger}"));
         }
 
         /// <summary>How far from the camera the ground is where it looks (metres): the depth of field's focus.</summary>
@@ -248,6 +258,62 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>The light shafts' globals: the sun's place on the screen, from where the camera is, towards the sun.</summary>
+        static Texture2D cloudsMade;
+        static float cloudsDark = -1;
+
+        /// <summary>The clouds' shadows: a cookie on the sun, a soft noise that wraps, going with the wind.</summary>
+        static void Clouds(Look look)
+        {
+            var sun = RenderSettings.sun;
+            if (sun == null) return;
+            if (look.clouds <= 0)
+            {
+                if (cloudsMade != null && sun.cookie == cloudsMade) sun.cookie = null;
+                return;
+            }
+            if (cloudsMade == null || cloudsDark != look.clouds)
+            {
+                const int n = 256;
+                cloudsMade ??= new Texture2D(n, n, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, name = "Nubes", hideFlags = HideFlags.DontSave };
+                cloudsDark = look.clouds;
+                var pixels = new Color32[n * n];
+                // (Four octaves of noise that wraps: each a grid of whole cells over the tile, its corners' values smoothed.)
+                float Wrapped(float x, float y, int cells, int seed)
+                {
+                    float fx = x * cells, fy = y * cells;
+                    int x0 = Mathf.FloorToInt(fx), y0 = Mathf.FloorToInt(fy);
+                    float tx = fx - x0, ty = fy - y0;
+                    tx = tx * tx * (3 - 2 * tx);
+                    ty = ty * ty * (3 - 2 * ty);
+                    float V(int i, int j)
+                    {
+                        uint h = (uint)(((i % cells + cells) % cells) * 73856093 ^ ((j % cells + cells) % cells) * 19349663 ^ seed * 83492791);
+                        h ^= h >> 13;
+                        h *= 0x5bd1e995;
+                        h ^= h >> 15;
+                        return (h & 0xffff) / 65535f;
+                    }
+                    return Mathf.Lerp(Mathf.Lerp(V(x0, y0), V(x0 + 1, y0), tx), Mathf.Lerp(V(x0, y0 + 1), V(x0 + 1, y0 + 1), tx), ty);
+                }
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        float u = x / (float)n, v = y / (float)n;
+                        float f = 0.5f * Wrapped(u, v, 3, 1) + 0.25f * Wrapped(u, v, 6, 2) + 0.15f * Wrapped(u, v, 12, 3) + 0.1f * Wrapped(u, v, 24, 4);
+                        float cover = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.45f, 0.68f, f));
+                        byte lit = (byte)Mathf.RoundToInt(255 * (1 - look.clouds * cover));
+                        pixels[y * n + x] = new Color32(lit, lit, lit, lit);
+                    }
+                cloudsMade.SetPixels32(pixels);
+                cloudsMade.Apply(true);
+            }
+            sun.cookie = cloudsMade;
+            var data = sun.GetComponent<UniversalAdditionalLightData>() ?? sun.gameObject.AddComponent<UniversalAdditionalLightData>();
+            data.lightCookieSize = Vector2.one * look.cloudSize;
+            float t = Application.isPlaying ? Time.time : 0;
+            data.lightCookieOffset = new Vector2(t * look.cloudSpeed, t * look.cloudSpeed * 0.4f);
+        }
+
         static void Rays(Look look, Camera camera)
         {
             Shader.SetGlobalVector("_CineRays", look.rays);
@@ -259,7 +325,18 @@ namespace Bastion.EditorTools
                 return;
             }
             var at = camera.WorldToViewportPoint(camera.transform.position - sun.transform.forward * 1000);
-            Shader.SetGlobalVector("_CineSun", new Vector4(at.x, at.y, at.z > 0 ? 1 : 0, 0));
+            if (at.z <= 0)
+            {
+                // (Behind the camera, as it mostly is from above: the shafts run across the picture the way the light
+                // goes, from a point far off the screen against it.)
+                var ground = camera.transform.position + camera.transform.forward * Focus(camera);
+                var a = camera.WorldToViewportPoint(ground);
+                var b = camera.WorldToViewportPoint(ground - sun.transform.forward * 5);
+                var way = new Vector2(b.x - a.x, b.y - a.y);
+                way = way.sqrMagnitude > 1e-8f ? way.normalized : Vector2.up;
+                at = new Vector3(0.5f + way.x * 2.5f, 0.5f + way.y * 2.5f, 1);
+            }
+            Shader.SetGlobalVector("_CineSun", new Vector4(at.x, at.y, 1, 0));
         }
     }
 }

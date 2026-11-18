@@ -193,8 +193,35 @@ namespace Bastion.Client
         public Shot SoldierShot()
         {
             var target = new Vector3(soldierAt.x, 0.8f, soldierAt.y);
-            return new Shot { pos = target + new Vector3(soldierView.x * soldierDistance, 0, soldierView.y * soldierDistance), target = target, fov = 38 };
+            var shot = new Shot { pos = target + new Vector3(soldierView.x * soldierDistance, 0, soldierView.y * soldierDistance), target = target, fov = 38 };
+            if (!Customizing) return shot;
+            // Personalizar's (T1, 18/11: the soldier is the preview of what is tried on): from the feet to over the helmet and
+            // a shoulder's width either side, fitted into what the panels leave and kept in the middle, the camera as level.
+            var side = new Vector3(soldierView.y, 0, -soldierView.x).normalized * (0.4f / MapSpace.Tile);
+            var foot = new Vector3(soldierAt.x, 0, soldierAt.y);
+            var top = foot + Vector3.up * (CustomTop / MapSpace.Tile);
+            return Fitted(shot, new[] { foot + side, foot - side, top + side, top - side }, true);
         }
+
+        /// <summary>How high over the feet Personalizar's shot reaches (metres): a figure with its helmet on, and a little over.</summary>
+        const float CustomTop = 2.15f;
+
+        /// <summary>
+        /// Personalizar is open over Soldados (UI, T1): the soldier's shot close, the whole figure in what the panels leave,
+        /// as the preview of what is tried on; off, Soldados' own.
+        /// </summary>
+        public bool Customizing
+        {
+            get => customizing;
+            set
+            {
+                if (customizing == value) return;
+                customizing = value;
+                if (view == Views.Barracks) Reframe();
+            }
+        }
+
+        bool customizing;
 
         static bool Finite(Vector3 v) => !(float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z) || float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z));
 
@@ -244,6 +271,8 @@ namespace Bastion.Client
                 bool wide = bar || r.width > w * 0.5f;
                 if (r.yMin <= 2 || (bar && r.yMin <= 24)) top = Mathf.Max(top, r.yMax);
                 else if (r.yMax >= h - 2 || (bar && r.yMax >= h - 24) || (wide && r.center.y > h * 0.6f)) bottom = Mathf.Max(bottom, h - r.yMin);
+                // (A plate up in the middle, over what is shown, takes the top: Personalizar's name over the soldier, T1.)
+                else if (r.center.y < h * 0.3f && Mathf.Abs(r.center.x - w / 2) < w * 0.2f) top = Mathf.Max(top, r.yMax);
                 else if (r.center.x < w / 2) left = Mathf.Max(left, r.xMax);
                 else right = Mathf.Max(right, w - r.xMin);
             }
@@ -319,7 +348,7 @@ namespace Bastion.Client
         /// <summary>The panels moved (another layout, another size): a fitted tab's shot made again.</summary>
         void Refit()
         {
-            if (view == Views.Squad || view == Views.Debrief || FireShown) Reframe();
+            if (view == Views.Squad || view == Views.Debrief || FireShown || (view == Views.Barracks && customizing)) Reframe();
         }
 
         /// <summary>

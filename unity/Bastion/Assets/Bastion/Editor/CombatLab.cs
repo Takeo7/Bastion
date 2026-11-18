@@ -2605,11 +2605,16 @@ namespace Bastion.EditorTools
         ///   unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Evac -shotOut lata.png
         ///   BASTION_SUBEN=1 unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Evac -shotFrames 40 -shotFps 10 -shotOut tira
         ///   BASTION_IR=1 unity/tools/captura.sh -shotSetup Bastion.EditorTools.CombatLab.Evac -shotPlay -shotFrames 30 -shotFps 10 -shotOut tira
+        /// BASTION_LAB_GUARDADO=a room's save instead of a recording (T21: an expedition's, its seats by La Lata's doors), and
+        /// with BASTION_SUBEN=1 each one's nearest door logged ([plazas]); BASTION_GIRO=auto, the camera to its doors' side.
         /// </summary>
         public static void Evac()
         {
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "../step2/city-11-scavenge";
-            state = Seen(MapLab.Golden(name));
+            // (BASTION_LAB_GUARDADO=a room's save: its state, an expedition's with La Lata's seats by its doors, T21.)
+            string saved = Environment.GetEnvironmentVariable("BASTION_LAB_GUARDADO");
+            if (!string.IsNullOrEmpty(saved)) name = "guardado";
+            state = Seen(string.IsNullOrEmpty(saved) ? MapLab.Golden(name) : Bastion.Net.Json.Read<GameState>(Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(saved))["state"].ToString()));
             if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_VEHICULO"), out int vehicle)) state.Vehicle = vehicle;
             MapLab.Lighting(state.Mission?.Night != true);
             var view = MapLab.Map(state, name);
@@ -2635,6 +2640,26 @@ namespace Bastion.EditorTools
                 units = new GameObject("Unidades").AddComponent<UnitViews>();
                 units.Sync(state);
                 units.MasksNow();
+                // (T21: each one's place against La Lata's doors, the nearest's and how far, in metres; and the camera, at
+                // BASTION_GIRO=auto, turned the game's way, 90° by 90°, to the side its doors are on.)
+                if (view.Lata != null)
+                {
+                    // (Its doorways in tiles, 0.10.1's frame, z south: in Unity's world.)
+                    var doors = view.Lata.Doorways().Select(t => new Vector3(t.x, t.y, -t.z) * MapSpace.Tile).ToList();
+                    foreach (var u in squad.Where(u => !u.Evacuated))
+                    {
+                        var p = MapSpace.TileToWorld(state, u.Pos);
+                        int near = Enumerable.Range(0, doors.Count).OrderBy(k => Vector3.Distance(Flat(doors[k]), Flat(p))).FirstOrDefault();
+                        Debug.Log(FormattableString.Invariant($"[plazas] {u.Id} at {u.Pos.X},{u.Pos.Y}: door {near} of {doors.Count}, {(doors.Count > 0 ? Vector3.Distance(Flat(doors[near]), Flat(p)) : -1):0.00} m"));
+                    }
+                    if (Environment.GetEnvironmentVariable("BASTION_GIRO") == "auto" && doors.Count > 0)
+                    {
+                        var side = Flat(doors.Aggregate(Vector3.zero, (a, b) => a + b) / doors.Count) - Flat(view.Lata.transform.position);
+                        float yaw = new[] { 45f, 135f, 225f, 315f }.OrderByDescending(y => Vector3.Dot(side, new Vector3(Mathf.Sin(y * Mathf.Deg2Rad), 0, -Mathf.Cos(y * Mathf.Deg2Rad)))).First();
+                        MapSpace.Aim(camera, MapSpace.TileToWorld(state, new Pos { X = at.X, Y = at.Y }), distance, yaw);
+                        Debug.Log($"[plazas] the camera from {yaw}°");
+                    }
+                }
                 new GameObject("Subida").AddComponent<Boarding>().squad = squad.Where(u => !u.Evacuated).ToList();
                 return;
             }
@@ -2682,6 +2707,8 @@ namespace Bastion.EditorTools
             }
             EditorApplication.playModeStateChanged += Go;
         }
+
+        static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0, v.z);
 
         /// <summary>Evac's boarding on a strip's clock (Shots steps it): all of `squad` boarding 0.3 s in, La Lata going once they have.</summary>
         sealed class Boarding : MonoBehaviour, IShotStep

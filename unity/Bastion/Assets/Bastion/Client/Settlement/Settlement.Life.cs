@@ -212,7 +212,8 @@ namespace Bastion.Client
                 // (The pistol, the only gun, rides in its holster: Sling.)
                 string gun = GunOf(entry);
                 stander.pistol = gun == "pistol";
-                stander.gun = stander.pistol ? UnitViews.Pistol(holder, catalog) : UnitViews.Gun(Anims.Weapon(gun), holder, catalog, out _);
+                stander.art = stander.pistol ? null : Anims.Weapon(gun);
+                stander.gun = stander.pistol ? UnitViews.Pistol(holder, catalog) : UnitViews.Gun(stander.art, holder, catalog, out _);
                 string build = stander.build;
                 stander.anim = new FigureAnimator(stander.animator, m => catalog.Clip(Anims.Motion(build, m, false)), null, m => false);
             }

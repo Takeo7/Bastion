@@ -21,11 +21,12 @@ namespace Bastion.Engine
 
         /// <summary>
         /// The specials drawn on the maps: today's objectives, and since H5 the four new ones (NewSpecials: Asedio,
-        /// Travesía, Sigilo, Guarida).
+        /// Travesía, Sigilo, Guarida). Without «Arreglar la radio» since T2 (Arturo, 18/11: «se quita la etapa», and all of
+        /// fixing with it): its share goes to the other eight.
         /// </summary>
         public static readonly IReadOnlyList<string> Specials = new[]
         {
-            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Hack, NodeKinds.Rescue,
+            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Rescue,
             NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite,
         };
         /// <summary>H5's four, on the maps since their rules are there (they are in Specials too).</summary>

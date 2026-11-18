@@ -27,7 +27,7 @@ namespace Bastion.UI.Strategy
                 Supplies = Gears.Supplies(c.Stash).ToString(),
                 SuppliesTip = StrategyText.Stash.SuppliesTip,
                 Hint = GearText.Hint,
-                Stash = Grid(c.Stash, GearPlaces.Stash, null, Gears.Reach(c, Slot, Connected, null) == null, 8),
+                Stash = Grid(c.Stash, GearPlaces.Stash, null, Gears.Reach(c, Slot, Connected, null) == null, 8, Against(pick)),
             };
             foreach (var s in mine.Concat(alive.Except(mine)))
             {
@@ -44,6 +44,9 @@ namespace Bastion.UI.Strategy
 
         static string FirstName(CampaignSoldier s) => (s.Name ?? "").Split(' ')[0];
 
+        /// <summary>A soldier's kit to weigh a weapon against (T4): what is in each place, and whose; none without a kit.</summary>
+        static (System.Func<string, Engine.Gear>, string)? Against(CampaignSoldier s) => s?.Kit is Kit k ? (slot => Gears.InSlot(k, slot), FirstName(s)) : ((System.Func<string, Engine.Gear>, string)?)null;
+
         /// <summary>A soldier's six places and pack; health as it stands in a run (Run.Hp), whole in the base.</summary>
         KitView Kit(CampaignSoldier s, bool mine)
         {
@@ -53,7 +56,7 @@ namespace Bastion.UI.Strategy
             var v = new KitView
             {
                 Soldier = s.Id, Name = s.Name, Line = StrategyText.Stash.Health(hp, max), Mine = mine,
-                Pack = Grid(k.Pack, s.Id, KitSlots.Pack, mine),
+                Pack = Grid(k.Pack, s.Id, KitSlots.Pack, mine, 0, Against(s)),
                 Note = mine ? null : StrategyText.Stash.Theirs(PlayerName(s.Owner)),
             };
             foreach (var slot in KitSlots.All)
@@ -79,20 +82,23 @@ namespace Bastion.UI.Strategy
             }
         }
 
-        public static GearGridView Grid(GearGrid g, string owner, string slot, bool mine, int rows = 0) => new GearGridView
+        public static GearGridView Grid(GearGrid g, string owner, string slot, bool mine, int rows = 0, (System.Func<string, Engine.Gear> at, string who)? against = null) => new GearGridView
         {
             Owner = owner, Slot = slot, W = g.W, H = g.H, Mine = mine, Rows = rows,
-            Items = g.Items.Select(p => new PlacedView { Gear = Item(p.Gear), X = p.X, Y = p.Y, Turned = p.Turned }).ToList(),
+            Items = g.Items.Select(p => new PlacedView { Gear = Item(p.Gear, against), X = p.X, Y = p.Y, Turned = p.Turned }).ToList(),
         };
 
-        /// <summary>A gear as the grids draw it: size lying across, its pile, its name and what it is on hover.</summary>
-        public static GearItemView Item(Engine.Gear g)
+        /// <summary>
+        /// A gear as the grids draw it: size lying across, its pile, its name and what it is on hover; a weapon's figures
+        /// against what `against`'s soldier carries in its place (T4), if they are given.
+        /// </summary>
+        public static GearItemView Item(Engine.Gear g, (System.Func<string, Engine.Gear> at, string who)? against = null)
         {
             var (w, h) = Content.GearSize(g.Kind, g.Type);
             return new GearItemView
             {
                 Id = g.Id, Kind = g.Kind, Type = g.Type, Name = GearName(g), The = Lore.GearThe(g.Kind, g.Type, g.Count), Icon = GearIcon(g),
-                W = w, H = h, Count = g.Count, Pile = Content.PileOf(g.Kind, g.Type), Tip = GearTip(g),
+                W = w, H = h, Count = g.Count, Pile = Content.PileOf(g.Kind, g.Type), Tip = GearTip(g, against),
             };
         }
 
@@ -129,7 +135,7 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>On hover: its name (and how many of how many), what it is, what is mounted on it.</summary>
-        static string GearTip(Engine.Gear g)
+        static string GearTip(Engine.Gear g, (System.Func<string, Engine.Gear> at, string who)? against)
         {
             var pile = Content.PileOf(g.Kind, g.Type);
             var lines = new List<string> { pile > 1 ? $"{GearName(g)} · {g.Count} de {pile}" : GearName(g) };
@@ -139,6 +145,16 @@ namespace Bastion.UI.Strategy
                     var d = Content.GearWeapon(g);
                     if (d != null) lines.Add(d.Slot == FoundWeaponSlots.Primary ? StrategyText.Stash.Primary : d.Slot == FoundWeaponSlots.Sidearm ? StrategyText.Stash.Sidearm : StrategyText.Stash.Melee);
                     if (g.Mods != null && g.Mods.Count > 0) lines.Add(StrategyText.Stash.Mounted(g.Mods.Select(m => ModName(m).ToLowerInvariant()).ToList()));
+                    // What it is good for and its figures, to tell one from another (Arturo, 18/11 T4; Lore's line and order).
+                    if (d != null)
+                    {
+                        // Against the soldier chosen's weapon in the same place (Arturo, 18/11, cuadro: «verde o rojo junto a
+                        // cada cifra»): not against itself, nor an empty place.
+                        var place = d.Slot == FoundWeaponSlots.Primary ? KitSlots.Primary : d.Slot == FoundWeaponSlots.Sidearm ? KitSlots.Pistol : KitSlots.Melee;
+                        var theirs = against?.at?.Invoke(place);
+                        var vs = theirs != null && theirs.Id != g.Id ? Content.GearWeapon(theirs) : null;
+                        lines.AddRange(WeaponLines(d, g.Mods, vs, theirs?.Mods, vs != null ? StrategyText.Stash.Against(Lore.GearThe(theirs.Kind, theirs.Type, 1), against.Value.who) : null));
+                    }
                     break;
                 case GearKinds.Item:
                     if (g.Type != null && Content.Items.TryGetValue(g.Type, out var i)) lines.Add(i.Description);
@@ -154,6 +170,79 @@ namespace Bastion.UI.Strategy
                 case GearKinds.Supplies: lines.Add(StrategyText.Stash.SuppliesLine); break;
             }
             return string.Join("\n", lines.Where(l => !string.IsNullOrEmpty(l)));
+        }
+
+        /// <summary>
+        /// A weapon's help under its name (Arturo, 18/11 T4: «en las armas sus características para saber cuál es mejor que
+        /// otra»): Lore's line for what it fires as and a long blade's or the rake's, then its figures in Lore's order, only
+        /// those that say something (T4-OBJETOS.md): Daño, Puntería, Crítico, Alcance, Cargador, Ruido, the actions when two,
+        /// Quita blindaje. As it is: the engine's card with what is mounted (Aim.WeaponProfileOf), no wear on an expedition.
+        /// </summary>
+        public static List<string> WeaponLines(FoundWeaponDef d, IReadOnlyList<string> mods, FoundWeaponDef vs = null, IReadOnlyList<string> vsMods = null, string against = null)
+        {
+            var lines = new List<string>();
+            if (Lore.WeaponLine(d.Weapon) is string line) lines.Add(line);
+            if (Lore.MeleeLine(d.Id) is string blade) lines.Add(blade);
+            // What the colours weigh against, right over the figures (Lore, 18/11).
+            if (!string.IsNullOrEmpty(against)) lines.Add(against);
+            var a = FiguresOf(d, mods);
+            var b = vs != null ? FiguresOf(vs, vsMods) : (WeaponFigures?)null;
+            // Each figure green if it is better than the other's, red if worse (Mixta's good and danger), as it is otherwise;
+            // and by it how much it goes up or down (Arturo, 18/11, cuadro: «junto a cada cifra, cuánto sube o baja»).
+            void Figure(string label, string value, int better = 0, double by = 0)
+            {
+                var shown = better == 0 ? value : $"<color={(better > 0 ? Better : Worse)}>{value}{(by != 0 ? $" ({SignedFigure(by)})" : "")}</color>";
+                lines.Add($"{label}: {shown}");
+            }
+            int Cmp(double mine, double theirs, bool lowIsGood = false) => b == null || mine == theirs ? 0 : (mine > theirs) != lowIsGood ? 1 : -1;
+            // (Damage by its middle: 4–6 against 3–5 is +1.)
+            Figure(Lore.WeaponLabels.Damage, a.Min == a.Max ? a.Min.ToString() : $"{a.Min}–{a.Max}", Cmp(a.Min + a.Max, b?.Min + b?.Max ?? 0), b == null ? 0 : (a.Min + a.Max - b.Value.Min - b.Value.Max) / 2.0);
+            if (a.Aim != 0 || (b?.Aim ?? 0) != 0) Figure(Lore.WeaponLabels.Aim, SignedFigure(a.Aim), Cmp(a.Aim, b?.Aim ?? 0), a.Aim - (b?.Aim ?? 0));
+            if (a.Crit != 0 || (b?.Crit ?? 0) != 0) Figure(Lore.WeaponLabels.Crit, $"{a.Crit} %", Cmp(a.Crit, b?.Crit ?? 0), a.Crit - (b?.Crit ?? 0));
+            // In tiles (Arturo, 18/11 T23: «el número de casillas que tiene de alcance»; Gameplay's Content.ReachTiles, Lore's
+            // words): how far, and where it's best when that is less; weighed by how far, then how far the best goes, then
+            // how close it starts.
+            var reach = a.Reach.Max != (b?.Reach.Max ?? a.Reach.Max) ? Cmp(a.Reach.Max, b.Value.Reach.Max)
+                : a.Reach.To != (b?.Reach.To ?? a.Reach.To) ? Cmp(a.Reach.To, b.Value.Reach.To)
+                : Cmp(a.Reach.From, b?.Reach.From ?? a.Reach.From, lowIsGood: true);
+            var reachBy = b == null ? 0 : a.Reach.Max != b.Value.Reach.Max ? a.Reach.Max - b.Value.Reach.Max : a.Reach.To != b.Value.Reach.To ? a.Reach.To - b.Value.Reach.To : a.Reach.From - b.Value.Reach.From;
+            Figure(Lore.WeaponLabels.Reach, StrategyText.Stash.Reach(a.Reach.From, a.Reach.To, a.Reach.Max, a.Melee), reach, reachBy);
+            // (A blade has no magazine: no line for it, Lore 18/11.)
+            if (!a.Melee) Figure(Lore.WeaponLabels.Clip, Lore.WeaponFigure("clip", a.Clip, a.Melee), b?.Melee != false ? 0 : Cmp(a.Clip, b?.Clip ?? 0), b?.Melee != false ? 0 : a.Clip - b.Value.Clip);
+            Figure(Lore.WeaponLabels.Noise, Lore.WeaponFigure("noise", a.Noise), Cmp(a.Noise, b?.Noise ?? 0, lowIsGood: true), a.Noise - (b?.Noise ?? a.Noise));
+            if (a.Actions >= 2 || (b?.Actions ?? 0) >= 2) Figure(a.Melee ? Lore.WeaponLabels.ActionsMelee : Lore.WeaponLabels.Actions, Lore.WeaponFigure("actions", a.Actions), Cmp(a.Actions, b?.Actions ?? 0, lowIsGood: true), a.Actions - (b?.Actions ?? a.Actions));
+            if (a.Shred > 0 || (b?.Shred ?? 0) > 0) Figure(Lore.WeaponLabels.Shred, a.Shred.ToString(), Cmp(a.Shred, b?.Shred ?? 0), a.Shred - (b?.Shred ?? 0));
+            return lines;
+        }
+
+        const string Better = "#8fd05a", Worse = "#f0503c";
+
+        /// <summary>A figure with its sign, as the aim always goes («+0», «+20», «−10»); a half, with a comma («+0,5»).</summary>
+        static string SignedFigure(double n)
+        {
+            var s = System.Math.Abs(n).ToString("0.#", System.Globalization.CultureInfo.GetCultureInfo("es-ES"));
+            return n < 0 ? "−" + s : "+" + s;
+        }
+
+        /// <summary>A weapon's figures as it is (the engine's card with what is mounted, no wear); the knife's, its own.</summary>
+        struct WeaponFigures
+        {
+            public int Min, Max, Aim, Crit, Clip, Noise, Actions, Shred;
+            public WeaponReach Reach;
+            public bool Melee;
+        }
+
+        static WeaponFigures FiguresOf(FoundWeaponDef d, IReadOnlyList<string> mods)
+        {
+            var w = Content.Weapons[d.Weapon];
+            // (The knife isn't one found: its own figures, nothing to mount on it.)
+            var p = Content.FoundWeapons.ContainsKey(d.Id) ? Aim.WeaponProfileOf(d.Id, 100, mods ?? new List<string>()) : null;
+            return new WeaponFigures
+            {
+                Min = p?.Damage.Min ?? w.Damage, Max = p?.Damage.Max ?? w.Damage + w.Spread, Aim = p?.Aim ?? w.Aim, Crit = p?.Crit ?? w.Crit,
+                Reach = Content.ReachTiles(w), Clip = p?.Clip ?? w.Clip, Noise = p?.Noise ?? w.Noise, Actions = p?.Actions ?? w.ApCost,
+                Shred = p?.Shred ?? w.Shred, Melee = w.Melee,
+            };
         }
 
         // ------------------------------------------------------------ the orders

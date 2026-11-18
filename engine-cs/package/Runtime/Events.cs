@@ -71,6 +71,24 @@ namespace Bastion.Engine
             return me;
         }
 
+        /// <summary>
+        /// A walk shown tile by tile (T18, Arturo 18/11: «la actualización de visión y de niebla que se haga en cada casilla y
+        /// no al final del movimiento»): `ev`'s unit on its path's tile `index`, looking the way it walks, with the buildings
+        /// the squad finds passing there (Buildings.Discover, not stopped). Nothing else: its actions and movement, and the
+        /// buildings it looks into from where it stops, are the whole event's (ApplyEvent), applied after the last tile to
+        /// the same state. For the client's view, its fog and who it sees; the rules apply MovedEvent whole.
+        /// </summary>
+        public static void MoveStep(GameState s, MovedEvent ev, int index)
+        {
+            if (index < 0 || index >= ev.Path.Count) return;
+            var u = UnitOf(s, ev.Unit);
+            var at = ev.Path[index];
+            var before = index > 0 ? ev.Path[index - 1] : u.Pos;
+            u.Facing = Los.FacingTo(before, at) ?? u.Facing;
+            u.Pos = CopyPos(at);
+            if (Los.IsViewer(u, Teams.Xcom)) Buildings.Discover(s, at, false);
+        }
+
         public static void ApplyEvent(GameState s, GameEvent e)
         {
             s.Seq++;
@@ -1244,6 +1262,7 @@ namespace Bastion.Engine
                 Blow = s.Blow != null ? new Blow { Unit = s.Blow.Unit, Kind = s.Blow.Kind, Landed = s.Blow.Landed } : null,
                 Ready = (bool[])s.Ready.Clone(),
                 Command = s.Command,
+                Solo = s.Solo,
                 ActiveUnit = s.ActiveUnit,
                 EvacCall = s.EvacCall != null ? new EvacCall { By = s.EvacCall.By, Unit = s.EvacCall.Unit } : null,
                 AbandonCall = s.AbandonCall != null ? new AbandonCall { By = s.AbandonCall.By } : null,

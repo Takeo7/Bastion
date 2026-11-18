@@ -153,14 +153,25 @@ namespace Bastion.UI.Combat
             if (now == key) return;
             key = now;
             SearchZone(s, area);
-            // The zone: a square on each tile, a little short of its edges.
+            // The zone: a square on each tile, a little short of its edges, and its edges drawn: one tile, one seat in La
+            // Lata, by its doors (T21: as many tiles as seats; a loose wash read as an area, not as places).
             build.Clear();
             var inset = 0.02f * T;
+            var seat = new Color32(Evac.r, Evac.g, Evac.b, 0xe0);
             foreach (var t in evac)
             {
                 var floor = Board.TileToWorld(s, new Pos { X = t.X, Y = t.Y }).y + 0.015f * T;
                 var a = Board.Corner(t.X, t.Y, floor);
                 build.Flat(a.x + inset, a.z - inset, a.x + T - inset, a.z - T + inset, floor, new Color32(Evac.r, Evac.g, Evac.b, 0x38));
+                var edge = 0.08f * T;
+                var c0 = new Vector3(a.x + edge, floor + 0.005f * T, a.z - edge);
+                var c1 = new Vector3(a.x + T - edge, c0.y, a.z - edge);
+                var c2 = new Vector3(a.x + T - edge, c0.y, a.z - T + edge);
+                var c3 = new Vector3(a.x + edge, c0.y, a.z - T + edge);
+                build.Line(c0, c1, 2.5f, seat);
+                build.Line(c1, c2, 2.5f, seat);
+                build.Line(c2, c3, 2.5f, seat);
+                build.Line(c3, c0, 2.5f, seat);
             }
             zone.sharedMesh = build.Build(zone.sharedMesh);
             // The beams: a dark casing and a bright core going up, a ring at the foot.

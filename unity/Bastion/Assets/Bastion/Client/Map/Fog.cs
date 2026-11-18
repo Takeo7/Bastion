@@ -396,9 +396,12 @@ namespace Bastion.Client.Map
         /// <summary>
         /// What the squad sees in `seen` (the state as the player has been shown it): in sight, in view, and what it has
         /// seen this mission, storey by storey; `instant`, at once (a new map, a return), else fading over SIGHT_FADE. What
-        /// is seen of a building nobody has been in is not kept.
+        /// is seen of a building nobody has been in is not kept. `sightOnly`, a tile of a walk (Arturo's T18 of 18/11: the
+        /// fog with each tile, not at the walk's end; UI calls it with Gameplay's Events.MoveStep): what is in sight now,
+        /// the view as the last whole Show had it, till the walk's end brings it up to date (Los.TeamView works out the
+        /// walker's own anew each tile, some 6 ms of the 9 a tile cost on city-7: NieblaLab.Coste).
         /// </summary>
-        public void Show(GameState seen, bool instant = false)
+        public void Show(GameState seen, bool instant = false, bool sightOnly = false)
         {
             using var shown = ShowMarker.Auto();
             if (map == null || seen.Width != width || seen.Height != height) Reset(seen);
@@ -408,7 +411,8 @@ namespace Bastion.Client.Map
             using (SightMarker.Auto()) visible = Units.UnitViews.Current?.SightOf(seen) ?? Los.TeamVisibility(seen, "xcom");
             // Lit at night (the engine's lit mask: street lights, a Bengala, a fire, as far as their light reaches).
             lights = Night ? Los.LitMask(seen) : null;
-            using (ViewMarker.Auto()) view = Los.TeamView(seen, "xcom");
+            if (!sightOnly || view == null || view.Length != visible.Length)
+                using (ViewMarker.Auto()) view = Los.TeamView(seen, "xcom");
             using (CloseMarker.Auto()) Close(seen);
             peeks = Bastion.Engine.Buildings.SidePeeks(seen);
             spotted.Clear();

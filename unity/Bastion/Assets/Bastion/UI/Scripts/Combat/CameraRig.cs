@@ -20,6 +20,8 @@ namespace Bastion.UI.Combat
         /// <summary>From above (#12): all but straight down, so that north stays up the screen.</summary>
         const float OverheadPitch = 89f;
         const float MinDistance = 9f * 1.5f;
+        /// <summary>How much closer a unit of the wheel takes the camera (0.001 till 18/11), and how fast the distance follows (7, the rest's).</summary>
+        const float WheelZoom = 0.0025f, WheelFollow = 12f;
         /// <summary>
         /// The farthest: 33.5 tiles at 45°, which looks as far beyond the point looked at as the 0.10.1's 42 did at 52°
         /// (about 27 tiles), so neither the sky nor the map's edge comes in round the middle of a map.
@@ -291,7 +293,11 @@ namespace Bastion.UI.Combat
                 if (wheel != 0 && (!keys || !GameInput.Shift && !GameInput.Alt) && (OverHud == null || !OverHud(GameInput.Point)))
                 {
                     TakeControl();
-                    desiredDistance = Mathf.Clamp(desiredDistance * (1 - wheel * 0.001f), MinDistance, MaxDistance);
+                    // A turn of the wheel goes further, and the camera gets there sooner (Arturo, 18/11 T19: «que hacer
+                    // scroll cueste menos»): from the farthest to the nearest in about four notches (it took about ten), no
+                    // more than a good step a frame, so a trackpad's flick doesn't jump.
+                    var step = Mathf.Clamp(wheel * WheelZoom, -0.45f, 0.45f);
+                    desiredDistance = Mathf.Clamp(desiredDistance * (1 - step), MinDistance, MaxDistance);
                 }
                 // The right button held drags the ground under it.
                 var at = GameInput.Point;
@@ -479,7 +485,7 @@ namespace Bastion.UI.Combat
                     zoomSpring = false;
                 }
             }
-            else distance += (desiredDistance - distance) * k;
+            else distance += (desiredDistance - distance) * (1 - Mathf.Exp(-dt * WheelFollow));
             Place();
             // Into the shot over a shoulder, or back out of it: between the two views, eased at both ends.
             closeness = closeOn ? Mathf.Min(1, closeness + dt / CloseIn) : Mathf.Max(0, closeness - dt / CloseOut);

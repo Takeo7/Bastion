@@ -21,6 +21,8 @@ namespace Bastion.UI
                 case Bastion.Engine.WeaponIds.Rifle: case Bastion.Engine.WeaponIds.Pistol: case Bastion.Engine.WeaponIds.Shotgun:
                 case Bastion.Engine.WeaponIds.Sniper: case Bastion.Engine.WeaponIds.Cannon: case Bastion.Engine.WeaponIds.Pan:
                 case Bastion.Engine.WeaponIds.Bat: case Bastion.Engine.WeaponIds.Crowbar: case Bastion.Engine.WeaponIds.Chainsaw:
+                // The bolt-action rifle, a weapon of its own since 18/11 (T14): its picture, not the blade's.
+                case Bastion.Engine.WeaponIds.HuntingRifle:
                     return "weapon:" + weapon;
                 default:
                     return "overwatchMelee";

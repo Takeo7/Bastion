@@ -172,33 +172,48 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void WhoDoesntFitIsLeftBehindAndLost()
         {
-            // Two seats alone (a new game's), both taken: the survivor in the zone too stays behind.
+            // Two seats alone (a new game's), both taken: La Lata's zone is two tiles (T21), the squad on them, and the
+            // survivor has nowhere to stand in it: left behind, lost.
             var (c, s) = Rescue(level: 0);
             Assert.Equal(2, s.Mission.Seats);
+            Assert.Equal(2, s.Mission.EvacZone.Count);
             Assert.False(Runs.SeatFree(c));
             var vip = Survivor(s);
             var squad = Squaddies(s);
             Assert.Equal(2, squad.Count);
             squad[0].Pos = Beside(s, vip);
             Assert.True(Exec(s, Ability(squad[0].Id, AbilityIds.Talk)).Ok);
-            Aboard(s, new[] { vip }.Concat(squad));
-            // The squad's own first, whatever stands first.
-            Assert.Equal(new[] { vip.Id }, Rules.NoSeat(s).Select((x) => x.Id));
+            Aboard(s, squad);
+            Assert.Empty(Rules.NoSeat(s));
             var r = Exec(s, new EvacCommand { Unit = squad[0].Id });
             Assert.True(r.Ok, r.Error);
             var left = Assert.Single(Of<LeftBehindEvent>(r.Events));
-            Assert.Equal((vip.Id, (bool?)true), (left.Unit, left.NoSeat));
+            Assert.Equal(vip.Id, left.Unit);
             Assert.True(vip.Lost);
             Assert.All(squad, (x) => Assert.True(x.Evacuated));
             Assert.Equal(Outcomes.Victory, s.Outcome);
             var report = EndFight(c, s, s.Outcome!, s.OutcomeReason!);
             Assert.Null(report.Run!.Joined);
             Assert.DoesNotContain(c.Soldiers, (x) => x.Name == vip.Name);
+            // More in the zone than seats (only a run of before, its squad bigger than its seats now): the squad's own sit
+            // first, the one who joined is left for want of a seat.
+            var (_, t) = Rescue(level: 0);
+            t.Mission.EvacZone = t.Mission.EvacZone.Concat(new[] { new Vec2 { X = Beside(t, Survivor(t)).X, Y = Beside(t, Survivor(t)).Y } }).ToList();
+            var other = Survivor(t);
+            var two = Squaddies(t);
+            two[0].Pos = Beside(t, other);
+            Assert.True(Exec(t, Ability(two[0].Id, AbilityIds.Talk)).Ok);
+            Aboard(t, two);
+            Assert.True(Abilities.InEvacZone(t, other.Pos) || Abilities.InEvacZone(t, two[0].Pos));
+            other.Pos = t.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).First((p) => Grid.UnitAt(t, p) == null);
+            Assert.Equal(new[] { other.Id }, Rules.NoSeat(t).Select((x) => x.Id));
+            var gone = Exec(t, new EvacCommand { Unit = two[0].Id });
+            Assert.Equal((other.Id, (bool?)true), (Assert.Single(Of<LeftBehindEvent>(gone.Events)).Unit, Of<LeftBehindEvent>(gone.Events)[0].NoSeat));
             // With a seat free, nobody is left.
-            var (d, t) = Rescue(level: 2);
+            var (d, u) = Rescue(level: 2);
             Assert.True(Runs.SeatFree(d));
-            Aboard(t, Squaddies(t));
-            Assert.Empty(Rules.NoSeat(t));
+            Aboard(u, Squaddies(u));
+            Assert.Empty(Rules.NoSeat(u));
         }
 
         [Fact]

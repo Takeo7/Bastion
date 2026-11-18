@@ -881,7 +881,9 @@ namespace Bastion.EditorTools
             Settlement.FaceKeyOff = Environment.GetEnvironmentVariable("BASTION_SIN_LUZ") == "1";
             // BASTION_SUBIR=1, in play mode (-shotPlay): the squad made once it runs (its clips' graphs don't outlive the
             // switch), and a moment later boarding La Lata, which then goes (Settlement.Leave). BASTION_LATA=v another vehicle.
-            if (Environment.GetEnvironmentVariable("BASTION_SUBIR") == "1")
+            // BASTION_SUBIR=0: in play mode too, but staying (T7: CineLab's looks in turn, which play mode needs).
+            bool boarding = Environment.GetEnvironmentVariable("BASTION_SUBIR") == "1";
+            if (boarding || Environment.GetEnvironmentVariable("BASTION_SUBIR") == "0")
             {
                 void Go(UnityEditor.PlayModeStateChange change)
                 {
@@ -890,7 +892,7 @@ namespace Bastion.EditorTools
                     // BASTION_MEDIR=giro: each one's turn, place and fade every frame (Settlement.BoardMeasured: A-11).
                     Settlement.BoardMeasured = Environment.GetEnvironmentVariable("BASTION_MEDIR") == "giro";
                     MakeEscuadra();
-                    Later();
+                    if (boarding) Later();
                     async void Later()
                     {
                         await Awaitable.WaitForSecondsAsync(0.5f);

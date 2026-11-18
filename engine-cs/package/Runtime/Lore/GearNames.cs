@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Bastion.Engine
 {
@@ -109,6 +110,47 @@ namespace Bastion.Engine
                 return new GearWords(one, one, one);
             }
             return new GearWords(type ?? kind, type ?? kind, type ?? kind);
+        }
+
+        /// <summary>
+        /// What a belt item does, in one line, for its sheet on hover in an expedition (Arturo, 18/11, T4): its uses in a
+        /// fight (ItemDef.Charges: each piece on the belt gives them, Gameplay 18/11), what it does, and that it is used from
+        /// the belt, not the pack. Null for the old armoury's others (ItemDef.Description has theirs).
+        /// </summary>
+        public static string? ItemLine(string item)
+        {
+            string what;
+            var thrown = true;
+            switch (item)
+            {
+                case ItemIds.FragGrenade:
+                    what = "Daña a todos en el área y abre boquetes en las paredes.";
+                    break;
+                case ItemIds.Molotov:
+                    what = "Donde cae, arde un cuadrado de 3×3 casillas durante 2 turnos.";
+                    break;
+                case ItemIds.SmokeGrenade:
+                    what = "Humo durante 2 turnos: −20 a la puntería contra quien esté dentro.";
+                    break;
+                case ItemIds.Flashbang:
+                    what = "Desorienta a los enemigos de la zona: −20 de puntería. No hace daño.";
+                    break;
+                case ItemIds.FirstAid:
+                    what = "Cura 4 de salud a uno mismo o a un compañero de al lado.";
+                    thrown = false;
+                    break;
+                default:
+                    return null;
+            }
+            var n = Content.Items.TryGetValue(item, out var def) && def.Charges != null ? def.Charges.Values.Sum() : 1;
+            var uses = thrown ? (n == 1 ? "Un lanzamiento" : $"{UsesWord(n)} lanzamientos") : (n == 1 ? "Un uso" : $"{UsesWord(n)} usos");
+            return $"{uses}. {what} {(thrown ? "Se lanza" : "Se usa")} desde el cinturón.";
+        }
+
+        /// <summary>«Dos», «Tres»… at the head of ItemLine; past five, the figure.</summary>
+        private static string UsesWord(int n)
+        {
+            return n >= 2 && n <= 5 ? new[] { "Dos", "Tres", "Cuatro", "Cinco" }[n - 2] : n.ToString();
         }
     }
 }

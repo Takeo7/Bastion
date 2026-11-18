@@ -53,13 +53,26 @@ namespace Bastion.Engine
         public const string BloaterBurst = "bloaterBurst";
         /// <summary>El Toro's fists (H6): the Mazazo.</summary>
         public const string BruteFists = "bruteFists";
+        /// <summary>
+        /// The bolt-action rifle's own (T14, Arturo 18/11: «solo tiene un disparo y sin embargo ataca como si fuese un rifle
+        /// de asalto»): one round a shot, the assault rifle's figures otherwise (FoundWeaponIds.HuntingRifle).
+        /// </summary>
+        public const string HuntingRifle = "huntingRifle";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
             Rifle, Shotgun, Cannon, Sniper, Pistol, Sword, Knife, Pan, Bat, Crowbar, Chainsaw, TrooperRifle, TurretGun,
             OfficerRifle, XenoPistol, LancerRifle, StunLance, MecCannon, SectoidPistol, Claws, FragGrenade, MicroMissiles,
-            BloaterBurst, Katana, Longsword, Rake, Stick, BruteFists,
+            BloaterBurst, Katana, Longsword, Rake, Stick, BruteFists, HuntingRifle,
         };
+    }
+
+    /// <summary>Content.ReachTiles (T23): the tiles a weapon is best at, From–To, and the most it reaches, Max.</summary>
+    public sealed class WeaponReach
+    {
+        public int From { get; set; }
+        public int To { get; set; }
+        public int Max { get; set; }
     }
 
     public sealed class WeaponDef
@@ -460,6 +473,24 @@ namespace Bastion.Engine
             return values[(int)Math.Min(Math.Floor(distance), values.Count - 1)];
         }
 
+        /// <summary>
+        /// A weapon's reach in tiles, for its sheet (T23, Arturo 18/11: «el alcance tiene que ser el número de casillas que
+        /// tiene de alcance»): where its range table takes nothing off the aim (From–To, the best), and the most it shoots
+        /// at, a soldier's sight by day (Templates' 18: there is no other limit; at night or in a storm, less). A blade: its
+        /// reach, the rake's two, anything else's one, all of it the best.
+        /// </summary>
+        public static WeaponReach ReachTiles(WeaponDef w)
+        {
+            if (w.Melee || w.Range == RangeTableIds.None)
+            {
+                var blade = w.Id == WeaponIds.Rake ? 2 : 1;
+                return new WeaponReach { From = 1, To = blade, Max = blade };
+            }
+            var max = Templates[TemplateIds.Rookie].Sight;
+            var good = Enumerable.Range(1, max).Where((d) => RangeModifier(w.Range, d) >= 0).ToList();
+            return new WeaponReach { From = good.Count > 0 ? good.Min() : 0, To = good.Count > 0 ? good.Max() : 0, Max = max };
+        }
+
         private static WeaponDef Weapon(
             string id,
             string name,
@@ -537,6 +568,8 @@ namespace Bastion.Engine
             [WeaponIds.MicroMissiles] = Weapon(WeaponIds.MicroMissiles, "Micromisiles", 3, shred: 1, burst: 0, noise: 18),
             // El Toro's (H6): 6 a blow, with both fists.
             [WeaponIds.BruteFists] = Weapon(WeaponIds.BruteFists, "Mazazo", 6, critDamage: 2, aim: 10, range: RangeTableIds.None, melee: true, burst: 1, noise: 2),
+            // T14 (18/11): the bolt-action rifle fires one round, not the assault rifle's three; its figures, the assault rifle's.
+            [WeaponIds.HuntingRifle] = Weapon(WeaponIds.HuntingRifle, "Fusil de cerrojo", 4, spread: 1, critDamage: 2, clip: 4, burst: 1, noise: 18),
         };
 
         // ---------------------------------------------------------------- abilities
@@ -544,7 +577,7 @@ namespace Bastion.Engine
         public static readonly IReadOnlyDictionary<string, AbilityDef> Abilities = new Dictionary<string, AbilityDef>
         {
             [AbilityIds.Shoot] = new AbilityDef { Id = AbilityIds.Shoot, Name = "Disparar", Description = "Dispara el arma principal.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Primary },
-            [AbilityIds.Pistol] = new AbilityDef { Id = AbilityIds.Pistol, Name = "Pistola", Description = "Dispara la pistola, sin gastar las balas del arma principal.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Secondary },
+            [AbilityIds.Pistol] = new AbilityDef { Id = AbilityIds.Pistol, Name = "Pistola", Description = "Dispara la pistola, sin gastar el cargador del arma principal.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Secondary },
             // An action, like a shot (playtest 16/10): the turn goes on.
             [AbilityIds.Slash] = new AbilityDef { Id = AbilityIds.Slash, Name = "Tajo", Description = "Golpea a un enemigo que tengas al lado. Ignora la cobertura. La katana, la espada y la motosierra golpean a todos los que tengas al lado, y el rastrillo llega a dos casillas.", Target = AbilityTargets.Melee, Ap = 1, EndsTurn = false, Weapon = AbilityWeapons.Melee },
             // Arturo, 16/11: with a blade, from behind one of the dead that hasn't seen you, it always kills, silently; only a
@@ -608,8 +641,8 @@ namespace Bastion.Engine
             [AbilityIds.OpenDoor] = new AbilityDef { Id = AbilityIds.OpenDoor, Name = "Abrir la puerta", Description = "Abre una puerta cerrada que tengas al lado.", Target = AbilityTargets.Tile, Ap = 0, EndsTurn = false, Range = 1.5, Noise = 1 },
             [AbilityIds.CloseDoor] = new AbilityDef { Id = AbilityIds.CloseDoor, Name = "Cerrar la puerta", Description = "Cierra una puerta abierta que tengas al lado, si no hay nadie en ella.", Target = AbilityTargets.Tile, Ap = 0, EndsTurn = false, Range = 1.5, Noise = 1 },
             [AbilityIds.RunAndGun] = new AbilityDef { Id = AbilityIds.RunAndGun, Name = "Esfuerzo extra", Description = "Sin gastar acción: una acción más este turno.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false, Cooldown = 4 },
-            [AbilityIds.RapidFire] = new AbilityDef { Id = AbilityIds.RapidFire, Name = "Ráfaga", Description = "Dos disparos seguidos, cada uno con −15 de puntería. Gasta dos balas.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Cooldown = 3, Weapon = AbilityWeapons.Primary, Aim = -15, Ammo = 2 },
-            [AbilityIds.Suppression] = new AbilityDef { Id = AbilityIds.Suppression, Name = "Supresión", Description = "Inmoviliza al objetivo: −50 de puntería hasta tu próximo turno, y si se mueve, le disparas. Gasta dos balas.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Ammo = 2 },
+            [AbilityIds.RapidFire] = new AbilityDef { Id = AbilityIds.RapidFire, Name = "Ráfaga", Description = "Dos disparos seguidos, cada uno con −15 de puntería. Gasta dos disparos del cargador.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Cooldown = 3, Weapon = AbilityWeapons.Primary, Aim = -15, Ammo = 2 },
+            [AbilityIds.Suppression] = new AbilityDef { Id = AbilityIds.Suppression, Name = "Supresión", Description = "Inmoviliza al objetivo: −50 de puntería hasta tu próximo turno, y si se mueve, le disparas. Gasta dos disparos del cargador.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Ammo = 2 },
             [AbilityIds.ChainShot] = new AbilityDef { Id = AbilityIds.ChainShot, Name = "Disparo en cadena", Description = "Disparo con −15 de puntería; si acierta, vuelves a disparar.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Cooldown = 3, Weapon = AbilityWeapons.Primary, Aim = -15 },
             [AbilityIds.Rupture] = new AbilityDef { Id = AbilityIds.Rupture, Name = "Ruptura", Description = "Disparo con +3 de daño; el objetivo recibe +3 de daño de todos los ataques.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Cooldown = 4, Weapon = AbilityWeapons.Primary, DamageBonus = 3 },
             [AbilityIds.AimedShot] = new AbilityDef { Id = AbilityIds.AimedShot, Name = "A la cabeza", Description = "Un disparo con −25 de puntería que hace la mitad más de daño.", Target = AbilityTargets.Enemy, Ap = 1, EndsTurn = false, Cooldown = 3, Weapon = AbilityWeapons.Primary, Aim = -25, DamageMult = 1.5 },
@@ -635,8 +668,14 @@ namespace Bastion.Engine
             [AbilityIds.Talk] = new AbilityDef { Id = AbilityIds.Talk, Name = Lore.TalkText.Action, Description = Lore.TalkText.Help, Target = AbilityTargets.Self, Ap = 1, EndsTurn = false },
         };
 
-        /// <summary>Base chance of fixing the objective terminal (Arreglar); Investigar's bars add to it.</summary>
+        /// <summary>Base chance of fixing the objective terminal (Arreglar); since T2 no bar adds to it.</summary>
         public const int HackBase = 55;
+
+        /// <summary>
+        /// «Suerte al registrar» before the bars (T2, Arturo 18/11): percent of finding something more on a run's search that
+        /// found something; the Registrar bar grows it (Bars, UnitMods.SearchLuck).
+        /// </summary>
+        public const int SearchLuck = 10;
 
         /// <summary>Mindspin: success chance is PSI_BASE − (will − 40), then the effect is rolled.</summary>
         public const int PsiBase = 70;
@@ -687,7 +726,7 @@ namespace Bastion.Engine
             [FoundWeaponIds.PrecisionRifle] = new FoundWeaponDef { Id = FoundWeaponIds.PrecisionRifle, Name = "Fusil de precisión", Find = "un fusil de precisión", Weapon = WeaponIds.Sniper, Slot = FoundWeaponSlots.Primary, Better = false, Weight = 3 },
             [FoundWeaponIds.MachineGun] = new FoundWeaponDef { Id = FoundWeaponIds.MachineGun, Name = "Ametralladora", Find = "una ametralladora", Weapon = WeaponIds.Cannon, Slot = FoundWeaponSlots.Primary, Better = false, Weight = 3 },
             [FoundWeaponIds.Machete] = new FoundWeaponDef { Id = FoundWeaponIds.Machete, Name = "Machete", Find = "un machete", Weapon = WeaponIds.Sword, Slot = FoundWeaponSlots.Melee, Better = false, Weight = 0 },
-            [FoundWeaponIds.HuntingRifle] = new FoundWeaponDef { Id = FoundWeaponIds.HuntingRifle, Name = "Fusil de cerrojo", Find = "un fusil de cerrojo bien engrasado", Weapon = WeaponIds.Rifle, Slot = FoundWeaponSlots.Primary, Better = true, Mod = WeaponModIds.Stock, Weight = 3 },
+            [FoundWeaponIds.HuntingRifle] = new FoundWeaponDef { Id = FoundWeaponIds.HuntingRifle, Name = "Fusil de cerrojo", Find = "un fusil de cerrojo bien engrasado", Weapon = WeaponIds.HuntingRifle, Slot = FoundWeaponSlots.Primary, Better = true, Mod = WeaponModIds.Stock, Weight = 3 },
             [FoundWeaponIds.SawnOff] = new FoundWeaponDef { Id = FoundWeaponIds.SawnOff, Name = "Escopeta recortada", Find = "una escopeta recortada", Weapon = WeaponIds.Shotgun, Slot = FoundWeaponSlots.Primary, Better = true, Mod = WeaponModIds.ExtMag, Weight = 2 },
             [FoundWeaponIds.ScopedRifle] = new FoundWeaponDef { Id = FoundWeaponIds.ScopedRifle, Name = "Fusil con mira", Find = "un fusil con mira telescópica", Weapon = WeaponIds.Sniper, Slot = FoundWeaponSlots.Primary, Better = true, Mod = WeaponModIds.Scope, Weight = 1 },
             [FoundWeaponIds.LightMachineGun] = new FoundWeaponDef { Id = FoundWeaponIds.LightMachineGun, Name = "Ametralladora ligera", Find = "una ametralladora ligera con su cinta", Weapon = WeaponIds.Cannon, Slot = FoundWeaponSlots.Primary, Better = true, Mod = WeaponModIds.ExtMag, Weight = 1 },
@@ -713,7 +752,7 @@ namespace Bastion.Engine
         {
             [WeaponModIds.Scope] = new WeaponModDef { Id = WeaponModIds.Scope, Name = "Mira", Line = "+10 de puntería.", None = "ninguna mira" },
             [WeaponModIds.Stock] = new WeaponModDef { Id = WeaponModIds.Stock, Name = "Culata", Line = "+10 de puntería en vigilancia: el arma apoyada no tiembla.", None = "ninguna culata" },
-            [WeaponModIds.ExtMag] = new WeaponModDef { Id = WeaponModIds.ExtMag, Name = "Cargador ampliado", Line = "Dos balas más en cada cargador.", None = "ningún cargador ampliado" },
+            [WeaponModIds.ExtMag] = new WeaponModDef { Id = WeaponModIds.ExtMag, Name = "Cargador ampliado", Line = "Dos disparos más en cada cargador.", None = "ningún cargador ampliado" },
             [WeaponModIds.Silencer] = new WeaponModDef { Id = WeaponModIds.Silencer, Name = "Silenciador", Line = "El disparo hace la mitad de ruido. Casero: un tubo, arandelas y cinta.", None = "ningún silenciador" },
         };
         public const int ModSlots = 2;
@@ -1212,6 +1251,11 @@ namespace Bastion.Engine
                 HoloAim = a.HoloAim + b.HoloAim,
                 SuppressAim = a.SuppressAim + b.SuppressAim,
                 Hack = a.Hack + b.Hack,
+                SearchLuck = a.SearchLuck + b.SearchLuck,
+                BoxLuck = a.BoxLuck + b.BoxLuck,
+                RoomLuck = a.RoomLuck + b.RoomLuck,
+                ModFinds = a.ModFinds + b.ModFinds,
+                SearchReach = a.SearchReach + b.SearchReach,
                 PsiGuard = a.PsiGuard + b.PsiGuard,
                 SlashDisorient = a.SlashDisorient + b.SlashDisorient,
                 Sight = a.Sight + b.Sight,

@@ -65,6 +65,9 @@ namespace Bastion.UI.Strategy
     [Serializable]
     public sealed class RunMapView
     {
+        /// <summary>Which expedition (its chapter and seed), and whether it hasn't gone anywhere yet: the map builds itself once (T9).</summary>
+        public string Run;
+        public bool Fresh;
         /// <summary>«Expedición · Capítulo 1».</summary>
         public string Head;
         /// <summary>Under it: what to do now («Elige la siguiente etapa.»).</summary>

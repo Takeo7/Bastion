@@ -173,6 +173,22 @@ namespace Bastion.UI.Strategy
         public static class Stash
         {
             public const string Head = "Almacén";
+            /// <summary>Right over a weapon's figures weighed against a soldier's (T4; Lore's words): «Frente al fusil de cerrojo de Anja (verde, mejor; rojo, peor):».</summary>
+            public static string Against(string the, string who) => $"Frente {(the.StartsWith("el ") ? "al " + the.Substring(3) : "a " + the)} de {who} (verde, mejor; rojo, peor):";
+            /// <summary>
+            /// A weapon's reach in tiles (T23, Lore's words): how far first, then where it's best, so no figure has to be guessed:
+            /// «hasta 18 casillas; mejor de 1 a 11», «hasta 18 casillas; mejor desde 11», «hasta 18 casillas»; a blade «1 casilla».
+            /// </summary>
+            public static string Reach(int from, int to, int max, bool melee = false)
+            {
+                string Tiles(int n) => $"{n} {(n == 1 ? "casilla" : "casillas")}";
+                // (A blade's, the rake's two too: as far as it reaches, no «hasta».)
+                if (melee || (from == to && to == max)) return Tiles(max);
+                if (from <= 1 && to >= max) return $"hasta {Tiles(max)}";
+                return to >= max ? $"hasta {Tiles(max)}; mejor desde {from}" : $"hasta {Tiles(max)}; mejor de {from} a {to}";
+            }
+            /// <summary>An empty place of a kit, round the figure in Soldados (T3).</summary>
+            public const string Nothing = "Nada";
             public const string SuppliesTip = "Suministros del almacén. Con ellos se mejora la base.";
             public static string Whose(string player) => $"De {player}";
             public static string Theirs(string player) => $"Es de {player}: su equipo solo lo cambia {player}.";

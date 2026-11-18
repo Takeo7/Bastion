@@ -13,9 +13,10 @@ namespace Bastion.Engine
     {
         /// <summary>
         /// A campaign of runs: the stash, the kits, the upgrades and the node maps (H0). CampaignVersion stays for the one of
-        /// before. 29 since N3 and N4 (17/11): no Superviviente stop, and the squad's seats from 2 (MigrateRuns).
+        /// before. 29 since N3 and N4 (17/11): no Superviviente stop, and the squad's seats from 2; 30 since T2 (18/11): no
+        /// «Arreglar la radio» (MigrateRuns).
         /// </summary>
-        public const int RunsCampaignVersion = 29;
+        public const int RunsCampaignVersion = 30;
 
         /// <summary>The first campaign of runs, the 0.13.0's (SaveStore.FreshVersion): from it, MigrateRuns brings it up to date.</summary>
         public const int FirstRunsVersion = 28;
@@ -25,6 +26,9 @@ namespace Bastion.Engine
         {
             return c.Version >= FirstRunsVersion && c.Stash != null;
         }
+
+        /// <summary>«Arreglar la radio» (NodeKinds), gone since T2 (18/11): only in saves, a normal fight once loaded.</summary>
+        public const string OldRadioStage = "hack";
 
         /// <summary>The 0.13.0's Superviviente stop (NodeKinds), gone since N3: only in its saves, a Refugio once loaded.</summary>
         public const string OldSurvivorStop = "survivor";
@@ -79,6 +83,12 @@ namespace Bastion.Engine
                     }
                     foreach (var n in run.Nodes.Where((n) => n.Kind == OldSurvivorStop)) n.Kind = NodeKinds.Refuge;
                 }
+            }
+            // T2 (Arturo, 18/11): «Arreglar la radio» gone from the maps; one still on a map is a normal fight there (one being
+            // fought goes on as it was launched: its mission is the save's).
+            if (c.Version < 30 && c.Stash != null && c.Run != null)
+            {
+                foreach (var n in c.Run.Nodes.Where((n) => n.Kind == OldRadioStage)) n.Kind = NodeKinds.Normal;
             }
             c.Version = RunsCampaignVersion;
             return c;

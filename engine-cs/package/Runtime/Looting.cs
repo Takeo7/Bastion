@@ -163,7 +163,8 @@ namespace Bastion.Engine
         }
 
         /// <summary>What searching a place of kind `spot` turns up: rollLoot by the kind of place, not the piece of furniture.</summary>
-        private static Loot? RollSpot(string spot, int difficulty, Rng rng, bool night, bool mags, bool pistols)
+        /// <remarks>`modTimes`: how many times an accessory's share (Armero, T2: 2).</remarks>
+        private static Loot? RollSpot(string spot, int difficulty, Rng rng, bool night, bool mags, bool pistols, int modTimes = 1)
         {
             var d = Math.Max(1, Math.Min(4, difficulty));
             var t = Tables[spot];
@@ -179,7 +180,7 @@ namespace Bastion.Engine
             if (roll < (edge += t.Food)) return new Loot { Food = rng.Range(FoodFind[0], FoodFind[1]) };
             if (roll < (edge += t.Parts)) return new Loot { Parts = rng.Range(PartsFind[0], PartsFind[1]) };
             if (roll < (edge += t.Weapon)) return FoundWeapon(rng, pistols);
-            if (roll < (edge += t.Mod)) return FoundMod(rng);
+            if (roll < (edge += t.Mod * modTimes)) return FoundMod(rng);
             if (roll < (edge += t.Mags)) return mags ? new Loot { Mags = 1 } : null;
             return null;
         }
@@ -231,17 +232,17 @@ namespace Bastion.Engine
         /// medicines, two magazines (for a searcher who counts them; nothing for
         /// anyone else), or three to five rations.
         /// </summary>
-        public static Loot? RollBox(string kind, Rng rng, bool mags, bool pistols = false, int difficulty = 2, bool night = false)
+        public static Loot? RollBox(string kind, Rng rng, bool mags, bool pistols = false, int difficulty = 2, bool night = false, int modTimes = 1)
         {
             switch (kind)
             {
                 case CarBoot:
-                    return RollSpot(Spots.Trunk, difficulty, rng, night, mags, pistols);
+                    return RollSpot(Spots.Trunk, difficulty, rng, night, mags, pistols, modTimes);
                 case PoliceBoot:
-                    return rng.Int(PoliceBootGun) == 0 ? FoundWeapon(rng, pistols) : RollSpot(Spots.Trunk, difficulty, rng, night, mags, pistols);
+                    return rng.Int(PoliceBootGun) == 0 ? FoundWeapon(rng, pistols) : RollSpot(Spots.Trunk, difficulty, rng, night, mags, pistols, modTimes);
                 case DecorKinds.LootWeapons:
                     // A weapon, or now and then an improvement for one (docs/FASE9.md §5).
-                    return rng.Int(10) < 3 ? FoundMod(rng) : FoundWeapon(rng, pistols);
+                    return rng.Int(10) < 3 * modTimes ? FoundMod(rng) : FoundWeapon(rng, pistols);
                 case DecorKinds.LootMedical:
                     return new Loot { Medicines = rng.Range(1, 2) };
                 case DecorKinds.LootAmmo:
@@ -395,10 +396,10 @@ namespace Bastion.Engine
         /// supermarket with its shelves still stocked (`market` 'full') always gives food, 6 to 10 rations (Ana, 21/10:
         /// «siempre que estén las estanterías llenas de cosas se pueda lutear»); a picked one, a shop's roll.
         /// </summary>
-        public static Loot? RollRoom(LootRoom room, int difficulty, Rng rng, bool night = false, bool mags = false, string? market = null, bool pistols = false)
+        public static Loot? RollRoom(LootRoom room, int difficulty, Rng rng, bool night = false, bool mags = false, string? market = null, bool pistols = false, int modTimes = 1)
         {
             if (market == MarketStocks.Full) return new Loot { Food = rng.Range(MarketFood[0], MarketFood[1]) };
-            return RollSpot(market != null ? Spots.Shop : room.Spot, difficulty, rng, night, mags, pistols);
+            return RollSpot(market != null ? Spots.Shop : room.Spot, difficulty, rng, night, mags, pistols, modTimes);
         }
 
         /// <summary>Room in a soldier's backpack: BACKPACK_SLOTS, one more with the Chapistería (docs/FASE8.md §C).</summary>
@@ -490,13 +491,38 @@ namespace Bastion.Engine
         /// <summary>Furniture `u` can search right now from where it stands (any backpack room aside).</summary>
         public static List<Pos> SearchableTiles(GameState s, Unit u)
         {
-            return Grid.Dirs8.Select((d) => new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z }).Append(Grid.ToPos(u.Pos)).Where((p) => IsSearchable(s, p) && ReachesToOpen(s, u.Pos, p)).ToList();
+            var reach = 1 + Math.Max(0, u.Mods.SearchReach);
+            var tiles = new List<Pos>();
+            for (var dy = -reach; dy <= reach; dy++)
+            {
+                for (var dx = -reach; dx <= reach; dx++)
+                {
+                    var p = new Pos { X = u.Pos.X + dx, Y = u.Pos.Y + dy, Z = u.Pos.Z };
+                    if (Grid.InBounds(s, p.X, p.Y) && IsSearchable(s, p) && ReachesToOpen(s, u.Pos, p, reach)) tiles.Add(p);
+                }
+            }
+            // As they were found before: the eight beside first (Grid.Dirs8's order), then where it stands, then further.
+            return tiles.OrderBy((p) => Math.Max(Math.Abs(p.X - u.Pos.X), Math.Abs(p.Y - u.Pos.Y)) == 0 ? 1 : Math.Max(Math.Abs(p.X - u.Pos.X), Math.Abs(p.Y - u.Pos.Y)) == 1 ? 0 : 2)
+                .ThenBy((p) => Grid.Dirs8.ToList().FindIndex((d) => d.X == p.X - u.Pos.X && d.Y == p.Y - u.Pos.Y)).ToList();
         }
 
-        /// <summary>Whether a soldier on `from` can open what is on `p`: beside it (ReachesToSearch), or standing on a body.</summary>
-        public static bool ReachesToOpen(GameState s, Pos from, Pos p)
+        /// <summary>
+        /// Whether a soldier on `from` can open what is on `p`: beside it (ReachesToSearch), or standing on a body; with
+        /// `reach` 2 (Gancho, T2), two tiles off too, past a tile it reaches across to it on the way (ReachesToSearch twice).
+        /// </summary>
+        public static bool ReachesToOpen(GameState s, Pos from, Pos p, int reach = 1)
         {
-            return ReachesToSearch(s, from, p) || (Grid.SamePos(from, p) && BodyAt(s, p) != null);
+            if (ReachesToSearch(s, from, p) || (Grid.SamePos(from, p) && BodyAt(s, p) != null)) return true;
+            if (reach < 2 || Math.Max(Math.Abs(p.X - from.X), Math.Abs(p.Y - from.Y)) != 2) return false;
+            foreach (var d in Grid.Dirs8)
+            {
+                var m = new Pos { X = from.X + d.X, Y = from.Y + d.Y, Z = from.Z };
+                if (!Grid.InBounds(s, m.X, m.Y) || Math.Max(Math.Abs(p.X - m.X), Math.Abs(p.Y - m.Y)) != 1) continue;
+                var kind = Grid.KindAt(s, m);
+                if (kind != null && Solid.Contains(kind)) continue;
+                if (ReachesToSearch(s, from, m) && ReachesToSearch(s, m, p)) return true;
+            }
+            return false;
         }
 
         // --------------------------------------------------------------- the haul

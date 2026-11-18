@@ -41,7 +41,6 @@ namespace Bastion.Engine
                 case NodeKinds.Elimination:
                 case NodeKinds.Recovery:
                 case NodeKinds.Sabotage:
-                case NodeKinds.Hack:
                 case NodeKinds.Rescue:
                     return node;
                 case NodeKinds.Stealth:
@@ -211,6 +210,8 @@ namespace Bastion.Engine
             });
             // Nothing to search out of everyone's reach (Red, R3 17/11: a police car walled in).
             Setup.OnlyWithinReach(state);
+            // As many tiles to get out by as La Lata has seats, by its doors (T21, Arturo 18/11).
+            SeatZone(state);
             // One in RunMap.LooseOdds of the other fights, a survivor loose on the map, unmarked (N2, Arturo 17/11).
             if (RunMap.LooseSurvivor(node)) PlaceLoose(state, SurvivorOf(c, node), new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x10057))));
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
@@ -233,6 +234,84 @@ namespace Bastion.Engine
             member.Kit = null;
             member.Mags = 0;
             return member;
+        }
+
+        /// <summary>
+        /// Where each vehicle is boarded (T21; Arte's MotoLab.Puertas, 18/11), in tiles from its middle: along it (+ to the
+        /// nose) and out to a side (+ to `side`, the side its zone was on: the bus's doors are all on it). The tiles beside
+        /// the vehicle's place (two wide) are 1.5 out. The motorbike: one each side of its back half; the 4×4: its four doors;
+        /// the van: six behind its back doors, two wide and three deep; the bus: four by each of its two doors, two along and
+        /// two out. As many as its seats, in this order.
+        /// </summary>
+        private static IReadOnlyList<(double Along, double Out)> DoorsOf(int vehicle)
+        {
+            switch (vehicle)
+            {
+                case Moto:
+                    return new[] { (-0.5, -1.5), (-0.5, 1.5) };
+                case 0:
+                    return new[] { (0.11, -1.5), (0.11, 1.5), (-0.51, -1.5), (-0.51, 1.5) };
+                case 1:
+                    return new[] { (-2.5, -0.5), (-2.5, 0.5), (-3.5, -0.5), (-3.5, 0.5), (-4.5, -0.5), (-4.5, 0.5) };
+                case 3:
+                    return new[] { (2.96, 1.5), (2.96, 2.5), (1.96, 1.5), (1.96, 2.5), (-0.38, 1.5), (-0.38, 2.5), (-1.38, 1.5), (-1.38, 2.5) };
+                default:
+                    return new (double, double)[0];
+            }
+        }
+
+        /// <summary>
+        /// La Lata's zone cut to its seats (T21, Arturo 18/11: «solo la cantidad de huecos que hay y que estén donde
+        /// corresponda con el vehículo, de sus puertas»): MissionState.Seats tiles, by its doors (DoorsOf); where a door's
+        /// tile can't be stood on, the nearest free one within two; short of them, the free tiles nearest the vehicle. Who
+        /// doesn't fit finds no tile (Rules.NoSeat as well). Without seats or the vehicle's place, as it was.
+        /// </summary>
+        public static void SeatZone(GameState s)
+        {
+            var m = s.Mission;
+            var bus = m.EvacBus;
+            var seats = m.Seats;
+            if (seats == null || bus == null || bus.Tiles.Count == 0 || m.EvacZone.Count == 0) return;
+            var d = Grid.Dirs4[bus.Heading];
+            var o = new Vec2 { X = -d.Y, Y = d.X };
+            double cx = bus.Tiles.Average((t) => t.X), cy = bus.Tiles.Average((t) => t.Y);
+            // The side its zone was on: the doors that are on one side face it.
+            var lean = m.EvacZone.Average((t) => (t.X - cx) * o.X + (t.Y - cy) * o.Y);
+            var side = lean < 0 ? -1 : 1;
+            var chosen = new List<Vec2>();
+            bool Free(Vec2 p) => Grid.InBounds(s, p.X, p.Y) && !bus.Tiles.Any((t) => t.X == p.X && t.Y == p.Y) && !chosen.Any((t) => t.X == p.X && t.Y == p.Y)
+                && Flights.CanStopAt(s, new Pos { X = p.X, Y = p.Y, Z = 0 });
+            Vec2 At(double along, double out_) => new Vec2 { X = (int)Math.Floor(cx + d.X * along + o.X * out_ * side + 0.5), Y = (int)Math.Floor(cy + d.Y * along + o.Y * out_ * side + 0.5) };
+            foreach (var (along, out_) in DoorsOf(s.Vehicle ?? 3))
+            {
+                if (chosen.Count >= seats.Value) break;
+                var door = At(along, out_);
+                if (Free(door))
+                {
+                    chosen.Add(door);
+                    continue;
+                }
+                var near = new List<Vec2>();
+                for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) near.Add(new Vec2 { X = door.X + dx, Y = door.Y + dy });
+                // The nearest to the door, and of those the nearest to the vehicle: the zone stays round it.
+                int ToVehicle(Vec2 p) => bus.Tiles.Min((t) => Math.Max(Math.Abs(t.X - p.X), Math.Abs(t.Y - p.Y)));
+                var other = near.Where(Free).OrderBy((p) => Math.Max(Math.Abs(p.X - door.X), Math.Abs(p.Y - door.Y))).ThenBy(ToVehicle).ThenBy((p) => Math.Abs(p.X - door.X) + Math.Abs(p.Y - door.Y)).FirstOrDefault();
+                if (other != null) chosen.Add(other);
+            }
+            // Short of tiles (a door walled in; a run of before with more of the squad than seats): the free ones nearest it,
+            // its old zone's first.
+            if (chosen.Count < seats.Value)
+            {
+                var around = new List<Vec2>();
+                for (var y = (int)cy - 6; y <= (int)cy + 6; y++) for (var x = (int)cx - 6; x <= (int)cx + 6; x++) around.Add(new Vec2 { X = x, Y = y });
+                var old = m.EvacZone.ToList();
+                foreach (var p in around.Where((p) => Grid.InBounds(s, p.X, p.Y)).OrderBy((p) => old.Any((t) => t.X == p.X && t.Y == p.Y) ? 0 : 1).ThenBy((p) => Js.Hypot(p.X - cx, p.Y - cy)).ThenBy((p) => p.Y).ThenBy((p) => p.X))
+                {
+                    if (chosen.Count >= seats.Value) break;
+                    if (Free(p)) chosen.Add(p);
+                }
+            }
+            if (chosen.Count > 0) m.EvacZone = chosen;
         }
 
         /// <summary>How far by the walk from the squad's start a loose survivor waits, at least (N2): not at the door.</summary>

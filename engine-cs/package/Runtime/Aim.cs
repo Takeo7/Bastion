@@ -185,11 +185,14 @@ namespace Bastion.Engine
             return s.Units.Any((u) => Los.IsViewer(u, team) && Los.CanSee(s, u, target));
         }
 
-        /// <summary>"Llave doble": a living soldier of the other player within 4 tiles of `pos`.</summary>
+        /// <summary>
+        /// "Llave doble": a living soldier of the other player within 4 tiles of `pos`; playing alone (GameState.Solo; T2,
+        /// Arturo 18/11), any comrade.
+        /// </summary>
         public static bool PartnerNear(GameState s, Unit u, Pos pos)
         {
             if (u.Owner == null) return false;
-            return s.Units.Any((o) => o.Alive && o.Team == u.Team && o.Owner != null && o.Owner != u.Owner && Grid.Distance(o.Pos, pos) <= 4 && Grid.SameSpace(s, o.Pos, pos));
+            return s.Units.Any((o) => o.Alive && o.Team == u.Team && o.Owner != null && (s.Solo == true ? o.Id != u.Id && !o.Captive : o.Owner != u.Owner) && Grid.Distance(o.Pos, pos) <= 4 && Grid.SameSpace(s, o.Pos, pos));
         }
 
         /// <summary>Null when the attack is impossible (no line of sight, or not adjacent for melee).</summary>

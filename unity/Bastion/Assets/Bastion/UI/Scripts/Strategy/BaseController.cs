@@ -243,7 +243,9 @@ namespace Bastion.UI.Strategy
             root.SetModal(shown);
             var clearing = Settlement.Instance;
             if (clearing == null) return;
-            // Soldados' soldier on the clearing, as Personalizar's draft has them while it is open.
+            // Soldados' soldier on the clearing, as Personalizar's draft has them while it is open; and while it is, the
+            // whole figure fitted between its panels (Arte's Customizing, T1).
+            clearing.Customizing = view == BaseViews.Barracks && soldiers.Draft != null;
             if (view == BaseViews.Barracks) clearing.Showcase(p.State, soldiers.Soldier, soldiers.Draft?.Look);
             // Almacén's chosen soldier between its plates, as in Soldados.
             if (view == BaseViews.Stash) clearing.Showcase(p.State, stash?.Kit?.Soldier, null);

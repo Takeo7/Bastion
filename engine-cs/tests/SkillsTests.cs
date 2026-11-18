@@ -107,13 +107,15 @@ namespace Bastion.Engine.Tests
         public void WhatTheLinesAdd()
         {
             var st = Bars.FighterStatsOf(Bars.NoSkills(), GrowthOf((SkillIds.Shooting, 10), (SkillIds.Melee, 20), (SkillIds.Throwing, 10), (SkillIds.Medicine, 13), (SkillIds.Searching, 10), (SkillIds.Fitness, 23)), new string[0]);
-            // 55 (60 until 31/10) → 60.5 and 66; a throw of 10 → 11; the medkit's 4 → 5 (4.52); 55 → 61 (60.5); dodge's 50 → 62
-            // (61.5; Arturo, 6/11: Forma física grows dodge, and health only on the board).
+            // 55 (60 until 31/10) → 60.5 and 66; a throw of 10 → 11; the medkit's 4 → 5 (4.52); search luck's 10 → 11 (T2, 18/11:
+            // it was fixing's 55 → 61); dodge's 50 → 62 (61.5; Arturo, 6/11: Forma física grows dodge, and health only on the
+            // board).
             Assert.Equal(6, st.Mods.GunAim);
             Assert.Equal(11, st.Mods.MeleeAim);
             Assert.Equal(1, st.Mods.GrenadeRange);
             Assert.Equal(1, st.Mods.Heal);
-            Assert.Equal(6, st.Mods.Hack);
+            Assert.Equal(0, st.Mods.Hack);
+            Assert.Equal(1, st.Mods.SearchLuck);
             Assert.Equal(12, st.Mods.Dodge);
             Assert.Equal(5, st.MaxHp);
             Assert.Equal(5, Bars.FighterStatsOf(Bars.NoSkills(), Bars.NoGrowth(), new string[0]).MaxHp);

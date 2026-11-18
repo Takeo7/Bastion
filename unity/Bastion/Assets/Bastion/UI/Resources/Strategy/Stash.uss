@@ -52,15 +52,21 @@
     margin-bottom: 8px;
 }
 
+/*
+ * A soldier to choose (Almacén, the map's squad): their bust on its studio's light as Soldados' tiles, the name under it,
+ * and in a run the health under that; all as wide as each other (Arturo, 18/11 T5 and T10: by name, a longer name made a
+ * longer bar, and looked like more health).
+ */
 .stash-tab {
     flex-direction: column;
-    justify-content: center;
-    height: 28px;
+    align-items: stretch;
+    width: 62px;
     margin: 0 4px 4px 0;
-    padding: 0 10px;
-    font-size: 13px;
+    padding: 0;
+    font-size: 11px;
     color: #a1a79d;
-    background-color: #2b2f31;
+    background-color: rgba(8, 9, 10, 0.88);
+    background-image: none;
     border-width: 1px;
     border-color: #060708;
     border-radius: 0;
@@ -71,8 +77,8 @@
 }
 
 .stash-tab--on {
-    color: #ffffff;
-    background-color: #3d4346;
+    color: #15181a;
+    background-color: #ffffff;
     border-color: #ffffff;
 }
 
@@ -80,20 +86,58 @@
     opacity: 0.75;
 }
 
-.stash-tab__top {
-    flex-direction: row;
+.stash-tab__face {
+    height: 52px;
+    overflow: hidden;
     align-items: center;
+    justify-content: center;
 }
 
-/* In a run, each one's health under the name. */
-.stash-tab--hp {
-    height: 34px;
+.stash-tab__bust {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    -unity-background-scale-mode: scale-and-crop;
 }
 
+.stash-tab__silhouette {
+    width: 28px;
+    height: 28px;
+    -unity-background-image-tint-color: rgba(201, 205, 198, 0.35);
+}
+
+.stash-tab__label {
+    padding: 2px 2px 3px;
+    color: #a1a79d;
+    -unity-text-align: middle-center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stash-tab:hover .stash-tab__label {
+    color: #eef0ea;
+}
+
+/* The chosen one's band lit, its name dark on it (as Soldados' tiles). */
+.stash-tab--on .stash-tab__label,
+.stash-tab--on:hover .stash-tab__label {
+    color: #15181a;
+}
+
+/* In a run, each one's health under the name, the bar as wide as the tile. */
 .stash-tab__hp {
     height: 3px;
-    margin-top: 3px;
+    margin: 0 4px 4px;
     background-color: rgba(255, 255, 255, 0.12);
+}
+
+.stash-tab--on .stash-tab__hp {
+    background-color: rgba(0, 0, 0, 0.18);
 }
 
 .stash-tab__fill {
@@ -107,13 +151,6 @@
 
 .kit-head {
     margin-bottom: 6px;
-}
-
-.stash-tab__dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    margin-right: 6px;
 }
 
 .stash-name {

@@ -666,6 +666,7 @@ namespace Bastion.Client.Units
                         v.grip = g;
                     }
                     if (v.inHand == Held.Rifle && v.reload > 0) ReloadTilt(v);
+                    else if (v.inHand == Held.Rifle) Steady(v, dt);
                     break;
             }
         }
@@ -784,25 +785,136 @@ namespace Bastion.Client.Units
             v.supportShare = 0;
             if (SupportOff || v.inHand != Held.Rifle || v.weapon == null || v.animator == null || !v.animator.isHuman || v.dead || v.twoHands <= 0) return;
             var art = v.arts.TryGetValue(v.drawn, out var x) ? x : null;
-            if (art?.fore == null || art.fore.Length < 2) return;
-            var a = v.animator;
-            Transform shoulder = a.GetBoneTransform(HumanBodyBones.LeftUpperArm), elbow = a.GetBoneTransform(HumanBodyBones.LeftLowerArm), hand = a.GetBoneTransform(HumanBodyBones.LeftHand);
-            Transform knuckle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal), right = a.GetBoneTransform(HumanBodyBones.RightHand), rightKnuckle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
-            if (shoulder == null || elbow == null || hand == null || knuckle == null || right == null) return;
-            Vector3 Palm() => Vector3.Lerp(hand.position, knuckle.position, 0.6f);
-            var rightPalm = rightKnuckle != null ? Vector3.Lerp(right.position, rightKnuckle.position, 0.6f) : right.position;
-            float apart = Vector3.Distance(rightPalm, Palm()) / Figures.CharacterScale;
-            if (apart <= 0.12f || apart >= 0.8f) return;
-            var fore = v.weapon.TransformPoint(new Vector3(0, art.fore[0], art.fore[1]));
-            if ((fore - Palm()).sqrMagnitude > SupportMost * SupportMost) return;
             // (As far as the gun is back between both hands, twoHands, and over TwoHandsBack from when the palm comes within
             // SupportMost: the left palm eased onto the handguard, not there in a frame as a reload, a throw or a blow ends;
             // the 3D review's G-1, 10/11. Held steadily, all of it, as before.)
-            v.supportShare = Mathf.MoveTowards(share, 1, dt / TwoHandsBack);
-            var goal = Vector3.Lerp(Palm(), fore, v.twoHands * v.supportShare);
+            float next = Mathf.MoveTowards(share, 1, dt / TwoHandsBack);
+            if (LeftOnto(v.animator, v.weapon, art, v.twoHands * next)) v.supportShare = next;
+        }
+
+        /// <summary>
+        /// Support's reach: `a`'s left palm `k` of the way onto `weapon`'s handguard (`art`.fore), the elbow where the clip has
+        /// it; false (and nothing moved) without a handguard, the hands not both on the gun, or the palm further than
+        /// SupportMost from it.
+        /// </summary>
+        static bool LeftOnto(Animator a, Transform weapon, WeaponArt art, float k)
+        {
+            if (art?.fore == null || art.fore.Length < 2 || a == null || weapon == null) return false;
+            Transform shoulder = a.GetBoneTransform(HumanBodyBones.LeftUpperArm), elbow = a.GetBoneTransform(HumanBodyBones.LeftLowerArm), hand = a.GetBoneTransform(HumanBodyBones.LeftHand);
+            Transform knuckle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal), right = a.GetBoneTransform(HumanBodyBones.RightHand), rightKnuckle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (shoulder == null || elbow == null || hand == null || knuckle == null || right == null) return false;
+            Vector3 Palm() => Vector3.Lerp(hand.position, knuckle.position, 0.6f);
+            var rightPalm = rightKnuckle != null ? Vector3.Lerp(right.position, rightKnuckle.position, 0.6f) : right.position;
+            float apart = Vector3.Distance(rightPalm, Palm()) / Figures.CharacterScale;
+            if (apart <= 0.12f || apart >= 0.8f) return false;
+            var fore = weapon.TransformPoint(new Vector3(0, art.fore[0], art.fore[1]));
+            if ((fore - Palm()).sqrMagnitude > SupportMost * SupportMost) return false;
+            var goal = Vector3.Lerp(Palm(), fore, k);
             // (Twice: the palm is ahead of the wrist, and it turns with the forearm.)
             for (int pass = 0; pass < 2; pass++)
                 Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, hand.position + (goal - Palm()), elbow.position - shoulder.position, 0.005f);
+            return true;
+        }
+
+        /// <summary>
+        /// A long gun at rest in a figure's hands away from a battle (the base: the row, the clearing's people, Soldados and
+        /// Personalizar), as a battle holds one (HoldNow, Support): its palm point (`art`.palm) in the right palm, along to the
+        /// left hand, and the left palm then onto its handguard (`art`.fore). T22 (Arturo, 18/11: «no coge bien el arma»): with
+        /// Hold alone, the gun's origin in the right palm, the stocks went back through the right forearm and the left hand
+        /// stayed where the clip has it for the assault rifle, open under the action (the hunting rifle's, 20 cm short of its
+        /// handguard).
+        /// </summary>
+        public static void HoldAtRest(Animator a, Transform gun, Transform root, WeaponArt art, ref Quaternion? grip)
+        {
+            var palm = art?.palm != null && art.palm.Length >= 3 ? new Vector3(art.palm[0], art.palm[1], art.palm[2]) : Vector3.zero;
+            Hold(a, gun, root, false, ref grip, palm);
+            if (SupportOff || a == null || !a.isHuman || !LeftOnto(a, gun, art, 1)) return;
+            // Closed round it from below (seen close in Personalizar, the clip's open hand hung under the handguard): the palm
+            // up against it, the fingers across to its far side; turned at the wrist, put back on it, turned again (the reach
+            // turns the forearm, and with it the hand), then the fingers bent round.
+            for (int pass = 0; pass < 2; pass++)
+            {
+                UnderGrip(a, gun);
+                LeftOnto(a, gun, art, 1);
+            }
+            Fist(a, HandguardBend, HandguardBend, true);
+        }
+
+        /// <summary>A melee weapon's model for a figure away from a battle (the base), under `parent`; null for anything else.</summary>
+        public static Transform Blade(WeaponArt art, Transform parent, FigureCatalog catalog) => art != null && art.melee ? WeaponModel(art, parent, catalog, out _) : null;
+
+        /// <summary>
+        /// A melee weapon at rest away from a battle (the base: Soldados, Personalizar, the row; T22, with Arturo's T6: «quien
+        /// empieza con cuchillo tiene que verse con cuchillo»), as a battle holds one standing (HoldBlade, not on guard): its
+        /// grip in the closed right fist, along the fingers; a two-handed one's other grip in the left hand.
+        /// </summary>
+        public static void HoldBladeAtRest(Animator a, Transform blade, Transform root, WeaponArt art)
+        {
+            if (a == null || blade == null || root == null || !a.isHuman) return;
+            Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), index = a.GetBoneTransform(HumanBodyBones.RightIndexProximal),
+                little = a.GetBoneTransform(HumanBodyBones.RightLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (hand == null || index == null || little == null || middle == null) return;
+            Fist(a);
+            var palm = Vector3.Lerp(hand.position, middle.position, 0.6f);
+            var fingers = (middle.position - hand.position).normalized;
+            var across = Vector3.ProjectOnPlane(index.position - little.position, fingers);
+            Seat(blade, art, palm, Quaternion.LookRotation(fingers, across.sqrMagnitude > 1e-6f ? across : root.up));
+            if (art?.two != null && art.two.Length >= 3)
+                Reach(a, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, blade.TransformPoint(new Vector3(art.two[0], art.two[1], art.two[2])),
+                    root.TransformDirection(new Vector3(-1, -0.7f, 0)), 0.02f);
+        }
+
+        /// <summary>
+        /// A long gun's rise steadied while running (T22, Producto 18/11: running and sprinting, the clips' arms pumped it from
+        /// 6° up to 39° down and back at each stride, and from the game's camera the gun jumped): its barrel's rise over the
+        /// level follows the hands' over SteadySeconds, within SteadyLow and SteadyHigh (only the far ends: held off the line
+        /// between the hands, the long ones' stocks went into the right forearm), turned about the right palm;
+        /// the left hand then goes onto it (Support). Only while it moves (eased in and out over SteadyEase), as much as it is
+        /// not up to aim; standing, the clips' as they are (lowered after an aim, it lagged and the stock went in).
+        /// </summary>
+        static void Steady(View v, float dt)
+        {
+            var w = v.weapon;
+            var a = v.animator;
+            if (w == null || a == null || !a.isHuman || v.dead) return;
+            float now = Mathf.Asin(Mathf.Clamp(w.forward.y, -1, 1)) * Mathf.Rad2Deg;
+            v.steadyShare = Mathf.MoveTowards(v.steadyShare, v.walking && v.up <= 0 ? 1 : 0, dt / SteadyEase);
+            // (Not held, it follows the hands as they are, so that it comes in from where the gun is.)
+            if (v.steadyShare <= 0 || dt <= 0) v.steadyRise = now;
+            else v.steadyRise = Mathf.Lerp(v.steadyRise, now, 1 - Mathf.Exp(-dt / SteadySeconds));
+            float k = v.steadyShare * (1 - v.up);
+            float rise = Mathf.Lerp(now, Mathf.Clamp(v.steadyRise, SteadyLow, SteadyHigh), k);
+            if (Mathf.Abs(rise - now) < 0.05f) return;
+            Transform hand = a.GetBoneTransform(HumanBodyBones.RightHand), knuckle = a.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (hand == null) return;
+            var palm = knuckle != null ? Vector3.Lerp(hand.position, knuckle.position, 0.6f) : hand.position;
+            var level = Vector3.ProjectOnPlane(w.forward, Vector3.up);
+            if (level.sqrMagnitude < 1e-6f) return;
+            level.Normalize();
+            float r = rise * Mathf.Deg2Rad;
+            var turn = Quaternion.FromToRotation(w.forward, level * Mathf.Cos(r) + Vector3.up * Mathf.Sin(r));
+            w.SetPositionAndRotation(palm + turn * (w.position - palm), turn * w.rotation);
+        }
+
+        /// <summary>Steady's: how slowly the barrel's rise follows the hands, how long it takes to come in or go (seconds), its least and most rise (degrees).</summary>
+        const float SteadySeconds = 0.25f, SteadyEase = 0.2f, SteadyLow = -30, SteadyHigh = 8;
+
+        /// <summary>How far the left hand's fingers bend round a handguard (degrees: the first joint, the second).</summary>
+        static readonly Vector2 HandguardBend = new Vector2(55, 50);
+
+        /// <summary>`a`'s left hand turned at the wrist to hold `gun` from below: its palm up against it, its fingers across to the gun's right.</summary>
+        static void UnderGrip(Animator a, Transform gun)
+        {
+            Transform hand = a.GetBoneTransform(HumanBodyBones.LeftHand), index = a.GetBoneTransform(HumanBodyBones.LeftIndexProximal),
+                little = a.GetBoneTransform(HumanBodyBones.LeftLittleProximal), middle = a.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
+            if (hand == null || index == null || little == null || middle == null) return;
+            var fingers = middle.position - hand.position;
+            // (Fist's palm side, a mirror's on the left.)
+            var palmward = -Vector3.Cross(fingers, index.position - little.position);
+            if (fingers.sqrMagnitude < 1e-8f || palmward.sqrMagnitude < 1e-8f) return;
+            var now = Quaternion.LookRotation(fingers, palmward);
+            var want = Quaternion.LookRotation(gun.right, gun.up);
+            hand.rotation = want * Quaternion.Inverse(now) * hand.rotation;
         }
 
         /// <summary>How far Support moves the left palm at most (metres), and BASTION_SIN_MANO=1, none at all (the labs' «before»).</summary>

@@ -15,7 +15,6 @@ namespace Bastion.Engine
         public const string Elimination = "elimination";
         public const string Recovery = "recovery";
         public const string Sabotage = "sabotage";
-        public const string Hack = "hack";
         public const string Rescue = "rescue";
         // New ones (H5): not on the maps until their rules are there (RunMap.Specials).
         public const string Hold = "hold";
@@ -30,7 +29,7 @@ namespace Bastion.Engine
 
         public static readonly IReadOnlyList<string> All = new[]
         {
-            Normal, Elimination, Recovery, Sabotage, Hack, Rescue, Hold, Crossing, Stealth, Elite, Refuge, Trade, Event, Boss,
+            Normal, Elimination, Recovery, Sabotage, Rescue, Hold, Crossing, Stealth, Elite, Refuge, Trade, Event, Boss,
         };
 
         /// <summary>The stops: no fight, the squad answers them on the map.</summary>

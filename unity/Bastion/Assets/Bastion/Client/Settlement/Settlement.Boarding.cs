@@ -375,7 +375,8 @@ namespace Bastion.Client
             s.root.position = Vector3.Lerp(s.mountFrom, at - off, k) + Vector3.up * (Mathf.Sin(Mathf.PI * k) * MountHop);
             // (The rider's hands on the grips: its gun is slung already, as all who board.)
             if (s.seat == 0 && Lata.Grips() is var (left, right)) UnitViews.RiderHands(s.animator, left, right, k);
-            if (s.slung) KeepSlung(s);
+            if (s.blade) UnitViews.HoldBladeAtRest(s.animator, s.gun, s.root, s.art);
+            else if (s.slung) KeepSlung(s);
         }
 
         /// <summary>How high the hips go over the way getting on (metres; UnitViews.Ride's).</summary>
@@ -563,6 +564,8 @@ namespace Bastion.Client
                 // (A wounded one up off the crouch to run: clearingArt.ts, none running.)
                 s.anim.Crouch = 0;
             }
+            // (A blade stays in the right fist: StepStander holds it.)
+            if (s.blade) return;
             var gun = s.gun;
             // The pistol, its only gun, in its holster down the right thigh (syntyFigures.ts hold: pistolOnly), not on the back.
             if (s.pistol)

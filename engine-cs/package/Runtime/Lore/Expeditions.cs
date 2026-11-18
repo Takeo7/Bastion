@@ -38,7 +38,6 @@ namespace Bastion.Engine
             [NodeKinds.Elimination] = "Limpieza",
             [NodeKinds.Recovery] = "Recuperación",
             [NodeKinds.Sabotage] = "Sabotaje",
-            [NodeKinds.Hack] = "Arreglar la radio",
             [NodeKinds.Rescue] = "Rescate",
             [NodeKinds.Hold] = "Asedio",
             [NodeKinds.Crossing] = "Travesía",
@@ -101,8 +100,6 @@ namespace Bastion.Engine
                     return $"Recuperad {item_} y volved {Bus.To}.";
                 case NodeKinds.Sabotage:
                     return $"Apagad {(alarm != null ? Alarms[alarm].Name : "la alarma")} antes de que termine la cuenta atrás, y volved {Bus.To}.";
-                case NodeKinds.Hack:
-                    return $"Poned en marcha el equipo y volved {Bus.To}. Si falla, salta la alarma.";
                 case NodeKinds.Rescue:
                     // Arturo, 17/11: the survivor is in a marked zone, found and talked to (Hablar), and joins.
                     return $"{(crows ? "Los Cuervos retienen a alguien" : "Alguien con vida se esconde")} en una zona marcada del mapa. Llegad a su lado y habladle: se une a la escuadra. Volved todos {Bus.To}.";

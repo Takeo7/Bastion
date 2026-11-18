@@ -131,7 +131,8 @@ namespace Bastion.UI.Strategy
             var soldier = c.Soldiers.FirstOrDefault(s => s.Id == picked);
             if (soldier != null && pick.Draft != null && pick.Draft.Soldier == soldier.Id) v.Customizer = Customizer(soldier, pick.Draft);
             else if (soldier != null) v.Sheet = Sheet(c, soldier);
-            // The runs: the kit is Almacén's, and nobody is recruited (the free one comes alone).
+            // The runs: the kit is Almacén's, and nobody is recruited (the free one comes alone). Round the figure what they
+            // carry, to look at, not to change here (Arturo, 18/11 T3: «en soldados quiero saber qué equipamiento llevan»).
             if (c.Stash != null)
             {
                 v.Recruit = null;
@@ -141,8 +142,25 @@ namespace Bastion.UI.Strategy
                     v.Sheet.Armor = null;
                     v.Sheet.Belt.Clear();
                     v.Sheet.Care = null;
+                    if (soldier?.Kit is Kit kit)
+                    {
+                        foreach (var slot in new[] { KitSlots.Primary, KitSlots.Melee, KitSlots.Pistol }) v.Sheet.Arms.Add(KitPick(kit, slot));
+                        v.Sheet.Belt.Add(KitPick(kit, KitSlots.Vest));
+                        foreach (var slot in new[] { KitSlots.Belt0, KitSlots.Belt1 }) v.Sheet.Belt.Add(KitPick(kit, slot));
+                    }
                 }
             }
+            return v;
+        }
+
+        /// <summary>A place of a run's kit round the figure (T3): its name, what is in it with its picture and its help; empty, «Nada».</summary>
+        static PickView KitPick(Kit kit, string slot)
+        {
+            var g = Gears.InSlot(kit, slot);
+            var item = g != null ? Item(g) : null;
+            var label = Bastion.UI.Gear.GearText.SlotLabel(slot);
+            var v = new PickView { Id = slot, Label = label != "" ? label : Bastion.UI.Gear.GearText.Belt, Value = item != null ? (item.Count > 1 ? $"{item.Name} ×{item.Count}" : item.Name) : StrategyText.Stash.Nothing, Icon = item?.Icon, Editable = false };
+            if (!string.IsNullOrEmpty(item?.Tip)) v.Lines.Add(item.Tip);
             return v;
         }
 

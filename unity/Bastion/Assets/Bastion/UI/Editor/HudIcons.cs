@@ -84,12 +84,16 @@ namespace Bastion.UI.EditorTools
             // The bar's keys (synty-icons.css data-ability), and Disparar's by its gun (data-weapon).
             ("shoot", Rifle), ("weapon:rifle", Rifle), ("weapon:pistol", Pistol), ("weapon:shotgun", Shotgun),
             ("weapon:sniper", Sniper), ("weapon:cannon", MachineGun), ("pistol", Pistol),
+            // The bolt-action rifle's own (it fires as the assault rifle: Arturo, 18/11 T14), Apocalypse HUD's.
+            ("weapon:huntingRifle", "ICON_SM_Wep_HuntingRifle_Clean_01_Clean"),
             ("weapon:pan", Pan), ("weapon:bat", Bat), ("weapon:crowbar", Crowbar), ("weapon:chainsaw", Chainsaw),
             ("slash", Blades), ("takedown", Dagger), ("overwatchMelee", Blade), ("stone", Rock), ("overwatch", Target),
             ("hunker", Helmet), ("hide", Hood), ("pry", Crowbar), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
             ("launch", Launcher), ("smoke", Smoke), ("flashbang", Flashbang), ("firstAid", Healing),
             ("evac", Vehicle), ("evacAccept", Vehicle), ("evacRefuse", Time), ("abandonRefuse", Time),
             ("abandon", Flag), ("abandonAccept", Flag), ("hack", Settings), ("search", Backpack), ("searchRoom", Backpack),
+            // Registrar by what is searched (Arturo, 18/11 T12): a car's boot (Apocalypse's car, not La Lata's), a body, a box.
+            ("search:car", "ICON_Apocalpyse_Map_Vehicle_01"), ("search:body", "ICON_DarkFantasy_Status_Dead_01_Clean"), ("search:box", "ICON_ModernMenus_Crate_01_Clean"),
             ("runAndGun", FastForward), ("rapidFire", Ammo), ("aimedShot", Sniper), ("suppression", MachineGun),
             ("chainShot", Bullets), ("rupture", ShieldBroken), ("elbowRoom", Knife), ("patchUp", Repair),
             ("lightningHands", SpeedUp), ("faceoff", Revolver), ("killZone", Targeted), ("revival", Health),

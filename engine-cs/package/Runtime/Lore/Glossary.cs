@@ -48,7 +48,7 @@ namespace Bastion.Engine
             ["La Lata"] = "Lleva a la escuadra y la espera en la zona de evacuación. Moto, todoterreno, furgoneta y autobús: cada uno, más plazas.",
             ["Evacuar"] = "Se sale " + Bus.In + " desde la zona de evacuación: lo pide un jugador y lo acepta el otro. Quien esté fuera cuando sale, o no quepa, se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.",
             ["Recluta"] = "Quien acaba de unirse al Bastión, con un cuchillo.",
-            ["Barras"] = "Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo en las misiones. Cada barra llena sube un poco su habilidad y da un punto para el tablero.",
+            ["Barras"] = "Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Registrar y Forma física. Se llenan haciendo eso mismo en los combates. Cada barra llena sube un poco su habilidad y da un punto para el tablero.",
             ["Tablero"] = "Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.",
             ["Veteranía"] = "Cuenta los puntos gastados en el tablero: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.",
         };

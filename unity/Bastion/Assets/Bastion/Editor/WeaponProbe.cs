@@ -12,12 +12,14 @@ namespace Bastion.EditorTools
     {
         public static void Run()
         {
-            // (BASTION_ARMAS=name,…: others of Apocalypse's, its models.)
+            // (BASTION_ARMAS=name,…: others of Apocalypse's, its models; or paths from Assets/.)
             var names = System.Environment.GetEnvironmentVariable("BASTION_ARMAS")?.Split(',')
                 ?? new[] { "SM_Wep_AssaultRifle_01", "SM_Wep_Shotgun_01", "SM_Wep_SniperRifle_01", "SM_Wep_MachineGun_01", "SM_Wep_SubMGun_01", "SM_Wep_HuntingRifle_01", "SM_Wep_Pistol_01", "SM_Wep_Baton_01" };
             foreach (string name in names)
             {
-                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Synty/PolygonApocalypse/Prefabs/Weapons/Guns/{name}.prefab")
+                // (A path from Assets/, another pack's: T22's sawn-off search.)
+                var prefab = name.StartsWith("Assets/") ? AssetDatabase.LoadAssetAtPath<GameObject>(name)
+                    : AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Synty/PolygonApocalypse/Prefabs/Weapons/Guns/{name}.prefab")
                     ?? AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Synty/PolygonApocalypse/Models/{name}.fbx");
                 if (prefab == null)
                 {

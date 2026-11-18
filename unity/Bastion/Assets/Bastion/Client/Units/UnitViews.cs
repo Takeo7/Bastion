@@ -174,6 +174,9 @@ namespace Bastion.Client.Units
             public float twoHands = 1;
             /// <summary>How far Support has the left palm onto the handguard (0–1): eased in as it comes within reach (G-1).</summary>
             public float supportShare = 1;
+            /// <summary>The long gun's rise over the level as Steady follows it (degrees), and how far Steady holds it (0–1, eased in and out with moving).</summary>
+            public float steadyRise;
+            public float steadyShare;
             /// <summary>How far it is aimed (0 at rest, 1 aimed), going there over AimBlend.</summary>
             public float aim;
             public bool aiming;
@@ -1139,9 +1142,22 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// What the squad sees (Los.TeamVisibility) of `s` as it is now, if the last Sync worked it out for it (that state, at
-        /// that Seq), else null: the cutaway goes by it too, not working it out again (1.8 ms on Metsovo's 64 × 64).
+        /// that Seq, its eyes where they were), else null: the cutaway goes by it too, not working it out again (1.8 ms on
+        /// Metsovo's 64 × 64).
         /// </summary>
-        public bool[] SightOf(GameState s) => s != null && s == sightOf && s.Seq == sightSeq ? sight : null;
+        public bool[] SightOf(GameState s) => s != null && s == sightOf && s.Seq == sightSeq && Eyes(s) == sightEyes ? sight : null;
+
+        /// <summary>
+        /// Where the squad's eyes are and which way they face, as one number: a walk's tile moves one without a new Seq (T18,
+        /// Gameplay's Events.MoveStep on the view), and the sight of the tile before is not this one's.
+        /// </summary>
+        static long Eyes(GameState s)
+        {
+            long h = 17;
+            foreach (var u in s.Units)
+                if (Los.IsViewer(u, Teams.Xcom)) h = h * 31 + ((u.Pos.X * 4099L + u.Pos.Y) * 64 + u.Pos.Z) * 4099 + (long)Math.Round((u.Facing ?? -1) * 1000);
+            return h;
+        }
 
         /// <summary>Sync's parts for the profiler (RendimientoLab.Parones; UI, 7/11: ShowSeen 6 to 35 ms).</summary>
         static readonly Unity.Profiling.ProfilerMarker SyncMarker = new Unity.Profiling.ProfilerMarker("Bastion.Art.Sync"),
@@ -1150,6 +1166,7 @@ namespace Bastion.Client.Units
         bool[] sight;
         GameState sightOf;
         int sightSeq;
+        long sightEyes;
 
         /// <summary>The figures as the state seen says: those that come in made, those gone taken away, each on its tile.</summary>
         public void Sync(GameState view)
@@ -1163,7 +1180,7 @@ namespace Bastion.Client.Units
             // contact stayed drawn for good, inside a building not found too).
             bool[] inSight;
             using (SightMarker.Auto()) inSight = Los.TeamVisibility(view, "xcom");
-            (sight, sightOf, sightSeq) = (inSight, view, view.Seq);
+            (sight, sightOf, sightSeq, sightEyes) = (inSight, view, view.Seq, Eyes(view));
             syncs++;
             lookers.Clear();
             foreach (var u in view.Units) if (Los.IsViewer(u, Teams.Xcom)) lookers.Add(u.Pos);

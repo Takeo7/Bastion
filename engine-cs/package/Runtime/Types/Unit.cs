@@ -171,6 +171,18 @@ namespace Bastion.Engine
         /// <summary>Extra aim this unit's Suppression takes away.</summary>
         public int SuppressAim { get; set; }
         public int Hack { get; set; }
+        /// <summary>
+        /// «Suerte al registrar» (T2, Arturo 18/11): percent more, over Content.SearchLuck, of finding something more on a
+        /// search that found something (another roll): the Registrar bar's growth, and the board's. BoxLuck, only opening a
+        /// box or a boot (Ganzúa); RoomLuck, only searching a room (Buscavidas).
+        /// </summary>
+        public int SearchLuck { get; set; }
+        public int BoxLuck { get; set; }
+        public int RoomLuck { get; set; }
+        /// <summary>Armero (T2): a weapon's accessory turns up this many times more often on a search (1: twice).</summary>
+        public int ModFinds { get; set; }
+        /// <summary>Gancho (T2): tiles more a box, a boot or a body is opened from (1: from two).</summary>
+        public int SearchReach { get; set; }
         /// <summary>Against the Chillón's scream: 1 = never panics («Nervios de acero»), 2 = immune («Serenidad»).</summary>
         public int PsiGuard { get; set; }
         /// <summary>Golpe al oído (board.ts): the Slash disorients on a hit.</summary>

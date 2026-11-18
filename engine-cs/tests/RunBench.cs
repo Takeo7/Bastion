@@ -49,7 +49,7 @@ namespace Bastion.Engine.Tests
         private static readonly string[] Kinds =
         {
             NodeKinds.Normal, NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Sabotage,
-            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Hack, NodeKinds.Rescue,
+            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Rescue,
         };
 
         /// <summary>What a site can be (RunMap.SpecialFor, Generate): a Sabotaje only where an alarm is, a Travesía never in one building.</summary>
@@ -140,7 +140,7 @@ namespace Bastion.Engine.Tests
         {
             [NodeKinds.Normal] = "Saqueo", [NodeKinds.Hold] = "Asedio", [NodeKinds.Crossing] = "Travesía", [NodeKinds.Stealth] = "Sigilo*",
             [NodeKinds.Elite] = "Guarida", [NodeKinds.Sabotage] = "Sabotaje", [NodeKinds.Elimination] = "Limpieza",
-            [NodeKinds.Recovery] = "Recuperación", [NodeKinds.Hack] = "Pirateo", [NodeKinds.Rescue] = "Rescate",
+            [NodeKinds.Recovery] = "Recuperación", [NodeKinds.Rescue] = "Rescate",
         };
 
         private static string SiteName(string site) => site == Places.Town ? "Pueblo o ciudad" : Places.Names[site];

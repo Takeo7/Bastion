@@ -24,7 +24,9 @@ namespace Bastion.UI.Combat
         RunPackView RunPackOf(GameState v, Unit u, bool live)
         {
             packUnit = u.Id;
-            var view = new RunPackView { Pack = StrategyPresenter.Grid(u.Pack, u.Id, KitSlots.Pack, live) };
+            // A weapon in the pack or on the floor against what the soldier carries in its place (T4).
+            var against = u.Kit != null ? (slot => Gears.InSlot(u.Kit, slot), u.Name.Split(' ')[0]) : ((System.Func<string, Bastion.Engine.Gear>, string)?)null;
+            var view = new RunPackView { Pack = StrategyPresenter.Grid(u.Pack, u.Id, KitSlots.Pack, live, 0, against) };
             foreach (var slot in new[] { KitSlots.Primary, KitSlots.Melee, KitSlots.Pistol, KitSlots.Vest })
             {
                 var (w, h) = Box(slot);
@@ -43,7 +45,7 @@ namespace Bastion.UI.Combat
                     if (Gears.FirstFit(laid, d.Gear) is Placed at) Gears.Place(laid, d.Gear, at.X, at.Y, at.Turned);
                 var rows = laid.Items.Count == 0 ? 1 : laid.Items.Max(p => p.Y + (p.Turned ? Content.GearSize(p.Gear.Kind, p.Gear.Type).W : Content.GearSize(p.Gear.Kind, p.Gear.Type).H));
                 laid.H = rows;
-                view.Floor = StrategyPresenter.Grid(laid, Floor, null, live);
+                view.Floor = StrategyPresenter.Grid(laid, Floor, null, live, 0, against);
             }
             if (live)
                 foreach (var o in v.Units.Where(o => o.Id != u.Id && o.Alive && o.Team == Teams.Xcom && !o.Captive && o.Pack != null && Aim.InMeleeReach(v, u.Pos, o.Pos)))

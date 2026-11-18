@@ -83,11 +83,13 @@ namespace Bastion.Engine
             switch (weapon)
             {
                 case WeaponIds.Rifle:
+                // T14 (Gameplay, 18/11): the bolt-action rifle's own weapon, one round a shot; the assault rifle's figures, so its line (Lore).
+                case WeaponIds.HuntingRifle:
                     return "Para todo: suma puntería de cerca y no la pierde de lejos.";
                 case WeaponIds.Shotgun:
                     return "Mucho daño de cerca. Desde doce casillas, pierde puntería.";
                 case WeaponIds.Cannon:
-                    return "Mucho daño, de cerca y de lejos, pero hace mucho ruido y el cargador es corto.";
+                    return "Mucho daño, de cerca y de lejos, pero hace mucho ruido.";
                 case WeaponIds.Sniper:
                     return "Para lejos: de cerca pierde mucha puntería. Cada disparo gasta las dos acciones.";
                 case WeaponIds.Pistol:
@@ -117,10 +119,13 @@ namespace Bastion.Engine
             }
         }
 
-        /// <summary>A figure of the card, in words: «4 balas», «2 acciones», «12 casillas»; the blade «No gasta». `what`: "clip", "actions" or "noise".</summary>
+        /// <summary>
+        /// A figure of the card, in words: «4 disparos», «2 acciones», «12 casillas»; the blade «No gasta». `what`: "clip",
+        /// "actions" or "noise". A clip counts shots, not rounds (WeaponDef.Clip; Producto, 18/11: not «balas»).
+        /// </summary>
         public static string WeaponFigure(string what, int n, bool melee = false)
         {
-            if (what == "clip") return melee || n == 0 ? "No gasta" : $"{n} {(n == 1 ? "bala" : "balas")}";
+            if (what == "clip") return melee || n == 0 ? "No gasta" : $"{n} {(n == 1 ? "disparo" : "disparos")}";
             if (what == "actions") return $"{n} {(n == 1 ? "acción" : "acciones")}";
             return $"{n} {(n == 1 ? "casilla" : "casillas")}";
         }

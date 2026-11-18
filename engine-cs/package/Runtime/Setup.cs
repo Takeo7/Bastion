@@ -1175,6 +1175,7 @@ namespace Bastion.Engine
                 Concealed = siege == null,
                 Ready = new[] { false, false },
                 Command = opts.Slots.Count > 0 ? opts.Slots[0] : 0,
+                Solo = opts.Slots.Count == 1 ? true : (bool?)null,
                 Outcome = null,
                 OutcomeReason = null,
                 CampaignMission = opts.CampaignMission,

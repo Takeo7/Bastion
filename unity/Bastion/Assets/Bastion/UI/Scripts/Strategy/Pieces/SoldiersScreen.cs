@@ -19,6 +19,8 @@ namespace Bastion.UI.Strategy
         readonly VisualElement right;
         /// <summary>Under the clearing, in the middle (strategy.css .strat-center-bottom): «ESPERAR A QUE SE CUREN».</summary>
         readonly VisualElement bottom;
+        /// <summary>Personalizar's head over the figure, at the top in the middle: rank and name (T1).</summary>
+        readonly VisualElement customTop;
         /// <summary>The clearing between the panels, where dragging turns the soldier shown (Ana's #5, Arturo 29/10).</summary>
         readonly VisualElement turnPad;
         /// <summary>The pointer's last x while it drags on the pad; where it went down, and whether it has dragged since.</summary>
@@ -117,6 +119,9 @@ namespace Bastion.UI.Strategy
             right = Ui.El("strat-side strat-side--right panel", view);
             bottom = Ui.El("strat-center-bottom", view);
             bottom.pickingMode = PickingMode.Ignore;
+            customTop = Ui.El("custom-top", view);
+            customTop.pickingMode = PickingMode.Ignore;
+            Ui.Show(customTop, false);
             // They scroll with the wheel, without a bar (as the 0.10.1's panels).
             left.Add(new ScrollView(ScrollViewMode.Vertical) { name = "left-scroll", verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden });
             right.Add(new ScrollView(ScrollViewMode.Vertical) { name = "right-scroll", verticalScrollerVisibility = ScrollerVisibility.Auto, horizontalScrollerVisibility = ScrollerVisibility.Hidden });
@@ -129,7 +134,8 @@ namespace Bastion.UI.Strategy
             Ui.Show(right, on && (last?.Sheet != null || last?.Customizer != null));
             Ui.Show(turnPad, on && (last?.Sheet != null || last?.Customizer != null));
             Ui.Show(gear, on && last?.Sheet != null && last.Customizer == null);
-            Ui.Show(bottom, on && last?.MustWait != null);
+            Ui.Show(bottom, on && (last?.MustWait != null || last?.Customizer != null));
+            Ui.Show(customTop, on && last?.Customizer != null);
             if (!on) Hover(null);
         }
 
@@ -184,19 +190,22 @@ namespace Bastion.UI.Strategy
             leftBody.Clear();
             rightBody.Clear();
             bottom.Clear();
+            customTop.Clear();
             gear.Clear();
             gear.Add(figure);
-            Ui.Show(bottom, shown && v?.MustWait != null);
+            Ui.Show(bottom, shown && (v?.MustWait != null || v?.Customizer != null));
+            Ui.Show(customTop, shown && v?.Customizer != null);
             Ui.Show(turnPad, shown && (v?.Sheet != null || v?.Customizer != null));
             Ui.Show(gear, shown && v?.Sheet != null && v.Customizer == null);
             if (!Customizable) Hover(null);
             if (v == null) return;
             if (v.MustWait != null) MustWait(v.MustWait);
-            Grid(v, leftBody);
+            // Personalizar puts the grid away: its own on both sides of the figure (T1).
+            if (v.Customizer == null) Grid(v, leftBody);
             Ui.Show(right, shown && (v.Sheet != null || v.Customizer != null));
             // The sheet as tall as it is (Arturo, 14/11); Personalizar, as before, down to the foot.
             right.EnableInClassList("soldiers-sheet", v.Customizer == null);
-            if (v.Customizer != null) Customizer(v.Customizer, rightBody);
+            if (v.Customizer != null) Customizer(v.Customizer, leftBody, rightBody);
             else if (v.Sheet != null)
             {
                 Sheet(v.Sheet, rightBody);
@@ -233,13 +242,18 @@ namespace Bastion.UI.Strategy
             return key;
         }
 
-        /// <summary>Personalizar: name and nickname, Ropa, Cabeza and Complexión, the colours, its buttons.</summary>
-        void Customizer(CustomizerView c, VisualElement parent)
+        /// <summary>
+        /// Personalizar round the figure, which is what it looks like (Arturo, 18/11 T1: the mock-up B, «carrusel junto a la
+        /// figura»): rank and name at the top in the middle; on the left the name and nickname fields and a carousel for
+        /// the clothes and another for the head, each ‹ › putting the next on at once, which of how many under it; on the
+        /// right the build's three and the colours; the buttons at the foot in the middle.
+        /// </summary>
+        void Customizer(CustomizerView c, VisualElement leftSide, VisualElement rightSide)
         {
-            Ui.Text(c.Kicker.ToUpperInvariant(), "sheet__kicker font-title", parent);
-            customTitle = Ui.Text((c.Title ?? "").ToUpperInvariant(), "sheet__name font-title", parent);
-            var name = Field("Nombre", c.Name, c.NameMax, null, parent);
-            var nickname = Field("Apodo", c.Nickname, c.NicknameMax, "Sin apodo", parent);
+            Ui.Text(c.Kicker.ToUpperInvariant(), "custom-top__kicker font-title", customTop);
+            customTitle = Ui.Text((c.Title ?? "").ToUpperInvariant(), "custom-top__name font-title", customTop);
+            var name = Field("Nombre", c.Name, c.NameMax, null, leftSide);
+            var nickname = Field("Apodo", c.Nickname, c.NicknameMax, "Sin apodo", leftSide);
             void Typed()
             {
                 customTitle.text = (string.IsNullOrWhiteSpace(name.value) ? c.Title ?? "" : name.value).ToUpperInvariant();
@@ -249,42 +263,71 @@ namespace Bastion.UI.Strategy
             nickname.RegisterValueChangedCallback(_ => Typed());
             foreach (var g in c.Groups)
             {
-                Ui.Text(g.Title.ToUpperInvariant(), "custom__head font-title", parent);
-                var row = Ui.El("custom__choices", parent);
-                foreach (var ch in g.Choices)
-                {
-                    var (group, id) = (g.Id, ch.Id);
-                    var b = new Button(() => handlers.OnCustomChoice(group, id, false)) { text = ch.Label };
-                    b.AddToClassList("custom__choice");
-                    b.EnableInClassList("custom__choice--on", ch.On);
-                    if (!string.IsNullOrEmpty(ch.Tip)) tips.Attach(b, ch.Tip);
-                    // Over an outfit, the figure wears it for a look; away, back to the draft.
-                    b.RegisterCallback<PointerEnterEvent>(_ => handlers.OnCustomChoice(group, id, true));
-                    b.RegisterCallback<PointerLeaveEvent>(_ => handlers.OnCustomChoice(group, null, true));
-                    row.Add(b);
-                }
+                // Few choices (the build's three): side by side, on the right. Many: a carousel, on the left.
+                if (g.Choices.Count <= 3) Segments(g, rightSide);
+                else Carousel(g, leftSide);
             }
-            var head = Ui.El("strat-head custom__colors-head", parent);
+            var head = Ui.El("strat-head custom__colors-head", rightSide);
             Ui.Text(c.ColorsHead.ToUpperInvariant(), "strat-head__text font-title", head);
-            if (!string.IsNullOrEmpty(c.ColorsOff)) Ui.Text(c.ColorsOff, "custom__off", parent);
-            var rows = Ui.El("custom__rows", parent);
+            if (!string.IsNullOrEmpty(c.ColorsOff)) Ui.Text(c.ColorsOff, "custom__off", rightSide);
+            var rows = Ui.El("custom__rows", rightSide);
             rows.SetEnabled(string.IsNullOrEmpty(c.ColorsOff));
             foreach (var r in c.Colors) ColorRow(r, rows);
-            var actions = Ui.El("custom__actions", parent);
-            Action(actions, "Aleatorio", "random");
-            tips.Attach(Action(actions, "Restablecer", "reset"), "Vuelve al aspecto de serie de este soldado");
+            var bar = Ui.El("custom-bar", bottom);
+            Action(bar, "Aleatorio", "random");
+            tips.Attach(Action(bar, "Restablecer", "reset"), "Vuelve al aspecto de serie de este soldado");
             // On a holder: off (no colours, or no one else), the key takes no hover, and its help says why.
-            var copyHolder = Ui.El("custom__copy-holder", actions);
+            var copyHolder = Ui.El("custom__copy-holder", bar);
             var copy = Action(copyHolder, c.CopyArmed ? $"¿Pintar a tus {c.CopyCount} soldados? Pulsa otra vez" : "Copiar a todos mis soldados", "copy");
             copy.EnableInClassList("custom__copy--armed", c.CopyArmed);
             copy.SetEnabled(c.CanCopy);
             if (!string.IsNullOrEmpty(c.CopyTip)) tips.Attach(copyHolder, c.CopyTip);
-            var foot = Ui.El("custom__foot", parent);
-            var save = Action(foot, "Guardar", "save");
+            Action(bar, "Cancelar", "cancel");
+            var save = Action(bar, "Guardar", "save");
             save.AddToClassList("btn-primary");
             save.SetEnabled(c.CanSave);
-            Action(foot, "Cancelar", "cancel");
-            if (!c.CanSave && !string.IsNullOrEmpty(c.SaveWhy)) Ui.Text(c.SaveWhy, "strat-why", parent);
+            if (!c.CanSave && !string.IsNullOrEmpty(c.SaveWhy)) Ui.Text(c.SaveWhy, "strat-center-bottom__line", bottom);
+        }
+
+        /// <summary>A group as a carousel (T1): its name, ‹ the one on › (the figure wears it at once), which of how many.</summary>
+        void Carousel(ChoiceGroupView g, VisualElement parent)
+        {
+            var box = Ui.El("custom-carousel", parent);
+            Ui.Text(g.Title.ToUpperInvariant(), "custom__head font-title", box);
+            var row = Ui.El("custom-carousel__row", box);
+            var at = Math.Max(0, g.Choices.FindIndex(ch => ch.On));
+            var n = g.Choices.Count;
+            var group = g.Id;
+            void Arrow(string text, int step, string label)
+            {
+                var id = g.Choices[(at + step + n) % n].Id;
+                var b = new Button(() => handlers.OnCustomChoice(group, id, false)) { text = text };
+                Ui.AddClasses(b, "custom-carousel__arrow font-title");
+                tips.Attach(b, label);
+                row.Add(b);
+            }
+            Arrow("‹", -1, "Anterior");
+            var on = g.Choices[at];
+            var value = Ui.Text(on.Label, "custom-carousel__value font-title", row);
+            if (!string.IsNullOrEmpty(on.Tip)) tips.Attach(value, on.Tip);
+            Arrow("›", 1, "Siguiente");
+            Ui.Text($"{at + 1} de {n}", "custom-carousel__count", box);
+        }
+
+        /// <summary>A group of few as buttons side by side, the one on lit (T1: the build).</summary>
+        void Segments(ChoiceGroupView g, VisualElement parent)
+        {
+            Ui.Text(g.Title.ToUpperInvariant(), "custom__head font-title", parent);
+            var row = Ui.El("custom-segments", parent);
+            foreach (var ch in g.Choices)
+            {
+                var (group, id) = (g.Id, ch.Id);
+                var b = new Button(() => handlers.OnCustomChoice(group, id, false)) { text = ch.Label.ToUpperInvariant() };
+                Ui.AddClasses(b, "custom-segments__choice font-title");
+                b.EnableInClassList("custom-segments__choice--on", ch.On);
+                if (!string.IsNullOrEmpty(ch.Tip)) tips.Attach(b, ch.Tip);
+                row.Add(b);
+            }
         }
 
         TextField Field(string label, string value, int max, string placeholder, VisualElement parent)
@@ -370,7 +413,7 @@ namespace Bastion.UI.Strategy
         public static Color TheirLight = new Color32(0x3f, 0xb8, 0xc8, 0xff);
 
         /// <summary>A bust's backdrop: its light's colour dark, lit in its middle (as the battle's squad cards: SquadList.Studio).</summary>
-        static void Studio(VisualElement face, bool theirs)
+        internal static void Studio(VisualElement face, bool theirs)
         {
             var light = theirs ? TheirLight : MineLight;
             face.style.backgroundColor = new Color(light.r * 0.3f, light.g * 0.3f, light.b * 0.3f, 1);
@@ -523,7 +566,7 @@ namespace Bastion.UI.Strategy
         /// </summary>
         void Gear(SoldierSheetView s)
         {
-            // The runs: the kit is Almacén's, none round the figure.
+            // None to show, none round the figure.
             if (s.Arms.Count == 0 && s.Armor == null && s.Belt.Count == 0) return;
             var left = Column("soldier-gear__col--left");
             var arms = s.Arms;
@@ -536,7 +579,8 @@ namespace Bastion.UI.Strategy
             }
             var right = Column("soldier-gear__col--right");
             if (s.Armor != null) ArmorTile(s.Armor, right);
-            foreach (var p in s.Belt.Take(2)) GearTile(p, right);
+            // (A run's kit: the vest first, then the belt's two, three a side.)
+            foreach (var p in s.Belt.Take(s.Armor != null ? 2 : 3)) GearTile(p, right);
             var chosen = arms.Concat(s.Belt).FirstOrDefault(p => p.Id == open && p.Editable);
             if (chosen != null) Options(chosen, arms.Contains(chosen));
         }
@@ -604,7 +648,11 @@ namespace Bastion.UI.Strategy
             tile.EnableInClassList("gear-tile--fixed", !p.Editable);
             var face = Ui.El("gear-tile__face", tile);
             face.pickingMode = PickingMode.Ignore;
+            // A run's kit, to look at (T3): taller, with what it is under its picture.
+            tile.EnableInClassList("gear-tile--kit", !p.Editable && p.Options.Count == 0);
             if (!string.IsNullOrEmpty(p.Icon)) Ui.Icon(icon, p.Icon, "gear-tile__icon", face).pickingMode = PickingMode.Ignore;
+            // An empty place that can't be changed here (a run's kit, T3) says so, without the «+» to add one.
+            else if (!p.Editable) Ui.Text(p.Value, "gear-tile__none", face).pickingMode = PickingMode.Ignore;
             else Plus(face, "gear-tile__plus");
             if (p.Condition >= 0)
             {
@@ -613,6 +661,8 @@ namespace Bastion.UI.Strategy
                 fill.style.width = Length.Percent(Mathf.Clamp(p.Condition, 0, 100));
                 fill.EnableInClassList("gear-tile__gauge-fill--worn", p.Condition < 30);
             }
+            // (Arturo, 18/11, Producto's review of T3: «falta el nombre del objeto en cada casilla, y sus usos en el cinturón».)
+            if (!p.Editable && !string.IsNullOrEmpty(p.Icon) && !string.IsNullOrEmpty(p.Value)) Ui.Text(p.Value, "gear-tile__value", tile).pickingMode = PickingMode.Ignore;
             Ui.Text(p.Label.ToUpperInvariant(), "gear-tile__label font-title", tile).pickingMode = PickingMode.Ignore;
             var help = new System.Collections.Generic.List<string> { p.Value };
             help.AddRange(p.Lines);

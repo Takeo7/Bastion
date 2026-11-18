@@ -26,6 +26,13 @@ namespace Bastion.UI.Strategy
         readonly VisualElement pack;
         readonly VisualElement[] holders = new VisualElement[6];
         string chooserKey;
+        System.Collections.Generic.List<KitTabView> lastSoldiers;
+
+        /// <summary>A soldier's bust by id (StrategyRoot's: Arte's Portraits); null, the silhouette.</summary>
+        public System.Func<string, Texture> PortraitOf;
+
+        /// <summary>The HUD's icons (the silhouette while a bust is drawn).</summary>
+        public System.Func<string, Sprite> Icon;
 
         static readonly string[] Places = { "primary", "melee", "pistol", "vest", "belt0", "belt1" };
 
@@ -86,10 +93,22 @@ namespace Bastion.UI.Strategy
             Ui.Show(note, !string.IsNullOrEmpty(kit.Note));
         }
 
-        /// <summary>The soldiers as tabs (anew only if they changed): a click chooses one; in a run, their health under the name.</summary>
+        /// <summary>A bust came (StrategyRoot.Repaint): the tabs drawn again with it, the grids left as they are.</summary>
+        public void Repaint()
+        {
+            if (lastSoldiers != null) Chooser(lastSoldiers);
+        }
+
+        /// <summary>
+        /// The soldiers as tabs (anew only if they changed, or a bust came): a click chooses one. Each its bust on its
+        /// studio's light as Soldados' (Arturo, 18/11 T5: «su icono igual que en soldados», not the name alone), its name
+        /// under it, and in a run its health under that, every bar as wide as the next (T10: as wide as each name, a long
+        /// name looked like more health).
+        /// </summary>
         void Chooser(System.Collections.Generic.List<KitTabView> soldiers)
         {
-            var key = Ui.Key(soldiers);
+            lastSoldiers = soldiers;
+            var key = Ui.Key(soldiers) + "|" + StrategyRoot.PictureStamp;
             if (key == chooserKey) return;
             chooserKey = key;
             chooser.Clear();
@@ -101,13 +120,21 @@ namespace Bastion.UI.Strategy
                 b.EnableInClassList("stash-tab--on", s.On);
                 b.EnableInClassList("stash-tab--theirs", !s.Mine);
                 b.EnableInClassList("stash-tab--hp", s.HpMax > 0);
-                var top = Ui.El("stash-tab__top", b);
-                if (!string.IsNullOrEmpty(s.Color))
+                var face = Ui.El("stash-tab__face", b);
+                face.pickingMode = PickingMode.Ignore;
+                SoldiersScreen.Studio(face, !s.Mine);
+                Bastion.Client.Portraits.Light(id, s.Mine ? SoldiersScreen.MineLight : SoldiersScreen.TheirLight);
+                var bust = Ui.El("stash-tab__bust", face);
+                bust.pickingMode = PickingMode.Ignore;
+                var portrait = PortraitOf?.Invoke(id);
+                if (portrait is RenderTexture rt) bust.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(rt));
+                else if (portrait is Texture2D t2) bust.style.backgroundImage = new StyleBackground(t2);
+                else if (Icon?.Invoke("tab:barracks") is Sprite silhouette)
                 {
-                    var dot = Ui.El("stash-tab__dot", top);
-                    dot.style.backgroundColor = Ui.Hex(s.Color, Color.white);
+                    var shape = Ui.El("stash-tab__silhouette", bust);
+                    shape.style.backgroundImage = new StyleBackground(silhouette);
                 }
-                Ui.Text(s.Name, "stash-tab__label", top);
+                Ui.Text(s.Name, "stash-tab__label", b).pickingMode = PickingMode.Ignore;
                 if (s.HpMax > 0)
                 {
                     var bar = Ui.El("stash-tab__hp", b);

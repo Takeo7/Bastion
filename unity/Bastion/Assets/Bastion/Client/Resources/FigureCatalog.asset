@@ -543,6 +543,7 @@ MonoBehaviour:
   - farm:SM_Prop_Tool_Rake_01
   - gang:SM_Wep_Sword_02
   - military:SM_Chr_Attach_Knife_Sheath_01
+  - police:SM_Wep_Shotgun_01
   - SM_Wep_AssaultRifle_01
   - SM_Wep_AssaultRifle_02
   - SM_Wep_AssaultRifle_03
@@ -570,6 +571,7 @@ MonoBehaviour:
   - {fileID: 1851300905487520, guid: 79e26d971e19c1f449f5d11c36eb05de, type: 3}
   - {fileID: 1592597363156974, guid: 1410f1cba8074a1429937abe0289a307, type: 3}
   - {fileID: 1136006431183740, guid: f0b3adf97e1d6ba43bc2200fd5b75f36, type: 3}
+  - {fileID: 5660749044265983309, guid: bbd9ebcaf89300f42b9afb50416f05f8, type: 3}
   - {fileID: 1900586067242068, guid: ad49a19d2c4adc94b838606a5d459f85, type: 3}
   - {fileID: 1263777055603640, guid: d9f9bf1ca5142254ba3a359ff4a34b3e, type: 3}
   - {fileID: 1490873028196816, guid: a3fe0be603767ae42a0d14c81d777c2b, type: 3}

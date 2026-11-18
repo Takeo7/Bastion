@@ -16,6 +16,8 @@ namespace Bastion.UI.Strategy
     {
         readonly VisualElement left;
         readonly KitPanel right;
+        /// <summary>The soldiers' tabs and kit on the right (their busts: StrategyRoot).</summary>
+        public KitPanel Kits => right;
         readonly TooltipLayer tips;
         readonly GearBoard board;
         readonly Label head;
@@ -37,7 +39,7 @@ namespace Bastion.UI.Strategy
             stash = Ui.El("stash-grid", left);
             hint = Ui.Text("", "stash-hint muted", left);
             bin = Ui.El("stash-bin", left);
-            right = new KitPanel(view, "strat-side strat-side--right panel stash-right", tips, handlers, board);
+            right = new KitPanel(view, "strat-side strat-side--right panel stash-right", tips, handlers, board) { Icon = icon };
             Show(false);
         }
 

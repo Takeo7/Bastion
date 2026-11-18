@@ -142,6 +142,8 @@ namespace Bastion.UI.Hud
                 // Synty's backpack, as on the bar's key to search; a click opens the pockets over it, again shuts them (Ana,
                 // 7/11 #13).
                 Ui.Icon(icon, "search", "unit-pack-mark__icon", packMark);
+                // A key with its word, not a loose picture (Arturo, 18/11 T11: «no parece un botón»).
+                Ui.Text(HudText.Pack.PackHead, "unit-pack-mark__label font-title", packMark).pickingMode = PickingMode.Ignore;
                 tips.Attach(packMark, backpack.Haul);
                 packMark.EnableInClassList("unit-pack-mark--open", backpack.Pockets);
                 packMark.RegisterCallback<ClickEvent>(_ =>

@@ -115,6 +115,12 @@ namespace Bastion.UI.Combat
             };
         }
 
+        /// <summary>
+        /// Disparar's picture: the gun in hand's (Content.AttackWeapon); the bolt-action rifle its own, though it fires as the
+        /// assault rifle (Arturo, 18/11 T14: «aparece como un rifle de asalto en el botón»).
+        /// </summary>
+        static string ShotPicture(Unit u) => u.Arms?.Primary == FoundWeaponIds.HuntingRifle ? FoundWeaponIds.HuntingRifle : Content.AttackWeapon(u, AbilityIds.Shoot).Id;
+
         /// <summary>A weapon found in the field that has a picture of its own on the Tajo's key (the knife and the machete keep the blade).</summary>
         static bool Found(string weapon) => weapon == WeaponIds.Pan || weapon == WeaponIds.Bat || weapon == WeaponIds.Crowbar || weapon == WeaponIds.Chainsaw;
 
@@ -148,7 +154,7 @@ namespace Bastion.UI.Combat
                     Id = id,
                     // Disparar by the gun in hand (Arturo, 23/10 #7): its picture on the key, not always the rifle's; the Tajo by a
                     // found blunt weapon or the chainsaw (Ana's notes, Arturo 29/10).
-                    Weapon = id == AbilityIds.Shoot ? Content.AttackWeapon(u, AbilityIds.Shoot).Id : id == AbilityIds.Slash && Found(Content.AttackWeapon(u, id).Id) ? Content.AttackWeapon(u, id).Id : null,
+                    Weapon = id == AbilityIds.Shoot ? ShotPicture(u) : id == AbilityIds.Slash && Found(Content.AttackWeapon(u, id).Id) ? Content.AttackWeapon(u, id).Id : null,
                     Enabled = reason == null,
                     Reason = reason,
                     // Out of rounds in the magazine (Ana, 20/10 #24): said on the key.
@@ -162,6 +168,8 @@ namespace Bastion.UI.Combat
                     Noise = AbilityTexts.NoiseText(State, u, id),
                     Stats = AbilityTexts.AbilityStats(State, u, id),
                     Description = id == AbilityIds.Search && SearchBeside(u) is string beside ? AbilityTexts.SearchWords(beside).effect : def.Description,
+                    // Registrar by what is beside: a car, a body, a box (Arturo, 18/11 T12: it was the backpack every time).
+                    Icon = id == AbilityIds.Search ? SearchIcon(SearchBeside(u)) : null,
                     Active = mode != Mode.Move && modeAbility == id,
                     Count = charge ?? -1,
                     Cooldown = cooldown,
@@ -209,11 +217,15 @@ namespace Bastion.UI.Combat
                     Id = menu.Id,
                     Name = menu.Name,
                     // Lanzar is the stone's, and the grenade's for one without it (since 29/10 a skill of the board's).
-                    Icon = menu.Id == "menu:throw" && options.All(o => o.Id != AbilityIds.Stone) ? AbilityIds.Grenade : menu.Icon,
+                    // Investigar with something beside to search, by what it is (T12).
+                    Icon = menu.Id == "menu:throw" && options.All(o => o.Id != AbilityIds.Stone) ? AbilityIds.Grenade
+                        : menu.Id == "menu:investigate" && options.FirstOrDefault(o => o.Id == AbilityIds.Search)?.Icon is string looks ? looks : menu.Icon,
                     Enabled = usable.Count > 0,
                     Reason = usable.Count > 0 ? null : first.Reason,
                     Note = usable.Count > 0 ? null : options.FirstOrDefault(o => o.Note != null)?.Note,
-                    Description = several ? $"{menu.Name}: {string.Join(", ", options.Select(o => o.Name.ToLowerInvariant()))}. Pulsa para elegir." : first.Description,
+                    // Its choices, not its name again (the card's title says it; Lore, 18/11): «Registrar la habitación o abrir el
+                    // maletero del coche de policía. Pulsa para elegir.»
+                    Description = several ? $"{ChoiceList(options.Select(o => o.Name.ToLowerInvariant()).ToList())}. Pulsa para elegir." : first.Description,
                     // With a choice to make, each choice's card has its own figures (#18): none on the menu's.
                     Cost = several ? "" : first.Cost,
                     Limits = several ? null : first.Limits,
@@ -240,14 +252,17 @@ namespace Bastion.UI.Combat
                 keys.RemoveAt(throwAt);
                 keys.Insert(keys.FindIndex(k => k.key.Id == "menu:watch") + 1, t);
             }
-            // Each key at its own number always, whatever the soldier carries (Arturo, 15/11): those with one first, in its
-            // order, a key the soldier lacks leaving its number free; the rest after them (the board's, a door, the crowbar).
+            // The usual keys in their order (Numbered), the rest after them (the board's, a door, the crowbar).
             keys = keys.OrderBy(k => Slot(k.key.Id) < 0 ? Numbered.Length : Slot(k.key.Id)).ToList();
             var bar = new List<AbilityView>();
+            var place = 0;
             foreach (var (key, options) in keys)
             {
-                var slot = Slot(key.Id);
-                var number = slot < 0 ? "" : slot == 9 ? "0" : (slot + 1).ToString();
+                // Each key's number is its place along the bar, 1 to 9 and 0 (Arturo, 18/11 T15: «que los números del teclado
+                // equivalgan a los números de cada botón», not one number for each action whatever is before it); past the
+                // tenth, none.
+                var number = place < 10 ? (place == 9 ? "0" : (place + 1).ToString()) : "";
+                place++;
                 // With the finger, no keys (Lore, 7/11).
                 key.Hotkey = Bastion.Client.GameInput.Touch || number == "" ? "" : key.Id == AbilityIds.Shoot ? $"{number} · Espacio" : number;
                 bar.Add(key);
@@ -256,14 +271,21 @@ namespace Bastion.UI.Combat
             return bar;
         }
 
-        /// <summary>
-        /// The keys with a number of their own, 1 to 9 and 0 (Arturo, 15/11: «las acciones siempre en el mismo número»): a
-        /// soldier's usual ten, in the order they had.
-        /// </summary>
+        /// <summary>A soldier's usual keys, in the order they go along the bar (their number is their place: T15).</summary>
         static readonly string[] Numbered = { AbilityIds.Shoot, AbilityIds.Slash, AbilityIds.Pistol, "menu:watch", "menu:throw", AbilityIds.Reload, AbilityIds.Hunker, AbilityIds.Hide, AbilityIds.FirstAid, "menu:investigate" };
 
-        /// <summary>`id`'s place among Numbered (its number less one; 9 is the 0); -1, none.</summary>
+        /// <summary>`id`'s place among Numbered; -1, none.</summary>
         static int Slot(string id) => Array.IndexOf(Numbered, id);
+
+        /// <summary>A menu's choices as one sentence (Lore, 18/11): the first capitalised, the last joined by «o».</summary>
+        static string ChoiceList(List<string> names)
+        {
+            var said = names.Count <= 1 ? string.Join("", names) : string.Join(", ", names.Take(names.Count - 1)) + " o " + names[names.Count - 1];
+            return said.Length > 0 ? char.ToUpperInvariant(said[0]) + said.Substring(1) : said;
+        }
+
+        /// <summary>Registrar's picture by what is searched (Looting.SearchSpot): a car's boot, a body, a box; none, the backpack.</summary>
+        static string SearchIcon(string spot) => spot == null ? null : spot == Looting.CarBoot || spot == Looting.PoliceBoot ? "search:car" : spot == Looting.Body ? "search:body" : "search:box";
 
         /// <summary>A box beside the soldier, opened or not, that its hands reach: a body at its feet too (SearchBeside).</summary>
         bool CrateBeside(Unit u) => SearchBeside(u) != null;

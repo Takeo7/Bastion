@@ -81,6 +81,11 @@ namespace Bastion.Engine
         /// saved before it existed: the first player to act takes it.
         /// </summary>
         public int? Command { get; set; } // Slot
+        /// <summary>
+        /// One player only (T2, Arturo 18/11): what asks for a soldier of the other player (Aim.PartnerNear, Rules.Bridged)
+        /// takes any comrade. Null with two, and in states of before.
+        /// </summary>
+        public bool? Solo { get; set; }
         /// <summary>The soldier in play (playtest 2026-10-15, #9): the holder finishes it before another; once it's done, the partner plays one of theirs.</summary>
         public string? ActiveUnit { get; set; }
         /// <summary>A player asked to evacuate from the bus and waits for the partner's yes (docs/PRUEBA-2026-10-14.md P1).</summary>

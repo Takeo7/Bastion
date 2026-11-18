@@ -27,6 +27,8 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 6f9436295675b0a4cbbfa6176cc476e0, type: 3}
   - Id: pistol
     Sprite: {fileID: 21300000, guid: 76a01d15da329774faff16bf89d49346, type: 3}
+  - Id: weapon:huntingRifle
+    Sprite: {fileID: 21300000, guid: ed68939f156bf584e8cd95bcf3939b6a, type: 3}
   - Id: weapon:pan
     Sprite: {fileID: 21300000, guid: 6dfd9f944c148704ea74e7cb66c48e07, type: 3}
   - Id: weapon:bat
@@ -83,6 +85,12 @@ MonoBehaviour:
     Sprite: {fileID: 21300000, guid: 8a65f66b8fbcf4248a5b819cb71edfeb, type: 3}
   - Id: searchRoom
     Sprite: {fileID: 21300000, guid: 8a65f66b8fbcf4248a5b819cb71edfeb, type: 3}
+  - Id: search:car
+    Sprite: {fileID: 21300000, guid: 73b06da295851fe4cb8197bfe5daa54b, type: 3}
+  - Id: search:body
+    Sprite: {fileID: 21300000, guid: e52e147582f5fcc40be69842669c83f2, type: 3}
+  - Id: search:box
+    Sprite: {fileID: 21300000, guid: 359da89d3c10fad4f9f14458aaa9ef59, type: 3}
   - Id: runAndGun
     Sprite: {fileID: 21300000, guid: ee63e40df78e38149a4fbe2ee6d77080, type: 3}
   - Id: rapidFire

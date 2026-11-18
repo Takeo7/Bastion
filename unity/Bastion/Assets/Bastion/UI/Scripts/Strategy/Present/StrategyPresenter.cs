@@ -49,14 +49,19 @@ namespace Bastion.UI.Strategy
         public TopView Top()
         {
             var c = State;
-            // The runs: the chapter and the stash's supplies, no more (no day, siege, rations nor Marea).
+            // The runs: the chapter and the stash's supplies, no more (no day, siege, rations nor Marea); out on an
+            // expedition, not the stash's either, which can't be spent there (Arturo, 18/11 T17: in the Trueque they read as
+            // money to pay with, next to what the soldiers carry).
             if (c.Stash != null)
-                return new TopView
+            {
+                var top = new TopView
                 {
                     Chapter = StrategyText.Runs.Chapter(c.Chapter ?? 1),
                     DayTip = Tip(StrategyText.Runs.Chapter(c.Chapter ?? 1), StrategyText.Runs.ChapterTip),
-                    Stores = { new StoreView { Id = "supplies", Value = Gears.Supplies(c.Stash).ToString(), TipName = StrategyText.Stash.Supplies, Tip = StrategyText.Sentences(StrategyText.Stash.SuppliesTip) } },
                 };
+                if (c.Run == null) top.Stores.Add(new StoreView { Id = "supplies", Value = Gears.Supplies(c.Stash).ToString(), TipName = StrategyText.Stash.Supplies, Tip = StrategyText.Sentences(StrategyText.Stash.SuppliesTip) });
+                return top;
+            }
             var level = Level;
             var v = new TopView
             {

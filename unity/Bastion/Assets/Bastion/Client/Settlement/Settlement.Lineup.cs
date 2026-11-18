@@ -62,6 +62,10 @@ namespace Bastion.Client
             public Animator animator;
             public FigureAnimator anim;
             public Transform gun;
+            /// <summary>Its gun's art (where the hands go on it: UnitViews.HoldAtRest); null, the pistol or none.</summary>
+            public WeaponArt art;
+            /// <summary>Whether what it holds is a melee weapon (in the right fist, UnitViews.HoldBladeAtRest; kept there getting in).</summary>
+            public bool blade;
             /// <summary>Whether that is the pistol, its only gun (held at rest by the thigh: UnitViews.HoldPistol), not a two-handed one.</summary>
             public bool pistol;
             public Quaternion? grip;
@@ -93,6 +97,15 @@ namespace Bastion.Client
         /// has one; Arturo's T6 of 18/11, «si todos empiezan con cuchillo ¿por qué aparecen con pistolas en la base?»: the
         /// campaign's Armería said nothing of the pistol, which reads as carrying one); else the Armería's, as before.
         /// </summary>
+        /// <summary>
+        /// What a soldier holds in the base: the Armería's weapon in the hand; with none, the pistol (null here, at the thigh)
+        /// if they carry one, else the blade at their belt, the knife unless said (Arms.Melee).
+        /// </summary>
+        internal static string InHand(Arms arms) => arms == null ? null : arms.Primary ?? (UnitViews.CarriesPistol(arms) ? null : arms.Melee ?? FoundWeaponIds.Knife);
+
+        /// <summary>The art of one of the Armería's weapons (FoundWeaponIds; the knife, the runs' gear, too); null, none.</summary>
+        internal static WeaponArt ArtOf(string weapon) => weapon == null ? null : Anims.Weapon(weapon == FoundWeaponIds.Knife ? "knife" : Anims.FoundModel(weapon));
+
         internal static Arms ArmsOf(CampaignState c, CampaignSoldier s) => Campaign.IsRuns(c) ? Runs.SquadMemberOf(c, s).Arms : Campaign.SoldierArms(c, s);
 
         /// <summary>
@@ -237,13 +250,17 @@ namespace Bastion.Client
             if (stander.animator != null && stander.animator.isHuman && catalog != null)
             {
                 stander.animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-                // The Armería's gun, or the pistol where there is none (syntyFigures.ts armamentOf), at rest by the thigh; with
-                // no pistol either (Arturo, 1/11), empty-handed.
+                // The Armería's weapon (a gun, or a blade in the right fist), or the pistol where there is none (syntyFigures.ts
+                // armamentOf), at rest by the thigh; with no pistol either, the knife (Arturo's T6, 18/11: who starts with the
+                // knife is seen with it; empty-handed since 1/11 till then).
                 var arms = ArmsOf(campaign, s);
-                string primary = arms?.Primary;
-                stander.gun = primary == null ? UnitViews.CarriesPistol(arms) ? UnitViews.Pistol(holder, catalog) : null : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(primary)), holder, catalog, out _);
-                stander.pistol = primary == null && stander.gun != null;
-                bool armed = stander.gun != null && !stander.pistol;
+                string inHand = InHand(arms);
+                stander.art = ArtOf(inHand);
+                stander.blade = stander.art?.melee == true;
+                stander.gun = inHand == null ? UnitViews.CarriesPistol(arms) ? UnitViews.Pistol(holder, catalog) : null
+                    : stander.blade ? UnitViews.Blade(stander.art, holder, catalog) : UnitViews.Gun(stander.art, holder, catalog, out _);
+                stander.pistol = inHand == null && stander.gun != null;
+                bool armed = stander.gun != null && !stander.pistol && !stander.blade;
                 var rests = Anims.RifleRests;
                 string rest = rests.Count > 0 ? rests[((index % rests.Count) + rests.Count) % rests.Count] : "rifleIdle";
                 // How it stands: with the pistol its way of waiting (PISTOL_RESTS), else its idle; wounded, part way down to
@@ -277,13 +294,14 @@ namespace Bastion.Client
             if (s.anim == null) return;
             if (dt <= 0) s.anim.Step(0);
             for (float left = dt; left > 1e-5f; left -= 0.1f) s.anim.Step(Mathf.Min(0.1f, left));
-            if (s.slung) KeepSlung(s);
+            if (s.blade) UnitViews.HoldBladeAtRest(s.animator, s.gun, s.root, s.art);
+            else if (s.slung) KeepSlung(s);
             else if (s.pistol)
             {
                 UnitViews.HoldPistol(s.animator, s.gun, s.root, 0, ref s.grip);
                 s.spread.Apply(s.animator, s.anim, s.gun, dt);
             }
-            else UnitViews.Hold(s.animator, s.gun, s.root, false, ref s.grip);
+            else UnitViews.HoldAtRest(s.animator, s.gun, s.root, s.art, ref s.grip);
         }
 
         /// <summary>Where place `i` of a lineup of `n` stands (Unity's world, on the ground: for the cards under them).</summary>

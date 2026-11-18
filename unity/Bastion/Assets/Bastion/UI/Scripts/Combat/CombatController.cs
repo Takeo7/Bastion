@@ -80,6 +80,8 @@ namespace Bastion.UI.Combat
 
         /// <summary>Whether a unit still has events to be seen (the event player's): its move's marks wait for them.</summary>
         public Func<string, bool> Busy = id => false;
+        /// <summary>Whether the event player is showing anything (EventPlayer.Busy): the turn camera waits for it (T16).</summary>
+        public Func<bool> Playing = () => false;
 
         /// <summary>The enemy's turn on screen (the event player's): the space bar hurries it then (Hurry), and gives no orders.</summary>
         public Func<bool> EnemyTurnPlaying = () => false;
@@ -397,7 +399,7 @@ namespace Bastion.UI.Combat
                 looking = null;
                 if (current?.Id == mineInPlay.Id) return;
                 picked = mineInPlay.Id;
-                TurnCamera(mineInPlay);
+                TurnCameraSoon(mineInPlay);
                 if (sameTurn) NextSoldier(current, mineInPlay);
                 return;
             }
@@ -419,10 +421,30 @@ namespace Bastion.UI.Combat
             {
                 // The camera only with the command: with the partner holding it (turns one soldier each), it goes to
                 // theirs as it passes (CommandPassedEvent), not to this one, who waits (Arturo, 15/11).
-                if (HasCommand()) TurnCamera(next);
+                if (HasCommand()) TurnCameraSoon(next);
                 if (sameTurn) NextSoldier(current, next);
             }
         }
+
+        /// <summary>
+        /// The camera to the soldier who comes in, once what plays now has been seen (Arturo, 18/11 T16: «al acabar el turno
+        /// de un soldado sigue sin ir la cámara al soldado que le toca»). The pick goes on as the order's state comes, before
+        /// its events are played; the camera sent then was taken back to the one acting by its own action's playing. Now it
+        /// waits for the event player to be done (Update), unless the pick has changed meanwhile.
+        /// </summary>
+        void TurnCameraSoon(Unit u)
+        {
+            if (u == null) return;
+            if (Playing()) turnAfter = u.Id;
+            else
+            {
+                turnAfter = null;
+                TurnCamera(u);
+            }
+        }
+
+        /// <summary>Who the camera goes to once the event player is done (TurnCameraSoon); null, nobody.</summary>
+        string turnAfter;
 
         /// <summary>The turn AutoSelect last saw.</summary>
         int autoTurn = -1;
@@ -708,6 +730,12 @@ namespace Bastion.UI.Combat
             guard ??= new App.QualityGuard(QualityLowered);
             guard.Frame();
             if (State == null) return;
+            if (turnAfter != null && !Playing())
+            {
+                var after = turnAfter;
+                turnAfter = null;
+                if (after == picked) TurnCamera(UnitById(State, after));
+            }
             if (Time.unscaledTime >= graceEnds) GraceOver();
             // An action sent whose events never came (a lost answer): its marks back after 2 s.
             if (sent != null && Time.realtimeSinceStartup - sentAt > 2f) TurnedDown();
@@ -1313,6 +1341,9 @@ namespace Bastion.UI.Combat
             if (enemy != null || u == null || dest == null) return;
             var path = Paths.BuildPath(State, u, reach, hover);
             Overlay?.ShowPath(State, u.Pos, path, dest.Dash, Planning);
+            // Where on it an enemy in sight would react (T20, Gameplay's Rules.ReactionsAlong): marked before moving.
+            if (Overlay != null && path != null && !Planning)
+                Overlay.ShowReactions(State, Rules.ReactionsAlong(State, u, path).Select(r => (r.Tile, UnitById(State, r.Unit)?.Pos)).ToList());
             Overlay?.ShowCover(State, CoverMatters() ? hover : null);
             Overlay?.ShowHover(State, hover, Planning ? MoveOverlay.PlanRing : dest.Detected ? MoveOverlay.NoticedRing : dest.Dash ? MoveOverlay.DashRing : MoveOverlay.WalkRing);
             // Into El Toro's line, his charge drawn to it before one stands there (Gameplay, 16/11).

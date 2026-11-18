@@ -31,6 +31,8 @@ namespace Bastion.UI.Strategy
                 BackTip = StrategyText.Runs.BackTip,
                 BackWhy = Runs.EndRunRefusal(c),
                 SquadHead = StrategyText.Runs.Squad,
+                Run = $"{run.Chapter}:{run.Seed}",
+                Fresh = run.At == null && run.Path.Count == 0,
             };
             foreach (var n in run.Nodes.OrderBy(n => n.Row).ThenBy(n => n.Col))
             {
@@ -155,7 +157,7 @@ namespace Bastion.UI.Strategy
                     foreach (var w in stop.Wares ?? new List<Ware>())
                         v.Wares.Add(new WareView
                         {
-                            Gear = Ware(w.Gear),
+                            Gear = Ware(w.Gear, buyer),
                             Price = w.Price.ToString(),
                             Why = Gears.BuyWareRefusal(c, Slot, Connected, new BuyWareCommand { Ware = w.Gear.Id, Soldier = buyer?.Id ?? "" }),
                         });
@@ -191,9 +193,10 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>A ware as the Trueque lists it (Lore.GearName): one, its name in the singular; more, how many and the plural («2 medicinas»).</summary>
-        static Gear.GearItemView Ware(Engine.Gear g)
+        static Gear.GearItemView Ware(Engine.Gear g, CampaignSoldier buyer)
         {
-            var v = Item(g);
+            // Against the soldier it would go to (T4).
+            var v = Item(g, Against(buyer));
             v.Name = Lore.GearName(g.Kind, g.Type, g.Count);
             return v;
         }
@@ -232,7 +235,7 @@ namespace Bastion.UI.Strategy
             switch (kind)
             {
                 case NodeKinds.Normal: return "kind:scavenge";
-                case NodeKinds.Elimination: case NodeKinds.Recovery: case NodeKinds.Sabotage: case NodeKinds.Hack: case NodeKinds.Rescue: return "kind:" + kind;
+                case NodeKinds.Elimination: case NodeKinds.Recovery: case NodeKinds.Sabotage: case NodeKinds.Rescue: return "kind:" + kind;
                 case NodeKinds.Stealth: return "hide";
                 default: return "node:" + kind;
             }

@@ -20,7 +20,7 @@ namespace Bastion.EditorTools
     /// of the generator's, city 7, a Saqueo, to set the plaza against); each
     /// as the game draws it (its units, its fog as the squad sees, its animals, its weather),
     /// the game's camera over the enemy at each of BASTION_DISTANCIAS (24 and 33.5 tiles, the farthest), at each of
-    /// BASTION_CALIDAD (Medio, Alto), 1920×1080, in each of BASTION_VARIANTES in turns three times, the least of each (frames
+    /// BASTION_CALIDAD (Medio, Alto), 1920×1080, in each of BASTION_VARIANTES in turns three times (BASTION_VUELTAS), the least of each (frames
     /// waited for, a pixel read back: no vsync to hold them):
     ///   base: as it is. lejos: the camera's far plane where the ground it can see ends. residente: URP's GPU Resident
     ///   Drawer (its renderer in Forward+). oclusion: that and its GPU occlusion culling. fusion: the map's still things
@@ -42,6 +42,7 @@ namespace Bastion.EditorTools
     ///   MaterialPropertyBlocks, the palette's, the tint's and the fade's, which keep a renderer out of the SRP Batcher),
     ///   horneadas (each skinned body baked into a still mesh where it stands: drawn the same, nothing skinned; measured
     ///   last, as fusion, for it can't be undone).
+    ///   And T7's cinematic looks (CineLab): cine-0 (the game's, as juego), cine-A1, cine-A2… each over it.
     /// Each frame's time, and of it the camera.Render call alone (the CPU's: culling, the passes, the draws handed on; the
     /// rest is waiting for the GPU). And the figures' step on the CPU (UnitViews, ms for a 60th of a second, the least of
     /// 60), all of them and only those seen (UnitViews.CullOutOfPlay); how many renderers and materials each figure and
@@ -296,11 +297,14 @@ namespace Bastion.EditorTools
             int was = QualitySettings.GetQualityLevel();
             var distances = (Environment.GetEnvironmentVariable("BASTION_DISTANCIAS") ?? "24,33.5").Split(',').Select(v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToList();
             var asked = (Environment.GetEnvironmentVariable("BASTION_VARIANTES") ?? "base,lejos,forward,residente,oclusion,fusion").Split(',');
+            // (BASTION_VUELTAS: the turns, 3 unless said; more for what costs a few tenths of a ms.)
+            int turns = int.TryParse(Environment.GetEnvironmentVariable("BASTION_VUELTAS"), out int t) && t > 0 ? t : 3;
             // (The merge can't be undone: it is measured last, on its own, after the rest.)
             Run(asked.Where(v => v != "fusion" && v != "horneadas").ToArray());
             if (asked.Contains("fusion")) Run(new[] { "fusion" });
             if (asked.Contains("horneadas")) Run(new[] { "horneadas" });
             QualitySettings.SetQualityLevel(was, true);
+            CineLab.Fixed = null;
             camera.targetTexture = null;
             UnityEngine.Object.DestroyImmediate(target);
             UnityEngine.Object.DestroyImmediate(half);
@@ -340,6 +344,9 @@ namespace Bastion.EditorTools
                 bool baked = false;
                 void Put(string variant, float tiles)
                 {
+                    // (T7: a cinematic look of CineLab's over the game's, «cine-A1»…; «cine-0», the game's as it is, to set them
+                    // against. Once one has been, the rest go back to the game's.)
+                    CineLab.Fixed = variant.StartsWith("cine-") ? variant.Substring(5) : CineLab.Fixed == null ? null : "0";
                     renderer.Update();
                     bool plus = variant == "forward" || variant == "residente" || variant == "oclusion";
                     renderer.FindProperty("m_RenderingMode").intValue = plus ? 2 : mode;
@@ -430,7 +437,7 @@ namespace Bastion.EditorTools
                     camera.fieldOfView = 40;
                     var least = variants.ToDictionary(v => v, v => double.MaxValue);
                     var cpu = variants.ToDictionary(v => v, v => double.MaxValue);
-                    for (int turn = 0; turn < 3; turn++)
+                    for (int turn = 0; turn < turns; turn++)
                         foreach (string variant in variants)
                         {
                             Put(variant, tiles);

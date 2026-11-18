@@ -131,6 +131,8 @@ namespace Bastion.UI.Strategy
             gear = new GearBoard(root, tips, Icon, gearRelay) { PictureOf = (k, t) => GearPictureOf?.Invoke(k, t) };
             stash = new StashScreen(root.Q("view"), tips, Icon, relay, gear);
             runMap = new RunMapScreen(root.Q("view"), tips, Icon, relay, gear);
+            // Almacén's and the map's soldiers by their busts (Arturo, 18/11 T5).
+            stash.Kits.PortraitOf = runMap.Kits.PortraitOf = id => PortraitOf?.Invoke(id);
             upgrades = new UpgradesScreen(root.Q("view"), tips, relay);
             skillBoard = new SkillBoardModal(root.Q("board"), relay, s => Sound?.Invoke(s), tips) { PortraitOf = id => PortraitOf?.Invoke(id) };
             toast = root.Q<Label>("toast");
@@ -188,6 +190,8 @@ namespace Bastion.UI.Strategy
             if (lastSquad != null) squad.Set(lastSquad);
             if (lastDebrief != null) debrief.Set(lastDebrief);
             if (lastBoard != null) skillBoard.Set(lastBoard);
+            stash.Kits.Repaint();
+            runMap.Kits.Repaint();
             Dress();
         }
 
@@ -448,8 +452,11 @@ namespace Bastion.UI.Strategy
             return out_;
         }
 
-        /// <summary>stage.ts PANELS: what a fitted shot of the clearing keeps clear of.</summary>
-        static readonly string[] ShotPanels = { "strat-top", "strat-nav", "strat-side", "squad-bottom", "debrief-card" };
+        /// <summary>
+        /// stage.ts PANELS: what a fitted shot of the clearing keeps clear of; Personalizar's rank and name plates at the top
+        /// and its buttons at the foot too (T1: Arte's fitted figure had its head under the name and its feet under them).
+        /// </summary>
+        static readonly string[] ShotPanels = { "strat-top", "strat-nav", "strat-side", "squad-bottom", "debrief-card", "custom-top__kicker", "custom-top__name", "custom-bar" };
 
         /// <summary>On screen: it and all that holds it laid out (a hidden screen's panels keep their own display).</summary>
         static bool Shown(VisualElement e)

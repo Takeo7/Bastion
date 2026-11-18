@@ -1851,11 +1851,21 @@ namespace Bastion.UI.Combat
                     var steps = units.StepSeconds(u.Id, u.Pos, m.Path, Gait(m), pace);
                     var reveal = 0f;
                     for (var k = 0; k < into && k < steps.Length; k++) reveal += steps[k] + (waits != null && k < waits.Length ? waits[k] : 0);
-                    // Every other tile reached, a step heard (sfx.ts step), the shade in the fog's too.
+                    // Every other tile reached, a step heard (sfx.ts step), the shade in the fog's too. One of the squad walking
+                    // opens the fog and shows whom it sees tile by tile, not only once there (Arturo, 18/11 T18): the view put
+                    // on each tile as it gets to it (Gameplay's Events.MoveStep), the figures, and the fog's sight alone (Arte's
+                    // sightOnly), which takes the line of sight the figures' Sync has just worked out (Arte: ~2 ms a tile); the
+                    // whole event is applied after the last, as ever.
                     var stepped = 0;
+                    var sees = !grouped && u.Team == Teams.Xcom && Los.IsViewer(u, Teams.Xcom);
                     Action<Vector3> step = foot =>
                     {
-                        if (stepped++ % 2 == 0) control.Sfx.Step(u, foot);
+                        var at = stepped++;
+                        if (at % 2 == 0) control.Sfx.Step(u, foot);
+                        if (!sees) return;
+                        Events.MoveStep(V, m, at);
+                        units.Sync(V);
+                        Bastion.Client.Map.Fog.Current?.Show(V, false, sightOnly: true);
                     };
                     var walk = plan != null
                         ? units.MoveAlong(u.Id, m.Path, Gait(m), pace, waits, passes, step, stop)

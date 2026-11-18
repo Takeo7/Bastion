@@ -97,7 +97,6 @@ namespace Bastion.Engine.Tests
                 [NodeKinds.Elimination] = MissionKinds.Elimination,
                 [NodeKinds.Recovery] = MissionKinds.Recovery,
                 [NodeKinds.Sabotage] = MissionKinds.Sabotage,
-                [NodeKinds.Hack] = MissionKinds.Hack,
                 [NodeKinds.Rescue] = MissionKinds.Rescue,
                 [NodeKinds.Hold] = MissionKinds.Scavenge,
                 [NodeKinds.Crossing] = MissionKinds.Scavenge,

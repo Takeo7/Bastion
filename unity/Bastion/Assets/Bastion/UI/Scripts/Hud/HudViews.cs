@@ -388,7 +388,7 @@ namespace Bastion.UI.Hud
         public bool Enabled;
         /// <summary>Why it can't be used now (the card's last line).</summary>
         public string Reason;
-        /// <summary>What to do first, on the key itself (#24: «Sin balas: recarga»).</summary>
+        /// <summary>What to do first, on the key itself (#24: «Cargador vacío: recarga»).</summary>
         public string Note;
         public string Name;
         public string Cost;

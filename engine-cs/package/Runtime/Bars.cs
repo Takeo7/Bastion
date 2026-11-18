@@ -145,7 +145,8 @@ namespace Bastion.Engine
             [SkillIds.Melee] = new SkillDef { Id = SkillIds.Melee, Name = "Cuerpo a cuerpo", Short = "CaC", Line = "Se llena golpeando con la hoja, más si se acierta y más si se abate.", Stat = "Puntería cuerpo a cuerpo" },
             [SkillIds.Throwing] = new SkillDef { Id = SkillIds.Throwing, Name = "Lanzar", Short = "LAN", Line = "Se llena lanzando piedras y granadas, más si alcanzan a alguien.", Stat = "Alcance al lanzar" },
             [SkillIds.Medicine] = new SkillDef { Id = SkillIds.Medicine, Name = "Curar", Short = "CUR", Line = "Se llena curando con el botiquín o con medicinas; más si es a otro.", Stat = "Curación" },
-            [SkillIds.Searching] = new SkillDef { Id = SkillIds.Searching, Name = "Investigar", Short = "INV", Line = "Se llena registrando habitaciones, abriendo cajas, arreglando equipos y apagando alarmas.", Stat = "Destreza al arreglar" },
+            // T2 (Arturo, 18/11): Investigar is Registrar, its figure the luck of finding something more.
+            [SkillIds.Searching] = new SkillDef { Id = SkillIds.Searching, Name = "Registrar", Short = "REG", Line = "Se llena registrando habitaciones y cuerpos, abriendo cajas y maleteros, y apagando alarmas.", Stat = "Suerte al registrar" },
             [SkillIds.Fitness] = new SkillDef { Id = SkillIds.Fitness, Name = "Forma física", Short = "FOR", Line = "Se llena cubriéndose, gastando todo el movimiento del turno y recibiendo daño; más si la esquiva deja el impacto en rozadura.", Stat = "Esquiva" },
         };
 
@@ -252,7 +253,7 @@ namespace Bastion.Engine
                 case SkillIds.Medicine:
                     return Content.MedkitHeal;
                 case SkillIds.Searching:
-                    return Content.HackBase;
+                    return Content.SearchLuck;
                 default:
                     return DodgeBase;
             }
@@ -282,7 +283,7 @@ namespace Bastion.Engine
                     mods.Heal = more;
                     break;
                 case SkillIds.Searching:
-                    mods.Hack = more;
+                    mods.SearchLuck = more;
                     break;
                 case SkillIds.Fitness:
                     mods.Dodge = more;

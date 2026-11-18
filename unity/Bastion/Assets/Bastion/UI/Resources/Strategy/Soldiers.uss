@@ -645,6 +645,108 @@
     -unity-background-image-tint-color: #ff7ad9;
 }
 
+/* Personalizar as a carousel round the figure (Arturo, 18/11 T1, the mock-up B). */
+.custom-top {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 58px;
+    align-items: center;
+}
+
+/* On a dark plate over the clearing's sky (its grey kicker was lost on it). */
+.custom-top > * {
+    padding: 0 12px;
+    background-color: rgba(12, 14, 15, 0.78);
+}
+
+.custom-top__kicker {
+    padding-top: 4px;
+}
+
+.custom-top__name {
+    padding-bottom: 2px;
+}
+
+.custom-top__kicker {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    color: var(--t-muted);
+}
+
+.custom-top__name {
+    font-size: 30px;
+    letter-spacing: 1px;
+    color: #ffffff;
+}
+
+.custom-carousel {
+    margin-top: 10px;
+}
+
+.custom-carousel__row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.custom-carousel__arrow {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    font-size: 24px;
+    -unity-text-align: middle-center;
+}
+
+.custom-carousel__value {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin: 0 8px;
+    font-size: 17px;
+    color: #ffffff;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.custom-carousel__count {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--t-muted);
+    -unity-text-align: upper-center;
+}
+
+.custom-segments {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.custom-segments__choice {
+    flex-grow: 1;
+    height: 40px;
+    margin: 0 4px 0 0;
+    font-size: 14px;
+}
+
+.custom-segments__choice--on {
+    color: var(--t-primary-ink);
+    background-color: var(--t-primary);
+    border-color: var(--t-primary);
+}
+
+.custom-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 8px 10px;
+    background-color: var(--t-panel);
+}
+
+.custom-bar Button {
+    margin: 0 4px;
+    font-size: 13px;
+}
+
 .custom__actions,
 .custom__foot {
     flex-direction: row;
@@ -1017,6 +1119,19 @@
     border-radius: 0;
 }
 
+/* A run's kit round the figure (T3): taller, the thing's name under its picture. */
+.gear-tile--kit {
+    height: 104px;
+}
+
+.gear-tile__value {
+    padding: 0 3px 2px;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    color: #ffffff;
+}
+
 .gear-tile:hover {
     background-color: rgba(30, 32, 34, 0.85);
     border-color: rgba(255, 255, 255, 0.85);
@@ -1053,6 +1168,12 @@
 .gear-tile__plus {
     width: 24px;
     height: 24px;
+}
+
+/* An empty place of a run's kit (T3): «Nada», faint, nothing to add here. */
+.gear-tile__none {
+    font-size: 12px;
+    color: var(--t-muted);
 }
 
 .gear-tile__plus .steel-plus__bar--across {

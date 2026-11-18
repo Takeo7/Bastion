@@ -697,8 +697,12 @@ namespace Bastion.UI.Strategy
         {
             // An absolute path (a dump of the pass), or one of Gameplay's by name.
             var path = which.StartsWith("/") ? which : System.IO.Path.Combine(Application.dataPath, "../../../.dev-snapshots/gameplay/runs/muestras", which + ".json");
-            var state = Bastion.Net.Json.Read<Bastion.Engine.CampaignState>(System.IO.File.ReadAllText(path));
+            // Brought up to today's version as the room does a save it loads (Campaign.MigrateRuns: the 18/11 samples
+            // still had a Superviviente stop, gone with N3, and 4 seats).
+            var state = Bastion.Engine.Campaign.MigrateRuns(Bastion.Net.Json.Read<Bastion.Engine.CampaignState>(System.IO.File.ReadAllText(path)));
             var p = new StrategyPresenter { State = state, Slot = 0, Seats = SampleCampaign.Seats(state.Players.Count > 1) };
+            // Their busts, as BaseController asks for them with each campaign (Almacén's and the map's tabs, T5).
+            Bastion.Client.Portraits.Know(state);
             var gear = new RunsGear(p, () => Show(p, null));
             root.BindGear(gear);
             runsShow = id => Show(p, id);
@@ -742,16 +746,36 @@ namespace Bastion.UI.Strategy
                     },
                 };
             }
-            var view = p.State.Run != null && (scene == null || scene == "respondido") ? "runmap" : scene == "parte" ? "debrief" : scene == "mejoras" ? "upgrades" : scene == "salir" ? "squad" : scene == "soldados" ? "barracks" : "stash";
+            var view = p.State.Run != null && (scene == null || scene == "respondido") ? "runmap" : scene == "parte" ? "debrief" : scene == "mejoras" ? "upgrades" : scene == "salir" ? "squad" : scene == "soldados" || scene == "personalizar" ? "barracks" : "stash";
             root.SetTop(p.Top());
             root.SetNav(p.Nav(view));
             root.SetScreen(view);
+            // «personalizar»: Personalizar open on the player's first soldier, the draft as they are (T1).
+            var pick = new SoldiersPick { Soldier = runsChosen ?? p.State.Soldiers.FirstOrDefault(s => s.Owner == 0 && s.Alive)?.Id };
+            if (scene == "personalizar" && p.State.Soldiers.Find(s => s.Id == pick.Soldier) is Bastion.Engine.CampaignSoldier own)
+                pick.Draft = new CustomDraft { Soldier = own.Id, Name = own.Name, Nickname = own.Nickname ?? "", Look = CustomDraft.Copy(own.Appearance) ?? Bastion.Engine.Appearances.DefaultAppearance(own.Owner, null, null, own.Id) };
             if (view == "runmap") root.SetRunMap(p.Expedition(runsChosen));
             else if (view == "upgrades") root.SetUpgrades(p.Upgrades());
             else if (view == "squad") root.SetSquad(p.RunSquad());
-            else if (view == "barracks") root.SetSoldiers(p.Soldiers(new SoldiersPick { Soldier = runsChosen }));
+            else if (view == "barracks") root.SetSoldiers(p.Soldiers(pick));
             else if (view == "debrief") root.SetDebrief(p.Debrief());
             else root.SetStash(p.StashScreen(runsChosen));
+            // In Arte's scene «Base»: the runs' clearing as BaseController shows it, the tab's shot, and Soldados' soldier (with
+            // the draft's look while customizing).
+            if (Bastion.Client.Settlement.Instance is Bastion.Client.Settlement clearing)
+            {
+                clearing.SetVehicle(Bastion.Engine.Runs.VehicleOf(p.State));
+                clearing.ShowFixed();
+                clearing.SetView(view == "stash" ? "barracks" : view == "runmap" ? "geoscape" : view == "upgrades" ? "facilities" : view, true);
+                clearing.Customizing = view == "barracks" && pick.Draft != null;
+                if (view == "barracks") clearing.Showcase(p.State, pick.Soldier, pick.Draft?.Look);
+                // Almacén's chosen soldier, and the squad by La Lata (the debrief's), as BaseController.Dress does (Arte, 18/11:
+                // «Partir» showed the cards over nobody).
+                if (view == "stash") clearing.Showcase(p.State, p.StashScreen(runsChosen)?.Kit?.Soldier, null);
+                var report = view == "debrief";
+                var (mirror, halves) = p.LineupSides(report);
+                clearing.SetLineup(p.State, p.Lineup(report), mirror, halves);
+            }
         }
 
         string runsChosen;

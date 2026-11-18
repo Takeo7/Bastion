@@ -20,6 +20,10 @@ namespace Bastion.Client
         Animator showAnimator;
         FigureAnimator showAnim;
         Transform showGun;
+        /// <summary>Its gun's art (where the hands go on it: UnitViews.HoldAtRest).</summary>
+        WeaponArt showArt;
+        /// <summary>Whether what it holds is a melee weapon (in the right fist: UnitViews.HoldBladeAtRest).</summary>
+        bool showBlade;
         /// <summary>Whether that is the pistol (their only gun), held by the thigh.</summary>
         bool showPistol;
         Quaternion? showGrip;
@@ -52,7 +56,7 @@ namespace Bastion.Client
                 return;
             }
             var arms = ArmsOf(campaign, s);
-            Showcase(s.Id, look ?? s.Appearance, s.Alive ? arms.Primary : null, !s.Alive, s.Name, SquadTint.ColourOf(s.Owner), UnitViews.CarriesPistol(arms));
+            Showcase(s.Id, look ?? s.Appearance, s.Alive ? InHand(arms) : null, !s.Alive, s.Name, SquadTint.ColourOf(s.Owner), UnitViews.CarriesPistol(arms));
         }
 
         /// <summary>
@@ -117,9 +121,12 @@ namespace Bastion.Client
             string rest = null;
             if (showAnimator != null && showAnimator.isHuman && catalog != null)
             {
-                showGun = weapon == null ? pistol ? UnitViews.Pistol(showFigure, catalog) : null : UnitViews.Gun(Anims.Weapon(Anims.FoundModel(weapon)), showFigure, catalog, out _);
+                showArt = ArtOf(weapon);
+                bool blade = showArt?.melee == true;
+                showGun = weapon == null ? pistol ? UnitViews.Pistol(showFigure, catalog) : null : blade ? UnitViews.Blade(showArt, showFigure, catalog) : UnitViews.Gun(showArt, showFigure, catalog, out _);
                 showPistol = weapon == null && showGun != null;
-                bool armed = showGun != null && !showPistol;
+                showBlade = blade && showGun != null;
+                bool armed = showGun != null && !showPistol && !showBlade;
                 rest = UnitViews.RestFor(soldierId);
                 // As the battle's (UnitViews.Make): a gun in the hands, Mixamo's armed idle where there is one; the pistol
                 // by the thigh, its way of waiting (PISTOL_RESTS) the body's.
@@ -206,7 +213,8 @@ namespace Bastion.Client
                     UnitViews.HoldPistol(showAnimator, showGun, showFigure, 0, ref showGrip);
                     showSpread.Apply(showAnimator, showAnim, showGun, dt);
                 }
-                else UnitViews.Hold(showAnimator, showGun, showFigure, false, ref showGrip);
+                else if (showBlade) UnitViews.HoldBladeAtRest(showAnimator, showGun, showFigure, showArt);
+                else UnitViews.HoldAtRest(showAnimator, showGun, showFigure, showArt, ref showGrip);
             }
         }
 

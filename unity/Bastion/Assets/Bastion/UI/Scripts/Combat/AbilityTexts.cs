@@ -13,8 +13,8 @@ namespace Bastion.UI.Combat
     /// </summary>
     public static class AbilityTexts
     {
-        /// <summary>Out of rounds in the magazine, on the key itself (Ana, 20/10 #24).</summary>
-        public const string ReloadFirst = "Sin balas: recarga";
+        /// <summary>Out of rounds in the magazine, on the key itself (Ana, 20/10 #24); a magazine counts shots (Lore, 18/11).</summary>
+        public const string ReloadFirst = "Cargador vacío: recarga";
 
         /// <summary>
         /// Why a choice of Lanzar is off when none are left (Lore, 28/10), instead of the engine's «No quedan usos.»: by
@@ -51,7 +51,7 @@ namespace Bastion.UI.Combat
             new Menu { Id = "menu:watch", Name = "Vigilancia", Icon = AbilityIds.Overwatch, Members = new[] { AbilityIds.Overwatch, AbilityIds.OverwatchMelee }, Shows = (v, crate) => true },
             // The molotov before the grenades, as it comes before them (Arturo, 01/11 #10).
             new Menu { Id = "menu:throw", Name = "Lanzar", Icon = AbilityIds.Stone, Members = new[] { AbilityIds.Stone, AbilityIds.Molotov, AbilityIds.Grenade, AbilityIds.Smoke, AbilityIds.Flashbang }, Shows = (v, crate) => true },
-            new Menu { Id = "menu:investigate", Name = "Investigar", Icon = AbilityIds.SearchRoom, Members = new[] { AbilityIds.SearchRoom, AbilityIds.Search }, Shows = (v, crate) => v.Id == AbilityIds.SearchRoom || crate },
+            new Menu { Id = "menu:investigate", Name = "Registrar", Icon = AbilityIds.SearchRoom, Members = new[] { AbilityIds.SearchRoom, AbilityIds.Search }, Shows = (v, crate) => v.Id == AbilityIds.SearchRoom || crate },
         };
 
         public static bool IsMenu(string id) => id != null && id.StartsWith("menu:", StringComparison.Ordinal);

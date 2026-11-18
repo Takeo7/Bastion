@@ -196,7 +196,9 @@ namespace Bastion.Client.Units
         static readonly Dictionary<string, string[]> FoundModels = new Dictionary<string, string[]>
         {
             ["assaultRifle"] = new[] { "rifle", "rifle2", "rifle3" },
-            ["pumpShotgun"] = new[] { "shotgun" },
+            // (Police Station's pump with its pistol grip, Arturo's choice of 18/11 in T22; Apocalypse's short one with its taped
+            // stock for the sawn-off alone.)
+            ["pumpShotgun"] = new[] { "shotgunPump" },
             ["precisionRifle"] = new[] { "sniper", "sniper2", "sniper2" },
             ["machineGun"] = new[] { "machineGun" },
             ["machete"] = new[] { "machete" },

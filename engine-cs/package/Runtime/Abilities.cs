@@ -137,7 +137,15 @@ namespace Bastion.Engine
         {
             var def = Content.Abilities[ability];
             if (def.Ap == 0) return 0;
+            // De un vistazo (T2): a room searched without an action, once a fight.
+            if (QuickLook(u, ability)) return 0;
             return Content.IsAttack(ability) ? Math.Max(def.Ap, Content.AttackWeapon(u, ability).ApCost) : def.Ap;
+        }
+
+        /// <summary>Whether `ability` is a room searched with De un vistazo's use (T2): free of an action, its use spent.</summary>
+        public static bool QuickLook(Unit u, string ability)
+        {
+            return ability == AbilityIds.SearchRoom && u.Charges.TryGetValue(ChargeIds.QuickLook, out var n) && n > 0;
         }
 
         /// <summary>Whether using the ability spends every action left (perks can lift that).</summary>
@@ -225,7 +233,7 @@ namespace Bastion.Engine
             var need = ApNeeded(u, ability);
             // A door is part of moving (docs/PRUEBA-2026-11-05-ARTURO.md #14, movement apart from the actions): with
             // movement left and no actions, it still opens and shuts.
-            if (u.Ap <= 0 && !(Doors.Contains(ability) && Paths.HasTurnLeft(u))) return "Sin acciones.";
+            if (u.Ap <= 0 && !(Doors.Contains(ability) && Paths.HasTurnLeft(u)) && !QuickLook(u, ability)) return "Sin acciones.";
             if (u.Ap < need) return need == 2 ? "Necesita 2 acciones y le queda 1." : "Sin acciones.";
             var cooldown = u.Cooldowns.TryGetValue(ability, out var cd) ? cd : 0;
             if (cooldown > 0) return $"Disponible en {cooldown} {(cooldown == 1 ? "turno" : "turnos")}.";
@@ -455,7 +463,7 @@ namespace Bastion.Engine
             var def = Content.Abilities[ability];
             if (def.Target != Engine.AbilityTargets.Tile || !Grid.InBounds(s, tile.X, tile.Y)) return false;
             if (Grid.Distance(u.Pos, tile) > AbilityRange(u, ability)) return false;
-            if (ability == AbilityIds.Search) return Looting.IsSearchable(s, tile) && Looting.ReachesToOpen(s, u.Pos, tile);
+            if (ability == AbilityIds.Search) return Looting.IsSearchable(s, tile) && Looting.ReachesToOpen(s, u.Pos, tile, 1 + Math.Max(0, u.Mods.SearchReach));
             if (ability == AbilityIds.OpenDoor || ability == AbilityIds.CloseDoor) return DoorTiles(s, u, ability == AbilityIds.OpenDoor ? TileKinds.Door : TileKinds.DoorOpen).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Smash) return BreakablesBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Pry) return BoardedBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));

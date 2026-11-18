@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Bastion.UI.Gear;
 using Bastion.UI.Hud;
 using UnityEngine;
@@ -27,11 +28,27 @@ namespace Bastion.UI.Strategy
         readonly Label line;
         readonly Button back;
         readonly KitPanel squad;
+        /// <summary>The squad's tabs and kits on the right (their busts: StrategyRoot).</summary>
+        public KitPanel Kits => squad;
         readonly StopPlate stop;
         readonly TooltipLayer tips;
         readonly Func<string, Sprite> icon;
         readonly IStrategyHandlers handlers;
-        readonly List<(Vector2 a, Vector2 b, int kind)> segments = new List<(Vector2, Vector2, int)>();
+        readonly List<(Vector2 a, Vector2 b, int kind, int row)> segments = new List<(Vector2, Vector2, int, int)>();
+
+        /// <summary>
+        /// The map building itself as an expedition starts (Arturo, 18/11 T9: «que el mapa al darle a empezar una run haga
+        /// como una animación de construirse»): the rows from the bottom, each stage fading in and growing, the ways to it
+        /// drawn from where they start just before; once an expedition (the last one built), under two seconds. On the
+        /// battle's clock (the base's runs at 1): captures step it frame by frame, so a strip shows it.
+        /// </summary>
+        static string built;
+        float buildAt = -1;
+        int buildRows;
+        IVisualElementScheduledItem building;
+        readonly List<(VisualElement e, int row)> rising = new List<(VisualElement, int)>();
+        const float RowFirst = 0.25f, RowGap = 0.2f, Pop = 0.3f, Way = 0.22f;
+        static float RowAt(int row) => RowFirst + row * RowGap;
         string key;
         bool shown;
         RunMapView view;
@@ -55,7 +72,7 @@ namespace Bastion.UI.Strategy
             Ui.AddClasses(back, "runmap-back font-title");
             plate.Add(back);
             stop = new StopPlate(plate, tips, icon, handlers);
-            squad = new KitPanel(view, "strat-side strat-side--right panel stash-right runmap-squad", tips, handlers, board);
+            squad = new KitPanel(view, "strat-side strat-side--right panel stash-right runmap-squad", tips, handlers, board) { Icon = icon };
             Show(false);
         }
 
@@ -99,12 +116,22 @@ namespace Bastion.UI.Strategy
             var start = Place(0, 0, 1);
             foreach (var n in v.Nodes) at[n.Id] = Place(n.Row, n.Col, Math.Max(1, n.Cols));
 
+            // A new expedition's map, the first time it is seen: built (T9).
+            if (v.Fresh && v.Run != null && v.Run != built)
+            {
+                built = v.Run;
+                buildAt = Time.time;
+                buildRows = v.Nodes.Count > 0 ? v.Nodes.Max(n => n.Row) : 0;
+            }
+            else if (!Building) buildAt = -1;
+            rising.Clear();
+            var rowOf = v.Nodes.ToDictionary(n => n.Id, n => n.Row);
             segments.Clear();
             foreach (var l in v.Links)
             {
                 var a = l.From == null ? start : at.TryGetValue(l.From, out var pa) ? pa : start;
                 if (!at.TryGetValue(l.To, out var b)) continue;
-                segments.Add((a, b, l.Taken ? 3 : l.Open ? 2 : l.Dim ? 0 : 1));
+                segments.Add((a, b, l.Taken ? 3 : l.Open ? 2 : l.Dim ? 0 : 1, rowOf.TryGetValue(l.To, out var row) ? row : 0));
             }
             // The dim under, the way taken over all.
             segments.Sort((x, y) => x.kind.CompareTo(y.kind));
@@ -161,9 +188,10 @@ namespace Bastion.UI.Strategy
                     badge.pickingMode = PickingMode.Ignore;
                     IconIn(badge, n.AddedIcon, "rnode__mod-icon");
                 }
-                if (!n.Hidden) Name(p, side, n.Name, open ? "rnode__name rnode__name--open" : "rnode__name");
+                if (!n.Hidden) Rise(Name(p, side, n.Name, open ? "rnode__name rnode__name--open" : "rnode__name"), n.Row);
                 // A Rescate with no seat left (N2): said under its name, before choosing it.
-                if (!n.Hidden && !string.IsNullOrEmpty(n.Warn)) Name(p + new Vector2(0, 15), side, n.Warn, "rnode__name rnode__warn");
+                if (!n.Hidden && !string.IsNullOrEmpty(n.Warn)) Rise(Name(p + new Vector2(0, 15), side, n.Warn, "rnode__name rnode__warn"), n.Row);
+                Rise(el, n.Row);
                 if (n.At) Here(p, side);
                 var node = n;
                 var card = node.Card.FindAll(l => !string.IsNullOrEmpty(l));
@@ -184,13 +212,52 @@ namespace Bastion.UI.Strategy
         }
 
         /// <summary>A stage's name under it.</summary>
-        void Name(Vector2 p, float side, string text, string classes)
+        Label Name(Vector2 p, float side, string text, string classes)
         {
-            if (string.IsNullOrEmpty(text)) return;
+            if (string.IsNullOrEmpty(text)) return null;
             var l = Ui.Text(text, classes, field);
             l.pickingMode = PickingMode.Ignore;
             l.style.left = p.x - 80;
             l.style.top = p.y + side / 2 + 3;
+            return l;
+        }
+
+        bool Building => buildAt >= 0 && Time.time - buildAt < RowAt(buildRows) + Pop;
+
+        /// <summary>A stage's mark (or its name) of `row`, to come up as the map builds: hidden till its time (Grow).</summary>
+        void Rise(VisualElement e, int row)
+        {
+            if (e == null || buildAt < 0) return;
+            rising.Add((e, row));
+            Grow(e, row, Time.time - buildAt);
+            building ??= field.schedule.Execute(Tick).Every(16);
+            building.Resume();
+        }
+
+        static void Grow(VisualElement e, int row, float t)
+        {
+            var f = Mathf.Clamp01((t - RowAt(row)) / Pop);
+            var eased = 1 - (1 - f) * (1 - f);
+            e.style.opacity = f;
+            var s = Mathf.Lerp(0.4f, 1, eased);
+            e.style.scale = new Scale(new Vector3(s, s, 1));
+        }
+
+        /// <summary>The build's frame: each mark as far as its row has come, the ways redrawn; done, all as they are.</summary>
+        void Tick()
+        {
+            var t = Time.time - buildAt;
+            foreach (var (e, row) in rising) Grow(e, row, t);
+            links.MarkDirtyRepaint();
+            if (Building) return;
+            foreach (var (e, _) in rising)
+            {
+                e.style.opacity = StyleKeyword.Null;
+                e.style.scale = StyleKeyword.Null;
+            }
+            rising.Clear();
+            buildAt = -1;
+            building?.Pause();
         }
 
         /// <summary>«Aquí» to the left of where the squad is (over it, it met the name of the stage above).</summary>
@@ -218,8 +285,12 @@ namespace Bastion.UI.Strategy
         {
             var p = ctx.painter2D;
             p.lineCap = LineCap.Round;
-            foreach (var (a, b, kind) in segments)
+            var t = Time.time - buildAt;
+            foreach (var (a, b, kind, row) in segments)
             {
+                // Building: each way drawn from where it starts, just before its stage comes up (T9).
+                var f = buildAt < 0 ? 1 : Mathf.Clamp01((t - RowAt(row) + Way) / Way);
+                if (f <= 0) continue;
                 switch (kind)
                 {
                     case 0: p.strokeColor = new Color(1, 1, 1, 0.08f); p.lineWidth = 2; break;
@@ -229,7 +300,7 @@ namespace Bastion.UI.Strategy
                 }
                 p.BeginPath();
                 p.MoveTo(a);
-                p.LineTo(b);
+                p.LineTo(Vector2.Lerp(a, b, f));
                 p.Stroke();
             }
         }

@@ -123,7 +123,7 @@ namespace Bastion.Engine
             var need = Abilities.ApNeeded(u, ability);
             // In real time nothing counts actions: its time is what an ability costs (realtime.ts).
             var ap = S.Realtime != null ? 0 : ability == AbilityIds.RunAndGun ? -1 : Abilities.EndsTurn(u, ability) ? Math.Max(u.Ap, need) : need;
-            Emit(new AbilityUsedEvent { Unit = u.Id, Ability = ability, Ap = ap, Cooldown = def.Cooldown ?? 0, Charge = def.Charge ?? (Content.RunsChainsaw(u, ability) ? ChargeIds.Fuel : null) });
+            Emit(new AbilityUsedEvent { Unit = u.Id, Ability = ability, Ap = ap, Cooldown = def.Cooldown ?? 0, Charge = def.Charge ?? (Content.RunsChainsaw(u, ability) ? ChargeIds.Fuel : Abilities.QuickLook(u, ability) ? ChargeIds.QuickLook : null) });
         }
 
         /// <summary>
@@ -217,7 +217,7 @@ namespace Bastion.Engine
                 case AbilityIds.FirstAid:
                     // What Curar has grown and the board's cells heal more (docs/FASE10.md); Primeros auxilios and the rest also shelter.
                     // Entre los dos (board.ts): 2 more on the other player's soldiers.
-                    Emit(new HealedEvent { Unit = u.Id, Target = target!.Id, Amount = Math.Min(Content.MedkitHeal + u.Mods.Heal + (Rules.Bridged(u, target) ? 2 : 0), target.MaxHp - target.Hp) });
+                    Emit(new HealedEvent { Unit = u.Id, Target = target!.Id, Amount = Math.Min(Content.MedkitHeal + u.Mods.Heal + (Rules.Bridged(S, u, target) ? 2 : 0), target.MaxHp - target.Hp) });
                     if (u.Mods.Aid > target.Aided) Emit(new AidedEvent { Unit = u.Id, Target = target.Id, Amount = u.Mods.Aid });
                     break;
                 case AbilityIds.Overwatch:
@@ -717,13 +717,18 @@ namespace Bastion.Engine
             // A run scales its supplies its own way (RunLoot.SuppliesScale).
             var night = S.Run == null && S.Mission.Night == true;
             var body = box == Looting.Body ? Looting.BodyAt(S, Grid.ToPos(tile))! : null;
-            var loot = body != null ? Looting.RollBody(body, Rng, pistols)
-                : box != null ? Looting.RollBox(box, Rng, u.Mags != null, pistols, S.Mission.Difficulty ?? 2, night) : null;
+            // Armero (T2): a run's accessories twice as often.
+            var times = S.Run != null ? 1 + Math.Max(0, u.Mods.ModFinds) : 1;
+            Loot? Roll() => body != null ? Looting.RollBody(body, Rng, pistols)
+                : box != null ? Looting.RollBox(box, Rng, u.Mags != null, pistols, S.Mission.Difficulty ?? 2, night, times) : null;
+            var loot = Roll();
             if (S.Run != null)
             {
                 // A run's fight (H3): as gear, a vest now and then where the police or the army were.
                 var vest = box == Looting.PoliceBoot || body?.Outfit == Outfits.Police || body?.Outfit == Outfits.Military;
-                var (packed, floor, next) = FoundGear(u, loot, vest);
+                // «Suerte al registrar» (T2): something more, another roll; Ganzúa's more on a box or a boot.
+                var more = Lucky(u, loot, body == null ? u.Mods.BoxLuck : 0) ? Roll() : null;
+                var (packed, floor, next) = FoundGear(u, loot, vest, more);
                 Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Packed = packed, Floor = floor, NextGear = next });
                 return;
             }
@@ -735,21 +740,36 @@ namespace Bastion.Engine
         {
             var room = Looting.RoomAt(S, u.Pos);
             if (room == null) return;
-            var loot = Looting.RollRoom(room, S.Mission.Difficulty ?? 2, Rng, S.Run == null && S.Mission.Night == true, u.Mags != null, Looting.MarketStock(S, room), S.Mission.Pistols == true);
+            var times = S.Run != null ? 1 + Math.Max(0, u.Mods.ModFinds) : 1;
+            Loot? Roll() => Looting.RollRoom(room, S.Mission.Difficulty ?? 2, Rng, S.Run == null && S.Mission.Night == true, u.Mags != null, Looting.MarketStock(S, room), S.Mission.Pistols == true, times);
+            var loot = Roll();
             if (S.Run != null)
             {
-                var (packed, floor, next) = FoundGear(u, loot, false);
+                // «Suerte al registrar» (T2): something more, another roll; Buscavidas' more in a room.
+                var more = Lucky(u, loot, u.Mods.RoomLuck) ? Roll() : null;
+                var (packed, floor, next) = FoundGear(u, loot, false, more);
                 Emit(new RoomSearchedEvent { Unit = u.Id, Room = room.Id, Packed = packed, Floor = floor, NextGear = next, Again = again ? true : (bool?)null });
                 return;
             }
             Emit(new RoomSearchedEvent { Unit = u.Id, Room = room.Id, Loot = loot, Again = again ? true : (bool?)null });
         }
 
-        /// <summary>A run's find (H3): today's roll as gear (RunLoot), where it goes, and the gear counter after it.</summary>
-        private (List<Placed>? Packed, List<Gear>? Floor, int Next) FoundGear(Unit u, Loot? loot, bool vest)
+        /// <summary>
+        /// Whether a run's search that found something (`loot`) finds something more (T2, «Suerte al registrar»): one time in
+        /// a hundred for each point of Content.SearchLuck, the soldier's UnitMods.SearchLuck and `extra` (a box's, a room's).
+        /// Nothing found, no roll.
+        /// </summary>
+        private bool Lucky(Unit u, Loot? loot, int extra)
+        {
+            return loot != null && Rng.Int(100) < Content.SearchLuck + u.Mods.SearchLuck + extra;
+        }
+
+        /// <summary>A run's find (H3): today's roll as gear (RunLoot), and `more`'s (T2), where it goes, and the gear counter after it.</summary>
+        private (List<Placed>? Packed, List<Gear>? Floor, int Next) FoundGear(Unit u, Loot? loot, bool vest, Loot? more = null)
         {
             var maker = new RunLoot.Maker(S.Run!.NextGear);
             var found = RunLoot.GearOf(loot, S.Run, Rng, maker);
+            if (more != null) found.AddRange(RunLoot.GearOf(more, S.Run, Rng, maker));
             // The offices' and the shed's own, on a find (H9).
             if (found.Count > 0) found.AddRange(RunLoot.SiteExtra(S.Site, S.Run, Rng, maker, InteriorSite.UseAt(S, u.Pos)));
             if (vest) found.AddRange(RunLoot.VestOf(Rng, maker));
@@ -1920,10 +1940,10 @@ namespace Bastion.Engine
 
         // ------------------------------------------------------------- commands
 
-        /// <summary>Entre los dos (board.ts): the botiquín does more for the other player's soldiers.</summary>
-        internal static bool Bridged(Unit u, Unit target)
+        /// <summary>Entre los dos (board.ts): the botiquín does more for the other player's soldiers; playing alone, any comrade's (T2).</summary>
+        internal static bool Bridged(GameState s, Unit u, Unit target)
         {
-            return Content.HasPerk(u, PerkIds.Bridge) && u.Owner != null && target.Owner != null && u.Owner != target.Owner;
+            return Content.HasPerk(u, PerkIds.Bridge) && u.Owner != null && target.Owner != null && (s.Solo == true ? u.Id != target.Id : u.Owner != target.Owner);
         }
 
         /// <summary>commandUnit: the unit `slot` may order, or (`error`) why not.</summary>

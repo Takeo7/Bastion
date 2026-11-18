@@ -119,6 +119,9 @@ namespace Bastion.UI.Combat
         MeshFilter way;
         /// <summary>The way's glow on the floor (ShowPath).</summary>
         MeshFilter wayGlow;
+        /// <summary>Where on the way an enemy would react (ShowReactions, T20): a red ring on the tile, a line from whoever.</summary>
+        MeshFilter reactions;
+        public static readonly Color32 ReactionRed = Hex(0xff4a3a);
         /// <summary>
         /// The islands of the range (holes in it round a car, a bollard…): their borders and glow, apart, shown only while
         /// the pointer is over one, all of them at once (PointIslands; Arturo, 14/11: the outer border alone otherwise).
@@ -164,6 +167,7 @@ namespace Bastion.UI.Combat
             wayShade = Layer("Camino (sombra)", 3103, false, true, zone, Pull, true);
             way = Layer("Camino", 3105, false, false, zone, Pull, true);
             wayGlow = Layer("Camino (brillo)", 3100, false, false, zone);
+            reactions = Layer("Camino (reacciones)", 3106, false, false, zone, Pull, true);
             isles = new GameObject("Islas").transform;
             isles.SetParent(zone, false);
             isleStrips = Layer("Islas (franjas)", 3100, false, false, isles);
@@ -848,6 +852,27 @@ namespace Bastion.UI.Combat
             way.sharedMesh = build.Build(way.sharedMesh);
             wayShade.sharedMesh = under.Build(wayShade.sharedMesh);
             wayGlow.sharedMesh = glow.Build(wayGlow.sharedMesh);
+            // A way gone or another: its reactions with it (ShowReactions comes after).
+            ShowReactions(null, null);
+        }
+
+        /// <summary>
+        /// Where on the way drawn an enemy in sight would react before the soldier moves (Arturo, 18/11 T20: «que haya
+        /// feedback visual antes de hacer el movimiento de que ahí va a haber un ataque de reacción»; Rules.ReactionsAlong):
+        /// a red ring on each tile it would, and a thin red line from whoever to it. Null or empty clears them.
+        /// </summary>
+        public void ShowReactions(GameState s, IList<(Pos tile, Pos from)> at)
+        {
+            var mesh = new MeshBuilder();
+            if (s != null && at != null)
+                foreach (var (tile, from) in at)
+                {
+                    var p = Board.WayPoint(s, tile, 0.1f * T);
+                    mesh.Arc(p, 0.3f * T, 0.42f * T, 0, Mathf.PI * 2, 32, Alpha(ReactionRed, 0.95f));
+                    mesh.Arc(p, 0.12f * T, 0.2f * T, 0, Mathf.PI * 2, 20, Alpha(ReactionRed, 0.95f));
+                    if (from != null) mesh.Line(Board.WayPoint(s, from, 0.1f * T), p, EdgePx, Alpha(ReactionRed, 0.7f));
+                }
+            reactions.sharedMesh = mesh.Build(reactions.sharedMesh);
         }
 
         /// <summary>The pointer's ring on `tile` in `color` (PlanRing, WalkRing, DashRing, NoticedRing); null: none.</summary>

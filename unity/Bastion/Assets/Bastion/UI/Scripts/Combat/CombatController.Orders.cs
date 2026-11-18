@@ -342,11 +342,11 @@ namespace Bastion.UI.Combat
                 Hud.PickMenu(n);
                 return;
             }
-            // The key with that number (Numbered), not the one in that place: a soldier without a pistol has no 3.
+            // The key showing that number: its place along the bar (Arturo, 18/11 T15), the calls after them having none.
             var bar = BarKeys();
             var keys = bar.Where(v => string.IsNullOrEmpty(v.Menu)).ToList();
-            var i = n == 0 ? 9 : n - 1;
-            var v = keys.FirstOrDefault(k => Slot(k.Id) == i);
+            var number = n.ToString();
+            var v = keys.FirstOrDefault(k => k.Hotkey == number || (k.Hotkey ?? "").StartsWith(number + " ·", System.StringComparison.Ordinal));
             if (v == null) return;
             if (v.Id.StartsWith("evac")) return;
             var options = bar.Where(o => o.Menu == v.Id).ToList();
