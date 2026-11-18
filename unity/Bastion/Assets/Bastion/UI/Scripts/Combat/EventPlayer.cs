@@ -259,7 +259,7 @@ namespace Bastion.UI.Combat
                 case AidedEvent _: return 0.5f;
                 case EvacuatedEvent _: return 0.4f;
                 case BoardedEvent _: return 0.4f;
-                case AlightedEvent _: return 0.4f;
+                case AlightedEvent _: return UnitViews.AlightSeconds;
                 case SearchedEvent _: return 0.7f;
                 case MovedEvent _: return 0.25f;
                 default: return 0.2f;

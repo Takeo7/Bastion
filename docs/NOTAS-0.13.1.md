@@ -61,6 +61,8 @@ Versión 0.13.1 (commit [commit]). Toda expedición sale ahora con 2 plazas, en 
   - cuando lo pedís con «Evacuar», desde dentro; a dos, lo acepta el compañero, salvo que todos los suyos ya estén dentro;
   - o sola, cuando ya están dentro todos los vivos.
 - **Quien siga fuera cuando sale, se pierde.** El aviso al pedir la salida dice quién se quedaría fuera.
+- **Se ve a cada soldado subir** por la puerta de La Lata que tiene al lado, y bajar por ella a su casilla. En la moto, los de a bordo se quedan sentados en ella, a la vista.
+- **En el Asedio,** antes de que llegue La Lata no se sube. Al llegar, suben solos los que la esperan en sus casillas, mientras haya plaza.
 - **En una Recuperación,** el objeto cuenta en cuanto sube quien lo lleva, y se queda en La Lata aunque baje.
 
 ### El Rescate
@@ -154,11 +156,14 @@ Versión 0.13.1 (commit [commit]). Toda expedición sale ahora con 2 plazas, en 
   - al terminar el turno, el parpadeo ya no mueve los demás botones;
   - la niebla y lo que se ve cambian casilla a casilla mientras anda un soldado, no al final;
   - la rueda del ratón acerca y aleja más deprisa: unas cuatro vueltas de lejos a cerca, donde antes eran diez;
-  - con seis soldados o más, el estado de cada uno sale en su busto como un icono, porque el nombre no cabe; el nombre entero sigue en la bandera sobre su cabeza.
+  - con seis soldados o más, el estado de cada uno sale en su busto como un icono, porque el nombre no cabe. El nombre entero sale en la bandera sobre su cabeza, en la franja del soldado elegido y al pasar el ratón por el busto.
 - **El fusil de cerrojo** dispara una bala cada vez, no una ráfaga, y tiene su propio icono. Sus cifras son las del fusil de asalto.
-- **Las armas, en las manos:** se agarran mejor, y las ametralladoras se meten menos en el pecho.
+- **Los fusiles y las ametralladoras, bajo el brazo:** en la base y en combate, de pie y sin apuntar, se llevan con la culata bajo el brazo y las dos manos en el arma.
+- **La pistola, en la base,** con la empuñadura en la mano.
+- **El fusil de cerrojo, el de precisión y el fusil con mira** se recargan con su propio gesto: el arma baja y la mano mueve el cerrojo. Antes se recargaban como el fusil de asalto.
 - **En la base,** cada soldado lleva en la mano su arma de verdad: con solo un cuchillo, ya no sale con una pistola.
 - **La escopeta de corredera** tiene un modelo nuevo.
+- **La escopeta recortada** sale con su modelo. Antes salía una escopeta larga.
 - **Quien vuelve a entrar en la partida al acabar una etapa** ve la línea de los reclutas que han llegado.
 
 ## Lo que sigue sin arreglar
