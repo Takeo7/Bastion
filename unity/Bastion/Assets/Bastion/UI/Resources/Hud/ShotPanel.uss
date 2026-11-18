@@ -168,3 +168,13 @@
 .cancel {
     height: 34px;
 }
+
+/* A name too long beside Cancelar (ShotPanel.FitFire): the key on a row of its own, Cancelar under it. */
+.shot-actions--stacked {
+    flex-direction: column;
+}
+
+.shot-actions--stacked > .fire {
+    margin-right: 0;
+    margin-bottom: 5px;
+}

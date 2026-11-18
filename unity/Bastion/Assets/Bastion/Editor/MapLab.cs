@@ -164,7 +164,12 @@ namespace Bastion.EditorTools
         {
             UnityEditor.SceneManagement.EditorSceneManager.NewScene(UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
             string name = Environment.GetEnvironmentVariable("BASTION_MAP") ?? "city-7";
-            var state = Golden(name);
+            // (BASTION_GENERAR=biome,seed,kind[,site], as Build's; BASTION_SIN_PIEZAS=1: without MissionState.Pieces, its
+            // furniture drawn as the 0.13.2 did: G19's cost, before and after.)
+            var made = Environment.GetEnvironmentVariable("BASTION_GENERAR")?.Split(',');
+            var state = made != null && made.Length >= 2 ? Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination", made.Length > 3 ? made[3] : null) : Golden(name);
+            if (made != null) name = string.Join(",", made);
+            if (Environment.GetEnvironmentVariable("BASTION_SIN_PIEZAS") == "1" && state.Mission != null) state.Mission.Pieces = null;
             Lighting(true);
             var view = Map(state, name);
             var camera = new GameObject("Shot camera").AddComponent<Camera>();
@@ -650,6 +655,8 @@ namespace Bastion.EditorTools
             Rng = new Rng((uint)seed),
             Kind = kind,
             Difficulty = 3,
+            // (BASTION_VEHICULO=3: La Lata the bus of eight seats, Gameplay's G19: where the engine parks it.)
+            Vehicle = int.TryParse(Environment.GetEnvironmentVariable("BASTION_VEHICULO"), out int vehicle) ? vehicle : (int?)null,
         });
 
         /// <summary>
@@ -1177,6 +1184,7 @@ namespace Bastion.EditorTools
         /// </summary>
         public static void Models()
         {
+            float Env(string name) => float.TryParse(Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : 0;
             Lighting(true);
             var keys = (Environment.GetEnvironmentVariable("BASTION_MODELOS") ?? "").Split(',').Where(k => k.Length > 0).ToArray();
             var prefabs = Prefabs();
@@ -1193,13 +1201,23 @@ namespace Bastion.EditorTools
                 }
                 var made = (GameObject)UnityEngine.Object.Instantiate(model);
                 made.transform.position = new Vector3((i - (keys.Length - 1) / 2f) * 2, 0, 0);
+                // BASTION_GIRO: each turned so (degrees); BASTION_PUERTAS and BASTION_TAPAS: its doors swung out and its lid
+                // lifted so (MapBuilder.SwingDoors, LiftLid; A3: what opens, and which way).
+                made.transform.rotation = Quaternion.Euler(0, Env("BASTION_GIRO"), 0);
+                MapBuilder.SwingDoors(made.transform, Env("BASTION_PUERTAS"));
+                MapBuilder.LiftLid(made.transform, Env("BASTION_TAPAS"));
+                foreach (var part in made.GetComponentsInChildren<Transform>())
+                {
+                    if (part == made.transform) continue;
+                    Debug.Log(FormattableString.Invariant($"[modelos] {keys[i]} part {part.name}: at {part.localPosition.x:0.00}, {part.localPosition.y:0.00}, {part.localPosition.z:0.00}, parent {part.parent.name}"));
+                }
                 var renderers = made.GetComponentsInChildren<Renderer>();
                 var box = renderers.Select(r => r.bounds).Aggregate((a, b) => { a.Encapsulate(b); return a; });
                 Debug.Log(FormattableString.Invariant($"[modelos] {keys[i]} ({AssetDatabase.GetAssetPath(model)}): {box.size.x:0.00} × {box.size.y:0.00} × {box.size.z:0.00} m, from y {box.min.y:0.00}; {renderers.Length} parts: {string.Join(", ", renderers.Select(r => r.name + " [" + string.Join("+", r.sharedMaterials.Select(m => m != null ? m.name : "-")) + "]"))}"));
             }
             var camera = new GameObject("Shot camera").AddComponent<Camera>();
             float distance = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : 6;
-            MapSpace.Aim(camera, Vector3.zero, distance, 0);
+            MapSpace.Aim(camera, Vector3.up * Env("BASTION_ALTO"), distance, 0);
             Lighting(true);
         }
 
@@ -1390,6 +1408,14 @@ namespace Bastion.EditorTools
                 var tile = new Pos { X = (int)v[0], Y = (int)v[1] };
                 (state.Lights ??= new List<Bastion.Engine.Light>()).Add(new Bastion.Engine.Light { Id = $"lab{state.Lights.Count}", Tile = tile, Radius = v[2], Turns = 3, Tiles = Los.LightTiles(state, tile, v[2], Content.Night.LampHeight) });
             }
+            // (G19: each piece searched one by one, where it is and whether it holds something: [piezas].)
+            if (state.Mission?.Pieces != null)
+                for (int z = 0; z <= (state.Levels?.Count ?? 0); z++)
+                    for (int i = 0; i < state.Width * state.Height; i++)
+                    {
+                        var spot = new Pos { X = i % state.Width, Y = i / state.Width, Z = z };
+                        if (Looting.PieceAt(state, spot) is string piece) Debug.Log($"[piezas] {piece} at {spot.X},{spot.Y},{spot.Z}: {(state.Mission.Pieces.Contains(Bastion.Engine.Grid.NodeOf(state, spot)) ? "full" : "empty")}");
+                    }
             // BASTION_REGISTRADO=x0,y0,x1,y1: every cover tile in there on the ground searched (the furniture opened, a car's boot up).
             var searched = Environment.GetEnvironmentVariable("BASTION_REGISTRADO")?.Split(',').Select(int.Parse).ToArray();
             if (searched != null && searched.Length == 4)

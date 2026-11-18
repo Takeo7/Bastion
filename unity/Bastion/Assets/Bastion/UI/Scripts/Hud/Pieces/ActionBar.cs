@@ -188,6 +188,8 @@ namespace Bastion.UI.Hud
         {
             var tree = Ui.Clone("AbilityButton");
             var btn = tree.Q<Button>("key");
+            // (By its action, for the labs: «key-search», «key-menu-investigate».)
+            btn.name = "key-" + a.Id.Replace(':', '-');
             btn.clicked += onClick;
             btn.SetEnabled(a.Enabled);
             btn.EnableInClassList("ability--active", a.Active);

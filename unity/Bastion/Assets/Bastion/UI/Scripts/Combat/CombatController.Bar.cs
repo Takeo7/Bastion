@@ -301,18 +301,20 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>Registrar's picture by what is searched (Looting.SearchSpot): a car's boot, a body, a box; none, the backpack.</summary>
-        static string SearchIcon(string spot) => spot == null ? null : spot == Looting.CarBoot || spot == Looting.PoliceBoot ? "search:car" : spot == Looting.Body ? "search:body" : "search:box";
+        static string SearchIcon(string spot) => spot == null ? null : spot == Looting.CarBoot || spot == Looting.PoliceBoot ? "search:car" : BodyLike(spot) ? "search:body" : "search:box";
 
         /// <summary>A box beside the soldier, opened or not, that its hands reach: a body at its feet too (SearchBeside).</summary>
         bool CrateBeside(Unit u) => SearchBeside(u) != null;
 
         /// <summary>
-        /// What Registrar would work on beside `u`, by kind (Looting.SearchSpot: a box, a car's boot, a body, the one it
-        /// stands on too: Looting.ReachesToOpen): one still to search first, else any its hands reach; null, none.
+        /// What Registrar would work on beside `u`, by kind (Looting.SearchSpot: a box, a car's boot, a body, a piece, the one
+        /// it stands on too: Looting.ReachesToOpen): one still to search first, two tiles off too with Gancho (Looting.
+        /// SearchableTiles, as the click; U15: the key had none there), else any searched its hands reach; null, none.
         /// </summary>
         string SearchBeside(Unit u)
         {
             if (u == null) return null;
+            if (Looting.SearchableTiles(State, u).FirstOrDefault() is Pos open) return Looting.SearchSpot(State, open);
             string opened = null;
             for (var dx = -1; dx <= 1; dx++)
                 for (var dy = -1; dy <= 1; dy++)

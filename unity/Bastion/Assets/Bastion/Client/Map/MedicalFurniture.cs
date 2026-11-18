@@ -13,21 +13,26 @@ namespace Bastion.Client.Map
     {
         static readonly HashSet<string> FurnitureKinds = new HashSet<string>
         {
-            "medicalCabinet", "medicalCart", "wheelchair", "receptionDesk", "waitingSeats", "examTable", "medicalMonitor", "xray", "bedsideTable",
+            "medicalCabinet", "medicalShelf", "medicalCart", "wheelchair", "receptionDesk", "waitingSeats", "examTable", "medicalMonitor", "xray", "bedsideTable",
             "visitorChair", "clinicalSink", "sterilizer", "ultrasound", "waitingTable", "waterDispenser", "toilet", "clinicalBin", "consultDesk",
         };
 
         /// <summary>medicalFurniture.ts: whether a kind is one of these, and the tile it stands on (the tall ones high cover, the rest low).</summary>
         public static bool IsFurniture(string kind) => kind != null && FurnitureKinds.Contains(kind);
-        public static bool FurnitureHigh(string kind) => kind == "medicalCabinet" || kind == "xray" || kind == "waterDispenser";
+        public static bool FurnitureHigh(string kind) => kind == "medicalCabinet" || kind == "medicalShelf" || kind == "xray" || kind == "waterDispenser";
 
         const int FMetal = 0x8b9c9c, FWhite = 0xdedfd5, FRubber = 0x353d40, FBlue = 0x416b78;
 
-        /// <summary>A kind's faces (`black`: its dark variant, the wheelchair's seat, the armchair's fabric); null if it isn't one.</summary>
-        public static IReadOnlyList<Face> Furniture(string kind, bool black = false)
+        /// <summary>
+        /// A kind's faces (`black`: its dark variant, the wheelchair's seat, the armchair's fabric; `open`: the cabinet of
+        /// medicines with its glass doors swung out and its shelves bare, the shelf of medicines bare, the cart with nothing
+        /// on it: G19, searched or empty from the start); null if it isn't one.
+        /// </summary>
+        public static IReadOnlyList<Face> Furniture(string kind, bool black = false, bool open = false)
         {
             if (!IsFurniture(kind)) return null;
-            string key = $"furniture:{kind}:{black}";
+            open &= kind == "medicalCabinet" || kind == "medicalShelf" || kind == "medicalCart";
+            string key = $"furniture:{kind}:{black}:{open}";
             if (cache.TryGetValue(key, out var ready)) return ready;
             var to = new List<Face>();
             void Add(IEnumerable<Vector3[]> g, int colour, float x, float y, float z, float rz = 0) => Put(to, g, colour, T(x, y, z) * Rz(rz));
@@ -44,13 +49,27 @@ namespace Bastion.Client.Map
                     B(FWhite, 0, 0.72f, 0, 0.66f, 1.18f, 0.44f);
                     foreach (float x in new[] { -0.16f, 0.16f })
                     {
-                        B(0xb5c8c5, x, 0.91f, -0.229f, 0.27f, 0.65f, 0.018f);
-                        B(FMetal, x + (x < 0 ? 0.09f : -0.09f), 0.85f, -0.25f, 0.018f, 0.15f, 0.025f);
-                        foreach (float y in new[] { 0.69f, 0.96f, 1.18f }) B(FWhite, x, y, -0.245f, 0.27f, 0.02f, 0.02f);
+                        if (open)
+                        {
+                            // Its glass door swung out on its outer edge, straight ahead: within its tile (0.49 from its middle).
+                            float hinge = x < 0 ? -0.305f : 0.305f;
+                            B(0xb5c8c5, hinge, 0.91f, -0.365f, 0.018f, 0.65f, 0.27f);
+                            B(FMetal, hinge + (x < 0 ? 0.02f : -0.02f), 0.85f, -0.47f, 0.025f, 0.15f, 0.018f);
+                            // The dark of the inside, its shelves bare.
+                            B(0x3e4847, x, 0.91f, -0.224f, 0.29f, 0.65f, 0.01f);
+                            foreach (float y in new[] { 0.69f, 0.96f }) B(FWhite, x, y, -0.235f, 0.29f, 0.025f, 0.02f);
+                        }
+                        else
+                        {
+                            B(0xb5c8c5, x, 0.91f, -0.229f, 0.27f, 0.65f, 0.018f);
+                            B(FMetal, x + (x < 0 ? 0.09f : -0.09f), 0.85f, -0.25f, 0.018f, 0.15f, 0.025f);
+                            foreach (float y in new[] { 0.69f, 0.96f, 1.18f }) B(FWhite, x, y, -0.245f, 0.27f, 0.02f, 0.02f);
+                        }
                         B(0xc7cac1, x, 0.35f, -0.233f, 0.29f, 0.29f, 0.025f);
                     }
                     B(0x91453c, 0, 1.23f, -0.245f, 0.13f, 0.045f, 0.02f);
                     B(0x91453c, 0, 1.23f, -0.25f, 0.045f, 0.13f, 0.02f);
+                    if (open) break;
                     foreach (float y in new[] { 0.72f, 0.99f })
                         for (int n = 0; n < 5; n++)
                         {
@@ -58,6 +77,38 @@ namespace Bastion.Client.Map
                             B(n % 2 == 1 ? 0xb08c50 : 0xe1e8dc, x, y, -0.26f, 0.055f, 0.11f, 0.025f);
                             B(FBlue, x, y + 0.06f, -0.26f, 0.055f, 0.025f, 0.03f);
                         }
+                    break;
+                case "medicalShelf":
+                    // Ours (Arturo, 18/11, G19: «uno nuestro, con frascos»): open shelving, lower than the cabinet and with no
+                    // doors, its boards stocked with jars and boxes, or bare.
+                    foreach (float x in new[] { -0.39f, 0.39f }) B(FWhite, x, 0.54f, 0, 0.03f, 1.04f, 0.36f);
+                    B(0xc7cac1, 0, 0.56f, 0.17f, 0.76f, 1.0f, 0.02f);
+                    foreach (float y in new[] { 0.10f, 0.40f, 0.70f, 1.03f }) B(FWhite, 0, y, 0, 0.76f, 0.03f, 0.34f);
+                    foreach (float y in new[] { 0.10f, 0.40f, 0.70f }) B(FMetal, 0, y, -0.172f, 0.76f, 0.035f, 0.012f);
+                    if (open) break;
+                    for (int b = 0; b < 3; b++)
+                    {
+                        float y = 0.115f + b * 0.30f;
+                        for (int n = 0; n < 6; n++)
+                        {
+                            float x = -0.30f + n * 0.12f;
+                            if ((n + b) % 3 == 0)
+                            {
+                                // A box, its red band to the front.
+                                B(0xe1e8dc, x, y + 0.05f, -0.05f, 0.095f, 0.10f, 0.15f);
+                                B(0x91453c, x, y + 0.05f, -0.127f, 0.095f, 0.035f, 0.004f);
+                            }
+                            else
+                            {
+                                B((n + b) % 2 == 1 ? 0xb08c50 : 0xe1e8dc, x, y + 0.06f, -0.06f, 0.06f, 0.12f, 0.06f);
+                                B(FBlue, x, y + 0.13f, -0.06f, 0.06f, 0.025f, 0.06f);
+                            }
+                        }
+                    }
+                    // A first-aid box on top.
+                    B(FWhite, -0.16f, 1.095f, 0, 0.24f, 0.10f, 0.17f);
+                    B(0x91453c, -0.16f, 1.147f, 0, 0.11f, 0.004f, 0.035f);
+                    B(0x91453c, -0.16f, 1.147f, 0, 0.035f, 0.004f, 0.11f);
                     break;
                 case "medicalCart":
                     foreach (float x in new[] { -0.25f, 0.25f })
@@ -73,8 +124,8 @@ namespace Bastion.Client.Map
                     }
                     B(FWhite, 0, 0.43f, 0, 0.48f, 0.18f, 0.34f);
                     B(FMetal, 0, 0.43f, -0.18f, 0.15f, 0.025f, 0.02f);
-                    B(FBlue, -0.13f, 0.24f, 0, 0.18f, 0.06f, 0.26f);
-                    foreach (float x in new[] { 0.12f, 0.20f })
+                    if (!open) B(FBlue, -0.13f, 0.24f, 0, 0.18f, 0.06f, 0.26f);
+                    foreach (float x in open ? new float[0] : new[] { 0.12f, 0.20f })
                     {
                         Add(Cylinder(0.025f, 0.025f, 0.10f, 6), 0xe1d5b6, x, 0.63f, 0.10f);
                         Add(Cylinder(0.027f, 0.027f, 0.025f, 6), FBlue, x, 0.69f, 0.10f);

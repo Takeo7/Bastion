@@ -188,6 +188,13 @@ namespace Bastion.Engine
         /// walled in with its lot): never a spot to search (Looting.SearchSpot). Missing: nothing.
         /// </summary>
         public List<int>? OutOfReach { get; set; }
+        /// <summary>
+        /// G19 (Arturo, 18/11, cuadros 65–67): the pieces searched one by one as a box (SearchPieces; Looting.PieceAt) that hold
+        /// something, by node of their tile (a piece over several, its anchor's); Setup's. One of those kinds not in it is
+        /// empty from the start: drawn empty, never a spot to search. Its room isn't searched whole (LootRoom.Pieces).
+        /// Missing (a fight saved by the 0.13.2): none of it, every room searched whole as before.
+        /// </summary>
+        public List<int>? Pieces { get; set; }
         public List<Reinforcement> Reinforcements { get; set; } = new List<Reinforcement>();
         /// <summary>1–4, for the loot tables (missing in missions saved before searching: 2).</summary>
         public int? Difficulty { get; set; }

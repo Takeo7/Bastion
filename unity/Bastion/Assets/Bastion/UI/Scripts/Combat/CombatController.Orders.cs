@@ -451,6 +451,9 @@ namespace Bastion.UI.Combat
             return (handPick != null ? list.FirstOrDefault(t => Same(t, handPick)) : null) ?? list.FirstOrDefault();
         }
 
+        /// <summary>For the labs: `id` armed by hand on what is beside, one thing too (its panel shown, as with two).</summary>
+        public void LabArmHand(string id) => ArmHand(id);
+
         void ArmHand(string id, Pos tile = null)
         {
             mode = Mode.Tile;

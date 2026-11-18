@@ -287,20 +287,27 @@ namespace Bastion.Engine
                             var p = new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z };
                             return Looting.SearchSpot(s, p) != null && Looting.ReachesToSearch(s, u.Pos, p);
                         }) || Looting.SearchSpot(s, u.Pos) != null;
-                        return done ? "Ya está abierta." : "No hay ninguna caja al lado.";
+                        // (Producto, 18/11, G19: boxes, boots, bodies and pieces alike.)
+                        return done ? Lore.SearchedBeside : Lore.NothingBeside;
                     }
                     break;
                 case AbilityIds.SearchRoom:
                 {
                     var room = Looting.RoomAt(s, u.Pos);
                     if (room == null) return "Solo dentro de una habitación.";
+                    // G19 (cuadro 67): a room with its own furniture to search is searched piece by piece.
+                    if (room.Pieces) return Lore.RoomByPieces;
                     if (Looting.RoomSearched(s, room)) return "Esta habitación ya está registrada.";
                     break;
                 }
                 case AbilityIds.PatchUp:
-                    // Rebuscar (Arturo, 16/11): the room it stands in, already searched or not.
-                    if (Looting.RoomAt(s, u.Pos) == null) return "Solo dentro de una habitación.";
+                {
+                    // Rebuscar (Arturo, 16/11): the room it stands in, already searched or not; never one searched piece by piece (G19).
+                    var room = Looting.RoomAt(s, u.Pos);
+                    if (room == null) return "Solo dentro de una habitación.";
+                    if (room.Pieces) return Lore.RoomByPieces;
                     break;
+                }
                 case AbilityIds.OpenDoor:
                     if (DoorTiles(s, u, TileKinds.Door).Count == 0) return "No hay ninguna puerta cerrada a tu lado.";
                     break;

@@ -343,20 +343,22 @@ namespace Bastion.Engine
         {
             // Math.min(...[]) is Infinity: no side touches an empty zone (NaN >= 3), none, and no draw.
             if (zone.Count == 0) return null;
+            // (As long as the canvas keeps it: Canvas.BusLength.)
+            var length = c.BusLength;
             var x0 = zone.Min((p) => p.X);
             var y0 = zone.Min((p) => p.Y);
             // North, south (lying along x) and west, east (along y), beside the zone. Centred on it if it fits;
             // else slid along that side (a zone in a corner leaves no room on the map's side of it).
             var sides = new List<(Rect R, bool AlongX, int Slide)>();
-            for (var slide = 0; slide <= BusL - 1; slide++)
+            for (var slide = 0; slide <= length - 1; slide++)
             {
                 foreach (var shift in slide != 0 ? new[] { slide, -slide } : new[] { 0 })
                 {
-                    var lead = (int)Math.Floor((BusL - 3) / 2.0) + shift;
-                    sides.Add((Rect(x0 - lead, y0 - BusW, BusL, BusW), true, slide));
-                    sides.Add((Rect(x0 - lead, y0 + 3, BusL, BusW), true, slide));
-                    sides.Add((Rect(x0 - BusW, y0 - lead, BusW, BusL), false, slide));
-                    sides.Add((Rect(x0 + 3, y0 - lead, BusW, BusL), false, slide));
+                    var lead = (int)Math.Floor((length - 3) / 2.0) + shift;
+                    sides.Add((Rect(x0 - lead, y0 - BusW, length, BusW), true, slide));
+                    sides.Add((Rect(x0 - lead, y0 + 3, length, BusW), true, slide));
+                    sides.Add((Rect(x0 - BusW, y0 - lead, BusW, length), false, slide));
+                    sides.Add((Rect(x0 + 3, y0 - lead, BusW, length), false, slide));
                 }
             }
             // The bus still has to touch the zone along at least three tiles (its doors open onto it).
@@ -400,8 +402,16 @@ namespace Bastion.Engine
                 return look == null || Soft.Contains(look.Kind) || Car(p) != null;
             }
             bool LaneOpen(Rect r, bool alongX) => LaneOf(r, alongX).All((p) => c.ElevAt(p.X, p.Y) == 0 && c.GroundAt(p.X, p.Y) != Indoor && Clearable(p));
+            // La Lata drawn longer than its place (Canvas.BusDrawn), centred on it: out of doors, on the map, nothing tall under it.
+            bool Drawn(Rect r, bool alongX)
+            {
+                if (c.BusDrawn <= length) return true;
+                var over = (c.BusDrawn - length + 1) / 2;
+                var all = alongX ? Rect(r.X - over, r.Y, r.W + 2 * over, r.H) : Rect(r.X, r.Y - over, r.W, r.H + 2 * over);
+                return TilesIn(all).All((p) => c.In(p.X, p.Y) && c.ElevAt(p.X, p.Y) == 0 && c.GroundAt(p.X, p.Y) != Indoor && c.GroundAt(p.X, p.Y) != Out && (c.Get(p.X, p.Y) == TileKinds.Floor || c.Get(p.X, p.Y) == TileKinds.Low));
+            }
             var options = sides
-                .Where((o) => Touches(o.R, o.AlongX) && Fits(o.R))
+                .Where((o) => Touches(o.R, o.AlongX) && Fits(o.R) && Drawn(o.R, o.AlongX))
                 .Select((o) => (o.R, o.AlongX, o.Slide, Cost: TilesIn(o.R).Count((p) => c.Get(p.X, p.Y) != TileKinds.Floor) + o.Slide * 0.3 + rng.Next() * 0.5))
                 .ToList();
             // With its way out open if it can be; else as before, what stands in its way cleared where it can be.

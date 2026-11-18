@@ -70,14 +70,14 @@ namespace Bastion.Engine
         /// <summary>
         /// What a map that is one building gives more when a search finds something (H9-INTERIORES.md, «lo que más da cada
         /// uno»): half the time, one of its own: the offices, supplies or a weapon's improvement; the shed, a magazine, an
-        /// improvement or supplies; the police station, a weapon (a pistol or a shotgun), a magazine or a vest; the plaza,
-        /// supplies or a belt's thing, and in its pharmacy (`use`, the room searched: ShopUses) medicines; the camping, a
-        /// little of everything. Nothing anywhere else (the hospital's medicines come from its furniture already).
+        /// improvement or supplies; the plaza, supplies or a belt's thing; the camping, a little of everything. Nothing
+        /// anywhere else: the police station's and the pharmacy's are their furniture's now, searched piece by piece (G19,
+        /// cuadro 67: its armoury, its lockers; the pharmacy's shelves), as the hospital's are. Never on a piece's search.
         /// </summary>
-        public static List<Gear> SiteExtra(string? site, RunFight run, Rng rng, Maker maker, string? use = null)
+        public static List<Gear> SiteExtra(string? site, RunFight run, Rng rng, Maker maker)
         {
             var out_ = new List<Gear>();
-            if (site != Sites.Offices && site != Sites.Shed && site != Sites.Police && site != Sites.Plaza && site != Sites.Camping) return out_;
+            if (site != Sites.Offices && site != Sites.Shed && site != Sites.Plaza && site != Sites.Camping) return out_;
             if (rng.Int(2) != 0) return out_;
             // The camping: a little of everything (its food is supplies, GearOf).
             if (site == Sites.Camping)
@@ -92,17 +92,8 @@ namespace Bastion.Engine
             }
             if (site == Sites.Plaza)
             {
-                if (use == ShopUses.Pharmacy) out_.AddRange(maker.Make(GearKinds.Medicine, null, rng.Range(1, 2)));
-                else if (rng.Int(2) == 0) out_.AddRange(maker.Make(GearKinds.Supplies, null, Math.Max(1, (int)Js.Round(rng.Range(5, 12) * SuppliesScale(run)))));
+                if (rng.Int(2) == 0) out_.AddRange(maker.Make(GearKinds.Supplies, null, Math.Max(1, (int)Js.Round(rng.Range(5, 12) * SuppliesScale(run)))));
                 else out_.AddRange(maker.Make(GearKinds.Item, rng.Pick(Content.BeltItems)));
-                return out_;
-            }
-            if (site == Sites.Police)
-            {
-                var roll = rng.Int(3);
-                if (roll == 0) out_.AddRange(maker.Make(GearKinds.Weapon, rng.Pick(PoliceWeapons)));
-                else if (roll == 1) out_.AddRange(maker.Make(GearKinds.Mags, null));
-                else out_.AddRange(VestOf(rng, maker));
                 return out_;
             }
             var pick = rng.Int(site == Sites.Offices ? 2 : 3);
@@ -112,9 +103,6 @@ namespace Bastion.Engine
             else out_.AddRange(maker.Make(GearKinds.Mags, null));
             return out_;
         }
-
-        /// <summary>What a police station gives of weapons (SiteExtra): its own.</summary>
-        public static readonly IReadOnlyList<string> PoliceWeapons = new[] { FoundWeaponIds.Pistol, FoundWeaponIds.PumpShotgun };
 
         /// <summary>The good weapons a Guarida's box and a boss give (H5, H6): one of these, with its improvement.</summary>
         public static readonly IReadOnlyList<string> GoodWeapons = new[] { FoundWeaponIds.ScopedRifle, FoundWeaponIds.HuntingRifle };
@@ -138,10 +126,10 @@ namespace Bastion.Engine
             return found;
         }
 
-        /// <summary>A vest now and then (VestChance; a heavy one in HeavyIn), where the police or the army left one.</summary>
-        public static List<Gear> VestOf(Rng rng, Maker maker)
+        /// <summary>A vest now and then (VestChance; a heavy one in HeavyIn), where the police or the army left one; `chance` in 100 (a locker's, G19: 100).</summary>
+        public static List<Gear> VestOf(Rng rng, Maker maker, int chance = VestChance)
         {
-            if (rng.Int(100) >= VestChance) return new List<Gear>();
+            if (chance < 100 && rng.Int(100) >= chance) return new List<Gear>();
             return maker.Make(GearKinds.Vest, rng.Int(HeavyIn) == 0 ? VestIds.HeavyVest : VestIds.Vest);
         }
 

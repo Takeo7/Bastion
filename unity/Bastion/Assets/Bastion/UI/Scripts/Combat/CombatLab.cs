@@ -698,6 +698,29 @@ namespace Bastion.UI.Combat
                             }
                             // «girar=45»: the camera round by that many degrees, eased (CameraRig.Turn), not by quarter turns as Q
                             // and E: a building's front square on (the walking range into found houses, Arturo 11/11).
+                            // «menu=menu-investigate»: that menu of the bar opened (or shut), as its key or its number would.
+                            // «tecla=search»: the help of that key of the bar (a menu's choice too, once it is open) pinned open.
+                            // (A «-» for a menu's «:», which BASTION_TOQUES takes for the step's time.)
+                            if (what.StartsWith("menu="))
+                            {
+                                Hud?.ToggleAbilityMenu(what.Substring(5).Replace("menu-", "menu:"));
+                                break;
+                            }
+                            // «mano=search»: that action armed by hand with one thing beside too, its panel open (a click does it at once).
+                            if (what.StartsWith("mano="))
+                            {
+                                control.LabArmHand(what.Substring(5));
+                                break;
+                            }
+                            if (what.StartsWith("tecla="))
+                            {
+                                var keyName = "key-" + what.Substring(6).Replace(':', '-');
+                                var root = Hud?.GetComponent<UnityEngine.UIElements.UIDocument>()?.rootVisualElement;
+                                var pinned = root == null ? null : UnityEngine.UIElements.UQueryExtensions.Q(root, keyName);
+                                if (pinned != null) Hud.PinTip(pinned);
+                                Debug.Log($"[lab] ayuda de la tecla {keyName}: {(pinned != null ? "abierta" : "no está")}");
+                                break;
+                            }
                             if (what.StartsWith("girar="))
                             {
                                 if (float.TryParse(what.Substring(6), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var degrees)) control.Rig?.Turn(degrees);

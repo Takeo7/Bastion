@@ -10,19 +10,37 @@ namespace Bastion.Engine
         /// <summary>A piece of furniture that can be searched, as the log and the button read it.</summary>
         public sealed class SearchSpot
         {
-            public SearchSpot(string name, IReadOnlyList<string> supplies, bool masculine = false)
+            public SearchSpot(string name, IReadOnlyList<string> supplies, bool masculine = false, bool plural = false, bool open = true, bool body = false)
             {
                 Name = name;
                 Supplies = supplies;
                 Masculine = masculine;
+                Plural = plural;
+                Opens = open;
+                Body = body;
             }
 
-            /// <summary>With its article, as it reads after «Abrir»: «la caja de armas».</summary>
+            /// <summary>With its article, as it reads after its verb: «la caja de armas», «el armero».</summary>
             public string Name { get; }
             /// <summary>What the supplies found in it were; one is picked by seed.</summary>
             public IReadOnlyList<string> Supplies { get; }
-            /// <summary>Whether Name is masculine, for what agrees with it: «Está vacío», «ya está abierto».</summary>
+            /// <summary>Whether Name is masculine, for what agrees with it: «Está vacío».</summary>
             public bool Masculine { get; }
+            /// <summary>Whether Name is plural («las taquillas»): «Están vacías».</summary>
+            public bool Plural { get; }
+            /// <summary>
+            /// Opened, what has a door or a lid (a box, a boot, a locker); searched, what is open (a rack, a shelf, a cart, a
+            /// body). Arturo, 18/11, cuadro 66.
+            /// </summary>
+            public bool Opens { get; }
+            /// <summary>A body's: «No lleva nada.» when it has nothing.</summary>
+            public bool Body { get; }
+            /// <summary>The action's verb: «Abrir», «Registrar».</summary>
+            public string Verb => Opens ? "Abrir" : "Registrar";
+            /// <summary>As the log says it: «Ana abre», «Ana registra».</summary>
+            public string Does => Opens ? "abre" : "registra";
+            /// <summary>When nothing was in it: «Está vacía.», «Están vacíos.», a body's «No lleva nada.»</summary>
+            public string Empty => Body ? "No lleva nada." : $"{(Plural ? "Están" : "Está")} {(Masculine ? "vacío" : "vacía")}{(Plural ? "s" : "")}.";
         }
 
         /// <summary>
@@ -39,8 +57,23 @@ namespace Bastion.Engine
             // A car's boot, a police car's, and a dead enemy's body (Arturo, 2/11): Looting.CarBoot, PoliceBoot and Body.
             ["carBoot"] = new SearchSpot("el maletero", new[] { "una caja de herramientas", "cables de arranque y un gato", "una lona y una cuerda", "una bolsa de deporte con ropa" }, masculine: true),
             ["policeBoot"] = new SearchSpot("el maletero del coche de policía", new[] { "bengalas de carretera", "una linterna y unas esposas", "una manta térmica y cinta de balizar" }, masculine: true),
-            ["body"] = new SearchSpot("el cuerpo", new string[0], masculine: true),
+            ["body"] = new SearchSpot("el cuerpo", new string[0], masculine: true, open: false, body: true),
+            // The police station's and the medical furniture, searched one by one (Arturo, 18/11, cuadros 65 to 67; Gameplay's
+            // G19, .dev-snapshots/gameplay/muebles/CONTRATO.md): Looting.SearchSpot gives the piece's own kind.
+            [SearchPieces.WeaponRack] = new SearchSpot("el armero", new string[0], masculine: true, open: false),
+            [SearchPieces.WeaponLocker] = new SearchSpot("el armario de armas", new string[0], masculine: true),
+            [SearchPieces.GunCase] = new SearchSpot("los maletines de armas", new string[0], masculine: true, plural: true),
+            [SearchPieces.AmmoCase] = new SearchSpot("las cajas de munición", new string[0], plural: true),
+            [SearchPieces.LockerRow] = new SearchSpot("las taquillas", new string[0], plural: true),
+            [SearchPieces.EvidenceShelf] = new SearchSpot("el estante de pruebas", new[] { "tabaco de contrabando", "móviles y relojes en bolsas de pruebas", "una caja de pilas y linternas" }, masculine: true, open: false),
+            [SearchPieces.CorpseOfficer] = new SearchSpot("el cuerpo del agente", new string[0], masculine: true, open: false, body: true),
+            [SearchPieces.MedicalCabinet] = new SearchSpot("el armario de medicinas", new string[0], masculine: true),
+            [SearchPieces.MedicalShelf] = new SearchSpot("el estante de medicinas", new string[0], masculine: true, open: false),
+            [SearchPieces.MedicalCart] = new SearchSpot("el carro de curas", new string[0], masculine: true, open: false),
         };
+
+        /// <summary>What isn't in SearchSpots reads as a box.</summary>
+        private static readonly SearchSpot AnyBox = new SearchSpot("la caja", new string[0]);
 
         /// <summary>A room as its furniture makes it (loot.ts Room.spot): what it is called, and what the supplies found in it were.</summary>
         private static readonly IReadOnlyDictionary<string, SearchSpot> Rooms = new Dictionary<string, SearchSpot>
@@ -205,11 +238,9 @@ namespace Bastion.Engine
         /// </summary>
         public static string SearchLine(string who, string decor, Loot? find, int seed)
         {
-            var known = SearchSpots.TryGetValue(decor, out var spot);
-            var where = known ? spot.Name : "la caja";
-            var parts = FindParts(find, known ? spot.Supplies : new string[0], seed);
-            if (decor == Looting.Body) return parts.Count > 0 ? $"{who} registra {where}: {JoinAnd(parts)}." : $"{who} registra {where}. No lleva nada.";
-            return parts.Count > 0 ? $"{who} abre {where}: {JoinAnd(parts)}." : $"{who} abre {where}. Está {(known && spot.Masculine ? "vacío" : "vacía")}.";
+            var spot = SearchSpots.TryGetValue(decor, out var known) ? known : AnyBox;
+            var parts = FindParts(find, spot.Supplies, seed);
+            return parts.Count > 0 ? $"{who} {spot.Does} {spot.Name}: {JoinAnd(parts)}." : $"{who} {spot.Does} {spot.Name}. {spot.Empty}";
         }
 
         /// <summary>The log line for searching a room (docs/FASE8.md §B): «Ana registra el despacho: una radio de manivela (+12 §) y 1 pieza.» `spot`: loot.ts Room.spot.</summary>
@@ -222,7 +253,8 @@ namespace Bastion.Engine
 
         /// <summary>
         /// What opening `decor` does, for the action's panel (Arturo, 2/11: boots and bodies too): a box's sure find, a boot's
-        /// chances (Spots.Trunk; Looting.PoliceBootGun), a body's gun (Looting.RollBody, Content.Uniforms).
+        /// chances (Spots.Trunk; Looting.PoliceBootGun), a body's gun (Looting.RollBody, Content.Uniforms), a piece of
+        /// furniture's own (G19).
         /// </summary>
         public static string SearchEffect(string decor)
         {
@@ -234,16 +266,49 @@ namespace Bastion.Engine
                     return "Abre el maletero de un coche de policía que tengas al lado. Una vez de cada cinco hay un arma; si no, lo que haya en cualquier maletero. Hace un poco de ruido.";
                 case Looting.Body:
                     return "Registra el cuerpo de un enemigo caído a tu lado o a tus pies. Los vivos llevan siempre su arma. Un zombi casi nunca lleva una, salvo los policías y los militares: uno de cada cuatro. Hace un poco de ruido.";
+                // The furniture searched one by one (G19, CONTRATO.md §3): only one with something is marked, so the racks and
+                // the medicine cabinets «dan siempre».
+                case SearchPieces.WeaponRack:
+                    return "Registra un armero que tengas al lado. Da siempre un arma larga: un fusil de asalto o una escopeta. Hace un poco de ruido.";
+                case SearchPieces.WeaponLocker:
+                    return "Abre un armario de armas que tengas al lado. Da siempre una pistola. Hace un poco de ruido.";
+                case SearchPieces.GunCase:
+                    return "Abre unos maletines de armas que tengas al lado. Dan siempre una pistola o un accesorio de arma. Hace un poco de ruido.";
+                case SearchPieces.AmmoCase:
+                    return "Abre unas cajas de munición que tengas al lado. Dan siempre dos cargadores. Hace un poco de ruido.";
+                case SearchPieces.LockerRow:
+                    return "Abre unas taquillas que tengas al lado. Puede haber un chaleco o un cargador, o nada. Hace un poco de ruido.";
+                case SearchPieces.EvidenceShelf:
+                    return "Registra un estante de pruebas que tengas al lado. Puede haber suministros o algo para el cinturón, o nada. Hace un poco de ruido.";
+                case SearchPieces.CorpseOfficer:
+                    return "Registra el cuerpo de un agente que tengas al lado. A veces lleva una pistola o un chaleco. Hace un poco de ruido.";
+                case SearchPieces.MedicalCabinet:
+                    return "Abre un armario de medicinas que tengas al lado. Da siempre una medicina o un botiquín. Hace un poco de ruido.";
+                case SearchPieces.MedicalShelf:
+                    return "Registra un estante de medicinas que tengas al lado. Puede haber una medicina o un botiquín, o nada. Hace un poco de ruido.";
+                case SearchPieces.MedicalCart:
+                    return "Registra un carro de curas que tengas al lado. Puede haber una medicina, o nada. Hace un poco de ruido.";
                 default:
                     return "Abre una caja marcada que tengas al lado. Da siempre lo suyo: un arma, una o dos medicinas, dos cargadores o de 3 a 5 raciones. Hace un poco de ruido.";
             }
         }
 
-        /// <summary>Opening a marked box, for the action's title: «Abrir la caja de armas»; a body's, «Registrar el cuerpo».</summary>
+        /// <summary>Opening a marked box, for the action's title: «Abrir la caja de armas»; a body's, «Registrar el cuerpo»; a rack's, «Registrar el armero».</summary>
         public static string BoxTitle(string decor)
         {
-            return $"{(decor == Looting.Body ? "Registrar" : "Abrir")} {(SearchSpots.TryGetValue(decor, out var spot) ? spot.Name : "la caja")}";
+            var spot = SearchSpots.TryGetValue(decor, out var known) ? known : AnyBox;
+            return $"{spot.Verb} {spot.Name}";
         }
+
+        /// <summary>
+        /// Why Registrar can't be done (Abilities, Search): nothing beside to search, or what is beside already searched (it said
+        /// «No hay ninguna caja al lado.» and «Ya está abierta.», for a boot, a body and the furniture too).
+        /// </summary>
+        public const string NothingBeside = "No hay nada que registrar a tu lado.";
+        public const string SearchedBeside = "Lo que tienes al lado ya está registrado.";
+
+        /// <summary>Why a room with furniture searched one by one isn't searched whole (SearchRoom; G19, cuadro 65).</summary>
+        public const string RoomByPieces = "En esta habitación se registra mueble a mueble.";
 
         /// <summary>What a search turned up, short, to float over the furniture: «+12 §», «Botiquín», «Mira», «Medicinas», «+2 raciones», «+1 pieza», a weapon's name, «+1 cargador» or «Nada».</summary>
         public static string FindLabel(Loot? find)

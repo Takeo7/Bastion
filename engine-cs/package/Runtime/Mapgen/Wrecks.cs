@@ -258,7 +258,8 @@ namespace Bastion.Engine
                 var look = global::Bastion.Engine.Decor.DecorOf(c.Decor[i]);
                 if (look == null) continue;
                 var p = V(i % c.Width, i / c.Width);
-                if (look.Kind == DecorKinds.CarFront && c.GroundAt(p.X, p.Y) != Indoor) cars.Add(CarCells(p, look.Facing));
+                // (Not one kept whole: a police station's patrol cars, G19.)
+                if (look.Kind == DecorKinds.CarFront && c.GroundAt(p.X, p.Y) != Indoor && !c.Spared.Contains(i)) cars.Add(CarCells(p, look.Facing));
                 else if ((look.Kind == DecorKinds.Bin || look.Kind == DecorKinds.Drums) && c.GroundAt(p.X, p.Y) != Indoor) small.Add(p);
             }
             var wrecked = wrecks.Select((w) => CarCells(w.Nose, global::Bastion.Engine.Decor.DecorOf(c.Decor[c.I(w.Nose.X, w.Nose.Y)])?.Facing ?? 0)).ToList();

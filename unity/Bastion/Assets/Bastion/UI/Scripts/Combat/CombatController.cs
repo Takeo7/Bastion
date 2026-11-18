@@ -1225,7 +1225,7 @@ namespace Bastion.UI.Combat
             {
                 if (!HandTiles(id).Any(t => Same(t, tile))) continue;
                 // A body that can't be searched now is walked to like any other tile (U9).
-                if (id == AbilityIds.Search && Looting.SearchSpot(State, tile) == Looting.Body && !SearchesAt(u, tile)) continue;
+                if (id == AbilityIds.Search && BodyLike(Looting.SearchSpot(State, tile)) && !SearchesAt(u, tile)) continue;
                 var view = BarView(id);
                 if (view?.Enabled == true) UseDoor(id, tile);
                 else if (view?.Reason != null) Toast(view.Reason);
@@ -1382,8 +1382,9 @@ namespace Bastion.UI.Combat
                 var decor = HasSpots ? Looting.SearchSpot(State, hover) : null;
                 // A body only where a click searches it (U9, Arturo 18/11): from further, beside it without the means, or
                 // searched, its tile is a tile like any other (the way there, its ring and its cover; below). And only once
-                // the figure is there, not while it still walks to it (Producto, 18/11).
-                if (decor == Looting.Body && (!SearchesAt(u, hover) || !StandsWhereSeen(u))) decor = null;
+                // the figure is there, not while it still walks to it (Producto, 18/11). A police station's dead officer the
+                // same (U15: on the floor, its tile walked on).
+                if (BodyLike(decor) && (!SearchesAt(u, hover) || !StandsWhereSeen(u))) decor = null;
                 // A body or a car's boot: the thing itself outlined and a rucksack over it, no frame on the tile and no
                 // words (Arturo, 5/11 #12); lit where a click searches it. Searched, nothing.
                 if (decor != null && IsBodyOrBoot(decor))
@@ -1392,7 +1393,8 @@ namespace Bastion.UI.Combat
                     var reach = SearchesAt(u, hover);
                     searchNext = new List<(Pos, bool)> { (hover, reach) };
                     // With the finger the first tap only points: what the second does, said (Lore, 7/11).
-                    if (GameInput.Touch && reach) Note(hover, HudText.Touch.Open(Capitalize(Lore.SearchSpots.TryGetValue(decor, out var found) ? found.Name : "el cuerpo"), "registrar"));
+                    // Its verb as Lore has it (Producto, 18/11, U15): «toca otra vez: abrir» a boot, «registrar» a body.
+                    if (GameInput.Touch && reach) Note(hover, HudText.Touch.Open(Capitalize(SpotName(decor, "el cuerpo")), SearchVerb(decor)));
                     return;
                 }
                 if (decor != null)
@@ -1402,13 +1404,16 @@ namespace Bastion.UI.Combat
                     var body = decor == Looting.Body;
                     if (Looting.WasSearched(State, hover))
                     {
+                        // A piece searched (G19): no mark and no words, as one empty from the start (Producto, 18/11, U15).
+                        if (IsPiece(decor)) return;
                         // Agreeing with what it is (Lore's Masculine): «El maletero · ya está abierto» (0.11.5).
                         Note(hover, body ? $"{name} · ya está registrado" : $"{name} · ya está {(spot != null && spot.Masculine ? "abierto" : "abierta")}");
                         return;
                     }
                     var near = HandTiles(AbilityIds.Search).Any(t => Same(t, hover));
                     var blocked = near ? Abilities.AbilityBlocker(State, u, AbilityIds.Search) : null;
-                    var verb = body ? "registrar" : "abrir";
+                    // (A piece by Lore's title: «Abrir las taquillas», «Registrar el armero».)
+                    var verb = SearchVerb(decor);
                     // The box or the furniture outlined and the rucksack over it, lit where a click opens it (Arturo, 7/11:
                     // not a tile on the floor); words only for why not and for the finger.
                     searchNext = new List<(Pos, bool)> { (hover, near && blocked == null) };

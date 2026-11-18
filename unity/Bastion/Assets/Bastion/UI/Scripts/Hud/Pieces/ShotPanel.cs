@@ -29,6 +29,9 @@ namespace Bastion.UI.Hud
             // mixta.css: a big plate in its frame, and Disparar slanted (.hud button.fire).
             PlateFrame.Dress(host);
             Slant.Dress(host.Q<Button>("fire"));
+            // Its words whole, as they are laid out (FitFire).
+            var fireKey = host.Q<Button>("fire");
+            fireKey.RegisterCallback<GeometryChangedEvent>(_ => FitFire(fireKey));
             host.Q("dial-holder").Add(dial);
             host.Q<Button>("prev").clicked += () => handlers.OnCycleTarget(-1);
             host.Q<Button>("next").clicked += () => handlers.OnCycleTarget(1);
@@ -104,8 +107,48 @@ namespace Bastion.UI.Hud
             var fire = host.Q<Button>("fire");
             var locked = !string.IsNullOrEmpty(v.Locked);
             fire.text = locked ? v.Locked : (v.Action ?? "").ToUpperInvariant();
+            // (Each text measured again from the key's own size, beside Cancelar.)
+            fire.style.fontSize = StyleKeyword.Null;
+            fire.style.letterSpacing = StyleKeyword.Null;
+            fire.parent.RemoveFromClassList("shot-actions--stacked");
             fire.SetEnabled(!locked);
             tips.Attach(fire, locked ? HudText.Shot.LockedTip : HudText.Shot.FireTip);
+        }
+
+        /// <summary>The least the fire key's words go down to (its own 16).</summary>
+        const float LeastFire = 13f;
+
+        /// <summary>
+        /// The fire key's words whole, never cut nor on two lines (Producto, 18/11, U15: «REGISTRAR EL ESTANTE DE MEDICINAS»
+        /// was cut at both ends): closer and smaller, as the busts' state words (SquadList.FitTag), down to LeastFire; still
+        /// too long beside Cancelar, the key takes the whole row (Cancelar under it) and is fitted again there. Any that
+        /// doesn't fit even so is said in the log, for Lore.
+        /// </summary>
+        void FitFire(Button fire)
+        {
+            var room = fire.contentRect.width;
+            if (float.IsNaN(room) || room <= 0 || string.IsNullOrEmpty(fire.text)) return;
+            var wide = fire.MeasureTextSize(fire.text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined).x;
+            if (wide <= room + 0.5f) return;
+            var now = fire.resolvedStyle.fontSize;
+            var row = fire.parent;
+            var fits = Mathf.Floor(now * room / wide * 0.97f * 4) / 4;
+            if (fits < LeastFire && !row.ClassListContains("shot-actions--stacked"))
+            {
+                // A row of its own, from its own size again.
+                row.AddToClassList("shot-actions--stacked");
+                fire.style.fontSize = StyleKeyword.Null;
+                fire.style.letterSpacing = StyleKeyword.Null;
+                return;
+            }
+            if (now <= LeastFire)
+            {
+                // (Past its padding into the plate's edge is still whole; only past the key itself is cut.)
+                if (wide > fire.layout.width) Debug.Log($"[ui] «{fire.text}» no cabe entero en el botón ({wide:0.#} de {fire.layout.width:0.#} px a {LeastFire} px)");
+                return;
+            }
+            fire.style.letterSpacing = 0;
+            fire.style.fontSize = Mathf.Max(LeastFire, fits);
         }
 
         void FillDamage(VisualElement damage, DamageView d)

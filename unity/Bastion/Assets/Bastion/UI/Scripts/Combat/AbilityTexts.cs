@@ -78,7 +78,17 @@ namespace Bastion.UI.Combat
             spot == Looting.Body ? ("Cuerpo", "Registra el cuerpo de un enemigo muerto que tengas al lado o a tus pies: sale lo que llevaba encima. Hace un poco de ruido.")
             : spot == Looting.PoliceBoot ? ("Maletero", "Abre el maletero del coche de policía que tengas al lado: a veces hay un arma. Hace un poco de ruido.")
             : spot == Looting.CarBoot ? ("Maletero", "Abre el maletero del coche que tengas al lado. Hace un poco de ruido.")
+            // A piece searched one by one (G19): its name without the article, as «Caja» (Producto, 18/11, U15), and Lore's words.
+            : spot != null && SearchPieces.All.Contains(spot) ? (Bare(Lore.SearchSpots.TryGetValue(spot, out var piece) ? piece.Name : "el mueble"), Lore.SearchEffect(spot))
             : (MenuLabels[AbilityIds.Search], Content.Abilities[AbilityIds.Search].Description);
+
+        /// <summary>A name with its article, as a choice of a menu reads it: «el armario de armas» → «Armario de armas».</summary>
+        static string Bare(string name)
+        {
+            foreach (var article in new[] { "el ", "la ", "los ", "las " })
+                if (name.StartsWith(article, StringComparison.Ordinal)) name = name.Substring(article.Length);
+            return name.Length > 0 ? char.ToUpperInvariant(name[0]) + name.Substring(1) : name;
+        }
 
         /// <summary>What attack variants do besides the odds shown in the panel.</summary>
         public static readonly Dictionary<string, string> AttackNotes = new Dictionary<string, string>

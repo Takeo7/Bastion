@@ -29,6 +29,52 @@ namespace Bastion.Engine
         public int Id { get; set; }
         public List<Pos> Tiles { get; set; } = new List<Pos>();
         public string Spot { get; set; } = ""; // Spots
+        /// <summary>G19: a piece of furniture searched one by one beside its floor (SearchPieces.Furniture): not searched whole.</summary>
+        public bool Pieces { get; set; }
+    }
+
+    /// <summary>
+    /// G19 (Arturo, 18/11, cuadros 65–67; .dev-snapshots/gameplay/muebles/CONTRATO.md): what is searched piece by piece, as a
+    /// box: the police station's own (its marks, InteriorSite.Dressing, PoliceDetailKinds) and the medical furniture
+    /// anywhere (its decor). What Looting.SearchSpot gives for each, for its name (Lore).
+    /// </summary>
+    public static class SearchPieces
+    {
+        public const string WeaponRack = PoliceDetailKinds.WeaponRack;
+        public const string WeaponLocker = PoliceDetailKinds.WeaponLocker;
+        public const string GunCase = PoliceDetailKinds.GunCase;
+        public const string AmmoCase = PoliceDetailKinds.AmmoCase;
+        public const string EvidenceShelf = PoliceDetailKinds.EvidenceShelf;
+        public const string LockerRow = PoliceDetailKinds.LockerRow;
+        /// <summary>The dead officer (cuadro 67): on the floor, a body; no furniture, so its room is searched whole still.</summary>
+        public const string CorpseOfficer = PoliceDetailKinds.CorpseOfficer;
+        public const string MedicalCabinet = DecorKinds.MedicalCabinet;
+        public const string MedicalShelf = DecorKinds.MedicalShelf;
+        public const string MedicalCart = DecorKinds.MedicalCart;
+
+        /// <summary>A police station's: marks of its InteriorSite.</summary>
+        public static readonly IReadOnlyList<string> Police = new[] { WeaponRack, WeaponLocker, GunCase, AmmoCase, EvidenceShelf, LockerRow, CorpseOfficer };
+        /// <summary>Anywhere: decor, by its anchor.</summary>
+        public static readonly IReadOnlyList<string> Medical = new[] { MedicalCabinet, MedicalShelf, MedicalCart };
+        public static readonly IReadOnlyList<string> All = Police.Concat(Medical).ToList();
+
+        /// <summary>Furniture: its room isn't searched whole (LootRoom.Pieces). All but the officer's body.</summary>
+        public static bool Furniture(string kind) => kind != CorpseOfficer;
+
+        /// <summary>The tall ones (a `high` tile); the rest stand `low`.</summary>
+        public static readonly IReadOnlyList<string> Tall = new[] { WeaponRack, WeaponLocker, EvidenceShelf, LockerRow, MedicalCabinet, MedicalShelf };
+
+        /// <summary>
+        /// Whether the piece of `kind` on `p` still stands to be searched (Arte, 18/11): a blast knocks a tall one down to low
+        /// cover and blows a low one away (Sim's BlastResult), and what it held with it, as a box blown away (SearchSpot).
+        /// The officer's body, wherever it lies.
+        /// </summary>
+        public static bool Standing(GameState s, Pos p, string kind)
+        {
+            if (kind == CorpseOfficer) return true;
+            var tile = Grid.KindAt(s, p);
+            return Tall.Contains(kind) ? tile == TileKinds.High : tile == TileKinds.Low || tile == TileKinds.High;
+        }
     }
 
     /// <summary>A weapon with its condition and mods, as it travels in a backpack.</summary>
@@ -272,6 +318,8 @@ namespace Bastion.Engine
             if (!Grid.InBounds(s, p.X, p.Y)) return null;
             if (s.Mission.OutOfReach != null && s.Mission.OutOfReach.Contains(Grid.NodeOf(s, p))) return null;
             if (BodyAt(s, p) != null) return Body;
+            // G19: a piece that holds something (MissionState.Pieces), the dead officer's on the floor too.
+            if (s.Mission.Pieces != null && s.Mission.Pieces.Contains(Grid.NodeOf(s, p)) && PieceAt(s, p) is string piece) return SearchPieces.Standing(s, p, piece) ? piece : null;
             var decor = DecorLayer(s, p.Z);
             if (decor == null) return null;
             var kind = Grid.KindAt(s, p);
@@ -280,6 +328,28 @@ namespace Bastion.Engine
             if (p.Z == 0 && BootOf(s, i) is int nose) return (s.Mission.PoliceCar ?? new List<int>()).Contains(nose) ? PoliceBoot : CarBoot;
             var look = Decor.DecorOf(i < decor.Count ? decor[i] : (int?)null);
             return look != null && LootBoxes.Contains(look.Kind) ? look.Kind : null;
+        }
+
+        /// <summary>
+        /// G19: the piece searched one by one on `p` (SearchPieces), whether it holds something or is empty from the start:
+        /// a police station's mark there, or medical furniture whose anchor `p` is (`anyTile`: any of its tiles). Null with no
+        /// MissionState.Pieces (a fight of the 0.13.2's), as if there were none.
+        /// </summary>
+        public static string? PieceAt(GameState s, Pos at, bool anyTile = false)
+        {
+            if (s.Mission.Pieces == null) return null;
+            var p = Grid.ToPos(at);
+            if (!Grid.InBounds(s, p.X, p.Y)) return null;
+            foreach (var site in s.Interiors ?? new List<InteriorSite>())
+            {
+                if (site.Kind != InteriorKinds.Police) continue;
+                foreach (var d in site.Dressing) if (d.X == p.X && d.Y == p.Y && d.Z == p.Z && SearchPieces.Police.Contains(d.Kind)) return d.Kind;
+            }
+            var decor = DecorLayer(s, p.Z);
+            if (decor == null) return null;
+            var i = Grid.TileIndex(s, p.X, p.Y);
+            var o = Decor.ObjectAt(decor, s.Width, i);
+            return o != null && (anyTile || o.Anchor == i) && SearchPieces.Medical.Contains(o.Kind) ? o.Kind : null;
         }
 
         /// <summary>The dead enemy lying on `p` that can be searched: not risen again, nor an objective, nor the alarm.</summary>
@@ -301,6 +371,64 @@ namespace Bastion.Engine
             int nx = car.Anchor % s.Width, ny = car.Anchor / s.Width;
             var boot = car.Tiles.OrderByDescending((j) => Js.Hypot(j % s.Width - nx, j / s.Width - ny)).First();
             return boot == i ? car.Anchor : (int?)null;
+        }
+
+        // ------------------------------------------------------------ the pieces
+
+        /// <summary>RollPiece's shares in 100: a locker's vest and magazine, an evidence shelf's supplies and belt's thing, a medicine shelf's medicine and kit, a cart's medicine; the rest, nothing.</summary>
+        public const int LockerVest = 30, LockerMag = 30, EvidenceSupplies = 30, EvidenceBelt = 20, ShelfMedicine = 40, ShelfFirstAid = 15, CartMedicine = 35;
+
+        /// <summary>
+        /// G19 (CONTRATO.md §3, cuadro 67): what searching a piece that holds something turns up, and the chance in 100 of a
+        /// vest with it (a run's only, RunLoot.VestOf). The armoury always gives: its rack a long gun (an assault rifle two
+        /// times in three, a shotgun), its locker a sidearm, its gun cases a sidearm or an improvement, its ammo boxes two
+        /// magazines; the lockers a vest, a magazine or nothing; an evidence shelf supplies, a belt's thing or nothing; the
+        /// officer's body what a policeman's does (RollBody: a gun one time in four, a vest now and then); a medicine cabinet
+        /// a medicine or a first-aid kit, always; a medicine shelf one of them or nothing; a cart a medicine or nothing.
+        /// A sidearm where pistols aren't counted (MissionState.Pistols) is a shotgun, as a body's (RollBody); magazines only
+        /// for a searcher who counts them.
+        /// </summary>
+        public static (Loot? Loot, int Vest) RollPiece(string kind, Rng rng, bool mags, bool pistols = false, int difficulty = 2, bool night = false)
+        {
+            var d = Math.Max(1, Math.Min(4, difficulty));
+            Loot Gun(string id) => new Loot { Weapon = id, Condition = rng.Range(FoundCondition[0], FoundCondition[1]) };
+            var sidearm = pistols ? FoundWeaponIds.Pistol : FoundWeaponIds.PumpShotgun;
+            switch (kind)
+            {
+                case SearchPieces.WeaponRack:
+                    return (Gun(rng.Int(3) < 2 ? FoundWeaponIds.AssaultRifle : FoundWeaponIds.PumpShotgun), 0);
+                case SearchPieces.WeaponLocker:
+                    return (Gun(sidearm), 0);
+                case SearchPieces.GunCase:
+                    return (rng.Int(2) == 0 ? Gun(sidearm) : FoundMod(rng), 0);
+                case SearchPieces.AmmoCase:
+                    return (mags ? new Loot { Mags = 2 } : null, 0);
+                case SearchPieces.LockerRow:
+                {
+                    var roll = rng.Int(100);
+                    if (roll < LockerVest) return (null, 100);
+                    return (roll < LockerVest + LockerMag && mags ? new Loot { Mags = 1 } : null, 0);
+                }
+                case SearchPieces.EvidenceShelf:
+                {
+                    var roll = rng.Int(100);
+                    if (roll < EvidenceSupplies) return (new Loot { Supplies = Supplies(d, rng, night) }, 0);
+                    return (roll < EvidenceSupplies + EvidenceBelt ? new Loot { Item = rng.Pick(Content.BeltItems) } : null, 0);
+                }
+                case SearchPieces.CorpseOfficer:
+                    return (rng.Int(100) < Content.Uniforms.Gun ? Gun(sidearm) : null, RunLoot.VestChance);
+                case SearchPieces.MedicalCabinet:
+                    return (rng.Int(3) < 2 ? new Loot { Medicines = 1 } : new Loot { Item = ItemIds.FirstAid }, 0);
+                case SearchPieces.MedicalShelf:
+                {
+                    var roll = rng.Int(100);
+                    return (roll < ShelfMedicine ? new Loot { Medicines = 1 } : roll < ShelfMedicine + ShelfFirstAid ? new Loot { Item = ItemIds.FirstAid } : null, 0);
+                }
+                case SearchPieces.MedicalCart:
+                    return (rng.Int(100) < CartMedicine ? new Loot { Medicines = 1 } : null, 0);
+                default:
+                    return (null, 0);
+            }
         }
 
         // ------------------------------------------------------------- the rooms
@@ -337,6 +465,7 @@ namespace Bastion.Engine
             var seen = new HashSet<int> { Grid.TileIndex(s, start.X, start.Y) };
             var tiles = new List<Pos>();
             var furniture = new JsMap<int, string>();
+            var pieces = false;
             var queue = new Queue<Pos>();
             queue.Enqueue(start);
             while (queue.Count > 0)
@@ -356,6 +485,8 @@ namespace Bastion.Engine
                         // An object over several tiles (a bed, a table) by its anchor: once, whichever of its tiles is beside the floor.
                         var look = Decor.ObjectAt(decor, s.Width, i);
                         if (look != null && SpotsOf.TryGetValue(look.Kind, out var spot)) furniture.Set(look.Anchor, spot);
+                        // G19: a piece searched one by one beside it, full or empty from the start.
+                        if (!pieces && PieceAt(s, q, anyTile: true) is string piece && SearchPieces.Furniture(piece)) pieces = true;
                     }
                     if (seen.Contains(i) || !RoomFloor(kind) || !Interior(s, x, y, z)) continue;
                     seen.Add(i);
@@ -369,7 +500,7 @@ namespace Bastion.Engine
             Js.Sort(entries, (a, b) => b.Value - a.Value != 0 ? b.Value - a.Value : string.CompareOrdinal(a.Key, b.Key));
             var best = entries.Count > 0 ? entries[0].Key : Spots.Home;
             var id = tiles.Min((p) => Grid.NodeOf(s, p));
-            return new LootRoom { Id = id, Tiles = tiles, Spot = best };
+            return new LootRoom { Id = id, Tiles = tiles, Spot = best, Pieces = pieces };
         }
 
         /// <summary>Whether the squad has already searched `room` (docs/FASE8.md §B: once for everyone).</summary>
@@ -507,12 +638,13 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// Whether a soldier on `from` can open what is on `p`: beside it (ReachesToSearch), or standing on a body; with
+        /// Whether a soldier on `from` can open what is on `p`: beside it (ReachesToSearch), or standing on a body (the dead
+        /// officer's too, G19); with
         /// `reach` 2 (Gancho, T2), two tiles off too, past a tile it reaches across to it on the way (ReachesToSearch twice).
         /// </summary>
         public static bool ReachesToOpen(GameState s, Pos from, Pos p, int reach = 1)
         {
-            if (ReachesToSearch(s, from, p) || (Grid.SamePos(from, p) && BodyAt(s, p) != null)) return true;
+            if (ReachesToSearch(s, from, p) || (Grid.SamePos(from, p) && (BodyAt(s, p) != null || PieceAt(s, p) == SearchPieces.CorpseOfficer))) return true;
             if (reach < 2 || Math.Max(Math.Abs(p.X - from.X), Math.Abs(p.Y - from.Y)) != 2) return false;
             foreach (var d in Grid.Dirs8)
             {

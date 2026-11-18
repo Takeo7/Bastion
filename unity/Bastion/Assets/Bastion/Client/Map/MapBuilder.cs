@@ -1254,6 +1254,7 @@ namespace Bastion.Client.Map
                     h = h * 31 + d.Z * 7919 + i;
                     h = h * 31 + (i < tiles.Count ? tiles[i]?.GetHashCode() ?? 1 : 0);
                     h = h * 31 + (i < decor.Count ? decor[i] : -1);
+                    if (d.Kind == "medicalSupplies") h = h * 31 + (int)PieceOf(d.Z, i);
                     // (The wall behind, only for what hangs on it: Dressing's `wall`.)
                     if (d.Kind == "wallCross" || d.Kind == "cautionSign" || d.Kind == "safeSign" || d.Kind == "wallBlood")
                         h = h * 31 + (wi >= 0 && wi < tiles.Count ? tiles[wi]?.GetHashCode() ?? 1 : 0);
@@ -1312,6 +1313,8 @@ namespace Bastion.Client.Map
                 if (body && tile != "floor") continue;
                 if (scatter && tile != "floor" && tile != "low" && tile != "high") continue;
                 if (!scatter && !bed && !body && !wall && tile != "low" && tile != "high") continue;
+                // (G19: nothing left on a cart searched, nor on one empty from the start.)
+                if (d.Kind == "medicalSupplies" && look?.Kind == "medicalCart" && PieceOf(d.Z, i) is Piece.Searched or Piece.Empty) continue;
                 var normal = Bastion.Engine.Grid.Dirs4[d.Facing];
                 int wx = d.X - normal.X, wy = d.Y - normal.Y, wi = wy * s.Width + wx;
                 if (wall && (wx < 0 || wy < 0 || wx >= s.Width || wy >= s.Height || wi >= tiles.Count || tiles[wi] != "wall")) continue;
@@ -1868,7 +1871,8 @@ namespace Bastion.Client.Map
             // A loot box (mapView.ts lootBox): shut with its lid on, or searched open.
             if (LootBox(k, i, look.Kind, turn, floor)) return;
             // Searched furniture (mapView.ts addDecor): opened, its contents on the floor in front of it.
-            if (SearchedAt(k, i) && !look.Kind.StartsWith("loot"))
+            // (Not what is searched piece by piece, G19: opened or emptied as its own, nothing on the floor.)
+            if (SearchedAt(k, i) && !look.Kind.StartsWith("loot") && PieceOf(k, i) == Piece.None)
             {
                 var front = Bastion.Engine.Grid.Dirs4[MapArt.Facing.Contains(look.Kind) ? look.Facing : Mathf.FloorToInt(MapArt.Hash(x, y, 2) * 4)];
                 var middle = new Vector3((x + 0.5f) * MapSpace.Tile, floor, -(y + 0.5f) * MapSpace.Tile);
@@ -1915,14 +1919,18 @@ namespace Bastion.Client.Map
         void Clinical(int k, int i, DecorLook look, float floor)
         {
             int x = i % s.Width, y = i / s.Width;
-            var faces = MedicalDetails.Furniture(look.Kind, MapArt.Hash(x, y, 73 + k) < 0.6f);
+            // G19: a cabinet of medicines empty from the start or searched, open and bare, a shelf of them bare; a cart
+            // searched, without its kit.
+            var piece = PieceOf(k, i);
+            bool open = piece == Piece.Searched || piece == Piece.Empty;
+            var faces = MedicalDetails.Furniture(look.Kind, MapArt.Hash(x, y, 73 + k) < 0.6f, open);
             int owner = plan != null && i < plan.Owner.Length ? plan.Owner[i] : -1;
             double wear = owner >= 0 && owner < plan.Buildings.Count ? plan.Buildings[owner].medicalWear ?? 0 : 0;
             float yaw = (4 - look.Facing) % 4 * (Mathf.PI / 2) + (MapArt.Hash(x, y, 19) - 0.5f) * (float)wear * 0.7f;
             var at = Matrix4x4.TRS(new Vector3(x + 0.5f, floor / MapSpace.Tile, y + 0.5f), Quaternion.AngleAxis(yaw * Mathf.Rad2Deg, Vector3.up), Vector3.one);
             var o = Shapes($"Mueble {look.Kind}", props[k], faces.Select(f => (f, at)), Resources.Load<Material>("FrameShape"), true);
             Own(o, k, new[] { i });
-            if (look.Kind == "medicalCart") Own(PlaceGame(props[k], "clinicalKit", at * Matrix4x4.Translate(new Vector3(-0.08f, 0.59f, -0.03f))), k, new[] { i });
+            if (look.Kind == "medicalCart" && !open) Own(PlaceGame(props[k], "clinicalKit", at * Matrix4x4.Translate(new Vector3(-0.08f, 0.59f, -0.03f))), k, new[] { i });
         }
 
         /// <summary>A fence or gate post still standing on tile (x, y) (mapView.ts fenceAt: the ground's): the fences beside it run their rails to it.</summary>

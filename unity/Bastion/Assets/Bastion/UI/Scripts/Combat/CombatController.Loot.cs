@@ -50,7 +50,32 @@ namespace Bastion.UI.Combat
         /// <summary>What ShowWay's pass puts there (its branches and ShowArmed), shown as it ends.</summary>
         List<(Pos at, bool lit)> searchNext;
 
-        static bool IsBodyOrBoot(string spot) => spot == Looting.Body || spot == Looting.CarBoot || spot == Looting.PoliceBoot;
+        static bool IsBodyOrBoot(string spot) => BodyLike(spot) || spot == Looting.CarBoot || spot == Looting.PoliceBoot;
+
+        /// <summary>
+        /// A body on the floor, whose tile is walked on: one of the dead's, or a police station's dead officer (G19; Producto,
+        /// 18/11, U15: «como los cuerpos de zombi»), marked only where a click searches it (U9).
+        /// </summary>
+        static bool BodyLike(string spot) => spot == Looting.Body || spot == SearchPieces.CorpseOfficer;
+
+        /// <summary>
+        /// Whether `p`, on a storey under `level` (the one in view), is inside a building that has a storey over it (Interior):
+        /// its mark would float over the floor in view, where nothing is (Producto, 18/11, U15: «una marca flotando sobre un
+        /// suelo donde no hay nada confunde»). In the street, under the sky, never: the cars and bodies there show.
+        /// </summary>
+        static bool Covered(GameState s, Pos p, int level) => p.Z < level && Interior(s, p);
+
+        /// <summary>A piece searched one by one (G19: a police station's, the medical furniture anywhere; the dead officer too).</summary>
+        static bool IsPiece(string spot) => spot != null && SearchPieces.All.Contains(spot);
+
+        /// <summary>Its name with its article, as Lore has it («el armero», «las taquillas»); `fallback` with none.</summary>
+        static string SpotName(string spot, string fallback = "la caja") => spot != null && Lore.SearchSpots.TryGetValue(spot, out var s) ? s.Name : fallback;
+
+        /// <summary>
+        /// What a click does to `spot`, in words, Lore's verb (SearchSpot.Verb; Arturo, 18/11, cuadro 66): «abrir» what has a
+        /// door or a lid (a box, a boot, a locker), «registrar» what is open (a rack, a shelf, a cart, a body).
+        /// </summary>
+        static string SearchVerb(string spot) => (spot != null && Lore.SearchSpots.TryGetValue(spot, out var s) ? s.Verb : "Abrir").ToLowerInvariant();
 
         /// <summary>
         /// Whether a click on `tile` searches it now: within `u`'s hands (HandTiles) and nothing stops it. A body is one only
@@ -105,10 +130,10 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>
-        /// Everything to search the squad has seen (U11): the bodies, the boots and the boxes not searched yet
+        /// Everything to search the squad has seen (U11): the bodies, the boots, the boxes and the pieces (G19) not searched yet
         /// (Looting.SearchSpot), explored (the fog's, as the boxes' marks) and not inside a building not found (FoundInside),
-        /// on the storeys up to the one in view; lit what the picked one can search now from where it stands. Doors and
-        /// boards are not loot.
+        /// on the storeys up to the one in view, a lower one's only where no storey is over it (Covered); lit what the picked
+        /// one can search now from where it stands. Doors and boards are not loot.
         /// </summary>
         List<(Pos at, bool lit)> AllToSearch()
         {
@@ -125,7 +150,7 @@ namespace Bastion.UI.Combat
             void Add(Pos p)
             {
                 var node = Bastion.Engine.Grid.NodeOf(s, p);
-                if (!taken.Add(node) || Looting.WasSearched(s, p)) return;
+                if (!taken.Add(node) || Looting.WasSearched(s, p) || Covered(s, p, top)) return;
                 if (fog != null && !fog.Explored(node)) return;
                 if (node < found.Length && !found[node]) return;
                 list.Add((p, can && SearchesAt(u, p)));
@@ -134,12 +159,19 @@ namespace Bastion.UI.Combat
             // SearchSpot (it looks for a body among all the units at each: 12 ms over a city, 7/11).
             foreach (var a in s.Units)
                 if (!a.Alive && a.Pos.Z <= top && Looting.SearchSpot(s, a.Pos) == Looting.Body) Add(a.Pos);
+            // The pieces by their nodes (G19, MissionState.Pieces): the dead officer lies on the floor, which the tiles' loop
+            // below passes over; empty from the start, they aren't there; searched, Add leaves them.
+            foreach (var node in s.Mission.Pieces ?? new List<int>())
+            {
+                var p = Bastion.Engine.Grid.PosOf(s, node);
+                if (p.Z <= top && Looting.SearchSpot(s, p) != null) Add(p);
+            }
             // The squad's fallen with their things still there (U12), lit where a click opens the pack on them.
             foreach (var d in s.FloorGear ?? new List<DroppedGear>())
                 if (d.From != null && d.Pos.Z <= top && FallenWithGear(s, d.Pos) != null)
                 {
                     var node = Bastion.Engine.Grid.NodeOf(s, d.Pos);
-                    if (taken.Contains(node) || (fog != null && !fog.Explored(node)) || (node < found.Length && !found[node])) continue;
+                    if (taken.Contains(node) || Covered(s, d.Pos, top) || (fog != null && !fog.Explored(node)) || (node < found.Length && !found[node])) continue;
                     taken.Add(node);
                     list.Add((d.Pos, can && TakesFromFallen(u, d.Pos)));
                 }
@@ -160,7 +192,7 @@ namespace Bastion.UI.Combat
         /// 64: «todo lo que tiene al lado»): the bodies, boots, boxes and furniture within Registrar's reach (Looting.
         /// SearchableTiles: beside, two off with Gancho) while nothing stops it, and a fallen comrade's things beside, taken for
         /// free (G16) with no actions left too (Producto, 18/11). Doors and boards only under the pointer. Only while BesideQuiet,
-        /// on the storeys up to the one in view.
+        /// on the storeys up to the one in view, as Mayús (Covered).
         /// </summary>
         List<(Pos at, bool lit)> BesideToSearch()
         {
@@ -169,7 +201,7 @@ namespace Bastion.UI.Combat
             if (u == null || !BesideQuiet(u)) return list;
             if (HasSpots && Abilities.AbilityBlocker(State, u, AbilityIds.Search) == null)
                 foreach (var t in Looting.SearchableTiles(State, u))
-                    if (t.Z <= Level) list.Add((t, true));
+                    if (t.Z <= Level && !Covered(State, t, Level)) list.Add((t, true));
             foreach (var d in State.FloorGear ?? new List<DroppedGear>())
                 if (d.From != null && d.Pos.Z <= Level && !list.Any(m => Same(m.at, d.Pos)) && FallenWithGear(State, d.Pos) != null && RunPack.InReach(State, u, d))
                     list.Add((d.Pos, true));
@@ -242,7 +274,7 @@ namespace Bastion.UI.Combat
                 // Over the thing's top (Arte's SearchOutline.TopOf: a box's lid, a door's leaf, the furniture against a
                 // window), else at the height each kind had.
                 var spot = Looting.SearchSpot(v, at);
-                var high = spot == Looting.Body || FallenWithGear(v, at) != null ? SearchBodyHeight : spot == Looting.CarBoot || spot == Looting.PoliceBoot ? SearchBootHeight : LootMarkHeight;
+                var high = BodyLike(spot) || FallenWithGear(v, at) != null ? SearchBodyHeight : spot == Looting.CarBoot || spot == Looting.PoliceBoot ? SearchBootHeight : LootMarkHeight;
                 var world = Board.TileToWorld(v, at, high * Board.Tile);
                 if (Bastion.Client.Units.SearchOutline.TopOf(v, at) is float top) world.y = top + SearchOverTop;
                 list.Add(new WorldTagView

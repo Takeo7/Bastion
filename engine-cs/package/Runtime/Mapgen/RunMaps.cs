@@ -89,6 +89,20 @@ namespace Bastion.Engine
         /// </summary>
         private static List<Vec2> FirstEvac(Canvas c, IEnumerable<Vec2> centres, int? most = null)
         {
+            // A long place where one fits anywhere (Canvas.BusLength); else the old one where La Lata drawn on it stands clear of
+            // walls (Canvas.BusDrawn); else the old one.
+            var all = centres.ToList();
+            var zone = FirstEvacOf(c, all, most);
+            if (zone.Count > 0 || c.BusLength == BusL) return zone;
+            c.BusLength = BusL;
+            zone = FirstEvacOf(c, all, most);
+            if (zone.Count > 0 || c.BusDrawn == BusL) return zone;
+            c.BusDrawn = BusL;
+            return FirstEvacOf(c, all, most);
+        }
+
+        private static List<Vec2> FirstEvacOf(Canvas c, IEnumerable<Vec2> centres, int? most)
+        {
             var tries = 0;
             foreach (var p in centres)
             {
@@ -183,7 +197,8 @@ namespace Bastion.Engine
         /// <summary>The offices (H9 §1): the city's office block (BigBuilding: 11–14 across, up to 18 deep, 2–3 storeys), at its biggest.</summary>
         public static readonly IReadOnlyList<int> OfficesAcross = new[] { 12, 14 };
         public static readonly IReadOnlyList<int> OfficesDepth = new[] { 16, 18 };
-        public const int OfficesStrip = 6;
+        /// <summary>Seven deep (G19, 18/11): its first two rows clear of where the squad comes in, La Lata's bus along them.</summary>
+        public const int OfficesStrip = 7;
         /// <summary>The shed (H9 §2): the factory's main shed (Facility, MainHall: 24–30 along its docks, 16–20 deep); its strip deeper, the lorries back onto it.</summary>
         public static readonly IReadOnlyList<int> ShedAcross = new[] { 24, 30 };
         public static readonly IReadOnlyList<int> ShedDepth = new[] { 16, 20 };
@@ -381,11 +396,11 @@ namespace Bastion.Engine
         /// window of two, its door) and the duty office behind it; a corridor of four to the back door and the yard; down its
         /// west side, against the outer wall, 3–5 cells of 2 × 3 (a bed and a toilet, their front of bars onto the corridor,
         /// solid walls between: Arturo, 17/11; the last one a row deeper where it meets the back wall) and the toilets after
-        /// them; every wall one tile thick (Arte, 17/11); down its east side the armoury (racks, a locker, the cases and the best
-        /// box), the evidence room (shelves), the interrogation room (its table), the lockers and the kitchen. One storey or
-        /// two (offices up there; its stairs in a corner of the lobby). Two patrol cars on the strip, cover only (Arte: no
-        /// boot to open). The cells are solid while the map is made (nothing joins them to the rest) and turn to floor and
-        /// bars at the end (InteriorOf).
+        /// them; every wall one tile thick (Arte, 17/11); down its east side the armoury (racks, a locker, the cases; no box of
+        /// its own since its furniture is searched, G19), the evidence room (shelves), the interrogation room (its table), the lockers and the kitchen. One storey or
+        /// two (offices up there; its stairs in a corner of the lobby). Two patrol cars on the strip, their boots to search
+        /// (G19). The cells are solid while the map is made (nothing joins them to the rest) and turn to floor and bars at the
+        /// end (InteriorOf).
         /// </summary>
         private static Rect PoliceOnly(Canvas c, Rng rng, Style style)
         {
@@ -488,7 +503,6 @@ namespace Bastion.Engine
             Thing(9, 7, TileKinds.High, DecorKinds.Cabinet, 1);
             Thing(11, 10, TileKinds.Low, DecorKinds.Crates, 0);
             Thing(13, 10, TileKinds.Low, DecorKinds.Crates, 0);
-            Thing(12, 8, TileKinds.Low, DecorKinds.LootWeapons, 0);
             for (var iy = 12; iy < 15; iy++) Thing(15, iy, TileKinds.High, DecorKinds.Shelf, 3);
             foreach (var ix in new[] { 11, 12, 13 }) Thing(ix, 14, TileKinds.High, DecorKinds.Shelf, 0);
             // The interrogation table: one tile, a chair at each side of it (Arte, 17/11: two side by side read as one long table).
@@ -512,13 +526,19 @@ namespace Bastion.Engine
             FurnishRoom(c, Area(11, 0, 5, 5), rng, Furnishes.Office);
             // Upstairs, offices; the stairs in the lobby's corner.
             if (b.Storeys > 1) b.HouseStairs = Area(0, 1, 2, 4);
-            // Two patrol cars on the strip, at its ends.
+            // Two patrol cars on the strip, at its ends (G19, Producto 18/11): whole cars, low cover as any, their noses to the
+            // street and their boots by the front wall, searched as a police car's (Setup.PlacePoliceCars: all of them here).
+            // What the builder kept clear before its doors in the outer walls went with those doors: the strip is free again
+            // (it kept one end's car out, 0.13.2).
+            for (var y = 0; y < PoliceStrip; y++) for (var x = 0; x < c.Width; x++) c.Keep[c.I(x, y)] = false;
             foreach (var x in new[] { 1, c.Width - 2 })
             {
-                var car = new[] { V(x, 3), V(x, 4), V(x, 5) };
-                if (!car.All((p) => c.Free(p.X, p.Y) && c.Get(p.X, p.Y) == TileKinds.Floor)) continue;
-                foreach (var p in car) c.Force(p.X, p.Y, TileKinds.High);
-                DressObject(c, car, DecorKinds.SirenCar, 0);
+                var car = new List<Vec2> { V(x, 3), V(x, 4), V(x, 5) };
+                if (!car.All((p) => c.Free(p.X, p.Y))) continue;
+                // Kept: La Lata's way out never clears it (ParkBus), nor does a fire take it (LayFires).
+                if (!PutObject(c, car, TileKinds.Low, DecorKinds.CarFront, 0)) continue;
+                foreach (var p in car) c.Reserve(p.X, p.Y);
+                c.Spared.Add(c.I(car[0].X, car[0].Y));
             }
             b.InteriorKind = InteriorKinds.Police;
             b.InteriorRooms = rooms;

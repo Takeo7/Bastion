@@ -137,6 +137,43 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Abrir la caja de armas", Lore.BoxTitle("lootWeapons"));
             Assert.Equal("Abrir la caja de comida", Lore.BoxTitle("lootFood"));
             Assert.Equal("Abrir la caja", Lore.BoxTitle("wardrobe"));
+            Assert.Equal("Abrir el maletero", Lore.BoxTitle(Looting.CarBoot));
+            Assert.Equal("Registrar el cuerpo", Lore.BoxTitle(Looting.Body));
+            Assert.Equal("Ana registra el cuerpo. No lleva nada.", Lore.SearchLine("Ana", Looting.Body, null, 0));
+            Assert.Equal("Ana abre el maletero. Está vacío.", Lore.SearchLine("Ana", Looting.CarBoot, null, 0));
+            Assert.Equal("Ana abre la caja. Está vacía.", Lore.SearchLine("Ana", "wardrobe", null, 0));
+            // G19 (Arturo, 18/11, cuadros 65 to 67): the furniture searched one by one. Opened, what has a door or a lid;
+            // searched, what is open.
+            Assert.Equal("Registrar el armero", Lore.BoxTitle(SearchPieces.WeaponRack));
+            Assert.Equal("Abrir el armario de armas", Lore.BoxTitle(SearchPieces.WeaponLocker));
+            Assert.Equal("Abrir los maletines de armas", Lore.BoxTitle(SearchPieces.GunCase));
+            Assert.Equal("Abrir las cajas de munición", Lore.BoxTitle(SearchPieces.AmmoCase));
+            Assert.Equal("Abrir las taquillas", Lore.BoxTitle(SearchPieces.LockerRow));
+            Assert.Equal("Registrar el estante de pruebas", Lore.BoxTitle(SearchPieces.EvidenceShelf));
+            Assert.Equal("Registrar el cuerpo del agente", Lore.BoxTitle(SearchPieces.CorpseOfficer));
+            Assert.Equal("Abrir el armario de medicinas", Lore.BoxTitle(SearchPieces.MedicalCabinet));
+            Assert.Equal("Registrar el estante de medicinas", Lore.BoxTitle(SearchPieces.MedicalShelf));
+            Assert.Equal("Registrar el carro de curas", Lore.BoxTitle(SearchPieces.MedicalCart));
+            Assert.Equal("Ana registra el armero: un fusil de asalto.", Lore.SearchLine("Ana", SearchPieces.WeaponRack, new Loot { Weapon = FoundWeaponIds.AssaultRifle }, 0));
+            Assert.Equal("Ana registra el armero. Está vacío.", Lore.SearchLine("Ana", SearchPieces.WeaponRack, null, 0));
+            Assert.Equal("Ana abre los maletines de armas. Están vacíos.", Lore.SearchLine("Ana", SearchPieces.GunCase, null, 0));
+            Assert.Equal("Ana abre las cajas de munición. Están vacías.", Lore.SearchLine("Ana", SearchPieces.AmmoCase, null, 0));
+            Assert.Equal("Ana abre las taquillas. Están vacías.", Lore.SearchLine("Ana", SearchPieces.LockerRow, null, 0));
+            Assert.Equal("Ana registra el estante de pruebas: tabaco de contrabando (+9 §).", Lore.SearchLine("Ana", SearchPieces.EvidenceShelf, new Loot { Supplies = 9 }, 0));
+            Assert.Equal("Ana registra el estante de pruebas: una caja de pilas y linternas (+9 §).", Lore.SearchLine("Ana", SearchPieces.EvidenceShelf, new Loot { Supplies = 9 }, 2));
+            Assert.Equal("Ana registra el cuerpo del agente. No lleva nada.", Lore.SearchLine("Ana", SearchPieces.CorpseOfficer, null, 0));
+            Assert.Equal("Ana abre el armario de medicinas: vendas sin abrir.", Lore.SearchLine("Ana", SearchPieces.MedicalCabinet, new Loot { Medicines = 1 }, 2));
+            Assert.Equal("Ana abre el armario de medicinas: un botiquín.", Lore.SearchLine("Ana", SearchPieces.MedicalCabinet, new Loot { Item = ItemIds.FirstAid }, 0));
+            Assert.Equal("Ana registra el estante de medicinas. Está vacío.", Lore.SearchLine("Ana", SearchPieces.MedicalShelf, null, 0));
+            Assert.Equal("Ana registra el carro de curas: un frasco de yodo.", Lore.SearchLine("Ana", SearchPieces.MedicalCart, new Loot { Medicines = 1 }, 3));
+            Assert.Equal("Registra un armero que tengas al lado. Da siempre un arma larga: un fusil de asalto o una escopeta. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.WeaponRack));
+            Assert.Equal("Abre unas taquillas que tengas al lado. Puede haber un chaleco o un cargador, o nada. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.LockerRow));
+            Assert.Equal("Registra el cuerpo de un agente que tengas al lado. A veces lleva una pistola o un chaleco. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.CorpseOfficer));
+            Assert.Equal("Abre un armario de medicinas que tengas al lado. Da siempre una medicina o un botiquín. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.MedicalCabinet));
+            Assert.Equal("Registra un carro de curas que tengas al lado. Puede haber una medicina, o nada. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.MedicalCart));
+            Assert.Equal("En esta habitación se registra mueble a mueble.", Lore.RoomByPieces);
+            Assert.Equal("No hay nada que registrar a tu lado.", Lore.NothingBeside);
+            Assert.Equal("Lo que tienes al lado ya está registrado.", Lore.SearchedBeside);
 
             // people and outfits
             Assert.Equal("f", Lore.NamedSex["Dra. Amara Nwosu"]);
@@ -3171,7 +3208,10 @@ namespace Bastion.Engine.Tests
             // The special maps (H9, Arturo 17/11): their line under «Sitio:» on the sheet; nothing for the six places of always.
             Assert.Equal("Solo por dentro: se descubre sala a sala. Registrando, salen más suministros y accesorios de arma.", Lore.SiteLine(Places.Offices));
             Assert.Equal("Solo por dentro: la nave se ve entera nada más entrar. Registrando, salen más cargadores, accesorios de arma y suministros.", Lore.SiteLine(Places.Shed));
-            Assert.Equal("Solo por dentro: se descubre sala a sala. Registrando, salen más armas, cargadores y chalecos.", Lore.SiteLine(Places.Police));
+            // G19 (Arturo, 18/11, cuadros 65 to 67): the police station's, the hospital's and the pharmacy's furniture, one by one.
+            Assert.Equal("Solo por dentro: se descubre sala a sala. En la armería salen armas y cargadores, y en las taquillas, chalecos. Los coches patrulla de delante pueden llevar un arma en el maletero.", Lore.SiteLine(Places.Police));
+            Assert.Equal("Solo por dentro: se descubre sala a sala. En los armarios, los estantes y los carros de curas salen medicinas y botiquines.", Lore.SiteLine(Places.Hospital));
+            Assert.Equal("Al aire libre: una plaza con tiendas alrededor, y por sus escaparates se ve dentro. Registrando, salen más suministros y cosas para el cinturón, y en los estantes de la farmacia, medicinas y botiquines.", Lore.SiteLine(Places.Plaza));
             Assert.All(new[] { Places.Hospital, Places.Offices, Places.Shed, Places.Police, Places.Plaza, Places.Camping }, (p) => Assert.NotNull(Lore.SiteLine(p)));
             Assert.All(new[] { Places.City, Places.Town, Places.Estate, Places.Factory, Places.Roadside, Places.Country }, (p) => Assert.Null(Lore.SiteLine(p)));
             Assert.Equal("Mal tiempo", Lore.ModifierName(Modifiers.Storm));

@@ -62,7 +62,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(1, u.Ap);
             Assert.Equal(new[] { 1 * 8 + 3 }, s.Searched);
             Assert.False(Looting.IsSearchable(s, P(3, 1)));
-            Assert.Equal("Ya está abierta.", Abilities.AbilityBlocker(s, u, AbilityIds.Search));
+            Assert.Equal(Lore.SearchedBeside, Abilities.AbilityBlocker(s, u, AbilityIds.Search));
         }
 
         [Fact(DisplayName = "searching › a full backpack leaves the find on the floor; the box at hand, no wall in between; furniture and cars are no longer searched")]
@@ -83,7 +83,7 @@ namespace Bastion.Engine.Tests
             Assert.Null(dropped.From);
             s.Searched = new List<int>();
             u.Pos = P(0, 0);
-            Assert.Equal("No hay ninguna caja al lado.", Abilities.AbilityBlocker(s, u, AbilityIds.Search));
+            Assert.Equal(Lore.NothingBeside, Abilities.AbilityBlocker(s, u, AbilityIds.Search));
             // Diagonally round the corner of a wall: out of reach.
             u.Pos = P(4, 2);
             SamePlaces(new[] { P(3, 1) }, Looting.SearchableTiles(s, u));

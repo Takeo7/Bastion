@@ -226,7 +226,9 @@ namespace Bastion.Engine
             }
             else if (needsEvac)
             {
-                // The hospital's on its strip (H7); an expedition's normal node (EvacNear), near the squad.
+                // The hospital's on its strip (H7); an expedition's normal node (EvacNear), near the squad. On these maps La
+                // Lata's place is as long as its longest (Canvas.BusLength), where it fits.
+                if (site == Sites.Hospital || site == Sites.Offices || site == Sites.Shed || site == Sites.Police || site == Sites.Plaza || site == Sites.Camping) c.BusLength = c.BusDrawn = TownBus[1];
                 if (site == Sites.Hospital) evacZone = HospitalEvac(c);
                 else if (site == Sites.Offices || site == Sites.Shed || site == Sites.Police) evacZone = StripEvac(c, site == Sites.Shed ? ShedStrip : site == Sites.Police ? PoliceStrip : OfficesStrip);
                 else if (site == Sites.Plaza) evacZone = PlazaEvac(c);

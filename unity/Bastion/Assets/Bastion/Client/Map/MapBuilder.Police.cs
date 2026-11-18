@@ -91,6 +91,174 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>
+        /// G19 (Arturo, 18/11, cuadros 65–67; .dev-snapshots/gameplay/muebles/CONTRATO.md §1): what the furniture searched
+        /// piece by piece on a tile is drawn as. `None`: no such piece there, or a fight without MissionState.Pieces (the
+        /// 0.13.2's): as it was drawn till now. `Empty`: empty from the start. `Full`: it holds something. `Searched`: opened.
+        /// </summary>
+        enum Piece { None, Empty, Full, Searched }
+
+        /// <summary>How far a searched piece's doors swing out and its lid lifts (degrees).</summary>
+        const float DoorsOpen = 100, LidOpen = 105;
+
+        Piece PieceOf(int k, int i)
+        {
+            if (s.Mission?.Pieces == null) return Piece.None;
+            var at = new Pos { X = i % s.Width, Y = i / s.Width, Z = k };
+            if (Looting.PieceAt(s, at) == null) return Piece.None;
+            return !s.Mission.Pieces.Contains(Bastion.Engine.Grid.NodeOf(s, at)) ? Piece.Empty : SearchedAt(k, i) ? Piece.Searched : Piece.Full;
+        }
+
+        /// <summary>How much stouter across a rack's rifles are drawn than the pack's.</summary>
+        const float RifleStout = 1.7f;
+
+        /// <summary>The pack's rifles in a rack (poRackGuns), each mesh painted in bands (PaintRifles), made once.</summary>
+        static readonly Dictionary<int, Mesh> banded = new Dictionary<int, Mesh>();
+
+        /// <summary>
+        /// A rack's rifles in the colours of the game's guns (Producto, 18/11, G19: the pack's are black on a black rack, and
+        /// the one rack of four that holds them has to read at once from the game's camera): each rifle's triangles by how high
+        /// they are along it, wood at the stock and the handguard, steel lighter than the rack between and above, and each
+        /// rifle stouter across. Its mesh
+        /// again with a colour a vertex, drawn as the clinics' furniture (FrameShape).
+        /// </summary>
+        void PaintRifles(GameObject rack)
+        {
+            var rifles = ModelOf(rack)?.Find("poRackGuns");
+            var material = Resources.Load<Material>("FrameShape");
+            if (rifles == null || material == null) return;
+            foreach (var f in rifles.GetComponentsInChildren<MeshFilter>())
+            {
+                var from = f.sharedMesh;
+                if (from == null || !from.isReadable) continue;
+                if (!banded.TryGetValue(from.GetInstanceID(), out var mesh) || mesh == null)
+                {
+                    var at = from.vertices;
+                    var normal = from.normals;
+                    var all = from.triangles;
+                    // Each rifle apart: the triangles that share a corner's place.
+                    var first = new Dictionary<Vector3Int, int>();
+                    var root = new int[at.Length];
+                    int Root(int v)
+                    {
+                        while (root[v] != v) v = root[v] = root[root[v]];
+                        return v;
+                    }
+                    for (int v = 0; v < at.Length; v++)
+                    {
+                        var key = Vector3Int.RoundToInt(at[v] * 2000);
+                        root[v] = first.TryGetValue(key, out int same) ? same : first[key] = v;
+                    }
+                    for (int n = 0; n + 2 < all.Length; n += 3)
+                    {
+                        root[Root(all[n + 1])] = Root(all[n]);
+                        root[Root(all[n + 2])] = Root(all[n]);
+                    }
+                    var boxes = new Dictionary<int, Bounds>();
+                    for (int v = 0; v < at.Length; v++)
+                    {
+                        int rifle = Root(v);
+                        if (boxes.TryGetValue(rifle, out var its))
+                        {
+                            its.Encapsulate(at[v]);
+                            boxes[rifle] = its;
+                        }
+                        else boxes[rifle] = new Bounds(at[v], Vector3.zero);
+                    }
+                    var wood = new Color(0x8e / 255f, 0x5c / 255f, 0x32 / 255f).linear;
+                    var steel = new Color(0x8d / 255f, 0x97 / 255f, 0xa1 / 255f).linear;
+                    var vertices = new List<Vector3>(all.Length);
+                    var normals = new List<Vector3>(all.Length);
+                    var colours = new List<Color>(all.Length);
+                    for (int n = 0; n + 2 < all.Length; n += 3)
+                    {
+                        var box = boxes[Root(all[n])];
+                        // (Along the rifle: its longest side. Wood at its stock and its handguard, steel between and above.)
+                        int axis = box.size.y >= box.size.x && box.size.y >= box.size.z ? 1 : box.size.x >= box.size.z ? 0 : 2;
+                        float high = ((at[all[n]][axis] + at[all[n + 1]][axis] + at[all[n + 2]][axis]) / 3 - box.min[axis]) / Mathf.Max(1e-4f, box.size[axis]);
+                        var colour = high < 0.32f || high > 0.5f && high < 0.72f ? wood : steel;
+                        for (int c = 0; c < 3; c++)
+                        {
+                            // Stouter across (RifleStout): as it comes it is a line from the game's camera.
+                            var v = at[all[n + c]];
+                            for (int a = 0; a < 3; a++) if (a != axis) v[a] = box.center[a] + (v[a] - box.center[a]) * RifleStout;
+                            vertices.Add(v);
+                            normals.Add(all[n + c] < normal.Length ? normal[all[n + c]] : Vector3.up);
+                            colours.Add(colour);
+                        }
+                    }
+                    mesh = new Mesh { name = from.name + " (pintado)", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32, hideFlags = HideFlags.DontSave };
+                    mesh.SetVertices(vertices);
+                    mesh.SetNormals(normals);
+                    mesh.SetColors(colours);
+                    mesh.SetTriangles(Enumerable.Range(0, vertices.Count).ToArray(), 0);
+                    mesh.RecalculateBounds();
+                    banded[from.GetInstanceID()] = mesh;
+                }
+                f.sharedMesh = mesh;
+                var r = f.GetComponent<MeshRenderer>();
+                if (r != null) r.sharedMaterials = new[] { material };
+            }
+        }
+
+        /// <summary>The model of a placed prop (Place: its holder, the fitting, the prefab's copy), or null.</summary>
+        static Transform ModelOf(GameObject placed) =>
+            placed != null && placed.transform.childCount > 0 && placed.transform.GetChild(0).childCount > 0 ? placed.transform.GetChild(0).GetChild(0) : null;
+
+        /// <summary>A part's mesh's middle in `model`'s frame, or null without a mesh.</summary>
+        static Vector3? Middle(Transform model, Transform part)
+        {
+            var mesh = part.GetComponent<MeshFilter>()?.sharedMesh;
+            return mesh != null ? model.InverseTransformPoint(part.TransformPoint(mesh.bounds.center)) : (Vector3?)null;
+        }
+
+        /// <summary>
+        /// A model's doors (its parts named so: Synty's have their pivot on the hinge) swung out `degrees` on their upright
+        /// hinge, away from the body's middle; those whose name ends as one of `only`, if said. A door hinged along its top
+        /// or with its pivot in its middle is left shut.
+        /// </summary>
+        public static void SwingDoors(Transform model, float degrees, params string[] only)
+        {
+            if (model == null) return;
+            var body = Middle(model, model) ?? Vector3.zero;
+            foreach (Transform part in model)
+            {
+                if (!part.name.Contains("_Door") || part.name.Contains("Glass") || only.Length > 0 && !only.Any(part.name.EndsWith)) continue;
+                if (!(Middle(model, part) is Vector3 middle)) continue;
+                var off = middle - part.localPosition;
+                if (Mathf.Abs(off.x) < 0.05f) continue;
+                float front = Mathf.Sign(middle.z - body.z), side = Mathf.Sign(off.x);
+                part.localRotation = Quaternion.AngleAxis(-side * front * degrees, Vector3.up) * part.localRotation;
+            }
+        }
+
+        /// <summary>
+        /// A model's lid (its part named so) lifted `degrees` on its hinge: the long edge its pivot is on, or, with its pivot
+        /// in its middle, its back edge (the model's −z... the edge away from its clasps is not told: its far long edge).
+        /// </summary>
+        public static void LiftLid(Transform model, float degrees)
+        {
+            if (model == null) return;
+            foreach (Transform part in model)
+            {
+                if (!part.name.Contains("_Lid")) continue;
+                var mesh = part.GetComponent<MeshFilter>()?.sharedMesh;
+                if (mesh == null) continue;
+                // (In the lid's own frame: the hinge along its longer horizontal side, at the edge nearest its pivot.)
+                var box = mesh.bounds;
+                bool alongX = box.size.x >= box.size.z;
+                float edge = alongX ? (Mathf.Abs(box.min.z) <= Mathf.Abs(box.max.z) ? box.min.z : box.max.z) : (Mathf.Abs(box.min.x) <= Mathf.Abs(box.max.x) ? box.min.x : box.max.x);
+                var hinge = alongX ? new Vector3(box.center.x, box.min.y, edge) : new Vector3(edge, box.min.y, box.center.z);
+                var axis = alongX ? Vector3.right : Vector3.forward;
+                // (Up: the lid's middle rises.)
+                float way = alongX ? Mathf.Sign(edge - box.center.z) : -Mathf.Sign(edge - box.center.x);
+                var turn = Quaternion.AngleAxis(way * degrees, axis);
+                var at = part.TransformPoint(hinge);
+                part.localRotation = part.localRotation * turn;
+                part.position += at - part.TransformPoint(hinge);
+            }
+        }
+
+        /// <summary>
         /// The furniture on tile i of storey k as its police station's mark says (Furniture's); false to draw the tile as any
         /// other (what has no model of the pack's on low cover: a weapon locker, a rack or shelving knocked down).
         /// </summary>
@@ -114,6 +282,9 @@ namespace Bastion.Client.Map
             GameObject Stand(string id, float back, float aside, float up, float turn = 0) =>
                 Put(id, At(cx - front.X * back - front.Y * aside, up, cz - front.Y * back + front.X * aside), YawOf(f) + turn);
             float Deep(string id) => (float)Measure(id).z;
+            // G19: what is searched piece by piece, as the engine has it: emptied or opened once searched, or from the start.
+            var piece = PieceOf(k, i);
+            bool open = piece == Piece.Searched || piece == Piece.Empty;
             switch (mark.Kind)
             {
                 case PoliceDetailKinds.Desk:
@@ -153,7 +324,8 @@ namespace Bastion.Client.Map
                 {
                     if (low) return false;
                     string id = R(0) < 0.5f ? "poLocker" : "poLocker2";
-                    Stand(id, Back(k, x, y, f, Deep(id)), 0, 0);
+                    var locker = Stand(id, Back(k, x, y, f, Deep(id)), 0, 0);
+                    if (open) SwingDoors(ModelOf(locker), DoorsOpen);
                     return true;
                 }
                 case PoliceDetailKinds.WeaponRack:
@@ -161,7 +333,11 @@ namespace Bastion.Client.Map
                     // The rack along its row, its rifles in it (one in seven taken).
                     if (low) return false;
                     var rack = Stand("poRack", Back(k, x, y, f, Deep("poRack")), 0, 0);
-                    if (R(0) >= 1 / 7f) Insert(rack, "poRackGuns");
+                    if (piece == Piece.None ? R(0) >= 1 / 7f : piece == Piece.Full)
+                    {
+                        Insert(rack, "poRackGuns");
+                        PaintRifles(rack);
+                    }
                     return true;
                 }
                 case PoliceDetailKinds.EvidenceShelf:
@@ -169,7 +345,7 @@ namespace Bastion.Client.Map
                     // The shelving along its row, one of its three loads of boxes on it (one in seven bare).
                     if (low) return false;
                     var shelf = Stand("poShelf", Back(k, x, y, f, Deep("poShelf")), 0, 0);
-                    if (R(0) >= 1 / 7f) Insert(shelf, new[] { "poShelfIn", "poShelfIn2", "poShelfIn3" }[Mathf.FloorToInt(R(1) * 3) % 3]);
+                    if (piece == Piece.None ? R(0) >= 1 / 7f : piece == Piece.Full) Insert(shelf, new[] { "poShelfIn", "poShelfIn2", "poShelfIn3" }[Mathf.FloorToInt(R(1) * 3) % 3]);
                     return true;
                 }
                 case PoliceDetailKinds.GunCase:
@@ -180,8 +356,10 @@ namespace Bastion.Client.Map
                     Stand(first, 0, (R(1) - 0.5f) * 0.1f, 0, (R(2) - 0.5f) * 8);
                     float up = (float)Measure(first).top;
                     string second = ids[R(3) < 0.6f ? 0 : 1];
-                    Stand(second, (R(4) - 0.5f) * 0.15f, (R(5) - 0.5f) * 0.2f, up, (R(6) - 0.5f) * 24);
-                    if (!low) Stand(ids[0], (R(7) - 0.5f) * 0.12f, (R(8) - 0.5f) * 0.2f, up + (float)Measure(second).top, 90 + (R(9) - 0.5f) * 30);
+                    var last = Stand(second, (R(4) - 0.5f) * 0.15f, (R(5) - 0.5f) * 0.2f, up, (R(6) - 0.5f) * 24);
+                    if (!low) last = Stand(ids[0], (R(7) - 0.5f) * 0.12f, (R(8) - 0.5f) * 0.2f, up + (float)Measure(second).top, 90 + (R(9) - 0.5f) * 30);
+                    // (Searched, the one on top open, nothing in it.)
+                    if (open) LiftLid(ModelOf(last), LidOpen);
                     return true;
                 }
                 case PoliceDetailKinds.AmmoCase:
@@ -194,7 +372,9 @@ namespace Bastion.Client.Map
                         {
                             if (h == layers - 1 && R(10 + n) < 0.4f) continue;
                             float aside = (n % 2 - 0.5f) * 0.32f + (R(20 + h * 4 + n) - 0.5f) * 0.04f, back = (n / 2 - 0.5f) * 0.18f;
-                            Stand("poAmmo", back, aside, h * high, (R(40 + h * 4 + n) - 0.5f) * 10);
+                            var box = Stand("poAmmo", back, aside, h * high, (R(40 + h * 4 + n) - 0.5f) * 10);
+                            // (Searched, those on top open.)
+                            if (open && h == layers - 1) LiftLid(ModelOf(box), LidOpen);
                         }
                     return true;
                 }
@@ -220,8 +400,12 @@ namespace Bastion.Client.Map
                     return true;
                 }
                 case PoliceDetailKinds.LockerRow:
-                    Stand("inLockers", Back(k, x, y, f, Deep("inLockers")), 0, 0);
+                {
+                    var lockers = Stand("inLockers", Back(k, x, y, f, Deep("inLockers")), 0, 0);
+                    // (Its two middle doors hinge side by side: past a right angle they would cross.)
+                    if (open) SwingDoors(ModelOf(lockers), 90);
                     return true;
+                }
             }
             return false;
         }
@@ -368,6 +552,15 @@ namespace Bastion.Client.Map
                     var at = Matrix4x4.TRS(new Vector3(cx, floor / T, cz), Quaternion.AngleAxis(R(0) * 360, Vector3.up), Vector3.one);
                     var body = PlaceGame(props[k], R(1) < 0.5f ? "corpseOfficer" : "corpseOfficer2", at);
                     if (body != null) fitted.Add(Tracked(body, i, k));
+                    // (G19, cuadro 67: searched as a body, «el cuerpo del agente»: on its tile, for its line and its mark's
+                    // height, SearchOutline. As it lies, searched or not.)
+                    if (body != null)
+                    {
+                        long key = Key(k, i);
+                        tilesOf[body] = new List<long> { key };
+                        if (!onTile.TryGetValue(key, out var list)) onTile[key] = list = new List<GameObject>();
+                        list.Add(body);
+                    }
                     return true;
                 }
             }

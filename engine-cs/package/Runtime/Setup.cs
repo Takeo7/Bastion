@@ -1214,19 +1214,86 @@ namespace Bastion.Engine
                 state.Lights.Add(new Light { Id = f.Id, Tile = at, Radius = Content.Flames.Light, Tiles = Los.LightTiles(state, at, Content.Flames.Light, Content.Flames.LightHeight) });
             }
             PlacePoliceCars(state, rng);
+            // On a draw of its own, so nothing else moves (G19).
+            PlacePieces(state, new Rng((opts.Map.Seed ?? 0) * 31 + PiecesSalt));
             // Paused at the start, while the briefing is read: the space bar (or «Empezar») sets the clock going.
             if (opts.Realtime == true) state.Realtime = new Realtime { Clock = 0, Paused = true, Units = new Dictionary<string, RtUnit>() };
             return state;
         }
 
+        private const int PiecesSalt = 0x6719;
+        /// <summary>One medicine cabinet in so many holds something (cuadro 67; at least one in each medical building).</summary>
+        public const int CabinetShare = 4;
+        /// <summary>One evidence shelf in so many is empty from the start.</summary>
+        public const int EvidenceEmpty = 6;
+
+        /// <summary>
+        /// G19 (CONTRATO.md §1, §3; cuadros 65–67): which of the pieces searched one by one hold something
+        /// (MissionState.Pieces): of a police station's racks, one (the one drawn with its rifles); of its evidence shelves,
+        /// five in six; of the medicine cabinets anywhere, one in CabinetShare and at least one in each medical building;
+        /// the rest always (some of them may still turn up nothing: Looting.RollPiece). Never one knocked down
+        /// (SearchPieces.Standing: drawn fallen, nothing in it; Producto, 18/11). Null on a map with none. (Public for its test.)
+        /// </summary>
+        public static void PlacePieces(GameState s, Rng rng)
+        {
+            var held = new List<int>();
+            // Any piece at all, standing or not: a map with some has its rooms searched piece by piece.
+            var any = false;
+            foreach (var site in (s.Interiors ?? new List<InteriorSite>()).Where((x) => x.Kind == InteriorKinds.Police))
+            {
+                var racks = new List<int>();
+                foreach (var d in site.Dressing)
+                {
+                    var at = new Pos { X = d.X, Y = d.Y, Z = d.Z };
+                    if (!SearchPieces.Police.Contains(d.Kind)) continue;
+                    any = true;
+                    if (!SearchPieces.Standing(s, at, d.Kind)) continue;
+                    var node = Grid.NodeOf(s, at);
+                    if (d.Kind == SearchPieces.WeaponRack) racks.Add(node);
+                    else if (d.Kind != SearchPieces.EvidenceShelf || rng.Int(EvidenceEmpty) != 0) held.Add(node);
+                }
+                if (racks.Count > 0) held.Add(rng.Pick(racks));
+            }
+            var cabinets = new List<Pos>();
+            var stocked = new List<Pos>();
+            for (var z = 0; z < Grid.LevelCount(s); z++)
+            {
+                var decor = z == 0 ? s.Decor : Grid.LevelOf(s, z - 1)?.Decor;
+                if (decor == null) continue;
+                for (var i = 0; i < s.Width * s.Height && i < decor.Count; i++)
+                {
+                    var o = Decor.ObjectAt(decor, s.Width, i);
+                    if (o == null || o.Anchor != i || !SearchPieces.Medical.Contains(o.Kind)) continue;
+                    var p = new Pos { X = i % s.Width, Y = i / s.Width, Z = z };
+                    any = true;
+                    if (!SearchPieces.Standing(s, p, o.Kind)) continue;
+                    if (o.Kind != SearchPieces.MedicalCabinet) held.Add(Grid.NodeOf(s, p));
+                    else if (rng.Int(CabinetShare) == 0) stocked.Add(p);
+                    else cabinets.Add(p);
+                }
+            }
+            // A medical building with cabinets and none of them holding anything: one does.
+            foreach (var m in s.Medical ?? new List<MedicalSite>())
+            {
+                bool In(Pos p) => p.X >= m.X && p.Y >= m.Y && p.X < m.X + m.W && p.Y < m.Y + m.H;
+                var empty = cabinets.Where(In).ToList();
+                if (empty.Count > 0 && !stocked.Any(In)) stocked.Add(rng.Pick(empty));
+            }
+            held.AddRange(stocked.Select((p) => Grid.NodeOf(s, p)));
+            s.Mission.Pieces = any ? held.OrderBy((n) => n).ToList() : null;
+        }
+
         /// <summary>
         /// The police cars (Arturo, 2/11: «en los coches de policía hay más probabilidad de que haya armas, en cualquier
         /// misión»): one whole car in PoliceCarShare on the ground, not a wreck nor burning, its nose and boot in
-        /// MissionState.PoliceCar. Its boot holds a gun more often (Looting.PoliceBoot).
+        /// MissionState.PoliceCar; every one on a police station's map (its strip's two, G19). Its boot holds a gun more
+        /// often (Looting.PoliceBoot).
         /// </summary>
         private static void PlacePoliceCars(GameState s, Rng rng)
         {
             var burning = new HashSet<int>((s.Fires ?? new List<Fire>()).SelectMany((f) => f.Tiles.Append(f.Source)));
+            // A police station's map (G19): its cars are the two on its strip, both its own.
+            var station = (s.Interiors ?? new List<InteriorSite>()).Any((x) => x.Kind == InteriorKinds.Police);
             var police = new List<int>();
             for (var i = 0; i < (s.Decor?.Count ?? 0); i++)
             {
@@ -1235,7 +1302,7 @@ namespace Bastion.Engine
                 var car = Decor.ObjectAt(s.Decor, s.Width, i);
                 if (car == null || car.Anchor != i || car.Tiles.Any(burning.Contains)) continue;
                 var boot = car.Tiles.FirstOrDefault((j) => Looting.BootOf(s, j) == i);
-                if (car.Tiles.Count < 2 || Looting.BootOf(s, boot) != i || rng.Int(PoliceCarShare) != 0) continue;
+                if (car.Tiles.Count < 2 || Looting.BootOf(s, boot) != i || (!station && rng.Int(PoliceCarShare) != 0)) continue;
                 police.Add(i);
                 police.Add(boot);
             }

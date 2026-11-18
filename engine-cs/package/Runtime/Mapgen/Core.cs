@@ -242,6 +242,15 @@ namespace Bastion.Engine
             public Vec2 Squad = V(0, 0);
             /// <summary>The ground kept for the evacuation (the north-east corner), or null where it is laid later (a town's avenue).</summary>
             public Rect? EvacArea;
+            /// <summary>
+            /// How long a place ParkBus keeps for La Lata: BusL, or a town bus's on the maps that are one building, the plaza
+            /// and the camping (G19, Producto 18/11: the 8 seats' bus, 9 long, was drawn over its 5 and through the wall).
+            /// </summary>
+            public int BusLength = BusL;
+            /// <summary>How long La Lata is drawn on it, centred (LaLata.Park): a shorter place only where that has no wall under it.</summary>
+            public int BusDrawn = BusL;
+            /// <summary>The cars no fire takes, by their nose: a police station's patrol cars (G19).</summary>
+            public readonly HashSet<int> Spared = new HashSet<int>();
             /// <summary>The side of the map the squad comes in by, where it comes in by a way through the outline (docs/MAPAS.md §5.10).</summary>
             public int? SquadSide = null;
             /// <summary>What closes the map round what is played (docs/MAPAS.md §5.10): a town's outline, the country's.</summary>

@@ -132,7 +132,8 @@ namespace Bastion.Engine.Tests
                 Assert.True(bay.X >= floor.X && bay.Y >= floor.Y && bay.X + bay.W <= floor.X + floor.W && bay.Y + bay.H <= floor.Y + floor.H);
                 Assert.Equal(3, Math.Min(bay.W, bay.H));
 
-                // The police station: its rooms, 3–5 cells, the armoury with the best box; its marks, the counter on its window.
+                // The police station: its rooms, 3–5 cells, the armoury (no box of its own since G19: its furniture is searched); its
+                // marks, the counter on its window.
                 var (_, c) = At(Places.Police, NodeKinds.Normal, seed);
                 var station = c.Interiors!.Single();
                 Assert.Equal(InteriorKinds.Police, station.Kind);
@@ -144,7 +145,7 @@ namespace Bastion.Engine.Tests
                 var counter = station.Dressing.Single((d) => d.Kind == PoliceDetailKinds.Counter);
                 Assert.Equal(TileKinds.Window, c.Tiles[counter.Y * c.Width + counter.X]);
                 var armory = station.Rooms.Single((r) => r.Use == PoliceUses.Armory);
-                Assert.Contains(Enumerable.Range(armory.Y, armory.H).SelectMany((y) => Enumerable.Range(armory.X, armory.W).Select((x) => y * c.Width + x)), (i) => Decor.DecorOf(c.Decor[i])?.Kind == DecorKinds.LootWeapons);
+                Assert.DoesNotContain(Enumerable.Range(armory.Y, armory.H).SelectMany((y) => Enumerable.Range(armory.X, armory.W).Select((x) => y * c.Width + x)), (i) => Decor.DecorOf(c.Decor[i])?.Kind == DecorKinds.LootWeapons);
             }
         }
 
@@ -1034,19 +1035,15 @@ namespace Bastion.Engine.Tests
             Assert.InRange(offices.Count, 70, 130);
             Assert.Equal(new[] { GearKinds.Mod, GearKinds.Supplies }, offices.Select((g) => g.Kind).Distinct().OrderBy((k) => k));
             Assert.Equal(new[] { GearKinds.Mags, GearKinds.Mod, GearKinds.Supplies }, shed.Select((g) => g.Kind).Distinct().OrderBy((k) => k));
-            // The plaza: supplies and a belt's things; its pharmacy, medicines.
+            // The plaza: supplies and a belt's things (its pharmacy's medicines are its shelves', G19).
             var plaza = Enumerable.Range(1, 200).SelectMany((seed) => RunLoot.SiteExtra(Sites.Plaza, run, new Rng(seed), new RunLoot.Maker(0))).ToList();
             Assert.Equal(new[] { GearKinds.Item, GearKinds.Supplies }, plaza.Select((g) => g.Kind).Distinct().OrderBy((k) => k));
             Assert.All(plaza.Where((g) => g.Kind == GearKinds.Item), (g) => Assert.Contains(g.Type, Content.BeltItems));
-            var pharmacy = Enumerable.Range(1, 200).SelectMany((seed) => RunLoot.SiteExtra(Sites.Plaza, run, new Rng(seed), new RunLoot.Maker(0), ShopUses.Pharmacy)).ToList();
-            Assert.Equal(new[] { GearKinds.Medicine }, pharmacy.Select((g) => g.Kind).Distinct());
             // The camping: a little of everything.
             var camping = Enumerable.Range(1, 300).SelectMany((seed) => RunLoot.SiteExtra(Sites.Camping, run, new Rng(seed), new RunLoot.Maker(0))).ToList();
             Assert.Equal(new[] { GearKinds.Item, GearKinds.Mags, GearKinds.Medicine, GearKinds.Mod, GearKinds.Supplies }, camping.Select((g) => g.Kind).Distinct().OrderBy((k) => k));
-            // The police station: weapons, magazines and vests.
-            var police = Enumerable.Range(1, 200).SelectMany((seed) => RunLoot.SiteExtra(Sites.Police, run, new Rng(seed), new RunLoot.Maker(0))).ToList();
-            Assert.Equal(new[] { GearKinds.Mags, GearKinds.Vest, GearKinds.Weapon }, police.Select((g) => g.Kind).Distinct().OrderBy((k) => k));
-            Assert.All(police.Where((g) => g.Kind == GearKinds.Weapon), (g) => Assert.Contains(g.Type, RunLoot.PoliceWeapons));
+            // The police station: nothing more (G19, cuadro 67: its armoury and its lockers, searched piece by piece).
+            Assert.All(Enumerable.Range(1, 200), (seed) => Assert.Empty(RunLoot.SiteExtra(Sites.Police, run, new Rng(seed), new RunLoot.Maker(0))));
         }
 
         // ------------------------------------------------------------- on the map

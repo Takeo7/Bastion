@@ -719,16 +719,29 @@ namespace Bastion.Engine
             var body = box == Looting.Body ? Looting.BodyAt(S, Grid.ToPos(tile))! : null;
             // Armero (T2): a run's accessories twice as often.
             var times = S.Run != null ? 1 + Math.Max(0, u.Mods.ModFinds) : 1;
-            Loot? Roll() => body != null ? Looting.RollBody(body, Rng, pistols)
-                : box != null ? Looting.RollBox(box, Rng, u.Mags != null, pistols, S.Mission.Difficulty ?? 2, night, times) : null;
+            // A piece searched one by one (G19): its own roll, a vest's chance with it, and nothing of the site's more.
+            var piece = box != null && SearchPieces.All.Contains(box);
+            var pieceVest = 0;
+            Loot? Roll()
+            {
+                if (body != null) return Looting.RollBody(body, Rng, pistols);
+                if (piece)
+                {
+                    // (A run's soldier always counts its magazines: gear in its pack, Producto 18/11.)
+                    var (found, vestChance) = Looting.RollPiece(box!, Rng, S.Run != null || u.Mags != null, pistols, S.Mission.Difficulty ?? 2, night);
+                    pieceVest = Math.Max(pieceVest, vestChance);
+                    return found;
+                }
+                return box != null ? Looting.RollBox(box, Rng, u.Mags != null, pistols, S.Mission.Difficulty ?? 2, night, times) : null;
+            }
             var loot = Roll();
             if (S.Run != null)
             {
                 // A run's fight (H3): as gear, a vest now and then where the police or the army were.
-                var vest = box == Looting.PoliceBoot || body?.Outfit == Outfits.Police || body?.Outfit == Outfits.Military;
-                // «Suerte al registrar» (T2): something more, another roll; Ganzúa's more on a box or a boot.
+                var vest = box == Looting.PoliceBoot || body?.Outfit == Outfits.Police || body?.Outfit == Outfits.Military ? RunLoot.VestChance : pieceVest;
+                // «Suerte al registrar» (T2): something more, another roll; Ganzúa's more on a box, a boot or a piece.
                 var more = Lucky(u, loot, body == null ? u.Mods.BoxLuck : 0) ? Roll() : null;
-                var (packed, floor, next) = FoundGear(u, loot, vest, more);
+                var (packed, floor, next) = FoundGear(u, loot, vest, more, extra: !piece);
                 Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Packed = packed, Floor = floor, NextGear = next });
                 return;
             }
@@ -747,7 +760,7 @@ namespace Bastion.Engine
             {
                 // «Suerte al registrar» (T2): something more, another roll; Buscavidas' more in a room.
                 var more = Lucky(u, loot, u.Mods.RoomLuck) ? Roll() : null;
-                var (packed, floor, next) = FoundGear(u, loot, false, more);
+                var (packed, floor, next) = FoundGear(u, loot, 0, more);
                 Emit(new RoomSearchedEvent { Unit = u.Id, Room = room.Id, Packed = packed, Floor = floor, NextGear = next, Again = again ? true : (bool?)null });
                 return;
             }
@@ -764,15 +777,18 @@ namespace Bastion.Engine
             return loot != null && Rng.Int(100) < Content.SearchLuck + u.Mods.SearchLuck + extra;
         }
 
-        /// <summary>A run's find (H3): today's roll as gear (RunLoot), and `more`'s (T2), where it goes, and the gear counter after it.</summary>
-        private (List<Placed>? Packed, List<Gear>? Floor, int Next) FoundGear(Unit u, Loot? loot, bool vest, Loot? more = null)
+        /// <summary>
+        /// A run's find (H3): today's roll as gear (RunLoot), and `more`'s (T2), where it goes, and the gear counter after it;
+        /// a vest `vest` times in 100; the site's own more on a find, but on a piece's (`extra` false, G19).
+        /// </summary>
+        private (List<Placed>? Packed, List<Gear>? Floor, int Next) FoundGear(Unit u, Loot? loot, int vest, Loot? more = null, bool extra = true)
         {
             var maker = new RunLoot.Maker(S.Run!.NextGear);
             var found = RunLoot.GearOf(loot, S.Run, Rng, maker);
             if (more != null) found.AddRange(RunLoot.GearOf(more, S.Run, Rng, maker));
             // The offices' and the shed's own, on a find (H9).
-            if (found.Count > 0) found.AddRange(RunLoot.SiteExtra(S.Site, S.Run, Rng, maker, InteriorSite.UseAt(S, u.Pos)));
-            if (vest) found.AddRange(RunLoot.VestOf(Rng, maker));
+            if (extra && found.Count > 0) found.AddRange(RunLoot.SiteExtra(S.Site, S.Run, Rng, maker));
+            if (vest > 0) found.AddRange(RunLoot.VestOf(Rng, maker, vest));
             var (packed, floor) = RunLoot.Stow(u.Pack ?? new GearGrid(), found);
             return (packed.Count > 0 ? packed : null, floor.Count > 0 ? floor : null, maker.Next);
         }

@@ -1183,12 +1183,11 @@ namespace Bastion.UI.Combat
                 view.Action = view.Title;
                 view.Effect = AbilityTexts.SearchWords(decor).effect;
             }
-            // Tab to the next names it (the body, the boot, the box of weapons…).
-            string NameOf(string spot) => Lore.SearchSpots.TryGetValue(spot, out var s) ? s.Name : "la caja";
+            // Tab to the next names it (the body, the boot, the box of weapons, the rack…); what it does, a piece's own verb (U15).
             var next = others == 1 ? HandTiles().FirstOrDefault(t => !Same(t, tile)) : null;
-            var tab = next != null && Looting.SearchSpot(State, next) is string after ? NameOf(after) : "el siguiente";
-            view.Hint = Bastion.Client.GameInput.Touch ? HudText.Touch.Hand(NameOf(decor), decor == Looting.Body ? "registrar" : "abrir")
-                : $"Otra vez, Espacio o clic en {NameOf(decor)}: {(decor == Looting.Body ? "registrar" : "abrir")}{(others > 0 ? $" · Tab: {tab}" : "")} · Esc: cancelar";
+            var tab = next != null && Looting.SearchSpot(State, next) is string after ? SpotName(after) : "el siguiente";
+            view.Hint = Bastion.Client.GameInput.Touch ? HudText.Touch.Hand(SpotName(decor), SearchVerb(decor))
+                : $"Otra vez, Espacio o clic en {SpotName(decor)}: {SearchVerb(decor)}{(others > 0 ? $" · Tab: {tab}" : "")} · Esc: cancelar";
             return view;
         }
 
