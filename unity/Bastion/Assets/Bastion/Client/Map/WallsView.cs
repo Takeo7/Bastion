@@ -390,7 +390,7 @@ namespace Bastion.Client.Map
             plan != null && piece.building >= 0 && piece.building < plan.Buildings.Count && plan.Buildings[piece.building].kind == BuildingKinds.Ruin && piece.level == 0 && !piece.roof ? 1 : 0;
 
         /// <summary>A ruin's wall: the least it stands over a tile the engine has as wall (a figure's height), and by a gap (m).</summary>
-        const float RuinLeast = 1.8f, RuinByGap = 2.4f;
+        const float RuinLeast = 1.8f, RuinByGap = 2.4f, RuinAlone = 3.0f;
 
         static Texture2D ruinMap;
         /// <summary>RuinMap's heights by tile, as last made (null: no ruins).</summary>
@@ -438,7 +438,8 @@ namespace Bastion.Client.Map
                     float standing = along && across ? S * Mathf.Lerp(0.8f, 1.0f, k)
                         : tile != Bastion.Engine.TileKinds.Wall ? S * 1.15f
                         : k < 0.5f ? Mathf.Lerp(RuinLeast, 2.3f, k2) : S * Mathf.Lerp(0.72f, 0.95f, k2);
-                    high[y * w + x] = byGap && !(along && across) ? Mathf.Max(standing, RuinByGap) : standing;
+                    // (One alone, a gap on every side: higher, RuinAlone; at RuinByGap it was a peak under a fridge's height for most of its width.)
+                    high[y * w + x] = !(along || across) ? Mathf.Max(standing, RuinAlone) : byGap && !(along && across) ? Mathf.Max(standing, RuinByGap) : standing;
                     walls++;
                 }
             if (Environment.GetEnvironmentVariable("BASTION_RUINA_LOG") == "1") Debug.Log($"[ruina] {walls} wall tiles in ruins; {low} of them were drawn under {RuinLeast} m before the rule, none now");

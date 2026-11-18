@@ -241,7 +241,7 @@ Shader "Bastion/Building"
     // A ruin's wall (A2b, Arturo 18/11: «Que parezca caída»; its walls stood whole, cut straight, a house without its
     // roof): left standing up to what _RuinMap has there (a texel a tile, metres over its floor, read between tiles: each
     // stretch falls in a long slope from a high tile to a low one, WallsView.RuinMap), its top broken board by board
-    // (0.21 m along the wall, x + z: its walls run along one or the other; each ends its own way under that, 0.22 m at
+    // (0.21 m along the wall, x + z: its walls run along one or the other; each ends its own way over that, 0.22 m at
     // most). The same in every pass: its shadow and its depth are broken too.
     TEXTURE2D(_RuinMap);
     SAMPLER(sampler_RuinMap);
@@ -260,7 +260,8 @@ Shader "Bastion/Building"
             float2 uv = float2(input.positionWS.x, -input.positionWS.z) / 1.5 / _RuinSize.xy;
             float standing = SAMPLE_TEXTURE2D_LOD(_RuinMap, sampler_RuinMap, uv, 0).r;
             float board = floor((input.positionWS.x + input.positionWS.z) / 0.21);
-            if (input.positionWS.y > input.ruin.y + standing - RuinHash(board) * 0.22) discard;
+            // (The boards' ends over that height, never under it: what the map has is the least drawn. Producto's rule, 18/11.)
+            if (input.positionWS.y > input.ruin.y + standing + RuinHash(board) * 0.22) discard;
         }
     }
     ENDHLSL

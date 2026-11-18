@@ -684,6 +684,10 @@ namespace Bastion.EditorTools
                             string d = Bastion.Engine.Decor.DecorOf(state.Decor[i])?.Kind;
                             if (d != null) decor[d] = decor.TryGetValue(d, out int c) ? c + 1 : 1;
                         }
+                    // (Its tiles, a row a line: # wall, W window, l low cover, h high cover, . the rest.)
+                    for (int y = b.y0; y <= b.y1; y++)
+                        Debug.Log($"[ruina] seed {seed} y {y:00}: " + string.Concat(Enumerable.Range(b.x0, b.x1 - b.x0 + 1).Select(x => state.Tiles[y * state.Width + x] switch
+                            { TileKinds.Wall => '#', TileKinds.Window => 'W', TileKinds.WindowBroken => 'W', TileKinds.Low => 'l', TileKinds.High => 'h', _ => '.' })));
                     Debug.Log($"[ruina] seed {seed} ({state.Width}×{state.Height}): {b.x0},{b.y0}–{b.x1},{b.y1} ({b.x1 - b.x0 + 1}×{b.y1 - b.y0 + 1}), {walls} wall tiles; by it: {string.Join(", ", decor.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value}"))}");
                 }
             }
