@@ -2652,6 +2652,12 @@ namespace Bastion.EditorTools
                         int near = Enumerable.Range(0, doors.Count).OrderBy(k => Vector3.Distance(Flat(doors[k]), Flat(p))).FirstOrDefault();
                         Debug.Log(FormattableString.Invariant($"[plazas] {u.Id} at {u.Pos.X},{u.Pos.Y}: door {near} of {doors.Count}, {(doors.Count > 0 ? Vector3.Distance(Flat(doors[near]), Flat(p)) : -1):0.00} m"));
                     }
+                    // (BASTION_GIRO=degrees: from there, whatever its doors' side: trees in the way.)
+                    if (float.TryParse(Environment.GetEnvironmentVariable("BASTION_GIRO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float turned))
+                    {
+                        MapSpace.Aim(camera, MapSpace.TileToWorld(state, new Pos { X = at.X, Y = at.Y }), distance, turned);
+                        Debug.Log($"[plazas] the camera from {turned}°");
+                    }
                     if (Environment.GetEnvironmentVariable("BASTION_GIRO") == "auto" && doors.Count > 0)
                     {
                         var side = Flat(doors.Aggregate(Vector3.zero, (a, b) => a + b) / doors.Count) - Flat(view.Lata.transform.position);
@@ -2715,7 +2721,10 @@ namespace Bastion.EditorTools
         {
             public System.Collections.Generic.List<Unit> squad;
             float time;
-            bool boarded, going;
+            bool boarded, going, aboard, down;
+            // (BASTION_BAJAN=1, T24: La Lata doesn't go; 1.2 s after they board the state has them aboard, and 0.6 s later
+            // back on their tiles: they come down, UnitViews.Alight.)
+            readonly bool alight = Environment.GetEnvironmentVariable("BASTION_BAJAN") == "1";
 
             public void ShotStep(float dt)
             {
@@ -2724,6 +2733,24 @@ namespace Bastion.EditorTools
                 {
                     boarded = true;
                     foreach (var u in squad) units.Board(u.Id);
+                }
+                if (alight)
+                {
+                    float done = 0.3f + UnitViews.BoardSeconds + 1.2f;
+                    if (!aboard && time >= done)
+                    {
+                        aboard = true;
+                        foreach (var u in squad) (u.Aboard, u.Evacuated, u.Alive) = (true, true, false);
+                        units.Sync(state);
+                    }
+                    if (!down && time >= done + 0.6f)
+                    {
+                        down = true;
+                        foreach (var u in squad) (u.Aboard, u.Evacuated, u.Alive) = (null, false, true);
+                        units.Sync(state);
+                        Debug.Log($"[combat] {squad.Count} down out of La Lata at {time:0.00} s");
+                    }
+                    return;
                 }
                 // (Onto the motorbike they walk and get on first: UnitViews.Ride; in the game MapView.LataDeparts waits by frames.)
                 if (!going && time >= 0.3f + UnitViews.BoardSeconds && !units.Mounting)

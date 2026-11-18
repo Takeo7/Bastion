@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Linq;
 using Bastion.Client.Map;
+using Bastion.Engine;
 using UnityEngine;
 
 namespace Bastion.Client.Units
@@ -48,9 +50,98 @@ namespace Bastion.Client.Units
             return true;
         }
 
+        // ------------------------------------------------------------ in by the door and down out of it (T24)
+
+        /// <summary>Seconds one takes to come down out of La Lata onto its tile (Alight), and how near a doorway has to be to go in or come out by it (metres).</summary>
+        public const float AlightSeconds = 0.5f;
+        const float DoorNear = 3f;
+
+        /// <summary>Who is aboard La Lata by the state last seen (Unit.Aboard), and who came down in this Sync (from where; off the motorbike, with a hop).</summary>
+        readonly HashSet<string> aboard = new HashSet<string>();
+        readonly List<(string id, Vector3 from, bool hop)> alighting = new List<(string, Vector3, bool)>();
+
+        /// <summary>La Lata's doorway nearest `near`, in the world, if within DoorNear; null on the motorbike, or without doors.</summary>
+        static Vector3? Doorway(Vector3 near)
+        {
+            var lata = MapView.Current?.Lata;
+            if (lata == null || lata.IsBike || !lata.Shown) return null;
+            Vector3? best = null;
+            float least = DoorNear * DoorNear;
+            // (Its doorways in tiles, 0.10.1's frame, z south: in Unity's world.)
+            foreach (var t in lata.Doorways())
+            {
+                var p = new Vector3(t.x, t.y, -t.z) * MapSpace.Tile;
+                float d = (new Vector3(p.x - near.x, 0, p.z - near.z)).sqrMagnitude;
+                if (d < least) (best, least) = (p, d);
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// One aboard on the motorbike seated in sight (a game loaded or joined with it aboard: UI's capture 13 of 18/11, the
+        /// motorbike empty with someone aboard since the turn began): its view made if need be and put beside its seat, to
+        /// get on (Ride). True if its view is kept.
+        /// </summary>
+        bool Seated(Unit u)
+        {
+            var lata = MapView.Current?.Lata;
+            if (u.Aboard != true || lata == null || !lata.IsBike || !lata.Shown || lata.Seat(0) == null) return false;
+            if (!views.TryGetValue(u.Id, out var v)) views[u.Id] = v = Make(u);
+            if (v.seat >= 0) return true;
+            v.boarded = true;
+            if (!Mount(v)) return false;
+            if (lata.MountSpot(v.seat, v.root.position) is Vector3 spot) v.root.position = new Vector3(spot.x, v.root.position.y, spot.z);
+            return true;
+        }
+
+        /// <summary>Where `u`, aboard till now, comes down from: off its seat on the motorbike (`hop`), or La Lata's doorway nearest its tile; null, none (it is just there).</summary>
+        Vector3? AlightFrom(Unit u, out bool hop)
+        {
+            hop = views.TryGetValue(u.Id, out var v) && v.seat >= 0 && v.root != null;
+            if (hop) return v.root.position;
+            return state != null ? Doorway(MapSpace.TileToWorld(state, u.Pos)) : null;
+        }
+
+        /// <summary>Down out of La Lata (AlightedEvent, by the state: Sync): from `from` to where it stands, faded in as it comes (off the motorbike, in sight, with a hop).</summary>
+        void Alight(View v, Vector3 from, bool hop)
+        {
+            if (v.root == null) return;
+            (v.alight, v.alightHop, v.alightTo) = (0, hop, v.root.position);
+            v.alightFrom = new Vector3(from.x, hop ? from.y : v.alightTo.y, from.z);
+            v.root.position = v.alightFrom;
+            var way = v.alightTo - v.alightFrom;
+            way.y = 0;
+            if (way.sqrMagnitude > 1e-4f) v.root.rotation = Quaternion.LookRotation(way);
+            v.yawTo = null;
+            if (!hop)
+            {
+                v.fade = 0.001f;
+                v.fadeGoal = 1;
+                v.fadeRate = 1 / AlightSeconds;
+                // (Now: made this Sync, it was drawn whole by the door for a frame before its fade began.)
+                StepFade(v, 0);
+            }
+            v.anim?.Motion("run");
+        }
+
+        /// <summary>One going in by the door or coming down, a step.</summary>
+        void Door(View v, float dt)
+        {
+            if (v.root == null) return;
+            if (v.boarded && v.seat < 0 && v.boardFrom is Vector3 a && v.boardTo is Vector3 b) v.root.position = Vector3.Lerp(a, b, Mathf.SmoothStep(0, 1, 1 - v.fade));
+            if (v.alight < 0) return;
+            v.alight = Mathf.Min(1, v.alight + dt / AlightSeconds);
+            float k = Mathf.SmoothStep(0, 1, v.alight);
+            v.root.position = Vector3.Lerp(v.alightFrom, v.alightTo, k) + (v.alightHop ? Vector3.up * (Mathf.Sin(Mathf.PI * k) * MountHop) : Vector3.zero);
+            if (v.alight < 1) return;
+            v.alight = -1;
+            v.anim?.Motion(IdleOf(v));
+        }
+
         /// <summary>One on its way to the motorbike, getting on it or on it, a step (after its pose: its hips' place).</summary>
         void Ride(View v, float dt)
         {
+            Door(v, dt);
             if (v.seat < 0 || v.root == null) return;
             var lata = MapView.Current?.Lata;
             var seatNow = lata != null ? lata.Seat(v.seat) : null;

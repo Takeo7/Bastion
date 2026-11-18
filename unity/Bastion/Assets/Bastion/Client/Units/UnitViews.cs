@@ -248,6 +248,14 @@ namespace Bastion.Client.Units
             public float bolt = -1;
             /// <summary>Seconds into the loading of a straight-stocked gun (UnitViews.Tuck's Loading, T25); −1, none.</summary>
             public float load = -1;
+            /// <summary>
+            /// Going in by La Lata's door as it fades (Board), from where it stood to the doorway; and coming down out of it
+            /// (UnitViews.Ride's Alight, T24): how far (0–1; −1, not), from where to where, and whether off the motorbike (a hop).
+            /// </summary>
+            public Vector3? boardFrom, boardTo;
+            public float alight = -1;
+            public Vector3 alightFrom, alightTo;
+            public bool alightHop;
             public Vector3 mountFrom;
             public Quaternion mountTurn;
             /// <summary>A shot's kick to play (Recoil) as its step begins.</summary>
@@ -1196,8 +1204,19 @@ namespace Bastion.Client.Units
                 // (Aboard La Lata, gone; but one on the motorbike rides it in sight: its view kept, UnitViews.Ride.)
                 if (u.Evacuated)
                 {
-                    if (views.TryGetValue(u.Id, out var rider) && rider.seat >= 0) seen.Add(u.Id);
+                    // (Aboard, T24: remembered, to see it come down; on the motorbike seated in sight, though the game was
+                    // loaded or joined with it aboard already. UnitViews.Ride.)
+                    if (u.Aboard == true) aboard.Add(u.Id);
+                    if (Seated(u) || (views.TryGetValue(u.Id, out var rider) && rider.seat >= 0)) seen.Add(u.Id);
                     continue;
+                }
+                // (Down out of La Lata, AlightedEvent: from its door, or off the motorbike's seat, to its tile. Made anew.)
+                Vector3? down = null;
+                if (aboard.Remove(u.Id))
+                {
+                    down = AlightFrom(u, out bool hop);
+                    if (views.ContainsKey(u.Id)) Remove(u.Id);
+                    if (down is Vector3 from) alighting.Add((u.Id, from, hop));
                 }
                 seen.Add(u.Id);
                 bool made = false;
@@ -1246,7 +1265,8 @@ namespace Bastion.Client.Units
                 // eating had slid from the body it ate to its tile's middle once dead.)
                 bool still = was != null && was.X == u.Pos.X && was.Y == u.Pos.Y && was.Z == u.Pos.Z;
                 // (One caged by its bars too: it keeps pressed to them by itself, KeepToBars.)
-                if (!(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
+                // (Nor one coming down out of La Lata: on its way to its tile, UnitViews.Ride.)
+                if (v.alight < 0 && !(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
                 // (Turned as the state has it, by its bars: the caged one's TurnedEvent, which UI's event player leaves to the view.)
                 if (v.cage != null && u.Alive && u.Facing is double facing && !v.walking && !v.barsLunge && !v.barsHeld && v.yawTo == null
                     && Mathf.Abs(Mathf.DeltaAngle(v.root.eulerAngles.y, YawOf(facing))) > 2) TurnTo(v, YawOf(facing));
@@ -1265,6 +1285,8 @@ namespace Bastion.Client.Units
                 v.synced = true;
             }
             foreach (var id in views.Keys.Where(id => !seen.Contains(id)).ToList()) Remove(id);
+            foreach (var (id, from, hop) in alighting) if (views.TryGetValue(id, out var comer)) Alight(comer, from, hop);
+            alighting.Clear();
         }
 
         View Make(Unit u)
@@ -1802,7 +1824,14 @@ namespace Bastion.Client.Units
             if (!views.TryGetValue(id, out var v)) return;
             v.boarded = true;
             if (Mount(v)) return;
-            if (Map.MapView.Current?.LataAt is Vector3 lata) Face(id, lata);
+            // (In by its door, T24: to the nearest doorway as it fades, if it is near; else where it stands, turned to it.)
+            if (Doorway(v.root.position) is Vector3 door && v.root != null)
+            {
+                (v.boardFrom, v.boardTo) = (v.root.position, new Vector3(door.x, v.root.position.y, door.z));
+                Face(id, door);
+                v.anim?.Motion("run");
+            }
+            else if (Map.MapView.Current?.LataAt is Vector3 lata) Face(id, lata);
             v.fadeGoal = 0;
             v.fadeRate = 1 / BoardSeconds;
         }
