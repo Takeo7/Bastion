@@ -171,6 +171,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Registra el cuerpo de un agente que tengas al lado. A veces lleva una pistola o un chaleco. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.CorpseOfficer));
             Assert.Equal("Abre un armario de medicinas que tengas al lado. Da siempre una medicina o un botiquín. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.MedicalCabinet));
             Assert.Equal("Registra un carro de curas que tengas al lado. Puede haber una medicina, o nada. Hace un poco de ruido.", Lore.SearchEffect(SearchPieces.MedicalCart));
+            // A police boot's vest in a run (Rules: RunLoot.VestChance), as the 0.13.3's notes say it.
+            Assert.Equal("Abre el maletero de un coche de policía que tengas al lado. Una vez de cada cinco hay un arma; si no, lo que haya en cualquier maletero. A veces, también un chaleco. Hace un poco de ruido.", Lore.SearchEffect(Looting.PoliceBoot));
             Assert.Equal("En esta habitación se registra mueble a mueble.", Lore.RoomByPieces);
             Assert.Equal("No hay nada que registrar a tu lado.", Lore.NothingBeside);
             Assert.Equal("Lo que tienes al lado ya está registrado.", Lore.SearchedBeside);

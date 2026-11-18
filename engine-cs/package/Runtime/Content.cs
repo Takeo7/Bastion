@@ -618,7 +618,7 @@ namespace Bastion.Engine
             {
                 Id = AbilityIds.Search,
                 Name = "Abrir o registrar",
-                Description = "Abre una caja marcada o el maletero cerrado de un coche que tengas al lado, o registra el cuerpo de un enemigo caído a tu lado o a tus pies. Hace un poco de ruido.",
+                Description = "Abre o registra lo que tengas al lado: una caja marcada, el maletero de un coche, un mueble o el cuerpo de un enemigo caído. Hace un poco de ruido.",
                 Target = AbilityTargets.Tile,
                 Ap = 1,
                 EndsTurn = false,
