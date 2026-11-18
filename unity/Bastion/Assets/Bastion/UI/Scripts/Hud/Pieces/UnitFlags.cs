@@ -36,6 +36,8 @@ namespace Bastion.UI.Hud
             public float Seconds;
             /// <summary>A pin's: how many pixels over its point (a mark over a unit's flag).</summary>
             public float Lift;
+            /// <summary>A said line's: who says it, beside whose flag it stands, and who hears it, on the other side.</summary>
+            public string Speaker, Listener;
         }
 
         readonly Func<string, Sprite> icon;
@@ -122,9 +124,10 @@ namespace Bastion.UI.Hud
 
         /// <summary>
         /// A word or number rising and fading over `world` (damage, «CRÍTICO −5», «ATURDIDO»…); kind: damage, crit, info, warn,
-        /// callout; `iconId`, a HUD icon before it (a weapon found: Ana's notes, Arturo 29/10).
+        /// callout; `iconId`, a HUD icon before it (a weapon found: Ana's notes, Arturo 29/10); `over`, a unit whose flag it
+        /// rises from, on its top, clear of the names below (Rescate's «SE UNE» over the soldier's name: Producto, 18/11).
         /// </summary>
-        public void Float(Vector3 world, string text, string kind, string iconId = null)
+        public void Float(Vector3 world, string text, string kind, string iconId = null, string over = null)
         {
             VisualElement label;
             // With a picture, a row of it and the word (a Label with children no longer measures its text).
@@ -137,14 +140,25 @@ namespace Bastion.UI.Hud
             }
             else label = Ui.Text(text, "float float--" + kind, layer);
             label.pickingMode = PickingMode.Ignore;
-            floats.Add(new Floating { Label = label, World = world, Born = Time.time });
+            floats.Add(new Floating { Label = label, World = world, Born = Time.time, Speaker = over });
         }
 
         /// <summary>
         /// A tag that stays over a point a while and fades at the end (overlays.ts pingTag: whose ping it is, 4 s), on a
         /// plate of `color`.
         /// </summary>
-        public void Pin(Vector3 world, string text, string color, float seconds)
+        public void Pin(Vector3 world, string text, string color, float seconds) => Plate(world, text, color, seconds, null, null);
+
+        /// <summary>
+        /// A line `speaker` says to `listener` (Rescate's «¿Te vienes?» and its answer), on a plate of `color`, `seconds`:
+        /// beside the speaker's flag, on the side away from the listener's, so it covers neither name and reads as theirs
+        /// (Producto, 18/11: over the head it lay on the name, and lifted it sat over the survivor). Without the flag, over
+        /// `world`.
+        /// </summary>
+        public void Say(string speaker, string listener, Vector3 world, string text, string color, float seconds) =>
+            Plate(world, text, color, seconds, speaker, listener);
+
+        void Plate(Vector3 world, string text, string color, float seconds, string speaker, string listener)
         {
             var label = Ui.Text(text, "pin", layer);
             label.pickingMode = PickingMode.Ignore;
@@ -153,7 +167,47 @@ namespace Bastion.UI.Hud
                 label.style.backgroundColor = new Color(c.r * 0.78f, c.g * 0.78f, c.b * 0.78f, 1);
                 label.style.borderTopColor = label.style.borderBottomColor = label.style.borderLeftColor = label.style.borderRightColor = new Color(c.r, c.g, c.b, 0.45f);
             }
-            pins.Add(new Floating { Label = label, World = world, Born = Time.time, Seconds = seconds });
+            pins.Add(new Floating { Label = label, World = world, Born = Time.time, Seconds = seconds, Speaker = speaker, Listener = listener });
+        }
+
+        /// <summary>About a flag's height (its health and a state's line), for a float over a head whose flag isn't up yet.</summary>
+        const float FlagRoom = 18;
+
+        /// <summary>A float with a unit (Floating.Speaker): its foot on the top of that unit's flag, centred on it, `rise` up.</summary>
+        bool OverFlag(Floating f, float rise)
+        {
+            if (f.Speaker == null || !flags.TryGetValue(f.Speaker, out var own) || own.style.visibility == Visibility.Hidden) return false;
+            var at = own.style.translate.value;
+            float fw = own.layout.width;
+            if (float.IsNaN(fw)) return false;
+            var w = float.IsNaN(f.Label.layout.width) ? 0 : f.Label.layout.width;
+            var h = float.IsNaN(f.Label.layout.height) ? 0 : f.Label.layout.height;
+            f.Label.style.visibility = Visibility.Visible;
+            f.Label.style.translate = new Translate(at.x.value + fw / 2 - w / 2, at.y.value - h - 2 + rise);
+            return true;
+        }
+
+        /// <summary>
+        /// A said line beside its speaker's flag, its foot on the flag's, on the side away from the listener's flag (on the
+        /// right with no listener in sight), kept on screen. False without the speaker's flag laid out: placed over its point.
+        /// </summary>
+        bool Beside(Floating f, float wide)
+        {
+            if (f.Speaker == null || !flags.TryGetValue(f.Speaker, out var own) || own.style.visibility == Visibility.Hidden) return false;
+            var at = own.style.translate.value;
+            float fx = at.x.value, fy = at.y.value, fw = own.layout.width, fh = own.layout.height;
+            if (float.IsNaN(fw) || float.IsNaN(fh)) return false;
+            var w = float.IsNaN(f.Label.layout.width) ? 0 : f.Label.layout.width;
+            var h = float.IsNaN(f.Label.layout.height) ? 0 : f.Label.layout.height;
+            var right = true;
+            if (f.Listener != null && flags.TryGetValue(f.Listener, out var other) && other.style.visibility != Visibility.Hidden && !float.IsNaN(other.layout.width))
+                right = other.style.translate.value.x.value + other.layout.width / 2 <= fx + fw / 2;
+            var x = right ? fx + fw + 4 : fx - w - 4;
+            if (x + w > wide - Edge) x = fx - w - 4;
+            if (x < Edge) x = fx + fw + 4;
+            f.Label.style.visibility = Visibility.Visible;
+            f.Label.style.translate = new Translate(x, fy + fh - h);
+            return true;
         }
 
         /// <summary>
@@ -314,7 +368,12 @@ namespace Bastion.UI.Hud
                     floats.RemoveAt(i);
                     continue;
                 }
-                Place(f.Label, panel, camera, f.World, -FloatRise * t, 0.5f);
+                if (!OverFlag(f, -FloatRise * t))
+                {
+                    // Its unit's flag not up yet (one just seen): from where its top will be, over the head.
+                    if (f.Speaker != null && headOf(f.Speaker) is Vector3 over) Place(f.Label, panel, camera, over, -FlagRoom - FloatRise * t, 1f);
+                    else Place(f.Label, panel, camera, f.World, -FloatRise * t, 0.5f);
+                }
                 f.Label.style.opacity = t < 0.7f ? 1f : 1f - (t - 0.7f) / 0.3f;
             }
             foreach (var t in tags)
@@ -343,7 +402,7 @@ namespace Bastion.UI.Hud
                     pins.RemoveAt(i);
                     continue;
                 }
-                Place(f.Label, panel, camera, f.World, f.Lift, 1f);
+                if (!Beside(f, wide)) Place(f.Label, panel, camera, f.World, f.Lift, 1f);
                 f.Label.style.opacity = t < 0.75f ? 1f : 1f - (t - 0.75f) / 0.25f;
             }
         }

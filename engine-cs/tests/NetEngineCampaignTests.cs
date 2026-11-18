@@ -702,6 +702,154 @@ namespace Bastion.Engine.Tests
             Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
         }
 
+        /// <summary>The mission as the room last saved it.</summary>
+        private static GameState SavedState(Host host) => new SaveStore(host.SavePath, null, new EngineCampaignRules()).Load()!.State!;
+
+        /// <summary>Every event of `t` that `player` has heard since last asked.</summary>
+        private static List<JToken> Heard(MemoryEnd player, string t) => player.Take("events").SelectMany((m) => m["events"]!).Where((e) => (string?)e["t"] == t).ToList();
+
+        /// <summary>A free tile next to `tile` (orthogonal first), out of La Lata's zone, one can stand on.</summary>
+        private static Pos NextToZone(GameState s, Pos tile)
+        {
+            foreach (var d in Grid.Dirs4.Concat(Grid.Dirs8))
+            {
+                var p = new Pos { X = tile.X + d.X, Y = tile.Y + d.Y, Z = 0 };
+                if (Grid.InBounds(s, p.X, p.Y) && !Abilities.InEvacZone(s, p) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null) return p;
+            }
+            throw new InvalidOperationException("nowhere next to La Lata's zone");
+        }
+
+        /// <summary>
+        /// T24 (Red, 18/11; Gameplay's contract, .dev-snapshots/gameplay/t24): getting into La Lata and down again through the
+        /// room, two players and the motorbike's two seats. One ends a walk on a tile of its zone: both hear `boarded`, and it
+        /// is aboard (off the field, safe) on both screens, after the partner comes back and after the host closes and
+        /// continues. Down in the squad's next turn: not the partner's to order; its owner's, to a free tile of the zone, and
+        /// both hear `alighted` with that tile. Then both in: La Lata goes by itself, and the fight is won, on both screens.
+        /// </summary>
+        [Fact]
+        public void OneGetsIntoLaLataAndDownAgainTheSameOnBothScreens()
+        {
+            using var host = new Host();
+            var ana = host.Join("Ana");
+            var pepe = host.Join("Pepe");
+            var anaToken = (string)ana.Take("welcome").Single()["token"]!;
+            var pepeToken = (string)pepe.Take("welcome").Single()["token"]!;
+            host.Say(ana, new { t = "newCampaign" });
+            host.Say(ana, Ccmd(new { type = "startRun" }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            // The first row's first node a Saqueo with no modifier, in the save; the host opens it again, and out.
+            var store = new SaveStore(host.SavePath, null, new EngineCampaignRules());
+            var save = store.Load()!;
+            var n = RunMap.Choices(save.Campaign!.Run!)[0];
+            n.Kind = NodeKinds.Normal;
+            n.Modifier = null;
+            if (n.Seed == null)
+            {
+                n.Seed = 4242 + n.Row;
+                n.Site = Places.Country;
+            }
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            host.Say(ana, new { t = "continueCampaign" });
+            host.Say(ana, Ccmd(new { type = "chooseNode", node = n.Id }));
+            host.Say(pepe, Ccmd(new { type = "vote", accept = true }));
+            Assert.Equal("mission", host.Room.Summary().phase);
+            var s = SnapshotOf(pepe);
+            Assert.True(Rules.LaLataHere(s));
+            Assert.Equal((2, 2), (s.Mission.Seats, s.Mission.EvacZone.Count));
+            // Whoever has the command, theirs one step from one tile of the zone; the partner's from the other.
+            var mover = s.Command ?? 0;
+            var partner = 1 - mover;
+            save = store.Load()!;
+            var st = save.State!;
+            var zone = st.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).ToList();
+            var mine = st.Units.Single((u) => u.Team == Teams.Xcom && u.CampaignId != null && u.Owner == mover);
+            var theirs = st.Units.Single((u) => u.Team == Teams.Xcom && u.CampaignId != null && u.Owner == partner);
+            mine.Pos = NextToZone(st, zone[0]);
+            theirs.Pos = NextToZone(st, zone[1]);
+            store.Save(save);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            var players = new[] { ana, pepe };
+            var tokens = new[] { anaToken, pepeToken };
+            foreach (var p in players) p.Take("events");
+            void Say(int slot, object cmd)
+            {
+                host.Say(players[slot], new { t = "cmd", cmd });
+            }
+            // The command to `slot`, if it is the other's.
+            void Hold(int slot)
+            {
+                players[1 - slot].Take("rejected");
+                if (SavedState(host).Command == 1 - slot) Say(1 - slot, new { type = "pass" });
+                var no = players[1 - slot].Take("rejected").Select((r) => (string?)r["message"]).FirstOrDefault();
+                Assert.True(SavedState(host).Command != 1 - slot, $"the command not passed to {slot}: «{no}»");
+            }
+
+            // In: both hear it, and it is aboard on both screens; La Lata waits for the partner's.
+            Say(mover, new { type = "move", unit = mine.Id, to = zone[0] });
+            Assert.Empty(players[mover].Take("rejected"));
+            foreach (var p in players) Assert.Equal(mine.Id, (string?)Heard(p, "boarded").Single()["unit"]);
+            var aboard = SavedState(host);
+            var it = aboard.Units.Single((u) => u.Id == mine.Id);
+            Assert.Equal((true, false, true), (it.Aboard, it.Alive, it.Evacuated));
+            Assert.Equal(((int?)1, (string?)null, false), (Rules.SeatsFree(aboard), aboard.Outcome, aboard.Mission.EvacDone == true));
+            Assert.Null(Grid.UnitAt(aboard, zone[0]));
+            // The partner back, and the host closed and continued: aboard on both.
+            players[partner].Close("se va");
+            host.Room.Pump();
+            players[partner] = host.Join(partner == 0 ? "Ana" : "Pepe", tokens[partner]);
+            Assert.Equal(true, SnapshotOf(players[partner]).Units.Single((u) => u.Id == mine.Id).Aboard);
+            (ana, pepe) = Reopen(host, anaToken, pepeToken);
+            players = new[] { ana, pepe };
+            foreach (var p in players)
+            {
+                var again = SnapshotOf(p).Units.Single((u) => u.Id == mine.Id);
+                Assert.Equal((true, false), (again.Aboard, again.Alive));
+            }
+            // No action left this turn (in with it): the squad's next one, both ready, the dead's turn played.
+            var turn = SavedState(host).Turn;
+            foreach (var slot in new[] { mover, partner }) Say(slot, new { type = "endTurn", ready = true });
+            for (var i = 0; i < 60 && !(SavedState(host).Turn > turn && SavedState(host).ActiveTeam == Teams.Xcom); i++) host.Advance(1000);
+            var next = SavedState(host);
+            Assert.Equal((turn + 1, Teams.Xcom, (string?)null), (next.Turn, next.ActiveTeam, next.Outcome));
+            Assert.True(next.Units.Single((u) => u.Id == theirs.Id).Alive);
+            Assert.True(next.Units.Single((u) => u.Id == mine.Id).Ap >= 1);
+            foreach (var p in players) p.Take("events");
+            // Down: not the partner's to order; its owner's, to a free tile of the zone.
+            var tile = Rules.AlightTiles(next).First();
+            Hold(partner);
+            players[partner].Take("rejected");
+            Say(partner, new { type = "ability", unit = mine.Id, ability = AbilityIds.Alight, tile });
+            Assert.Equal("Es de la escuadra del otro jugador.", (string?)players[partner].Take("rejected").Single()["message"]);
+            Hold(mover);
+            Say(mover, new { type = "ability", unit = mine.Id, ability = AbilityIds.Alight, tile });
+            Assert.Empty(players[mover].Take("rejected"));
+            foreach (var p in players)
+            {
+                var down = Heard(p, "alighted").Single();
+                Assert.Equal((mine.Id, tile.X, tile.Y), ((string?)down["unit"], (int)down["tile"]!["x"]!, (int)down["tile"]!["y"]!));
+            }
+            var out_ = SavedState(host).Units.Single((u) => u.Id == mine.Id);
+            Assert.Equal((true, false, false, tile.X, tile.Y), (out_.Alive, out_.Aboard == true, out_.Evacuated, out_.Pos.X, out_.Pos.Y));
+            // Both in: it in again on the zone's other tile, the partner's on this one; La Lata goes by itself.
+            var other = zone.First((z) => z.X != tile.X || z.Y != tile.Y);
+            Say(mover, new { type = "move", unit = mine.Id, to = other });
+            Assert.Empty(players[mover].Take("rejected"));
+            Hold(partner);
+            Say(partner, new { type = "move", unit = theirs.Id, to = tile });
+            Assert.Empty(players[partner].Take("rejected"));
+            host.Advance(1000);
+            foreach (var p in players)
+            {
+                var events = p.Take("events").SelectMany((m) => m["events"]!).ToList();
+                Assert.Equal(new[] { mine.Id, theirs.Id }, events.Where((e) => (string?)e["t"] == "boarded").Select((e) => (string?)e["unit"]));
+                Assert.Single(events, (e) => (string?)e["t"] == "evacDeparted");
+                Assert.Equal(Outcomes.Victory, (string?)events.Single((e) => (string?)e["t"] == "missionEnded")["outcome"]);
+            }
+            Assert.Equal(Outcomes.Victory, SavedState(host).Outcome);
+            Assert.DoesNotContain(host.Log, (l) => l.Contains("Fallo") || l.StartsWith("[sala]"));
+        }
+
         /// <summary>A free tile beside `who`, on their floor, one can stand on and reach them from (as RunRescueTests'), the nearest the map's first.</summary>
         private static Pos Beside(GameState s, Unit who)
         {

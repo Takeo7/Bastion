@@ -146,9 +146,9 @@ namespace Bastion.UI.Combat
         /// flares where more are coming, and a run's Rescate's zone to look in (`area`, N2). Nothing is made again unless one
         /// of them changed.
         /// </summary>
-        public void Show(GameState s, IList<Vec2> evac, IList<(Pos at, int color)> beacons, Pos item, IList<Pos> flaresAt, SearchArea area = null)
+        public void Show(GameState s, IList<Vec2> evac, IList<(Pos at, int color)> beacons, Pos item, IList<Pos> flaresAt, SearchArea area = null, IList<Pos> exits = null)
         {
-            var now = string.Join(";", evac.Select(p => $"{p.X},{p.Y}")) + "|" + string.Join(";", beacons.Select(b => $"{b.at.X},{b.at.Y},{b.at.Z},{b.color}")) + "|" + (item != null ? $"{item.X},{item.Y},{item.Z}" : "") + "|" + string.Join(";", flaresAt.Select(p => $"{p.X},{p.Y}"))
+            var now = string.Join(";", evac.Select(p => $"{p.X},{p.Y}")) + "|" + (exits != null ? string.Join(";", exits.Select(p => $"{p.X},{p.Y}")) : "") + "|" + string.Join(";", beacons.Select(b => $"{b.at.X},{b.at.Y},{b.at.Z},{b.color}")) + "|" + (item != null ? $"{item.X},{item.Y},{item.Z}" : "") + "|" + string.Join(";", flaresAt.Select(p => $"{p.X},{p.Y}"))
                 + "|" + (area != null ? $"{area.Center.X},{area.Center.Y},{area.Radius}" : "");
             if (now == key) return;
             key = now;
@@ -173,6 +173,23 @@ namespace Bastion.UI.Combat
                 build.Line(c2, c3, 2.5f, seat);
                 build.Line(c3, c0, 2.5f, seat);
             }
+            // Bajar armed (T24): the tiles one inside can get down to, an edge only, thinner and with no fill: not seats.
+            if (exits != null)
+                foreach (var t in exits)
+                {
+                    var floor = Board.TileToWorld(s, new Pos { X = t.X, Y = t.Y }).y + 0.02f * T;
+                    var a = Board.Corner(t.X, t.Y, floor);
+                    var edge = 0.14f * T;
+                    var c0 = new Vector3(a.x + edge, floor, a.z - edge);
+                    var c1 = new Vector3(a.x + T - edge, floor, a.z - edge);
+                    var c2 = new Vector3(a.x + T - edge, floor, a.z - T + edge);
+                    var c3 = new Vector3(a.x + edge, floor, a.z - T + edge);
+                    var white = new Color32(0xff, 0xff, 0xff, 0xc0);
+                    build.Line(c0, c1, 1.5f, white);
+                    build.Line(c1, c2, 1.5f, white);
+                    build.Line(c2, c3, 1.5f, white);
+                    build.Line(c3, c0, 1.5f, white);
+                }
             zone.sharedMesh = build.Build(zone.sharedMesh);
             // The beams: a dark casing and a bright core going up, a ring at the foot.
             build.Clear();

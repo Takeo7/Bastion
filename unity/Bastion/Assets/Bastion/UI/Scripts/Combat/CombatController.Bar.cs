@@ -22,7 +22,23 @@ namespace Bastion.UI.Combat
         List<AbilityView> BarKeys()
         {
             var u = Unit();
-            var calls = AbandonActions().Concat(EvacActions(u)).ToList();
+            // One inside La Lata (T24): Bajar, and the calls (Evacuar from inside).
+            var inside = Inside();
+            var calls = AbandonActions().Concat(EvacActions(u ?? inside)).ToList();
+            if (inside != null)
+            {
+                var down = new List<AbilityView> { AlightKey(inside) };
+                // Nothing else of this player's left (T24, two players): «Ceder el mando» too, as the game's menu says it;
+                // first and lit, what will be pressed most (Producto, 18/11), with its key.
+                if (OnlyInside())
+                {
+                    var give = CallKey("passCommand", HudText.Command.Pass, HudText.Command.PassTip);
+                    give.Hotkey = HudText.Command.PassKey;
+                    give.Active = true;
+                    down.Insert(0, give);
+                }
+                return down.Concat(calls).ToList();
+            }
             if (u == null || !Commands(u)) return calls;
             var keys = WithMenus(SoldierAbilities(u), u);
             // (A soldier's turn ends by «Terminar turno» while it is in play: one key for both, Arturo 7/11, Ana's #5.)
@@ -308,6 +324,27 @@ namespace Bastion.UI.Combat
                     opened ??= kind;
                 }
             return opened;
+        }
+
+        /// <summary>
+        /// Bajar for one inside La Lata (T24): an action, to a free tile of its zone; off with the engine's why
+        /// (Rules.AlightRefusal), lit while armed on more than one tile.
+        /// </summary>
+        AbilityView AlightKey(Unit inside)
+        {
+            var def = Content.Abilities[AbilityIds.Alight];
+            var no = Rules.AlightRefusal(State, inside, MySlot, ActiveSlots(), Rules.AlightTiles(State).FirstOrDefault());
+            return new AbilityView
+            {
+                Id = AbilityIds.Alight,
+                Name = def.Name,
+                Hotkey = "1",
+                Enabled = no == null && CanAct(),
+                Reason = no,
+                Cost = AbilityTexts.CostText(inside, AbilityIds.Alight),
+                Description = def.Description,
+                Active = AlightArmed(),
+            };
         }
 
         static AbilityView CallKey(string id, string name, string description, string limits = null)

@@ -98,7 +98,8 @@ namespace Bastion.Engine
         /// held, «Llevad a la Dra. Irina Sokolova a La Lata», «La Dra. Irina Sokolova,
         /// en La Lata: que suba el resto», «…, a salvo». `phase`: "captive", "loose", "aboard" or "out"; in an
         /// expedition's Rescate (Arturo, 17/11), "search" till someone sees them in the marked zone, "talk" till someone
-        /// talks to them, and "dead" if they die: the stage goes on as a Saqueo, without a recruit.
+        /// talks to them, "dead" if they die (the stage goes on as a Saqueo, without a recruit), and "full" when they are
+        /// aboard, La Lata has no seat left and someone is still outside (T24).
         /// </summary>
         public static string VipObjective(string vip, string phase)
         {
@@ -109,6 +110,8 @@ namespace Bastion.Engine
             if (phase == "dead") return $"Sin recluta: registrad lo que queráis y salid {Bus.In}";
             if (phase == "loose") return $"Llevad {(who.StartsWith("el ") ? $"al {who.Substring(3)}" : $"a {who}")} {Bus.To}";
             var who_ = Capital(who);
+            // T24: aboard with La Lata full and someone still outside (Producto, 18/11: it said «que suba el resto»).
+            if (phase == "full") return $"{who_}, a bordo. {Bus.Name} va llena: evacuad o que baje alguien";
             return phase == "aboard" ? $"{who_}, {Bus.In}: que suba el resto" : $"{who_}, a salvo";
         }
 
@@ -136,8 +139,11 @@ namespace Bastion.Engine
             public const string SeenFloat = "CON VIDA";
             /// <summary>The log when a soldier of the squad first sees a Rescate's survivor (SurvivorFoundEvent's `by`).</summary>
             public static string Spotted(string who) => $"{who} ve a alguien con vida.";
-            /// <summary>The log when a search turns up a survivor on any map (Arturo, 17/11: one of every six, without warning).</summary>
-            public static string Found(string who) => $"Al registrar, {who} encuentra a alguien con vida.";
+            /// <summary>
+            /// The log when a soldier comes on a survivor on any map (Arturo, 17/11: one of every six, without warning): they wait
+            /// in a building and are found on sight, as the Rescate's (Runs.PlaceLoose), so not «al registrar».
+            /// </summary>
+            public static string Found(string who) => $"{who} encuentra a alguien con vida.";
             /// <summary>
             /// The log when the survivor dies (Arturo, 17/11: the stage goes on, without a recruit). `name` null while
             /// nobody has seen them.

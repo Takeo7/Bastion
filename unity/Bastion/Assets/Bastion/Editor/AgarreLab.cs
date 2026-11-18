@@ -87,8 +87,9 @@ namespace Bastion.EditorTools
                 string w = weapons[k];
                 // (The pistol alone: none in the hands, the pistol by the thigh.)
                 clearing.Showcase("lab0", look, w == FoundWeaponIds.Pistol ? null : w, false, "Lab 0", "#e8a33a", true);
-                if (turned) clearing.TurnShowcase(turn);
-                Debug.Log(FormattableString.Invariant($"[agarre] {k} {w} from frame {Time.frameCount}, {Time.time:0.00} s"));
+                // (Once: TurnShowcase adds to the turn, as a drag does, and it is kept while it is the same soldier.)
+                if (turned && k == 0) clearing.TurnShowcase(turn);
+                Debug.Log(FormattableString.Invariant($"[agarre] {k} {w} from frame {Time.frameCount}, {Time.time:0.00} s; the last tucked {Bastion.Client.Units.UnitViews.LastTuckDown:0.0}° under the level"));
             }
             UnityEditor.EditorApplication.update += Step;
         }
@@ -134,6 +135,52 @@ namespace Bastion.EditorTools
             sun.type = LightType.Directional;
             sun.transform.rotation = Quaternion.LookRotation(new Vector3(-1, -0.6f, -0.3f));
             RenderSettings.ambientLight = new Color(0.55f, 0.55f, 0.58f);
+        }
+
+        /// <summary>
+        /// T22's grips (Producto, 18/11: the right hand on the scope, the left a fist under the handguard): each long gun of the
+        /// base, by its art (BASTION_ARTES: Anims.json's weapons, the base's unless said), its mesh's profile from its right
+        /// in its own frame, unscaled: for each 1.5 cm along z, the least and most y of its vertices and what parts they are
+        /// of ([perfil]), and its parts' boxes, to put the hands (WeaponArt.palm on the stock's wrist behind the trigger
+        /// guard, fore on the handguard). Edit mode.
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.AgarreLab.Perfil -quit
+        /// </summary>
+        public static void Perfil()
+        {
+            var arts = (Environment.GetEnvironmentVariable("BASTION_ARTES") ?? "rifle,rifle2,rifle3,shotgun,shotgunPump,sniper,sniper2,machineGun,machineGun2,boltRifle").Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var catalog = Bastion.Client.Units.FigureCatalog.Load();
+            foreach (var id in arts)
+            {
+                var art = Bastion.Client.Units.Anims.Weapon(id);
+                var prefab = art != null ? catalog.Weapon(art.fbx) : null;
+                if (prefab == null)
+                {
+                    Debug.Log($"[perfil] {id}: no model");
+                    continue;
+                }
+                var gun = (GameObject)UnityEngine.Object.Instantiate(prefab);
+                gun.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                gun.transform.localScale = Vector3.one;
+                var slices = new SortedDictionary<int, (float lo, float hi, HashSet<string> parts)>();
+                foreach (var f in gun.GetComponentsInChildren<MeshFilter>())
+                {
+                    if (f.sharedMesh == null || !f.gameObject.activeInHierarchy || f.name.Contains("Silencer")) continue;
+                    var m = f.transform.localToWorldMatrix;
+                    foreach (var v in f.sharedMesh.vertices)
+                    {
+                        var p = m.MultiplyPoint3x4(v);
+                        int k = Mathf.FloorToInt(p.z / 0.015f);
+                        var (lo, hi, parts) = slices.TryGetValue(k, out var was) ? was : (float.PositiveInfinity, float.NegativeInfinity, new HashSet<string>());
+                        parts.Add(f.name.Replace("SM_Wep_", ""));
+                        slices[k] = (Mathf.Min(lo, p.y), Mathf.Max(hi, p.y), parts);
+                    }
+                }
+                Debug.Log($"[perfil] {id} ({art.fbx}): palm {Show(art.palm)}, fore {Show(art.fore)}");
+                foreach (var (k, (lo, hi, parts)) in slices)
+                    Debug.Log(FormattableString.Invariant($"[perfil] {id} z {k * 0.015f:0.000}: y {lo:0.000} .. {hi:0.000} ({string.Join(" ", parts)})"));
+                UnityEngine.Object.DestroyImmediate(gun);
+            }
+            string Show(float[] v) => v == null ? "-" : string.Join(",", v.Select(x => x.ToString("0.000", CultureInfo.InvariantCulture)));
         }
 
         static float Number(string name, float or) => float.TryParse(Environment.GetEnvironmentVariable(name), NumberStyles.Float, CultureInfo.InvariantCulture, out float v) ? v : or;

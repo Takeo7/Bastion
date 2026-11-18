@@ -157,7 +157,8 @@ namespace Bastion.UI.Strategy
                     }
                     break;
                 case GearKinds.Item:
-                    if (g.Type != null && Content.Items.TryGetValue(g.Type, out var i)) lines.Add(i.Description);
+                    // The belt's five, Lore's line with their uses (Arturo, 18/11, T4); the old armoury's others, their own.
+                    if (g.Type != null && Content.Items.TryGetValue(g.Type, out var i)) lines.Add(Lore.ItemLine(g.Type) ?? i.Description);
                     break;
                 case GearKinds.Mod:
                     if (g.Type != null && Content.WeaponMods.TryGetValue(g.Type, out var m)) lines.Add(m.Line);

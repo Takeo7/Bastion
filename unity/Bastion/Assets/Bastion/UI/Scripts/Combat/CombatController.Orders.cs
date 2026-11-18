@@ -26,7 +26,7 @@ namespace Bastion.UI.Combat
         Mode mode = Mode.Move;
 
         /// <summary>Something is armed to aim (an attack, a support ability, something by hand): not a throw, which waits for the pointer.</summary>
-        public bool Armed => mode == Mode.Target || HandArmed() != null;
+        public bool Armed => mode == Mode.Target || HandArmed() != null || AlightArmed();
 
         /// <summary>What is armed and open, for the lab's log.</summary>
         public string LabState() => $"{(Unit() is Unit me ? $"{me.Id} acciones {me.Ap}, movimiento {Bastion.UI.Hud.HudText.Moves.Tiles(Paths.MoveBudget(State, me))} de {Bastion.UI.Hud.HudText.Moves.Tiles(Paths.FullMoves(State, me))} en {me.Pos.X}/{me.Pos.Y}, " : "")}cobertura {(CoverMatters() ? "sí" : "no")} (disparan: {string.Join(" ", Shown.Units.Where(u => u.Alive && u.Team == Teams.Alien && Shoots(u)).Select(u => u.Template + (Visible(u) ? "*" : "")).Distinct())}), modo {mode} {modeAbility ?? "-"}, blanco {targetId ?? "-"}, menú de la barra {(Hud != null && Hud.AbilityMenuOpen ? "abierto" : "cerrado")}, menú {(Hud != null && Hud.MenuOpen ? "abierto" : "cerrado")}; barra: {string.Join(" ", BarKeys().Select(v => $"{v.Id}{(v.Menu != null ? "<" + v.Menu : "")}{(v.Enabled ? "" : "(off)")}"))}";
@@ -45,6 +45,8 @@ namespace Bastion.UI.Combat
         /// <summary>«Evacuar» pressed once: the second asks, until this time; the soldier it is for.</summary>
         float evacArmedUntil = -1;
         string evacArmed;
+        /// <summary>The note the first press of «Evacuar» left, until the second.</summary>
+        string evacQuestion;
 
         /// <summary>The partner's last soldier moved, for «Ver» (game.ts partnerLast); the game sets it from the events.</summary>
         public string PartnerLast;
@@ -75,6 +77,8 @@ namespace Bastion.UI.Combat
             modeAbility = null;
             targetId = null;
             handPick = null;
+            alightArmed = false;
+            alightPick = null;
         }
 
         void CancelMode()
@@ -232,6 +236,16 @@ namespace Bastion.UI.Combat
         /// <summary>A key of the bar, or a choice of one of its menus (game.ts useAbility).</summary>
         void UseAbility(string id)
         {
+            if (id == AbilityIds.Alight)
+            {
+                UseAlight();
+                return;
+            }
+            if (id == "passCommand")
+            {
+                PassCommand();
+                return;
+            }
             if (id == "evac" || id == "evacAccept" || id == "evacRefuse")
             {
                 UseEvac(id);
@@ -363,7 +377,7 @@ namespace Bastion.UI.Combat
         {
             if (Hud != null && (Hud.CloseGear() || Hud.CloseAbilityMenu() || Hud.ClosePackMenu())) return;
             if (CloseMiniMap()) return;
-            if (mode != Mode.Move) CancelMode();
+            if (mode != Mode.Move || AlightArmed()) CancelMode();
             // (A detected tile's warning too: game.ts.)
             else if (EndArmed || concealWarn != null)
             {
@@ -718,8 +732,101 @@ namespace Bastion.UI.Combat
                 s.Mission.Seats ?? 0);
         }
 
-        /// <summary>Our soldiers in the bus, on the state orders go by.</summary>
-        List<Unit> MineAboard() => State.Units.Where(x => x.Alive && Commands(x) && Abilities.InEvacZone(State, x.Pos)).ToList();
+        /// <summary>
+        /// Ours who can ask La Lata to go, on the state orders go by: inside it (T24, Unit.Aboard), or in its zone (without a
+        /// seat, in a run; anywhere in it, out of one).
+        /// </summary>
+        List<Unit> MineAboard() => State.Units.Where(x => Commands(x) && (x.Aboard == true || (x.Alive && Abilities.InEvacZone(State, x.Pos)))).ToList();
+
+        // ------------------------------------------------------- La Lata (T24)
+
+        /// <summary>Bajar pressed with more than one free tile: the next click (or the key again) gets down there.</summary>
+        bool alightArmed;
+        /// <summary>The free tile Bajar would use: the one under the pointer, else the first.</summary>
+        Pos alightPick;
+
+        bool AlightArmed() => alightArmed && Inside() != null;
+
+        /// <summary>Mine inside La Lata with an action left, to get down (T24).</summary>
+        List<Unit> MyInside() => State.Units.Where(u => u.Aboard == true && Commands(u) && u.Ap > 0).ToList();
+
+        /// <summary>
+        /// With two (T24, Gameplay and Producto, 18/11): this player holds the command and has nothing left but soldiers inside
+        /// La Lata with an action, and the partner has something to do. The engine gives the command for them to get down,
+        /// and doesn't take it back: the player chooses each time, Bajar or «Ceder el mando» (Arturo, by Producto, 18/11:
+        /// «Espera a que cedas»; it went by itself after 4 s), the latter first and lit on the bar, and by the partner's name.
+        /// </summary>
+        bool OnlyInside()
+        {
+            if (!CanAct() || !HasCommand() || !Rules.LaLataHere(State) || IdleSoldiers() > 0 || MyInside().Count == 0) return false;
+            var partner = PartnerHere();
+            return partner != null && !State.Ready[partner.Slot] && AbilityTexts.BusySlots(State).Contains(partner.Slot);
+        }
+
+        /// <summary>The tile Bajar would get down to now.</summary>
+        Pos AlightTarget()
+        {
+            var free = Rules.AlightTiles(State);
+            return (alightPick != null ? free.FirstOrDefault(t => Same(t, alightPick)) : null) ?? free.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Bajar (T24, AbilityIds.Alight): why not, said (Rules.AlightRefusal); one free tile, down there at once; more, armed
+        /// on them (a click on one, or the key again, gets down).
+        /// </summary>
+        void UseAlight()
+        {
+            var inside = Inside();
+            if (inside == null || !CanAct()) return;
+            if (!HasCommand())
+            {
+                Toast(CommandLock());
+                return;
+            }
+            var free = Rules.AlightTiles(State);
+            var no = Rules.AlightRefusal(State, inside, MySlot, ActiveSlots(), free.FirstOrDefault());
+            if (no != null)
+            {
+                Toast(no);
+                return;
+            }
+            if (free.Count == 1 || AlightArmed())
+            {
+                SendAlight(AlightTarget());
+                return;
+            }
+            alightArmed = true;
+            alightPick = free[0];
+            Refresh();
+        }
+
+        void SendAlight(Pos tile)
+        {
+            var inside = Inside();
+            alightArmed = false;
+            alightPick = null;
+            if (inside != null && tile != null) Send(new AbilityCommand { Unit = inside.Id, Ability = AbilityIds.Alight, Tile = tile });
+            Refresh();
+        }
+
+        /// <summary>Bajar armed: the pointer on a free tile picks it; the tile it would get down to ringed.</summary>
+        void ShowAlight()
+        {
+            if (hover != null && Rules.AlightTiles(State).Any(t => Same(t, hover))) alightPick = hover;
+            Overlay?.ShowHover(State, AlightTarget(), MoveOverlay.WalkRing);
+        }
+
+        /// <summary>
+        /// A walk's last tile on La Lata's (T24): that it gets in (Lore.BoardText.WillBoard), or that there is no seat left
+        /// (Full); elsewhere, nothing.
+        /// </summary>
+        string BoardNote(Unit u, Pos tile)
+        {
+            // On a tile of La Lata's (its whole zone: the open ones are Rules.OpenTiles, all the engine's InEvacZone means now).
+            if (u == null || tile == null || !Rules.LaLataHere(State) || !State.Mission.EvacZone.Any(z => z.X == tile.X && z.Y == tile.Y) || tile.Z != 0) return null;
+            if (Rules.WouldBoard(State, u, tile)) return Lore.BoardText.WillBoard;
+            return Rules.SeatsFree(State) == 0 ? Lore.BoardText.Full.TrimEnd('.') : null;
+        }
 
         /// <summary>The partner whose yes leaving needs (Sim.callEvac): here, and with soldiers on the field.</summary>
         PlayerInfo EvacPartner()
@@ -748,11 +855,15 @@ namespace Bastion.UI.Combat
                 evacArmed = u.Id;
                 evacArmedUntil = Time.time + 5;
                 var p = Lore.EvacPrompt(EvacSituation(State), EvacPartner()?.Name);
-                Toast($"{p.Text} Pulsa otra vez «{p.Go}».");
+                evacQuestion = $"{p.Text} Pulsa otra vez «{p.Go}».";
+                Toast(evacQuestion);
                 RefreshHud();
                 return;
             }
             evacArmed = null;
+            // Answered: its question goes (it stayed under the stage's card: Producto, 18/11).
+            if (evacQuestion != null) Hud?.ClearToast(evacQuestion);
+            evacQuestion = null;
             Send(new EvacCommand { Unit = u.Id });
         }
 
@@ -818,14 +929,18 @@ namespace Bastion.UI.Combat
         public void OnSelectUnit(string id)
         {
             var u = UnitById(State, id);
-            if (u != null && u.Alive && Commands(u)) Pick(id, false);
+            // One inside La Lata too (T24), to get down or ask it to go: the camera to La Lata.
+            if (u == null || !(u.Alive || u.Aboard == true) || !Commands(u)) return;
+            if (u.Aboard == true) insideChosen = id;
+            Pick(id, u.Aboard == true);
         }
 
         /// <summary>A card clicked twice (UI-08): the camera to that soldier, on its floor.</summary>
         public void OnLookUnit(string id)
         {
             var u = UnitById(Shown, id);
-            if (u == null || !u.Alive || u.Evacuated) return;
+            // Inside La Lata (T24): where it got in, by La Lata.
+            if (u == null || (!(u.Alive || u.Aboard == true)) || (u.Evacuated && u.Aboard != true)) return;
             SetLevel(u.Pos.Z);
             // From the map above, the camera comes down there.
             if (Overhead) OverheadClick(u.Pos);

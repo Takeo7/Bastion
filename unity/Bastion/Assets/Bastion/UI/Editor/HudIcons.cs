@@ -91,6 +91,18 @@ namespace Bastion.UI.EditorTools
             ("hunker", Helmet), ("hide", Hood), ("pry", Crowbar), ("reload", Reload), ("grenade", Explosives), ("missiles", Explosives),
             ("launch", Launcher), ("smoke", Smoke), ("flashbang", Flashbang), ("firstAid", Healing),
             ("evac", Vehicle), ("evacAccept", Vehicle), ("evacRefuse", Time), ("abandonRefuse", Time),
+            // Bajar de La Lata (T24): Dark Fantasy HUD's arrow down, apart from Evacuar's vehicle.
+            ("alight", "ICON_DarkFantasy_Status_Down_01_Clean"),
+            // «Ceder el mando» on the bar, with only soldiers inside La Lata left (T24, two players): the wait's clock.
+            ("passCommand", Time),
+            // The states as icons on narrow busts (Arturo, in the cuadro, 18/11: SquadList.StateIcons), one shape each that
+            // tells apart small: the bar's where it has one (a ring, a dagger, a helmet, a hood, the vehicle), else the HUD
+            // packs' status icons (four arrows, a bolt, an eye struck out, chevrons down, a spiral, a burst, a tangle).
+            ("state:overwatch", Target), ("state:killZone", "ICON_DarkFantasy_Status_Targeted_02_Clean"), ("state:watchMelee", Blade),
+            ("state:hunker", Helmet), ("state:hide", Hood), ("state:stun", Shocked), ("state:disoriented", "ICON_DarkFantasy_Status_Blinded_01_Clean"),
+            ("state:down", "ICON_MilitaryCombat_Status_Down_01_Clean"), ("state:controlled", "ICON_DarkFantasy_Status_Cursed_01_Clean"),
+            ("state:panic", "ICON_DarkFantasy_Status_Critical_01_Clean"), ("state:captive", "ICON_DarkFantasy_Status_Entangled_01_Clean"),
+            ("state:aboard", Vehicle), ("state:carry", Backpack),
             ("abandon", Flag), ("abandonAccept", Flag), ("hack", Settings), ("search", Backpack), ("searchRoom", Backpack),
             // Registrar by what is searched (Arturo, 18/11 T12): a car's boot (Apocalypse's car, not La Lata's), a body, a box.
             ("search:car", "ICON_Apocalpyse_Map_Vehicle_01"), ("search:body", "ICON_DarkFantasy_Status_Dead_01_Clean"), ("search:box", "ICON_ModernMenus_Crate_01_Clean"),

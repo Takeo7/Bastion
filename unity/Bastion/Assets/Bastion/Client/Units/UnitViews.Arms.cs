@@ -667,6 +667,17 @@ namespace Bastion.Client.Units
                     }
                     if (v.inHand == Held.Rifle && v.reload > 0) ReloadTilt(v);
                     else if (v.inHand == Held.Rifle) Steady(v, dt);
+                    // A straight-stocked one tucked under the arm away from the aim, the hands to it (UnitViews.Tuck, T22): eased
+                    // in and out with the aim, a reload and a busy left hand, over the clips' own hold.
+                    // (Not in the battle yet: there the stock went 5–14 cm into the right arm by CombatLab.Agarres' table, 18/11.
+                    // BASTION_TUCK_COMBATE=1, for the labs, till it is right.)
+                    if (TuckInBattle && v.inHand == Held.Rifle && v.arts.TryGetValue(v.drawn, out var stocked) && Tucks(stocked))
+                    {
+                        bool away = !v.dead && v.reload <= 0 && !busy;
+                        v.tuck = Mathf.MoveTowards(v.tuck, away ? 1 - v.up : 0, dt / TuckEase);
+                        if (v.tuck > 0) HoldTucked(v.animator, v.weapon, v.root, stocked, Mathf.SmoothStep(0, 1, v.tuck));
+                    }
+                    else v.tuck = 0;
                     break;
             }
         }
@@ -789,7 +800,8 @@ namespace Bastion.Client.Units
             // SupportMost: the left palm eased onto the handguard, not there in a frame as a reload, a throw or a blow ends;
             // the 3D review's G-1, 10/11. Held steadily, all of it, as before.)
             float next = Mathf.MoveTowards(share, 1, dt / TwoHandsBack);
-            if (LeftOnto(v.animator, v.weapon, art, v.twoHands * next)) v.supportShare = next;
+            // (Not while it is tucked under the arm: there the left hand is put by UnitViews.Tuck.)
+            if (LeftOnto(v.animator, v.weapon, art, v.twoHands * next * (1 - Mathf.SmoothStep(0, 1, v.tuck)))) v.supportShare = next;
         }
 
         /// <summary>
@@ -826,6 +838,12 @@ namespace Bastion.Client.Units
         /// </summary>
         public static void HoldAtRest(Animator a, Transform gun, Transform root, WeaponArt art, ref Quaternion? grip)
         {
+            // (A straight-stocked one tucked under the arm, the hands to it: UnitViews.Tuck.)
+            if (Tucks(art))
+            {
+                HoldTucked(a, gun, root, art, 1);
+                return;
+            }
             var palm = art?.palm != null && art.palm.Length >= 3 ? new Vector3(art.palm[0], art.palm[1], art.palm[2]) : Vector3.zero;
             Hold(a, gun, root, false, ref grip, palm);
             if (SupportOff || a == null || !a.isHuman || !LeftOnto(a, gun, art, 1)) return;
@@ -898,6 +916,8 @@ namespace Bastion.Client.Units
 
         /// <summary>Steady's: how slowly the barrel's rise follows the hands, how long it takes to come in or go (seconds), its least and most rise (degrees).</summary>
         const float SteadySeconds = 0.25f, SteadyEase = 0.2f, SteadyLow = -30, SteadyHigh = 8;
+
+        static readonly bool TuckInBattle = Environment.GetEnvironmentVariable("BASTION_TUCK_COMBATE") == "1";
 
         /// <summary>How far the left hand's fingers bend round a handguard (degrees: the first joint, the second).</summary>
         static readonly Vector2 HandguardBend = new Vector2(55, 50);

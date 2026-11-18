@@ -330,12 +330,22 @@ namespace Bastion.UI.Combat
 
         Unit Unit() => UnitById(State, picked) is Unit u && u.Alive ? u : null;
 
+        /// <summary>The picked one if it is inside La Lata (T24: Unit.Aboard, off the field) and this player's: it can Bajar.</summary>
+        Unit Inside() => State.Outcome == null && State.Mission.EvacDone != true && UnitById(State, picked) is Unit u && u.Aboard == true && Commands(u) ? u : null;
+
+        /// <summary>
+        /// One inside La Lata the player picked by its card (OnSelectUnit): kept picked (AutoSelect), where one that has just
+        /// got in gives way to the next soldier.
+        /// </summary>
+        string insideChosen;
+
         // ------------------------------------------------------- picking
 
         /// <summary>Picks a soldier (null: none), its reach worked out and shown, the camera to it (`look`).</summary>
         public void Pick(string id, bool look = true)
         {
             if (Rig != null) Rig.TakeControl();
+            if (id != insideChosen) insideChosen = null;
             if (picked != id)
             {
                 picked = id;
@@ -344,6 +354,12 @@ namespace Bastion.UI.Combat
             var u = Unit();
             looking = u != null && !Paths.HasTurnLeft(u) && CanAct() ? u.Id : null;
             if (u != null && look && Rig != null) Rig.Focus(Board.TileToWorld(State, u.Pos));
+            // One inside La Lata (T24): the camera to La Lata, where it would get down.
+            else if (u == null && look && Rig != null && Inside() != null && State.Mission.EvacZone.Count > 0)
+            {
+                var zone = State.Mission.EvacZone;
+                Rig.Focus(Bastion.Client.Map.MapView.Current?.LataAt ?? Board.TileToWorld(State, new Pos { X = zone[zone.Count / 2].X, Y = zone[zone.Count / 2].Y }));
+            }
             // Picking another of one's own while one is in play is allowed, to look. It asks to leave the one in play
             // (Arturo, 7/11: its turn ends when the player says so), saying what it still has; picked again, it is left.
             var waiting = u != null && Commands(u) && Paths.HasTurnLeft(u) ? WaitingFor(u.Id) : null;
@@ -403,6 +419,8 @@ namespace Bastion.UI.Combat
                 if (sameTurn) NextSoldier(current, mineInPlay);
                 return;
             }
+            // One inside La Lata picked by its card (T24): it stays, to get down or ask La Lata to go.
+            if (current == null && insideChosen != null && insideChosen == picked && Inside() != null) return;
             // The partner's soldier comes into play: the camera to it too, if wanted (#47).
             if (turned && playing != null && playing.Alive && !Commands(playing) && playing.Team == Teams.Xcom) TurnCamera(playing);
             if (current != null && current.Id == looking)
@@ -413,6 +431,14 @@ namespace Bastion.UI.Combat
             // The current one stays while it has anything left: movement after acting too (Arturo, 5/11 #14: move 3,
             // shoot, move the 5 left).
             if (current != null && Commands(current) && (Paths.HasTurnLeft(current) || !CanAct())) return;
+            // With the command and only soldiers inside La Lata left with actions (T24, two players): the first of them, to
+            // get down; its keys say so, and «Ceder el mando» beside (OnlyInside).
+            if (OnlyInside() && MyInside().FirstOrDefault() is Unit waiting)
+            {
+                insideChosen = waiting.Id;
+                if (picked != waiting.Id) Pick(waiting.Id, true);
+                return;
+            }
             var next = mineInPlay ?? MyUnits().FirstOrDefault(x => x.Ap > 0) ?? MyUnits().FirstOrDefault(Paths.HasTurnLeft) ?? (current != null && Commands(current) ? current : MyUnits().FirstOrDefault());
             if (CameraRig.Logging && next?.Id != current?.Id)
                 Debug.Log($"[cámara] cambio de soldado: {current?.Id ?? "ninguno"} → {next?.Id ?? "ninguno"} ({(current == null ? $"elegido «{picked}»" : $"acciones {current.Ap}, movimiento {Paths.MoveBudget(State, current)}, manda {Commands(current)}")}, órdenes {CanAct()})");
@@ -1101,6 +1127,13 @@ namespace Bastion.UI.Combat
             var u = Unit();
             var body = BodyUnder(screen);
             var tile = hover;
+            // Bajar armed (T24): a free tile of La Lata's is where it gets down; anywhere else backs out.
+            if (AlightArmed())
+            {
+                if (tile != null && Rules.AlightTiles(State).Any(t => Same(t, tile))) SendAlight(tile);
+                else CancelMode();
+                return;
+            }
             // Aiming: a click on one of the targets picks it; again, it acts.
             if (mode == Mode.Target && body != null && TargetOptions(modeAbility).Any(o => o.Unit.Id == body.Id))
             {
@@ -1275,6 +1308,11 @@ namespace Bastion.UI.Combat
             Note(hover, hover != null && Burning.At(Shown, hover) ? $"Fuego: quita {Content.Flames.Damage} de salud al pisarlo, y {Content.Flames.Damage} más al acabar el turno en él" : null, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered));
             // The pointer on El Toro: whom his charge reaches from there (H6).
             if (hovered != null && hovered.Id == Shown.Mission?.Boss) ShowBossCharges(hovered);
+            if (AlightArmed())
+            {
+                ShowAlight();
+                return;
+            }
             if (mode == Mode.Tile) ThrowNote();
             if (mode == Mode.Target) AimLitNote();
             if (mode != Mode.Move) return;
@@ -1354,7 +1392,7 @@ namespace Bastion.UI.Combat
             var again = !GameInput.Touch ? null : Planning ? HudText.Touch.AgainPlan : dest.Detected ? HudText.Touch.Concealed : HudText.Touch.AgainMove;
             var heard = path != null && AbilityTexts.MoveNoise(State, u, path, dest.Run) != null;
             // Into the hidden squad's extra: that it is lost if they are seen (Gameplay, 16/11).
-            NoteWith(hover, heard ? "noise" : null, charged ? HudText.Boss.InLine : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
+            NoteWith(hover, heard ? "noise" : null, BoardNote(u, hover), charged ? HudText.Boss.InLine : null, dest.Dash ? HudText.Moves.Hidden : null, FireNote(path), LitNote(hover), again);
         }
 
         /// <summary>

@@ -64,9 +64,12 @@ namespace Bastion.Engine
         }
 
         /// <summary>On the evac zone: it lies on the ground.</summary>
+        /// <remarks>A run's La Lata (T21, T24): the tiles still open, as many as its seats free (Rules.OpenTiles).</remarks>
         public static bool InEvacZone(GameState s, Pos p)
         {
-            return p.Z == 0 && s.Mission.EvacZone.Any((z) => Grid.SameTile(z, p));
+            if (p.Z != 0) return false;
+            if (s.Run != null && s.Mission.Seats != null) return Rules.OpenTiles(s).Any((z) => Grid.SameTile(z, p));
+            return s.Mission.EvacZone.Any((z) => Grid.SameTile(z, p));
         }
 
         /// <summary>

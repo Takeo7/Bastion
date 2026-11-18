@@ -47,6 +47,19 @@ namespace Bastion.UI.Hud
             Ui.Show(toast, false);
         }
 
+        /// <summary>
+        /// All of them gone at once: the stage's card is up (Producto, 18/11: «Solo caben…» stayed under «ETAPA SUPERADA»),
+        /// and nothing over the bar is to be answered any more.
+        /// </summary>
+        public void Hush()
+        {
+            toastTimer?.Pause();
+            offerTimer?.Pause();
+            Ui.Show(toast, false);
+            Ui.Show(offer, false);
+            Notice(null);
+        }
+
         /// <summary>A line with one button (`act`, calling `onAct`), for OfferMs: «Mochila llena: 2 medicinas, al suelo.» «Cambiar».</summary>
         public void Offer(string text, string act, Action onAct)
         {

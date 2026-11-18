@@ -75,6 +75,12 @@ namespace Bastion.Client.Units
         /// the machine gun stood a palm over the head, its carrying handle in the nape.
         /// </summary>
         public float[] back;
+        /// <summary>
+        /// A straight-stocked long gun's (UnitViews.HoldTucked, T22): held at rest with its butt under the right arm, by three
+        /// points of its model's frame, unscaled: its butt plate's top (x, y, z), its stock's wrist where the right palm goes,
+        /// its handguard's underside where the left does (AgarreLab.Perfil's profiles). None: the clips' own hold.
+        /// </summary>
+        public float[] tuck;
     }
 
     /// <summary>

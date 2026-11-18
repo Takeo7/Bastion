@@ -53,6 +53,10 @@ namespace Bastion.Net
             if (s.EvacCall != null) return s.EvacCall.By != slot ? new EvacAnswerCommand { Accept = true } : null;
             var holds = s.Command == slot || s.Command == null || !connected.Contains(s.Command.Value);
             if (!holds || s.Ready[slot]) return null;
+            // Inside La Lata (T24, Gameplay 18/11), with nobody left outside that can get to it: one of them asks it to go
+            // (it goes by itself only with all the living in).
+            var inside = s.Run != null ? s.Units.FirstOrDefault((u) => u.Aboard == true && Content.CommandsFor(slot, u.Owner, connected)) : null;
+            if (inside != null && s.Mission.EvacDone != true && AllAboard(s)) return new EvacCommand { Unit = inside.Id };
             // Movement left counts too: the turn doesn't end by itself while there is some (Arturo, 5/11 #14).
             var able = Grid.Combatants(s, Teams.Xcom).Where((u) => !u.Evacuated && Paths.HasTurnLeft(u) && Content.CommandsFor(slot, u.Owner, connected)).ToList();
             if (able.Count == 0) return new EndTurnCommand { Ready = true };
@@ -239,7 +243,8 @@ namespace Bastion.Net
         private static Pos? Goal(GameState s, Unit u, bool leaving, System.Func<Unit, Reach> walksOf, System.Func<Unit, Pos?> roomOf)
         {
             var m = s.Mission;
-            var bus = m.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).OrderBy((p) => Grid.Distance(u.Pos, p)).FirstOrDefault();
+            // La Lata's tiles still open (T24): one shut by someone in it takes nobody.
+            var bus = Rules.OpenTiles(s).Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).OrderBy((p) => Grid.Distance(u.Pos, p)).FirstOrDefault();
             if (leaving && bus != null) return bus;
             if (m.Kind == MissionKinds.Recovery && m.Item != null && m.Item.Pos != null) return m.Item.Pos;
             if (m.Kind == MissionKinds.Hack && m.Terminal != null && !m.ObjectiveDone) return m.Terminal;
@@ -286,7 +291,7 @@ namespace Bastion.Net
         /// </summary>
         private static bool AllAboard(GameState s)
         {
-            var bus = s.Mission.EvacZone.Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
+            var bus = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
             foreach (var o in Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos)))
             {
                 var reach = Paths.ComputeReach(s, o, double.MaxValue);
@@ -606,7 +611,7 @@ namespace Bastion.Net
         /// </summary>
         private static Pos? WayTo(GameState s, Reach walks, Pos goal, bool bus)
         {
-            var ends = bus ? s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 })
+            var ends = bus ? Rules.OpenTiles(s).Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 })
                 : walks.Cost.TryGetValue(Grid.NodeOf(s, goal), out _) ? new[] { goal }
                 : Grid.Dirs8.Select((d) => new Pos { X = goal.X + d.X, Y = goal.Y + d.Y, Z = goal.Z });
             Pos? best = null;

@@ -148,6 +148,8 @@ namespace Bastion.Client
             if (entries.Count == 0)
             {
                 foreach (var s in before.Values) DropStander(s);
+                rowSubjects = null;
+                ShowcaseGrassOff();
                 return;
             }
             if (lineupRoot == null)
@@ -156,6 +158,10 @@ namespace Bastion.Client
                 lineupRoot.SetParent(transform, false);
             }
             var row = PlaceLineup(entries.Count);
+            // (No grass between its camera and those standing in it: ShowcaseGrassOff.)
+            rowCamera = new Vector2(row.cam.x, row.cam.z);
+            rowSubjects = Enumerable.Range(0, entries.Count).Where(k => entries[k] != null).Select(k => row.spots[k]).ToList();
+            ShowcaseGrassOff();
             for (int i = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];

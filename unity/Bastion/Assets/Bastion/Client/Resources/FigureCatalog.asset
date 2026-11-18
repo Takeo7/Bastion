@@ -539,18 +539,20 @@ MonoBehaviour:
   weaponNames:
   - apocalypse:SM_Item_Stick_01
   - apocalypse:SM_Prop_Pan_01
+  - apocalypse:SM_Wep_Baton_01
+  - apocalypse:SM_Wep_Crowbar_01
   - apocalypse:SM_Wep_Katana_01
+  - apocalypse:SM_Wep_Shotgun_01
   - farm:SM_Prop_Tool_Rake_01
   - gang:SM_Wep_Sword_02
   - military:SM_Chr_Attach_Knife_Sheath_01
+  - military:SM_Wep_Pistol_01
   - police:SM_Wep_Shotgun_01
   - SM_Wep_AssaultRifle_01
   - SM_Wep_AssaultRifle_02
   - SM_Wep_AssaultRifle_03
   - SM_Wep_Bat_Wood_01
-  - SM_Wep_Baton_01
   - SM_Wep_ChainSaw_01
-  - SM_Wep_Crowbar_01
   - SM_Wep_HuntingRifle_01
   - SM_Wep_HuntingRifle_Clean_01
   - SM_Wep_MachineGun_01
@@ -559,26 +561,26 @@ MonoBehaviour:
   - SM_Wep_Melee_Machete_01
   - SM_Wep_Mod_Attach_Scope_02
   - SM_Wep_Mod_Attach_Silencer_02
-  - SM_Wep_Pistol_01
-  - SM_Wep_Shotgun_01
   - SM_Wep_SniperRifle_01
   - SM_Wep_SniperRifle_02
   - SM_Wep_SubMGun_01
   weapons:
   - {fileID: 1246845882456928, guid: 6cf91da3d004a0b4096c83c7a865dfec, type: 3}
   - {fileID: 1335890822894770, guid: 0056b36596874344d8f4adb07dab8d83, type: 3}
+  - {fileID: 1402644178857166, guid: 4deca74d46c275b40b3255680aa23aff, type: 3}
+  - {fileID: 1750927141268108, guid: 8775c006a5395ff488d9315934a2a901, type: 3}
   - {fileID: 1104172259794306, guid: c93dc5e6b62380f499e6ec8328bc0160, type: 3}
+  - {fileID: 1105646471333690, guid: a2458a3a2318bb64ea864a87f6558170, type: 3}
   - {fileID: 1851300905487520, guid: 79e26d971e19c1f449f5d11c36eb05de, type: 3}
   - {fileID: 1592597363156974, guid: 1410f1cba8074a1429937abe0289a307, type: 3}
   - {fileID: 1136006431183740, guid: f0b3adf97e1d6ba43bc2200fd5b75f36, type: 3}
+  - {fileID: 1252744804793604, guid: 191a40a97567c454dad88aa6ea16ac71, type: 3}
   - {fileID: 5660749044265983309, guid: bbd9ebcaf89300f42b9afb50416f05f8, type: 3}
   - {fileID: 1900586067242068, guid: ad49a19d2c4adc94b838606a5d459f85, type: 3}
   - {fileID: 1263777055603640, guid: d9f9bf1ca5142254ba3a359ff4a34b3e, type: 3}
   - {fileID: 1490873028196816, guid: a3fe0be603767ae42a0d14c81d777c2b, type: 3}
   - {fileID: 1145237178023060, guid: d855c6cd18605f34dbfdca25cb40d71c, type: 3}
-  - {fileID: 1402644178857166, guid: 4deca74d46c275b40b3255680aa23aff, type: 3}
   - {fileID: 1074116973428324, guid: d4ca9bcafe7b6124ba175d36e7661b84, type: 3}
-  - {fileID: 1750927141268108, guid: 8775c006a5395ff488d9315934a2a901, type: 3}
   - {fileID: 1862461175073062, guid: f8ee5a952b0a300448ad8d17e2ab2584, type: 3}
   - {fileID: 1311854592980844, guid: 339cc5e61566f63428dc7728c5c3c5a0, type: 3}
   - {fileID: 1167886286928202, guid: c10ff4af96f3d7243ae6a36a3377ce60, type: 3}
@@ -587,8 +589,6 @@ MonoBehaviour:
   - {fileID: 1167932600818802, guid: bef05be41376b52498b91573c3ff5a3b, type: 3}
   - {fileID: 1567561224783704, guid: dac7aad86aa407c4fbd4311625527a04, type: 3}
   - {fileID: 1010455169370680, guid: 5b30bc5d4d210504695bb674e7c07aba, type: 3}
-  - {fileID: 1252744804793604, guid: 191a40a97567c454dad88aa6ea16ac71, type: 3}
-  - {fileID: 1866863028788630, guid: 5056d20a32324e1438d988478b9dc3e2, type: 3}
   - {fileID: 1658074229854742, guid: adc01ffa88b3d6744a5eb21a731f6c23, type: 3}
   - {fileID: 1886666021998926, guid: 3027fd935d242c541a7114d06d974130, type: 3}
   - {fileID: 1025874851918808, guid: e22ad038422a02c49b86a09ff69dedfc, type: 3}

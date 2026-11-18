@@ -258,6 +258,8 @@ namespace Bastion.UI.Combat
                 case HealedEvent _: return 0.5f;
                 case AidedEvent _: return 0.5f;
                 case EvacuatedEvent _: return 0.4f;
+                case BoardedEvent _: return 0.4f;
+                case AlightedEvent _: return 0.4f;
                 case SearchedEvent _: return 0.7f;
                 case MovedEvent _: return 0.25f;
                 default: return 0.2f;
@@ -1415,6 +1417,9 @@ namespace Bastion.UI.Combat
         /// camera after it for a moment, turning a little as it goes to end up behind it (Arturo, 31/10 #1); a move of the
         /// player's lets it go.
         /// </summary>
+        /// <summary>How many tiles beyond what the camera ends on after La Lata goes, to show it under the stage's card.</summary>
+        const float UnderCard = 3.5f;
+
         async Awaitable LataLeaves()
         {
             var map = Bastion.Client.Map.MapView.Current;
@@ -1423,6 +1428,7 @@ namespace Bastion.UI.Combat
             if (map == null) return;
             var going = map.LataDeparts(stop);
             var rig = control.Rig;
+            var from = map.LataAt;
             if (rig != null && map.LataAt is Vector3 start)
             {
                 var epoch = rig.Epoch;
@@ -1439,6 +1445,17 @@ namespace Bastion.UI.Combat
                 }
             }
             await going;
+            // Gone: the camera back on whoever stays outside, else where La Lata stood (Producto, 18/11: it ended over empty
+            // rocks, where it had followed La Lata to; so since the 0.13.0).
+            var outside = V.Units.FirstOrDefault(u => u.Alive && u.Team == Teams.Xcom && u.Automaton == null && !u.Captive);
+            if (rig != null && (outside != null || from != null))
+            {
+                // A little beyond it, so it shows under the stage's card, which takes the screen's middle.
+                var ahead = rig.Camera.transform.forward;
+                ahead.y = 0;
+                var spot = outside != null ? Feet(outside.Id) : from.Value;
+                rig.Focus(spot + ahead.normalized * (UnderCard * Board.Tile));
+            }
         }
 
         /// <summary>What a blast leaves on everyone it caught, right after its `explosive`, taken off the queue; none unless at least two.</summary>
@@ -1565,7 +1582,7 @@ namespace Bastion.UI.Combat
                 if (mine) planDue = true;
             }
             else if (e is CommandPassedEvent cp && cp.To == control.MySlot) planDue = true;
-            else if (e is MovedEvent || e is DiedEvent || e is EvacuatedEvent) control.DropPlan(UnitOf(e));
+            else if (e is MovedEvent || e is DiedEvent || e is EvacuatedEvent || e is BoardedEvent) control.DropPlan(UnitOf(e));
             r.Left.Add(e);
             return e is TileChangedEvent || e is FloorBrokenEvent || e is SmashedEvent || e is SearchedEvent || e is RoomSearchedEvent || e is BoardsRemovedEvent;
         }
@@ -1691,7 +1708,7 @@ namespace Bastion.UI.Combat
 
         Vector3 Head(string id) => Units != null ? Units.Head(id) : Feet(id) + Vector3.up * 1.75f;
 
-        void Float(Vector3 at, string text, string kind, string iconId = null) => Hud?.Float(at, text, kind, iconId);
+        void Float(Vector3 at, string text, string kind, string iconId = null, string over = null) => Hud?.Float(at, text, kind, iconId, over);
 
         static string Capitalize(string text) => string.IsNullOrEmpty(text) ? text : char.ToUpperInvariant(text[0]) + text.Substring(1);
 
@@ -2424,13 +2441,16 @@ namespace Bastion.UI.Combat
                 {
                     // In the zone and with a seat, as the engine boards them (DepartEvac): who doesn't fit in a run's La Lata stays (N2).
                     var noSeat = Rules.NoSeat(v);
-                    var aboard = v.Units.Where(u => u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(v, u.Pos) && !noSeat.Contains(u)).ToList();
+                    // Those inside already first (T24), then whoever is in the zone with a seat.
+                    var aboard = v.Units.Where(u => u.Aboard == true).Concat(v.Units.Where(u => u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(v, u.Pos) && !noSeat.Contains(u))).ToList();
                     // Leaving in the enemy turn is leaving on time (playtest 18/10 #8): nobody asked for it.
                     if (v.ActiveTeam == Teams.Alien)
                     {
                         departedOnTime = true;
                         Log(Lore.TimeText.Departs, "#ff6b5a");
                     }
+                    // Everyone alive inside (T24): it goes by itself (Lore's line first).
+                    else if (Rules.AllAboard(v)) Log(Lore.BoardText.AllAboard, "#6dff9a");
                     Log(Lore.EvacDepartLine(aboard.Select(u => u.Name).ToList()), "#6dff9a");
                     // The camera to La Lata (else the zone), everyone in it boards (the `evacuated` that follow), and then it
                     // pulls away (Arte's MapView.LataDeparts): filmed, without the zone nor any other (#1).
@@ -2457,6 +2477,29 @@ namespace Bastion.UI.Combat
                     control.Refresh();
                     await Wait(UnitViews.BoardSeconds);
                     if (!grouped && !NextBoards()) await LataLeaves();
+                    return;
+                }
+                case BoardedEvent board:
+                {
+                    // Into La Lata at the end of its walk (T24): it goes in by the door (Arte's, as at the departure), its
+                    // flag with it; safe from now.
+                    var u = Unit(board.Unit);
+                    if (u == null) return;
+                    units?.Board(board.Unit);
+                    control.Aboard.Add(board.Unit);
+                    Log(Lore.BoardText.Boarded(u.Name), "#6dff9a");
+                    control.Refresh();
+                    await Wait(UnitViews.BoardSeconds);
+                    return;
+                }
+                case AlightedEvent down:
+                {
+                    // Down out of La Lata on the tile chosen (T24): Arte's figure out by the door once View has it.
+                    var u = Unit(down.Unit);
+                    if (u == null) return;
+                    control.Aboard.Remove(down.Unit);
+                    Log(Lore.BoardText.Alighted(u.Name), PlayerColor(u.Owner ?? control.MySlot));
+                    Look(Board.TileToWorld(V, down.Tile));
                     return;
                 }
                 case LeftBehindEvent lb:
@@ -2576,7 +2619,8 @@ namespace Bastion.UI.Combat
                     var vip = Unit(found.Unit);
                     var finder = Unit(found.By)?.Name ?? "";
                     Look(Feet(vip.Id));
-                    Float(Chest(vip.Id), Lore.TalkText.SeenFloat, "heal");
+                    // Over the flag they get now, not through it (Producto, 18/11: «CON VIDA» under «CAUTIVO»).
+                    Float(Chest(vip.Id), Lore.TalkText.SeenFloat, "heal", over: vip.Id);
                     Log(V.Mission.SearchArea != null ? Lore.TalkText.Spotted(finder) : Lore.TalkText.Found(finder), "#6dff9a");
                     control.Refresh();
                     await Wait(0.9f);
@@ -2590,12 +2634,13 @@ namespace Bastion.UI.Combat
                     if (V.Run != null && Unit(vr.By) is Unit asker)
                     {
                         Look(Feet(vip.Id));
-                        // One after the other, not both up at once: from the game's camera their heads are close.
-                        Hud?.Pin(Head(asker.Id) + Vector3.up * 0.35f, Lore.TalkText.Ask, PlayerColor(asker.Owner ?? vr.Owner ?? control.MySlot), AskPin);
+                        // One after the other, not both up at once: from the game's camera their heads are close. Each beside its
+                        // speaker's flag, away from the other's (Producto, 18/11: over the head they lay on the names).
+                        Hud?.Say(asker.Id, vip.Id, Head(asker.Id) + Vector3.up * 0.35f, Lore.TalkText.Ask, PlayerColor(asker.Owner ?? vr.Owner ?? control.MySlot), AskPin);
                         await Wait(AskPin + 0.15f);
-                        Hud?.Pin(Head(vip.Id) + Vector3.up * 0.35f, Lore.TalkText.Yes, SurvivorPin, YesPin);
+                        Hud?.Say(vip.Id, asker.Id, Head(vip.Id) + Vector3.up * 0.35f, Lore.TalkText.Yes, SurvivorPin, YesPin);
                         await Wait(1.3f);
-                        Float(Chest(vip.Id), Lore.TalkText.Float, "heal");
+                        Float(Chest(vip.Id), Lore.TalkText.Float, "heal", over: vip.Id);
                         Log(Lore.TalkText.Joined(vip.Name, control.Players.Count > 1 ? PlayerName(vr.Owner) : null), "#6dff9a");
                         control.Sfx.Rescue();
                         await Wait(0.6f);
@@ -3543,7 +3588,8 @@ namespace Bastion.UI.Combat
         /// </summary>
         static OutcomeView RunOutcome(GameState s, bool won, string line)
         {
-            var home = s.Units.Count(u => u.Team == Teams.Xcom && u.CampaignId != null && (won ? !Fell(u) : u.Evacuated));
+            // The survivor who got out in La Lata counts too (Gameplay, 18/11: out alone, the expedition goes on with them).
+            var home = s.Units.Count(u => u.Team == Teams.Xcom && ((u.CampaignId != null && (won ? !Fell(u) : u.Evacuated)) || Recruit(s, u)));
             var boss = s.Run.NodeKind == NodeKinds.Boss;
             var bossName = s.Mission.Boss != null ? s.Units.FirstOrDefault(u => u.Id == s.Mission.Boss)?.Name : null;
             var v = new OutcomeView { Victory = won, Line = line, Campaign = true };
@@ -3602,6 +3648,9 @@ namespace Bastion.UI.Combat
         }
 
         /// <summary>Fallen out there, or left behind (RunFights.ApplyFight's Fell).</summary>
+        /// <summary>A survivor who joined on the map (a Rescate's or one loose) and went in La Lata: a recruit coming home.</summary>
+        static bool Recruit(GameState s, Unit u) => u.CampaignId == null && u.Automaton == null && !u.Captive && u.Evacuated && (u.Id == s.Mission.ObjectiveUnit || u.Id == s.Mission.Survivor);
+
         static bool Fell(Unit u) => (!u.Alive && !u.Evacuated && u.Hp <= 0) || u.Lost == true;
 
         /// <summary>The number of a gear's id («g17»: 17), or 0 (RunFights.GearNumber).</summary>

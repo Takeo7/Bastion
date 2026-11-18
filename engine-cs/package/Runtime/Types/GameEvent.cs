@@ -525,6 +525,24 @@ namespace Bastion.Engine
         public int? Owner { get; set; } // Slot
     }
 
+    /// <summary>
+    /// Into La Lata (T24, Arturo 18/11): `unit` ended its walk on a tile of its zone with a seat free, and is in, safe, off
+    /// the field (Unit.Aboard); an item it carried is aboard with it.
+    /// </summary>
+    public sealed class BoardedEvent : GameEvent
+    {
+        public override string T => "boarded";
+        public string Unit { get; set; } = "";
+    }
+
+    /// <summary>Down out of La Lata (T24, AbilityIds.GetOut): `unit` on `tile`, a free one of its zone, an action spent.</summary>
+    public sealed class AlightedEvent : GameEvent
+    {
+        public override string T => "alighted";
+        public string Unit { get; set; } = "";
+        public Pos Tile { get; set; } = new Pos();
+    }
+
     /// <summary>A run's Rescate (N2): `by` of the squad has seen the survivor, `unit`; from now they are shown (MissionState.SurvivorFound).</summary>
     public sealed class SurvivorFoundEvent : GameEvent
     {

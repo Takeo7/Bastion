@@ -1355,7 +1355,7 @@
    "sight": 0.1
   },
   "shotgun": {
-   "fbx": "SM_Wep_Shotgun_01",
+   "fbx": "apocalypse:SM_Wep_Shotgun_01",
    "reach": 0.86,
    "palm": [
     -0.04,
@@ -1371,6 +1371,17 @@
   },
   "sniper": {
    "fbx": "SM_Wep_SniperRifle_01",
+   "tuck": [
+    0,
+    -0.05,
+    -0.34,
+    0.044,
+    -0.02,
+    -0.07,
+    0,
+    0.01,
+    0.45
+   ],
    "reach": 0.7,
    "back": [
     0.03,
@@ -1384,6 +1395,17 @@
   },
   "sniper2": {
    "fbx": "SM_Wep_SniperRifle_02",
+   "tuck": [
+    0,
+    -0.03,
+    -0.28,
+    0.044,
+    -0.014,
+    -0.07,
+    0,
+    -0.02,
+    0.48
+   ],
    "reach": 0.69,
    "back": [
     0.03,
@@ -1421,6 +1443,17 @@
   },
   "huntingRifle": {
    "fbx": "SM_Wep_HuntingRifle_01",
+   "tuck": [
+    0,
+    -0.045,
+    -0.36,
+    0.044,
+    -0.018,
+    -0.07,
+    0,
+    -0.028,
+    0.5
+   ],
    "reach": 0.91,
    "palm": [
     -0.03,
@@ -1444,7 +1477,7 @@
    "reflex": true
   },
   "baton": {
-   "fbx": "SM_Wep_Baton_01",
+   "fbx": "apocalypse:SM_Wep_Baton_01",
    "melee": true,
    "grip": [
     0.0,
@@ -1453,7 +1486,7 @@
    ]
   },
   "pistol": {
-   "fbx": "SM_Wep_Pistol_01",
+   "fbx": "military:SM_Wep_Pistol_01",
    "pistol": true
   },
   "knife": {
@@ -1493,6 +1526,17 @@
   },
   "boltRifle": {
    "fbx": "SM_Wep_HuntingRifle_Clean_01",
+   "tuck": [
+    0,
+    -0.045,
+    -0.36,
+    0.044,
+    -0.018,
+    -0.07,
+    0,
+    -0.028,
+    0.5
+   ],
    "reach": 0.9,
    "palm": [
     -0.03,
@@ -1546,7 +1590,7 @@
    ]
   },
   "crowbar": {
-   "fbx": "SM_Wep_Crowbar_01",
+   "fbx": "apocalypse:SM_Wep_Crowbar_01",
    "melee": true,
    "size": 0.65,
    "grip": [

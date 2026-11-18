@@ -57,6 +57,16 @@ namespace Bastion.UI.Hud
 
         /// <param name="host">The cards' row.</param>
         /// <param name="plate">The squad's plate, as wide as the row needs.</param>
+        /// <summary>
+        /// On narrow busts (six or more) the states as icons (Arturo, in the cuadro, 18/11: the words didn't fit, and shorter
+        /// ones would have changed their names everywhere); their names in full in the bust's help, on the flag over the
+        /// figure and on the picked one's sheet. BASTION_ESTADOS_ICONO=0 shows the words, for a capture of before.
+        /// </summary>
+        public static bool StateIcons = System.Environment.GetEnvironmentVariable("BASTION_ESTADOS_ICONO") != "0";
+
+        /// <summary>The HUD's icons (HudRoot), for the states as icons.</summary>
+        public Func<string, Sprite> Icons;
+
         public SquadList(VisualElement host, VisualElement plate, IHudHandlers handlers, TooltipLayer tips)
         {
             this.host = host;
@@ -134,7 +144,9 @@ namespace Bastion.UI.Hud
             else if (portrait is Texture2D t2) face.style.backgroundImage = new StyleBackground(t2);
             var narrow = width - (c.Selected ? PickedMore : 0) < Narrow;
             card.EnableInClassList("squad-card--narrow", narrow);
-            tree.Q<Label>("name").text = narrow && !string.IsNullOrEmpty(c.Short) ? c.Short : c.Name;
+            // The first name (or the nickname) always, as the base's Soldados (Producto, 18/11: «Anja» beside «Yuki Tanaka»
+            // was all of a piece with nothing); the whole name is on the sheet over the cards.
+            FitName(tree.Q<Label>("name"), !string.IsNullOrEmpty(c.Short) ? c.Short : c.Name, $"{width}|{c.Selected}|{narrow}");
             Ui.Pips(tree.Q("hp"), c.Hp, c.MaxHp);
             var ap = tree.Q("ap");
             Ui.Pips(ap, c.Ap, c.ApMax);
@@ -152,13 +164,27 @@ namespace Bastion.UI.Hud
             var tags = tree.Q("tags");
             var help = new List<string> { c.Name, c.Title };
             var shown = 0;
-            void Tag(string text, string kind, string tip)
+            // Narrow, as icons (StateIcons): two in a row, as big as the bust lets them (18 px at six, 14 at eight), «EN
+            // JUEGO» left to the card's top edge; all of them, with their words, in the help.
+            var asIcons = StateIcons && narrow && Icons != null;
+            tags.EnableInClassList("squad-card__tags--icons", asIcons);
+            var side = Mathf.Clamp(Mathf.Floor((width - 10 - 2) / 2), 13, 18);
+            void Tag(string text, string kind, string tip, string icon = null)
             {
-                if (shown++ < 2) Ui.Text(text, "tag squad-card__tag tag--" + kind, tags).pickingMode = PickingMode.Ignore;
+                if (asIcons && icon != null && Icons(icon) != null)
+                {
+                    if (shown++ < 2)
+                    {
+                        var mark = Ui.Icon(Icons, icon, "squad-card__state tag--" + kind, tags);
+                        mark.style.width = side;
+                        mark.style.height = side;
+                    }
+                }
+                else if (!(asIcons && kind == "in-play") && shown++ < 2) FitTag(Ui.Text(text, "tag squad-card__tag tag--" + kind, tags), $"{width}");
                 help.Add(string.IsNullOrEmpty(tip) ? text : $"{text}: {tip}");
             }
             if (c.InPlay) Tag(HudText.Squad.InPlay, "in-play", HudText.Squad.InPlayTip);
-            foreach (var t in c.Tags) Tag(t.Text, t.Kind, t.Tip);
+            foreach (var t in c.Tags) Tag(t.Text, t.Kind, t.Tip, t.Icon);
             tips.Attach(card, string.Join("\n", help));
             var id = c.Id;
             if (c.Mine && !c.Dead) card.RegisterCallback<ClickEvent>(_ => Click(id));
@@ -172,6 +198,75 @@ namespace Bastion.UI.Hud
             // The card out of its template's container: the row lays out cards.
             card.RemoveFromHierarchy();
             return card;
+        }
+
+        /// <summary>The names already measured on a card of that width (one line in the log each, if it doesn't fit).</summary>
+        static readonly HashSet<string> namesMeasured = new HashSet<string>();
+
+        /// <summary>
+        /// The card's name, the first one: never smaller; one that doesn't fit whole is said in the log, for Lore (Producto,
+        /// 18/11: a shorter word, not a smaller one).
+        /// </summary>
+        static void FitName(Label label, string name, string card)
+        {
+            label.text = name;
+            var key = name + "|" + card;
+            if (namesMeasured.Contains(key)) return;
+            label.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                var room = label.contentRect.width;
+                if (float.IsNaN(room) || room <= 0 || !namesMeasured.Add(key)) return;
+                var wide = label.MeasureTextSize(name, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined).x;
+                if (wide > room + 0.5f) Debug.Log($"[ui] «{name}» no cabe entero en el busto ({wide:0.#} de {room:0.#} px)");
+            });
+        }
+
+        /// <summary>The size a state's word was made to fit the bust whole, by the word and the card's width.</summary>
+        static readonly Dictionary<string, float> tagSizes = new Dictionary<string, float>();
+
+        /// <summary>
+        /// The least a state's word goes down to, half a point under its own 8.5 (Producto, 18/11: read at the interface's
+        /// 90 %). A word that doesn't fit so is Lore's to shorten, not smaller: it is cut at the end as before.
+        /// </summary>
+        const float LeastTag = 8f;
+
+        /// <summary>
+        /// A state's word over the bust, whole (Producto, 18/11: «EVACUA…»): a little smaller and closer when it doesn't fit,
+        /// down to LeastTag; the words that still don't fit say so in the log, for Lore.
+        /// </summary>
+        static void FitTag(Label tag, string card)
+        {
+            tag.pickingMode = PickingMode.Ignore;
+            var key = tag.text + "|" + card;
+            if (tagSizes.TryGetValue(key, out var size))
+            {
+                if (size > 0)
+                {
+                    tag.style.fontSize = size;
+                    tag.style.letterSpacing = 0;
+                }
+                return;
+            }
+            tag.RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                var room = tag.contentRect.width;
+                if (float.IsNaN(room) || room <= 0) return;
+                var wide = tag.MeasureTextSize(tag.text, 0, VisualElement.MeasureMode.Undefined, 0, VisualElement.MeasureMode.Undefined).x;
+                if (wide <= room + 0.5f)
+                {
+                    if (!tagSizes.ContainsKey(key)) tagSizes[key] = tag.style.fontSize.keyword == StyleKeyword.Undefined ? 0 : tag.resolvedStyle.fontSize;
+                    return;
+                }
+                var now = tag.resolvedStyle.fontSize;
+                if (now <= LeastTag)
+                {
+                    tagSizes[key] = LeastTag;
+                    Debug.Log($"[ui] «{tag.text}» no cabe entero en el busto ({wide:0.#} de {room:0.#} px a {LeastTag} px)");
+                    return;
+                }
+                tag.style.letterSpacing = 0;
+                tag.style.fontSize = Mathf.Max(LeastTag, Mathf.Floor(now * room / wide * 0.97f * 4) / 4);
+            });
         }
 
         static Texture2D studio;

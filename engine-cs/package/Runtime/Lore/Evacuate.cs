@@ -41,16 +41,18 @@ namespace Bastion.Engine
                 : !o.Ready
                     ? "El objetivo no está cumplido: si salís ahora, la misión se pierde."
                     : "";
+            // In an expedition (seats counted, T24), say why: not got on yet, or no seat left (Red and Producto, 18/11).
+            var boarding = o.Seats > 0;
             var @out = o.Left.Count == 0
                 ? o.NoSeat.Count == 0 ? "Estáis todos dentro." : ""
                 : o.Left.Count == 1
-                    ? $"{o.Left[0]} se quedaría fuera, y se perdería."
-                    : $"{JoinAnd(o.Left)} se quedarían fuera, y se perderían.";
+                    ? boarding ? $"{o.Left[0]} no ha subido: se quedaría fuera, y se perdería." : $"{o.Left[0]} se quedaría fuera, y se perdería."
+                    : boarding ? $"{JoinAnd(o.Left)} no han subido: se quedarían fuera, y se perderían." : $"{JoinAnd(o.Left)} se quedarían fuera, y se perderían.";
             var seat = o.NoSeat.Count == 0
                 ? ""
                 : o.NoSeat.Count == 1
-                    ? $"Solo caben {o.Seats}: {o.NoSeat[0]} se quedaría fuera, y se perdería."
-                    : $"Solo caben {o.Seats}: {JoinAnd(o.NoSeat)} se quedarían fuera, y se perderían.";
+                    ? $"No queda plaza: {o.NoSeat[0]} se quedaría fuera, y se perdería."
+                    : $"No queda plaza: {JoinAnd(o.NoSeat)} se quedarían fuera, y se perderían.";
             return string.Join(" ", new[] { lose, @out, seat }.Where((x) => x.Length > 0));
         }
 
@@ -133,6 +135,29 @@ namespace Bastion.Engine
             return noSeat.Count == 1 ? $"No caben todos: {noSeat[0]} se queda fuera." : $"No caben todos: {JoinAnd(noSeat)} se quedan fuera.";
         }
 
+        /// <summary>
+        /// Getting on La Lata on reaching one of its tiles (Arturo, 18/11, T24): the soldier is safe inside, can get off on
+        /// their turn to free the seat, and La Lata leaves with «Evacuar», or by itself once every living one is aboard.
+        /// «Subir» and «bajar», not «entrar»: they hold for the motorbike too.
+        /// </summary>
+        public static class BoardText
+        {
+            /// <summary>Before moving, on the path's last tile.</summary>
+            public const string WillBoard = "Subirá a " + Bus.Name;
+            /// <summary>No seat left: before moving, and as the refusal.</summary>
+            public const string Full = "No queda plaza en " + Bus.Name + ".";
+            /// <summary>On the bust (and the flag) of whoever is aboard: short, to fit whole («EVACUADO» was cut).</summary>
+            public const string AboardTag = "A BORDO";
+            /// <summary>The action to get off, and its help.</summary>
+            public const string Alight = "Bajar";
+            public const string AlightHelp = "Baja de " + Bus.Name + " a una casilla libre junto a sus puertas y deja libre su plaza. Le queda la otra acción y todo su movimiento. Fuera le pueden ver y atacar.";
+            /// <summary>The log lines.</summary>
+            public static string Boarded(string who) => $"{who} sube a {Bus.Name}: está a salvo.";
+            public static string Alighted(string who) => $"{who} baja de {Bus.Name}.";
+            /// <summary>The log when it leaves by itself, every living one aboard (EvacDepartLine follows).</summary>
+            public const string AllAboard = "Ya están todos dentro: " + Bus.Name + " sale.";
+        }
+
         /// <summary>The words for evacuating that don't depend on who.</summary>
         public static class EvacText
         {
@@ -140,7 +165,7 @@ namespace Bastion.Engine
             public const string Lapsed = "Nadie ha contestado: la petición de salir caduca con el turno.";
             /// <summary>The evacuation notice's kicker, and the EVACUAR button's tooltip.</summary>
             public const string Kicker = Bus.Name;
-            public const string ButtonTip = "Evacuar " + Bus.In + ": quien esté fuera cuando salga, o no quepa, se pierde";
+            public const string ButtonTip = "Evacuar " + Bus.In + ": sale con los que estén dentro, y quien esté fuera se pierde";
             /// <summary>The debrief's status of someone left outside (`lost`).</summary>
             public const string Lost = "Se quedó fuera";
             /// <summary>The mission's end when the bus left early: a Limpieza abandoned, or any other without its objective.</summary>
@@ -156,7 +181,7 @@ namespace Bastion.Engine
         public static class TimeText
         {
             /// <summary>At the start of the last turn: the strip's alert and the log.</summary>
-            public const string LastTurn = "Último turno: " + Bus.Name + " sale al acabarlo, con quien esté en la zona de evacuación y quepa.";
+            public const string LastTurn = "Último turno: " + Bus.Name + " sale al acabarlo, con los que estén dentro.";
             public const string LastTurnFloat = "ÚLTIMO TURNO";
             /// <summary>Log, as it leaves on time.</summary>
             public const string Departs = Bus.Name + " no espera más.";

@@ -195,25 +195,36 @@ namespace Bastion.Engine.Tests
             var report = EndFight(c, s, s.Outcome!, s.OutcomeReason!);
             Assert.Null(report.Run!.Joined);
             Assert.DoesNotContain(c.Soldiers, (x) => x.Name == vip.Name);
-            // More in the zone than seats (only a run of before, its squad bigger than its seats now): the squad's own sit
-            // first, the one who joined is left for want of a seat.
-            var (_, t) = Rescue(level: 0);
-            t.Mission.EvacZone = t.Mission.EvacZone.Concat(new[] { new Vec2 { X = Beside(t, Survivor(t)).X, Y = Beside(t, Survivor(t)).Y } }).ToList();
-            var other = Survivor(t);
-            var two = Squaddies(t);
-            two[0].Pos = Beside(t, other);
-            Assert.True(Exec(t, Ability(two[0].Id, AbilityIds.Talk)).Ok);
-            Aboard(t, two);
-            Assert.True(Abilities.InEvacZone(t, other.Pos) || Abilities.InEvacZone(t, two[0].Pos));
-            other.Pos = t.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).First((p) => Grid.UnitAt(t, p) == null);
-            Assert.Equal(new[] { other.Id }, Rules.NoSeat(t).Select((x) => x.Id));
-            var gone = Exec(t, new EvacCommand { Unit = two[0].Id });
-            Assert.Equal((other.Id, (bool?)true), (Assert.Single(Of<LeftBehindEvent>(gone.Events)).Unit, Of<LeftBehindEvent>(gone.Events)[0].NoSeat));
+            // More in the zone than seats can't be since T24: its tiles are only the seats free (Rules.OpenTiles; LaLataAboardTests).
             // With a seat free, nobody is left.
             var (d, u) = Rescue(level: 2);
             Assert.True(Runs.SeatFree(d));
             Aboard(u, Squaddies(u));
             Assert.Empty(Rules.NoSeat(u));
+        }
+
+        [Fact]
+        public void TheSurvivorAloneBroughtOutTheRunGoesOn()
+        {
+            // Red, 18/11 (seed 25): the squad fallen, the survivor out alone on La Lata: won, and the run goes on with them.
+            var (c, s) = Rescue(level: 2);
+            var vip = Survivor(s);
+            var u = Squaddies(s)[0];
+            u.Pos = Beside(s, vip);
+            Assert.True(Exec(s, Ability(u.Id, AbilityIds.Talk)).Ok);
+            foreach (var x in Squaddies(s))
+            {
+                x.Alive = false;
+                x.Hp = 0;
+            }
+            vip.Evacuated = true;
+            vip.Alive = false;
+            var report = EndFight(c, s, Outcomes.Victory, EndReasons.Objective);
+            Assert.NotNull(report.Run!.Joined);
+            Assert.True(report.Run.InSquad);
+            Assert.Null(report.Run.Ended);
+            Assert.NotNull(c.Run);
+            Assert.Equal(new[] { report.Run.Joined }, c.Run!.Squad);
         }
 
         [Fact]

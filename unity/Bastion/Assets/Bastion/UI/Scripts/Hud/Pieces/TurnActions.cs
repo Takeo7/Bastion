@@ -74,6 +74,8 @@ namespace Bastion.UI.Hud
             // Armed for its second press: the accent round it, as any key armed.
             end.EnableInClassList("ability--active", mode == "confirm");
             end.SetEnabled(mode != "disabled" && mode != "waiting" && mode != "enemy");
+            // The stage over (Producto, 18/11): gone, not left alone under the card.
+            Ui.Show(end, mode != "over");
             var ready = mode == "ready" && check != null;
             endIcon.style.backgroundImage = ready ? new StyleBackground(check) : new StyleBackground(StyleKeyword.None);
             Ui.Show(endMark, !ready);

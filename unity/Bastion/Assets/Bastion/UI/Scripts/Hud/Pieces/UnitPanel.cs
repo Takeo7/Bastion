@@ -91,6 +91,11 @@ namespace Bastion.UI.Hud
                 whose.style.color = Ui.Hex(view.WhoseColor, Color.white);
             }
             else cls.text = view.RankName;
+            // Its states in full after its name, when the busts show them as icons (SquadList.StateIcons).
+            var stateRow = tree.Q("head");
+            stateRow.Query(className: "unit-state").ForEach(e => e.RemoveFromHierarchy());
+            foreach (var t in view.States)
+                tips.Attach(Ui.Text(t.Text, "tag unit-state tag--" + t.Kind, stateRow), t.Tip);
             // Its cover's shield in its colour, after its name (Arturo, 7/11: here, not by its health).
             if (view.Cover >= 0)
             {

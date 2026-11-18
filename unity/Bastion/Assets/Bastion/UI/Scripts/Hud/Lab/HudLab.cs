@@ -33,6 +33,8 @@ namespace Bastion.UI.Hud
 
         void Start()
         {
+            // BASTION_INTERFAZ=0.9: Ajustes' «Interfaz» for this capture too, as the combat lab (the panel put back as play stops).
+            App.GameSettings.ApplyInterface();
             hud = GetComponent<HudRoot>();
             if (!hud.Ready) return;
             hud.Bind(this);
@@ -170,7 +172,10 @@ namespace Bastion.UI.Hud
                 },
             });
             hud.SetSquad(Squad());
-            hud.SetSelected(Selected());
+            var sheet = Selected();
+            // The states in full on the picked one's sheet, with the busts' as icons (SquadList.StateIcons).
+            if (SquadList.StateIcons) sheet.States = new List<TagView>(Squad().Cards.Find(c => c.Id == selected)?.Tags ?? new List<TagView>());
+            hud.SetSelected(sheet);
             hud.SetAbilities(Bar(owner));
             hud.SetTarget(Shot());
             hud.SetEndTurn(new EndTurnView { Mode = owner == "mine" ? "act" : owner == "partner" ? "waiting" : owner == "enemy" ? "enemy" : "disabled", Detail = owner == "partner" ? "Ana" : null });
@@ -235,7 +240,7 @@ namespace Bastion.UI.Hud
                 {
                     Id = id,
                     Name = name,
-                    Short = name.Split(' ')[0],
+                    Short = name.Trim('«', '»').Split(' ')[0],
                     Mine = mine,
                     Selected = id == selected,
                     Hp = hp,
@@ -255,6 +260,29 @@ namespace Bastion.UI.Hud
             // Ana's turn, one soldier at a time: hers in play.
             if (turnState == 1) v.Cards[v.Cards.Count - 1].InPlay = true;
             Card("s6", "Ana Ríos", Ana, false, 4, 6, 2, new float[] { 0, 0, 0, 0, 10, 10 });
+            // BASTION_ROTULOS=1: the longest states on the narrowest cards (six), to see which fit at the least size
+            // (Producto, 18/11: no smaller than one read at the interface's 90 %; the log says those that don't).
+            // BASTION_BUSTOS=7 or 8: more busts (a run's eight seats, the partner's too), for the states' room.
+            var more = int.TryParse(System.Environment.GetEnvironmentVariable("BASTION_BUSTOS"), out var busts) ? busts - v.Cards.Count : 0;
+            var extra = new[] { ("s7", "Hiro Sato"), ("s8", "Pablo Ruiz") };
+            for (var k = 0; k < more && k < extra.Length; k++)
+                Card(extra[k].Item1, extra[k].Item2, Ana, false, 5, 6, 2, new float[] { 0, 0, 0, 0, 0, 0 });
+            if (System.Environment.GetEnvironmentVariable("BASTION_ROTULOS") == "1")
+            {
+                v.Cards[3].Dead = false;
+                v.Cards[3].Hp = 4;
+                // The nine Lore shortened (ROTULOS-BUSTOS.md), and «A BORDO»: one or two a bust, as they come.
+                var states = new[]
+                {
+                    ("VIGILANCIA", "ow", "state:overwatch"), ("ZONA LETAL", "ow", "state:killZone"), ("HOJA EN ALTO", "ow", "state:watchMelee"),
+                    ("CUBRIÉNDOSE", "hk", "state:hunker"), ("ESCONDIDO", "hide", "state:hide"), ("ATURDIDO", "stun", "state:stun"),
+                    ("DESORIENTADO", "psi", "state:disoriented"), ("EN EL SUELO", "stun", "state:down"), ("CONTROLADO", "psi", "state:controlled"),
+                    (Bastion.Engine.Lore.BoardText.AboardTag, "evac", "state:aboard"),
+                };
+                v.Cards[1].Tags.Clear();
+                for (var k = 0; k < states.Length; k++)
+                    v.Cards[k % v.Cards.Count].Tags.Add(new TagView { Text = states[k].Item1, Kind = states[k].Item2, Icon = states[k].Item3 });
+            }
             return v;
         }
 

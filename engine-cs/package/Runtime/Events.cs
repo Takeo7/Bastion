@@ -168,6 +168,13 @@ namespace Bastion.Engine
                     }
                     foreach (var u in s.Units)
                     {
+                        // Inside La Lata (T24): its actions, to come down with.
+                        if (u.Aboard == true && u.Team == ev.Team)
+                        {
+                            u.Ap = Content.ApPerTurnOf(u);
+                            u.Moves = null;
+                            continue;
+                        }
                         if (!u.Alive) continue;
                         if (u.Team != ev.Team)
                         {
@@ -496,6 +503,40 @@ namespace Bastion.Engine
                         CompleteObjective(s);
                     }
                     if (s.Mission.Kind == MissionKinds.Rescue && s.Mission.ObjectiveUnit == u.Id) CompleteObjective(s);
+                    break;
+                }
+                case BoardedEvent ev:
+                {
+                    // Into La Lata (T24): off the field, safe, a seat taken; what it carried in it.
+                    var u = UnitOf(s, ev.Unit);
+                    u.Alive = false;
+                    u.Evacuated = true;
+                    u.Aboard = true;
+                    u.Ap = 0;
+                    u.Overwatch = false;
+                    u.KillZone = false;
+                    u.Hunkered = false;
+                    u.Hidden = null;
+                    EndSuppression(s, u);
+                    var item = s.Mission.Item;
+                    if (item?.Carrier == u.Id)
+                    {
+                        item.Carrier = null;
+                        item.Evacuated = true;
+                        CompleteObjective(s);
+                    }
+                    break;
+                }
+                case AlightedEvent ev:
+                {
+                    // Down out of La Lata (T24): by its doors, an action spent, its walk whole.
+                    var u = UnitOf(s, ev.Unit);
+                    u.Alive = true;
+                    u.Evacuated = false;
+                    u.Aboard = null;
+                    u.Pos = CopyPos(ev.Tile);
+                    u.Ap = Math.Max(0, u.Ap - 1);
+                    u.Moves = null;
                     break;
                 }
                 case EvacCalledEvent ev:
@@ -1110,6 +1151,7 @@ namespace Bastion.Engine
                 Evacuated = u.Evacuated,
                 PodId = u.PodId,
                 Lost = u.Lost,
+                Aboard = u.Aboard,
                 Rank = u.Rank,
                 Perks = new List<string>(u.Perks),
                 Mods = Content.AddMods(u.Mods, new UnitMods()),

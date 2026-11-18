@@ -170,7 +170,8 @@ namespace Bastion.EditorTools
                     grip = art?.grip != null && art.grip.Length >= 3 ? new Vector3(art.grip[0], art.grip[1], art.grip[2]) : Vector3.zero,
                     // The sawn-off is the pump shotgun in the hands (FoundModels): here sawn, its stock off behind the grip
                     // and its barrel past the pump, or it would be the long gun drawn small.
-                    cut = id == "sawnOff" ? SawnOff : (Vector2?)null,
+                    // (Not cut any more: since 18/11 the sawn-off is Apocalypse's own short one, whole; T22.)
+                    cut = null,
                 });
                 if (id == "machineGun") list.AddRange(Vests());
             }

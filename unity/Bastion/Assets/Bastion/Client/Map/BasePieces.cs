@@ -1282,11 +1282,13 @@ namespace Bastion.Client.Map
                             lot.Put(i % 2 != 0 ? "bGardenPlant2" : "bGardenPlant", u + (i % 2 != 0 ? 0.18 : -0.18), -2.1 + i * 0.8, i, 0.55, lot.Top("bGardenBed") * k);
                     }
                 }
-                lot.Put("bGardenBarrel", 3.0, 2.4, 0, 1.1);
+                // (At the corner away from where the squad's row stands past it: at the other, it stood before the row's
+                // legs in Partir with four, six and eight seats; Producto, 18/11.)
+                lot.Put("bGardenBarrel", -3.0, -2.4, 0, 1.1);
                 if (level >= 3)
                 {
                     lot.Put("bScarecrow", -3.0, 2.3, 0.5, 0.6);
-                    lot.Put("bGardenBarrel", 2.35, 2.5, 1, 1.1);
+                    lot.Put("bGardenBarrel", -2.35, -2.5, 1, 1.1);
                 }
             },
             // Cuarentena (4 × 4): a cage of mesh panels (two a side), its door on the front; a guard's chair and cans; then a lamp.

@@ -36,7 +36,8 @@ namespace Bastion.UI.Combat
             ActionBarView bar;
             using (MBar.Auto()) bar = new ActionBarView { Abilities = BarKeys() };
             var u = Unit();
-            if (u != null && Commands(u) && CanAct() && !mine) bar.Lock = HudText.Turn.PartnerLock(PlayerName(s.Command));
+            // One inside La Lata too (T24): its Bajar waits for the command as any key.
+            if ((u ?? Inside()) is Unit commanded && Commands(commanded) && CanAct() && !mine) bar.Lock = HudText.Turn.PartnerLock(PlayerName(s.Command));
             // Why the cards rest in the enemy's turn: the bar says it over itself (hud.ts setTurn).
             else if (s.Outcome == null && (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien)) bar.Lock = HudText.Turn.EnemyLock;
             // The picked soldier's movement left, before the keys (Arturo, 5/11 #14).
@@ -57,7 +58,8 @@ namespace Bastion.UI.Combat
             // Without the command too (Arturo, 7/11): the key ends one's own turn, «A punto» until the partner's is over.
             // One of mine in play: the key ends its turn first (Arturo, 7/11, Ana's #5).
             var playing = InPlayMine();
-            var endMode = !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : (EndArmed && idle > 0) || (playing != null && WarnedLeft) ? "confirm" : playing != null && !EndArmed ? "done" : "act";
+            // The stage over: no key to end a turn (Producto, 18/11: one left alone under the card).
+            var endMode = s.Outcome != null ? "over" : !CanAct() ? (s.ActiveTeam == Teams.Alien || Shown.ActiveTeam == Teams.Alien ? "enemy" : "disabled") : ready ? "ready" : (EndArmed && idle > 0) || (playing != null && WarnedLeft) ? "confirm" : playing != null && !EndArmed ? "done" : "act";
             // (With actions or movement left: the turn ends by itself only when none has either, Arturo 5/11 #14; Lore's words.)
             var detail = endMode == "confirm" ? $"{idle} {(idle == 1 ? "soldado" : "soldados")} sin terminar" : waiting;
             Hud.SetEndTurn(new EndTurnView
@@ -111,7 +113,8 @@ namespace Bastion.UI.Combat
             Hud.SetPlayers(alone ? null : PlayersView(v, sharing ? holder : (int?)null));
             Hud.SetSquad(SquadView(v, inPlay?.Id));
             var shown = UnitById(v, picked);
-            Hud.SetSelected(shown != null && shown.Alive ? UnitPanel(shown) : null);
+            // One inside La Lata too (T24, Producto 18/11): its name, weapon and health stay over the cards.
+            Hud.SetSelected(shown != null && (shown.Alive || (shown.Aboard == true && v.Outcome == null)) ? UnitPanel(shown) : null);
             RefreshFlags();
             RefreshMarks();
             // The enemies' sight follows what is seen (the button on: who comes into sight, who moves); worked out per enemy only when it changed.
@@ -154,7 +157,8 @@ namespace Bastion.UI.Combat
             // A siege's breaches: an orange beam each, and an arrow a side at the screen's edge (CombatController.Siege).
             var breaches = new EdgeMarksView();
             BreachMarks(v, beacons, breaches);
-            Marks?.Show(v, m.EvacZone, beacons, item, m.Reinforcements.Where(r => r.Pos != null && !r.Landed).Select(r => r.Pos).ToList(), SearchZone(v));
+            // La Lata's open tiles only (Gameplay's Rules.OpenTiles: one a seat still free; Arturo, by Producto, 18/11).
+            Marks?.Show(v, Rules.OpenTiles(v), beacons, item, m.Reinforcements.Where(r => r.Pos != null && !r.Landed).Select(r => r.Pos).ToList(), SearchZone(v), AlightArmed() ? Rules.AlightTiles(v) : null);
             if (Hud == null) return;
             Hud.SetWorldTags(WorldTags(v));
             // Where to go, the ring's arrow (UI-COMBATE UI-06): the objective, else the evacuation, as the O key's.
@@ -328,7 +332,10 @@ namespace Bastion.UI.Combat
                 Tag(u.Marked > 0, "MARCADO", "aid");
                 Tag(u.Ruptured > 0, "VULNERABLE", "stun");
                 Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data");
-                Tag(u.Captive, UnitWords.Agree(u, "CAUTIVO"), "data");
+                // A run's survivor alone and hidden is «ESCONDIDO»; «CAUTIVO», the Cuervos' prisoner (Arturo, 18/11; Lore).
+                // A run's survivor alone is hiding; only the Cuervos' prisoner is held (Arturo, in the cuadro, 18/11; Lore's).
+                var hiding = u.Captive && v.Run != null && v.Mission.Guarded != true;
+                Tag(u.Captive, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data");
                 Tag(u.Objective, "OBJETIVO", "stun");
                 Tag(quiet.Contains(u.Id), HudText.Takedown.Tag, "quiet");
                 var would = false;
@@ -640,7 +647,8 @@ namespace Bastion.UI.Combat
             }
             // With the finger, «Ceder» by the partner, as the menu's «Ceder el mando» (CombatController.Menu: PassOn).
             var partner = PartnerHere();
-            view.CanPass = Bastion.Client.GameInput.Touch && partner != null && v.ActiveTeam == Teams.Xcom && v.Outcome == null && CanAct()
+            // And with the mouse when only soldiers inside La Lata are left (T24: OnlyInside), where it is what is pressed.
+            view.CanPass = (Bastion.Client.GameInput.Touch || OnlyInside()) && partner != null && v.ActiveTeam == Teams.Xcom && v.Outcome == null && CanAct()
                 && HasCommand() && !v.Ready[partner.Slot] && busy.Contains(partner.Slot);
             return view;
         }
@@ -682,11 +690,13 @@ namespace Bastion.UI.Combat
                     Id = u.Id,
                     Color = Players.FirstOrDefault(p => p.Slot == owner)?.Color ?? Content.PlayerColors[Math.Clamp(owner, 0, Content.PlayerColors.Count - 1)],
                     Name = (u.Template == TemplateIds.Rookie ? "" : Content.Templates[u.Template].Short + " ") + (!string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name),
-                    Short = !string.IsNullOrEmpty(u.Nickname) ? $"«{u.Nickname}»" : u.Name.Split(' ')[0],
+                    // The bust's: the nickname with no quotes (Producto, 18/11: «Chispa» didn't fit eight busts), else the first name.
+                    Short = !string.IsNullOrEmpty(u.Nickname) ? u.Nickname : u.Name.Split(' ')[0],
                     Mine = mine,
                     Selected = u.Id == picked,
                     Dead = !u.Alive && !u.Evacuated,
-                    Evacuated = u.Evacuated,
+                    // Inside La Lata (T24) it plays on (Bajar, Evacuar): not greyed as one already gone.
+                    Evacuated = u.Evacuated && u.Aboard != true,
                     InPlay = u.Id == inPlay,
                     Bust = u.Team == Teams.Xcom,
                     Hp = u.Hp,
@@ -698,27 +708,42 @@ namespace Bastion.UI.Combat
                     Moves = u.Automaton == null && u.Alive ? Paths.MoveBudget(v, u) / Paths.CostOrtho : 0,
                     MovesMax = u.Automaton == null && u.Alive ? Paths.FullMoves(v, u) / Paths.CostOrtho : 0,
                 };
-                void Tag(bool on, string text, string kind, string tip = null)
-                {
-                    if (on) card.Tags.Add(new TagView { Text = text, Kind = kind, Tip = tip });
-                }
                 // «EN JUEGO» is the card's own (SquadList, from InPlay), first.
-                Tag(u.ControlledBy != null, UnitWords.Agree(u, "CONTROLADO"), "psi");
-                Tag(u.Captive, UnitWords.Agree(u, "CAUTIVO"), "data");
-                Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi");
-                Tag(u.Panicked, "PÁNICO", "psi");
-                Tag(u.Evacuated, UnitWords.Agree(u, "EVACUADO"), "evac");
-                Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data");
-                Tag(u.Overwatch, u.KillZone ? "ZONA LETAL" : u.WatchMelee == true ? "HOJA EN ALTO" : "VIGILANCIA", "ow");
-                Tag(u.Hunkered, "CUBRIÉNDOSE", "hk");
-                Tag(u.Hidden == true, UnitWords.Agree(u, "ESCONDIDO"), "hide");
-                Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun");
-                // Knocked down by El Toro's charge (H6): up at the squad's next turn, an action spent. Lore's «EN EL SUELO»
-                // (masculine «tumbado» would go over anyone).
-                Tag(u.Down == true, Lore.BossText.DownTag, "stun", Lore.Glossary["En el suelo"]);
+                card.Tags.AddRange(StateTags(u, carrier));
                 view.Cards.Add(card);
             }
             return view;
+        }
+
+        /// <summary>
+        /// A soldier's states for its card, in order, each with its icon for a narrow bust (Producto, 18/11: with six busts
+        /// or more the words don't fit, and shortening them changes their names everywhere; SquadList.StateIcons). The
+        /// picked one's sheet says them in full (UnitPanel), as its flag over the figure does.
+        /// </summary>
+        List<TagView> StateTags(Unit u, string carrier)
+        {
+            var list = new List<TagView>();
+            void Tag(bool on, string text, string kind, string icon, string tip = null)
+            {
+                if (on) list.Add(new TagView { Text = text, Kind = kind, Tip = tip, Icon = icon });
+            }
+            Tag(u.ControlledBy != null, UnitWords.Agree(u, "CONTROLADO"), "psi", "state:controlled");
+            // A run's survivor alone is hiding; only the Cuervos' prisoner is held (Arturo, in the cuadro, 18/11; Lore's).
+            var hiding = u.Captive && Shown.Run != null && Shown.Mission.Guarded != true;
+            Tag(u.Captive, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data", hiding ? "state:hide" : "state:captive");
+            Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi", "state:disoriented");
+            Tag(u.Panicked, "PÁNICO", "psi", "state:panic");
+            // Inside La Lata, or gone in it: Lore's «A BORDO» (T24; «EVACUADO» came out cut, and agreed in gender).
+            Tag(u.Evacuated || u.Aboard == true, Lore.BoardText.AboardTag, "evac", "state:aboard");
+            Tag(carrier == u.Id, Lore.ItemTag(RecoveryItem()), "data", "state:carry");
+            Tag(u.Overwatch, u.KillZone ? "ZONA LETAL" : u.WatchMelee == true ? "HOJA EN ALTO" : "VIGILANCIA", "ow", u.KillZone ? "state:killZone" : u.WatchMelee == true ? "state:watchMelee" : "state:overwatch");
+            Tag(u.Hunkered, "CUBRIÉNDOSE", "hk", "state:hunker");
+            Tag(u.Hidden == true, UnitWords.Agree(u, "ESCONDIDO"), "hide", "state:hide");
+            Tag(u.Stunned, UnitWords.Agree(u, "ATURDIDO"), "stun", "state:stun");
+            // Knocked down by El Toro's charge (H6): up at the squad's next turn, an action spent. Lore's «EN EL SUELO»
+            // (masculine «tumbado» would go over anyone).
+            Tag(u.Down == true, Lore.BossText.DownTag, "stun", "state:down", Lore.Glossary["En el suelo"]);
+            return list;
         }
 
         /// <summary>
@@ -831,6 +856,8 @@ namespace Bastion.UI.Combat
             // Its state and improvements (docs/FASE9.md §5), where it carries a weapon of the Armería.
             if (!string.IsNullOrEmpty(arms?.Primary)) view.WeaponMarks = WeaponMarks(Content.ConditionOf(u), arms.Mods);
             view.Pack = PackOf(u);
+            // With the busts' states as icons, the picked one's in full beside its name.
+            if (SquadList.StateIcons && u.Team == Teams.Xcom) view.States = StateTags(u, Shown.Mission.Item?.Carrier);
             return view;
         }
 
@@ -870,10 +897,14 @@ namespace Bastion.UI.Combat
                     // dead, the stage goes on without a recruit. Lore's phases.
                     var run = s.Run != null && vip != null;
                     objective = run && !vip.Alive && !vip.Evacuated ? Lore.VipObjective(who, "dead")
-                        : m.ObjectiveDone ? Lore.VipObjective(who, "out")
+                        // Gone in La Lata (T24: the recruit counts if inside as it leaves): «…, a salvo».
+                        : m.ObjectiveDone || (run && vip.Evacuated && m.EvacDone == true) ? Lore.VipObjective(who, "out")
                         : run && Unfound(vip) ? Lore.VipObjective(who, "search")
                         : run && vip.Captive ? Lore.VipObjective(who, "talk")
-                        : vip != null && vip.Alive && !vip.Captive && Abilities.InEvacZone(s, vip.Pos) ? Lore.VipObjective(who, "aboard")
+                        // Inside La Lata (T24) as in its zone: «…, en La Lata: que suba el resto».
+                        // Inside with La Lata full and some of the squad still out (Lore, 18/11): go, or someone gets down.
+                        : vip != null && vip.Aboard == true && Rules.SeatsFree(s) == 0 && s.Units.Any(u => u.Alive && u.Team == Teams.Xcom && !u.Captive && u.Automaton == null && u.Id != vip.Id) ? Lore.VipObjective(who, "full")
+                        : vip != null && (vip.Aboard == true || (vip.Alive && !vip.Captive && Abilities.InEvacZone(s, vip.Pos))) ? Lore.VipObjective(who, "aboard")
                         : vip != null && vip.Captive ? Lore.VipObjective(who, "captive")
                         : Lore.VipObjective(who, "loose");
                     break;

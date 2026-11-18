@@ -570,31 +570,55 @@ namespace Bastion.Client
         }
 
         /// <summary>
-        /// No grass between Soldados' camera and its soldier (T1, Producto 18/11: in Personalizar the tufts went over the legs and
-        /// huge leaves stood before the camera): the ground's cover kept off the tiles within ShowcaseClearWidth of the line from
-        /// half a tile before the soldier to a tile behind the camera (Personalizar's shot is on it, nearer).
+        /// No grass before the soldiers the base shows close (T1, Producto 18/11: in Personalizar the tufts went over the legs
+        /// and huge leaves stood before the camera; then Almacén's, capture 27, and the row's in Partir): the ground's cover
+        /// kept off what each camera sees on its way to them, from a little behind their feet towards the camera, widening as
+        /// the view does (GrassWedge). Soldados', Personalizar's and Almacén's soldier (one figure, one shot: SoldierShot) and
+        /// the row (Escuadra, Partir, the debrief: LineupShot). The grass behind them, and the rest of the clearing, stay.
         /// </summary>
         void ShowcaseGrassOff()
         {
             if (built == null || Base == null) return;
-            var b = Base;
-            var clear = new List<int>();
+            var clear = new HashSet<int>();
             var dir = soldierView.sqrMagnitude > 1e-6f ? soldierView.normalized : new Vector2(0, 1);
-            float far = soldierDistance + 1;
-            int x0 = Mathf.FloorToInt(Mathf.Min(soldierAt.x, soldierAt.x + dir.x * far) - ShowcaseClearWidth - 1), x1 = Mathf.CeilToInt(Mathf.Max(soldierAt.x, soldierAt.x + dir.x * far) + ShowcaseClearWidth + 1);
-            int z0 = Mathf.FloorToInt(Mathf.Min(soldierAt.y, soldierAt.y + dir.y * far) - ShowcaseClearWidth - 1), z1 = Mathf.CeilToInt(Mathf.Max(soldierAt.y, soldierAt.y + dir.y * far) + ShowcaseClearWidth + 1);
-            for (int z = Mathf.Max(0, z0); z <= Mathf.Min(b.Height - 1, z1); z++)
-                for (int x = Mathf.Max(0, x0); x <= Mathf.Min(b.Width - 1, x1); x++)
-                {
-                    var d = new Vector2(x + 0.5f, z + 0.5f) - soldierAt;
-                    float along = Vector2.Dot(d, dir), across = Mathf.Abs(d.x * dir.y - d.y * dir.x);
-                    if (along >= 0.5f && along <= far && across <= ShowcaseClearWidth) clear.Add(z * b.Width + x);
-                }
+            GrassWedge(soldierAt + dir * soldierDistance, new[] { soldierAt }, clear);
+            if (rowSubjects != null && rowSubjects.Count > 0) GrassWedge(rowCamera, rowSubjects, clear);
             built.ClearCover(clear);
         }
 
-        /// <summary>How far either side of the line from Soldados' soldier to its camera the grass is kept off (tiles).</summary>
-        const float ShowcaseClearWidth = 1.3f;
+        /// <summary>The row's camera and its places (tiles), as PlaceLineup last laid them; none, no row.</summary>
+        Vector2 rowCamera;
+        List<Vector2> rowSubjects;
+
+        /// <summary>
+        /// The tiles (indices into `clear`) whose middle lies between `camera` and any of `subjects` (tiles, on the ground):
+        /// from GrassBehind behind the subject to GrassNear off the camera, and across within the view's widening from the
+        /// camera (GrassSpread a tile along, and GrassMargin more).
+        /// </summary>
+        void GrassWedge(Vector2 camera, IEnumerable<Vector2> subjects, HashSet<int> clear)
+        {
+            var b = Base;
+            foreach (var subject in subjects)
+            {
+                var way = subject - camera;
+                float length = way.magnitude;
+                if (length < 0.5f) continue;
+                var u = way / length;
+                float reach = length * GrassSpread + GrassMargin;
+                int x0 = Mathf.FloorToInt(Mathf.Min(camera.x, subject.x) - reach - 1), x1 = Mathf.CeilToInt(Mathf.Max(camera.x, subject.x) + reach + 1);
+                int z0 = Mathf.FloorToInt(Mathf.Min(camera.y, subject.y) - reach - 1), z1 = Mathf.CeilToInt(Mathf.Max(camera.y, subject.y) + reach + 1);
+                for (int z = Mathf.Max(0, z0); z <= Mathf.Min(b.Height - 1, z1); z++)
+                    for (int x = Mathf.Max(0, x0); x <= Mathf.Min(b.Width - 1, x1); x++)
+                    {
+                        var d = new Vector2(x + 0.5f, z + 0.5f) - camera;
+                        float along = Vector2.Dot(d, u), across = Mathf.Abs(d.x * u.y - d.y * u.x);
+                        if (along >= GrassNear && along <= length + GrassBehind && across <= along * GrassSpread + GrassMargin) clear.Add(z * b.Width + x);
+                    }
+            }
+        }
+
+        /// <summary>GrassWedge's: how far behind a subject's feet, how near the camera (tiles), how much it widens a tile along, and its margin either side (tiles).</summary>
+        const float GrassBehind = 0.4f, GrassNear = 0.3f, GrassSpread = 0.45f, GrassMargin = 0.6f;
 
         /// <summary>Which piece stands on each tile of the base shown (Base.PieceAt, made once a base: it is asked thousands of times).</summary>
         BasePiece[] pieceGrid;

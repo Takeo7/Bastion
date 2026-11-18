@@ -228,6 +228,8 @@ namespace Bastion.Engine
         /// (Abilities.TalkTarget, Rules: VipRescuedEvent).
         /// </summary>
         public const string Talk = "talk";
+        /// <summary>«Bajar» (T24, Arturo 18/11): down out of La Lata to a free tile of its zone, an action (Rules.AlightRefusal).</summary>
+        public const string Alight = "alight";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
@@ -235,7 +237,7 @@ namespace Bastion.Engine
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
             Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry, Takedown, Pound, Charge, Roar,
-            Talk,
+            Talk, Alight,
         };
     }
 

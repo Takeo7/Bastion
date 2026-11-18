@@ -175,6 +175,10 @@ namespace Bastion.Client.Units
             /// <summary>How far Support has the left palm onto the handguard (0–1): eased in as it comes within reach (G-1).</summary>
             public float supportShare = 1;
             /// <summary>The long gun's rise over the level as Steady follows it (degrees), and how far Steady holds it (0–1, eased in and out with moving).</summary>
+            /// <summary>Left behind by La Lata (Unit.Lost): standing still, turned to it once.</summary>
+            public bool leftBehind;
+            /// <summary>How far a straight-stocked gun is tucked under the arm (UnitViews.Tuck: 1 at rest and moving, 0 aimed, reloading or the left hand busy), eased.</summary>
+            public float tuck = 1;
             public float steadyRise;
             public float steadyShare;
             /// <summary>How far it is aimed (0 at rest, 1 aimed), going there over AimBlend.</summary>
@@ -1217,7 +1221,18 @@ namespace Bastion.Client.Units
                     v.armsKey = ArmsKey(u);
                     _ = Equip(v, u);
                 }
-                if (!u.Alive && !v.dead) Lie(v);
+                // (One left behind as La Lata goes, Unit.Lost, isn't dead: it stays standing where it was, turned to La Lata,
+                // as it goes and the notice shows; it lay as the dead do, and the camera after the motorbike found it so.
+                // Producto and UI, 18/11; so since the port, the rule is 0.10.1's.)
+                if (u.Lost == true && !v.dead)
+                {
+                    if (!v.leftBehind)
+                    {
+                        v.leftBehind = true;
+                        if (Map.MapView.Current?.LataAt is Vector3 lata) Face(u.Id, lata);
+                    }
+                }
+                else if (!u.Alive && !v.dead) Lie(v);
                 if (!u.Alive && v.dead) HideDropped(v);
                 // (One felled silently lies on: its death comes in the events behind the blow, the state still has it alive. One
                 // knocked down too, till it gets up: UnitViews.Brute.)

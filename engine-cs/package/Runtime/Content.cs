@@ -602,7 +602,7 @@ namespace Bastion.Engine
             [AbilityIds.Launch] = new AbilityDef { Id = AbilityIds.Launch, Name = "Lanzagranadas", Description = "Dispara una granada más lejos y con más radio. También abre boquetes en las paredes y, arriba, hunde el suelo donde cae.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Charge = ChargeIds.Grenade, Range = 14, Radius = 3.5, Explosive = WeaponIds.FragGrenade },
             [AbilityIds.Missiles] = new AbilityDef { Id = AbilityIds.Missiles, Name = "Granada del chaleco", Description = "Le estalla una granada que aún cuelga del chaleco. También abre boquetes en las paredes y, arriba, hunde el suelo.", Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Charge = ChargeIds.Missiles, Range = 15, Radius = 2.5, Explosive = WeaponIds.MicroMissiles },
             // Lore's, N8 (17/11): who doesn't fit is lost too (N2).
-            [AbilityIds.Evac] = new AbilityDef { Id = AbilityIds.Evac, Name = "Evacuar", Description = "Desde La Lata, pide salir. Si el otro jugador acepta, salen los que estén dentro y quepan, y los demás se pierden. En la Limpieza es una retirada: la misión se pierde.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false },
+            [AbilityIds.Evac] = new AbilityDef { Id = AbilityIds.Evac, Name = "Evacuar", Description = "Desde dentro de La Lata, pide que salga. Si el otro jugador acepta, sale con los que estén dentro, y los de fuera se pierden. En la Limpieza es una retirada: la misión se pierde.", Target = AbilityTargets.Self, Ap = 0, EndsTurn = false },
             [AbilityIds.Hack] = new AbilityDef
             {
                 Id = AbilityIds.Hack,
@@ -666,6 +666,8 @@ namespace Bastion.Engine
             [AbilityIds.FirstAid] = new AbilityDef { Id = AbilityIds.FirstAid, Name = "Botiquín", Description = "Cura 4 de salud a uno mismo o a un compañero de al lado.", Target = AbilityTargets.Ally, Ap = 1, EndsTurn = false, Charge = ChargeIds.FirstAid, Range = 1.5 },
             // A run's Rescate (N2): one action, from beside the survivor; Lore's texts (N8).
             [AbilityIds.Talk] = new AbilityDef { Id = AbilityIds.Talk, Name = Lore.TalkText.Action, Description = Lore.TalkText.Help, Target = AbilityTargets.Self, Ap = 1, EndsTurn = false },
+            // T24 (18/11): down out of La Lata, to the tile chosen of its zone; Lore's texts.
+            [AbilityIds.Alight] = new AbilityDef { Id = AbilityIds.Alight, Name = Lore.BoardText.Alight, Description = Lore.BoardText.AlightHelp, Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false },
         };
 
         /// <summary>Base chance of fixing the objective terminal (Arreglar); since T2 no bar adds to it.</summary>

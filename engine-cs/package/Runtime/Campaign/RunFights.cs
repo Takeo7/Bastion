@@ -307,7 +307,26 @@ namespace Bastion.Engine
             var m = s.Mission;
             var bus = m.EvacBus;
             var seats = m.Seats;
-            if (seats == null || bus == null || bus.Tiles.Count == 0 || m.EvacZone.Count == 0) return;
+            if (seats == null || m.EvacZone.Count == 0) return;
+            // No place of the vehicle on the map (Red, 18/11: a service area's, seed 5111): its zone cut to the seats, the
+            // tiles of it nearest its middle, one piece.
+            if (bus == null || bus.Tiles.Count == 0)
+            {
+                if (m.EvacZone.Count <= seats.Value) return;
+                double zx = m.EvacZone.Average((t) => t.X), zy = m.EvacZone.Average((t) => t.Y);
+                var kept = new List<Vec2>();
+                var rest = m.EvacZone.OrderBy((t) => Js.Hypot(t.X - zx, t.Y - zy)).ThenBy((t) => t.Y).ThenBy((t) => t.X).ToList();
+                kept.Add(rest[0]);
+                rest.RemoveAt(0);
+                while (kept.Count < seats.Value && rest.Count > 0)
+                {
+                    var next = rest.FirstOrDefault((t) => kept.Any((k) => Math.Max(Math.Abs(k.X - t.X), Math.Abs(k.Y - t.Y)) == 1)) ?? rest[0];
+                    kept.Add(next);
+                    rest.Remove(next);
+                }
+                m.EvacZone = kept;
+                return;
+            }
             var d = Grid.Dirs4[bus.Heading];
             var o = new Vec2 { X = -d.Y, Y = d.X };
             double cx = bus.Tiles.Average((t) => t.X), cy = bus.Tiles.Average((t) => t.Y);
@@ -589,12 +608,13 @@ namespace Bastion.Engine
             report.Run.Found = home.SelectMany((s) => AllOf(s.Kit!)).Where((g) => GearNumber(g.Id) > fight.FirstGear).Select(Gears.CloneGear).ToList();
 
             // A survivor brought out on La Lata (H4, N2: a Rescate's or one loose on the map): they join, with a knife and the
-            // health they had; the squad fallen
-            // round them too.
+            // health they had, the squad fallen round them or not; into the squad, they stand for it (Red, 18/11: a Rescate won
+            // by the survivor alone ended the run as wiped).
             if (!string.IsNullOrEmpty(mission.Mission.Survivor))
             {
                 var vip = mission.Units.FirstOrDefault((u) => u.Id == mission.Mission.Survivor);
                 if (vip != null && vip.Evacuated) report.Run.Joined = Rescued(c, node, vip, rng, report.Run)?.Id;
+                if (report.Run.Joined != null && report.Run.InSquad == true) standing++;
             }
             // The squad fell: the run is over, and what they carried with it.
             if (fought > 0 && standing == 0)

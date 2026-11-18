@@ -113,6 +113,41 @@
     white-space: nowrap;
 }
 
+/* A proposal for the cuadro (SquadList.StateIcons, Producto 18/11): on narrow busts the states as icons in a row, on a
+   dark square each, in their tags' colours; their names in the help, on the flag and on the picked one's sheet. */
+.squad-card__tags--icons {
+    flex-direction: row;
+}
+
+.squad-card__state {
+    width: 15px;
+    height: 15px;
+    margin: 0 1px 0 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 1px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.squad-card__state.tag--ow {
+    -unity-background-image-tint-color: #7fd3ff;
+}
+
+.squad-card__state.tag--hk {
+    -unity-background-image-tint-color: #9fe08a;
+}
+
+.squad-card__state.tag--hide {
+    -unity-background-image-tint-color: #a9bfd6;
+}
+
+.squad-card__state.tag--data {
+    -unity-background-image-tint-color: #8fe6ff;
+}
+
+.squad-card__state.tag--evac {
+    -unity-background-image-tint-color: var(--t-good);
+}
+
 /* Health and actions as wide as the card: a piece a point (the slot's parchment for health), a bar an action. */
 .squad-card__hp {
     margin-top: 3px;

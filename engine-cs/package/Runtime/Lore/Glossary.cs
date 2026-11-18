@@ -46,7 +46,7 @@ namespace Bastion.Engine
             ["Encargo"] = "Cadena de misiones y decisiones con un desenlace que se queda.",
             ["Taller de oficios"] = "Cada misión llena más las barras.",
             ["La Lata"] = "Lleva a la escuadra y la espera en la zona de evacuación. Moto, todoterreno, furgoneta y autobús: cada uno, más plazas.",
-            ["Evacuar"] = "Se sale " + Bus.In + " desde la zona de evacuación: lo pide un jugador y lo acepta el otro. Quien esté fuera cuando sale, o no quepa, se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.",
+            ["Evacuar"] = "Al llegar a una casilla de " + Bus.Name + ", el soldado sube y está a salvo; en su turno puede bajar. " + Bus.Name + " sale cuando lo pide un jugador y lo acepta el otro, o sola cuando ya están todos dentro. Quien esté fuera se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.",
             ["Recluta"] = "Quien acaba de unirse al Bastión, con un cuchillo.",
             ["Barras"] = "Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Registrar y Forma física. Se llenan haciendo eso mismo en los combates. Cada barra llena sube un poco su habilidad y da un punto para el tablero.",
             ["Tablero"] = "Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.",

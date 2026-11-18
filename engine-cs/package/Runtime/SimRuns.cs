@@ -241,6 +241,85 @@ namespace Bastion.Engine
             return !(s.Run != null && u.Id == s.Mission.Survivor && s.Mission.SurvivorFound != true);
         }
 
+        // ------------------------------------------------------------- La Lata (T24)
+
+        /// <summary>Whether La Lata is there to get into (T24): a run's, its zone drawn, not gone, and in an Asedio come.</summary>
+        public static bool LaLataHere(GameState s)
+        {
+            var m = s.Mission;
+            return s.Run != null && m.Seats != null && m.EvacZone.Count > 0 && m.EvacDone != true && !(m.HoldUntil != null && s.Turn < m.HoldUntil);
+        }
+
+        /// <summary>La Lata's seats nobody is in yet (T24): MissionState.Seats less who is aboard (Unit.Aboard). Null without seats.</summary>
+        public static int? SeatsFree(GameState s)
+        {
+            var seats = s.Mission.Seats;
+            return seats == null ? (int?)null : Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true));
+        }
+
+        /// <summary>One of the squad that can get into La Lata: a soldier or one who joined, not a captive, the relay or a turret.</summary>
+        private static bool Boarder(Unit u) => u.Team == Teams.Xcom && !u.Captive && !u.Objective && u.Automaton == null;
+
+        /// <summary>
+        /// Whether `u`, its walk ended where it stands, gets into La Lata (T24, Arturo 18/11): one of the squad on a tile of
+        /// its zone, La Lata there (LaLataHere), a seat free. Without one it stays on the tile (Lore.BoardText.Full).
+        /// </summary>
+        public static bool Boards(GameState s, Unit u)
+        {
+            return u.Alive && Boarder(u) && LaLataHere(s) && Abilities.InEvacZone(s, u.Pos) && (SeatsFree(s) ?? 0) > 0;
+        }
+
+        /// <summary>Whether a walk of `u` ending on `tile` would get it into La Lata (T24): for the path drawn before moving.</summary>
+        public static bool WouldBoard(GameState s, Unit u, Pos tile)
+        {
+            return u.Alive && Boarder(u) && LaLataHere(s) && Abilities.InEvacZone(s, tile) && (SeatsFree(s) ?? 0) > 0;
+        }
+
+        /// <summary>
+        /// Whether La Lata goes by itself (T24: «sale sola solo si ya están dentro todos los vivos»): someone aboard, and
+        /// nobody of the squad alive out of it (a captive aside: they don't come by themselves).
+        /// </summary>
+        public static bool AllAboard(GameState s)
+        {
+            return s.Run != null && s.Units.Any((u) => u.Aboard == true) && !s.Units.Any((u) => u.Alive && Boarder(u));
+        }
+
+        /// <summary>
+        /// La Lata's tiles that count now (T21, T24; Producto, 18/11: «tantas casillas como plazas libres»): its zone's but the
+        /// ones those aboard got in by (each closes the tile it got in on, its door's), as many as its seats free; full,
+        /// none. Before La Lata comes (an Asedio), all of them, to wait on. Without seats (outside the runs), its zone as it
+        /// is. What the client draws, and what Abilities.InEvacZone means.
+        /// </summary>
+        public static List<Vec2> OpenTiles(GameState s)
+        {
+            var zone = s.Mission.EvacZone;
+            var free = SeatsFree(s);
+            if (free == null || s.Run == null) return zone;
+            var m = s.Mission;
+            if (m.HoldUntil != null && s.Turn < m.HoldUntil) return zone;
+            var shut = s.Units.Where((u) => u.Aboard == true).Select((u) => (u.Pos.X, u.Pos.Y)).ToHashSet();
+            return zone.Where((z) => !shut.Contains((z.X, z.Y))).Take(free.Value).ToList();
+        }
+
+        /// <summary>The tiles one aboard may get down to (T24): La Lata's zone's, free, that can be stood on.</summary>
+        public static List<Pos> AlightTiles(GameState s)
+        {
+            return s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).Where((p) => Grid.UnitAt(s, p) == null && Flights.CanStopAt(s, p)).ToList();
+        }
+
+        /// <summary>Why `u` can't get down out of La Lata to `tile` now, as `slot` (T24, AbilityIds.Alight), or null.</summary>
+        public static string? AlightRefusal(GameState s, Unit? u, int slot, IReadOnlyList<int> connected, Pos? tile)
+        {
+            if (u == null || u.Aboard != true) return "No está en " + Lore.Bus.Name + ".";
+            if (!Content.CommandsFor(slot, u.Owner, connected)) return "Es de la escuadra del otro jugador.";
+            if (s.Outcome != null || s.ActiveTeam != Teams.Xcom || s.Mission.EvacDone == true) return "Ahora no.";
+            if (u.Ap < 1) return "Sin acciones.";
+            var free = AlightTiles(s);
+            if (free.Count == 0) return "No hay sitio libre junto a " + Lore.Bus.Name + ".";
+            if (tile == null || !free.Any((p) => Grid.SamePos(p, tile))) return "Solo a una casilla libre junto a " + Lore.Bus.Name + ".";
+            return null;
+        }
+
         /// <summary>
         /// Who is in La Lata's zone now and wouldn't fit if it left (N2): past MissionState.Seats, the squad's own first and
         /// the one who joined on the map last, each in the order they stand in the state. Empty with no seats counted
@@ -251,7 +330,9 @@ namespace Bastion.Engine
             var seats = s.Mission.Seats;
             if (seats == null) return new List<Unit>();
             var aboard = s.Units.Where((u) => u.Alive && u.Team == Teams.Xcom && !u.Objective && !u.Captive && u.Automaton == null && Abilities.InEvacZone(s, u.Pos)).ToList();
-            return aboard.Where((u) => u.CampaignId != null).Concat(aboard.Where((u) => u.CampaignId == null)).Skip(seats.Value).ToList();
+            // The seats taken inside (T24) first.
+            var left = Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true));
+            return aboard.Where((u) => u.CampaignId != null).Concat(aboard.Where((u) => u.CampaignId == null)).Skip(left).ToList();
         }
     }
 }

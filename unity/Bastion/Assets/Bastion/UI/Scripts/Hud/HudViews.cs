@@ -16,6 +16,8 @@ namespace Bastion.UI.Hud
         /// <summary>ow, hk, stun, psi, bite, data, evac, aid, in-play: as the CSS classes were.</summary>
         public string Kind;
         public string Tip;
+        /// <summary>Its icon on a narrow bust (SquadList.StateIcons): a HUD icon, «state:…».</summary>
+        public string Icon;
     }
 
     // ----------------------------------------------------------------- turn
@@ -157,6 +159,8 @@ namespace Bastion.UI.Hud
     public sealed class UnitPanelView
     {
         public string Id;
+        /// <summary>Its states in full, beside its name (with SquadList.StateIcons: the busts show only their icons).</summary>
+        public List<TagView> States = new List<TagView>();
         /// <summary>A soldier opens its sheet with a click (H); a VIP or an enemy doesn't.</summary>
         public bool Soldier;
         /// <summary>Veterancy chevrons.</summary>

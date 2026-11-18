@@ -86,7 +86,7 @@ namespace Bastion.UI.Hud
             // mixta.css: one of the big plates, in the steel frame with rivets (Arturo, 24/10: as the 0.10.1).
             squadPlate = root.Q("squad-plate");
             PlateFrame.Dress(squadPlate);
-            squad = new SquadList(root.Q("squad-cards"), squadPlate, relay, tips);
+            squad = new SquadList(root.Q("squad-cards"), squadPlate, relay, tips) { Icons = Icon };
             gear = new Bastion.UI.Gear.GearBoard(root, tips, Icon, gearRelay) { Cell = 40, PictureOf = Bastion.Client.GearPictures.Of, CanThrow = false };
             unit = new UnitPanel(root.Q("unit-panel"), root.Q("pack"), relay, tips, Icon) { Gear = gear };
             abilitiesHost = root.Q("abilities");
@@ -257,7 +257,12 @@ namespace Bastion.UI.Hud
         /// <summary>The camera up over the map (#12): its strip shown or not.</summary>
         public void SetMiniMap(bool open) => miniMap?.Set(open);
         public void SetCall(CallView v) => cards.SetCall(v);
-        public void SetOutcome(OutcomeView v) => cards.SetOutcome(v);
+        public void SetOutcome(OutcomeView v)
+        {
+            // Under the stage's card, no note of the fight is left to read or answer.
+            if (v != null) notes.Hush();
+            cards.SetOutcome(v);
+        }
 
         /// <summary>The aim's panel; a self ability's sits over its key (the bar's active one).</summary>
         public void SetTarget(ShotView v)
@@ -367,7 +372,7 @@ namespace Bastion.UI.Hud
         public void PackOffer(string text, Action swap) => notes.Offer(text, HudText.Pack.Swap, swap);
 
         /// <summary>A word or number rising over a point of the world (damage, «ATURDIDO»…).</summary>
-        public void Float(Vector3 world, string text, string kind, string iconId = null) => flags.Float(world, text, kind, iconId);
+        public void Float(Vector3 world, string text, string kind, string iconId = null, string over = null) => flags.Float(world, text, kind, iconId, over);
 
         /// <summary>An enemy just seen: a mark on its flag for 2 s, an eye if it hasn't noticed the squad, a «!» if it has (UnitFlags.Spot).</summary>
         public void Spot(string id, bool alert) => flags.Spot(id, alert);
@@ -391,6 +396,9 @@ namespace Bastion.UI.Hud
 
         /// <summary>A tag over a point for a while (whose ping it is), on a plate of `color`.</summary>
         public void Pin(Vector3 world, string text, string color, float seconds = 4) => flags.Pin(world, text, color, seconds);
+
+        /// <summary>A line one unit says to another, beside the speaker's flag (UnitFlags.Say).</summary>
+        public void Say(string speaker, string listener, Vector3 world, string text, string color, float seconds) => flags.Say(speaker, listener, world, text, color, seconds);
 
         /// <summary>One of the dead in sight that heard a noise: a mark over its head a moment (UnitFlags.Heard).</summary>
         public void Heard(Vector3 head, string color, float seconds = 2) => flags.Heard(head, HudText.Noise.Heard, color, seconds);

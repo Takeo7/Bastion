@@ -410,11 +410,16 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Nadie ha contestado: la petición de salir caduca con el turno.", Lore.EvacText.Lapsed);
             Assert.Equal("La Lata", Lore.EvacText.Kicker);
             // N8 (Arturo, 17/11): a Rescate's survivor takes a seat, and whoever doesn't fit is lost. T8 (18/11): «Evacuar», not «Salir».
-            Assert.Equal("Evacuar en La Lata: quien esté fuera cuando salga, o no quepa, se pierde", Lore.EvacText.ButtonTip);
+            Assert.Equal("Evacuar en La Lata: sale con los que estén dentro, y quien esté fuera se pierde", Lore.EvacText.ButtonTip);
+            // T24 (Arturo, 18/11): on reaching La Lata the soldier gets on and is safe; they can get off on their turn.
+            Assert.Equal("Subirá a La Lata", Lore.BoardText.WillBoard);
+            Assert.Equal("Ana sube a La Lata: está a salvo.", Lore.BoardText.Boarded("Ana"));
+            Assert.Equal("Ana baja de La Lata.", Lore.BoardText.Alighted("Ana"));
+            Assert.Equal("Ya están todos dentro: La Lata sale.", Lore.BoardText.AllAboard);
             Assert.Equal("Se quedó fuera", Lore.EvacText.Lost);
             Assert.Equal("Retirada", Lore.EvacText.Retreat);
             Assert.Equal("Salisteis sin el objetivo", Lore.EvacText.WithoutObjective);
-            Assert.Equal("Último turno: La Lata sale al acabarlo, con quien esté en la zona de evacuación y quepa.", Lore.TimeText.LastTurn);
+            Assert.Equal("Último turno: La Lata sale al acabarlo, con los que estén dentro.", Lore.TimeText.LastTurn);
             Assert.Equal("ÚLTIMO TURNO", Lore.TimeText.LastTurnFloat);
             Assert.Equal("La Lata no espera más.", Lore.TimeText.Departs);
             Assert.Equal("Se acabó el tiempo, pero La Lata salió con el objetivo a bordo", Lore.TimeText.WonOnTime);
@@ -3100,7 +3105,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Cadena de misiones y decisiones con un desenlace que se queda.", Lore.Glossary["Encargo"]);
             Assert.Equal("Cada misión llena más las barras.", Lore.Glossary["Taller de oficios"]);
             Assert.Equal("Lleva a la escuadra y la espera en la zona de evacuación. Moto, todoterreno, furgoneta y autobús: cada uno, más plazas.", Lore.Glossary["La Lata"]);
-            Assert.Equal("Se sale en La Lata desde la zona de evacuación: lo pide un jugador y lo acepta el otro. Quien esté fuera cuando sale, o no quepa, se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.", Lore.Glossary["Evacuar"]);
+            Assert.Equal("Al llegar a una casilla de La Lata, el soldado sube y está a salvo; en su turno puede bajar. La Lata sale cuando lo pide un jugador y lo acepta el otro, o sola cuando ya están todos dentro. Quien esté fuera se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.", Lore.Glossary["Evacuar"]);
             Assert.Equal("Quien acaba de unirse al Bastión, con un cuchillo.", Lore.Glossary["Recluta"]);
             Assert.Equal("Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Registrar y Forma física. Se llenan haciendo eso mismo en los combates. Cada barra llena sube un poco su habilidad y da un punto para el tablero.", Lore.Glossary["Barras"]);
             Assert.Equal("Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.", Lore.Glossary["Tablero"]);
@@ -3176,7 +3181,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Buscad a quien pide ayuda en la zona marcada", Lore.VipObjective("Marta Gil", "search"));
             Assert.Equal("Sin recluta: registrad lo que queráis y salid en La Lata", Lore.VipObjective("Marta Gil", "dead"));
             Assert.Equal("Hiro ve a alguien con vida.", Lore.TalkText.Spotted("Hiro"));
-            Assert.Equal("Al registrar, Hiro encuentra a alguien con vida.", Lore.TalkText.Found("Hiro"));
+            Assert.Equal("Hiro encuentra a alguien con vida.", Lore.TalkText.Found("Hiro"));
             Assert.Equal("Marta Gil ha muerto. La etapa sigue, sin recluta.", Lore.TalkText.Died("Marta Gil"));
             Assert.Equal("Quien pedía ayuda ha muerto. La etapa sigue, sin recluta.", Lore.TalkText.Died());
             Assert.Equal("Ahora toda expedición sale con 2 plazas, en moto. La mejora «Más plazas» vuelve a empezar, y los 150 § que costó están en el almacén.", Lore.SeatsReset(150));
@@ -3186,10 +3191,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal("un todoterreno", Lore.RunTransport(4).A);
             Assert.Equal("Autobús", Lore.RunTransport(8).Name);
             Assert.Equal("Hablad con Marta Gil", Lore.VipObjective("Marta Gil", "talk"));
+            Assert.Equal("Jonas Becker, a bordo. La Lata va llena: evacuad o que baje alguien", Lore.VipObjective("Jonas Becker", "full"));
             Assert.Equal("Marta Gil se une a la escuadra, a las órdenes de Ana.", Lore.TalkText.Joined("Marta Gil", "Ana"));
             Assert.Equal("Marta Gil se une a la escuadra.", Lore.TalkText.Joined("Marta Gil"));
-            Assert.Equal("Solo caben 2: Marta Gil se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new string[0], new[] { "Marta Gil" }, 2), null).Text);
-            Assert.Equal("Hiro se quedaría fuera, y se perdería. Solo caben 4: Marta Gil y Lucía Vidal se quedarían fuera, y se perderían.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Hiro" }, new[] { "Marta Gil", "Lucía Vidal" }, 4), null).Text);
+            Assert.Equal("No queda plaza: Marta Gil se quedaría fuera, y se perdería.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new string[0], new[] { "Marta Gil" }, 2), null).Text);
+            Assert.Equal("Hiro no ha subido: se quedaría fuera, y se perdería. No queda plaza: Marta Gil y Lucía Vidal se quedarían fuera, y se perderían.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Hiro" }, new[] { "Marta Gil", "Lucía Vidal" }, 4), null).Text);
+            Assert.Equal("Hiro y Ana no han subido: se quedarían fuera, y se perderían.", Lore.EvacPrompt(new Lore.EvacSituation(false, true, new[] { "Hiro", "Ana" }, new string[0], 2), null).Text);
             Assert.Equal("No caben todos: Marta Gil se queda fuera.", Lore.EvacNoSeatLine(new[] { "Marta Gil" }));
             Assert.Equal("Solo sale un soldado por jugador.", RunTexts.PerPlayer(1));
             Assert.Equal("En el Trueque, todo cuesta un 20 % menos.", Lore.UpgradeLine(UpgradeIds.Haggle));

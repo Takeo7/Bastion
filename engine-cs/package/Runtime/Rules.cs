@@ -941,7 +941,17 @@ namespace Bastion.Engine
                 if (!u.Alive || Over) return;
             }
             Flush();
-            if (u.Team == Teams.Xcom && u.Alive && !Over) HuntedBy(u);
+            if (u.Team == Teams.Xcom && u.Alive && !Over)
+            {
+                // Its walk ended on a tile of La Lata's with a seat free: in, safe (T24); La Lata goes if all the living are.
+                if (Rules.Boards(S, u))
+                {
+                    Emit(new BoardedEvent { Unit = u.Id });
+                    CheckOutcome();
+                    return;
+                }
+                HuntedBy(u);
+            }
         }
 
         /// <summary>
@@ -1480,6 +1490,12 @@ namespace Bastion.Engine
         /// </summary>
         public void CheckOutcome()
         {
+            // Everyone alive of the squad inside La Lata (T24): it goes.
+            if (S.Outcome == null && S.Mission.EvacDone != true && Rules.AllAboard(S))
+            {
+                DepartEvac();
+                return;
+            }
             if (Over) return;
             var s = S;
             var m = s.Mission;
@@ -1664,16 +1680,21 @@ namespace Bastion.Engine
         {
             var first = turn % 2 == 1 ? 0 : 1;
             var order = new[] { first, first == 0 ? 1 : 0 };
-            bool Fielded(int slot) => Grid.Combatants(S, Teams.Xcom).Any((u) => u.Owner == slot);
+            // One aboard La Lata with actions too: it has a turn, to come down (T24; Red and Producto, 18/11).
+            bool Fielded(int slot) => Grid.Combatants(S, Teams.Xcom).Any((u) => u.Owner == slot) || S.Units.Any((u) => u.Aboard == true && u.Owner == slot && u.Ap > 0);
             foreach (var slot in order) if (Connected.Contains(slot) && Fielded(slot)) return slot;
             foreach (var slot in order) if (Connected.Contains(slot)) return slot;
             return first;
         }
 
-        /// <summary>Whether `slot` has a soldier (or a shared unit) that can still act or move.</summary>
+        /// <summary>
+        /// Whether `slot` has a soldier (or a shared unit) that can still act or move; or one aboard La Lata with an action, to
+        /// come down (T24: it has a turn, and the command comes to it; it doesn't hold the turn: MaybeEndXcomTurn).
+        /// </summary>
         public bool HasActions(int slot)
         {
-            return Grid.Combatants(S, Teams.Xcom).Any((u) => Paths.HasTurnLeft(u) && (u.Owner == slot || u.Owner == null));
+            return Grid.Combatants(S, Teams.Xcom).Any((u) => Paths.HasTurnLeft(u) && (u.Owner == slot || u.Owner == null))
+                || S.Units.Any((u) => u.Aboard == true && u.Owner == slot && u.Ap > 0 && Rules.LaLataHere(S));
         }
 
         /// <summary>Whether turns go one soldier at a time (playtest 2026-10-15, #9): the partner is here, not done, and has someone to move.</summary>
@@ -2099,9 +2120,10 @@ namespace Bastion.Engine
             if (cmd is EvacCommand evac)
             {
                 var u = Grid.GetUnit(s, evac.Unit);
-                if (u == null || !u.Alive || u.Team != Teams.Xcom || u.Captive) return CommandResult.Failure("Esa unidad no puede evacuar.");
+                // From inside La Lata too (T24).
+                if (u == null || !(u.Alive || u.Aboard == true) || u.Team != Teams.Xcom || u.Captive) return CommandResult.Failure("Esa unidad no puede evacuar.");
                 if (!Content.CommandsFor(ctx.Slot, u.Owner, ctx.Connected)) return CommandResult.Failure("Es de la escuadra del otro jugador.");
-                if (!Abilities.InEvacZone(s, u.Pos)) return CommandResult.Failure("Solo desde el autobús, en la zona de evacuación.");
+                if (u.Aboard != true && !Abilities.InEvacZone(s, u.Pos)) return CommandResult.Failure("Solo desde el autobús, en la zona de evacuación.");
                 // A run's Asedio (H5): La Lata isn't here yet.
                 if (s.Mission.HoldUntil != null && s.Turn < s.Mission.HoldUntil) return CommandResult.Failure($"La Lata llega en el turno {s.Mission.HoldUntil}."); // Lore: provisional
                 if (s.EvacCall?.By == ctx.Slot) return CommandResult.Failure("Ya has pedido evacuar: falta que conteste el otro jugador.");
@@ -2120,6 +2142,16 @@ namespace Bastion.Engine
             }
 
             if (!holds) return CommandResult.Failure("Tiene el mando el otro jugador: espera a que te lo ceda.");
+            // Down out of La Lata (T24): one aboard, an action, to a free tile of its zone; it plays on from there. With the
+            // command, as any order: one aboard with actions has a turn (HasActions, OpeningCommander; Producto, 18/11).
+            if (cmd is AbilityCommand down && down.Ability == AbilityIds.Alight)
+            {
+                var who = Grid.GetUnit(s, down.Unit);
+                var no = Rules.AlightRefusal(s, who, ctx.Slot, ctx.Connected, down.Tile);
+                if (no != null) return CommandResult.Failure(no);
+                sim.Emit(new AlightedEvent { Unit = who!.Id, Tile = Engine.Events.CopyPos(down.Tile!) });
+                return CommandResult.Success(sim.Events);
+            }
             // Turns go one soldier at a time (playtest 2026-10-15, #9): the one in play is finished before another of yours.
             string? InPlay(string id)
             {
@@ -2291,7 +2323,8 @@ namespace Bastion.Engine
         {
             var m = s.Mission;
             if (m.Kind == MissionKinds.Elimination) return false;
-            var aboard = s.Units.Where((u) => u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(s, u.Pos)).ToList();
+            // Those in its zone, and those inside it (T24).
+            var aboard = s.Units.Where((u) => (u.Alive && u.Team == Teams.Xcom && Abilities.InEvacZone(s, u.Pos)) || u.Aboard == true).ToList();
             if (aboard.Count == 0) return false;
             if (Rules.FreeExit(m) || m.ObjectiveDone || RunsRescue(s)) return true;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier) && aboard.Any((u) => u.Id == m.Item!.Carrier);

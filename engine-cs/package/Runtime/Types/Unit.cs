@@ -255,6 +255,12 @@ namespace Bastion.Engine
         public string? PodId { get; set; }
         /// <summary>Left behind when the bus went (docs/PRUEBA-2026-10-14.md P1): off the field, and lost to the campaign.</summary>
         public bool? Lost { get; set; }
+        /// <summary>
+        /// Inside La Lata (T24, Arturo 18/11: «cuando llegas a la casilla de la lata mejor entras en la lata, ese soldado se
+        /// salva ya»): off the field as one evacuated (Alive false, Evacuated true), in one of its seats, safe; it may come
+        /// down again in its turn (AbilityIds.GetOut). Null outside.
+        /// </summary>
+        public bool? Aboard { get; set; }
         public int Rank { get; set; }
         public List<string> Perks { get; set; } = new List<string>(); // PerkIds
         public UnitMods Mods { get; set; } = new UnitMods();

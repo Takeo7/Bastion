@@ -593,6 +593,14 @@ namespace Bastion.UI.Combat
                         default:
                             // «ayuda=horde» the help of the first element of that class pinned open (TooltipLayer.Pin), whatever
                             // the editor's own pointer does.
+                            // «ayudabusto=s1»: that soldier's card's help pinned open (its states and what each does), as the pointer's.
+                            if (what.StartsWith("ayudabusto="))
+                            {
+                                var root = Hud?.GetComponent<UnityEngine.UIElements.UIDocument>()?.rootVisualElement; var card = root == null ? null : UnityEngine.UIElements.UQueryExtensions.Q(root, "card-" + what.Substring("ayudabusto=".Length));
+                                if (card != null) Hud.PinTip(card);
+                                Debug.Log($"[lab] ayuda del busto {what}: {(card != null ? "abierta" : "no está")}");
+                                break;
+                            }
                             // «elige=Aspecto de película/No»: that row of Ajustes (open) set to that choice, as its button would
                             // (as «autono»); «fila=Aspecto de película»: the row's help pinned open.
                             if (what.StartsWith("elige=") || what.StartsWith("fila="))
