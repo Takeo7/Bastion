@@ -1972,6 +1972,10 @@
    "fbx": "SM_Prop_Roof_Aircon_02",
    "fit": 1.6
   },
+  "ruinRoof": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Deck_Roof_01"
+  },
   "roofVent": {
    "pack": "town",
    "fbx": "SM_Prop_Airvent_01",

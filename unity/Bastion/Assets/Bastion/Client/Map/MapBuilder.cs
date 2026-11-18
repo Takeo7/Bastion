@@ -408,6 +408,7 @@ namespace Bastion.Client.Map
                 ground.Build(terrain, plan, Storeys[0]);
             }
             using (MapLoad.Time("buildings")) BuildingParts();
+            HillTops();
             using (MapLoad.Time("walls"))
             {
                 wallsView = new WallsView(walls, s.Width, (parent, id) => Place(parent, id, Vector3.zero, 0), LooksOf, plan);
@@ -420,6 +421,7 @@ namespace Bastion.Client.Map
                     var done = new HashSet<int>();
                     for (int i = 0; i < n; i++) Decor(k, i, done);
                 }
+            using (MapLoad.Time("decor")) RuinDebris();
             using (MapLoad.Time("pileups")) SeparatePileups();
             using (MapLoad.Time("base"))
             {
@@ -510,6 +512,432 @@ namespace Bastion.Client.Map
 
         /// <summary>The ground's own plane (UI's GroundView «Suelo»): it has its own snow.</summary>
         Transform GroundPlane() => Storeys.Length > 0 ? Storeys[0].GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "Suelo") : null;
+
+        /// <summary>
+        /// What fell in a ruin (A2b, Arturo 18/11: «Que parezca caída»; Producto: what makes it read as fallen in): by the
+        /// tile, the same ruin always the same. In each gap of its walls, and past a wall's end, a heap of debris and a
+        /// plank or two lying; inside, by its walls, beams (planks, long) leant on them, one end on the floor; and in one
+        /// inside corner a stretch of its roof (boards) fallen, tilted against the walls. Small and low: none hides a tile
+        /// more than a piece of furniture does, and none on a tile with something on it already.
+        /// </summary>
+        void RuinDebris()
+        {
+            if (plan == null || props == null || props.Length == 0 || Environment.GetEnvironmentVariable("BASTION_SIN_RUINA") == "1") return;
+            int w = s.Width, h = s.Height;
+            bool Wall(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && BuildingPlan.IsWallLike(s.Tiles[y * w + x]);
+            bool Clear(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && s.Tiles[y * w + x] == TileKinds.Floor
+                && (s.Decor == null || y * w + x >= s.Decor.Count || Bastion.Engine.Decor.DecorOf(s.Decor[y * w + x]) == null);
+            GameObject Put(string id, int tile, float gx, float gy, float y, float yaw, float pitch, float roll, Vector3 scale)
+            {
+                var o = Place(props[0], id, new Vector3(gx * MapSpace.Tile, y, -gy * MapSpace.Tile), 0);
+                if (o == null) return null;
+                o.transform.rotation = Quaternion.Euler(0, yaw, 0) * Quaternion.Euler(pitch, 0, roll);
+                o.transform.localScale = Vector3.Scale(o.transform.localScale, scale);
+                Own(o, 0, new[] { tile });
+                return o;
+            }
+            foreach (var b in plan.Buildings.Where(b => b.kind == BuildingKinds.Ruin))
+            {
+                bool roofDown = false;
+                for (int y = b.y0; y <= b.y1; y++)
+                    for (int x = b.x0; x <= b.x1; x++)
+                    {
+                        int t = y * w + x;
+                        if (!Clear(x, y)) continue;
+                        double R(int k) => BuildingPlan.Hash(x, y, 400 + k);
+                        bool e = Wall(x + 1, y), we = Wall(x - 1, y), n = Wall(x, y - 1), so = Wall(x, y + 1);
+                        int walls = (e ? 1 : 0) + (we ? 1 : 0) + (n ? 1 : 0) + (so ? 1 : 0);
+                        bool edge = x == b.x0 || x == b.x1 || y == b.y0 || y == b.y1;
+                        if (edge && walls > 0)
+                        {
+                            // A gap where the wall fell: its heap, and its boards lying out and in.
+                            // (The heap small and not in every gap: Military's debris is pale concrete, a house's is boards.)
+                            // (Boards alone: Military's debris heaps are pale concrete, not a wooden house's.)
+                            for (int k = 0; k < 2; k++)
+                                Put("bPlank", t, x + 0.5f + ((float)R(5 + k) - 0.5f) * 0.9f, y + 0.5f + ((float)R(7 + k) - 0.5f) * 0.9f, 0.05f + 0.06f * k, (float)R(9 + k) * 360, 90, (float)R(11 + k) * 20 - 10, new Vector3(1, 1.2f + (float)R(13 + k) * 0.6f, 1));
+                            continue;
+                        }
+                        if (edge || walls == 0) continue;
+                        // Inside, by a wall: in one corner the roof's stretch that came down; else, now and then, a beam leant on the wall.
+                        if (!roofDown && walls >= 2)
+                        {
+                            roofDown = true;
+                            float yaw = e && n ? 45 : e && so ? 135 : we && so ? 225 : 315;
+                            // (Town's porch roof, shingled: tilted against the corner and half sunk. None in the catalog: boards.)
+                            var roof = Put("ruinRoof", t, x + 0.5f, y + 0.5f, 0, yaw, 0, 0, Vector3.one);
+                            if (roof != null && roof.GetComponentsInChildren<Renderer>() is { Length: > 0 } rs)
+                            {
+                                var box = rs[0].bounds;
+                                foreach (var r in rs) box.Encapsulate(r.bounds);
+                                roof.transform.localScale *= 2.7f / Mathf.Max(0.1f, Mathf.Max(box.size.x, box.size.z));
+                                roof.transform.rotation = Quaternion.Euler(0, yaw, 0) * Quaternion.Euler(32, 0, 8);
+                                box = rs[0].bounds;
+                                foreach (var r in rs) box.Encapsulate(r.bounds);
+                                // (Over its tile's middle, its low edge sunk in the ground.)
+                                roof.transform.position += new Vector3((x + 0.5f) * MapSpace.Tile - box.center.x, -0.3f - box.min.y, -(y + 0.5f) * MapSpace.Tile - box.center.z);
+                            }
+                            else Put("boardsMany", t, x + 0.5f, y + 0.5f, 0.25f, yaw, -62, 0, new Vector3(1.5f, 1.5f, 1.5f));
+
+                            continue;
+                        }
+                        // (Close to the wall and steep: none across a tile one walks at the knees' height.)
+                        if (R(21) < 0.6)
+                        {
+                            float yaw = e ? 90 : we ? 270 : n ? 0 : 180;
+                            Put("bPlank", t, x + 0.5f + (e ? 0.3f : we ? -0.3f : ((float)R(22) - 0.5f) * 0.5f), y + 0.5f + (so ? 0.3f : n ? -0.3f : ((float)R(22) - 0.5f) * 0.5f), 0.02f,
+                                yaw + ((float)R(23) - 0.5f) * 30, 14 + (float)R(24) * 14, 0, new Vector3(1.3f, 2.2f + (float)R(25) * 0.8f, 1.3f));
+                        }
+                    }
+            }
+        }
+
+        /// <summary>
+        /// The hills (A2a, Arturo 18/11. Left out of the port, 0.10.1's floor slabs at a hill's height: a hill showed as a
+        /// ring of rock round a hollow, and one on it stood in the air. Rock faces a tile's side crossed at every corner, «un
+        /// muro en zigzag»; a mound of grass can't be, a storey's fall in half a tile; his 59: «Peñasco redondo de tierra y
+        /// roca»): each a crag, one mesh for them all in three parts. Its height over a fine grid (HillGrid points a tile) is
+        /// the hill's tiles' blurred over HillRound tiles either way, so that its outline is round at the tiles' corners, and
+        /// shaped: from HillOut of a tile outside a straight edge a short scree of earth (CragScree high; none by a ladder's
+        /// foot), then its rock nearly sheer, each point pushed in or out and up or down its own way, in facets (Nature's
+        /// rock walls' material and colour), and its top flat from HillIn inside the edge, the ground's own material, whose
+        /// grass hangs over the rock a little, more here and less there. And Nature's rocks: half sunk in the scree against
+        /// it, and a few on its edge. What is played is the engine's, as before: its tiles, its height, its sides a wall.
+        /// </summary>
+        void HillTops()
+        {
+            var plane = GroundPlane();
+            var ground = plane != null ? plane.GetComponent<MeshRenderer>()?.sharedMaterial : null;
+            if (ground == null || s.Elev == null) return;
+            // (BASTION_SIN_PENASCO=1, a lab's: none, to weigh a frame with and without.)
+            if (Environment.GetEnvironmentVariable("BASTION_SIN_PENASCO") == "1") return;
+            int w = s.Width, h = s.Height;
+            bool Hill(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && plan.Raised[y * w + x] == BuildingPlan.RaisedHill && y * w + x < s.Elev.Count && s.Elev[y * w + x] > 0;
+            bool Ladder(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && s.Tiles[y * w + x] == TileKinds.Ladder;
+            const int G = HillGrid;
+            int reach = Mathf.CeilToInt(HillRound * G);
+            // (How much of the square HillRound about each point of the grid is hill: 1 well inside, 0.5 on a straight edge,
+            // a quarter on a corner that sticks out. By sums over the grid's cells, each a tile's or not.)
+            int cw = w * G, ch = h * G;
+            var sums = new int[(cw + 1) * (ch + 1)];
+            bool any = false;
+            for (int cy = 0; cy < ch; cy++)
+                for (int cx = 0; cx < cw; cx++)
+                {
+                    bool hill = Hill(cx / G, cy / G);
+                    any |= hill;
+                    sums[(cy + 1) * (cw + 1) + cx + 1] = (hill ? 1 : 0) + sums[cy * (cw + 1) + cx + 1] + sums[(cy + 1) * (cw + 1) + cx] - sums[cy * (cw + 1) + cx];
+                }
+            if (!any) return;
+            float Share(int px, int py)
+            {
+                int x0 = Mathf.Clamp(px - reach, 0, cw), x1 = Mathf.Clamp(px + reach, 0, cw), y0 = Mathf.Clamp(py - reach, 0, ch), y1 = Mathf.Clamp(py + reach, 0, ch);
+                return (sums[y1 * (cw + 1) + x1] - sums[y0 * (cw + 1) + x1] - sums[y1 * (cw + 1) + x0] + sums[y0 * (cw + 1) + x0]) / (float)(4 * reach * reach);
+            }
+            // (On a straight edge the share goes from 1, HillRound inside, to 0, HillRound outside.)
+            float full = 0.5f + HillIn / (2 * HillRound), none = 0.5f - HillOut / (2 * HillRound);
+            float top = MapSpace.Storey;
+            float N(int px, int py, int salt) => (float)BuildingPlan.Hash(px, py, salt);
+            // (A point of the grid: how far in from the crag's foot it is, 0 to 1 on its top.)
+            float K(int px, int py) => Mathf.InverseLerp(none, full, Share(Mathf.Clamp(px, 0, cw), Mathf.Clamp(py, 0, ch)));
+            float unit = MapSpace.Tile / G;
+            var parts = new[] { (v: new List<Vector3>(), t: new List<int>()), (v: new List<Vector3>(), t: new List<int>()), (v: new List<Vector3>(), t: new List<int>()) };
+            // (A triangle of a part, faceted: its own corners, wound so that it faces `way`. Places in the map's metres, x
+            // east and z south; into the world, z north.)
+            var tones = new List<int>();
+            void Tri(int part, Vector3 a, Vector3 b, Vector3 c, Vector3 way, int tone = 0)
+            {
+                if (part == 2) tones.AddRange(new[] { tone, tone, tone });
+                Vector3 W(Vector3 p) => new Vector3(p.x, p.y, -p.z);
+                a = W(a); b = W(b); c = W(c);
+                if (Vector3.Dot(Vector3.Cross(b - a, c - a), W(way)) < 0) (b, c) = (c, b);
+                var (v, t) = parts[part];
+                foreach (var p in new[] { a, b, c })
+                {
+                    t.Add(v.Count);
+                    v.Add(p);
+                }
+            }
+            // Its top: the grid's cells wholly on it (a tile wholly on it, one square), flat.
+            void Flat(float x0, float z0, float x1, float z1)
+            {
+                Tri(0, new Vector3(x0, top, z0), new Vector3(x1, top, z0), new Vector3(x1, top, z1), Vector3.up);
+                Tri(0, new Vector3(x0, top, z0), new Vector3(x1, top, z1), new Vector3(x0, top, z1), Vector3.up);
+            }
+            var whole = new HashSet<int>();
+            for (int ty = 0; ty < h; ty++)
+                for (int tx = 0; tx < w; tx++)
+                {
+                    if (!Hill(tx, ty)) continue;
+                    bool flat = true;
+                    for (int py = ty * G; py <= (ty + 1) * G && flat; py++)
+                        for (int px = tx * G; px <= (tx + 1) * G && flat; px++) flat = K(px, py) >= 1;
+                    if (!flat) continue;
+                    whole.Add(ty * w + tx);
+                    Flat(tx * MapSpace.Tile, ty * MapSpace.Tile, (tx + 1) * MapSpace.Tile, (ty + 1) * MapSpace.Tile);
+                }
+            for (int cy = 0; cy < ch; cy++)
+                for (int cx = 0; cx < cw; cx++)
+                    if (!whole.Contains(cy / G * w + cx / G) && K(cx, cy) >= 1 && K(cx + 1, cy) >= 1 && K(cx + 1, cy + 1) >= 1 && K(cx, cy + 1) >= 1)
+                        Flat(cx * unit, cy * unit, (cx + 1) * unit, (cy + 1) * unit);
+            // Its outline: where the grid's field crosses CragLine (a hill's tiles' edge, round at their corners), cell by
+            // cell, joined into rings, each walked again in stretches of CragStretch.
+            var ends = new Dictionary<long, Vector2>();
+            var next = new Dictionary<long, List<long>>();
+            long EdgeKey(int px, int py, bool across) => ((long)py * (cw + 2) + px) * 2 + (across ? 1 : 0);
+            for (int cy = 0; cy < ch; cy++)
+                for (int cx = 0; cx < cw; cx++)
+                {
+                    float k0 = K(cx, cy) - CragLine, k1 = K(cx + 1, cy) - CragLine, k2 = K(cx + 1, cy + 1) - CragLine, k3 = K(cx, cy + 1) - CragLine;
+                    var found = new List<long>();
+                    void Cross(float a, float b, int px, int py, bool across)
+                    {
+                        if ((a >= 0) == (b >= 0)) return;
+                        long key = EdgeKey(px, py, across);
+                        float t = a / (a - b);
+                        ends[key] = new Vector2((px + (across ? t : 0)) * unit, (py + (across ? 0 : t)) * unit);
+                        found.Add(key);
+                    }
+                    Cross(k0, k1, cx, cy, true);
+                    Cross(k1, k2, cx + 1, cy, false);
+                    Cross(k3, k2, cx, cy + 1, true);
+                    Cross(k0, k3, cx, cy, false);
+                    for (int i = 0; i + 1 < found.Count; i += 2)
+                    {
+                        if (!next.TryGetValue(found[i], out var la)) next[found[i]] = la = new List<long>();
+                        if (!next.TryGetValue(found[i + 1], out var lb)) next[found[i + 1]] = lb = new List<long>();
+                        la.Add(found[i + 1]);
+                        lb.Add(found[i]);
+                    }
+                }
+            var done = new HashSet<long>();
+            int rocks = 0;
+            foreach (long start in next.Keys.OrderBy(k => k).ToList())
+            {
+                if (done.Contains(start)) continue;
+                var ring = new List<Vector2>();
+                long at = start, from = -1;
+                while (!done.Contains(at))
+                {
+                    done.Add(at);
+                    ring.Add(ends[at]);
+                    long to = next[at].FirstOrDefault(n => n != from && !done.Contains(n));
+                    if (!next[at].Any(n => n != from && !done.Contains(n))) break;
+                    from = at;
+                    at = to;
+                }
+                if (ring.Count < 8) continue;
+                float length = 0;
+                for (int i = 0; i < ring.Count; i++) length += Vector2.Distance(ring[i], ring[(i + 1) % ring.Count]);
+                // (Stretches of uneven lengths, half CragStretch to twice it, by the place: an even beat reads as made by a
+                // machine. Producto, 18/11.)
+                var marks = new List<float>();
+                for (float sum = 0; sum < length;)
+                {
+                    marks.Add(sum);
+                    var here = ring[Mathf.Min(ring.Count - 1, Mathf.FloorToInt(sum / length * ring.Count))];
+                    sum += CragStretch * Mathf.Lerp(0.6f, 1.9f, (float)BuildingPlan.Hash(Mathf.RoundToInt(here.x * 4), Mathf.RoundToInt(here.y * 4), 230 + marks.Count));
+                }
+                if (marks.Count > 8 && length - marks[marks.Count - 1] < CragStretch * 0.5f) marks.RemoveAt(marks.Count - 1);
+                int n = marks.Count;
+                if (n < 6) continue;
+                var line = new List<Vector2>();
+                float walked = 0;
+                int seg = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    float want = marks[i];
+                    while (walked + Vector2.Distance(ring[seg % ring.Count], ring[(seg + 1) % ring.Count]) < want)
+                    {
+                        walked += Vector2.Distance(ring[seg % ring.Count], ring[(seg + 1) % ring.Count]);
+                        seg++;
+                    }
+                    Vector2 p0 = ring[seg % ring.Count], p1 = ring[(seg + 1) % ring.Count];
+                    line.Add(Vector2.Lerp(p0, p1, Mathf.Clamp01((want - walked) / Mathf.Max(1e-4f, Vector2.Distance(p0, p1)))));
+                }
+                // (Each point's way out: square to the line there, towards the lower of the field.)
+                var outs = new List<Vector2>();
+                for (int i = 0; i < n; i++)
+                {
+                    var along = (line[(i + 1) % n] - line[(i + n - 1) % n]).normalized;
+                    var o = new Vector2(along.y, -along.x);
+                    Vector2 a = line[i] + o * (unit * 2), b = line[i] - o * (unit * 2);
+                    if (K(Mathf.RoundToInt(a.x / unit), Mathf.RoundToInt(a.y / unit)) > K(Mathf.RoundToInt(b.x / unit), Mathf.RoundToInt(b.y / unit))) o = -o;
+                    outs.Add(o);
+                }
+                // Its rings, up from the ground: the scree's foot; the rock's foot on the scree (none by a ladder: the rock
+                // from the ground); two up the rock, each stretch set in or out and higher or lower its own way, a ledge now
+                // and then; its brow; the grass's edge, hanging over the brow here and there; and the grass in to the top.
+                int ringId = Mathf.RoundToInt(line[0].x * 7 + line[0].y * 13);
+                float R(int i, int salt) => (float)BuildingPlan.Hash(Mathf.RoundToInt(line[i].x * 4), Mathf.RoundToInt(line[i].y * 4), salt);
+                Vector3 P(int i, float outBy, float y) => new Vector3(line[i].x + outs[i].x * outBy, y, line[i].y + outs[i].y * outBy);
+                bool ByLadder(int i)
+                {
+                    var q = line[i] + outs[i] * (MapSpace.Tile * 0.5f);
+                    return Ladder(Mathf.FloorToInt(q.x / MapSpace.Tile), Mathf.FloorToInt(q.y / MapSpace.Tile));
+                }
+                var rings = new Vector3[9][];
+                for (int k = 0; k < 9; k++) rings[k] = new Vector3[n];
+                for (int i = 0; i < n; i++)
+                {
+                    bool ladder = ByLadder(i) || ByLadder((i + 1) % n) || ByLadder((i + n - 1) % n);
+                    // (Its foot's scree, wide here and none there: a slow wave round it, by the ring.)
+                    float turn = i / (float)n * Mathf.PI * 2, foot = ladder ? 0 : Mathf.Clamp01(0.5f + 0.75f * Mathf.Sin(turn * 2 + ringId) * Mathf.Sin(turn * 3 + ringId * 0.7f) + 0.25f * (R(i, 201) - 0.5f));
+                    float scree = CragScree * foot * (0.7f + 0.6f * R(i, 215));
+                    float ledge = R(i, 206) < 0.3f ? 0.22f : 0;
+                    // (The scree's foot in the ground's own grass, then its earth: no edge between it and the grass about it.)
+                    rings[7][i] = P(i, 0.14f + (0.5f + 0.14f * R(i, 207)) * foot, -0.06f);
+                    rings[0][i] = P(i, 0.12f + (0.3f + 0.08f * R(i, 214)) * foot, scree * 0.3f);
+                    rings[1][i] = P(i, 0.08f + 0.12f * R(i, 202) * foot, scree);
+                    rings[2][i] = P(i, 0.32f * R(i, 203) + ledge, top * (0.3f + 0.15f * R(i, 204)));
+                    rings[3][i] = P(i, -0.05f + 0.26f * R(i, 205) + ledge * 0.3f, top * (0.62f + 0.14f * R(i, 208)));
+                    rings[4][i] = P(i, 0.02f + 0.1f * R(i, 209), top - 0.14f - 0.1f * R(i, 210));
+                    // (By a ladder the rock stands back, plain: the ladder leans on it, whole in sight.)
+                    if (ladder)
+                    {
+                        rings[1][i] = P(i, 0, 0);
+                        rings[2][i] = P(i, -0.06f, top * 0.35f);
+                        rings[3][i] = P(i, -0.1f, top * 0.68f);
+                        rings[4][i] = P(i, -0.12f, top - 0.14f);
+                    }
+                    // (Its shoulder of bare rock round the top, between its brow and the grass: 15 to 50 cm wide, none at one
+                    // stretch in five, level or up to 13 cm over the grass: seen from behind and above it draws the outline.
+                    // Arturo's 60, Producto, 18/11. No kerb: neither its width nor its height is the same twice.)
+                    float shoulder = ladder || R(i, 211) < 0.2f ? 0.04f : Mathf.Lerp(0.15f, 0.5f, R(i, 212));
+                    rings[8][i] = P(i, -0.02f - shoulder * 0.3f, top + (shoulder > 0.1f ? 0.13f * R(i, 213) : 0));
+                    rings[5][i] = P(i, -shoulder, top + 0.012f);
+                    rings[6][i] = P(i, -shoulder - 0.7f, top + 0.012f);
+                }
+                for (int i = 0; i < n; i++)
+                {
+                    int j = (i + 1) % n;
+                    var way = new Vector3(outs[i].x + outs[j].x, 1.2f, outs[i].y + outs[j].y);
+                    Tri(0, rings[7][i], rings[7][j], rings[0][j], Vector3.up);
+                    Tri(0, rings[7][i], rings[0][j], rings[0][i], Vector3.up);
+                    // (The rock in Nature's two tones, by the face: the upper faces and one in three of the rest the paler.)
+                    int Tone(int k) => k >= 4 || R(i, 240 + k) < 0.35f ? 0 : 1;
+                    var order = new[] { 0, 1, 2, 3, 4, 8, 5, 6 };
+                    for (int q = 0; q + 1 < order.Length; q++)
+                    {
+                        int k = order[q], k2 = order[q + 1];
+                        int part = k == 0 ? 1 : k == 5 ? 0 : 2;
+                        Tri(part, rings[k][i], rings[k][j], rings[k2][j], k >= 4 ? Vector3.up : way, Tone(k));
+                        Tri(part, rings[k][i], rings[k2][j], rings[k2][i], k >= 4 ? Vector3.up : way, Tone(k + 3));
+                    }
+                    // Nature's rocks about it, by the stretch (the same hill, always the same): small ones loose on the
+                    // scree, a larger one half sunk against the rock now and then, and four or so on its edge, over the grass.
+                    if (ByLadder(i)) continue;
+                    // (The loose ones together where the scree is widest, two or three places a crag; not spread about.)
+                    float wide = (rings[7][i] - rings[1][i]).magnitude;
+                    if (wide > 0.55f)
+                    {
+                        rocks += CragStone(P(i, 0.3f + 0.25f * R(i, 221), 0), 0.22f, 0.18f, 0.4f, i + ringId);
+                        if (R(i, 220) < 0.6f) rocks += CragStone(P(i, 0.2f + 0.3f * R(i, 225), 0), 0.2f, 0.15f, 0.3f, i + ringId + 50);
+                    }
+                    else if (R(i, 220) < 0.12f) rocks += CragStone(P(i, 0.25f, 0), 0.6f, 0.6f, 1.0f, i + ringId);
+                    int every = Mathf.Max(3, n / CragEdgeRocks);
+                    if (i % every == Mathf.FloorToInt(R(0, 222) * every) && R(i, 223) < 0.85f) rocks += CragStone(P(i, -0.05f - 0.15f * R(i, 224), top), 0.42f, 0.55f, 1.0f, i + ringId + 500);
+                }
+            }
+            // Nature's rock: its walls' material, and the place in its atlas most of their mesh is painted from.
+            Material rock = null;
+            Vector2 rockUv = new Vector2(0.5f, 0.5f), rockShade = rockUv;
+            var wall = prefabOf(MapArt.ModelKey(MapArt.Prop("cliff")));
+            if (wall != null && wall.GetComponentInChildren<MeshRenderer>() is MeshRenderer wr && wall.GetComponentInChildren<MeshFilter>() is MeshFilter wf)
+            {
+                rock = wr.sharedMaterial;
+                var uvs = wf.sharedMesh != null && wf.sharedMesh.isReadable ? wf.sharedMesh.uv : null;
+                if (uvs != null && uvs.Length > 0) rockUv = rockShade = Common(uvs)[0];
+            }
+            // (Its second tone: the commonest place another of Nature's rocks is painted from that isn't that one.)
+            Vector2[] Common(Vector2[] uvs) => uvs.GroupBy(u => new Vector2(Mathf.Round(u.x * 256) / 256, Mathf.Round(u.y * 256) / 256)).OrderByDescending(g => g.Count()).Select(g => g.Key).Take(4).ToArray();
+            foreach (string id in new[] { "cliff", "cliff2", "boulder", "rock" })
+            {
+                var other = prefabOf(MapArt.ModelKey(MapArt.Prop(id)));
+                var mesh = other != null ? other.GetComponentInChildren<MeshFilter>()?.sharedMesh : null;
+                if (mesh == null || !mesh.isReadable || other.GetComponentInChildren<MeshRenderer>()?.sharedMaterial != rock) continue;
+                var found = Common(mesh.uv);
+                if (Environment.GetEnvironmentVariable("BASTION_COLINA_LOG") == "1") Debug.Log($"[colina] {id}'s tones in the atlas: {string.Join(" ", found.Select(u => u.ToString("F3")))}");
+                if (rockShade == rockUv && found.FirstOrDefault(u => (u - rockUv).sqrMagnitude > 1e-5f) is Vector2 shade && shade != default) rockShade = shade;
+            }
+            var earth = KitMaterials.New(KitMaterials.Plain, "Talud");
+            if (earth != null) earth.color = HillEarth;
+            int total = 0;
+            foreach (var (name, k, material) in new[] { ("Peñascos (cima)", 0, ground), ("Peñascos (talud)", 1, earth), ("Peñascos (roca)", 2, rock ?? earth) })
+            {
+                var (v, t) = parts[k];
+                if (v.Count == 0 || material == null) continue;
+                total += v.Count;
+                var mesh = new Mesh { name = name };
+                if (v.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                mesh.SetVertices(v);
+                mesh.SetTriangles(t, 0);
+                if (k == 2) mesh.SetUVs(0, tones.Select(tone => tone == 0 ? rockUv : rockShade).ToList());
+                mesh.RecalculateNormals();
+                mesh.RecalculateBounds();
+                var o = new GameObject(name);
+                // (Under the ground's plane: its own to the contact occlusion, GroundOcclusion, which leaves the ground's out;
+                // an occluder, it stood in for the ground under it and the top, reading that, came out black.)
+                o.transform.SetParent(plane, false);
+                o.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = o.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = material;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                renderer.receiveShadows = true;
+                if (k != 0) continue;
+                // (Without the ground's contact occlusion: that is of what stands on the ground at its foot, and the top came
+                // out darker than the grass about it: it read as sunk. Producto, 18/11. And where it hangs over the rock,
+                // steep, which the ground's shader leaves its paving's colour: the grass's in the shade.)
+                var block = new MaterialPropertyBlock();
+                block.SetVector("_GroundAOArea", new Vector4(1e7f, 1e7f, 1, 1));
+                block.SetColor("_Pave", HillGrass);
+                renderer.SetPropertyBlock(block);
+            }
+            if (Environment.GetEnvironmentVariable("BASTION_COLINA_LOG") == "1") Debug.Log($"[colina] the crags' meshes: {total} vertices; {rocks} rocks about them");
+        }
+
+        /// <summary>
+        /// One of Nature's rocks by a crag at `at` (the map's metres, x east, z south; y its foot's height): `least` to `most`
+        /// wide, sunk till `high` of it stands over that, turned and sized by `salt`. 1 if placed.
+        /// </summary>
+        int CragStone(Vector3 at, float high, float least, float most, int salt)
+        {
+            if (props == null || props.Length == 0) return 0;
+            int tx = Mathf.Clamp(Mathf.FloorToInt(at.x / MapSpace.Tile), 0, s.Width - 1), ty = Mathf.Clamp(Mathf.FloorToInt(at.z / MapSpace.Tile), 0, s.Height - 1);
+            double R(int k) => BuildingPlan.Hash(Mathf.RoundToInt(at.x * 8), Mathf.RoundToInt(at.z * 8), salt + k);
+            var o = Place(props[0], R(1) < 0.6 ? "rock" : "boulder", new Vector3(at.x, at.y, -at.z), (float)R(2) * 360);
+            if (o == null) return 0;
+            var rs = o.GetComponentsInChildren<Renderer>();
+            if (rs.Length == 0) return 0;
+            Bounds Box()
+            {
+                var box = rs[0].bounds;
+                foreach (var r in rs) box.Encapsulate(r.bounds);
+                return box;
+            }
+            float wide = Mathf.Lerp(least, most, (float)R(3)), now = Mathf.Max(Box().size.x, Box().size.z);
+            if (now > 1e-3f) o.transform.localScale *= wide / now;
+            o.transform.position += Vector3.up * (at.y + high * (0.6f + 0.4f * (float)R(4)) - Box().max.y);
+            Own(o, 0, new[] { ty * s.Width + tx });
+            return 1;
+        }
+
+        /// <summary>
+        /// A hill's mesh: points a tile's side; the tiles either way its outline is rounded over; how far inside a straight
+        /// edge its top is flat, and how far outside it its scree comes down to the ground (tiles).
+        /// </summary>
+        const int HillGrid = 8;
+        const float HillRound = 0.5f, HillIn = 0.15f, HillOut = 0.47f;
+        /// <summary>
+        /// A crag up from its foot (0) to its top (1): its scree to CragFoot, CragScree high (m); its rock to CragBrow, its
+        /// points CragRough either way (m); then its shoulder, CragShoulder under the top (m), and how far down the rock the
+        /// grass hangs at most (CragHang, of that way up).
+        /// </summary>
+        const float CragFoot = 0.3f, CragBrow = 0.9f, CragScree = 0.4f, CragRough = 0.16f, CragShoulder = 0.12f, CragHang = 0.04f;
+        /// <summary>Its outline: where the field is this (a hill's tiles' edge), walked in stretches this long (m); and how many rocks on its edge, about.</summary>
+        const float CragLine = 0.76f, CragStretch = 0.75f;
+        const int CragEdgeRocks = 7;
+        /// <summary>The bare earth of a crag's scree, and its top's grass where it hangs over the rock (linear).</summary>
+        static readonly Color HillEarth = new Color(0.3f, 0.24f, 0.18f), HillGrass = new Color(0.2f, 0.2f, 0.03f);
 
         /// <summary>
         /// The base's pines (mapView.ts dressed, 'basePines') on the tiles of `only` (Key; all of them if null), each on its
@@ -1369,7 +1797,9 @@ namespace Bastion.Client.Map
             var tiles = TilesOf(k);
             var decor = DecorOf(k);
             if (i >= tiles.Count || i >= decor.Count) return;
-            float floor = k * MapSpace.Storey;
+            // (On the ground, on the tile's own height: raised ground's, as mapView.ts has it; left out of the port, what
+            // stands on a hill was drawn at its foot, inside it. A2a, 18/11.)
+            float floor = k * MapSpace.Storey + (k == 0 && s.Elev != null && i < s.Elev.Count ? s.Elev[i] * MapSpace.Storey : 0);
             string tile = tiles[i];
             // A hack's terminal (mapView.ts addDecor 'console': the objective of a hack): its desk, its back to the wall beside it.
             if (tile == "console")

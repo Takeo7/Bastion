@@ -39,6 +39,7 @@ namespace Bastion.Client.Map
             this.storeys = storeys;
             this.width = width;
             this.plan = plan;
+            RuinMap(plan);
             this.place = place;
             this.colours = colours;
         }
@@ -120,7 +121,9 @@ namespace Bastion.Client.Map
                 var at = InMetres(piece.matrix);
                 var thicken = Matrix4x4.Scale(new Vector3(piece.square ? piece.thick : 1, 1, piece.thick));
                 var (outer, inner) = ColoursOf(piece);
-                var more = new Vector4(StoreyOf(piece.building, piece.floor), 0, 0, 0);
+                // (A ruin's: how high it is left standing, RuinTop; its cap goes with what fell.)
+                float ruin = RuinTop(piece);
+                var more = new Vector4(StoreyOf(piece.building, piece.floor), 0, 0, ruin);
                 var cut = CutOf(piece.building, piece.roof, piece.between, piece.outward, piece.floor);
                 Material first = null;
                 foreach (var part in parts)
@@ -143,7 +146,7 @@ namespace Bastion.Client.Map
                     }
                 }
                 // Its cap (buildWalls CAP_QUAD): a lid over its footprint at its top, which the cutaway lowers with the wall.
-                if (piece.cap && first != null && CapBox(piece, parts, thicken) is Bounds box)
+                if (piece.cap && ruin <= 0 && first != null && CapBox(piece, parts, thicken) is Bounds box)
                 {
                     var lid = Matrix4x4.Translate(new Vector3(box.min.x, box.max.y, box.min.z)) * Matrix4x4.Scale(new Vector3(box.size.x, 1, box.size.z));
                     BatchOf(first).AddCap(MapSpace.FromGame(at * lid), inner, cut, new Vector4(more.x, 1, 0, 0));
@@ -153,6 +156,9 @@ namespace Bastion.Client.Map
             if (clear != null)
                 foreach (var pane in glass)
                 {
+                    // (A ruin's window broken under its lintel: no pane, no shards; they stood in the air over the break.)
+                    if (ruinStanding != null && plan != null && pane.building >= 0 && pane.building < plan.Buildings.Count && plan.Buildings[pane.building].kind == BuildingKinds.Ruin
+                        && pane.tile >= 0 && pane.tile < ruinStanding.Length && ruinStanding[pane.tile] < MapSpace.Storey) continue;
                     var cut = CutOf(pane.building, pane.roof, pane.between, pane.outward, pane.floor);
                     if (pane.broken)
                     {
@@ -377,6 +383,103 @@ namespace Bastion.Client.Map
             o.transform.localScale = new Vector3(m.GetColumn(0).magnitude, m.GetColumn(1).magnitude, m.GetColumn(2).magnitude);
             // A shop's sign and a shed's shutter go while their building is cut on their storey (the motel's stands outside).
             if (prop.building >= 0) Cutaway.Current?.Track(o, prop.building, prop.level, true, prop.outward);
+        }
+
+        /// <summary>Whether `piece` is of a ruin's wall on the ground (A2b, 18/11): broken by the shader, to RuinMap's heights.</summary>
+        float RuinTop(WallPiece piece) =>
+            plan != null && piece.building >= 0 && piece.building < plan.Buildings.Count && plan.Buildings[piece.building].kind == BuildingKinds.Ruin && piece.level == 0 && !piece.roof ? 1 : 0;
+
+        /// <summary>A ruin's wall: the least it stands over a tile the engine has as wall (a figure's height), and by a gap (m).</summary>
+        const float RuinLeast = 1.8f, RuinByGap = 2.4f;
+
+        static Texture2D ruinMap;
+        /// <summary>RuinMap's heights by tile, as last made (null: no ruins).</summary>
+        static float[] ruinStanding;
+        static readonly int RuinMapId = Shader.PropertyToID("_RuinMap"), RuinSizeId = Shader.PropertyToID("_RuinSize");
+
+        /// <summary>
+        /// How high each tile of the ruins' walls is left standing (metres over the floor; Bastion/Building's _RuinMap, a
+        /// texel a tile, read between tiles: a stretch falls in a long slope from a high tile to a low one), by the tile:
+        /// a corner the highest of its walls (RuinCorner of a storey); a window's, whole (two in five) or broken under its
+        /// lintel; a plain stretch nearly down (a quarter of them: two or three boards), half way, or nearly whole. A gap
+        /// in line with a wall, or past its end, low: the wall comes down to it. Any other tile, as the walls beside it, so
+        /// that a wall is cut the same through its thickness.
+        /// </summary>
+        public static void RuinMap(BuildingPlan plan)
+        {
+            var s = plan?.S;
+            // (BASTION_SIN_RUINA=1, a lab's: its walls whole and nothing fallen, to weigh a frame with and without.)
+            if (s == null || !plan.Buildings.Any(b => b.kind == BuildingKinds.Ruin) || Environment.GetEnvironmentVariable("BASTION_SIN_RUINA") == "1")
+            {
+                Shader.SetGlobalVector(RuinSizeId, Vector4.zero);
+                ruinStanding = null;
+                return;
+            }
+            int w = s.Width, h = s.Height;
+            const float S = MapSpace.Storey;
+            bool Wall(int x, int y) => x >= 0 && y >= 0 && x < w && y < h && BuildingPlan.IsWallLike(s.Tiles[y * w + x]);
+            bool Ruined(int x, int y) => Wall(x, y) && plan.Owner[y * w + x] >= 0 && plan.Buildings[plan.Owner[y * w + x]].kind == BuildingKinds.Ruin;
+            var high = new float[w * h];
+            int walls = 0, low = 0;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    if (!Ruined(x, y)) continue;
+                    float k = (float)BuildingPlan.Hash(x, y, 91), k2 = (float)BuildingPlan.Hash(x, y, 92);
+                    bool along = Wall(x + 1, y) || Wall(x - 1, y), across = Wall(x, y - 1) || Wall(x, y + 1);
+                    string tile = s.Tiles[y * w + x];
+                    // (Producto, 18/11: a tile the engine has as wall hides and isn't walked: none drawn lower than one standing,
+                    // RuinLeast, but in its last quarter by a gap: by a gap, RuinByGap at least, so that it is so. Before, a
+                    // quarter of the plain ones 40–70 cm high and a half under 2.2 m: `was`, counted for the log.)
+                    float was = along && across ? S : tile != Bastion.Engine.TileKinds.Wall ? S : k < 0.25f ? Mathf.Lerp(0.4f, 0.7f, k2) : k < 0.75f ? S * Mathf.Lerp(0.35f, 0.65f, k2) : S;
+                    if (was < RuinLeast) low++;
+                    bool byGap = (along && !(Wall(x + 1, y) && Wall(x - 1, y))) || (across && !(Wall(x, y - 1) && Wall(x, y + 1))) || !(along || across);
+                    // (A window's, whole in its middle: its sides go as the walls beside it do, half a window; never two jambs alone.)
+                    float standing = along && across ? S * Mathf.Lerp(0.8f, 1.0f, k)
+                        : tile != Bastion.Engine.TileKinds.Wall ? S * 1.15f
+                        : k < 0.5f ? Mathf.Lerp(RuinLeast, 2.3f, k2) : S * Mathf.Lerp(0.72f, 0.95f, k2);
+                    high[y * w + x] = byGap && !(along && across) ? Mathf.Max(standing, RuinByGap) : standing;
+                    walls++;
+                }
+            if (Environment.GetEnvironmentVariable("BASTION_RUINA_LOG") == "1") Debug.Log($"[ruina] {walls} wall tiles in ruins; {low} of them were drawn under {RuinLeast} m before the rule, none now");
+            var all = new float[w * h];
+            var dirs = new[] { (1, 0), (-1, 0), (0, 1), (0, -1) };
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int i = y * w + x;
+                    if (Ruined(x, y))
+                    {
+                        all[i] = high[i];
+                        continue;
+                    }
+                    float sum = 0;
+                    int n = 0;
+                    bool gap = false;
+                    foreach (var (dx, dy) in dirs)
+                    {
+                        if (!Ruined(x + dx, y + dy)) continue;
+                        sum += high[(y + dy) * w + x + dx];
+                        n++;
+                        // (That wall runs on the way it lies from here, or stands alone: this is its gap, or past its end.)
+                        if (Wall(x + 2 * dx, y + 2 * dy) || !(Wall(x + dx + dy, y + dy + dx) || Wall(x + dx - dy, y + dy - dx))) gap = true;
+                    }
+                    all[i] = n == 0 ? 0 : gap ? 0.2f : sum / n;
+                }
+            if (ruinMap == null || ruinMap.width != w || ruinMap.height != h)
+            {
+                if (ruinMap != null)
+                {
+                    if (Application.isPlaying) UnityEngine.Object.Destroy(ruinMap);
+                    else UnityEngine.Object.DestroyImmediate(ruinMap);
+                }
+                ruinMap = new Texture2D(w, h, TextureFormat.RFloat, false, true) { name = "Ruinas", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            }
+            ruinStanding = all;
+            ruinMap.SetPixelData(all, 0);
+            ruinMap.Apply(false);
+            Shader.SetGlobalTexture(RuinMapId, ruinMap);
+            Shader.SetGlobalVector(RuinSizeId, new Vector4(w, h, 1, 0));
         }
 
         /// <summary>

@@ -721,11 +721,25 @@ namespace Bastion.Client.Map
                     // Ladders: against the side of the tile one storey up, whatever it is (a building's roof one walks on,
                     // too); a building's stairs, every tile of a flight, are drawn as stairs (BuildingSurfaces).
                     if (TileIn(s.Tiles, i) == TileKinds.Ladder && Flights.FlightAt(s, new Pos { X = x, Y = y, Z = 0 }) == null)
+                    {
+                        bool leant = false;
                         foreach (var d in dirs)
                         {
                             bool up = Elev(x + d.X, y + d.Y) == e + 1 || (e == 0 && Bastion.Engine.Grid.IsWalkable(plan.KindAt(x + d.X, y + d.Y, 1)));
-                            if (up) Stand("ladder", x + 0.5f + d.X * 0.44f, e * Storey, y + 0.5f + d.Y * 0.44f, new Vec2 { X = -d.X, Y = -d.Y });
+                            if (!up) continue;
+                            // (Against a hill's crag, leant on its rock: its foot further out, its top at the edge. A2a, 18/11.)
+                            bool crag = InMap(x + d.X, y + d.Y) && plan.Raised[(y + d.Y) * w + x + d.X] == BuildingPlan.RaisedHill;
+                            if (!crag) Stand("ladder", x + 0.5f + d.X * 0.44f, e * Storey, y + 0.5f + d.Y * 0.44f, new Vec2 { X = -d.X, Y = -d.Y });
+                            // (One a tile: in a crag's inside corner two leant across each other.)
+                            else if (!leant && (leant = true))
+                                Pieces.Add(new WallPiece
+                                {
+                                    id = "ladder", thick = 1, building = -1, level = level, tile = tile, floor = e * Storey, outward = new Vector2(-d.X, -d.Y),
+                                    matrix = Matrix4x4.Translate(new Vector3(x + 0.5f + d.X * (0.5f - CragLadderOut), e * Storey, y + 0.5f + d.Y * (0.5f - CragLadderOut)))
+                                        * Map.Pieces.RotationY(Yaw(new Vec2 { X = -d.X, Y = -d.Y })) * Matrix4x4.Rotate(Quaternion.Euler(CragLadderLean, 0, 0)),
+                                });
                         }
+                    }
                     // On a storey: a ladder up to the next one.
                     for (int k = 1; k <= storeys; k++)
                     {
@@ -755,14 +769,8 @@ namespace Bastion.Client.Map
                         float ex = x + 0.5f + d.X * 0.5f, ez = y + 0.5f + d.Y * 0.5f;
                         if (style == BuildingPlan.RaisedHill)
                         {
-                            // Two rocks stacked up the side, each its own way, bulging out a little.
-                            double R(int salt) => BuildingPlan.Hash(x * 4 + d.X + 2, y * 4 + d.Y + 2, salt);
-                            for (int k = low; k < e; k++)
-                            {
-                                float b0 = k * Storey;
-                                Rock(R(1) < 0.5 ? "cliff" : "cliff2", ex - d.X * 0.02f, b0 - 0.25f, ez - d.Y * 0.02f, d, 1.9f + (float)R(2) * 0.3f, 1.0f + (float)R(3) * 0.25f, R(4) < 0.5 ? 0 : Mathf.PI);
-                                Rock(R(5) < 0.5 ? "cliff" : "cliff2", ex - d.X * 0.08f, b0 + 1.0f, ez - d.Y * 0.08f, d, 1.6f + (float)R(6) * 0.3f, 0.9f + (float)R(7) * 0.25f, R(8) < 0.5 ? 0 : Mathf.PI);
-                            }
+                            // (A hill's sides are its own slopes, one mesh a hill: MapBuilder.HillTops. Arturo's 58, 18/11,
+                            // «Loma de hierba»: rock faces a tile's side crossed at every corner, a wall in zigzag.)
                             continue;
                         }
                         if (style == BuildingPlan.RaisedPlatform)
@@ -796,9 +804,9 @@ namespace Bastion.Client.Map
             return t != null && t != TileKinds.Roof && !IsWallLike(t);
         }
 
-        /// <summary>A rock of a hill's side, its face out towards `o`, stretched `tall` times, turned `turn` (it lies along x).</summary>
-        void Rock(string id, float x, float @base, float z, Vec2 o, float tall, float along, float turn) =>
-            Prop(id, Compose(x, @base, z, Mathf.Atan2(o.X, o.Y) + Mathf.PI / 2 + turn, new Vector3(along, tall, 1.7f)), -1);
+        /// <summary>A ladder against a hill's crag: how far out from the hill's edge its foot stands (tiles), and its lean (degrees).</summary>
+        static readonly float CragLadderOut = Number("BASTION_ESCALERA_FUERA", 0.3f), CragLadderLean = Number("BASTION_ESCALERA_INCLINA", -11f);
+        static float Number(string name, float or) => float.TryParse(System.Environment.GetEnvironmentVariable(name), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : or;
 
         void LayTile(int x, int y, IReadOnlyList<Vec2> dirs, Func<Building, int, int, bool> shopFront, Dictionary<int, int> signDoor, Dictionary<int, float> shutters,
             Action<Building, float, float, float, Vec2, float, float> shutter, Action<Building, float, float, float, Vec2> sign)

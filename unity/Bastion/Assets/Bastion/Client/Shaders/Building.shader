@@ -50,7 +50,7 @@ Shader "Bastion/Building"
         float4 inner : TEXCOORD3;
         // Pieces: the building (+1), the way out (x, z in 0.10.1's frame; ON_ROOF), the floor (m).
         float4 cut : TEXCOORD4;
-        // Pieces: the storey, a cap (1); a pane lit by night (1).
+        // Pieces: the storey, a cap (1); a pane lit by night (1); a ruin's wall (1).
         float4 more : TEXCOORD5;
         UNITY_VERTEX_INPUT_INSTANCE_ID
     };
@@ -67,6 +67,8 @@ Shader "Bastion/Building"
         // How high it is drawn up to (m), how far it has faded, whether it is a cap, a pane lit by night.
         float4 cut : TEXCOORD6;
         half fogFactor : TEXCOORD7;
+        // A ruin's wall (1), and its floor's height.
+        float2 ruin : TEXCOORD8;
         UNITY_VERTEX_INPUT_INSTANCE_ID
     };
 
@@ -97,6 +99,9 @@ Shader "Bastion/Building"
         output.inner = input.inner;
         output.cut = float4(top, fade, input.more.y, input.more.z);
         output.fogFactor = ComputeFogFactor(output.positionCS.z);
+        #if !defined(_SWATCH)
+            output.ruin = float2(input.more.w, input.cut.w);
+        #endif
         return output;
     }
 
@@ -233,9 +238,30 @@ Shader "Bastion/Building"
         return lerp(albedo, snow, cap * 0.96);
     }
 
+    // A ruin's wall (A2b, Arturo 18/11: «Que parezca caída»; its walls stood whole, cut straight, a house without its
+    // roof): left standing up to what _RuinMap has there (a texel a tile, metres over its floor, read between tiles: each
+    // stretch falls in a long slope from a high tile to a low one, WallsView.RuinMap), its top broken board by board
+    // (0.21 m along the wall, x + z: its walls run along one or the other; each ends its own way under that, 0.22 m at
+    // most). The same in every pass: its shadow and its depth are broken too.
+    TEXTURE2D(_RuinMap);
+    SAMPLER(sampler_RuinMap);
+    float4 _RuinSize;
+
+    float RuinHash(float n)
+    {
+        return frac(sin(n * 127.1 + 311.7) * 43758.5453);
+    }
+
     void Clip(BuildingVaryings input)
     {
         if (input.positionWS.y > input.cut.x || CutDither(input.positionCS.xy) < input.cut.y) discard;
+        if (input.ruin.x > 0.5 && _RuinSize.z > 0.5)
+        {
+            float2 uv = float2(input.positionWS.x, -input.positionWS.z) / 1.5 / _RuinSize.xy;
+            float standing = SAMPLE_TEXTURE2D_LOD(_RuinMap, sampler_RuinMap, uv, 0).r;
+            float board = floor((input.positionWS.x + input.positionWS.z) / 0.21);
+            if (input.positionWS.y > input.ruin.y + standing - RuinHash(board) * 0.22) discard;
+        }
     }
     ENDHLSL
 
@@ -309,6 +335,16 @@ Shader "Bastion/Building"
                     if (!front) albedo = half3(0.16, 0.15, 0.14);
                     // A wall's cap: the section of a solid wall, a plain grey a little of the building's inside colour.
                     if (input.cut.z > 0.5) albedo = half3(0.34, 0.32, 0.3) * lerp(half3(1, 1, 1), input.inner.rgb, 0.35);
+                    // A ruin's: greyer and dirtier than a house's, each board its own shade, one in seven burnt; and through
+                    // the break, the wood's section, not the flat dark of a wall's back.
+                    if (input.ruin.x > 0.5)
+                    {
+                        float grey = dot(albedo, half3(0.3, 0.59, 0.11));
+                        albedo = lerp(albedo, grey * half3(0.9, 0.88, 0.84), 0.55) * 0.78;
+                        float row = floor(input.positionWS.y / 0.19), stretch = floor((input.positionWS.x + input.positionWS.z) / 1.5);
+                        albedo *= RuinHash(row * 13.0 + stretch * 7.0) < 0.14 ? 0.35 : 0.85 + 0.3 * RuinHash(row * 5.0 + stretch * 3.0);
+                        if (!front) albedo = half3(0.3, 0.22, 0.15) * (0.7 + 0.5 * RuinHash(floor((input.positionWS.x + input.positionWS.z) / 0.21)));
+                    }
                 #endif
                 albedo *= _BaseColor.rgb;
                 #if !defined(_GLASS)
