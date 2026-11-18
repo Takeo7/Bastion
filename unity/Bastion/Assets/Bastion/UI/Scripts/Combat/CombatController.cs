@@ -843,6 +843,14 @@ namespace Bastion.UI.Combat
                     if (marking || GameInput.Pressed(GameInput.Button.Middle)) Ping(down);
                     else OverheadClick(down);
                 }
+                // Shift or Alt and the wheel, the floor, as in the view (U17: without them the wheel brings it closer, the
+                // camera's; a Mac's Shift turns the wheel sideways).
+                var turned = GameInput.Wheel.y != 0 ? GameInput.Wheel.y : GameInput.Wheel.x;
+                if ((marking || GameInput.Alt) && turned != 0 && !overHud && (Hud == null || !Hud.MenuOpen))
+                {
+                    if (Time.unscaledTime - lastFloorWheel > 0.3f) SetLevel(Level + (turned > 0 ? 1 : -1));
+                    lastFloorWheel = Time.unscaledTime;
+                }
                 return;
             }
             RightClick(at, overHud);
@@ -1313,6 +1321,8 @@ namespace Bastion.UI.Combat
             ShowWayMarks();
             // Shift held: everything to search instead (U11). Else what the picked one searches from where it stands, with
             // no pointer (U14), and what the pointer marks besides.
+            // The rooms still to search too, with Mayús (U18); made again with the marks.
+            ShowRooms(lootAll);
             if (lootAll)
             {
                 ShowSearchMarks(AllToSearch());

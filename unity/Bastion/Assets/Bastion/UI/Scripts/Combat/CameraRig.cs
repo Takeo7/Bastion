@@ -127,11 +127,18 @@ namespace Bastion.UI.Combat
         /// </summary>
         public bool Overhead { get; private set; }
 
-        public void EnterOverhead(Vector3 centre, float metres)
+        /// <summary>From above, how near and how far the wheel and the fingers take it (U17): a few rooms, or the whole map.</summary>
+        float overNear, overFar;
+
+        /// <summary>`near` and `far` (metres): the wheel's bounds up there (none given, it stays at `metres`).</summary>
+        public void EnterOverhead(Vector3 centre, float metres, float near = 0, float far = 0)
         {
             if (Overhead) return;
             beforeOverhead = (desiredYaw, desiredDistance, desiredTarget);
             Overhead = true;
+            overNear = near > 0 ? Mathf.Min(near, metres) : metres;
+            overFar = Mathf.Max(far, metres);
+            dragging = false;
             closeOn = false;
             savedDistance = null;
             zoomSpring = false;
@@ -259,9 +266,11 @@ namespace Bastion.UI.Combat
             // #4); the menu has the keys meanwhile.
             if (Time.timeScale == 0) return;
             var dt = Time.unscaledDeltaTime;
-            // From above, the player's keys and pointer are the map's (the controller's): it only finishes its move.
+            // From above, the clicks are the map's (the controller's); the wheel and the fingers bring it closer or take it
+            // further, and it is moved round once closer (OverheadInput).
             if (Overhead)
             {
+                OverheadInput(dt);
                 Step(dt);
                 return;
             }
@@ -428,6 +437,70 @@ namespace Bastion.UI.Combat
         }
 
         static float Smoother(float t) => t * t * t * (t * (t * 6 - 15) + 10);
+
+        /// <summary>
+        /// From above (U17, Arturo 18/11: «debería poder hacerse zoom en el mapa», the combat's map, M): the wheel, or two
+        /// fingers' pinch, closer or further between overNear and overFar, the ground under the pointer kept under it; with
+        /// Shift or Alt the wheel is the floor's (the controller's), over the HUD the HUD's. The right button dragged, a
+        /// finger dragged, or the keys move it round, within the map. Straight down all the while: the map, not the game's
+        /// view.
+        /// </summary>
+        void OverheadInput(float dt)
+        {
+            if (Held != null && Held()) return;
+            var keys = !GameInput.SystemHeld && GameInput.HasKeys;
+            // The ground a pixel spans up there (straight down): the drags move it under the pointer, one for one.
+            var perPixel = 2 * distance * Mathf.Tan(Camera.fieldOfView * 0.5f * Mathf.Deg2Rad) / Mathf.Max(1, Screen.height);
+            if (GameInput.HasPointer && !GameInput.Touch)
+            {
+                var at = GameInput.Point;
+                var wheel = GameInput.Wheel.y;
+                if (wheel != 0 && (!keys || !GameInput.Shift && !GameInput.Alt) && (OverHud == null || !OverHud(at)))
+                    OverheadZoom(1 - Mathf.Clamp(wheel * WheelZoom, -0.45f, 0.45f), at);
+                if (RightDrag && GameInput.Pressed(GameInput.Button.Secondary))
+                {
+                    dragging = true;
+                    dragFrom = at;
+                }
+                if (!GameInput.Held(GameInput.Button.Secondary)) dragging = false;
+                if (dragging && at != dragFrom)
+                {
+                    Pan(-(at.x - dragFrom.x) * perPixel, -(at.y - dragFrom.y) * perPixel);
+                    dragFrom = at;
+                }
+            }
+            if (keys)
+            {
+                var speed = 24f * dt * (distance / 36f);
+                var forward = (GameInput.Held(GameInput.Key.Forward) ? speed : 0) - (GameInput.Held(GameInput.Key.Backward) ? speed : 0);
+                var right = (GameInput.Held(GameInput.Key.Right) ? speed : 0) - (GameInput.Held(GameInput.Key.Left) ? speed : 0);
+                if (right != 0 || forward != 0) Pan(right, forward);
+            }
+            if (GameInput.Touch)
+            {
+                if (GameInput.Drag != Vector2.zero) Pan(-GameInput.Drag.x * perPixel, -GameInput.Drag.y * perPixel);
+                if (GameInput.Pinch != 1) OverheadZoom(1 / GameInput.Pinch, null);
+            }
+        }
+
+        /// <summary>From above, `factor` times as far (within overNear and overFar), the ground under `at` (screen pixels) kept there.</summary>
+        void OverheadZoom(float factor, Vector2? at)
+        {
+            var before = desiredDistance;
+            var after = Mathf.Clamp(before * factor, overNear, overFar);
+            if (Mathf.Abs(after - before) < 1e-3f) return;
+            // The point under the pointer on the ground, and the middle drawn towards it (or away) by the same share.
+            if (at is Vector2 p && Camera != null)
+            {
+                var ray = Camera.ScreenPointToRay(p);
+                if (Mathf.Abs(ray.direction.y) > 1e-4f)
+                {
+                    var g = ray.origin + ray.direction * ((desiredTarget.y - ray.origin.y) / ray.direction.y);
+                    desiredTarget = Clamp(g + (desiredTarget - g) * (after / before));
+                }
+            }
+            desiredDistance = after;
+        }
 
         void Pan(float right, float forward)
         {

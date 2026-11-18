@@ -9,7 +9,8 @@ namespace Bastion.Client.Units
     /// <summary>
     /// The line round what a soldier would search (Arturo's #12 of 5/11: «que no se resalte la casilla sino el cuerpo o el
     /// coche»; UI's CombatController.ShowSearchMarks, its rucksack over it): the body lying on each tile asked
-    /// (Looting.BodyAt) or the car over it (its boot's tile, Looting.SearchSpot), Bastion/Mark's line round it in UI's
+    /// (Looting.BodyAt) or the boot's lid of the car over it (its boot's tile, Looting.SearchSpot; the lid alone, Arturo's
+    /// of 19/11: CarBoot.OnlyLid), Bastion/Mark's line round it in UI's
     /// colour, lit where a click searches it, else far. A body takes the line as a pass more over its own renderers
     /// (UnitViews.BodyRenderers), as the target's mark does; a car is joined into the map's still batch, so a copy of it
     /// stands over it with the line alone (MapView.CarCopy). And what else a soldier opens, searches or pries (Arturo's #3
@@ -77,7 +78,8 @@ namespace Bastion.Client.Units
                 // (A door's leaf is cut low by the cutaway, or dark in an unfound building: its line seen through, round all of it.)
                 var at = pair.Value.thing;
                 string kind = at != null && s != null ? Bastion.Engine.Grid.KindAt(s, at) : null;
-                var material = MaterialOf(pair.Value.colour, kind == TileKinds.Door || kind == TileKinds.DoorOpen);
+                // (So too a car's boot lid, a part of its body: its line lies on the car, which would hide it.)
+                var material = MaterialOf(pair.Value.colour, kind == TileKinds.Door || kind == TileKinds.DoorOpen || pair.Value.car >= 0);
                 if (material == null) return;
                 if (shown.TryGetValue(pair.Key, out var now))
                 {
@@ -142,6 +144,8 @@ namespace Bastion.Client.Units
         {
             if (s == null || at == null) return null;
             var body = Looting.BodyAt(s, at) ?? FallenAt(s, at);
+            // (A car's: its boot's lid, what is outlined, not its roof.)
+            if (body == null && CarAt(s, at) is int car && car >= 0 && MapView.Current?.BootTop(car) is float lid) return lid;
             if (body == null) return MapView.Current?.TopOf(at);
             var renderers = UnitViews.Current?.BodyRenderers(body.Id)?.Where(r => r != null).ToList();
             return renderers != null && renderers.Count > 0 ? renderers.Max(r => r.bounds.max.y) : (float?)null;
@@ -175,6 +179,9 @@ namespace Bastion.Client.Units
                 else Object.DestroyImmediate(copy);
             }
         }
+
+        /// <summary>The line's material in `colour` (a lab's: MapLab.CarBoots).</summary>
+        public static Material LineMaterial(Color colour, bool through = false) => MaterialOf(colour, through);
 
         /// <summary>Bastion/Mark with its line alone, in `colour` (sRGB, as UI's), seen `through` what is before it or not, made the first time.</summary>
         static Material MaterialOf(Color colour, bool through = false)

@@ -115,7 +115,8 @@ namespace Bastion.Engine.Tests
             // The Rescates kept in reach (N3) are normal fights made Rescates.
             Assert.InRange(Share(NodeKinds.Normal), 0.30, 0.65);
             Assert.InRange(Share(RunMap.Specials.ToArray()), 0.20, 0.45);
-            Assert.InRange(Share(NodeKinds.Stops.ToArray()), 0.10, 0.30);
+            // (Stops more since G22's Refuges, some 3 a map: cuadro 76.)
+            Assert.InRange(Share(NodeKinds.Stops.ToArray()), 0.15, 0.45);
             Assert.All(NodeKinds.Stops, (k) => Assert.True(counts.ContainsKey(k), k));
             Assert.All(RunMap.Specials, (k) => Assert.True(counts.ContainsKey(k), k));
             // H5's four too.
@@ -125,8 +126,13 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void ATradeInReachFromEveryStart()
         {
+            // Since G22 (cuadro 72: «el Trueque cede»), from most starts: the Refuges are placed first, and two stops are
+            // never in a row (.dev-snapshots/gameplay/g21-g22/G22-VOLVER.md: 83 %); one on every map.
+            int starts = 0, with = 0, none = 0;
             foreach (var (seed, map) in Maps())
             {
+                // (One on every map but where none fits: Refuges round every place left for it, some 1 map in 75.)
+                if (!map.Any((n) => n.Kind == NodeKinds.Trade)) none++;
                 foreach (var start in map.Where((n) => n.Row == 1))
                 {
                     var seen = new HashSet<string>();
@@ -135,9 +141,12 @@ namespace Bastion.Engine.Tests
                     {
                         next = next.SelectMany((id) => Get(map, id).Next).Where(seen.Add).ToList();
                     }
-                    Assert.True(seen.Any((id) => Get(map, id).Kind == NodeKinds.Trade), $"seed {seed}: no Trade from {start.Id}");
+                    starts++;
+                    if (seen.Any((id) => Get(map, id).Kind == NodeKinds.Trade)) with++;
                 }
             }
+            Assert.InRange(with / (double)starts, 0.75, 1);
+            Assert.InRange(none, 0, Seeds / 50);
         }
 
         [Fact]

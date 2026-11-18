@@ -3407,14 +3407,21 @@ namespace Bastion.UI.Combat
         /// What a run's search found (H3: the event's Packed and Floor), over it and in the log: the things by Lore's names
         /// («Granada · 12 §»), and what didn't fit in the pack, left at its feet; «Nada» when nothing.
         /// </summary>
+        /// <summary>For the labs (U19): what a search found, made by hand, over `at` and in the log, as a run's search says it.</summary>
+        public void LabFound(Vector3 at, string who, List<Bastion.Engine.Gear> floor) => FoundGear(at, who, null, floor);
+
         void FoundGear(Vector3 at, string who, List<Placed> packed, List<Bastion.Engine.Gear> floor)
         {
-            // The supplies in one figure each, however many piles they went into (the pass of 17/11: «65 §, 35 § y 17 §»).
+            // The supplies in one figure each, however many piles they went into (the pass of 17/11: «65 §, 35 § y 17 §»); and
+            // the same things together, two pistols as one entry of two (U19, Red's R8: «una pistola y una pistola»).
             static List<Bastion.Engine.Gear> Merged(IEnumerable<Bastion.Engine.Gear> gear)
             {
                 var list = gear.ToList();
                 var supplies = list.Where(g => g.Kind == GearKinds.Supplies).Sum(g => g.Count);
-                var rest = list.Where(g => g.Kind != GearKinds.Supplies).ToList();
+                var rest = list.Where(g => g.Kind != GearKinds.Supplies)
+                    .GroupBy(g => (g.Kind, g.Type))
+                    .Select(same => new Bastion.Engine.Gear { Kind = same.Key.Kind, Type = same.Key.Type, Count = same.Sum(g => Math.Max(1, g.Count)) })
+                    .ToList();
                 if (supplies > 0) rest.Insert(0, new Bastion.Engine.Gear { Kind = GearKinds.Supplies, Count = supplies });
                 return rest;
             }

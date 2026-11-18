@@ -45,6 +45,11 @@ namespace Bastion.Engine
         public const string NotNext = "Desde aquí no se llega a esa etapa.";
         public const string NotSeen = "Esa etapa aún no se ve.";
         public const string EndFromMap = "Solo se vuelve a la base desde el mapa.";
+        /// <summary>
+        /// G22 (Arturo, 18/11, cuadro 72): back to the base only from a Refugio, or by itself once the chapter's boss is
+        /// beaten (ChapterDone). An expedition started before keeps EndFromMap.
+        /// </summary>
+        public const string EndFromRefuge = "Solo se vuelve a la base desde un Refugio o al superar el capítulo.";
         public const string NotAtStop = "No estáis en una parada.";
         public const string NothingToAnswer = "Aquí no hay nada que responder.";
         public const string Answered = "Eso ya está respondido.";

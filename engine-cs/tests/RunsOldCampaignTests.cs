@@ -102,6 +102,8 @@ namespace Bastion.Engine.Tests
                     played++;
                     Same(before, c, $"{n.Kind} fought");
                 }
+                // (Home from the map: a run of before G22's, for this test.)
+                if (c.Run != null) c.Run.HomeFromRefuge = null;
                 if (c.Run != null) Order(new EndRunCommand());
                 Same(before, c, "back home");
                 // Every order of before: refused, and nothing of before changes.

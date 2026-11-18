@@ -79,6 +79,14 @@ namespace Bastion.UI.Strategy
                 while (control?.State == null) await Awaitable.WaitForSecondsAsync(0.25f, ct);
                 for (var waited = 0f; root.ModalOpen && waited < 15; waited += 0.25f) await Awaitable.WaitForSecondsAsync(0.25f, ct);
                 await Awaitable.WaitForSecondsAsync(1.5f, ct);
+                // A new game shows Salir alone till back from the first expedition (U16): its screen, said, and no proposal
+                // (Mejoras is shut).
+                if (control.FirstTime)
+                {
+                    Debug.Log("[pestañas] partida nueva: solo «Salir» hasta volver de la primera expedición");
+                    Shot(folder, "pestana-salir");
+                    return;
+                }
                 var tabs = new[] { BaseViews.Stash, BaseViews.Barracks, BaseViews.Upgrades, BaseViews.Squad };
                 for (var i = 0; i < tabs.Length; i++)
                 {

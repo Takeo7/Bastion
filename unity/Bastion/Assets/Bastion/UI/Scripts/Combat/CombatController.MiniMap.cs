@@ -6,8 +6,8 @@ namespace Bastion.UI.Combat
     /// The map from above (Arturo, 31/10 #12; 01/11: «el minimapa es muy minimapa»): M (its key on the HUD went with
     /// UI-COMBATE v1.0) takes the camera straight up over the map, north up and far enough for all the squad has explored
     /// (the whole map with no fog), with what the fog lets be seen; a click on the ground brings it back down there, and M
-    /// or Esc back where it was. Up there the marks of a move go, a click orders nothing, and nothing else moves the
-    /// camera (CameraRig.Overhead).
+    /// or Esc back where it was. Up there the marks of a move go, a click orders nothing; the wheel or the fingers bring it
+    /// closer or further and drag it round (U17, CameraRig.OverheadInput), and nothing else moves the camera.
     /// </summary>
     public sealed partial class CombatController
     {
@@ -16,6 +16,8 @@ namespace Bastion.UI.Combat
         /// <summary>Tiles round what has been explored, and the least it frames (tiles a side).</summary>
         const int OverheadMargin = 2;
         const int OverheadLeast = 20;
+        /// <summary>The nearest the wheel takes it up there (U17), in tiles high: still the map, a few rooms of it.</summary>
+        const int OverheadNearest = 14;
 
         bool Overhead => Rig != null && Rig.Overhead;
 
@@ -24,22 +26,33 @@ namespace Bastion.UI.Combat
         void ToggleMiniMap()
         {
             if (Rig == null || State == null) return;
-            if (Overhead) Rig.LeaveOverhead();
+            if (Overhead)
+            {
+                Rig.LeaveOverhead();
+                // (Mayús's rooms back to the view's, not over the roofs: U18.)
+                if (lootAll) ShowWay();
+            }
             else
             {
                 // Not over a shoulder: an aim let go first.
                 if (mode == Mode.Target) CancelMode();
                 var box = Explored();
-                var w = box.width * Board.Tile;
-                var h = box.height * Board.Tile;
-                var tan = Mathf.Tan(Rig.Camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-                var metres = Mathf.Max(h / 2 / tan, w / 2 / (tan * Rig.Camera.aspect)) / OverheadRoom;
-                Rig.EnterOverhead(new Vector3(box.center.x * Board.Tile, 0, -box.center.y * Board.Tile), metres);
+                // As far as frames what was explored; the wheel from OverheadNearest tiles high to the whole map (U17).
+                var metres = Framing(box.width, box.height);
+                Rig.EnterOverhead(new Vector3(box.center.x * Board.Tile, 0, -box.center.y * Board.Tile), metres,
+                    Framing(OverheadNearest * Rig.Camera.aspect, OverheadNearest), Framing(State.Width, State.Height));
                 hover = null;
                 ShowWay();
                 RefreshFlags();
             }
             Hud?.SetMiniMap(Overhead);
+        }
+
+        /// <summary>How far up a rectangle `w` by `h` tiles fills the room the map has on the screen (OverheadRoom), straight down.</summary>
+        float Framing(float w, float h)
+        {
+            var tan = Mathf.Tan(Rig.Camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            return Mathf.Max(h * Board.Tile / 2 / tan, w * Board.Tile / 2 / (tan * Rig.Camera.aspect)) / OverheadRoom;
         }
 
         /// <summary>

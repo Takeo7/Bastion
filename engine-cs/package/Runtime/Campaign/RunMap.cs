@@ -1,8 +1,8 @@
 #nullable enable
 // A chapter's node map (H1: .dev-snapshots/gameplay/runs/H0-DISENO.md §4, PLAN-RUNS.md §3.1; new in C#), made from the
 // run's seed: 7 rows, rows 1–5 of 3 or 4 nodes, row 6 a Refuge every node of row 5 leads to, row 7 the boss. Each node
-// leads to 1 or 2 of the next row and no two links cross; every node is reached and leads on. What can be seen of it,
-// and the map a fight is played on.
+// leads to 1 or 2 of the next row and no two links cross; every node is reached and leads on. A Refuge in reach every
+// two rows (G22). What can be seen of it, and the map a fight is played on.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,17 +33,26 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> NewSpecials = new[] { NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite };
 
         /// <summary>
-        /// What a node of rows 2–5 is, in percent: normal 50, special 25, stops 25 (Refuge 10, Trade 8, Event 7). The
-        /// Superviviente's 5 went to the normal ones (N3, 17/11).
+        /// What a node of rows 2–5 is, in percent: normal 60, special 25, stops 15 (Trade 8, Event 7). The Superviviente's 5
+        /// went to the normal ones (N3, 17/11); the Refuge's 10 too, since the Refuges are placed where they are wanted
+        /// (G22: RefugesInReach).
         /// </summary>
         private static readonly IReadOnlyList<(string Kind, int Weight)> Mix = new[]
         {
-            (NodeKinds.Normal, 50),
+            (NodeKinds.Normal, 60),
             ("special", 25),
-            (NodeKinds.Refuge, 10),
             (NodeKinds.Trade, 8),
             (NodeKinds.Event, 7),
         };
+
+        /// <summary>
+        /// G22 (Arturo, 18/11, cuadros 72 y 76: «por lo menos un refugio cada 2 líneas, de momento»; «algo intermedio»): a
+        /// Refuge in row RefugeFirst (one, past the row-1 node with the most ways on), and one in rows RefugeFirst + 1 to
+        /// RefugeSecond past every node of row RefugeFirst, so in reach from wherever the run went by then; the last, row 6's
+        /// (RefugeRow). Some 3 a map (.dev-snapshots/gameplay/g21-g22/G22-VOLVER.md).
+        /// </summary>
+        public const int RefugeFirst = 2;
+        public const int RefugeSecond = 4;
 
         /// <summary>
         /// The rows a Rescate is kept in reach in from every start (RescueInReach; N3, 17/11: recruits come only from a
@@ -152,8 +161,18 @@ namespace Bastion.Engine
                     var after = all.Where((p) => p.Next.Contains(n.Id)).Any((p) => NodeKinds.IsStop(p.Kind));
                     n.Kind = Roll(rng, stops: !after && n.Row < NodeRows);
                 }
+                // The rows of a window rolled, the rest not yet: its Refuges (what comes after rolls round them). Row 2's,
+                // one, past the row-1 node with the most ways on; then one in rows 3–4 past every node of row 2.
+                if (r == RefugeFirst - 1)
+                    foreach (var s in rows[0].OrderByDescending((n) => n.Next.Count))
+                    {
+                        if (rows[RefugeFirst - 1].Any((x) => x.Kind == NodeKinds.Refuge)) break;
+                        RefugesInReach(rng, all, new List<RunNode> { s }, RefugeFirst, RefugeFirst);
+                    }
+                if (r == RefugeSecond - 1) RefugesInReach(rng, all, rows[RefugeFirst - 1].ToList(), RefugeFirst + 1, RefugeSecond);
             }
             TradeInReach(rng, rows, all);
+            OneTrade(rng, rows, all);
             RescueInReach(rng, rows, all);
             foreach (var n in all.Where((x) => IsFight(x.Kind)))
             {
@@ -240,7 +259,7 @@ namespace Bastion.Engine
         /// <summary>
         /// A Trade in reach from wherever the run starts: while a row-1 node has none ahead, a fight of rows 2–4 whose
         /// neighbours aren't stops becomes one, the one ahead of the most of those starts; failing that, a stop ahead of
-        /// one becomes a Trade.
+        /// one becomes a Trade (a Refuge only if G22's stay in reach without it: RefugesHold).
         /// </summary>
         private static void TradeInReach(Rng rng, List<List<RunNode>> rows, List<RunNode> all)
         {
@@ -257,10 +276,78 @@ namespace Bastion.Engine
                     rng.Pick(reach.Where((x) => x.Starts == most).Select((x) => x.Node).ToList()).Kind = NodeKinds.Trade;
                     continue;
                 }
-                var stops = ahead[missing[0]].Where((x) => NodeKinds.IsStop(x.Kind)).ToList();
+                // (A Refuge only where every way keeps one in reach without it: G22's come first.)
+                var stops = ahead[missing[0]].Where((x) => NodeKinds.IsStop(x.Kind) && (x.Kind != NodeKinds.Refuge || RefugesHold(all, rows, x))).ToList();
                 if (stops.Count == 0) return;
                 rng.Pick(stops).Kind = NodeKinds.Trade;
             }
+        }
+
+        /// <summary>
+        /// A Trade on every map at least (G22: «el Trueque cede», in reach from most starts only): with none, a normal fight
+        /// of rows 2–4 with no stop next to it becomes one, else a special one so (never a Rescate), else an event, else a
+        /// Refuge G22's can spare.
+        /// </summary>
+        private static void OneTrade(Rng rng, List<List<RunNode>> rows, List<RunNode> all)
+        {
+            if (all.Any((n) => n.Kind == NodeKinds.Trade)) return;
+            bool Clear(RunNode x) => x.Next.All((id) => IsFight(all.First((y) => y.Id == id).Kind)) && all.Where((p) => p.Next.Contains(x.Id)).All((p) => IsFight(p.Kind));
+            var middle = all.Where((n) => n.Row >= 2 && n.Row < NodeRows).ToList();
+            var tiers = new Func<RunNode, bool>[]
+            {
+                (n) => n.Kind == NodeKinds.Normal && Clear(n),
+                (n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Boss && Clear(n),
+                (n) => n.Kind == NodeKinds.Event,
+                (n) => n.Kind == NodeKinds.Refuge && RefugesHold(all, rows, n),
+            };
+            foreach (var tier in tiers)
+            {
+                var pick = middle.Where(tier).ToList();
+                if (pick.Count == 0) continue;
+                rng.Pick(pick).Kind = NodeKinds.Trade;
+                return;
+            }
+        }
+
+        /// <summary>
+        /// G22: while a node of `from` has no Refuge ahead in rows `lo` to `hi`, one of those ahead of the most of them
+        /// becomes one: a normal fight with no stop before or after it, else a special one so (never a Rescate), else an
+        /// event, else a trade (a stop for a stop: never two stops in a row on a way).
+        /// </summary>
+        private static void RefugesInReach(Rng rng, List<RunNode> all, List<RunNode> from, int lo, int hi)
+        {
+            var ahead = from.ToDictionary((n) => n, (n) => Ahead(n, all).Where((x) => x.Row >= lo && x.Row <= hi).ToList());
+            bool Clear(RunNode x) => x.Next.All((id) => IsFight(all.First((y) => y.Id == id).Kind)) && all.Where((p) => p.Next.Contains(x.Id)).All((p) => IsFight(p.Kind));
+            var tiers = new Func<RunNode, bool>[]
+            {
+                (x) => x.Kind == NodeKinds.Normal && Clear(x),
+                (x) => IsFight(x.Kind) && x.Kind != NodeKinds.Normal && x.Kind != NodeKinds.Rescue && x.Kind != NodeKinds.Boss && Clear(x),
+                (x) => x.Kind == NodeKinds.Event,
+                (x) => x.Kind == NodeKinds.Trade,
+            };
+            while (true)
+            {
+                var missing = from.Where((n) => !ahead[n].Any((x) => x.Kind == NodeKinds.Refuge)).ToList();
+                if (missing.Count == 0) return;
+                var near = missing.SelectMany((n) => ahead[n]).Distinct().ToList();
+                var reach = new List<(RunNode Node, int From)>();
+                foreach (var tier in tiers)
+                {
+                    reach = near.Where(tier).Select((x) => (Node: x, From: missing.Count((n) => ahead[n].Contains(x)))).ToList();
+                    if (reach.Count > 0) break;
+                }
+                if (reach.Count == 0) return;
+                var most = reach.Max((x) => x.From);
+                rng.Pick(reach.Where((x) => x.From == most).Select((x) => x.Node).ToList()).Kind = NodeKinds.Refuge;
+            }
+        }
+
+        /// <summary>Whether G22's Refuges hold still `without` one of them: row RefugeFirst's, and one past every node of it.</summary>
+        private static bool RefugesHold(List<RunNode> all, List<List<RunNode>> rows, RunNode without)
+        {
+            bool Has(RunNode n, int lo, int hi) => Ahead(n, all).Any((x) => x != without && x.Kind == NodeKinds.Refuge && x.Row >= lo && x.Row <= hi);
+            var first = rows[RefugeFirst - 1];
+            return first.Any((x) => x != without && x.Kind == NodeKinds.Refuge) && first.All((n) => Has(n, RefugeFirst + 1, RefugeSecond));
         }
 
         /// <summary>

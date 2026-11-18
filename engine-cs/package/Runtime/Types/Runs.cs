@@ -113,6 +113,11 @@ namespace Bastion.Engine
         public List<string>? Events { get; set; }
         /// <summary>A modifier an event left for the next fight chosen (H4: «la siguiente etapa, de noche»).</summary>
         public string? Pending { get; set; } // Modifiers
+        /// <summary>
+        /// G22 (Arturo, 18/11, cuadro 72): a run started since goes home only from a Refuge (or the boss dead: the chapter
+        /// done); missing, one started before, from the map after any stage as it did (Runs.EndRunRefusal).
+        /// </summary>
+        public bool? HomeFromRefuge { get; set; }
     }
 
     /// <summary>The stop the squad is at (RunState.stop).</summary>

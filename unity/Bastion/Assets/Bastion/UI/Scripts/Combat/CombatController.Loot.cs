@@ -187,6 +187,57 @@ namespace Bastion.UI.Combat
             return list;
         }
 
+        /// <summary>The rooms of RoomsToSearch as last made (Mayús held).</summary>
+        List<(List<Pos> tiles, bool lit)> roomMarks = new List<(List<Pos>, bool)>();
+
+        /// <summary>
+        /// The rooms still to search the squad has found (U18): inside a building found (FoundInside), on the storeys up to
+        /// the one in view and not under one (Covered), not searched (Looting.RoomSearched) nor searched piece by piece
+        /// (LootRoom.Pieces); lit the one the picked soldier stands in where Registrar la habitación can go now. Each room
+        /// once, by walking the floors inside (Looting.RoomAt).
+        /// </summary>
+        List<(List<Pos> tiles, bool lit)> RoomsToSearch()
+        {
+            var s = State;
+            var list = new List<(List<Pos>, bool)>();
+            if (s == null || s.Storeys == null) return list;
+            var u = Unit();
+            var can = u != null && CanAct() && Commands(u) && StandsWhereSeen(u) && Abilities.AbilityBlocker(s, u, AbilityIds.SearchRoom) == null;
+            var mine = can ? Looting.RoomAt(s, u.Pos) : null;
+            var found = FoundInside();
+            var area = s.Width * s.Height;
+            var top = Mathf.Min(Level, s.Levels?.Count ?? 0);
+            var seen = new HashSet<int>();
+            for (var z = 0; z <= top; z++)
+                for (var i = 0; i < area; i++)
+                {
+                    if (s.Storeys[i] <= z) continue;
+                    var p = new Pos { X = i % s.Width, Y = i / s.Width, Z = z };
+                    var node = Bastion.Engine.Grid.NodeOf(s, p);
+                    if (seen.Contains(node) || Covered(s, p, top)) continue;
+                    var room = Looting.RoomAt(s, p);
+                    if (room == null) continue;
+                    foreach (var t in room.Tiles) seen.Add(Bastion.Engine.Grid.NodeOf(s, t));
+                    if (room.Pieces || Looting.RoomSearched(s, room)) continue;
+                    // Found: a room is, as a whole, once one of its tiles is (FoundInside, Buildings.Veil).
+                    if (!room.Tiles.Any(t => Bastion.Engine.Grid.NodeOf(s, t) is var n && n < found.Length && found[n])) continue;
+                    list.Add((room.Tiles, mine != null && mine.Id == room.Id));
+                }
+            return list;
+        }
+
+        /// <summary>
+        /// The rooms still to search with Mayús held (or none), their floor washed and their border drawn (MissionMarks.
+        /// ShowRooms; Arturo, cuadro 73: the floor, not an icon), over the roofs from above.
+        /// </summary>
+        void ShowRooms(bool on)
+        {
+            var watch = on ? System.Diagnostics.Stopwatch.StartNew() : null;
+            roomMarks = on ? RoomsToSearch() : new List<(List<Pos>, bool)>();
+            if (on) Debug.Log($"[mayús] {roomMarks.Count} habitaciones por registrar en {watch.Elapsed.TotalMilliseconds:0.0} ms");
+            Marks?.ShowRooms(State, roomMarks, Overhead);
+        }
+
         /// <summary>
         /// What the picked one searches with a click now from where it stands, lit, with no pointer (U14, Arturo 18/11, cuadro
         /// 64: «todo lo que tiene al lado»): the bodies, boots, boxes and furniture within Registrar's reach (Looting.

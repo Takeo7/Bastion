@@ -31,12 +31,28 @@ namespace Bastion.Engine.Tests
         /// <summary>A tile next to `zone`'s tile `z`, free, that can be stood on and is not in the zone: a step away from it.</summary>
         private static Pos Beside(GameState s, Vec2 z)
         {
-            foreach (var d in Grid.Dirs8)
+            // Straight beside it first: a diagonal step round a corner costs more than a step (G22's maps, 18/11).
+            foreach (var d in Grid.Dirs4.Concat(Grid.Dirs8.Where((d) => d.X != 0 && d.Y != 0)))
             {
                 var p = new Pos { X = z.X + d.X, Y = z.Y + d.Y, Z = 0 };
-                if (Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null && !Abilities.InEvacZone(s, p)) return p;
+                // (Not round a wall's corner: a step there isn't one.)
+                if (Grid.InBounds(s, p.X, p.Y) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null && !Abilities.InEvacZone(s, p) && Looting.ReachesToSearch(s, p, new Pos { X = z.X, Y = z.Y, Z = 0 })) return p;
             }
             throw new System.InvalidOperationException("nowhere beside La Lata");
+        }
+
+        /// <summary>A tile beside `z` from which `u` walks onto it this turn (Paths: a diagonal round La Lata's corner isn't one), or null.</summary>
+        private static Pos? Walked(GameState s, Unit u, Vec2 z)
+        {
+            var at = new Pos { X = z.X, Y = z.Y, Z = 0 };
+            foreach (var d in Grid.Dirs4.Concat(Grid.Dirs8.Where((d) => d.X != 0 && d.Y != 0)))
+            {
+                var p = new Pos { X = z.X + d.X, Y = z.Y + d.Y, Z = 0 };
+                if (!Grid.InBounds(s, p.X, p.Y) || !Flights.CanStopAt(s, p) || (Grid.UnitAt(s, p) is Unit o && o != u) || Abilities.InEvacZone(s, p)) continue;
+                u.Pos = p;
+                if (Paths.ComputeReach(s, u, Paths.MoveBudget(s, u)).Cost.ContainsKey(Grid.NodeOf(s, at))) return p;
+            }
+            return null;
         }
 
         /// <summary>`u` a step from La Lata's zone tile `i`, walked onto it.</summary>
@@ -311,11 +327,12 @@ namespace Bastion.Engine.Tests
             Assert.Equal(seats, Rules.OpenTiles(s).Count);
             for (var i = 0; i < seats - 1; i++)
             {
-                var open = Rules.OpenTiles(s)[0];
                 var u = squad[i];
-                u.Pos = Beside(s, open);
                 u.Ap = 2;
                 u.Moves = null;
+                // One of the open tiles a step walks onto (a zone may open on one side only: the rest past it).
+                var open = Rules.OpenTiles(s).First((z) => Walked(s, u, z) != null);
+                u.Pos = Walked(s, u, open)!;
                 var r = Exec(s, Move(u.Id, open.X, open.Y));
                 Assert.True(r.Ok, r.Error);
                 Assert.True(u.Aboard, $"{seats} seats, the {i + 1}th");

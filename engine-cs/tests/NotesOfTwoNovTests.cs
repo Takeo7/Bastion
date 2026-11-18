@@ -230,11 +230,13 @@ namespace Bastion.Engine.Tests
                 }
             }
             Assert.True(police >= 2, $"{police}");
-            Assert.True(boots >= 5 * police, $"{boots} {police}");
+            // (One car in three rifled already since G21, never a police car: fewer boots for each of these.)
+            Assert.True(boots >= 3 * police, $"{boots} {police}");
             int Guns(string kind) => Enumerable.Range(1, 300).Count((seed) => !string.IsNullOrEmpty(Looting.RollBox(kind, new Rng(seed), false, true)?.Weapon));
             // A gun one time in five plus a boot's own chance (Looting.PoliceBootGun; one in three till Arturo's notes of 15/11).
             Assert.InRange(Guns(Looting.PoliceBoot), 55, 100);
-            Assert.InRange(Guns(Looting.CarBoot), 4, 25);
+            // A boot's own chance, 9 in 100 since G21 (it was 4).
+            Assert.InRange(Guns(Looting.CarBoot), 15, 45);
         }
 
         // ------------------------------------------------------------ bodies

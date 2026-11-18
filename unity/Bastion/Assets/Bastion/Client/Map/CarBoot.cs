@@ -73,7 +73,22 @@ namespace Bastion.Client.Map
             var space = car.transform;
             var filters = car.GetComponentsInChildren<MeshFilter>().Where(f => f.sharedMesh != null).ToList();
             if (filters.Count == 0) return false;
-            // The car's length here against what the numbers were measured on.
+            float k = Scale(space, filters);
+            bool opened = false;
+            if (lid.leaves != null)
+                foreach (var (part, x, z, swing) in lid.leaves)
+                    opened |= Swing(space, filters.Where(f => f.name.EndsWith(part) || f.name.Contains(part + "_")), new Vector3(x * k, 0, z * k), Quaternion.AngleAxis(swing, Vector3.up));
+            else if (lid.flap != null)
+                opened = Swing(space, filters.Where(f => f.name.EndsWith(lid.flap)), new Vector3(0, lid.high * k, lid.hinge * k), Quaternion.AngleAxis(lid.turn, Vector3.right));
+            else
+                opened = Cut(space, filters, lid, id, k);
+            if (opened && lid.tubAcross > 0) Tub(space, lid, k);
+            return opened;
+        }
+
+        /// <summary>The car's length here against what the numbers were measured on.</summary>
+        static float Scale(Transform space, List<MeshFilter> filters)
+        {
             float zMin = float.MaxValue, zMax = float.MinValue;
             foreach (var f in filters)
             {
@@ -86,17 +101,111 @@ namespace Bastion.Client.Map
                     zMax = Mathf.Max(zMax, z);
                 }
             }
-            float k = (zMax - zMin) / Length;
-            bool opened = false;
-            if (lid.leaves != null)
-                foreach (var (part, x, z, swing) in lid.leaves)
-                    opened |= Swing(space, filters.Where(f => f.name.EndsWith(part) || f.name.Contains(part + "_")), new Vector3(x * k, 0, z * k), Quaternion.AngleAxis(swing, Vector3.up));
-            else if (lid.flap != null)
-                opened = Swing(space, filters.Where(f => f.name.EndsWith(lid.flap)), new Vector3(0, lid.high * k, lid.hinge * k), Quaternion.AngleAxis(lid.turn, Vector3.right));
+            return (zMax - zMin) / Length;
+        }
+
+        /// <summary>
+        /// Of car `id` (`car`, a copy of its own as MapBuilder places it: CarCopy), its boot's lid alone, shut as it is: the
+        /// lid cut out of its body, or its own leaves or flap, every other part's renderer off. For the line round what is
+        /// searched (Arturo, 19/11, cuadro 70: «en los coches que solo resalte el maletero»). False, and the car left whole,
+        /// if it has no boot to open here or its meshes can't be read.
+        /// </summary>
+        public static bool OnlyLid(GameObject car, string id)
+        {
+            if (car == null || !Lids.TryGetValue(id, out var lid)) return false;
+            var space = car.transform;
+            var filters = car.GetComponentsInChildren<MeshFilter>().Where(f => f.sharedMesh != null).ToList();
+            if (filters.Count == 0) return false;
+            float k = Scale(space, filters);
+            var kept = new List<MeshFilter>();
+            // (A leaf's own parts go with it, a door's glass; a lid cut out of the body is its mesh alone: the wheels hang from the body.)
+            bool withParts = lid.leaves != null || lid.flap != null;
+            if (lid.leaves != null) kept.AddRange(filters.Where(f => lid.leaves.Any(l => f.name.EndsWith(l.part) || f.name.Contains(l.part + "_"))));
+            else if (lid.flap != null) kept.AddRange(filters.Where(f => f.name.EndsWith(lid.flap)));
             else
-                opened = Cut(space, filters, lid, id, k);
-            if (opened && lid.tubAcross > 0) Tub(space, lid, k);
-            return opened;
+            {
+                var lids = new List<(MeshFilter, Mesh)>();
+                foreach (var f in filters)
+                {
+                    if (f.name.Contains("Wheel") || f.name.Contains("Steering") || !f.sharedMesh.isReadable) continue;
+                    var key = (f.sharedMesh.GetInstanceID(), id);
+                    if (!cuts.TryGetValue(key, out var made) || made.rest == null)
+                        made = cuts[key] = Split(f.sharedMesh, space.worldToLocalMatrix * f.transform.localToWorldMatrix, lid, k);
+                    if (made.lid != null) lids.Add((f, made.lid));
+                }
+                foreach (var (f, mesh) in lids)
+                {
+                    f.sharedMesh = Rimmed(mesh);
+                    var r = f.GetComponent<MeshRenderer>();
+                    if (r != null) r.sharedMaterials = r.sharedMaterials.Take(1).ToArray();
+                    kept.Add(f);
+                }
+            }
+            if (kept.Count == 0) return false;
+            foreach (var r in car.GetComponentsInChildren<Renderer>())
+                if (!kept.Any(f => r.transform == f.transform || withParts && r.transform.IsChildOf(f.transform))) r.enabled = false;
+            return true;
+        }
+
+        /// <summary>Each cut lid with its rim (Rimmed), by the lid's mesh.</summary>
+        static readonly Dictionary<int, Mesh> rims = new Dictionary<int, Mesh>();
+
+        /// <summary>
+        /// A cut lid for Bastion/Mark's line: the lid is a sheet lying on the body, with no back faces to push out, so its
+        /// line wants a rim. Its outside (every submesh but the last, its inside turned round) and, along each edge only
+        /// one triangle has, a strip of no width, both ways round: one side as it is (no normal: the line's pass leaves it),
+        /// the other with the way out of the lid for its normal (pushed out the line's width). The line goes all round it.
+        /// </summary>
+        static Mesh Rimmed(Mesh lid)
+        {
+            if (rims.TryGetValue(lid.GetInstanceID(), out var made) && made != null) return made;
+            var at = lid.vertices;
+            var normal = lid.normals;
+            var all = new List<int>();
+            for (int s = 0; s < Mathf.Max(1, lid.subMeshCount - 1); s++) all.AddRange(lid.GetTriangles(s));
+            Vector3Int Place(int v) => Vector3Int.RoundToInt(at[v] * 5000);
+            // Each edge by its two places, and the way out of its triangle across it; twice seen, it is no border.
+            var edges = new Dictionary<(Vector3Int, Vector3Int), (int a, int b, Vector3 way, int seen)>();
+            for (int n = 0; n + 2 < all.Count; n += 3)
+                for (int e = 0; e < 3; e++)
+                {
+                    int a = all[n + e], b = all[n + (e + 1) % 3], c = all[n + (e + 2) % 3];
+                    Vector3Int pa = Place(a), pb = Place(b);
+                    if (pa == pb) continue;
+                    var key = pa.x < pb.x || pa.x == pb.x && (pa.y < pb.y || pa.y == pb.y && pa.z < pb.z) ? (pa, pb) : (pb, pa);
+                    var along = (at[b] - at[a]).normalized;
+                    var way = at[a] - at[c];
+                    way = (way - Vector3.Dot(way, along) * along).normalized;
+                    edges[key] = edges.TryGetValue(key, out var was) ? (was.a, was.b, was.way, was.seen + 1) : (a, b, way, 1);
+                }
+            var border = edges.Values.Where(e => e.seen == 1).ToList();
+            // (Each corner's way out, its two edges' between them: the strips meet.)
+            var outAt = new Dictionary<Vector3Int, Vector3>();
+            foreach (var e in border)
+                foreach (int v in new[] { e.a, e.b })
+                    outAt[Place(v)] = (outAt.TryGetValue(Place(v), out var sum) ? sum : Vector3.zero) + e.way;
+            var vertices = new List<Vector3>(at);
+            var normals = new List<Vector3>(Enumerable.Range(0, at.Length).Select(v => v < normal.Length ? normal[v] : Vector3.up));
+            var triangles = new List<int>(all);
+            foreach (var e in border)
+            {
+                int start = vertices.Count;
+                foreach (int v in new[] { e.a, e.b })
+                {
+                    vertices.Add(at[v]);
+                    normals.Add(Vector3.zero);
+                    vertices.Add(at[v]);
+                    normals.Add(outAt[Place(v)].normalized);
+                }
+                // (a, a pushed, b, b pushed: both ways round, the line's pass draws the faces turned away.)
+                triangles.AddRange(new[] { start, start + 1, start + 2, start + 2, start + 1, start + 3, start, start + 2, start + 1, start + 2, start + 3, start + 1 });
+            }
+            made = new Mesh { name = lid.name + " (canto)", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32, hideFlags = HideFlags.DontSave };
+            made.SetVertices(vertices);
+            made.SetNormals(normals);
+            made.SetTriangles(triangles, 0);
+            made.RecalculateBounds();
+            return rims[lid.GetInstanceID()] = made;
         }
 
         /// <summary>The parts `leaves` hung on a hinge at `at` (the car's frame) and turned on it so.</summary>

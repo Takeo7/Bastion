@@ -195,6 +195,12 @@ namespace Bastion.Engine
         /// Missing (a fight saved by the 0.13.2): none of it, every room searched whole as before.
         /// </summary>
         public List<int>? Pieces { get; set; }
+        /// <summary>
+        /// G21 (Arturo, 18/11, cuadros 70, 72 y 74: «uno de cada tres»; «oxidado = no se registra»): the whole cars rifled
+        /// before the squad came, by their nose's ground tile index (as GameState.Wrecks' Anchor): no boot to open
+        /// (Looting.BootOf), drawn rusted as a wreck is. Setup's (PlaceLootedCars). Missing (a fight saved before): none.
+        /// </summary>
+        public List<int>? Rifled { get; set; }
         public List<Reinforcement> Reinforcements { get; set; } = new List<Reinforcement>();
         /// <summary>1–4, for the loot tables (missing in missions saved before searching: 2).</summary>
         public int? Difficulty { get; set; }

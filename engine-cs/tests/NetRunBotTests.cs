@@ -116,6 +116,8 @@ namespace Bastion.Engine.Tests
         {
             var c = Solo();
             var run = Start(c);
+            // A run of before G22's: home from the map (GoesHomeFromARefuge: the new ones).
+            run.HomeFromRefuge = null;
             var heard = Heard(c, 0);
             Assert.IsType<ChooseNodeCommand>(heard.BaseOrder(0, true));
             // After a fight, one of four fallen and the rest hurt, but over half their health: on.
@@ -134,6 +136,30 @@ namespace Bastion.Engine.Tests
             foreach (var s in squad.Skip(1)) run.Hp[s.Id] = Runs.MaxHp(s);
             squad[1].Alive = false;
             run.Squad.Remove(squad[1].Id);
+            Assert.IsType<EndRunCommand>(Done(heard, c, 0, Zero));
+            Assert.Null(c.Run);
+        }
+
+        [Fact]
+        public void GoesHomeFromARefuge()
+        {
+            // G22: a broken squad heads for a Refuge and goes home from it; not from the map.
+            var c = Solo();
+            var run = Start(c);
+            var heard = Heard(c, 0);
+            var first = RunMap.Choices(run)[0];
+            run.Path.Add(first.Id);
+            run.At = first.Id;
+            var squad = Squad(c);
+            foreach (var s in squad.Take(2)) { s.Alive = false; run.Squad.Remove(s.Id); }
+            // On the map: a Refuge among the choices is chosen.
+            var refuge = RunMap.Choices(run)[RunMap.Choices(run).Count - 1];
+            refuge.Kind = NodeKinds.Refuge;
+            refuge.Site = null;
+            refuge.Seed = null;
+            var go = Assert.IsType<ChooseNodeCommand>(Done(heard, c, 0, Zero));
+            Assert.Equal(refuge.Id, go.Node);
+            // At it: home.
             Assert.IsType<EndRunCommand>(Done(heard, c, 0, Zero));
             Assert.Null(c.Run);
         }

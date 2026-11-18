@@ -31,6 +31,12 @@ namespace Bastion.UI.Combat
         MeshFilter zone;
         Material zoneMaterial;
         MeshFilter search;
+        /// <summary>
+        /// The rooms still to search, their floor washed and their border (U18, Mayús held; CombatController.RoomsToSearch):
+        /// tested against what is in front in the game's view, over everything from above.
+        /// </summary>
+        MeshFilter roomsFill, roomsShade, roomsLine, roomsFillOver, roomsShadeOver, roomsLineOver;
+        string roomsKey = "";
         MeshFilter beams;
         MeshFilter flares;
         Material flareRing;
@@ -47,6 +53,12 @@ namespace Bastion.UI.Combat
             zone = Layer("Evacuación", 3097, false);
             zoneMaterial = zone.GetComponent<MeshRenderer>().sharedMaterial;
             search = Layer("Búsqueda", 3096, false);
+            roomsFill = Layer("Habitaciones por registrar", 3093, false);
+            roomsShade = Layer("Habitaciones por registrar (sombra)", 3094, false, true);
+            roomsLine = Layer("Habitaciones por registrar (borde)", 3095, false);
+            roomsFillOver = Layer("Habitaciones por registrar, desde arriba", 3093, true);
+            roomsShadeOver = Layer("Habitaciones por registrar, desde arriba (sombra)", 3094, true, true);
+            roomsLineOver = Layer("Habitaciones por registrar, desde arriba (borde)", 3095, true);
             beams = Layer("Balizas", 3108, false);
             flares = Layer("Bengalas", 3098, false);
             flareRings = Layer("Bengalas (anillos)", 3099, false);
@@ -69,11 +81,11 @@ namespace Bastion.UI.Combat
             core.gameObject.SetActive(false);
         }
 
-        MeshFilter Layer(string name, int queue, bool overAll)
+        MeshFilter Layer(string name, int queue, bool overAll, bool shade = false)
         {
             var go = new GameObject(name);
             go.transform.SetParent(shown, false);
-            go.AddComponent<MeshRenderer>().sharedMaterial = MeshBuilder.Material(queue, overAll);
+            go.AddComponent<MeshRenderer>().sharedMaterial = MeshBuilder.Material(queue, overAll, shade);
             return go.AddComponent<MeshFilter>();
         }
 
@@ -140,6 +152,70 @@ namespace Bastion.UI.Combat
             foreach (var p in flareAt) build.Arc(p + Vector3.up * (0.06f * T), 0.8f * T * flareSpread, T * flareSpread, 0, Mathf.PI * 2, 40, MoveOverlay.Hex(0xffffff));
             flareRings.sharedMesh = build.Build(flareRings.sharedMesh);
         }
+
+        /// <summary>
+        /// The rooms still to search with Mayús held (U18, Arturo 18/11: «que dándole al shift veas las habitaciones que
+        /// faltan por lootear también»; cuadro 73, the floor washed): each room's floor washed white, a little short of its
+        /// tiles' edges, and its border drawn round it, white over a dark line (it reads on white tiles and on dark ones,
+        /// apart from the walking range's blue border and from the light through a window, which has no edges). The one the
+        /// picked soldier stands in and can search now (`lit`) brighter and its border thicker. From above (`over`) over
+        /// everything, roofs too: straight down, a room's own place on the roof over it. Made again only when they change.
+        /// </summary>
+        public void ShowRooms(GameState s, IList<(List<Pos> tiles, bool lit)> list, bool over)
+        {
+            var now = list == null ? "" : over + "|" + string.Join("|", list.Select(r => $"{r.tiles[0].X},{r.tiles[0].Y},{r.tiles[0].Z}:{r.tiles.Count}:{r.lit}"));
+            if (now == roomsKey) return;
+            roomsKey = now;
+            var (fill, shade, line) = over ? (roomsFillOver, roomsShadeOver, roomsLineOver) : (roomsFill, roomsShade, roomsLine);
+            var (offFill, offShade, offLine) = over ? (roomsFill, roomsShade, roomsLine) : (roomsFillOver, roomsShadeOver, roomsLineOver);
+            foreach (var f in new[] { offFill, offShade, offLine }) f.sharedMesh = null;
+            // (Inside the room's edge, apart from the walking range's line and the foot of the walls, which hide its edge
+            // from the game's camera: the hospital's corridor, 18/11.)
+            var inset = 0.14f * T;
+            // The fill.
+            build.Clear();
+            foreach (var (tiles, lit) in list ?? new List<(List<Pos>, bool)>())
+            {
+                var colour = new Color32(Search.r, Search.g, Search.b, (byte)(lit ? 0x58 : 0x2c));
+                foreach (var p in tiles)
+                {
+                    var floor = Board.TileToWorld(s, p).y + 0.014f * T;
+                    var a = Board.Corner(p.X, p.Y, floor);
+                    build.Flat(a.x, a.z, a.x + T, a.z - T, floor, colour);
+                }
+            }
+            fill.sharedMesh = build.Build(fill.sharedMesh);
+            // The border: each tile's sides with no tile of the room beyond, a little inside it; the dark line under, then
+            // the white one.
+            var edges = new List<(Vector3 a, Vector3 b, bool lit)>();
+            foreach (var (tiles, lit) in list ?? new List<(List<Pos>, bool)>())
+            {
+                var mine = new HashSet<(int, int)>(tiles.Select(p => (p.X, p.Y)));
+                foreach (var p in tiles)
+                {
+                    var floor = Board.TileToWorld(s, p).y + 0.02f * T;
+                    float x0 = p.X * T, x1 = (p.X + 1) * T, z0 = -p.Y * T, z1 = -(p.Y + 1) * T;
+                    if (!mine.Contains((p.X, p.Y - 1))) edges.Add((new Vector3(x0, floor, z0 - inset), new Vector3(x1, floor, z0 - inset), lit));
+                    if (!mine.Contains((p.X, p.Y + 1))) edges.Add((new Vector3(x0, floor, z1 + inset), new Vector3(x1, floor, z1 + inset), lit));
+                    if (!mine.Contains((p.X - 1, p.Y))) edges.Add((new Vector3(x0 + inset, floor, z0), new Vector3(x0 + inset, floor, z1), lit));
+                    if (!mine.Contains((p.X + 1, p.Y))) edges.Add((new Vector3(x1 - inset, floor, z0), new Vector3(x1 - inset, floor, z1), lit));
+                }
+            }
+            build.Clear();
+            foreach (var (a, b, lit) in edges) build.Line(a, b, lit ? RoomLitPx + 2.6f : RoomPx + 2f, RoomShade);
+            shade.sharedMesh = build.Build(shade.sharedMesh);
+            build.Clear();
+            foreach (var (a, b, lit) in edges) build.Line(a, b, lit ? RoomLitPx : RoomPx, new Color32(Search.r, Search.g, Search.b, (byte)(lit ? 0xff : 0xb0)));
+            line.sharedMesh = build.Build(line.sharedMesh);
+        }
+
+        /// <summary>
+        /// The rooms' borders, in pixels: the one the picked soldier can search, and the rest. The border does the work on a
+        /// light floor, where the white wash is lost (Arturo, cuadro 76: the wash and the border, no stripes).
+        /// </summary>
+        const float RoomLitPx = 3.2f, RoomPx = 1.6f;
+        /// <summary>The dark line under a room's border (as the walking range's: MoveOverlay.Shade).</summary>
+        static readonly Color32 RoomShade = MoveOverlay.Hex(0x3a4048);
 
         /// <summary>
         /// The marks for `s`: the evacuation zone's tiles, beams (where and in what colour), the loose item's tile, the

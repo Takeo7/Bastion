@@ -1073,15 +1073,33 @@ namespace Bastion.EditorTools
                     var footprint = MapArt.FootprintOf(ids[k]);
                     if (art.fit > 0 && footprint != null && footprint.fit > 0) car.transform.localScale *= footprint.fit / art.fit;
                     car.transform.position = new Vector3(((k % columns) * 2 + open - columns + 0.5f) * 2.2f * MapSpace.Tile, 0, -(k / columns - (rows - 1) / 2f) * 5f * MapSpace.Tile);
-                    if (open == 1) Debug.Log($"[maletero] {ids[k]}: {(Bastion.Client.Map.CarBoot.Open(car, ids[k]) ? "open" : "NOT OPEN")}");
+                    // BASTION_TAPAS_CONTORNO=1 (A7): the second shut too, with SearchOutline's line round its boot's lid alone.
+                    bool lined = Environment.GetEnvironmentVariable("BASTION_TAPAS_CONTORNO") == "1";
+                    if (open == 1 && !lined) Debug.Log($"[maletero] {ids[k]}: {(Bastion.Client.Map.CarBoot.Open(car, ids[k]) ? "open" : "NOT OPEN")}");
                     var paints = MapBuilder.WholePaintsOf(ids[k]);
                     if (paints.Length > 0) MapBuilder.PaintWhole(car, ids[k], paints[0], materials);
+                    if (open == 1 && lined)
+                    {
+                        var lid = MapBuilder.Prop(root, ids[k], prefabs);
+                        lid.transform.SetPositionAndRotation(car.transform.position, car.transform.rotation);
+                        lid.transform.localScale = car.transform.localScale;
+                        Debug.Log($"[maletero] {ids[k]}: {(Bastion.Client.Map.CarBoot.OnlyLid(lid, ids[k]) ? "its lid alone" : "WHOLE")}");
+                        var line = Bastion.Client.Units.SearchOutline.LineMaterial(new Color(0.953f, 0.925f, 0.863f), true);
+                        foreach (var r in lid.GetComponentsInChildren<Renderer>())
+                        {
+                            r.sharedMaterials = Enumerable.Repeat(line, Mathf.Max(1, r.sharedMaterials.Length)).ToArray();
+                            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                        }
+                    }
                 }
             var camera = new GameObject("Shot camera").AddComponent<Camera>();
             camera.farClipPlane = 800;
             float distance = float.TryParse(Environment.GetEnvironmentVariable("BASTION_DIST"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : 26;
             float turn = float.TryParse(Environment.GetEnvironmentVariable("BASTION_GIRO"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float g) ? g : 20;
             MapSpace.Aim(camera, Vector3.zero, distance, turn);
+            // (BASTION_CENITAL=1: from straight above, as the game's map view.)
+            if (Environment.GetEnvironmentVariable("BASTION_CENITAL") == "1")
+                camera.transform.SetPositionAndRotation(Vector3.up * distance * MapSpace.Tile, Quaternion.Euler(90, turn, 0));
             Lighting(true);
         }
 
@@ -1606,6 +1624,17 @@ namespace Bastion.EditorTools
             // BASTION_VISTAS=x,y,distance[,storey[,yaw]];…: BASTION_AT's views a frame each, one after another (the last kept):
             // several places of a map in one run (-shotFrames as many).
             if (Environment.GetEnvironmentVariable("BASTION_VISTAS") is string views) camera.gameObject.AddComponent<Views>().Set(camera, views);
+            // (G21: the cars the mission has rifled from the start, and its wrecks: [saqueados].)
+            if (state.Mission?.Rifled != null)
+                Debug.Log($"[saqueados] rifled {string.Join(" ", state.Mission.Rifled.Select(i => $"{i % state.Width},{i / state.Width}"))}; wrecks {string.Join(" ", (state.Wrecks ?? new List<Wreck>()).Select(w => $"{w.Anchor % state.Width},{w.Anchor / state.Width}"))}");
+            // BASTION_HOMBRO=x,y,yaw[,pitch[,height[,fov]]]: the camera as the shot over the shoulder has it, about (A5, the sky):
+            // 1.9 m over that tile (or `height`), looking that way (degrees, 0 north), pitch degrees down (6).
+            if (Environment.GetEnvironmentVariable("BASTION_HOMBRO")?.Split(',') is string[] sh && sh.Length >= 3)
+            {
+                float F(int k, float or) => sh.Length > k ? float.Parse(sh[k], System.Globalization.CultureInfo.InvariantCulture) : or;
+                camera.transform.SetPositionAndRotation(MapSpace.World((int)F(0, 0), (int)F(1, 0)) + Vector3.up * F(4, 1.9f), Quaternion.Euler(F(3, 6), F(2, 0), 0));
+                camera.fieldOfView = F(5, 40);
+            }
             // BASTION_ROMPER=x,y[,z];…: those windows broken as the mission breaks one, the map brought to it (MapView.Rebuild, as
             // the event player does once the event has played) before frame BASTION_ROMPER_EN (1 unless said): what draws a
             // window broken during the mission, the same frame; and the glass bursting there (Fx.Shatter).

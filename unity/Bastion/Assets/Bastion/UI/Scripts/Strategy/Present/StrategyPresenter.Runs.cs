@@ -68,6 +68,13 @@ namespace Bastion.UI.Strategy
             return pads;
         }
 
+        /// <summary>
+        /// The first time (U16, Arturo 18/11, cuadro 70: «la primera vez que juegas se te pone en la vista de iniciar
+        /// expedición sin posibilidad de volver a otros menús»): a runs' campaign with no stage ever chosen (NodesPlayed:
+        /// all the campaign's, never back to 0) and none going on. Salir alone; the whole base once back from the first.
+        /// </summary>
+        public bool FirstTime => State is CampaignState c && c.Stash != null && c.Run == null && (c.NodesPlayed ?? 0) == 0;
+
         /// <summary>Salir: one's soldiers to put in or out, the partner's to see, who is ready, «Salir» (StartRunCommand).</summary>
         public SquadView RunSquad()
         {
@@ -97,7 +104,8 @@ namespace Bastion.UI.Strategy
             v.Launch = StrategyText.Runs.Start2;
             v.LaunchEnabled = why == null;
             v.LaunchWhy = why;
-            v.Back = StrategyText.Runs.BackToStash;
+            // The first time no way back to the base's tabs (U16): Esc's menu only (Ajustes, leaving the game).
+            v.Back = FirstTime ? null : StrategyText.Runs.BackToStash;
             var together = c.Players.Count > 1 && partner != null && partner.Connected;
             foreach (var s in RunPads())
                 v.Cards.Add(s == null

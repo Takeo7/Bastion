@@ -123,6 +123,12 @@ namespace Bastion.Client
         void LifeBase()
         {
             if (Base == null || built == null) return;
+            // (Nobody about at the halt, nor the base's dog: Producto, 19/11.)
+            if (Halted)
+            {
+                life?.ClearAll();
+                return;
+            }
             Life.SetBase(Base, LifeTaken);
             var camp = ClearingLife.Camp.Of(ClearingState(Base, Snow), built.BoxOf);
             if (Lata != null && busParked && !away)
@@ -169,7 +175,7 @@ namespace Bastion.Client
         /// <summary>Those out on the Asentamiento's tab, none on the others (screen.ts render: setLife).</summary>
         void LifeView()
         {
-            if (Base == null) return;
+            if (Base == null || Halted) return;
             // Those about the clearing but the squad standing by La Lata (clearingArt.ts relife: the same soldier was in both).
             var inRow = new HashSet<string>(lineupEntries.Where(e => e?.SoldierId != null).Select(e => e.SoldierId));
             Life.Set(view == Views.Facilities ? lifeEntries.Where(e => e.Seed == null || !inRow.Contains(e.Seed)).ToList() : new List<LifeEntry>());

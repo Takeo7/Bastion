@@ -14,6 +14,7 @@ CBUFFER_START(UnityPerMaterial)
     half _NormalAmount;
     half _Dull;
     half _Dust;
+    half _Grime;
     half4 _DustColor;
 CBUFFER_END
 

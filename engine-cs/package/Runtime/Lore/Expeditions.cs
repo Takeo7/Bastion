@@ -112,7 +112,8 @@ namespace Bastion.Engine
                 case NodeKinds.Elite:
                     return $"{(guard != null && Content.Templates.TryGetValue(guard, out var t) ? $"Un {t.Name}" : "Un muerto especial")} y su grupo guardan la mejor caja del capítulo.";
                 case NodeKinds.Refuge:
-                    return "Un sitio seguro para descansar: todos se curan del todo.";
+                    // G22 (cuadro 72): the only way back to the base, but beating the boss.
+                    return "Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.";
                 case NodeKinds.Trade:
                     return "Alguien cambia lo que tiene por suministros.";
                 case NodeKinds.Event:

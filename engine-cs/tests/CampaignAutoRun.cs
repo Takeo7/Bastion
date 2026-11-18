@@ -85,6 +85,8 @@ namespace Bastion.Engine.Tests
                     if (still > 200)
                     {
                         Stuck = $"{where} · rechazadas: {string.Join(" | ", refused.Distinct().TakeLast(4))}";
+                        // In a fight, its state as it stuck too (RunBench: atasco-<seed>.json; R9, 18/11).
+                        if (phase == RoomPhases.Mission && heard.Mission != null) StuckMission = Json.Write(heard.Mission);
                         say?.Invoke("atascada: " + Stuck);
                         return played;
                     }

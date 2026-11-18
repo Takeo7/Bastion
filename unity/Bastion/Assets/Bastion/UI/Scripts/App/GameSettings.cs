@@ -557,7 +557,7 @@ namespace Bastion.UI.App
             {
                 Id = CinemaId,
                 Label = "Aspecto de película",
-                About = "Más contraste y colores algo más oscuros, más bruma a lo lejos de día y el fondo desenfocado. No cambia las reglas ni lo que se ve del combate. Con gráficos «Bajos», sin desenfoque.",
+                About = "Más contraste y colores algo más oscuros, y más bruma a lo lejos de día. No cambia las reglas ni lo que se ve del combate.",
                 Choices = new System.Collections.Generic.List<string> { "Sí", "No" },
                 On = Cinematic ? 0 : 1,
             },

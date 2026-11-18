@@ -50,7 +50,18 @@ namespace Bastion.Client
         }
 
         /// <summary>The runs' clearing shown (Show with FixedBase): the same base each time, so made again only the first.</summary>
-        public void ShowFixed(bool snow = false) => Show(FixedBase(), snow);
+        public void ShowFixed(bool snow = false)
+        {
+            Show(Halt != null ? HaltBase() : FixedBase(), snow);
+            // The halt by night or in the rain, if the stage just played was («site/modifier», UI's: night, storm…).
+            string modifier = Halt != null && Halt.Contains("/") ? Halt.Substring(Halt.IndexOf('/') + 1) : null;
+            if (modifier == haltModifier) return;
+            haltModifier = modifier;
+            if (modifier == "night") Mood.Show(Mood.Night).FillOpposite = true;
+            else if (!snow) Mood.Show(Mood.Day).FillOpposite = true;
+        }
+
+        string haltModifier;
 
         /// <summary>The fire of the open shot (tiles: its middle), if the clearing has one.</summary>
         Vector2 fireAt;

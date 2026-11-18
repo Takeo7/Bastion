@@ -15,6 +15,7 @@ Shader "Bastion/Car"
         _Dull ("Colour taken out", Range(0, 1)) = 0.4
         _Dust ("Dust", Range(0, 1)) = 0.85
         _DustColor ("Dust's colour", Color) = (0.52, 0.46, 0.38, 1)
+        _Grime ("Left out for months: grime down its sides, more dust", Range(0, 1)) = 0
         [HideInInspector] _Cutoff ("Cutoff", Float) = 0.5
     }
 
@@ -130,9 +131,19 @@ Shader "Bastion/Car"
                 float tall = unity_RendererBounds_Max.y - unity_RendererBounds_Min.y;
                 float low = tall > 1e-3 ? 1.0 - smoothstep(0.05, 0.4, (input.positionWS.y - unity_RendererBounds_Min.y) / tall) : 0.0;
                 float dust = saturate(_Dust * max(up * (0.15 + 0.85 * patches), low * (0.3 + 0.7 * patches)));
+                // Left out for months (Arturo, 19/11: «sanos, pero abandonados»): the dust thicker on top, and grime run down
+                // its sides in streaks from the roof's edge, a film over all of it.
+                float side = 1.0 - smoothstep(0.2, 0.6, abs(face.y));
+                float streaks = Noise(float2(dot(input.positionWS.xz, float2(7.3, 5.9)), input.positionWS.y * 0.9));
+                float high = tall > 1e-3 ? saturate((input.positionWS.y - unity_RendererBounds_Min.y) / tall) : 0.0;
+                float grime = _Grime * saturate(max(up * (0.55 + 0.45 * patches), side * (0.25 + 0.6 * smoothstep(0.35, 0.8, streaks) * (0.4 + 0.6 * high))));
+                grime = max(grime, _Grime * low * (0.55 + 0.45 * patches));
+                dust = max(dust, grime);
+                // (Its grime and the mud along its sills darker than the dust on top: they show on a white car too.)
+                float mud = saturate(_Grime * max(side * smoothstep(0.35, 0.8, streaks), low));
 
                 SurfaceData surface = (SurfaceData)0;
-                surface.albedo = lerp(paint, _DustColor.rgb, dust * 0.85);
+                surface.albedo = lerp(paint, lerp(_DustColor.rgb, half3(0.27, 0.23, 0.18), mud * 0.75), dust * 0.85);
                 surface.metallic = _Metallic;
                 surface.specular = half3(0, 0, 0);
                 surface.smoothness = lerp(_Smoothness, 0.03, dust);

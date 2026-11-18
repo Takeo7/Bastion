@@ -156,7 +156,9 @@ namespace Bastion.Engine
             [Spots.Office] = new LootTable { Supplies = 30, Item = 8, Medicines = 2, Food = 4, Parts = 15, Weapon = 0, Mod = 1, Mags = 3, Items = new[] { ItemIds.FirstAid, ItemIds.Flashbang, ItemIds.MindShield } },
             [Spots.Shop] = new LootTable { Supplies = 35, Item = 8, Medicines = 12, Food = 25, Parts = 2, Weapon = 0, Mod = 1, Mags = 6, Items = new[] { ItemIds.FirstAid, ItemIds.SmokeGrenade, ItemIds.Molotov } },
             [Spots.Store] = new LootTable { Supplies = 30, Item = 14, Medicines = 2, Food = 15, Parts = 15, Weapon = 3, Mod = 4, Mags = 10, Items = new[] { ItemIds.FragGrenade, ItemIds.SmokeGrenade, ItemIds.Flashbang } },
-            [Spots.Trunk] = new LootTable { Supplies = 30, Item = 14, Medicines = 8, Food = 5, Parts = 15, Weapon = 4, Mod = 3, Mags = 10, Items = new[] { ItemIds.Molotov, ItemIds.FirstAid, ItemIds.NanoVest } },
+            // A boot left (G21, cuadro 72: one car in three rifled already, Setup.PlaceLootedCars): a little better than it was
+            // (Supplies 30, Item 14, Food 5, Parts 15, Weapon 4, Mod 3, Mags 10; nothing in 11).
+            [Spots.Trunk] = new LootTable { Supplies = 34, Item = 18, Medicines = 8, Food = 2, Parts = 8, Weapon = 9, Mod = 5, Mags = 16, Items = new[] { ItemIds.Molotov, ItemIds.FirstAid, ItemIds.NanoVest } },
             [Spots.Glovebox] = new LootTable { Supplies = 25, Item = 5, Medicines = 12, Food = 3, Parts = 5, Weapon = 1, Mod = 1, Mags = 8, Items = new[] { ItemIds.FirstAid } },
         };
 
@@ -360,7 +362,8 @@ namespace Bastion.Engine
 
         /// <summary>
         /// The nose of the car whose boot is on ground tile `i`, or null: a whole car (Decor.ObjectAt, its CarFront the
-        /// anchor), its boot the farthest of its tiles from the nose, and no wreck (GameState.Wrecks: its boot burst open).
+        /// anchor), its boot the farthest of its tiles from the nose, and no wreck (GameState.Wrecks: its boot burst open)
+        /// nor one rifled already (MissionState.Rifled, G21) nor burning (a fire whose source is its nose).
         /// </summary>
         public static int? BootOf(GameState s, int i)
         {
@@ -368,6 +371,10 @@ namespace Bastion.Engine
             var car = Decor.ObjectAt(s.Decor, s.Width, i);
             if (car == null || car.Kind != DecorKinds.CarFront || car.Tiles.Count < 2) return null;
             if ((s.Wrecks ?? new List<Wreck>()).Any((w) => car.Tiles.Contains(w.Anchor))) return null;
+            // Nor one rifled before the squad came (G21: MissionState.Rifled), nor one burning (GameState.Fires from its nose,
+            // for ever): drawn rusted, both (Arturo, cuadro 74: «oxidado = no se registra»).
+            if (s.Mission.Rifled?.Contains(car.Anchor) == true) return null;
+            if ((s.Fires ?? new List<Fire>()).Any((f) => f.Source == car.Anchor)) return null;
             int nx = car.Anchor % s.Width, ny = car.Anchor / s.Width;
             var boot = car.Tiles.OrderByDescending((j) => Js.Hypot(j % s.Width - nx, j / s.Width - ny)).First();
             return boot == i ? car.Anchor : (int?)null;

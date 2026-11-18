@@ -450,6 +450,39 @@ namespace Bastion.Client
         /// (the pines before it are taken out of the shot: ClearShot), and nothing stands under the row, the camera least
         /// turned. Without La Lata, in front of the caravan.
         /// </summary>
+        /// <summary>Where La Lata stopped at the halt, before it is put to one end of the row (PlaceLineup).</summary>
+        Vector3? haltAnchor;
+
+        /// <summary>
+        /// The halt by night: the squad lit as by La Lata's headlights (Producto, 19/11: «no se ve a nadie»), a warm lamp low
+        /// between it and the row's middle and a little before them; off by day.
+        /// </summary>
+        UnityEngine.Light haltLamp;
+
+        void HaltLamp(Vector3 lata, Vector2 mid)
+        {
+            bool night = haltModifier == "night";
+            if (haltLamp == null && night)
+            {
+                haltLamp = new GameObject("Faros del alto").AddComponent<UnityEngine.Light>();
+                haltLamp.transform.SetParent(transform, false);
+                haltLamp.type = LightType.Point;
+                haltLamp.color = new Color(1f, 0.86f, 0.62f);
+                haltLamp.shadows = LightShadows.None;
+            }
+            if (haltLamp == null) return;
+            haltLamp.enabled = night;
+            if (!night) return;
+            var row = new Vector3(mid.x, 0, mid.y);
+            var toCamera = bestToward;
+            haltLamp.transform.position = World(row + new Vector3(toCamera.x, 0, toCamera.y) * 2.2f + Vector3.up * 1.6f);
+            haltLamp.range = 9 * MapSpace.Tile;
+            haltLamp.intensity = 14;
+        }
+
+        /// <summary>The way from the row to its camera, as last placed (tiles, unit).</summary>
+        Vector2 bestToward = new Vector2(0, 1);
+
         LineupPlace PlaceLineup(int count)
         {
             if (place != null && place.count == count && place.mirror == lineupMirror && place.halves == lineupHalves) return place;
@@ -459,7 +492,7 @@ namespace Bastion.Client
             var dir = new Vector2(Mathf.Sin(heading), Mathf.Cos(heading));
             var side = new Vector2(dir.y, -dir.x);
             var lot = parked || b == null ? null : Bastion.Engine.Base.BastionLot(b);
-            var at = parked ? new Vector2(Lata.At.x, Lata.At.z) : lot != null ? new Vector2(lot.X + lot.W / 2f, lot.Y + lot.H + 1.5f) : b != null ? new Vector2(b.Width / 2f, b.Height / 2f + 5) : Vector2.zero;
+            var at = parked && Halted && haltAnchor is Vector3 anchor ? new Vector2(anchor.x, anchor.z) : parked ? new Vector2(Lata.At.x, Lata.At.z) : lot != null ? new Vector2(lot.X + lot.W / 2f, lot.Y + lot.H + 1.5f) : b != null ? new Vector2(b.Width / 2f, b.Height / 2f + 5) : Vector2.zero;
             // (The bus it starts with by the size 0.10.1 had for it when the camp was placed, before its model was built:
             // Park's 7 by 1.7.)
             float length = parked ? (Lata.Vehicle == 3 ? 7 : Lata.Length) : 0;
@@ -592,7 +625,28 @@ namespace Bastion.Client
             if (parked && best != null && count > 0)
             {
                 var mid = Vector2.Lerp(best.spots[0], best.spots[count - 1], 0.5f);
-                Lata.Park(Lata.At, heading, new Vector3(mid.x, 0, mid.y), true, 0, false);
+                // (At a halt, La Lata to one end of the row, whole and in sight, not behind them: Producto, 19/11.)
+                var stand = Lata.At;
+                float row = Vector2.Distance(best.spots[0], best.spots[count - 1]);
+                if (Halted)
+                {
+                    haltAnchor ??= Lata.At;
+                    // (A long one, the bus or the van, stays behind the row, seen over and between them: at its end it went
+                    // out of the shot.)
+                    // (A middling one, the car or the van, half behind the row's end; the motorbike clear of it, and a little
+                    // towards the camera, into its lane: on the road's middle it stood on the line.)
+                    float along = Lata.Length > 5f ? 0 : Lata.Length > 3.2f ? row / 2 + 0.3f : row / 2 + length / 2 + 0.9f;
+                    var into = Lata.Length > 3.2f ? Vector2.zero : new Vector2(best.cam.x - mid.x, best.cam.z - mid.y).normalized * 0.6f;
+                    stand = haltAnchor.Value + new Vector3(dir.x, 0, dir.y) * along + new Vector3(into.x, 0, into.y);
+                }
+                Lata.Park(stand, heading, new Vector3(mid.x, 0, mid.y), true, 0, false);
+                if (Halted)
+                {
+                    bestToward = new Vector2(best.cam.x - mid.x, best.cam.z - mid.y).normalized;
+                    HaltLamp(stand, mid);
+                    var seen = Lata.GetComponentsInChildren<Renderer>().Where(r => r.enabled).ToList();
+                    if (seen.Count > 0) Debug.Log(System.FormattableString.Invariant($"[alto] La Lata ({Lata.Vehicle}, {Lata.Length:0.#} long) at {stand.x:0.##},{stand.z:0.##}: its lowest point {seen.Min(r => r.bounds.min.y):0.###} m over the ground's 0, the row {row:0.#} tiles"));
+                }
             }
             if (best != null) Debug.Log(System.FormattableString.Invariant($"[settlement] lineup of {count}: side {bestK}, shift {bestShift:0.#}, cost {bestCost:0.#}, on the lot {bestLot}; tried: {string.Join(" | ", tried)}"));
             return place = best;

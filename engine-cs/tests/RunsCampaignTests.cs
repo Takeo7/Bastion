@@ -315,7 +315,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(new[] { run.At }, run.Path);
             Assert.Equal(1, c.NodesPlayed);
             Refused(RunTexts.NotChoosing, c, new ChooseNodeCommand { Node = RunMap.Node(run, run.At)!.Next[0] });
-            Refused(RunTexts.EndFromMap, c, new EndRunCommand());
+            Refused(RunTexts.EndFromRefuge, c, new EndRunCommand());
             // Won (H3 calls it; here by hand): back to the map, the next row to choose from.
             Runs.NodeCleared(c, new Rng(1));
             Assert.Equal(RunPhases.Choose, run.Phase);
@@ -384,8 +384,10 @@ namespace Bastion.Engine.Tests
         [Fact]
         public void GoingBackEndsTheRun()
         {
+            // A run started before G22 (no RunState.HomeFromRefuge): from the map, as then (RunHomeTests: the new ones).
             var c = Two();
             var run = Start(c);
+            run.HomeFromRefuge = null;
             var s = Squad(c)[0];
             var med = InPack(c, s, GearKinds.Medicine, null, 0, 0, 2);
             run.Hp[s.Id] = 1;
@@ -399,9 +401,9 @@ namespace Bastion.Engine.Tests
             Assert.Contains(s.Kit!.Pack.Items, (p) => p.Gear == med);
             Assert.Equal(RunTexts.RunEnded, c.Log[0].Text);
             Refused(RunTexts.NoRun, c, new EndRunCommand());
-            // Not from a stop.
+            // A run started now (G22): not from the map nor a Trade, only from a Refuge.
             GoTo(c, NodeKinds.Trade);
-            Refused(RunTexts.EndFromMap, c, new EndRunCommand(), 0, Both);
+            Refused(RunTexts.EndFromRefuge, c, new EndRunCommand(), 0, Both);
         }
 
         [Fact]
@@ -410,6 +412,8 @@ namespace Bastion.Engine.Tests
             var c = Solo();
             Start(c);
             foreach (var s in c.Soldiers) s.Alive = false;
+            // (Home from the map: a run of before G22's.)
+            c.Run!.HomeFromRefuge = null;
             Ok(c, new EndRunCommand());
             Assert.Single(c.Soldiers, (s) => s.Alive);
             Assert.Empty(c.Squad);
@@ -440,7 +444,8 @@ namespace Bastion.Engine.Tests
             Assert.False(Runs.Controls(c, 1, Both, kept));
             // Whoever is away is commanded by the one here.
             Assert.True(Runs.Controls(c, 0, Zero, handed));
-            // Gone with the run.
+            // Gone with the run (home from the map: a run of before G22's).
+            c.Run!.HomeFromRefuge = null;
             Ok(c, new EndRunCommand());
             Assert.True(Runs.Controls(c, 0, Both, handed));
             Assert.False(Runs.Controls(c, 1, Both, handed));

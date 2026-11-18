@@ -291,6 +291,9 @@ namespace Bastion.Client.Map
         /// <summary>A copy of the car whose nose is on ground tile `anchor`, as drawn, under the map (MapBuilder.CarCopy); null if none.</summary>
         public GameObject CarCopy(int anchor) => builder?.CarCopy(anchor, transform);
 
+        /// <summary>How high the boot's lid of that car stands (MapBuilder.BootTop); null if none.</summary>
+        public float? BootTop(int anchor) => builder?.BootTop(anchor, transform);
+
         /// <summary>What is drawn on `tile` that a soldier opens, searches or pries, each mesh again with `material` alone, going with it (MapBuilder.Outline); none if nothing.</summary>
         public List<GameObject> Outline(Pos tile, Material material) => builder?.Outline(tile, material) ?? new List<GameObject>();
 

@@ -148,6 +148,8 @@ namespace Bastion.UI.Strategy
                 if (c.Run != null && view != BaseViews.RunMap && view != BaseViews.Debrief) SetView(BaseViews.RunMap);
                 else if (c.Run == null && (view == BaseViews.RunMap || view == BaseViews.Geoscape || view == BaseViews.Engineering || view == BaseViews.Facilities)) SetView(BaseViews.Stash);
             }
+            // The first time, Salir alone (U16): whatever came before it, the partner coming in too.
+            if (p.FirstTime && view != BaseViews.Squad && view != BaseViews.Debrief) SetView(BaseViews.Squad);
             if (!viewSent) SetView(view);
             Render();
         }
@@ -330,9 +332,18 @@ namespace Bastion.UI.Strategy
 
         void Go(string to)
         {
+            // The first time the base's tabs are shut (U16): only Salir.
+            if (p.FirstTime && to != BaseViews.Squad && to != BaseViews.Debrief)
+            {
+                Debug.Log($"[base] primera vez: «{to}» cerrada hasta volver de la primera expedición");
+                return;
+            }
             SetView(to);
             Render();
         }
+
+        /// <summary>The first time (U16, StrategyPresenter.FirstTime): Salir alone.</summary>
+        public bool FirstTime => p.FirstTime;
 
         // ------------------------------------------------------------ the grids (the runs, H2)
 

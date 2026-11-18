@@ -3205,6 +3205,9 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Saqueo", Lore.StageName(NodeKinds.Normal));
             Assert.Equal("Registrad lo que queráis y salid en La Lata.", Lore.StageLine(NodeKinds.Normal));
             Assert.Equal("Recuperad la carga y volved a La Lata.", Lore.StageLine(NodeKinds.Recovery));
+            // G22 (cuadro 72): back to the base only from a Refugio or once the chapter is beaten.
+            Assert.Equal("Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.", Lore.StageLine(NodeKinds.Refuge));
+            Assert.Equal("Solo se vuelve a la base desde un Refugio o al superar el capítulo.", RunTexts.EndFromRefuge);
             Assert.Equal("Aguantad hasta que llegue La Lata, en el turno 8. Llegan oleadas, cada vez mayores.", Lore.StageLine(NodeKinds.Hold, holdTurns: 8));
             Assert.Equal("Un Acorazado y su grupo guardan la mejor caja del capítulo.", Lore.StageLine(NodeKinds.Elite, guard: TemplateIds.Mec));
             // The special maps (H9, Arturo 17/11): their line under «Sitio:» on the sheet; nothing for the six places of always.
@@ -3269,6 +3272,20 @@ namespace Bastion.Engine.Tests
             Assert.Equal("un silenciador", Lore.GearA(GearKinds.Mod, WeaponModIds.Silencer));
             Assert.Equal("2 medicinas", Lore.GearA(GearKinds.Medicine, null, 2));
             Assert.Equal("117 §", Lore.GearA(GearKinds.Supplies, null, 117));
+            // U19 (18/11): two of one found together, one entry with its plural.
+            Assert.Equal("2 pistolas", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Pistol, 2));
+            Assert.Equal("2 fusiles de asalto", Lore.GearName(GearKinds.Weapon, FoundWeaponIds.AssaultRifle, 2));
+            Assert.Equal("2 escopetas recortadas", Lore.GearThe(GearKinds.Weapon, FoundWeaponIds.SawnOff, 2));
+            Assert.Equal("3 cuchillos", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Knife, 3));
+            Assert.Equal("2 sartenes", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Pan, 2));
+            Assert.Equal("2 chalecos antibalas", Lore.GearA(GearKinds.Vest, VestIds.Vest, 2));
+            Assert.Equal("2 chalecos con placas", Lore.GearName(GearKinds.Vest, VestIds.HeavyVest, 2));
+            Assert.Equal("una pistola", Lore.GearA(GearKinds.Weapon, FoundWeaponIds.Pistol));
+            // Every weapon and vest has its own: none reads «2 pistola».
+            foreach (var w in new System.Collections.Generic.List<string>(Content.FoundWeapons.Keys) { FoundWeaponIds.Knife })
+                Assert.NotEqual($"2 {Lore.GearName(GearKinds.Weapon, w).ToLowerInvariant()}", Lore.GearName(GearKinds.Weapon, w, 2));
+            foreach (var v in Content.Vests.Keys)
+                Assert.NotEqual($"2 {Lore.GearName(GearKinds.Vest, v).ToLowerInvariant()}", Lore.GearName(GearKinds.Vest, v, 2));
             Assert.Equal("De noche", Lore.NightText.Label);
             Assert.Equal("De noche: a oscuras, tus soldados ven 10 casillas en vez de 18. Hay más zombis, y el botín vale la mitad más.", Lore.NightText.Briefing);
             Assert.Equal("Misión de noche: el botín y la recompensa valen la mitad más.", Lore.NightText.Report);

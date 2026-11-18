@@ -707,6 +707,16 @@ namespace Bastion.UI.Combat
                                 break;
                             }
                             // «mano=search»: that action armed by hand with one thing beside too, its panel open (a click does it at once).
+                            // «hallazgo=weapon.pistol;weapon.pistol;mags;mags;supplies*40»: those things found by s1, over it and in the
+                            // log (U19); «*n», a pile of n.
+                            if (what.StartsWith("hallazgo=") && player != null)
+                            {
+                                var found = what.Substring(9).Split(';').Select(g => g.Split('*')).Select(g => (kind: g[0].Split('.'), count: g.Length > 1 ? int.Parse(g[1]) : 1))
+                                    .Select(g => new Bastion.Engine.Gear { Kind = g.kind[0], Type = g.kind.Length > 1 ? g.kind[1] : null, Count = g.count }).ToList();
+                                var who = control.State.Units.First(x => x.Id == "s1");
+                                player.LabFound(Board.TileToWorld(control.State, who.Pos, Board.Tile), who.Name, found);
+                                break;
+                            }
                             if (what.StartsWith("mano="))
                             {
                                 control.LabArmHand(what.Substring(5));

@@ -347,7 +347,8 @@ namespace Bastion.Engine.Tests
         [Fact(DisplayName = "found weapons › rare: boots, stores and home wardrobes; never an office")]
         public void RareBootsStoresAndHomeWardrobes()
         {
-            CloseTo(0.04, Share(DecorKinds.CarRear, Weapon), 1);
+            // A boot's 9 in 100 since G21 (the one car in three rifled already, the rest a little better); it was 4.
+            CloseTo(0.09, Share(DecorKinds.CarRear, Weapon), 1);
             CloseTo(0.03, Share(DecorKinds.Crates, Weapon), 1);
             Assert.True(Share(DecorKinds.Wardrobe, Weapon) > 0);
             Assert.Equal(0, Share(DecorKinds.Desk, Weapon));

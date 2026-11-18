@@ -298,6 +298,7 @@ namespace Bastion.Engine
                 Phase = RunPhases.Choose,
                 Squad = going.Select((s) => s.Id).ToList(),
                 Hp = going.ToDictionary((s) => s.Id, MaxHp),
+                HomeFromRefuge = true,
             };
             Campaign.RunsLog(c, RunTexts.RunStarted(chapter));
         }
@@ -344,12 +345,21 @@ namespace Bastion.Engine
             return false;
         }
 
-        /// <summary>Why the squad can't go back now (EndRunCommand): only from the map, between nodes.</summary>
+        /// <summary>
+        /// Why the squad can't go back now (EndRunCommand): only from a Refuge, at its stop (G22, Arturo 18/11, cuadro 72;
+        /// the boss dead, the run comes home by itself); a run started before (RunState.HomeFromRefuge missing), from the
+        /// map between nodes, as then.
+        /// </summary>
         public static string? EndRunRefusal(CampaignState c)
         {
-            if (c.Run == null) return RunTexts.NoRun;
-            return c.Run.Phase != RunPhases.Choose ? RunTexts.EndFromMap : null;
+            var run = c.Run;
+            if (run == null) return RunTexts.NoRun;
+            if (run.HomeFromRefuge == true) return AtRefuge(run) ? null : RunTexts.EndFromRefuge;
+            return run.Phase != RunPhases.Choose ? RunTexts.EndFromMap : null;
         }
+
+        /// <summary>Whether the squad is at a Refuge's stop (G22: the way home).</summary>
+        public static bool AtRefuge(RunState run) => run.Phase == RunPhases.Stop && RunMap.Node(run, run.At)?.Kind == NodeKinds.Refuge;
 
         /// <summary>
         /// The run ends: back to the base, everyone healed (health is only counted in a run), each pack with what it holds;

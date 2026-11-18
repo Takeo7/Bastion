@@ -256,8 +256,100 @@ namespace Bastion.Client.Map
         static readonly HashSet<string> Wrecks = new HashSet<string> { "carWreck", "carRusted", "carSuv", "carOpen" };
         static readonly bool CarsLogged = Environment.GetEnvironmentVariable("BASTION_COCHES") == "1";
 
+        /// <summary>
+        /// A whole car left where it stands (Abandoned; cuadro 77, «más abandonados»: damage that reads from the game's
+        /// camera, never a wreck's rust nor grass growing out of it): weeds by its wheels and leaves on its roof; and the
+        /// filthy ones (`neglect` 2) down on a flat tyre, the wheel squashed and that corner sunk, and one in two of them a
+        /// side window gone. Each its own by its tile, the same for both players.
+        /// </summary>
+        void Abandon(GameObject car, int ax, int ay, int neglect)
+        {
+            float R(int salt) => MapArt.Hash(ax, ay, 60 + salt);
+            var box = BoundsIn(car, car.transform);
+            var scale = car.transform.lossyScale;
+            GameObject On(string id, Vector3 local, float turn, float size)
+            {
+                var o = Place(car.transform.parent, id, car.transform.TransformPoint(local), turn);
+                if (o == null) return null;
+                o.transform.localScale *= size;
+                o.transform.SetParent(car.transform, true);
+                foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                return o;
+            }
+            // (The weeds first, upright, before the car leans.)
+            for (int n = 0; n < 4; n++)
+                if (R(10 + n) < (neglect > 1 ? 0.85f : 0.5f))
+                {
+                    float sx = n % 2 == 0 ? -1 : 1, sz = n < 2 ? 0.32f : -0.3f;
+                    On(R(14 + n) < 0.5f ? "tuft" : "tuftLow", new Vector3(box.center.x + sx * (box.extents.x + 0.05f / scale.x), box.min.y, box.center.z + sz * box.size.z), R(18 + n) * 360, neglect > 1 ? 1f : 0.8f);
+                }
+            if (R(1) < (neglect > 1 ? 0.8f : 0.4f)) On("leaves", new Vector3(box.center.x + (R(2) - 0.5f) * 0.3f * box.size.x, box.max.y - 0.02f / scale.y, box.center.z + (R(3) - 0.6f) * 0.2f * box.size.z), R(4) * 360, 0.6f);
+            if (neglect < 2) return;
+            // A side window gone (never all: a wreck has none).
+            if (R(30) < 0.5f) WindowOut(car, R(31) < 0.5f ? -1 : 1, R(32) < 0.5f);
+            // A flat tyre: its wheel squashed, the car down on that corner.
+            bool left = R(6) < 0.5f, front = R(7) < 0.5f;
+            string wheel = "_Wheel_" + (front ? "f" : "r") + (left ? "l" : "r");
+            foreach (var part in car.GetComponentsInChildren<Transform>())
+                if (part.name.EndsWith(wheel, StringComparison.OrdinalIgnoreCase))
+                {
+                    var up = part.InverseTransformDirection(Vector3.up);
+                    int axis = Mathf.Abs(up.x) > Mathf.Abs(up.y) && Mathf.Abs(up.x) > Mathf.Abs(up.z) ? 0 : Mathf.Abs(up.y) > Mathf.Abs(up.z) ? 1 : 2;
+                    var s = part.localScale;
+                    s[axis] *= 0.72f;
+                    part.localScale = s;
+                }
+            car.transform.rotation *= Quaternion.Euler(front ? 2.2f : -2.2f, 0, left ? 4f : -4f);
+            car.transform.position += Vector3.down * 0.07f;
+        }
+
+        /// <summary>Each car's glass without one side window, by its mesh, the side and which door's.</summary>
+        static readonly Dictionary<(int, int, bool), Mesh> windowsOut = new Dictionary<(int, int, bool), Mesh>();
+
+        /// <summary>
+        /// One side window of `car` gone: its glass's triangles that face `side` (−1 left, 1 right) over the front half of the
+        /// cabin or the back, taken out of its mesh. A model whose glass can't be read, or has none there, is left whole.
+        /// </summary>
+        void WindowOut(GameObject car, int side, bool front)
+        {
+            foreach (var f in car.GetComponentsInChildren<MeshFilter>())
+            {
+                var mesh = f.sharedMesh;
+                if (mesh == null || !mesh.isReadable || !f.name.EndsWith("_Glass")) continue;
+                var key = (mesh.GetInstanceID(), side, front);
+                if (!windowsOut.TryGetValue(key, out var made) || made == null)
+                {
+                    var toCar = car.transform.worldToLocalMatrix * f.transform.localToWorldMatrix;
+                    var at = mesh.vertices.Select(v => toCar.MultiplyPoint3x4(v)).ToArray();
+                    float zMin = at.Min(v => v.z), zMax = at.Max(v => v.z), middle = (zMin + zMax) / 2;
+                    made = UnityEngine.Object.Instantiate(mesh);
+                    made.name = mesh.name + " (sin una luna)";
+                    made.hideFlags = HideFlags.DontSave;
+                    bool any = false;
+                    for (int s = 0; s < mesh.subMeshCount; s++)
+                    {
+                        var all = mesh.GetTriangles(s);
+                        var kept = new List<int>(all.Length);
+                        for (int n = 0; n + 2 < all.Length; n += 3)
+                        {
+                            Vector3 a = at[all[n]], b = at[all[n + 1]], c = at[all[n + 2]];
+                            var normal = Vector3.Cross(b - a, c - a).normalized;
+                            var m = (a + b + c) / 3;
+                            // (Both its faces: the pane is drawn from inside too.)
+                            if (Mathf.Abs(normal.x) > 0.6f && m.x * side > 0 && (m.z > middle) == front) any = true;
+                            else kept.AddRange(new[] { all[n], all[n + 1], all[n + 2] });
+                        }
+                        made.SetTriangles(kept, s);
+                    }
+                    if (!any) made = mesh;
+                    windowsOut[key] = made;
+                }
+                f.sharedMesh = made;
+            }
+        }
+
         /// <summary>A car in paint `share` (0 to 1) of its own: a wreck's (CarPaints) or a whole one's by its pack (WholePaints).</summary>
-        void Repaint(GameObject car, string id, float share)
+        void Repaint(GameObject car, string id, float share, int neglect = 1)
         {
             string from = CarRed, paint;
             if (Wrecks.Contains(id)) paint = CarPaints[Mathf.FloorToInt(share * CarPaints.Length) % CarPaints.Length];
@@ -266,7 +358,7 @@ namespace Bastion.Client.Map
                 var paints = WholePaintsOf(id);
                 if (paints.Length == 0) return;
                 paint = paints[Mathf.FloorToInt(share * paints.Length) % paints.Length];
-                if (!PaintWhole(car, id, paint, materialOf)) Missing.Add($"{id} ({paint})");
+                if (!PaintWhole(car, id, paint, materialOf, neglect)) Missing.Add($"{id} ({paint})");
                 return;
             }
             if (paint == null || materialOf == null) return;
@@ -293,10 +385,17 @@ namespace Bastion.Client.Map
         /// its colour taken down and dust over it. Off, Synty's paint as it is (a lab's, to set them side by side).
         /// </summary>
         public static bool Worn = true;
-        static readonly Dictionary<Material, Material> worn = new Dictionary<Material, Material>();
+        /// <summary>
+        /// Whole cars left out for months (Arturo, 19/11, cuadro 76: «sanos, pero abandonados»: whole and plainly not a
+        /// wreck, but not just parked): grime down their sides and more dust (Bastion/Car's _Grime), down on a flat tyre,
+        /// leaves on the roof and weeds by the wheels (Thing). Off till Arturo has seen its second proof (Producto, 19/11):
+        /// BASTION_ABANDONO=1 turns it on, a lab's.
+        /// </summary>
+        public static bool Abandoned = Environment.GetEnvironmentVariable("BASTION_ABANDONO") == "1";
+        static readonly Dictionary<(Material, int), Material> worn = new Dictionary<(Material, int), Material>();
 
         /// <summary>Whole car `car` (prop `id`) in paint `paint` (null: its own), worn; false if the paint isn't there.</summary>
-        public static bool PaintWhole(GameObject car, string id, string paint, Func<string, Material> materialOf)
+        public static bool PaintWhole(GameObject car, string id, string paint, Func<string, Material> materialOf, int neglect = 1)
         {
             if (!(MapArt.Prop(id) is PropArt art) || art.pack == null || !WholePaints.TryGetValue(art.pack, out var whole)) return false;
             var to = paint != null && materialOf != null ? materialOf(paint) : null;
@@ -308,7 +407,7 @@ namespace Bastion.Client.Map
                     if (mats[k] != null && mats[k].name.StartsWith(whole.from))
                     {
                         var own = to ?? mats[k];
-                        mats[k] = Worn ? WornOf(own) : own;
+                        mats[k] = Worn ? WornOf(own, neglect) : own;
                     }
                 r.sharedMaterials = mats;
             }
@@ -316,16 +415,24 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>Paint `paint`'s worn copy (Kit/Car with its textures), made the first time.</summary>
-        static Material WornOf(Material paint)
+        static Material WornOf(Material paint, int neglect = 1)
         {
-            if (worn.TryGetValue(paint, out var m) && m != null) return m;
+            if (!Abandoned) neglect = 0;
+            if (worn.TryGetValue((paint, neglect), out var m) && m != null) return m;
             m = KitMaterials.New(KitMaterials.Car, paint.name + " (gastado)");
             if (m == null) return paint;
             m.SetTexture("_BaseMap", paint.HasProperty("_Albedo_Map") ? paint.GetTexture("_Albedo_Map") : paint.mainTexture);
             var normals = paint.HasProperty("_Normal_Map") ? paint.GetTexture("_Normal_Map") : null;
             if (normals != null) m.SetTexture("_BumpMap", normals);
             m.SetFloat("_NormalAmount", normals != null && paint.HasProperty("_Normal_Amount") ? paint.GetFloat("_Normal_Amount") : 0);
-            return worn[paint] = m;
+            // (How long it has stood: 1 dirty, 2 filthy. Cuadro 77, «más abandonados».)
+            if (neglect > 0)
+            {
+                m.SetFloat("_Grime", neglect > 1 ? 1f : 0.75f);
+                m.SetFloat("_Dull", neglect > 1 ? 0.6f : 0.5f);
+                m.SetFloat("_Dust", 1f);
+            }
+            return worn[(paint, neglect)] = m;
         }
 
         /// <summary>Each storey's objects (0 the ground: its floor, walls and decor; above, each slab and what is on it).</summary>
@@ -2369,6 +2476,19 @@ namespace Bastion.Client.Map
                     // One that crashed or burns is a wreck, never one of the whole cars; one burning, a rusted shell.
                     if ((wreck != null && wreck.Kind != WreckKinds.Abandoned || burning) && !Wrecks.Contains(id)) id = Crashed[Mathf.FloorToInt(MapArt.Hash(ax, ay, 14) * Crashed.Length)];
                     if (burning) id = "carRusted";
+                    // G21 (Arturo, 19/11, cuadro 74: «oxidado = no se registra»), where the mission says which cars were
+                    // rifled before the squad came (MissionState.Rifled): rusted, those and the wrecks, which have no boot to
+                    // search; whole, every other, one of the set's whole ones. A fight begun before, as it was.
+                    if (floor == 0 && s.Mission?.Rifled != null && !burning)
+                    {
+                        bool rusted = wreck != null || s.Mission.Rifled.Contains(thing.Anchor);
+                        if (rusted && !Wrecks.Contains(id)) id = Crashed[Mathf.FloorToInt(MapArt.Hash(ax, ay, 14) * Crashed.Length)];
+                        if (!rusted && Wrecks.Contains(id))
+                        {
+                            var whole = cars.Where(c => !Wrecks.Contains(c)).ToArray();
+                            if (whole.Length > 0) id = whole[Mathf.Min(whole.Length - 1, Mathf.FloorToInt(MapArt.Hash(ax, ay, 15) * whole.Length))];
+                        }
+                    }
                     // Searched (its boot or its glovebox), a wreck is the one with the boot lid up; a whole one opens its own
                     // (CarBoot, below).
                     if (Wrecks.Contains(id) && thing.Tiles.Any(j => SearchedAt(Mathf.RoundToInt(floor / MapSpace.Storey), j))) id = "carOpen";
@@ -2434,8 +2554,11 @@ namespace Bastion.Client.Map
                     Debug.Log($"[coches] {id} (set's #{Mathf.FloorToInt(MapArt.Hash(ax, ay, 1) * MapArt.Set("carFront").Length)}) at {ax},{ay} facing {thing.Facing}: {(tilesAlongX == modelAlongX ? "along" : "ACROSS")} ({box.size.x:F2} × {box.size.z:F2} m)");
                 }
                 // (The patrol car in its own livery, worn: another's paint would make it any car.)
-                if (police) PaintWhole(placed, id, null, materialOf);
-                else Repaint(placed, id, MapArt.Hash(ax, ay, 13));
+                // (How far gone each is, by its tile: two in five only dirty, the rest filthy and with something broken: Abandon.)
+                int neglect = MapArt.Hash(ax, ay, 61) < 0.4f ? 1 : 2;
+                if (police) PaintWhole(placed, id, null, materialOf, neglect);
+                else Repaint(placed, id, MapArt.Hash(ax, ay, 13), neglect);
+                if (Abandoned && !Wrecks.Contains(id) && wreck == null && floor == 0) Abandon(placed, ax, ay, neglect);
                 if (wreck != null) Crash(parent, placed, thing, wreck, floor);
                 if (rifled) Ransack(0, boot, "boot", Bastion.Engine.Grid.Dirs4[(thing.Facing + 2) % 4], floor);
                 // Some wrecks still have a battery: their headlights on, by night, at the nose (not one crashed askew).
@@ -2933,6 +3056,8 @@ namespace Bastion.Client.Map
             copy.name = car.id + " (contorno)";
             copy.transform.SetPositionAndRotation(car.car.transform.position, car.car.transform.rotation);
             copy.transform.localScale = car.car.transform.lossyScale;
+            // (Only its boot's lid, where it has one to open: Arturo, 19/11. A wreck, whole.)
+            CarBoot.OnlyLid(copy, car.id);
             foreach (var r in copy.GetComponentsInChildren<Renderer>())
             {
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -2940,6 +3065,21 @@ namespace Bastion.Client.Map
             }
             return copy;
         }
+
+        /// <summary>How high the boot's lid of the car whose nose is on ground tile `anchor` stands (m, the world's), for UI's icon over it; null if none (CarCopy's lid).</summary>
+        public float? BootTop(int anchor, Transform parent)
+        {
+            if (bootTops.TryGetValue(anchor, out float top)) return top;
+            var copy = CarCopy(anchor, parent);
+            if (copy == null) return null;
+            var seen = copy.GetComponentsInChildren<Renderer>().Where(r => r.enabled).ToList();
+            float? found = seen.Count > 0 ? seen.Max(r => r.bounds.max.y) : (float?)null;
+            DestroyNow(copy);
+            if (found is float y) bootTops[anchor] = y;
+            return found;
+        }
+
+        readonly Dictionary<int, float> bootTops = new Dictionary<int, float>();
 
         static Bounds BoundsIn(GameObject model, Transform space)
         {

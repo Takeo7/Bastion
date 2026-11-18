@@ -1214,7 +1214,8 @@ namespace Bastion.Engine
                 state.Lights.Add(new Light { Id = f.Id, Tile = at, Radius = Content.Flames.Light, Tiles = Los.LightTiles(state, at, Content.Flames.Light, Content.Flames.LightHeight) });
             }
             PlacePoliceCars(state, rng);
-            // On a draw of its own, so nothing else moves (G19).
+            // Each on a draw of its own, so nothing else moves (G21, G19).
+            PlaceLootedCars(state, new Rng((opts.Map.Seed ?? 0) * 37 + LootedSalt));
             PlacePieces(state, new Rng((opts.Map.Seed ?? 0) * 31 + PiecesSalt));
             // Paused at the start, while the briefing is read: the space bar (or «Empezar») sets the clock going.
             if (opts.Realtime == true) state.Realtime = new Realtime { Clock = 0, Paused = true, Units = new Dictionary<string, RtUnit>() };
@@ -1222,6 +1223,32 @@ namespace Bastion.Engine
         }
 
         private const int PiecesSalt = 0x6719;
+        private const int LootedSalt = 0x1007;
+        /// <summary>One whole car in so many has had its boot rifled before the squad came (G21).</summary>
+        public const int LootedShare = 3;
+
+        /// <summary>
+        /// G21 (Arturo, 18/11, cuadros 70, 72 y 74: «uno de cada tres»; «oxidado = no se registra»): of the whole cars on the
+        /// ground whose boot opens (Looting.BootOf), one in LootedShare was rifled already (MissionState.Rifled): no boot to
+        /// open any more, drawn rusted. Never a police car (PoliceCar: a police station's two, and any other, always
+        /// something in them). What is left in the rest is a little better (Spots.Trunk). Public for its test.
+        /// </summary>
+        public static void PlaceLootedCars(GameState s, Rng rng)
+        {
+            if (s.Decor == null) return;
+            var burning = new HashSet<int>((s.Fires ?? new List<Fire>()).SelectMany((f) => f.Tiles.Append(f.Source)));
+            var police = new HashSet<int>(s.Mission.PoliceCar ?? new List<int>());
+            var rifled = new List<int>();
+            for (var i = 0; i < s.Decor.Count; i++)
+            {
+                var car = Decor.ObjectAt(s.Decor, s.Width, i);
+                if (car == null || car.Kind != DecorKinds.CarFront || car.Anchor != i || car.Tiles.Count < 2 || car.Tiles.Any(burning.Contains) || police.Contains(i)) continue;
+                var boot = car.Tiles.FirstOrDefault((j) => Looting.BootOf(s, j) == i);
+                if (Looting.BootOf(s, boot) != i || rng.Int(LootedShare) != 0) continue;
+                rifled.Add(i);
+            }
+            s.Mission.Rifled = rifled.Count > 0 ? rifled : null;
+        }
         /// <summary>One medicine cabinet in so many holds something (cuadro 67; at least one in each medical building).</summary>
         public const int CabinetShare = 4;
         /// <summary>One evidence shelf in so many is empty from the start.</summary>

@@ -92,12 +92,15 @@ namespace Bastion.Net
             return new EndTurnCommand { Ready = true };
         }
 
-        /// <summary>Whether the partner takes turns with `slot` (Sim.Alternates): here, not done, and with someone to move.</summary>
+        /// <summary>
+        /// Whether the partner takes turns with `slot`: the rules' own (Sim.Alternates: here, not done, and with someone to
+        /// move, or one aboard La Lata with its actions, T24), so the bot hands over the command whenever the rules would
+        /// refuse another of its soldiers (Rules InPlay). Counting only those on the field, it kept the command with Pepe's
+        /// one in La Lata, gave Ana's other one its order, refused for ever (R9, 18/11: the bench's chapter of seed 28).
+        /// </summary>
         private static bool PartnerPlays(GameState s, int slot, IReadOnlyList<int> connected)
         {
-            var partner = slot == 0 ? 1 : 0;
-            return connected.Contains(partner) && !s.Ready[partner]
-                && Grid.Combatants(s, Teams.Xcom).Any((u) => !u.Evacuated && Paths.HasTurnLeft(u) && (u.Owner == partner || u.Owner == null));
+            return new Sim(s, new Rng(0), connected).Alternates(slot == 0 ? 1 : 0);
         }
 
         /// <summary>

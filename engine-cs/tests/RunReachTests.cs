@@ -31,8 +31,8 @@ namespace Bastion.Engine.Tests
             {
                 var boot = new Pos { X = 7, Y = y, Z = 0 };
                 Assert.Equal(TileKinds.Low, Grid.KindAt(s, boot));
-                Assert.NotNull(Looting.BootOf(s, Grid.TileIndex(s, boot.X, boot.Y)));
-                Assert.Contains(Grid.NodeOf(s, boot), s.Mission.OutOfReach!);
+                // (Or rifled already, no boot at all: G21.)
+                if (Looting.BootOf(s, Grid.TileIndex(s, boot.X, boot.Y)) != null) Assert.Contains(Grid.NodeOf(s, boot), s.Mission.OutOfReach!);
                 Assert.Null(Looting.SearchSpot(s, boot));
                 Assert.False(Looting.IsSearchable(s, boot));
                 Assert.DoesNotContain(Grid.TileIndex(s, boot.X, boot.Y), s.Mission.PoliceCar ?? new List<int>());

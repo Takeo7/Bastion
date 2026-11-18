@@ -171,21 +171,19 @@ namespace Bastion.Engine.Tests
         }
 
         [Fact]
-        public void ARunEndedOnItsMapGoesBackToTheBase()
+        public void ARunGoesHomeFromARefugeOnly()
         {
+            // G22 (Arturo, 18/11, cuadro 72): from the map, the room says no and the run goes on (home from a Refuge: the
+            // engine's RunHomeTests); the room on the base, as before, once one does (RunsCampaignTests, the old runs).
             using var host = new Host();
             var ana = host.Join("Ana");
             host.Say(ana, new { t = "newCampaign" });
-            // Alone, at once.
             host.Say(ana, Ccmd(new { type = "startRun" }));
             Assert.NotNull(host.Saved().Run);
             host.Say(ana, Ccmd(new { type = "endRun" }));
-            Assert.Null(host.Saved().Run);
-            Assert.Null(CampaignSent(ana)["run"]);
-            Assert.Equal("base", host.Room.Summary().phase);
-            // The summary says it is on the base.
-            var saved = ana.Take("room").Last()["savedCampaign"]!;
-            Assert.Null(saved["row"]);
+            Assert.Equal(RunTexts.EndFromRefuge, (string?)ana.Take("rejected").Single()["message"]);
+            Assert.NotNull(host.Saved().Run);
+            Assert.NotNull(CampaignSent(ana)["run"]);
         }
 
         [Fact]

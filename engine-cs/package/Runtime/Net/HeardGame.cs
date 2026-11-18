@@ -161,13 +161,17 @@ namespace Bastion.Net
                 if (medicine != null) return medicine;
                 if (!hosting) return null;
                 if (run.Path.Count == 0) wentOut[run.Seed] = run.Squad.Count;
-                if (Homeward(c, run)) return Runs.EndRunRefusal(c) == null ? new EndRunCommand() : null;
+                if (Homeward(c, run) && Runs.EndRunRefusal(c) == null) return new EndRunCommand();
                 var choices = RunMap.Choices(run);
-                var next = choices.FirstOrDefault((n) => RunMap.Visible(c, n)) ?? choices.FirstOrDefault();
+                // Wanting home where it can't go (G22: only from a Refuge), toward one: a Refuge to choose, or one just past.
+                var refuge = Homeward(c, run) ? choices.FirstOrDefault((n) => n.Kind == NodeKinds.Refuge) ?? choices.FirstOrDefault((n) => n.Next.Any((id) => RunMap.Node(run, id)?.Kind == NodeKinds.Refuge)) : null;
+                var next = refuge ?? choices.FirstOrDefault((n) => RunMap.Visible(c, n)) ?? choices.FirstOrDefault();
                 return next != null && Runs.ChooseNodeRefusal(c, next.Id) == null ? new ChooseNodeCommand { Node = next.Id } : null;
             }
             var stop = run.Stop;
             if (run.Phase != RunPhases.Stop || stop == null) return null;
+            // Home from a Refuge as from the map before (G22).
+            if (hosting && Homeward(c, run) && Runs.EndRunRefusal(c) == null) return new EndRunCommand();
             if (Runs.LeaveStopRefusal(c) != null)
             {
                 if (!hosting) return null;

@@ -46,6 +46,35 @@ namespace Bastion.Engine
         };
 
         /// <summary>
+        /// The weapons' and the vests' many, by their type (U19, 18/11: two of one found together go as one entry, «2 pistolas»):
+        /// the noun and what agrees with it, «escopetas recortadas»; «antibalas», «de asalto», «con mira» as they are.
+        /// </summary>
+        private static readonly IReadOnlyDictionary<string, string> GearPlurals = new Dictionary<string, string>
+        {
+            [FoundWeaponIds.Knife] = "cuchillos",
+            [FoundWeaponIds.Pistol] = "pistolas",
+            [FoundWeaponIds.AssaultRifle] = "fusiles de asalto",
+            [FoundWeaponIds.PumpShotgun] = "escopetas",
+            [FoundWeaponIds.PrecisionRifle] = "fusiles de precisión",
+            [FoundWeaponIds.MachineGun] = "ametralladoras",
+            [FoundWeaponIds.HuntingRifle] = "fusiles de cerrojo",
+            [FoundWeaponIds.SawnOff] = "escopetas recortadas",
+            [FoundWeaponIds.ScopedRifle] = "fusiles con mira",
+            [FoundWeaponIds.LightMachineGun] = "ametralladoras ligeras",
+            [FoundWeaponIds.Machete] = "machetes",
+            [FoundWeaponIds.Pan] = "sartenes",
+            [FoundWeaponIds.Bat] = "bates",
+            [FoundWeaponIds.Crowbar] = "palancas",
+            [FoundWeaponIds.Chainsaw] = "motosierras",
+            [FoundWeaponIds.Katana] = "katanas",
+            [FoundWeaponIds.Longsword] = "espadas",
+            [FoundWeaponIds.Rake] = "rastrillos",
+            [FoundWeaponIds.Stick] = "palos",
+            [VestIds.Vest] = "chalecos antibalas",
+            [VestIds.HeavyVest] = "chalecos con placas",
+        };
+
+        /// <summary>
         /// A gear's name as a label (UI's sheets and lists, the Trueque, the Sucesos): «Granada», «2 granadas», «Fusil de
         /// cerrojo», «Chaleco con placas». One goes with its capital and no figure; more, with how many. The supplies are
         /// «Suministros» however many: their figure goes apart («Suministros · 35 de 100»).
@@ -83,8 +112,8 @@ namespace Bastion.Engine
         }
 
         /// <summary>
-        /// The words of a gear: those of what piles, or a weapon's and a vest's from Content (one to a place, never more:
-        /// its «many» is only the name again). A weapon is feminine when Content finds «una» of it.
+        /// The words of a gear: those of what piles, or a weapon's and a vest's from Content, their many from GearPlurals (one
+        /// to a place, but two found together are told as one: U19). A weapon is feminine when Content finds «una» of it.
         /// </summary>
         private static GearWords WordsOf(string kind, string? type)
         {
@@ -96,13 +125,13 @@ namespace Bastion.Engine
                 if (def != null)
                 {
                     var one = LowerFirst(def.Name);
-                    return new GearWords(one, one, (def.Find.StartsWith("una ") ? "la " : "el ") + one);
+                    return new GearWords(one, GearPlurals.TryGetValue(type, out var many) ? many : one, (def.Find.StartsWith("una ") ? "la " : "el ") + one);
                 }
             }
             if (kind == GearKinds.Vest && type != null && Content.Vests.TryGetValue(type, out var vest))
             {
                 var one = LowerFirst(vest.Name);
-                return new GearWords(one, one, "el " + one);
+                return new GearWords(one, GearPlurals.TryGetValue(type, out var many) ? many : one, "el " + one);
             }
             if (type != null && Content.Items.TryGetValue(type, out var item))
             {

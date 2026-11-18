@@ -81,6 +81,17 @@ namespace Bastion.Client
             pieceGrid = null;
             Snow = snow;
             var state = ClearingState(@base, snow);
+            // The halt's way, a road: asphalt with its line, three tiles wide, the whole map long.
+            // (Tarmac in the pines is the roadside's: GroundMap.)
+            if (Halted) state.Site = Sites.Roadside;
+            if (Halted && state.Ground != null)
+                for (int i = 0; i < state.Width * state.Height && i < state.Ground.Count; i++)
+                {
+                    // (Two lanes of road with their line, La Lata on it; an earth shoulder either side, not the clearing's grass.)
+                    float off = Mathf.Abs(i % state.Width + 0.5f - state.Width / 2f);
+                    if (off <= 1) state.Ground[i] = 1;
+                    else if (off <= HaltHalf) state.Ground[i] = 3;
+                }
             // (Its fill fixed, opposite the sun: clearingArt.ts aim.)
             Mood.Show(snow ? Mood.SnowDay : Mood.Day).FillOpposite = true;
             if (Map == null)
@@ -92,6 +103,7 @@ namespace Bastion.Client
                 Map.transform.SetParent(transform, false);
             }
             built = Map.Build(state, this.prefabOf, this.materialOf);
+            if (Halted) HaltDress(state);
             UnFace(Map.transform);
             // The fire pits lit (clearingArt.ts camp: its fires).
             SetFlames(built.PiecesPlaced.Where(p => p.id == "bFirePit").Select(p => (Vector3)p.matrix.GetColumn(3)).ToList());
@@ -101,6 +113,7 @@ namespace Bastion.Client
             if (Lata == null || Lata.Vehicle != vehicle) MakeLata();
             // Its snow as the clearing's, the vehicle kept or not (the 3D review's E-02, 10/11).
             Lata?.Snowy(snow);
+            haltAnchor = null;
             Park();
             CampPlaces();
             ShowcaseGrassOff();
@@ -127,6 +140,73 @@ namespace Bastion.Client
             Show(campaign.Bastion, Campaign.Wintry(campaign));
             LifeView();
         }
+
+        /// <summary>
+        /// A8 (Arturo, 19/11, cuadro 75: «siempre una carretera»): between a run's stages the debrief is a halt on the way,
+        /// not the base: the site of the stage just played (UI sets it before SetView; null, the base itself: no run, or
+        /// back after the boss or a Refuge). The same stretch whatever the site.
+        /// </summary>
+        public static string Halt = Environment.GetEnvironmentVariable("BASTION_ALTO");
+
+        static BaseState haltBase;
+
+        /// <summary>
+        /// The halt's ground: the engine's base with nothing on it and its clearing grown over, pines either side of a way
+        /// through its middle from north to south (HaltHalf tiles either side of it clear), four in five tiles of the rest.
+        /// </summary>
+        static BaseState HaltBase()
+        {
+            if (haltBase != null) return haltBase;
+            var b = Bastion.Engine.Base.FreshBase(new Rng(7));
+            b.Pieces.Clear();
+            b.Felled = null;
+            var trees = new System.Collections.Generic.List<int>();
+            float middle = (b.Width - 1) / 2f;
+            for (int i = 0; i < b.Width * b.Height; i++)
+            {
+                int x = i % b.Width, y = i / b.Width;
+                if (Mathf.Abs(x - middle) > HaltHalf && Bastion.Client.Map.MapArt.Hash(x, y, 77) < (Mathf.Abs(x - middle) < 11 ? 0.35f : 0.8f)) trees.Add(i);
+            }
+            b.Trees = trees;
+            return haltBase = b;
+        }
+
+        /// <summary>
+        /// What says «road» by the halt (Producto, 19/11: without it, it read as the base): power poles down one verge, a
+        /// barrier along the other, a sign, a wreck in the ditch, tyres and a cone; about the middle, where La Lata stops.
+        /// </summary>
+        void HaltDress(GameState state)
+        {
+            // (No animals about: the base's dog came along.)
+            foreach (var animals in Map.GetComponentsInChildren<Transform>(true).Where(c => c.name == "Fauna").ToList()) DestroyNow(animals.gameObject);
+            var holder = new GameObject("Carretera").transform;
+            holder.SetParent(Map.transform, false);
+            float cx = state.Width / 2f, cz = state.Height / 2f, T = MapSpace.Tile;
+            void Put(string id, float x, float z, float yaw)
+            {
+                var o = MapBuilder.Prop(holder, id, prefabOf);
+                if (o == null) return;
+                o.transform.localPosition = new Vector3(x * T, 0, -z * T);
+                o.transform.localRotation = Quaternion.Euler(0, yaw, 0);
+            }
+            // (All down `side` of the road, the far one from the camera: nothing between it and the row.)
+            for (int n = -3; n <= 3; n++) Put("powerPole", cx + HaltSide * 4.3f, cz + n * 7 + 3.5f, 90);
+            for (int n = -14; n <= 14; n++)
+                if (n % 6 != 1) Put("bJersey", cx + HaltSide * 3.1f, cz + n * 1.5f + 0.4f, 90);
+            Put("stopSign", cx + HaltSide * 3.7f, cz - 7, 180);
+            Put("natureSign", cx + HaltSide * 3.8f, cz + 9, 0);
+            Put("carRusted", cx + HaltSide * 5.6f, cz - 5, 28);
+            Put("tirePile", cx + HaltSide * 4.0f, cz + 4.5f, 40);
+        }
+
+        /// <summary>The side of the halt's road its furniture stands on (east 1, west −1): the far one from the lineup's camera.</summary>
+        const float HaltSide = -1;
+
+        /// <summary>How far either side of the halt's road no pine stands (tiles from its middle): the road, three wide, and a verge.</summary>
+        const float HaltHalf = 6.5f;
+
+        /// <summary>Whether what is shown is the halt (Show with HaltBase).</summary>
+        bool Halted => Base != null && ReferenceEquals(Base, haltBase);
 
         void MakeLata()
         {
@@ -160,6 +240,7 @@ namespace Bastion.Client
             vehicle = v;
             if (Base == null) return;
             MakeLata();
+            haltAnchor = null;
             Park();
             CampPlaces();
             ShowcaseGrassOff();
