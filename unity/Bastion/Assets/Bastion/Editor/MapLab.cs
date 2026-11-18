@@ -733,6 +733,63 @@ namespace Bastion.EditorTools
         }
 
         /// <summary>
+        /// A4 (Producto, 18/11: the police station's patrol cars stood unseen): the cover the map draws nothing on. Each
+        /// mission of BASTION_MAPAS (biome,seed,kind[,site];…; a few of every biome and site if not said) built unjoined, and
+        /// every low or high tile of its ground and storeys with nothing on it (MapView.TopOf) nor drawn over it counted by its decor ([sindibujo]).
+        ///   unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapLab.SinDibujo -quit
+        /// </summary>
+        public static void SinDibujo()
+        {
+            var specs = (Environment.GetEnvironmentVariable("BASTION_MAPAS") ??
+                "city,1,scavenge;city,2,elimination;city,3,scavenge;wilds,1,scavenge;wilds,2,elimination;wilds,3,scavenge,roadside;facility,1,scavenge;facility,2,elimination;city,4,scavenge,industrial;"
+                + "city,5,scavenge,hospital;city,6,scavenge,offices;facility,7,scavenge,shed;city,2,scavenge,police;city,8,scavenge,plaza;wilds,9,scavenge,camping").Split(';').Where(v => v.Length > 0);
+            var all = new Dictionary<string, (int count, string first)>();
+            bool join = MapBuilder.JoinStill;
+            MapBuilder.JoinStill = false;
+            foreach (string spec in specs)
+            {
+                var m = spec.Split(',');
+                GameState state;
+                try { state = Generated(m[0], int.Parse(m[1]), m.Length > 2 ? m[2] : MissionKinds.Scavenge, m.Length > 3 ? m[3] : null); }
+                catch (Exception e)
+                {
+                    Debug.Log($"[sindibujo] {spec}: {e.Message}");
+                    continue;
+                }
+                var view = new GameObject("Mapa " + spec).AddComponent<MapView>();
+                view.Build(state, Prefabs(), Materials());
+                var here = new Dictionary<string, List<string>>();
+                int covers = 0;
+                // (What is drawn by another way than on its tile, a house's dressing or La Lata, counts too: any renderer no
+                // bigger than five tiles with something within 0.3 tiles of the tile's middle, over its floor.)
+                var drawn = view.GetComponentsInChildren<Renderer>().Where(r => r.enabled && r.bounds.size.x < 5 * MapSpace.Tile && r.bounds.size.z < 5 * MapSpace.Tile).Select(r => r.bounds).ToList();
+                for (int k = 0; k <= (state.Levels?.Count ?? 0); k++)
+                {
+                    var tiles = k == 0 ? state.Tiles : state.Levels[k - 1].Tiles;
+                    var decor = k == 0 ? state.Decor : state.Levels[k - 1].Decor;
+                    for (int i = 0; i < tiles.Count; i++)
+                    {
+                        if (tiles[i] != TileKinds.Low && tiles[i] != TileKinds.High) continue;
+                        covers++;
+                        if (view.TopOf(new Pos { X = i % state.Width, Y = i / state.Width, Z = k }) != null) continue;
+                        var box = new Bounds(new Vector3((i % state.Width + 0.5f) * MapSpace.Tile, k * MapSpace.Storey + 0.15f + 0.4f * MapSpace.Storey, -(i / state.Width + 0.5f) * MapSpace.Tile),
+                            new Vector3(0.6f * MapSpace.Tile, 0.8f * MapSpace.Storey, 0.6f * MapSpace.Tile));
+                        if (drawn.Any(d => d.Intersects(box))) continue;
+                        string kind = $"{(decor != null && i < decor.Count ? Bastion.Engine.Decor.DecorOf(decor[i])?.Kind : null) ?? "(none)"} {tiles[i]}";
+                        if (!here.TryGetValue(kind, out var list)) here[kind] = list = new List<string>();
+                        list.Add($"{i % state.Width},{i / state.Width}" + (k > 0 ? $",{k}" : ""));
+                    }
+                }
+                foreach (var pair in here)
+                    all[pair.Key] = (all.TryGetValue(pair.Key, out var was) ? was.count + pair.Value.Count : pair.Value.Count, was.first ?? $"{spec} at {pair.Value[0]}");
+                Debug.Log($"[sindibujo] {spec} ({state.Width}×{state.Height}), {covers} cover tiles; undrawn: {string.Join("; ", here.OrderByDescending(p => p.Value.Count).Select(p => $"{p.Key} ×{p.Value.Count} ({string.Join(" ", p.Value.Take(4))})"))}");
+                UnityEngine.Object.DestroyImmediate(view.gameObject);
+            }
+            MapBuilder.JoinStill = join;
+            foreach (var pair in all.OrderByDescending(p => p.Value.count)) Debug.Log($"[sindibujo] total {pair.Key}: {pair.Value.count}, first in {pair.Value.first}");
+        }
+
+        /// <summary>
         /// The floors' and roofs' faces with no normal (a polygon's first three corners in a line: the shader's NaN black,
         /// and the bloom spreads it over the screen; the 0.11.3's square houses, 1/11), in each map of BASTION_MAP (the
         /// goldens of step1 if not said; a saved game's file by its path too).
@@ -1289,6 +1346,14 @@ namespace Bastion.EditorTools
             // recorded one; with a site, its estate or roadside (Sites: industrial, roadside).
             var made = Environment.GetEnvironmentVariable("BASTION_GENERAR")?.Split(',');
             var state = medical != null ? Medical(medical) : made != null && made.Length >= 2 ? Generated(made[0], int.Parse(made[1]), made.Length > 2 ? made[2] : "elimination", made.Length > 3 ? made[3] : null) : Golden(name);
+            // BASTION_DECORADO=kind: where the map has that decor ([decorado]: its tile, its facing, the tile's kind), and the map's size.
+            if (Environment.GetEnvironmentVariable("BASTION_DECORADO") is string wanted)
+            {
+                Debug.Log($"[decorado] {state.Width}×{state.Height}, site {state.Site}, mission {state.Mission?.Kind}");
+                for (int i = 0; i < state.Decor.Count; i++)
+                    if (Bastion.Engine.Decor.DecorOf(state.Decor[i]) is DecorLook look && (look.Kind == wanted || look.Kind == DecorKinds.Part && wanted == "part"))
+                        Debug.Log($"[decorado] {look.Kind} at {i % state.Width},{i / state.Width} facing {look.Facing}, tile {state.Tiles[i]}");
+            }
             // BASTION_CLIMA=drizzle|downpour|storm|snowfall|blizzard (or ClimaLab's WeatherOverride): the mission's rain or snow.
             if ((WeatherOverride ?? Environment.GetEnvironmentVariable("BASTION_CLIMA")) is string weather) state.Weather = weather;
             // BASTION_ABRIR=x,y;…: those doors open (a door's look open, its leaf swung).

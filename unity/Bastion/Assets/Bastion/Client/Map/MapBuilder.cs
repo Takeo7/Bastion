@@ -2361,8 +2361,11 @@ namespace Bastion.Client.Map
                     id = MapArt.Hash(x0, y0, 31) < 0.3f ? "parkBenchBroken" : "parkBench";
                     break;
                 case "sirenCar":
-                    // The sabotage's siren car is its unit's (the relay, unitViews.ts sirenOf), not the map's.
-                    return null;
+                    // The sabotage's siren car is its unit's (the relay, unitViews.ts sirenOf), not the map's; any other (a
+                    // police station's two on its strip, H9 §3: Producto's A4 of 18/11, they stood unseen), the patrol car.
+                    if (s.Mission?.Kind == MissionKinds.Sabotage || x1 - x0 > 0 && y1 - y0 > 0) return null;
+                    id = PoliceCar;
+                    break;
                 case "shed":
                 case "washingLine":
                 case "vegPatch":
@@ -2379,6 +2382,13 @@ namespace Bastion.Client.Map
                 var at = Matrix4x4.TRS(new Vector3(cx, floor / MapSpace.Tile, cz), Quaternion.AngleAxis((4 - thing.Facing) % 4 * 90f, Vector3.up), Vector3.one);
                 var drip = PlaceGame(parent, "ivStand", at * Matrix4x4.Translate(new Vector3(0.45f, 0, 0.6f)));
                 if (drip != null) drip.transform.SetParent(placed.transform, true);
+            }
+            if (placed != null && thing.Kind == "sirenCar")
+            {
+                // In its own livery, as the first mission's; its boot's lid up once searched (the tile furthest from its nose).
+                int boot = thing.Tiles.OrderByDescending(j => (j % s.Width - ax) * (j % s.Width - ax) + (j / s.Width - ay) * (j / s.Width - ay)).First();
+                if (floor == 0 && SearchedAt(0, boot)) CarBoot.Open(placed, id);
+                PaintWhole(placed, id, null, materialOf);
             }
             if (placed != null && thing.Kind == "carFront")
             {
