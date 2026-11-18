@@ -43,6 +43,14 @@ namespace Bastion.Client.Units
         /// <summary>The left arm reaches this share of its length at most; the handguard's point slid back to it, no nearer the grip than this (metres, unscaled).</summary>
         const float TuckReach = 0.97f;
         static readonly float TuckForeLeast = Tried("BASTION_TUCK_ANG")?.z ?? 0.34f;
+        const float TuckForeLeastGripped = 0.26f;
+        /// <summary>
+        /// TuckAt and TuckElbow for a pistol-gripped gun (the assault rifle, the machine guns): its butt 8 cm further back and
+        /// 3 out, the elbow higher. Their stocks are deeper and their bodies wider than a hunting rifle's: where that one
+        /// goes, they were 7–8 cm into the right upper arm at rest and running (lab/pg.sh in Arte's T22 notes, 18/11); so, the
+        /// assault rifle 0 at rest and 3–4 running, the machine guns 4–7.
+        /// </summary>
+        static readonly Vector3 TuckAtGripped = Tried() ?? new Vector3(0.1f, -0.22f, -0.18f), TuckElbowGripped = Tried("BASTION_TUCK_CODO") ?? new Vector3(1f, 0.4f, -0.2f);
         /// <summary>Seconds a gun takes to come under the arm or leave it (aiming, reloading, the left hand busy).</summary>
         static readonly float TuckEase = Tried("BASTION_TUCK_PASO", 4)?.x ?? 0.18f;
         /// <summary>
@@ -55,6 +63,13 @@ namespace Bastion.Client.Units
 
         /// <summary>Whether `art` is held tucked (its tuck points given).</summary>
         public static bool Tucks(WeaponArt art) => art?.tuck != null && art.tuck.Length >= 9;
+
+        /// <summary>
+        /// Whether a tucked gun's grip is a pistol's, under it (its `hand` given: the assault rifle and the machine guns, tucked
+        /// since Producto's note of 18/11, «la culata sube por fuera del brazo hasta el hombro»): the right hand round it from
+        /// its right, the knuckles ahead; and loaded as any rifle, by its clip, not by its bolt (Loading).
+        /// </summary>
+        static bool PistolGripped(WeaponArt art) => art?.hand != null && art.hand.Length >= 3;
 
         /// <summary>The gun tucked and both hands on it, after the body's pose; `k` how far (0 the clips' own, 1 all).</summary>
         public static void HoldTucked(Animator a, Transform gun, Transform root, WeaponArt art, float k) => HoldTucked(a, gun, root, art, k, 0, null);
@@ -79,7 +94,8 @@ namespace Bastion.Client.Units
             var across = Vector3.Cross(root.up, ahead).normalized;
             var way = Quaternion.AngleAxis(Mathf.Lerp(TuckDown, LoadDown, work), across) * ahead;
             var turn = Quaternion.AngleAxis(TuckCant, way) * Quaternion.LookRotation(way, root.up);
-            var at = shoulderR.position + root.TransformDirection(Vector3.Lerp(TuckAt, LoadAt, work)) * scale;
+            bool gripped = PistolGripped(art);
+            var at = shoulderR.position + root.TransformDirection(gripped ? TuckAtGripped : Vector3.Lerp(TuckAt, LoadAt, work)) * scale;
             // (From where the clips' own hold has it, `k` of the way.)
             // (And round the arm in between: TuckRound.)
             var round = root.TransformDirection(TuckRound) * (scale * Mathf.Sin(k * Mathf.PI));
@@ -88,7 +104,10 @@ namespace Bastion.Client.Units
             LastTuckDown = Mathf.Asin(Mathf.Clamp(-gun.forward.y, -1, 1)) * Mathf.Rad2Deg;
             // The left hand's place on the handguard: as far along as its arm reaches.
             float arm = (Vector3.Distance(shoulderL.position, elbowL.position) + Vector3.Distance(elbowL.position, handL.position)) * TuckReach;
-            for (int step = 0; step < 12 && fore.z > grip.z + Mathf.Lerp(TuckForeLeast, LoadForeLeast, work) && Vector3.Distance(gun.TransformPoint(fore), shoulderL.position) > arm; step++) fore.z -= 0.03f;
+            // (A pistol-gripped one's, nearer: the machine gun's butt is long, and its handguard was out of the arm's reach,
+            // the hand left short of it by its top.)
+            float least = gripped ? TuckForeLeastGripped : Mathf.Lerp(TuckForeLeast, LoadForeLeast, work);
+            for (int step = 0; step < 12 && fore.z > grip.z + least && Vector3.Distance(gun.TransformPoint(fore), shoulderL.position) > arm; step++) fore.z -= 0.03f;
             // The right hand onto the stock's wrist from behind, on its right side: the palm against that side, covering it top
             // to bottom, the fingers ahead and down (to close under it), the thumb left on top; the back of the hand seen from
             // the right. (Facing down on its top, the wood showed under the knuckles: «la mano encima», Producto, 18/11.)
@@ -96,6 +115,17 @@ namespace Bastion.Client.Units
             // 18/11.)
             // (Off it, loading: over the action from its right, the palm down on it.)
             float off = right is Vector3 r ? Mathf.Clamp01(Vector3.Distance(r, grip) / 0.06f) : 0;
+            if (gripped)
+            {
+                // (A pistol grip: the palm against its right side, the knuckles ahead, the fingers closed round its front and
+                // the index along the trigger guard.)
+                Grasp(a, false, k, gun.TransformPoint(grip) + gun.right * (0.02f * model), (way * 0.9f + gun.up * 0.3f).normalized, -gun.right, root.TransformDirection(TuckElbowGripped));
+                Grasp(a, true, k, gun.TransformPoint(fore), gun.right, gun.up, root.TransformDirection(new Vector3(-0.8f, -0.7f, 0.1f)));
+                if (k < 0.5f) return;
+                Fist(a, TriggerIndex, TriggerOthers);
+                Fist(a, TuckBend, TuckBend, true);
+                return;
+            }
             var elbow = root.TransformDirection(Vector3.Lerp(TuckElbow, LoadElbow, work));
             Grasp(a, false, k, gun.TransformPoint(right ?? grip), Vector3.Slerp((way * 0.8f - gun.up * 0.6f).normalized, (way * 0.7f - gun.right * 0.7f).normalized, off),
                 Vector3.Slerp((-gun.right * 0.97f - gun.up * 0.24f).normalized, (-gun.up * 0.9f - gun.right * 0.4f).normalized, off), elbow);

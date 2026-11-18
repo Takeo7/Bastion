@@ -1824,7 +1824,7 @@ namespace Bastion.Client.Units
                 return;
             }
             // (A straight-stocked one: no clip, the bolt worked and the rounds in from above with the gun low. Loading, T25.)
-            if (!pistol && TuckInBattle && v.drawn != null && v.arts.TryGetValue(v.drawn, out var stocked) && Tucks(stocked))
+            if (!pistol && TuckInBattle && v.drawn != null && v.arts.TryGetValue(v.drawn, out var stocked) && Tucks(stocked) && !PistolGripped(stocked))
             {
                 try
                 {
