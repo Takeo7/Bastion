@@ -59,6 +59,8 @@ namespace Bastion.Client.Units
         /// <summary>Who is aboard La Lata by the state last seen (Unit.Aboard), and who came down in this Sync (from where; off the motorbike, with a hop).</summary>
         readonly HashSet<string> aboard = new HashSet<string>();
         readonly List<(string id, Vector3 from, bool hop)> alighting = new List<(string, Vector3, bool)>();
+        /// <summary>BASTION_LATA_LOG=1: who the state has aboard, who comes down and from where, and when it is down ([lata] lines).</summary>
+        static readonly bool LataLog = System.Environment.GetEnvironmentVariable("BASTION_LATA_LOG") == "1";
 
         /// <summary>La Lata's doorway nearest `near`, in the world, if within DoorNear; null on the motorbike, or without doors.</summary>
         static Vector3? Doorway(Vector3 near)
@@ -122,6 +124,7 @@ namespace Bastion.Client.Units
                 StepFade(v, 0);
             }
             v.anim?.Motion("run");
+            if (LataLog) Debug.Log($"[lata] {v.id} comes down from {v.alightFrom} to {v.alightTo}, frame {Time.frameCount}");
         }
 
         /// <summary>One going in by the door or coming down, a step.</summary>
@@ -136,6 +139,7 @@ namespace Bastion.Client.Units
             if (v.alight < 1) return;
             v.alight = -1;
             v.anim?.Motion(IdleOf(v));
+            if (LataLog) Debug.Log($"[lata] {v.id} is down at {v.root.position}, frame {Time.frameCount}");
         }
 
         /// <summary>One on its way to the motorbike, getting on it or on it, a step (after its pose: its hips' place).</summary>

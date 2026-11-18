@@ -69,6 +69,10 @@ namespace Bastion.Client.Map
         static Shader shader;
         float scanned = -Lost;
 
+        /// <summary>How many points ahead of La Lata on its way are looked at too, and how far apart (tiles).</summary>
+        const int LataAhead = 3;
+        const float LataStep = 3;
+
         /// <summary>The fade on the trees under `root` (the map's), made once a map.</summary>
         public static TreeFade Attach(Transform root)
         {
@@ -205,7 +209,7 @@ namespace Bastion.Client.Map
         /// <summary>
         /// The points looked at (tiles, and their height in tiles): the selected soldier, the target where their bodies
         /// stand, the tile under the cursor; then each other living unit in sight (or heard: a shade), the squad's too (E-05),
-        /// where its figure is.
+        /// where its figure is; and La Lata while it is in sight.
         /// </summary>
         void Looked()
         {
@@ -221,6 +225,19 @@ namespace Bastion.Client.Map
                 Add(units, focus.selected);
                 Add(units, focus.target);
                 if (focus.hover != null) points.Add(new Vector3(focus.hover.X + 0.5f, focus.hover.Y + 0.5f, focus.hover.Z * MapSpace.Storey / MapSpace.Tile));
+            }
+            // La Lata too, parked or on its way out (Red's pass of 18/11, the Camping: with everyone aboard nothing was
+            // looked at any more, the pines' crowns closed over it and its going was a screen of crowns).
+            var map = MapView.Current;
+            if (map != null && map.Lata != null && map.Lata.Shown && map.LataAt is Vector3 lata)
+            {
+                // (On its way, ahead of it too: the crowns take a moment to fade, and it was under the next ones by then.)
+                var ahead = map.Lata.transform.forward;
+                for (var k = 0; k <= (map.Lata.Moving ? LataAhead : 0); k++)
+                {
+                    var at = lata + ahead * (k * LataStep * MapSpace.Tile);
+                    points.Add(new Vector3(at.x / MapSpace.Tile, -at.z / MapSpace.Tile, at.y / MapSpace.Tile));
+                }
             }
             var state = units != null ? units.State : null;
             if (state == null) return;

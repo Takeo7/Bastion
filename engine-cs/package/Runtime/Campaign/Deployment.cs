@@ -111,6 +111,7 @@ namespace Bastion.Engine
                     s.Alive = false;
                     s.FellDay = report.Day;
                     entry.Status = u.Lost == true ? ReportStatuses.Lost : ReportStatuses.Dead;
+                    if (u.Lost == true) s.FellCause = FellCauses.Lost;
                     if (u.Lost == true) Log(c, $"{s.Name} se quedó fuera cuando salió La Lata.", LogTones.Bad);
                     else if (FacilityCount(c, FacilityIds.Memorial) != 0) Log(c, $"{s.Name} descansa en el Camposanto.");
                     // Equipment is lost with its bearer, the Armería's weapons too.

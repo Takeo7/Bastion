@@ -146,8 +146,10 @@ namespace Bastion.Engine
     {
         /// <summary>The infection won (TURNED_CAUSE).</summary>
         public const string Turned = "turned";
+        /// <summary>Left outside when La Lata went (Unit.Lost; Lore.EvacText.Lost). Saves of before have no cause: «Caído».</summary>
+        public const string Lost = "lost";
 
-        public static readonly IReadOnlyList<string> All = new[] { Turned };
+        public static readonly IReadOnlyList<string> All = new[] { Turned, Lost };
     }
 
     /// <summary>lore.ts Ending: how the final mission was resolved, with both keys (CampaignState.ending; Lore.EndingTitles).</summary>

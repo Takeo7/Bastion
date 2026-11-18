@@ -391,5 +391,33 @@ namespace Bastion.Engine.Tests
             Assert.Equal(Outcomes.Victory, s.Outcome);
             Assert.Null(loose.Lost);
         }
+
+        [Fact]
+        public void WhoIsLeftOutIsLostNotFallen()
+        {
+            // Producto, 18/11: left outside when La Lata goes, «Se quedó fuera» (FellCauses.Lost) and its own line in the log;
+            // one down in the fight, as before: no cause, «ha caído en combate».
+            var (c, s) = Fight();
+            var squad = Squaddies(s);
+            Assert.Equal(4, squad.Count);
+            var down = squad[3];
+            down.Alive = false;
+            down.Hp = 0;
+            Assert.True(WalkIn(s, squad[0], 0).Ok);
+            Assert.True(WalkIn(s, squad[1], 1).Ok);
+            var left = squad[2];
+            var r = Exec(s, new EvacCommand { Unit = squad[0].Id });
+            Assert.True(r.Ok, r.Error);
+            Assert.Single(Of<LeftBehindEvent>(r.Events), (e) => e.Unit == left.Id);
+            EndFight(c, s, s.Outcome!, s.OutcomeReason!);
+            var lost = c.Soldiers.Single((x) => x.Id == left.CampaignId);
+            var dead = c.Soldiers.Single((x) => x.Id == down.CampaignId);
+            Assert.Equal((false, FellCauses.Lost), (lost.Alive, lost.FellCause));
+            Assert.Equal((false, (string?)null), (dead.Alive, dead.FellCause));
+            Assert.Contains(c.Log, (l) => l.Text == $"{lost.Name} se quedó fuera cuando salió La Lata.");
+            Assert.DoesNotContain(c.Log, (l) => l.Text == $"{lost.Name} ha caído en combate.");
+            Assert.Contains(c.Log, (l) => l.Text == $"{dead.Name} ha caído en combate.");
+            Assert.All(squad.Take(2), (u) => Assert.Null(c.Soldiers.Single((x) => x.Id == u.CampaignId).FellCause));
+        }
     }
 }

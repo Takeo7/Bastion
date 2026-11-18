@@ -149,12 +149,13 @@ namespace Bastion.Client.Units
 
         /// <summary>
         /// Where `v` stands on `p` (`at`: its tile's place): one caged by its bars, pressed to them, as it faces now or (`ahead`,
-        /// a walk's end) facing them; anyone else at `at`.
+        /// a walk's end) facing them; one beside the motorbike, out from its side; anyone else at `at`.
         /// </summary>
         Vector3 StandOf(View v, Pos p, Vector3 at, bool ahead = false)
         {
             var line = CageOf(v, p);
-            if (line == null) return at;
+            // (Nor against the motorbike, on a tile of its zone: out from its side, LaLata.StandBeside.)
+            if (line == null) return Map.MapView.Current?.Lata?.StandBeside(at) ?? at;
             if (!ahead) return PressedAt(v, line, at.y);
             var front = line.middle - line.normal * CagedGap.x;
             front.y = at.y;

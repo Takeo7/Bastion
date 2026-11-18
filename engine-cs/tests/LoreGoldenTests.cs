@@ -413,6 +413,8 @@ namespace Bastion.Engine.Tests
             Assert.Equal("Evacuar en La Lata: sale con los que estén dentro, y quien esté fuera se pierde", Lore.EvacText.ButtonTip);
             // T24 (Arturo, 18/11): on reaching La Lata the soldier gets on and is safe; they can get off on their turn.
             Assert.Equal("Subirá a La Lata", Lore.BoardText.WillBoard);
+            // The Asedio's objective with La Lata full and someone still out (Red's pass, 18/11), as the Rescate's.
+            Assert.Equal("La Lata va llena: evacuad o que baje alguien", Lore.BoardText.FullObjective);
             Assert.Equal("Ana sube a La Lata: está a salvo.", Lore.BoardText.Boarded("Ana"));
             Assert.Equal("Ana baja de La Lata.", Lore.BoardText.Alighted("Ana"));
             Assert.Equal("Ya están todos dentro: La Lata sale.", Lore.BoardText.AllAboard);

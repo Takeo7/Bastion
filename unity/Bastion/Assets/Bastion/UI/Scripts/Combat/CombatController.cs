@@ -685,6 +685,14 @@ namespace Bastion.UI.Combat
             var mask = new bool[s.Width * s.Height * Grid.LevelCount(s)];
             for (var i = 0; i < mask.Length; i++) mask[i] = true;
             Buildings.Veil(s, mask);
+            // (What is seen from beside a window is shown, not found (N1): no walking range in it while its building isn't
+            // found, as in the rest of it; Producto, 18/11, Red's pass 8.)
+            var side = Buildings.SidePeeks(s);
+            if (side.Count > 0)
+            {
+                var foundTiles = Buildings.FoundTiles(s);
+                foreach (var i in side) if (!foundTiles.Contains(i)) mask[i] = false;
+            }
             (foundMask, foundFor, foundList, foundCount, foundPlaces) = (mask, s, s.Discovered, count, places);
             return mask;
         }

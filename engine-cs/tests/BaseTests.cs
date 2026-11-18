@@ -618,8 +618,28 @@ namespace Bastion.Engine.Tests
             Assert.False(dead.Alive);
             Assert.Equal(report.Day, dead.FellDay);
             Assert.Contains(c.Log, (l) => l.Text == $"{dead.Name} descansa en el Camposanto.");
+            Assert.Null(dead.FellCause);
             // What it did, and one more of it for the fallen.
             Assert.Equal(3, report.Squad.First((e) => e.Id == survivor.CampaignId).Learned![SkillIds.Shooting]);
+        }
+
+        [Fact]
+        public void LeftOutWhenTheBusWentIsLostNotFallen()
+        {
+            // Producto, 18/11: «Se quedó fuera» (FellCauses.Lost) for whoever La Lata left outside, here as in the runs.
+            var c = Solo();
+            var offer = c.Offers[0];
+            Run(c, new ChooseMissionCommand { Id = offer.Id });
+            var mission = Setup.CreateMission(new MissionOptions { Map = offer.Map, Slots = new List<int> { 0 }, Rng = new Rng(2), Kind = offer.Kind, Squad = Campaign.BuildSquad(c), Pods = offer.Pods });
+            var left = mission.Units.First((u) => u.Team == Teams.Xcom);
+            left.Lost = true;
+            mission.Outcome = Outcomes.Victory;
+            var report = Campaign.ApplyMissionResult(c, mission, new Rng(1));
+            var lost = c.Soldiers.First((s) => s.Id == left.CampaignId);
+            Assert.Equal((false, FellCauses.Lost), (lost.Alive, lost.FellCause));
+            Assert.Equal(ReportStatuses.Lost, report.Squad.First((e) => e.Id == lost.Id).Status);
+            Assert.Contains(c.Log, (l) => l.Text == $"{lost.Name} se quedó fuera cuando salió La Lata.");
+            Assert.DoesNotContain(c.Log, (l) => l.Text == $"{lost.Name} ha caído en combate.");
         }
 
         // ------------------------------------------------------------ the world

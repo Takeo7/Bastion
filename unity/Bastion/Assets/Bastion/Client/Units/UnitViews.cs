@@ -1206,7 +1206,7 @@ namespace Bastion.Client.Units
                 {
                     // (Aboard, T24: remembered, to see it come down; on the motorbike seated in sight, though the game was
                     // loaded or joined with it aboard already. UnitViews.Ride.)
-                    if (u.Aboard == true) aboard.Add(u.Id);
+                    if (u.Aboard == true && aboard.Add(u.Id) && LataLog) Debug.Log($"[lata] {u.Id} aboard, sync {syncs}");
                     if (Seated(u) || (views.TryGetValue(u.Id, out var rider) && rider.seat >= 0)) seen.Add(u.Id);
                     continue;
                 }
@@ -1215,6 +1215,7 @@ namespace Bastion.Client.Units
                 if (aboard.Remove(u.Id))
                 {
                     down = AlightFrom(u, out bool hop);
+                    if (LataLog) Debug.Log($"[lata] {u.Id} down: from {down}, hop {hop}, view {views.ContainsKey(u.Id)}, sync {syncs}");
                     if (views.ContainsKey(u.Id)) Remove(u.Id);
                     if (down is Vector3 from) alighting.Add((u.Id, from, hop));
                 }

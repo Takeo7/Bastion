@@ -576,6 +576,7 @@ namespace Bastion.Engine
                     s.Alive = false;
                     s.FellDay = c.Day;
                     entry.Status = u.Lost == true ? ReportStatuses.Lost : ReportStatuses.Dead;
+                    if (u.Lost == true) s.FellCause = FellCauses.Lost;
                     // What it carried: left on the floor where it fell (nobody took it up), or with it, left behind.
                     var lost = u.Lost == true ? (u.Kit != null ? new[] { u.Kit.Primary, u.Kit.Melee, u.Kit.Pistol, u.Kit.Vest }.Concat(u.Kit.Belt).Where((g) => g != null).Select((g) => g!).Concat(u.Pack?.Items.Select((p) => p.Gear) ?? new Gear[0]).ToList() : new List<Gear>())
                         : (mission.FloorGear ?? new List<DroppedGear>()).Where((d) => d.From == u.Id).Select((d) => d.Gear).ToList();
@@ -583,7 +584,7 @@ namespace Bastion.Engine
                     s.Kit = null;
                     run.Hp.Remove(s.Id);
                     run.Hands?.Remove(s.Id);
-                    Campaign.RunsLog(c, $"{s.Name} ha caído en combate.", LogTones.Bad);
+                    Campaign.RunsLog(c, u.Lost == true ? $"{s.Name} se quedó fuera cuando salió {Lore.Bus.Name}." : $"{s.Name} ha caído en combate.", LogTones.Bad);
                     continue;
                 }
                 standing++;

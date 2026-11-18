@@ -148,6 +148,14 @@ namespace Bastion.UI.Strategy
                 ? $"<b>{name}</b> ha caído."
                 : $"<b>{name}</b> ha caído. Se pierde lo que llevaba: {Ui.List(lost)}.";
 
+            /// <summary>
+            /// One left outside La Lata as it went (Red's pass, 18/11: not «ha caído»), «la» or «lo» by who it is: «Yuki se
+            /// quedó fuera de La Lata. La perdéis con lo que llevaba: el cuchillo.»
+            /// </summary>
+            public static string LeftLine(string name, bool female, IList<string> lost) => lost.Count == 0
+                ? $"<b>{name}</b> se quedó fuera de {Lore.Bus.Name}. {(female ? "La" : "Lo")} perdéis."
+                : $"<b>{name}</b> se quedó fuera de {Lore.Bus.Name}. {(female ? "La" : "Lo")} perdéis con lo que llevaba: {Ui.List(lost)}.";
+
             /// <summary>Asked before going back (alone it is at once).</summary>
             public const string EndAsk = "¿Volver a la base?";
             public const string EndNo = "Seguir la expedición";

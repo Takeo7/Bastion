@@ -111,7 +111,7 @@ namespace Bastion.Engine
             if (phase == "loose") return $"Llevad {(who.StartsWith("el ") ? $"al {who.Substring(3)}" : $"a {who}")} {Bus.To}";
             var who_ = Capital(who);
             // T24: aboard with La Lata full and someone still outside (Producto, 18/11: it said «que suba el resto»).
-            if (phase == "full") return $"{who_}, a bordo. {Bus.Name} va llena: evacuad o que baje alguien";
+            if (phase == "full") return $"{who_}, a bordo. {BoardText.FullObjective}";
             return phase == "aboard" ? $"{who_}, {Bus.In}: que suba el resto" : $"{who_}, a salvo";
         }
 

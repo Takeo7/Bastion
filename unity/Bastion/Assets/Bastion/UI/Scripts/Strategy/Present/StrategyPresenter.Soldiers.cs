@@ -277,7 +277,7 @@ namespace Bastion.UI.Strategy
         /// </summary>
         (string text, string tone, string tip) Health(CampaignState c, CampaignSoldier s, bool brief)
         {
-            if (!s.Alive) return (s.FellCause == "turned" ? Campaign.TurnedCause : Female(s) ? "Caída" : "Caído", "bad", null);
+            if (!s.Alive) return (s.FellCause == FellCauses.Turned ? Campaign.TurnedCause : s.FellCause == FellCauses.Lost ? Lore.EvacText.Lost : Female(s) ? "Caída" : "Caído", "bad", null);
             if (s.WoundedDays > 0) return (brief ? MissionsText(MissionsFor(s.WoundedDays)) : $"Heridas · {MissionsText(MissionsFor(s.WoundedDays))}", "warn", null);
             return (Female(s) ? "Lista" : "Listo", brief ? null : "good", null);
         }

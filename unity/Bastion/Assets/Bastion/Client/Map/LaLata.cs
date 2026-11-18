@@ -217,6 +217,25 @@ namespace Bastion.Client.Map
         /// <summary>How far off its side one stands to get on (tiles).</summary>
         const float BikeBeside = 0.3f;
 
+        /// <summary>How far from its middle line one stands on a tile beside it (tiles): BikeStandOut.</summary>
+        const float BikeStandOut = 0.8f;
+
+        /// <summary>
+        /// Where one stands on a tile whose place is `at`, by the motorbike parked in sight: its zone's two tiles are its own
+        /// place's, one each side (T21), their middles half a tile from its middle line, and one standing there was against
+        /// it, hidden behind it from the game's camera: one got down off it read as still sitting on it (Red's pass of
+        /// 18/11, both apps). Out from its side, to BikeStandOut from its middle line, still on its tile. Anywhere else, `at`.
+        /// </summary>
+        public Vector3 StandBeside(Vector3 at)
+        {
+            if (!IsBike || body == null || !Shown || Moving) return at;
+            var local = body.transform.InverseTransformPoint(at);
+            float most = BikeStandOut * Tile;
+            if (local.z < box.min.z || local.z > box.max.z || Mathf.Abs(local.x) >= most) return at;
+            var stand = body.transform.TransformPoint(new Vector3(local.x < 0 ? -most : most, local.y, local.z));
+            return new Vector3(stand.x, at.y, stand.z);
+        }
+
         /// <summary>How many it carries in sight (the motorbike's two); the others take theirs in, out of sight.</summary>
         public int Seats => IsBike ? BikeSeats.Length : 0;
 

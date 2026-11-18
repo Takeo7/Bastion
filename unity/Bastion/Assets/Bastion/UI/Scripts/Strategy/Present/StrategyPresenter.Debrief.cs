@@ -34,7 +34,13 @@ namespace Bastion.UI.Strategy
                 v.Haul.Add(new HaulView { Kind = g.Kind, Type = g.Type, Icon = GearIconOf(g), Figure = g.Count > 1 ? g.Count.ToString() : "", Better = g.Kind == GearKinds.Weapon, Tip = Lore.GearName(g.Kind, g.Type, g.Count) });
             if (v.Haul.Count == 0 && run.Ended != RunEnds.Wiped) v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.NothingFound });
             foreach (var f in run.Fallen)
-                v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.FallenLine(f.Name, f.Lost.Select(g => Lore.GearThe(g.Kind, g.Type, g.Count)).ToList()), Bad = true });
+            {
+                var lost = f.Lost.Select(g => Lore.GearThe(g.Kind, g.Type, g.Count)).ToList();
+                // One left outside La Lata hasn't fallen (Red's pass, 18/11): their report says so (ReportStatuses.Lost).
+                var left = report.Squad.Any(e => e.Id == f.Id && e.Status == ReportStatuses.Lost);
+                var female = c.Soldiers.FirstOrDefault(x => x.Id == f.Id) is CampaignSoldier fs && Female(fs);
+                v.Lines.Add(new DebriefLineView { Text = left ? StrategyText.Runs.LeftLine(f.Name, female, lost) : StrategyText.Runs.FallenLine(f.Name, lost), Bad = true });
+            }
             if (run.Joined != null && c.Soldiers.FirstOrDefault(x => x.Id == run.Joined) is CampaignSoldier rescued)
                 v.Lines.Add(new DebriefLineView { Text = StrategyText.Runs.JoinedLine(rescued.Name) });
             // (One a line: whoever came in late has them all from the report, ReportRecruits.)

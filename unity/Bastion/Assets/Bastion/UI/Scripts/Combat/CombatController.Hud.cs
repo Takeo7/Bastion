@@ -927,7 +927,9 @@ namespace Bastion.UI.Combat
             if (m.HoldUntil is int until)
             {
                 turnsLeft = Math.Max(0, until - s.Turn);
-                objective = HudText.Mission.Hold(until, turnsLeft);
+                // Come and full with some of the squad still out (Red's pass, 18/11): go, or someone gets down.
+                var outside = s.Units.Any(u => u.Alive && u.Team == Teams.Xcom && !u.Captive && !u.Objective && u.Automaton == null);
+                objective = HudText.Mission.Hold(until, turnsLeft, Rules.SeatsFree(s) == 0 && outside);
                 tip = HudText.Mission.HoldTip;
             }
             if (m.Boss != null && UnitById(s, m.Boss) is Unit boss)

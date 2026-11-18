@@ -144,6 +144,11 @@ namespace Bastion.Engine
         {
             /// <summary>Before moving, on the path's last tile.</summary>
             public const string WillBoard = "Subirá a " + Bus.Name;
+            /// <summary>
+            /// The objective with La Lata full and some of the squad still out (Lore, 18/11): go, or someone gets down. The
+            /// Rescate's after who is aboard (VipObjective "full"), the Asedio's alone (Red's pass, 18/11).
+            /// </summary>
+            public const string FullObjective = Bus.Name + " va llena: evacuad o que baje alguien";
             /// <summary>No seat left: before moving, and as the refusal.</summary>
             public const string Full = "No queda plaza en " + Bus.Name + ".";
             /// <summary>On the bust (and the flag) of whoever is aboard: short, to fit whole («EVACUADO» was cut).</summary>

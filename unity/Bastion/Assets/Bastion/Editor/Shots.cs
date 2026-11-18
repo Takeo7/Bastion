@@ -150,6 +150,17 @@ namespace Bastion.EditorTools
                     if (!EditorApplication.isPlaying) return;
                     // Entering play mode forgets the fixed step: set again in it, so each frame is 1/fps of the game's time.
                     if (Time.captureDeltaTime != 1 / fps) Time.captureDeltaTime = 1 / fps;
+                    // The scene changed under the shots (the app from its start screen to a fight, joined to a room): the game's
+                    // camera there now, its cameras and panels into textures as the first ones were; none yet, no shot.
+                    if (camera == null)
+                    {
+                        camera = Camera.main;
+                        if (camera == null) return;
+                        camera.GetUniversalAdditionalCameraData().renderPostProcessing = true;
+                        foreach (var c in UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
+                            if (c.targetTexture == null) c.targetTexture = new RenderTexture(width, height, 24) { name = "Pantalla de la pasada" };
+                        panels = PanelsInto(width, height);
+                    }
                     // The camera and the panels at the shot's size from the start, not only as it is taken (UI, 24/10: the
                     // marks laid out while they were 4:3, the batch screen's, stood a fifth too far out in a 16:10 shot).
                     camera.aspect = width / (float)height;

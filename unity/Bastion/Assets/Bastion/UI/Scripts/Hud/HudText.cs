@@ -144,7 +144,8 @@ namespace Bastion.UI.Hud
         public static class Mission
         {
             // The expeditions' stages (H5, H6; Lore to confirm).
-            public static string Hold(int until, int left) => left > 0 ? $"Aguantad: La Lata llega en el turno {until}, dentro de {left} {(left == 1 ? "turno" : "turnos")}" : "La Lata ha llegado: subid";
+            /// <summary>`full`: come, with no seat left and some of the squad still out (Red's pass, 18/11), as the Rescate says.</summary>
+            public static string Hold(int until, int left, bool full = false) => left > 0 ? $"Aguantad: La Lata llega en el turno {until}, dentro de {left} {(left == 1 ? "turno" : "turnos")}" : full ? Bastion.Engine.Lore.BoardText.FullObjective : "La Lata ha llegado: subid";
             public const string HoldTip = "Llegan oleadas cada dos turnos, cada vez mayores. Hasta que llegue La Lata no se puede salir.";
             /// <summary>«Matad al Toro…»: «a el» contracted.</summary>
             public static string Boss(string name) => $"Matad {(name.StartsWith("El ") ? "al " + name.Substring(3) : "a " + name)} y salid en La Lata";
