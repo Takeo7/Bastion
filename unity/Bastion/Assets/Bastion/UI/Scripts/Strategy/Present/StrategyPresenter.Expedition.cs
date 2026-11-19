@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Bastion.Engine;
 
 namespace Bastion.UI.Strategy
@@ -253,6 +254,19 @@ namespace Bastion.UI.Strategy
             if (r != null && Lore.RunEvents.TryGetValue(r.Event, out var told) && r.Option >= 0 && r.Option < told.Options.Count)
                 return told.Options[r.Option].Result(r.SoldierName, r.SurvivorName) + (r.Lost == true ? " " + Lore.RunEventLost : "");
             return stop.Outcome != null && RunTexts.Outcomes.TryGetValue(stop.Outcome, out var said) ? said : stop.Outcome;
+        }
+
+        /// <summary>
+        /// Each stage kind's icon and each modifier's (U26, after El herido's came out as an empty ring in the R10): taken from
+        /// the engine's constants, not its lists, so that a new kind is in. The editor's NodeIconsCheck looks for each in the
+        /// table, on every compile.
+        /// </summary>
+        public static IEnumerable<(string Kind, string Icon)> StageIcons()
+        {
+            foreach (var f in typeof(NodeKinds).GetFields(BindingFlags.Public | BindingFlags.Static))
+                if (f.IsLiteral && f.GetValue(null) is string kind) yield return (kind, NodeIcon(kind));
+            foreach (var f in typeof(Modifiers).GetFields(BindingFlags.Public | BindingFlags.Static))
+                if (f.IsLiteral && f.GetValue(null) is string modifier) yield return (modifier, ModifierIcon(modifier));
         }
 
         /// <summary>A stage's icon by kind: the missions' own for today's objectives, Synty's map signs for the rest.</summary>

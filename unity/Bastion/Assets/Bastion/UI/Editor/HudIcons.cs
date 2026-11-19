@@ -77,6 +77,9 @@ namespace Bastion.UI.EditorTools
         // Our own (Textures/Icons): the 0.10.1's stone, a Synty rock's silhouette (synty-sprites.py r-roca), for Lanzar and
         // Piedra; it had Explosives, the grenade's, and Lanzar read as a grenade (Ana, 28/10).
         const string Rock = "r-roca";
+        // El herido (U26, after the R10): a crutch, ours, white and solid as the packs' (none of theirs reads «can't walk»:
+        // their wounds are skulls, a claw's slashes or drops of blood). Drawn by u26/muleta.swift.
+        const string Crutch = "n-muleta";
         const string OwnIcons = "Assets/Bastion/UI/Textures/Icons";
 
         static readonly (string Id, string File)[] Icons =
@@ -162,6 +165,9 @@ namespace Bastion.UI.EditorTools
             // medicines' cross, till Arte's picture.
             ("node:bitten", "ICON_Apocalpyse_Map_Biohazard_01"), ("bite", "ICON_Apocalpyse_Map_Biohazard_01"),
             ("antiviral", "ICON_DarkFantasy_Map_Potions_01_Clean"),
+            // El herido (U26): the crutch, its stage on the map and the arrow at the screen's edge to them on the floor (not
+            // Rescate's cross nor Mordido's biohazard). Every stage needs its icon: NodeIconsCheck says which lack one.
+            ("node:wounded", Crutch),
             // The runs' base tabs: Almacén a backpack, Mejoras the workshop's tools (Salir is the Escuadra's La Lata).
             ("tab:stash", Backpack), ("tab:upgrades", "ICON_Apocalpyse_Inventory_Crafting_01"),
         };

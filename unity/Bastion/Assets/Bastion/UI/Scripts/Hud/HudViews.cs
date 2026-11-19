@@ -636,6 +636,8 @@ namespace Bastion.UI.Hud
         /// <summary>What the arrow says: its name and how far it is from the picked soldier («Objetivo · 12 casillas»).</summary>
         public string Label;
         public Vector3 World;
+        /// <summary>An icon of the table before the words, or none (El herido's crutch, U26).</summary>
+        public string Icon;
     }
 
     [Serializable]

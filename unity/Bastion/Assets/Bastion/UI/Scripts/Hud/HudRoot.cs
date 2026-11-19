@@ -109,7 +109,7 @@ namespace Bastion.UI.Hud
             log = new Log(root.Q("log"), Icon);
             flags = new UnitFlags(root.Q("flags"), Icon);
             flags.TargetPicked += id => TargetPicked?.Invoke(id);
-            edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at));
+            edges = new EdgeMarks(root.Q("edge-marks"), tips, at => Look?.Invoke(at), Icon);
             goalArrow = new GoalArrow(root.Q("goal-arrow"), tips);
             sight = new SightButton(root.Q("sight"), tips);
             sight.Toggled += () => SightToggled?.Invoke();

@@ -169,9 +169,10 @@ namespace Bastion.UI.Combat
             Hud.SetGoal(goals.Count > 0 ? Board.TileToWorld(v, goals[0].pos, Board.Tile) : (Vector3?)null);
             var view = new EdgeMarksView();
             view.Marks.AddRange(breaches.Marks);
-            // El herido on the floor off the screen (U25), found and alive: «El herido · 12 casillas», as Mordido's.
+            // El herido on the floor off the screen (U25), found and alive: «El herido · 12 casillas», amber as Mordido's, with
+            // their stage's crutch (U26: Producto, after the R10).
             if (Rules.WoundedOf(v) is Unit down && down.Alive && down.CarriedBy == null && !down.Evacuated && !Unfound(down))
-                view.Marks.Add(new EdgeMarkView { Kind = "bite", Name = Lore.StageName(NodeKinds.Wounded), World = Board.TileToWorld(v, down.Pos, Board.Tile) });
+                view.Marks.Add(new EdgeMarkView { Kind = "wounded", Icon = "node:wounded", Name = Lore.StageName(NodeKinds.Wounded), World = Board.TileToWorld(v, down.Pos, Board.Tile) });
             // Mordido's bitten off the screen (U23), from their finding till cured: «Mordido · 5 turnos», an alert at 2 and 1.
             if (UnitById(v, m.ObjectiveUnit) is Unit bitten && BiteLeft(v, bitten) is int left && !Unfound(bitten))
                 view.Marks.Add(new EdgeMarkView { Kind = left <= 2 ? "alert" : "bite", Name = $"{Lore.StageName(NodeKinds.Bitten)} · {left} {(left == 1 ? "turno" : "turnos")}", World = Board.TileToWorld(v, bitten.Pos, Board.Tile) });

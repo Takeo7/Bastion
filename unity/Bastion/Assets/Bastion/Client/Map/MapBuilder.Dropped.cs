@@ -30,6 +30,8 @@ namespace Bastion.Client.Map
         /// <summary>The floor's things as the state has them now, drawn again when one is dropped or picked up.</summary>
         void DrawDropped()
         {
+            // (The locked doors first, by their own key: a door opened with the key changes nothing on the floor; R10, 19/11.)
+            DrawLocks();
             var dropped = s.Dropped ?? new List<DroppedLoot>();
             // (And a mission's own things lying loose, G23: La llave's key, Mordido's antiviral; GameState.FloorGear with no
             // one they fell from. What a fallen soldier carried is their body's, not drawn here.)
@@ -72,7 +74,6 @@ namespace Bastion.Client.Map
                 droppedArt.Add(g.gameObject);
             }
             foreach (var d in loose) Loose(d);
-            DrawLocks();
         }
 
         /// <summary>

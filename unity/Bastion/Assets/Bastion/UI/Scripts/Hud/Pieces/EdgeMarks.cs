@@ -29,14 +29,16 @@ namespace Bastion.UI.Hud
         readonly VisualElement layer;
         readonly TooltipLayer tips;
         readonly Action<Vector3> look;
+        readonly Func<string, Sprite> icons;
         readonly List<Shown> shown = new List<Shown>();
         string key;
 
-        public EdgeMarks(VisualElement layer, TooltipLayer tips, Action<Vector3> look)
+        public EdgeMarks(VisualElement layer, TooltipLayer tips, Action<Vector3> look, Func<string, Sprite> icons = null)
         {
             this.layer = layer;
             this.tips = tips;
             this.look = look;
+            this.icons = icons;
             // USS has no @keyframes: the alerts fade to 0.65 and back (styles.css pulse, 0.7 s each way; the fade is USS's).
             var dim = false;
             layer.schedule.Execute(() =>
@@ -61,6 +63,7 @@ namespace Bastion.UI.Hud
                 var el = Ui.El("edge-mark panel edge-mark--" + mark.Kind, layer);
                 var arrow = new Arrow();
                 el.Add(arrow);
+                if (!string.IsNullOrEmpty(mark.Icon)) Ui.Icon(icons, mark.Icon, "edge-mark__icon", el);
                 Ui.Text(mark.Label, "edge-mark__label", el);
                 var at = mark.World;
                 el.RegisterCallback<ClickEvent>(_ => look?.Invoke(at));
