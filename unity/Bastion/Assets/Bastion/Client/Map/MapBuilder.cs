@@ -257,12 +257,11 @@ namespace Bastion.Client.Map
         static readonly bool CarsLogged = Environment.GetEnvironmentVariable("BASTION_COCHES") == "1";
 
         /// <summary>
-        /// A whole car left where it stands (Abandoned; cuadro 77, «más abandonados»: damage that reads from the game's
-        /// camera, never a wreck's rust nor grass growing out of it): weeds by its wheels and leaves on its roof; and the
-        /// filthy ones (`neglect` 2) down on a flat tyre, the wheel squashed and that corner sunk, and one in two of them a
-        /// side window gone. Each its own by its tile, the same for both players.
+        /// A whole car left where it stands (Abandoned; cuadros 77 and 82: never a wreck's rust nor grass growing out of
+        /// it): weeds by its wheels and leaves on its roof; and the filthy ones (`neglect` 2) down on a flat tyre, the wheel
+        /// squashed and that corner sunk. Each its own by its tile, the same for both players.
         /// </summary>
-        void Abandon(GameObject car, int ax, int ay, int neglect)
+        void Abandon(GameObject car, int ax, int ay, int neglect, string id = null)
         {
             float R(int salt) => MapArt.Hash(ax, ay, 60 + salt);
             var box = BoundsIn(car, car.transform);
@@ -285,8 +284,6 @@ namespace Bastion.Client.Map
                 }
             if (R(1) < (neglect > 1 ? 0.8f : 0.4f)) On("leaves", new Vector3(box.center.x + (R(2) - 0.5f) * 0.3f * box.size.x, box.max.y - 0.02f / scale.y, box.center.z + (R(3) - 0.6f) * 0.2f * box.size.z), R(4) * 360, 0.6f);
             if (neglect < 2) return;
-            // A side window gone (never all: a wreck has none).
-            if (R(30) < 0.5f) WindowOut(car, R(31) < 0.5f ? -1 : 1, R(32) < 0.5f);
             // A flat tyre: its wheel squashed, the car down on that corner.
             bool left = R(6) < 0.5f, front = R(7) < 0.5f;
             string wheel = "_Wheel_" + (front ? "f" : "r") + (left ? "l" : "r");
@@ -296,56 +293,11 @@ namespace Bastion.Client.Map
                     var up = part.InverseTransformDirection(Vector3.up);
                     int axis = Mathf.Abs(up.x) > Mathf.Abs(up.y) && Mathf.Abs(up.x) > Mathf.Abs(up.z) ? 0 : Mathf.Abs(up.y) > Mathf.Abs(up.z) ? 1 : 2;
                     var s = part.localScale;
-                    s[axis] *= 0.72f;
+                    s[axis] *= 0.55f;
                     part.localScale = s;
                 }
-            car.transform.rotation *= Quaternion.Euler(front ? 2.2f : -2.2f, 0, left ? 4f : -4f);
-            car.transform.position += Vector3.down * 0.07f;
-        }
-
-        /// <summary>Each car's glass without one side window, by its mesh, the side and which door's.</summary>
-        static readonly Dictionary<(int, int, bool), Mesh> windowsOut = new Dictionary<(int, int, bool), Mesh>();
-
-        /// <summary>
-        /// One side window of `car` gone: its glass's triangles that face `side` (−1 left, 1 right) over the front half of the
-        /// cabin or the back, taken out of its mesh. A model whose glass can't be read, or has none there, is left whole.
-        /// </summary>
-        void WindowOut(GameObject car, int side, bool front)
-        {
-            foreach (var f in car.GetComponentsInChildren<MeshFilter>())
-            {
-                var mesh = f.sharedMesh;
-                if (mesh == null || !mesh.isReadable || !f.name.EndsWith("_Glass")) continue;
-                var key = (mesh.GetInstanceID(), side, front);
-                if (!windowsOut.TryGetValue(key, out var made) || made == null)
-                {
-                    var toCar = car.transform.worldToLocalMatrix * f.transform.localToWorldMatrix;
-                    var at = mesh.vertices.Select(v => toCar.MultiplyPoint3x4(v)).ToArray();
-                    float zMin = at.Min(v => v.z), zMax = at.Max(v => v.z), middle = (zMin + zMax) / 2;
-                    made = UnityEngine.Object.Instantiate(mesh);
-                    made.name = mesh.name + " (sin una luna)";
-                    made.hideFlags = HideFlags.DontSave;
-                    bool any = false;
-                    for (int s = 0; s < mesh.subMeshCount; s++)
-                    {
-                        var all = mesh.GetTriangles(s);
-                        var kept = new List<int>(all.Length);
-                        for (int n = 0; n + 2 < all.Length; n += 3)
-                        {
-                            Vector3 a = at[all[n]], b = at[all[n + 1]], c = at[all[n + 2]];
-                            var normal = Vector3.Cross(b - a, c - a).normalized;
-                            var m = (a + b + c) / 3;
-                            // (Both its faces: the pane is drawn from inside too.)
-                            if (Mathf.Abs(normal.x) > 0.6f && m.x * side > 0 && (m.z > middle) == front) any = true;
-                            else kept.AddRange(new[] { all[n], all[n + 1], all[n + 2] });
-                        }
-                        made.SetTriangles(kept, s);
-                    }
-                    if (!any) made = mesh;
-                    windowsOut[key] = made;
-                }
-                f.sharedMesh = made;
-            }
+            car.transform.rotation *= Quaternion.Euler(front ? 3.5f : -3.5f, 0, left ? 7f : -7f);
+            car.transform.position += Vector3.down * 0.11f;
         }
 
         /// <summary>A car in paint `share` (0 to 1) of its own: a wreck's (CarPaints) or a whole one's by its pack (WholePaints).</summary>
@@ -388,10 +340,10 @@ namespace Bastion.Client.Map
         /// <summary>
         /// Whole cars left out for months (Arturo, 19/11, cuadro 76: «sanos, pero abandonados»: whole and plainly not a
         /// wreck, but not just parked): grime down their sides and more dust (Bastion/Car's _Grime), down on a flat tyre,
-        /// leaves on the roof and weeds by the wheels (Thing). Off till Arturo has seen its second proof (Producto, 19/11):
-        /// BASTION_ABANDONO=1 turns it on, a lab's.
+        /// leaves on the roof and weeds by the wheels (Thing). No dents nor broken panes: tried, they didn't read (cuadro 82,
+        /// «sin golpes ni lunas»). BASTION_SIN_ABANDONO=1, as they were (a lab's «before»).
         /// </summary>
-        public static bool Abandoned = Environment.GetEnvironmentVariable("BASTION_ABANDONO") == "1";
+        public static bool Abandoned = Environment.GetEnvironmentVariable("BASTION_SIN_ABANDONO") != "1";
         static readonly Dictionary<(Material, int), Material> worn = new Dictionary<(Material, int), Material>();
 
         /// <summary>Whole car `car` (prop `id`) in paint `paint` (null: its own), worn; false if the paint isn't there.</summary>
@@ -429,7 +381,8 @@ namespace Bastion.Client.Map
             if (neglect > 0)
             {
                 m.SetFloat("_Grime", neglect > 1 ? 1f : 0.75f);
-                m.SetFloat("_Dull", neglect > 1 ? 0.6f : 0.5f);
+                // (No duller than the first proof's: its red and its green were at the edge of being told, Producto.)
+                m.SetFloat("_Dull", 0.42f);
                 m.SetFloat("_Dust", 1f);
             }
             return worn[(paint, neglect)] = m;
@@ -2558,7 +2511,7 @@ namespace Bastion.Client.Map
                 int neglect = MapArt.Hash(ax, ay, 61) < 0.4f ? 1 : 2;
                 if (police) PaintWhole(placed, id, null, materialOf, neglect);
                 else Repaint(placed, id, MapArt.Hash(ax, ay, 13), neglect);
-                if (Abandoned && !Wrecks.Contains(id) && wreck == null && floor == 0) Abandon(placed, ax, ay, neglect);
+                if (Abandoned && !Wrecks.Contains(id) && wreck == null && floor == 0) Abandon(placed, ax, ay, neglect, id);
                 if (wreck != null) Crash(parent, placed, thing, wreck, floor);
                 if (rifled) Ransack(0, boot, "boot", Bastion.Engine.Grid.Dirs4[(thing.Facing + 2) % 4], floor);
                 // Some wrecks still have a battery: their headlights on, by night, at the nose (not one crashed askew).
