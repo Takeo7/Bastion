@@ -231,6 +231,15 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// G23.2 Mordido won: the bitten cured and in La Lata, or gone in it (Evacuated). As La Lata goes (CheckOutcome,
+        /// DepartEvac), not before: MissionState.ObjectiveDone stays the Rescate's own (UI's «en La Lata» and «llena» lines).
+        /// </summary>
+        public static bool BittenSafe(GameState s)
+        {
+            return s.Mission.Bitten == true && s.Mission.Cured == true && s.Units.FirstOrDefault((u) => u.Id == s.Mission.ObjectiveUnit) is Unit b && b.Evacuated;
+        }
+
+        /// <summary>
         /// A run's survivor not yet found that `u` of the squad sees from `from` (N2; MissionState.Survivor): in its line of sight and not hidden
         /// in a building the squad hasn't found (Buildings.Hidden, as an enemy would be). Null otherwise.
         /// </summary>

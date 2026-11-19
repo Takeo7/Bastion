@@ -47,6 +47,55 @@
     background-color: #9fb8c8;
 }
 
+/* Mordido's count (U23): the biohazard and the turns left on a dark plate of its own, over the health; amber, at 2 and 1
+   red and beating (UnitFlags' schedule toggles --lit). A number, never a bar: not taken for health. */
+.uflag__bite {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 2px;
+    padding: 1px 5px 1px 3px;
+    background-color: rgba(10, 12, 13, 0.85);
+    border-width: 1px;
+    border-color: rgba(255, 201, 58, 0.7);
+    border-radius: 2px;
+}
+
+.uflag__bite-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 3px;
+    -unity-background-image-tint-color: #ffc93a;
+}
+
+.uflag__bite-turns {
+    font-size: 14px;
+    color: #ffc93a;
+}
+
+.uflag__bite--urgent {
+    border-color: rgba(240, 80, 60, 0.8);
+}
+
+.uflag__bite--urgent .uflag__bite-icon {
+    -unity-background-image-tint-color: #ff6b5a;
+}
+
+.uflag__bite--urgent .uflag__bite-turns {
+    color: #ff6b5a;
+}
+
+.uflag__bite--lit {
+    background-color: rgba(150, 30, 20, 0.9);
+}
+
+.uflag__bite--lit .uflag__bite-icon {
+    -unity-background-image-tint-color: #ffffff;
+}
+
+.uflag__bite--lit .uflag__bite-turns {
+    color: #ffffff;
+}
+
 /* Cover: high, low, flanked (a shield's sprite later; a coloured block until then). */
 .uflag__cover {
     width: 10px;

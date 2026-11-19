@@ -49,7 +49,18 @@ namespace Bastion.UI.Hud
         {
             this.layer = layer;
             this.icon = icon;
+            // Mordido's count at 2 and 1 (U23) beats, twice a second: USS has no @keyframes.
+            layer.schedule.Execute(() =>
+            {
+                beat = !beat;
+                layer.Query(className: "uflag__bite--urgent").ForEach(x => x.EnableInClassList("uflag__bite--lit", beat));
+            }).Every(500);
         }
+
+        bool beat;
+
+        /// <summary>Mordido's count's icon (HudIcons: Apocalypse HUD's biohazard).</summary>
+        public const string BiteIcon = "bite";
 
         /// <summary>The flags of the units in sight; those left out go.</summary>
         public void Set(FlagsView view)
@@ -483,7 +494,7 @@ namespace Bastion.UI.Hud
             return x;
         }
 
-        static void Fill(VisualElement el, FlagView f)
+        void Fill(VisualElement el, FlagView f)
         {
             el.Clear();
             el.EnableInClassList("uflag--enemy", f.Enemy);
@@ -501,6 +512,14 @@ namespace Bastion.UI.Hud
             }
             // The name only on the one under the pointer (Ana, Arturo 31/10 #9: no longer on the picked one's).
             if (!string.IsNullOrEmpty(f.Name)) Ui.Text(f.Name, "uflag__name", el);
+            // Mordido's count (U23): a line of its own between the name and the health, the biohazard and the turns left,
+            // amber; not a bar, so never taken for health. At 2 and 1, red and beating (the constructor's schedule).
+            if (f.Countdown >= 0)
+            {
+                var bite = Ui.El(f.CountdownUrgent ? "uflag__bite uflag__bite--urgent" : "uflag__bite", el);
+                Ui.Icon(icon, BiteIcon, "uflag__bite-icon", bite);
+                Ui.Text(f.Countdown.ToString(), "uflag__bite-turns font-title", bite);
+            }
             var row = Ui.El("uflag__row", el);
             // (No cover's square by the health: the shield is on the soldier's panel now, Arturo 7/11.)
             if (f.Eye != null)

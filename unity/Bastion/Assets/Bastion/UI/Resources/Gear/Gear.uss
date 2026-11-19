@@ -115,8 +115,10 @@
     background-color: rgba(58, 72, 84, 0.55);
 }
 
-/* La llave's key (U22): the mission's green, as its mark on the floor, apart from anything found; it stays in the stage. */
-.gear-item--key {
+/* La llave's key (U22) and Mordido's antiviral (U23): the mission's green, as their mark on the floor, apart from anything
+   found; they stay in the stage. */
+.gear-item--key,
+.gear-item--antiviral {
     background-color: rgba(42, 88, 62, 0.65);
     border-width: 2px;
     border-color: #4dff9a;

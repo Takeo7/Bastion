@@ -157,6 +157,11 @@ namespace Bastion.UI.EditorTools
             // La llave (U22): the same family's key, its stage on the map, and the key itself in a pack, on the floor (its
             // mark) and in the log's float.
             ("node:key", "ICON_DarkFantasy_Map_Key_01_Clean"), ("key", "ICON_DarkFantasy_Map_Key_01_Clean"),
+            // Mordido (U23): Apocalypse's biohazard, its stage on the map and the count over the bitten (no other icon of the
+            // game is it: the 0.10.1's doom went with its campaign); the antiviral, Dark Fantasy's flask, apart from the
+            // medicines' cross, till Arte's picture.
+            ("node:bitten", "ICON_Apocalpyse_Map_Biohazard_01"), ("bite", "ICON_Apocalpyse_Map_Biohazard_01"),
+            ("antiviral", "ICON_DarkFantasy_Map_Potions_01_Clean"),
             // The runs' base tabs: Almacén a backpack, Mejoras the workshop's tools (Salir is the Escuadra's La Lata).
             ("tab:stash", Backpack), ("tab:upgrades", "ICON_Apocalpyse_Inventory_Crafting_01"),
         };

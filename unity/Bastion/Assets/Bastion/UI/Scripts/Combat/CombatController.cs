@@ -1346,7 +1346,9 @@ namespace Bastion.UI.Combat
             // At night, a lit tile says what the light does there and how long it lasts (#50); over one of the dead, whom
             // it sees and where it goes next (21/10 #11). A move, a door or a box beside say theirs instead (below).
             var hovered = hover != null ? Grid.UnitAt(Shown, hover) : null;
-            Note(hover, hover != null && Burning.At(Shown, hover) ? $"Fuego: quita {Content.Flames.Damage} de salud al pisarlo, y {Content.Flames.Damage} más al acabar el turno en él" : null, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered));
+            // Over Mordido's bitten, found (U23): their count in words (Lore's), as the flag can't take the pointer.
+            var biteNote = hovered != null && BiteLeft(Shown, hovered) is int left && !Unfound(hovered) ? Lore.BiteText.Countdown(left) : null;
+            Note(hover, hover != null && Burning.At(Shown, hover) ? $"Fuego: quita {Content.Flames.Damage} de salud al pisarlo, y {Content.Flames.Damage} más al acabar el turno en él" : null, Shown.Mission.Night == true && hover != null && Los.IsLit(Shown, hover) ? Lore.LitNote(LightTurns(hover)) : null, BreakableNote(hover), IntentNote(hovered), biteNote);
             // The pointer on El Toro: whom his charge reaches from there (H6).
             if (hovered != null && hovered.Id == Shown.Mission?.Boss) ShowBossCharges(hovered);
             if (AlightArmed())

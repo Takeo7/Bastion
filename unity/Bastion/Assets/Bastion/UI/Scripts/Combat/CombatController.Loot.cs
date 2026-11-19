@@ -111,6 +111,12 @@ namespace Bastion.UI.Combat
         /// <summary>Whether La llave's key lies on `tile` (U22): its mark there is the key, not the rucksack.</summary>
         static bool KeyLiesAt(GameState v, Pos tile) => v.Mission.KeyArmory == true && (v.FloorGear ?? new List<DroppedGear>()).Any(d => d.Gear.Kind == GearKinds.Key && Bastion.Engine.Grid.SamePos(d.Pos, tile));
 
+        /// <summary>Mordido's antiviral's icon (HudIcons: Dark Fantasy's flask, till Arte's picture).</summary>
+        internal const string AntiviralIcon = "antiviral";
+
+        /// <summary>Whether Mordido's antiviral lies on `tile` (U23): its mark there is the flask.</summary>
+        static bool AntiviralLiesAt(GameState v, Pos tile) => v.Mission.Bitten == true && (v.FloorGear ?? new List<DroppedGear>()).Any(d => d.Gear.Kind == GearKinds.Antiviral && Bastion.Engine.Grid.SamePos(d.Pos, tile));
+
         /// <summary>Whether `u` takes what a fallen comrade left on `tile` now: from beside its body (RunPack.InReach, G16) and its figure there.</summary>
         bool TakesFromFallen(Unit u, Pos tile) => (State.FloorGear ?? new List<DroppedGear>()).Any(d => d.From != null && Same(d.Pos, tile) && RunPack.InReach(State, u, d)) && StandsWhereSeen(u);
 
@@ -190,8 +196,9 @@ namespace Bastion.UI.Combat
                     taken.Add(node);
                     list.Add((d.Pos, can && TakesFromFallen(u, d.Pos)));
                 }
-            // La llave's key on the floor (U22), with the rest: its own mark, lit with the picked one on it (taken from there).
-            if (KeyOnFloor(s) is Pos key && key.Z <= top && !Covered(s, key, top))
+            // La llave's key or Mordido's antiviral on the floor (U22, U23), with the rest: its own mark, lit with the picked one
+            // on it (taken from there).
+            if (MissionGearOnFloor(s) is Pos key && key.Z <= top && !Covered(s, key, top))
             {
                 var node = Bastion.Engine.Grid.NodeOf(s, key);
                 if (!taken.Contains(node) && (fog == null || fog.Explored(node)))
@@ -319,6 +326,7 @@ namespace Bastion.UI.Combat
         static string MarkIcon(GameState v, Pos at)
         {
             if (KeyLiesAt(v, at)) return KeyIcon;
+            if (AntiviralLiesAt(v, at)) return AntiviralIcon;
             if (Abilities.Boards(v, at) != null) return AbilityIds.Pry;
             var kind = Bastion.Engine.Grid.KindAt(v, at);
             if (kind == TileKinds.Door) return AbilityIds.OpenDoor;

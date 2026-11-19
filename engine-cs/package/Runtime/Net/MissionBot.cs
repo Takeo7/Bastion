@@ -285,7 +285,10 @@ namespace Bastion.Net
                 var pry = Pry(s, u, goal, leaving);
                 if (pry != null) return pry;
                 var stride = Stride(s, u);
-                var move = stride >= Paths.CostOrtho ? MoveToward(s, u, goal, stride, leaving, walks) : null;
+                // Mordido's antiviral in hand, the count running: on regardless of the danger (with the dead by the stairs,
+                // it stood on watch upstairs till the bitten turned: R11, 19/11).
+                var rush = BittenFight(s) && Looting.AntiviralOf(u) != null;
+                var move = stride >= Paths.CostOrtho ? MoveToward(s, u, goal, stride, leaving, walks, reckless: rush) : null;
                 if (move != null) return move;
             }
             // On a run's way out with no step to take, what is near is shot after all: the horde stood in the way to La Lata,
@@ -690,16 +693,22 @@ namespace Bastion.Net
         /// <summary>
         /// Where `u` goes in Mordido, by where the antiviral is (Looting.AntiviralWhere; never MissionState.AntiviralAt): in a
         /// piece, the nearest place by the walk beside a medicine cabinet or shelf left; on the floor, there; in a pack, the
-        /// bitten (the one who has it, a free place beside them); cured, the bitten (to talk to them, if not yet). The bitten,
-        /// one of the squad now, stays where they are.
+        /// bitten (the one who has it, a free place beside them; the rest with that one); cured, the bitten (to talk to them,
+        /// if not yet). The bitten, one of the squad now, with the one who has it, or the nearest of the squad.
         /// </summary>
         private static Pos? BittenGoal(GameState s, Unit u, Reach walks)
         {
             if (Vip(s) is not Unit bitten) return null;
             var where = Looting.AntiviralWhere(s);
-            // The bitten, one of the squad now, stays: the one with the antiviral comes to them (both on their way, on two
-            // floors, neither got there: R11, 19/11).
-            if (u.Id == bitten.Id) return u.Pos;
+            // The bitten, one of the squad now: with the one who has the antiviral, or else with the nearest of the squad (left
+            // alone where they were found, the dead had them while the squad searched upstairs: R11, 19/11).
+            if (u.Id == bitten.Id)
+            {
+                var mates = Grid.Combatants(s, Teams.Xcom).Where((o) => o.Id != u.Id && !o.Evacuated).ToList();
+                var holder = mates.FirstOrDefault((o) => Looting.AntiviralOf(o) != null);
+                if (holder != null) return holder.Pos;
+                return mates.OrderBy((o) => WalkTo(s, walks, o.Pos)).ThenBy((o) => o.Id, System.StringComparer.Ordinal).Select((o) => (Pos?)o.Pos).FirstOrDefault() ?? u.Pos;
+            }
             // The one with it: a free place beside them that reaches them, by the walk past the squad (two of it stood by
             // them, and the place left was none it walked to: R11).
             if (where == AntiviralPlaces.Pack && Looting.AntiviralOf(u) != null)
@@ -723,6 +732,10 @@ namespace Bastion.Net
                 }
                 case AntiviralPlaces.Floor:
                     return (s.FloorGear ?? new List<DroppedGear>()).First((d) => d.Gear.Kind == GearKinds.Antiviral).Pos;
+                case AntiviralPlaces.Pack:
+                    // The rest with the one who has it, not crowding the bitten: two stood by them, and the places beside
+                    // them left were walls (R11).
+                    return s.Units.FirstOrDefault((o) => o.Alive && o.Team == Teams.Xcom && Looting.AntiviralOf(o) != null)?.Pos ?? bitten.Pos;
                 default:
                     return bitten.Pos;
             }

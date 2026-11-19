@@ -535,8 +535,6 @@ namespace Bastion.Engine
                         item.Evacuated = true;
                         CompleteObjective(s);
                     }
-                    // A Rescate's survivor aboard, as its item (G23.2: Mordido's, cured, is won so; never taken in uncured).
-                    if (s.Mission.Kind == MissionKinds.Rescue && s.Mission.ObjectiveUnit == u.Id) CompleteObjective(s);
                     break;
                 }
                 case AlightedEvent ev:

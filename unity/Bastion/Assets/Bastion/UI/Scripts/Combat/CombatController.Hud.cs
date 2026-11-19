@@ -154,7 +154,7 @@ namespace Bastion.UI.Combat
             var objective = UnitById(v, m.ObjectiveUnit);
             if (objective != null && objective.Alive && !m.ObjectiveDone && !Unfound(objective)) beacons.Add((objective.Pos, objective.Team == Teams.Alien ? 0xff4a6a : 0x4dff9a));
             // La llave's key on the floor the same (U22): seen from afar, picked up from on it.
-            var item = m.Item != null && m.Item.Carrier == null && m.Item.Evacuated != true ? m.Item.Pos : KeyOnFloor(v);
+            var item = m.Item != null && m.Item.Carrier == null && m.Item.Evacuated != true ? m.Item.Pos : MissionGearOnFloor(v);
             // A siege's breaches: an orange beam each, and an arrow a side at the screen's edge (CombatController.Siege).
             var breaches = new EdgeMarksView();
             BreachMarks(v, beacons, breaches);
@@ -167,6 +167,9 @@ namespace Bastion.UI.Combat
             Hud.SetGoal(goals.Count > 0 ? Board.TileToWorld(v, goals[0].pos, Board.Tile) : (Vector3?)null);
             var view = new EdgeMarksView();
             view.Marks.AddRange(breaches.Marks);
+            // Mordido's bitten off the screen (U23), from their finding till cured: «Mordido · 5 turnos», an alert at 2 and 1.
+            if (UnitById(v, m.ObjectiveUnit) is Unit bitten && BiteLeft(v, bitten) is int left && !Unfound(bitten))
+                view.Marks.Add(new EdgeMarkView { Kind = left <= 2 ? "alert" : "bite", Name = $"{Lore.StageName(NodeKinds.Bitten)} · {left} {(left == 1 ? "turno" : "turnos")}", World = Board.TileToWorld(v, bitten.Pos, Board.Tile) });
             if (moment != null && Time.time < momentUntil) view.Marks.Add(new EdgeMarkView { Kind = "alert", Name = moment.Value.who, World = moment.Value.at + Vector3.up * Board.Tile });
             // The soldier pointed at from the list, when it is off the screen (#11): an arrow at the edge, as the marks'.
             var pointed = UnitById(v, listPointed);
@@ -212,6 +215,10 @@ namespace Bastion.UI.Combat
                     else if (target != null && target.Alive && (m.Kind == MissionKinds.Sabotage || target.Captive)) goal = target.Pos;
                 }
             }
+            // Mordido (U23): the antiviral on the floor; in a pack, the bitten, to give it to them.
+            if (m.Bitten == true && m.Cured != true && UnitById(s, m.ObjectiveUnit) is Unit bitten && bitten.Alive && !Unfound(bitten))
+                goal = AntiviralOnFloor(s) ?? (Looting.AntiviralWhere(s) == AntiviralPlaces.Pack ? bitten.Pos : goal);
+            else if (m.Bitten == true && AntiviralOnFloor(s) is Pos lying) goal = lying;
             // La llave (U22): the key on the floor, then, in a pack, the armoury's door; on its holder still, nowhere to go.
             if (m.KeyArmory == true && !Looting.ArmoryOpen(s))
                 goal = KeyOnFloor(s) ?? (Looting.KeyWhere(s) == KeyPlaces.Pack && m.Locked is List<int> locked && locked.Count > 0 ? Grid.PosOf(s, locked[0]) : null);
@@ -341,6 +348,13 @@ namespace Bastion.UI.Combat
                 var hiding = u.Captive && v.Run != null && v.Mission.Guarded != true;
                 Tag(u.Captive, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data");
                 Tag(u.Objective, "OBJETIVO", "stun");
+                // Mordido's count over the bitten (U23): from their finding till cured; red and beating at 2 and 1.
+                if (BiteLeft(v, u) is int left && !Unfound(u))
+                {
+                    f.Countdown = left;
+                    f.CountdownTip = Lore.BiteText.Countdown(left);
+                    f.CountdownUrgent = left <= 2;
+                }
                 Tag(quiet.Contains(u.Id), HudText.Takedown.Tag, "quiet");
                 var would = false;
                 if (tags.TryGetValue(u.Id, out var t))
@@ -965,6 +979,12 @@ namespace Bastion.UI.Combat
                 objective = steps.First(x => !x.Done).Text;
                 tip = Lore.KeyText.ObjectiveTip;
             }
+            else if (BiteSteps(s, objective) is List<GoalStepView> bite)
+            {
+                steps = bite;
+                objective = (bite.FirstOrDefault(x => !x.Done) ?? bite.Last()).Text;
+                tip = Lore.StageLine(NodeKinds.Bitten, biteTurns: Setup.BiteTurns);
+            }
             return new MissionView
             {
                 Label = s.Run != null ? Bastion.UI.Strategy.StrategyText.Runs.NodeName(s.Run.NodeKind) : MissionName(m.Kind),
@@ -1000,9 +1020,57 @@ namespace Bastion.UI.Combat
             };
         }
 
+        /// <summary>
+        /// Mordido's objective in steps (U23, G23.2; Lore's words, the Rescate's for finding, talking and La Lata): the one who
+        /// asks for help (found and talked to), the antiviral (in a pack or used; on the floor, its line says so), giving it
+        /// to them with the count under it (from their finding, red at 2 and 1), and La Lata (the Rescate's line for it).
+        /// Till they are found only the first two: the others name them, and nobody knows who they are yet. Turned (or
+        /// fallen), what was done stays and the rest is Lore's one line, in red. Null in another fight.
+        /// </summary>
+        List<GoalStepView> BiteSteps(GameState s, string rescueLine)
+        {
+            var m = s.Mission;
+            if (m.Bitten != true || UnitById(s, m.ObjectiveUnit) is not Unit vip) return null;
+            var found = !Unfound(vip);
+            var joined = found && !vip.Captive;
+            var where = Looting.AntiviralWhere(s);
+            var cured = m.Cured == true;
+            var steps = new List<GoalStepView>
+            {
+                new GoalStepView { Text = Lore.VipObjective(vip.Name, found ? "talk" : "search"), Done = joined },
+                new GoalStepView { Text = where == AntiviralPlaces.Floor ? Lore.BiteText.AntiviralOnFloor : Lore.BiteText.FindAntiviral, Done = where == AntiviralPlaces.Pack || where == AntiviralPlaces.Used },
+            };
+            if (!vip.Alive && !vip.Evacuated)
+            {
+                steps.RemoveAll(x => !x.Done);
+                steps.Add(new GoalStepView { Text = Lore.BiteText.TurnedObjective, Lost = true });
+                return steps;
+            }
+            if (!found) return steps;
+            var cure = new GoalStepView { Text = Lore.BiteText.GiveAntiviral(vip.Name), Done = cured };
+            if (BiteLeft(s, vip) is int left)
+            {
+                cure.Note = Lore.BiteText.Countdown(left);
+                cure.NoteUrgent = left <= 2;
+            }
+            steps.Add(cure);
+            steps.Add(new GoalStepView { Text = joined ? rescueLine : Lore.VipObjective(vip.Name, "loose"), Done = m.ObjectiveDone });
+            return steps;
+        }
+
+        /// <summary>Mordido's turns left for `u` (U23): the bitten survivor found, alive and not cured; else null.</summary>
+        static int? BiteLeft(GameState s, Unit u) => s.Mission.Bitten == true && s.Mission.Cured != true && s.Mission.BiteTurns is int left && u != null && u.Id == s.Mission.ObjectiveUnit && u.Alive && !u.Evacuated ? left : (int?)null;
+
         /// <summary>La llave's key lying on the floor (U22: marked as a mission's loose item, its beam and core), or null.</summary>
         static Pos KeyOnFloor(GameState s) => s.Mission.KeyArmory == true && !Looting.ArmoryOpen(s)
             ? (s.FloorGear ?? new List<DroppedGear>()).FirstOrDefault(d => d.Gear.Kind == GearKinds.Key)?.Pos : null;
+
+        /// <summary>Mordido's antiviral lying on the floor (U23: marked as the key on the floor), or null; once cured, none.</summary>
+        static Pos AntiviralOnFloor(GameState s) => s.Mission.Bitten == true && s.Mission.Cured != true
+            ? (s.FloorGear ?? new List<DroppedGear>()).FirstOrDefault(d => d.Gear.Kind == GearKinds.Antiviral)?.Pos : null;
+
+        /// <summary>The mission's own thing on the floor (U22, U23): La llave's key or Mordido's antiviral.</summary>
+        static Pos MissionGearOnFloor(GameState s) => KeyOnFloor(s) ?? AntiviralOnFloor(s);
 
         /// <summary>
         /// The chapter's boss (H6; MissionState.Boss) for the bar at the top: once seen, or once it has roared (all the map

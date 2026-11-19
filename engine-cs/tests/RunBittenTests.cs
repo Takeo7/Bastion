@@ -233,8 +233,36 @@ namespace Bastion.Engine.Tests
             Assert.True(Rules.WouldBoard(s, b, tile));
             Events.ApplyEvent(s, new BoardedEvent { Unit = b.Id });
             Assert.True(b.Aboard);
-            Assert.True(s.Mission.ObjectiveDone);
+            // Not done till La Lata goes (the Rescate's ObjectiveDone untouched: UI's «en La Lata» lines).
+            Assert.False(s.Mission.ObjectiveDone);
             Assert.True(Rules.EvacWins(s));
+            Assert.True(Rules.BittenSafe(s));
+            new Sim(s, new Rng(1), new[] { 0 }).DepartEvac();
+            Assert.Equal(Outcomes.Victory, s.Outcome);
+        }
+
+        [Fact]
+        public void TheSquadCanAlwaysGoLeavingThem()
+        {
+            // Producto, 19/11: the bitten not cured can't get in; the rest in, La Lata goes by itself, leaving them (no prize).
+            var (_, s) = Bitten();
+            var b = Found(s);
+            foreach (var u in s.Units.Where((x) => x.Team == Teams.Xcom && x.CampaignId != null && x.Alive).ToList()) Events.ApplyEvent(s, new BoardedEvent { Unit = u.Id });
+            Assert.True(b.Alive);
+            Assert.True(Rules.AllAboard(s));
+            new Sim(s, new Rng(1), new[] { 0 }).CheckOutcome();
+            Assert.True(s.Mission.EvacDone);
+            Assert.True(b.Lost);
+            Assert.Equal(Outcomes.Defeat, s.Outcome);
+            // The antiviral in a pack of theirs, the same: they go.
+            var (_, s2) = Bitten();
+            var b2 = Found(s2);
+            var u2 = Soldier(s2);
+            TakeTheAntiviral(s2, u2);
+            foreach (var u in s2.Units.Where((x) => x.Team == Teams.Xcom && x.CampaignId != null && x.Alive).ToList()) Events.ApplyEvent(s2, new BoardedEvent { Unit = u.Id });
+            new Sim(s2, new Rng(1), new[] { 0 }).CheckOutcome();
+            Assert.Equal(Outcomes.Defeat, s2.Outcome);
+            Assert.True(b2.Lost);
         }
 
         [Fact]

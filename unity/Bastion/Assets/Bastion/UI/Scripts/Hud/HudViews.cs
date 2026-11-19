@@ -524,6 +524,11 @@ namespace Bastion.UI.Hud
     {
         public string Text;
         public bool Done;
+        /// <summary>A line under it (Mordido's count, U23), red when `NoteUrgent`; null, none.</summary>
+        public string Note;
+        public bool NoteUrgent;
+        /// <summary>The mission lost its point (the bitten turned, U23): in red, no number.</summary>
+        public bool Lost;
     }
 
     /// <summary>A siege's compass (#34): shown, and the sides (DIRS4: 0 N, 1 E, 2 S, 3 O) the next wave comes in by.</summary>
@@ -573,6 +578,13 @@ namespace Bastion.UI.Hud
         public bool Why;
         /// <summary>Its card in the list under the pointer: an arrow over it points it out (Arturo, 31/10 #11).</summary>
         public bool Pointed;
+        /// <summary>
+        /// Mordido's count over the bitten survivor (U23): the turns left before they turn, from their finding; -1, none.
+        /// Its words on hover (Lore's BiteText.Countdown); `CountdownUrgent` at 2 and 1, red and beating.
+        /// </summary>
+        public int Countdown = -1;
+        public string CountdownTip;
+        public bool CountdownUrgent;
     }
 
     [Serializable]

@@ -132,6 +132,8 @@ namespace Bastion.UI.Strategy
                 case GearKinds.Supplies: return "§";
                 // La llave's (U22): Synty's map key, as its stage's on the map.
                 case GearKinds.Key: return "key";
+                // Mordido's (U23): Dark Fantasy's flask, apart from the medicines' cross, till Arte's picture.
+                case GearKinds.Antiviral: return "antiviral";
                 default: return null;
             }
         }
@@ -173,6 +175,8 @@ namespace Bastion.UI.Strategy
                 case GearKinds.Supplies: lines.Add(StrategyText.Stash.SuppliesLine); break;
                 // La llave's (U22): what it opens, and that it stays in the stage (Lore's).
                 case GearKinds.Key: lines.Add(Lore.KeyText.Help); break;
+                // Mordido's antiviral (U23): what it does, and that it stays in the stage (Lore's).
+                case GearKinds.Antiviral: lines.Add(Lore.BiteText.AntiviralHelp); break;
             }
             return string.Join("\n", lines.Where(l => !string.IsNullOrEmpty(l)));
         }

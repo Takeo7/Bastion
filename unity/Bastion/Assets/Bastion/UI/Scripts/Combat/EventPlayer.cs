@@ -1566,6 +1566,10 @@ namespace Bastion.UI.Combat
             var floorBefore = new HashSet<string>((V.Dropped ?? new List<DroppedLoot>()).Select(d => d.Id));
             var gearBefore = e is DiedEvent ? new HashSet<string>((V.FloorGear ?? new List<DroppedGear>()).Select(d => d.Gear.Id)) : null;
             var keyBefore = KeyLying(V) != null;
+            // Mordido's (U23): cured, and the turns left, before the event; whether it is the bitten turning.
+            var curedBefore = V.Mission.Cured == true;
+            var biteBefore = V.Mission.BiteTurns;
+            var turning = e is DiedEvent dies && V.Mission.Bitten == true && V.Mission.Cured != true && V.Mission.BiteTurns == 0 && dies.Unit == V.Mission.ObjectiveUnit;
             if (!applied) Apply(r, e);
             if (e is PodSplitEvent split) splitFrom[split.Into] = split.Pod;
             // A soldier falls and their rucksack stays on the floor (#49), said once; in a run, all they carried, on their
@@ -1580,6 +1584,23 @@ namespace Bastion.UI.Combat
             {
                 Log(Lore.KeyText.Dropped, "#ffd23a");
                 if (IsVisible(dropped.Pos.X, dropped.Pos.Y)) Float(Board.TileToWorld(V, dropped.Pos, KeyFloatHeight), Lore.KeyText.DroppedFloat, "callout", CombatController.KeyIcon);
+            }
+            // Mordido (U23), with the event on View so the objective's card changes in the same refresh: cured (the antiviral
+            // used on them), the count's warning at 2 and 1, and turned. Over them as the important ones (La llave's plate).
+            if (V.Mission.Bitten == true && Unit(V.Mission.ObjectiveUnit) is Unit bitten)
+            {
+                if (!curedBefore && V.Mission.Cured == true && e is GearUsedEvent used)
+                {
+                    Log(Lore.BiteText.Cured(Unit(used.Unit)?.Name ?? bitten.Name, bitten.Name), "#6dff9a");
+                    if (IsVisible(bitten.Pos.X, bitten.Pos.Y)) Float(Board.TileToWorld(V, bitten.Pos, KeyFloatHeight), Lore.BiteText.CuredFloat, "callout", CombatController.AntiviralIcon);
+                }
+                if (V.Mission.Cured != true && V.Mission.BiteTurns != biteBefore && V.Mission.BiteTurns is int left && left >= 1 && left <= 2 && bitten.Alive)
+                    Log(Lore.BiteText.Warn(bitten.Name, left), "#ff6b5a");
+                if (turning)
+                {
+                    Log(Lore.BiteText.Turned(bitten.Name), "#ff6b5a");
+                    if (IsVisible(bitten.Pos.X, bitten.Pos.Y)) Float(Board.TileToWorld(V, bitten.Pos, KeyFloatHeight), Lore.BiteText.TurnedFloat, "callout", Bastion.UI.Hud.UnitFlags.BiteIcon);
+                }
             }
             // The armoury opened with the key (U22): said over its door with the same plate, the other moment that changes
             // the mission (Producto, 19/11), and in the log; here, so the card ticks its step in the same refresh.
@@ -2030,7 +2051,10 @@ namespace Bastion.UI.Combat
                     // A run's survivor (N2), a Rescate's or one loose on any map: the stage goes on without a recruit; nameless if
                     // nobody had seen them.
                     else if (V.Run != null && u.Id == SurvivorOf(V))
-                        Log(Lore.TalkText.Died(control.Unfound(u) ? null : u.Name), "#ff6b5a");
+                    {
+                        // (Mordido's bitten turning, U23: Leave says it, Lore's BiteText.Turned.)
+                        if (!(V.Mission.Bitten == true && V.Mission.Cured != true && V.Mission.BiteTurns == 0)) Log(Lore.TalkText.Died(control.Unfound(u) ? null : u.Name), "#ff6b5a");
+                    }
                     else Log(u.Team == Teams.Xcom ? $"{u.Name} ha caído en combate" : $"{u.Name} eliminado", u.Team == Teams.Xcom ? "#ff6b5a" : "#54d1ff");
                     if (!ShownToSquad(u)) return;
                     // One of ours falling with no attack framed first (the fire, a blast): close on them (#21).
@@ -2259,11 +2283,14 @@ namespace Bastion.UI.Combat
                     fx?.EvacBeam(Board.TileToWorld(v, corpse.Pos));
                     if (units != null) await units.Reanimate(corpse.Id, rise.Zombie.Id, stop);
                     else await Wait(0.6f);
-                    Float(Board.TileToWorld(v, rise.Zombie.Pos, 0.75f), "SE LEVANTA", "crit");
+                    // Mordido's bitten turned (U23): «SE CONVIERTE» and Lore's line said it as they fell (Leave); no second word
+                    // over them, nor the squad's stamp («ya no es de los vuestros»: they may never have joined).
+                    var turned = v.Mission.Bitten == true && corpse.Id == v.Mission.ObjectiveUnit;
+                    if (!turned) Float(Board.TileToWorld(v, rise.Zombie.Pos, 0.75f), "SE LEVANTA", "crit");
                     // Whoever of the squad falls rises, bitten or not (Arturo, 7/11; Lore's words).
-                    Log(u != null ? $"El grito de un Chillón levanta el cuerpo de {corpse.Name}" : $"{corpse.Name} se levanta", "#e8d8c0");
+                    if (!turned) Log(u != null ? $"El grito de un Chillón levanta el cuerpo de {corpse.Name}" : $"{corpse.Name} se levanta", "#e8d8c0");
                     // The first of the squad to rise gets the stamp.
-                    if (u == null && !risenSeen)
+                    if (u == null && !risenSeen && !turned)
                     {
                         risenSeen = true;
                         Hud?.Banner("¡SE LEVANTA!", "alien", $"{corpse.Name} ya no es de los vuestros");
@@ -3467,8 +3494,8 @@ namespace Bastion.UI.Combat
             var into = inPack.Select(g => Lore.GearA(g.Kind, g.Type, g.Count)).ToList();
             var left = onFloor.Select(g => Lore.GearA(g.Kind, g.Type, g.Count)).ToList();
             var all = inPack.Concat(onFloor).Select(Name).ToList();
-            // A weapon, or La llave's key (U22), stands out: yellow over it and in the log.
-            var weapon = (packed ?? new List<Placed>()).Select(p => p.Gear).Concat(floor ?? new List<Bastion.Engine.Gear>()).Any(g => g.Kind == GearKinds.Weapon || g.Kind == GearKinds.Key);
+            // A weapon, La llave's key (U22) or Mordido's antiviral (U23) stands out: as a weapon found, over it and in the log.
+            var weapon = (packed ?? new List<Placed>()).Select(p => p.Gear).Concat(floor ?? new List<Bastion.Engine.Gear>()).Any(g => g.Kind == GearKinds.Weapon || g.Kind == GearKinds.Key || g.Kind == GearKinds.Antiviral);
             Float(at, all.Count == 0 ? HudText.Found.Nothing : string.Join(" · ", all.Take(3)) + (all.Count > 3 ? " …" : ""), weapon ? "callout" : all.Count > 0 ? "heal" : "info");
             if (all.Count > 0) control.Sfx.Found(at);
             Log(HudText.Found.Line(who, into, left, onFloor.Count > 1 || onFloor.Any(g => g.Count > 1)), weapon ? "#ffd23a" : all.Count > 0 ? "#6dff9a" : null);

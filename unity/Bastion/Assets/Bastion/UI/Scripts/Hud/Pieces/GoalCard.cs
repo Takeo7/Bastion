@@ -72,9 +72,13 @@ namespace Bastion.UI.Hud
                 for (var i = 0; i < m.Steps.Count; i++)
                 {
                     var step = m.Steps[i];
-                    var row = Ui.El(step.Done ? "mission-step mission-step--done" : "mission-step", steps);
-                    Ui.Text(step.Done ? "✓" : (i + 1).ToString(), "mission-step__mark font-title", row);
-                    Ui.Text(step.Text, "mission-step__text", row);
+                    var row = Ui.El(step.Lost ? "mission-step mission-step--lost" : step.Done ? "mission-step mission-step--done" : "mission-step", steps);
+                    // (Lost, U23: the bitten turned, what is left to do in red, with no number.)
+                    Ui.Text(step.Done ? "✓" : step.Lost ? "" : (i + 1).ToString(), "mission-step__mark font-title", row);
+                    var words = Ui.El("mission-step__words", row);
+                    Ui.Text(step.Text, "mission-step__text", words);
+                    // Mordido's count under its step (U23), red at 2 and 1.
+                    if (!string.IsNullOrEmpty(step.Note)) Ui.Text(step.Note, step.NoteUrgent ? "mission-step__note mission-step__note--urgent" : "mission-step__note", words);
                 }
                 tips.Attach(steps, string.IsNullOrEmpty(m.ObjectiveTip) ? m.Objective : m.ObjectiveTip);
             }

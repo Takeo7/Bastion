@@ -49,7 +49,7 @@ namespace Bastion.Engine.Tests
         private static readonly string[] Kinds =
         {
             NodeKinds.Normal, NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Sabotage,
-            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Rescue, NodeKinds.Key,
+            NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Rescue, NodeKinds.Key, NodeKinds.Bitten,
         };
 
         /// <summary>
@@ -62,6 +62,7 @@ namespace Bastion.Engine.Tests
             if (kind == NodeKinds.Crossing) return !inside;
             if (kind == NodeKinds.Sabotage) return site == Places.Plaza || site == Places.Camping || site == Places.Factory;
             if (kind == NodeKinds.Key) return site == Places.Police;
+            if (kind == NodeKinds.Bitten) return site == Places.Hospital;
             return true;
         }
 
@@ -112,6 +113,7 @@ namespace Bastion.Engine.Tests
             var rng = new Rng(seed * 7919 + 13);
             int orders = 0, refused = 0, idle = 0;
             var lost = false;
+            var bite = new Leg();
             while (s.Outcome == null && orders < 3000 && idle < 3)
             {
                 var any = false;
@@ -123,6 +125,13 @@ namespace Bastion.Engine.Tests
                     if (Rules.ExecuteCommand(s, cmd, slot, Both, rng).Ok) any = true;
                     else refused++;
                     if (Looting.KeyLost(s)) lost = true;
+                    if (s.Mission.Bitten == true)
+                    {
+                        if (bite.FoundTurn == null && s.Mission.BiteTurns != null) bite.FoundTurn = s.Turn;
+                        if (bite.AntiviralTurn == null && s.Mission.Antiviral == null) bite.AntiviralTurn = s.Turn;
+                        if (bite.CuredTurn == null && s.Mission.Cured == true) bite.CuredTurn = s.Turn;
+                        if (Looting.AntiviralLost(s)) bite.AntiviralLost = true;
+                    }
                 }
                 idle = any ? 0 : idle + 1;
             }
@@ -132,6 +141,11 @@ namespace Bastion.Engine.Tests
                 Done = s.Mission.ObjectiveDone, Orders = orders, Refused = refused, Stuck = s.Outcome == null, Leg = Seen(s),
             };
             f.Leg.KeyLost = lost;
+            f.Leg.FoundTurn = bite.FoundTurn;
+            f.Leg.AntiviralTurn = bite.AntiviralTurn;
+            f.Leg.CuredTurn = bite.CuredTurn;
+            f.Leg.AntiviralLost = bite.AntiviralLost;
+            f.Leg.Turned = s.Mission.Bitten == true && s.Units.FirstOrDefault((u) => u.Id == s.Mission.ObjectiveUnit)?.Reanimated == true;
             if (s.Outcome != null)
             {
                 f.Outcome = s.Outcome;
@@ -153,7 +167,7 @@ namespace Bastion.Engine.Tests
         {
             [NodeKinds.Normal] = "Saqueo", [NodeKinds.Hold] = "Asedio", [NodeKinds.Crossing] = "Travesía", [NodeKinds.Stealth] = "Sigilo*",
             [NodeKinds.Elite] = "Guarida", [NodeKinds.Sabotage] = "Sabotaje", [NodeKinds.Elimination] = "Limpieza",
-            [NodeKinds.Recovery] = "Recuperación", [NodeKinds.Rescue] = "Rescate", [NodeKinds.Key] = "La llave",
+            [NodeKinds.Recovery] = "Recuperación", [NodeKinds.Rescue] = "Rescate", [NodeKinds.Key] = "La llave", [NodeKinds.Bitten] = "Mordido",
         };
 
         private static string SiteName(string site) => site == Places.Town ? "Pueblo o ciudad" : Places.Names[site];
@@ -215,6 +229,24 @@ namespace Bastion.Engine.Tests
                 }
                 lines.Add("");
             }
+            // G23.2 Mordido (Producto, 19/11): found, the antiviral, cured, turned, won; the turns between.
+            if (kinds.Contains(NodeKinds.Bitten) && sites.Contains(Places.Hospital))
+            {
+                lines.Add($"## Mordido en el hospital (media de las {seeds.Length}; cuenta de {Setup.BiteTurns} turnos)");
+                lines.Add("");
+                lines.Add("| | ganados | caídos (media) | encontrado | antiviral sacado | curado | convertido | turno en que se le encuentra (media) | turnos de encontrarle a tener el antiviral (media) | antiviral perdido |");
+                lines.Add("|---|---|---|---|---|---|---|---|---|---|");
+                foreach (var rifles in new[] { true, false })
+                {
+                    var mine = fights.Where((f) => f.Site == Places.Hospital && f.Kind == NodeKinds.Bitten && f.Rifles == rifles).ToList();
+                    if (mine.Count == 0) continue;
+                    var found = mine.Where((f) => f.Leg.FoundTurn != null).ToList();
+                    var both = found.Where((f) => f.Leg.AntiviralTurn != null).ToList();
+                    string Avg(IEnumerable<double> v) => v.Any() ? $"{v.Average():0.0}" : "–";
+                    lines.Add($"| {(rifles ? "fusiles" : "cuchillos")} | {mine.Count((f) => f.Outcome == Outcomes.Victory)} de {mine.Count} | {mine.Average((f) => f.Fallen):0.0} | {found.Count} | {mine.Count((f) => f.Leg.AntiviralTurn != null)} | {mine.Count((f) => f.Leg.CuredTurn != null)} | {mine.Count((f) => f.Leg.Turned)} | {Avg(found.Select((f) => (double)f.Leg.FoundTurn!.Value))} | {Avg(both.Select((f) => (double)Math.Max(0, f.Leg.AntiviralTurn!.Value - f.Leg.FoundTurn!.Value)))} | {mine.Count((f) => f.Leg.AntiviralLost)} |");
+                }
+                lines.Add("");
+            }
             // G23.1 La llave against a Saqueo at the same police stations: its armoury opened, what each found.
             if (kinds.Contains(NodeKinds.Key) && sites.Contains(Places.Police))
             {
@@ -241,11 +273,12 @@ namespace Bastion.Engine.Tests
             foreach (var f in fights)
                 lines.Add($"{SiteName(f.Site)} · {KindNames[f.Kind]} · {(f.Rifles ? "fusiles" : "cuchillos")} · {f.Seed} ({f.Map}): {(f.Stuck ? "SIN ACABAR" : $"{f.Outcome}/{f.Reason}")}, turno {f.Turn}, objetivo {(f.Done ? "sí" : "no")}"
                     + $", {f.Fallen} caídos, {f.Found} objetos ({f.Leg.Worth} §), {f.Supplies} §, premio {f.Reward}{(f.Unseen != null ? f.Unseen.Value ? " sin ser vistos" : " vistos" : "")}"
-                    + (f.Leg.KeyAt != null ? $", llave {f.Leg.KeyAt}{(f.Leg.KeyLost ? " PERDIDA" : "")}, armería {(f.Leg.ArmoryOpen ? "abierta" : "cerrada")} {f.Leg.ArmorySearched}/{f.Leg.ArmoryPieces}" : "") + $", {f.Orders} órdenes, {f.Refused} rechazadas, {f.Seconds:0.0} s");
+                    + (f.Leg.KeyAt != null ? $", llave {f.Leg.KeyAt}{(f.Leg.KeyLost ? " PERDIDA" : "")}, armería {(f.Leg.ArmoryOpen ? "abierta" : "cerrada")} {f.Leg.ArmorySearched}/{f.Leg.ArmoryPieces}" : "")
+                    + (f.Kind == NodeKinds.Bitten ? $", encontrado t{f.Leg.FoundTurn?.ToString() ?? "-"}, antiviral t{f.Leg.AntiviralTurn?.ToString() ?? "-"}, curado t{f.Leg.CuredTurn?.ToString() ?? "-"}{(f.Leg.Turned ? ", CONVERTIDO" : "")}{(f.Leg.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "") + $", {f.Orders} órdenes, {f.Refused} rechazadas, {f.Seconds:0.0} s");
             File.WriteAllLines(Path.Combine(BenchFactAttribute.Folder!, "r1.md"), lines);
             foreach (var l in lines.Take(40)) output.WriteLine(l);
             Assert.Equal(0, fights.Sum((f) => f.Refused));
-            Assert.DoesNotContain(fights, (f) => f.Leg.KeyLost);
+            Assert.DoesNotContain(fights, (f) => f.Leg.KeyLost || f.Leg.AntiviralLost);
         }
 
         // ------------------------------------------------------------------ R2
@@ -272,6 +305,12 @@ namespace Bastion.Engine.Tests
             /// <summary>Its key nowhere to be had at some point of the fight (Looting.KeyLost: Producto's invariant, 19/11).</summary>
             public bool KeyLost;
             public int ArmorySearched, ArmoryPieces;
+            /// <summary>
+            /// G23.2 Mordido's (Producto, 19/11): the turns the bitten was found, the antiviral taken out of its piece and the
+            /// bitten cured (null: never), whether they turned, and whether the antiviral was ever nowhere (Looting.AntiviralLost).
+            /// </summary>
+            public int? FoundTurn, AntiviralTurn, CuredTurn;
+            public bool Turned, AntiviralLost;
         }
 
         private sealed class Expedition

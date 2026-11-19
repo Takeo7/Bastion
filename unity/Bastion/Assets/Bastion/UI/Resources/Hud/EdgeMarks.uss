@@ -51,6 +51,17 @@
     color: var(--t-danger);
 }
 
+/* Mordido's bitten off the screen (U23): «Mordido · 5 turnos», amber as the count over them; at 2 and 1 it is an alert. */
+.edge-mark--bite {
+    border-width: 2px;
+    border-color: #ffc93a;
+}
+
+.edge-mark--bite .edge-mark__arrow,
+.edge-mark--bite .edge-mark__label {
+    color: #ffc93a;
+}
+
 /* A soldier pointed at from the list and off the screen (Arturo, 31/10 #11): its name in the lit ring's light. */
 .edge-mark--soldier {
     border-width: 2px;

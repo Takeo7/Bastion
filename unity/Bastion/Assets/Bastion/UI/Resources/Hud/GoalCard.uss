@@ -55,10 +55,29 @@
     color: var(--t-accent);
 }
 
-.mission-step__text {
+.mission-step__words {
     flex-shrink: 1;
+}
+
+.mission-step__text {
     font-size: 13px;
     white-space: normal;
+}
+
+/* Mordido's count under its step (U23): amber, red at 2 and 1. */
+.mission-step__note {
+    font-size: 12px;
+    white-space: normal;
+    color: #ffc93a;
+}
+
+.mission-step__note--urgent {
+    color: var(--t-danger);
+}
+
+/* The bitten turned (U23): what is left, in red. */
+.mission-step--lost .mission-step__text {
+    color: var(--t-danger);
 }
 
 .mission-step--done .mission-step__mark {

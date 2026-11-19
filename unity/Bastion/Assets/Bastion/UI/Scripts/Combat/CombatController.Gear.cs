@@ -114,11 +114,21 @@ namespace Bastion.UI.Combat
             if (placed == null) return list;
             string Why(ItemCommand c) => !HasCommand() ? CommandLock() : RunPack.Refusal(State, c, MySlot, ActiveSlots());
             var near = State.Units.Where(o => o.Id != u.Id && o.Alive && o.Team == Teams.Xcom && !o.Captive && o.Pack != null && Aim.InMeleeReach(State, u.Pos, o.Pos)).ToList();
+            // Mordido's bitten beside (U23), found, before talking to them too: a medicine heals their health, not the bite
+            // (the engine's why, Lore's MedicineNo), and the antiviral cures them.
+            var bitten = State.Mission.Bitten == true && UnitById(State, State.Mission.ObjectiveUnit) is Unit b && b.Alive && b.Id != u.Id && !Unfound(b) && Aim.InMeleeReach(State, u.Pos, b.Pos) ? b : null;
+            GearActionView UseOn(Unit o) => new GearActionView { Id = "use:" + o.Id, Label = HudText.Pack.HealOther(o.Name.Split(' ')[0]), Why = Why(new ItemCommand { Unit = u.Id, Action = ItemActions.Use, Gear = gear, To = o.Id }) };
             if (placed.Gear.Kind == GearKinds.Medicine)
             {
                 list.Add(new GearActionView { Id = "use:" + u.Id, Label = HudText.Pack.UseSelf, Why = Why(new ItemCommand { Unit = u.Id, Action = ItemActions.Use, Gear = gear, To = u.Id }) });
-                foreach (var o in near)
-                    list.Add(new GearActionView { Id = "use:" + o.Id, Label = HudText.Pack.HealOther(o.Name.Split(' ')[0]), Why = Why(new ItemCommand { Unit = u.Id, Action = ItemActions.Use, Gear = gear, To = o.Id }) });
+                foreach (var o in near) list.Add(UseOn(o));
+                if (bitten != null && !near.Contains(bitten)) list.Add(UseOn(bitten));
+            }
+            if (placed.Gear.Kind == GearKinds.Antiviral)
+            {
+                // On the bitten beside; the bitten themselves, on themselves.
+                if (u.Id == State.Mission.ObjectiveUnit) list.Add(new GearActionView { Id = "use:" + u.Id, Label = HudText.Pack.UseSelf, Why = Why(new ItemCommand { Unit = u.Id, Action = ItemActions.Use, Gear = gear, To = u.Id }) });
+                if (bitten != null) list.Add(UseOn(bitten));
             }
             foreach (var o in near)
                 list.Add(new GearActionView { Id = "give:" + o.Id, Label = HudText.Pack.GiveTo(o.Name.Split(' ')[0]), Why = Why(new ItemCommand { Unit = u.Id, Action = ItemActions.Give, Gear = gear, To = o.Id }) });
