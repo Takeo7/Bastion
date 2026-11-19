@@ -59,7 +59,9 @@ namespace Bastion.UI.Strategy
                     // Its line with what is known of it (Runs.StageLine: the alarm, the Asedio's turn, the Guarida's guard).
                     nv.Card.Add(Runs.StageLine(n));
                     // A Rescate with La Lata full (N2, 17/11): whoever doesn't fit is lost when it leaves, said before choosing it.
-                    if (n.Kind == NodeKinds.Rescue && !Runs.SeatFree(c))
+                    // A Mordido too (Producto, 19/11): winning it takes the bitten aboard, cured, and with no seat free a soldier
+                    // stays on the ground (Lore's line says it as it is).
+                    if ((n.Kind == NodeKinds.Rescue || n.Kind == NodeKinds.Bitten) && !Runs.SeatFree(c))
                     {
                         nv.Card.Add(Lore.RescueNoSeat);
                         nv.Warn = Lore.RescueNoSeatTag;

@@ -185,6 +185,15 @@ namespace Bastion.UI.Strategy
                 case "board": control.OnBoard(); return false;
                 // «tablero:c1»: that one's board from the expedition's map, a stop or the report (U10's keys).
                 case "tablero": control.OnBoardFor(S(1)); return false;
+                // «ayuda:rnode-n4-0»: the help of the element by that name pinned open (the expedition map's node card).
+                case "ayuda":
+                {
+                    var strategy = FindFirstObjectByType<StrategyRoot>();
+                    var found = strategy?.GetComponent<UIDocument>()?.rootVisualElement?.Q(S(1));
+                    if (found != null) strategy.PinTip(found);
+                    Debug.Log($"[base-run] ayuda de {S(1)}: {(found != null ? "abierta" : "no está")}");
+                    return false;
+                }
                 // «estado»: what is open now, in the log (U10's test with two).
                 case "estado": Debug.Log($"[base-run] estado: {control.OpenNow()}"); return false;
                 // «ocultar»: every panel of the screen hidden, the clearing and its row as they are (A8: Arte's shots of the

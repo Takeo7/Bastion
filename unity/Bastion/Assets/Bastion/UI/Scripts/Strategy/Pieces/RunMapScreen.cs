@@ -160,6 +160,8 @@ namespace Bastion.UI.Strategy
                 if (open) el = new Button(() => handlers.OnNode(id));
                 else el = new VisualElement();
                 Ui.AddClasses(el, "rnode");
+                // By its id, for the labs (BaseRun «ayuda:rnode-n4-0»: its card pinned open).
+                el.name = "rnode-" + id;
                 field.Add(el);
                 Round(el, p, side);
                 el.EnableInClassList("rnode--hidden", n.Hidden);
