@@ -399,6 +399,22 @@ namespace Bastion.Engine
             s.Run.NextGear = maker.Next;
         }
 
+        /// <summary>
+        /// G23.3 El herido (Arturo, cuadros 71, 73 y 92; .dev-snapshots/gameplay/g23/HERIDO.md): the Rescate's survivor can't
+        /// walk (MissionState.Wounded, Unit.Lame): no actions nor movement ever; carried to La Lata. Where they wait is the
+        /// Rescate's own, on the ground, the squad's to walk to (OnlyWithinReach).
+        /// </summary>
+        public static void Wounded(GameState s)
+        {
+            if (s.Run == null || string.IsNullOrEmpty(s.Mission.ObjectiveUnit)) return;
+            var w = Grid.GetUnit(s, s.Mission.ObjectiveUnit!);
+            if (w == null) return;
+            s.Mission.Wounded = true;
+            w.Lame = true;
+            w.Ap = 0;
+            w.Moves = 0;
+        }
+
         /// <summary>G23.2 Mordido (Arturo, cuadro 87: 10; cuadro 89, after R1 with the bots: «En cualquiera, con 15 turnos»): the squad's turns the bitten has from their finding.</summary>
         public const int BiteTurns = 15;
 

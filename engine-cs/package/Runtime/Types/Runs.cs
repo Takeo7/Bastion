@@ -28,6 +28,11 @@ namespace Bastion.Engine
         public const string Key = "key";
         /// <summary>G23.2 Mordido (Arturo, 19/11, cuadros 73 y 87): a Rescate whose survivor is bitten; always at the hospital.</summary>
         public const string Bitten = "bitten";
+        /// <summary>
+        /// G23.3 El herido (Arturo, cuadros 71, 73 y 92): a Rescate whose survivor can't walk; carried to La Lata, turn about,
+        /// and La Lata doesn't go without them alive (MissionState.Wounded).
+        /// </summary>
+        public const string Wounded = "wounded";
         // Stops, no fight (H4).
         public const string Refuge = "refuge";
         public const string Trade = "trade";

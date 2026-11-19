@@ -233,7 +233,21 @@ namespace Bastion.Engine
         /// </summary>
         public static int FullMoves(Unit u)
         {
+            // G23.3 El herido: never walks.
+            if (u.Lame == true) return 0;
             return (int)Math.Round((Content.Templates[u.Template].Mobility + u.Mods.Mobility) * CostOrtho);
+        }
+
+        /// <summary>G23.3 El herido (Arturo, cuadro 92: «6 casillas»): the most whoever carries them walks, in path cost.</summary>
+        public const int CarryMoves = 6 * CostOrtho;
+
+        /// <summary>
+        /// The movement `u` has left this turn as spent (Unit.moves, or all of it), before what carrying caps (MoveBudget):
+        /// what a walk is taken off (Events, MovedEvent), so that what is left after setting the wounded down is still there.
+        /// </summary>
+        public static int MovesLeft(GameState s, Unit u)
+        {
+            return u.Moves ?? FullMoves(s, u);
         }
 
         /// <summary>
@@ -265,15 +279,22 @@ namespace Bastion.Engine
 
         /// <summary>The movement `u` has left this turn, in path cost: Unit.moves, or all of it (null: none spent yet).</summary>
         /// <remarks>Without the hidden squad's extra (ConcealedBonus): for the squad, MoveBudget(s, u).</remarks>
+        /// <remarks>G23.3: carrying the wounded (Unit.Carrying), what is left of CarryMoves this turn at most (Unit.Hauled).</remarks>
         public static int MoveBudget(Unit u)
         {
-            return u.Moves ?? FullMoves(u);
+            return Carried(u, u.Moves ?? FullMoves(u));
         }
 
         /// <summary>MoveBudget with the hidden squad's extra: all of FullMoves(s, u) while none is spent.</summary>
         public static int MoveBudget(GameState s, Unit u)
         {
-            return u.Moves ?? FullMoves(s, u);
+            return Carried(u, MovesLeft(s, u));
+        }
+
+        /// <summary>G23.3: `left`, or with the wounded on `u`'s back what it may still walk with them this turn, if less.</summary>
+        private static int Carried(Unit u, int left)
+        {
+            return u.Carrying != null ? Math.Max(0, Math.Min(left, CarryMoves - (u.Hauled ?? 0))) : left;
         }
 
         /// <summary>
@@ -283,15 +304,16 @@ namespace Bastion.Engine
         /// Forma física all the same (SpendsAll).
         /// </summary>
         /// <remarks>Without the hidden squad's extra: for the squad, IsRun(s, u, cost).</remarks>
+        /// <remarks>G23.3: never with the wounded on its back (Arturo, cuadro 71: «quien carga no corre»).</remarks>
         public static bool IsRun(Unit u, double cost)
         {
-            return MoveBudget(u) >= FullMoves(u) && SpendsAll(u, cost);
+            return u.Carrying == null && MoveBudget(u) >= FullMoves(u) && SpendsAll(u, cost);
         }
 
         /// <summary>IsRun with the hidden squad's extra: hidden, a run is all of its 11 tiles at once.</summary>
         public static bool IsRun(GameState s, Unit u, double cost)
         {
-            return MoveBudget(s, u) >= FullMoves(s, u) && SpendsAll(s, u, cost);
+            return u.Carrying == null && MoveBudget(s, u) >= FullMoves(s, u) && SpendsAll(s, u, cost);
         }
 
         /// <summary>Whether a move of `cost` spends the turn's movement, less than a tile of it left: that teaches Forma física (Arturo, 5/11).</summary>

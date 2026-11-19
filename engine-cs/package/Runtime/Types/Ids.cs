@@ -230,6 +230,14 @@ namespace Bastion.Engine
         public const string Talk = "talk";
         /// <summary>«Bajar» (T24, Arturo 18/11): down out of La Lata to a free tile of its zone, an action (Rules.AlightRefusal).</summary>
         public const string Alight = "alight";
+        /// <summary>
+        /// G23.3 El herido (Arturo, cuadros 71 and 92): «Cargar» the wounded from beside them, an action; the first time they
+        /// join (VipRescuedEvent, no Talk). «Dejar» on a free tile beside, an action. «Pasar» to one of the squad beside, an
+        /// action of the giver's (Abilities.CarryTarget, SetDownTiles, PassTargets).
+        /// </summary>
+        public const string Carry = "carry";
+        public const string SetDown = "setDown";
+        public const string Pass = "pass";
 
         public static readonly IReadOnlyList<string> All = new[]
         {
@@ -237,7 +245,7 @@ namespace Bastion.Engine
             SearchRoom, OpenDoor, CloseDoor, RunAndGun, RapidFire, Suppression, ChainShot, Rupture, AimedShot,
             LightningHands, Faceoff, KillZone, Revival, Restoration, ElbowRoom, PatchUp, Stone, OverwatchMelee, Claw,
             Mindspin, Reanimate, Burst, Smash, Smoke, Flashbang, FirstAid, Molotov, Hide, Pry, Takedown, Pound, Charge, Roar,
-            Talk, Alight,
+            Talk, Alight, Carry, SetDown, Pass,
         };
     }
 

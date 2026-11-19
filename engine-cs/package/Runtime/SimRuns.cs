@@ -217,8 +217,30 @@ namespace Bastion.Engine
         /// </summary>
         public static bool RunsRescue(GameState s)
         {
-            // Mordido's (G23.2): won only with the bitten cured and aboard (EvacWins).
-            return s.Run != null && s.Mission.Kind == MissionKinds.Rescue && s.Mission.Bitten != true;
+            // Mordido's (G23.2): won only with the bitten cured and aboard (EvacWins). El herido's (G23.3), with them aboard.
+            return s.Run != null && s.Mission.Kind == MissionKinds.Rescue && s.Mission.Bitten != true && s.Mission.Wounded != true;
+        }
+
+        /// <summary>G23.3 El herido: the wounded unit (MissionState.ObjectiveUnit), or null outside the stage.</summary>
+        public static Unit? WoundedOf(GameState s)
+        {
+            return s.Mission.Wounded == true && !string.IsNullOrEmpty(s.Mission.ObjectiveUnit) ? Grid.GetUnit(s, s.Mission.ObjectiveUnit!) : null;
+        }
+
+        /// <summary>
+        /// G23.3 El herido (Arturo, cuadro 73: «No se sale sin él»): the wounded alive and not in La Lata: on the floor, carried,
+        /// or not found yet. La Lata doesn't go meanwhile (EvacCommand, AllAboard). Dead, it may.
+        /// </summary>
+        public static bool WoundedOut(GameState s)
+        {
+            var w = WoundedOf(s);
+            return w != null && !w.Evacuated && (w.Alive || w.CarriedBy != null);
+        }
+
+        /// <summary>G23.3 El herido won: the wounded in La Lata, or gone in it (Evacuated), as it goes (CheckOutcome, DepartEvac).</summary>
+        public static bool WoundedSafe(GameState s)
+        {
+            return WoundedOf(s) is Unit w && w.Evacuated;
         }
 
         /// <summary>
@@ -273,7 +295,8 @@ namespace Bastion.Engine
         public static int? SeatsFree(GameState s)
         {
             var seats = s.Mission.Seats;
-            return seats == null ? (int?)null : Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true));
+            // G23.3: the wounded takes no seat (Arturo, cuadro 92: «no ocupa plaza»).
+            return seats == null ? (int?)null : Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true && u.Lame != true));
         }
 
         /// <summary>One of the squad that can get into La Lata: a soldier or one who joined, not a captive, the relay or a turret.</summary>
@@ -300,7 +323,8 @@ namespace Bastion.Engine
         /// </summary>
         public static bool AllAboard(GameState s)
         {
-            return s.Run != null && s.Units.Any((u) => u.Aboard == true) && !s.Units.Any((u) => u.Alive && Boarder(u) && !BittenUncured(s, u));
+            // G23.3: never without the wounded alive (WoundedOut), found or not.
+            return s.Run != null && s.Units.Any((u) => u.Aboard == true) && !s.Units.Any((u) => u.Alive && Boarder(u) && !BittenUncured(s, u)) && !WoundedOut(s);
         }
 
         /// <summary>
@@ -316,7 +340,7 @@ namespace Bastion.Engine
             if (free == null || s.Run == null) return zone;
             var m = s.Mission;
             if (m.HoldUntil != null && s.Turn < m.HoldUntil) return zone;
-            var shut = s.Units.Where((u) => u.Aboard == true).Select((u) => (u.Pos.X, u.Pos.Y)).ToHashSet();
+            var shut = s.Units.Where((u) => u.Aboard == true && u.Lame != true).Select((u) => (u.Pos.X, u.Pos.Y)).ToHashSet();
             return zone.Where((z) => !shut.Contains((z.X, z.Y))).Take(free.Value).ToList();
         }
 
@@ -348,9 +372,10 @@ namespace Bastion.Engine
         {
             var seats = s.Mission.Seats;
             if (seats == null) return new List<Unit>();
-            var aboard = s.Units.Where((u) => u.Alive && u.Team == Teams.Xcom && !u.Objective && !u.Captive && u.Automaton == null && Abilities.InEvacZone(s, u.Pos)).ToList();
+            // G23.3: the wounded takes no seat, on the floor in its zone either.
+            var aboard = s.Units.Where((u) => u.Alive && u.Team == Teams.Xcom && !u.Objective && !u.Captive && u.Automaton == null && u.Lame != true && Abilities.InEvacZone(s, u.Pos)).ToList();
             // The seats taken inside (T24) first.
-            var left = Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true));
+            var left = Math.Max(0, seats.Value - s.Units.Count((u) => u.Aboard == true && u.Lame != true));
             return aboard.Where((u) => u.CampaignId != null).Concat(aboard.Where((u) => u.CampaignId == null)).Skip(left).ToList();
         }
     }

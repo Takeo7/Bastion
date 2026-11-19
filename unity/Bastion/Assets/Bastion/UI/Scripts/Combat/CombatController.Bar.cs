@@ -99,11 +99,21 @@ namespace Bastion.UI.Combat
             bool Door(string id) => (id != AbilityIds.OpenDoor && id != AbilityIds.CloseDoor) || Abilities.DoorTiles(State, u, id == AbilityIds.OpenDoor ? "door" : "doorOpen").Count > 0;
             // Hablar only while a run's survivor waits and has been seen (N2, 17/11): the engine lists it for everyone.
             var waiting = Abilities.Waiting(State);
-            bool Talk(string id) => id != AbilityIds.Talk || (waiting != null && !Unfound(waiting));
+            // El herido (U25): the wounded is carried, never talked to (the engine refuses it): no Hablar in that stage.
+            bool Talk(string id) => id != AbilityIds.Talk || (waiting != null && !Unfound(waiting) && m.Wounded != true);
             // Leaving is the bar's own action (EvacActions), for any of ours in the bus: never the soldier's.
-            return Abilities.AbilitiesOf(u)
+            var list = Abilities.AbilitiesOf(u)
                 .Where(id => id != AbilityIds.Evac && (id != AbilityIds.Hack || (m.Terminal != null && !m.ObjectiveDone)) && (id != AbilityIds.Search || HasSpots) && Door(id) && Talk(id))
                 .ToList();
+            // El herido's (U25, G23.3; the engine's, this fight only): Cargar, or Dejar and Pasar while carrying; before the
+            // doors, which come and go, so their numbers don't move.
+            var carry = Abilities.CarryAbilities(State, u);
+            if (carry.Count > 0)
+            {
+                var at = list.FindIndex(id => id == AbilityIds.OpenDoor || id == AbilityIds.CloseDoor);
+                list.InsertRange(at < 0 ? list.Count : at, carry);
+            }
+            return list;
         }
 
         /// <summary>Whether this map has furniture to search (Registrar): the game's, from the map (game.ts hasSpots).</summary>
@@ -427,6 +437,17 @@ namespace Bastion.UI.Combat
             var go = CallKey("evac", armed ? $"Confirmar: {p.Go}" : p.Go, $"{p.Title}. {p.Text}");
             go.Active = armed;
             go.Cost = EvacPartner() != null ? $"Lo acepta {PartnerHere()?.Name ?? "el otro jugador"}" : "Termina la misión";
+            // El herido out and alive (U25; the engine refuses it): off, why in Lore's words, named once they've been seen.
+            // Its card says only that (Producto, 19/11): La Lata's own words, «si salís ahora…», over a key that doesn't let
+            // anyone out, contradicted it.
+            if (Rules.WoundedOut(s) && Rules.WoundedOf(s) is Unit hurt)
+            {
+                go.Enabled = false;
+                go.Active = false;
+                go.Cost = null;
+                go.Description = null;
+                go.Reason = Lore.WoundedText.NotWithout(Unfound(hurt) ? null : hurt.Name);
+            }
             return new List<AbilityView> { go };
         }
     }

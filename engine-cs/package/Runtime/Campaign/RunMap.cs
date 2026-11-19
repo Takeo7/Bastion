@@ -109,7 +109,7 @@ namespace Bastion.Engine
         /// Whether a fight's map has a survivor loose on it (N2): one in LooseOdds of the fights that aren't a Rescate (whose
         /// survivor is sure) nor the boss, by the map's seed; no mark on the map, nor where to look.
         /// </summary>
-        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Bitten && n.Kind != NodeKinds.Boss && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
+        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Bitten && n.Kind != NodeKinds.Wounded && n.Kind != NodeKinds.Boss && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
 
         /// <summary>Rows with no service area: the first fights, made with knives only.</summary>
         public const int EarlyRows = 2;

@@ -179,7 +179,8 @@ namespace Bastion.UI.Combat
             // The bodies by their units; the rest only where something stands (Low or High), not every tile through
             // SearchSpot (it looks for a body among all the units at each: 12 ms over a city, 7/11).
             foreach (var a in s.Units)
-                if (!a.Alive && a.Pos.Z <= top && Looting.SearchSpot(s, a.Pos) == Looting.Body) Add(a.Pos);
+                // (Not El herido carried, U25: on someone's back, not a body.)
+                if (!a.Alive && a.CarriedBy == null && a.Pos.Z <= top && Looting.SearchSpot(s, a.Pos) == Looting.Body) Add(a.Pos);
             // The pieces by their nodes (G19, MissionState.Pieces): the dead officer lies on the floor, which the tiles' loop
             // below passes over; empty from the start, they aren't there; searched, Add leaves them.
             foreach (var node in s.Mission.Pieces ?? new List<int>())

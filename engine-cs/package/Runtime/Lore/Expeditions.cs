@@ -50,6 +50,7 @@ namespace Bastion.Engine
             [NodeKinds.Elite] = "Guarida",
             [NodeKinds.Key] = "La llave",
             [NodeKinds.Bitten] = "Mordido",
+            [NodeKinds.Wounded] = "El herido", // G23.3: the stage, as Arturo and Producto call it (as «Mordido»), not the person
             [NodeKinds.Refuge] = "Refugio",
             [NodeKinds.Trade] = "Trueque",
             [NodeKinds.Event] = "Suceso",
@@ -151,6 +152,66 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// El herido (G23.3; Gameplay's .dev-snapshots/gameplay/g23/HERIDO.md; Arturo, cuadros 71, 73 and 92): a Rescate whose
+        /// survivor has a broken leg and never acts (Unit.Lame). Carried to La Lata (Cargar, Dejar, Pasar: an action each, from
+        /// beside), which won't leave while they are out and alive; joined on the first carry, with no Hablar. Said by their
+        /// name or as «quien tiene la pierna rota», never «el herido», so nothing has to agree with who they are.
+        /// </summary>
+        public static class WoundedText
+        {
+            /// <summary>The tiles a carrier walks at most a turn (Paths.CarryMoves).</summary>
+            private static int Tiles => Paths.CarryMoves / Paths.CostOrtho;
+
+            /// <summary>The objective's steps (UI's strip): to find (the Rescate's own), to carry, to bring, to leave; and if they die.</summary>
+            public const string Search = TalkText.Search;
+            public static string Carry(string who) => $"Cargad a {who} a hombros";
+            public static string Bring(string who) => $"Llevad a {who} {Bus.To}";
+            public const string Leave = "Salid " + Bus.In;
+            public const string DeadObjective = "Sin recluta ni recompensa: salid " + Bus.In;
+            /// <summary>The strip's help.</summary>
+            public static string ObjectiveTip => $"No anda: se le lleva a hombros. Cargar, dejar y pasar cuestan una acción, siempre desde una casilla de al lado; recibir no cuesta nada. Cargando, se anda como mucho {Tiles} casillas por turno y no se dispara el arma larga. Si cae quien carga, queda en el suelo, y ahí le pueden morder. {Bus.Name} no sale mientras siga fuera con vida.";
+
+            /// <summary>Over the flags: whoever carries them, and them on the floor.</summary>
+            public const string CarrierTag = "CARGANDO";
+            public const string FloorTag = "PIERNA ROTA";
+            /// <summary>The same on the busts, which fit no more than «A BORDO» (UI, 19/11: «CARGAN…», «PIERNA R…»).</summary>
+            public const string CarrierTagShort = "CARGA";
+            public const string FloorTagShort = "NO ANDA";
+
+            /// <summary>The actions and their help (Content); Dejar's name on a tile of La Lata's, where they go in at once.</summary>
+            public const string CarryAction = "Cargar";
+            public static string CarryHelp => $"Carga a hombros a quien tiene la pierna rota, desde una casilla de al lado. La primera vez, se une a la escuadra. Cargando, andas como mucho {Tiles} casillas por turno y no disparas el arma larga; la pistola, sí.";
+            public const string SetDownAction = "Dejar";
+            public const string SetDownHelp = "Deja a quien llevas a hombros en una casilla libre de al lado. En una casilla de " + Bus.Name + ", sube a bordo en el acto.";
+            public static string SetDownAboardAction(string who) => $"Subir a {who} {Bus.To}";
+            public const string PassAction = "Pasar";
+            public const string PassHelp = "Pasa a quien llevas a hombros a alguien de la escuadra que tengas al lado y no cargue a nadie. Recibir no cuesta nada.";
+
+            /// <summary>The refusals (Abilities, Rules): Hablar to them; La Lata out without them (`who` null while nobody has seen them).</summary>
+            public const string AlreadyCarrying = "Ya llevas a alguien a hombros.";
+            public const string NobodyToCarry = "No hay nadie a quien cargar.";
+            public const string NotBeside = "Ponte al lado de quien tiene la pierna rota.";
+            public const string NotCarrying = "No llevas a nadie.";
+            public const string NoFreeTile = "No hay ninguna casilla libre a tu lado.";
+            public const string NobodyToPass = "No tienes al lado a nadie de la escuadra que pueda cargar.";
+            public const string NoLongArm = "Cargando a alguien no se dispara el arma larga.";
+            public const string NoTalk = "No anda: se le carga a hombros, con «Cargar».";
+            public static string NotWithout(string? who) => string.IsNullOrEmpty(who) ? "No se sale sin quien pide ayuda en la zona marcada." : $"No se sale sin {who}.";
+
+            /// <summary>
+            /// The log: joined (the first carry), carried, passed on, set down on the floor or in La Lata (then not their own
+            /// Boarded line too), and fallen with their carrier (with its float over the tile).
+            /// </summary>
+            public static string Joined(string who) => $"{who} se une a la escuadra.";
+            public static string Carried(string by, string who) => $"{by} carga a {who} a hombros.";
+            public static string Passed(string from, string to, string who) => $"{from} pasa a {who} a hombros de {to}.";
+            public static string SetDown(string by, string who) => $"{by} deja a {who} en el suelo.";
+            public static string SetDownAboard(string by, string who) => $"{by} sube a {who} {Bus.To}.";
+            public static string Fell(string by, string who) => $"{who} cae al suelo con {by}.";
+            public const string FellFloat = "AL SUELO";
+        }
+
+        /// <summary>
         /// What is done at a stage, in one line, for its sheet on the map. The figures and names when known: the item to
         /// bring back, the alarm (Alarms), the turn La Lata comes on a Hold, the guard of a Guarida (a template); a Rescate
         /// with Cuervos round the survivor (`crows`; Arturo, 17/11: some are held by them, others hide alone).
@@ -183,8 +244,11 @@ namespace Bastion.Engine
                     // G23.1 (Arturo, 18/11 and 19/11, cuadros 71, 73 and 79): won as a Saqueo; the armoury is the prize.
                     return $"La armería de la comisaría está cerrada, con todos sus muebles llenos. Uno de los muertos de uniforme lleva la llave; también se puede volar la pared con una granada. Salid {Bus.In}.";
                 case NodeKinds.Bitten:
-                    // G23.2 (Arturo, cuadros 73 and 87): 10 turns from the finding; turned, out without a recruit nor a reward.
+                    // G23.2 (Arturo, cuadros 73, 87 and 89): BiteTurns from the finding; turned, out without a recruit nor a reward.
                     return $"Alguien mordido se esconde en una zona marcada. Desde que se le encuentra, le quedan {biteTurns ?? Setup.BiteTurns} turnos: dadle el antiviral, que está en uno de los armarios o estantes de medicinas. Volved todos {Bus.To}. Si se convierte, se sale sin recluta ni recompensa.";
+                case NodeKinds.Wounded:
+                    // G23.3 (Arturo, cuadros 71, 73 and 92): carried to La Lata, which won't leave without them; dead, no recruit nor reward.
+                    return $"Alguien con la pierna rota pide ayuda en una zona marcada. No anda: se le lleva a hombros {Bus.To}, y la escuadra se puede turnar. Quien carga anda como mucho {Paths.CarryMoves / Paths.CostOrtho} casillas por turno y no dispara el arma larga. {Bus.Name} no sale mientras siga fuera con vida; si muere, se sale sin recluta ni recompensa.";
                 case NodeKinds.Refuge:
                     // G22 (cuadro 72): the only way back to the base, but beating the boss.
                     return "Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.";

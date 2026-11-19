@@ -96,6 +96,49 @@ namespace Bastion.Engine
             return Aim.Adjacent(from, vip.Pos) && from.Z == vip.Pos.Z && Looting.ReachesToSearch(s, from, vip.Pos) ? vip : null;
         }
 
+        /// <summary>
+        /// G23.3 El herido: whom `u` can take up from `from` (its own tile by default): the wounded on the floor (found or
+        /// not, joined or not) on a tile beside it, on its floor, reached as a box beside one is searched (no wall between).
+        /// Null if nobody, or if `u` carries already.
+        /// </summary>
+        public static Unit? CarryTarget(GameState s, Unit u, Pos? from = null)
+        {
+            from ??= u.Pos;
+            var w = Rules.WoundedOf(s);
+            if (w == null || !w.Alive || w.CarriedBy != null || u.Team != Teams.Xcom || u.Captive || u.Lame == true || u.Id == w.Id || u.Carrying != null) return null;
+            return Aim.Adjacent(from, w.Pos) && from.Z == w.Pos.Z && Looting.ReachesToSearch(s, from, w.Pos) ? w : null;
+        }
+
+        /// <summary>G23.3: the free tiles beside `u`, on its floor, it can set the wounded down on (reached as a box is searched).</summary>
+        public static List<Pos> SetDownTiles(GameState s, Unit u)
+        {
+            if (u.Carrying == null) return new List<Pos>();
+            return Grid.Dirs8.Select((d) => new Pos { X = u.Pos.X + d.X, Y = u.Pos.Y + d.Y, Z = u.Pos.Z })
+                .Where((p) => Grid.InBounds(s, p.X, p.Y) && Grid.IsWalkable(Grid.KindAt(s, p)) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null && Looting.ReachesToSearch(s, u.Pos, p))
+                .ToList();
+        }
+
+        /// <summary>G23.3: whom of the squad beside `u`, on its floor, it can pass the wounded to: one that can carry, carrying nobody.</summary>
+        public static List<Unit> PassTargets(GameState s, Unit u)
+        {
+            if (u.Carrying == null) return new List<Unit>();
+            return s.Units.Where((o) => o.Alive && o.Id != u.Id && o.Team == Teams.Xcom && !o.Captive && !o.Objective && o.Automaton == null && o.Lame != true
+                && o.Template != TemplateIds.Vip && o.Carrying == null && Content.Templates[o.Template].Team == Teams.Xcom
+                && Aim.Adjacent(u.Pos, o.Pos) && o.Pos.Z == u.Pos.Z && Looting.ReachesToSearch(s, u.Pos, o.Pos)).ToList();
+        }
+
+        /// <summary>
+        /// G23.3 El herido: what of carrying them `u` has in this fight (not in AbilitiesOf, which knows no fight: the bar
+        /// would show them in every one): Cargar to one of the squad that carries nobody, Dejar and Pasar to one that
+        /// does; none outside the stage, nor for the wounded themselves.
+        /// </summary>
+        public static List<string> CarryAbilities(GameState s, Unit u)
+        {
+            if (s.Mission.Wounded != true || u.Team != Teams.Xcom || u.Captive || u.Lame == true || u.Template == TemplateIds.Vip
+                || Content.Templates[u.Template].Team != Teams.Xcom || u.Automaton != null) return new List<string>();
+            return u.Carrying != null ? new List<string> { AbilityIds.SetDown, AbilityIds.Pass } : new List<string> { AbilityIds.Carry };
+        }
+
         /// <summary>Hack from a tile beside the terminal, on its floor.</summary>
         public static bool CanHackFrom(GameState s, Unit u, Pos? from = null)
         {
@@ -237,7 +280,7 @@ namespace Bastion.Engine
         /// <summary>Why the ability cannot be used right now (ignoring targets), or null if it can.</summary>
         public static string? AbilityBlocker(GameState s, Unit u, string ability)
         {
-            if (!AbilitiesOf(u).Contains(ability)) return "No tiene esa habilidad.";
+            if (!AbilitiesOf(u).Contains(ability) && !CarryAbilities(s, u).Contains(ability)) return "No tiene esa habilidad.";
             var def = Content.Abilities[ability];
             var need = ApNeeded(u, ability);
             // A door is part of moving (docs/PRUEBA-2026-11-05-ARTURO.md #14, movement apart from the actions): with
@@ -256,8 +299,23 @@ namespace Bastion.Engine
             }
             if (u.Disoriented != 0 && def.Target == Engine.AbilityTargets.Tile && !ByHand.Contains(ability) && ability != AbilityIds.Stone) return "Con desorientación no se pueden usar explosivos.";
             if (Content.FiresPrimary(u, ability) && Content.ConditionOf(u) <= 0) return "Rota: no dispara. Se arregla en la Armería.";
+            // G23.3 El herido (Arturo, cuadro 71: «ni usa el arma larga»): the pistol and the blade, yes.
+            if (u.Carrying != null && Content.FiresPrimary(u, ability)) return Lore.WoundedText.NoLongArm;
             switch (ability)
             {
+                case AbilityIds.Carry:
+                    if (u.Carrying != null) return Lore.WoundedText.AlreadyCarrying;
+                    if (Rules.WoundedOf(s) is not Unit w || !w.Alive) return Lore.WoundedText.NobodyToCarry;
+                    if (CarryTarget(s, u) == null) return Lore.WoundedText.NotBeside;
+                    break;
+                case AbilityIds.SetDown:
+                    if (u.Carrying == null) return Lore.WoundedText.NotCarrying;
+                    if (SetDownTiles(s, u).Count == 0) return Lore.WoundedText.NoFreeTile;
+                    break;
+                case AbilityIds.Pass:
+                    if (u.Carrying == null) return Lore.WoundedText.NotCarrying;
+                    if (PassTargets(s, u).Count == 0) return Lore.WoundedText.NobodyToPass;
+                    break;
                 case AbilityIds.Reload:
                     if (Content.FullyLoaded(u)) return !string.IsNullOrEmpty(u.Arms?.Primary) ? "Los cargadores están llenos." : "El cargador está lleno.";
                     if (u.Mags == 0) return "No quedan cargadores.";
@@ -276,6 +334,9 @@ namespace Bastion.Engine
                     if (u.Arms?.Melee == FoundWeaponIds.Chainsaw) return "Con la motosierra no hay golpe silencioso.";
                     break;
                 case AbilityIds.Talk:
+                    // G23.3 El herido: joined by carrying them (Producto, cuadro 92).
+                    // (Found, they wait no more: Events.SurvivorFound. Never talked to in this stage.)
+                    if (s.Mission.Wounded == true) return Lore.WoundedText.NoTalk;
                     if (Waiting(s) == null) return "No hay nadie con quien hablar.";
                     if (TalkTarget(s, u) == null) return "Ponte al lado de quien pide ayuda.";
                     break;
@@ -441,6 +502,7 @@ namespace Bastion.Engine
                 !t.Alive &&
                 !t.Evacuated &&
                 !t.Reanimated &&
+                t.CarriedBy == null &&
                 !t.Objective &&
                 !Content.Templates[t.Template].Robotic &&
                 t.Template != TemplateIds.Zombie &&
@@ -466,6 +528,8 @@ namespace Bastion.Engine
                 case AbilityIds.Revival:
                 case AbilityIds.FirstAid:
                     return AllyTargets(s, u, ability);
+                case AbilityIds.Pass:
+                    return PassTargets(s, u);
             }
             if (def.Target == Engine.AbilityTargets.Melee && Content.IsAttack(ability)) return MeleeTargets(s, u, ability).Select((o) => o.Target).ToList();
             if (def.Target == Engine.AbilityTargets.Enemy && Content.IsAttack(ability)) return RangedTargets(s, u, ability);
@@ -484,6 +548,7 @@ namespace Bastion.Engine
             if (ability == AbilityIds.OpenDoor || ability == AbilityIds.CloseDoor) return DoorTiles(s, u, ability == AbilityIds.OpenDoor ? TileKinds.Door : TileKinds.DoorOpen).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Smash) return BreakablesBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
             if (ability == AbilityIds.Pry) return BoardedBeside(s, u.Pos).Any((p) => Grid.SamePos(p, tile));
+            if (ability == AbilityIds.SetDown) return SetDownTiles(s, u).Any((p) => Grid.SamePos(p, tile));
             // Fire burns on the ground only (Burning): a molotov is thrown at the street or a ground floor.
             if (ability == AbilityIds.Molotov && tile.Z != 0) return false;
             return s.Units.Any((o) => Los.IsViewer(o, u.Team) && Los.CanSeeTile(s, o.Pos, tile, Los.SightTo(s, o, tile), Los.WindowReachOf(o.Team)));

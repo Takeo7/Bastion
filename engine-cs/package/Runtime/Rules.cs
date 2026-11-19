@@ -253,6 +253,28 @@ namespace Bastion.Engine
                     Emit(new VipRescuedEvent { Unit = vip.Id, By = u.Id, Owner = u.Owner });
                     break;
                 }
+                case AbilityIds.Carry:
+                {
+                    // G23.3 El herido: on its back; the first time, found and joined too, no Talk (Producto, cuadro 92).
+                    var w = Abilities.CarryTarget(S, u)!;
+                    if (S.Mission.SurvivorFound != true) Emit(new SurvivorFoundEvent { Unit = w.Id, By = u.Id });
+                    // Joined the first time (found, they are no captive any more: Events.SurvivorFound; nobody's till now).
+                    if (w.Captive || w.Owner == null) Emit(new VipRescuedEvent { Unit = w.Id, By = u.Id, Owner = u.Owner });
+                    Emit(new CarriedEvent { Unit = u.Id, Target = w.Id });
+                    break;
+                }
+                case AbilityIds.SetDown:
+                    Emit(new SetDownEvent { Unit = u.Id, Target = u.Carrying!, Tile = Engine.Events.CopyPos(tile!) });
+                    // On a tile of La Lata's (T24): in at once, with no seat taken (Arturo, cuadro 92).
+                    if (Rules.WoundedOf(S) is Unit down && down.Alive && Rules.LaLataHere(S) && Abilities.InEvacZone(S, down.Pos))
+                    {
+                        Emit(new BoardedEvent { Unit = down.Id });
+                        CheckOutcome();
+                    }
+                    break;
+                case AbilityIds.Pass:
+                    Emit(new CarriedEvent { Unit = target!.Id, Target = u.Carrying!, From = u.Id });
+                    break;
                 case AbilityIds.Search:
                     Search(u, tile!);
                     break;
@@ -419,6 +441,8 @@ namespace Bastion.Engine
             if (u.Hp > 0) return;
             // Off a flight of stairs, at its nearer end (flights.ts): somewhere one can stop to pick it up.
             if (S.Mission.Item?.Carrier == u.Id) Emit(new ItemDroppedEvent { Pos = Flights.RestingPlace(S, u.Pos) });
+            // G23.3 El herido: on the floor where their carrier falls, unhurt.
+            if (u.Carrying != null) Emit(new SetDownEvent { Unit = u.Id, Target = u.Carrying, Tile = Flights.RestingPlace(S, u.Pos), Fell = true });
             Emit(new DiedEvent { Unit = u.Id, By = source?.Id });
             // A patrol car's or an ambulance's siren silenced: the car stays, over its tile as over its nose's (19/10), solid. Without
             // an alarm said (a skirmish, older saves), a car but in a facility, as the client draws it (unitViews.ts ALARM_BY_MAP).
@@ -689,6 +713,8 @@ namespace Bastion.Engine
             bool Rises(Unit x)
             {
                 var t = Content.Templates[x.Template];
+                // G23.3: never the wounded on someone's back (off the field, not dead).
+                if (x.CarriedBy != null) return false;
                 return !x.Alive && !x.Evacuated && !x.Reanimated && x.Team == Teams.Xcom && !t.Robotic && !t.Undead && x.Automaton == null && !x.Objective && !x.Captive && x.Template != TemplateIds.Vip;
             }
             foreach (var corpse in S.Units.Where(Rises).ToList())
@@ -999,7 +1025,10 @@ namespace Bastion.Engine
                 // Its walk ended on a tile of La Lata's with a seat free: in, safe (T24); La Lata goes if all the living are.
                 if (Rules.Boards(S, u))
                 {
+                    // G23.3: the wounded on its back, in after it, with no seat taken.
+                    var carried = u.Carrying;
                     Emit(new BoardedEvent { Unit = u.Id });
+                    if (carried != null) Emit(new BoardedEvent { Unit = carried });
                     CheckOutcome();
                     return;
                 }
@@ -1552,7 +1581,8 @@ namespace Bastion.Engine
             if (Over) return;
             var s = S;
             var m = s.Mission;
-            var squad = Grid.Combatants(s, Teams.Xcom);
+            // G23.3: the wounded alone on the field is nobody to fight on (they never act).
+            var squad = Grid.Combatants(s, Teams.Xcom).Where((u) => u.Lame != true).ToList();
             var hostiles = Grid.Combatants(s, Teams.Alien);
             void End(string outcome, string reason) => Emit(new MissionEndedEvent { Outcome = outcome, Reason = reason });
 
@@ -1583,11 +1613,12 @@ namespace Bastion.Engine
             if (m.EvacDone == true)
             {
                 var someoneOut = s.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated);
-                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s) || Rules.BittenSafe(s));
+                var won = someoneOut && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(s) || Rules.BittenSafe(s) || Rules.WoundedSafe(s));
                 End(won ? Outcomes.Victory : Outcomes.Defeat, won ? EndReasons.Objective : EndReasons.Abandoned);
                 return;
             }
-            if (squad.Count == 0) End(Outcomes.Defeat, EndReasons.Wiped);
+            // G23.3: everyone in La Lata waiting for the wounded (WoundedOut) isn't wiped: they may get down for them.
+            if (squad.Count == 0 && !(Rules.WoundedOut(s) && s.Units.Any((u) => u.Aboard == true && u.Lame != true))) End(Outcomes.Defeat, EndReasons.Wiped);
         }
 
         /// <summary>
@@ -1618,10 +1649,20 @@ namespace Bastion.Engine
             var noSeat = Rules.NoSeat(S);
             // Never the bitten not cured (G23.2): they would turn in it.
             bool Boards(Unit o) => Abilities.InEvacZone(S, o.Pos) && !noSeat.Contains(o) && !Rules.BittenUncured(S, o);
-            foreach (var u in squad.Where(Boards).ToList()) Emit(new EvacuatedEvent { Unit = u.Id });
-            foreach (var u in squad.Where((o) => !Boards(o)).ToList()) Emit(new LeftBehindEvent { Unit = u.Id, NoSeat = noSeat.Contains(u) ? true : (bool?)null });
+            foreach (var u in squad.Where(Boards).ToList())
+            {
+                // G23.3: the wounded on its back goes with it.
+                var carried = u.Carrying;
+                Emit(new EvacuatedEvent { Unit = u.Id });
+                if (carried != null) Emit(new EvacuatedEvent { Unit = carried });
+            }
+            foreach (var u in squad.Where((o) => !Boards(o)).ToList())
+            {
+                if (u.Carrying != null) Emit(new SetDownEvent { Unit = u.Id, Target = u.Carrying, Tile = Engine.Events.CopyPos(u.Pos), Fell = true });
+                Emit(new LeftBehindEvent { Unit = u.Id, NoSeat = noSeat.Contains(u) ? true : (bool?)null });
+            }
             var m = S.Mission;
-            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S));
+            var won = S.Units.Any((u) => u.Team == Teams.Xcom && u.Evacuated) && (Rules.FreeExit(m) || m.ObjectiveDone || Rules.RunsRescue(S) || Rules.BittenSafe(S) || Rules.WoundedSafe(S));
             if (timeUp && !won) Emit(new MissionEndedEvent { Outcome = Outcomes.Defeat, Reason = EndReasons.Timer });
             else CheckOutcome();
         }
@@ -1736,7 +1777,10 @@ namespace Bastion.Engine
                 foreach (var u in S.Units.Where((x) => x.Team == Teams.Xcom).ToList())
                 {
                     if (Over) break;
-                    if (Rules.Boards(S, u)) Emit(new BoardedEvent { Unit = u.Id });
+                    if (!Rules.Boards(S, u)) continue;
+                    var carried = u.Carrying;
+                    Emit(new BoardedEvent { Unit = u.Id });
+                    if (carried != null) Emit(new BoardedEvent { Unit = carried });
                 }
             }
             CheckOutcome();
@@ -2180,6 +2224,7 @@ namespace Bastion.Engine
             if (cmd is EvacAnswerCommand answer)
             {
                 if (s.EvacCall == null || s.EvacCall.By == ctx.Slot) return CommandResult.Failure("No hay ninguna petición de evacuar que contestar.");
+                if (answer.Accept && Rules.WoundedOut(s)) return CommandResult.Failure(Lore.WoundedText.NotWithout(s.Mission.SurvivorFound == true ? Rules.WoundedOf(s)?.Name : null));
                 if (answer.Accept) sim.DepartEvac();
                 else sim.Emit(new EvacRefusedEvent { Slot = ctx.Slot });
                 return CommandResult.Success(sim.Events);
@@ -2195,6 +2240,8 @@ namespace Bastion.Engine
                 if (s.Run != null && s.Mission.Seats != null && u.Aboard != true) return CommandResult.Failure("Solo desde dentro de " + Lore.Bus.Name + ".");
                 if (u.Aboard != true && !Abilities.InEvacZone(s, u.Pos)) return CommandResult.Failure("Solo desde el autobús, en la zona de evacuación.");
                 if (s.EvacCall?.By == ctx.Slot) return CommandResult.Failure("Ya has pedido evacuar: falta que conteste el otro jugador.");
+                // G23.3 El herido (Arturo, cuadro 73: «No se sale sin él»).
+                if (Rules.WoundedOut(s)) return CommandResult.Failure(Lore.WoundedText.NotWithout(s.Mission.SurvivorFound == true ? Rules.WoundedOf(s)?.Name : null));
                 sim.CallEvac(ctx.Slot, u);
                 return CommandResult.Success(sim.Events);
             }

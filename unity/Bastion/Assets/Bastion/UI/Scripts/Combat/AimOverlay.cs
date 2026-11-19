@@ -539,18 +539,27 @@ namespace Bastion.UI.Combat
             return result;
         }
 
-        /// <summary>The furniture or doors the hand reaches: a square frame on each, white on the one it would act on (`pick`).</summary>
-        public void ShowSpots(GameState s, IList<Pos> list, Pos pick)
+        /// <summary>
+        /// The tiles the hand reaches (El herido's Dejar, U25): a square frame on each, white on the one it would act on
+        /// (`pick`); those of `aboard` (La Lata's) in its green, the picked one lighter.
+        /// </summary>
+        public void ShowSpots(GameState s, IList<Pos> list, Pos pick, IList<Pos> aboard = null)
         {
             build.Clear();
             if (s != null && list != null)
                 foreach (var p in list)
                 {
                     var on = pick != null && p.X == pick.X && p.Y == pick.Y && p.Z == pick.Z;
-                    Square(build, Board.TileToWorld(s, p, 0.04f * T), 0.62f * T, 0.74f * T, on ? SpotPick : new Color32(SpotOpen.r, SpotOpen.g, SpotOpen.b, 0xf2));
+                    var lata = aboard != null && Contains(aboard, p);
+                    var colour = lata ? (on ? SpotLataPick : SpotLata) : on ? SpotPick : new Color32(SpotOpen.r, SpotOpen.g, SpotOpen.b, 0xf2);
+                    Square(build, Board.TileToWorld(s, p, 0.04f * T), 0.62f * T, 0.74f * T, colour);
                 }
             spots.sharedMesh = build.Build(spots.sharedMesh);
         }
+
+        /// <summary>La Lata's tiles among those (U25): its open tiles' green (MissionMarks), lighter when picked.</summary>
+        static readonly Color32 SpotLata = new Color32(0x4d, 0xff, 0x9a, 0xd8);
+        static readonly Color32 SpotLataPick = new Color32(0xc8, 0xff, 0xe0, 0xff);
 
         /// <summary>A flat square frame round `c` (a four-sided ring turned 45°, radii `inner`–`outer` to its corners).</summary>
         static void Square(MeshBuilder into, Vector3 c, float inner, float outer, Color32 color)

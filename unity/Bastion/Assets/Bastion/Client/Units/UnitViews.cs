@@ -244,6 +244,17 @@ namespace Bastion.Client.Units
             public float mounted = -1;
             /// <summary>The camp loop a run's survivor waits in (UnitViews.Survivor), or null.</summary>
             public string survivorClip;
+            /// <summary>The camp loop the wounded sits in (UnitViews.Wounded), or null; and its splint, once built.</summary>
+            public string woundedClip;
+            public GameObject splint;
+            /// <summary>Who carries it on its shoulders (Unit.CarriedBy; UnitViews.Wounded's StepCarried), or null.</summary>
+            public string carriedBy;
+            /// <summary>Its long gun not drawn while it carries the wounded (StepCarried).</summary>
+            public bool gunHidden;
+            /// <summary>Its rucksack's bone, shrunk while it carries (sought once), and its scale at rest.</summary>
+            public Transform backBone;
+            public bool backSought;
+            public Vector3 backScale = Vector3.one;
             /// <summary>Seconds since a bolt-action gun fired, its bolt being worked (UnitViews.Bolt); −1 none.</summary>
             public float bolt = -1;
             /// <summary>Seconds into the loading of a straight-stocked gun (UnitViews.Tuck's Loading, T25); −1, none.</summary>
@@ -611,6 +622,7 @@ namespace Bastion.Client.Units
                 WorkBolt(v, dt);
                 SearchPose(v);
                 ClimbPose(v);
+                WoundedLeg(v);
                 Reach(v);
                 if (v.deadKind) DeadPose(v);
                 // (The Brute's blow: its left fist by the right, after its own pose: UnitViews.Brute.)
@@ -623,6 +635,8 @@ namespace Bastion.Client.Units
             if (ThinLog && ++thinLogged % 60 == 0) Debug.Log($"[alternan] {Time.time:0.0} s: {seenNow} seen, {waited} waiting this frame (crowd {(thin ? "yes" : "no")}, dt {step * 1000:0.0} ms)");
             // (A silent takedown's hands on the dead one, once both are posed: UnitViews.Takedown.)
             StepTakedowns();
+            // (The wounded on its carrier's shoulders, once both are posed: UnitViews.Wounded.)
+            StepCarried();
             // (The caged by their bars and whoever reaches through bars, kept off them, last: UnitViews.Bars.)
             StepBars();
             // (The frame's own step: dt is the last figure's, with what it missed.)
@@ -1264,7 +1278,23 @@ namespace Bastion.Client.Units
                         if (Map.MapView.Current?.LataAt is Vector3 lata) Face(u.Id, lata);
                     }
                 }
-                else if (!u.Alive && !v.dead) Lie(v);
+                // (The wounded carried is no body: on its carrier's shoulders, UnitViews.Wounded.)
+                else if (!u.Alive && !v.dead && u.CarriedBy == null) Lie(v);
+                // (Set down or fallen with its carrier: upright again, turned as the state has it (to who set it down) or as its carrier was, on its tile below.)
+                // (Gone into La Lata on those shoulders, Unit.Aboard or Evacuated, before Board is called: it stays on them and
+                // fades as its carrier does.)
+                if (v.carriedBy != null && u.CarriedBy == null && !v.boarded && (u.Aboard == true || u.Evacuated))
+                {
+                    v.boarded = true;
+                    // (As far gone as its carrier already is: its own event comes after, and it was left a moment over the roof.)
+                    if (views.TryGetValue(v.carriedBy, out var inside)) v.fade = Mathf.Min(v.fade, inside.fade);
+                    v.fadeGoal = 0;
+                    v.fadeRate = 1 / BoardSeconds;
+                }
+                if (v.carriedBy != null && u.CarriedBy == null && !v.boarded)
+                    v.root.rotation = Quaternion.Euler(0, u.Facing is double set ? YawOf(set) : views.TryGetValue(v.carriedBy, out var bearer) && bearer.root != null ? bearer.root.eulerAngles.y : 0, 0);
+                // (Aboard La Lata it stays as it went in, on those shoulders, till it has faded.)
+                if (!v.boarded) v.carriedBy = u.CarriedBy;
                 if (!u.Alive && v.dead) HideDropped(v);
                 // (One felled silently lies on: its death comes in the events behind the blow, the state still has it alive. One
                 // knocked down too, till it gets up: UnitViews.Brute.)
@@ -1276,8 +1306,9 @@ namespace Bastion.Client.Units
                 // eating had slid from the body it ate to its tile's middle once dead.)
                 bool still = was != null && was.X == u.Pos.X && was.Y == u.Pos.Y && was.Z == u.Pos.Z;
                 // (One caged by its bars too: it keeps pressed to them by itself, KeepToBars.)
-                // (Nor one coming down out of La Lata: on its way to its tile, UnitViews.Ride.)
-                if (v.alight < 0 && !(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
+                // (Nor one coming down out of La Lata: on its way to its tile, UnitViews.Ride. Nor the wounded carried: it
+                // stays on its carrier's shoulders, StepCarried; put on its tile here it was drawn there for a frame.)
+                if (v.alight < 0 && u.CarriedBy == null && !(still && (v.feeding || v.reachFor != null || v.dead || v.cage != null))) v.root.position = StandOf(v, v.place, MapSpace.StandAt(view, v.place));
                 // (Turned as the state has it, by its bars: the caged one's TurnedEvent, which UI's event player leaves to the view.)
                 if (v.cage != null && u.Alive && u.Facing is double facing && !v.walking && !v.barsLunge && !v.barsHeld && v.yawTo == null
                     && Mathf.Abs(Mathf.DeltaAngle(v.root.eulerAngles.y, YawOf(facing))) > 2) TurnTo(v, YawOf(facing));
@@ -1285,7 +1316,8 @@ namespace Bastion.Client.Units
                 // (A body that has got up as one of the dead, Reanimate, is gone: the engine keeps it, Reanimated.)
                 // (Ours always; but a run's survivor only once the squad has found it, as the rules have it: N2, Gameplay's
                 // contract, B; UI 17/11. Not by sight alone: in a building not found it isn't found through a window.)
-                bool shown = !u.Alive && u.Reanimated ? false
+                bool shown = u.CarriedBy != null ? views.TryGetValue(u.CarriedBy, out var carrier) && carrier.root != null && carrier.root.gameObject.activeSelf
+                    : !u.Alive && u.Reanimated ? false
                     : v.boarded ? v.fade > 0
                     : u.Team == "xcom" ? Bastion.Engine.Rules.SurvivorShown(view, u)
                     : revealed.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
@@ -1374,9 +1406,12 @@ namespace Bastion.Client.Units
         {
             if (v.anim == null || v.dead) return;
             // (A run's survivor waiting to be talked to: its own way, UnitViews.Survivor.)
+            // (El herido, on the ground: sat, UnitViews.Wounded; before the survivor's, which it also is till carried.)
+            if (WoundedPose(v, u)) return;
             if (SurvivorPose(v, u)) return;
             bool hidden = u.Hidden == true && u.Alive;
-            bool crouched = u.Hunkered || u.Captive || hidden || (u.Team == "xcom" && u.Alive && state != null && state.Concealed);
+            // (Who carries the wounded stands under it, unseen or not: UnitViews.Wounded.)
+            bool crouched = u.Carrying == null && (u.Hunkered || u.Captive || hidden || (u.Team == "xcom" && u.Alive && state != null && state.Concealed));
             bool slumped = u.Team == "xcom" && u.Alive && u.Hp * 2 <= u.MaxHp;
             if (slumped != v.slumped)
             {
@@ -1834,6 +1869,22 @@ namespace Bastion.Client.Units
         {
             if (!views.TryGetValue(id, out var v)) return;
             v.boarded = true;
+            // (The wounded goes in on its carrier's shoulders, fading as it does: no seat nor door of its own, UnitViews.Wounded.)
+            if (v.carriedBy != null)
+            {
+                v.fadeGoal = 0;
+                v.fadeRate = 1 / BoardSeconds;
+                return;
+            }
+            // (And whoever it carries with it, at once: the wounded's own event comes when this one has faded, and it was left
+            // half a second alone over La Lata's roof.)
+            foreach (var w in views.Values)
+                if (w.carriedBy == id && !w.boarded)
+                {
+                    w.boarded = true;
+                    w.fadeGoal = 0;
+                    w.fadeRate = 1 / BoardSeconds;
+                }
             if (Mount(v)) return;
             // (In by its door, T24: to the nearest doorway as it fades, if it is near; else where it stands, turned to it.)
             if (Doorway(v.root.position) is Vector3 door && v.root != null)

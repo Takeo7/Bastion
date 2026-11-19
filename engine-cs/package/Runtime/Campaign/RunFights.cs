@@ -46,6 +46,9 @@ namespace Bastion.Engine
                 // G23.2: a Rescate whose survivor is bitten.
                 case NodeKinds.Bitten:
                     return MissionKinds.Rescue;
+                // G23.3: a Rescate whose survivor can't walk.
+                case NodeKinds.Wounded:
+                    return MissionKinds.Rescue;
                 case NodeKinds.Stealth:
                     return MissionKinds.Recovery;
                 default:
@@ -225,6 +228,8 @@ namespace Bastion.Engine
             if (node.Kind == NodeKinds.Key) Setup.KeyArmory(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x6e7))));
             // Mordido (G23.2): the survivor bitten, the antiviral in one medicine cabinet or shelf.
             if (node.Kind == NodeKinds.Bitten) Setup.Bitten(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xb17e))));
+            // El herido (G23.3): the survivor can't walk.
+            if (node.Kind == NodeKinds.Wounded) Setup.Wounded(state);
             return (state, name);
         }
 

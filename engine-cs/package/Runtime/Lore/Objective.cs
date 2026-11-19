@@ -105,7 +105,7 @@ namespace Bastion.Engine
         {
             var who = Titled(vip);
             if (phase == "captive") return $"Llegad hasta {who}";
-            if (phase == "search") return "Buscad a quien pide ayuda en la zona marcada";
+            if (phase == "search") return TalkText.Search;
             if (phase == "talk") return $"Hablad con {who}";
             if (phase == "dead") return $"Sin recluta: registrad lo que queráis y salid {Bus.In}";
             if (phase == "loose") return $"Llevad {(who.StartsWith("el ") ? $"al {who.Substring(3)}" : $"a {who}")} {Bus.To}";
@@ -128,6 +128,8 @@ namespace Bastion.Engine
             public const string Ask = "¿Te vienes?";
             public const string Yes = "Sí. Vámonos de aquí.";
             public const string Float = "SE UNE";
+            /// <summary>The objective while nobody has seen them in the marked zone (VipObjective "search"; El herido's too).</summary>
+            public const string Search = "Buscad a quien pide ayuda en la zona marcada";
 
             /// <summary>The log line: «Marta Gil se une a la escuadra, a las órdenes de Ana.»; alone, without the player.</summary>
             public static string Joined(string name, string? player = null)

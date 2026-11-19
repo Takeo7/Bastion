@@ -1550,6 +1550,9 @@ namespace Bastion.UI.Combat
             Fresh(r);
         }
 
+        /// <summary>El herido set down on La Lata's tile (U25): their Boarded, next, says nothing (Lore's SetDownAboard said it).</summary>
+        string setDownAboard;
+
         /// <summary>La llave's key on the floor (U22; GameState.FloorGear), or null; in another fight, null.</summary>
         static DroppedGear KeyLying(GameState s) => s.Mission.KeyArmory == true ? (s.FloorGear ?? new List<DroppedGear>()).FirstOrDefault(d => d.Gear.Kind == GearKinds.Key) : null;
 
@@ -1601,6 +1604,28 @@ namespace Bastion.UI.Combat
                     Log(Lore.BiteText.Turned(bitten.Name), "#ff6b5a");
                     if (IsVisible(bitten.Pos.X, bitten.Pos.Y)) Float(Board.TileToWorld(V, bitten.Pos, KeyFloatHeight), Lore.BiteText.TurnedFloat, "callout", Bastion.UI.Hud.UnitFlags.BiteIcon);
                 }
+            }
+            // El herido (U25, Lore's words; with the event on View, so the card changes in the same refresh): carried, passed
+            // on, set down (in La Lata, «sube a La Lata», and then not their own Boarded line too), and fallen with whoever
+            // carried them, over the tile with the important plate.
+            if (e is CarriedEvent carried && Unit(carried.Target) is Unit hurt && Unit(carried.Unit) is Unit bearer)
+            {
+                var from = carried.From != null ? Unit(carried.From) : null;
+                Log(from != null ? Lore.WoundedText.Passed(from.Name, bearer.Name, hurt.Name) : Lore.WoundedText.Carried(bearer.Name, hurt.Name), PlayerColor(bearer.Owner ?? control.MySlot));
+            }
+            if (e is SetDownEvent down && Unit(down.Target) is Unit put && Unit(down.Unit) is Unit putter)
+            {
+                if (down.Fell == true)
+                {
+                    Log(Lore.WoundedText.Fell(putter.Name, put.Name), "#ffd23a");
+                    if (IsVisible(down.Tile.X, down.Tile.Y)) Float(Board.TileToWorld(V, down.Tile, KeyFloatHeight), Lore.WoundedText.FellFloat, "callout");
+                }
+                else if (Rules.LaLataHere(V) && Abilities.InEvacZone(V, down.Tile))
+                {
+                    Log(Lore.WoundedText.SetDownAboard(putter.Name, put.Name), "#6dff9a");
+                    setDownAboard = put.Id;
+                }
+                else Log(Lore.WoundedText.SetDown(putter.Name, put.Name), PlayerColor(putter.Owner ?? control.MySlot));
             }
             // The armoury opened with the key (U22): said over its door with the same plate, the other moment that changes
             // the mission (Producto, 19/11), and in the log; here, so the card ticks its step in the same refresh.
@@ -2541,7 +2566,9 @@ namespace Bastion.UI.Combat
                     if (u == null) return;
                     units?.Board(board.Unit);
                     control.Aboard.Add(board.Unit);
-                    Log(Lore.BoardText.Boarded(u.Name), "#6dff9a");
+                    // (El herido set down in La Lata, U25: Lore's SetDownAboard said it already.)
+                    if (board.Unit == setDownAboard) setDownAboard = null;
+                    else Log(Lore.BoardText.Boarded(u.Name), "#6dff9a");
                     control.Refresh();
                     await Wait(UnitViews.BoardSeconds);
                     return;
@@ -2683,6 +2710,16 @@ namespace Bastion.UI.Combat
                 case VipRescuedEvent vr:
                 {
                     var vip = Unit(vr.Unit);
+                    // El herido (U25): joined as they are first carried, no talk (Hablar is refused them); Lore's line, with
+                    // no «a las órdenes de»: they never act.
+                    if (V.Mission.Wounded == true && vip != null)
+                    {
+                        Float(Chest(vip.Id), Lore.TalkText.Float, "heal", over: vip.Id);
+                        Log(Lore.WoundedText.Joined(vip.Name), "#6dff9a");
+                        control.Sfx.Rescue();
+                        await Wait(0.6f);
+                        return;
+                    }
                     // A run's survivor talked to (Hablar, N2): the soldier's question over them, the answer over the survivor,
                     // then «SE UNE»; theirs to command from now, the player said in the log only with two (Lore).
                     if (V.Run != null && Unit(vr.By) is Unit asker)

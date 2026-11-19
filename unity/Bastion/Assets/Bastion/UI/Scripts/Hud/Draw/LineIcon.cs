@@ -265,6 +265,53 @@ namespace Bastion.UI.Hud
                 pen.Round(12.5f, 12, 8.2f, -45, 45);
                 pen.Stroke();
             },
+            // El herido's three keys (U25, G23.3; Synty has nothing of carrying), filled like Synty's beside them and each its
+            // own shape: Cargar, one standing holding another up across; Dejar, an arrow down over one lying on the ground;
+            // Pasar, one lying up high and an arrow across under them, from one side to the other.
+            ["carry"] = pen =>
+            {
+                // From the side (Producto, 19/11: the load heavier): the carried folded over the carrier's shoulder, its
+                // upper body down the back (its head low on the left), its legs down the front; the carrier's head above.
+                pen.Begin(3.2f, 14.6f);
+                pen.To(10.6f, 5.2f);
+                pen.To(15.2f, 5.2f);
+                pen.To(21.6f, 12.8f);
+                pen.To(18.2f, 15.8f);
+                pen.To(13.4f, 10.8f);
+                pen.To(12.4f, 10.8f);
+                pen.To(7.4f, 17.6f);
+                pen.Fill();
+                pen.Dot(4, 17.4f, 3);
+                pen.Dot(16.2f, 2.9f, 2.1f);
+                pen.Begin(10.4f, 11.2f);
+                pen.To(15.2f, 11.2f);
+                pen.To(14.6f, 17.6f);
+                pen.To(11, 17.6f);
+                pen.Fill();
+                pen.Line(11.8f, 17.8f, 10.8f, 22.4f);
+                pen.Line(13.8f, 17.8f, 14.8f, 22.4f);
+            },
+            ["setDown"] = pen =>
+            {
+                pen.Line(12, 2.5f, 12, 8.5f);
+                pen.Begin(7.6f, 7.6f);
+                pen.To(16.4f, 7.6f);
+                pen.To(12, 12.4f);
+                pen.Fill();
+                Lying(pen, 3, 16.2f, 18);
+                pen.Line(2.5f, 21.8f, 21.5f, 21.8f);
+            },
+            ["pass"] = pen =>
+            {
+                // Two of the squad and an arrow from one to the other (Producto, 19/11: not «swap»'s two arrows).
+                Standing(pen, 4.2f, 7);
+                Standing(pen, 19.8f, 7);
+                pen.Line(8.6f, 15, 14.4f, 15);
+                pen.Begin(13.4f, 11.4f);
+                pen.To(18, 15);
+                pen.To(13.4f, 18.6f);
+                pen.Fill();
+            },
             // «Terminar turno» on the bar (UI-COMBATE UI-04): an arrow against a bar, filled like Synty's icons beside it.
             ["endTurn"] = pen =>
             {
@@ -294,6 +341,35 @@ namespace Bastion.UI.Hud
             pen.Curve(cx - rx, cy - ry * c, cx - rx * c, cy - ry, cx, cy - ry);
             pen.Curve(cx + rx * c, cy - ry, cx + rx, cy - ry * c, cx + rx, cy);
             pen.Fill();
+        }
+
+        /// <summary>
+        /// One lying along y (`top`, its back), `length` long from `x` (the feet) to the head beyond it on the right: a body
+        /// with round ends and its head, for El herido's keys (U25).
+        /// </summary>
+        static void Lying(Pen pen, float x, float top, float length)
+        {
+            const float h = 3.4f;
+            pen.Begin(x + h / 2, top);
+            pen.To(x + length - 3.6f, top);
+            pen.Round(x + length - 3.6f, top + h / 2, h / 2, 270, 450);
+            pen.To(x + h / 2, top + h);
+            pen.Round(x + h / 2, top + h / 2, h / 2, 90, 270);
+            pen.Fill();
+            pen.Dot(x + length - 0.9f, top + h / 2, 2.1f);
+        }
+
+        /// <summary>One standing, its head's top at `top`, centred on `cx`: head, body and two legs (El herido's Pasar, U25).</summary>
+        static void Standing(Pen pen, float cx, float top)
+        {
+            pen.Dot(cx, top + 2.2f, 2.2f);
+            pen.Begin(cx - 2.6f, top + 5.2f);
+            pen.To(cx + 2.6f, top + 5.2f);
+            pen.To(cx + 2.1f, top + 10.6f);
+            pen.To(cx - 2.1f, top + 10.6f);
+            pen.Fill();
+            pen.Line(cx - 1.4f, top + 10.8f, cx - 1.6f, top + 15);
+            pen.Line(cx + 1.4f, top + 10.8f, cx + 1.6f, top + 15);
         }
 
         /// <summary>The weather's cloud, its foot on 14.5: three bumps, the middle one highest.</summary>

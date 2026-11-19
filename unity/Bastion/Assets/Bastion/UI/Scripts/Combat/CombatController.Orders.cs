@@ -281,7 +281,8 @@ namespace Bastion.UI.Combat
                     {
                         var hand = HandTiles(id);
                         if (HandArmed() == id) ConfirmHand(HandTarget());
-                        else if (hand.Count == 1) UseDoor(id, hand[0]);
+                        // (Dejar, U25: an action, never at once on its only tile; armed, its tile shown first.)
+                        else if (hand.Count == 1 && id != AbilityIds.SetDown) UseDoor(id, hand[0]);
                         else ArmHand(id);
                         return;
                     }
@@ -441,6 +442,7 @@ namespace Bastion.UI.Combat
             var u = Unit();
             if (u == null || id == null) return new List<Pos>();
             if (id == AbilityIds.Pry) return Abilities.BoardedBeside(State, u.Pos);
+            if (id == AbilityIds.SetDown) return Abilities.SetDownTiles(State, u);
             return id == AbilityIds.Search ? Looting.SearchableTiles(State, u) : Abilities.DoorTiles(State, u, id == AbilityIds.OpenDoor ? "door" : "doorOpen");
         }
 
@@ -485,12 +487,15 @@ namespace Bastion.UI.Combat
             }
             if (tile == null)
             {
-                Toast(id == AbilityIds.Search ? "No hay nada que abrir ni registrar a tu lado." : id == AbilityIds.Pry ? "No hay ninguna ventana ni puerta tapiada a tu lado." : "No hay ninguna puerta a tu lado.");
+                Toast(id == AbilityIds.SetDown ? Abilities.AbilityBlocker(State, u, id) : id == AbilityIds.Search ? "No hay nada que abrir ni registrar a tu lado." : id == AbilityIds.Pry ? "No hay ninguna ventana ni puerta tapiada a tu lado." : "No hay ninguna puerta a tu lado.");
                 return;
             }
             Send(new AbilityCommand { Unit = u.Id, Ability = id, Tile = tile });
             CancelMode();
         }
+
+        /// <summary>Whether the wounded set down on `tile` goes into La Lata at once (U25; the engine's rule: La Lata here, its zone).</summary>
+        bool AboardIfSetDown(Pos tile) => tile != null && Rules.LaLataHere(State) && Abilities.InEvacZone(State, tile);
 
         /// <summary>By hand on `tile`, at once: a door opened or closed (free, and it can be undone).</summary>
         void UseDoor(string id, Pos tile)
@@ -527,6 +532,13 @@ namespace Bastion.UI.Combat
                 var list = HandTiles();
                 if (hover != null && list.Any(t => Same(t, hover))) handPick = hover;
                 var pick = HandTarget();
+                // Dejar (U25): a frame on each free tile beside, white on the one picked; La Lata's in its green, where the
+                // wounded goes in at once (Producto, 19/11: seen before confirming).
+                if (hand == AbilityIds.SetDown)
+                {
+                    AimMarks.ShowSpots(State, list, pick, list.Where(t => AboardIfSetDown(t)).ToList());
+                    return;
+                }
                 searchNext = list.Select(t => (t, Same(t, pick))).ToList();
                 return;
             }

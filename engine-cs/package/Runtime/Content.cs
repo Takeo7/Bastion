@@ -285,6 +285,8 @@ namespace Bastion.Engine
         /// </summary>
         public static int ApPerTurnOf(Unit u)
         {
+            // G23.3 El herido: never acts.
+            if (u.Lame == true) return 0;
             // El Toro, two (H6).
             if (Templates.TryGetValue(u.Template, out var t) && t.Undead) return u.Template == TemplateIds.Brute ? ApPerTurn : UndeadActions;
             return u.Team == Teams.Xcom && u.Rank >= ThirdActionRank ? ApPerTurn + 1 : ApPerTurn;
@@ -668,6 +670,10 @@ namespace Bastion.Engine
             [AbilityIds.Talk] = new AbilityDef { Id = AbilityIds.Talk, Name = Lore.TalkText.Action, Description = Lore.TalkText.Help, Target = AbilityTargets.Self, Ap = 1, EndsTurn = false },
             // T24 (18/11): down out of La Lata, to the tile chosen of its zone; Lore's texts.
             [AbilityIds.Alight] = new AbilityDef { Id = AbilityIds.Alight, Name = Lore.BoardText.Alight, Description = Lore.BoardText.AlightHelp, Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false },
+            // G23.3 El herido (Arturo, cuadros 71 and 92): an action each, from beside.
+            [AbilityIds.Carry] = new AbilityDef { Id = AbilityIds.Carry, Name = Lore.WoundedText.CarryAction, Description = Lore.WoundedText.CarryHelp, Target = AbilityTargets.Self, Ap = 1, EndsTurn = false },
+            [AbilityIds.SetDown] = new AbilityDef { Id = AbilityIds.SetDown, Name = Lore.WoundedText.SetDownAction, Description = Lore.WoundedText.SetDownHelp, Target = AbilityTargets.Tile, Ap = 1, EndsTurn = false, Range = 1.5 },
+            [AbilityIds.Pass] = new AbilityDef { Id = AbilityIds.Pass, Name = Lore.WoundedText.PassAction, Description = Lore.WoundedText.PassHelp, Target = AbilityTargets.Ally, Ap = 1, EndsTurn = false, Range = 1.5 },
         };
 
         /// <summary>Base chance of fixing the objective terminal (Arreglar); since T2 no bar adds to it.</summary>

@@ -186,10 +186,12 @@ namespace Bastion.Engine
                             continue;
                         }
                         // A turret has no turn of its own: it keeps watch in the enemy's (docs/FASE12.md §11.4).
-                        u.Ap = u.Captive || u.Objective || u.Automaton != null ? 0 : u.Stunned ? 1 : Content.ApPerTurnOf(u);
+                        // G23.3 El herido (Unit.Lame) never acts.
+                        u.Ap = u.Captive || u.Objective || u.Automaton != null || u.Lame == true ? 0 : u.Stunned ? 1 : Content.ApPerTurnOf(u);
                         // Its movement, apart from the actions (Arturo, 5/11 #14): all of it (null), none for one that can't act.
-                        u.Moves = u.Captive || u.Objective || u.Automaton != null ? 0 : (int?)null;
+                        u.Moves = u.Captive || u.Objective || u.Automaton != null || u.Lame == true ? 0 : (int?)null;
                         u.Stunned = false;
+                        u.Hauled = null;
                         u.Overwatch = false;
                         u.KillZone = false;
                         u.ReactedTo = new List<string>();
@@ -222,7 +224,10 @@ namespace Bastion.Engine
                     // What it walked off its movement (Arturo, 5/11 #14); all of it, Forma física learns (below).
                     // With what the hidden squad walks more (Paths.ConcealedBonus).
                     var spentAll = ev.Moves != null && Paths.SpendsAll(s, u, ev.Moves.Value);
-                    if (ev.Moves != null) u.Moves = Math.Max(0, Paths.MoveBudget(s, u) - ev.Moves.Value);
+                    // What it has left as spent, not what carrying caps (G23.3: Paths.MovesLeft); with the wounded on its back,
+                    // what it walked with them this turn too (Unit.Hauled).
+                    if (ev.Moves != null) u.Moves = Math.Max(0, Paths.MovesLeft(s, u) - ev.Moves.Value);
+                    if (ev.Moves != null && u.Carrying != null) u.Hauled = (u.Hauled ?? 0) + ev.Moves.Value;
                     // What the squad finds on the way: the buildings it walks into, and where it stops, those it looks into.
                     if (Los.IsViewer(u, Teams.Xcom)) for (var k = 0; k < ev.Path.Count; k++) Buildings.Discover(s, ev.Path[k], k == ev.Path.Count - 1);
                     EndSuppression(s, u);
@@ -500,6 +505,7 @@ namespace Bastion.Engine
                 case EvacuatedEvent ev:
                 {
                     var u = UnitOf(s, ev.Unit);
+                    Unload(s, u);
                     u.Alive = false;
                     u.Evacuated = true;
                     u.Ap = 0;
@@ -519,6 +525,8 @@ namespace Bastion.Engine
                 {
                     // Into La Lata (T24): off the field, safe, a seat taken; what it carried in it.
                     var u = UnitOf(s, ev.Unit);
+                    // G23.3: the wounded, in after their carrier (Rules: its own BoardedEvent), no longer carried.
+                    Unload(s, u);
                     u.Alive = false;
                     u.Evacuated = true;
                     u.Aboard = true;
@@ -547,6 +555,36 @@ namespace Bastion.Engine
                     u.Pos = CopyPos(ev.Tile);
                     u.Ap = Math.Max(0, u.Ap - 1);
                     u.Moves = null;
+                    break;
+                }
+                case CarriedEvent ev:
+                {
+                    // G23.3 El herido: on `unit`'s back, off the field, where it goes (KeepCarried); passed on, off `from`'s.
+                    var w = UnitOf(s, ev.Target);
+                    var by = UnitOf(s, ev.Unit);
+                    // (The action, the ability's: AbilityUsedEvent.)
+                    if (!string.IsNullOrEmpty(ev.From)) UnitOf(s, ev.From!).Carrying = null;
+                    w.Alive = false;
+                    w.CarriedBy = by.Id;
+                    w.Pos = CopyPos(by.Pos);
+                    w.Overwatch = false;
+                    w.Hunkered = false;
+                    w.Hidden = null;
+                    EndSuppression(s, w);
+                    by.Carrying = w.Id;
+                    break;
+                }
+                case SetDownEvent ev:
+                {
+                    // G23.3: on the floor, on the field again (the action, the ability's: AbilityUsedEvent).
+                    var w = UnitOf(s, ev.Target);
+                    var by = UnitOf(s, ev.Unit);
+                    by.Carrying = null;
+                    w.CarriedBy = null;
+                    w.Alive = true;
+                    w.Pos = CopyPos(ev.Tile);
+                    // Facing whoever set them down (fallen with them, as they were).
+                    w.Facing = Los.FacingTo(w.Pos, by.Pos) ?? w.Facing;
                     break;
                 }
                 case EvacCalledEvent ev:
@@ -734,7 +772,7 @@ namespace Bastion.Engine
                     if (s.Run != null)
                     {
                         vip.Ap = Content.ApPerTurnOf(vip);
-                        vip.Moves = null;
+                        vip.Moves = vip.Lame == true ? 0 : (int?)null;
                         SurvivorFound(s);
                     }
                     break;
@@ -946,6 +984,32 @@ namespace Bastion.Engine
                     if (s.Fires != null) s.Fires = s.Fires.Where((f) => f.Id != ev.Id).ToList();
                     break;
             }
+            // G23.3 El herido: carried, where their carrier is (a walk, a fall, a push).
+            if (s.Mission.Wounded == true) KeepCarried(s);
+        }
+
+        /// <summary>G23.3: whoever is carried, on their carrier's tile.</summary>
+        private static void KeepCarried(GameState s)
+        {
+            foreach (var w in s.Units)
+            {
+                if (w.CarriedBy == null) continue;
+                var by = Grid.GetUnit(s, w.CarriedBy);
+                if (by != null && !Grid.SamePos(w.Pos, by.Pos)) w.Pos = CopyPos(by.Pos);
+            }
+        }
+
+        /// <summary>
+        /// G23.3: `u`, the wounded, into La Lata or gone in it (their own BoardedEvent or EvacuatedEvent, right after their
+        /// carrier's: Rules): carried no more. Their carrier's own event leaves them on its back till then, so that no state
+        /// between the two has them neither carried nor in (Arte, 19/11).
+        /// </summary>
+        private static void Unload(GameState s, Unit u)
+        {
+            if (u.CarriedBy == null) return;
+            var by = Grid.GetUnit(s, u.CarriedBy);
+            if (by != null && by.Carrying == u.Id) by.Carrying = null;
+            u.CarriedBy = null;
         }
 
         /// <summary>`!Object.keys(loot).length`: nothing set.</summary>
@@ -1066,11 +1130,17 @@ namespace Bastion.Engine
         }
 
         /// <summary>The mission's objective is secured: the timer stops.</summary>
-        /// <summary>A run's survivor found (N2); a bitten one's count from now (G23.2 Mordido: Setup.BiteTurns).</summary>
+        /// <summary>
+        /// A run's survivor found (N2); a bitten one's count from now (G23.2 Mordido: Setup.BiteTurns); the wounded no longer
+        /// hidden away (G23.3; Producto, 19/11, after cuadro 92 «en el suelo le muerden, como a cualquiera»: found, a wounded
+        /// on the floor, carried yet or not): not a captive any more, so the dead see them and go for them. Still nobody's
+        /// till taken up (Owner: VipRescuedEvent, Rules' Carry).
+        /// </summary>
         private static void SurvivorFound(GameState s)
         {
             s.Mission.SurvivorFound = true;
             if (s.Mission.Bitten == true && s.Mission.BiteTurns == null && s.Mission.Cured != true) s.Mission.BiteTurns = Setup.BiteTurns;
+            if (s.Mission.Wounded == true && !string.IsNullOrEmpty(s.Mission.ObjectiveUnit) && Grid.GetUnit(s, s.Mission.ObjectiveUnit!) is Unit w) w.Captive = false;
         }
 
         private static void CompleteObjective(GameState s)
@@ -1185,6 +1255,10 @@ namespace Bastion.Engine
                 PodId = u.PodId,
                 Lost = u.Lost,
                 Aboard = u.Aboard,
+                Lame = u.Lame,
+                Carrying = u.Carrying,
+                Hauled = u.Hauled,
+                CarriedBy = u.CarriedBy,
                 Rank = u.Rank,
                 Perks = new List<string>(u.Perks),
                 Mods = Content.AddMods(u.Mods, new UnitMods()),
@@ -1316,6 +1390,7 @@ namespace Bastion.Engine
                     KeyArmory = m.KeyArmory,
                     Sky = m.Sky,
                     Bitten = m.Bitten,
+                    Wounded = m.Wounded,
                     BiteTurns = m.BiteTurns,
                     Cured = m.Cured,
                     Antiviral = m.Antiviral != null ? Gears.CloneGear(m.Antiviral) : null,

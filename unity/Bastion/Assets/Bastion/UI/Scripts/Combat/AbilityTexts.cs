@@ -31,9 +31,10 @@ namespace Bastion.UI.Combat
 
         /// <summary>
         /// Done by hand on a tile beside the soldier: Registrar, opening or closing a door (playtest 13/10 #2), and the
-        /// crowbar's boards off a window (Quitar las tablas: Arturo, 02/11 A11).
+        /// crowbar's boards off a window (Quitar las tablas: Arturo, 02/11 A11), and El herido's Dejar (U25: on a free tile
+        /// beside, a frame on each, never at once).
         /// </summary>
-        public static readonly HashSet<string> Hand = new HashSet<string> { AbilityIds.Search, AbilityIds.OpenDoor, AbilityIds.CloseDoor, AbilityIds.Pry };
+        public static readonly HashSet<string> Hand = new HashSet<string> { AbilityIds.Search, AbilityIds.OpenDoor, AbilityIds.CloseDoor, AbilityIds.Pry, AbilityIds.SetDown };
 
         /// <summary>A key that folds several abilities into a menu (docs/FASE10.md §4).</summary>
         public sealed class Menu

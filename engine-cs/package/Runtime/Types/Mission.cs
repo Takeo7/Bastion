@@ -227,6 +227,12 @@ namespace Bastion.Engine
         /// they turn; cured with the antiviral (Cured), they don't. Missing, none of it.
         /// </summary>
         public bool? Bitten { get; set; }
+        /// <summary>
+        /// G23.3 El herido (Arturo, cuadros 71, 73 y 92; .dev-snapshots/gameplay/g23/HERIDO.md): a run's Rescate whose survivor
+        /// (MissionState.ObjectiveUnit, Unit.Lame) can't walk or act: carried (AbilityIds.Carry), set down, passed on; La Lata
+        /// doesn't go while they live out of it; won with them aboard. Missing, none of it.
+        /// </summary>
+        public bool? Wounded { get; set; }
         /// <summary>Mordido: the squad's turns left till the bitten turns, from their finding (Setup.BiteTurns); null before.</summary>
         public int? BiteTurns { get; set; }
         /// <summary>Mordido: the antiviral used on the bitten (GearUsedEvent): no count any more, and La Lata takes them.</summary>

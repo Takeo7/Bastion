@@ -261,6 +261,20 @@ namespace Bastion.Engine
         /// down again in its turn (AbilityIds.GetOut). Null outside.
         /// </summary>
         public bool? Aboard { get; set; }
+        /// <summary>G23.3 El herido: never walks nor acts (no actions, no movement); carried by the squad. Null for everyone else.</summary>
+        public bool? Lame { get; set; }
+        /// <summary>
+        /// G23.3: the one `this` carries (AbilityIds.Carry): its unit id. While so, it walks Paths.CarryMoves at most and
+        /// fires no long gun. Null otherwise.
+        /// </summary>
+        public string? Carrying { get; set; }
+        /// <summary>G23.3: what `this` walked this turn with the wounded on its back, in path cost (Paths.CarryMoves at most). Null: none.</summary>
+        public int? Hauled { get; set; }
+        /// <summary>
+        /// G23.3: who carries `this`, their unit id. Off the field meanwhile (Alive false, not Evacuated): nobody aims at them,
+        /// they take no tile, and they go where their carrier goes (Pos kept with theirs). Null otherwise.
+        /// </summary>
+        public string? CarriedBy { get; set; }
         public int Rank { get; set; }
         public List<string> Perks { get; set; } = new List<string>(); // PerkIds
         public UnitMods Mods { get; set; } = new UnitMods();

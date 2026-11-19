@@ -169,6 +169,9 @@ namespace Bastion.UI.Combat
             Hud.SetGoal(goals.Count > 0 ? Board.TileToWorld(v, goals[0].pos, Board.Tile) : (Vector3?)null);
             var view = new EdgeMarksView();
             view.Marks.AddRange(breaches.Marks);
+            // El herido on the floor off the screen (U25), found and alive: «El herido · 12 casillas», as Mordido's.
+            if (Rules.WoundedOf(v) is Unit down && down.Alive && down.CarriedBy == null && !down.Evacuated && !Unfound(down))
+                view.Marks.Add(new EdgeMarkView { Kind = "bite", Name = Lore.StageName(NodeKinds.Wounded), World = Board.TileToWorld(v, down.Pos, Board.Tile) });
             // Mordido's bitten off the screen (U23), from their finding till cured: «Mordido · 5 turnos», an alert at 2 and 1.
             if (UnitById(v, m.ObjectiveUnit) is Unit bitten && BiteLeft(v, bitten) is int left && !Unfound(bitten))
                 view.Marks.Add(new EdgeMarkView { Kind = left <= 2 ? "alert" : "bite", Name = $"{Lore.StageName(NodeKinds.Bitten)} · {left} {(left == 1 ? "turno" : "turnos")}", World = Board.TileToWorld(v, bitten.Pos, Board.Tile) });
@@ -217,6 +220,9 @@ namespace Bastion.UI.Combat
                     else if (target != null && target.Alive && (m.Kind == MissionKinds.Sabotage || target.Captive)) goal = target.Pos;
                 }
             }
+            // El herido (U25): found and on the floor, to them (as the Rescate's, joined too); carried, La Lata (below); not
+            // found, the zone (above).
+            if (Rules.WoundedOf(s) is Unit hurt && hurt.Alive && hurt.CarriedBy == null && !hurt.Evacuated && !Unfound(hurt)) goal = hurt.Pos;
             // Mordido (U23): the antiviral on the floor; in a pack, the bitten, to give it to them.
             if (m.Bitten == true && m.Cured != true && UnitById(s, m.ObjectiveUnit) is Unit bitten && bitten.Alive && !Unfound(bitten))
                 goal = AntiviralOnFloor(s) ?? (Looting.AntiviralWhere(s) == AntiviralPlaces.Pack ? bitten.Pos : goal);
@@ -348,7 +354,10 @@ namespace Bastion.UI.Combat
                 // A run's survivor alone and hidden is «ESCONDIDO»; «CAUTIVO», the Cuervos' prisoner (Arturo, 18/11; Lore).
                 // A run's survivor alone is hiding; only the Cuervos' prisoner is held (Arturo, in the cuadro, 18/11; Lore's).
                 var hiding = u.Captive && v.Run != null && v.Mission.Guarded != true;
-                Tag(u.Captive, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data");
+                Tag(u.Captive && u.Lame != true, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data");
+                // El herido (U25; Lore's): on the floor, their broken leg; whoever carries them, «CARGANDO».
+                Tag(u.Lame == true && u.CarriedBy == null, Lore.WoundedText.FloorTag, "stun");
+                Tag(u.Carrying != null, Lore.WoundedText.CarrierTag, "data");
                 Tag(u.Objective, "OBJETIVO", "stun");
                 // Mordido's count over the bitten (U23): from their finding till cured; red and beating at 2 and 1.
                 if (BiteLeft(v, u) is int left && !Unfound(u))
@@ -714,7 +723,8 @@ namespace Bastion.UI.Combat
                     Short = !string.IsNullOrEmpty(u.Nickname) ? u.Nickname : u.Name.Split(' ')[0],
                     Mine = mine,
                     Selected = u.Id == picked,
-                    Dead = !u.Alive && !u.Evacuated,
+                    // (El herido carried, U25: not alive in the engine's sense while on someone's back, never fallen.)
+                    Dead = !u.Alive && !u.Evacuated && u.CarriedBy == null,
                     // Inside La Lata (T24) it plays on (Bajar, Evacuar): not greyed as one already gone.
                     Evacuated = u.Evacuated && u.Aboard != true,
                     InPlay = u.Id == inPlay,
@@ -750,7 +760,11 @@ namespace Bastion.UI.Combat
             Tag(u.ControlledBy != null, UnitWords.Agree(u, "CONTROLADO"), "psi", "state:controlled");
             // A run's survivor alone is hiding; only the Cuervos' prisoner is held (Arturo, in the cuadro, 18/11; Lore's).
             var hiding = u.Captive && Shown.Run != null && Shown.Mission.Guarded != true;
-            Tag(u.Captive, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data", hiding ? "state:hide" : "state:captive");
+            Tag(u.Captive && u.Lame != true, UnitWords.Agree(u, hiding ? "ESCONDIDO" : "CAUTIVO"), hiding ? "hide" : "data", hiding ? "state:hide" : "state:captive");
+            // El herido (U25): on their bust, «PIERNA ROTA» on the floor; «CARGANDO» on whoever carries them.
+            // (The bust's short ones, Lore's: «A BORDO»'s width at most.)
+            Tag(u.Lame == true && u.CarriedBy == null && u.Alive, Lore.WoundedText.FloorTagShort, "stun", "state:down");
+            Tag(u.Carrying != null, Lore.WoundedText.CarrierTagShort, "data", "state:carry");
             Tag(u.Disoriented > 0, UnitWords.Agree(u, "DESORIENTADO"), "psi", "state:disoriented");
             Tag(u.Panicked, "PÁNICO", "psi", "state:panic");
             // Inside La Lata, or gone in it: Lore's «A BORDO» (T24; «EVACUADO» came out cut, and agreed in gender).
@@ -987,6 +1001,12 @@ namespace Bastion.UI.Combat
                 objective = (bite.FirstOrDefault(x => !x.Done) ?? bite.Last()).Text;
                 tip = Lore.StageLine(NodeKinds.Bitten, biteTurns: Setup.BiteTurns);
             }
+            else if (WoundedSteps(s) is List<GoalStepView> hurt)
+            {
+                steps = hurt;
+                objective = (hurt.FirstOrDefault(x => !x.Done) ?? hurt.Last()).Text;
+                tip = Lore.WoundedText.ObjectiveTip;
+            }
             return new MissionView
             {
                 Label = s.Run != null ? Bastion.UI.Strategy.StrategyText.Runs.NodeName(s.Run.NodeKind) : MissionName(m.Kind),
@@ -1057,6 +1077,32 @@ namespace Bastion.UI.Combat
             }
             steps.Add(cure);
             steps.Add(new GoalStepView { Text = joined ? rescueLine : Lore.VipObjective(vip.Name, "loose"), Done = m.ObjectiveDone });
+            return steps;
+        }
+
+        /// <summary>
+        /// El herido's objective in steps (U25, G23.3; Lore's words, which name them, never «el herido»): to find them in the
+        /// marked zone (the Rescate's), to carry them (again if set down or fallen with their carrier), to bring them to La
+        /// Lata, to leave. Till found only the first: the others name them. Dead, what was done stays and the rest is Lore's
+        /// one line, in red. Null in another fight.
+        /// </summary>
+        List<GoalStepView> WoundedSteps(GameState s)
+        {
+            if (Rules.WoundedOf(s) is not Unit w) return null;
+            var found = !Unfound(w);
+            var aboard = w.Evacuated || w.Aboard == true;
+            var carried = w.CarriedBy != null;
+            var steps = new List<GoalStepView> { new GoalStepView { Text = Lore.WoundedText.Search, Done = found } };
+            if (!w.Alive && !carried && !aboard)
+            {
+                steps.RemoveAll(x => !x.Done);
+                steps.Add(new GoalStepView { Text = Lore.WoundedText.DeadObjective, Lost = true });
+                return steps;
+            }
+            if (!found) return steps;
+            steps.Add(new GoalStepView { Text = Lore.WoundedText.Carry(w.Name), Done = carried || aboard });
+            steps.Add(new GoalStepView { Text = Lore.WoundedText.Bring(w.Name), Done = aboard });
+            steps.Add(new GoalStepView { Text = Lore.WoundedText.Leave, Done = s.Mission.ObjectiveDone && w.Evacuated });
             return steps;
         }
 
@@ -1260,6 +1306,16 @@ namespace Bastion.UI.Combat
             var def = Content.Abilities[id];
             var others = HandTiles().Count - 1;
             var view = new ShotView { Kind = "self", Action = def.Name, Locked = LockLabel(), Cost = AbilityTexts.CostText(u, id), Noise = AbilityTexts.NoiseText(State, u, id), Effect = def.Description, Title = def.Name };
+            // El herido's Dejar (U25): on La Lata's tile its name says they go in (Lore's, with their name; Producto, 19/11:
+            // seen before confirming), as the tile's green frame does.
+            if (id == AbilityIds.SetDown)
+            {
+                var hurt = Rules.WoundedOf(State);
+                if (hurt != null && AboardIfSetDown(tile)) view.Action = view.Title = Lore.WoundedText.SetDownAboardAction(hurt.Name);
+                view.Hint = Bastion.Client.GameInput.Touch ? HudText.Touch.Hand("la casilla", view.Action.ToLowerInvariant())
+                    : $"Otra vez, Espacio o clic en la casilla{(others > 0 ? " · Tab: otra casilla" : "")} · Esc: cancelar";
+                return view;
+            }
             // The crowbar on a boarded window or door (Arturo, 02/11 A11).
             if (id == AbilityIds.Pry)
             {

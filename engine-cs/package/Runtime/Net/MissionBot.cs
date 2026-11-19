@@ -66,6 +66,16 @@ namespace Bastion.Net
             // (it goes by itself only with all the living in).
             var inside = s.Run != null ? s.Units.FirstOrDefault((u) => u.Aboard == true && Content.CommandsFor(slot, u.Owner, connected)) : null;
             if (inside != null && s.Mission.EvacDone != true && AllAboard(s)) return new EvacCommand { Unit = inside.Id };
+            // El herido alive and out with the squad's living all in La Lata, which won't go without them and isn't a wipe
+            // (G23.3): one gets down, the nearest tile to them, to go for them (R1, 19/11: fábrica, cuchillos, semilla 16,
+            // one in La Lata for 2900 turns).
+            if (s.Run != null && Rules.WoundedOut(s) && Rules.WoundedOf(s) is Unit hurt && !Grid.Combatants(s, Teams.Xcom).Any((o) => !o.Evacuated && o.Lame != true))
+            {
+                var tile = Rules.AlightTiles(s).OrderBy((p) => Grid.Distance(p, hurt.Pos)).ThenBy((p) => Grid.NodeOf(s, p)).FirstOrDefault();
+                var down = s.Units.Where((u) => u.Aboard == true && u.Lame != true && Rules.AlightRefusal(s, u, slot, connected, tile) == null)
+                    .OrderBy((u) => u.Id, System.StringComparer.Ordinal).FirstOrDefault();
+                if (down != null) return new AbilityCommand { Unit = down.Id, Ability = AbilityIds.Alight, Tile = tile };
+            }
             // Movement left counts too: the turn doesn't end by itself while there is some (Arturo, 5/11 #14).
             var able = Grid.Combatants(s, Teams.Xcom).Where((u) => !u.Evacuated && Paths.HasTurnLeft(u) && Content.CommandsFor(slot, u.Owner, connected)).ToList();
             if (able.Count == 0) return new EndTurnCommand { Ready = true };
@@ -82,7 +92,9 @@ namespace Bastion.Net
             // The soldier in play first: it is to be finished before another (Rules InPlay). Then the others, the one
             // nearest its goal first; one with nothing to do lets the next one play, and only with none left is the turn over,
             // movement left or not.
+            // (El herido: the one carrying them before the rest, who follow it.)
             var order = able.OrderBy((x) => x.Id == s.ActiveUnit ? 0 : 1)
+                .ThenBy((x) => x.Carrying != null ? 0 : 1)
                 .ThenBy((x) => goals[x.Id] is Pos g ? Grid.Distance(x.Pos, g) : 0)
                 .ThenBy((x) => x.Id, System.StringComparer.Ordinal);
             foreach (var u in order)
@@ -121,6 +133,8 @@ namespace Bastion.Net
         {
             var m = s.Mission;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier);
+            // El herido (G23.3): never without them while they live (Rules.WoundedOut: La Lata wouldn't go).
+            if (WoundedFight(s)) return WoundedLeaving(s);
             // Mordido (G23.2): not with the bitten till they are cured.
             if (BittenFight(s)) return BittenLeaving(s);
             if (m.Kind == MissionKinds.Rescue && Vip(s) is Unit vip && !vip.Captive) return true;
@@ -208,6 +222,8 @@ namespace Bastion.Net
                         if (RunPack.Refusal(s, use, slot, connected) == null) return use;
                     }
                 }
+                // El herido (G23.3): taken up from beside them, set down on a tile of La Lata (they get in), or passed on.
+                if (WoundedFight(s) && WoundedOrder(s, u) is Command carry) return carry;
             }
             if (!armed)
             {
@@ -274,10 +290,10 @@ namespace Bastion.Net
             // La Lata in an Asedio).
             if (!armed && !carrier && !going && !Holding(s))
             {
-                var close = MoveToStrike(s, u);
+                var close = MoveToStrike(s, u, leaving);
                 if (close != null) return close;
             }
-            var goal = (!armed && !leaving ? GunGoal(s, u, walks) : null) ?? target;
+            var goal = (!armed && !leaving && u.Carrying == null ? GunGoal(s, u, walks) : null) ?? target;
             // La llave, after its key: never far ahead of the squad's last (Leash), so the dead come to it together.
             if (goal != null && !leaving && KeyFight(s) && Looting.KeyWhere(s) == KeyPlaces.Holder && Ahead(s, u, goal, walks, walksOf) > Leash * Paths.CostOrtho) goal = null;
             if (goal != null && !(leaving && Abilities.InEvacZone(s, u.Pos)))
@@ -287,7 +303,7 @@ namespace Bastion.Net
                 var stride = Stride(s, u);
                 // Mordido's antiviral in hand, the count running: on regardless of the danger (with the dead by the stairs,
                 // it stood on watch upstairs till the bitten turned: R11, 19/11).
-                var rush = BittenFight(s) && Looting.AntiviralOf(u) != null;
+                var rush = (BittenFight(s) && Looting.AntiviralOf(u) != null) || u.Carrying != null;
                 var move = stride >= Paths.CostOrtho ? MoveToward(s, u, goal, stride, leaving, walks, reckless: rush) : null;
                 if (move != null) return move;
             }
@@ -317,6 +333,7 @@ namespace Bastion.Net
             // the stage lost). Not in a Rescate: there the survivor left behind loses nothing but a recruit.
             if (leaving && bus != null && LastSeatIsTheBittens(s, u, walksOf)) return null;
             if (leaving && bus != null) return bus;
+            if (WoundedFight(s) && !leaving) return WoundedGoal(s, u, walksOf(u)) ?? bus;
             if (m.Kind == MissionKinds.Recovery && m.Item != null && m.Item.Pos != null) return m.Item.Pos;
             if (m.Kind == MissionKinds.Hack && m.Terminal != null && !m.ObjectiveDone) return m.Terminal;
             if (BittenFight(s) && !leaving) return BittenGoal(s, u, walksOf(u)) ?? bus;
@@ -364,6 +381,8 @@ namespace Bastion.Net
         /// </summary>
         private static bool AllAboard(GameState s)
         {
+            // El herido alive and out of it: La Lata doesn't go (G23.3).
+            if (Rules.WoundedOut(s)) return false;
             var bus = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
             // (Mordido's bitten not cured never gets in: none to wait for, G23.2.)
             foreach (var o in Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos) && !Rules.BittenUncured(s, o)))
@@ -560,9 +579,10 @@ namespace Bastion.Net
         /// <summary>
         /// The blade's move (Arturo, 16/10: striking is striking and moving is moving): with an action to strike, a stretch
         /// to a tile beside one of the dead the squad sees (moving takes none: Arturo, 5/11 #14). The weakest first, then
-        /// where fewest others can bite, then the shortest; null when none is that near.
+        /// where fewest others can bite, then the shortest; null when none is that near. In a run, not leaving, never to a
+        /// tile of La Lata: the walk gets in (T24; R1, 19/11: El herido in the fábrica, one in before they were found).
         /// </summary>
-        private static Command? MoveToStrike(GameState s, Unit u)
+        private static Command? MoveToStrike(GameState s, Unit u, bool leaving)
         {
             if (Paths.MoveBudget(s, u) <= 0 || !Usable(s, u, AbilityIds.Slash)) return null;
             var enemies = Enemies(s).ToList();
@@ -574,6 +594,7 @@ namespace Bastion.Net
             (int hp, int crowd, double cost) bestKey = default;
             foreach (var o in Paths.Destinations(s, u, reach))
             {
+                if (s.Run != null && !leaving && Abilities.InEvacZone(s, o.Pos)) continue;
                 var beside = seen.Where((e) => Aim.InMeleeReach(s, o.Pos, e.Pos)).ToList();
                 if (beside.Count == 0) continue;
                 var key = (hp: beside.Min((e) => e.Hp), crowd: enemies.Count((e) => Grid.Distance(o.Pos, e.Pos) <= 2.5), cost: o.Cost);
@@ -770,6 +791,62 @@ namespace Bastion.Net
             if (open.Count != 1) return false;
             return walksOf(bitten).Cost.ContainsKey(open[0]);
         }
+
+        // ------------------------------------------------------------ El herido (G23.3)
+
+        /// <summary>A run's El herido: the Rescate's survivor can't walk, and is carried to La Lata.</summary>
+        private static bool WoundedFight(GameState s) => s.Run != null && s.Mission.Wounded == true;
+
+        /// <summary>El herido: the squad goes once they are in La Lata, or dead; never while they live out of it.</summary>
+        private static bool WoundedLeaving(GameState s)
+        {
+            var w = Rules.WoundedOf(s);
+            return w == null || w.Evacuated || (!w.Alive && w.CarriedBy == null);
+        }
+
+        /// <summary>
+        /// Where `u` goes in El herido while they are out: the one carrying them, beside La Lata (to set them down in it); the
+        /// rest, with that one; with them on the ground, a free place beside them to take them up from.
+        /// </summary>
+        private static Pos? WoundedGoal(GameState s, Unit u, Reach walks)
+        {
+            var w = Rules.WoundedOf(s);
+            if (w == null) return null;
+            if (u.Carrying == w.Id)
+            {
+                // La Lata's nearest free tile by the walk: they need no seat (they get in without one).
+                return s.Mission.EvacZone.Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).Where((p) => Grid.UnitAt(s, p) == null)
+                    .OrderBy((p) => WalkTo(s, walks, p)).ThenBy((p) => Grid.NodeOf(s, p)).Select((p) => (Pos?)p).FirstOrDefault();
+            }
+            if (w.CarriedBy != null && Grid.GetUnit(s, w.CarriedBy) is Unit carrier) return carrier.Pos;
+            if (!w.Alive) return null;
+            // A free place beside them that takes them up, by the walk past the squad.
+            var past = Paths.ComputeReach(s, u, double.MaxValue, null, (o) => o.Id != u.Id);
+            return Grid.Dirs8.Select((d) => new Pos { X = w.Pos.X + d.X, Y = w.Pos.Y + d.Y, Z = w.Pos.Z })
+                .Where((p) => Grid.InBounds(s, p.X, p.Y) && (Grid.UnitAt(s, p) == null || Grid.UnitAt(s, p) == u) && Abilities.CarryTarget(s, u, p) != null && past.Cost.ContainsKey(Grid.NodeOf(s, p)))
+                .OrderBy((p) => past.Cost[Grid.NodeOf(s, p)]).ThenBy((p) => Grid.NodeOf(s, p)).Select((p) => (Pos?)p).FirstOrDefault() ?? w.Pos;
+        }
+
+        /// <summary>
+        /// El herido, before anything else: beside them on the ground, they are taken up; carried beside a free tile of La
+        /// Lata, set down on it (they get in); carried with no step left with them this turn, passed to one beside that has
+        /// walk enough left (PassOn tiles) to take them on.
+        /// </summary>
+        private static Command? WoundedOrder(GameState s, Unit u)
+        {
+            if (Abilities.CarryAbilities(s, u).Contains(AbilityIds.Carry) && Abilities.AbilityBlocker(s, u, AbilityIds.Carry) == null)
+                return Ability(u, AbilityIds.Carry);
+            if (u.Carrying == null) return null;
+            if (Abilities.AbilityBlocker(s, u, AbilityIds.SetDown) == null && Abilities.SetDownTiles(s, u).FirstOrDefault((p) => Abilities.InEvacZone(s, p)) is Pos inside)
+                return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.SetDown, Tile = inside };
+            if (Paths.MoveBudget(s, u) >= Paths.CostOrtho || Abilities.AbilityBlocker(s, u, AbilityIds.Pass) != null) return null;
+            var mate = Abilities.PassTargets(s, u).Where((o) => Paths.MoveBudget(s, o) >= PassOn * Paths.CostOrtho)
+                .OrderByDescending((o) => Paths.MoveBudget(s, o)).ThenBy((o) => o.Id, System.StringComparer.Ordinal).FirstOrDefault();
+            return mate != null ? Ability(u, AbilityIds.Pass, mate.Id) : null;
+        }
+
+        /// <summary>El herido: the tiles of walk one beside the carrier needs left to be worth passing them to (an action).</summary>
+        public const int PassOn = 3;
 
         // ------------------------------------------------------------ La llave (G23.1)
 

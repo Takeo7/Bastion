@@ -3200,7 +3200,7 @@ namespace Bastion.Engine.Tests
             // T8 (Arturo, 18/11): «Salir» looked like quitting the game.
             Assert.Equal("Partir", Lore.ExpeditionText.Start);
             Assert.Equal("Parte la escuadra: empieza una expedición del capítulo 1.", Lore.ExpeditionText.StartHelp(1));
-            Assert.Equal(15, Lore.StageNames.Count);
+            Assert.Equal(16, Lore.StageNames.Count);
             // G23.2, Mordido (cuadros 73 and 87).
             Assert.Equal("Mordido", Lore.StageName(NodeKinds.Bitten));
             Assert.Equal("Alguien mordido se esconde en una zona marcada. Desde que se le encuentra, le quedan 15 turnos: dadle el antiviral, que está en uno de los armarios o estantes de medicinas. Volved todos a La Lata. Si se convierte, se sale sin recluta ni recompensa.", Lore.StageLine(NodeKinds.Bitten));
@@ -3216,6 +3216,35 @@ namespace Bastion.Engine.Tests
             Assert.Equal("La mordedura ya está curada.", Lore.BiteText.AlreadyCured);
             Assert.Equal("Antiviral", Lore.GearName(GearKinds.Antiviral, null));
             Assert.Equal("el antiviral", Lore.GearA(GearKinds.Antiviral, null));
+            // G23.3, El herido (cuadros 71, 73 and 92): by their name or «quien tiene la pierna rota», never «el herido».
+            Assert.Equal("El herido", Lore.StageName(NodeKinds.Wounded));
+            Assert.Equal("Alguien con la pierna rota pide ayuda en una zona marcada. No anda: se le lleva a hombros a La Lata, y la escuadra se puede turnar. Quien carga anda como mucho 6 casillas por turno y no dispara el arma larga. La Lata no sale mientras siga fuera con vida; si muere, se sale sin recluta ni recompensa.", Lore.StageLine(NodeKinds.Wounded));
+            Assert.Equal("Buscad a quien pide ayuda en la zona marcada", Lore.WoundedText.Search);
+            Assert.Equal(Lore.WoundedText.Search, Lore.VipObjective("Marta Gil", "search"));
+            Assert.Equal("Cargad a Marta Gil a hombros", Lore.WoundedText.Carry("Marta Gil"));
+            Assert.Equal("Llevad a Marta Gil a La Lata", Lore.WoundedText.Bring("Marta Gil"));
+            Assert.Equal("Salid en La Lata", Lore.WoundedText.Leave);
+            Assert.Equal("Sin recluta ni recompensa: salid en La Lata", Lore.WoundedText.DeadObjective);
+            Assert.Equal("No anda: se le lleva a hombros. Cargar, dejar y pasar cuestan una acción, siempre desde una casilla de al lado; recibir no cuesta nada. Cargando, se anda como mucho 6 casillas por turno y no se dispara el arma larga. Si cae quien carga, queda en el suelo, y ahí le pueden morder. La Lata no sale mientras siga fuera con vida.", Lore.WoundedText.ObjectiveTip);
+            Assert.Equal("Carga a hombros a quien tiene la pierna rota, desde una casilla de al lado. La primera vez, se une a la escuadra. Cargando, andas como mucho 6 casillas por turno y no disparas el arma larga; la pistola, sí.", Content.Abilities[AbilityIds.Carry].Description);
+            Assert.Equal("Dejar", Content.Abilities[AbilityIds.SetDown].Name);
+            Assert.Equal("Deja a quien llevas a hombros en una casilla libre de al lado. En una casilla de La Lata, sube a bordo en el acto.", Lore.WoundedText.SetDownHelp);
+            Assert.Equal("Subir a Marta Gil a La Lata", Lore.WoundedText.SetDownAboardAction("Marta Gil"));
+            Assert.Equal("Pasa a quien llevas a hombros a alguien de la escuadra que tengas al lado y no cargue a nadie. Recibir no cuesta nada.", Content.Abilities[AbilityIds.Pass].Description);
+            Assert.Equal("No hay nadie a quien cargar.", Lore.WoundedText.NobodyToCarry);
+            Assert.Equal("Ponte al lado de quien tiene la pierna rota.", Lore.WoundedText.NotBeside);
+            Assert.Equal("No anda: se le carga a hombros, con «Cargar».", Lore.WoundedText.NoTalk);
+            Assert.Equal("No se sale sin quien pide ayuda en la zona marcada.", Lore.WoundedText.NotWithout(null));
+            Assert.Equal("No se sale sin Marta Gil.", Lore.WoundedText.NotWithout("Marta Gil"));
+            Assert.Equal("Marta Gil se une a la escuadra.", Lore.WoundedText.Joined("Marta Gil"));
+            Assert.Equal("Ana carga a Marta Gil a hombros.", Lore.WoundedText.Carried("Ana", "Marta Gil"));
+            Assert.Equal("Ana pasa a Marta Gil a hombros de Luis.", Lore.WoundedText.Passed("Ana", "Luis", "Marta Gil"));
+            Assert.Equal("Ana deja a Marta Gil en el suelo.", Lore.WoundedText.SetDown("Ana", "Marta Gil"));
+            Assert.Equal("Ana sube a Marta Gil a La Lata.", Lore.WoundedText.SetDownAboard("Ana", "Marta Gil"));
+            Assert.Equal("Marta Gil cae al suelo con Ana.", Lore.WoundedText.Fell("Ana", "Marta Gil"));
+            // On the busts, no longer than «A BORDO».
+            Assert.True(Lore.WoundedText.CarrierTagShort.Length <= Lore.BoardText.AboardTag.Length);
+            Assert.True(Lore.WoundedText.FloorTagShort.Length <= Lore.BoardText.AboardTag.Length);
             // G23.1, La llave (cuadros 71, 73 and 79).
             Assert.Equal("La llave", Lore.StageName(NodeKinds.Key));
             Assert.Equal("La armería de la comisaría está cerrada, con todos sus muebles llenos. Uno de los muertos de uniforme lleva la llave; también se puede volar la pared con una granada. Salid en La Lata.", Lore.StageLine(NodeKinds.Key));

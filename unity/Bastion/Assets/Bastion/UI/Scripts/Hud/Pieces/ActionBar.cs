@@ -258,7 +258,8 @@ namespace Bastion.UI.Hud
                 if (parts.Count > 0) Ui.Text(string.Join(" · ", parts), "ac-cost", card);
                 if (!string.IsNullOrEmpty(a.Damage)) Ui.Text(a.Damage, "ac-dmg", card);
             }
-            Ui.Text(a.Description, "ac-desc", card);
+            // (None: only why it's off, El herido's La Lata, U25.)
+            if (!string.IsNullOrEmpty(a.Description)) Ui.Text(a.Description, "ac-desc", card);
             if (!string.IsNullOrEmpty(a.Reason)) Ui.Text(a.Reason, "ac-why", card);
             return card;
         }

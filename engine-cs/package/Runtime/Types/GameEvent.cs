@@ -535,6 +535,32 @@ namespace Bastion.Engine
         public string Unit { get; set; } = "";
     }
 
+    /// <summary>
+    /// G23.3 El herido: `unit` takes up `target`, the wounded (Unit.Carrying, Unit.CarriedBy), an action spent: from beside
+    /// them (AbilityIds.Carry), or passed on by `from` beside it (AbilityIds.Pass, `from`'s action). Off the field while
+    /// carried, they go where `unit` goes.
+    /// </summary>
+    public sealed class CarriedEvent : GameEvent
+    {
+        public override string T => "carried";
+        public string Unit { get; set; } = "";
+        public string Target { get; set; } = "";
+        public string? From { get; set; }
+    }
+
+    /// <summary>
+    /// G23.3: `unit` puts `target`, the wounded, down on `tile` (AbilityIds.SetDown, an action; `fell`: `unit` fell, and
+    /// they are on the floor where it was, no action).
+    /// </summary>
+    public sealed class SetDownEvent : GameEvent
+    {
+        public override string T => "setDown";
+        public string Unit { get; set; } = "";
+        public string Target { get; set; } = "";
+        public Pos Tile { get; set; } = new Pos();
+        public bool? Fell { get; set; }
+    }
+
     /// <summary>Down out of La Lata (T24, AbilityIds.GetOut): `unit` on `tile`, a free one of its zone, an action spent.</summary>
     public sealed class AlightedEvent : GameEvent
     {
