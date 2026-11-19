@@ -2181,6 +2181,16 @@
    "fbx": "SM_Item_Rice_01",
    "fit": 0.14
   },
+  "dropKey": {
+   "pack": "police",
+   "fbx": "SM_Prop_Handcuffs_Key_01",
+   "fit": 0.42
+  },
+  "dropAntiviral": {
+   "pack": "gang",
+   "fbx": "SM_Prop_Syringe_01",
+   "fit": 0.5
+  },
   "dropBag": {
    "pack": "apocalypse",
    "fbx": "SM_Item_Duffle_Bag_01",

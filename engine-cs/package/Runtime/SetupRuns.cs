@@ -399,8 +399,8 @@ namespace Bastion.Engine
             s.Run.NextGear = maker.Next;
         }
 
-        /// <summary>G23.2 Mordido (Arturo, cuadro 87): the squad's turns the bitten has from their finding.</summary>
-        public const int BiteTurns = 10;
+        /// <summary>G23.2 Mordido (Arturo, cuadro 87: 10; cuadro 89, after R1 with the bots: «En cualquiera, con 15 turnos»): the squad's turns the bitten has from their finding.</summary>
+        public const int BiteTurns = 15;
 
         /// <summary>
         /// G23.2 Mordido (Arturo, 19/11, cuadros 73 y 87; .dev-snapshots/gameplay/g23/MORDIDO.md): the Rescate's survivor

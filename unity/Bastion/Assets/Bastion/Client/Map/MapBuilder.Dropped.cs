@@ -31,7 +31,10 @@ namespace Bastion.Client.Map
         void DrawDropped()
         {
             var dropped = s.Dropped ?? new List<DroppedLoot>();
-            string key = string.Join(",", dropped.Select(d => d.Id));
+            // (And a mission's own things lying loose, G23: La llave's key, Mordido's antiviral; GameState.FloorGear with no
+            // one they fell from. What a fallen soldier carried is their body's, not drawn here.)
+            var loose = (s.FloorGear ?? new List<DroppedGear>()).Where(d => d.From == null && d.Gear != null && (d.Gear.Kind == GearKinds.Key || d.Gear.Kind == GearKinds.Antiviral)).ToList();
+            string key = string.Join(",", dropped.Select(d => d.Id)) + "|" + string.Join(",", loose.Select(d => $"{d.Gear.Kind}@{d.Pos.X}.{d.Pos.Y}.{d.Pos.Z}"));
             if (key == droppedDrawn) return;
             droppedDrawn = key;
             foreach (var o in droppedArt) DestroyNow(o);
@@ -68,6 +71,57 @@ namespace Bastion.Client.Map
                 g.rotation = Quaternion.Euler(0, -DropHash(t.id, 2) * 360, 0);
                 droppedArt.Add(g.gameObject);
             }
+            foreach (var d in loose) Loose(d);
+            DrawLocks();
+        }
+
+        /// <summary>
+        /// A mission's own thing lying loose on its tile (DrawDropped): the armoury's key, big enough to be seen;
+        /// the antiviral, a jar of pills and its syringe. On the ring, as the rest.
+        /// </summary>
+        void Loose(DroppedGear d)
+        {
+            string id = d.Gear.Kind + $"@{d.Pos.X}.{d.Pos.Y}.{d.Pos.Z}";
+            int level = Mathf.Clamp(d.Pos.Z, 0, Storeys.Length - 1);
+            var g = new GameObject("tirado " + id).transform;
+            g.SetParent(Storeys.Length > 0 ? Storeys[level] : root, false);
+            float way = DropHash(id, 1) * Mathf.PI * 2;
+            g.position = MapSpace.TileToWorld(s, d.Pos) + new Vector3(Mathf.Sin(way), 0, -Mathf.Cos(way)) * DropOff * MapSpace.Tile;
+            // (Synty's stand on end: laid flat, the key in brass, the syringe by its jar.)
+            float top = 0;
+            // (The antiviral, a big jar of pills with its syringe by it: not a medicine's case, cuadro 91.)
+            bool jar = d.Gear.Kind == GearKinds.Antiviral;
+            if (jar) Things(g, ("lootPills", 2.4f, false, 0));
+            var thing = Prop(g, d.Gear.Kind == GearKinds.Key ? "dropKey" : "dropAntiviral", prefabOf);
+            if (thing != null)
+            {
+                thing.transform.localPosition = Vector3.zero;
+                // (Whichever of its sides is the longest, down flat: the turn about x or z that leaves it lowest.)
+                Bounds box = default;
+                float lowest = float.MaxValue;
+                foreach (var turn in new[] { Quaternion.Euler(90, 0, 35), Quaternion.Euler(0, 35, 90), Quaternion.Euler(0, 35, 0) })
+                {
+                    thing.transform.localRotation = turn;
+                    var tried = BoundsIn(thing, g);
+                    if (tried.size.y >= lowest) continue;
+                    (lowest, box) = (tried.size.y, tried);
+                }
+                foreach (var turn in new[] { Quaternion.Euler(90, 0, 35), Quaternion.Euler(0, 35, 90), Quaternion.Euler(0, 35, 0) })
+                {
+                    thing.transform.localRotation = turn;
+                    if (Mathf.Approximately(BoundsIn(thing, g).size.y, lowest)) break;
+                }
+                box = BoundsIn(thing, g);
+                thing.transform.localPosition = new Vector3(-box.center.x + (jar ? 0.22f : 0), top - box.min.y + 0.005f, -box.center.z);
+                if (d.Gear.Kind == GearKinds.Key)
+                {
+                    lockBrass ??= Coloured("Candado", new Color(0.86f, 0.62f, 0.16f));
+                    foreach (var r in thing.GetComponentsInChildren<Renderer>()) r.sharedMaterials = Enumerable.Repeat(lockBrass, Mathf.Max(1, r.sharedMaterials.Length)).ToArray();
+                }
+            }
+            DropRing(g);
+            g.rotation = Quaternion.Euler(0, -DropHash(id, 2) * 360, 0);
+            droppedArt.Add(g.gameObject);
         }
 
         /// <summary>dropped.ts hash: stable numbers from a thing's id, 0 to 1 (FNV-1a over its UTF-16 units).</summary>

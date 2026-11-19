@@ -58,16 +58,22 @@ namespace Bastion.Engine.Tests
         private static CommandResult EndTurn(GameState s) => Exec(s, new EndTurnCommand { Ready = true });
 
         [Fact]
-        public void NotOnTheMapsYetAndAtTheHospitalOnce()
+        public void OnTheMapsRowsTwoToFiveAtTheHospital()
         {
-            // Producto, 19/11: in the engine, not on the maps till the bot, UI and Arte have it (as La llave was).
-            Assert.DoesNotContain(NodeKinds.Bitten, RunMap.Specials);
-            Assert.DoesNotContain(Enumerable.Range(1, 500).SelectMany((seed) => RunMap.Generate(1, seed)), (n) => n.Kind == NodeKinds.Bitten);
-            // Once on them: at the hospital (RunMap.SpecialFor), no survivor loose besides its own, a Rescate's fight.
+            // Arturo, cuadro 90 («Como está, y lo pruebo yo»): on the maps after the 0.13.4, as the other specials.
+            Assert.Contains(NodeKinds.Bitten, RunMap.Specials);
+            var nodes = Enumerable.Range(1, 500).SelectMany((seed) => RunMap.Generate(1, seed)).ToList();
+            var bitten = nodes.Where((n) => n.Kind == NodeKinds.Bitten).ToList();
+            // Rows 2–5, one special out of ten.
+            Assert.All(bitten, (n) => Assert.InRange(n.Row, 2, RunMap.NodeRows));
+            double share = bitten.Count / (double)nodes.Count((n) => n.Row >= 2 && n.Row <= RunMap.NodeRows);
+            Assert.InRange(share, 0.015, 0.04);
+            // Always the hospital (RunMap.SpecialFor), whatever the seed; no survivor loose besides its own; a Rescate's fight.
+            Assert.All(bitten, (n) => Assert.Equal(Places.Hospital, n.Site));
+            Assert.All(bitten, (n) => Assert.False(RunMap.LooseSurvivor(n)));
+            Assert.Equal(MissionKinds.Rescue, Runs.MissionKindOf(NodeKinds.Bitten));
             var node = new RunNode { Id = "n3-1", Row = 3, Kind = NodeKinds.Bitten, Seed = 4242, Site = Places.Town };
             Assert.Equal(Places.Hospital, RunMap.SpecialFor(node));
-            Assert.False(RunMap.LooseSurvivor(node));
-            Assert.Equal(MissionKinds.Rescue, Runs.MissionKindOf(NodeKinds.Bitten));
         }
 
         [Fact]
@@ -112,7 +118,7 @@ namespace Bastion.Engine.Tests
             Assert.True(b.Alive);
             Events.ApplyEvent(s, new SurvivorFoundEvent { Unit = b.Id, By = Soldier(s).Id });
             Assert.Equal(Setup.BiteTurns, s.Mission.BiteTurns);
-            Assert.Equal(10, Setup.BiteTurns);
+            Assert.Equal(15, Setup.BiteTurns);
             // One less a squad's turn over.
             Assert.True(EndTurn(s).Ok);
             Assert.Equal(Setup.BiteTurns - 1, s.Mission.BiteTurns);

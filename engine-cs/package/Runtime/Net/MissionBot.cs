@@ -312,6 +312,10 @@ namespace Bastion.Net
             var m = s.Mission;
             // La Lata's tiles still open (T24): one shut by someone in it takes nobody.
             var bus = Rules.OpenTiles(s).Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).OrderBy((p) => Grid.Distance(u.Pos, p)).FirstOrDefault();
+            // Mordido (G23.2): La Lata's last seat is the cured bitten's while they can walk to it, not a soldier's, who stays
+            // out (R1, 19/11, hospital, knives, seed 12: four seats, four soldiers in first, the bitten left on the ground and
+            // the stage lost). Not in a Rescate: there the survivor left behind loses nothing but a recruit.
+            if (leaving && bus != null && LastSeatIsTheBittens(s, u, walksOf)) return null;
             if (leaving && bus != null) return bus;
             if (m.Kind == MissionKinds.Recovery && m.Item != null && m.Item.Pos != null) return m.Item.Pos;
             if (m.Kind == MissionKinds.Hack && m.Terminal != null && !m.ObjectiveDone) return m.Terminal;
@@ -752,6 +756,19 @@ namespace Bastion.Net
             if (s.Mission.Cured == true) return !bitten.Captive;
             var where = Looting.AntiviralWhere(s);
             return s.Mission.BiteTurns is int left && left <= BiteGiveUp && where != AntiviralPlaces.Pack && where != AntiviralPlaces.Floor;
+        }
+
+        /// <summary>
+        /// Mordido: one seat of La Lata left, and the bitten cured and come along (talked to) still out of it and able to walk
+        /// to it: that seat is theirs, and `u`, one of the squad, doesn't take it.
+        /// </summary>
+        private static bool LastSeatIsTheBittens(GameState s, Unit u, System.Func<Unit, Reach> walksOf)
+        {
+            if (!BittenFight(s) || s.Mission.Cured != true || Vip(s) is not Unit bitten || bitten.Id == u.Id) return false;
+            if (!bitten.Alive || bitten.Captive || bitten.Aboard == true || bitten.Evacuated) return false;
+            var open = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
+            if (open.Count != 1) return false;
+            return walksOf(bitten).Cost.ContainsKey(open[0]);
         }
 
         // ------------------------------------------------------------ La llave (G23.1)

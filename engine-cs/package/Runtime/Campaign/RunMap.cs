@@ -23,13 +23,12 @@ namespace Bastion.Engine
         /// The specials drawn on the maps: today's objectives, and since H5 the four new ones (NewSpecials: Asedio,
         /// Travesía, Sigilo, Guarida). Without «Arreglar la radio» since T2 (Arturo, 18/11: «se quita la etapa», and all of
         /// fixing with it): its share goes to the others. La llave since G23.1, from row KeyFrom only, always at a police
-        /// station. Mordido (G23.2), always at the hospital, once on them.
+        /// station. Mordido since G23.2 (Arturo, cuadro 90: «Como está, y lo pruebo yo»), rows 2–5, always at the hospital.
         /// </summary>
         public static readonly IReadOnlyList<string> Specials = new[]
         {
             NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Rescue,
-            NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Key,
-            // NodeKinds.Bitten: its rules are in (G23.2), not on the maps till the bot, UI and Arte have it (Producto, 19/11).
+            NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Key, NodeKinds.Bitten,
         };
 
         /// <summary>G23.1 La llave from this row (Producto, 19/11: its armoury full arms a squad at once; rows 1–2 are knives').</summary>

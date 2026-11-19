@@ -191,6 +191,54 @@ namespace Bastion.EditorTools
             list.Add(Prop("mags", "apocalypse:SM_Chr_Attach_Mags_01", upright: true));
             list.Add(Prop("medicine", "apocalypse:SM_Item_Pills_01", upright: true));
             list.Add(Prop("supplies", "apocalypse:SM_Prop_Crate_01", upright: true));
+            // The missions' own, as they lie on the floor (MapBuilder.Loose): the armoury's key in brass; the antiviral, the
+            // syringe with its jar of pills small behind it (the syringe is what tells it from the medicine).
+            list.Add(new Thing { file = "key", source = "police:SM_Prop_Handcuffs_Key_01", make = () =>
+            {
+                var key = Copy(prefabs("police:SM_Prop_Handcuffs_Key_01"));
+                var brass = KitMaterials.New(KitMaterials.Plain, "Candado");
+                if (key == null || brass == null) return key;
+                brass.SetColor("_BaseColor", new Color(0.86f, 0.62f, 0.16f));
+                foreach (var r in key.GetComponentsInChildren<Renderer>()) r.sharedMaterials = Enumerable.Repeat(brass, Mathf.Max(1, r.sharedMaterials.Length)).ToArray();
+                return key;
+            } });
+            list.Add(new Thing { file = "antiviral", source = "apocalypse:SM_Item_Pills_01 + our syringe", upright = true, make = () =>
+            {
+                var jar = Copy(prefabs("apocalypse:SM_Item_Pills_01"));
+                if (jar == null) return null;
+                var both = new GameObject("antiviral");
+                jar.transform.SetParent(both.transform, false);
+                if (!Box(jar, out var j)) return both;
+                // (The syringe is the picture, across it from corner to corner, the jar small behind its plunger's end:
+                // another outline than the medicine's. Ours, of cylinders, not Synty's: at 40 px that one was a cigarette
+                // (Producto, 19/11), so a wide plunger and flange, green in the barrel and a dark needle.)
+                var syringe = new GameObject("syringe").transform;
+                syringe.SetParent(both.transform, false);
+                float length = j.size.y * 2.6f;
+                Material Paint(Color c) { var m = KitMaterials.New(KitMaterials.Plain, "Jeringa"); if (m != null) m.SetColor("_BaseColor", c); return m; }
+                void Part(Material m, float from, float to, float radius)
+                {
+                    var c = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    UnityEngine.Object.DestroyImmediate(c.GetComponent<Collider>());
+                    c.transform.SetParent(syringe, false);
+                    c.transform.localPosition = new Vector3(0, (from + to) / 2 * length, 0);
+                    c.transform.localScale = new Vector3(radius * 2 * length, (to - from) / 2 * length, radius * 2 * length);
+                    if (m != null) c.GetComponent<Renderer>().sharedMaterial = m;
+                }
+                Material steel = Paint(new Color(0.2f, 0.22f, 0.25f)), white = Paint(new Color(0.9f, 0.93f, 0.95f)), green = Paint(new Color(0.25f, 0.8f, 0.4f));
+                // (From its plunger's end, 0, to its needle's tip, 1.)
+                Part(white, 0, 0.035f, 0.12f);
+                Part(white, 0.035f, 0.2f, 0.03f);
+                Part(white, 0.2f, 0.235f, 0.14f);
+                Part(white, 0.235f, 0.36f, 0.075f);
+                Part(green, 0.36f, 0.7f, 0.075f);
+                Part(white, 0.7f, 0.76f, 0.04f);
+                Part(steel, 0.76f, 1, 0.018f);
+                syringe.localRotation = Quaternion.FromToRotation(Vector3.up, new Vector3(0.72f, 0.69f, 0).normalized);
+                Box(syringe.gameObject, out var y);
+                syringe.localPosition += new Vector3(j.max.x - y.center.x - y.size.x * 0.3f, j.min.y - y.min.y, j.min.z - y.max.z);
+                return both;
+            } });
             return list;
         }
 

@@ -123,6 +123,41 @@ namespace Bastion.Engine.Tests
             Assert.NotNull(Looting.AntiviralOf(u));
         }
 
+        [Fact]
+        public void LaLatasLastSeatIsLeftToTheCuredBitten()
+        {
+            // R1, 19/11 (hospital, knives, seed 12): four seats, the four soldiers got in first and the bitten, cured, was left
+            // on the ground: the stage lost. With one seat left, no soldier takes it while the bitten can walk to it.
+            var (s, u) = Alone(12);
+            var b = Survivor(s);
+            b.Captive = false;
+            b.Owner = u.Owner;
+            b.Ap = 0;
+            b.Moves = 0;
+            s.Mission.Cured = true;
+            var zone = Rules.OpenTiles(s).Select((z) => new Pos { X = z.X, Y = z.Y, Z = 0 }).ToList();
+            var rest = s.Units.Where((x) => x.Team == Teams.Xcom && x.CampaignId != null && x.Alive && x.Id != u.Id).ToList();
+            Assert.True(rest.Count >= zone.Count - 1);
+            for (var k = 0; k < zone.Count - 1; k++)
+            {
+                rest[k].Pos = zone[k];
+                rest[k].Aboard = true;
+            }
+            var seat = Assert.Single(Rules.OpenTiles(s));
+            var last = new Pos { X = seat.X, Y = seat.Y, Z = 0 };
+            u.Pos = Enumerable.Range(0, s.Width * s.Height).Select((i) => new Pos { X = i % s.Width, Y = i / s.Width, Z = 0 })
+                .Where((p) => Grid.Distance(p, last) == 2 && Grid.IsWalkable(Grid.KindAt(s, p)) && Flights.CanStopAt(s, p) && Grid.UnitAt(s, p) == null && !Abilities.InEvacZone(s, p))
+                .First();
+            for (var k = 0; k < 4; k++)
+            {
+                var cmd = MissionBot.Next(s, 0, Zero);
+                if (cmd == null || cmd is EndTurnCommand) break;
+                Assert.True(Exec(s, cmd).Ok, Bastion.Net.Json.Write(cmd));
+            }
+            Assert.NotEqual(true, u.Aboard);
+            Assert.Single(Rules.OpenTiles(s));
+        }
+
         /// <summary>What a fight played by both seats' bots came to.</summary>
         private sealed class Played
         {

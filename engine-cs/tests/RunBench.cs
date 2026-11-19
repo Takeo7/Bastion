@@ -145,7 +145,7 @@ namespace Bastion.Engine.Tests
             f.Leg.AntiviralTurn = bite.AntiviralTurn;
             f.Leg.CuredTurn = bite.CuredTurn;
             f.Leg.AntiviralLost = bite.AntiviralLost;
-            f.Leg.Turned = s.Mission.Bitten == true && s.Units.FirstOrDefault((u) => u.Id == s.Mission.ObjectiveUnit)?.Reanimated == true;
+            (f.Leg.Turned, f.Leg.Killed, f.Leg.Left) = HowItEnded(s);
             if (s.Outcome != null)
             {
                 f.Outcome = s.Outcome;
@@ -234,8 +234,8 @@ namespace Bastion.Engine.Tests
             {
                 lines.Add($"## Mordido en el hospital (media de las {seeds.Length}; cuenta de {Setup.BiteTurns} turnos)");
                 lines.Add("");
-                lines.Add("| | ganados | caídos (media) | encontrado | antiviral sacado | curado | convertido | turno en que se le encuentra (media) | turnos de encontrarle a tener el antiviral (media) | antiviral perdido |");
-                lines.Add("|---|---|---|---|---|---|---|---|---|---|");
+                lines.Add("| | ganados | caídos (media) | encontrado | antiviral sacado | curado | convertido (la cuenta a 0) | muerto de otro modo | en tierra al salir La Lata | turno en que se le encuentra (media) | turnos de encontrarle a tener el antiviral (media) | antiviral perdido |");
+                lines.Add("|---|---|---|---|---|---|---|---|---|---|---|---|");
                 foreach (var rifles in new[] { true, false })
                 {
                     var mine = fights.Where((f) => f.Site == Places.Hospital && f.Kind == NodeKinds.Bitten && f.Rifles == rifles).ToList();
@@ -243,7 +243,7 @@ namespace Bastion.Engine.Tests
                     var found = mine.Where((f) => f.Leg.FoundTurn != null).ToList();
                     var both = found.Where((f) => f.Leg.AntiviralTurn != null).ToList();
                     string Avg(IEnumerable<double> v) => v.Any() ? $"{v.Average():0.0}" : "–";
-                    lines.Add($"| {(rifles ? "fusiles" : "cuchillos")} | {mine.Count((f) => f.Outcome == Outcomes.Victory)} de {mine.Count} | {mine.Average((f) => f.Fallen):0.0} | {found.Count} | {mine.Count((f) => f.Leg.AntiviralTurn != null)} | {mine.Count((f) => f.Leg.CuredTurn != null)} | {mine.Count((f) => f.Leg.Turned)} | {Avg(found.Select((f) => (double)f.Leg.FoundTurn!.Value))} | {Avg(both.Select((f) => (double)Math.Max(0, f.Leg.AntiviralTurn!.Value - f.Leg.FoundTurn!.Value)))} | {mine.Count((f) => f.Leg.AntiviralLost)} |");
+                    lines.Add($"| {(rifles ? "fusiles" : "cuchillos")} | {mine.Count((f) => f.Outcome == Outcomes.Victory)} de {mine.Count} | {mine.Average((f) => f.Fallen):0.0} | {found.Count} | {mine.Count((f) => f.Leg.AntiviralTurn != null)} | {mine.Count((f) => f.Leg.CuredTurn != null)} | {mine.Count((f) => f.Leg.Turned)} | {mine.Count((f) => f.Leg.Killed)} | {mine.Count((f) => f.Leg.Left)} | {Avg(found.Select((f) => (double)f.Leg.FoundTurn!.Value))} | {Avg(both.Select((f) => (double)Math.Max(0, f.Leg.AntiviralTurn!.Value - f.Leg.FoundTurn!.Value)))} | {mine.Count((f) => f.Leg.AntiviralLost)} |");
                 }
                 lines.Add("");
             }
@@ -274,7 +274,7 @@ namespace Bastion.Engine.Tests
                 lines.Add($"{SiteName(f.Site)} · {KindNames[f.Kind]} · {(f.Rifles ? "fusiles" : "cuchillos")} · {f.Seed} ({f.Map}): {(f.Stuck ? "SIN ACABAR" : $"{f.Outcome}/{f.Reason}")}, turno {f.Turn}, objetivo {(f.Done ? "sí" : "no")}"
                     + $", {f.Fallen} caídos, {f.Found} objetos ({f.Leg.Worth} §), {f.Supplies} §, premio {f.Reward}{(f.Unseen != null ? f.Unseen.Value ? " sin ser vistos" : " vistos" : "")}"
                     + (f.Leg.KeyAt != null ? $", llave {f.Leg.KeyAt}{(f.Leg.KeyLost ? " PERDIDA" : "")}, armería {(f.Leg.ArmoryOpen ? "abierta" : "cerrada")} {f.Leg.ArmorySearched}/{f.Leg.ArmoryPieces}" : "")
-                    + (f.Kind == NodeKinds.Bitten ? $", encontrado t{f.Leg.FoundTurn?.ToString() ?? "-"}, antiviral t{f.Leg.AntiviralTurn?.ToString() ?? "-"}, curado t{f.Leg.CuredTurn?.ToString() ?? "-"}{(f.Leg.Turned ? ", CONVERTIDO" : "")}{(f.Leg.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "") + $", {f.Orders} órdenes, {f.Refused} rechazadas, {f.Seconds:0.0} s");
+                    + (f.Kind == NodeKinds.Bitten ? $", encontrado t{f.Leg.FoundTurn?.ToString() ?? "-"}, antiviral t{f.Leg.AntiviralTurn?.ToString() ?? "-"}, curado t{f.Leg.CuredTurn?.ToString() ?? "-"}{(f.Leg.Turned ? ", CONVERTIDO" : "")}{(f.Leg.Killed ? ", MUERTO" : "")}{(f.Leg.Left ? ", EN TIERRA" : "")}{(f.Leg.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "") + $", {f.Orders} órdenes, {f.Refused} rechazadas, {f.Seconds:0.0} s");
             File.WriteAllLines(Path.Combine(BenchFactAttribute.Folder!, "r1.md"), lines);
             foreach (var l in lines.Take(40)) output.WriteLine(l);
             Assert.Equal(0, fights.Sum((f) => f.Refused));
@@ -310,7 +310,11 @@ namespace Bastion.Engine.Tests
             /// bitten cured (null: never), whether they turned, and whether the antiviral was ever nowhere (Looting.AntiviralLost).
             /// </summary>
             public int? FoundTurn, AntiviralTurn, CuredTurn;
-            public bool Turned, AntiviralLost;
+            /// <summary>
+            /// Turned: the count out (Rules.Bite). Killed: dead some other way (a bite of the dead, a fall), cured or not. Left:
+            /// alive on the ground when La Lata went (LeftBehindEvent: Unit.Lost).
+            /// </summary>
+            public bool Turned, Killed, Left, AntiviralLost;
         }
 
         private sealed class Expedition
@@ -320,6 +324,8 @@ namespace Bastion.Engine.Tests
             public string? Ended;
             /// <summary>La llave's on its map, and in reach from where it went out (all of them: from row 1).</summary>
             public int Keys;
+            /// <summary>G23.2 Mordido's on its map, likewise.</summary>
+            public int Bitten;
             public readonly List<Leg> Legs = new List<Leg>();
         }
 
@@ -355,6 +361,21 @@ namespace Bastion.Engine.Tests
             : g.Kind == GearKinds.Supplies ? g.Count
             : g.Kind == GearKinds.Item ? (g.Type == ItemIds.FirstAid ? 25 : 15) * g.Count
             : g.Kind == GearKinds.Mod ? 30 * g.Count : 0);
+
+        /// <summary>
+        /// Mordido's bitten at the end: turned by the count (Rules.Bite: the count at 0, never cured), dead some other way (a
+        /// squad's then, risen as one of its fallen: Reanimated too, so that alone doesn't say it), or left on the ground as
+        /// La Lata went. Not Alive says none of it alone: in La Lata (Evacuated) and left (Lost) aren't either.
+        /// </summary>
+        private static (bool Turned, bool Killed, bool Left) HowItEnded(GameState s)
+        {
+            if (s.Mission.Bitten != true) return (false, false, false);
+            var b = s.Units.FirstOrDefault((u) => u.Id == s.Mission.ObjectiveUnit);
+            if (b == null || b.Alive || b.Evacuated) return (false, false, false);
+            if (b.Lost == true) return (false, false, true);
+            var turned = s.Mission.Cured != true && s.Mission.BiteTurns == 0;
+            return (turned, !turned, false);
+        }
 
         /// <summary>The fight once over, for its leg: at a police station, and La llave's armoury.</summary>
         private static Leg Seen(GameState s)
@@ -395,6 +416,7 @@ namespace Bastion.Engine.Tests
             Expedition? now = null;
             Leg? seen = null;
             var lost = false;
+            var bite = new Leg();
             var played = CampaignAutoRun.Run(seed, 1000,
                 watch: (c) =>
                 {
@@ -402,7 +424,7 @@ namespace Bastion.Engine.Tests
                     {
                         if (now == null)
                         {
-                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key) };
+                            now = new Expedition { Index = ch.Expeditions.Count + 1, Before = AllSupplies(c), Upgrades = UpgradesOf(c), Squad = c.Run.Squad.Count, Soldiers = c.Soldiers.Count((s) => s.Alive), Arms = ArmsOf(c), Keys = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Key), Bitten = c.Run.Nodes.Count((n) => n.Kind == NodeKinds.Bitten) };
                             ch.Expeditions.Add(now);
                         }
                         now.Row = Math.Max(now.Row, RowOf(c.Run.At));
@@ -446,8 +468,22 @@ namespace Bastion.Engine.Tests
                     seen = Seen(s);
                     seen.KeyLost = lost;
                     lost = false;
+                    seen.FoundTurn = bite.FoundTurn;
+                    seen.AntiviralTurn = bite.AntiviralTurn;
+                    seen.CuredTurn = bite.CuredTurn;
+                    seen.AntiviralLost = bite.AntiviralLost;
+                    (seen.Turned, seen.Killed, seen.Left) = HowItEnded(s);
+                    bite = new Leg();
                 },
-                playing: (s) => lost |= Looting.KeyLost(s));
+                playing: (s) =>
+                {
+                    lost |= Looting.KeyLost(s);
+                    if (s.Mission.Bitten != true) return;
+                    if (bite.FoundTurn == null && s.Mission.BiteTurns != null) bite.FoundTurn = s.Turn;
+                    if (bite.AntiviralTurn == null && s.Mission.Antiviral == null) bite.AntiviralTurn = s.Turn;
+                    if (bite.CuredTurn == null && s.Mission.Cured == true) bite.CuredTurn = s.Turn;
+                    if (Looting.AntiviralLost(s)) bite.AntiviralLost = true;
+                });
             ch.Missions = played.Count;
             ch.Stuck = CampaignAutoRun.Stuck;
             if (CampaignAutoRun.StuckMission != null) File.WriteAllText(Path.Combine(BenchFactAttribute.Folder!, $"atasco-{seed}.json"), CampaignAutoRun.StuckMission);
@@ -538,17 +574,47 @@ namespace Bastion.Engine.Tests
                 lines.Add("");
                 lines.Add("Lo hallado, a los precios de la sonda de G19 (un fusil de asalto 90 §, una escopeta 80 §, un cargador 15 §…).");
             }
+            // G23.2 Mordido (Producto, 19/11: on the maps; the distribution, not only the mean).
+            var bitten = legs.Where((l) => l.Kind == NodeKinds.Bitten).ToList();
+            lines.Add("");
+            lines.Add("## Mordido");
+            lines.Add("");
+            lines.Add($"- En los mapas: {expeditions.Sum((e) => e.Bitten)} en {expeditions.Count} expediciones ({expeditions.Sum((e) => e.Bitten) / (double)Math.Max(1, expeditions.Count):0.00} por mapa; {expeditions.Count((e) => e.Bitten > 0) / (double)Math.Max(1, expeditions.Count):P0} de los mapas con alguno); {expeditions.Sum((e) => e.Bitten) / (double)count:0.0} por capítulo.");
+            lines.Add($"- Jugados: {bitten.Count} en {count} capítulos ({bitten.Count / (double)count:0.00} por capítulo; filas {string.Join(", ", bitten.GroupBy((l) => l.Row).OrderBy((g) => g.Key).Select((g) => $"{g.Key}: {g.Count()}"))}).");
+            if (bitten.Count > 0)
+            {
+                string Spread(IEnumerable<int> xs)
+                {
+                    var v = xs.OrderBy((x) => x).ToList();
+                    return v.Count == 0 ? "ninguno" : $"{v.Count}: mín {v[0]}, mediana {v[v.Count / 2]}, máx {v[^1]} ({string.Join(" ", v)})";
+                }
+                lines.Add($"- El mordido: curado y a bordo (ganada) {bitten.Count((l) => l.Victory && l.CuredTurn != null)}; curado y no llega {bitten.Count((l) => !l.Victory && l.CuredTurn != null)}; convertido (la cuenta a 0) {bitten.Count((l) => l.Turned)}; muerto de otro modo (mordido por los muertos…) {bitten.Count((l) => l.Killed)}, {bitten.Count((l) => l.Killed && l.CuredTurn != null)} de ellos ya curados; en tierra al salir La Lata {bitten.Count((l) => l.Left)}; sin encontrarlo {bitten.Count((l) => l.FoundTurn == null)}; encontrado y vivo al acabar (sin unirse, o al caer la escuadra) {bitten.Count((l) => l.FoundTurn != null && !l.Victory && !l.Turned && !l.Killed && !l.Left)}.");
+                lines.Add($"- La escuadra: cae entera {bitten.Count((l) => l.Ended == RunEnds.Wiped)}; sale sin él {bitten.Count((l) => !l.Victory && l.Ended != RunEnds.Wiped)}.");
+                lines.Add($"- Ganadas {bitten.Count((l) => l.Victory)} de {bitten.Count}; caídos {bitten.Sum((l) => l.Fallen)} ({bitten.Average((l) => l.Fallen):0.0} por combate); razones: {string.Join(", ", bitten.GroupBy((l) => l.Reason).OrderByDescending((g) => g.Count()).Select((g) => $"{g.Key} {g.Count()}"))}.");
+                lines.Add($"- Turno en que lo encuentran: {Spread(bitten.Where((l) => l.FoundTurn != null).Select((l) => l.FoundTurn!.Value))}.");
+                lines.Add($"- Turnos desde encontrarlo hasta sacar el antiviral (con antiviral): {Spread(bitten.Where((l) => l.FoundTurn != null && l.AntiviralTurn != null).Select((l) => l.AntiviralTurn!.Value - l.FoundTurn!.Value))}.");
+                lines.Add($"- Turnos desde encontrarlo hasta curarlo (curados): {Spread(bitten.Where((l) => l.FoundTurn != null && l.CuredTurn != null).Select((l) => l.CuredTurn!.Value - l.FoundTurn!.Value))}.");
+                lines.Add($"- Antiviral fuera del mueble antes de encontrarlo: {bitten.Count((l) => l.AntiviralTurn != null && (l.FoundTurn == null || l.AntiviralTurn < l.FoundTurn))}; perdido en algún momento (Looting.AntiviralLost): {bitten.Count((l) => l.AntiviralLost)}.");
+                lines.Add("");
+                lines.Add("| Mordido | combates | ganados | caídos (media) | § sueltos (media) |");
+                lines.Add("|---|---|---|---|---|");
+                foreach (var g in bitten.GroupBy((l) => l.Row <= 2 ? "fila 2" : l.Row <= 4 ? "filas 3–4" : "fila 5").OrderBy((g) => g.Key))
+                    lines.Add($"| {g.Key} | {g.Count()} | {g.Count((l) => l.Victory)} | {g.Average((l) => l.Fallen):0.0} | {g.Average((l) => l.Supplies + l.Reward):0} |");
+                var rescue = legs.Where((l) => l.Kind == NodeKinds.Rescue).ToList();
+                if (rescue.Count > 0) lines.Add($"| Rescate (para comparar) | {rescue.Count} | {rescue.Count((l) => l.Victory)} | {rescue.Average((l) => l.Fallen):0.0} | {rescue.Average((l) => l.Supplies + l.Reward):0} |");
+            }
             lines.Add("");
             lines.Add("## Cada expedición");
             lines.Add("");
             foreach (var ch in chapters)
                 foreach (var e in ch.Expeditions)
                     lines.Add($"{ch.Seed}·{e.Index}: {e.Squad} de {e.Soldiers} vivos, armas {e.Arms}, mejoras «{e.Upgrades}», § {e.Before} → {e.After}, fila {e.Row}, acaba {e.Ended ?? "-"}: "
-                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Matched ? "" : " ¿?")}")));
+                        + string.Join(" / ", e.Legs.Select((l) => $"{l.Name} f{l.Row} {(l.Victory ? "gana" : "pierde")} ({l.Reason}) {l.Fallen} caídos {l.Supplies}+{l.Reward} §{(l.KeyAt != null ? $" llave {l.KeyAt}{(l.KeyLost ? " PERDIDA" : "")}, armería {(l.ArmoryOpen ? "abierta" : "cerrada")} {l.ArmorySearched}/{l.ArmoryPieces}" : "")}{(l.Kind == NodeKinds.Bitten ? $" encontrado t{l.FoundTurn?.ToString() ?? "-"}, antiviral t{l.AntiviralTurn?.ToString() ?? "-"}, curado t{l.CuredTurn?.ToString() ?? "-"}{(l.Turned ? ", CONVERTIDO" : "")}{(l.Killed ? ", MUERTO" : "")}{(l.Left ? ", EN TIERRA" : "")}{(l.AntiviralLost ? ", ANTIVIRAL PERDIDO" : "")}" : "")}{(l.Matched ? "" : " ¿?")}")));
             File.WriteAllLines(Path.Combine(BenchFactAttribute.Folder!, "r2.md"), lines);
             foreach (var l in lines.Take(30)) output.WriteLine(l);
             Assert.All(chapters, (c) => Assert.Null(c.Stuck));
             Assert.DoesNotContain(keys, (l) => l.KeyLost);
+            Assert.DoesNotContain(bitten, (l) => l.AntiviralLost);
         }
     }
 }

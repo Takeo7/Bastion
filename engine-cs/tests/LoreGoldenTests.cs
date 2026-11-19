@@ -3203,7 +3203,7 @@ namespace Bastion.Engine.Tests
             Assert.Equal(15, Lore.StageNames.Count);
             // G23.2, Mordido (cuadros 73 and 87).
             Assert.Equal("Mordido", Lore.StageName(NodeKinds.Bitten));
-            Assert.Equal("Alguien mordido se esconde en una zona marcada. Desde que se le encuentra, le quedan 10 turnos: dadle el antiviral, que está en uno de los armarios o estantes de medicinas. Volved todos a La Lata. Si se convierte, se sale sin recluta ni recompensa.", Lore.StageLine(NodeKinds.Bitten));
+            Assert.Equal("Alguien mordido se esconde en una zona marcada. Desde que se le encuentra, le quedan 15 turnos: dadle el antiviral, que está en uno de los armarios o estantes de medicinas. Volved todos a La Lata. Si se convierte, se sale sin recluta ni recompensa.", Lore.StageLine(NodeKinds.Bitten));
             Assert.Equal("Dadle el antiviral a Marta Gil", Lore.BiteText.GiveAntiviral("Marta Gil"));
             Assert.Equal("Se convierte en 4 turnos", Lore.BiteText.Countdown(4));
             Assert.Equal("Se convierte al acabar este turno", Lore.BiteText.Countdown(1));

@@ -153,8 +153,10 @@ namespace Bastion.UI.Combat
             if (m.Terminal != null && !m.ObjectiveDone) beacons.Add((m.Terminal, 0x54d1ff));
             var objective = UnitById(v, m.ObjectiveUnit);
             if (objective != null && objective.Alive && !m.ObjectiveDone && !Unfound(objective)) beacons.Add((objective.Pos, objective.Team == Teams.Alien ? 0xff4a6a : 0x4dff9a));
-            // La llave's key on the floor the same (U22): seen from afar, picked up from on it.
-            var item = m.Item != null && m.Item.Carrier == null && m.Item.Evacuated != true ? m.Item.Pos : MissionGearOnFloor(v);
+            var item = m.Item != null && m.Item.Carrier == null && m.Item.Evacuated != true ? m.Item.Pos : null;
+            // La llave's key or Mordido's antiviral on the floor (U22, U23): seen from afar by its beam and the ring at its
+            // foot, in the item's green; not the item's core, which hid Arte's key and flask lying there (Producto, 19/11).
+            if (MissionGearOnFloor(v) is Pos lying) beacons.Add((lying, 0x4dff9a));
             // A siege's breaches: an orange beam each, and an arrow a side at the screen's edge (CombatController.Siege).
             var breaches = new EdgeMarksView();
             BreachMarks(v, beacons, breaches);
