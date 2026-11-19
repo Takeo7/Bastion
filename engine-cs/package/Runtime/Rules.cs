@@ -703,6 +703,28 @@ namespace Bastion.Engine
             }
         }
 
+        /// <summary>
+        /// G23.2 Mordido (Arturo, cuadro 87): the bitten's count out (MissionState.BiteTurns 0) and not cured, they turn as
+        /// the dead's turn begins: dead on their tile, and up as one of the dead there, a group of its own, alert, as a
+        /// fallen of the squad (RiseFallen). On the field only: La Lata never takes them uncured. With no room to get up,
+        /// next turn.
+        /// </summary>
+        private void Bite()
+        {
+            var m = S.Mission;
+            if (m.Bitten != true || m.Cured == true || m.BiteTurns != 0) return;
+            var bitten = S.Units.FirstOrDefault((x) => x.Id == m.ObjectiveUnit);
+            if (bitten == null || bitten.Reanimated || bitten.Evacuated || bitten.Aboard == true) return;
+            if (bitten.Alive) Emit(new DiedEvent { Unit = bitten.Id });
+            if (Over) return;
+            var at = Abilities.RiseSpot(S, bitten);
+            if (at == null) return;
+            var zombie = Rules.RisenUnit(ZombieId(), bitten, at, null);
+            var pod = new Pod { Id = $"p{zombie.Id}", Active = true, UnitIds = new List<string>(), Patrol = new List<Pos>(), PatrolIndex = 0 };
+            zombie.PodId = pod.Id;
+            Emit(new ReanimatedEvent { Corpse = bitten.Id, Zombie = zombie, Pod = pod });
+        }
+
         /// <summary>Opens the loot box on `tile` (docs/FASE8.md §B): always what it is marked for; a car's boot, or a body (Arturo, 2/11).</summary>
         private void Search(Unit u, Pos tile)
         {
@@ -750,8 +772,9 @@ namespace Bastion.Engine
                 var vest = box == Looting.PoliceBoot || body?.Outfit == Outfits.Police || body?.Outfit == Outfits.Military ? RunLoot.VestChance : pieceVest;
                 // «Suerte al registrar» (T2): something more, another roll; Ganzúa's more on a box, a boot or a piece.
                 var more = Lucky(u, loot, body == null ? u.Mods.BoxLuck : 0) ? Roll() : null;
-                // La llave (G23.1): its holder's body gives it too.
+                // La llave (G23.1): its holder's body gives it too; Mordido (G23.2): its piece, the antiviral.
                 var key = body != null && body.Id == S.Mission.KeyHolder && S.Mission.Key != null ? new List<Gear> { Gears.CloneGear(S.Mission.Key) } : null;
+                if (piece && S.Mission.Antiviral != null && S.Mission.AntiviralAt == Grid.NodeOf(S, tile)) key = new List<Gear> { Gears.CloneGear(S.Mission.Antiviral) };
                 var (packed, floor, next) = FoundGear(u, loot, vest, more, extra: !piece, with: key);
                 Emit(new SearchedEvent { Unit = u.Id, Tile = Engine.Events.CopyPos(tile), Packed = packed, Floor = floor, NextGear = next });
                 return;
@@ -1593,7 +1616,8 @@ namespace Bastion.Engine
             var squad = S.Units.Where((o) => o.Alive && o.Team == Teams.Xcom && !(S.Run != null && o.Captive)).ToList();
             // In the zone and with a seat (N2: a run's La Lata takes MissionState.Seats; who doesn't fit is lost).
             var noSeat = Rules.NoSeat(S);
-            bool Boards(Unit o) => Abilities.InEvacZone(S, o.Pos) && !noSeat.Contains(o);
+            // Never the bitten not cured (G23.2): they would turn in it.
+            bool Boards(Unit o) => Abilities.InEvacZone(S, o.Pos) && !noSeat.Contains(o) && !Rules.BittenUncured(S, o);
             foreach (var u in squad.Where(Boards).ToList()) Emit(new EvacuatedEvent { Unit = u.Id });
             foreach (var u in squad.Where((o) => !Boards(o)).ToList()) Emit(new LeftBehindEvent { Unit = u.Id, NoSeat = noSeat.Contains(u) ? true : (bool?)null });
             var m = S.Mission;
@@ -1634,6 +1658,9 @@ namespace Bastion.Engine
             BurnStanding(Teams.Xcom);
             if (Over) return;
             Emit(new TurnBeganEvent { Team = Teams.Alien, Turn = turn });
+            // Mordido (G23.2): the bitten's count out, they turn.
+            Bite();
+            if (Over) return;
             // The base's turrets keep watch through the enemy's turn: each of the dead that moves in sight, once (docs/FASE12.md §11.4).
             foreach (var t in S.Units.Where((x) => x.Alive && x.Automaton != null && Content.LoadedFor(x, AbilityIds.Shoot)).ToList()) Emit(new OverwatchEvent { Unit = t.Id, KillZone = true });
             // They rise now, but only act from the next turn on (they had no turn to begin).
@@ -2369,7 +2396,7 @@ namespace Bastion.Engine
             if (aboard.Count == 0) return false;
             if (Rules.FreeExit(m) || m.ObjectiveDone || RunsRescue(s)) return true;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier) && aboard.Any((u) => u.Id == m.Item!.Carrier);
-            if (m.Kind == MissionKinds.Rescue) return !string.IsNullOrEmpty(m.ObjectiveUnit) && aboard.Any((u) => u.Id == m.ObjectiveUnit);
+            if (m.Kind == MissionKinds.Rescue) return !string.IsNullOrEmpty(m.ObjectiveUnit) && aboard.Any((u) => u.Id == m.ObjectiveUnit) && (m.Bitten != true || m.Cured == true);
             return false;
         }
 

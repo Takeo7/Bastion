@@ -45,6 +45,8 @@ namespace Bastion.Engine
             [GearKinds.Medicine] = new GearWords("medicina", "medicinas", "la medicina"),
             // G23.1: the one key of La llave.
             [GearKinds.Key] = new GearWords("llave de la armería", "llaves de la armería", "la llave de la armería"),
+            // G23.2: Mordido's one antiviral.
+            [GearKinds.Antiviral] = new GearWords("antiviral", "antivirales", "el antiviral"),
         };
 
         /// <summary>
@@ -106,8 +108,8 @@ namespace Bastion.Engine
             var words = WordsOf(kind, type);
             if (count > 1) return $"{count} {words.Many}";
             var the = words.The;
-            // There is only one: «Anja encuentra la llave de la armería.»
-            if (kind == GearKinds.Key) return the;
+            // There is only one: «Anja encuentra la llave de la armería.», «… el antiviral.»
+            if (kind == GearKinds.Key || kind == GearKinds.Antiviral) return the;
             if (the.StartsWith("el ")) return "un " + the.Substring(3);
             if (the.StartsWith("la ")) return "una " + the.Substring(3);
             if (the.StartsWith("los ")) return "unos " + the.Substring(4);

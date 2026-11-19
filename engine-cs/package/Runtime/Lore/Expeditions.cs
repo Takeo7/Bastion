@@ -49,6 +49,7 @@ namespace Bastion.Engine
             [NodeKinds.Stealth] = "Sigilo",
             [NodeKinds.Elite] = "Guarida",
             [NodeKinds.Key] = "La llave",
+            [NodeKinds.Bitten] = "Mordido",
             [NodeKinds.Refuge] = "Refugio",
             [NodeKinds.Trade] = "Trueque",
             [NodeKinds.Event] = "Suceso",
@@ -96,18 +97,18 @@ namespace Bastion.Engine
         {
             /// <summary>The objective, a line at a time (UI's strip): the key to find, the armoury to open, La Lata.</summary>
             public const string FindKey = "Buscad la llave: la lleva un muerto de uniforme";
-            /// <summary>Dropped by the body that got up, or by a soldier who fell: to be picked up.</summary>
+            /// <summary>Dropped by a soldier who fell (or by a body that got up): to be picked up.</summary>
             public const string KeyOnFloor = "La llave está en el suelo: recogedla";
             public const string OpenArmory = "Abrid la armería, o volad su pared";
             public const string Leave = "Salid " + Bus.In;
             /// <summary>The strip's help.</summary>
-            public const string ObjectiveTip = "La armería tiene todos sus muebles llenos. La llave la lleva uno de los muertos de uniforme: matadlos y registrad sus cuerpos. Si uno se levanta antes, la suelta. Una granada contra la pared también abre la armería, con ruido.";
+            public const string ObjectiveTip = "La armería tiene todos sus muebles llenos. La llave la lleva uno de los muertos de uniforme: matadlos y registrad sus cuerpos. Si cae quien la lleva, queda en el suelo. Una granada contra la pared también abre la armería, con ruido.";
             /// <summary>The key in the pack: its sheet's help.</summary>
             public const string Help = "Abre la puerta de la armería. Se gasta al abrirla, y no sale de esta etapa.";
             /// <summary>«Abrir la puerta» on the armoury's without the key (Abilities, OpenDoor); with it, the action's name.</summary>
             public const string Locked = "Está cerrada. Hace falta la llave de la armería.";
             public const string OpenWithKey = "Abrir con la llave";
-            /// <summary>When the body that had it gets up (ReanimatedEvent): the log, and over the tile.</summary>
+            /// <summary>When it falls to the floor (its bearer down, or a body that had it getting up): the log, and over the tile.</summary>
             public const string Dropped = "La llave de la armería cae al suelo.";
             public const string DroppedFloat = "LLAVE AL SUELO";
             /// <summary>The armoury opened with the key (UnlockedEvent): the log, and over the door.</summary>
@@ -116,11 +117,45 @@ namespace Bastion.Engine
         }
 
         /// <summary>
+        /// Mordido (G23.2; Gameplay's .dev-snapshots/gameplay/g23/MORDIDO.md; Arturo, cuadros 73 and 87): a Rescate whose
+        /// survivor is bitten, BiteTurns of the squad's turns from their finding (MissionState.BiteTurns, down at the end of
+        /// each), cured by the map's one antiviral. Finding, talking and taking them home are the Rescate's (VipObjective).
+        /// </summary>
+        public static class BiteText
+        {
+            /// <summary>The objective's own steps (UI's strip).</summary>
+            public const string FindAntiviral = "Buscad el antiviral: está en uno de los armarios o estantes de medicinas";
+            public static string GiveAntiviral(string who) => $"Dadle el antiviral a {who}";
+            public const string AntiviralOnFloor = "El antiviral está en el suelo: recogedlo";
+            public const string TurnedObjective = "Sin recluta ni recompensa: salid " + Bus.In;
+            /// <summary>Over their head from their finding: the turns left (1: it ends with this one).</summary>
+            public static string Countdown(int turns) => turns <= 1 ? "Se convierte al acabar este turno" : $"Se convierte en {turns} turnos";
+            /// <summary>The log's warning with 2 and with 1 turn left.</summary>
+            public static string Warn(string who, int turns) => turns <= 1 ? $"{who} se convierte al acabar este turno." : $"A {who} le quedan {turns} turnos para convertirse.";
+            /// <summary>Cured (CuredEvent): the log, and over them.</summary>
+            public static string Cured(string by, string who) => $"{by} le da el antiviral a {who}. Ya no se convertirá.";
+            public const string CuredFloat = "ANTIVIRAL";
+            /// <summary>Turned: the log, and over them.</summary>
+            public static string Turned(string who) => $"{who} se convierte. Sin recluta ni recompensa: salid {Bus.In}.";
+            public const string TurnedFloat = "SE CONVIERTE";
+            /// <summary>A medicine used on them, or refused at full health: it heals, not the bite.</summary>
+            public const string MedicineNo = "La medicina cura la salud, no la mordedura: hace falta el antiviral.";
+            /// <summary>
+            /// «Usar» the antiviral on anyone else, and on them once cured (RunPack.Refusal): said of the bite, not of the
+            /// person, so nothing has to agree with who they are.
+            /// </summary>
+            public const string AntiviralOnlyBite = "El antiviral solo sirve contra la mordedura.";
+            public const string AlreadyCured = "La mordedura ya está curada.";
+            /// <summary>The antiviral in the pack: its sheet's help.</summary>
+            public const string AntiviralHelp = "Cura la mordedura: se usa desde una casilla de al lado, con «Usar». Se gasta, y no sale de esta etapa.";
+        }
+
+        /// <summary>
         /// What is done at a stage, in one line, for its sheet on the map. The figures and names when known: the item to
         /// bring back, the alarm (Alarms), the turn La Lata comes on a Hold, the guard of a Guarida (a template); a Rescate
         /// with Cuervos round the survivor (`crows`; Arturo, 17/11: some are held by them, others hide alone).
         /// </summary>
-        public static string StageLine(string kind, string? item = null, string? alarm = null, int? holdTurns = null, string? guard = null, bool crows = false)
+        public static string StageLine(string kind, string? item = null, string? alarm = null, int? holdTurns = null, string? guard = null, bool crows = false, int? biteTurns = null)
         {
             var item_ = item ?? DefaultItem;
             switch (kind)
@@ -147,6 +182,9 @@ namespace Bastion.Engine
                 case NodeKinds.Key:
                     // G23.1 (Arturo, 18/11 and 19/11, cuadros 71, 73 and 79): won as a Saqueo; the armoury is the prize.
                     return $"La armería de la comisaría está cerrada, con todos sus muebles llenos. Uno de los muertos de uniforme lleva la llave; también se puede volar la pared con una granada. Salid {Bus.In}.";
+                case NodeKinds.Bitten:
+                    // G23.2 (Arturo, cuadros 73 and 87): 10 turns from the finding; turned, out without a recruit nor a reward.
+                    return $"Alguien mordido se esconde en una zona marcada. Desde que se le encuentra, le quedan {biteTurns ?? Setup.BiteTurns} turnos: dadle el antiviral, que está en uno de los armarios o estantes de medicinas. Volved todos {Bus.To}. Si se convierte, se sale sin recluta ni recompensa.";
                 case NodeKinds.Refuge:
                     // G22 (cuadro 72): the only way back to the base, but beating the boss.
                     return "Un sitio seguro para descansar: todos se curan del todo. Desde aquí se puede volver a la base.";

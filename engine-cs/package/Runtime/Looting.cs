@@ -34,6 +34,15 @@ namespace Bastion.Engine
     }
 
     /// <summary>Looting.KeyWhere: where La llave's key is (G23.1).</summary>
+    /// <summary>Looting.AntiviralWhere: where Mordido's antiviral is (G23.2).</summary>
+    public static class AntiviralPlaces
+    {
+        public const string Piece = "piece";
+        public const string Floor = "floor";
+        public const string Pack = "pack";
+        public const string Used = "used";
+    }
+
     public static class KeyPlaces
     {
         public const string Holder = "holder";
@@ -330,7 +339,9 @@ namespace Bastion.Engine
             if (s.Mission.OutOfReach != null && s.Mission.OutOfReach.Contains(Grid.NodeOf(s, p))) return null;
             if (BodyAt(s, p) != null) return Body;
             // G19: a piece that holds something (MissionState.Pieces), the dead officer's on the floor too.
-            if (s.Mission.Pieces != null && s.Mission.Pieces.Contains(Grid.NodeOf(s, p)) && PieceAt(s, p) is string piece) return SearchPieces.Standing(s, p, piece) ? piece : null;
+            // (Mordido's antiviral's, standing or not: G23.2, never lost with it.)
+            if (s.Mission.Pieces != null && s.Mission.Pieces.Contains(Grid.NodeOf(s, p)) && PieceAt(s, p) is string piece)
+                return SearchPieces.Standing(s, p, piece) || s.Mission.Antiviral != null && s.Mission.AntiviralAt == Grid.NodeOf(s, p) ? piece : null;
             var decor = DecorLayer(s, p.Z);
             if (decor == null) return null;
             var kind = Grid.KindAt(s, p);
@@ -448,6 +459,34 @@ namespace Bastion.Engine
             if ((s.FloorGear ?? new List<DroppedGear>()).Any((d) => d.Gear.Kind == GearKinds.Key)) return KeyPlaces.Floor;
             if (s.Units.Any((u) => (u.Alive || u.Aboard == true) && KeyOf(u) != null)) return KeyPlaces.Pack;
             return s.Mission.Locked == null ? KeyPlaces.Used : KeyPlaces.Pack;
+        }
+
+        /// <summary>Mordido's antiviral in `u`'s pack, or null.</summary>
+        public static Gear? AntiviralOf(Unit u) => u.Pack?.Items.FirstOrDefault((p) => p.Gear.Kind == GearKinds.Antiviral)?.Gear;
+
+        /// <summary>
+        /// Where Mordido's antiviral is (G23.2, for its objective): `piece` (in its cabinet or shelf, AntiviralAt), `floor`,
+        /// `pack` (in someone's, La Lata's too), `used` (the bitten cured); null in another fight.
+        /// </summary>
+        public static string? AntiviralWhere(GameState s)
+        {
+            if (s.Mission.Bitten != true) return null;
+            if (s.Mission.Cured == true) return AntiviralPlaces.Used;
+            if (s.Mission.Antiviral != null) return AntiviralPlaces.Piece;
+            if ((s.FloorGear ?? new List<DroppedGear>()).Any((d) => d.Gear.Kind == GearKinds.Antiviral)) return AntiviralPlaces.Floor;
+            return AntiviralPlaces.Pack;
+        }
+
+        /// <summary>
+        /// G23.2's invariant (Producto, 19/11, as the key's): whether Mordido's antiviral is nowhere to be had while the fight
+        /// lasts: not in its piece still to search, nor on the floor, nor in anyone's pack (La Lata's too), nor used.
+        /// </summary>
+        public static bool AntiviralLost(GameState s)
+        {
+            if (s.Mission.Bitten != true || s.Mission.Cured == true) return false;
+            if (s.Mission.Antiviral != null) return s.Mission.AntiviralAt == null || !IsSearchable(s, Grid.PosOf(s, s.Mission.AntiviralAt.Value));
+            if ((s.FloorGear ?? new List<DroppedGear>()).Any((d) => d.Gear.Kind == GearKinds.Antiviral)) return false;
+            return !s.Units.Any((u) => (u.Alive || u.Aboard == true) && AntiviralOf(u) != null);
         }
 
         /// <summary>

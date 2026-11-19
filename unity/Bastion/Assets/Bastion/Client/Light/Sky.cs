@@ -47,6 +47,61 @@ namespace Bastion.Client
 
         static Sky current;
 
+        /// <summary>
+        /// A5 (Arturo, 19/11, cuadro 74: «quiero otro cielo»), the proposals for his cuadro, a lab's alone (BASTION_CIELO; 0,
+        /// the game's). Three skies of their own character, each with its light by day (ProposalLight: the sun, the sky's
+        /// light and the haze, over Mood.Day), Synty's clouds one by one for the flat rings and its mountains in the round
+        /// for the flat band and the roofs' silhouettes: 1 «Verano», a blue sky with white clouds; 2 «Encapotado», a low
+        /// grey lid of big dark clouds, the sun through a break; 3 «Atardecer», orange to violet, its clouds against the
+        /// light. By night and under the weather, the game's colours with those clouds, dark. Their models, the map's catalogue's.
+        /// </summary>
+        public static int Proposal = int.TryParse(System.Environment.GetEnvironmentVariable("BASTION_CIELO"), out int asked) ? asked : 0;
+
+        /// <summary>
+        /// The base's own sky and light, the game's warm one as it was (Arturo, 19/11, cuadro 84: «la suya, la cálida de
+        /// hoy»): Settlement holds it while it shows the base itself; the stages and the halt between them have theirs.
+        /// </summary>
+        public static bool Hold;
+
+        /// <summary>The stage's sky now: Proposal, or 0 (the game's as it was) while the base holds its own.</summary>
+        static int Stage => Hold ? 0 : Proposal > 0 ? Proposal : Of(Halt ?? MapView.Current?.State?.Mission?.Sky);
+
+        /// <summary>
+        /// The sky of the stage just played, at the halt between stages (Settlement sets it from UI's «site/modifier/sky»);
+        /// null in a fight, whose own is its mission's (MissionState.Sky: Bastion.Engine.Skies; null, the game's as it was).
+        /// </summary>
+        public static string Halt;
+
+        static int Of(string sky) => sky == Bastion.Engine.Skies.Clear ? 1 : sky == Bastion.Engine.Skies.Overcast ? 2 : sky == Bastion.Engine.Skies.Dusk ? 3 : 0;
+        int stageShown = -1;
+
+        /// <summary>At «Bajo» and on iOS a stage's sky is its dome and its light alone: no clouds, no far town nor sierra (Producto, 19/11).</summary>
+        static bool Lite
+        {
+            get
+            {
+                if (Application.platform == RuntimePlatform.IPhonePlayer) return true;
+                int level = QualitySettings.GetQualityLevel();
+                var names = QualitySettings.names;
+                return level >= 0 && level < names.Length && names[level] == "Bajo";
+            }
+        }
+        public static System.Func<string, GameObject> LabPrefabs;
+        bool solidsMade;
+        Mood.Values proposalMood;
+        /// <summary>The sky up now: the proposal's by a fair day or by night; the lid (2) under rain, whatever the stage's (cuadro 84's table).</summary>
+        int skyNow;
+
+        /// <summary>The day's light under each proposal's sky: Mood.Day with its sun, its sky's light and its haze changed.</summary>
+        static Mood.Values ProposalLight(int proposal)
+        {
+            var v = Mood.Day.Hazier(1);
+            if (proposal == 1) (v.haze, v.sun, v.sunIntensity, v.skyLight, v.skyIntensity, v.saturation) = (0xc9dff2, 0xfff3d8, 3.9f, 0xa6c3f0, 1.9f, 1.0f);
+            else if (proposal == 2) (v.haze, v.hazeDensity, v.sun, v.sunIntensity, v.skyLight, v.skyIntensity, v.saturation, v.fill) = (0x8f99a6, 0.0036f, 0xdfe6f0, 2.3f, 0x9fb0c8, 2.0f, 0.86f, 0xdfe6ee);
+            else if (proposal == 3) (v.haze, v.hazeDensity, v.sun, v.sunIntensity, v.sunFrom, v.skyLight, v.skyIntensity, v.fill, v.fillIntensity) = (0xe3b79a, 0.0036f, 0xffb787, 3.3f, new Vector3(14, 15, -31), 0xb4b0dc, 2.3f, 0xffdcc0, 0.75f);
+            return v;
+        }
+
         sealed class Part
         {
             public Transform Transform;
@@ -55,6 +110,10 @@ namespace Bastion.Client
             public float Turn;
             public Lands? Land;
             public bool Snow;
+            /// <summary>The game's as it was (the flat band, the roofs, the cloud rings): only with no stage's sky (Stage 0). Or a stage's sky's own (its sierra, its far town): only with one.</summary>
+            public bool Old, New;
+            /// <summary>A proposal's clouds: shown only under that sky (skyNow: 1 summer, 2 the lid, 3 dusk); 0, under any.</summary>
+            public int Kind;
         }
 
         readonly List<Part> parts = new List<Part>();
@@ -80,8 +139,24 @@ namespace Bastion.Client
         void LateUpdate()
         {
             var mood = Mood.Current != null ? Mood.Current.Now : null;
+            // (The base's hold taken or let go: its own day back, or the stage's.)
+            if (mood != null && stageShown != Stage)
+            {
+                if (ReferenceEquals(mood, proposalMood) && Stage == 0) Mood.Show(Mood.Day);
+                stageShown = Stage;
+                shown = null;
+                mood = Mood.Current != null ? Mood.Current.Now : null;
+            }
             if (mood == null || ReferenceEquals(mood, shown)) return;
-            shown = mood;
+            // (A proposal's own daylight, in a lab: the day's mood swapped for it.)
+            if (Stage > 0 && ReferenceEquals(mood, Mood.Day))
+            {
+                proposalMood = ProposalLight(Stage);
+                shown = proposalMood;
+                Mood.Show(proposalMood);
+                mood = proposalMood;
+            }
+            else shown = mood;
             if (parts.Count == 0) Build();
             Colours(mood);
         }
@@ -103,7 +178,122 @@ namespace Bastion.Client
             mountains.SetFloat("_Repeat", MountainRepeat);
             mountains.SetFloat("_Air", 0.3f);
             mountains.SetFloat("_Foot", 0.55f);
-            Add("Montañas", RingMesh(MountainBottom, MountainTop), mountains, MountainsAt, 0.7f);
+            var band = Add("Montañas", RingMesh(MountainBottom, MountainTop), mountains, MountainsAt, 0.7f);
+            band.Old = true;
+        }
+
+        /// <summary>The proposals' solids (2 and 3), once the lab's models are there: clouds one by one, mountains in the round.</summary>
+        void Solids()
+        {
+            // (The map's catalogue has their models: MapArt's skyCloud1–3 and skyMountain1–5.)
+            if (LabPrefabs == null && MapCatalog.Load()?.PrefabOf() is System.Func<string, GameObject> prefabOf)
+                LabPrefabs = id => MapArt.Prop(id) is PropArt art ? prefabOf(MapArt.ModelKey(art)) : null;
+            if (solidsMade || Stage < 1 || LabPrefabs == null) return;
+            solidsMade = true;
+            int made = parts.Count;
+            Mesh Whole(string key, out float size)
+            {
+                size = 1;
+                var prefab = LabPrefabs(key);
+                var meshes = prefab != null ? prefab.GetComponentsInChildren<MeshFilter>().Where(f => f.sharedMesh != null).ToList() : null;
+                if (meshes == null || meshes.Count == 0) return null;
+                var root = prefab.transform.worldToLocalMatrix;
+                var mesh = new Mesh { name = key, indexFormat = IndexFormat.UInt32 };
+                // (Every submesh: a building's glass is its second, and without it it was a frame.)
+                mesh.CombineMeshes(meshes.SelectMany(f => Enumerable.Range(0, f.sharedMesh.subMeshCount).Select(s => new CombineInstance { mesh = f.sharedMesh, subMeshIndex = s, transform = root * f.transform.localToWorldMatrix })).ToArray(), true, true);
+                size = Mathf.Max(mesh.bounds.size.x, mesh.bounds.size.z);
+                return mesh;
+            }
+            float R(int n, int salt) => Mathf.Repeat(Mathf.Sin(n * 127.1f + salt * 311.7f) * 43758.5453f, 1);
+            // The solids of one kind joined into one mesh round the origin, each `wide` (a share of the radius) at its bearing and height.
+            Part lastRing = null;
+            void Ring(string name, string[] keys, int count, float low, float high, float narrow, float wide, float squash, Color tint, float mist, int queue, float fade = 0)
+            {
+                var all = new List<CombineInstance>();
+                for (int n = 0; n < count; n++)
+                {
+                    var mesh = Whole(keys[n % keys.Length], out float size);
+                    if (mesh == null) continue;
+                    float bearing = (n + R(n, 1) * 0.7f) / count * 360, up = Mathf.Lerp(low, high, R(n, 2)), scale = Mathf.Lerp(narrow, wide, R(n, 3)) / size;
+                    var centre = mesh.bounds.center;
+                    var at = Quaternion.Euler(0, bearing, 0) * new Vector3(0, up, 1);
+                    all.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.TRS(at, Quaternion.Euler(0, bearing + R(n, 4) * 360, 0), new Vector3(scale, scale * squash, scale)) * Matrix4x4.Translate(new Vector3(-centre.x, -mesh.bounds.min.y, -centre.z)) });
+                }
+                if (all.Count == 0) return;
+                var joined = new Mesh { name = name, indexFormat = IndexFormat.UInt32 };
+                joined.CombineMeshes(all.ToArray(), true, true);
+                if (System.Environment.GetEnvironmentVariable("BASTION_CIELO_LOG") == "1") Debug.Log($"[cielo] {name}: {joined.triangles.Length / 3} triangles");
+                var m = MakeMaterial("_CLOUD", null, 2);
+                m.SetColor("_Tint", tint);
+                m.SetFloat("_Mist", mist);
+                m.SetFloat("_Fade", fade);
+                m.renderQueue = shader.renderQueue + queue;
+                lastRing = Add(name, joined, m, queue < 4 ? MountainsAt : CloudsAt, 0);
+            }
+            string[] clouds = { "skyCloud1", "skyCloud2", "skyCloud3" };
+            int first = parts.Count;
+            Ring("Nubes de verano", clouds, 26, 0.12f, 0.6f, 0.3f, 0.6f, 0.9f, Color.white, 0, 4);
+            for (int k = first; k < parts.Count; k++) parts[k].Kind = 1;
+            first = parts.Count;
+            // A lid: many, low all round and on up overhead, with breaks between them.
+            Ring("Nubes bajas", clouds, 90, 0.05f, 0.2f, 0.4f, 0.65f, 0.4f, Color.white, 0.2f, 4);
+            Ring("Nubes medias", clouds, 80, 0.2f, 0.5f, 0.45f, 0.75f, 0.35f, Color.white, 0.08f, 5);
+            Ring("Nubes altas", clouds, 40, 0.6f, 1.3f, 0.5f, 0.8f, 0.35f, Color.white, 0, 6);
+            for (int k = first; k < parts.Count; k++) parts[k].Kind = 2;
+            first = parts.Count;
+            Ring("Nubes del atardecer", clouds, 44, 0.05f, 0.3f, 0.18f, 0.4f, 0.45f, Color.white, 0, 4);
+            for (int k = first; k < parts.Count; k++) parts[k].Kind = 3;
+            Ring("Sierra", new[] { "skyMountain1", "skyMountain2", "skyMountain3", "skyMountain4", "skyMountain5" }, 14, -0.02f, -0.01f, 0.35f, 0.6f, 0.7f, new Color(0.42f, 0.45f, 0.5f), 0.6f, 1, 0.012f);
+            // In a town or by a factory, buildings before the sierra, in the round (Generic's background ones), two rows of
+            // them, the far one paler: not the flat silhouettes.
+            // (Plain blocks, a box each with a setback on some: Synty's background buildings were a quarter of a million
+            // triangles for what is a haze-coloured shape at this distance.)
+            void Town(string name, int count, float narrow, float wide, float low, float tall, Color tint, float mist, int queue, Lands land)
+            {
+                var vertices = new List<Vector3>();
+                var normals = new List<Vector3>();
+                var triangles = new List<int>();
+                void Box(Vector3 at, Quaternion turn, Vector3 size)
+                {
+                    foreach (var (n, u, v) in new[] { (Vector3.right, Vector3.up, Vector3.forward), (Vector3.left, Vector3.forward, Vector3.up), (Vector3.up, Vector3.forward, Vector3.right), (Vector3.forward, Vector3.right, Vector3.up), (Vector3.back, Vector3.up, Vector3.right) })
+                    {
+                        int start = vertices.Count;
+                        foreach (var (a, b) in new[] { (-1, -1), (1, -1), (1, 1), (-1, 1) })
+                        {
+                            vertices.Add(at + turn * Vector3.Scale(n + u * a + v * b, size / 2) + Vector3.up * size.y / 2);
+                            normals.Add(turn * n);
+                        }
+                        triangles.AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
+                    }
+                }
+                for (int n = 0; n < count; n++)
+                {
+                    float bearing = (n + R(n, 11) * 0.8f) / count * 360, across = Mathf.Lerp(narrow, wide, R(n, 12)), high = Mathf.Lerp(low, tall, R(n, 13) * R(n, 13));
+                    var turn = Quaternion.Euler(0, bearing, 0);
+                    var at = turn * new Vector3(0, -0.003f, 1);
+                    Box(at, turn, new Vector3(across, high, across * 0.7f));
+                    if (R(n, 14) < 0.35f) Box(at + Vector3.up * high, turn, new Vector3(across * 0.55f, high * 0.3f, across * 0.4f));
+                }
+                var mesh = new Mesh { name = name, indexFormat = IndexFormat.UInt32 };
+                mesh.SetVertices(vertices);
+                mesh.SetNormals(normals);
+                mesh.SetTriangles(triangles, 0);
+                mesh.RecalculateBounds();
+                if (System.Environment.GetEnvironmentVariable("BASTION_CIELO_LOG") == "1") Debug.Log($"[cielo] {name}: {triangles.Count / 3} triangles");
+                var m = MakeMaterial("_CLOUD", null, 2);
+                m.SetColor("_Tint", tint);
+                m.SetFloat("_Mist", mist);
+                m.SetFloat("_Fade", 0.009f);
+                m.renderQueue = shader.renderQueue + queue;
+                Add(name, mesh, m, MountainsAt, 0, land);
+            }
+            foreach (var land in new[] { Lands.Town, Lands.Industry })
+            {
+                bool town = land == Lands.Town;
+                Town("Ciudad lejana " + land, town ? 240 : 90, 0.012f, 0.03f, 0.008f, town ? 0.05f : 0.02f, new Color(0.5f, 0.5f, 0.55f), 0.68f, 2, land);
+                Town("Ciudad " + land, town ? 180 : 60, 0.016f, 0.036f, 0.01f, town ? 0.06f : 0.024f, new Color(0.45f, 0.45f, 0.5f), 0.5f, 3, land);
+            }
+            for (int k = made; k < parts.Count; k++) parts[k].New = true;
         }
 
         Material MakeMaterial(string keyword, Texture texture, int cull)
@@ -164,6 +354,43 @@ namespace Bastion.Client
                 lit = Linear(0xdfe5ec);
                 shade = Linear(0x9aa6b4);
             }
+            skyNow = 0;
+            if (Stage > 0)
+            {
+                bool own = ReferenceEquals(m, proposalMood), weather = !own && !night && !snow && !ReferenceEquals(m, Mood.Day);
+                skyNow = weather ? 2 : snow ? 0 : Stage;
+                if (own && Stage == 1)
+                {
+                    Shader.SetGlobalVector("_SkyZenith", Linear(0x2c68bf));
+                    Shader.SetGlobalVector("_SkyMiddle", Linear(0x86bdec));
+                    (lit, shade) = (Linear(0xffffff), Linear(0xb4c6de));
+                }
+                else if (own && Stage == 2)
+                {
+                    Shader.SetGlobalVector("_SkyZenith", Linear(0x4d5661));
+                    Shader.SetGlobalVector("_SkyMiddle", Linear(0x7c8794));
+                    Shader.SetGlobalVector("_SkySun", Linear(0xe8eef6) * 1.2f);
+                    Shader.SetGlobalFloat("_SkyGlow", 1.4f);
+                    (lit, shade) = (Linear(0x7b8794), Linear(0x333a44));
+                }
+                else if (own)
+                {
+                    Shader.SetGlobalVector("_SkyZenith", Linear(0x4b4a82));
+                    Shader.SetGlobalVector("_SkyMiddle", Linear(0xd98a62));
+                    Shader.SetGlobalVector("_SkySun", Linear(0xffd9a0) * 1.2f);
+                    Shader.SetGlobalFloat("_SkyGlow", 1.8f);
+                    // (Against the light: dark, their lit side an ember.)
+                    (lit, shade) = (Linear(0xe8935f), Linear(0x3c2f52));
+                }
+                else if (weather)
+                {
+                    // (The lid, darker the heavier the weather is: by how thick its haze.)
+                    float heavy = Mathf.InverseLerp(0.004f, 0.02f, m.hazeDensity);
+                    (lit, shade) = (Vector4.Lerp(Linear(0x7a8088), Linear(0x4a4f57), heavy), Vector4.Lerp(Linear(0x3a3f46), Linear(0x1c1f25), heavy));
+                }
+                // (By night, hardly there: a little over the sky's own dark.)
+                else if (night) (lit, shade) = (Vector4.Lerp(Linear(NightSky[1]), light, 0.04f), Linear(NightSky[0]));
+            }
             Shader.SetGlobalVector("_SkyCloudLit", lit);
             Shader.SetGlobalVector("_SkyCloudShade", shade);
         }
@@ -184,12 +411,13 @@ namespace Bastion.Client
             {
                 Roofs(Land);
                 Clouds();
+                if (!Lite) Solids();
             }
             var far = camera.farClipPlane;
             var at = camera.transform.position;
             foreach (var p in parts)
             {
-                var shown = on && (p.Land == null || p.Land == Land) && (!p.Snow || snow);
+                var shown = on && !(p.Old && Stage > 0) && !(p.New && (Stage == 0 || Lite)) && !(p.Kind > 0 && Lite) && (p.Land == null || p.Land == Land) && (!p.Snow || snow) && (p.Kind == 0 || p.Kind == skyNow);
                 foreach (var r in p.Renderers) r.enabled = shown;
                 if (!shown) continue;
                 p.Transform.SetPositionAndRotation(at, Quaternion.Euler(0, p.Turn * Mathf.Rad2Deg, 0));
@@ -213,7 +441,7 @@ namespace Bastion.Client
                 m.SetFloat("_Air", 0.22f - i * 0.1f);
                 m.SetFloat("_Foot", 0.45f);
                 m.renderQueue = shader.renderQueue + 1 + i;
-                Add($"Tejados {land} {i}", RingMesh(-0.01f, top), m, at, 1.3f + i * 2.1f, land);
+                Add($"Tejados {land} {i}", RingMesh(-0.01f, top), m, at, 1.3f + i * 2.1f, land).Old = true;
             }
         }
 
@@ -247,7 +475,7 @@ namespace Bastion.Client
                 mesh.RecalculateBounds();
                 var m = MakeMaterial("_CLOUD", null, 2);
                 m.renderQueue = shader.renderQueue + 4;
-                Add("Nubes " + id, mesh, m, CloudsAt, turn, null, snowOnly);
+                Add("Nubes " + id, mesh, m, CloudsAt, turn, null, snowOnly).Old = true;
             }
         }
 

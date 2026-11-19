@@ -399,6 +399,64 @@ namespace Bastion.Engine
             s.Run.NextGear = maker.Next;
         }
 
+        /// <summary>G23.2 Mordido (Arturo, cuadro 87): the squad's turns the bitten has from their finding.</summary>
+        public const int BiteTurns = 10;
+
+        /// <summary>
+        /// G23.2 Mordido (Arturo, 19/11, cuadros 73 y 87; .dev-snapshots/gameplay/g23/MORDIDO.md): the Rescate's survivor
+        /// bitten (MissionState.Bitten); the antiviral (MissionState.Antiviral, a gear of the fight's) in one medicine cabinet
+        /// or shelf of the map (AntiviralAt), unmarked: one with something in it (MissionState.Pieces) if there is one that
+        /// may hold it, else one made so. One that may: standing, searched from a tile the squad walks to, and in no room
+        /// without a door (Producto, 19/11). After OnlyWithinReach.
+        /// </summary>
+        public static void Bitten(GameState s, Rng rng)
+        {
+            if (s.Run == null || string.IsNullOrEmpty(s.Mission.ObjectiveUnit)) return;
+            var soldier = s.Units.FirstOrDefault((u) => u.Team == Teams.Xcom && u.Alive && u.CampaignId != null);
+            if (soldier == null) return;
+            var reach = new HashSet<int>(Paths.ComputeReach(s, soldier, 1_000_000, ignore: (_) => true).Cost.Keys);
+            var rooms = (s.Medical ?? new List<MedicalSite>()).SelectMany((m) => m.Rooms ?? new List<MedicalRoom>()).ToList();
+            bool Inside(MedicalRoom r, int x, int y) => x >= r.X && y >= r.Y && x < r.X + r.W && y < r.Y + r.H;
+            // The room it stands in has a door in its walls (none: not in a room).
+            bool Doored(Pos p)
+            {
+                var room = rooms.FirstOrDefault((r) => r.Z == p.Z && Inside(r, p.X, p.Y));
+                if (room == null) return true;
+                for (var y = room.Y - 1; y <= room.Y + room.H; y++)
+                    for (var x = room.X - 1; x <= room.X + room.W; x++)
+                    {
+                        if (Inside(room, x, y) || !Grid.InBounds(s, x, y)) continue;
+                        var kind = Grid.KindAt(s, new Pos { X = x, Y = y, Z = p.Z });
+                        if (kind == TileKinds.Door || kind == TileKinds.DoorOpen) return true;
+                    }
+                return false;
+            }
+            var out_ = new HashSet<int>(s.Mission.OutOfReach ?? new List<int>());
+            var can = new List<Pos>();
+            for (var z = 0; z < Grid.LevelCount(s); z++)
+                for (var y = 0; y < s.Height; y++)
+                    for (var x = 0; x < s.Width; x++)
+                    {
+                        var p = new Pos { X = x, Y = y, Z = z };
+                        var kind = Looting.PieceAt(s, p);
+                        if (kind != SearchPieces.MedicalCabinet && kind != SearchPieces.MedicalShelf) continue;
+                        if (!SearchPieces.Standing(s, p, kind) || out_.Contains(Grid.NodeOf(s, p)) || !Doored(p)) continue;
+                        if (!Grid.Dirs8.Any((d) => new Pos { X = x + d.X, Y = y + d.Y, Z = z } is Pos q && Grid.InBounds(s, q.X, q.Y) && reach.Contains(Grid.NodeOf(s, q)) && Looting.ReachesToSearch(s, q, p))) continue;
+                        can.Add(p);
+                    }
+            if (can.Count == 0) return;
+            var pieces = s.Mission.Pieces ??= new List<int>();
+            var full = can.Where((p) => pieces.Contains(Grid.NodeOf(s, p))).ToList();
+            var at = rng.Pick(full.Count > 0 ? full : can);
+            var node = Grid.NodeOf(s, at);
+            if (!pieces.Contains(node)) pieces.Add(node);
+            s.Mission.Bitten = true;
+            s.Mission.AntiviralAt = node;
+            var maker = new RunLoot.Maker(s.Run.NextGear);
+            s.Mission.Antiviral = maker.Make(GearKinds.Antiviral, null)[0];
+            s.Run.NextGear = maker.Next;
+        }
+
         /// <summary>
         /// A run's fight (Red, R3 17/11): what there is to search that no soldier gets beside on foot from the squad is out of
         /// reach (MissionState.OutOfReach: never a spot to search), and no such car is a police car. A town's outline shuts up

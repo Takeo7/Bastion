@@ -3200,7 +3200,22 @@ namespace Bastion.Engine.Tests
             // T8 (Arturo, 18/11): «Salir» looked like quitting the game.
             Assert.Equal("Partir", Lore.ExpeditionText.Start);
             Assert.Equal("Parte la escuadra: empieza una expedición del capítulo 1.", Lore.ExpeditionText.StartHelp(1));
-            Assert.Equal(14, Lore.StageNames.Count);
+            Assert.Equal(15, Lore.StageNames.Count);
+            // G23.2, Mordido (cuadros 73 and 87).
+            Assert.Equal("Mordido", Lore.StageName(NodeKinds.Bitten));
+            Assert.Equal("Alguien mordido se esconde en una zona marcada. Desde que se le encuentra, le quedan 10 turnos: dadle el antiviral, que está en uno de los armarios o estantes de medicinas. Volved todos a La Lata. Si se convierte, se sale sin recluta ni recompensa.", Lore.StageLine(NodeKinds.Bitten));
+            Assert.Equal("Dadle el antiviral a Marta Gil", Lore.BiteText.GiveAntiviral("Marta Gil"));
+            Assert.Equal("Se convierte en 4 turnos", Lore.BiteText.Countdown(4));
+            Assert.Equal("Se convierte al acabar este turno", Lore.BiteText.Countdown(1));
+            Assert.Equal("A Marta Gil le quedan 2 turnos para convertirse.", Lore.BiteText.Warn("Marta Gil", 2));
+            Assert.Equal("Marta Gil se convierte al acabar este turno.", Lore.BiteText.Warn("Marta Gil", 1));
+            Assert.Equal("Ana le da el antiviral a Marta Gil. Ya no se convertirá.", Lore.BiteText.Cured("Ana", "Marta Gil"));
+            Assert.Equal("Marta Gil se convierte. Sin recluta ni recompensa: salid en La Lata.", Lore.BiteText.Turned("Marta Gil"));
+            Assert.Equal("Sin recluta ni recompensa: salid en La Lata", Lore.BiteText.TurnedObjective);
+            Assert.Equal("El antiviral solo sirve contra la mordedura.", Lore.BiteText.AntiviralOnlyBite);
+            Assert.Equal("La mordedura ya está curada.", Lore.BiteText.AlreadyCured);
+            Assert.Equal("Antiviral", Lore.GearName(GearKinds.Antiviral, null));
+            Assert.Equal("el antiviral", Lore.GearA(GearKinds.Antiviral, null));
             // G23.1, La llave (cuadros 71, 73 and 79).
             Assert.Equal("La llave", Lore.StageName(NodeKinds.Key));
             Assert.Equal("La armería de la comisaría está cerrada, con todos sus muebles llenos. Uno de los muertos de uniforme lleva la llave; también se puede volar la pared con una granada. Salid en La Lata.", Lore.StageLine(NodeKinds.Key));

@@ -52,9 +52,11 @@ namespace Bastion.Client
         /// <summary>The runs' clearing shown (Show with FixedBase): the same base each time, so made again only the first.</summary>
         public void ShowFixed(bool snow = false)
         {
-            // The halt by night or under its weather, if the stage just played was («site/modifier», UI's: night, storm,
-            // snowfall…): the engine's Weathers by name; any other, a fair day.
-            haltModifier = Halt != null && Halt.Contains("/") ? Halt.Substring(Halt.IndexOf('/') + 1) : null;
+            // The halt by night or under its weather, and under its sky, if the stage just played was (UI's «site/modifier/sky»,
+            // each empty if none: hospital//dusk, police/storm/overcast, town/night/): the engine's Weathers and Skies by name.
+            var fields = (Halt ?? "").Split('/');
+            haltModifier = fields.Length > 1 && fields[1].Length > 0 ? fields[1] : null;
+            Bastion.Client.Sky.Halt = Halt != null && fields.Length > 2 && fields[2].Length > 0 ? fields[2] : null;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             Show(Halt != null ? HaltBase() : FixedBase(), snow);
             if (clock.ElapsedMilliseconds > 5) Debug.Log($"[alto] the {(Halt != null ? "halt" : "base")} made in {clock.ElapsedMilliseconds} ms");

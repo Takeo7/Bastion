@@ -166,6 +166,9 @@ namespace Bastion.Engine
                         foreach (var light in s.Lights ?? new List<Light>()) if (light.Turns != null) light.Turns--;
                         foreach (var fire in s.Fires ?? new List<Fire>()) if (fire.Turns != null) fire.Turns--;
                     }
+                    // G23.2 Mordido: a squad's turn over, a turn less for the bitten, found, not cured, on the field (never in La Lata).
+                    if (ev.Team == Teams.Alien && s.Mission.Bitten == true && s.Mission.Cured != true && s.Mission.BiteTurns > 0
+                        && s.Units.FirstOrDefault((u) => u.Id == s.Mission.ObjectiveUnit) is Unit bitten && bitten.Alive) s.Mission.BiteTurns--;
                     foreach (var u in s.Units)
                     {
                         // Inside La Lata (T24): its actions, to come down with.
@@ -532,6 +535,8 @@ namespace Bastion.Engine
                         item.Evacuated = true;
                         CompleteObjective(s);
                     }
+                    // A Rescate's survivor aboard, as its item (G23.2: Mordido's, cured, is won so; never taken in uncured).
+                    if (s.Mission.Kind == MissionKinds.Rescue && s.Mission.ObjectiveUnit == u.Id) CompleteObjective(s);
                     break;
                 }
                 case AlightedEvent ev:
@@ -732,12 +737,12 @@ namespace Bastion.Engine
                     {
                         vip.Ap = Content.ApPerTurnOf(vip);
                         vip.Moves = null;
-                        s.Mission.SurvivorFound = true;
+                        SurvivorFound(s);
                     }
                     break;
                 }
                 case SurvivorFoundEvent _:
-                    s.Mission.SurvivorFound = true;
+                    SurvivorFound(s);
                     break;
                 case ReinforcementsIncomingEvent ev:
                 {
@@ -794,6 +799,9 @@ namespace Bastion.Engine
                     // G23.1: the key off its holder's body, taken.
                     var key = s.Mission.Key;
                     if (key != null && ((ev.Packed?.Any((p) => p.Gear.Id == key.Id) ?? false) || (ev.Floor?.Any((g) => g.Id == key.Id) ?? false))) s.Mission.Key = null;
+                    // G23.2: the antiviral out of its piece, taken.
+                    var antiviral = s.Mission.Antiviral;
+                    if (antiviral != null && ((ev.Packed?.Any((p) => p.Gear.Id == antiviral.Id) ?? false) || (ev.Floor?.Any((g) => g.Id == antiviral.Id) ?? false))) s.Mission.Antiviral = null;
                     // A run's Guarida (H5): its box open.
                     if (s.Mission.Lair != null && Grid.SameTile(s.Mission.Lair, ev.Tile)) CompleteObjective(s);
                     Deed(s, ev.Unit, DeedIds.Search);
@@ -923,6 +931,8 @@ namespace Bastion.Engine
                     break;
                 }
                 case GearUsedEvent ev:
+                    // G23.2: the antiviral on the bitten cures them.
+                    if (s.Mission.Bitten == true && ev.Target == s.Mission.ObjectiveUnit && RunPack.InPack(UnitOf(s, ev.Unit), ev.Gear)?.Gear.Kind == GearKinds.Antiviral) s.Mission.Cured = true;
                     RunPack.Apply(s, ev);
                     break;
                 case LightOnEvent ev:
@@ -1058,6 +1068,13 @@ namespace Bastion.Engine
         }
 
         /// <summary>The mission's objective is secured: the timer stops.</summary>
+        /// <summary>A run's survivor found (N2); a bitten one's count from now (G23.2 Mordido: Setup.BiteTurns).</summary>
+        private static void SurvivorFound(GameState s)
+        {
+            s.Mission.SurvivorFound = true;
+            if (s.Mission.Bitten == true && s.Mission.BiteTurns == null && s.Mission.Cured != true) s.Mission.BiteTurns = Setup.BiteTurns;
+        }
+
         private static void CompleteObjective(GameState s)
         {
             s.Mission.ObjectiveDone = true;
@@ -1299,6 +1316,12 @@ namespace Bastion.Engine
                     Pieces = CopyInts(m.Pieces),
                     Rifled = CopyInts(m.Rifled),
                     KeyArmory = m.KeyArmory,
+                    Sky = m.Sky,
+                    Bitten = m.Bitten,
+                    BiteTurns = m.BiteTurns,
+                    Cured = m.Cured,
+                    Antiviral = m.Antiviral != null ? Gears.CloneGear(m.Antiviral) : null,
+                    AntiviralAt = m.AntiviralAt,
                     Locked = CopyInts(m.Locked),
                     KeyHolder = m.KeyHolder,
                     Key = m.Key != null ? Gears.CloneGear(m.Key) : null,

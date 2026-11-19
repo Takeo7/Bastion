@@ -23,12 +23,13 @@ namespace Bastion.Engine
         /// The specials drawn on the maps: today's objectives, and since H5 the four new ones (NewSpecials: Asedio,
         /// Travesía, Sigilo, Guarida). Without «Arreglar la radio» since T2 (Arturo, 18/11: «se quita la etapa», and all of
         /// fixing with it): its share goes to the others. La llave since G23.1, from row KeyFrom only, always at a police
-        /// station.
+        /// station. Mordido (G23.2), always at the hospital, once on them.
         /// </summary>
         public static readonly IReadOnlyList<string> Specials = new[]
         {
             NodeKinds.Elimination, NodeKinds.Recovery, NodeKinds.Sabotage, NodeKinds.Rescue,
             NodeKinds.Hold, NodeKinds.Crossing, NodeKinds.Stealth, NodeKinds.Elite, NodeKinds.Key,
+            // NodeKinds.Bitten: its rules are in (G23.2), not on the maps till the bot, UI and Arte have it (Producto, 19/11).
         };
 
         /// <summary>G23.1 La llave from this row (Producto, 19/11: its armoury full arms a squad at once; rows 1–2 are knives').</summary>
@@ -83,6 +84,23 @@ namespace Bastion.Engine
         public const int LooseOdds = 6;
 
         /// <summary>A number of the map's seed for a draw of its own (the hospital's is the seed itself, HospitalOdds).</summary>
+        /// <summary>A day sky's share in 100 (cuadro 83, Producto 19/11): clear, overcast, and the rest dusk.</summary>
+        public const int SkyClear = 50, SkyOvercast = 30;
+
+        /// <summary>
+        /// The day sky of `n`'s fight (Skies; cuadro 83: look only, not on the node's sheet), by its map's seed: none at
+        /// night (the night rules), overcast in a storm, else SkyClear / SkyOvercast / the rest dusk. The same node, the same
+        /// sky: the stage's road after it (UI's Settlement.Halt) takes it from here. Null for a stop.
+        /// </summary>
+        public static string? SkyOf(RunNode n)
+        {
+            if (!IsFight(n.Kind) || n.Seed == null) return null;
+            if (n.Modifier == Modifiers.Night || n.Added == Modifiers.Night) return null;
+            if (n.Modifier == Modifiers.Storm || n.Added == Modifiers.Storm) return Skies.Overcast;
+            var d = SeedDraw(n.Seed.Value, 0x5c1e5) % 100;
+            return d < SkyClear ? Skies.Clear : d < SkyClear + SkyOvercast ? Skies.Overcast : Skies.Dusk;
+        }
+
         private static uint SeedDraw(int seed, uint salt) => unchecked(((uint)Math.Abs(seed) ^ salt) * 2654435761u) >> 16;
 
         /// <summary>Whether a Rescate drawn on the map has Cuervos (RunNode.Guarded): from GuardedFrom, one in GuardedOdds.</summary>
@@ -92,7 +110,7 @@ namespace Bastion.Engine
         /// Whether a fight's map has a survivor loose on it (N2): one in LooseOdds of the fights that aren't a Rescate (whose
         /// survivor is sure) nor the boss, by the map's seed; no mark on the map, nor where to look.
         /// </summary>
-        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Boss && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
+        public static bool LooseSurvivor(RunNode n) => IsFight(n.Kind) && n.Kind != NodeKinds.Rescue && n.Kind != NodeKinds.Bitten && n.Kind != NodeKinds.Boss && n.Seed != null && SeedDraw(n.Seed.Value, 0x10e5e) % LooseOdds == 0;
 
         /// <summary>Rows with no service area: the first fights, made with knives only.</summary>
         public const int EarlyRows = 2;
@@ -114,6 +132,8 @@ namespace Bastion.Engine
         public static string? SpecialFor(RunNode n)
         {
             if (n.Seed == null || n.Kind == NodeKinds.Boss) return null;
+            // Mordido's, always (G23.2: the one map with medicine cabinets and shelves enough).
+            if (n.Kind == NodeKinds.Bitten) return Places.Hospital;
             var seed = Math.Abs(n.Seed.Value);
             if (seed % HospitalOdds != 0) return null;
             var outdoors = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Crossing;
@@ -190,7 +210,9 @@ namespace Bastion.Engine
             {
                 if (n.Row >= 2 && n.Kind != NodeKinds.Boss && rng.Int(100) < ModifierChance) n.Modifier = rng.Pick(Modifiers.All);
                 n.Seed = (int)Math.Floor(rng.Next() * 2147483648.0);
-                n.Site = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss ? Places.Factory : n.Kind == NodeKinds.Key ? Places.Police : Weighted(rng, SiteMix);
+                n.Site = n.Kind == NodeKinds.Sabotage || n.Kind == NodeKinds.Boss ? Places.Factory : n.Kind == NodeKinds.Key ? Places.Police
+                    // Mordido (G23.2): a town's or a city's, the hospital (SpecialFor) with its flag.
+                    : n.Kind == NodeKinds.Bitten ? Places.Town : Weighted(rng, SiteMix);
                 // No service area in rows 1–2 (Red, 16/11: a long walk to La Lata with knives only): the countryside, drawn
                 // as it was so the rest of the map stays the same.
                 if (n.Site == Places.Roadside && n.Row <= EarlyRows) n.Site = Places.Country;

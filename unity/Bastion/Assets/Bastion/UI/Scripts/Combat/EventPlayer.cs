@@ -1581,6 +1581,13 @@ namespace Bastion.UI.Combat
                 Log(Lore.KeyText.Dropped, "#ffd23a");
                 if (IsVisible(dropped.Pos.X, dropped.Pos.Y)) Float(Board.TileToWorld(V, dropped.Pos, KeyFloatHeight), Lore.KeyText.DroppedFloat, "callout", CombatController.KeyIcon);
             }
+            // The armoury opened with the key (U22): said over its door with the same plate, the other moment that changes
+            // the mission (Producto, 19/11), and in the log; here, so the card ticks its step in the same refresh.
+            if (e is UnlockedEvent opened)
+            {
+                if (Unit(opened.Unit) is Unit who) Log(Lore.KeyText.Unlocked(who.Name), "#6dff9a");
+                if (IsVisible(opened.Tile.X, opened.Tile.Y)) Float(Board.TileToWorld(V, opened.Tile, KeyFloatHeight), Lore.KeyText.UnlockedFloat, "callout", CombatController.KeyIcon);
+            }
             // A find with the backpack full stays on the floor (docs/FASE8.md §C).
             if ((e is SearchedEvent || e is RoomSearchedEvent) && by == control.MySlot)
             {
@@ -2753,15 +2760,13 @@ namespace Bastion.UI.Combat
                     await Wait(0.5f);
                     return;
                 }
-                // La llave (U22, G23.1): the key turned in the armoury's door, said over it and in the log (Lore's); the door
-                // opens next (TileChangedEvent) as any.
+                // La llave (U22, G23.1): the key turned in the armoury's door, the camera on it; what it says, with the
+                // objective's card (Leave); the door opens next (TileChangedEvent) as any.
                 case UnlockedEvent unlocked:
                 {
                     var u = Unit(unlocked.Unit);
                     var door = Board.TileToWorld(v, unlocked.Tile, 1.2f * Board.Tile);
                     if (u != null) Look(Vector3.Lerp(Feet(u.Id), door, 0.5f));
-                    Float(door, Lore.KeyText.UnlockedFloat, "heal", CombatController.KeyIcon);
-                    if (u != null) Log(Lore.KeyText.Unlocked(u.Name), "#6dff9a");
                     await Wait(0.5f);
                     return;
                 }

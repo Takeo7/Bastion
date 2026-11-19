@@ -45,6 +45,8 @@ namespace Bastion.Client
         {
             if (Current == this) Current = null;
             Mood.ShadowReach(null);
+            Bastion.Client.Sky.Hold = false;
+            Bastion.Client.Sky.Halt = null;
             // No fade left over the next scene's 3D.
             Shader.SetGlobalFloat("_StageFade", 0);
             life?.ClearAll();
@@ -72,7 +74,7 @@ namespace Bastion.Client
         {
             Current = this;
             // The same clearing as shown: nothing to make again (UI shows it on every campaign state).
-            string key = @base == null ? null : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { @base, snow }) + (ReferenceEquals(@base, haltBase) ? haltModifier : null);
+            string key = @base == null ? null : Newtonsoft.Json.JsonConvert.SerializeObject(new object[] { @base, snow }) + (ReferenceEquals(@base, haltBase) ? haltModifier + "/" + Bastion.Client.Sky.Halt : null);
             if (key != null && key == shownKey && Map != null && prefabOf == null && materialOf == null) return;
             shownKey = key;
             this.prefabOf = prefabOf ?? this.prefabOf ?? MapCatalog.Load()?.PrefabOf() ?? (_ => null);
@@ -84,6 +86,8 @@ namespace Bastion.Client
             // The halt's way, a road: asphalt with its line, three tiles wide, the whole map long.
             // (Tarmac in the pines is the roadside's: GroundMap.)
             if (Halted) state.Site = Sites.Roadside;
+            // (The base's own sky and light, the warm one; a halt's, its stage's.)
+            Bastion.Client.Sky.Hold = !Halted;
             bool haltNight = Halted && haltModifier == "night";
             if (Halted && haltModifier != null && haltModifier != "night") state.Weather = haltModifier;
             if (Halted && state.Ground != null)

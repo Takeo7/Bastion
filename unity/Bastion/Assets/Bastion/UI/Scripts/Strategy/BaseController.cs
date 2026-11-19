@@ -306,7 +306,9 @@ namespace Bastion.UI.Strategy
         /// <summary>
         /// A8 (Arturo, 18/11: «cuando acabas un nodo, al darle a seguir expedición, la vista parece que el soldado está en la
         /// base»; «Siempre una carretera»): the stage's report between two stages stands on Arte's halt by a road, not on the
-        /// base's clearing; as Settlement.Halt takes it, «site/modifier» of the stage just played (hospital/night). Null, the
+        /// base's clearing; as Settlement.Halt takes it, «site/modifier/sky» of the stage just played: its modifier, or the
+        /// one an event left on it (RunNode.Added: the fight had that night or storm too), and its day sky (RunMap.SkyOf;
+        /// cuadro 83: the fight's own, none at night), each empty when none (hospital/night/, hospital//dusk). Null, the
         /// clearing: the route and the stops (the valley's, as before), and the base itself (no expedition under way, back
         /// after the boss or a Refugio).
         /// </summary>
@@ -316,7 +318,9 @@ namespace Bastion.UI.Strategy
             if (c?.Stash == null || c.Run == null || !ReportPending(c)) return null;
             var node = c.Run.Nodes.FirstOrDefault(n => n.Id == c.LastReport?.Run?.Node);
             var site = node?.Site ?? "roadside";
-            return string.IsNullOrEmpty(node?.Modifier) ? site : $"{site}/{node.Modifier}";
+            var modifier = !string.IsNullOrEmpty(node?.Modifier) ? node.Modifier : node?.Added;
+            var sky = node != null ? RunMap.SkyOf(node) : null;
+            return $"{site}/{modifier}/{sky}";
         }
 
         bool ReportPending(CampaignState c)

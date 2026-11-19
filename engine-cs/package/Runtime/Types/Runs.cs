@@ -26,6 +26,8 @@ namespace Bastion.Engine
         /// one of the dead in uniform; its furniture all full (MissionOptions.KeyArmory).
         /// </summary>
         public const string Key = "key";
+        /// <summary>G23.2 Mordido (Arturo, 19/11, cuadros 73 y 87): a Rescate whose survivor is bitten; always at the hospital.</summary>
+        public const string Bitten = "bitten";
         // Stops, no fight (H4).
         public const string Refuge = "refuge";
         public const string Trade = "trade";

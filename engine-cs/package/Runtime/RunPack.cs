@@ -170,11 +170,21 @@ namespace Bastion.Engine
                 case ItemActions.Use:
                 {
                     if (placed == null) return Texts.PackOnly;
+                    // Mordido's antiviral (G23.2): on the bitten only, beside (or the bitten on themselves), once.
+                    if (placed.Gear.Kind == GearKinds.Antiviral)
+                    {
+                        var bitten = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(s, cmd.To!) : u;
+                        if (bitten == null || !bitten.Alive || s.Mission.Bitten != true || bitten.Id != s.Mission.ObjectiveUnit) return Lore.BiteText.AntiviralOnlyBite;
+                        if (s.Mission.Cured == true) return Lore.BiteText.AlreadyCured;
+                        if (bitten != u && !Aim.InMeleeReach(s, u.Pos, bitten.Pos)) return "Tiene que estar a tu lado.";
+                        return null;
+                    }
                     if (placed.Gear.Kind != GearKinds.Medicine) return Texts.OnlyMedicine;
                     var to = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(s, cmd.To!) : u;
                     if (to == null || !to.Alive || to.Team != Teams.Xcom || to.Objective) return "Solo en ti o en un compañero.";
                     if (to != u && !Aim.InMeleeReach(s, u.Pos, to.Pos)) return "Tiene que estar a tu lado.";
-                    if (to.Hp >= to.MaxHp) return to == u ? "No tienes heridas." : "No tiene heridas.";
+                    // On the bitten not cured (G23.2), the medicine is no antiviral: say so (Lore).
+                    if (to.Hp >= to.MaxHp) return Rules.BittenUncured(s, to) ? Lore.BiteText.MedicineNo : to == u ? "No tienes heridas." : "No tiene heridas.";
                     return null;
                 }
                 case ItemActions.Arrange:
@@ -254,7 +264,10 @@ namespace Bastion.Engine
                 case ItemActions.Use:
                 {
                     var target = !string.IsNullOrEmpty(cmd.To) ? Grid.GetUnit(s, cmd.To!)! : u;
+                    var antiviral = InPack(u, id)?.Gear.Kind == GearKinds.Antiviral;
                     sim.Emit(new GearUsedEvent { Unit = u.Id, Target = target.Id, Gear = id, Free = Rules.FreeMedicine(u) ? true : (bool?)null });
+                    // The antiviral cures the bite (Events: MissionState.Cured), not wounds.
+                    if (antiviral) break;
                     var amount = Math.Min(Content.MedicineHeal + u.Mods.Heal, target.MaxHp - target.Hp);
                     if (amount > 0) sim.Emit(new HealedEvent { Unit = u.Id, Target = target.Id, Amount = amount });
                     break;

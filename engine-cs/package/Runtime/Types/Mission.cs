@@ -28,6 +28,19 @@ namespace Bastion.Engine
         public static readonly IReadOnlyList<string> All = new[] { Drizzle, Downpour, Storm, Snowfall, Blizzard };
     }
 
+    /// <summary>
+    /// A run's day sky (Arturo, 19/11, cuadro 83: «Varios, según la etapa»; MissionState.Sky): look only, no rule changes
+    /// with it (.dev-snapshots/gameplay/g23/CIELO.md).
+    /// </summary>
+    public static class Skies
+    {
+        public const string Clear = "clear";
+        public const string Overcast = "overcast";
+        public const string Dusk = "dusk";
+
+        public static readonly IReadOnlyList<string> All = new[] { Clear, Overcast, Dusk };
+    }
+
     /// <summary>Trap.kind: `'mine' | 'spikes' | 'snare'`.</summary>
     public static class TrapKinds
     {
@@ -203,6 +216,25 @@ namespace Bastion.Engine
         public List<int>? Rifled { get; set; }
         /// <summary>G23.1 La llave: this fight's (MissionOptions.KeyArmory), for its objective; missing, none.</summary>
         public bool? KeyArmory { get; set; }
+        /// <summary>
+        /// A run's fight's day sky (Skies; RunMap.SkyOf its node's): look only. Null: today's (outside the runs, at night, a
+        /// fight saved before it).
+        /// </summary>
+        public string? Sky { get; set; }
+        /// <summary>
+        /// G23.2 Mordido (Arturo, 19/11, cuadros 73 y 87; .dev-snapshots/gameplay/g23/MORDIDO.md): a run's Rescate whose
+        /// survivor (MissionState.ObjectiveUnit) is bitten: from the moment they are found, BiteTurns of the squad's turns till
+        /// they turn; cured with the antiviral (Cured), they don't. Missing, none of it.
+        /// </summary>
+        public bool? Bitten { get; set; }
+        /// <summary>Mordido: the squad's turns left till the bitten turns, from their finding (Setup.BiteTurns); null before.</summary>
+        public int? BiteTurns { get; set; }
+        /// <summary>Mordido: the antiviral used on the bitten (GearUsedEvent): no count any more, and La Lata takes them.</summary>
+        public bool? Cured { get; set; }
+        /// <summary>Mordido: the antiviral (a gear of the fight's) while still in its piece, at node AntiviralAt; null once taken.</summary>
+        public Gear? Antiviral { get; set; }
+        /// <summary>Mordido: the medicine cabinet or shelf the antiviral is in (its node; MissionState.Pieces).</summary>
+        public int? AntiviralAt { get; set; }
         /// <summary>
         /// G23.1: the doors locked, by node (the armoury's): nobody walks through one (Paths), and only one with the key
         /// in its pack opens it (OpenDoor; UnlockedEvent). Missing: none.

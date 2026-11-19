@@ -13,6 +13,9 @@ Shader "Bastion/Sky"
         _Repeat ("Times round", Float) = 1
         _Air ("Haze over it", Float) = 0.3
         _Foot ("Hazed foot (share of its height)", Float) = 0.5
+        _Tint ("A solid's tint (the clouds' white; a lab's mountains)", Color) = (1, 1, 1, 1)
+        _Mist ("A solid's haze", Float) = 0
+        _Fade ("A solid's foot lost in the haze (up to this height, a share of its distance)", Float) = 0
         [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 1
     }
 
@@ -44,6 +47,9 @@ Shader "Bastion/Sky"
                 float _Air;
                 float _Foot;
                 float _Cull;
+                float4 _Tint;
+                float _Mist;
+                float _Fade;
             CBUFFER_END
 
             float3 _SkyHorizon, _SkyMiddle, _SkyZenith, _SkySunDir, _SkySun, _SkyLand, _SkyCloudLit, _SkyCloudShade;
@@ -97,7 +103,9 @@ Shader "Bastion/Sky"
                     c = lerp(c, _SkyHorizon, saturate(_Air + (1.0 - smoothstep(0.0, _Foot, input.uv.y)) * (1.0 - _Air)));
                 #else
                     float k = saturate(input.light.x * 0.5 + 0.5 + max(input.light.y, 0.0) * 0.25);
-                    c = lerp(_SkyCloudShade, _SkyCloudLit, k);
+                    c = lerp(_SkyCloudShade, _SkyCloudLit, k) * _Tint.rgb;
+                    float foot = _Fade > 0.0 ? 1.0 - smoothstep(0.0, _Fade, input.direction.y) : 0.0;
+                    c = lerp(c, _SkyHorizon, saturate(max(_Mist, foot)));
                 #endif
                 return half4(c, 1);
             }

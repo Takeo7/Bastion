@@ -121,6 +121,8 @@ namespace Bastion.Net
         {
             var m = s.Mission;
             if (m.Kind == MissionKinds.Recovery) return !string.IsNullOrEmpty(m.Item?.Carrier);
+            // Mordido (G23.2): not with the bitten till they are cured.
+            if (BittenFight(s)) return BittenLeaving(s);
             if (m.Kind == MissionKinds.Rescue && Vip(s) is Unit vip && !vip.Captive) return true;
             // A run's Rescate with the survivor fallen: a Saqueo to get out of (N2, Gameplay 17/11).
             if (m.Kind == MissionKinds.Rescue && s.Run != null && Vip(s) == null) return true;
@@ -191,6 +193,21 @@ namespace Bastion.Net
                 if (KeyFight(s) && Looting.KeyOf(u) != null && Usable(s, u, AbilityIds.OpenDoor)
                     && Abilities.DoorTiles(s, u, TileKinds.Door).FirstOrDefault((p) => Looting.LockedAt(s, p)) is Pos door)
                     return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.OpenDoor, Tile = door };
+                // Mordido (G23.2): the antiviral picked up where it lies, and used on the bitten from beside them (or by
+                // them on themselves), before anything else.
+                if (BittenFight(s))
+                {
+                    if (RunPack.FloorInReach(s, u).FirstOrDefault((d) => d.Gear.Kind == GearKinds.Antiviral) is DroppedGear drug)
+                    {
+                        var take = new ItemCommand { Unit = u.Id, Action = ItemActions.Take, Gear = drug.Gear.Id };
+                        if (RunPack.Refusal(s, take, slot, connected) == null) return take;
+                    }
+                    if (Looting.AntiviralOf(u) is Gear antiviral && Vip(s) is Unit bitten)
+                    {
+                        var use = new ItemCommand { Unit = u.Id, Action = ItemActions.Use, Gear = antiviral.Id, To = bitten.Id == u.Id ? null : bitten.Id };
+                        if (RunPack.Refusal(s, use, slot, connected) == null) return use;
+                    }
+                }
             }
             if (!armed)
             {
@@ -226,6 +243,11 @@ namespace Bastion.Net
             var going = s.Run != null && leaving && !Holding(s);
             var shot = BestShot(s, u, going ? 1.5 : Close);
             var nearest = Enemies(s).Select((e) => Grid.Distance(u.Pos, e.Pos)).DefaultIfEmpty(double.MaxValue).Min();
+            // Mordido (G23.2): a medicine cabinet or shelf beside it searched before any shot while the antiviral is still in
+            // one: the count runs.
+            if (BittenFight(s) && Looting.AntiviralWhere(s) == AntiviralPlaces.Piece && Usable(s, u, AbilityIds.Search)
+                && Looting.SearchableTiles(s, u).FirstOrDefault((p) => MedicalPiece(s, p)) is Pos cabinet)
+                return new AbilityCommand { Unit = u.Id, Ability = AbilityIds.Search, Tile = cabinet };
             // La llave (G23.1): a body in uniform beside it searched before any shot: with the dead coming on every turn,
             // the holder's lay by the squad for the whole fight, its key never taken (Gameplay, 19/11).
             // So too the armoury's furniture once it is open: standing in it, it shot through the door the whole time.
@@ -290,6 +312,7 @@ namespace Bastion.Net
             if (leaving && bus != null) return bus;
             if (m.Kind == MissionKinds.Recovery && m.Item != null && m.Item.Pos != null) return m.Item.Pos;
             if (m.Kind == MissionKinds.Hack && m.Terminal != null && !m.ObjectiveDone) return m.Terminal;
+            if (BittenFight(s) && !leaving) return BittenGoal(s, u, walksOf(u)) ?? bus;
             if ((Vip(s) ?? Alarm(s)) is Unit objective) return objective.Pos;
             if (s.Run != null && m.Lair != null) return m.Lair;
             if (Bull(s) is Unit bull) return bull.Pos;
@@ -335,7 +358,8 @@ namespace Bastion.Net
         private static bool AllAboard(GameState s)
         {
             var bus = Rules.OpenTiles(s).Select((z) => Grid.NodeOf(s, new Pos { X = z.X, Y = z.Y, Z = 0 })).ToList();
-            foreach (var o in Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos)))
+            // (Mordido's bitten not cured never gets in: none to wait for, G23.2.)
+            foreach (var o in Grid.Combatants(s, Teams.Xcom).Where((o) => !o.Evacuated && !Abilities.InEvacZone(s, o.Pos) && !Rules.BittenUncured(s, o)))
             {
                 var reach = Paths.ComputeReach(s, o, double.MaxValue);
                 if (bus.Any((n) => reach.Cost.TryGetValue(n, out _))) return false;
@@ -626,6 +650,95 @@ namespace Bastion.Net
             }
             if (best == null || Paths.BuildPath(s, u, reach, best.Pos) == null) return null;
             return new MoveCommand { Unit = u.Id, To = best.Pos };
+        }
+
+        // ------------------------------------------------------------ Mordido (G23.2)
+
+        /// <summary>Mordido: past this many of the count left, with the antiviral not in hand, the squad goes without the bitten.</summary>
+        public const int BiteGiveUp = 2;
+
+        /// <summary>Mordido: the turn the squad goes, cured or not.</summary>
+        public const int BittenLeaveTurn = 20;
+
+        /// <summary>A run's Mordido: a Rescate whose survivor is bitten, cured only with the antiviral in one medicine cabinet or shelf.</summary>
+        private static bool BittenFight(GameState s) => s.Run != null && s.Mission.Bitten == true;
+
+        /// <summary>A medicine cabinet or shelf on `p` still to search (the antiviral is in one of them; never a cart).</summary>
+        private static bool MedicalPiece(GameState s, Pos p) => Looting.PieceAt(s, p) is string k && (k == SearchPieces.MedicalCabinet || k == SearchPieces.MedicalShelf) && Looting.IsSearchable(s, p);
+
+        [System.ThreadStatic] private static GameState? cabinetsOf;
+        [System.ThreadStatic] private static int cabinetsSeq;
+        [System.ThreadStatic] private static List<Pos>? cabinets;
+
+        /// <summary>Every medicine cabinet and shelf of the map still to search, on any floor (once a state's seq).</summary>
+        private static List<Pos> MedicalLeft(GameState s)
+        {
+            if (cabinets != null && ReferenceEquals(cabinetsOf, s) && cabinetsSeq == s.Seq) return cabinets;
+            var left = new List<Pos>();
+            for (var z = 0; z <= (s.Levels?.Count ?? 0); z++)
+                for (var y = 0; y < s.Height; y++)
+                    for (var x = 0; x < s.Width; x++)
+                    {
+                        var p = new Pos { X = x, Y = y, Z = z };
+                        if (MedicalPiece(s, p)) left.Add(p);
+                    }
+            cabinetsOf = s;
+            cabinetsSeq = s.Seq;
+            return cabinets = left;
+        }
+
+        /// <summary>
+        /// Where `u` goes in Mordido, by where the antiviral is (Looting.AntiviralWhere; never MissionState.AntiviralAt): in a
+        /// piece, the nearest place by the walk beside a medicine cabinet or shelf left; on the floor, there; in a pack, the
+        /// bitten (the one who has it, a free place beside them); cured, the bitten (to talk to them, if not yet). The bitten,
+        /// one of the squad now, stays where they are.
+        /// </summary>
+        private static Pos? BittenGoal(GameState s, Unit u, Reach walks)
+        {
+            if (Vip(s) is not Unit bitten) return null;
+            var where = Looting.AntiviralWhere(s);
+            // The bitten, one of the squad now, stays: the one with the antiviral comes to them (both on their way, on two
+            // floors, neither got there: R11, 19/11).
+            if (u.Id == bitten.Id) return u.Pos;
+            // The one with it: a free place beside them that reaches them, by the walk past the squad (two of it stood by
+            // them, and the place left was none it walked to: R11).
+            if (where == AntiviralPlaces.Pack && Looting.AntiviralOf(u) != null)
+            {
+                var past = Paths.ComputeReach(s, u, double.MaxValue, null, (o) => o.Id != u.Id);
+                return Grid.Dirs8.Select((d) => new Pos { X = bitten.Pos.X + d.X, Y = bitten.Pos.Y + d.Y, Z = bitten.Pos.Z })
+                    .Where((p) => Grid.InBounds(s, p.X, p.Y) && (Grid.UnitAt(s, p) == null || Grid.UnitAt(s, p) == u) && Aim.InMeleeReach(s, p, bitten.Pos) && past.Cost.ContainsKey(Grid.NodeOf(s, p)))
+                    .OrderBy((p) => past.Cost[Grid.NodeOf(s, p)]).ThenBy((p) => Grid.NodeOf(s, p)).Select((p) => (Pos?)p).FirstOrDefault() ?? bitten.Pos;
+            }
+            switch (where)
+            {
+                case AntiviralPlaces.Piece:
+                {
+                    var left = MedicalLeft(s);
+                    foreach (var kv in walks.Cost.OrderBy((kv) => kv.Value).ThenBy((kv) => kv.Key))
+                    {
+                        var at = Grid.PosOf(s, kv.Key);
+                        if (left.Any((q) => q.Z == at.Z && Grid.Distance(at, q) < 1.5 && Looting.ReachesToSearch(s, at, q))) return at;
+                    }
+                    return bitten.Pos;
+                }
+                case AntiviralPlaces.Floor:
+                    return (s.FloorGear ?? new List<DroppedGear>()).First((d) => d.Gear.Kind == GearKinds.Antiviral).Pos;
+                default:
+                    return bitten.Pos;
+            }
+        }
+
+        /// <summary>
+        /// Mordido: the squad goes broken, with the bitten gone (turned, or fallen), cured once they have been talked to (to
+        /// come along into La Lata), at BittenLeaveTurn, or with the count at BiteGiveUp and the antiviral not in hand.
+        /// </summary>
+        private static bool BittenLeaving(GameState s)
+        {
+            if (Routed(s) || s.Turn >= BittenLeaveTurn) return true;
+            if (Vip(s) is not Unit bitten) return true;
+            if (s.Mission.Cured == true) return !bitten.Captive;
+            var where = Looting.AntiviralWhere(s);
+            return s.Mission.BiteTurns is int left && left <= BiteGiveUp && where != AntiviralPlaces.Pack && where != AntiviralPlaces.Floor;
         }
 
         // ------------------------------------------------------------ La llave (G23.1)

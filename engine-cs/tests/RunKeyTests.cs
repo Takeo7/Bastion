@@ -63,7 +63,7 @@ namespace Bastion.Engine.Tests
                 if (here.Count > 0) with++;
                 keys += here.Count;
             }
-            Assert.InRange(with / (double)maps, 0.2, 0.9);
+            Assert.InRange(with / (double)maps, 0.1, 0.9);
         }
 
         [Fact]

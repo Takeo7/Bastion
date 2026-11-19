@@ -679,6 +679,38 @@
    "fbx": "SM_Bld_WaterTank_03",
    "fit": 1.9
   },
+  "skyCloud1": {
+   "pack": "apocalypse",
+   "fbx": "SM_Generic_Cloud_01"
+  },
+  "skyCloud2": {
+   "pack": "apocalypse",
+   "fbx": "SM_Generic_Cloud_02"
+  },
+  "skyCloud3": {
+   "pack": "apocalypse",
+   "fbx": "SM_Generic_Cloud_03"
+  },
+  "skyMountain1": {
+   "pack": "military",
+   "fbx": "SM_Env_Mountain_01"
+  },
+  "skyMountain2": {
+   "pack": "military",
+   "fbx": "SM_Env_Mountain_02"
+  },
+  "skyMountain3": {
+   "pack": "military",
+   "fbx": "SM_Env_Mountain_03"
+  },
+  "skyMountain4": {
+   "pack": "military",
+   "fbx": "SM_Env_Mountain_04"
+  },
+  "skyMountain5": {
+   "pack": "military",
+   "fbx": "SM_Env_Mountain_05"
+  },
   "sirenPolice": {
    "pack": "city",
    "fbx": "SM_Veh_Car_Police_01",

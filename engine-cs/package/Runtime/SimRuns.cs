@@ -217,7 +217,17 @@ namespace Bastion.Engine
         /// </summary>
         public static bool RunsRescue(GameState s)
         {
-            return s.Run != null && s.Mission.Kind == MissionKinds.Rescue;
+            // Mordido's (G23.2): won only with the bitten cured and aboard (EvacWins).
+            return s.Run != null && s.Mission.Kind == MissionKinds.Rescue && s.Mission.Bitten != true;
+        }
+
+        /// <summary>
+        /// G23.2 Mordido: whether `u` is the bitten, not cured. La Lata never takes them (WouldBoard, AllAboard, DepartEvac):
+        /// they would turn in it. Left behind if it goes.
+        /// </summary>
+        public static bool BittenUncured(GameState s, Unit u)
+        {
+            return s.Mission.Bitten == true && s.Mission.Cured != true && u.Id == s.Mission.ObjectiveUnit;
         }
 
         /// <summary>
@@ -272,7 +282,7 @@ namespace Bastion.Engine
         /// <summary>Whether a walk of `u` ending on `tile` would get it into La Lata (T24): for the path drawn before moving.</summary>
         public static bool WouldBoard(GameState s, Unit u, Pos tile)
         {
-            return u.Alive && Boarder(u) && LaLataHere(s) && Abilities.InEvacZone(s, tile) && (SeatsFree(s) ?? 0) > 0;
+            return u.Alive && Boarder(u) && !BittenUncured(s, u) && LaLataHere(s) && Abilities.InEvacZone(s, tile) && (SeatsFree(s) ?? 0) > 0;
         }
 
         /// <summary>
@@ -281,7 +291,7 @@ namespace Bastion.Engine
         /// </summary>
         public static bool AllAboard(GameState s)
         {
-            return s.Run != null && s.Units.Any((u) => u.Aboard == true) && !s.Units.Any((u) => u.Alive && Boarder(u));
+            return s.Run != null && s.Units.Any((u) => u.Aboard == true) && !s.Units.Any((u) => u.Alive && Boarder(u) && !BittenUncured(s, u));
         }
 
         /// <summary>

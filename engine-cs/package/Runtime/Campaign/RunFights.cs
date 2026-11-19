@@ -43,6 +43,9 @@ namespace Bastion.Engine
                 case NodeKinds.Sabotage:
                 case NodeKinds.Rescue:
                     return node;
+                // G23.2: a Rescate whose survivor is bitten.
+                case NodeKinds.Bitten:
+                    return MissionKinds.Rescue;
                 case NodeKinds.Stealth:
                     return MissionKinds.Recovery;
                 default:
@@ -215,9 +218,13 @@ namespace Bastion.Engine
             // One in RunMap.LooseOdds of the other fights, a survivor loose on the map, unmarked (N2, Arturo 17/11).
             if (RunMap.LooseSurvivor(node)) PlaceLoose(state, SurvivorOf(c, node), new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x10057))));
             state.Run = new RunFight { Node = node.Id, NodeKind = node.Kind, Row = node.Row, Modifier = node.Modifier, Added = node.Added, FirstGear = c.NextId, NextGear = c.NextId };
+            // Its day sky (cuadro 83): look only.
+            state.Mission.Sky = RunMap.SkyOf(node);
             // La llave (G23.1): its armoury locked and full, its key (a gear of the fight's) on one of the dead in uniform the
             // squad can get to.
             if (node.Kind == NodeKinds.Key) Setup.KeyArmory(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0x6e7))));
+            // Mordido (G23.2): the survivor bitten, the antiviral in one medicine cabinet or shelf.
+            if (node.Kind == NodeKinds.Bitten) Setup.Bitten(state, new Rng(unchecked((uint)((node.Seed ?? 0) ^ 0xb17e))));
             return (state, name);
         }
 
@@ -513,10 +520,10 @@ namespace Bastion.Engine
             };
         }
 
-        /// <summary>A pack home without the armoury's key (G23.1: the fight's only).</summary>
+        /// <summary>A pack home without the fight's own: the armoury's key (G23.1) and Mordido's antiviral (G23.2).</summary>
         private static GearGrid WithoutKey(GearGrid pack)
         {
-            pack.Items.RemoveAll((p) => p.Gear.Kind == GearKinds.Key);
+            pack.Items.RemoveAll((p) => p.Gear.Kind == GearKinds.Key || p.Gear.Kind == GearKinds.Antiviral);
             return pack;
         }
 
